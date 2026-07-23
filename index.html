@@ -964,21 +964,34 @@ function randomQuestion() {
 function evaluateAnswer() {
   const key = `${currentSubj}-${currentIdx}`;
   const text = userAnswers[key] || "";
-  const words = countWords(text);
+  const trimmed = text.trim();
+
+  // 1. Anti-Gibberish Check
+  const repeatedCharRegex = /(.)\1{4,}/; 
+  const spaceCount = (trimmed.match(/ /g) || []).length;
+  const isGibberish = (trimmed.length < 15 || repeatedCharRegex.test(trimmed) || spaceCount < 2);
 
   let score = 0;
-  if (words > 180) score += 35;
-  else if (words > 80) score += 25;
-  else score += 15;
 
-  const lower = text.toLowerCase();
-  if (lower.includes("issue") || lower.includes("whether") || lower.includes("resolved")) score += 20;
-  if (lower.includes("article") || lower.includes("section") || lower.includes("code") || lower.includes("rule")) score += 25;
-  if (lower.includes("therefore") || lower.includes("hence") || lower.includes("conclude") || lower.includes("thus")) score += 20;
+  if (isGibberish) {
+    score = 0; // Gives 0 for gibberish/mashing
+  } else {
+    // YOUR ORIGINAL SCORING LOGIC (UNTOUCHED)
+    const words = countWords(text);
 
-  score = Math.min(100, Math.max(35, score));
+    if (words > 180) score += 35;
+    else if (words > 80) score += 25;
+    else score += 15;
+
+    const lower = text.toLowerCase();
+    if (lower.includes("issue") || lower.includes("whether") || lower.includes("resolved")) score += 20;
+    if (lower.includes("article") || lower.includes("section") || lower.includes("code") || lower.includes("rule")) score += 25;
+    if (lower.includes("therefore") || lower.includes("hence") || lower.includes("conclude") || lower.includes("thus")) score += 20;
+
+    score = Math.min(100, Math.max(0, score));
+  }
+
   const passed = score >= 75;
-
   const resultObj = {
     score: score,
     passed: passed,

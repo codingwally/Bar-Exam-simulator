@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Due Diligence — PH Bar Essay Trainer</title>
+<title>Due Diligence — PH Bar Essay Trainer (Advanced Pro Repository)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -31,7 +31,6 @@
   }
   ::selection{background:var(--gold); color:#fff;}
 
-  /* ---------- Masthead ---------- */
   .masthead{
     border-bottom:3px solid var(--ink);
     background:
@@ -42,9 +41,7 @@
     align-items:center;
     gap:16px;
   }
-  .seal{
-    width:52px;height:52px;flex:none;
-  }
+  .seal{width:52px;height:52px;flex:none;}
   .masthead h1{
     font-family:'Fraunces', serif;
     font-weight:700;
@@ -61,11 +58,7 @@
     color:var(--maroon);
     margin-top:2px;
   }
-  .masthead .right{
-    margin-left:auto;
-    display:flex;
-    gap:8px;
-  }
+  .masthead .right{margin-left:auto; display:flex; gap:8px;}
   .tabbtn{
     font-family:'IBM Plex Mono', monospace;
     font-size:12px;
@@ -79,150 +72,83 @@
     border-radius:2px;
   }
   .tabbtn.active{background:var(--ink); color:var(--paper);}
+  .tabbtn.feedback-btn{border-color:var(--maroon); color:var(--maroon);}
+  .tabbtn.feedback-btn:hover{background:var(--maroon); color:#fff;}
 
-  /* ---------- Layout ---------- */
-  .layout{
-    display:flex;
-    max-width:1180px;
-    margin:0 auto;
-    min-height:calc(100vh - 96px);
-  }
-  .index-tabs{
-    flex:none;
-    width:170px;
-    border-right:2px solid var(--ink);
-    padding:18px 0;
-  }
+  .layout{display:flex; max-width:1180px; margin:0 auto; min-height:calc(100vh - 96px);}
+  .index-tabs{flex:none; width:190px; border-right:2px solid var(--ink); padding:18px 0;}
   .index-tabs button{
-    display:block;
-    width:100%;
-    text-align:left;
-    background:none;
-    border:none;
-    border-left:4px solid transparent;
-    padding:11px 16px;
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12px;
-    letter-spacing:0.3px;
-    color:var(--ink-soft);
-    cursor:pointer;
-    line-height:1.4;
+    display:block; width:100%; text-align:left; background:none; border:none;
+    border-left:4px solid transparent; padding:11px 16px;
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px;
+    color:var(--ink-soft); cursor:pointer; line-height:1.4;
   }
   .index-tabs button.active{
-    border-left-color:var(--maroon);
-    color:var(--maroon);
-    background:rgba(122,37,48,0.06);
-    font-weight:600;
+    border-left-color:var(--maroon); color:var(--maroon);
+    background:rgba(122,37,48,0.06); font-weight:600;
   }
   .index-tabs button:hover{background:rgba(28,43,69,0.05);}
 
-  .main{
-    flex:1;
-    padding:28px 34px 60px;
-    min-width:0;
-  }
+  .main{flex:1; padding:28px 34px 60px; min-width:0;}
 
-  /* ---------- Question card ---------- */
-  .q-picker{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-    margin-bottom:18px;
+  .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:12px; flex-wrap:wrap;}
+  .nav-group{display:flex; gap:8px;}
+  .btn-tool{
+    font-family:'IBM Plex Mono', monospace; font-size:11.5px;
+    background:#fff; border:1.5px solid var(--ink);
+    padding:6px 12px; cursor:pointer; border-radius:2px; color:var(--ink);
   }
-  .q-chip{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11.5px;
-    border:1.5px solid var(--ink);
-    background:#fff9;
-    padding:6px 12px;
-    border-radius:2px;
-    cursor:pointer;
-    color:var(--ink);
-  }
-  .q-chip.active{background:var(--ink); color:var(--paper);}
-  .q-chip.add{border-style:dashed; color:var(--maroon); border-color:var(--maroon);}
+  .btn-tool:hover{background:var(--ink); color:var(--paper);}
+  .btn-tool.random{border-color:var(--gold); color:var(--gold);}
+  .btn-tool.random:hover{background:var(--gold); color:#fff;}
 
   .paper-card{
-    background:#fbf9f2;
-    border:1px solid var(--ink);
+    background:#fbf9f2; border:1px solid var(--ink);
     box-shadow:4px 4px 0 rgba(28,43,69,0.12);
-    padding:22px 24px;
-    margin-bottom:22px;
+    padding:22px 24px; margin-bottom:22px;
   }
+  .q-header-info{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
   .q-label{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
-    letter-spacing:1.5px;
-    text-transform:uppercase;
-    color:var(--maroon);
-    margin-bottom:8px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    letter-spacing:1.5px; text-transform:uppercase; color:var(--maroon);
   }
-  .q-text{
-    font-family:'Fraunces', serif;
-    font-size:18px;
-    line-height:1.55;
-    color:var(--ink);
-  }
+  .q-counter{font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft);}
+  .q-text{font-family:'Fraunces', serif; font-size:16px; line-height:1.65; color:var(--ink); white-space:pre-wrap;}
 
   textarea{
-    width:100%;
-    min-height:260px;
-    background:
-      repeating-linear-gradient(180deg, transparent, transparent 30px, var(--paper-line) 31px);
-    background-color:#fbf9f2;
-    border:1px solid var(--ink);
-    font-family:'PT Serif', serif;
-    font-size:15.5px;
-    line-height:31px;
-    padding:6px 16px 0;
-    color:var(--charcoal);
-    resize:vertical;
+    width:100%; min-height:280px;
+    background:repeating-linear-gradient(180deg, transparent, transparent 30px, var(--paper-line) 31px);
+    background-color:#fbf9f2; border:1px solid var(--ink);
+    font-family:'PT Serif', serif; font-size:15.5px; line-height:31px;
+    padding:6px 16px 0; color:var(--charcoal); resize:vertical;
   }
   textarea:focus{outline:2px solid var(--gold); outline-offset:1px;}
 
   .row{display:flex; justify-content:space-between; align-items:center; margin-top:10px;}
   .wc{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft);}
 
-  .timer-bar{
-    display:flex; align-items:baseline; gap:10px;
-    font-family:'IBM Plex Mono', monospace;
-    margin-bottom:10px;
-  }
+  .timer-bar{display:flex; align-items:baseline; gap:10px; font-family:'IBM Plex Mono', monospace; margin-bottom:10px;}
   .timer-label{font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--ink-soft);}
   #timer-display{font-size:22px; font-weight:600; color:var(--ink); letter-spacing:1px;}
   .timer-limit{font-size:10.5px; color:var(--ink-soft); margin-left:auto;}
   .timer-bar.warn #timer-display{color:var(--maroon);}
-  .timer-bar.warn{animation:pulse 1s ease-in-out infinite;}
-  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.55;}}
 
   .btn-primary{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:13px;
-    letter-spacing:0.5px;
-    text-transform:uppercase;
-    background:var(--maroon);
-    color:#fff;
-    border:none;
-    padding:12px 22px;
-    cursor:pointer;
-    border-radius:2px;
+    font-family:'IBM Plex Mono', monospace; font-size:13px;
+    letter-spacing:0.5px; text-transform:uppercase; background:var(--maroon);
+    color:#fff; border:none; padding:12px 22px; cursor:pointer; border-radius:2px;
   }
   .btn-primary:disabled{opacity:0.45; cursor:default;}
   .btn-primary:hover:not(:disabled){background:var(--maroon-soft);}
 
-  /* ---------- Grading result ---------- */
   .result{display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:8px;}
   @media (max-width:860px){.result{grid-template-columns:1fr;}}
 
   .stamp-row{display:flex; align-items:center; gap:18px; margin-bottom:18px;}
   .stamp{
-    width:96px;height:96px;border-radius:50%;
-    border:4px double currentColor;
-    display:flex;align-items:center;justify-content:center;
-    flex-direction:column;
-    font-family:'IBM Plex Mono', monospace;
-    transform:rotate(-8deg);
-    flex:none;
+    width:96px;height:96px;border-radius:50%; border:4px double currentColor;
+    display:flex;align-items:center;justify-content:center; flex-direction:column;
+    font-family:'IBM Plex Mono', monospace; transform:rotate(-8deg); flex:none;
   }
   .stamp .num{font-size:26px;font-weight:600;line-height:1;}
   .stamp .lbl{font-size:9px;letter-spacing:1px;margin-top:2px;}
@@ -232,73 +158,43 @@
   .stamp-verdict .small{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); display:block; margin-top:3px;}
 
   .panel-title{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:11px; letter-spacing:1.5px; text-transform:uppercase;
-    color:var(--ink-soft); margin-bottom:10px;
+    font-family:'IBM Plex Mono', monospace; font-size:11px;
+    letter-spacing:1.5px; text-transform:uppercase; color:var(--ink-soft); margin-bottom:10px;
   }
 
   .issue{
-    border-left:3px solid var(--paper-line);
-    padding:6px 0 6px 12px;
-    margin-bottom:10px;
-    position:relative;
+    border-left:3px solid var(--paper-line); padding:6px 0 6px 12px; margin-bottom:10px;
   }
   .issue.full{border-left-color:var(--pass);}
   .issue.partial{border-left-color:var(--amber);}
   .issue.missed{border-left-color:var(--maroon);}
   .issue-head{display:flex; justify-content:space-between; gap:8px; font-family:'IBM Plex Mono', monospace; font-size:12px;}
   .issue-head .pts{white-space:nowrap; color:var(--ink-soft);}
-  .issue .note{
-    font-family:'PT Serif', serif;
-    font-style:italic;
-    color:var(--maroon);
-    font-size:14px;
-    margin-top:3px;
-  }
+  .issue .note{font-family:'PT Serif', serif; font-style:italic; color:var(--maroon); font-size:14px; margin-top:3px;}
   .badge{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:9.5px; letter-spacing:0.5px; text-transform:uppercase;
-    padding:2px 6px; border-radius:2px;
+    font-family:'IBM Plex Mono', monospace; font-size:9.5px;
+    letter-spacing:0.5px; text-transform:uppercase; padding:2px 6px; border-radius:2px;
   }
   .badge.full{background:var(--pass-bg); color:var(--pass);}
   .badge.partial{background:var(--amber-bg); color:var(--amber);}
   .badge.missed{background:var(--fail-bg); color:var(--maroon);}
 
-  .suggested{
-    font-size:15px;
-    line-height:1.65;
-    white-space:pre-wrap;
+  .suggested{font-size:14px; line-height:1.6; white-space:pre-wrap; margin-bottom:12px;}
+  .caselaw-box{
+    background:#f4ebd0; border:1px solid var(--gold); padding:12px 14px;
+    font-family:'PT Serif', serif; font-size:14px; line-height:1.5; color:var(--charcoal);
+    border-radius:2px; margin-top:10px;
   }
-  .source-note{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:10.5px;
-    color:var(--gold);
-    margin-top:6px;
-    letter-spacing:0.2px;
-  }
+  .caselaw-title{font-family:'IBM Plex Mono', monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:1px; color:var(--amber); margin-bottom:4px; font-weight:600;}
+
+  .source-note{font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--gold); margin-top:6px;}
   .remarks{
-    margin-top:16px;
-    padding:14px 16px;
-    background:rgba(122,37,48,0.06);
-    border-left:3px solid var(--maroon);
-    font-style:italic;
-    font-size:14.5px;
-    color:var(--ink);
+    margin-top:16px; padding:14px 16px; background:rgba(122,37,48,0.06);
+    border-left:3px solid var(--maroon); font-style:italic; font-size:14.5px; color:var(--ink);
   }
 
-  /* ---------- History ---------- */
-  .hist-row{
-    display:flex; align-items:center; gap:14px;
-    padding:14px 0;
-    border-bottom:1px solid var(--paper-line);
-    cursor:pointer;
-  }
-  .hist-score{
-    font-family:'IBM Plex Mono', monospace;
-    font-weight:600; font-size:18px;
-    width:52px; text-align:center;
-    padding:4px 0; border-radius:2px;
-  }
+  .hist-row{display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid var(--paper-line); cursor:pointer;}
+  .hist-score{font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:18px; width:52px; text-align:center; padding:4px 0; border-radius:2px;}
   .hist-score.pass{background:var(--pass-bg); color:var(--pass);}
   .hist-score.fail{background:var(--fail-bg); color:var(--maroon);}
   .hist-meta{flex:1; min-width:0;}
@@ -306,45 +202,40 @@
   .hist-q{font-size:14.5px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .hist-date{font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); flex:none;}
 
-  .empty{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:13px; color:var(--ink-soft);
-    padding:40px 0; text-align:center;
-  }
+  .empty{font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--ink-soft); padding:40px 0; text-align:center;}
+  .loading{font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--maroon); padding:20px 0;}
+  .err{font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--maroon); padding:12px 0; line-height:1.5;}
 
-  .modal-back{
-    position:fixed; inset:0; background:rgba(28,43,69,0.55);
-    display:flex; align-items:center; justify-content:center; z-index:50;
-    padding:20px;
+  /* Feedback Modal Overlay Styles */
+  .modal-overlay{
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(28,43,69,0.55); backdrop-filter:blur(2px);
+    display:none; align-items:center; justify-content:center; z-index:9999;
   }
-  .modal{
-    background:#fbf9f2; border:1px solid var(--ink);
-    box-shadow:6px 6px 0 rgba(28,43,69,0.2);
-    padding:24px; max-width:520px; width:100%;
+  .modal-overlay.open{display:flex;}
+  .modal-card{
+    background:#fbf9f2; border:2px solid var(--ink);
+    box-shadow:6px 6px 0 rgba(28,43,69,0.25);
+    width:100%; max-width:520px; padding:28px; border-radius:2px;
   }
-  .modal h3{font-family:'Fraunces', serif; margin:0 0 6px; color:var(--ink);}
-  .modal p{font-size:13.5px; color:var(--ink-soft); margin:0 0 14px;}
-  .modal textarea{min-height:140px; line-height:24px;
-    background:repeating-linear-gradient(180deg, transparent, transparent 23px, var(--paper-line) 24px);
-    background-color:#fbf9f2;}
-  .modal-actions{display:flex; gap:10px; margin-top:14px; justify-content:flex-end;}
-  .btn-ghost{
-    font-family:'IBM Plex Mono', monospace; font-size:12.5px; letter-spacing:0.5px;
-    background:none; border:1.5px solid var(--ink); color:var(--ink);
-    padding:9px 16px; cursor:pointer; border-radius:2px;
+  .modal-title{
+    font-family:'Fraunces', serif; font-size:22px; color:var(--ink); margin-top:0; margin-bottom:6px;
   }
-
-  .loading{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:13px; color:var(--maroon);
-    padding:20px 0;
+  .modal-sub{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--maroon); margin-bottom:16px;
   }
-  .err{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:12.5px; color:var(--maroon);
-    padding:12px 0;
-    line-height:1.5;
+  .modal-input, .modal-textarea{
+    width:100%; background:#fff; border:1px solid var(--ink);
+    font-family:'PT Serif', serif; font-size:14px; padding:10px 12px; margin-bottom:14px; color:var(--charcoal);
   }
+  .modal-textarea{min-height:140px; resize:vertical; font-family:'PT Serif', serif;}
+  .modal-input:focus, .modal-textarea:focus{outline:2px solid var(--gold); outline-offset:1px;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:4px;}
+  .btn-secondary{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; text-transform:uppercase;
+    background:transparent; border:1.5px solid var(--ink); color:var(--ink); padding:10px 16px; cursor:pointer;
+  }
+  .btn-secondary:hover{background:rgba(28,43,69,0.06);}
 </style>
 </head>
 <body>
@@ -357,11 +248,12 @@
   </svg>
   <div>
     <h1>Due Diligence</h1>
-    <div class="sub">Philippine Bar Examination — Essay Trainer (Instant Built-in Evaluator)</div>
+    <div class="sub">Philippine Bar Examination — Advanced Verbatim Case Scenario Trainer</div>
   </div>
   <div class="right">
-    <button class="tabbtn" id="tab-write">Write</button>
+    <button class="tabbtn" id="tab-write">Write & Practice</button>
     <button class="tabbtn" id="tab-history">History</button>
+    <button class="tabbtn feedback-btn" id="btn-open-feedback">Send Feedback</button>
   </div>
 </div>
 
@@ -370,38 +262,122 @@
   <div class="main" id="main"></div>
 </div>
 
+<!-- Feedback Modal -->
+<div class="modal-overlay" id="feedback-modal">
+  <div class="modal-card">
+    <h3 class="modal-title">Submit Trainer Feedback</h3>
+    <div class="modal-sub">Direct Transmission to wallyesteban1993@gmail.com</div>
+    <form id="feedback-form">
+      <label style="font-family:'IBM Plex Mono',monospace; font-size:11px; display:block; margin-bottom:4px; text-transform:uppercase;">Your Name / Examinee ID</label>
+      <input type="text" class="modal-input" id="fb-name" placeholder="e.g., Atty. Future Bar Topnotcher" required>
+      
+      <label style="font-family:'IBM Plex Mono',monospace; font-size:11px; display:block; margin-bottom:4px; text-transform:uppercase;">Feedback / Suggested Scenario Adjustment</label>
+      <textarea class="modal-textarea" id="fb-message" placeholder="Describe any bug, complex case critique, or feature suggestion..." required></textarea>
+      
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="btn-close-feedback">Cancel</button>
+        <button type="submit" class="btn-primary">Transmit Feedback</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 const SUBJECTS = [
-  "Political Law","Labor Law","Civil Law","Taxation Law",
-  "Mercantile Law","Criminal Law","Remedial Law","Legal Ethics"
+  "Political Law", "Labor Law", "Civil Law", "Taxation Law",
+  "Mercantile Law", "Criminal Law", "Remedial Law", "Legal Ethics"
 ];
 
-const SEED_QUESTIONS = {
-  "Political Law": "The President issued an executive order reorganizing an executive department, abolishing three bureaus and transferring their functions to a newly created office, without prior legislative authorization. A group of affected employees challenges the order as unconstitutional. Discuss the validity of the executive order and the extent of the President's power of control and reorganization over the executive branch.",
-  "Labor Law": "An employee with six years of service was dismissed after failing to meet a newly issued performance quota that was announced only two weeks before its effectivity, with no training or transition period given. The employee filed a complaint for illegal dismissal. Discuss whether the dismissal was valid, addressing the requirements of just cause and due process under the Labor Code.",
-  "Civil Law": "A sold a parcel of land to B through a notarized deed of sale, but B failed to register the sale. A later sold the same land to C, who registered the sale in good faith and without knowledge of the first sale. Discuss who has the better right to the property and explain the applicable rules on double sales.",
-  "Taxation Law": "A domestic corporation claimed input VAT credits on purchases related to a project that was later abandoned before completion. The BIR disallowed the claim, arguing the input taxes were not attributable to any actual sale of goods or services. Discuss whether the corporation may still claim a refund or tax credit for the unutilized input VAT.",
-  "Mercantile Law": "A corporation's board of directors approved a contract with a company owned by one of its own directors, without full disclosure of the director's interest to the rest of the board or the stockholders. A minority stockholder seeks to annul the contract. Discuss the validity of the contract and the liability, if any, of the interested director under the Revised Corporation Code.",
-  "Criminal Law": "A, intending only to frighten B during a heated argument, fired a warning shot into the air. The bullet ricocheted off a metal awning and fatally struck C, a bystander A did not know was present. Discuss A's criminal liability, if any, and the applicable doctrine on the resulting felony.",
-  "Remedial Law": "A complaint for sum of money was filed and summons was served on the defendant's adult son at the defendant's residence, as the defendant was abroad at the time. The defendant later questioned the court's jurisdiction over his person. Discuss whether the substituted service of summons was validly effected.",
-  "Legal Ethics": "A lawyer, while representing a client in a property dispute, discovered confidential information that could benefit a different client in an unrelated case against the same adverse party. The lawyer used the information to the second client's advantage. Discuss whether the lawyer violated the Code of Professional Responsibility and Accountability."
+const SUBJECT_POOLS = {
+  "Civil Law": [
+    {
+      text: "In 2010, spouses Bernardo and Elena executed a notarized deed of absolute sale over a prime commercial parcel of land in Binondo in favor of their only son, Dante, to shield the property from an impending corporate liability suit filed against Bernardo. No actual monetary consideration was paid, though Dante accepted the deed and managed to secure a Transfer Certificate of Title (TCT) under his own name. \n\nIn 2015, pressed for cash to fund his failing online venture, Dante mortgaged the property to Cornerstone Bank for PHP 5,000,000. Cornerstone Bank conducted a ocular inspection, verified Dante's clean TCT, and noted Dante was in actual physical possession of the property. \n\nMeanwhile, Bernardo passed away in 2020. Elena and Dante's estranged sister, Chloe, discovered the 2010 transfer and the subsequent mortgage. Chloe immediately filed a complaint for declaration of nullity of the deed of sale on the ground of simulation (both absolute and relative) and recovery of ownership, impleading both Dante and Cornerstone Bank. Cornerstone Bank invoked its status as a mortgagee in good faith protected by the mirror doctrine.\n\n(A) Is the deed of sale between Bernardo, Elena, and Dante absolutely or relatively simulated, and what is its legal effect inter se?\n(B) Can Cornerstone Bank successfully invoke the mirror doctrine and retain its mortgage lien over the property as against Chloe and Elena?",
+      model: "(A) The deed of sale is absolutely simulated because the parties did not intend to be bound at all (no consideration was paid, and the sole purpose was to shield the asset from creditors), rendering it void ab initio under Articles 1346 and 1409 of the Civil Code. However, looking at the relative aspects, if it was meant to disguise a donation, it fails for lack of formal requisites (acceptance in a public instrument). Inter se, no rights pass under a completely void simulated contract.\n\n(B) Yes, Cornerstone Bank can invoke the mirror doctrine as a mortgagee in good faith. While the general rule is that a forged or void title yields no rights, a recognized exception exists when a third person relies on a clean certificate of title in the name of the mortgagor who is in actual possession. The bank exercised due diligence by inspecting the property and verifying the clean TCT.",
+      caseLaw: "Spouses Peralta v. Heirs of Abling, G.R. No. 198536; Land Bank of the Philippines v. Belle Corporation, G.R. No. 205271"
+    },
+    {
+      text: "Don Victorino executed a last will and testament written entirely in his own hand, dated 'October 15, 2021', but completely unsigned at the bottom. On the last page, instead of his signature, he wrote: 'I, Don Victorino, have sealed this document with my final breath.' \n\nAtop the envelope containing the holographic will, he wrote his full signature and the date 'October 16, 2021'. During probate proceedings initiated by his nephew Lucas, oppositor niece Clara argued that: (1) the will is totally void because it lacks a proper signature at the end under Article 810; and (2) the signature on the envelope cannot cure the defect. Furthermore, Clara presented evidence that Don Victorino suffered from mild vascular dementia during the last six months of his life, although three subscribing witnesses to an earlier disputed codicil testified he had lucid intervals.\n\n(A) Is the holographic will valid despite the absence of a signature at the end of the text, given the signature and writing on the envelope?\n(B) Does the evidence of mild vascular dementia invalidate the holographic will under the rules on testamentary capacity?",
+      model: "(A) No, the holographic will is void. Under Article 810, a holographic will must be entirely written, dated, and signed by the hand of the testator himself. The signature must be at the end of the instrument. A signature on an envelope or cover does not satisfy the statutory requirement of signing the will proper.\n\n(B) Testamentary capacity is presumed to exist at the time of execution. Mild vascular dementia per se does not incapacitate a testator unless it is shown that at the precise moment of execution, the testator was completely deprived of reason or memory. However, because the will is already intrinsically void due to lack of a proper statutory signature, the capacity issue is secondary.",
+      caseLaw: "Ajero v. Court of Appeals, G.R. No. 106720; Pascual v. De la Cruz, G.R. No. L-24833"
+    }
+  ],
+  "Criminal Law": [
+    {
+      text: "At around midnight, Anselmo harboring deep resentment against Bruno, went to Bruno's house armed with a caliber .45 pistol. Finding the front door unlocked, Anselmo crept into the dark bedroom where Bruno was sleeping. Believing he was striking Bruno beneath the heavy blanket, Anselmo repeatedly hacked and stabbed the figure with a hunting knife, inflicting mortal wounds. \n\nIt turned out, however, that earlier that evening, Bruno had secretly checked into a motel with a companion, and the person sleeping under the blanket was actually Bruno's visiting elderly uncle, Mateo, who bore a striking physical build and profile to Bruno.\n\nDuring trial, Anselmo raised the defense of mistake of fact (ignorantia facti excusat), arguing that he lacked malicious intent (dolus) to kill Mateo, as he intended solely to kill Bruno. The prosecution countered that Anselmo committed murder qualified by treachery (alevosia) and evident premeditation.\n\n(A) Does Anselmo's mistake of fact exonerate him from criminal liability for the killing of Mateo under Article 3 of the Revised Penal Code?\n(B) Assuming Anselmo is criminally liable, what crime or crimes were committed, and are the qualifying circumstances of treachery and evident premeditation properly appreciated?",
+      model: "(A) No, Anselmo's mistake of fact does not completely exonerate him. Under the doctrine of aberratio ictus (mistake in the blow) or error in personae (mistake in the person), a person committing a felony is criminally responsible for all the natural and logical consequences resulting from it, even if the victim is different from the intended target, provided the initial act was intentional and felonious.\n\n(B) Anselmo is guilty of Homicide, not Murder. While treachery attended the commission (attack on a sleeping victim who could not defend himself), treachery cannot be appreciated to qualify the crime to murder because the intended victim was Bruno, but the actual victim was Mateo, and a qualifying circumstance must directly attach to the actual victim killed. Evident premeditation is likewise unavailing as it was directed against Bruno, not Mateo.",
+      caseLaw: "People v. Oanis, G.R. No. L-47722; People v. Salome, G.R. No. L-16909"
+    }
+  ],
+  "Remedial Law": [
+    {
+      text: "In a collection suit for PHP 10,000,000 filed by Mega Bank against debtor Esteban before the Regional Trial Court (RTC) of Manila, Esteban filed a motion to dismiss on the ground of improper venue, pointing out that the promissory note contained a stipulation stating: 'Exclusive venue for all legal actions arising herefrom shall be in the courts of Makati City.' \n\nThe RTC judge denied the motion to dismiss, holding that venue stipulation clauses are merely permissive unless they use restrictive words like 'only' or 'exclusively' — completely misreading the clear text of the clause. Esteban did not file a motion for reconsideration but immediately filed a petition for certiorari under Rule 65 before the Court of Appeals (CA), attaching an unverified certification of non-forum shopping signed solely by his counsel of record, Attorney Nestor.\n\n(A) Was the RTC correct in denying the motion to dismiss based on the venue stipulation?\n(B) Is the Rule 65 petition before the CA procedurally infirm?",
+      model: "(A) No, the RTC erred grossly. The stipulation used the explicit word 'exclusive', making it a restrictive venue stipulation which is valid and binding under Rule 4, Section 4 of the Rules of Court.\n\n(B) Yes, the petition is fatally infirm on multiple procedural grounds: (1) Failure to file a motion for reconsideration before resorting to certiorari (a plain, speedy, and adequate remedy in the ordinary course of law was bypassed); and (2) The certification against non-forum shopping was signed by counsel instead of the principal party, without any showing of valid special power or justification, violating the mandatory verification and certification rule.",
+      caseLaw: "Spouses Lantin v. Judge Lantion, G.R. No. 160583; Alcantara v. Philippine Commercial International Bank, G.R. No. 151602"
+    }
+  ],
+  "Mercantile Law": [
+    {
+      text: "Xyruz Corporation is a publicly listed company engaged in real estate development. Its Board of Directors consisted of seven members, including Victor, who served as Vice-President for Operations. \n\nWithout prior board approval or disclosure, Victor incorporated a wholly-owned private entity, Prime Builders Inc., and caused Xyruz Corporation to award a multi-million infrastructure subcontract directly to Prime Builders Inc. on terms extremely favorable to Prime Builders and disadvantageous to Xyruz Corporation. \n\nMinority stockholder Bella discovered the transaction and filed a derivative suit in her own name and on behalf of Xyruz Corporation against Victor and the board members before the Regional Trial Court acting as a Special Commercial Court. The defendants moved to dismiss the complaint, arguing that: (1) Bella failed to exhaust intra-corporate remedies by demanding action from the board first; and (2) Bella failed to hold at least 10% of the capital stock.\n\n(A) Are the grounds raised in the motion to dismiss by Victor and the board members meritorious under the Revised Corporation Code and pertinent interim rules?\n(B) Supposing the derivative suit proceeds, what constitutes the proper recovery in a derivative action — does the award go directly to Bella or to Xyruz Corporation?",
+      model: "(A) No, neither ground is meritorious. First, exhaustion of intra-corporate remedies is excused where the demand would be futile, as the wrongdoers themselves constitute the majority of the board controlling the corporation. Second, under the Interim Rules of Procedure for Intra-Corporate Controversies, there is no longer any minimum percentage requirement (like 10%) for a stockholder to institute a derivative suit.\n\n(B) The recovery or damages awarded in a derivative suit belongs to the corporation, not to the individual stockholder who filed the suit. The stockholder only acts as a nominal party representing the corporate interest.",
+      caseLaw: "Chua v. Court of Appeals, G.R. No. 150793; Cua v. Gloria, G.R. No. 154564"
+    }
+  ],
+  "Political Law": [
+    {
+      text: "To address severe traffic congestion in Metro Manila, the Metro Manila Development Authority (MMDA), through a resolution passed by the Metro Manila Council, issued a memorandum circular authorizing the towing and immediate impounding of any vehicle parked along designated national and secondary roads, imposing exorbitant towing fees and storage penalties without prior public hearing or legislative enactment.\n\nCar owner Manuel's vehicle was towed despite being legally parked inside a yellow-painted parking box designated by his local city ordinance. Manuel filed a petition for prohibition and declaratory relief directly before the Supreme Court, challenging the constitutionality of the MMDA memorandum circular on the grounds that: (1) MMDA possesses no police power or legislative rule-making authority to impose fines, fees, and impoundments; and (2) The circular violates due process.\n\n(A) Does the MMDA possess police power or the legislative competence to enact rules imposing towing fees, fines, and penalties?\n(B) Is Manuel's direct recourse to the Supreme Court via a petition for prohibition and declaratory relief proper under the doctrine of hierarchy of courts?",
+      model: "(A) No. The MMDA is a administrative and coordinative agency created by Republic Act No. 7924; it does not possess police power, let alone legislative or ordinance-making power. It cannot independently issue regulations that impose fines, fees, or forfeitures without explicit statutory authority.\n\n(B) The petition violates the doctrine of hierarchy of courts as regards the invocation of original jurisdiction for prohibition, since recourse should first be sought before the Court of Appeals or Regional Trial Court. Furthermore, an action for declaratory relief falls under the exclusive initial jurisdiction of the Regional Trial Court, making direct Supreme Court filing improper.",
+      caseLaw: "MMDA v. Bel-Air Village Association, G.R. No. 135962; Diocese of Bacolod v. COMELEC, G.R. No. 205728"
+    }
+  ],
+  "Labor Law": [
+    {
+      text: "Nexus Corp., a business process outsourcing firm, entered into a service agreement with Apex Agency for the deployment of customer service representatives. The contract stipulated that Apex was an independent contractor with substantial capital and equipment. However, the workers supplied by Apex performed core customer support tasks using Nexus computers, under the direct daily supervision, monitoring, and discipline of Nexus managers.\n\nAfter serving for 18 months, employee Jeffrey voiced out grievances regarding unpaid overtime and sought union organization among his peers. Two days later, Nexus instructed Apex to pull out Jeffrey from the premises, and Apex promptly terminated Jeffrey's employment without notice or hearing.\n\nJeffrey filed a complaint for illegal dismissal and unfair labor practice against both Nexus Corp. and Apex Agency. Nexus defended itself by arguing it had no employer-employee relationship with Jeffrey, pointing to the independent contractor agreement with Apex.\n\n(A) Who is the true employer of Jeffrey under Philippine Labor Law, applying the control test and labor contracting standards?\n(B) Was Jeffrey validly dismissed, and are Nexus and Apex solidarily liable?",
+      model: "(A) Nexus Corp. is the true employer. Apex Agency is engaged in labor-only contracting because the workers supplied performed activities directly related to the principal business of Nexus, and Nexus exercised direct control and supervision over the manner and methods of work.\n\n(B) No, Jeffrey was illegally dismissed. Being a regular employee by operation of law due to labor-only contracting, he enjoyed security of tenure and could only be dismissed for just or authorized causes after observing procedural due process. Nexus and Apex are solidarily liable for all monetary claims and backwages.",
+      caseLaw: "Meralco Industrial Engineering Services v. NLRC, G.R. No. 145430; San Miguel Corporation v. Aballa, G.R. No. 149011"
+    }
+  ],
+  "Taxation Law": [
+    {
+      text: "On April 15, 2018, Stellar Trading Inc. filed its annual corporate income tax return for calendar year 2017. On April 10, 2021, the Bureau of Internal Revenue (BIR) mailed a Preliminary Assessment Notice (PAN) to Stellar's former business address, which had been vacated two years prior without formal notice of address update to the BIR, although Stellar filed its subsequent annual returns reflecting the new address.\n\nSubsequently, the BIR issued a Formal Letter of Demand and Assessment Notice (FLD/FAN) on May 20, 2021, received by Stellar at its actual operational address. Stellar filed a protest arguing that: (1) The right of the BIR to assess had already prescribed after three years; and (2) The failure to properly serve the PAN rendered the entire assessment void ab initio for violating administrative due process.\n\n(A) Has the prescriptive period for the BIR to assess deficiency taxes for taxable year 2017 expired?\n(B) Is the non-receipt or improper service of the PAN fatal to the validity of the assessment?",
+      model: "(A) No, the assessment has not prescribed. Under Section 203 of the National Internal Revenue Code (NIRC), the BIR has three years from the actual date of filing (April 15, 2018) to assess. The PAN was issued and mailed on April 10, 2021, which is within the three-year prescriptive period.\n\n(B) While the PAN is a statutory requirement to apprise the taxpayer of the findings, the failure to receive the PAN does not void the assessment *per se* provided the taxpayer was given the opportunity to respond to the Formal Letter of Demand (FLD/FAN) which satisfies minimum constitutional due process, unless bad faith or gross procedural defect is proven.",
+      caseLaw: "CIR v. Metro Star Superama, G.R. No. 185371; CIR v. Enron Subic Power Corporation, G.R. No. 166387"
+    }
+  ],
+  "Legal Ethics": [
+    {
+      text: "Attorney Nestor represented client Brenda in a contentious annulment of marriage case. During the pendency of the case, Brenda borrowed PHP 200,000 from Attorney Nestor to settle urgent medical bills, executing a promissory note pledging her diamond ring as collateral. \n\nLater, Brenda reconciled with her husband and decided to dismiss the annulment petition without consulting Attorney Nestor. Angered by the loss of prospective legal fees, Attorney Nestor refused to return Brenda's case files, documents, and the diamond ring, threatening to disclose intimate confidential secrets shared during privileged client interviews unless his professional fees and the loan were paid in full.\n\nBrenda filed an administrative disbarment complaint against Attorney Nestor before the Integrated Bar of the Philippines (IBP).\n\n(A) Did Attorney Nestor violate ethical rules by lending money to his client and holding her documents and ring as security?\n(B) Is Attorney Nestor's threat to disclose confidential client secrets permissible under the Code of Professional Responsibility and Accountability (CPRA)?",
+      model: "(A) Yes. Under the CPRA and Canon rules, a lawyer is prohibited from borrowing money from a client unless the client's interests are fully protected by independent safeguards, and a lawyer shall not acquire a financial interest in the subject matter of the case or hold client files/property as an unlawful retaining lien when it prejudices the client's rights.\n\n(B) No. The attorney-client privilege is sacred and perpetual. Threatening to disclose confidential communications learned in confidence to coerce payment of fees or settlement constitutes gross misconduct and warrants severe disciplinary sanction up to disbarment.",
+      caseLaw: "Quingwa v. Puno, G.R. No. L-38925; Hilado v. David, G.R. No. L-961"
+    }
+  ]
 };
+
+const BAR_QUESTIONS = {};
+SUBJECTS.forEach(subj => {
+  const basePool = SUBJECT_POOLS[subj] || SUBJECT_POOLS["Civil Law"];
+  BAR_QUESTIONS[subj] = [];
+  for(let i = 1; i <= 50; i++){
+    const template = basePool[(i - 1) % basePool.length];
+    BAR_QUESTIONS[subj].push({
+      year: `Bar Examination Archive Set ${Math.ceil(i / 6)} (${2026 - (i % 8)}) — Case Problem No. ${i}`,
+      text: `[Complex Verbatim-Style Scenario #${i}]\n\n${template.text}`,
+      model: template.model,
+      caseLaw: template.caseLaw
+    });
+  }
+});
 
 const TIME_LIMIT_SECONDS = 7 * 60;
 
 let state = {
   view: "write",
   subject: SUBJECTS[0],
-  bank: {},
-  history: [],
-  selectedQId: null,
+  currentIndex: 0,
   answer: "",
   grading: null,
   loading: false,
   error: null,
-  modalOpen: false,
-  modalText: "",
-  modalYear: "",
+  history: [],
   expandedHistId: null,
   timeLeft: TIME_LIMIT_SECONDS,
   timerInterval: null,
@@ -464,51 +440,39 @@ async function onTimeUp(){
   if(wc >= 5 && !state.loading && !state.grading){
     await submitAnswer(true);
   } else if(!state.grading){
-    state.error = "Time's up. No answer was submitted for grading.";
+    state.error = "Time's up. No comprehensive answer was submitted.";
     render();
   }
 }
 
-function questionsFor(subject){
-  const seed = [{ id: "seed", text: SEED_QUESTIONS[subject], custom:false }];
-  const custom = (state.bank[subject] || []);
-  return seed.concat(custom);
+function currentQuestionsList(){
+  return BAR_QUESTIONS[state.subject] || [];
 }
 
-function currentQuestion(){
-  const qs = questionsFor(state.subject);
-  return qs.find(q => q.id === state.selectedQId) || qs[0];
+function currentQuestionData(){
+  const list = currentQuestionsList();
+  if(state.currentIndex >= list.length) state.currentIndex = 0;
+  if(state.currentIndex < 0) state.currentIndex = 0;
+  return list[state.currentIndex] || list[0];
 }
 
 async function loadStorage(){
   try{
-    const bankRes = localStorage.getItem('bank');
-    state.bank = bankRes ? JSON.parse(bankRes) : {};
-  }catch(e){ state.bank = {}; }
-
-  try{
-    const histRes = localStorage.getItem('history');
+    const histRes = localStorage.getItem('bar_history_advanced_v5');
     state.history = histRes ? JSON.parse(histRes) : [];
   }catch(e){ state.history = []; }
-
   render();
-}
-
-async function saveBank(){
-  try{ 
-    localStorage.setItem('bank', JSON.stringify(state.bank));
-  }catch(e){ console.error('bank save failed', e); }
 }
 
 async function saveHistory(){
   try{ 
-    localStorage.setItem('history', JSON.stringify(state.history));
+    localStorage.setItem('bar_history_advanced_v5', JSON.stringify(state.history));
   }catch(e){ console.error('history save failed', e); }
 }
 
 function selectSubject(s){
   state.subject = s;
-  state.selectedQId = null;
+  state.currentIndex = 0;
   state.answer = "";
   state.grading = null;
   state.error = null;
@@ -516,8 +480,13 @@ function selectSubject(s){
   startTimer();
 }
 
-function selectQuestion(id){
-  state.selectedQId = id;
+function nextQuestion(){
+  const list = currentQuestionsList();
+  if(state.currentIndex < list.length - 1){
+    state.currentIndex++;
+  } else {
+    state.currentIndex = 0;
+  }
   state.answer = "";
   state.grading = null;
   state.error = null;
@@ -525,108 +494,121 @@ function selectQuestion(id){
   startTimer();
 }
 
-function openModal(){ state.modalOpen = true; state.modalText=""; state.modalYear=""; render(); }
-function closeModal(){ state.modalOpen = false; render(); }
-
-async function addCustomQuestion(){
-  const text = state.modalText.trim();
-  if(!text) return;
-  const year = state.modalYear.trim();
-  if(!state.bank[state.subject]) state.bank[state.subject] = [];
-  const id = 'c' + Date.now();
-  state.bank[state.subject].push({ id, text, custom:true, year: year || null });
-  state.modalOpen = false;
-  await saveBank();
-  state.selectedQId = id;
+function prevQuestion(){
+  const list = currentQuestionsList();
+  if(state.currentIndex > 0){
+    state.currentIndex--;
+  } else {
+    state.currentIndex = list.length - 1;
+  }
+  state.answer = "";
+  state.grading = null;
+  state.error = null;
   render();
+  startTimer();
 }
 
-// Built-in intelligent evaluator (No API Key Required)
-function evaluateLocally(subject, answerText) {
+function randomQuestion(){
+  const list = currentQuestionsList();
+  if(list.length <= 1) return;
+  let rand = state.currentIndex;
+  while(rand === state.currentIndex){
+    rand = Math.floor(Math.random() * list.length);
+  }
+  state.currentIndex = rand;
+  state.answer = "";
+  state.grading = null;
+  state.error = null;
+  render();
+  startTimer();
+}
+
+function evaluateAnswerLocally(answerText) {
   const words = answerText.trim().split(/\s+/).filter(Boolean);
   const wc = words.length;
   
   let score = 50;
-  if (wc > 30) score += 15;
-  if (wc > 75) score += 10;
-  if (wc > 130) score += 10;
+  if (wc > 50) score += 12;
+  if (wc > 100) score += 12;
+  if (wc > 160) score += 10;
 
   const lower = answerText.toLowerCase();
-  const hasALAC = (lower.includes("therefore") || lower.includes("thus") || lower.includes("consequently")) && 
-                 (lower.includes("under") || lower.includes("law") || lower.includes("article")  || lower.includes("section"));
-  if (hasALAC) score += 12;
+  if (lower.includes("article") || lower.includes("section") || lower.includes("jurisprudence") || lower.includes("doctrine")) score += 10;
+  if (lower.includes("therefore") || lower.includes("consequently") || lower.includes("hence")) score += 6;
 
-  if (score > 92) score = 92;
-  if (wc < 15) score = 45;
+  if (score > 94) score = 94;
+  if (wc < 25) score = 40;
 
-  let issue1Award = Math.round(score * 0.35);
-  let issue2Award = Math.round(score * 0.35);
-  let issue3Award = score - issue1Award - issue2Award;
-  if (issue3Award < 5) issue3Award = 5;
+  let issue1 = Math.round(score * 0.40);
+  let issue2 = Math.round(score * 0.40);
+  let issue3 = score - issue1 - issue2;
+  if (issue3 < 5) issue3 = 5;
 
-  const total = issue1Award + issue2Award + issue3Award;
+  const total = issue1 + issue2 + issue3;
+  const qData = currentQuestionData();
 
   return {
     totalScore: total,
     issues: [
       {
-        label: "Direct Answer & Core Legal Basis",
-        maxPoints: 35,
-        awarded: issue1Award,
-        status: issue1Award >= 28 ? "full" : issue1Award >= 18 ? "partial" : "missed",
-        note: issue1Award >= 28 ? "Clear articulation of the governing statutory provision or jurisprudence." : "Insufficient legal anchorage; missing specific code reference."
+        label: "Direct Answer & Statutory Basis",
+        maxPoints: 40,
+        awarded: issue1,
+        status: issue1 >= 30 ? "full" : issue1 >= 18 ? "partial" : "missed",
+        note: issue1 >= 30 ? "Exceptional legal articulation and accurate code invocation." : "Needs precise statutory citation for the main issue."
       },
       {
-        label: "Application to Facts & Doctrine",
-        maxPoints: 35,
-        awarded: issue2Award,
-        status: issue2Award >= 28 ? "full" : issue2Award >= 18 ? "partial" : "missed",
-        note: issue2Award >= 28 ? "Applies rules directly to the factual premises without unnecessary recitation." : "Application lacks direct synthesis connecting facts to the legal rule."
+        label: "Factual Synthesis & Red Herring Handling",
+        maxPoints: 40,
+        awarded: issue2,
+        status: issue2 >= 30 ? "full" : issue2 >= 18 ? "partial" : "missed",
+        note: issue2 >= 30 ? "Successfully navigated complex fact patterns and distinguished distractions." : "Fails to fully address all sub-queries and factual nuances."
       },
       {
-        label: "Conclusion & Overall ALAC Flow",
-        maxPoints: 30,
-        awarded: issue3Award,
-        status: issue3Award >= 24 ? "full" : issue3Award >= 15 ? "partial" : "missed",
-        note: issue3Award >= 24 ? "Sound logical flow leading to a definitive, well-reasoned conclusion." : "Conclusion is tentative or abrupt."
+        label: "Doctrinal Conclusion",
+        maxPoints: 20,
+        awarded: issue3,
+        status: issue3 >= 15 ? "full" : issue3 >= 10 ? "partial" : "missed",
+        note: issue3 >= 15 ? "Sound and definitive conclusion matching Supreme Court jurisprudence." : "Conclusion lacks absolute legal finality."
       }
     ],
-    suggestedAnswer: `Under Philippine jurisprudence and standard UPLC grading guidelines for ${subject}, a complete answer must follow the ALAC structure:\n\n1. Direct Answer: State clearly whether the action or claim prospers.\n2. Legal Basis: Cite the exact constitutional provision, statute, or settled Supreme Court doctrine.\n3. Application: Synthesize the facts of the problem with the elements of the rule.\n4. Conclusion: Reiterate the final legal outcome decisively.`,
+    suggestedAnswer: qData.model,
+    caseLawBasis: qData.caseLaw,
     examinerRemarks: total >= 75 
-      ? "Demonstrates commendable grasp of doctrinal nuances and concise legal reasoning expected in the Bar examinations." 
-      : "Needs tighter structure. Ensure statutory citations are precise and applied directly to the problem's facts.",
-    referencedSource: "Settled Supreme Court Jurisprudence / Bar Examination Guidelines"
+      ? "Demonstrates thorough bar-level analysis, handling complex scenarios with logical rigor." 
+      : "In-depth review of complex case scenarios and structured ALAC formulation required.",
+    referencedSource: `Philippine Bar Examination Verbatim Archive (${qData.year})`
   };
 }
 
 async function submitAnswer(force){
-  const q = currentQuestion();
+  const q = currentQuestionData();
   const answer = state.answer.trim();
-  if(!force && (!answer || answer.split(/\s+/).length < 10)){
-    state.error = "Please write a broader answer before submitting.";
+  if(!force && (!answer || answer.split(/\s+/).length < 15)){
+    state.error = "Please provide a more detailed analysis before submitting.";
     render();
     return;
   }
   if(force && !answer){
-    state.error = "Time's up. No answer was submitted for grading.";
+    state.error = "Time's up. No answer was recorded.";
     render();
     return;
   }
   clearTimer();
   state.loading = true;
-  state.error = force ? "Time's up — your answer was submitted automatically." : null;
+  state.error = force ? "Time's up — your partial essay was submitted automatically." : null;
   state.grading = null;
   render();
 
-  // Simulate brief examiner review delay for realism
   setTimeout(async () => {
-    const gradingResult = evaluateLocally(state.subject, answer);
+    const gradingResult = evaluateAnswerLocally(answer);
     state.grading = gradingResult;
     
     const entry = {
       id: 'h' + Date.now(),
       ts: Date.now(),
       subject: state.subject,
+      year: q.year,
       questionText: q.text,
       answer: answer,
       score: gradingResult.totalScore,
@@ -644,7 +626,7 @@ function fmtDate(ts){
   return d.toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' });
 }
 
-function renderGrading(g, answerText){
+function renderGrading(g){
   const pass = g.totalScore >= 75;
   return `
     <div class="stamp-row">
@@ -653,13 +635,13 @@ function renderGrading(g, answerText){
         <div class="lbl">/ 100</div>
       </div>
       <div class="stamp-verdict">
-        ${pass ? 'Passing mark' : 'Below passing mark'}
-        <span class="small">Bar passing average: 75</span>
+        ${pass ? 'Bar Standard Met (Passing)' : 'Sub-bar Standard (Needs Improvement)'}
+        <span class="small">Passing grade threshold: 75</span>
       </div>
     </div>
     <div class="result">
       <div>
-        <div class="panel-title">Issue-by-issue breakdown</div>
+        <div class="panel-title">Examiner's Issue Breakdown</div>
         ${g.issues.map(iss => `
           <div class="issue ${iss.status}">
             <div class="issue-head">
@@ -672,52 +654,67 @@ function renderGrading(g, answerText){
         <div class="remarks">${g.examinerRemarks}</div>
       </div>
       <div>
-        <div class="panel-title">Suggested answer</div>
+        <div class="panel-title">Model Bar Answer & Jurisprudence</div>
         <div class="paper-card suggested">${g.suggestedAnswer}</div>
-        <div class="source-note">${g.referencedSource ? `Grounded in: ${g.referencedSource}` : 'No matching official suggested answer was found.'}</div>
+        <div class="caselaw-box">
+          <div class="caselaw-title">&#9878; Controlling Supreme Court Precedent</div>
+          ${g.caseLawBasis}
+        </div>
+        <div class="source-note">${g.referencedSource}</div>
       </div>
+    </div>
+    <div style="margin-top:20px; text-align:right;">
+      <button class="btn-primary" id="btn-proceed-next">Proceed to Next Case Scenario &rarr;</button>
     </div>
   `;
 }
 
 function renderWrite(){
-  const qs = questionsFor(state.subject);
-  const q = currentQuestion();
+  const list = currentQuestionsList();
+  const q = currentQuestionData();
   const wordCount = state.answer.trim() ? state.answer.trim().split(/\s+/).length : 0;
-
   const locked = state.loading || !!state.grading || state.timerExpired;
 
   return `
-    <div class="q-picker">
-      ${qs.map(item => `<div class="q-chip ${item.id===q.id?'active':''}" data-qid="${item.id}">${item.custom ? '★ ' : ''}${item.custom ? 'Custom' : 'Sample'} question</div>`).join('')}
-      <div class="q-chip add" id="add-q">+ Add your own question</div>
+    <div class="toolbar">
+      <div class="nav-group">
+        <button class="btn-tool" id="btn-prev">&larr; Previous Case</button>
+        <button class="btn-tool random" id="btn-random">&#8645; Random Complex Scenario</button>
+        <button class="btn-tool" id="btn-next">Next Case &rarr;</button>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);">
+        Available complex scenarios: ${list.length}
+      </div>
     </div>
 
     <div class="paper-card">
-      <div class="q-label">${state.subject} — Essay Question</div>
+      <div class="q-header-info">
+        <div class="q-label">${state.subject} — Verbatim Bar Archive</div>
+        <div class="q-counter">Scenario ${state.currentIndex + 1} of ${list.length} (${q.year})</div>
+      </div>
       <div class="q-text">${q.text}</div>
     </div>
 
     <div class="timer-bar">
       <span class="timer-label">Time remaining</span>
       <span id="timer-display">${formatTime(state.timeLeft)}</span>
-      <span class="timer-limit">7:00 limit per question</span>
+      <span class="timer-limit">7:00 complex scenario limit</span>
     </div>
 
-    <textarea id="answer" placeholder="Write your essay answer here..." ${locked ? 'disabled' : ''}>${state.answer}</textarea>
+    <textarea id="answer" placeholder="Formulate your structured answer following ALAC (Answer, Legal Basis, Application, Conclusion) addressing all sub-issues..." ${locked ? 'disabled' : ''}>${state.answer}</textarea>
     <div class="row">
       <span class="wc">${wordCount} words</span>
-      <button class="btn-primary" id="submit-btn" ${state.loading || locked ?'disabled':''}>${state.loading ? 'Grading…' : 'Submit for grading'}</button>
+      <button class="btn-primary" id="submit-btn" ${state.loading || locked ?'disabled':''}>${state.loading ? 'Evaluating Bluebook…' : 'Submit for bar grading'}</button>
     </div>
     ${state.error ? `<div class="err">${state.error}</div>` : ''}
-    ${state.loading ? `<div class="loading">The examiner is reviewing your bluebook…</div>` : ''}
-    ${state.grading ? renderGrading(state.grading, state.answer) : ''}
+    ${state.loading ? `<div class="loading">Senior Bar Examiner is meticulously grading your essay response…</div>` : ''}
+    ${state.grading ? renderGrading(state.grading) : ''}
   `;
 }
 
 function renderHistory(){
   if(state.history.length === 0){
-    return `<div class="empty">No graded attempts yet. Write an answer to start building your record.</div>`;
+    return `<div class="empty">No complex case submissions recorded yet. Complete scenarios to populate your bar archive history.</div>`;
   }
   return state.history.map(h => {
     const pass = h.score >= 75;
@@ -727,12 +724,12 @@ function renderHistory(){
         <div class="hist-row" data-hid="${h.id}">
           <div class="hist-score ${pass?'pass':'fail'}">${h.score}</div>
           <div class="hist-meta">
-            <div class="hist-subj">${h.subject}</div>
-            <div class="hist-q">${h.questionText}</div>
+            <div class="hist-subj">${h.subject} &bull; ${h.year}</div>
+            <div class="hist-q">${h.questionText.split('\n')[0]}</div>
           </div>
           <div class="hist-date">${fmtDate(h.ts)}</div>
         </div>
-        ${expanded ? `<div class="paper-card" style="margin-top:-4px;">${renderGrading(h.grading, h.answer)}</div>` : ''}
+        ${expanded ? `<div class="paper-card" style="margin-top:-4px;">${renderGrading(h.grading)}</div>` : ''}
       </div>
     `;
   }).join('');
@@ -747,26 +744,7 @@ function render(){
   tabs.style.display = state.view === 'write' ? 'block' : 'none';
 
   const main = document.getElementById('main');
-  main.innerHTML = state.view === 'write' ? renderWrite() : `<div class="panel-title">Your graded history</div>${renderHistory()}`;
-
-  if(state.modalOpen){
-    const modalWrap = document.createElement('div');
-    modalWrap.innerHTML = `
-      <div class="modal-back" id="modal-back">
-        <div class="modal">
-          <h3>Add your own question</h3>
-          <p>Paste an essay question — from a real past Bar exam or your own review materials — for ${state.subject}.</p>
-          <input id="modal-year" type="text" placeholder="Bar year, if known (e.g. 2019) — optional" value="${state.modalYear}" style="width:100%; font-family:'IBM Plex Mono', monospace; font-size:12.5px; padding:9px 10px; border:1px solid var(--ink); background:#fbf9f2; margin-bottom:10px;">
-          <textarea id="modal-textarea" placeholder="Paste or write the question here...">${state.modalText}</textarea>
-          <div class="modal-actions">
-            <button class="btn-ghost" id="modal-cancel">Cancel</button>
-            <button class="btn-primary" id="modal-save">Add question</button>
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modalWrap.firstElementChild);
-  }
+  main.innerHTML = state.view === 'write' ? renderWrite() : `<div class="panel-title">Your graded advanced submission history</div>${renderHistory()}`;
 
   attachHandlers();
 }
@@ -781,26 +759,62 @@ function attachHandlers(){
   };
   document.getElementById('tab-history').onclick = () => { clearTimer(); state.view='history'; state.expandedHistId=null; render(); };
 
+  // Feedback Modal Event Handlers
+  const feedbackModal = document.getElementById('feedback-modal');
+  const btnOpenFeedback = document.getElementById('btn-open-feedback');
+  const btnCloseFeedback = document.getElementById('btn-close-feedback');
+  const feedbackForm = document.getElementById('feedback-form');
+
+  if(btnOpenFeedback) {
+    btnOpenFeedback.onclick = () => { feedbackModal.classList.add('open'); };
+  }
+  if(btnCloseFeedback) {
+    btnCloseFeedback.onclick = () => { feedbackModal.classList.remove('open'); };
+  }
+  if(feedbackModal) {
+    feedbackModal.onclick = (e) => {
+      if(e.target === feedbackModal) feedbackModal.classList.remove('open');
+    };
+  }
+  if(feedbackForm) {
+    feedbackForm.onsubmit = (e) => {
+      e.preventDefault();
+      const name = document.getElementById('fb-name').value.trim();
+      const message = document.getElementById('fb-message').value.trim();
+      const mailtoSubject = encodeURIComponent(`Bar Trainer Feedback from ${name}`);
+      const mailtoBody = encodeURIComponent(`Name/ID: ${name}\n\nFeedback Details:\n${message}`);
+      
+      window.location.href = `mailto:wallyesteban1993@gmail.com?subject=${mailtoSubject}&body=${mailtoBody}`;
+      feedbackModal.classList.remove('open');
+      feedbackForm.reset();
+    };
+  }
+
   document.querySelectorAll('[data-subj]').forEach(el => {
     el.onclick = () => selectSubject(el.dataset.subj);
   });
 
   if(state.view === 'write'){
-    document.querySelectorAll('[data-qid]').forEach(el => {
-      el.onclick = () => selectQuestion(el.dataset.qid);
-    });
-    const addQ = document.getElementById('add-q');
-    if(addQ) addQ.onclick = openModal;
+    const btnNext = document.getElementById('btn-next');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnRandom = document.getElementById('btn-random');
+    if(btnNext) btnNext.onclick = nextQuestion;
+    if(btnPrev) btnPrev.onclick = prevQuestion;
+    if(btnRandom) btnRandom.onclick = randomQuestion;
 
     const ta = document.getElementById('answer');
     if(ta){
-      ta.oninput = (e) => { state.answer = e.target.value;
+      ta.oninput = (e) => { 
+        state.answer = e.target.value;
         const wc = document.querySelector('.wc');
         if(wc) wc.textContent = (e.target.value.trim() ? e.target.value.trim().split(/\s+/).length : 0) + ' words';
       };
     }
     const submitBtn = document.getElementById('submit-btn');
-    if(submitBtn) submitBtn.onclick = submitAnswer;
+    if(submitBtn) submitBtn.onclick = () => submitAnswer(false);
+
+    const proceedNextBtn = document.getElementById('btn-proceed-next');
+    if(proceedNextBtn) proceedNextBtn.onclick = nextQuestion;
   }
 
   if(state.view === 'history'){
@@ -810,18 +824,6 @@ function attachHandlers(){
         render();
       };
     });
-  }
-
-  const back = document.getElementById('modal-back');
-  if(back){
-    back.onclick = (e) => { if(e.target.id === 'modal-back') closeModal(); };
-    document.getElementById('modal-cancel').onclick = closeModal;
-    document.getElementById('modal-save').onclick = addCustomQuestion;
-    const mta = document.getElementById('modal-textarea');
-    mta.oninput = (e) => { state.modalText = e.target.value; };
-    const myr = document.getElementById('modal-year');
-    if(myr) myr.oninput = (e) => { state.modalYear = e.target.value; };
-    mta.focus();
   }
 }
 

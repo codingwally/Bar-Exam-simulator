@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gemini Auto-Graded Quiz</title>
+  <title>Gemini AI Quiz</title>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 650px; margin: 30px auto; padding: 20px; color: #1f2937; line-height: 1.5; }
-    .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); background: #fff; }
-    .key-box { background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; padding: 12px; margin-bottom: 20px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background: #f9fafb; color: #1f2937; line-height: 1.5; }
+    .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .key-box { background: #f3f4f6; border: 1px solid #d1d5db; padding: 12px; border-radius: 8px; margin-bottom: 20px; }
     input[type="password"], textarea { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #d1d5db; font-size: 14px; margin-top: 6px; }
-    textarea { height: 90px; resize: vertical; }
-    button { background-color: #2563eb; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-top: 12px; transition: background 0.2s; }
+    textarea { height: 100px; resize: vertical; }
+    button { background-color: #2563eb; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-top: 12px; }
     button:hover { background-color: #1d4ed8; }
     button:disabled { background-color: #9ca3af; cursor: not-allowed; }
-    .next-btn { background-color: #059669; }
-    .next-btn:hover { background-color: #047857; }
-    .feedback { margin-top: 15px; padding: 12px; border-radius: 6px; font-size: 14px; display: none; }
+    .btn-next { background-color: #059669; }
+    .btn-next:hover { background-color: #047857; }
+    .feedback { margin-top: 16px; padding: 12px; border-radius: 6px; font-size: 14px; display: none; }
     .feedback.correct { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .feedback.incorrect { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
     .feedback.error { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
@@ -26,74 +26,72 @@
 <body>
 
 <div class="card">
-  <!-- API Key Setup (Keeps key safe from GitHub scrapers) -->
+  <!-- Key Input Section -->
   <div class="key-box">
     <label for="api-key" style="font-weight: 600; font-size: 0.85em; color: #374151;">
-      GEMINI API KEY (<a href="https://aistudio.google.com/" target="_blank">Get free key</a>)
+      GEMINI API KEY (<a href="https://aistudio.google.com/" target="_blank">Get Free Key</a>)
     </label>
-    <input type="password" id="api-key" placeholder="Paste your Gemini API key here..." />
+    <input type="password" id="api-key" placeholder="Paste your API key here..." />
   </div>
 
-  <!-- Main Quiz Container -->
+  <!-- Quiz Screen -->
   <div id="quiz-container">
     <div id="question-number" style="font-size: 0.85em; font-weight: bold; color: #6b7280; text-transform: uppercase;">Question 1</div>
     <h2 id="question-text" style="margin-top: 4px;">Loading...</h2>
 
     <label for="user-answer" style="font-size: 0.9em; font-weight: 600;">Your Answer:</label>
-    <textarea id="user-answer" placeholder="Write your explanation here..."></textarea>
+    <textarea id="user-answer" placeholder="Type your answer..."></textarea>
 
-    <div>
-      <button id="submit-btn" onclick="gradeAnswer()">Submit Answer</button>
-    </div>
+    <button id="submit-btn" onclick="gradeAnswer()">Submit for AI Feedback</button>
 
-    <!-- AI Feedback -->
+    <!-- Feedback Container -->
     <div id="feedback-box" class="feedback"></div>
 
-    <!-- Navigation (Triggers Next Question) -->
-    <div id="navigation-box" class="hidden" style="margin-top: 15px;">
-      <button class="next-btn" onclick="nextQuestion()">Next Question ➔</button>
+    <!-- Move to Next Question -->
+    <div id="next-container" class="hidden">
+      <button class="btn-next" onclick="nextQuestion()">Next Question ➔</button>
     </div>
   </div>
 
-  <!-- End Screen -->
-  <div id="end-screen" class="hidden" style="text-align: center; padding: 20px 0;">
+  <!-- Completion Screen -->
+  <div id="end-screen" class="hidden" style="text-align: center;">
     <h2>🎉 Quiz Finished!</h2>
-    <p>You have submitted all answers.</p>
-    <button onclick="restartQuiz()">Try Again</button>
+    <p>You have completed all questions.</p>
+    <button onclick="restartQuiz()">Restart Quiz</button>
   </div>
 </div>
 
 <script>
-  // Quiz Data Array
+  // Questions list
   const quizData = [
     {
-      question: "What is the primary cause of Earth's ocean tides?",
-      rubric: "Answer must state that tides are primarily caused by the gravitational pull of the Moon (and secondarily the Sun) acting on Earth's oceans."
+      question: "What causes Earth's seasons?",
+      rubric: "Mention Earth's 23.5-degree axial tilt and its revolution/orbit around the Sun."
     },
     {
-      question: "Why do plant leaves look green?",
-      rubric: "Answer must explain that chlorophyll absorbs red and blue light while reflecting green light back to our eyes."
+      question: "What is the primary function of plant roots?",
+      rubric: "Mention absorbing water and nutrients from soil, and anchoring the plant."
     }
   ];
 
   let currentIndex = 0;
 
   function loadQuestion() {
-    const currentQ = quizData[currentIndex];
+    const q = quizData[currentIndex];
     document.getElementById("question-number").innerText = `Question ${currentIndex + 1} of ${quizData.length}`;
-    document.getElementById("question-text").innerText = currentQ.question;
+    document.getElementById("question-text").innerText = q.question;
     document.getElementById("user-answer").value = "";
     document.getElementById("user-answer").disabled = false;
-    
-    // Reset buttons and feedback state
+
+    // Reset UI
     const feedbackBox = document.getElementById("feedback-box");
     feedbackBox.style.display = "none";
     feedbackBox.className = "feedback";
-    document.getElementById("navigation-box").classList.add("hidden");
-    
+    document.getElementById("next-container").classList.add("hidden");
+
     const submitBtn = document.getElementById("submit-btn");
     submitBtn.disabled = false;
-    submitBtn.innerText = "Submit Answer";
+    submitBtn.innerText = "Submit for AI Feedback";
   }
 
   async function gradeAnswer() {
@@ -103,78 +101,70 @@
     const submitBtn = document.getElementById("submit-btn");
 
     if (!apiKey) {
-      alert("Please paste your free Gemini API key into the top box first!");
+      alert("Please enter your Gemini API Key at the top.");
       return;
     }
     if (!userAnswer) {
-      alert("Please write an answer before submitting.");
+      alert("Please type an answer before submitting.");
       return;
     }
 
-    // Lock UI during call
+    // Lock UI while fetching response
     submitBtn.disabled = true;
     submitBtn.innerText = "Grading with AI...";
     document.getElementById("user-answer").disabled = true;
 
-    const currentQ = quizData[currentIndex];
-
-    // Build JSON Enforcement Prompt
-    const promptText = `
-      You are an automated quiz grader.
-      Question: "${currentQ.question}"
-      Rubric: "${currentQ.rubric}"
+    const q = quizData[currentIndex];
+    const prompt = `
+      You are an strict auto-grader. Evaluate the answer using the rubric.
+      Question: "${q.question}"
+      Rubric: "${q.rubric}"
       Student Answer: "${userAnswer}"
 
-      Evaluate if the answer satisfies the rubric.
-      Respond strictly with a single, valid JSON object following this format (no markdown, no extra commentary):
+      Return strictly a JSON object with this structure:
       {
         "isCorrect": true or false,
-        "feedback": "Concise 1-2 sentence explanation of why it is right or wrong based on the rubric."
+        "feedback": "1-2 sentence feedback explaining why it passed or failed."
       }
     `;
 
     try {
-      // Direct HTTP Request to Gemini 2.5 Flash
+      // Calls Gemini 2.5 Flash API directly
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: promptText }] }],
-          generationConfig: {
-            responseMimeType: "application/json" // Guarantees JSON response
-          }
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" }
         })
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error?.message || `Server Error ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || "Failed request");
       }
 
       const data = await response.json();
-      const responseText = data.candidates[0].content.parts[0].text;
-      
-      // Parse JSON from Gemini
-      const result = JSON.parse(responseText);
+      const rawJson = data.candidates[0].content.parts[0].text;
+      const result = JSON.parse(rawJson);
 
-      // Display results
+      // Display feedback
       feedbackBox.style.display = "block";
       feedbackBox.className = `feedback ${result.isCorrect ? 'correct' : 'incorrect'}`;
-      feedbackBox.innerHTML = `<strong>${result.isCorrect ? '✅ Correct' : '❌ Incorrect'}</strong><br>${result.feedback}`;
+      feedbackBox.innerHTML = `<strong>${result.isCorrect ? '✅ Correct' : '❌ Incorrect'}</strong><p style="margin: 4px 0 0;">${result.feedback}</p>`;
 
-      // Show the "Next Question" button
-      document.getElementById("navigation-box").classList.remove("hidden");
+      // Show Next button
+      document.getElementById("next-container").classList.remove("hidden");
       submitBtn.innerText = "Submitted";
 
     } catch (err) {
-      console.error("API Error:", err);
+      console.error(err);
       feedbackBox.style.display = "block";
       feedbackBox.className = "feedback error";
-      feedbackBox.innerHTML = `<strong>API Error:</strong> ${err.message}. Please check your API key and try again.`;
+      feedbackBox.innerText = `Error: ${err.message}. Double-check your API key or network connection.`;
       
-      // Re-enable input on failure
       submitBtn.disabled = false;
-      submitBtn.innerText = "Submit Answer";
+      submitBtn.innerText = "Submit for AI Feedback";
       document.getElementById("user-answer").disabled = false;
     }
   }
@@ -184,7 +174,6 @@
     if (currentIndex < quizData.length) {
       loadQuestion();
     } else {
-      // Hide quiz, show end screen
       document.getElementById("quiz-container").classList.add("hidden");
       document.getElementById("end-screen").classList.remove("hidden");
     }
@@ -197,7 +186,7 @@
     loadQuestion();
   }
 
-  // Initialize
+  // Load first question on page load
   loadQuestion();
 </script>
 

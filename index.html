@@ -1,168 +1,855 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bar Exam Essay Simulator</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 750px; margin: 40px auto; padding: 20px; color: #1f2937; line-height: 1.6; background: #f8fafc; }
-    .card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 30px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-    .memo-box { background: #f1f5f9; border-left: 4px solid #2563eb; padding: 15px; margin-bottom: 20px; font-size: 0.95em; border-radius: 0 6px 6px 0; }
-    textarea { width: 100%; height: 220px; margin-top: 8px; padding: 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 14px; }
-    button { background: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; margin-top: 12px; }
-    button:disabled { background: #94a3b8; cursor: not-allowed; }
-    .next-btn { background: #059669; }
-    .feedback { margin-top: 20px; padding: 16px; border-radius: 8px; display: none; font-size: 0.95em; }
-    .correct { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-    .incorrect { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-    .hidden { display: none; }
-  </style>
+<meta charset="UTF-8">
+<title>Due Diligence — PH Bar Essay Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDE6D6;
+    --paper-line:#D8CDB4;
+    --ink:#1C2B45;
+    --ink-soft:#3c4a63;
+    --maroon:#7A2530;
+    --maroon-soft:#9c4550;
+    --gold:#A9812F;
+    --charcoal:#2A241D;
+    --pass:#3f5c39;
+    --pass-bg:#e3ead9;
+    --fail-bg:#f2ded9;
+    --amber:#8a6114;
+    --amber-bg:#f2e6c9;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--charcoal);
+    font-family:'PT Serif', serif;
+    min-height:100vh;
+  }
+  ::selection{background:var(--gold); color:#fff;}
+
+  /* ---------- Masthead ---------- */
+  .masthead{
+    border-bottom:3px solid var(--ink);
+    background:
+      repeating-linear-gradient(180deg, transparent, transparent 27px, var(--paper-line) 28px),
+      var(--paper);
+    padding:22px 28px 16px;
+    display:flex;
+    align-items:center;
+    gap:16px;
+  }
+  .seal{
+    width:52px;height:52px;flex:none;
+  }
+  .masthead h1{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-size:28px;
+    letter-spacing:0.5px;
+    margin:0;
+    color:var(--ink);
+  }
+  .masthead .sub{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:var(--maroon);
+    margin-top:2px;
+  }
+  .masthead .right{
+    margin-left:auto;
+    display:flex;
+    gap:8px;
+  }
+  .tabbtn{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    background:transparent;
+    border:1.5px solid var(--ink);
+    color:var(--ink);
+    padding:8px 14px;
+    cursor:pointer;
+    border-radius:2px;
+  }
+  .tabbtn.active{background:var(--ink); color:var(--paper);}
+  .tabbtn.reset-key{border-color:var(--maroon); color:var(--maroon);}
+
+  /* ---------- Layout ---------- */
+  .layout{
+    display:flex;
+    max-width:1180px;
+    margin:0 auto;
+    min-height:calc(100vh - 96px);
+  }
+  .index-tabs{
+    flex:none;
+    width:170px;
+    border-right:2px solid var(--ink);
+    padding:18px 0;
+  }
+  .index-tabs button{
+    display:block;
+    width:100%;
+    text-align:left;
+    background:none;
+    border:none;
+    border-left:4px solid transparent;
+    padding:11px 16px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:0.3px;
+    color:var(--ink-soft);
+    cursor:pointer;
+    line-height:1.4;
+  }
+  .index-tabs button.active{
+    border-left-color:var(--maroon);
+    color:var(--maroon);
+    background:rgba(122,37,48,0.06);
+    font-weight:600;
+  }
+  .index-tabs button:hover{background:rgba(28,43,69,0.05);}
+
+  .main{
+    flex:1;
+    padding:28px 34px 60px;
+    min-width:0;
+  }
+
+  /* ---------- Question card ---------- */
+  .q-picker{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:18px;
+  }
+  .q-chip{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    border:1.5px solid var(--ink);
+    background:#fff9;
+    padding:6px 12px;
+    border-radius:2px;
+    cursor:pointer;
+    color:var(--ink);
+  }
+  .q-chip.active{background:var(--ink); color:var(--paper);}
+  .q-chip.add{border-style:dashed; color:var(--maroon); border-color:var(--maroon);}
+
+  .paper-card{
+    background:#fbf9f2;
+    border:1px solid var(--ink);
+    box-shadow:4px 4px 0 rgba(28,43,69,0.12);
+    padding:22px 24px;
+    margin-bottom:22px;
+  }
+  .q-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:var(--maroon);
+    margin-bottom:8px;
+  }
+  .q-text{
+    font-family:'Fraunces', serif;
+    font-size:18px;
+    line-height:1.55;
+    color:var(--ink);
+  }
+
+  textarea{
+    width:100%;
+    min-height:260px;
+    background:
+      repeating-linear-gradient(180deg, transparent, transparent 30px, var(--paper-line) 31px);
+    background-color:#fbf9f2;
+    border:1px solid var(--ink);
+    font-family:'PT Serif', serif;
+    font-size:15.5px;
+    line-height:31px;
+    padding:6px 16px 0;
+    color:var(--charcoal);
+    resize:vertical;
+  }
+  textarea:focus{outline:2px solid var(--gold); outline-offset:1px;}
+
+  .row{display:flex; justify-content:space-between; align-items:center; margin-top:10px;}
+  .wc{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft);}
+
+  .timer-bar{
+    display:flex; align-items:baseline; gap:10px;
+    font-family:'IBM Plex Mono', monospace;
+    margin-bottom:10px;
+  }
+  .timer-label{font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--ink-soft);}
+  #timer-display{font-size:22px; font-weight:600; color:var(--ink); letter-spacing:1px;}
+  .timer-limit{font-size:10.5px; color:var(--ink-soft); margin-left:auto;}
+  .timer-bar.warn #timer-display{color:var(--maroon);}
+  .timer-bar.warn{animation:pulse 1s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.55;}}
+
+  .btn-primary{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    letter-spacing:0.5px;
+    text-transform:uppercase;
+    background:var(--maroon);
+    color:#fff;
+    border:none;
+    padding:12px 22px;
+    cursor:pointer;
+    border-radius:2px;
+  }
+  .btn-primary:disabled{opacity:0.45; cursor:default;}
+  .btn-primary:hover:not(:disabled){background:var(--maroon-soft);}
+
+  /* ---------- Grading result ---------- */
+  .result{display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:8px;}
+  @media (max-width:860px){.result{grid-template-columns:1fr;}}
+
+  .stamp-row{display:flex; align-items:center; gap:18px; margin-bottom:18px;}
+  .stamp{
+    width:96px;height:96px;border-radius:50%;
+    border:4px double currentColor;
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;
+    font-family:'IBM Plex Mono', monospace;
+    transform:rotate(-8deg);
+    flex:none;
+  }
+  .stamp .num{font-size:26px;font-weight:600;line-height:1;}
+  .stamp .lbl{font-size:9px;letter-spacing:1px;margin-top:2px;}
+  .stamp.pass{color:var(--pass); background:var(--pass-bg);}
+  .stamp.fail{color:var(--maroon); background:var(--fail-bg);}
+  .stamp-verdict{font-family:'Fraunces', serif; font-size:20px; color:var(--ink);}
+  .stamp-verdict .small{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); display:block; margin-top:3px;}
+
+  .panel-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; letter-spacing:1.5px; text-transform:uppercase;
+    color:var(--ink-soft); margin-bottom:10px;
+  }
+
+  .issue{
+    border-left:3px solid var(--paper-line);
+    padding:6px 0 6px 12px;
+    margin-bottom:10px;
+    position:relative;
+  }
+  .issue.full{border-left-color:var(--pass);}
+  .issue.partial{border-left-color:var(--amber);}
+  .issue.missed{border-left-color:var(--maroon);}
+  .issue-head{display:flex; justify-content:space-between; gap:8px; font-family:'IBM Plex Mono', monospace; font-size:12px;}
+  .issue-head .pts{white-space:nowrap; color:var(--ink-soft);}
+  .issue .note{
+    font-family:'PT Serif', serif;
+    font-style:italic;
+    color:var(--maroon);
+    font-size:14px;
+    margin-top:3px;
+  }
+  .badge{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:9.5px; letter-spacing:0.5px; text-transform:uppercase;
+    padding:2px 6px; border-radius:2px;
+  }
+  .badge.full{background:var(--pass-bg); color:var(--pass);}
+  .badge.partial{background:var(--amber-bg); color:var(--amber);}
+  .badge.missed{background:var(--fail-bg); color:var(--maroon);}
+
+  .suggested{
+    font-size:15px;
+    line-height:1.65;
+    white-space:pre-wrap;
+  }
+  .source-note{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    color:var(--gold);
+    margin-top:6px;
+    letter-spacing:0.2px;
+  }
+  .remarks{
+    margin-top:16px;
+    padding:14px 16px;
+    background:rgba(122,37,48,0.06);
+    border-left:3px solid var(--maroon);
+    font-style:italic;
+    font-size:14.5px;
+    color:var(--ink);
+  }
+
+  /* ---------- History ---------- */
+  .hist-row{
+    display:flex; align-items:center; gap:14px;
+    padding:14px 0;
+    border-bottom:1px solid var(--paper-line);
+    cursor:pointer;
+  }
+  .hist-score{
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600; font-size:18px;
+    width:52px; text-align:center;
+    padding:4px 0; border-radius:2px;
+  }
+  .hist-score.pass{background:var(--pass-bg); color:var(--pass);}
+  .hist-score.fail{background:var(--fail-bg); color:var(--maroon);}
+  .hist-meta{flex:1; min-width:0;}
+  .hist-subj{font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--maroon);}
+  .hist-q{font-size:14.5px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .hist-date{font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); flex:none;}
+
+  .empty{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px; color:var(--ink-soft);
+    padding:40px 0; text-align:center;
+  }
+
+  .modal-back{
+    position:fixed; inset:0; background:rgba(28,43,69,0.55);
+    display:flex; align-items:center; justify-content:center; z-index:50;
+    padding:20px;
+  }
+  .modal{
+    background:#fbf9f2; border:1px solid var(--ink);
+    box-shadow:6px 6px 0 rgba(28,43,69,0.2);
+    padding:24px; max-width:520px; width:100%;
+  }
+  .modal h3{font-family:'Fraunces', serif; margin:0 0 6px; color:var(--ink);}
+  .modal p{font-size:13.5px; color:var(--ink-soft); margin:0 0 14px;}
+  .modal textarea{min-height:140px; line-height:24px;
+    background:repeating-linear-gradient(180deg, transparent, transparent 23px, var(--paper-line) 24px);
+    background-color:#fbf9f2;}
+  .modal-actions{display:flex; gap:10px; margin-top:14px; justify-content:flex-end;}
+  .btn-ghost{
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; letter-spacing:0.5px;
+    background:none; border:1.5px solid var(--ink); color:var(--ink);
+    padding:9px 16px; cursor:pointer; border-radius:2px;
+  }
+
+  .loading{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px; color:var(--maroon);
+    padding:20px 0;
+  }
+  .err{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px; color:var(--maroon);
+    padding:12px 0;
+    line-height:1.5;
+  }
+</style>
 </head>
 <body>
 
-<div class="card">
-  <div id="quiz-container">
-    <div id="exam-meta" style="color: #64748b; font-weight: bold; font-size: 0.85em; text-transform: uppercase;">Bar Exam MEE Simulator • Essay 1</div>
-    <h2 id="subject-title" style="margin-top: 4px; color: #0f172a;">Torts / Contracts</h2>
-    
-    <div class="memo-box" id="question-text">
-      Loading bar prompt...
-    </div>
-
-    <label for="user-answer" style="font-weight: 600; display: block; margin-top: 15px;">Your IRAC Essay Answer:</label>
-    <textarea id="user-answer" placeholder="Type your Issue, Rule, Application, and Conclusion here..."></textarea>
-    
-    <button id="submit-btn" onclick="gradeAnswer()">Submit Essay for AI Grading</button>
-
-    <div id="feedback-box" class="feedback"></div>
-
-    <div id="next-container" class="hidden" style="margin-top: 20px;">
-      <button class="next-btn" onclick="nextQuestion()">Next Essay Prompt ➔</button>
-    </div>
+<div class="masthead">
+  <svg class="seal" viewBox="0 0 52 52" fill="none">
+    <circle cx="26" cy="26" r="24" stroke="#7A2530" stroke-width="2"/>
+    <circle cx="26" cy="26" r="18" stroke="#A9812F" stroke-width="1.2"/>
+    <path d="M26 12 L30 22 L41 22 L32 29 L35 40 L26 33 L17 40 L20 29 L11 22 L22 22 Z" fill="#1C2B45" opacity="0.85"/>
+  </svg>
+  <div>
+    <h1>Due Diligence</h1>
+    <div class="sub">Philippine Bar Examination — Essay Trainer</div>
   </div>
-
-  <div id="end-screen" class="hidden" style="text-align: center; padding: 30px 0;">
-    <h2>⚖️ Simulated Bar Exam Completed</h2>
-    <p>You have finished all essay prompts.</p>
-    <button onclick="restartQuiz()">Restart Simulator</button>
+  <div class="right">
+    <button class="tabbtn" id="tab-write">Write</button>
+    <button class="tabbtn" id="tab-history">History</button>
+    <button class="tabbtn reset-key" id="tab-reset-key" title="Reset API Key">Reset Key</button>
   </div>
 </div>
 
+<div class="layout">
+  <div class="index-tabs" id="subject-tabs"></div>
+  <div class="main" id="main"></div>
+</div>
+
 <script>
-  // GitHub Actions replaces this automatically during deployment if using your secret workflow
-  const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE";
+const SUBJECTS = [
+  "Political Law","Labor Law","Civil Law","Taxation Law",
+  "Mercantile Law","Criminal Law","Remedial Law","Legal Ethics"
+];
 
-  // Real Bar Exam (MEE Style) Sample Questions & Rubrics
-  const quizData = [
-    {
-      subject: "Constitutional Law",
-      prompt: "State legislature passes a law imposing a heavy tax exclusively on out-of-state publishing companies while exempting local in-state publishers. A national publishing firm sues, claiming it violates the Dormant Commerce Clause. Analyze the constitutionality of the state law.",
-      rubric: "Must address: 1) Dormant Commerce Clause framework, 2) Discrimination against out-of-state economic actors, 3) Strict scrutiny / Market participant exception analysis, 4) Conclusion that the law is likely unconstitutional."
-    },
-    {
-      subject: "Contracts / Sales",
-      prompt: "Buyer sent a signed purchase order for 500 widgets at $10 each. Seller replied with an acknowledgment form containing an arbitration clause and shipping terms, but no signature. Seller later fails to deliver, and Buyer sues. Analyze the status of the contract under UCC Article 2.",
-      rubric: "Must address: 1) UCC 2-207 (Battle of the Forms), 2) Formation of a contract despite different/additional terms, 3) Whether the arbitration clause becomes part of the contract (it's a material alteration between merchants), 4) Conclusion on breach."
-    }
-  ];
+const SEED_QUESTIONS = {
+  "Political Law": "The President issued an executive order reorganizing an executive department, abolishing three bureaus and transferring their functions to a newly created office, without prior legislative authorization. A group of affected employees challenges the order as unconstitutional. Discuss the validity of the executive order and the extent of the President's power of control and reorganization over the executive branch.",
+  "Labor Law": "An employee with six years of service was dismissed after failing to meet a newly issued performance quota that was announced only two weeks before its effectivity, with no training or transition period given. The employee filed a complaint for illegal dismissal. Discuss whether the dismissal was valid, addressing the requirements of just cause and due process under the Labor Code.",
+  "Civil Law": "A sold a parcel of land to B through a notarized deed of sale, but B failed to register the sale. A later sold the same land to C, who registered the sale in good faith and without knowledge of the first sale. Discuss who has the better right to the property and explain the applicable rules on double sales.",
+  "Taxation Law": "A domestic corporation claimed input VAT credits on purchases related to a project that was later abandoned before completion. The BIR disallowed the claim, arguing the input taxes were not attributable to any actual sale of goods or services. Discuss whether the corporation may still claim a refund or tax credit for the unutilized input VAT.",
+  "Mercantile Law": "A corporation's board of directors approved a contract with a company owned by one of its own directors, without full disclosure of the director's interest to the rest of the board or the stockholders. A minority stockholder seeks to annul the contract. Discuss the validity of the contract and the liability, if any, of the interested director under the Revised Corporation Code.",
+  "Criminal Law": "A, intending only to frighten B during a heated argument, fired a warning shot into the air. The bullet ricocheted off a metal awning and fatally struck C, a bystander A did not know was present. Discuss A's criminal liability, if any, and the applicable doctrine on the resulting felony.",
+  "Remedial Law": "A complaint for sum of money was filed and summons was served on the defendant's adult son at the defendant's residence, as the defendant was abroad at the time. The defendant later questioned the court's jurisdiction over his person. Discuss whether the substituted service of summons was validly effected.",
+  "Legal Ethics": "A lawyer, while representing a client in a property dispute, discovered confidential information that could benefit a different client in an unrelated case against the same adverse party. The lawyer used the information to the second client's advantage. Discuss whether the lawyer violated the Code of Professional Responsibility and Accountability."
+};
 
-  let currentIndex = 0;
+const TIME_LIMIT_SECONDS = 7 * 60;
 
-  function loadQuestion() {
-    const q = quizData[currentIndex];
-    document.getElementById("exam-meta").innerText = `Bar Exam MEE Simulator • Essay ${currentIndex + 1} of ${quizData.length}`;
-    document.getElementById("subject-title").innerText = q.subject;
-    document.getElementById("question-text").innerText = q.prompt;
-    document.getElementById("user-answer").value = "";
-    document.getElementById("user-answer").disabled = false;
+let state = {
+  view: "write",
+  subject: SUBJECTS[0],
+  bank: {},
+  history: [],
+  selectedQId: null,
+  answer: "",
+  grading: null,
+  loading: false,
+  error: null,
+  modalOpen: false,
+  modalText: "",
+  modalYear: "",
+  expandedHistId: null,
+  timeLeft: TIME_LIMIT_SECONDS,
+  timerInterval: null,
+  timerExpired: false
+};
 
-    document.getElementById("feedback-box").style.display = "none";
-    document.getElementById("next-container").classList.add("hidden");
+function formatTime(s){
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+}
 
-    const submitBtn = document.getElementById("submit-btn");
-    submitBtn.disabled = false;
-    submitBtn.innerText = "Submit Essay for AI Grading";
+function clearTimer(){
+  if(state.timerInterval){
+    clearInterval(state.timerInterval);
+    state.timerInterval = null;
   }
+}
 
-  async function gradeAnswer() {
-    const userAnswer = document.getElementById("user-answer").value.trim();
-    const feedbackBox = document.getElementById("feedback-box");
-    const submitBtn = document.getElementById("submit-btn");
+function startTimer(){
+  clearTimer();
+  state.timeLeft = TIME_LIMIT_SECONDS;
+  state.timerExpired = false;
+  state.timerInterval = setInterval(() => {
+    state.timeLeft--;
+    const el = document.getElementById('timer-display');
+    if(el){
+      el.textContent = formatTime(state.timeLeft);
+      el.parentElement.classList.toggle('warn', state.timeLeft <= 60);
+    }
+    if(state.timeLeft <= 0){
+      clearTimer();
+      state.timerExpired = true;
+      onTimeUp();
+    }
+  }, 1000);
+}
 
-    if (!userAnswer) {
-      alert("Please write your essay answer before submitting.");
+function resumeTimer(){
+  clearTimer();
+  state.timerInterval = setInterval(() => {
+    state.timeLeft--;
+    const el = document.getElementById('timer-display');
+    if(el){
+      el.textContent = formatTime(state.timeLeft);
+      el.parentElement.classList.toggle('warn', state.timeLeft <= 60);
+    }
+    if(state.timeLeft <= 0){
+      clearTimer();
+      state.timerExpired = true;
+      onTimeUp();
+    }
+  }, 1000);
+}
+
+async function onTimeUp(){
+  const ta = document.getElementById('answer');
+  if(ta) ta.disabled = true;
+  const wc = state.answer.trim() ? state.answer.trim().split(/\s+/).filter(Boolean).length : 0;
+  if(wc >= 5 && !state.loading && !state.grading){
+    await submitAnswer(true);
+  } else if(!state.grading){
+    state.error = "Time's up. No answer was submitted for grading.";
+    render();
+  }
+}
+
+function questionsFor(subject){
+  const seed = [{ id: "seed", text: SEED_QUESTIONS[subject], custom:false }];
+  const custom = (state.bank[subject] || []);
+  return seed.concat(custom);
+}
+
+function currentQuestion(){
+  const qs = questionsFor(state.subject);
+  return qs.find(q => q.id === state.selectedQId) || qs[0];
+}
+
+async function loadStorage(){
+  try{
+    const bankRes = localStorage.getItem('bank');
+    state.bank = bankRes ? JSON.parse(bankRes) : {};
+  }catch(e){ state.bank = {}; }
+
+  try{
+    const histRes = localStorage.getItem('history');
+    state.history = histRes ? JSON.parse(histRes) : [];
+  }catch(e){ state.history = []; }
+
+  render();
+}
+
+async function saveBank(){
+  try{ 
+    localStorage.setItem('bank', JSON.stringify(state.bank));
+  }catch(e){ console.error('bank save failed', e); }
+}
+
+async function saveHistory(){
+  try{ 
+    localStorage.setItem('history', JSON.stringify(state.history));
+  }catch(e){ console.error('history save failed', e); }
+}
+
+function selectSubject(s){
+  state.subject = s;
+  state.selectedQId = null;
+  state.answer = "";
+  state.grading = null;
+  state.error = null;
+  render();
+  startTimer();
+}
+
+function selectQuestion(id){
+  state.selectedQId = id;
+  state.answer = "";
+  state.grading = null;
+  state.error = null;
+  render();
+  startTimer();
+}
+
+function openModal(){ state.modalOpen = true; state.modalText=""; state.modalYear=""; render(); }
+function closeModal(){ state.modalOpen = false; render(); }
+
+async function addCustomQuestion(){
+  const text = state.modalText.trim();
+  if(!text) return;
+  const year = state.modalYear.trim();
+  if(!state.bank[state.subject]) state.bank[state.subject] = [];
+  const id = 'c' + Date.now();
+  state.bank[state.subject].push({ id, text, custom:true, year: year || null });
+  state.modalOpen = false;
+  await saveBank();
+  state.selectedQId = id;
+  render();
+}
+
+function promptApiKey(){
+  localStorage.removeItem("BAR_GEMINI_KEY");
+  const newKey = prompt("Enter your free Google Gemini API Key (starts with AIzaSy):");
+  if (newKey && newKey.trim()) {
+    localStorage.setItem("BAR_GEMINI_KEY", newKey.trim());
+    alert("API Key saved successfully!");
+  } else {
+    alert("No API key saved.");
+  }
+}
+
+async function submitAnswer(force){
+  const q = currentQuestion();
+  const answer = state.answer.trim();
+  if(!force && (!answer || answer.split(/\s+/).length < 10)){
+    state.error = "Please write a broader answer before submitting.";
+    render();
+    return;
+  }
+  if(force && !answer){
+    state.error = "Time's up. No answer was submitted for grading.";
+    render();
+    return;
+  }
+  clearTimer();
+  state.loading = true;
+  state.error = force ? "Time's up — your answer was submitted automatically." : null;
+  state.grading = null;
+  render();
+
+  let GEMINI_API_KEY = localStorage.getItem("BAR_GEMINI_KEY");
+  if (!GEMINI_API_KEY) {
+    GEMINI_API_KEY = prompt("Enter your free Google Gemini API Key (starts with AIzaSy):");
+    if (GEMINI_API_KEY && GEMINI_API_KEY.trim() !== "") {
+      GEMINI_API_KEY = GEMINI_API_KEY.trim();
+      localStorage.setItem("BAR_GEMINI_KEY", GEMINI_API_KEY);
+    } else {
+      state.error = "An API Key is required to grade your essay. Click 'Reset Key' at the top to set it.";
+      state.loading = false;
+      render();
       return;
     }
+  }
 
-    submitBtn.disabled = true;
-    submitBtn.innerText = "Grading Legal Analysis...";
-    document.getElementById("user-answer").disabled = true;
+  const yearNote = q.year ? ` (Bar year: ${q.year})` : '';
 
-    const q = quizData[currentIndex];
-    const prompt = `
-      You are a harsh, meticulous bar exam essay grader. Grade the applicant's essay using the IRAC method against the provided model rubric.
-      Subject & Prompt: "${q.prompt}"
-      Model Rubric Points: "${q.rubric}"
-      Applicant's Essay: "${userAnswer}"
+  const promptText = `You are a strict Philippine Bar examiner grading an essay answer (0-100 scale, 75 passing).
 
-      Evaluate whether they hit the critical legal rules and applied them properly.
-      Return strictly a JSON object matching this structure:
-      {
-        "isCorrect": true or false,
-        "feedback": "Detailed 3-4 sentence bar grader breakdown explaining which rubric points were met, what legal analysis was missing, and a final scoring summary."
+Grade the answer using standard UP Law Center (UPLC) ALAC methodology (Answer, Legal Basis, Application, Conclusion).
+
+Return ONLY valid JSON with this exact structure:
+{
+  "issues": [
+    {"label": "short issue name", "maxPoints": 25, "awarded": 20, "status": "full", "note": "brief feedback"}
+  ],
+  "totalScore": 80,
+  "suggestedAnswer": "Model UPLC-style ALAC answer (150-300 words)...",
+  "examinerRemarks": "2-3 sentences of direct feedback.",
+  "referencedSource": "Bar Exam Year or Landmark SC Case Citation if applicable"
+}
+
+Break the question into 3-4 distinct issues. maxPoints sum must equal 100. totalScore must equal sum of awarded. status can be "full", "partial", or "missed".
+
+SUBJECT: ${state.subject}${yearNote}
+QUESTION: ${q.text}
+STUDENT ANSWER: ${answer}`;
+
+  try{
+    // Using gemini-1.5-flash which is standard and available on free tier
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: promptText }]
+        }],
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
+      })
+    });
+
+    if(!response.ok){
+      const errBody = await response.text();
+      // If unauthorized or invalid key, remove saved key
+      if (response.status === 400 || response.status === 403 || response.status === 401) {
+        localStorage.removeItem("BAR_GEMINI_KEY");
       }
+      throw new Error(`Google API Error (${response.status}): ${errBody.slice(0,120)}`);
+    }
+
+    const data = await response.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if(!rawText) throw new Error('Empty response received from Gemini.');
+
+    const parsed = JSON.parse(rawText);
+
+    state.grading = parsed;
+    const entry = {
+      id: 'h' + Date.now(),
+      ts: Date.now(),
+      subject: state.subject,
+      questionText: q.text,
+      answer: answer,
+      score: parsed.totalScore,
+      grading: parsed
+    };
+    state.history.unshift(entry);
+    await saveHistory();
+    if(!force) state.error = null;
+  }catch(e){
+    console.error('Grading error:', e);
+    state.error = `Grading failed: ${e.message}. If your API key is wrong, click 'Reset Key' at the top right.`;
+  }
+  state.loading = false;
+  render();
+}
+
+function fmtDate(ts){
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' });
+}
+
+function renderGrading(g, answerText){
+  const pass = g.totalScore >= 75;
+  return `
+    <div class="stamp-row">
+      <div class="stamp ${pass ? 'pass':'fail'}">
+        <div class="num">${g.totalScore}</div>
+        <div class="lbl">/ 100</div>
+      </div>
+      <div class="stamp-verdict">
+        ${pass ? 'Passing mark' : 'Below passing mark'}
+        <span class="small">Bar passing average: 75</span>
+      </div>
+    </div>
+    <div class="result">
+      <div>
+        <div class="panel-title">Issue-by-issue breakdown</div>
+        ${g.issues.map(iss => `
+          <div class="issue ${iss.status}">
+            <div class="issue-head">
+              <span><span class="badge ${iss.status}">${iss.status}</span>&nbsp; ${iss.label}</span>
+              <span class="pts">${iss.awarded}/${iss.maxPoints}</span>
+            </div>
+            <div class="note">${iss.note}</div>
+          </div>
+        `).join('')}
+        <div class="remarks">${g.examinerRemarks}</div>
+      </div>
+      <div>
+        <div class="panel-title">Suggested answer</div>
+        <div class="paper-card suggested">${g.suggestedAnswer}</div>
+        <div class="source-note">${g.referencedSource ? `Grounded in: ${g.referencedSource}` : 'No matching official suggested answer was found.'}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderWrite(){
+  const qs = questionsFor(state.subject);
+  const q = currentQuestion();
+  const wordCount = state.answer.trim() ? state.answer.trim().split(/\s+/).length : 0;
+
+  const locked = state.loading || !!state.grading || state.timerExpired;
+
+  return `
+    <div class="q-picker">
+      ${qs.map(item => `<div class="q-chip ${item.id===q.id?'active':''}" data-qid="${item.id}">${item.custom ? '★ ' : ''}${item.custom ? 'Custom' : 'Sample'} question</div>`).join('')}
+      <div class="q-chip add" id="add-q">+ Add your own question</div>
+    </div>
+
+    <div class="paper-card">
+      <div class="q-label">${state.subject} — Essay Question</div>
+      <div class="q-text">${q.text}</div>
+    </div>
+
+    <div class="timer-bar">
+      <span class="timer-label">Time remaining</span>
+      <span id="timer-display">${formatTime(state.timeLeft)}</span>
+      <span class="timer-limit">7:00 limit per question</span>
+    </div>
+
+    <textarea id="answer" placeholder="Write your essay answer here..." ${locked ? 'disabled' : ''}>${state.answer}</textarea>
+    <div class="row">
+      <span class="wc">${wordCount} words</span>
+      <button class="btn-primary" id="submit-btn" ${state.loading || locked ?'disabled':''}>${state.loading ? 'Grading…' : 'Submit for grading'}</button>
+    </div>
+    ${state.error ? `<div class="err">${state.error}</div>` : ''}
+    ${state.loading ? `<div class="loading">The examiner is reviewing your bluebook…</div>` : ''}
+    ${state.grading ? renderGrading(state.grading, state.answer) : ''}
+  `;
+}
+
+function renderHistory(){
+  if(state.history.length === 0){
+    return `<div class="empty">No graded attempts yet. Write an answer to start building your record.</div>`;
+  }
+  return state.history.map(h => {
+    const pass = h.score >= 75;
+    const expanded = state.expandedHistId === h.id;
+    return `
+      <div>
+        <div class="hist-row" data-hid="${h.id}">
+          <div class="hist-score ${pass?'pass':'fail'}">${h.score}</div>
+          <div class="hist-meta">
+            <div class="hist-subj">${h.subject}</div>
+            <div class="hist-q">${h.questionText}</div>
+          </div>
+          <div class="hist-date">${fmtDate(h.ts)}</div>
+        </div>
+        ${expanded ? `<div class="paper-card" style="margin-top:-4px;">${renderGrading(h.grading, h.answer)}</div>` : ''}
+      </div>
     `;
+  }).join('');
+}
 
-    try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json" }
-        })
-      });
+function render(){
+  document.getElementById('tab-write').className = 'tabbtn' + (state.view==='write' ? ' active':'');
+  document.getElementById('tab-history').className = 'tabbtn' + (state.view==='history' ? ' active':'');
 
-      const data = await response.json();
-      const result = JSON.parse(data.candidates[0].content.parts[0].text);
+  const tabs = document.getElementById('subject-tabs');
+  tabs.innerHTML = SUBJECTS.map(s => `<button class="${s===state.subject?'active':''}" data-subj="${s}">${s}</button>`).join('');
+  tabs.style.display = state.view === 'write' ? 'block' : 'none';
 
-      feedbackBox.style.display = "block";
-      feedbackBox.className = `feedback ${result.isCorrect ? 'correct' : 'incorrect'}`;
-      feedbackBox.innerHTML = `<strong>${result.isCorrect ? '⚖️ Passing Analysis' : '⚠️ Needs Revision (Sub-passing)'}</strong><p style="margin-top: 8px;">${result.feedback}</p>`;
+  const main = document.getElementById('main');
+  main.innerHTML = state.view === 'write' ? renderWrite() : `<div class="panel-title">Your graded history</div>${renderHistory()}`;
 
-      document.getElementById("next-container").classList.remove("hidden");
-      submitBtn.innerText = "Graded";
+  if(state.modalOpen){
+    const modalWrap = document.createElement('div');
+    modalWrap.innerHTML = `
+      <div class="modal-back" id="modal-back">
+        <div class="modal">
+          <h3>Add your own question</h3>
+          <p>Paste an essay question — from a real past Bar exam or your own review materials — for ${state.subject}.</p>
+          <input id="modal-year" type="text" placeholder="Bar year, if known (e.g. 2019) — optional" value="${state.modalYear}" style="width:100%; font-family:'IBM Plex Mono', monospace; font-size:12.5px; padding:9px 10px; border:1px solid var(--ink); background:#fbf9f2; margin-bottom:10px;">
+          <textarea id="modal-textarea" placeholder="Paste or write the question here...">${state.modalText}</textarea>
+          <div class="modal-actions">
+            <button class="btn-ghost" id="modal-cancel">Cancel</button>
+            <button class="btn-primary" id="modal-save">Add question</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modalWrap.firstElementChild);
+  }
 
-    } catch (err) {
-      console.error(err);
-      feedbackBox.style.display = "block";
-      feedbackBox.className = "feedback incorrect";
-      feedbackBox.innerText = "Error connecting to Gemini API. Check your GitHub Secrets configuration.";
-      submitBtn.disabled = false;
-      submitBtn.innerText = "Submit Essay for AI Grading";
-      document.getElementById("user-answer").disabled = false;
+  attachHandlers();
+}
+
+function attachHandlers(){
+  document.getElementById('tab-write').onclick = () => {
+    state.view='write';
+    render();
+    if(!state.timerInterval && !state.timerExpired && !state.grading && state.timeLeft > 0){
+      resumeTimer();
     }
-  }
+  };
+  document.getElementById('tab-history').onclick = () => { clearTimer(); state.view='history'; state.expandedHistId=null; render(); };
+  document.getElementById('tab-reset-key').onclick = () => { promptApiKey(); };
 
-  function nextQuestion() {
-    currentIndex++;
-    if (currentIndex < quizData.length) {
-      loadQuestion();
-    } else {
-      document.getElementById("quiz-container").classList.add("hidden");
-      document.getElementById("end-screen").classList.remove("hidden");
+  document.querySelectorAll('[data-subj]').forEach(el => {
+    el.onclick = () => selectSubject(el.dataset.subj);
+  });
+
+  if(state.view === 'write'){
+    document.querySelectorAll('[data-qid]').forEach(el => {
+      el.onclick = () => selectQuestion(el.dataset.qid);
+    });
+    const addQ = document.getElementById('add-q');
+    if(addQ) addQ.onclick = openModal;
+
+    const ta = document.getElementById('answer');
+    if(ta){
+      ta.oninput = (e) => { state.answer = e.target.value;
+        const wc = document.querySelector('.wc');
+        if(wc) wc.textContent = (e.target.value.trim() ? e.target.value.trim().split(/\s+/).length : 0) + ' words';
+      };
     }
+    const submitBtn = document.getElementById('submit-btn');
+    if(submitBtn) submitBtn.onclick = submitAnswer;
   }
 
-  function restartQuiz() {
-    currentIndex = 0;
-    document.getElementById("end-screen").classList.add("hidden");
-    document.getElementById("quiz-container").classList.remove("hidden");
-    loadQuestion();
+  if(state.view === 'history'){
+    document.querySelectorAll('[data-hid]').forEach(el => {
+      el.onclick = () => {
+        state.expandedHistId = state.expandedHistId === el.dataset.hid ? null : el.dataset.hid;
+        render();
+      };
+    });
   }
 
-  loadQuestion();
+  const back = document.getElementById('modal-back');
+  if(back){
+    back.onclick = (e) => { if(e.target.id === 'modal-back') closeModal(); };
+    document.getElementById('modal-cancel').onclick = closeModal;
+    document.getElementById('modal-save').onclick = addCustomQuestion;
+    const mta = document.getElementById('modal-textarea');
+    mta.oninput = (e) => { state.modalText = e.target.value; };
+    const myr = document.getElementById('modal-year');
+    if(myr) myr.oninput = (e) => { state.modalYear = e.target.value; };
+    mta.focus();
+  }
+}
+
+loadStorage().then(startTimer);
 </script>
-
 </body>
 </html>

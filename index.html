@@ -987,7 +987,11 @@ function evaluateAnswer() {
     if (lower.includes("issue") || lower.includes("whether") || lower.includes("resolved")) score += 20;
     if (lower.includes("article") || lower.includes("section") || lower.includes("code") || lower.includes("rule")) score += 25;
     if (lower.includes("therefore") || lower.includes("hence") || lower.includes("conclude") || lower.includes("thus")) score += 20;
+let remarks = "Review the governing statutory provisions and ensure precise terminology is employed in your reasoning.";
 
+if (score === 0) {
+  remarks = "0 Score. Please answer diligently—life, liberty, and property depend on the legal consequences of your answer.";
+}
     score = Math.min(100, Math.max(0, score));
   }
 

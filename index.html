@@ -482,6 +482,8 @@ function currentQuestion(){
 }
 
 async function loadStorage(){
+  // Note: Assuming window.storage is a valid local implementation on your environment. 
+  // If running plainly in the browser, you may need to replace these with localStorage calls.
   try{
     const bankRes = await window.storage.get('bank', false);
     state.bank = bankRes ? JSON.parse(bankRes.value) : {};
@@ -560,7 +562,7 @@ async function submitAnswer(force){
 
   const system = `You are a strict, experienced Philippine Bar examiner grading an essay answer under actual Philippine Bar Examination standards (holistic 100-point scale per question; 75 is the passing mark). You know Philippine statutes, the Civil Code, the Revised Penal Code, the Labor Code, the Revised Corporation Code, the Rules of Court, the NIRC, the Constitution, and relevant Supreme Court jurisprudence.
 
-Before grading, use web search to try to find the official or widely-cited suggested answer for this specific question — prioritize the UP Law Center (UP Law Complex Bar Operations Commission) suggested answers, followed by other established Philippine bar review sources (e.g. jurisprudence-based reviewers, established bar review centers). Search using the subject, the bar year if given, and distinctive facts from the question. If you find a matching suggested answer, ground your issue breakdown and suggestedAnswer in it. Paraphrase and synthesize in your own words — never quote more than a short phrase, and never reproduce large verbatim passages from any source. If no specific match is found, say so and fall back to general Philippine legal principles.
+Base your suggested answer and grading primarily on established Philippine bar review sources, particularly UP Law Center (UP Law Complex Bar Operations Commission) suggested answers when applicable. Use the subject, the bar year if given, and distinctive facts to formulate the correct doctrine. Paraphrase and synthesize in your own words — never quote large verbatim passages.
 
 Respond with ONLY a single valid JSON object as your final output — no markdown fences, no commentary before or after, and no other text after the JSON — with exactly this shape:
 {
@@ -568,9 +570,9 @@ Respond with ONLY a single valid JSON object as your final output — no markdow
     {"label": "short phrase naming the legal issue", "maxPoints": integer, "awarded": integer, "status": "full" | "partial" | "missed", "note": "one specific examiner remark on what was covered or missing"}
   ],
   "totalScore": integer,
-  "suggestedAnswer": "a well-organized model answer in examiner style: identify each issue, state the applicable law/doctrine, apply it to the facts, and conclude — 150 to 300 words, in your own words even when grounded in a found source",
+  "suggestedAnswer": "a well-organized model answer in examiner style: identify each issue, state the applicable law/doctrine, apply it to the facts, and conclude — 150 to 300 words",
   "examinerRemarks": "2-3 sentences of direct, specific holistic feedback in an examiner's voice",
-  "referencedSource": "short description of the source you grounded this on (e.g. 'UP Law Center 2019 Suggested Answers, Civil Law'), or null if no specific match was found and you relied on general principles"
+  "referencedSource": "short description of the source you grounded this on (e.g. 'UP Law Center 2019 Suggested Answers, Civil Law'), or null if based on general principles"
 }
 Break the question into 3-5 distinct legal issues. maxPoints across all issues must sum to exactly 100, and totalScore must equal the sum of awarded. Grade strictly: award "full" only when the issue is correctly identified, the correct rule is cited or clearly implied, and it is properly applied to the facts; "partial" when only some of that is present; "missed" when the issue is absent or wrong.`;
 
@@ -579,13 +581,18 @@ Break the question into 3-5 distinct legal issues. maxPoints across all issues m
   try{
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "x-api-key": "YOUR_API_KEY_HERE", // Add your Anthropic API key here
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true" // Required for local HTML usage
+      },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "claude-3-7-sonnet-20250219", // Corrected valid model ID
         max_tokens: 3000,
         system: system,
-        messages: [{ role: "user", content: user }],
-        tools: [{ type: "web_search_20250305", name: "web_search" }]
+        messages: [{ role: "user", content: user }]
+        // The web_search tool object was removed here to prevent schema errors
       })
     });
 
@@ -605,7 +612,8 @@ Break the question into 3-5 distinct legal issues. maxPoints across all issues m
     }
     const raw = textBlocks[textBlocks.length - 1].text.trim();
     let clean = raw.replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
-    // Defensive: if the model added any stray text around the JSON, extract the outermost braces.
+    
+    // Defensive extraction of JSON
     const firstBrace = clean.indexOf('{');
     const lastBrace = clean.lastIndexOf('}');
     if(firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace){

@@ -1094,6 +1094,36 @@ function escapeHtml(text) {
 }
 
 window.addEventListener('DOMContentLoaded', init);
+// Dynamic Google Sheet Loader for Remedial Law
+  const REMEDIAL_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR_YII93J9lprfOT4cyQ0HSX3PEzcYa2DcjUul6qmKK-iyOuJiJjl6CiOUt3NRnS2VCS-ybmaFRmwDs/pub?output=csv';
+
+  function loadRemedialFromSheet() {
+    if (typeof Papa === 'undefined') return;
+    
+    Papa.parse(REMEDIAL_CSV_URL, {
+      download: true,
+      header: true,
+      complete: function(results) {
+        const sheetQuestions = results.data
+          .filter(row => row.text && row.model)
+          .map(row => ({
+            id: row.id,
+            subject: row.subject,
+            bar_year: row.bar_year,
+            question_no: row.question_no,
+            text: row.text,
+            model: row.model,
+            caseLaw: row.caseLaw || ''
+          }));
+
+        if (typeof BAR_QUESTIONS !== 'undefined') {
+          BAR_QUESTIONS["Remedial Law"] = sheetQuestions;
+        }
+      }
+    });
+  }
+
+  loadRemedialFromSheet();
 </script>
 </body>
 </html>

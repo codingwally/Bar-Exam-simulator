@@ -1124,6 +1124,34 @@ window.addEventListener('DOMContentLoaded', init);
   }
 
   loadRemedialFromSheet();
+// Anti-Gibberish & Strict Evaluation Rule
+  function checkAnswerQuality(userInput) {
+    const text = userInput.trim();
+
+    // 1. Check if empty or too short (less than 15 characters)
+    if (text.length < 15) {
+      return {
+        isGibberish: true,
+        score: 0,
+        feedback: "Score: 0. Please answer diligently—life, liberty, and property depend on the legal consequences of your answer."
+      };
+    }
+
+    // 2. Check for keyboard mashing (e.g. "asdfghjkl", "jjjjjjjj", or lack of spaces)
+    const repeatedChars = /(.)\1{4,}/; 
+    const spaceCount = (text.match(/ /g) || []).length;
+
+    if (repeatedChars.test(text) || spaceCount < 2) {
+      return {
+        isGibberish: true,
+        score: 0,
+        feedback: "Score: 0. Incomprehensible or gibberish submission detected. Please answer diligently—life, liberty, and property depend on the legal consequences of your answer."
+      };
+    }
+
+    // Pass: Valid response attempt
+    return { isGibberish: false };
+  }
 </script>
 </body>
 </html>

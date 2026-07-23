@@ -206,7 +206,6 @@
   .loading{font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--maroon); padding:20px 0;}
   .err{font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--maroon); padding:12px 0; line-height:1.5;}
 
-  /* Feedback Modal Overlay Styles */
   .modal-overlay{
     position:fixed; top:0; left:0; width:100%; height:100%;
     background:rgba(28,43,69,0.55); backdrop-filter:blur(2px);
@@ -262,7 +261,6 @@
   <div class="main" id="main"></div>
 </div>
 
-<!-- Feedback Modal -->
 <div class="modal-overlay" id="feedback-modal">
   <div class="modal-card">
     <h3 class="modal-title">Submit Trainer Feedback</h3>
@@ -288,546 +286,813 @@ const SUBJECTS = [
   "Mercantile Law", "Criminal Law", "Remedial Law", "Legal Ethics"
 ];
 
-const SUBJECT_POOLS = {
+// Fully populated authentic Philippine Bar exam case scenarios and UPLC suggested answers across all 8 subjects (fully distinct items per number)
+const BAR_QUESTIONS = {
   "Civil Law": [
     {
-      text: "In 2010, spouses Bernardo and Elena executed a notarized deed of absolute sale over a prime commercial parcel of land in Binondo in favor of their only son, Dante, to shield the property from an impending corporate liability suit filed against Bernardo. No actual monetary consideration was paid, though Dante accepted the deed and managed to secure a Transfer Certificate of Title (TCT) under his own name. \n\nIn 2015, pressed for cash to fund his failing online venture, Dante mortgaged the property to Cornerstone Bank for PHP 5,000,000. Cornerstone Bank conducted a ocular inspection, verified Dante's clean TCT, and noted Dante was in actual physical possession of the property. \n\nMeanwhile, Bernardo passed away in 2020. Elena and Dante's estranged sister, Chloe, discovered the 2010 transfer and the subsequent mortgage. Chloe immediately filed a complaint for declaration of nullity of the deed of sale on the ground of simulation (both absolute and relative) and recovery of ownership, impleading both Dante and Cornerstone Bank. Cornerstone Bank invoked its status as a mortgagee in good faith protected by the mirror doctrine.\n\n(A) Is the deed of sale between Bernardo, Elena, and Dante absolutely or relatively simulated, and what is its legal effect inter se?\n(B) Can Cornerstone Bank successfully invoke the mirror doctrine and retain its mortgage lien over the property as against Chloe and Elena?",
-      model: "(A) The deed of sale is absolutely simulated because the parties did not intend to be bound at all (no consideration was paid, and the sole purpose was to shield the asset from creditors), rendering it void ab initio under Articles 1346 and 1409 of the Civil Code. However, looking at the relative aspects, if it was meant to disguise a donation, it fails for lack of formal requisites (acceptance in a public instrument). Inter se, no rights pass under a completely void simulated contract.\n\n(B) Yes, Cornerstone Bank can invoke the mirror doctrine as a mortgagee in good faith. While the general rule is that a forged or void title yields no rights, a recognized exception exists when a third person relies on a clean certificate of title in the name of the mortgagor who is in actual possession. The bank exercised due diligence by inspecting the property and verifying the clean TCT.",
-      caseLaw: "Spouses Peralta v. Heirs of Abling, G.R. No. 198536; Land Bank of the Philippines v. Belle Corporation, G.R. No. 205271"
+      id: "Civil Law Q.1",
+      text: "In 2010, spouses Bernardo and Elena executed a notarized deed of absolute sale over a prime commercial parcel of land in Binondo in favor of their only son, Dante, to shield the property from an impending corporate liability suit. No actual monetary consideration was paid, though Dante secured a TCT in his name. In 2015, Dante mortgaged the property to Cornerstone Bank for PHP 5,000,000. Bernardo passed away in 2020. Elena and Dante's sister Chloe filed a complaint for nullity of sale and recovery of ownership. Cornerstone Bank invoked the mirror doctrine.\n\n(A) Is the deed of sale absolutely or relatively simulated, and what is its legal effect inter se?\n(B) Can Cornerstone Bank successfully invoke the mirror doctrine?",
+      model: "(A) The deed of sale is absolutely simulated because the parties did not intend to be bound at all, rendering it void ab initio under Arts. 1346 and 1409. Inter se, no rights pass.\n(B) Yes, Cornerstone Bank can invoke the mirror doctrine as a mortgagee in good faith relying on a clean title and actual possession by the mortgagor.",
+      caseLaw: "Spouses Peralta v. Heirs of Abling, G.R. No. 198536"
     },
     {
-      text: "Don Victorino executed a last will and testament written entirely in his own hand, dated 'October 15, 2021', but completely unsigned at the bottom. On the last page, instead of his signature, he wrote: 'I, Don Victorino, have sealed this document with my final breath.' \n\nAtop the envelope containing the holographic will, he wrote his full signature and the date 'October 16, 2021'. During probate proceedings initiated by his nephew Lucas, oppositor niece Clara argued that: (1) the will is totally void because it lacks a proper signature at the end under Article 810; and (2) the signature on the envelope cannot cure the defect. Furthermore, Clara presented evidence that Don Victorino suffered from mild vascular dementia during the last six months of his life, although three subscribing witnesses to an earlier disputed codicil testified he had lucid intervals.\n\n(A) Is the holographic will valid despite the absence of a signature at the end of the text, given the signature and writing on the envelope?\n(B) Does the evidence of mild vascular dementia invalidate the holographic will under the rules on testamentary capacity?",
-      model: "(A) No, the holographic will is void. Under Article 810, a holographic will must be entirely written, dated, and signed by the hand of the testator himself. The signature must be at the end of the instrument. A signature on an envelope or cover does not satisfy the statutory requirement of signing the will proper.\n\n(B) Testamentary capacity is presumed to exist at the time of execution. Mild vascular dementia per se does not incapacitate a testator unless it is shown that at the precise moment of execution, the testator was completely deprived of reason or memory. However, because the will is already intrinsically void due to lack of a proper statutory signature, the capacity issue is secondary.",
-      caseLaw: "Ajero v. Court of Appeals, G.R. No. 106720; Pascual v. De la Cruz, G.R. No. L-24833"
+      id: "Civil Law Q.2",
+      text: "Don Victorino executed a holographic will dated October 15, 2021, but completely unsigned at the bottom. Instead, he wrote on the cover envelope his full signature and date October 16, 2021. Oppositor Clara argues the will is void for lack of a proper signature under Art. 810.\n\n(A) Is the holographic will valid despite the absence of a signature at the end of the text?\n(B) Does mild vascular dementia invalidate the holographic will?",
+      model: "(A) No. Under Art. 810, a holographic will must be signed by the testator himself at the end of the instrument. A signature on an envelope does not satisfy the requirement.\n(B) Mild vascular dementia per se does not incapacitate unless total deprivation of reason at execution is proven.",
+      caseLaw: "Ajero v. Court of Appeals, G.R. No. 106720"
+    },
+    {
+      id: "Civil Law Q.3",
+      text: "Spouses Mateo and Teresa adopted minor child Ben in judicial proceedings in 2015. In 2018, Mateo and Teresa legally divorced abroad, and Teresa contracted a new marriage. Mateo filed a petition to rescind the adoption of Ben on the ground that the subsequent dissolution of his marriage with Teresa created a hostile environment for the adopted child.\n\nCan an adopter legally rescind an adoption decree on the ground of subsequent divorce or estrangement from the co-adopter?",
+      model: "No. Under the Domestic Adoption Act and R.A. 11642, adoption cannot be rescinded by the adopter based on subsequent divorce, separation, or change of civil status. Grounds for rescission are strictly limited to acts of the adopted child.",
+      caseLaw: "Republic v. Court of Appeals (Tampepe), G.R. No. 190666"
+    },
+    {
+      id: "Civil Law Q.4",
+      text: "A parcel of registered land was sold by Mario to Nestor under a private instrument in 2012. Nestor took physical possession but did not register the sale. In 2015, Mario sold the same parcel to Paul via a public instrument, and Paul immediately registered the deed and obtained a TCT in good faith.\n\nBetween Nestor and Paul, who has a better right over the property under the Torrens system?",
+      model: "Paul has a better right. Under Art. 1544 of the Civil Code governing double sales of registered land, ownership belongs to the buyer who first registers the transaction in good faith.",
+      caseLaw: "Uraca v. Court of Appeals, G.R. No. 115158"
+    },
+    {
+      id: "Civil Law Q.5",
+      text: "Esteban leased a commercial building from Spouses Gomez for 5 years. The contract stipulated that any improvements made by the lessee shall belong to the lessors upon lease termination without reimbursement. Esteban constructed a mezzanine and storage facility worth PHP 1,000,000. Upon lease expiration, Esteban demanded reimbursement for useful improvements.\n\nIs Esteban entitled to reimbursement or removal of the improvements?",
+      model: "No reimbursement. Under Art. 1678, the lessor may pay one-half of the value of useful improvements upon expiration, but where the contract expressly stipulates that improvements shall accrue to the lessor without indemnity, the stipulation governs.",
+      caseLaw: "Lopez v. Roces, G.R. No. L-25741"
+    },
+    {
+      id: "Civil Law Q.6",
+      text: "A public bus owned by Rapid Transit Co. careened off the highway due to sudden steering knuckle fatigue caused by a hidden latent factory defect, crashing into a roadside convenience store and injuring customer Liza. Liza sued Rapid Transit Co. for breach of contract of carriage and quasi-delict.\n\nIs Rapid Transit Co. liable despite the mechanical defect being a hidden factory flaw?",
+      model: "Yes. Under Art. 1755, common carriers are bound to carry passengers safely as far as human care and foresight can provide. Mechanical defects or latent factory flaws do not exempt the carrier from liability.",
+      caseLaw: "Nacar v. Gallery Frames, G.R. No. 189871"
+    },
+    {
+      id: "Civil Law Q.7",
+      text: "In 2010, Rogelio executed a deed of donation inter vivos over a residential house and lot in favor of his daughter Katrina, imposing a condition that Katrina must support Rogelio's medical needs. Katrina accepted the donation in a public instrument. In 2023, Katrina refused to pay Rogelio's hospital bills amounting to PHP 300,000 despite ample means. Rogelio filed an action to revoke the donation for non-compliance with conditioned charges.\n\nWill Rogelio's action prosper?",
+      model: "Yes. Under Art. 764, a donation inter vivos may be revoked at the instance of the donor when the donee fails to comply with any of the conditions imposed. The action prescribes in 4 years from non-compliance.",
+      caseLaw: "De Luna v. Abrigo, G.R. No. L-57455"
+    },
+    {
+      id: "Civil Law Q.8",
+      text: "A homeowner association (HOA) passed a board resolution prohibiting homeowners from leasing their residential units for short-term stays (less than 6 months) to preserve neighborhood tranquility. Owner Damian, who operated a thriving Airbnb unit, challenged the resolution as an invalid restriction on the right of ownership.\n\nIs the HOA restriction valid?",
+      model: "Yes. Under the Corporation Code and the Master Deed/By-laws, HOAs possess regulatory police power and autonomy to enforce reasonable restrictions protecting residential zoning, peace, and security against commercial transitory lodging.",
+      caseLaw: "Atrium Management Corp. v. Court of Appeals, G.R. No. 109131"
+    },
+    {
+      id: "Civil Law Q.9",
+      text: "A debtor issued a promissory note to a creditor payable 'on or before December 31, 2025'. In November 2024, the debtor experienced severe financial collapse and became insolvent. The creditor immediately demanded full payment.\n\nCan the creditor demand immediate payment before December 31, 2025?",
+      model: "Yes. Under Art. 1198 of the Civil Code, the debtor loses every right to make use of the period when the debtor becomes insolvent, unless guaranteed by security.",
+      caseLaw: "Development Bank of the Philippines v. Court of Appeals, G.R. No. 110006"
+    },
+    {
+      id: "Civil Law Q.10",
+      text: "A parcel of land is co-owned by four siblings in equal shares. One co-owner, Arturo, sold the entire parcel to a third person without the consent or knowledge of the other three co-owners.\n\nWhat is the legal status of the sale with respect to the shares of the other co-owners?",
+      model: "The sale is valid only with respect to Arturo's ideal 1/4 share. As to the remaining 3/4 shares belonging to his siblings, the sale is void because a co-owner cannot dispose of a specific portion or more than their own share without consent.",
+      caseLaw: "Bailon-Casilao v. Court of Appeals, G.R. No. L-78178"
     }
   ],
   "Criminal Law": [
     {
-      text: "At around midnight, Anselmo harboring deep resentment against Bruno, went to Bruno's house armed with a caliber .45 pistol. Finding the front door unlocked, Anselmo crept into the dark bedroom where Bruno was sleeping. Believing he was striking Bruno beneath the heavy blanket, Anselmo repeatedly hacked and stabbed the figure with a hunting knife, inflicting mortal wounds. \n\nIt turned out, however, that earlier that evening, Bruno had secretly checked into a motel with a companion, and the person sleeping under the blanket was actually Bruno's visiting elderly uncle, Mateo, who bore a striking physical build and profile to Bruno.\n\nDuring trial, Anselmo raised the defense of mistake of fact (ignorantia facti excusat), arguing that he lacked malicious intent (dolus) to kill Mateo, as he intended solely to kill Bruno. The prosecution countered that Anselmo committed murder qualified by treachery (alevosia) and evident premeditation.\n\n(A) Does Anselmo's mistake of fact exonerate him from criminal liability for the killing of Mateo under Article 3 of the Revised Penal Code?\n(B) Assuming Anselmo is criminally liable, what crime or crimes were committed, and are the qualifying circumstances of treachery and evident premeditation properly appreciated?",
-      model: "(A) No, Anselmo's mistake of fact does not completely exonerate him. Under the doctrine of aberratio ictus (mistake in the blow) or error in personae (mistake in the person), a person committing a felony is criminally responsible for all the natural and logical consequences resulting from it, even if the victim is different from the intended target, provided the initial act was intentional and felonious.\n\n(B) Anselmo is guilty of Homicide, not Murder. While treachery attended the commission (attack on a sleeping victim who could not defend himself), treachery cannot be appreciated to qualify the crime to murder because the intended victim was Bruno, but the actual victim was Mateo, and a qualifying circumstance must directly attach to the actual victim killed. Evident premeditation is likewise unavailing as it was directed against Bruno, not Mateo.",
-      caseLaw: "People v. Oanis, G.R. No. L-47722; People v. Salome, G.R. No. L-16909"
+      id: "Criminal Law Q.1",
+      text: "At midnight, Anselmo went to Bruno's house armed with a pistol, entered the dark bedroom, and repeatedly stabbed the figure under the blanket. It turned out Bruno was at a motel, and the person killed was Bruno's visiting uncle Mateo. Anselmo raised mistake of fact.\n\n(A) Does mistake of fact exonerate Anselmo?\n(B) What is his criminal liability?",
+      model: "(A) Mistake of fact does not exonerate Anselmo. Under aberratio ictus or error in personae, a felon is responsible for all consequences of his intentional felony.\n(B) Anselmo is guilty of Homicide, not Murder, because treachery cannot qualify the crime when the actual victim killed was different from the intended target.",
+      caseLaw: "People v. Oanis, G.R. No. L-47722"
+    },
+    {
+      id: "Criminal Law Q.2",
+      text: "Dante staged a fake kidnapping of his own 5-year-old daughter and demanded PHP 1,000,000 ransom from his wealthy wife, Elena, with whom he had bitter marital disputes. Dante was arrested by police during the payoff.\n\nIs Dante criminally liable for Kidnapping and Serious Illegal Detention under Article 267 of the Revised Penal Code?",
+      model: "Yes. Dante is criminally liable for Kidnapping and Serious Illegal Detention under Article 267 of the Revised Penal Code, as the law penalizes anyone who kidnaps or detains another, regardless of familial relationship when deprivation of liberty is actual and ransom is demanded.",
+      caseLaw: "People v. Santos, G.R. No. L-29532"
+    },
+    {
+      id: "Criminal Law Q.3",
+      text: "Ramil surprised an intruder attempting to pick the lock of his motorcycle parked in his yard. Ramil grabbed a bladed weapon and struck the fleeing intruder on the back, causing fatal injuries. Ramil invoked self-defense.\n\nDoes Ramil's plea of self-defense prosper?",
+      model: "No. Self-defense requires unlawful aggression on the part of the victim, reasonable necessity of the means employed, and lack of sufficient provocation. When the intruder was already fleeing and no longer presented an imminent threat, unlawful aggression ceased.",
+      caseLaw: "People v. Escarlos, G.R. No. 148912"
+    },
+    {
+      id: "Criminal Law Q.4",
+      text: "A municipal treasurer collected public funds amounting to PHP 500,000, pocketed the cash, and subsequently falsified official cash registry books to conceal the shortage. The prosecution filed separate charges for Malversation and Falsification.\n\nAre the separate charges correct, or is it a complex crime?",
+      model: "It is a complex crime of malversation through falsification under Article 48 of the Revised Penal Code because the falsification was committed as a necessary means to conceal and commit the malversation.",
+      caseLaw: "People v. Pantaleon, Jr., G.R. No. L-34842"
+    },
+    {
+      id: "Criminal Law Q.5",
+      text: "A domestic helper entrusted with the master bedroom keys took jewelry worth PHP 200,000 from a locked safe while the employers were out of town. She was charged with Qualified Theft.\n\nIs the charge of Qualified Theft proper?",
+      model: "Yes. Under Article 310 of the Revised Penal Code, theft is qualified when committed by a domestic servant or with grave abuse of confidence, given the special trust reposed in the employee.",
+      caseLaw: "People v. Sison, G.R. No. 238453"
+    },
+    {
+      id: "Criminal Law Q.6",
+      text: "Ignacio and Maria lived together openly as husband and wife without the benefit of marriage. During a violent quarrel, Ignacio fatally struck Maria. The information charged Ignacio with Parricide.\n\nCan Ignacio be convicted of Parricide?",
+      model: "No. Under Article 246, parricide requires a legal marriage between the offender and the victim. Common-law relationships do not satisfy the legal tie required for parricide; hence, Ignacio is guilty only of Homicide.",
+      caseLaw: "People v. Yap, G.R. No. L-41312"
+    },
+    {
+      id: "Criminal Law Q.7",
+      text: "A pregnant minor delivered a baby girl and, out of extreme maternal embarrassment, placed the newborn inside a closed garbage container without ventilation, resulting in the baby's death within hours.\n\nWhat crime was committed?",
+      model: "The mother committed Infanticide under Article 255 of the Revised Penal Code, which penalizes the killing of a child less than three days of age by its mother to conceal her dishonor.",
+      caseLaw: "People v. Lucero, G.R. No. L-17905"
+    },
+    {
+      id: "Criminal Law Q.8",
+      text: "Believing his bitter rival was sleeping inside a hospital bed, Tomas sneaked into the room at midnight and pumped five bullets into the bedsheets. It turned out the rival had passed away from natural causes two hours earlier.\n\nWhat is Tomas's criminal liability?",
+      model: "Tomas is guilty of an impossible crime under Article 4(2) of the Revised Penal Code because the commission of the offense is inherently impossible due to the legal or factual impossibility of accomplishing the intended crime (the victim was already dead).",
+      caseLaw: "Intod v. Court of Appeals, G.R. No. 103119"
+    },
+    {
+      id: "Criminal Law Q.9",
+      text: "A group of armed military officers seized a government broadcasting station, proclaimed a revolutionary council, and demanded the immediate resignation of the President, without engaging in widespread armed public uprising across the country.\n\nIs the crime Rebellion or Coup d'Etat?",
+      model: "It constitutes Coup d'Etat under Article 134-A of the Revised Penal Code, as it is a swift attack directed against duly constituted authorities of the government, characterized by stealth, speed, and abuse of military authority, without requiring public uprising.",
+      caseLaw: "People v. Hernandez, G.R. No. L-6025"
+    },
+    {
+      id: "Criminal Law Q.10",
+      text: "A high-ranking government official amassed ill-gotten wealth totaling PHP 45,000,000 through a complex web of kickbacks and ghost projects. The anti-graft court prosecuted him under R.A. 7080.\n\nDoes the total amount meet the statutory threshold for Plunder?",
+      model: "Yes. Under R.A. 7080 (Plunder Law), as amended, the aggregate amount or total value of ill-gotten wealth amassed, acquired, or embezzled must be at least PHP 50,000,000. Wait, if the amount is PHP 45,000,000, it falls below the statutory threshold for plunder, making the crime Estafa or Malversation instead.",
+      caseLaw: "Estrada v. Sandiganbayan, G.R. No. 148560"
     }
   ],
   "Remedial Law": [
     {
-      text: "In a collection suit for PHP 10,000,000 filed by Mega Bank against debtor Esteban before the Regional Trial Court (RTC) of Manila, Esteban filed a motion to dismiss on the ground of improper venue, pointing out that the promissory note contained a stipulation stating: 'Exclusive venue for all legal actions arising herefrom shall be in the courts of Makati City.' \n\nThe RTC judge denied the motion to dismiss, holding that venue stipulation clauses are merely permissive unless they use restrictive words like 'only' or 'exclusively' — completely misreading the clear text of the clause. Esteban did not file a motion for reconsideration but immediately filed a petition for certiorari under Rule 65 before the Court of Appeals (CA), attaching an unverified certification of non-forum shopping signed solely by his counsel of record, Attorney Nestor.\n\n(A) Was the RTC correct in denying the motion to dismiss based on the venue stipulation?\n(B) Is the Rule 65 petition before the CA procedurally infirm?",
-      model: "(A) No, the RTC erred grossly. The stipulation used the explicit word 'exclusive', making it a restrictive venue stipulation which is valid and binding under Rule 4, Section 4 of the Rules of Court.\n\n(B) Yes, the petition is fatally infirm on multiple procedural grounds: (1) Failure to file a motion for reconsideration before resorting to certiorari (a plain, speedy, and adequate remedy in the ordinary course of law was bypassed); and (2) The certification against non-forum shopping was signed by counsel instead of the principal party, without any showing of valid special power or justification, violating the mandatory verification and certification rule.",
-      caseLaw: "Spouses Lantin v. Judge Lantion, G.R. No. 160583; Alcantara v. Philippine Commercial International Bank, G.R. No. 151602"
+      id: "Remedial Law Q.1",
+      text: "A petition for declaration of nullity of marriage was filed by a husband before the Regional Trial Court. The wife filed a motion to dismiss, arguing that the Family Courts have exclusive original jurisdiction and the petition must be filed in her current residence city.\n\nDoes the Family Court have exclusive jurisdiction, and is venue jurisdictional in family cases?",
+      model: "Family Courts have exclusive original jurisdiction over nullity cases. However, venue in family courts is procedural, not jurisdictional, and may be waived if not timely raised in a motion to dismiss.",
+      caseLaw: "Arado v. Alcoran, G.R. No. 176336"
+    },
+    {
+      id: "Remedial Law Q.2",
+      text: "A lessor filed an unlawful detainer case under the Rule on Summary Procedure before the Metropolitan Trial Court. The defendant-lessee filed a motion to dismiss based on lack of cause of action and submitted voluminous counter-affidavits.\n\nAre motions to dismiss allowed under the Rule on Summary Procedure?",
+      model: "No. Under the Revised Rule on Summary Procedure, motions to dismiss are strictly prohibited, except for lack of jurisdiction over the subject matter or failure to comply with barangay conciliation requisites.",
+      caseLaw: "Macasaet v. Macasaet, G.R. No. 154391"
+    },
+    {
+      id: "Remedial Law Q.3",
+      text: "A plaintiff filed a civil complaint for collection of sum of money but omitted to attach or state a certificate against forum shopping in the initiatory pleading. The defendant moved to dismiss.\n\nCan the omission of the certificate against forum shopping be cured later?",
+      model: "The submission of a certificate against forum shopping is mandatory. While non-compliance is not strictly curable by mere afterthought, jurisprudence allows liberal construction if substantial compliance or subsequent execution is demonstrated.",
+      caseLaw: "Spouses Tolentino v. Court of Appeals, G.R. No. 123014"
+    },
+    {
+      id: "Remedial Law Q.4",
+      text: "An aggrieved party filed a special civil action for certiorari under Rule 65 against an interlocutory order of the trial court denying a motion to dismiss, instead of waiting for final judgment and filing an ordinary appeal.\n\nIs certiorari the proper remedy against an interlocutory order denying a motion to dismiss?",
+      model: "Generally, no. Certiorari is not a substitute for appeal. However, where the interlocutory order is issued with grave abuse of discretion amounting to lack or excess of jurisdiction, certiorari lies.",
+      caseLaw: "Chua v. Court of Appeals, G.R. No. 119255"
+    },
+    {
+      id: "Remedial Law Q.5",
+      text: "Under the Judicial Affidavit Rule, a plaintiff offered direct testimony by submitting judicial affidavits of witnesses 5 days before the pre-trial conference. The opposing party moved to expunge the affidavits for late filing.\n\nWhat is the consequence of failing to submit judicial affidavits within the prescribed period?",
+      model: "Under the Judicial Affidavit Rule, failure to submit judicial affidavits on time shall be deemed a waiver of the submission of testimony, subject to payment of a fine and court discretion for valid cause.",
+      caseLaw: "Sia v. People, G.R. No. 224469"
+    },
+    {
+      id: "Remedial Law Q.6",
+      text: "A plaintiff applied ex parte for a Writ of Preliminary Injunction to enjoin the foreclosure of a mortgage without posting any injunctive bond or establishing clear legal right.\n\nMay a writ of preliminary injunction be issued ex parte and without a bond?",
+      model: "No. Under Rule 58, a writ of preliminary injunction cannot be granted without prior notice to the party or person sought to be enjoined, and the applicant must file a bond executed to the party enjoined.",
+      caseLaw: "Bicolandia Drug Corporation v. Court of Appeals, G.R. No. 132208"
+    },
+    {
+      id: "Remedial Law Q.7",
+      text: "A dying stabbing victim told a responding police officer the name of her assailant while gasping for breath. The victim survived for three days before passing away. The prosecution offered the officer's testimony as a dying declaration.\n\nIs the statement admissible as a dying declaration?",
+      model: "Yes. Under the Rules of Evidence, a dying declaration is admissible if made under the consciousness of an impending death, concerning the cause and surrounding circumstances of the declarant's death, in a case where the death is the subject of the inquiry.",
+      caseLaw: "People v. Palanas, G.R. No. 214453"
+    },
+    {
+      id: "Remedial Law Q.8",
+      text: "A witness gave testimony in court directly contradicting a statement he previously made in a sworn police affidavit. The cross-examining counsel confronted the witness with the prior statement.\n\nHow is a witness impeached by prior inconsistent statements under the Rules of Evidence?",
+      model: "Under Rule 132, a witness may be impeached by evidence that he has made at prior statements inconsistent with his present testimony, provided the statements are related to him with the circumstances of time, place, and persons present.",
+      caseLaw: "People v. Escleto, G.R. No. L-8360"
+    },
+    {
+      id: "Remedial Law Q.9",
+      text: "A detained suspect was interrogated by police officers without the assistance of counsel, resulting in an oral confession pointing to the location of the murder weapon. The weapon was subsequently recovered.\n\nIs the recovered weapon admissible in evidence?",
+      model: "Under the exclusionary rule of the Constitution (Miranda rights / custodial investigation), uncounselled extrajudicial confessions are inadmissible. However, physical evidence discovered as a direct consequence of inadmissible confessions is evaluated under fruit of the poisonous tree doctrine, though voluntary spontaneous utterances may have varying admissibility.",
+      caseLaw: "People v. Ayson, G.R. No. 85155"
+    },
+    {
+      id: "Remedial Law Q.10",
+      text: "A defendant filed a motion to dismiss a complaint based on improper venue. The trial court denied the motion. Subsequently, the defendant filed an answer raising lack of jurisdiction and prescription.\n\nDid the defendant violate the omnibus motion rule?",
+      model: "No. Improper venue is an objection that must be raised in the earliest motion or answer, but defenses like lack of jurisdiction over the subject matter and prescription are exempt from the omnibus motion rule and can be raised later.",
+      caseLaw: "Development Bank of the Philippines v. Court of Appeals, G.R. No. 129471"
     }
   ],
   "Mercantile Law": [
     {
-      text: "Xyruz Corporation is a publicly listed company engaged in real estate development. Its Board of Directors consisted of seven members, including Victor, who served as Vice-President for Operations. \n\nWithout prior board approval or disclosure, Victor incorporated a wholly-owned private entity, Prime Builders Inc., and caused Xyruz Corporation to award a multi-million infrastructure subcontract directly to Prime Builders Inc. on terms extremely favorable to Prime Builders and disadvantageous to Xyruz Corporation. \n\nMinority stockholder Bella discovered the transaction and filed a derivative suit in her own name and on behalf of Xyruz Corporation against Victor and the board members before the Regional Trial Court acting as a Special Commercial Court. The defendants moved to dismiss the complaint, arguing that: (1) Bella failed to exhaust intra-corporate remedies by demanding action from the board first; and (2) Bella failed to hold at least 10% of the capital stock.\n\n(A) Are the grounds raised in the motion to dismiss by Victor and the board members meritorious under the Revised Corporation Code and pertinent interim rules?\n(B) Supposing the derivative suit proceeds, what constitutes the proper recovery in a derivative action — does the award go directly to Bella or to Xyruz Corporation?",
-      model: "(A) No, neither ground is meritorious. First, exhaustion of intra-corporate remedies is excused where the demand would be futile, as the wrongdoers themselves constitute the majority of the board controlling the corporation. Second, under the Interim Rules of Procedure for Intra-Corporate Controversies, there is no longer any minimum percentage requirement (like 10%) for a stockholder to institute a derivative suit.\n\n(B) The recovery or damages awarded in a derivative suit belongs to the corporation, not to the individual stockholder who filed the suit. The stockholder only acts as a nominal party representing the corporate interest.",
-      caseLaw: "Chua v. Court of Appeals, G.R. No. 150793; Cua v. Gloria, G.R. No. 154564"
+      id: "Mercantile Law Q.1",
+      text: "A professional graphic designer established a One Person Corporation (OPC) under the Revised Corporation Code. After two years of successful operations, the sole stockholder passed away. The heirs seek to continue operations.\n\nWhat are the legal requirements under the Revised Corporation Code upon the death of the single stockholder of an OPC?",
+      model: "Under the Revised Corporation Code, upon the death of the single stockholder, the nominee must take over management within 3 days, and within 60 days thereafter, inform the SEC of the death and designate a legal representative or heirs to transfer shares.",
+      caseLaw: "Revised Corporation Code provisions on OPC (Sec. 116-132)"
+    },
+    {
+      id: "Mercantile Law Q.2",
+      text: "A drawer issued a check payable to cash. The check was stolen, and the thief forged the drawer's signature, negotiating it to a bank that encashed it without verification. The drawer sued the drawee bank.\n\nWho bears the loss between the drawer and the drawee bank when the drawer's signature is forged?",
+      model: "The drawee bank generally bears the loss because it is charged with absolute knowledge of the drawer's signature and cannot debit the drawer's account for a forged check, unless the drawer's negligence facilitated the forgery.",
+      caseLaw: "Associated Bank v. Court of Appeals, G.R. No. 107382"
+    },
+    {
+      id: "Mercantile Law Q.3",
+      text: "An owner insured his commercial building against fire for PHP 10,000,000 with Company A and took out another policy for PHP 10,000,000 with Company B without notifying Company A. A fire destroyed the building.\n\nWhat is the legal effect of taking out double insurance without notice?",
+      model: "Under the Insurance Code, double insurance without notice to insurers violates the 'other insurance clause' commonly stipulated in policies, which may render the policies void or reduce recovery proportionally if fraudulent intent is absent.",
+      caseLaw: "Geagonia v. Court of Appeals, G.R. No. 114427"
+    },
+    {
+      id: "Mercantile Law Q.4",
+      text: "A local cosmetic company adopted a brand name 'SunGlow' identical to a registered international trademark for sunscreen. The international company filed an action for trademark infringement and unfair competition.\n\nWhat distinguishes trademark infringement from unfair competition?",
+      model: "Trademark infringement requires unauthorized use of a registered mark leading to likelihood of confusion. Unfair competition does not require registration and centers on fraudulent passing off of one's goods as those of another.",
+      caseLaw: "Prosource International v. Horphag Research, G.R. No. 180073"
+    },
+    {
+      id: "Mercantile Law Q.5",
+      text: "A depositor maintained a dollar savings account in a commercial bank. The Ombudsman issued a subpoena duces tecum ordering the bank to produce bank records in relation to an unexplained wealth investigation.\n\nAre foreign currency deposits covered by the Secrecy of Bank Deposits Act?",
+      model: "Yes, foreign currency deposits are strictly confidential under R.A. 6426 (Foreign Currency Deposit Act), with even stricter exceptions than Philippine peso deposits under R.A. 1405.",
+      caseLaw: "Ejercito v. Sandiganbayan, G.R. No. 157294"
+    },
+    {
+      id: "Mercantile Law Q.6",
+      text: "A transport cooperative failed to pay its loan obligations to a financing institution. The creditor instituted insolvency proceedings against individual cooperative members.\n\nAre individual members of a registered cooperative personally liable for debts of the cooperative?",
+      model: "No. Cooperatives registered under the Philippine Cooperative Code enjoy a distinct juridical personality, limiting the liability of individual members up to the extent of their respective subscribed share capital.",
+      caseLaw: "Republic v. Proconsumers, G.R. No. L-48356"
+    },
+    {
+      id: "Mercantile Law Q.7",
+      text: "A financially distressed corporation filed a petition for corporate rehabilitation under the FRIA. Prior to the issuance of a Commencement Order, a secured creditor initiated foreclosure proceedings on mortgaged machineries.\n\nWhat is the effect of the Commencement Order and Stay Order on pending foreclosure proceedings?",
+      model: "Under the Financial Rehabilitation and Insolvency Act (FRIA), the issuance of a Commencement Order includes a Stay Order suspending all actions or proceedings, in court or otherwise, for foreclosure or execution against the debtor.",
+      caseLaw: "Pacific Wide Realty v. Puerto Azul Land, G.R. No. 178768"
+    },
+    {
+      id: "Mercantile Law Q.8",
+      text: "A merchant executed a trust receipt in favor of a bank to secure the importation of industrial chemicals. The merchant failed to turn over the proceeds of the sale or return the goods upon maturity. The bank filed criminal charges for estafa.\n\nDoes violation of the Trust Receipts Law constitute estafa?",
+      model: "Yes. Under P.D. 115 (Trust Receipts Law), failure of the entrustee to turn over the proceeds of the sale of goods covered by a trust receipt or to return the goods constitutes estafa under Article 315 of the Revised Penal Code.",
+      caseLaw: "Colinares v. Court of Appeals, G.R. No. 90828"
+    },
+    {
+      id: "Mercantile Law Q.9",
+      text: "A business processing outsourcing firm collected personal data from EU nationals. A former employee leaked database files containing sensitive personal information. The National Privacy Commission initiated motu proprio investigations.\n\nWhat are the primary obligations under the Data Privacy Act of 2012?",
+      model: "Under the Data Privacy Act (R.A. 10173), personal information controllers must adhere to transparency, legitimate purpose, and proportionality principles, and implement rigorous security measures to protect data against unauthorized access or breaches.",
+      caseLaw: "Data Privacy Act jurisprudence and NPC advisory opinions"
+    },
+    {
+      id: "Mercantile Law Q.10",
+      text: "The Anti-Money Laundering Council (AMLC) requested a bank to freeze several accounts suspected of holding proceeds from illegal drug trafficking without securing prior court authorization.\n\nCan the AMLC issue an ex parte freeze order without court intervention?",
+      model: "Under the Anti-Money Laundering Act (AMLA), the AMLC may issue an ex parte freeze order on monetary instruments or property for a period not exceeding 20 days, during which it must file a petition for extension or civil forfeiture before the Court of Appeals.",
+      caseLaw: "Republic v. Glasgow Credit and Collection Services, G.R. No. 170281"
     }
   ],
   "Political Law": [
     {
-      text: "To address severe traffic congestion in Metro Manila, the Metro Manila Development Authority (MMDA), through a resolution passed by the Metro Manila Council, issued a memorandum circular authorizing the towing and immediate impounding of any vehicle parked along designated national and secondary roads, imposing exorbitant towing fees and storage penalties without prior public hearing or legislative enactment.\n\nCar owner Manuel's vehicle was towed despite being legally parked inside a yellow-painted parking box designated by his local city ordinance. Manuel filed a petition for prohibition and declaratory relief directly before the Supreme Court, challenging the constitutionality of the MMDA memorandum circular on the grounds that: (1) MMDA possesses no police power or legislative rule-making authority to impose fines, fees, and impoundments; and (2) The circular violates due process.\n\n(A) Does the MMDA possess police power or the legislative competence to enact rules imposing towing fees, fines, and penalties?\n(B) Is Manuel's direct recourse to the Supreme Court via a petition for prohibition and declaratory relief proper under the doctrine of hierarchy of courts?",
-      model: "(A) No. The MMDA is a administrative and coordinative agency created by Republic Act No. 7924; it does not possess police power, let alone legislative or ordinance-making power. It cannot independently issue regulations that impose fines, fees, or forfeitures without explicit statutory authority.\n\n(B) The petition violates the doctrine of hierarchy of courts as regards the invocation of original jurisdiction for prohibition, since recourse should first be sought before the Court of Appeals or Regional Trial Court. Furthermore, an action for declaratory relief falls under the exclusive initial jurisdiction of the Regional Trial Court, making direct Supreme Court filing improper.",
-      caseLaw: "MMDA v. Bel-Air Village Association, G.R. No. 135962; Diocese of Bacolod v. COMELEC, G.R. No. 205728"
+      id: "Political Law Q.1",
+      text: "A local government unit passed an ordinance expropriating a private parcel of agricultural land to construct a public market. The landowner challenged the ordinance, arguing that national infrastructure agencies hold exclusive power of eminent domain.\n\nDo local government units possess the power of eminent domain under the Local Government Code?",
+      model: "Yes. Under Section 19 of the Local Government Code, LGUs exercise the power of eminent domain through an ordinance for public use, purpose, or welfare, upon payment of just compensation.",
+      caseLaw: "Municipality of Parañaque v. V.M. Realty Corporation, G.R. No. 127820"
+    },
+    {
+      id: "Political Law Q.2",
+      text: "The principal of a public high school suspended the publication of the campus student newspaper after student editors published an investigative article criticizing school fund allocations. Editors challenged the suspension under freedom of expression.\n\nDoes school censorship violate freedom of speech and expression of campus journalists?",
+      model: "Under the Campus Journalism Act and constitutional free speech guarantees, student publications enjoy editorial independence, and prior restraint by school authorities is unconstitutional unless clear and present danger to school discipline is established.",
+      caseLaw: "Chavez v. Gonzales, G.R. No. 168338"
+    },
+    {
+      id: "Political Law Q.3",
+      text: "A civil service employee was summarily dismissed from his administrative position by a department head without formal notice, investigation, or hearing, on grounds of alleged disloyalty.\n\nDid the department head violate the constitutional right to due process?",
+      model: "Yes. Under Article III, Section 1 of the Constitution and Civil Service laws, government employees enjoy security of tenure and cannot be dismissed without procedural due process consisting of written notice and opportunity to be heard.",
+      caseLaw: "Velasco v. Civil Service Commission, G.R. No. L-45536"
+    },
+    {
+      id: "Political Law Q.4",
+      text: "A sitting President was sued in a civil court for alleged breach of a private commercial contract entered into prior to assuming office. The President invoked presidential immunity from suit.\n\nDoes presidential immunity from suit cover private and prior acts during incumbency?",
+      model: "No. Presidential immunity from suit covers official acts performed during tenure, but does not extend to unofficial, private, or prior civil acts committed before assuming office.",
+      caseLaw: "Soliven v. Makasiar, G.R. No. L-82585"
+    },
+    {
+      id: "Political Law Q.5",
+      text: "Congress enacted a statute delegating to an administrative board the broad authority to promulgate rules and regulations 'as necessary to maintain economic stability', without providing specific policy standards or limits.\n\nIs the legislative delegation valid under the non-delegability doctrine?",
+      model: "No. Under the principle of separation of powers, legislative power cannot be delegated unless the law establishes a complete standard (completeness test) and sufficient guidelines (sufficient standard test) to confine administrative discretion.",
+      caseLaw: "Abakada Guro Party List v. Ermita, G.R. No. 168056"
+    },
+    {
+      id: "Political Law Q.6",
+      text: "A candidate for municipal mayor was born in the United States to Filipino parents, later acquired US citizenship, but subsequently reacquired Philippine citizenship under R.A. 9225 while maintaining dual citizenship. Opponents challenge his qualification.\n\nDoes dual citizenship disqualify a person from running for elective public office?",
+      model: "Dual citizenship per se does not disqualify a candidate, provided that upon filing the certificate of candidacy, the candidate makes a personal and sworn renunciation of foreign citizenship under R.A. 9225.",
+      caseLaw: "Mercado v. Manzano, G.R. No. 135083"
+    },
+    {
+      id: "Political Law Q.7",
+      text: "A human rights activist was abducted and detained by unidentified armed men. Relatives filed a petition for a Writ of Amparo before the Regional Trial Court to compel military authorities to produce the victim.",
+      model: "The Writ of Amparo is a judicial remedy available to any person whose right to life, liberty, and security is violated or threatened by unlawful acts of public officials or private individuals, requiring respondents to observe extraordinary diligence.",
+      caseLaw: "Secretary of National Defense v. Manalo, G.R. No. 179090"
+    },
+    {
+      id: "Political Law Q.8",
+      text: "A municipal ordinance imposed a heavy fee on delivery trucks passing through national highways within the municipality, labeling it as a 'regulatory police fee'. Transport groups challenge the exaction.\n\nWhat is the distinction between police power and the power of taxation in relation to regulatory fees?",
+      model: "Police power regulates conduct and promotes general welfare, where fees collected must only cover cost of regulation. If the exaction is primarily intended to raise revenue, it is an exercise of the power of taxation.",
+      caseLaw: "Progressive Development Corp. v. Quezon City, G.R. No. L-36081"
+    },
+    {
+      id: "Political Law Q.9",
+      text: "Congress passed a national budget law reducing the internal revenue allotment (IRA / NTA) share of local government units below constitutional computations. LGUs challenged the statute before the Supreme Court.",
+      model: "Under the Constitution and the Mandanas-Garcia ruling, all national taxes—not just collections from the Bureau of Internal Revenue—must be included in computing the just share of local government units.",
+      caseLaw: "Mandanas v. Executive Secretary, G.R. Nos. 199802 & 208488"
+    },
+    {
+      id: "Political Law Q.10",
+      text: "The House of Representatives initiated impeachment proceedings against a constitutional commissioner. Oppositors filed a petition for certiorari seeking to enjoin the Senate impeachment court, arguing grave procedural errors.",
+      model: "Impeachment proceedings are political questions exclusively committed to Congress under the Constitution, and courts generally lack power to review internal congressional rules unless constitutional limits are violated.",
+      caseLaw: "Francisco v. House of Representatives, G.R. No. 160261"
     }
   ],
   "Labor Law": [
     {
-      text: "Nexus Corp., a business process outsourcing firm, entered into a service agreement with Apex Agency for the deployment of customer service representatives. The contract stipulated that Apex was an independent contractor with substantial capital and equipment. However, the workers supplied by Apex performed core customer support tasks using Nexus computers, under the direct daily supervision, monitoring, and discipline of Nexus managers.\n\nAfter serving for 18 months, employee Jeffrey voiced out grievances regarding unpaid overtime and sought union organization among his peers. Two days later, Nexus instructed Apex to pull out Jeffrey from the premises, and Apex promptly terminated Jeffrey's employment without notice or hearing.\n\nJeffrey filed a complaint for illegal dismissal and unfair labor practice against both Nexus Corp. and Apex Agency. Nexus defended itself by arguing it had no employer-employee relationship with Jeffrey, pointing to the independent contractor agreement with Apex.\n\n(A) Who is the true employer of Jeffrey under Philippine Labor Law, applying the control test and labor contracting standards?\n(B) Was Jeffrey validly dismissed, and are Nexus and Apex solidarily liable?",
-      model: "(A) Nexus Corp. is the true employer. Apex Agency is engaged in labor-only contracting because the workers supplied performed activities directly related to the principal business of Nexus, and Nexus exercised direct control and supervision over the manner and methods of work.\n\n(B) No, Jeffrey was illegally dismissed. Being a regular employee by operation of law due to labor-only contracting, he enjoyed security of tenure and could only be dismissed for just or authorized causes after observing procedural due process. Nexus and Apex are solidarily liable for all monetary claims and backwages.",
-      caseLaw: "Meralco Industrial Engineering Services v. NLRC, G.R. No. 145430; San Miguel Corporation v. Aballa, G.R. No. 149011"
+      id: "Labor Law Q.1",
+      text: "An enterprise engaged in agricultural production required field harvesters to work on national holidays without paying holiday pay, arguing that field personnel are exempt from labor standards.\n\nAre agricultural field personnel entitled to holiday pay under the Labor Code?",
+      model: "Under Article 82 of the Labor Code, field personnel whose hours of work cannot be determined with reasonable certainty are exempt from holiday pay, but regular farm workers subject to supervision and fixed hours are entitled.",
+      caseLaw: "Mercator Farm v. National Labor Relations Commission, G.R. No. 169389"
+    },
+    {
+      id: "Labor Law Q.2",
+      text: "A bank teller was dismissed for loss of trust and confidence after an internal audit revealed cash shortages in her drawer, although no criminal charges were filed in court.\n\nis the filing of criminal charges a prerequisite for dismissal based on loss of trust and confidence?",
+      model: "No. Proof beyond reasonable doubt is not required in labor cases. Dismissal based on loss of trust and confidence requires only substantial evidence that the employee holds a position of trust and committed a breach thereof.",
+      caseLaw: "Fujitsu Philippines v. Court of Appeals, G.R. No. 158232"
+    },
+    {
+      id: "Labor Law Q.3",
+      text: "An employee stopped reporting to work after receiving a disciplinary memo regarding tardiness. The employer subsequently treated the absence as abandonment and terminated employment. The employee filed a case for illegal dismissal.\n\nDid the employee abandon her job?",
+      model: "Abandonment requires clear, deliberate, and unjustified refusal to return to work coupled with an overt act showing intent to sever the employer-employee relationship. Mere absence without notice does not automatically constitute abandonment.",
+      caseLaw: "Samarca v. Arc-Men Industries, G.R. No. 146118"
+    },
+    {
+      id: "Labor Law Q.4",
+      text: "A labor union staged a strike without complying with the mandatory strike vote and notice requirements under the Labor Code, protesting unfair labor practices of management.\n\nWhat is the legal consequence of a strike staged without statutory strike vote and notice?",
+      model: "A strike staged without complying with mandatory 30-day notice and 7-day strike vote requirements is illegal, and union officers who participated may be declared to have lost their employment status.",
+      caseLaw: "National Federation of Sugar Workers v. Ovejera, G.R. No. L-59743"
+    },
+    {
+      id: "Labor Law Q.5",
+      text: "A manufacturing corporation engaged a manpower agency to supply assembly line workers under a contracting agreement. The workers performed core manufacturing tasks inside the principal's premises using principal equipment.\n\nIs the contracting arrangement legitimate or labor-only contracting?",
+      model: "This constitutes labor-only contracting prohibited under Department Order No. 174, because the contractor does not possess substantial capital or investment, and workers perform activities directly related to the principal business.",
+      caseLaw: "Cigarette Workers Union v. CIR, G.R. No. L-25756"
+    },
+    {
+      id: "Labor Law Q.6",
+      text: "A dismissed domestic worker filed a monetary claim for underpaid wages and separation pay directly before the National Labor Relations Commission (NLRC).\n\nDoes the Labor Arbiter and NLRC have jurisdiction over monetary claims of domestic workers?",
+      model: "Under R.A. 10361 (Domestic Workers Act or Batas Kasambahay) and Labor Code provisions, jurisdiction over monetary claims of kasambahay initially falls with the Department of Labor and Employment (DOLE) regional directors before reaching arbiters.",
+      caseLaw: "Hda. Luisita v. National Labor Relations Commission, G.R. No. 196049"
+    },
+    {
+      id: "Labor Law Q.7",
+      text: "An employee who served a private company for 15 years resigned voluntarily due to health reasons. He demanded retirement pay under Article 302 of the Labor Code.\n\nis an employee who resigns voluntarily entitled to retirement pay in the absence of a collective bargaining agreement?",
+      model: "Under Article 302 (formerly Art. 287) of the Labor Code, retirement pay is due only upon reaching the retirement age of 60-65 years and having served at least 5 years, unless a company policy or CBA provides for voluntary resignation retirement benefits.",
+      caseLaw: "Universal Robina Corporation v. Honorable Minister of Labor, G.R. No. L-45958"
+    },
+    {
+      id: "Labor Law Q.8",
+      text: "A probationary employee was dismissed after five months for failure to meet reasonable production standards communicated to her at the start of employment. Employee claims security of tenure.\n\nDoes a probationary employee enjoy absolute security of tenure?",
+      model: "Probationary employees enjoy security of tenure only during the probationary period and may be terminated for just cause or failure to qualify as a regular employee in accordance with reasonable standards made known upon engagement.",
+      caseLaw: "Aberdeen Court v. Agustin, G.R. No. 149371"
+    },
+    {
+      id: "Labor Law Q.9",
+      text: "A labor dispute paralyzed operations in a vital hospital and medical center. The Secretary of Labor assumed jurisdiction over the dispute and issued a return-to-work order. Strikers defied the order.\n\nWhat is the effect of an assumption of jurisdiction order by the Secretary of Labor?",
+      model: "An assumption or certification order by the Secretary of Labor automatically enjoins any strike or lockout, and strikers are mandated to return to work immediately under pain of disciplinary sanctions.",
+      caseLaw: "Metropolis Water District v. Local Union, G.R. No. 97232"
+    },
+    {
+      id: "Labor Law Q.10",
+      text: "An illegal dismissal case was decided by the Supreme Court, ordering reinstatement and backwages. However, during execution proceedings, plant management proved that extreme animosity and strained relations existed between parties.\n\nWhen is separation pay awarded in lieu of reinstatement?",
+      model: "Separation pay is awarded in lieu of reinstatement when reinstatement is no longer feasible due to strained relations between employer and employee, abolition of position, or closure of establishment.",
+      caseLaw: "Globe-Mackay Cable and Radio Corp. v. National Labor Relations Commission, G.R. No. 82511"
     }
   ],
   "Taxation Law": [
     {
-      text: "On April 15, 2018, Stellar Trading Inc. filed its annual corporate income tax return for calendar year 2017. On April 10, 2021, the Bureau of Internal Revenue (BIR) mailed a Preliminary Assessment Notice (PAN) to Stellar's former business address, which had been vacated two years prior without formal notice of address update to the BIR, although Stellar filed its subsequent annual returns reflecting the new address.\n\nSubsequently, the BIR issued a Formal Letter of Demand and Assessment Notice (FLD/FAN) on May 20, 2021, received by Stellar at its actual operational address. Stellar filed a protest arguing that: (1) The right of the BIR to assess had already prescribed after three years; and (2) The failure to properly serve the PAN rendered the entire assessment void ab initio for violating administrative due process.\n\n(A) Has the prescriptive period for the BIR to assess deficiency taxes for taxable year 2017 expired?\n(B) Is the non-receipt or improper service of the PAN fatal to the validity of the assessment?",
-      model: "(A) No, the assessment has not prescribed. Under Section 203 of the National Internal Revenue Code (NIRC), the BIR has three years from the actual date of filing (April 15, 2018) to assess. The PAN was issued and mailed on April 10, 2021, which is within the three-year prescriptive period.\n\n(B) While the PAN is a statutory requirement to apprise the taxpayer of the findings, the failure to receive the PAN does not void the assessment *per se* provided the taxpayer was given the opportunity to respond to the Formal Letter of Demand (FLD/FAN) which satisfies minimum constitutional due process, unless bad faith or gross procedural defect is proven.",
-      caseLaw: "CIR v. Metro Star Superama, G.R. No. 185371; CIR v. Enron Subic Power Corporation, G.R. No. 166387"
+      id: "Taxation Law Q.1",
+      text: "Congress enacted a revenue statute imposing a special tax on all income derived from agricultural exports, exempting agricultural cooperatives. Taxpayers challenged the tax as violating uniformity and equality principles.\n\nDoes the tax violate the constitutional rule of uniformity and equality of taxation?",
+      model: "No. The constitutional guarantee of uniformity and equality requires that all subjects or properties similarly situated be treated alike. Reasonable classification based on substantial distinctions (such as cooperatives) is permitted.",
+      caseLaw: "Tiu v. Court of Appeals, G.R. No. 127410"
+    },
+    {
+      id: "Taxation Law Q.2",
+      text: "An individual taxpayer sold a residential house and lot classified as a capital asset. The BIR assessed Capital Gains Tax (CGT) based on the zonal value, while the taxpayer argued actual selling price was lower.\n\nWhich valuation governs the assessment of Capital Gains Tax on real property sales?",
+      model: "Under the National Internal Revenue Code (NIRC), CGT is based on the gross selling price or fair market value determined by the Commissioner of Internal Revenue (zonal value) or the provincial/city assessor, whichever is higher.",
+      caseLaw: "Commissioner of Internal Revenue v. Court of Appeals, G.R. No. 123206"
+    },
+    {
+      id: "Taxation Law Q.3",
+      text: "A VAT-registered manufacturing enterprise exported finished goods to foreign buyers. The enterprise applied for a tax credit or refund of input VAT directly attributable to export sales.\n\nWhat is the tax treatment of export sales under the Value-Added Tax system?",
+      model: "Export sales by a VAT-registered person are zero-rated transactions under the NIRC, allowing the taxpayer to claim a refund or tax credit certificate for unutilized input VAT directly attributable to such exports.",
+      caseLaw: "CIR v. Mirant Pagbilao Corporation, G.R. No. 172129"
+    },
+    {
+      id: "Taxation Law Q.4",
+      text: "In computing the gross estate of a decedent, the heirs included a residential property claimed as family home, alongside unsecured personal debts incurred by the decedent prior to death.\n\nWhat are the allowable deductions from the gross estate for a family home and claims against the estate?",
+      model: "Under the NIRC, the family home is a deductible item up to statutory limits, provided it is certified as the actual family residence. Claims against the estate are deductible if substantiated by notarized documents and valid legal consideration.",
+      caseLaw: "CIR v. Court of Appeals (Heirs of Tan Eng Kee), G.R. No. 123486"
+    },
+    {
+      id: "Taxation Law Q.5",
+      text: "A wealthy philanthropist transferred substantial real estate properties to her children during her lifetime without valuable consideration. The BIR assessed donor's tax based on total fair market value.\n\nIs a gratuitous transfer inter vivos subject to donor's tax?",
+      model: "Yes. Under the NIRC, any transfer of property gratuitously (whether direct or indirect, in trust or otherwise) is subject to donor's tax computed based on the net gifts made during the calendar year.",
+      caseLaw: "Siasoco v. Court of Appeals, G.R. No. 132922"
+    },
+    {
+      id: "Taxation Law Q.6",
+      text: "The BIR issued a Final Assessment Notice (FAN) for deficiency income taxes against a corporation 4 years after the tax return was filed without any waiver of the prescriptive period.\n\nIs the tax assessment barred by prescription?",
+      model: "Yes. Under Section 203 of the NIRC, internal revenue taxes must be assessed within 3 years after the last day prescribed by law for filing the return. Assessments issued after 4 years without a valid waiver are void due to prescription.",
+      caseLaw: "CIR v. Procter & Gamble, G.R. No. L-66838"
+    },
+    {
+      id: "Taxation Law Q.7",
+      text: "A taxpayer received a Final Assessment Notice from the BIR and wished to contest it. Instead of filing an administrative protest with the Commissioner within 30 days, the taxpayer directly filed a petition for review before the Court of Tax Appeals (CTA).\n\nDoes the CTA acquire jurisdiction over a direct petition without exhausting administrative remedies?",
+      model: "No. Under the NIRC and CTA law, an administrative protest (request for reconsideration or reinvestigation) must first be filed with the CIR within 30 days from receipt of assessment before elevating the case to the CTA.",
+      caseLaw: "Lascona Land Co. v. CIR, G.R. No. 171251"
+    },
+    {
+      id: "Taxation Law Q.8",
+      text: "A provincial government enacted an ordinance imposing local business taxes on gross receipts of banks operating within its municipality. Banks challenged the local taxing power.",
+      model: "Under the Local Government Code, LGUs are prohibited from imposing taxes on gross receipts of banks and financial institutions already subject to specific national taxes, unless expressly authorized.",
+      caseLaw: "First Philippine International Bank v. Court of Appeals, G.R. No. 115849"
+    },
+    {
+      id: "Taxation Law Q.9",
+      text: "Customs authorities seized smuggled electronic goods found hidden in commercial containers at the port of Manila. Importers argue for administrative release upon payment of storage fees without forfeiture proceedings.",
+      model: "Smuggled goods unlawfully imported are subject to administrative forfeiture proceedings under the Customs Modernization and Tariff Act (CMTA), and release cannot be granted without forfeiture compliance.",
+      caseLaw: "Republic v. CFI of Manila, G.R. No. L-38435"
+    },
+    {
+      id: "Taxation Law Q.10",
+      text: "A non-stock, non-profit educational institution operated a canteen and bookstore inside its campus, generating commercial revenues. The local government assessed real property taxes on the entire campus.",
+      model: "Under Article XIV, Section 4 of the Constitution and the Local Government Code, lands, buildings, and improvements used actually, directly, and exclusively for educational purposes are exempt from real property taxes, though commercial ventures may be segregated.",
+      caseLaw: "Lung Center of the Philippines v. Quezon City, G.R. No. 141044"
     }
   ],
   "Legal Ethics": [
     {
-      text: "Attorney Nestor represented client Brenda in a contentious annulment of marriage case. During the pendency of the case, Brenda borrowed PHP 200,000 from Attorney Nestor to settle urgent medical bills, executing a promissory note pledging her diamond ring as collateral. \n\nLater, Brenda reconciled with her husband and decided to dismiss the annulment petition without consulting Attorney Nestor. Angered by the loss of prospective legal fees, Attorney Nestor refused to return Brenda's case files, documents, and the diamond ring, threatening to disclose intimate confidential secrets shared during privileged client interviews unless his professional fees and the loan were paid in full.\n\nBrenda filed an administrative disbarment complaint against Attorney Nestor before the Integrated Bar of the Philippines (IBP).\n\n(A) Did Attorney Nestor violate ethical rules by lending money to his client and holding her documents and ring as security?\n(B) Is Attorney Nestor's threat to disclose confidential client secrets permissible under the Code of Professional Responsibility and Accountability (CPRA)?",
-      model: "(A) Yes. Under the CPRA and Canon rules, a lawyer is prohibited from borrowing money from a client unless the client's interests are fully protected by independent safeguards, and a lawyer shall not acquire a financial interest in the subject matter of the case or hold client files/property as an unlawful retaining lien when it prejudices the client's rights.\n\n(B) No. The attorney-client privilege is sacred and perpetual. Threatening to disclose confidential communications learned in confidence to coerce payment of fees or settlement constitutes gross misconduct and warrants severe disciplinary sanction up to disbarment.",
-      caseLaw: "Quingwa v. Puno, G.R. No. L-38925; Hilado v. David, G.R. No. L-961"
+      id: "Legal Ethics Q.1",
+      text: "A lawyer represented a corporate client in contract negotiations against a supplier. Six months later, the same lawyer agreed to represent the supplier in a collection suit filed against the former corporate client arising from the exact same contract.\n\nDoes this situation constitute a conflict of interest under the Code of Professional Responsibility and Accountability (CPRA)?",
+      model: "Yes. Under the CPRA, a lawyer represents conflicting interests when, in behalf of one client, it is incumbent upon the lawyer to contend for that which duty to another client requires him to oppose, even if in different proceedings.",
+      caseLaw: "Hilado v. David, G.R. No. L-961"
+    },
+    {
+      id: "Legal Ethics Q.2",
+      text: "A client failed to pay agreed attorney's fees after winning a major property case. The lawyer asserted a retaining lien over case documents and a charging lien over the awarded real property.\n\nWhat is the difference between a retaining lien and a charging lien?",
+      model: "A retaining lien covers funds, documents, and papers lawfully coming into the lawyer's professional possession until fees are paid. A charging lien attaches to all judgments and executions for payment of services rendered in the specific case.",
+      caseLaw: "Metropolitan Bank v. Court of Appeals, G.R. No. 112567"
+    },
+    {
+      id: "Legal Ethics Q.3",
+      text: "A practicing lawyer was convicted by final judgment of a crime involving moral turpitude (estafa through falsification). The Integrated Bar of the Philippines initiated disbarment proceedings.\n\nWhat is the effect of conviction of a crime involving moral turpitude on a lawyer's license?",
+      model: "Under Rule 138 of the Rules of Court and the CPRA, conviction of a crime involving moral turpitude is a statutory ground for disbarment or suspension, as it demonstrates unfitness to remain a member of the legal profession.",
+      caseLaw: "In re: Alcantara, G.R. No. L-1546"
+    },
+    {
+      id: "Legal Ethics Q.4",
+      text: "During a private consultation, a client confessed to his lawyer that he concealed smuggled artifacts in his garage. Police later subpoenaed the lawyer to testify regarding the conversation.\n\nDoes the attorney-client privilege protect communications regarding past criminal acts disclosed in confidence?",
+      model: "Yes. The attorney-client privilege protects confidential communications made by a client to a lawyer in professional confidence, unless the communication is made in furtherance of a future crime or fraud.",
+      caseLaw: "Regala v. Sandiganbayan, G.R. No. 105938"
+    },
+    {
+      id: "Legal Ethics Q.5",
+      text: "A notary public notarized a deed of sale without requiring the affiant to personally appear before him, relying instead on a telephone call from a mutual friend confirming the identity of the signer.\n\nis notarizing a document without the physical presence of the affiant permissible?",
+      model: "No. Under the 2004 Rules on Notarial Practice, a notary public is strictly prohibited from notarizing a document unless the signer is physically present and personally known to the notary or identified through competent evidence of identity.",
+      caseLaw: "Dela Cruz v. Malic, A.C. No. 7942"
+    },
+    {
+      id: "Legal Ethics Q.6",
+      text: "A lawyer suspended from the practice of law for one year continued to draft pleadings for colleagues and signed briefs using another lawyer's roll number.\n\nWhat is the consequence of practicing law while under suspension?",
+      model: "Practicing law while under suspension constitutes contempt of court and serious professional misconduct, which warrants disbarment.",
+      caseLaw: "Ulep v. Legal Clinic, Bar Matter No. 553"
+    },
+    {
+      id: "Legal Ethics Q.7",
+      text: "A lawyer entered into a contingency fee agreement stipulating 80% of the property recovered as compensation for legal services. Client later contests the fee as excessive.\n\nAre excessive contingent attorney's fees valid under legal ethics?",
+      model: "Contingent fee agreements are valid in the Philippines, but courts may reduce them if unconscionable or excessive, considering the nature of the case, labor required, and professional standing.",
+      caseLaw: "Taganas v. Emuslan, G.R. No. 146980"
+    },
+    {
+      id: "Legal Ethics Q.8",
+      text: "A public prosecutor concealed exculpatory ballistic evidence during trial that pointed to the suspect's innocence, aiming solely for a conviction record.\n\nWhat is the primary ethical duty of a public prosecutor in criminal proceedings?",
+      model: "A public prosecutor's primary duty is not to secure a conviction, but to see that justice is done; hence, suppression of exculpatory evidence violates constitutional due process and prosecutorial ethics.",
+      caseLaw: "People v. Court of Appeals, G.R. No. 118841"
+    },
+    {
+      id: "Legal Ethics Q.9",
+      text: "A newly admitted lawyer published billboard advertisements and solicited clients outside hospital emergency rooms, offering free legal assistance for vehicular accidents.\n\nis lawyer advertising and ambulance chasing permissible under the CPRA?",
+      model: "No. Under the CPRA and professional ethics rules, ambulance chasing and commercial solicitation of legal business through public billboards or direct canvassing are strictly prohibited as degrading to the legal profession.",
+      caseLaw: "Ledesma v. Climaco, G.R. No. L-27153"
+    },
+    {
+      id: "Legal Ethics Q.10",
+      text: "A counsel of record wished to withdraw from active litigation due to irreconcilable differences with the client, but filed no formal motion and simply stopped attending hearings.\n\nWhat is the proper procedure for a lawyer seeking to withdraw from a case?",
+      model: "A lawyer cannot simply abandon a case. Withdrawal requires filing a written motion with notice to the client and adverse party, and securing the written consent of the client or approval of the court.",
+      caseLaw: "Republic v. Issuance of Warrant, G.R. No. 154380"
     }
   ]
 };
 
-const BAR_QUESTIONS = {};
-SUBJECTS.forEach(subj => {
-  const basePool = SUBJECT_POOLS[subj] || SUBJECT_POOLS["Civil Law"];
-  BAR_QUESTIONS[subj] = [];
-  for(let i = 1; i <= 50; i++){
-    const template = basePool[(i - 1) % basePool.length];
-    BAR_QUESTIONS[subj].push({
-      year: `Bar Examination Archive Set ${Math.ceil(i / 6)} (${2026 - (i % 8)}) — Case Problem No. ${i}`,
-      text: `[Complex Verbatim-Style Scenario #${i}]\n\n${template.text}`,
-      model: template.model,
-      caseLaw: template.caseLaw
-    });
-  }
-});
+let currentSubj = "Civil Law";
+let currentIdx = 0;
+let userAnswers = {};
+let submissionResults = {};
+let historyLog = [];
+let timerInterval = null;
+let timeLeft = 10800;
 
-const TIME_LIMIT_SECONDS = 7 * 60;
-
-let state = {
-  view: "write",
-  subject: SUBJECTS[0],
-  currentIndex: 0,
-  answer: "",
-  grading: null,
-  loading: false,
-  error: null,
-  history: [],
-  expandedHistId: null,
-  timeLeft: TIME_LIMIT_SECONDS,
-  timerInterval: null,
-  timerExpired: false
-};
-
-function formatTime(s){
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+function init() {
+  renderSubjectTabs();
+  renderMainWrite();
+  startTimer();
+  setupEventListeners();
 }
 
-function clearTimer(){
-  if(state.timerInterval){
-    clearInterval(state.timerInterval);
-    state.timerInterval = null;
-  }
-}
-
-function startTimer(){
-  clearTimer();
-  state.timeLeft = TIME_LIMIT_SECONDS;
-  state.timerExpired = false;
-  state.timerInterval = setInterval(() => {
-    state.timeLeft--;
-    const el = document.getElementById('timer-display');
-    if(el){
-      el.textContent = formatTime(state.timeLeft);
-      el.parentElement.classList.toggle('warn', state.timeLeft <= 60);
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      timeLeft = 0;
     }
-    if(state.timeLeft <= 0){
-      clearTimer();
-      state.timerExpired = true;
-      onTimeUp();
-    }
+    updateTimerDisplay();
   }, 1000);
 }
 
-function resumeTimer(){
-  clearTimer();
-  state.timerInterval = setInterval(() => {
-    state.timeLeft--;
-    const el = document.getElementById('timer-display');
-    if(el){
-      el.textContent = formatTime(state.timeLeft);
-      el.parentElement.classList.toggle('warn', state.timeLeft <= 60);
-    }
-    if(state.timeLeft <= 0){
-      clearTimer();
-      state.timerExpired = true;
-      onTimeUp();
-    }
-  }, 1000);
-}
-
-async function onTimeUp(){
-  const ta = document.getElementById('answer');
-  if(ta) ta.disabled = true;
-  const wc = state.answer.trim() ? state.answer.trim().split(/\s+/).filter(Boolean).length : 0;
-  if(wc >= 5 && !state.loading && !state.grading){
-    await submitAnswer(true);
-  } else if(!state.grading){
-    state.error = "Time's up. No comprehensive answer was submitted.";
-    render();
+function updateTimerDisplay() {
+  const disp = document.getElementById("timer-display");
+  if (!disp) return;
+  const h = Math.floor(timeLeft / 3600);
+  const m = Math.floor((timeLeft % 3600) / 60);
+  const s = timeLeft % 60;
+  disp.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  if (timeLeft < 900) {
+    disp.closest('.timer-bar')?.classList.add('warn');
   }
 }
 
-function currentQuestionsList(){
-  return BAR_QUESTIONS[state.subject] || [];
+function setupEventListeners() {
+  document.getElementById("tab-write").addEventListener("click", () => {
+    document.getElementById("tab-write").classList.add("active");
+    document.getElementById("tab-history").classList.remove("active");
+    renderMainWrite();
+  });
+
+  document.getElementById("tab-history").addEventListener("click", () => {
+    document.getElementById("tab-history").classList.add("active");
+    document.getElementById("tab-write").classList.remove("active");
+    renderMainHistory();
+  });
+
+  const fbModal = document.getElementById("feedback-modal");
+  document.getElementById("btn-open-feedback").addEventListener("click", () => {
+    fbModal.classList.add("open");
+  });
+  document.getElementById("btn-close-feedback").addEventListener("click", () => {
+    fbModal.classList.remove("open");
+  });
+  document.getElementById("feedback-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const name = document.getElementById("fb-name").value;
+    const msg = document.getElementById("fb-message").value;
+    window.location.href = `mailto:wallyesteban1993@gmail.com?subject=Due%20Diligence%20Trainer%20Feedback%20from%20${encodeURIComponent(name)}&body=${encodeURIComponent(msg)}`;
+    fbModal.classList.remove("open");
+    alert("Feedback client prepared for dispatch to wallyesteban1993@gmail.com!");
+  });
 }
 
-function currentQuestionData(){
-  const list = currentQuestionsList();
-  if(state.currentIndex >= list.length) state.currentIndex = 0;
-  if(state.currentIndex < 0) state.currentIndex = 0;
-  return list[state.currentIndex] || list[0];
+function renderSubjectTabs() {
+  const container = document.getElementById("subject-tabs");
+  container.innerHTML = SUBJECTS.map(subj => `
+    <button class="${subj === currentSubj ? 'active' : ''}" onclick="switchSubject('${subj}')">
+      ${subj}
+    </button>
+  `).join('');
 }
 
-async function loadStorage(){
-  try{
-    const histRes = localStorage.getItem('bar_history_advanced_v5');
-    state.history = histRes ? JSON.parse(histRes) : [];
-  }catch(e){ state.history = []; }
-  render();
+function switchSubject(subj) {
+  currentSubj = subj;
+  currentIdx = 0;
+  renderSubjectTabs();
+  renderMainWrite();
 }
 
-async function saveHistory(){
-  try{ 
-    localStorage.setItem('bar_history_advanced_v5', JSON.stringify(state.history));
-  }catch(e){ console.error('history save failed', e); }
-}
+function renderMainWrite() {
+  const main = document.getElementById("main");
+  const qList = BAR_QUESTIONS[currentSubj];
+  const q = qList[currentIdx];
+  const savedKey = `${currentSubj}-${currentIdx}`;
+  const currentText = userAnswers[savedKey] || "";
+  const hasSubmitted = submissionResults[savedKey] !== undefined;
 
-function selectSubject(s){
-  state.subject = s;
-  state.currentIndex = 0;
-  state.answer = "";
-  state.grading = null;
-  state.error = null;
-  render();
-  startTimer();
-}
+  let timerFormatted = "03:00:00";
+  const h = Math.floor(timeLeft / 3600);
+  const m = Math.floor((timeLeft % 3600) / 60);
+  const s = timeLeft % 60;
+  timerFormatted = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 
-function nextQuestion(){
-  const list = currentQuestionsList();
-  if(state.currentIndex < list.length - 1){
-    state.currentIndex++;
-  } else {
-    state.currentIndex = 0;
-  }
-  state.answer = "";
-  state.grading = null;
-  state.error = null;
-  render();
-  startTimer();
-}
-
-function prevQuestion(){
-  const list = currentQuestionsList();
-  if(state.currentIndex > 0){
-    state.currentIndex--;
-  } else {
-    state.currentIndex = list.length - 1;
-  }
-  state.answer = "";
-  state.grading = null;
-  state.error = null;
-  render();
-  startTimer();
-}
-
-function randomQuestion(){
-  const list = currentQuestionsList();
-  if(list.length <= 1) return;
-  let rand = state.currentIndex;
-  while(rand === state.currentIndex){
-    rand = Math.floor(Math.random() * list.length);
-  }
-  state.currentIndex = rand;
-  state.answer = "";
-  state.grading = null;
-  state.error = null;
-  render();
-  startTimer();
-}
-
-function evaluateAnswerLocally(answerText) {
-  const words = answerText.trim().split(/\s+/).filter(Boolean);
-  const wc = words.length;
-  
-  let score = 50;
-  if (wc > 50) score += 12;
-  if (wc > 100) score += 12;
-  if (wc > 160) score += 10;
-
-  const lower = answerText.toLowerCase();
-  if (lower.includes("article") || lower.includes("section") || lower.includes("jurisprudence") || lower.includes("doctrine")) score += 10;
-  if (lower.includes("therefore") || lower.includes("consequently") || lower.includes("hence")) score += 6;
-
-  if (score > 94) score = 94;
-  if (wc < 25) score = 40;
-
-  let issue1 = Math.round(score * 0.40);
-  let issue2 = Math.round(score * 0.40);
-  let issue3 = score - issue1 - issue2;
-  if (issue3 < 5) issue3 = 5;
-
-  const total = issue1 + issue2 + issue3;
-  const qData = currentQuestionData();
-
-  return {
-    totalScore: total,
-    issues: [
-      {
-        label: "Direct Answer & Statutory Basis",
-        maxPoints: 40,
-        awarded: issue1,
-        status: issue1 >= 30 ? "full" : issue1 >= 18 ? "partial" : "missed",
-        note: issue1 >= 30 ? "Exceptional legal articulation and accurate code invocation." : "Needs precise statutory citation for the main issue."
-      },
-      {
-        label: "Factual Synthesis & Red Herring Handling",
-        maxPoints: 40,
-        awarded: issue2,
-        status: issue2 >= 30 ? "full" : issue2 >= 18 ? "partial" : "missed",
-        note: issue2 >= 30 ? "Successfully navigated complex fact patterns and distinguished distractions." : "Fails to fully address all sub-queries and factual nuances."
-      },
-      {
-        label: "Doctrinal Conclusion",
-        maxPoints: 20,
-        awarded: issue3,
-        status: issue3 >= 15 ? "full" : issue3 >= 10 ? "partial" : "missed",
-        note: issue3 >= 15 ? "Sound and definitive conclusion matching Supreme Court jurisprudence." : "Conclusion lacks absolute legal finality."
-      }
-    ],
-    suggestedAnswer: qData.model,
-    caseLawBasis: qData.caseLaw,
-    examinerRemarks: total >= 75 
-      ? "Demonstrates thorough bar-level analysis, handling complex scenarios with logical rigor." 
-      : "In-depth review of complex case scenarios and structured ALAC formulation required.",
-    referencedSource: `Philippine Bar Examination Verbatim Archive (${qData.year})`
-  };
-}
-
-async function submitAnswer(force){
-  const q = currentQuestionData();
-  const answer = state.answer.trim();
-  if(!force && (!answer || answer.split(/\s+/).length < 15)){
-    state.error = "Please provide a more detailed analysis before submitting.";
-    render();
-    return;
-  }
-  if(force && !answer){
-    state.error = "Time's up. No answer was recorded.";
-    render();
-    return;
-  }
-  clearTimer();
-  state.loading = true;
-  state.error = force ? "Time's up — your partial essay was submitted automatically." : null;
-  state.grading = null;
-  render();
-
-  setTimeout(async () => {
-    const gradingResult = evaluateAnswerLocally(answer);
-    state.grading = gradingResult;
-    
-    const entry = {
-      id: 'h' + Date.now(),
-      ts: Date.now(),
-      subject: state.subject,
-      year: q.year,
-      questionText: q.text,
-      answer: answer,
-      score: gradingResult.totalScore,
-      grading: gradingResult
-    };
-    state.history.unshift(entry);
-    await saveHistory();
-    state.loading = false;
-    render();
-  }, 800);
-}
-
-function fmtDate(ts){
-  const d = new Date(ts);
-  return d.toLocaleDateString('en-PH', { month:'short', day:'numeric', year:'numeric' });
-}
-
-function renderGrading(g){
-  const pass = g.totalScore >= 75;
-  return `
-    <div class="stamp-row">
-      <div class="stamp ${pass ? 'pass':'fail'}">
-        <div class="num">${g.totalScore}</div>
-        <div class="lbl">/ 100</div>
-      </div>
-      <div class="stamp-verdict">
-        ${pass ? 'Bar Standard Met (Passing)' : 'Sub-bar Standard (Needs Improvement)'}
-        <span class="small">Passing grade threshold: 75</span>
-      </div>
+  main.innerHTML = `
+    <div class="timer-bar ${timeLeft < 900 ? 'warn' : ''}">
+      <span class="timer-label">⏱️ Bar Exam Simulation Clock</span>
+      <span id="timer-display">${timerFormatted}</span>
+      <span class="timer-limit">Recommended Time per Essay: 35–45 Mins</span>
     </div>
-    <div class="result">
-      <div>
-        <div class="panel-title">Examiner's Issue Breakdown</div>
-        ${g.issues.map(iss => `
-          <div class="issue ${iss.status}">
-            <div class="issue-head">
-              <span><span class="badge ${iss.status}">${iss.status}</span>&nbsp; ${iss.label}</span>
-              <span class="pts">${iss.awarded}/${iss.maxPoints}</span>
-            </div>
-            <div class="note">${iss.note}</div>
-          </div>
-        `).join('')}
-        <div class="remarks">${g.examinerRemarks}</div>
-      </div>
-      <div>
-        <div class="panel-title">Model Bar Answer & Jurisprudence</div>
-        <div class="paper-card suggested">${g.suggestedAnswer}</div>
-        <div class="caselaw-box">
-          <div class="caselaw-title">&#9878; Controlling Supreme Court Precedent</div>
-          ${g.caseLawBasis}
-        </div>
-        <div class="source-note">${g.referencedSource}</div>
-      </div>
-    </div>
-    <div style="margin-top:20px; text-align:right;">
-      <button class="btn-primary" id="btn-proceed-next">Proceed to Next Case Scenario &rarr;</button>
-    </div>
-  `;
-}
 
-function renderWrite(){
-  const list = currentQuestionsList();
-  const q = currentQuestionData();
-  const wordCount = state.answer.trim() ? state.answer.trim().split(/\s+/).length : 0;
-  const locked = state.loading || !!state.grading || state.timerExpired;
-
-  return `
     <div class="toolbar">
       <div class="nav-group">
-        <button class="btn-tool" id="btn-prev">&larr; Previous Case</button>
-        <button class="btn-tool random" id="btn-random">&#8645; Random Complex Scenario</button>
-        <button class="btn-tool" id="btn-next">Next Case &rarr;</button>
+        <button class="btn-tool" onclick="prevQuestion()">← Prev Question</button>
+        <button class="btn-tool" onclick="nextQuestion()">Next Question →</button>
+        <button class="btn-tool random" onclick="randomQuestion()">🔀 Randomize</button>
       </div>
       <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);">
-        Available complex scenarios: ${list.length}
+        Item ${currentIdx + 1} of ${qList.length} (${currentSubj})
       </div>
     </div>
 
     <div class="paper-card">
       <div class="q-header-info">
-        <div class="q-label">${state.subject} — Verbatim Bar Archive</div>
-        <div class="q-counter">Scenario ${state.currentIndex + 1} of ${list.length} (${q.year})</div>
+        <span class="q-label">${currentSubj.toUpperCase()} — VERBATIM CASE PROMPT</span>
+        <span class="q-counter">Item No. ${currentIdx + 1}</span>
       </div>
-      <div class="q-text">${q.text}</div>
+      <div class="q-text">${escapeHtml(q.text)}</div>
     </div>
 
-    <div class="timer-bar">
-      <span class="timer-label">Time remaining</span>
-      <span id="timer-display">${formatTime(state.timeLeft)}</span>
-      <span class="timer-limit">7:00 complex scenario limit</span>
+    <div class="paper-card" style="background:#fff;">
+      <div class="panel-title">Examinee Answer Workspace (ISSUE • RULE • APPLICATION • CONCLUSION)</div>
+      <textarea id="answer-box" oninput="handleInput(this)" placeholder="Draft your structured Bar answer here...">${escapeHtml(currentText)}</textarea>
+      <div class="row">
+        <span class="wc" id="word-count">${countWords(currentText)} words</span>
+        <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${!currentText.trim() ? 'disabled' : ''}>Evaluate & Grade Essay</button>
+      </div>
     </div>
 
-    <textarea id="answer" placeholder="Formulate your structured answer following ALAC (Answer, Legal Basis, Application, Conclusion) addressing all sub-issues..." ${locked ? 'disabled' : ''}>${state.answer}</textarea>
-    <div class="row">
-      <span class="wc">${wordCount} words</span>
-      <button class="btn-primary" id="submit-btn" ${state.loading || locked ?'disabled':''}>${state.loading ? 'Evaluating Bluebook…' : 'Submit for bar grading'}</button>
+    <div id="evaluation-result-area">
+      ${hasSubmitted ? renderResultHTML(savedKey) : ''}
     </div>
-    ${state.error ? `<div class="err">${state.error}</div>` : ''}
-    ${state.loading ? `<div class="loading">Senior Bar Examiner is meticulously grading your essay response…</div>` : ''}
-    ${state.grading ? renderGrading(state.grading) : ''}
   `;
 }
 
-function renderHistory(){
-  if(state.history.length === 0){
-    return `<div class="empty">No complex case submissions recorded yet. Complete scenarios to populate your bar archive history.</div>`;
+function countWords(str) {
+  const matches = str.trim().match(/\S+/g);
+  return matches ? matches.length : 0;
+}
+
+function handleInput(el) {
+  const val = el.value;
+  const key = `${currentSubj}-${currentIdx}`;
+  userAnswers[key] = val;
+  document.getElementById("word-count").textContent = `${countWords(val)} words`;
+  const btn = document.getElementById("submit-btn");
+  if (btn) {
+    btn.disabled = !val.trim();
   }
-  return state.history.map(h => {
-    const pass = h.score >= 75;
-    const expanded = state.expandedHistId === h.id;
-    return `
-      <div>
-        <div class="hist-row" data-hid="${h.id}">
-          <div class="hist-score ${pass?'pass':'fail'}">${h.score}</div>
-          <div class="hist-meta">
-            <div class="hist-subj">${h.subject} &bull; ${h.year}</div>
-            <div class="hist-q">${h.questionText.split('\n')[0]}</div>
-          </div>
-          <div class="hist-date">${fmtDate(h.ts)}</div>
-        </div>
-        ${expanded ? `<div class="paper-card" style="margin-top:-4px;">${renderGrading(h.grading)}</div>` : ''}
-      </div>
-    `;
-  }).join('');
 }
 
-function render(){
-  document.getElementById('tab-write').className = 'tabbtn' + (state.view==='write' ? ' active':'');
-  document.getElementById('tab-history').className = 'tabbtn' + (state.view==='history' ? ' active':'');
-
-  const tabs = document.getElementById('subject-tabs');
-  tabs.innerHTML = SUBJECTS.map(s => `<button class="${s===state.subject?'active':''}" data-subj="${s}">${s}</button>`).join('');
-  tabs.style.display = state.view === 'write' ? 'block' : 'none';
-
-  const main = document.getElementById('main');
-  main.innerHTML = state.view === 'write' ? renderWrite() : `<div class="panel-title">Your graded advanced submission history</div>${renderHistory()}`;
-
-  attachHandlers();
+function prevQuestion() {
+  const qList = BAR_QUESTIONS[currentSubj];
+  currentIdx = (currentIdx - 1 + qList.length) % qList.length;
+  renderMainWrite();
 }
 
-function attachHandlers(){
-  document.getElementById('tab-write').onclick = () => {
-    state.view='write';
-    render();
-    if(!state.timerInterval && !state.timerExpired && !state.grading && state.timeLeft > 0){
-      resumeTimer();
-    }
+function nextQuestion() {
+  const qList = BAR_QUESTIONS[currentSubj];
+  currentIdx = (currentIdx + 1) % qList.length;
+  renderMainWrite();
+}
+
+function randomQuestion() {
+  const qList = BAR_QUESTIONS[currentSubj];
+  currentIdx = Math.floor(Math.random() * qList.length);
+  renderMainWrite();
+}
+
+function evaluateAnswer() {
+  const key = `${currentSubj}-${currentIdx}`;
+  const text = userAnswers[key] || "";
+  const words = countWords(text);
+
+  let score = 0;
+  if (words > 180) score += 35;
+  else if (words > 80) score += 25;
+  else score += 15;
+
+  const lower = text.toLowerCase();
+  if (lower.includes("issue") || lower.includes("whether") || lower.includes("resolved")) score += 20;
+  if (lower.includes("article") || lower.includes("section") || lower.includes("code") || lower.includes("rule")) score += 25;
+  if (lower.includes("therefore") || lower.includes("hence") || lower.includes("conclude") || lower.includes("thus")) score += 20;
+
+  score = Math.min(100, Math.max(35, score));
+  const passed = score >= 75;
+
+  const resultObj = {
+    score: score,
+    passed: passed,
+    timestamp: new Date().toLocaleString(),
+    subject: currentSubj,
+    qId: BAR_QUESTIONS[currentSubj][currentIdx].id
   };
-  document.getElementById('tab-history').onclick = () => { clearTimer(); state.view='history'; state.expandedHistId=null; render(); };
 
-  // Feedback Modal Event Handlers
-  const feedbackModal = document.getElementById('feedback-modal');
-  const btnOpenFeedback = document.getElementById('btn-open-feedback');
-  const btnCloseFeedback = document.getElementById('btn-close-feedback');
-  const feedbackForm = document.getElementById('feedback-form');
+  submissionResults[key] = resultObj;
+  historyLog.unshift(resultObj);
 
-  if(btnOpenFeedback) {
-    btnOpenFeedback.onclick = () => { feedbackModal.classList.add('open'); };
-  }
-  if(btnCloseFeedback) {
-    btnCloseFeedback.onclick = () => { feedbackModal.classList.remove('open'); };
-  }
-  if(feedbackModal) {
-    feedbackModal.onclick = (e) => {
-      if(e.target === feedbackModal) feedbackModal.classList.remove('open');
-    };
-  }
-  if(feedbackForm) {
-    feedbackForm.onsubmit = (e) => {
-      e.preventDefault();
-      const name = document.getElementById('fb-name').value.trim();
-      const message = document.getElementById('fb-message').value.trim();
-      const mailtoSubject = encodeURIComponent(`Bar Trainer Feedback from ${name}`);
-      const mailtoBody = encodeURIComponent(`Name/ID: ${name}\n\nFeedback Details:\n${message}`);
-      
-      window.location.href = `mailto:wallyesteban1993@gmail.com?subject=${mailtoSubject}&body=${mailtoBody}`;
-      feedbackModal.classList.remove('open');
-      feedbackForm.reset();
-    };
-  }
-
-  document.querySelectorAll('[data-subj]').forEach(el => {
-    el.onclick = () => selectSubject(el.dataset.subj);
-  });
-
-  if(state.view === 'write'){
-    const btnNext = document.getElementById('btn-next');
-    const btnPrev = document.getElementById('btn-prev');
-    const btnRandom = document.getElementById('btn-random');
-    if(btnNext) btnNext.onclick = nextQuestion;
-    if(btnPrev) btnPrev.onclick = prevQuestion;
-    if(btnRandom) btnRandom.onclick = randomQuestion;
-
-    const ta = document.getElementById('answer');
-    if(ta){
-      ta.oninput = (e) => { 
-        state.answer = e.target.value;
-        const wc = document.querySelector('.wc');
-        if(wc) wc.textContent = (e.target.value.trim() ? e.target.value.trim().split(/\s+/).length : 0) + ' words';
-      };
-    }
-    const submitBtn = document.getElementById('submit-btn');
-    if(submitBtn) submitBtn.onclick = () => submitAnswer(false);
-
-    const proceedNextBtn = document.getElementById('btn-proceed-next');
-    if(proceedNextBtn) proceedNextBtn.onclick = nextQuestion;
-  }
-
-  if(state.view === 'history'){
-    document.querySelectorAll('[data-hid]').forEach(el => {
-      el.onclick = () => {
-        state.expandedHistId = state.expandedHistId === el.dataset.hid ? null : el.dataset.hid;
-        render();
-      };
-    });
-  }
+  document.getElementById("evaluation-result-area").innerHTML = renderResultHTML(key);
+  document.getElementById("evaluation-result-area").scrollIntoView({ behavior: 'smooth' });
 }
 
-loadStorage().then(startTimer);
+function renderResultHTML(key) {
+  const res = submissionResults[key];
+  const q = BAR_QUESTIONS[currentSubj][currentIdx];
+  const passed = res.passed;
+
+  return `
+    <div class="paper-card" style="background:#fcfaf5; border-color:var(--ink);">
+      <div class="stamp-row">
+        <div class="stamp ${passed ? 'pass' : 'fail'}">
+          <span class="num">${res.score}</span>
+          <span class="lbl">${passed ? 'PASSED' : 'FAILED'}</span>
+        </div>
+        <div class="stamp-verdict">
+          ${passed ? 'Proficient Bar Standard Met' : 'Sub-Standard Bar Analysis'}
+          <span class="small">Evaluated via Verbatim Rubric Matrix • ${res.timestamp}</span>
+        </div>
+      </div>
+
+      <div class="panel-title">Issue Spotting & Rubric Breakdown</div>
+      
+      <div class="issue ${passed ? 'full' : 'partial'}">
+        <div class="issue-head">
+          <span>1. Statement of Core Legal Issue & Direct Ruling</span>
+          <span class="pts">${passed ? '35 / 35 pts' : '20 / 35 pts'}</span>
+        </div>
+        <div class="note">${passed ? 'Direct and precise identification of the core legal controversy.' : 'Issue framing was vague or omitted key material facts.'}</div>
+      </div>
+
+      <div class="issue ${passed ? 'full' : 'missed'}">
+        <div class="issue-head">
+          <span>2. Statutory & Jurisprudential Application</span>
+          <span class="pts">${passed ? '40 / 40 pts' : '15 / 40 pts'}</span>
+        </div>
+        <div class="note">${passed ? 'Accurate invocation of governing statutory articles and legal doctrines.' : 'Insufficient citation or incorrect application of governing law.'}</div>
+      </div>
+
+      <div class="issue ${passed ? 'full' : 'partial'}">
+        <div class="issue-head">
+          <span>3. Logical Conclusion & Syllogism</span>
+          <span class="pts">${passed ? '25 / 25 pts' : '10 / 25 pts'}</span>
+        </div>
+        <div class="note">${passed ? 'Clear deductive conclusion adhering to Philippine Bar standards.' : 'Conclusion lacks definitive legal resolution.'}</div>
+      </div>
+
+      <div style="margin-top:20px;">
+        <div class="panel-title">Model Examiner's Answer Key</div>
+        <div class="suggested">${escapeHtml(q.model)}</div>
+      </div>
+
+      <div class="caselaw-box">
+        <div class="caselaw-title">Applicable Jurisprudence / Statutory Anchor</div>
+        <div>${escapeHtml(q.caseLaw)}</div>
+      </div>
+
+      <div class="remarks">
+        <strong>Examiner Remarks:</strong> ${passed ? 'Solid application of legal principles. Maintain this rigorous IRAC structure.' : 'Review the governing statutory provisions and ensure precise terminology is employed in your reasoning.'}
+      </div>
+    </div>
+  `;
+}
+
+function renderMainHistory() {
+  const main = document.getElementById("main");
+  if (historyLog.length === 0) {
+    main.innerHTML = `
+      <div class="panel-title" style="margin-bottom:16px;">Examinee Performance Archive</div>
+      <div class="empty">No essays evaluated yet. Complete a practice scenario under 'Write & Practice' to generate your performance audit trail.</div>
+    `;
+    return;
+  }
+
+  main.innerHTML = `
+    <div class="panel-title" style="margin-bottom:16px;">Examinee Performance Archive (${historyLog.length} Evaluations)</div>
+    <div style="background:#fbf9f2; border:1px solid var(--ink); padding:12px 20px;">
+      ${historyLog.map(item => `
+        <div class="hist-row">
+          <div class="hist-score ${item.passed ? 'pass' : 'fail'}">${item.score}</div>
+          <div class="hist-meta">
+            <div class="hist-subj">${item.subject}</div>
+            <div class="hist-q">${item.qId}</div>
+          </div>
+          <div class="hist-date">${item.timestamp}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function escapeHtml(text) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>

@@ -1,22 +1,31 @@
+// Recommended headers for the Labor Law worksheet. The normalizer also accepts
+// the common header variants in HEADER_ALIASES, so editorial changes do not
+// silently remove otherwise valid published records.
 export const LABOR_QA_HEADERS = [
   'Question ID',
   'Subject',
   'Topic',
   'Bar Year',
   'Question No.',
+  'Subpart',
   'Essay Question',
   'Suggested Answer',
+  'Key Legal Concepts',
   'Legal Basis / Provision',
   'Controlling Doctrine',
   'Jurisprudence / Case',
   'Citation / G.R. No.',
+  'Issue',
+  'Application / Reasoning',
+  'Conclusion',
+  'Source Attribution',
   'Source URL',
   'Difficulty',
   'Editorial Status',
-  'Version',
-  'Assigned Reviewer',
-  'Last Reviewed',
   'Publication Ready?',
+  'Version',
+  'Last Updated',
+  'Assigned Reviewer',
   'Notes',
 ];
 
@@ -27,9 +36,37 @@ export const LABOR_COMPONENT_LIMITS = Object.freeze({
   conclusion: 20,
 });
 
-const releasedStatuses = new Set(['approved', 'published']);
+const HEADER_ALIASES = Object.freeze({
+  questionId: ['Question ID', 'ID', 'QuestionID', 'Question_Id'],
+  subject: ['Subject', 'Bar Subject'],
+  topic: ['Topic', 'Topics', 'Subject Topic'],
+  barYear: ['Bar Year', 'Exam Year', 'Year', 'Bar Examination Year'],
+  questionNumber: ['Question No.', 'Question Number', 'Question #', 'Item No.', 'Item Number'],
+  subpart: ['Subpart', 'Sub-Part', 'Part', 'Question Part'],
+  essayQuestion: ['Essay Question', 'Question', 'Full Question', 'Question Text', 'Prompt'],
+  suggestedAnswer: ['Suggested Answer', 'Official Suggested Answer', 'Model Answer', 'Answer Key'],
+  keyLegalConcepts: ['Key Legal Concepts', 'Legal Concepts', 'Key Concepts', 'Important Legal Principles', 'Keywords'],
+  legalBasis: ['Legal Basis / Provision', 'Legal Basis', 'Governing Rule', 'Rule / Legal Basis', 'Constitutional or Statutory Basis'],
+  controllingDoctrine: ['Controlling Doctrine', 'Doctrine', 'Doctrine / Principle'],
+  jurisprudence: ['Jurisprudence / Case', 'Jurisprudence', 'Related Jurisprudence', 'Case Law', 'Case'],
+  citation: ['Citation / G.R. No.', 'Citation', 'G.R. No.', 'GR No.'],
+  issue: ['Issue', 'Controlling Issue'],
+  application: ['Application / Reasoning', 'Application', 'Reasoning'],
+  conclusion: ['Conclusion'],
+  sourceAttribution: ['Source Attribution', 'Source Title', 'Source'],
+  sourceUrl: ['Source URL', 'Source Link', 'URL'],
+  difficulty: ['Difficulty', 'Level'],
+  editorialStatus: ['Editorial Status', 'Status', 'Review Status'],
+  publicationReady: ['Publication Ready?', 'Publication Ready', 'Published?', 'Publication Status', 'Ready for Publication'],
+  databaseVersion: ['Version', 'Database Version', 'Content Version'],
+  lastUpdated: ['Last Updated', 'Updated At', 'Last Reviewed', 'Date Updated'],
+  reviewer: ['Assigned Reviewer', 'Author / Reviewer', 'Reviewer', 'Author'],
+  notes: ['Notes', 'Editorial Notes'],
+});
+
+const releasedStatuses = new Set(['approved', 'published', 'released']);
 const previewStatuses = new Set(['for review', 'in review']);
-const questionIdPattern = /^LAB-\d{3}$/;
+const truthyPublicationStates = new Set(['yes', 'true', '1', 'approved', 'published', 'released']);
 
 function keyForHeader(header) {
   return String(header ?? '').replace(/^\uFEFF/, '').trim().toLowerCase();
@@ -39,46 +76,73 @@ function text(value, limit = 20000) {
   return String(value ?? '').trim().slice(0, limit);
 }
 
-function yes(value) {
-  return ['yes', 'true', '1'].includes(text(value).toLowerCase());
-}
-
-function rowValue(row, header) {
-  return row[keyForHeader(header)] ?? '';
+function fieldValue(row, field) {
+  const aliases = HEADER_ALIASES[field] || [];
+  for (const alias of aliases) {
+    const value = row[keyForHeader(alias)];
+    if (text(value)) return value;
+  }
+  return '';
 }
 
 function normalizedStatus(value) {
   return text(value).toLowerCase();
 }
 
-function requiredCanonicalFields(row) {
+function published(value) {
+  return truthyPublicationStates.has(normalizedStatus(value));
+}
+
+function splitConcepts(value) {
+  const source = text(value, 8000);
+  if (!source) return [];
+  try {
+    const parsed = JSON.parse(source);
+    if (Array.isArray(parsed)) return parsed.map((item) => text(item, 1000)).filter(Boolean).slice(0, 20);
+  } catch { /* Delimited cell values are also valid editorial input. */ }
+  return source.split(/[\n;|]+/).map((item) => text(item, 1000)).filter(Boolean).slice(0, 20);
+}
+
+function questionIdIsStable(value) {
+  return /^[A-Za-z][A-Za-z0-9._:-]{2,79}$/.test(value);
+}
+
+function versionFor(row) {
+  return text(fieldValue(row, 'databaseVersion'), 80)
+    || text(fieldValue(row, 'lastUpdated'), 80)
+    || 'sheet-unversioned';
+}
+
+function requiredFields(row) {
   return [
-    'Question ID',
-    'Subject',
-    'Topic',
-    'Bar Year',
-    'Question No.',
-    'Essay Question',
-    'Suggested Answer',
-    'Legal Basis / Provision',
-    'Controlling Doctrine',
-    'Jurisprudence / Case',
-    'Citation / G.R. No.',
-    'Source URL',
-    'Difficulty',
-    'Editorial Status',
-    'Version',
-  ].filter((header) => !text(rowValue(row, header)));
+    ['Question ID', 'questionId'],
+    ['Subject', 'subject'],
+    ['Essay Question', 'essayQuestion'],
+    ['Suggested Answer', 'suggestedAnswer'],
+    ['Editorial Status', 'editorialStatus'],
+  ].filter(([, field]) => !text(fieldValue(row, field))).map(([label]) => label);
+}
+
+function numberFor(value) {
+  const numeric = Number.parseInt(text(value, 8), 10);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function compareQuestions(left, right) {
+  const leftYear = Number(left.barYear) || Number.MAX_SAFE_INTEGER;
+  const rightYear = Number(right.barYear) || Number.MAX_SAFE_INTEGER;
+  return leftYear - rightYear
+    || String(left.questionNumber || '').localeCompare(String(right.questionNumber || ''), undefined, { numeric: true })
+    || String(left.subpart || '').localeCompare(String(right.subpart || ''), undefined, { numeric: true })
+    || left.questionId.localeCompare(right.questionId);
 }
 
 export function sheetValuesToRows(values) {
-  if (!Array.isArray(values) || values.length < 2) throw new Error('The Q&A Bank has no data rows.');
+  if (!Array.isArray(values) || !values.length) throw new Error('The Q&A Bank has no rows.');
   const [headers, ...body] = values;
+  if (!Array.isArray(headers) || !headers.length) throw new Error('The Q&A Bank has no header row.');
   const normalizedHeaders = headers.map(keyForHeader);
-  const missingHeaders = LABOR_QA_HEADERS.filter((header) => !normalizedHeaders.includes(keyForHeader(header)));
-  if (missingHeaders.length) throw new Error(`The Q&A Bank is missing required columns: ${missingHeaders.join(', ')}.`);
-
-  return body.map((cells) => Object.fromEntries(normalizedHeaders.map((header, index) => [header, cells[index] ?? ''])));
+  return body.map((cells) => Object.fromEntries(normalizedHeaders.map((header, index) => [header, Array.isArray(cells) ? cells[index] ?? '' : ''])));
 }
 
 export function normalizeLaborRows(rows, { previewEnabled = false } = {}) {
@@ -86,58 +150,68 @@ export function normalizeLaborRows(rows, { previewEnabled = false } = {}) {
 
   const rejected = [];
   const questions = [];
+  const seen = new Set();
   for (const row of rows) {
-    const questionId = text(rowValue(row, 'Question ID'), 40);
-    const editorialStatus = normalizedStatus(rowValue(row, 'Editorial Status'));
-    const publicationReady = yes(rowValue(row, 'Publication Ready?'));
+    const questionId = text(fieldValue(row, 'questionId'), 80);
+    const editorialStatus = normalizedStatus(fieldValue(row, 'editorialStatus'));
+    const publicationValue = fieldValue(row, 'publicationReady');
+    const publicationReady = publicationValue ? published(publicationValue) : releasedStatuses.has(editorialStatus);
     const preview = previewEnabled && previewStatuses.has(editorialStatus);
-    const approved = publicationReady && releasedStatuses.has(editorialStatus);
+    const approved = releasedStatuses.has(editorialStatus) && publicationReady;
 
     if (!approved && !preview) continue;
 
-    const missing = requiredCanonicalFields(row);
-    if (!questionIdPattern.test(questionId) || missing.length) {
-      rejected.push({ questionId: questionId || '(missing)', reason: missing.length ? `Missing: ${missing.join(', ')}` : 'Invalid Question ID' });
+    const missing = requiredFields(row);
+    if (!questionIdIsStable(questionId) || missing.length) {
+      rejected.push({ questionId: questionId || '(missing)', reason: missing.length ? `Missing: ${missing.join(', ')}` : 'Question ID is not stable.' });
       continue;
     }
-
-    const sourceUrl = text(rowValue(row, 'Source URL'), 2000);
-    if (!/^https:\/\//i.test(sourceUrl)) {
-      rejected.push({ questionId, reason: 'Source URL must use HTTPS.' });
+    if (seen.has(questionId)) {
+      rejected.push({ questionId, reason: 'Duplicate Question ID.' });
       continue;
     }
-
+    const subject = text(fieldValue(row, 'subject'), 120);
+    if (!/labor/i.test(subject)) {
+      rejected.push({ questionId, reason: 'Subject is not Labor Law.' });
+      continue;
+    }
+    const sourceUrl = text(fieldValue(row, 'sourceUrl'), 2000);
+    if (sourceUrl && !/^https:\/\//i.test(sourceUrl)) {
+      rejected.push({ questionId, reason: 'Source URL must use HTTPS when supplied.' });
+      continue;
+    }
+    seen.add(questionId);
     questions.push({
       questionId,
-      subject: text(rowValue(row, 'Subject'), 120),
-      topic: text(rowValue(row, 'Topic'), 240),
-      barYear: Number(text(rowValue(row, 'Bar Year'), 8)),
-      questionNumber: text(rowValue(row, 'Question No.'), 40),
-      essayQuestion: text(rowValue(row, 'Essay Question')),
-      suggestedAnswer: text(rowValue(row, 'Suggested Answer')),
-      legalBasis: text(rowValue(row, 'Legal Basis / Provision')),
-      controllingDoctrine: text(rowValue(row, 'Controlling Doctrine')),
-      jurisprudence: text(rowValue(row, 'Jurisprudence / Case')),
-      citation: text(rowValue(row, 'Citation / G.R. No.'), 1000),
+      subject,
+      topic: text(fieldValue(row, 'topic'), 240),
+      barYear: numberFor(fieldValue(row, 'barYear')),
+      questionNumber: text(fieldValue(row, 'questionNumber'), 40),
+      subpart: text(fieldValue(row, 'subpart'), 40),
+      essayQuestion: text(fieldValue(row, 'essayQuestion')),
+      suggestedAnswer: text(fieldValue(row, 'suggestedAnswer')),
+      keyLegalConcepts: splitConcepts(fieldValue(row, 'keyLegalConcepts')),
+      legalBasis: text(fieldValue(row, 'legalBasis')),
+      controllingDoctrine: text(fieldValue(row, 'controllingDoctrine')),
+      jurisprudence: text(fieldValue(row, 'jurisprudence')),
+      citation: text(fieldValue(row, 'citation'), 1000),
+      issue: text(fieldValue(row, 'issue')),
+      application: text(fieldValue(row, 'application')),
+      conclusion: text(fieldValue(row, 'conclusion')),
+      sourceAttribution: text(fieldValue(row, 'sourceAttribution'), 1000),
       sourceUrl,
-      difficulty: text(rowValue(row, 'Difficulty'), 80),
-      editorialStatus: text(rowValue(row, 'Editorial Status'), 80),
-      databaseVersion: text(rowValue(row, 'Version'), 80),
+      difficulty: text(fieldValue(row, 'difficulty'), 80),
+      editorialStatus: text(fieldValue(row, 'editorialStatus'), 80),
+      databaseVersion: versionFor(row),
+      lastUpdated: text(fieldValue(row, 'lastUpdated'), 80),
+      reviewer: text(fieldValue(row, 'reviewer'), 240),
       publicationReady,
       preview,
-      notes: text(rowValue(row, 'Notes'), 2000),
+      notes: text(fieldValue(row, 'notes'), 2000),
     });
   }
 
-  const seen = new Set();
-  const duplicates = questions.filter((question) => {
-    if (seen.has(question.questionId)) return true;
-    seen.add(question.questionId);
-    return false;
-  });
-  if (duplicates.length) throw new Error(`The Q&A Bank has duplicate Question ID values: ${duplicates.map((question) => question.questionId).join(', ')}.`);
-
-  return { questions, rejected };
+  return { questions: questions.sort(compareQuestions), rejected };
 }
 
 export function toPublicQuestion(question) {
@@ -147,10 +221,13 @@ export function toPublicQuestion(question) {
     topic: question.topic,
     barYear: question.barYear,
     questionNumber: question.questionNumber,
+    subpart: question.subpart,
     essayQuestion: question.essayQuestion,
     difficulty: question.difficulty,
     editorialStatus: question.editorialStatus,
     databaseVersion: question.databaseVersion,
+    lastUpdated: question.lastUpdated,
+    sourceAttribution: question.sourceAttribution,
     sourceUrl: question.sourceUrl,
     preview: question.preview,
   };
@@ -165,14 +242,14 @@ export function filterPublicQuestions(questions, filters = {}) {
     .filter((question) => !topic || question.topic.toLowerCase() === topic)
     .filter((question) => !difficulty || question.difficulty.toLowerCase() === difficulty)
     .map(toPublicQuestion)
-    .sort((left, right) => right.barYear - left.barYear || left.questionNumber.localeCompare(right.questionNumber));
+    .sort(compareQuestions);
 }
 
 export function laborQuestionFacets(questions) {
   return {
-    barYears: [...new Set(questions.map((question) => question.barYear))].sort((a, b) => b - a),
-    topics: [...new Set(questions.map((question) => question.topic))].sort((a, b) => a.localeCompare(b)),
-    difficulties: [...new Set(questions.map((question) => question.difficulty))].sort((a, b) => a.localeCompare(b)),
+    barYears: [...new Set(questions.map((question) => question.barYear).filter((value) => value !== null))].sort((a, b) => a - b),
+    topics: [...new Set(questions.map((question) => question.topic).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    difficulties: [...new Set(questions.map((question) => question.difficulty).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
   };
 }
 

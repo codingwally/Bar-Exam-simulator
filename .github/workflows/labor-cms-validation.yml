@@ -8,6 +8,7 @@ on:
       - 'scripts/test-labor-cms.mjs'
       - 'scripts/test-labor-practice-contract.mjs'
       - 'scripts/test-labor-client-bootstrap.mjs'
+      - 'scripts/test-labor-release-gate.mjs'
       - 'supabase/functions/labor-practice/**'
       - 'supabase/migrations/**'
       - 'assets/labor-practice.*'
@@ -20,6 +21,7 @@ on:
       - 'scripts/test-labor-cms.mjs'
       - 'scripts/test-labor-practice-contract.mjs'
       - 'scripts/test-labor-client-bootstrap.mjs'
+      - 'scripts/test-labor-release-gate.mjs'
       - 'supabase/functions/labor-practice/**'
       - 'supabase/migrations/**'
       - 'assets/labor-practice.*'
@@ -40,7 +42,9 @@ jobs:
         run: node scripts/validate-labor-cms.mjs --mode=template
       - name: Test the CMS validator
         run: node scripts/test-labor-cms.mjs
-      - name: Test closed-loop Labor Law contracts
+      - name: Test Labor Law question-bank contracts
         run: node scripts/test-labor-practice-contract.mjs
       - name: Test Labor Law client integration
         run: node scripts/test-labor-client-bootstrap.mjs
+      - name: Enforce the Labor Law release gate
+        run: node scripts/test-labor-release-gate.mjs

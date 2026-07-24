@@ -24,6 +24,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify Labor Law availability before publishing
+        run: |
+          node scripts/test-labor-practice-contract.mjs
+          node scripts/test-labor-client-bootstrap.mjs
+          node scripts/test-labor-release-gate.mjs
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 

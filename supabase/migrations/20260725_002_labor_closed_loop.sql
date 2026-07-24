@@ -1,4 +1,4 @@
--- Closed-loop Labor Law practice service.
+-- Curated Labor Law practice service.
 -- These tables are private: only the labor-practice Edge Function uses the
 -- service role to cache editorial content and queue public feedback.
 

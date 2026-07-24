@@ -1,4 +1,4 @@
-# Labor Law closed-loop practice service
+# Labor Law curated practice service
 
 This production path keeps the Labor Law editorial corpus private. The browser calls
 only the `labor-practice` Supabase Edge Function. That function reads the private Google
@@ -18,17 +18,19 @@ Supabase service-role key, or an unpublished answer key.
 
 Use the private spreadsheet ID `1DgDe_ObIoiTy9NJ3DmdM1ec7h7t0FS7RvFhBTjubZ8A` with these tabs:
 
-- **Q&A Bank** — the server-read canonical catalog. It must have every column declared
-  in `supabase/functions/labor-practice/contracts.mjs`.
+- **Q&A Bank** — the server-read canonical catalog. It should use the recommended
+  headers in `supabase/functions/labor-practice/contracts.mjs`; common editorial header
+  variants are normalized by the same contract.
 - **Feedback Log** — editorial team workspace; public submissions are persisted in
   `labor_feedback_log` until a deliberate reviewed export process is established.
 - **Change Log** — records each approved canonical version and its reviewer.
 - **Lists & Guide** — controlled vocabularies, editorial rules, and reviewer guidance.
 
-Production exposes only rows where `Editorial Status` is `Approved` or `Published` and
-`Publication Ready?` is `Yes`. `ENABLE_REVIEW_CONTENT_PREVIEW` must remain `false` in
-production. A preview environment may set it to `true` to show clearly labelled `For
-Review` rows. Incomplete records are rejected in every environment.
+Production exposes only rows where `Editorial Status` is `Approved` or `Published`; if
+`Publication Ready?` is present, it must also be affirmative. `ENABLE_REVIEW_CONTENT_PREVIEW`
+must remain `false` in production. A preview environment may set it to `true` to show
+clearly labelled `For Review` rows. Invalid records are isolated and logged without
+disabling valid questions.
 
 The adapter does not impose a fixed question count: it can safely serve the current
 Labor Law set and future approved additions without a code redesign. This avoids a
@@ -77,8 +79,10 @@ equivalent server-verified challenge and add a rate-limit policy for the Edge en
 - The model’s `Question ID` and `Version` must match the selected canonical record.
   Invalid JSON, an invalid total, or version mismatch yields no score.
 - American English grammar guidance is returned separately with `affectedScore: false`.
-- A failed source refresh uses the last valid server cache. If neither source nor cache
-  is available, the user sees a safe no-score state and their local answer draft remains.
+- A failed source refresh uses the last valid server cache. The browser also keeps the
+  latest validated local snapshot available, so a catalog outage does not remove the
+  Labor Law exam. An evaluation outage preserves the draft and displays the matching
+  stored suggested answer without issuing a heuristic score.
 - Public feedback cannot change a canonical answer. A queue item can be marked closed
   only after it records both an applied canonical version and a Change Log ID.
 

@@ -238,11 +238,17 @@ async function canonicalCatalog(config) {
 
 function canonicalReveal(question) {
   return {
+    questionId: question.questionId,
     suggestedAnswer: question.suggestedAnswer,
+    keyLegalConcepts: question.keyLegalConcepts,
     legalBasis: question.legalBasis,
     controllingDoctrine: question.controllingDoctrine,
     jurisprudence: question.jurisprudence,
     citation: question.citation,
+    issue: question.issue,
+    application: question.application,
+    conclusion: question.conclusion,
+    sourceAttribution: question.sourceAttribution,
     sourceUrl: question.sourceUrl,
     databaseVersion: question.databaseVersion,
     preview: question.preview,
@@ -300,10 +306,14 @@ async function evaluateWithOpenAI(config, question, studentAnswer) {
               studentAnswer,
               curatedRecord: {
                 suggestedAnswer: question.suggestedAnswer,
+                keyLegalConcepts: question.keyLegalConcepts,
                 legalBasis: question.legalBasis,
                 controllingDoctrine: question.controllingDoctrine,
                 jurisprudence: question.jurisprudence,
                 citation: question.citation,
+                issue: question.issue,
+                application: question.application,
+                conclusion: question.conclusion,
               },
             }),
           }],

@@ -2,6 +2,8 @@
 .labor-service-card .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--gold);}
 .labor-service-card h3{font-family:var(--serif);color:var(--ink);font-size:23px;margin:8px 0;}
 .labor-service-card p{font-family:var(--sans);color:var(--ink-soft);font-size:14px;line-height:1.6;margin:0 0 16px;max-width:650px;}
+.labor-intro{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:0 0 16px;padding:20px 22px;border:1px solid rgba(197,160,89,.42);border-top:3px solid var(--gold);border-radius:14px;background:linear-gradient(120deg,rgba(255,255,255,.96),rgba(247,243,233,.92));box-shadow:0 10px 30px rgba(0,0,0,.05);}
+.labor-intro .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--gold);}.labor-intro h2{font-family:var(--serif);font-size:24px;line-height:1.2;color:var(--ink);margin:6px 0;}.labor-intro p{max-width:680px;font-family:var(--sans);font-size:13px;line-height:1.55;color:var(--ink-soft);margin:0;}.labor-intro .btn-primary{white-space:nowrap;}
 .labor-filter-bar{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:0 0 16px;padding:14px 16px;background:rgba(255,255,255,.82);border:1px solid var(--border-soft);border-radius:12px;}
 .labor-filter-field{display:grid;gap:4px;min-width:145px;}
 .labor-filter-field label{font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);}
@@ -27,4 +29,5 @@
 .grammar-corrected-answer{white-space:pre-wrap;background:#fff;border:1px solid #dbe7f4;border-radius:9px;padding:12px;font-family:var(--sans);font-size:13px;line-height:1.6;color:#263647;}
 .labor-canonical{margin-top:20px;padding-top:18px;border-top:1px solid var(--border-soft);}
 .labor-canonical .legal-detail{margin-top:12px;border-left:3px solid var(--gold);padding:8px 0 8px 13px;font-family:var(--sans);font-size:13px;line-height:1.55;color:var(--charcoal);white-space:pre-wrap;}.labor-canonical .legal-detail b{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px;}
-@media (max-width:720px){.labor-concept-grid{grid-template-columns:1fr;}.labor-result-head{align-items:flex-start;}.labor-score-orb{width:84px;height:84px;}.labor-score-orb b{font-size:25px;}.labor-filter-field{flex:1;min-width:120px;}}
+.labor-student-answer{margin:16px 0;padding:16px;border-radius:11px;background:#fff;border:1px solid var(--border-soft);}.labor-student-answer .suggested{margin:0;}
+@media (max-width:720px){.labor-concept-grid{grid-template-columns:1fr;}.labor-result-head{align-items:flex-start;}.labor-score-orb{width:84px;height:84px;}.labor-score-orb b{font-size:25px;}.labor-filter-field{flex:1;min-width:120px;}.labor-intro{align-items:flex-start;flex-direction:column;}.labor-intro .btn-primary{width:100%;}}

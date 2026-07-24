@@ -25,9 +25,10 @@ Student browser
 ```
 
 The `contracts.mjs` module is the shared gate for the spreadsheet record shape and
-evaluator response. It rejects incomplete, duplicate, unapproved, or non-HTTPS records.
-Production serves only `Approved`/`Published` records explicitly marked
-`Publication Ready? = Yes`. The preview flag is server-only and defaults to false.
+evaluator response. It accepts common editorial header variants, isolates malformed or
+duplicate rows, and serves only `Approved`/`Published` records. If a publication flag
+is supplied, it must also be affirmative. The preview flag is server-only and defaults
+to false.
 
 ## OpenAI migration
 
@@ -47,8 +48,9 @@ same strictly validated response. No client component depends on an OpenAI API s
 - Components are explicitly bounded and numerically summed: 20/30/30/20.
 - Question ID and canonical version are verified before a score can appear.
 - Grammar is a separate American English review with `affectedScore: false`.
-- Invalid AI output, missing Sheet configuration, or a failed source refresh yields no
-  score. Drafts are retained locally; there is no heuristic fallback.
+- Invalid AI output or a failed source refresh yields no score. Drafts are retained
+  locally, the corresponding stored suggested answer remains available, and there is
+  no heuristic fallback.
 - Community feedback is private and cannot alter a published answer without a reviewer,
   a new canonical version, and a Change Log reference.
 
@@ -56,7 +58,7 @@ same strictly validated response. No client component depends on an OpenAI API s
 
 | Risk | Mitigation |
 | --- | --- |
-| Google Sheet service account is not yet shared to the private Sheet | The app shows a safe configuration state; setup steps are documented. |
+| Google Sheet service account is not yet shared to the private Sheet | The app retains its latest available local catalog and does not enable remote refresh. |
 | Editorial rows may be incomplete or unpublished | The server excludes them before they reach learners. |
 | Model output is malformed or contradicts record version | Strict JSON/schema and contract validation reject it with no score. |
 | Public feedback endpoint can attract abuse | No canonical data can be changed. Add server-verified Turnstile and rate limiting before broad launch. |
@@ -65,9 +67,9 @@ same strictly validated response. No client component depends on an OpenAI API s
 
 ## Implementation roadmap
 
-1. **Complete secure configuration:** share the Sheet with its service account, apply the
-   migration, set Edge Function secrets, and deploy the function in a non-production
-   Supabase project.
+1. **Complete hosted configuration:** share the Sheet with its service account, apply the
+   migration, set Edge Function secrets, deploy the function, and enable remote refresh
+   only after the verified snapshot is published with it.
 2. **Editorial release:** validate the approved Labor rows against primary sources, mark
    publication readiness, and verify exact Question ID/version discipline.
 3. **Controlled launch:** enable the production endpoint with preview disabled; run the

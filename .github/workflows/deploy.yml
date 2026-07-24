@@ -24,9 +24,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Inject Gemini API Key
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify Labor Law availability before publishing
         run: |
-          sed -i 's/YOUR_GEMINI_API_KEY_HERE/${{ secrets.GEMINI_API_KEY }}/g' index.html
+          node scripts/test-labor-practice-contract.mjs
+          node scripts/test-labor-client-bootstrap.mjs
+          node scripts/test-labor-release-gate.mjs
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

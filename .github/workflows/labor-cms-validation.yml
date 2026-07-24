@@ -1,0 +1,30 @@
+name: Validate Labor Law CMS
+
+on:
+  pull_request:
+    paths:
+      - 'content/labor-law-cms/**'
+      - 'scripts/validate-labor-cms.mjs'
+      - 'scripts/test-labor-cms.mjs'
+  push:
+    branches: ['main', 'phase-1-labor-foundation']
+    paths:
+      - 'content/labor-law-cms/**'
+      - 'scripts/validate-labor-cms.mjs'
+      - 'scripts/test-labor-cms.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate the Phase 1 CMS structure
+        run: node scripts/validate-labor-cms.mjs --mode=template
+      - name: Test the CMS validator
+        run: node scripts/test-labor-cms.mjs

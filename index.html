@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<link rel="icon" type="image/png" href="logo.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='9' fill='%23081225'/%3E%3Cg stroke='%23C5A059' stroke-width='2' fill='none' stroke-linecap='round'%3E%3Cline x1='24' y1='11' x2='24' y2='36'/%3E%3Cline x1='12' y1='16' x2='36' y2='16'/%3E%3Cpath d='M12 16 L7 25 M12 16 L17 25'/%3E%3Cpath d='M36 16 L31 25 M36 16 L41 25'/%3E%3C/g%3E%3Cpath d='M6 25 Q12 31 18 25' fill='%23D4AF37'/%3E%3Cpath d='M30 25 Q36 31 42 25' fill='%23D4AF37'/%3E%3Crect x='18' y='35' width='12' height='2.5' rx='1' fill='%23D4AF37'/%3E%3Ccircle cx='24' cy='10' r='2.5' fill='%23D4AF37'/%3E%3C/svg%3E">
 <meta charset="UTF-8">
 <title>Due Diligence — PH Bar Essay Trainer (Advanced Pro Repository)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -332,32 +332,338 @@
     .row{flex-direction:column;align-items:stretch;}
   }
 
+
+  /* ==========================================================================
+     ENTERPRISE / INVESTOR LAYER — SPA nav, atmosphere, commercial modals
+     (additive; original selectors above are untouched)
+     ========================================================================== */
+
+  /* ---- Cinematic atmosphere backdrop ---- */
+  #atmosphere{position:fixed;inset:0;z-index:-2;overflow:hidden;background:#04101f;}
+  #atmosphere video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.5;}
+  #atmosphere .marble{
+    position:absolute;inset:0;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 2px, transparent 2px 88px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.25) 0 44px, rgba(255,255,255,.02) 44px 88px),
+      radial-gradient(120% 80% at 50% -10%, #0d2a4d 0%, #061426 55%, #030b16 100%);
+    animation:drift 40s ease-in-out infinite alternate;
+  }
+  #atmosphere .glass{position:absolute;inset:0;background:rgba(0,33,71,.85);backdrop-filter:blur(8px);}
+  @keyframes drift{from{transform:scale(1.05) translateX(-1%);}to{transform:scale(1.12) translateX(1%);}}
+
+  /* ---- Top bar (SPA) ---- */
+  .topbar{
+    position:sticky;top:0;z-index:1000;
+    display:flex;align-items:center;gap:22px;
+    padding:12px 26px;
+    background:linear-gradient(180deg, rgba(8,18,37,.96), rgba(8,18,37,.88));
+    border-bottom:1px solid rgba(197,160,89,.30);
+    box-shadow:0 8px 30px rgba(0,15,35,.35);
+    backdrop-filter:blur(10px);
+  }
+  .topbar .brand{display:flex;align-items:center;gap:12px;flex:none;}
+  .topbar .crest{width:42px;height:42px;filter:drop-shadow(0 2px 5px rgba(0,0,0,.4));}
+  .topbar .brand-name{font-family:var(--serif-display);font-weight:700;font-size:18px;letter-spacing:2px;color:#F6EFDD;text-transform:uppercase;line-height:1;}
+  .topbar .brand-sub{font-family:var(--mono);font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-top:3px;}
+
+  .spa-nav{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap;}
+  .spa-tab{
+    font-family:var(--sans);font-weight:600;font-size:12.5px;letter-spacing:.3px;
+    color:#cdd6e4;background:transparent;border:none;border-radius:9px;
+    padding:9px 15px;cursor:pointer;transition:all .2s ease;white-space:nowrap;
+  }
+  .spa-tab:hover{background:rgba(255,255,255,.06);color:#fff;}
+  .spa-tab.active{background:linear-gradient(180deg,rgba(197,160,89,.22),rgba(197,160,89,.08));color:#F6EFDD;box-shadow:inset 0 -2px 0 var(--gold);}
+
+  .topbar-actions{display:flex;align-items:center;gap:9px;flex:none;}
+  .icon-btn{font-family:var(--sans);font-weight:600;font-size:12px;color:#e7ecf4;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);padding:8px 13px;border-radius:9px;cursor:pointer;transition:all .2s;}
+  .icon-btn:hover{background:rgba(255,255,255,.12);}
+  .btn-subscribe{
+    font-family:var(--sans);font-weight:700;font-size:12.5px;letter-spacing:.4px;text-transform:uppercase;
+    color:#1a1204;background:var(--gold-grad);border:none;padding:9px 18px;border-radius:10px;cursor:pointer;
+    box-shadow:0 0 0 rgba(212,175,55,.6);animation:glow 2.4s ease-in-out infinite;
+  }
+  @keyframes glow{0%,100%{box-shadow:0 0 8px rgba(212,175,55,.35);}50%{box-shadow:0 0 22px rgba(212,175,55,.75);}}
+  .btn-subscribe:hover{filter:brightness(1.07);transform:translateY(-1px);}
+  .avatar-pill{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(197,160,89,.35);border-radius:999px;padding:5px 12px 5px 6px;cursor:pointer;}
+  .avatar-pill .av{width:26px;height:26px;border-radius:50%;background:var(--gold-grad);color:#1a1204;font-family:var(--serif-display);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;}
+  .avatar-pill .tier{font-family:var(--mono);font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--gold);}
+
+  /* ---- SPA pages ---- */
+  #spa-root{position:relative;z-index:1;}
+  .page{display:none;animation:fadeIn .25s ease;}
+  .page.active{display:block;}
+
+  /* ---- Exam sub-navigation + mode toggle ---- */
+  .exam-subnav{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    max-width:1200px;margin:0 auto;padding:18px 26px 0;
+  }
+  .exam-subnav .tabbtn{color:var(--ink-soft);background:var(--card);border:1px solid var(--border);}
+  .exam-subnav .tabbtn:hover{background:var(--navy);border-color:var(--navy);color:#fff;transform:translateY(-1px);}
+  .exam-subnav .tabbtn.active{background:var(--gold-grad);border-color:transparent;color:#1a1204;}
+  .exam-subnav .tabbtn.feedback-btn{border-color:var(--border-gold);color:var(--amber);}
+  .exam-subnav .tabbtn.feedback-btn:hover{background:var(--gold);color:#1a1204;}
+  .mode-toggle{display:inline-flex;margin-left:auto;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:3px;box-shadow:var(--shadow);}
+  .mode-toggle button{font-family:var(--sans);font-weight:600;font-size:11.5px;letter-spacing:.3px;border:none;background:transparent;color:var(--ink-soft);padding:8px 14px;border-radius:8px;cursor:pointer;transition:all .2s;}
+  .mode-toggle button.active{background:var(--navy);color:#fff;box-shadow:var(--shadow);}
+  .mode-toggle button.timed.active{background:var(--maroon);}
+
+  /* timer red alert under 60s */
+  .timer-bar.danger{border-color:rgba(220,38,38,.7)!important;box-shadow:0 0 0 1px rgba(220,38,38,.4), var(--shadow);}
+  .timer-bar.danger #timer-display{color:#ff6b6b!important;animation:pulse 1s steps(2) infinite;}
+  @keyframes pulse{50%{opacity:.55;}}
+
+  /* ---- Sponsored partner card (FGMallari) ---- */
+  .sponsor-card{
+    max-width:1200px;margin:8px auto 0;padding:0 26px;
+  }
+  .sponsor-inner{
+    position:relative;overflow:hidden;border-radius:16px;padding:24px 26px;
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 26px),
+      linear-gradient(135deg,#0b1b33,#132a4a);
+    border:1px solid rgba(120,160,210,.28);
+    box-shadow:var(--shadow-md);
+  }
+  .sponsor-tag{position:absolute;top:12px;right:14px;font-family:var(--mono);font-size:8.5px;letter-spacing:1.5px;text-transform:uppercase;color:#8fb2e0;opacity:.8;}
+  .sponsor-inner h3{font-family:var(--serif-display);font-weight:700;font-size:20px;letter-spacing:1px;color:#DCE7F5;margin:0 0 4px;text-transform:uppercase;}
+  .sponsor-inner .lead{font-family:var(--sans);font-weight:600;font-size:13px;color:#9fc0e8;margin-bottom:8px;}
+  .sponsor-inner .svc{font-family:var(--serif);font-style:italic;font-size:14px;color:#c9d7ea;margin-bottom:12px;}
+  .sponsor-inner .contact{display:flex;gap:20px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:#b7cbe6;}
+  .sponsor-inner .contact a{color:#e5c987;text-decoration:none;}
+
+  /* ---- Content pages (news / jurisprudence / midterms) ---- */
+  .page-wrap{max-width:1120px;margin:0 auto;padding:28px 26px 60px;}
+  .page-head{margin-bottom:22px;}
+  .page-head .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:2.5px;text-transform:uppercase;color:var(--gold);}
+  .page-head h2{font-family:var(--serif-display);font-weight:700;font-size:30px;letter-spacing:1px;color:var(--ink);margin:8px 0 6px;text-transform:uppercase;}
+  .page-head p{font-family:var(--serif);font-size:16px;color:var(--ink-soft);max-width:640px;font-style:italic;}
+  .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;}
+  .info-card{background:var(--card);border:1px solid var(--border-soft);border-top:3px solid var(--gold);border-radius:14px;box-shadow:var(--shadow);padding:22px;transition:transform .22s ease,box-shadow .22s ease;}
+  .info-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);}
+  .info-card .tag{font-family:var(--mono);font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--violet);font-weight:600;}
+  .info-card h4{font-family:var(--serif);font-weight:700;font-size:18px;color:var(--ink);margin:8px 0 8px;line-height:1.3;}
+  .info-card p{font-family:var(--sans);font-size:13.5px;color:var(--ink-soft);line-height:1.6;margin:0 0 10px;}
+  .info-card .meta{font-family:var(--mono);font-size:10.5px;color:var(--gold);}
+  .info-card .cite{font-family:var(--mono);font-size:11px;color:var(--ink-soft);border-top:1px dashed var(--border);padding-top:10px;margin-top:6px;}
+
+  /* ---- Enlarged / commercial modals ---- */
+  .modal-card.lg{max-width:720px;}
+  .modal-card.xl{max-width:860px;}
+  .price-hero{text-align:center;padding:8px 0 4px;}
+  .price-hero .amt{font-family:var(--serif-display);font-weight:700;font-size:40px;color:var(--ink);}
+  .price-hero .amt small{font-family:var(--sans);font-size:15px;color:var(--ink-soft);font-weight:500;}
+  .price-hero .usd{font-family:var(--mono);font-size:12px;color:var(--gold);margin-top:4px;}
+  .feature-list{list-style:none;padding:0;margin:20px 0;display:grid;gap:10px;}
+  .feature-list li{display:flex;gap:10px;align-items:flex-start;font-family:var(--sans);font-size:14px;color:var(--charcoal);}
+  .feature-list li::before{content:"✓";color:var(--pass);font-weight:800;flex:none;}
+  .pay-row{display:flex;gap:12px;flex-wrap:wrap;}
+  .pay-btn{flex:1;min-width:150px;font-family:var(--sans);font-weight:700;font-size:13px;padding:14px;border-radius:12px;border:none;cursor:pointer;transition:all .2s;}
+  .pay-btn.gcash{background:#0057ff;color:#fff;}
+  .pay-btn.visa{background:linear-gradient(135deg,#1a1f71,#2b3fa0);color:#fff;}
+  .pay-btn:hover{filter:brightness(1.08);transform:translateY(-1px);}
+  .mock-note{font-family:var(--mono);font-size:10px;letter-spacing:.5px;color:var(--ink-soft);text-align:center;margin-top:12px;opacity:.8;}
+
+  .sso-row{display:grid;gap:10px;margin-bottom:16px;}
+  .sso-btn{display:flex;align-items:center;justify-content:center;gap:10px;font-family:var(--sans);font-weight:600;font-size:13.5px;padding:12px;border-radius:11px;border:1px solid var(--border);background:var(--card);color:var(--ink);cursor:pointer;transition:all .2s;}
+  .sso-btn:hover{background:var(--card-2);border-color:var(--gold);}
+  .tier-badge{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);background:rgba(197,160,89,.12);border:1px solid var(--border-gold);padding:4px 10px;border-radius:999px;}
+  .divider-or{display:flex;align-items:center;gap:12px;color:var(--ink-soft);font-family:var(--mono);font-size:11px;margin:14px 0;}
+  .divider-or::before,.divider-or::after{content:"";flex:1;height:1px;background:var(--border);}
+
+  /* ---- Analytics dashboard ---- */
+  .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:22px;}
+  .metric{background:var(--card-2);border:1px solid var(--border-soft);border-top:3px solid var(--gold);border-radius:14px;padding:16px;}
+  .metric .val{font-family:var(--serif-display);font-weight:700;font-size:30px;color:var(--navy);line-height:1;}
+  .metric .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);margin-top:8px;}
+  .alac-bars{display:grid;gap:12px;margin-bottom:22px;}
+  .alac-bar .top{display:flex;justify-content:space-between;font-family:var(--sans);font-weight:600;font-size:12.5px;color:var(--ink);margin-bottom:5px;}
+  .alac-bar .track{height:9px;background:var(--border-soft);border-radius:99px;overflow:hidden;}
+  .alac-bar .fill{height:100%;background:var(--gold-grad);border-radius:99px;transition:width .6s ease;}
+  .attempt-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .attempt-table th{font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);}
+  .attempt-table td{font-family:var(--sans);padding:9px 10px;border-bottom:1px solid var(--border-soft);color:var(--charcoal);}
+  .attempt-table .sc.pass{color:var(--pass);font-weight:700;}
+  .attempt-table .sc.fail{color:var(--maroon);font-weight:700;}
+  .table-scroll{max-height:230px;overflow:auto;border:1px solid var(--border-soft);border-radius:12px;}
+
+  /* ---- Investor / patrons ---- */
+  .patron{display:flex;align-items:center;gap:16px;padding:16px;background:var(--card-2);border:1px solid var(--border-soft);border-left:3px solid var(--gold);border-radius:12px;margin-bottom:12px;}
+  .patron .medal{width:44px;height:44px;border-radius:50%;background:var(--gold-grad);display:flex;align-items:center;justify-content:center;font-size:20px;flex:none;}
+  .patron .nm{font-family:var(--serif);font-weight:700;font-size:17px;color:var(--ink);}
+  .patron .role{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);}
+
+  /* ---- Footer + disclaimer ---- */
+  .site-footer{position:relative;z-index:1;background:linear-gradient(180deg,rgba(8,18,37,.94),rgba(4,12,24,.97));border-top:1px solid rgba(197,160,89,.28);padding:30px 26px 40px;margin-top:10px;}
+  .footer-inner{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;gap:22px;justify-content:space-between;align-items:flex-start;}
+  .footer-inner .fcol{max-width:640px;}
+  .footer-inner .fbrand{font-family:var(--serif-display);font-weight:700;letter-spacing:2px;color:#F6EFDD;text-transform:uppercase;font-size:15px;margin-bottom:8px;}
+  .disclaimer{font-family:var(--sans);font-size:11.5px;line-height:1.6;color:#9fb0c6;}
+  .footer-links{display:flex;gap:16px;flex-wrap:wrap;}
+  .footer-links a{font-family:var(--mono);font-size:11px;letter-spacing:.5px;color:var(--gold);text-decoration:none;cursor:pointer;}
+  .footer-links a:hover{text-decoration:underline;}
+
+  /* ---- Responsive additions ---- */
+  @media (max-width:980px){
+    .topbar{flex-wrap:wrap;gap:12px;padding:12px 16px;}
+    .spa-nav{order:3;width:100%;justify-content:flex-start;overflow-x:auto;}
+    .topbar-actions{margin-left:auto;}
+    .exam-subnav{padding:16px 16px 0;}
+    .mode-toggle{margin-left:0;}
+  }
+  @media (max-width:560px){
+    .topbar .brand-sub{display:none;}
+    .btn-subscribe{padding:9px 12px;}
+    .icon-btn.hide-sm{display:none;}
+    .price-hero .amt{font-size:32px;}
+  }
+
 </style>
  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script> 
 </head>
 <body>
 
-<div class="masthead">
-  <svg class="seal" viewBox="0 0 52 52" fill="none">
-    <circle cx="26" cy="26" r="24" stroke="#7A2530" stroke-width="2"/>
-    <circle cx="26" cy="26" r="18" stroke="#A9812F" stroke-width="1.2"/>
-    <path d="M26 12 L30 22 L41 22 L32 29 L35 40 L26 33 L17 40 L20 29 L11 22 L22 22 Z" fill="#1C2B45" opacity="0.85"/>
-  </svg>
-  <div>
-    <h1>Due Diligence</h1>
-    <div class="sub">Philippine Bar Examination — Advanced Verbatim Case Scenario Trainer</div>
+<div id="atmosphere" aria-hidden="true">
+  <video autoplay muted loop playsinline poster="">
+    <source src="assets/atmosphere.mp4" type="video/mp4">
+  </video>
+  <div class="marble"></div>
+  <div class="glass"></div>
+</div>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="crest" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Scales of Justice crest">
+      <circle cx="24" cy="24" r="22.5" stroke="#C5A059" stroke-width="1.5" fill="#0a1a30"/>
+      <circle cx="24" cy="24" r="18.5" stroke="#C5A059" stroke-width="0.8" opacity="0.6"/>
+      <!-- central beam post -->
+      <rect x="23" y="10" width="2" height="24" rx="1" fill="#D4AF37"/>
+      <!-- top knob -->
+      <circle cx="24" cy="9.5" r="2.2" fill="#D4AF37"/>
+      <!-- balance beam -->
+      <rect x="10" y="13.5" width="28" height="1.8" rx="0.9" fill="#D4AF37"/>
+      <!-- suspension lines -->
+      <path d="M12 14 L8 22 M12 14 L16 22" stroke="#C5A059" stroke-width="0.9"/>
+      <path d="M36 14 L32 22 M36 14 L40 22" stroke="#C5A059" stroke-width="0.9"/>
+      <!-- left pan -->
+      <path d="M7 22 Q12 28 17 22 Z" fill="#C5A059" opacity="0.92"/>
+      <!-- right pan -->
+      <path d="M31 22 Q36 28 41 22 Z" fill="#C5A059" opacity="0.92"/>
+      <!-- base -->
+      <rect x="18" y="34" width="12" height="2" rx="1" fill="#D4AF37"/>
+      <rect x="21" y="30" width="6" height="5" fill="#D4AF37"/>
+    </svg>
+    <div>
+      <div class="brand-name">Due Diligence</div>
+      <div class="brand-sub">PH Bar Exam Simulator</div>
+    </div>
   </div>
-  <div class="right">
-    <button class="tabbtn" id="tab-write">Write & Practice</button>
+
+  <nav class="spa-nav">
+    <button class="spa-tab active" id="spa-mock" onclick="showPage('mock', this)">🏛️ Mock Bar Exam</button>
+    <button class="spa-tab" id="spa-midterms" onclick="showPage('midterms', this)">🎓 Midterms &amp; Finals</button>
+    <button class="spa-tab" id="spa-news" onclick="showPage('news', this)">📰 Bar News</button>
+    <button class="spa-tab" id="spa-jurisprudence" onclick="showPage('jurisprudence', this)">⚖️ Latest Jurisprudence</button>
+  </nav>
+
+  <div class="topbar-actions">
+    <button class="icon-btn hide-sm" id="btn-analytics" onclick="openAnalytics()">📈 Analytics</button>
+    <button class="btn-subscribe" id="btn-subscribe" onclick="openModal('subscribe-modal')">✦ Subscribe</button>
+    <button class="icon-btn hide-sm" id="btn-signin" onclick="openModal('auth-modal')">Sign In</button>
+    <div class="avatar-pill" id="avatar-pill" onclick="openModal('auth-modal')">
+      <span class="av">DD</span><span class="tier">Free Tier</span>
+    </div>
+  </div>
+</header>
+
+<main id="spa-root">
+<section id="page-mock" class="page active">
+  <div class="exam-subnav">
+    <button class="tabbtn active" id="tab-write">Write &amp; Practice</button>
     <button class="tabbtn" id="tab-history">History</button>
     <button class="tabbtn feedback-btn" id="btn-open-feedback">Send Feedback</button>
+    <div class="mode-toggle" role="tablist" aria-label="Exam mode">
+      <button class="untimed active" id="mode-untimed" onclick="setExamMode('untimed')">Untimed Review</button>
+      <button class="timed" id="mode-timed" onclick="setExamMode('timed')">⏱ Timed Bar Mode</button>
+    </div>
   </div>
-</div>
+
 
 <div class="layout">
   <div class="index-tabs" id="subject-tabs"></div>
   <div class="main" id="main"></div>
 </div>
+
+  <div class="sponsor-card">
+    <div class="sponsor-inner">
+      <span class="sponsor-tag">Sponsored Partner</span>
+      <h3>FGMallari Designs — Architect</h3>
+      <div class="lead">Lead Architect: Francis Fidel G. Mallari</div>
+      <div class="svc">Architectural Planning, Structural Design &amp; Blueprint Services.</div>
+      <div class="contact">
+        <span>📱 <a href="tel:+639499176005">0949 917 6005</a></span>
+        <span>✉️ <a href="mailto:francismallari1020@yahoo.com">francismallari1020@yahoo.com</a></span>
+      </div>
+    </div>
+  </div>
+</section><!-- /page-mock -->
+
+<section id="page-midterms" class="page">
+  <div class="page-wrap">
+    <div class="page-head">
+      <div class="eyebrow">Law School Modules</div>
+      <h2>Midterms &amp; Finals Mock Exams</h2>
+      <p>Subject-specific practice sets modeled on Philippine law school assessments — first year fundamentals through bar-prep review.</p>
+    </div>
+    <div class="card-grid" id="midterms-grid"></div>
+  </div>
+</section>
+
+<section id="page-news" class="page">
+  <div class="page-wrap">
+    <div class="page-head">
+      <div class="eyebrow">Official Bulletins</div>
+      <h2>Bar News</h2>
+      <p>Supreme Court bulletins, examination schedules, and pass-rate announcements. Verify all dates against the official OBE / Supreme Court PIO releases.</p>
+    </div>
+    <div class="card-grid" id="news-grid"></div>
+  </div>
+</section>
+
+<section id="page-jurisprudence" class="page">
+  <div class="page-wrap">
+    <div class="page-head">
+      <div class="eyebrow">Landmark Decisions</div>
+      <h2>Latest Jurisprudence</h2>
+      <p>Curated Supreme Court landmark rulings with one-line syllabus digests. Read the full decisions on the Supreme Court E-Library or LawPhil before citing.</p>
+    </div>
+    <div class="card-grid" id="jurisprudence-grid"></div>
+  </div>
+</section>
+</main><!-- /spa-root -->
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <div class="fcol">
+      <div class="fbrand">Due Diligence</div>
+      <p class="disclaimer">
+        <strong>Legal Notice.</strong> Suggested model answers and AI evaluations are generated solely for Bar Exam
+        practice and do NOT constitute formal legal advice. Consult a licensed attorney. Case citations and scenarios
+        are provided for academic drilling only and should be independently verified against official sources
+        (Supreme Court E-Library, LawPhil) before any reliance.
+      </p>
+    </div>
+    <div class="footer-links">
+      <a onclick="openModal('investor-modal')">🏛️ Angel Investors</a>
+      <a onclick="openModal('subscribe-modal')">Go Plus</a>
+      <a onclick="document.getElementById('btn-open-feedback').click()">Send Feedback</a>
+    </div>
+  </div>
+</footer>
+
 
 <div class="modal-overlay" id="feedback-modal">
   <div class="modal-card">
@@ -377,6 +683,88 @@
     </form>
   </div>
 </div>
+
+<!-- Subscribe / Pricing modal -->
+<div class="modal-overlay" id="subscribe-modal">
+  <div class="modal-card lg">
+    <h3 class="modal-title">Due Diligence <span style="color:var(--gold)">Plus</span></h3>
+    <div class="modal-sub">Unlock the full bar-prep arsenal</div>
+    <div class="price-hero">
+      <div class="amt">₱1,386.22<small>&nbsp;/ month</small></div>
+      <div class="usd">≈ $22.40 USD / month · cancel anytime</div>
+    </div>
+    <ul class="feature-list">
+      <li>Unlimited timed mock bar essays across all 8 subjects</li>
+      <li>AI ALAC grading with per-component rubric feedback</li>
+      <li>Performance analytics &amp; ALAC mastery tracking</li>
+      <li>Midterms &amp; Finals law-school module library</li>
+      <li>Curated jurisprudence digests &amp; bar bulletin alerts</li>
+      <li>Exportable progress reports (PDF)</li>
+    </ul>
+    <div class="pay-row">
+      <button class="pay-btn gcash" onclick="mockCheckout('GCash')">Pay with GCash</button>
+      <button class="pay-btn visa" onclick="mockCheckout('Visa / Card')">Pay with Visa / Card</button>
+    </div>
+    <div class="mock-note">Demo checkout — no live payment is processed in this preview build.</div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-secondary" onclick="closeModal('subscribe-modal')">Maybe later</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auth modal -->
+<div class="modal-overlay" id="auth-modal">
+  <div class="modal-card">
+    <h3 class="modal-title">Sign in to Due Diligence</h3>
+    <div class="modal-sub">Your progress syncs across devices</div>
+    <span class="tier-badge">Free Practice Tier — upgrade to Go Plus Unlimited</span>
+    <div class="sso-row" style="margin-top:16px;">
+      <button class="sso-btn" onclick="mockAuth('Google')"><span>🅶</span> Continue with Google</button>
+      <button class="sso-btn" onclick="mockAuth('Apple')"><span></span> Continue with Apple</button>
+    </div>
+    <div class="divider-or">or use email</div>
+    <input class="modal-input" type="email" id="auth-email" placeholder="you@example.com" autocomplete="off">
+    <input class="modal-input" type="password" id="auth-pass" placeholder="Password" autocomplete="off">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('auth-modal')">Cancel</button>
+      <button class="btn-primary" onclick="mockAuth('Email')">Sign In</button>
+    </div>
+    <div class="mock-note" style="margin-top:14px;">UI preview only — no credentials are collected, stored, or transmitted.</div>
+  </div>
+</div>
+
+<!-- Angel Investors modal -->
+<div class="modal-overlay" id="investor-modal">
+  <div class="modal-card">
+    <h3 class="modal-title">Patrons &amp; Angel Investors</h3>
+    <div class="modal-sub">With gratitude for their belief in this mission</div>
+    <div class="patron">
+      <div class="medal">🏛️</div>
+      <div><div class="nm">Gilmar P. De Castro</div><div class="role">Angel Investor</div></div>
+    </div>
+    <div class="patron">
+      <div class="medal">⚖️</div>
+      <div><div class="nm">Francis Mallari</div><div class="role">Angel Investor</div></div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-secondary" onclick="closeModal('investor-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Analytics dashboard modal -->
+<div class="modal-overlay" id="analytics-modal">
+  <div class="modal-card xl">
+    <h3 class="modal-title">Performance Analytics</h3>
+    <div class="modal-sub">Your bar-prep drill history &amp; ALAC mastery</div>
+    <div id="analytics-body"></div>
+    <div class="modal-actions" style="margin-top:18px;">
+      <button class="btn-secondary" onclick="exportProgressPDF()">⤓ Export Progress Report (PDF)</button>
+      <button class="btn-primary" onclick="closeModal('analytics-modal')">Done</button>
+    </div>
+  </div>
+</div>
+
 
 <script>
 const SUBJECTS = [
@@ -673,7 +1061,7 @@ const BAR_QUESTIONS = {
     },
     {
       id: "Political Law Q.7",
-      text: "A human rights activist was abducted and detained by unidentified armed men. Relatives filed a petition for a Writ of Amparo before the Regional Trial Court to compel military authorities to produce the victim.",
+      text: "A human rights activist was abducted and detained by unidentified armed men. Relatives filed a petition for a Writ of Amparo before the Regional Trial Court to compel military authorities to produce the victim.\n\nWill the petition for a Writ of Amparo prosper? Explain with legal basis.",
       model: "The Writ of Amparo is a judicial remedy available to any person whose right to life, liberty, and security is violated or threatened by unlawful acts of public officials or private individuals, requiring respondents to observe extraordinary diligence.",
       caseLaw: "Secretary of National Defense v. Manalo, G.R. No. 179090"
     },
@@ -685,7 +1073,7 @@ const BAR_QUESTIONS = {
     },
     {
       id: "Political Law Q.9",
-      text: "Congress passed a national budget law reducing the internal revenue allotment (IRA / NTA) share of local government units below constitutional computations. LGUs challenged the statute before the Supreme Court.",
+      text: "Congress passed a national budget law reducing the internal revenue allotment (IRA / NTA) share of local government units below constitutional computations. LGUs challenged the statute before the Supreme Court.\n\nWill the LGUs' challenge prosper? Explain with legal basis.",
       model: "Under the Constitution and the Mandanas-Garcia ruling, all national taxes—not just collections from the Bureau of Internal Revenue—must be included in computing the just share of local government units.",
       caseLaw: "Mandanas v. Executive Secretary, G.R. Nos. 199802 & 208488"
     },
@@ -803,19 +1191,19 @@ const BAR_QUESTIONS = {
     },
     {
       id: "Taxation Law Q.8",
-      text: "A provincial government enacted an ordinance imposing local business taxes on gross receipts of banks operating within its municipality. Banks challenged the local taxing power.",
+      text: "A provincial government enacted an ordinance imposing local business taxes on gross receipts of banks operating within its municipality. Banks challenged the local taxing power.\n\nIs the local business tax on the banks' gross receipts valid? Explain with legal basis.",
       model: "Under the Local Government Code, LGUs are prohibited from imposing taxes on gross receipts of banks and financial institutions already subject to specific national taxes, unless expressly authorized.",
       caseLaw: "First Philippine International Bank v. Court of Appeals, G.R. No. 115849"
     },
     {
       id: "Taxation Law Q.9",
-      text: "Customs authorities seized smuggled electronic goods found hidden in commercial containers at the port of Manila. Importers argue for administrative release upon payment of storage fees without forfeiture proceedings.",
+      text: "Customs authorities seized smuggled electronic goods found hidden in commercial containers at the port of Manila. Importers argue for administrative release upon payment of storage fees without forfeiture proceedings.\n\nMay the goods be released without forfeiture proceedings? Explain with legal basis.",
       model: "Smuggled goods unlawfully imported are subject to administrative forfeiture proceedings under the Customs Modernization and Tariff Act (CMTA), and release cannot be granted without forfeiture compliance.",
       caseLaw: "Republic v. CFI of Manila, G.R. No. L-38435"
     },
     {
       id: "Taxation Law Q.10",
-      text: "A non-stock, non-profit educational institution operated a canteen and bookstore inside its campus, generating commercial revenues. The local government assessed real property taxes on the entire campus.",
+      text: "A non-stock, non-profit educational institution operated a canteen and bookstore inside its campus, generating commercial revenues. The local government assessed real property taxes on the entire campus.\n\nIs the entire campus subject to real property tax? Explain with legal basis.",
       model: "Under Article XIV, Section 4 of the Constitution and the Local Government Code, lands, buildings, and improvements used actually, directly, and exclusively for educational purposes are exempt from real property taxes, though commercial ventures may be segregated.",
       caseLaw: "Lung Center of the Philippines v. Quezon City, G.R. No. 141044"
     }
@@ -902,10 +1290,17 @@ function init() {
 function startTimer() {
   if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(() => {
-    timeLeft--;
-    if (timeLeft <= 0) {
-      clearInterval(timerInterval);
-      timeLeft = 0;
+    if (examMode === 'timed') {
+      timeLeft--;
+      if (timeLeft <= 0) {
+        timeLeft = 0;
+        clearInterval(timerInterval);
+        updateTimerDisplay();
+        onTimeUp();
+        return;
+      }
+    } else {
+      elapsed++;
     }
     updateTimerDisplay();
   }, 1000);
@@ -914,13 +1309,26 @@ function startTimer() {
 function updateTimerDisplay() {
   const disp = document.getElementById("timer-display");
   if (!disp) return;
-  const h = Math.floor(timeLeft / 3600);
-  const m = Math.floor((timeLeft % 3600) / 60);
-  const s = timeLeft % 60;
-  disp.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  if (timeLeft < 900) {
-    disp.closest('.timer-bar')?.classList.add('warn');
+  const bar = disp.closest('.timer-bar');
+  if (examMode === 'timed') {
+    const m = Math.floor(timeLeft / 60);
+    const s = timeLeft % 60;
+    disp.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    if (bar) { bar.classList.toggle('danger', timeLeft <= 60); bar.classList.remove('warn'); }
+  } else {
+    const h = Math.floor(elapsed / 3600);
+    const m = Math.floor((elapsed % 3600) / 60);
+    const s = elapsed % 60;
+    disp.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    if (bar) { bar.classList.remove('danger'); bar.classList.remove('warn'); }
   }
+}
+
+// Auto-submit when the timed clock hits zero
+function onTimeUp() {
+  const key = `${currentSubj}-${currentIdx}`;
+  if ((userAnswers[key] || '').trim().length >= 15) { evaluateAnswer(); }
+  else { submitAndNext(); }
 }
 
 function setupEventListeners() {
@@ -984,10 +1392,10 @@ function renderMainWrite() {
   timerFormatted = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 
   main.innerHTML = `
-    <div class="timer-bar ${timeLeft < 900 ? 'warn' : ''}">
-      <span class="timer-label">⏱️ Bar Exam Simulation Clock</span>
-      <span id="timer-display">${timerFormatted}</span>
-      <span class="timer-limit">Recommended Time per Essay: 35–45 Mins</span>
+    <div class="timer-bar" id="timer-bar">
+      <span class="timer-label">⏱️ ${examMode === 'timed' ? 'Timed Bar Mode — 7:00 per item' : 'Untimed Review Clock'}</span>
+      <span id="timer-display">--:--</span>
+      <span class="timer-limit">${examMode === 'timed' ? 'Auto-submits at 0:00 · turns red under 60s' : 'Recommended: 35–45 mins per essay'}</span>
     </div>
 
     <div class="toolbar">
@@ -1011,7 +1419,7 @@ function renderMainWrite() {
 
     <div class="paper-card" style="background:#fff;">
       <div class="panel-title">Examinee Answer Workspace (ANSWER • LEGAL BASIS • APPLICATION • CONCLUSION)</div>
-      <textarea id="answer-box" oninput="handleInput(this)" placeholder="Draft your structured Bar answer here...">${escapeHtml(currentText)}</textarea>
+      <textarea id="answer-box" oninput="handleInput(this)" placeholder="Structure your answer using the ALAC method:&#10;&#10;I.  CONCLUSION  — State your direct answer (Yes/No, Valid/Invalid).&#10;II. LEGAL BASIS — Cite the codal article, section, or doctrine.&#10;III. APPLICATION — Apply the specific facts to the law.&#10;IV. CONCLUSION  — Reaffirm your position.">${escapeHtml(currentText)}</textarea>
       <div class="row">
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
         <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${!currentText.trim() ? 'disabled' : ''}>Evaluate & Grade Essay</button>
@@ -1022,6 +1430,7 @@ function renderMainWrite() {
       ${hasSubmitted ? renderResultHTML(savedKey) : ''}
     </div>
   `;
+  applyExamEnhancements();
 }
 
 function countWords(str) {
@@ -1063,39 +1472,59 @@ function evaluateAnswer() {
   const text = userAnswers[key] || "";
   const trimmed = text.trim();
 
-  // 1. Anti-Gibberish Check
-  const repeatedCharRegex = /(.)\1{4,}/; 
+  // Anti-gibberish pre-filter
+  const repeatedCharRegex = /(.)\1{4,}/;
   const spaceCount = (trimmed.match(/ /g) || []).length;
   const isGibberish = (trimmed.length < 15 || repeatedCharRegex.test(trimmed) || spaceCount < 2);
 
-  let score = 0;
+  // --- AIRTIGHT ALAC sub-scores: each wrapped in Number(); total is an explicit sum ---
+  let answerScore = 0, legalScore = 0, appScore = 0, conclusionScore = 0;
 
-  if (isGibberish) {
-    score = 0; // Gives 0 for gibberish/mashing
-  } else {
-    // YOUR ORIGINAL SCORING LOGIC (UNTOUCHED)
-    const words = countWords(text);
-
-    if (words > 180) score += 35;
-    else if (words > 80) score += 25;
-    else score += 15;
-
+  if (!isGibberish) {
     const lower = text.toLowerCase();
-    if (lower.includes("issue") || lower.includes("whether") || lower.includes("resolved")) score += 20;
-    if (lower.includes("article") || lower.includes("section") || lower.includes("code") || lower.includes("rule")) score += 25;
-    if (lower.includes("therefore") || lower.includes("hence") || lower.includes("conclude") || lower.includes("thus")) score += 20;
-let remarks = "Review the governing statutory provisions and ensure precise terminology is employed in your reasoning.";
+    const words = countWords(text);
+    const head = lower.slice(0, 160);
 
-if (score === 0) {
-  remarks = "0 Score. Please answer diligently—life, liberty, and property depend on the legal consequences of your answer.";
-}
-    score = Math.min(100, Math.max(0, score));
+    // A — Answer: a direct position, ideally front-loaded
+    const positionRe = /\b(yes|no|valid|invalid|void|liable|not liable|meritorious|will prosper|will not prosper|guilty|acquitted|dismissed|granted|denied)\b/;
+    if (positionRe.test(head)) answerScore = 20;
+    else if (positionRe.test(lower)) answerScore = 12;
+    else answerScore = 6;
+
+    // L — Legal Basis: codal / jurisprudential anchors
+    let legalHits = 0;
+    [/art(?:icle)?\.?\s*\d+/, /section\s*\d+/, /\br\.?a\.?\s*\d+/, /g\.?r\.?\s*no/, /\bp\.?d\.?\s*\d+/, /doctrine|jurisprudence|\bcode\b|constitution/]
+      .forEach(re => { if (re.test(lower)) legalHits++; });
+    legalScore = Math.min(30, legalHits * 8);
+
+    // A — Application: facts tied to the rule
+    let appHits = 0;
+    [/\bhere\b/, /in this case/, /applying/, /the facts?/, /\bsince\b/, /\bbecause\b/, /\bwhen\b/]
+      .forEach(re => { if (re.test(lower)) appHits++; });
+    appScore = Math.min(30, appHits * 6 + (words > 120 ? 6 : words > 60 ? 3 : 0));
+
+    // C — Conclusion: a reaffirming close
+    const concRe = /\b(therefore|hence|thus|in conclusion|wherefore|accordingly|conclude)\b/;
+    if (concRe.test(lower.slice(-220))) conclusionScore = 20;
+    else if (concRe.test(lower)) conclusionScore = 12;
+    else conclusionScore = 6;
   }
 
+  // AIRTIGHT TOTAL: explicit numeric sum, clamped — never NaN, never zeroed by concatenation
+  let score = Number(answerScore) + Number(legalScore) + Number(appScore) + Number(conclusionScore);
+  if (isGibberish || !Number.isFinite(score)) score = 0;
+  score = Math.min(100, Math.max(0, Math.round(score)));
+
   const passed = score >= 75;
+  const timeSpent = Math.max(0, Math.round((Date.now() - questionStartTs) / 1000));
   const resultObj = {
     score: score,
     passed: passed,
+    answerScore: Number(answerScore),
+    legalScore: Number(legalScore),
+    appScore: Number(appScore),
+    conclusionScore: Number(conclusionScore),
+    timeSpent: timeSpent,
     timestamp: new Date().toLocaleString(),
     subject: currentSubj,
     qId: BAR_QUESTIONS[currentSubj][currentIdx].id
@@ -1103,9 +1532,13 @@ if (score === 0) {
 
   submissionResults[key] = resultObj;
   historyLog.unshift(resultObj);
+  logAttempt(resultObj);
 
   document.getElementById("evaluation-result-area").innerHTML = renderResultHTML(key);
   document.getElementById("evaluation-result-area").scrollIntoView({ behavior: 'smooth' });
+
+  // Timed Bar Mode: auto-advance to the next item after the verdict is shown
+  if (examMode === 'timed') { setTimeout(submitAndNext, 2400); }
 }
 
 function renderResultHTML(key) {
@@ -1126,38 +1559,38 @@ function renderResultHTML(key) {
         </div>
       </div>
 
-      <div class="panel-title">ALAC Rubric Breakdown (Answer · Legal Basis · Application · Conclusion)</div>
+      <div class="panel-title">ALAC Rubric Breakdown — total = ${res.score}/100 (sum of the four sub-scores below)</div>
 
-      <div class="issue ${passed ? 'full' : 'partial'}">
+      <div class="issue ${res.answerScore >= 15 ? 'full' : res.answerScore >= 8 ? 'partial' : 'missed'}">
         <div class="issue-head">
           <span>A — Answer (direct position stated first)</span>
-          <span class="pts">${passed ? '20 / 20 pts' : '12 / 20 pts'}</span>
+          <span class="pts">${Number(res.answerScore)} / 20 pts</span>
         </div>
-        <div class="note">${passed ? 'A clear, unambiguous position (e.g. Yes/No, Valid/Invalid) is front-loaded before the discussion.' : 'The direct answer was buried, hedged, or omitted — ALAC front-loads the position.'}</div>
+        <div class="note">${res.answerScore >= 15 ? 'A clear, unambiguous position (e.g. Yes/No, Valid/Invalid) is front-loaded before the discussion.' : 'Front-load a direct position — ALAC states the answer before the discussion.'}</div>
       </div>
 
-      <div class="issue ${passed ? 'full' : 'missed'}">
+      <div class="issue ${res.legalScore >= 22 ? 'full' : res.legalScore >= 10 ? 'partial' : 'missed'}">
         <div class="issue-head">
           <span>L — Legal Basis (codal provision / jurisprudence)</span>
-          <span class="pts">${passed ? '30 / 30 pts' : '12 / 30 pts'}</span>
+          <span class="pts">${Number(res.legalScore)} / 30 pts</span>
         </div>
-        <div class="note">${passed ? 'Correct article/section or controlling doctrine is invoked to support the answer.' : 'The governing statute or doctrine was missing or misapplied.'}</div>
+        <div class="note">${res.legalScore >= 22 ? 'Correct article/section or controlling doctrine is invoked to support the answer.' : 'Cite the governing article, section, or controlling doctrine explicitly.'}</div>
       </div>
 
-      <div class="issue ${passed ? 'full' : 'partial'}">
+      <div class="issue ${res.appScore >= 22 ? 'full' : res.appScore >= 10 ? 'partial' : 'missed'}">
         <div class="issue-head">
           <span>A — Application (facts tied to the law)</span>
-          <span class="pts">${passed ? '30 / 30 pts' : '12 / 30 pts'}</span>
+          <span class="pts">${Number(res.appScore)} / 30 pts</span>
         </div>
-        <div class="note">${passed ? 'The specific facts of the problem are explicitly connected to the legal basis.' : 'The rule was restated without applying it to the given facts.'}</div>
+        <div class="note">${res.appScore >= 22 ? 'The specific facts of the problem are explicitly connected to the legal basis.' : 'Tie the specific facts of the problem to the rule — do not merely restate it.'}</div>
       </div>
 
-      <div class="issue ${passed ? 'full' : 'partial'}">
+      <div class="issue ${res.conclusionScore >= 15 ? 'full' : res.conclusionScore >= 8 ? 'partial' : 'missed'}">
         <div class="issue-head">
           <span>C — Conclusion (reaffirms the answer)</span>
-          <span class="pts">${passed ? '20 / 20 pts' : '8 / 20 pts'}</span>
+          <span class="pts">${Number(res.conclusionScore)} / 20 pts</span>
         </div>
-        <div class="note">${passed ? 'The conclusion reaffirms the position and addresses any nuance or exception raised.' : 'Conclusion lacks a definitive restatement of the position.'}</div>
+        <div class="note">${res.conclusionScore >= 15 ? 'The conclusion reaffirms the position and addresses any nuance or exception raised.' : 'Close by reaffirming your position (Therefore / Hence …).'}</div>
       </div>
 
       <div style="margin-top:20px;">
@@ -1246,6 +1679,204 @@ window.addEventListener('DOMContentLoaded', init);
   }
 
   loadRemedialFromSheet();
+
+/* =====================================================================
+   ENTERPRISE LAYER — SPA nav, exam modes, security, analytics, modals.
+   Additive only. Reuses existing globals: currentSubj, currentIdx,
+   userAnswers, timeLeft, startTimer, renderMainWrite, evaluateAnswer.
+   ===================================================================== */
+
+let examMode = 'untimed';
+let currentQuestionIndex = 0;
+const PER_Q_SECONDS = 420;      // 7 minutes per item (Timed Bar Mode)
+let elapsed = 0;                // count-up seconds for Untimed Review
+let questionStartTs = Date.now();
+
+/* ---------- SPA navigation ---------- */
+function showPage(page, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('page-' + page);
+  if (target) target.classList.add('active');
+  document.querySelectorAll('.spa-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ---------- Modals ---------- */
+function openModal(id) { const m = document.getElementById(id); if (m) m.classList.add('open'); }
+function closeModal(id) { const m = document.getElementById(id); if (m) m.classList.remove('open'); }
+function mockCheckout(method) { alert('Demo build: ' + method + ' checkout is not connected to a live payment processor.'); }
+function mockAuth(provider) { alert('Demo build: ' + provider + ' sign-in is a UI mockup. No credentials are collected or transmitted.'); }
+
+/* ---------- Exam mode + per-question clock ---------- */
+function setExamMode(mode) {
+  examMode = mode;
+  const t = document.getElementById('mode-timed');
+  const u = document.getElementById('mode-untimed');
+  if (t && u) {
+    t.classList.toggle('active', mode === 'timed');
+    u.classList.toggle('active', mode === 'untimed');
+  }
+  renderMainWrite();   // re-render workspace; applyExamEnhancements resets the clock
+}
+
+function resetQuestionClock() {
+  questionStartTs = Date.now();
+  if (examMode === 'timed') { timeLeft = PER_Q_SECONDS; } else { elapsed = 0; }
+  startTimer();
+  updateTimerDisplay();
+}
+
+/* loadQuestion(idx): bind a fresh clock to a specific item (spec API) */
+function loadQuestion(idx) {
+  const qList = BAR_QUESTIONS[currentSubj];
+  currentIdx = ((idx % qList.length) + qList.length) % qList.length;
+  currentQuestionIndex = currentIdx;
+  renderMainWrite();
+}
+
+/* Auto-advance: clear textarea, increment, load next, restart timer */
+function submitAndNext() {
+  const key = `${currentSubj}-${currentIdx}`;
+  userAnswers[key] = '';
+  loadQuestion(currentIdx + 1);
+}
+
+/* Called at the end of every renderMainWrite() */
+function applyExamEnhancements() {
+  currentQuestionIndex = currentIdx;
+  resetQuestionClock();
+  const box = document.getElementById('answer-box');
+  if (box && !box.dataset.locked) {
+    box.dataset.locked = '1';
+    ['copy', 'paste', 'cut', 'drop', 'dragstart'].forEach(evt =>
+      box.addEventListener(evt, e => { e.preventDefault(); return false; }));
+  }
+}
+
+/* ---------- Exam-integrity security lockdown ---------- */
+function enableSecurity() {
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('keydown', e => {
+    const k = (e.key || '').toLowerCase();
+    if (k === 'f12') { e.preventDefault(); return false; }
+    if (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(k)) { e.preventDefault(); return false; }
+    if (e.ctrlKey && ['u', 's'].includes(k)) { e.preventDefault(); return false; }
+  });
+}
+
+/* ---------- Analytics (localStorage) ---------- */
+const LS_KEY = 'dd_attempts_v1';
+function loadAttempts() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (e) { return []; }
+}
+function logAttempt(obj) {
+  try {
+    const list = loadAttempts();
+    list.unshift(obj);
+    localStorage.setItem(LS_KEY, JSON.stringify(list.slice(0, 500)));
+  } catch (e) { /* storage unavailable — non-fatal */ }
+}
+function openAnalytics() {
+  const list = loadAttempts();
+  const body = document.getElementById('analytics-body');
+  if (!list.length) {
+    body.innerHTML = '<div class="empty">No drills logged yet. Grade an essay under Mock Bar Exam to build your performance history.</div>';
+    openModal('analytics-modal');
+    return;
+  }
+  const n = list.length;
+  const avg = Math.round(list.reduce((s, a) => s + Number(a.score || 0), 0) / n);
+  const avgTime = Math.round(list.reduce((s, a) => s + Number(a.timeSpent || 0), 0) / n);
+  const passRate = Math.round(100 * list.filter(a => a.passed).length / n);
+  const comp = (key, max) => Math.round(100 * (list.reduce((s, a) => s + Number(a[key] || 0), 0) / n) / max);
+  const bars = [
+    ['Answer (front-loaded)', comp('answerScore', 20)],
+    ['Legal Basis', comp('legalScore', 30)],
+    ['Application', comp('appScore', 30)],
+    ['Conclusion', comp('conclusionScore', 20)]
+  ];
+  const rows = list.slice(0, 40).map(a => `
+    <tr>
+      <td class="sc ${a.passed ? 'pass' : 'fail'}">${a.score}</td>
+      <td>${a.subject || ''}</td>
+      <td>${a.qId || ''}</td>
+      <td>${a.timeSpent != null ? fmtSecs(a.timeSpent) : '—'}</td>
+      <td>${a.timestamp || ''}</td>
+    </tr>`).join('');
+  body.innerHTML = `
+    <div class="metric-grid">
+      <div class="metric"><div class="val">${avg}%</div><div class="lbl">Avg Score</div></div>
+      <div class="metric"><div class="val">${n}</div><div class="lbl">Essays Drilled</div></div>
+      <div class="metric"><div class="val">${fmtSecs(avgTime)}</div><div class="lbl">Avg Time / Answer</div></div>
+      <div class="metric"><div class="val">${passRate}%</div><div class="lbl">Pass Rate</div></div>
+    </div>
+    <div class="panel-title">ALAC Mastery Progress</div>
+    <div class="alac-bars">
+      ${bars.map(([label, pct]) => `
+        <div class="alac-bar">
+          <div class="top"><span>${label}</span><span>${pct}%</span></div>
+          <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+        </div>`).join('')}
+    </div>
+    <div class="panel-title">Attempt Log</div>
+    <div class="table-scroll">
+      <table class="attempt-table">
+        <thead><tr><th>Score</th><th>Subject</th><th>Item</th><th>Time</th><th>When</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  openModal('analytics-modal');
+}
+function fmtSecs(s) { s = Number(s) || 0; const m = Math.floor(s / 60), r = s % 60; return `${m}:${String(r).padStart(2, '0')}`; }
+function exportProgressPDF() { alert('Export Progress Report (PDF) — coming soon in Due Diligence Plus.'); }
+
+/* ---------- Content pages (curated placeholders — verify before citing) ---------- */
+function seedContentPages() {
+  const midterms = [
+    ['1st Year', 'Persons & Family Relations', 'Marriage validity, property regimes, and parental authority drills modeled on midterm coverage.', '20 items · essay + MCQ'],
+    ['1st Year', 'Criminal Law I (Book I)', 'Felonies, stages of execution, circumstances affecting liability, and penalties.', '25 items · essay'],
+    ['2nd Year', 'Obligations & Contracts', 'Sources of obligations, defective contracts, and modes of extinguishment.', '20 items · essay'],
+    ['2nd Year', 'Constitutional Law II', 'Bill of Rights — due process, equal protection, searches, and free expression.', '18 items · essay'],
+    ['3rd Year', 'Taxation I', 'General principles, income taxation, and BIR assessment procedure.', '22 items · problem-solving'],
+    ['4th Year', 'Remedial Law Review', 'Civil procedure, evidence, and special proceedings integrated review set.', '30 items · essay']
+  ];
+  const news = [
+    ['Schedule', 'Bar Examination Calendar', 'Placeholder bulletin. Confirm official examination dates and venues via the Supreme Court Office of the Bar Examinations (OBE) and PIO advisories.', 'Verify: sc.judiciary.gov.ph'],
+    ['Results', 'Bar Passing Rate Announcement', 'Placeholder card for the next results release. Do not rely on any figure here — the official list of successful examinees is published solely by the Supreme Court.', 'Verify: SC PIO release'],
+    ['Reform', 'Bar Coverage & Syllabi', 'Track changes to the Bar syllabi and clustered subject coverage announced by the Bar Chairperson.', 'Verify: OBE syllabus'],
+    ['Advisory', 'Digital Bar (BAR-ISTA) Guidelines', 'Examinee lockdown-browser and equipment guidelines for computerized administration.', 'Verify: OBE advisory']
+  ];
+  const juris = [
+    ['Local Government', 'Mandanas v. Executive Secretary', 'The "just share" of LGUs is computed from all national taxes, not BIR collections alone.', 'G.R. Nos. 199802 & 208488'],
+    ['Human Rights', 'Secretary of National Defense v. Manalo', 'Foundational writ of amparo ruling; respondents must observe extraordinary diligence.', 'G.R. No. 180906'],
+    ['Anti-Graft', 'Estrada v. Sandiganbayan', 'Upheld the constitutionality of the Plunder Law against a vagueness challenge.', 'G.R. No. 148560'],
+    ['Political Law', 'Francisco v. House of Representatives', 'Defined the one-year bar and justiciable limits of impeachment initiation.', 'G.R. No. 160261'],
+    ['Civil Law', 'Ajero v. Court of Appeals', 'Rules on the probate and formal validity of holographic wills.', 'G.R. No. 106720'],
+    ['Labor', 'Globe-Mackay v. NLRC', 'Separation pay in lieu of reinstatement where relations are strained.', 'G.R. No. 82511']
+  ];
+  const cardM = a => `<div class="info-card"><div class="tag">${a[0]}</div><h4>${a[1]}</h4><p>${a[2]}</p><div class="meta">${a[3]}</div></div>`;
+  const cardN = a => `<div class="info-card"><div class="tag">${a[0]}</div><h4>${a[1]}</h4><p>${a[2]}</p><div class="cite">${a[3]}</div></div>`;
+  const cardJ = a => `<div class="info-card"><div class="tag">${a[0]}</div><h4>${a[1]}</h4><p>${a[2]}</p><div class="cite">${a[3]}</div></div>`;
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  set('midterms-grid', midterms.map(cardM).join(''));
+  set('news-grid', news.map(cardN).join(''));
+  set('jurisprudence-grid', juris.map(cardJ).join(''));
+}
+
+/* ---------- Enterprise bootstrap ---------- */
+document.addEventListener('DOMContentLoaded', () => {
+  enableSecurity();
+  seedContentPages();
+  // close any modal on backdrop click or ESC
+  document.querySelectorAll('.modal-overlay').forEach(ov => {
+    ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); });
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+  });
+});
+
 </script>
 </body>
 </html>

@@ -236,6 +236,33 @@
     background:transparent; border:1.5px solid var(--ink); color:var(--ink); padding:10px 16px; cursor:pointer;
   }
   .btn-secondary:hover{background:rgba(28,43,69,0.06);}
+
+  /* ---- Mobile responsiveness ---- */
+  @media (max-width:760px){
+    .masthead{flex-wrap:wrap; padding:16px 18px 12px; gap:12px;}
+    .masthead h1{font-size:22px;}
+    .masthead .right{margin-left:0; width:100%; flex-wrap:wrap;}
+    .masthead .right .tabbtn{flex:1 1 auto; text-align:center;}
+
+    .layout{flex-direction:column; min-height:0;}
+    .index-tabs{
+      width:100%; border-right:none; border-bottom:2px solid var(--ink);
+      padding:8px 0; display:flex; flex-wrap:wrap; gap:4px;
+      overflow-x:auto; -webkit-overflow-scrolling:touch;
+    }
+    .index-tabs button{
+      width:auto; flex:1 0 auto; border-left:none; border-bottom:3px solid transparent;
+      text-align:center; padding:9px 12px;
+    }
+    .index-tabs button.active{border-left-color:transparent; border-bottom-color:var(--maroon);}
+
+    .main{padding:20px 16px 48px;}
+    .toolbar{flex-direction:column; align-items:stretch;}
+    .nav-group{justify-content:space-between;}
+    .nav-group .btn-tool{flex:1 1 auto; text-align:center;}
+    textarea{min-height:240px; font-size:16px;}
+    .stamp-row{flex-wrap:wrap;}
+  }
 </style>
  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script> 
 </head>
@@ -410,7 +437,7 @@ const BAR_QUESTIONS = {
     {
       id: "Criminal Law Q.10",
       text: "A high-ranking government official amassed ill-gotten wealth totaling PHP 45,000,000 through a complex web of kickbacks and ghost projects. The anti-graft court prosecuted him under R.A. 7080.\n\nDoes the total amount meet the statutory threshold for Plunder?",
-      model: "Yes. Under R.A. 7080 (Plunder Law), as amended, the aggregate amount or total value of ill-gotten wealth amassed, acquired, or embezzled must be at least PHP 50,000,000. Wait, if the amount is PHP 45,000,000, it falls below the statutory threshold for plunder, making the crime Estafa or Malversation instead.",
+      model: "No. Under R.A. 7080 (Plunder Law), as amended, the aggregate amount or total value of ill-gotten wealth amassed, acquired, or accumulated must be at least PHP 50,000,000 to constitute Plunder. Since the official amassed only PHP 45,000,000, the statutory threshold is not met; hence, he cannot be held liable for Plunder. He may instead be prosecuted for Malversation and/or violation of the Anti-Graft and Corrupt Practices Act (R.A. 3019) for the underlying acts.",
       caseLaw: "Estrada v. Sandiganbayan, G.R. No. 148560"
     }
   ],
@@ -914,7 +941,7 @@ function renderMainWrite() {
     </div>
 
     <div class="paper-card" style="background:#fff;">
-      <div class="panel-title">Examinee Answer Workspace (ISSUE • RULE • APPLICATION • CONCLUSION)</div>
+      <div class="panel-title">Examinee Answer Workspace (ANSWER • LEGAL BASIS • APPLICATION • CONCLUSION)</div>
       <textarea id="answer-box" oninput="handleInput(this)" placeholder="Draft your structured Bar answer here...">${escapeHtml(currentText)}</textarea>
       <div class="row">
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
@@ -1030,30 +1057,38 @@ function renderResultHTML(key) {
         </div>
       </div>
 
-      <div class="panel-title">Issue Spotting & Rubric Breakdown</div>
-      
+      <div class="panel-title">ALAC Rubric Breakdown (Answer · Legal Basis · Application · Conclusion)</div>
+
       <div class="issue ${passed ? 'full' : 'partial'}">
         <div class="issue-head">
-          <span>1. Statement of Core Legal Issue & Direct Ruling</span>
-          <span class="pts">${passed ? '35 / 35 pts' : '20 / 35 pts'}</span>
+          <span>A — Answer (direct position stated first)</span>
+          <span class="pts">${passed ? '20 / 20 pts' : '12 / 20 pts'}</span>
         </div>
-        <div class="note">${passed ? 'Direct and precise identification of the core legal controversy.' : 'Issue framing was vague or omitted key material facts.'}</div>
+        <div class="note">${passed ? 'A clear, unambiguous position (e.g. Yes/No, Valid/Invalid) is front-loaded before the discussion.' : 'The direct answer was buried, hedged, or omitted — ALAC front-loads the position.'}</div>
       </div>
 
       <div class="issue ${passed ? 'full' : 'missed'}">
         <div class="issue-head">
-          <span>2. Statutory & Jurisprudential Application</span>
-          <span class="pts">${passed ? '40 / 40 pts' : '15 / 40 pts'}</span>
+          <span>L — Legal Basis (codal provision / jurisprudence)</span>
+          <span class="pts">${passed ? '30 / 30 pts' : '12 / 30 pts'}</span>
         </div>
-        <div class="note">${passed ? 'Accurate invocation of governing statutory articles and legal doctrines.' : 'Insufficient citation or incorrect application of governing law.'}</div>
+        <div class="note">${passed ? 'Correct article/section or controlling doctrine is invoked to support the answer.' : 'The governing statute or doctrine was missing or misapplied.'}</div>
       </div>
 
       <div class="issue ${passed ? 'full' : 'partial'}">
         <div class="issue-head">
-          <span>3. Logical Conclusion & Syllogism</span>
-          <span class="pts">${passed ? '25 / 25 pts' : '10 / 25 pts'}</span>
+          <span>A — Application (facts tied to the law)</span>
+          <span class="pts">${passed ? '30 / 30 pts' : '12 / 30 pts'}</span>
         </div>
-        <div class="note">${passed ? 'Clear deductive conclusion adhering to Philippine Bar standards.' : 'Conclusion lacks definitive legal resolution.'}</div>
+        <div class="note">${passed ? 'The specific facts of the problem are explicitly connected to the legal basis.' : 'The rule was restated without applying it to the given facts.'}</div>
+      </div>
+
+      <div class="issue ${passed ? 'full' : 'partial'}">
+        <div class="issue-head">
+          <span>C — Conclusion (reaffirms the answer)</span>
+          <span class="pts">${passed ? '20 / 20 pts' : '8 / 20 pts'}</span>
+        </div>
+        <div class="note">${passed ? 'The conclusion reaffirms the position and addresses any nuance or exception raised.' : 'Conclusion lacks a definitive restatement of the position.'}</div>
       </div>
 
       <div style="margin-top:20px;">
@@ -1067,7 +1102,7 @@ function renderResultHTML(key) {
       </div>
 
       <div class="remarks">
-        <strong>Examiner Remarks:</strong> ${passed ? 'Solid application of legal principles. Maintain this rigorous IRAC structure.' : 'Review the governing statutory provisions and ensure precise terminology is employed in your reasoning.'}
+        <strong>Examiner Remarks:</strong> ${passed ? 'Solid application of legal principles. Maintain this rigorous ALAC structure — Answer, Legal Basis, Application, Conclusion.' : 'Review the governing statutory provisions and ensure precise terminology is employed in your reasoning.'}
       </div>
     </div>
   `;
@@ -1142,34 +1177,6 @@ window.addEventListener('DOMContentLoaded', init);
   }
 
   loadRemedialFromSheet();
-// Anti-Gibberish & Strict Evaluation Rule
-  function checkAnswerQuality(userInput) {
-    const text = userInput.trim();
-
-    // 1. Check if empty or too short (less than 15 characters)
-    if (text.length < 15) {
-      return {
-        isGibberish: true,
-        score: 0,
-        feedback: "Score: 0. Please answer diligently—life, liberty, and property depend on the legal consequences of your answer."
-      };
-    }
-
-    // 2. Check for keyboard mashing (e.g. "asdfghjkl", "jjjjjjjj", or lack of spaces)
-    const repeatedChars = /(.)\1{4,}/; 
-    const spaceCount = (text.match(/ /g) || []).length;
-
-    if (repeatedChars.test(text) || spaceCount < 2) {
-      return {
-        isGibberish: true,
-        score: 0,
-        feedback: "Score: 0. Incomprehensible or gibberish submission detected. Please answer diligently—life, liberty, and property depend on the legal consequences of your answer."
-      };
-    }
-
-    // Pass: Valid response attempt
-    return { isGibberish: false };
-  }
 </script>
 </body>
 </html>

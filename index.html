@@ -621,7 +621,8 @@
   }
 
 </style>
- <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script> 
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="assets/labor-csv-normalizer.js"></script>
 </head>
 <body>
 
@@ -1250,68 +1251,7 @@ const BAR_QUESTIONS = {
       caseLaw: "Francisco v. House of Representatives, G.R. No. 160261"
     }
   ],
-  "Labor Law": [
-    {
-      id: "Labor Law Q.1",
-      text: "An enterprise engaged in agricultural production required field harvesters to work on national holidays without paying holiday pay, arguing that field personnel are exempt from labor standards.\n\nAre agricultural field personnel entitled to holiday pay under the Labor Code?",
-      model: "Under Article 82 of the Labor Code, field personnel whose hours of work cannot be determined with reasonable certainty are exempt from holiday pay, but regular farm workers subject to supervision and fixed hours are entitled.",
-      caseLaw: "Mercator Farm v. National Labor Relations Commission, G.R. No. 169389"
-    },
-    {
-      id: "Labor Law Q.2",
-      text: "A bank teller was dismissed for loss of trust and confidence after an internal audit revealed cash shortages in her drawer, although no criminal charges were filed in court.\n\nis the filing of criminal charges a prerequisite for dismissal based on loss of trust and confidence?",
-      model: "No. Proof beyond reasonable doubt is not required in labor cases. Dismissal based on loss of trust and confidence requires only substantial evidence that the employee holds a position of trust and committed a breach thereof.",
-      caseLaw: "Fujitsu Philippines v. Court of Appeals, G.R. No. 158232"
-    },
-    {
-      id: "Labor Law Q.3",
-      text: "An employee stopped reporting to work after receiving a disciplinary memo regarding tardiness. The employer subsequently treated the absence as abandonment and terminated employment. The employee filed a case for illegal dismissal.\n\nDid the employee abandon her job?",
-      model: "Abandonment requires clear, deliberate, and unjustified refusal to return to work coupled with an overt act showing intent to sever the employer-employee relationship. Mere absence without notice does not automatically constitute abandonment.",
-      caseLaw: "Samarca v. Arc-Men Industries, G.R. No. 146118"
-    },
-    {
-      id: "Labor Law Q.4",
-      text: "A labor union staged a strike without complying with the mandatory strike vote and notice requirements under the Labor Code, protesting unfair labor practices of management.\n\nWhat is the legal consequence of a strike staged without statutory strike vote and notice?",
-      model: "A strike staged without complying with mandatory 30-day notice and 7-day strike vote requirements is illegal, and union officers who participated may be declared to have lost their employment status.",
-      caseLaw: "National Federation of Sugar Workers v. Ovejera, G.R. No. L-59743"
-    },
-    {
-      id: "Labor Law Q.5",
-      text: "A manufacturing corporation engaged a manpower agency to supply assembly line workers under a contracting agreement. The workers performed core manufacturing tasks inside the principal's premises using principal equipment.\n\nIs the contracting arrangement legitimate or labor-only contracting?",
-      model: "This constitutes labor-only contracting prohibited under Department Order No. 174, because the contractor does not possess substantial capital or investment, and workers perform activities directly related to the principal business.",
-      caseLaw: "Cigarette Workers Union v. CIR, G.R. No. L-25756"
-    },
-    {
-      id: "Labor Law Q.6",
-      text: "A dismissed domestic worker filed a monetary claim for underpaid wages and separation pay directly before the National Labor Relations Commission (NLRC).\n\nDoes the Labor Arbiter and NLRC have jurisdiction over monetary claims of domestic workers?",
-      model: "Under R.A. 10361 (Domestic Workers Act or Batas Kasambahay) and Labor Code provisions, jurisdiction over monetary claims of kasambahay initially falls with the Department of Labor and Employment (DOLE) regional directors before reaching arbiters.",
-      caseLaw: "Hda. Luisita v. National Labor Relations Commission, G.R. No. 196049"
-    },
-    {
-      id: "Labor Law Q.7",
-      text: "An employee who served a private company for 15 years resigned voluntarily due to health reasons. He demanded retirement pay under Article 302 of the Labor Code.\n\nis an employee who resigns voluntarily entitled to retirement pay in the absence of a collective bargaining agreement?",
-      model: "Under Article 302 (formerly Art. 287) of the Labor Code, retirement pay is due only upon reaching the retirement age of 60-65 years and having served at least 5 years, unless a company policy or CBA provides for voluntary resignation retirement benefits.",
-      caseLaw: "Universal Robina Corporation v. Honorable Minister of Labor, G.R. No. L-45958"
-    },
-    {
-      id: "Labor Law Q.8",
-      text: "A probationary employee was dismissed after five months for failure to meet reasonable production standards communicated to her at the start of employment. Employee claims security of tenure.\n\nDoes a probationary employee enjoy absolute security of tenure?",
-      model: "Probationary employees enjoy security of tenure only during the probationary period and may be terminated for just cause or failure to qualify as a regular employee in accordance with reasonable standards made known upon engagement.",
-      caseLaw: "Aberdeen Court v. Agustin, G.R. No. 149371"
-    },
-    {
-      id: "Labor Law Q.9",
-      text: "A labor dispute paralyzed operations in a vital hospital and medical center. The Secretary of Labor assumed jurisdiction over the dispute and issued a return-to-work order. Strikers defied the order.\n\nWhat is the effect of an assumption of jurisdiction order by the Secretary of Labor?",
-      model: "An assumption or certification order by the Secretary of Labor automatically enjoins any strike or lockout, and strikers are mandated to return to work immediately under pain of disciplinary sanctions.",
-      caseLaw: "Metropolis Water District v. Local Union, G.R. No. 97232"
-    },
-    {
-      id: "Labor Law Q.10",
-      text: "An illegal dismissal case was decided by the Supreme Court, ordering reinstatement and backwages. However, during execution proceedings, plant management proved that extreme animosity and strained relations existed between parties.\n\nWhen is separation pay awarded in lieu of reinstatement?",
-      model: "Separation pay is awarded in lieu of reinstatement when reinstatement is no longer feasible due to strained relations between employer and employee, abolition of position, or closure of establishment.",
-      caseLaw: "Globe-Mackay Cable and Radio Corp. v. National Labor Relations Commission, G.R. No. 82511"
-    }
-  ],
+  "Labor Law": [],
   "Taxation Law": [
     {
       id: "Taxation Law Q.1",
@@ -1445,6 +1385,7 @@ let submissionResults = {};
 let historyLog = [];
 let timerInterval = null;
 let timeLeft = 10800;
+let laborQuestionBankStatus = "loading";
 
 function init() {
   renderSubjectTabs();
@@ -1540,10 +1481,27 @@ function switchSubject(subj) {
   currentSubj = subj;
   currentIdx = 0;
   renderSubjectTabs();
+  if (subj === "Labor Law" && laborQuestionBankStatus !== "ready") {
+    renderLaborQuestionBankMessage();
+    return;
+  }
   renderMainWrite();
 }
 
+function renderLaborQuestionBankMessage() {
+  const main = document.getElementById("main");
+  if (laborQuestionBankStatus === "loading") {
+    main.innerHTML = `<div class="loading">Loading Labor Law questions…</div>`;
+    return;
+  }
+  main.innerHTML = `<div class="err">Labor Law questions could not be loaded. <button class="btn-tool" onclick="loadLaborFromSheet()">Try Again</button></div>`;
+}
+
 function renderMainWrite() {
+  if (currentSubj === "Labor Law" && laborQuestionBankStatus !== "ready") {
+    renderLaborQuestionBankMessage();
+    return;
+  }
   const main = document.getElementById("main");
   const qList = BAR_QUESTIONS[currentSubj];
   const q = qList[currentIdx];
@@ -1857,6 +1815,51 @@ window.addEventListener('DOMContentLoaded', init);
   }
 
   loadRemedialFromSheet();
+
+  // Labor Law is maintained in the published question bank. Papa Parse receives
+  // the full matrix so the real header can be found after the introductory rows.
+  const LABOR_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=1486762536&single=true&output=csv';
+
+  function loadLaborFromSheet() {
+    laborQuestionBankStatus = "loading";
+    if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
+    if (typeof Papa === 'undefined' || !window.DueDiligenceLaborCsv) {
+      laborQuestionBankStatus = "error";
+      console.error('Labor Law question bank could not start because the CSV parser is unavailable.');
+      if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
+      return;
+    }
+
+    Papa.parse(LABOR_CSV_URL, {
+      download: true,
+      header: false,
+      skipEmptyLines: false,
+      complete: function(results) {
+        try {
+          const parsed = window.DueDiligenceLaborCsv.parseRows(results.data);
+          if (parsed.questions.length !== 59) throw new Error(`Expected 59 valid Labor Law questions; received ${parsed.questions.length}.`);
+          BAR_QUESTIONS["Labor Law"] = parsed.questions;
+          laborQuestionBankStatus = "ready";
+          if (parsed.invalidRows.length) console.warn('Ignored invalid Labor Law CSV rows.', parsed.invalidRows);
+          if (currentSubj === "Labor Law") {
+            currentIdx = Math.min(currentIdx, BAR_QUESTIONS["Labor Law"].length - 1);
+            renderMainWrite();
+          }
+        } catch (error) {
+          laborQuestionBankStatus = "error";
+          console.error('Labor Law question bank could not be loaded.', error);
+          if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
+        }
+      },
+      error: function(error) {
+        laborQuestionBankStatus = "error";
+        console.error('Labor Law question bank request failed.', error);
+        if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
+      }
+    });
+  }
+
+  loadLaborFromSheet();
 
 /* =====================================================================
    ENTERPRISE LAYER — SPA nav, exam modes, security, analytics, modals.

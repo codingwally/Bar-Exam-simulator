@@ -1886,6 +1886,19 @@ function closeModal(id) { const m = document.getElementById(id); if (m) m.classL
 function mockCheckout(method) { alert('Demo build: ' + method + ' checkout is not connected to a live payment processor.'); }
 function mockAuth(provider) { alert('Demo build: ' + provider + ' sign-in is a UI mockup. No credentials are collected or transmitted.'); }
 
+/* Welcome patrons on the first load of each browser tab without repeatedly
+   interrupting an active study session after refreshes or navigation. */
+const INVESTOR_WELCOME_SESSION_KEY = 'dd_investor_welcome_seen';
+function showInvestorWelcome() {
+  try {
+    if (sessionStorage.getItem(INVESTOR_WELCOME_SESSION_KEY)) return;
+    sessionStorage.setItem(INVESTOR_WELCOME_SESSION_KEY, '1');
+  } catch (e) {
+    /* Privacy-restricted browsers may block storage; showing the welcome once is safe. */
+  }
+  openModal('investor-modal');
+}
+
 /* ---------- Exam mode + per-question clock ---------- */
 function setExamMode(mode) {
   examMode = mode;
@@ -2070,6 +2083,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
   });
+  requestAnimationFrame(showInvestorWelcome);
 });
 
 </script>

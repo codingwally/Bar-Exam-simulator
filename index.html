@@ -621,6 +621,7 @@
   }
 
 </style>
+<link rel="stylesheet" href="assets/labor-practice.css">
  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script> 
 </head>
 <body>
@@ -888,6 +889,16 @@
     <div class="orig-box" id="suggest-orig"></div>
     <span class="field-label">Your suggested / better legal answer</span>
     <textarea class="modal-textarea" id="suggest-text" placeholder="Provide a refined ALAC answer, a corrected legal basis, or a better citation…"></textarea>
+    <div data-labor-feedback-fields hidden>
+      <span class="field-label">Supporting legal basis / provision</span>
+      <textarea class="modal-textarea" id="suggest-legal-basis" placeholder="State the provision or doctrine supporting the proposed change."></textarea>
+      <span class="field-label">Supporting jurisprudence</span>
+      <textarea class="modal-textarea" id="suggest-jurisprudence" placeholder="Case title, citation, and the specific doctrine (if available)."></textarea>
+      <span class="field-label">Primary source URL (HTTPS, optional)</span>
+      <input class="modal-input" type="url" id="suggest-source-url" placeholder="https://lawphil.net/..." inputmode="url" autocomplete="off">
+      <span class="field-label">Why should the editorial team review this?</span>
+      <textarea class="modal-textarea" id="suggest-explanation" placeholder="Identify the legal issue and explain the proposed correction."></textarea>
+    </div>
     <span class="field-label">Your email (optional — for follow-up)</span>
     <input class="modal-input" type="email" id="suggest-email" placeholder="you@example.com" autocomplete="off">
     <div class="modal-actions">
@@ -2208,6 +2219,8 @@ function startDictation() {
 
 document.addEventListener('DOMContentLoaded', () => { setInterval(tickSession, 1000); });
 </script>
+<script src="assets/labor-practice-config.js"></script>
+<script src="assets/labor-practice.js"></script>
 
 </body>
 </html>

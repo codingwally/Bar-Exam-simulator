@@ -1,0 +1,30 @@
+.labor-service-card{margin:24px 0;padding:24px 26px;background:rgba(255,255,255,.96);border:1px solid rgba(197,160,89,.42);border-top:3px solid var(--gold);border-radius:16px;box-shadow:var(--shadow);}
+.labor-service-card .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--gold);}
+.labor-service-card h3{font-family:var(--serif);color:var(--ink);font-size:23px;margin:8px 0;}
+.labor-service-card p{font-family:var(--sans);color:var(--ink-soft);font-size:14px;line-height:1.6;margin:0 0 16px;max-width:650px;}
+.labor-filter-bar{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:0 0 16px;padding:14px 16px;background:rgba(255,255,255,.82);border:1px solid var(--border-soft);border-radius:12px;}
+.labor-filter-field{display:grid;gap:4px;min-width:145px;}
+.labor-filter-field label{font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);}
+.labor-filter-field select{min-height:34px;border:1px solid var(--border);border-radius:7px;background:#fff;color:var(--ink);font-family:var(--sans);font-size:12.5px;padding:0 9px;}
+.labor-chip{display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:3px 7px;border-radius:999px;background:#f5e6b8;color:#47340a;font-family:var(--mono);font-size:9px;letter-spacing:.7px;text-transform:uppercase;vertical-align:middle;}
+.labor-meta{margin-top:9px;font-family:var(--mono);font-size:10px;line-height:1.5;color:var(--ink-soft);}
+.labor-meta a{color:var(--maroon);}
+.labor-result-head{display:flex;align-items:center;gap:18px;margin-bottom:20px;}
+.labor-score-orb{width:102px;height:102px;display:grid;place-content:center;flex:none;border-radius:50%;background:linear-gradient(135deg,#08182f,#0d2a4d);border:2px solid var(--gold);box-shadow:0 10px 28px rgba(2,33,71,.22);color:#fff;text-align:center;}
+.labor-score-orb b{font-family:var(--serif);font-size:30px;line-height:1;}
+.labor-score-orb span{font-family:var(--mono);font-size:8px;letter-spacing:.7px;text-transform:uppercase;color:#e7dcbf;margin-top:5px;}
+.labor-result-copy h3{font-family:var(--serif);color:var(--ink);font-size:24px;margin:0 0 4px;}
+.labor-result-copy p{font-family:var(--sans);font-size:13px;color:var(--ink-soft);line-height:1.5;margin:0;}
+.labor-notice{margin:16px 0;padding:12px 14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe;color:#183b63;font-family:var(--sans);font-size:13px;line-height:1.45;}
+.labor-concept-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0;}
+.labor-concept-list{border:1px solid var(--border-soft);border-radius:11px;padding:13px;background:var(--card-2);}
+.labor-concept-list h4{font-family:var(--mono);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-soft);margin:0 0 8px;}
+.labor-concept-list ul{margin:0;padding-left:17px;font-family:var(--sans);font-size:12.5px;line-height:1.5;color:var(--charcoal);}
+.labor-concept-list.warn{border-left:3px solid #d89b29;}.labor-concept-list.danger{border-left:3px solid var(--maroon);}.labor-concept-list.good{border-left:3px solid var(--pass);}
+.grammar-review{margin-top:18px;padding:18px;border-radius:12px;border:1px solid #c9d7ea;background:#f8fbff;}
+.grammar-review h4{font-family:var(--serif);font-size:19px;color:#0b2547;margin:0 0 5px;}.grammar-review .no-deduction{font-family:var(--sans);font-size:12.5px;line-height:1.5;color:#315579;margin:0 0 14px;}
+.grammar-correction{padding:10px 0;border-top:1px solid #dbe7f4;font-family:var(--sans);font-size:12.5px;line-height:1.45;color:#25364b;}.grammar-correction b{color:#0b2547;}
+.grammar-corrected-answer{white-space:pre-wrap;background:#fff;border:1px solid #dbe7f4;border-radius:9px;padding:12px;font-family:var(--sans);font-size:13px;line-height:1.6;color:#263647;}
+.labor-canonical{margin-top:20px;padding-top:18px;border-top:1px solid var(--border-soft);}
+.labor-canonical .legal-detail{margin-top:12px;border-left:3px solid var(--gold);padding:8px 0 8px 13px;font-family:var(--sans);font-size:13px;line-height:1.55;color:var(--charcoal);white-space:pre-wrap;}.labor-canonical .legal-detail b{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-soft);margin-bottom:4px;}
+@media (max-width:720px){.labor-concept-grid{grid-template-columns:1fr;}.labor-result-head{align-items:flex-start;}.labor-score-orb{width:84px;height:84px;}.labor-score-orb b{font-size:25px;}.labor-filter-field{flex:1;min-width:120px;}}

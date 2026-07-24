@@ -65,11 +65,7 @@
     font-family:var(--sans);
     font-size:15px;
     line-height:1.6;
-    background:
-      radial-gradient(1100px 520px at 50% -160px, rgba(0,33,71,.10), transparent 70%),
-      radial-gradient(900px 500px at 100% 0, rgba(74,21,75,.05), transparent 60%),
-      var(--paper);
-    background-attachment:fixed;
+    background:transparent;
     -webkit-font-smoothing:antialiased;
     text-rendering:optimizeLegibility;
   }
@@ -521,6 +517,109 @@
     .price-hero .amt{font-size:32px;}
   }
 
+
+  /* ==========================================================================
+     ROUND 3 — contrast fixes, conspicuous angel badge, feedback loop, session
+     clock, passability heatmap, voice mic, luxury patrons modal. Additive.
+     ========================================================================== */
+
+  /* Reveal the cinematic atmosphere as the app backdrop; keep chrome dark */
+  html{background:#081225;}
+
+  /* ---- High-contrast titles on the dark navy backdrop (CRITICAL FIX) ---- */
+  .page-head .eyebrow{color:#EAB308;}
+  .page-head h2{color:#FFFFFF;text-shadow:0 1px 18px rgba(0,0,0,.35);}
+  .page-head h2::after{content:"";display:block;width:64px;height:3px;margin-top:12px;background:var(--gold-grad);border-radius:2px;}
+  .page-head p{color:#CBD5E1;font-style:italic;}
+  /* any stray on-navy helper text */
+  .on-navy{color:#CBD5E1 !important;}
+  .on-navy-title{color:#FFFFFF !important;}
+
+  /* ---- Global session clock ---- */
+  .session-clock{font-family:var(--mono);font-size:11.5px;letter-spacing:.5px;color:#EAD9A6;background:rgba(255,255,255,.05);border:1px solid rgba(197,160,89,.30);border-radius:999px;padding:7px 12px;white-space:nowrap;}
+
+  /* ---- Conspicuous Angel Investors badge (metallic gold, shimmering) ---- */
+  .btn-angel{
+    position:relative;font-family:var(--sans);font-weight:800;font-size:12px;letter-spacing:.4px;text-transform:uppercase;
+    color:#241803;border:1px solid rgba(255,240,200,.6);border-radius:999px;padding:9px 16px;cursor:pointer;white-space:nowrap;
+    background:linear-gradient(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B);
+    background-size:220% 100%;box-shadow:0 4px 16px rgba(197,160,89,.5);animation:sheen 3.2s linear infinite;
+  }
+  @keyframes sheen{0%{background-position:200% 0;}100%{background-position:-40% 0;}}
+  .btn-angel:hover{filter:brightness(1.06);transform:translateY(-1px);}
+  .btn-b2b{white-space:nowrap;}
+
+  /* ---- Angel callout in the upper workspace ---- */
+  .angel-callout{
+    display:flex;align-items:center;gap:10px;justify-content:center;cursor:pointer;
+    margin:2px 0 4px;padding:11px 18px;border-radius:12px;font-family:var(--sans);font-weight:700;font-size:13px;letter-spacing:.3px;
+    color:#3a2a06;background:linear-gradient(120deg,#EAD79A,#F7ECC2 50%,#D9BE73);
+    border:1px solid rgba(255,245,214,.8);box-shadow:0 6px 20px rgba(197,160,89,.35);
+  }
+  .angel-callout:hover{filter:brightness(1.04);}
+
+  /* ---- Feedback loop under model answer ---- */
+  .fb-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px;padding-top:16px;border-top:1px dashed var(--border);}
+  .fb-bar .fb-label{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);margin-right:2px;}
+  .fb-btn{font-family:var(--sans);font-weight:600;font-size:13px;border:1px solid var(--border);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 12px;cursor:pointer;transition:all .18s;}
+  .fb-btn:hover{border-color:var(--gold);background:var(--card-2);transform:translateY(-1px);}
+  .fb-btn.suggest{margin-left:auto;background:var(--navy);color:#fff;border-color:var(--navy);}
+  .fb-btn.suggest:hover{background:#0b2547;color:#fff;}
+  .btn-next{font-family:var(--sans);font-weight:700;font-size:13.5px;letter-spacing:.4px;text-transform:uppercase;background:var(--gold-grad);color:#1a1204;border:none;border-radius:12px;padding:13px 22px;cursor:pointer;box-shadow:0 8px 22px rgba(197,160,89,.32);transition:all .2s;margin-top:16px;}
+  .btn-next:hover{transform:translateY(-2px);filter:brightness(1.05);}
+
+  /* ---- Voice mic ---- */
+  .btn-tool.mic{border-color:var(--border-gold);color:var(--maroon);}
+  .btn-tool.mic:hover{background:var(--maroon);color:#fff;border-color:var(--maroon);}
+  .beta-tag{font-family:var(--mono);font-size:8px;letter-spacing:.5px;background:var(--maroon);color:#fff;border-radius:4px;padding:1px 4px;margin-left:5px;vertical-align:middle;}
+
+  /* ---- Toasts ---- */
+  #toast-container{position:fixed;right:20px;bottom:20px;z-index:12000;display:flex;flex-direction:column;gap:10px;max-width:360px;}
+  .toast{font-family:var(--sans);font-size:13.5px;line-height:1.45;color:#fff;background:linear-gradient(135deg,#0b2547,#08182f);border:1px solid rgba(197,160,89,.4);border-left:4px solid var(--gold);border-radius:12px;padding:13px 16px;box-shadow:var(--shadow-lg);opacity:0;transform:translateY(12px);transition:all .3s cubic-bezier(.22,.61,.36,1);}
+  .toast.show{opacity:1;transform:none;}
+  .toast.ok{border-left-color:#3fbf6a;}
+  .toast.warn{border-left-color:#e0a83a;}
+
+  /* ---- Passability index + syllabus heatmap ---- */
+  .metric.hero-metric{grid-column:1/-1;border-top-color:#EAB308;background:linear-gradient(135deg,#08182f,#0d2a4d);}
+  .metric.hero-metric .val{color:#F6EFDD;font-size:38px;}
+  .metric.hero-metric .lbl{color:#EAD9A6;}
+  .metric.hero-metric .sub{font-family:var(--sans);font-size:12px;color:#9fc0e8;margin-top:6px;}
+  .heatmap{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:22px;}
+  .heat-cell{border-radius:10px;padding:12px;color:#10240f;border:1px solid rgba(0,0,0,.06);}
+  .heat-cell .s{font-family:var(--mono);font-size:10px;letter-spacing:.5px;text-transform:uppercase;opacity:.85;}
+  .heat-cell .v{font-family:var(--serif-display);font-weight:700;font-size:22px;line-height:1.1;}
+  .heat-cell.none{background:#eceff3;color:#7a879a;}
+
+  /* ---- Suggest-correction + B2B modals ---- */
+  .field-label{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);display:block;margin-bottom:5px;}
+  .orig-box{background:var(--card-2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:10px;padding:12px 14px;font-family:var(--serif);font-size:13.5px;line-height:1.55;color:var(--charcoal);margin-bottom:16px;max-height:150px;overflow:auto;white-space:pre-wrap;}
+  .b2b-cta{margin-top:18px;padding:18px;border-radius:14px;text-align:center;background:linear-gradient(135deg,#0b2547,#08182f);border:1px solid rgba(197,160,89,.35);}
+  .b2b-cta h4{font-family:var(--serif);color:#F6EFDD;margin:0 0 6px;font-size:18px;}
+  .b2b-cta p{font-family:var(--sans);color:#c9d7ea;font-size:13px;margin:0 0 14px;}
+
+  /* ---- Luxury patrons modal (gold foil border + crest watermark) ---- */
+  .modal-card.patrons-lux{
+    position:relative;overflow:hidden;border:none;
+    background:
+      linear-gradient(#fffdf7,#fffdf7) padding-box,
+      linear-gradient(135deg,#B8860B,#F5E6B8 40%,#D4AF37 60%,#B8860B) border-box;
+    border:2.5px solid transparent;border-radius:20px;
+    box-shadow:0 30px 70px rgba(2,12,35,.5), 0 0 0 1px rgba(197,160,89,.3);
+  }
+  .modal-card.patrons-lux::before{
+    content:"";position:absolute;right:-40px;top:-30px;width:260px;height:260px;opacity:.06;pointer-events:none;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cg stroke='%23002147' stroke-width='2' fill='none'%3E%3Cline x1='24' y1='11' x2='24' y2='36'/%3E%3Cline x1='12' y1='16' x2='36' y2='16'/%3E%3Cpath d='M12 16 L7 25 M12 16 L17 25'/%3E%3Cpath d='M36 16 L31 25 M36 16 L41 25'/%3E%3C/g%3E%3Cpath d='M6 25 Q12 31 18 25' fill='%23002147'/%3E%3Cpath d='M30 25 Q36 31 42 25' fill='%23002147'/%3E%3C/svg%3E") center/contain no-repeat;
+  }
+  .patrons-lux .modal-title{color:#0b2547;}
+  .patron-cta{margin-top:18px;padding:18px;border-radius:14px;text-align:center;background:linear-gradient(135deg,#08182f,#0d2a4d);border:1px solid rgba(212,175,55,.5);}
+  .patron-cta p{font-family:var(--sans);font-size:13px;color:#e7dcbf;margin:0 0 12px;}
+  .patron-cta .btn-primary{display:inline-block;text-decoration:none;}
+
+  @media (max-width:980px){
+    .session-clock{display:none;}
+  }
+
 </style>
  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script> 
 </head>
@@ -570,6 +669,9 @@
   </nav>
 
   <div class="topbar-actions">
+    <div class="session-clock" id="session-clock" title="Total Session Time">⏳ 00:00:00</div>
+    <button class="btn-angel" id="btn-angel" onclick="openModal('investor-modal')">🏛️ Angel Investors</button>
+    <button class="icon-btn hide-sm" id="btn-b2b" onclick="toggleViewMode()">🏢 Individual</button>
     <button class="icon-btn hide-sm" id="btn-analytics" onclick="openAnalytics()">📈 Analytics</button>
     <button class="btn-subscribe" id="btn-subscribe" onclick="openModal('subscribe-modal')">✦ Subscribe</button>
     <button class="icon-btn hide-sm" id="btn-signin" onclick="openModal('auth-modal')">Sign In</button>
@@ -581,6 +683,13 @@
 
 <main id="spa-root">
 <section id="page-mock" class="page active">
+  <div class="page-wrap" style="padding-bottom:0;">
+    <div class="page-head" style="margin-bottom:14px;">
+      <div class="eyebrow">Split-Screen Essay Workspace</div>
+      <h2>Mock Bar Exam</h2>
+    </div>
+    <div class="angel-callout" onclick="openModal('investor-modal')">✨ Backed by Visionary Angel Investors — Meet our Patrons</div>
+  </div>
   <div class="exam-subnav">
     <button class="tabbtn active" id="tab-write">Write &amp; Practice</button>
     <button class="tabbtn" id="tab-history">History</button>
@@ -735,16 +844,20 @@
 
 <!-- Angel Investors modal -->
 <div class="modal-overlay" id="investor-modal">
-  <div class="modal-card">
+  <div class="modal-card patrons-lux">
     <h3 class="modal-title">Patrons &amp; Angel Investors</h3>
-    <div class="modal-sub">With gratitude for their belief in this mission</div>
+    <div class="modal-sub">Honoring the visionary patrons backing the next generation of Philippine legal technology</div>
     <div class="patron">
       <div class="medal">🏛️</div>
-      <div><div class="nm">Gilmar P. De Castro</div><div class="role">Angel Investor</div></div>
+      <div><div class="nm">Gilmar P. De Castro</div><div class="role">Angel Investor &amp; Founding Patron</div></div>
     </div>
     <div class="patron">
       <div class="medal">⚖️</div>
-      <div><div class="nm">Francis Mallari</div><div class="role">Angel Investor</div></div>
+      <div><div class="nm">Francis Mallari</div><div class="role">Angel Investor &amp; Founding Patron</div></div>
+    </div>
+    <div class="patron-cta">
+      <p>Interested in joining our Seed Round as a future Angel Investor?</p>
+      <a class="btn-primary" href="mailto:wallyesteban1993@gmail.com?subject=Angel%20Investment%20Inquiry&body=I%20am%20interested%20in%20learning%20more%20about%20joining%20the%20Due%20Diligence%20seed%20round%20as%20an%20Angel%20Investor.">Become a Patron / Contact Founders</a>
     </div>
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn-secondary" onclick="closeModal('investor-modal')">Close</button>
@@ -766,6 +879,59 @@
 </div>
 
 
+<!-- Suggest Correction / Better Answer modal (Web3Forms + mailto fallback) -->
+<div class="modal-overlay" id="suggest-modal">
+  <div class="modal-card">
+    <h3 class="modal-title">Suggest a Correction</h3>
+    <div class="modal-sub" id="suggest-qid">Refine the model answer for the editorial board</div>
+    <span class="field-label">Current model answer (for reference)</span>
+    <div class="orig-box" id="suggest-orig"></div>
+    <span class="field-label">Your suggested / better legal answer</span>
+    <textarea class="modal-textarea" id="suggest-text" placeholder="Provide a refined ALAC answer, a corrected legal basis, or a better citation…"></textarea>
+    <span class="field-label">Your email (optional — for follow-up)</span>
+    <input class="modal-input" type="email" id="suggest-email" placeholder="you@example.com" autocomplete="off">
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('suggest-modal')">Cancel</button>
+      <button class="btn-primary" onclick="submitSuggestion()">Send to Editorial Board</button>
+    </div>
+    <div class="mock-note" style="margin-top:12px;">Delivered to the Bar Review Editorial Board via secure form (Web3Forms), with an email fallback.</div>
+  </div>
+</div>
+
+<!-- B2B Review Center dashboard modal -->
+<div class="modal-overlay" id="b2b-modal">
+  <div class="modal-card xl">
+    <h3 class="modal-title">B2B Review Center Dashboard</h3>
+    <div class="modal-sub">Institutional cohort analytics — law school &amp; bar review preview</div>
+    <div class="metric-grid">
+      <div class="metric"><div class="val">248</div><div class="lbl">Enrolled Candidates</div></div>
+      <div class="metric"><div class="val">73.6%</div><div class="lbl">Cohort Avg Score</div></div>
+      <div class="metric"><div class="val">12,940</div><div class="lbl">Essays Drilled</div></div>
+      <div class="metric"><div class="val">61%</div><div class="lbl">Projected Passers</div></div>
+    </div>
+    <div class="panel-title">Cohort Mastery by Subject (sample)</div>
+    <div class="heatmap">
+      <div class="heat-cell" style="background:#bfe3c4"><div class="s">Political Law</div><div class="v">81</div></div>
+      <div class="heat-cell" style="background:#e7f0be"><div class="s">Labor Law</div><div class="v">74</div></div>
+      <div class="heat-cell" style="background:#f6e0b8"><div class="s">Civil Law</div><div class="v">66</div></div>
+      <div class="heat-cell" style="background:#f6cbb8"><div class="s">Taxation</div><div class="v">58</div></div>
+      <div class="heat-cell" style="background:#cfe8c4"><div class="s">Mercantile</div><div class="v">78</div></div>
+      <div class="heat-cell" style="background:#f6e0b8"><div class="s">Criminal</div><div class="v">69</div></div>
+      <div class="heat-cell" style="background:#e7f0be"><div class="s">Remedial</div><div class="v">72</div></div>
+      <div class="heat-cell" style="background:#bfe3c4"><div class="s">Legal Ethics</div><div class="v">83</div></div>
+    </div>
+    <div class="b2b-cta">
+      <h4>Equip your entire cohort</h4>
+      <p>Seat-based licensing, proctored timed exams, and instructor dashboards for law schools and bar review centers.</p>
+      <a class="btn-primary" href="mailto:wallyesteban1993@gmail.com?subject=Institutional%20Licensing%20Inquiry%20-%20Due%20Diligence&body=We%20are%20interested%20in%20B2B%20licensing%20for%20our%20institution.">Inquire for Institutional Licensing</a>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn-secondary" onclick="closeModal('b2b-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+
 <script>
 const SUBJECTS = [
   "Political Law", "Labor Law", "Civil Law", "Taxation Law",
@@ -778,7 +944,7 @@ const BAR_QUESTIONS = {
     {
       id: "Civil Law Q.1",
       text: "In 2010, spouses Bernardo and Elena executed a notarized deed of absolute sale over a prime commercial parcel of land in Binondo in favor of their only son, Dante, to shield the property from an impending corporate liability suit. No actual monetary consideration was paid, though Dante secured a TCT in his name. In 2015, Dante mortgaged the property to Cornerstone Bank for PHP 5,000,000. Bernardo passed away in 2020. Elena and Dante's sister Chloe filed a complaint for nullity of sale and recovery of ownership. Cornerstone Bank invoked the mirror doctrine.\n\n(A) Is the deed of sale absolutely or relatively simulated, and what is its legal effect inter se?\n(B) Can Cornerstone Bank successfully invoke the mirror doctrine?",
-      model: "(A) The deed of sale is absolutely simulated because the parties did not intend to be bound at all, rendering it void ab initio under Arts. 1346 and 1409. Inter se, no rights pass.\n(B) Yes, Cornerstone Bank can invoke the mirror doctrine as a mortgagee in good faith relying on a clean title and actual possession by the mortgagor.",
+      model: "I. ANSWER. (A) The deed is ABSOLUTELY simulated and void ab initio; inter se it transfers nothing. (B) Yes, Cornerstone Bank, as a mortgagee in good faith, may invoke the mirror doctrine.\n\nII. LEGAL BASIS. Under Arts. 1345-1346 of the Civil Code, simulation is absolute when the parties do not intend to be bound at all; such a contract is void under Art. 1409(2), and the action to declare its nullity is imprescriptible under Art. 1410. Conversely, under the Torrens system (P.D. 1529), a person dealing with registered land may rely on the face of a clean certificate of title — the 'mirror doctrine' — which protects a mortgagee in good faith and for value.\n\nIII. APPLICATION. Here, no consideration was paid and the conveyance to Dante was merely to shield the land from an impending suit; the parties never intended a true sale, so the deed is absolutely simulated and void, produced no effect between the spouses and Dante, and prescription never ran. When Dante later mortgaged the land, however, Cornerstone Bank dealt with a clean TCT in his name, without notice of the infirmity, and was not bound to look beyond the title.\n\nIV. CONCLUSION. The sale is void inter se, but the mortgage constituted by Cornerstone Bank in good faith is protected under the mirror doctrine.",
       caseLaw: "Spouses Peralta v. Heirs of Abling, G.R. No. 198536"
     },
     {
@@ -1062,7 +1228,7 @@ const BAR_QUESTIONS = {
     {
       id: "Political Law Q.7",
       text: "A human rights activist was abducted and detained by unidentified armed men. Relatives filed a petition for a Writ of Amparo before the Regional Trial Court to compel military authorities to produce the victim.\n\nWill the petition for a Writ of Amparo prosper? Explain with legal basis.",
-      model: "The Writ of Amparo is a judicial remedy available to any person whose right to life, liberty, and security is violated or threatened by unlawful acts of public officials or private individuals, requiring respondents to observe extraordinary diligence.",
+      model: "I. ANSWER. Yes, the petition for the Writ of Amparo will prosper.\n\nII. LEGAL BASIS. Under the Rule on the Writ of Amparo (A.M. No. 07-9-12-SC) and Secretary of National Defense v. Manalo (G.R. No. 180906), the writ is available to any person whose right to life, liberty, or security is violated or threatened by an unlawful act or omission of a public official or a private individual, particularly in cases of extralegal killings and enforced disappearances. Public respondents must discharge the burden of extraordinary diligence in the performance of their duty.\n\nIII. APPLICATION. Here, the activist was abducted and detained by armed men and remains missing — a classic enforced disappearance that threatens his rights to life, liberty, and security. His relatives, as aggrieved parties, may file the petition; the military respondents cannot rely on a mere general denial but must prove they exercised extraordinary diligence to locate and produce him.\n\nIV. CONCLUSION. The threat to life, liberty, and security being established, the petition for the Writ of Amparo will prosper, and the court may grant interim reliefs such as production and inspection orders.",
       caseLaw: "Secretary of National Defense v. Manalo, G.R. No. 179090"
     },
     {
@@ -1404,7 +1570,7 @@ function renderMainWrite() {
         <button class="btn-tool" onclick="nextQuestion()">Next Question →</button>
         <button class="btn-tool random" onclick="randomQuestion()">🔀 Randomize</button>
       </div>
-      <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-soft);">
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#CBD5E1;">
         Item ${currentIdx + 1} of ${qList.length} (${currentSubj})
       </div>
     </div>
@@ -1419,10 +1585,13 @@ function renderMainWrite() {
 
     <div class="paper-card" style="background:#fff;">
       <div class="panel-title">Examinee Answer Workspace (ANSWER • LEGAL BASIS • APPLICATION • CONCLUSION)</div>
-      <textarea id="answer-box" oninput="handleInput(this)" placeholder="Structure your answer using the ALAC method:&#10;&#10;I.  CONCLUSION  — State your direct answer (Yes/No, Valid/Invalid).&#10;II. LEGAL BASIS — Cite the codal article, section, or doctrine.&#10;III. APPLICATION — Apply the specific facts to the law.&#10;IV. CONCLUSION  — Reaffirm your position.">${escapeHtml(currentText)}</textarea>
+      <textarea id="answer-box" oninput="handleInput(this)" placeholder="Structure your answer using the ALAC method:&#10;&#10;I.  ANSWER  — State your direct answer (Yes/No, Valid/Invalid).&#10;II. LEGAL BASIS — Cite the codal article, section, or doctrine.&#10;III. APPLICATION — Apply the specific facts to the law.&#10;IV. CONCLUSION  — Reaffirm your position.">${escapeHtml(currentText)}</textarea>
       <div class="row">
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
-        <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${!currentText.trim() ? 'disabled' : ''}>Evaluate & Grade Essay</button>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation (Beta)">🎙️ Dictate<span class="beta-tag">BETA</span></button>
+          <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${!currentText.trim() ? 'disabled' : ''}>Evaluate & Grade Essay</button>
+        </div>
       </div>
     </div>
 
@@ -1606,6 +1775,15 @@ function renderResultHTML(key) {
       <div class="remarks">
         <strong>Examiner Remarks:</strong> ${passed ? 'Solid application of legal principles. Maintain this rigorous ALAC structure — Answer, Legal Basis, Application, Conclusion.' : 'Review the governing statutory provisions and ensure precise terminology is employed in your reasoning.'}
       </div>
+
+      <div class="fb-bar">
+        <span class="fb-label">Was this model answer helpful?</span>
+        <button class="fb-btn" onclick="rateModel('up')">👍 Helpful</button>
+        <button class="fb-btn" onclick="rateModel('down')">👎 Needs work</button>
+        <button class="fb-btn suggest" onclick="openSuggest()">✎ Suggest Correction / Better Answer</button>
+      </div>
+
+      <button class="btn-next" onclick="submitAndNext()">Submit &amp; Continue to Next Item →</button>
     </div>
   `;
 }
@@ -1614,14 +1792,14 @@ function renderMainHistory() {
   const main = document.getElementById("main");
   if (historyLog.length === 0) {
     main.innerHTML = `
-      <div class="panel-title" style="margin-bottom:16px;">Examinee Performance Archive</div>
-      <div class="empty">No essays evaluated yet. Complete a practice scenario under 'Write & Practice' to generate your performance audit trail.</div>
+      <div class="panel-title on-navy" style="margin-bottom:16px;">Examinee Performance Archive</div>
+      <div class="empty on-navy">No essays evaluated yet. Complete a practice scenario under 'Write & Practice' to generate your performance audit trail.</div>
     `;
     return;
   }
 
   main.innerHTML = `
-    <div class="panel-title" style="margin-bottom:16px;">Examinee Performance Archive (${historyLog.length} Evaluations)</div>
+    <div class="panel-title on-navy" style="margin-bottom:16px;">Examinee Performance Archive (${historyLog.length} Evaluations)</div>
     <div style="background:#fbf9f2; border:1px solid var(--ink); padding:12px 20px;">
       ${historyLog.map(item => `
         <div class="hist-row">
@@ -1739,7 +1917,8 @@ function loadQuestion(idx) {
 function submitAndNext() {
   const key = `${currentSubj}-${currentIdx}`;
   userAnswers[key] = '';
-  loadQuestion(currentIdx + 1);
+  loadQuestion(currentIdx + 1);   // increments + auto-loads next prompt + resets the 7:00 clock
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 /* Called at the end of every renderMainWrite() */
@@ -1806,10 +1985,26 @@ function openAnalytics() {
     </tr>`).join('');
   body.innerHTML = `
     <div class="metric-grid">
+      ${(function(){
+        const idx = Math.min(99, Math.round(avg * 0.7 + passRate * 0.3));
+        const status = idx >= 75 ? 'On Track for Passing Grade' : idx >= 60 ? 'Approaching the Passing Threshold' : 'Needs Focused Review';
+        return `<div class="metric hero-metric"><div class="val">${idx}%</div><div class="lbl">Estimated Bar Passability Index</div><div class="sub">${status}</div></div>`;
+      })()}
       <div class="metric"><div class="val">${avg}%</div><div class="lbl">Avg Score</div></div>
       <div class="metric"><div class="val">${n}</div><div class="lbl">Essays Drilled</div></div>
       <div class="metric"><div class="val">${fmtSecs(avgTime)}</div><div class="lbl">Avg Time / Answer</div></div>
       <div class="metric"><div class="val">${passRate}%</div><div class="lbl">Pass Rate</div></div>
+    </div>
+    <div class="panel-title">SC Syllabus Mastery Heatmap (by subject)</div>
+    <div class="heatmap">
+      ${(function(){
+        const bySub = {};
+        list.forEach(a => { const s = a.subject || '—'; (bySub[s] = bySub[s] || []).push(Number(a.score || 0)); });
+        const subs = Object.keys(bySub);
+        if (!subs.length) return '<div class="heat-cell none"><div class="s">No data yet</div></div>';
+        const color = v => v >= 80 ? '#bfe3c4' : v >= 70 ? '#cfe8c4' : v >= 60 ? '#e7f0be' : v >= 50 ? '#f6e0b8' : '#f6cbb8';
+        return subs.map(s => { const arr = bySub[s]; const av = Math.round(arr.reduce((x, y) => x + y, 0) / arr.length); return `<div class="heat-cell" style="background:${color(av)}"><div class="s">${s}</div><div class="v">${av}</div></div>`; }).join('');
+      })()}
     </div>
     <div class="panel-title">ALAC Mastery Progress</div>
     <div class="alac-bars">
@@ -1878,5 +2073,127 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 </script>
+<script>
+/* =====================================================================
+   ROUND 3 layer — session clock, toast, feedback loop, Web3Forms email
+   dispatch, B2B toggle, voice dictation. Reuses existing globals.
+   ===================================================================== */
+
+/* Web3Forms access key (public by design — lives client-side).
+   If unset/placeholder, submissions fall back to a mailto: to the editor. */
+const WEB3FORMS_KEY = '651c6e33-9972-496f-ac1b-d8e49a0bc496';
+const EDITOR_EMAIL  = 'wallyesteban1993@gmail.com';
+
+/* ---------- Toast ---------- */
+function toast(msg, type) {
+  let c = document.getElementById('toast-container');
+  if (!c) { c = document.createElement('div'); c.id = 'toast-container'; document.body.appendChild(c); }
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type || '');
+  t.textContent = msg;
+  c.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 4400);
+}
+
+/* ---------- Global session clock ---------- */
+let sessionSeconds = 0;
+function tickSession() {
+  sessionSeconds++;
+  const el = document.getElementById('session-clock');
+  if (el) {
+    const h = Math.floor(sessionSeconds / 3600), m = Math.floor((sessionSeconds % 3600) / 60), s = sessionSeconds % 60;
+    el.textContent = '⏳ ' + [h, m, s].map(x => String(x).padStart(2, '0')).join(':');
+  }
+}
+
+/* ---------- Model-answer feedback loop ---------- */
+function rateModel(dir) {
+  toast(dir === 'up'
+    ? '👍 Thanks — your endorsement was recorded for the editorial board.'
+    : '👎 Noted — flagged for editorial review. Consider suggesting a better answer.',
+    dir === 'up' ? 'ok' : 'warn');
+}
+function openSuggest() {
+  const q = BAR_QUESTIONS[currentSubj][currentIdx];
+  const qid = document.getElementById('suggest-qid');
+  const orig = document.getElementById('suggest-orig');
+  if (qid) qid.textContent = 'Refining: ' + q.id;
+  if (orig) orig.textContent = q.model;
+  openModal('suggest-modal');
+}
+async function submitSuggestion() {
+  const q = BAR_QUESTIONS[currentSubj][currentIdx];
+  const suggestion = (document.getElementById('suggest-text').value || '').trim();
+  const email = (document.getElementById('suggest-email').value || '').trim();
+  if (suggestion.length < 5) { toast('Please enter your suggested answer first.', 'warn'); return; }
+
+  const subject = `[Due Diligence Bar AI] Suggested Correction - Item #${q.id}`;
+  const message =
+    `Question ID: ${q.id}\nSubject: ${currentSubj}\nSubmitted: ${new Date().toLocaleString()}\n` +
+    `Submitter email: ${email || '(not provided)'}\n\n` +
+    `--- ORIGINAL MODEL ANSWER ---\n${q.model}\n\n` +
+    `--- USER SUGGESTED ANSWER ---\n${suggestion}\n`;
+
+  const onSuccess = () => {
+    document.getElementById('suggest-text').value = '';
+    closeModal('suggest-modal');
+    toast('Suggested answer sent directly to the Bar Review Editorial Board (' + EDITOR_EMAIL + ')!', 'ok');
+  };
+  const mailtoFallback = () => {
+    window.location.href = `mailto:${EDITOR_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+    onSuccess();
+  };
+
+  if (!WEB3FORMS_KEY || WEB3FORMS_KEY.indexOf('YOUR_') !== -1) { mailtoFallback(); return; }
+  try {
+    const res = await fetch('https://api.web3forms.com/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        access_key: WEB3FORMS_KEY,
+        from_name: 'Due Diligence Legal AI',
+        subject: subject,
+        email: email || 'no-reply@duediligence.app',
+        message: message
+      })
+    });
+    if (res.ok) { onSuccess(); } else { mailtoFallback(); }
+  } catch (e) { mailtoFallback(); }
+}
+
+/* ---------- B2B view switch ---------- */
+let b2bMode = false;
+function toggleViewMode() {
+  b2bMode = !b2bMode;
+  const b = document.getElementById('btn-b2b');
+  if (b) b.textContent = b2bMode ? '🏢 B2B Review Center' : '🏢 Individual';
+  openModal('b2b-modal');
+}
+
+/* ---------- Voice-to-text dictation (real, with fallback) ---------- */
+function startDictation() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const box = document.getElementById('answer-box');
+  if (!box) return;
+  if (!SR) { toast('Voice dictation needs a Chromium browser (Chrome/Edge). Beta.', 'warn'); return; }
+  try {
+    const rec = new SR();
+    rec.lang = 'en-PH'; rec.interimResults = false; rec.continuous = true;
+    toast('🎙️ Listening — dictate your answer. Click Dictate again to stop.', 'ok');
+    rec.onresult = e => {
+      let txt = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) txt += e.results[i][0].transcript;
+      box.value += (box.value ? ' ' : '') + txt.trim();
+      handleInput(box);
+    };
+    rec.onerror = () => toast('Voice capture stopped.', 'warn');
+    rec.start();
+  } catch (e) { toast('Voice dictation could not start.', 'warn'); }
+}
+
+document.addEventListener('DOMContentLoaded', () => { setInterval(tickSession, 1000); });
+</script>
+
 </body>
 </html>

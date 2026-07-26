@@ -30,7 +30,12 @@
       legalBasis: text(record['Legal Basis / Provision']),
       controllingDoctrine: text(record['Controlling Doctrine']),
       caseLaw: [jurisprudence, citation].filter(Boolean).join(', '),
+      caseName: jurisprudence,
+      caseCitation: citation,
+      sourceTitle: text(record['Source Title']) || [jurisprudence, citation].filter(Boolean).join(', '),
       sourceUrl: text(record['Source URL']),
+      verified: /^(true|yes|verified|1)$/i.test(text(record.Verified)),
+      lawCutoffDate: text(record['Law Cutoff Date']),
       difficulty: text(record.Difficulty),
       version: text(record.Version),
       lastReviewed: text(record['Last Reviewed']),
@@ -50,6 +55,12 @@
     rows.slice(headerIndex + 1).forEach((cells, offset) => {
       if (!Array.isArray(cells) || cells.every((cell) => !text(cell))) return;
       const record = Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? '']));
+      // Published Sheets can contain formula-only helper rows below the content
+      // table. Ignore them unless a content author started entering a question.
+      if (![record['Question ID'], record['Essay Question'], record['Suggested Answer']].some((value) => text(value))) return;
+      // The shared publication sheet may also contain approved records for
+      // other subjects; this loader owns Labor Law rows only.
+      if (text(record.Subject) && text(record.Subject) !== 'Labor Law') return;
       const question = toQuestion(record);
       if (!question) {
         invalidRows.push({ row: headerIndex + offset + 2, reason: 'Missing required Labor Law fields.' });

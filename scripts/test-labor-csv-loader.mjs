@@ -50,7 +50,8 @@ assert.doesNotMatch(pageSource, /Labor Law Q\.10/, 'No hard-coded ten-item Labor
 assert.match(pageSource, /function prevQuestion\(/, 'Existing previous-question navigation must remain.');
 assert.match(pageSource, /function nextQuestion\(/, 'Existing next-question navigation must remain.');
 assert.match(pageSource, /function randomQuestion\(/, 'Existing random-question behavior must remain.');
-assert.match(pageSource, /function evaluateAnswer\(/, 'Existing scoring behavior must remain.');
-assert.match(pageSource, /Number\(answerScore\) \+ Number\(legalScore\) \+ Number\(appScore\) \+ Number\(conclusionScore\)/, 'The existing numeric ALAC score calculation must remain.');
+assert.match(pageSource, /async function evaluateAnswer\(/, 'The Worker-backed examiner submission behavior must remain.');
+assert.match(pageSource, /EXAMINER_WORKER_URL/, 'Essay grading must use the Cloudflare Worker.');
+assert.doesNotMatch(pageSource, /Number\(answerScore\) \+ Number\(legalScore\)/, 'The retired heuristic 100-point calculation must not return.');
 
 console.log('Labor Law CSV loader tests passed.');

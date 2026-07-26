@@ -580,7 +580,7 @@
   .toast.ok{border-left-color:#3fbf6a;}
   .toast.warn{border-left-color:#e0a83a;}
 
-  /* ---- Passability index + syllabus heatmap ---- */
+  /* ---- Historical attempt dashboard ---- */
   .metric.hero-metric{grid-column:1/-1;border-top-color:#EAB308;background:linear-gradient(135deg,#08182f,#0d2a4d);}
   .metric.hero-metric .val{color:#F6EFDD;font-size:38px;}
   .metric.hero-metric .lbl{color:#EAD9A6;}
@@ -618,6 +618,59 @@
 
   @media (max-width:980px){
     .session-clock{display:none;}
+  }
+
+  /* ---- Per-question Supreme Court five-point assessment ---- */
+  .checking-card{max-width:560px;text-align:center;border-top:4px solid var(--gold);}
+  .checking-orbit{width:54px;height:54px;margin:2px auto 18px;border:3px solid rgba(197,160,89,.24);border-top-color:var(--gold);border-radius:50%;animation:checking-spin .9s linear infinite;}
+  @keyframes checking-spin{to{transform:rotate(360deg)}}
+  .checking-copy{font-family:var(--sans);color:#334155;line-height:1.65;margin:12px 0 0;}
+  .checking-list{display:inline-block;text-align:left;margin:15px auto 0;padding-left:22px;color:#475569;font-family:var(--sans);font-size:13px;line-height:1.7;}
+  .checking-error{display:none;margin-top:16px;padding:12px 14px;border-radius:10px;background:#fff1f2;border:1px solid #fecdd3;color:#9f1239;font-family:var(--sans);font-size:13px;line-height:1.5;}
+  .checking-card.has-error .checking-orbit,.checking-card.has-error .checking-list{display:none;}
+  .checking-card.has-error .checking-error{display:block;}
+  .checking-card.has-error #checking-title{color:#9f1239;}
+
+  .assessment-card{overflow:hidden;padding:0;background:#fffdf9;border:1px solid rgba(15,23,42,.16);border-top:4px solid var(--gold);border-radius:18px;box-shadow:0 22px 50px rgba(2,12,35,.18);}
+  .assessment-hero{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:center;padding:25px 28px;background:linear-gradient(135deg,#07172d,#0d2d52);color:#fff;}
+  .score-medallion{width:116px;height:116px;border-radius:50%;display:grid;place-items:center;text-align:center;border:2px solid #e2c36c;box-shadow:inset 0 0 0 6px rgba(197,160,89,.12),0 10px 30px rgba(0,0,0,.2);background:radial-gradient(circle at 35% 30%,#173f69,#07182d 72%);}
+  .score-medallion strong{display:block;font-family:var(--serif);font-size:34px;line-height:1;color:#fff;}
+  .score-medallion span{display:block;margin-top:6px;font-family:var(--mono);font-size:10px;letter-spacing:1.1px;color:#e7d6a5;text-transform:uppercase;}
+  .assessment-kicker{font-family:var(--mono);font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:#e8c96f;margin-bottom:7px;}
+  .assessment-title{font-family:var(--serif);font-size:25px;line-height:1.2;margin:0;color:#fff;}
+  .assessment-equivalent{font-family:var(--sans);font-size:13px;color:#dbe5f0;margin-top:8px;}
+  .assessment-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px;}
+  .assessment-badge{display:inline-flex;align-items:center;padding:6px 9px;border:1px solid rgba(232,201,111,.45);border-radius:999px;background:rgba(255,255,255,.07);font-family:var(--mono);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:#f8e9bd;}
+  .assessment-body{padding:26px 28px;}
+  .assessment-rationale{font-family:var(--sans);font-size:15px;line-height:1.72;color:#24364d;margin:0;}
+  .assessment-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:22px;}
+  .assessment-panel{padding:16px;border-radius:12px;border:1px solid #dfe5ec;background:#fff;}
+  .assessment-panel.strengths{border-top:3px solid #2f6b3f;}
+  .assessment-panel.errors{border-top:3px solid #a63d40;}
+  .assessment-panel.coaching{border-top:3px solid var(--gold);}
+  .assessment-panel h4,.assessment-section h4{font-family:var(--mono);font-size:10px;letter-spacing:1.1px;text-transform:uppercase;color:#4b5d73;margin:0 0 10px;}
+  .assessment-panel ul{margin:0;padding-left:18px;font-family:var(--sans);font-size:13px;line-height:1.55;color:#334155;}
+  .assessment-panel li+li{margin-top:6px;}
+  .assessment-section{margin-top:22px;padding-top:20px;border-top:1px solid #e2e8f0;}
+  .legal-explanation{font-family:var(--sans);font-size:14px;line-height:1.7;color:#334155;}
+  .alac-model{display:grid;gap:12px;}
+  .alac-part{padding:15px 16px;border-left:3px solid var(--gold);background:#faf8f1;border-radius:0 10px 10px 0;}
+  .alac-part b{display:block;font-family:var(--mono);font-size:10px;letter-spacing:1.2px;color:#7c5e16;margin-bottom:6px;}
+  .alac-part p{margin:0;font-family:var(--sans);font-size:14px;line-height:1.7;color:#24364d;white-space:pre-wrap;}
+  .source-list{display:grid;gap:8px;}
+  .source-link{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #dbe3ec;border-radius:9px;color:#0b4a78;text-decoration:none;font-family:var(--sans);font-size:13px;background:#fff;}
+  .source-link:hover{border-color:var(--gold);background:#fffdf5;}
+  .source-link small{color:#64748b;}
+  .assessment-warning{margin-top:18px;padding:13px 15px;border:1px solid #f3c65d;border-left:4px solid #d59613;border-radius:9px;background:#fff8e7;color:#704b05;font-family:var(--sans);font-size:13px;line-height:1.55;}
+  .assessment-meta{margin-top:20px;padding:14px 16px;border-radius:10px;background:#f1f5f9;color:#53657a;font-family:var(--sans);font-size:11.5px;line-height:1.6;}
+  .assessment-meta a{color:#0b4a78;}
+  .history-saved{display:inline-flex;gap:7px;align-items:center;margin-top:14px;color:#2f6b3f;font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.6px;}
+  @media(max-width:760px){
+    .assessment-hero{grid-template-columns:1fr;text-align:center;}
+    .score-medallion{margin:auto;}
+    .assessment-badges{justify-content:center;}
+    .assessment-grid{grid-template-columns:1fr;}
+    .assessment-body{padding:22px 18px;}
   }
 
 </style>
@@ -906,9 +959,9 @@
     <div class="modal-sub">Institutional cohort analytics — law school &amp; bar review preview</div>
     <div class="metric-grid">
       <div class="metric"><div class="val">248</div><div class="lbl">Enrolled Candidates</div></div>
-      <div class="metric"><div class="val">73.6%</div><div class="lbl">Cohort Avg Score</div></div>
+      <div class="metric"><div class="val">8</div><div class="lbl">Active Subject Modules</div></div>
       <div class="metric"><div class="val">12,940</div><div class="lbl">Essays Drilled</div></div>
-      <div class="metric"><div class="val">61%</div><div class="lbl">Projected Passers</div></div>
+      <div class="metric"><div class="val">24</div><div class="lbl">Faculty Review Seats</div></div>
     </div>
     <div class="panel-title">Cohort Mastery by Subject (sample)</div>
     <div class="heatmap">
@@ -932,6 +985,24 @@
   </div>
 </div>
 
+
+<!-- Gemini examiner progress / controlled error modal -->
+<div class="modal-overlay" id="checking-modal" role="dialog" aria-modal="true" aria-labelledby="checking-title">
+  <div class="modal-card checking-card" id="checking-card">
+    <div class="checking-orbit" aria-hidden="true"></div>
+    <h3 class="modal-title" id="checking-title">Checking your answer...</h3>
+    <p class="checking-copy" id="checking-copy">We are comparing your answer with the question bank and available Philippine legal authorities.</p>
+    <ul class="checking-list">
+      <li>The stored suggested answer and legal basis</li>
+      <li>Verified jurisprudence and legal resources</li>
+      <li>The Supreme Court five-point qualitative standard</li>
+    </ul>
+    <div class="checking-error" id="checking-error" role="alert"></div>
+    <div class="modal-actions" id="checking-actions" style="display:none;margin-top:18px;">
+      <button type="button" class="btn-secondary" onclick="closeCheckingModal()">Close</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const SUBJECTS = [
@@ -1386,8 +1457,14 @@ let historyLog = [];
 let timerInterval = null;
 let timeLeft = 10800;
 let laborQuestionBankStatus = "loading";
+let gradingInProgress = false;
+const EXAMINER_WORKER_URL = 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev';
+const SC_RUBRIC_VERSION = 'SC-2025-BB4-PER-QUESTION-v1';
+const SC_2025_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/08/2025-Bar-Bar-Bulletin-No.-4-August-8-2025-Approved.pdf';
+const SC_2026_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/10/2026-BAR-Bar-Bulletin-No.-1-October-16-2025.pdf';
 
 function init() {
+  historyLog = loadAttempts();
   renderSubjectTabs();
   renderMainWrite();
   startTimer();
@@ -1478,6 +1555,7 @@ function renderSubjectTabs() {
 }
 
 function switchSubject(subj) {
+  if (gradingInProgress) return;
   currentSubj = subj;
   currentIdx = 0;
   renderSubjectTabs();
@@ -1577,173 +1655,241 @@ function handleInput(el) {
 }
 
 function prevQuestion() {
+  if (gradingInProgress) return;
   const qList = BAR_QUESTIONS[currentSubj];
   currentIdx = (currentIdx - 1 + qList.length) % qList.length;
   renderMainWrite();
 }
 
 function nextQuestion() {
+  if (gradingInProgress) return;
   const qList = BAR_QUESTIONS[currentSubj];
   currentIdx = (currentIdx + 1) % qList.length;
   renderMainWrite();
 }
 
 function randomQuestion() {
+  if (gradingInProgress) return;
   const qList = BAR_QUESTIONS[currentSubj];
   currentIdx = Math.floor(Math.random() * qList.length);
   renderMainWrite();
 }
 
-function evaluateAnswer() {
-  const key = `${currentSubj}-${currentIdx}`;
-  const text = userAnswers[key] || "";
-  const trimmed = text.trim();
+function questionContextForExaminer(q) {
+  return {
+    subject: currentSubj,
+    question: q.text || '',
+    suggestedAnswer: q.model || '',
+    legalBasis: q.legalBasis || q.controllingDoctrine || '',
+    caseName: q.caseName || q.caseLaw || '',
+    caseCitation: q.caseCitation || '',
+    sourceTitle: q.sourceTitle || q.caseLaw || '',
+    sourceUrl: q.sourceUrl || '',
+    verified: q.verified === true,
+    lawCutoffDate: q.lawCutoffDate || '',
+  };
+}
 
-  // Anti-gibberish pre-filter
-  const repeatedCharRegex = /(.)\1{4,}/;
-  const spaceCount = (trimmed.match(/ /g) || []).length;
-  const isGibberish = (trimmed.length < 15 || repeatedCharRegex.test(trimmed) || spaceCount < 2);
+function showCheckingModal() {
+  const card = document.getElementById('checking-card');
+  card.classList.remove('has-error');
+  document.getElementById('checking-title').textContent = 'Checking your answer...';
+  document.getElementById('checking-copy').textContent = 'We are comparing your answer with the question bank and available Philippine legal authorities. Please wait. Do not refresh or resubmit.';
+  document.getElementById('checking-error').textContent = '';
+  document.getElementById('checking-actions').style.display = 'none';
+  openModal('checking-modal');
+}
 
-  // --- AIRTIGHT ALAC sub-scores: each wrapped in Number(); total is an explicit sum ---
-  let answerScore = 0, legalScore = 0, appScore = 0, conclusionScore = 0;
+function showCheckingError(message) {
+  const card = document.getElementById('checking-card');
+  card.classList.add('has-error');
+  document.getElementById('checking-title').textContent = 'Assessment unavailable';
+  document.getElementById('checking-copy').textContent = 'Your answer was not graded or saved.';
+  document.getElementById('checking-error').textContent = message;
+  document.getElementById('checking-actions').style.display = 'flex';
+}
 
-  if (!isGibberish) {
-    const lower = text.toLowerCase();
-    const words = countWords(text);
-    const head = lower.slice(0, 160);
+function closeCheckingModal() {
+  closeModal('checking-modal');
+}
 
-    // A — Answer: a direct position, ideally front-loaded
-    const positionRe = /\b(yes|no|valid|invalid|void|liable|not liable|meritorious|will prosper|will not prosper|guilty|acquitted|dismissed|granted|denied)\b/;
-    if (positionRe.test(head)) answerScore = 20;
-    else if (positionRe.test(lower)) answerScore = 12;
-    else answerScore = 6;
-
-    // L — Legal Basis: codal / jurisprudential anchors
-    let legalHits = 0;
-    [/art(?:icle)?\.?\s*\d+/, /section\s*\d+/, /\br\.?a\.?\s*\d+/, /g\.?r\.?\s*no/, /\bp\.?d\.?\s*\d+/, /doctrine|jurisprudence|\bcode\b|constitution/]
-      .forEach(re => { if (re.test(lower)) legalHits++; });
-    legalScore = Math.min(30, legalHits * 8);
-
-    // A — Application: facts tied to the rule
-    let appHits = 0;
-    [/\bhere\b/, /in this case/, /applying/, /the facts?/, /\bsince\b/, /\bbecause\b/, /\bwhen\b/]
-      .forEach(re => { if (re.test(lower)) appHits++; });
-    appScore = Math.min(30, appHits * 6 + (words > 120 ? 6 : words > 60 ? 3 : 0));
-
-    // C — Conclusion: a reaffirming close
-    const concRe = /\b(therefore|hence|thus|in conclusion|wherefore|accordingly|conclude)\b/;
-    if (concRe.test(lower.slice(-220))) conclusionScore = 20;
-    else if (concRe.test(lower)) conclusionScore = 12;
-    else conclusionScore = 6;
+async function evaluateAnswer() {
+  if (gradingInProgress) return;
+  const subjectAtSubmission = currentSubj;
+  const indexAtSubmission = currentIdx;
+  const key = `${subjectAtSubmission}-${indexAtSubmission}`;
+  const q = BAR_QUESTIONS[subjectAtSubmission][indexAtSubmission];
+  const studentAnswer = (userAnswers[key] || '').trim();
+  if (!studentAnswer) {
+    toast('Write an answer before requesting an assessment.', 'warn');
+    return;
+  }
+  if (studentAnswer.length > 12000) {
+    toast('Answers are limited to 12,000 characters.', 'warn');
+    return;
   }
 
-  // AIRTIGHT TOTAL: explicit numeric sum, clamped — never NaN, never zeroed by concatenation
-  let score = Number(answerScore) + Number(legalScore) + Number(appScore) + Number(conclusionScore);
-  if (isGibberish || !Number.isFinite(score)) score = 0;
-  score = Math.min(100, Math.max(0, Math.round(score)));
+  gradingInProgress = true;
+  const submitButton = document.getElementById('submit-btn');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = 'Checking...';
+  }
+  showCheckingModal();
 
-  const passed = score >= 75;
-  const timeSpent = Math.max(0, Math.round((Date.now() - questionStartTs) / 1000));
-  const resultObj = {
-    score: score,
-    passed: passed,
-    answerScore: Number(answerScore),
-    legalScore: Number(legalScore),
-    appScore: Number(appScore),
-    conclusionScore: Number(conclusionScore),
-    timeSpent: timeSpent,
-    timestamp: new Date().toLocaleString(),
-    subject: currentSubj,
-    qId: BAR_QUESTIONS[currentSubj][currentIdx].id
-  };
+  try {
+    const response = await fetch(EXAMINER_WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        questionId: q.id,
+        studentAnswer,
+        questionContext: questionContextForExaminer(q),
+      }),
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch (error) { /* controlled below */ }
+    if (!response.ok || !payload?.ok || !payload.assessment) {
+      throw new Error(payload?.error?.message || 'The examiner is temporarily unavailable. Please try again.');
+    }
 
-  submissionResults[key] = resultObj;
-  historyLog.unshift(resultObj);
-  logAttempt(resultObj);
+    const assessment = payload.assessment;
+    const timeSpent = Math.max(0, Math.round((Date.now() - questionStartTs) / 1000));
+    const resultObj = {
+      ...assessment,
+      score: Number(assessment.score),
+      maxScore: 5,
+      percentagePointValue: Number(assessment.score),
+      timeSpent,
+      timestamp: new Date(assessment.gradedAt || Date.now()).toLocaleString(),
+      gradedAt: assessment.gradedAt || new Date().toISOString(),
+      subject: subjectAtSubmission,
+      qId: q.id,
+      questionText: q.text,
+      studentAnswer,
+      modelAnswerFormat: 'ALAC',
+      historyVersion: 2,
+    };
 
-  document.getElementById("evaluation-result-area").innerHTML = renderResultHTML(key);
-  document.getElementById("evaluation-result-area").scrollIntoView({ behavior: 'smooth' });
+    submissionResults[key] = resultObj;
+    historyLog.unshift(resultObj);
+    resultObj.historySaved = logAttempt(resultObj);
+    closeCheckingModal();
 
-  // Timed Bar Mode: auto-advance to the next item after the verdict is shown
-  if (examMode === 'timed') { setTimeout(submitAndNext, 2400); }
+    if (currentSubj === subjectAtSubmission && currentIdx === indexAtSubmission) {
+      const resultArea = document.getElementById('evaluation-result-area');
+      resultArea.innerHTML = renderResultHTML(key);
+      resultArea.scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (error) {
+    const offline = !navigator.onLine ? 'You appear to be offline. Reconnect and try again.' : '';
+    showCheckingError(offline || error.message || 'The examiner could not complete this assessment.');
+  } finally {
+    gradingInProgress = false;
+    const activeButton = document.getElementById('submit-btn');
+    if (activeButton) {
+      activeButton.disabled = !(userAnswers[`${currentSubj}-${currentIdx}`] || '').trim();
+      activeButton.textContent = 'Evaluate & Grade Essay';
+    }
+  }
 }
 
 function renderResultHTML(key) {
   const res = submissionResults[key];
-  const q = BAR_QUESTIONS[currentSubj][currentIdx];
-  const passed = res.passed;
+  if (!res) return '';
+  const alac = res.modelAnswerALAC || {};
+  const warning = res.sourceStatus === 'conflict'
+    ? 'An online official source may materially conflict with the stored answer key. This assessment requires human editorial review before reliance.'
+    : res.assessmentType !== 'question_bank'
+      ? 'This answer was generated from online legal research because this item is not yet verified in the question bank. Please review the cited law, article, rule, jurisprudence, or full-text case before relying on it.'
+      : '';
 
   return `
-    <div class="paper-card" style="background:#fcfaf5; border-color:var(--ink);">
-      <div class="stamp-row">
-        <div class="stamp ${passed ? 'pass' : 'fail'}">
-          <span class="num">${res.score}</span>
-          <span class="lbl">${passed ? 'PASSED' : 'FAILED'}</span>
+    <article class="assessment-card" aria-label="Per-question Bar essay assessment">
+      <div class="assessment-hero">
+        <div class="score-medallion">
+          <div><strong>${Number(res.score).toFixed(1)} / 5</strong><span>Points earned</span></div>
         </div>
-        <div class="stamp-verdict">
-          ${passed ? 'Proficient Bar Standard Met' : 'Sub-Standard Bar Analysis'}
-          <span class="small">Evaluated via Verbatim Rubric Matrix • ${res.timestamp}</span>
+        <div>
+          <div class="assessment-kicker">Individual Question Assessment</div>
+          <h3 class="assessment-title">${escapeHtml(res.performanceLabel || 'Bar essay assessment')}</h3>
+          <div class="assessment-equivalent">Equivalent value: ${Number(res.percentagePointValue).toFixed(1)} percentage points for this question only</div>
+          <div class="assessment-badges">
+            <span class="assessment-badge">${escapeHtml(res.label || 'Question-bank assessment')}</span>
+            <span class="assessment-badge">Official tier ${escapeHtml(res.tier || '')}</span>
+            <span class="assessment-badge">Source: ${escapeHtml(res.sourceStatus || 'not_found')}</span>
+          </div>
         </div>
       </div>
+      <div class="assessment-body">
+        <h4 class="panel-title">Why this score</h4>
+        <p class="assessment-rationale">${escapeHtml(res.rationale || '')}</p>
 
-      <div class="panel-title">ALAC Rubric Breakdown — total = ${res.score}/100 (sum of the four sub-scores below)</div>
-
-      <div class="issue ${res.answerScore >= 15 ? 'full' : res.answerScore >= 8 ? 'partial' : 'missed'}">
-        <div class="issue-head">
-          <span>A — Answer (direct position stated first)</span>
-          <span class="pts">${Number(res.answerScore)} / 20 pts</span>
+        <div class="assessment-grid">
+          <section class="assessment-panel strengths"><h4>Strengths</h4>${renderAssessmentList(res.strengths, 'No specific strength was identified.')}</section>
+          <section class="assessment-panel errors"><h4>Errors or missing points</h4>${renderAssessmentList(res.errors, 'No material error was identified.')}</section>
+          <section class="assessment-panel coaching"><h4>Coaching suggestions</h4>${renderAssessmentList(res.improvements, 'Keep the answer direct, legally grounded, and fact-specific.')}</section>
         </div>
-        <div class="note">${res.answerScore >= 15 ? 'A clear, unambiguous position (e.g. Yes/No, Valid/Invalid) is front-loaded before the discussion.' : 'Front-load a direct position — ALAC states the answer before the discussion.'}</div>
-      </div>
 
-      <div class="issue ${res.legalScore >= 22 ? 'full' : res.legalScore >= 10 ? 'partial' : 'missed'}">
-        <div class="issue-head">
-          <span>L — Legal Basis (codal provision / jurisprudence)</span>
-          <span class="pts">${Number(res.legalScore)} / 30 pts</span>
+        <section class="assessment-section">
+          <h4>Legal explanation</h4>
+          <div class="legal-explanation">${escapeHtml(res.legalExplanation || '')}</div>
+        </section>
+
+        <section class="assessment-section">
+          <h4>Model Answer — ALAC Method</h4>
+          <div class="alac-model">
+            <div class="alac-part"><b>ANSWER</b><p>${escapeHtml(alac.answer || '')}</p></div>
+            <div class="alac-part"><b>LEGAL BASIS</b><p>${escapeHtml(alac.legalBasis || '')}</p></div>
+            <div class="alac-part"><b>APPLICATION</b><p>${escapeHtml(alac.application || '')}</p></div>
+            <div class="alac-part"><b>CONCLUSION</b><p>${escapeHtml(alac.conclusion || '')}</p></div>
+          </div>
+        </section>
+
+        <section class="assessment-section">
+          <h4>Legal sources</h4>
+          ${renderAssessmentSources(res.sources)}
+        </section>
+
+        ${warning ? `<div class="assessment-warning"><strong>Review required.</strong> ${escapeHtml(warning)}</div>` : ''}
+
+        <div class="assessment-meta">
+          <strong>Grading basis:</strong> The five-point qualitative assessment is adapted from
+          <a href="${SC_2025_BULLETIN_URL}" target="_blank" rel="noopener noreferrer">Supreme Court 2025 Bar Bulletin No. 4, “Answering the Bar Examinations,” pp. 12–15</a>.
+          The five-percentage-point question value follows
+          <a href="${SC_2026_BULLETIN_URL}" target="_blank" rel="noopener noreferrer">2026 Bar Bulletin No. 1</a>.
+          <br><br>
+          This AI-generated assessment is provided solely for Bar review and coaching. It is not an official Supreme Court grade and does not guarantee or predict the examinee’s actual Bar Examination result.
+          <br>Examiner model: ${escapeHtml(res.modelUsed || 'unavailable')} · Rubric: ${escapeHtml(res.rubricVersion || SC_RUBRIC_VERSION)} · ${escapeHtml(res.timestamp || '')}
         </div>
-        <div class="note">${res.legalScore >= 22 ? 'Correct article/section or controlling doctrine is invoked to support the answer.' : 'Cite the governing article, section, or controlling doctrine explicitly.'}</div>
-      </div>
+        <div class="history-saved">${res.historySaved === false ? '⚠ History could not be saved on this device' : '✓ Assessment saved to answer history'}</div>
 
-      <div class="issue ${res.appScore >= 22 ? 'full' : res.appScore >= 10 ? 'partial' : 'missed'}">
-        <div class="issue-head">
-          <span>A — Application (facts tied to the law)</span>
-          <span class="pts">${Number(res.appScore)} / 30 pts</span>
+        <div class="fb-bar">
+          <span class="fb-label">Was this model answer helpful?</span>
+          <button class="fb-btn" onclick="rateModel('up')">👍 Helpful</button>
+          <button class="fb-btn" onclick="rateModel('down')">👎 Needs work</button>
+          <button class="fb-btn suggest" onclick="openSuggest()">✎ Suggest Correction / Better Answer</button>
         </div>
-        <div class="note">${res.appScore >= 22 ? 'The specific facts of the problem are explicitly connected to the legal basis.' : 'Tie the specific facts of the problem to the rule — do not merely restate it.'}</div>
+        <button class="btn-next" onclick="submitAndNext()">Continue to Next Item →</button>
       </div>
-
-      <div class="issue ${res.conclusionScore >= 15 ? 'full' : res.conclusionScore >= 8 ? 'partial' : 'missed'}">
-        <div class="issue-head">
-          <span>C — Conclusion (reaffirms the answer)</span>
-          <span class="pts">${Number(res.conclusionScore)} / 20 pts</span>
-        </div>
-        <div class="note">${res.conclusionScore >= 15 ? 'The conclusion reaffirms the position and addresses any nuance or exception raised.' : 'Close by reaffirming your position (Therefore / Hence …).'}</div>
-      </div>
-
-      <div style="margin-top:20px;">
-        <div class="panel-title">Model Examiner's Answer Key</div>
-        <div class="suggested">${escapeHtml(q.model)}</div>
-      </div>
-
-      <div class="caselaw-box">
-        <div class="caselaw-title">Applicable Jurisprudence / Statutory Anchor</div>
-        <div>${escapeHtml(q.caseLaw)}</div>
-      </div>
-
-      <div class="remarks">
-        <strong>Examiner Remarks:</strong> ${passed ? 'Solid application of legal principles. Maintain this rigorous ALAC structure — Answer, Legal Basis, Application, Conclusion.' : 'Review the governing statutory provisions and ensure precise terminology is employed in your reasoning.'}
-      </div>
-
-      <div class="fb-bar">
-        <span class="fb-label">Was this model answer helpful?</span>
-        <button class="fb-btn" onclick="rateModel('up')">👍 Helpful</button>
-        <button class="fb-btn" onclick="rateModel('down')">👎 Needs work</button>
-        <button class="fb-btn suggest" onclick="openSuggest()">✎ Suggest Correction / Better Answer</button>
-      </div>
-
-      <button class="btn-next" onclick="submitAndNext()">Submit &amp; Continue to Next Item →</button>
-    </div>
+    </article>
   `;
+}
+
+function renderAssessmentList(items, emptyText) {
+  const values = Array.isArray(items) ? items.filter(Boolean) : [];
+  return `<ul>${(values.length ? values : [emptyText]).map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+}
+
+function renderAssessmentSources(sources) {
+  const safe = (Array.isArray(sources) ? sources : []).filter((source) => {
+    try { return new URL(source.url).protocol === 'https:'; } catch (error) { return false; }
+  });
+  if (!safe.length) return '<div class="legal-explanation">No verified online source is currently available.</div>';
+  return `<div class="source-list">${safe.map((source) => `
+    <a class="source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">
+      <span>${escapeHtml(source.title || 'Legal source')}</span><small>${escapeHtml(source.type || 'source')} ↗</small>
+    </a>`).join('')}</div>`;
 }
 
 function renderMainHistory() {
@@ -1761,12 +1907,12 @@ function renderMainHistory() {
     <div style="background:#fbf9f2; border:1px solid var(--ink); padding:12px 20px;">
       ${historyLog.map(item => `
         <div class="hist-row">
-          <div class="hist-score ${item.passed ? 'pass' : 'fail'}">${item.score}</div>
+          <div class="hist-score ${item.maxScore === 5 ? 'pass' : (item.passed ? 'pass' : 'fail')}">${item.maxScore === 5 ? `${Number(item.score).toFixed(1)}/5` : escapeHtml(item.score)}</div>
           <div class="hist-meta">
-            <div class="hist-subj">${item.subject}</div>
-            <div class="hist-q">${item.qId}</div>
+            <div class="hist-subj">${escapeHtml(item.subject)}</div>
+            <div class="hist-q">${escapeHtml(item.qId)} · ${item.maxScore === 5 ? escapeHtml(item.performanceLabel || 'Five-point assessment') : 'Legacy 100-point record'}</div>
           </div>
-          <div class="hist-date">${item.timestamp}</div>
+          <div class="hist-date">${escapeHtml(item.timestamp)}</div>
         </div>
       `).join('')}
     </div>
@@ -1781,7 +1927,7 @@ function escapeHtml(text) {
     '"': '&quot;',
     "'": '&#039;'
   };
-  return text.replace(/[&<>"']/g, m => map[m]);
+  return String(text ?? '').replace(/[&<>"']/g, m => map[m]);
 }
 
 window.addEventListener('DOMContentLoaded', init);
@@ -1931,6 +2077,7 @@ function loadQuestion(idx) {
 
 /* Auto-advance: clear textarea, increment, load next, restart timer */
 function submitAndNext() {
+  if (gradingInProgress) return;
   const key = `${currentSubj}-${currentIdx}`;
   userAnswers[key] = '';
   loadQuestion(currentIdx + 1);   // increments + auto-loads next prompt + resets the 7:00 clock
@@ -1970,7 +2117,10 @@ function logAttempt(obj) {
     const list = loadAttempts();
     list.unshift(obj);
     localStorage.setItem(LS_KEY, JSON.stringify(list.slice(0, 500)));
-  } catch (e) { /* storage unavailable — non-fatal */ }
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 function openAnalytics() {
   const list = loadAttempts();
@@ -1980,56 +2130,23 @@ function openAnalytics() {
     openModal('analytics-modal');
     return;
   }
-  const n = list.length;
-  const avg = Math.round(list.reduce((s, a) => s + Number(a.score || 0), 0) / n);
-  const avgTime = Math.round(list.reduce((s, a) => s + Number(a.timeSpent || 0), 0) / n);
-  const passRate = Math.round(100 * list.filter(a => a.passed).length / n);
-  const comp = (key, max) => Math.round(100 * (list.reduce((s, a) => s + Number(a[key] || 0), 0) / n) / max);
-  const bars = [
-    ['Answer (front-loaded)', comp('answerScore', 20)],
-    ['Legal Basis', comp('legalScore', 30)],
-    ['Application', comp('appScore', 30)],
-    ['Conclusion', comp('conclusionScore', 20)]
-  ];
+  const current = list.filter((attempt) => attempt.maxScore === 5 && attempt.rubricVersion === SC_RUBRIC_VERSION);
+  const legacy = list.filter((attempt) => attempt.maxScore !== 5);
   const rows = list.slice(0, 40).map(a => `
     <tr>
-      <td class="sc ${a.passed ? 'pass' : 'fail'}">${a.score}</td>
-      <td>${a.subject || ''}</td>
-      <td>${a.qId || ''}</td>
+      <td class="sc">${a.maxScore === 5 ? `${Number(a.score).toFixed(1)} / 5` : `${escapeHtml(a.score)} (legacy)`}</td>
+      <td>${escapeHtml(a.subject || '')}</td>
+      <td>${escapeHtml(a.qId || '')}</td>
       <td>${a.timeSpent != null ? fmtSecs(a.timeSpent) : '—'}</td>
-      <td>${a.timestamp || ''}</td>
+      <td>${escapeHtml(a.timestamp || '')}</td>
     </tr>`).join('');
   body.innerHTML = `
     <div class="metric-grid">
-      ${(function(){
-        const idx = Math.min(99, Math.round(avg * 0.7 + passRate * 0.3));
-        const status = idx >= 75 ? 'On Track for Passing Grade' : idx >= 60 ? 'Approaching the Passing Threshold' : 'Needs Focused Review';
-        return `<div class="metric hero-metric"><div class="val">${idx}%</div><div class="lbl">Estimated Bar Passability Index</div><div class="sub">${status}</div></div>`;
-      })()}
-      <div class="metric"><div class="val">${avg}%</div><div class="lbl">Avg Score</div></div>
-      <div class="metric"><div class="val">${n}</div><div class="lbl">Essays Drilled</div></div>
-      <div class="metric"><div class="val">${fmtSecs(avgTime)}</div><div class="lbl">Avg Time / Answer</div></div>
-      <div class="metric"><div class="val">${passRate}%</div><div class="lbl">Pass Rate</div></div>
+      <div class="metric hero-metric"><div class="val">${list.length}</div><div class="lbl">Saved essay attempts</div><div class="sub">Each assessment remains independent.</div></div>
+      <div class="metric"><div class="val">${current.length}</div><div class="lbl">Current five-point records</div></div>
+      <div class="metric"><div class="val">${legacy.length}</div><div class="lbl">Legacy records preserved</div></div>
     </div>
-    <div class="panel-title">SC Syllabus Mastery Heatmap (by subject)</div>
-    <div class="heatmap">
-      ${(function(){
-        const bySub = {};
-        list.forEach(a => { const s = a.subject || '—'; (bySub[s] = bySub[s] || []).push(Number(a.score || 0)); });
-        const subs = Object.keys(bySub);
-        if (!subs.length) return '<div class="heat-cell none"><div class="s">No data yet</div></div>';
-        const color = v => v >= 80 ? '#bfe3c4' : v >= 70 ? '#cfe8c4' : v >= 60 ? '#e7f0be' : v >= 50 ? '#f6e0b8' : '#f6cbb8';
-        return subs.map(s => { const arr = bySub[s]; const av = Math.round(arr.reduce((x, y) => x + y, 0) / arr.length); return `<div class="heat-cell" style="background:${color(av)}"><div class="s">${s}</div><div class="v">${av}</div></div>`; }).join('');
-      })()}
-    </div>
-    <div class="panel-title">ALAC Mastery Progress</div>
-    <div class="alac-bars">
-      ${bars.map(([label, pct]) => `
-        <div class="alac-bar">
-          <div class="top"><span>${label}</span><span>${pct}%</span></div>
-          <div class="track"><div class="fill" style="width:${pct}%"></div></div>
-        </div>`).join('')}
-    </div>
+    <div class="assessment-warning"><strong>Per-question records only.</strong> Due Diligence does not combine attempts, calculate an examination average, or predict an official Bar rating.</div>
     <div class="panel-title">Attempt Log</div>
     <div class="table-scroll">
       <table class="attempt-table">

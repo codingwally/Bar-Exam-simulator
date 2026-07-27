@@ -59,7 +59,10 @@ RLS policies but contain no production user or answer data.
 The baseline must come from
 `supabase/tests/fixtures/20260727_staging_existing_core_schema.sql`. It
 intentionally reproduces broad legacy grants and omits the unique/check
-constraints absent from the Phase 1B production inventory. Run
+constraints absent from the Phase 1B production inventory. Its columns,
+foreign-key actions, and nine legacy `PUBLIC` policy signatures were reconciled
+against the Phase 1D read-only production inventory after the first strict
+preflight detected drift. Run
 `read_only_existing_access_inventory.sql` and retain the output as the
 before-state artifact.
 

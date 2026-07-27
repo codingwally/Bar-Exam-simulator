@@ -28,14 +28,14 @@ create table if not exists public.profiles (
 create table if not exists public.subjects (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  sort_order integer not null
+  sort_order integer not null default 0
 );
 
 create table if not exists public.questions (
   id uuid primary key default gen_random_uuid(),
-  subject_id uuid not null references public.subjects(id),
+  subject_id uuid not null references public.subjects(id) on delete cascade,
   bar_year integer,
-  question_no text,
+  question_no integer,
   prompt_text text not null,
   model_answer text,
   case_law text,
@@ -47,10 +47,10 @@ create table if not exists public.questions (
 create table if not exists public.submissions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  question_id uuid not null references public.questions(id),
+  question_id uuid not null references public.questions(id) on delete cascade,
   answer_text text not null,
-  word_count integer not null default 0,
-  time_spent_seconds integer not null default 0,
+  word_count integer,
+  time_spent_seconds integer,
   submitted_at timestamptz not null default now()
 );
 
@@ -63,7 +63,7 @@ create table if not exists public.grading_results (
   legal_basis_score numeric,
   application_score numeric,
   conclusion_score numeric,
-  feedback_json jsonb not null default '{}'::jsonb,
+  feedback_json jsonb,
   rubric_version text,
   grader_model text,
   graded_at timestamptz not null default now()
@@ -75,7 +75,7 @@ create table if not exists public.calibration_examples (
   example_answer_text text not null,
   expert_score numeric,
   expert_notes text,
-  added_by uuid references auth.users(id) on delete set null,
+  added_by uuid references auth.users(id),
   created_at timestamptz not null default now()
 );
 
@@ -84,7 +84,7 @@ create table if not exists public.grade_disputes (
   submission_id uuid not null references public.submissions(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   reason text not null,
-  status text not null default 'pending',
+  status text not null default 'open',
   admin_notes text,
   created_at timestamptz not null default now()
 );
@@ -100,64 +100,54 @@ alter table public.grade_disputes enable row level security;
 create policy profiles_select_own
   on public.profiles
   for select
-  to authenticated
-  using ((select auth.uid()) = id);
+  using (auth.uid() = id);
 
 create policy profiles_update_own
   on public.profiles
   for update
-  to authenticated
-  using ((select auth.uid()) = id)
-  with check ((select auth.uid()) = id);
+  using (auth.uid() = id);
 
-create policy subjects_public_read
+create policy subjects_select_all
   on public.subjects
   for select
-  to anon, authenticated
   using (true);
 
-create policy questions_public_read
+create policy questions_select_all
   on public.questions
   for select
-  to anon, authenticated
   using (true);
 
 create policy submissions_select_own
   on public.submissions
   for select
-  to authenticated
-  using ((select auth.uid()) = user_id);
+  using (auth.uid() = user_id);
 
 create policy submissions_insert_own
   on public.submissions
   for insert
-  to authenticated
-  with check ((select auth.uid()) = user_id);
+  with check (auth.uid() = user_id);
 
 create policy grading_results_select_own
   on public.grading_results
   for select
-  to authenticated
   using (
     exists (
       select 1
-      from public.submissions
-      where submissions.id = grading_results.submission_id
-        and submissions.user_id = (select auth.uid())
+      from public.submissions s
+      where s.id = grading_results.submission_id
+        and s.user_id = auth.uid()
     )
   );
 
 create policy grade_disputes_select_own
   on public.grade_disputes
   for select
-  to authenticated
-  using ((select auth.uid()) = user_id);
+  using (auth.uid() = user_id);
 
 create policy grade_disputes_insert_own
   on public.grade_disputes
   for insert
-  to authenticated
-  with check ((select auth.uid()) = user_id);
+  with check (auth.uid() = user_id);
 
 -- Supabase's legacy table defaults exposed broad table privileges to both API
 -- roles. RLS limited rows, but UPDATE on profiles still covered protected

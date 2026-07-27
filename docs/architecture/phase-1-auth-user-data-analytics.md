@@ -24,12 +24,20 @@ their intended workflows. In particular, authenticated users have effective
 UPDATE access to protected profile columns.
 
 `supabase/tests/fixtures/20260727_staging_existing_core_schema.sql` reproduces
-that audited pre-Phase-1 state for staging tests. It intentionally includes the
-legacy broad grants and intentionally excludes constraints not found by the
-production inventory. It creates no public function or non-internal trigger.
+that audited pre-Phase-1 state for staging tests. The Phase 1D read-only
+inventory reconciled six previously incorrect column signatures, three
+foreign-key actions, and all nine legacy policy definitions. In particular,
+the legacy policies were assigned to `PUBLIC`, the public-read policies were
+named `subjects_select_all` and `questions_select_all`, and the profile UPDATE
+policy had no `WITH CHECK` expression. The fixture intentionally includes those
+legacy definitions and broad grants, and intentionally excludes constraints
+not found by the production inventory. It creates no public function or
+non-internal trigger.
 
-The Phase 1 migration revokes every `anon` and `authenticated` privilege on all
-seven core tables before granting this minimum matrix:
+The Phase 1 migration revokes every `PUBLIC`, `anon`, and `authenticated`
+privilege on all seven core tables, removes the nine legacy `PUBLIC` policies,
+and recreates owner/public-read policies for explicit API roles before granting
+this minimum matrix:
 
 | Core table | `anon` | `authenticated` |
 | --- | --- | --- |
@@ -61,7 +69,7 @@ migration.
 ## Production approval preflight
 
 `supabase/review/phase1_production_preflight.sql` is read-only and fail-fast. It
-checks the exact audited table/column/default/nullability signature, absence of
+checks the reconciled table/column/default/nullability signature, absence of
 unobserved unique/check constraints, exact primary- and foreign-key columns,
 all nine RLS policy names/roles/modes/commands/expressions, direct grant
 provenance, absence of PUBLIC grants, absence of Phase 1 functions, triggers,

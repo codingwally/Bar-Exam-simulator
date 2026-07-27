@@ -112,6 +112,31 @@ has(
   /grade_disputes_insert_own[\s\S]*submissions\.id = grade_disputes\.submission_id[\s\S]*submissions\.user_id = \(select auth\.uid\(\)\)/i,
   "grade disputes must reference a submission owned by the authenticated user",
 );
+for (const legacyPolicy of [
+  "subjects_select_all",
+  "questions_select_all",
+]) {
+  has(
+    new RegExp(`drop policy if exists ${legacyPolicy}`, "i"),
+    `${legacyPolicy} must be removed from the audited production baseline`,
+  );
+}
+for (const securedPolicy of [
+  "profiles_select_own",
+  "profiles_update_own",
+  "subjects_public_read",
+  "questions_public_read",
+  "submissions_select_own",
+  "submissions_insert_own",
+  "grading_results_select_own",
+  "grade_disputes_select_own",
+  "grade_disputes_insert_own",
+]) {
+  has(
+    new RegExp(`create policy ${securedPolicy}[\\s\\S]*?to (?:authenticated|anon, authenticated)`, "i"),
+    `${securedPolicy} must be recreated for explicit API roles instead of PUBLIC`,
+  );
+}
 
 // Onboarding requires a matching versioned acceptance.
 has(/unique \(user_id, terms_version, privacy_version\)/i, "terms acceptance must be versioned");
@@ -221,6 +246,41 @@ assert.doesNotMatch(
   /\bcheck\s*\(\s*(word_count|time_spent_seconds)/i,
   "fixture must not invent submission non-negative CHECK constraints",
 );
+assert.match(
+  fixture,
+  /sort_order integer not null default 0/i,
+  "fixture must preserve the production subjects.sort_order default",
+);
+assert.match(
+  fixture,
+  /question_no integer/i,
+  "fixture must preserve the production integer question number",
+);
+assert.match(
+  fixture,
+  /word_count integer,\s*[\r\n]+\s*time_spent_seconds integer,/i,
+  "fixture must preserve nullable submission metrics without defaults",
+);
+assert.match(
+  fixture,
+  /feedback_json jsonb,/i,
+  "fixture must preserve nullable grading feedback without a default",
+);
+assert.match(
+  fixture,
+  /status text not null default 'open'/i,
+  "fixture must preserve the production dispute status default",
+);
+assert.match(
+  fixture,
+  /create policy subjects_select_all[\s\S]*create policy questions_select_all/i,
+  "fixture must preserve the audited legacy public-read policy names",
+);
+assert.doesNotMatch(
+  fixture,
+  /create policy profiles_select_own[\s\S]*?to authenticated/i,
+  "fixture must preserve the audited PUBLIC profile policy role",
+);
 
 // Production preflight must remain read-only and fail-fast on drift.
 assert.match(
@@ -277,6 +337,21 @@ assert.match(
   preflight,
   /PHASE1_PREFLIGHT_GRANT_DRIFT/,
   "preflight must fail on grant drift",
+);
+assert.match(
+  preflight,
+  /\('questions', 'question_no', 'int4', 'YES', null::text\)/i,
+  "preflight must preserve the production integer question number",
+);
+assert.match(
+  preflight,
+  /\('profiles', 'profiles_update_own', 'permissive', array\['public'\]::text\[\], 'UPDATE', 'auth\.uid=id', ''\)/i,
+  "preflight must preserve the audited legacy PUBLIC profile policy signature",
+);
+assert.match(
+  preflight,
+  /\('questions', 'questions_subject_id_fkey'[\s\S]*'CASCADE'\)/i,
+  "preflight must preserve the audited questions-to-subject cascade",
 );
 assert.match(
   preflight,

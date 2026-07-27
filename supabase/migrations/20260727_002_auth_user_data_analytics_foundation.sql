@@ -57,6 +57,92 @@ grant all privileges on table
   public.grade_disputes
 to service_role;
 
+-- Rebuild the nine legacy policies from a known state. Production originally
+-- created these policies for PUBLIC (and used different names for the two
+-- public-read policies). Grants still limited effective access, but retaining
+-- PUBLIC policy roles would make future grant changes unnecessarily risky.
+drop policy if exists profiles_select_own on public.profiles;
+drop policy if exists profiles_update_own on public.profiles;
+drop policy if exists subjects_select_all on public.subjects;
+drop policy if exists subjects_public_read on public.subjects;
+drop policy if exists questions_select_all on public.questions;
+drop policy if exists questions_public_read on public.questions;
+drop policy if exists submissions_select_own on public.submissions;
+drop policy if exists submissions_insert_own on public.submissions;
+drop policy if exists grading_results_select_own on public.grading_results;
+drop policy if exists grade_disputes_select_own on public.grade_disputes;
+drop policy if exists grade_disputes_insert_own on public.grade_disputes;
+
+create policy profiles_select_own
+  on public.profiles
+  for select
+  to authenticated
+  using ((select auth.uid()) = id);
+
+create policy profiles_update_own
+  on public.profiles
+  for update
+  to authenticated
+  using ((select auth.uid()) = id)
+  with check ((select auth.uid()) = id);
+
+create policy subjects_public_read
+  on public.subjects
+  for select
+  to anon, authenticated
+  using (true);
+
+create policy questions_public_read
+  on public.questions
+  for select
+  to anon, authenticated
+  using (true);
+
+create policy submissions_select_own
+  on public.submissions
+  for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy submissions_insert_own
+  on public.submissions
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+create policy grading_results_select_own
+  on public.grading_results
+  for select
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.submissions
+      where submissions.id = grading_results.submission_id
+        and submissions.user_id = (select auth.uid())
+    )
+  );
+
+create policy grade_disputes_select_own
+  on public.grade_disputes
+  for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+create policy grade_disputes_insert_own
+  on public.grade_disputes
+  for insert
+  to authenticated
+  with check (
+    (select auth.uid()) = user_id
+    and exists (
+      select 1
+      from public.submissions
+      where submissions.id = grade_disputes.submission_id
+        and submissions.user_id = (select auth.uid())
+    )
+  );
+
 -- ---------------------------------------------------------------------------
 -- Profiles and onboarding
 -- ---------------------------------------------------------------------------
@@ -139,90 +225,10 @@ $$;
 -- RLS controls row ownership; column grants below enforce field-level security.
 alter table public.profiles enable row level security;
 
-do $$
-begin
-  if exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'profiles'
-      and policyname = 'profiles_select_own'
-  ) then
-    alter policy profiles_select_own on public.profiles
-      using ((select auth.uid()) = id);
-  else
-    create policy profiles_select_own
-      on public.profiles
-      for select
-      to authenticated
-      using ((select auth.uid()) = id);
-  end if;
-
-  if exists (
-    select 1 from pg_policies
-    where schemaname = 'public'
-      and tablename = 'profiles'
-      and policyname = 'profiles_update_own'
-  ) then
-    alter policy profiles_update_own on public.profiles
-      using ((select auth.uid()) = id)
-      with check ((select auth.uid()) = id);
-  else
-    create policy profiles_update_own
-      on public.profiles
-      for update
-      to authenticated
-      using ((select auth.uid()) = id)
-      with check ((select auth.uid()) = id);
-  end if;
-end
-$$;
-
 -- A permissive UPDATE policy cannot protect individual columns. The broad
 -- table-level privilege was revoked above; grant only approved personal fields.
 grant update (display_name, school, enrollment_status, year_level)
   on public.profiles to authenticated;
-
--- A dispute must belong to the authenticated user and must reference that
--- same user's submission. Checking only grade_disputes.user_id would allow a
--- student who learned another submission UUID to attach a dispute to it.
-do $$
-begin
-  if exists (
-    select 1
-    from pg_policies
-    where schemaname = 'public'
-      and tablename = 'grade_disputes'
-      and policyname = 'grade_disputes_insert_own'
-  ) then
-    alter policy grade_disputes_insert_own
-      on public.grade_disputes
-      to authenticated
-      with check (
-        (select auth.uid()) = user_id
-        and exists (
-          select 1
-          from public.submissions
-          where submissions.id = grade_disputes.submission_id
-            and submissions.user_id = (select auth.uid())
-        )
-      );
-  else
-    create policy grade_disputes_insert_own
-      on public.grade_disputes
-      for insert
-      to authenticated
-      with check (
-        (select auth.uid()) = user_id
-        and exists (
-          select 1
-          from public.submissions
-          where submissions.id = grade_disputes.submission_id
-            and submissions.user_id = (select auth.uid())
-        )
-      );
-  end if;
-end
-$$;
 
 -- ---------------------------------------------------------------------------
 -- Versioned terms acceptance and optional marketing consent history

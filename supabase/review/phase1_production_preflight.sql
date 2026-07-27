@@ -49,11 +49,11 @@ begin
         ('profiles', 'created_at', 'timestamptz', 'NO', 'now()'),
         ('subjects', 'id', 'uuid', 'NO', 'gen_random_uuid()'),
         ('subjects', 'name', 'text', 'NO', null::text),
-        ('subjects', 'sort_order', 'int4', 'NO', null::text),
+        ('subjects', 'sort_order', 'int4', 'NO', '0'),
         ('questions', 'id', 'uuid', 'NO', 'gen_random_uuid()'),
         ('questions', 'subject_id', 'uuid', 'NO', null::text),
         ('questions', 'bar_year', 'int4', 'YES', null::text),
-        ('questions', 'question_no', 'text', 'YES', null::text),
+        ('questions', 'question_no', 'int4', 'YES', null::text),
         ('questions', 'prompt_text', 'text', 'NO', null::text),
         ('questions', 'model_answer', 'text', 'YES', null::text),
         ('questions', 'case_law', 'text', 'YES', null::text),
@@ -64,8 +64,8 @@ begin
         ('submissions', 'user_id', 'uuid', 'NO', null::text),
         ('submissions', 'question_id', 'uuid', 'NO', null::text),
         ('submissions', 'answer_text', 'text', 'NO', null::text),
-        ('submissions', 'word_count', 'int4', 'NO', '0'),
-        ('submissions', 'time_spent_seconds', 'int4', 'NO', '0'),
+        ('submissions', 'word_count', 'int4', 'YES', null::text),
+        ('submissions', 'time_spent_seconds', 'int4', 'YES', null::text),
         ('submissions', 'submitted_at', 'timestamptz', 'NO', 'now()'),
         ('grading_results', 'id', 'uuid', 'NO', 'gen_random_uuid()'),
         ('grading_results', 'submission_id', 'uuid', 'NO', null::text),
@@ -75,7 +75,7 @@ begin
         ('grading_results', 'legal_basis_score', 'numeric', 'YES', null::text),
         ('grading_results', 'application_score', 'numeric', 'YES', null::text),
         ('grading_results', 'conclusion_score', 'numeric', 'YES', null::text),
-        ('grading_results', 'feedback_json', 'jsonb', 'NO', '''{}''::jsonb'),
+        ('grading_results', 'feedback_json', 'jsonb', 'YES', null::text),
         ('grading_results', 'rubric_version', 'text', 'YES', null::text),
         ('grading_results', 'grader_model', 'text', 'YES', null::text),
         ('grading_results', 'graded_at', 'timestamptz', 'NO', 'now()'),
@@ -90,7 +90,7 @@ begin
         ('grade_disputes', 'submission_id', 'uuid', 'NO', null::text),
         ('grade_disputes', 'user_id', 'uuid', 'NO', null::text),
         ('grade_disputes', 'reason', 'text', 'NO', null::text),
-        ('grade_disputes', 'status', 'text', 'NO', '''pending''::text'),
+        ('grade_disputes', 'status', 'text', 'NO', '''open''::text'),
         ('grade_disputes', 'admin_notes', 'text', 'YES', null::text),
         ('grade_disputes', 'created_at', 'timestamptz', 'NO', 'now()')
     ),
@@ -146,12 +146,12 @@ begin
     ) as (
       values
         ('profiles', 'profiles_id_fkey', array['id']::text[], 'auth', 'users', array['id']::text[], 'CASCADE'),
-        ('questions', 'questions_subject_id_fkey', array['subject_id']::text[], 'public', 'subjects', array['id']::text[], 'NO ACTION'),
+        ('questions', 'questions_subject_id_fkey', array['subject_id']::text[], 'public', 'subjects', array['id']::text[], 'CASCADE'),
         ('submissions', 'submissions_user_id_fkey', array['user_id']::text[], 'auth', 'users', array['id']::text[], 'CASCADE'),
-        ('submissions', 'submissions_question_id_fkey', array['question_id']::text[], 'public', 'questions', array['id']::text[], 'NO ACTION'),
+        ('submissions', 'submissions_question_id_fkey', array['question_id']::text[], 'public', 'questions', array['id']::text[], 'CASCADE'),
         ('grading_results', 'grading_results_submission_id_fkey', array['submission_id']::text[], 'public', 'submissions', array['id']::text[], 'CASCADE'),
         ('calibration_examples', 'calibration_examples_question_id_fkey', array['question_id']::text[], 'public', 'questions', array['id']::text[], 'CASCADE'),
-        ('calibration_examples', 'calibration_examples_added_by_fkey', array['added_by']::text[], 'auth', 'users', array['id']::text[], 'SET NULL'),
+        ('calibration_examples', 'calibration_examples_added_by_fkey', array['added_by']::text[], 'auth', 'users', array['id']::text[], 'NO ACTION'),
         ('grade_disputes', 'grade_disputes_submission_id_fkey', array['submission_id']::text[], 'public', 'submissions', array['id']::text[], 'CASCADE'),
         ('grade_disputes', 'grade_disputes_user_id_fkey', array['user_id']::text[], 'auth', 'users', array['id']::text[], 'CASCADE')
     ),
@@ -303,15 +303,15 @@ begin
       check_expression
     ) as (
       values
-        ('profiles', 'profiles_select_own', 'permissive', array['authenticated']::text[], 'SELECT', 'selectauth.uidasuid=id', ''),
-        ('profiles', 'profiles_update_own', 'permissive', array['authenticated']::text[], 'UPDATE', 'selectauth.uidasuid=id', 'selectauth.uidasuid=id'),
-        ('subjects', 'subjects_public_read', 'permissive', array['anon', 'authenticated']::text[], 'SELECT', 'true', ''),
-        ('questions', 'questions_public_read', 'permissive', array['anon', 'authenticated']::text[], 'SELECT', 'true', ''),
-        ('submissions', 'submissions_select_own', 'permissive', array['authenticated']::text[], 'SELECT', 'selectauth.uidasuid=user_id', ''),
-        ('submissions', 'submissions_insert_own', 'permissive', array['authenticated']::text[], 'INSERT', '', 'selectauth.uidasuid=user_id'),
-        ('grading_results', 'grading_results_select_own', 'permissive', array['authenticated']::text[], 'SELECT', 'existsselect1fromsubmissionswheresubmissions.id=grading_results.submission_idandsubmissions.user_id=selectauth.uidasuid', ''),
-        ('grade_disputes', 'grade_disputes_select_own', 'permissive', array['authenticated']::text[], 'SELECT', 'selectauth.uidasuid=user_id', ''),
-        ('grade_disputes', 'grade_disputes_insert_own', 'permissive', array['authenticated']::text[], 'INSERT', '', 'selectauth.uidasuid=user_id')
+        ('profiles', 'profiles_select_own', 'permissive', array['public']::text[], 'SELECT', 'auth.uid=id', ''),
+        ('profiles', 'profiles_update_own', 'permissive', array['public']::text[], 'UPDATE', 'auth.uid=id', ''),
+        ('subjects', 'subjects_select_all', 'permissive', array['public']::text[], 'SELECT', 'true', ''),
+        ('questions', 'questions_select_all', 'permissive', array['public']::text[], 'SELECT', 'true', ''),
+        ('submissions', 'submissions_select_own', 'permissive', array['public']::text[], 'SELECT', 'auth.uid=user_id', ''),
+        ('submissions', 'submissions_insert_own', 'permissive', array['public']::text[], 'INSERT', '', 'auth.uid=user_id'),
+        ('grading_results', 'grading_results_select_own', 'permissive', array['public']::text[], 'SELECT', 'existsselect1fromsubmissionsswheres.id=grading_results.submission_idands.user_id=auth.uid', ''),
+        ('grade_disputes', 'grade_disputes_select_own', 'permissive', array['public']::text[], 'SELECT', 'auth.uid=user_id', ''),
+        ('grade_disputes', 'grade_disputes_insert_own', 'permissive', array['public']::text[], 'INSERT', '', 'auth.uid=user_id')
     ),
     actual as (
       select

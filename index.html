@@ -2227,6 +2227,7 @@ async function evaluateAnswer() {
   }
 
   gradingInProgress = true;
+  const gradingStartedAt = performance.now();
   examStage = 'evaluating';
   saveDraftForCurrentQuestion();
   sessionController.pause();
@@ -2236,6 +2237,11 @@ async function evaluateAnswer() {
     submitButton.textContent = 'Checking...';
   }
   showCheckingModal();
+  window.DueDiligenceAnalytics?.track('grading_started', {
+    subject: subjectAtSubmission,
+    questionId: q.id,
+    durationMs: Math.max(0, Math.round(sessionController.snapshot().questionElapsedSeconds * 1000)),
+  });
 
   try {
     const response = await fetch(EXAMINER_WORKER_URL, {
@@ -2291,7 +2297,36 @@ async function evaluateAnswer() {
       resultArea.scrollIntoView({ behavior: 'smooth' });
     }
     window.DueDiligencePhase2?.afterGrade(payload.access);
+    window.DueDiligenceAnalytics?.track('grading_success', {
+      subject: subjectAtSubmission,
+      questionId: q.id,
+      resultCategory: assessment.tier || assessment.performanceLabel || 'graded',
+      durationMs: Math.max(0, Math.round(timeSpent * 1000)),
+      latencyMs: Math.max(0, Math.round(performance.now() - gradingStartedAt)),
+      modelName: assessment.modelUsed || null,
+      workerVersion: assessment.workerVersion || null,
+      score: Number(assessment.score),
+    });
+    if (!payload.access?.signedIn && payload.access?.guest?.completed === 1) {
+      window.DueDiligenceAnalytics?.track('guest_first_grade', { subject: subjectAtSubmission, questionId: q.id });
+    }
+    if (!payload.access?.signedIn && payload.access?.guest?.completed === 3) {
+      window.DueDiligenceAnalytics?.track('guest_third_grade', { subject: subjectAtSubmission, questionId: q.id });
+    }
   } catch (error) {
+    window.DueDiligenceAnalytics?.track(
+      error?.code === 'GUEST_LIMIT_REACHED'
+        ? 'guest_limit_reached'
+        : error?.code === 'RATE_LIMITED'
+          ? 'grading_rate_limited'
+          : 'grading_failure',
+      {
+        subject: subjectAtSubmission,
+        questionId: q.id,
+        resultCategory: String(error?.code || 'assessment_unavailable').slice(0, 80),
+        latencyMs: Math.max(0, Math.round(performance.now() - gradingStartedAt)),
+      },
+    );
     if (window.DueDiligencePhase2?.handleGradeError(error)) return;
     const offline = !navigator.onLine ? 'You appear to be offline. Reconnect and try again.' : '';
     showCheckingError(offline || error.message || 'The examiner could not complete this assessment.');
@@ -2907,7 +2942,10 @@ async function submitSuggestion() {
   try {
     const response = await fetch(`${EXAMINER_WORKER_URL}/corrections`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(globalThis.DueDiligencePhase2?.gradingHeaders() || {}),
+      },
       body: JSON.stringify({
         questionId: q.id,
         subject: q.sourceSubject || q.subject || currentSubj,
@@ -2923,6 +2961,11 @@ async function submitSuggestion() {
     }
 
     setSuggestStatus('Suggest a Correction/Better Answer submitted successfully.', 'success');
+    globalThis.DueDiligenceAnalytics?.track('correction_submitted', {
+      subject: q.sourceSubject || q.subject || currentSubj,
+      questionId: q.id,
+      resultCategory: document.getElementById('suggest-type').value,
+    });
     toast('Suggest a Correction/Better Answer submitted successfully.', 'ok');
     submitButton.textContent = 'Submitted';
   } catch (error) {
@@ -2974,6 +3017,7 @@ document.addEventListener('visibilitychange', () => {
   crossorigin="anonymous"></script>
 <script src="assets/phase2-config.js"></script>
 <script src="assets/phase2-experience.js"></script>
+<script src="assets/phase3-analytics.js"></script>
 
 </body>
 </html>

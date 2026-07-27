@@ -25,7 +25,7 @@
       subscriptionEnforcement: false,
       coachingBooking: false,
       emailSignIn: false,
-      adminDashboard: false,
+      adminDashboard: true,
     }),
     plans: Object.freeze({
       catalogVersion: 'planned-pricing-beta-v1-2026-07-28',

@@ -8,6 +8,7 @@ export const SUPPORT_LIMITS = Object.freeze({
 export const SUPPORT_CATEGORIES = new Set([
   'technical',
   'account',
+  'account_recovery',
   'content',
   'accessibility',
   'other',
@@ -61,6 +62,6 @@ export function supportInsertRecord(request) {
     category: request.category,
     message: request.message,
     reply_email: request.replyEmail,
-    status: 'new',
+    status: 'pending',
   };
 }

@@ -138,27 +138,45 @@ begin
     with expected(
       table_name,
       constraint_name,
+      source_columns,
       referenced_schema,
       referenced_table,
+      referenced_columns,
       delete_action
     ) as (
       values
-        ('profiles', 'profiles_id_fkey', 'auth', 'users', 'CASCADE'),
-        ('questions', 'questions_subject_id_fkey', 'public', 'subjects', 'NO ACTION'),
-        ('submissions', 'submissions_user_id_fkey', 'auth', 'users', 'CASCADE'),
-        ('submissions', 'submissions_question_id_fkey', 'public', 'questions', 'NO ACTION'),
-        ('grading_results', 'grading_results_submission_id_fkey', 'public', 'submissions', 'CASCADE'),
-        ('calibration_examples', 'calibration_examples_question_id_fkey', 'public', 'questions', 'CASCADE'),
-        ('calibration_examples', 'calibration_examples_added_by_fkey', 'auth', 'users', 'SET NULL'),
-        ('grade_disputes', 'grade_disputes_submission_id_fkey', 'public', 'submissions', 'CASCADE'),
-        ('grade_disputes', 'grade_disputes_user_id_fkey', 'auth', 'users', 'CASCADE')
+        ('profiles', 'profiles_id_fkey', array['id']::text[], 'auth', 'users', array['id']::text[], 'CASCADE'),
+        ('questions', 'questions_subject_id_fkey', array['subject_id']::text[], 'public', 'subjects', array['id']::text[], 'NO ACTION'),
+        ('submissions', 'submissions_user_id_fkey', array['user_id']::text[], 'auth', 'users', array['id']::text[], 'CASCADE'),
+        ('submissions', 'submissions_question_id_fkey', array['question_id']::text[], 'public', 'questions', array['id']::text[], 'NO ACTION'),
+        ('grading_results', 'grading_results_submission_id_fkey', array['submission_id']::text[], 'public', 'submissions', array['id']::text[], 'CASCADE'),
+        ('calibration_examples', 'calibration_examples_question_id_fkey', array['question_id']::text[], 'public', 'questions', array['id']::text[], 'CASCADE'),
+        ('calibration_examples', 'calibration_examples_added_by_fkey', array['added_by']::text[], 'auth', 'users', array['id']::text[], 'SET NULL'),
+        ('grade_disputes', 'grade_disputes_submission_id_fkey', array['submission_id']::text[], 'public', 'submissions', array['id']::text[], 'CASCADE'),
+        ('grade_disputes', 'grade_disputes_user_id_fkey', array['user_id']::text[], 'auth', 'users', array['id']::text[], 'CASCADE')
     ),
     actual as (
       select
         source_rel.relname::text as table_name,
         con.conname::text as constraint_name,
+        array(
+          select source_att.attname::text
+          from unnest(con.conkey) with ordinality source_key(attnum, position)
+          join pg_attribute source_att
+            on source_att.attrelid = con.conrelid
+           and source_att.attnum = source_key.attnum
+          order by source_key.position
+        ) as source_columns,
         target_ns.nspname::text as referenced_schema,
         target_rel.relname::text as referenced_table,
+        array(
+          select target_att.attname::text
+          from unnest(con.confkey) with ordinality target_key(attnum, position)
+          join pg_attribute target_att
+            on target_att.attrelid = con.confrelid
+           and target_att.attnum = target_key.attnum
+          order by target_key.position
+        ) as referenced_columns,
         case con.confdeltype
           when 'a' then 'NO ACTION'
           when 'r' then 'RESTRICT'
@@ -188,7 +206,53 @@ begin
     )
   ) then
     raise exception
-      'PHASE1_PREFLIGHT_FOREIGN_KEY_DRIFT: foreign-key targets or delete actions differ from the Phase 1B inventory';
+      'PHASE1_PREFLIGHT_FOREIGN_KEY_DRIFT: foreign-key source columns, targets, referenced columns, or delete actions differ from the Phase 1B inventory';
+  end if;
+
+  if exists (
+    with expected(table_name, constraint_name, key_columns) as (
+      values
+        ('profiles', 'profiles_pkey', array['id']::text[]),
+        ('subjects', 'subjects_pkey', array['id']::text[]),
+        ('questions', 'questions_pkey', array['id']::text[]),
+        ('submissions', 'submissions_pkey', array['id']::text[]),
+        ('grading_results', 'grading_results_pkey', array['id']::text[]),
+        ('calibration_examples', 'calibration_examples_pkey', array['id']::text[]),
+        ('grade_disputes', 'grade_disputes_pkey', array['id']::text[])
+    ),
+    actual as (
+      select
+        rel.relname::text as table_name,
+        con.conname::text as constraint_name,
+        array(
+          select att.attname::text
+          from unnest(con.conkey) with ordinality key_column(attnum, position)
+          join pg_attribute att
+            on att.attrelid = con.conrelid
+           and att.attnum = key_column.attnum
+          order by key_column.position
+        ) as key_columns
+      from pg_constraint con
+      join pg_class rel on rel.oid = con.conrelid
+      join pg_namespace n on n.oid = rel.relnamespace
+      where n.nspname = 'public'
+        and rel.relname = any(v_expected)
+        and con.contype = 'p'
+    )
+    (
+      select * from expected
+      except
+      select * from actual
+    )
+    union all
+    (
+      select * from actual
+      except
+      select * from expected
+    )
+  ) then
+    raise exception
+      'PHASE1_PREFLIGHT_PRIMARY_KEY_DRIFT: primary-key names or constrained columns differ from the Phase 1B inventory';
   end if;
 
   if exists (
@@ -224,49 +288,131 @@ begin
       coalesce(v_actual, array[]::text[]);
   end if;
 
-  if (
-    select count(*)
-    from (
-      values
-        ('profiles', 'profiles_select_own', 'SELECT'),
-        ('profiles', 'profiles_update_own', 'UPDATE'),
-        ('subjects', 'subjects_public_read', 'SELECT'),
-        ('questions', 'questions_public_read', 'SELECT'),
-        ('submissions', 'submissions_select_own', 'SELECT'),
-        ('submissions', 'submissions_insert_own', 'INSERT'),
-        ('grading_results', 'grading_results_select_own', 'SELECT'),
-        ('grade_disputes', 'grade_disputes_select_own', 'SELECT'),
-        ('grade_disputes', 'grade_disputes_insert_own', 'INSERT')
-    ) expected(table_name, policy_name, command)
-    left join pg_policies p
-      on p.schemaname = 'public'
-     and p.tablename = expected.table_name
-     and p.policyname = expected.policy_name
-     and p.cmd = expected.command
-    where p.policyname is null
-  ) > 0
-  or (
-    select count(*)
-    from pg_policies
-    where schemaname = 'public'
-      and tablename = any(v_expected)
-  ) <> 9 then
-    raise exception
-      'PHASE1_PREFLIGHT_POLICY_DRIFT: expected the nine Phase 1B core policies and no extras';
-  end if;
-
   if exists (
-    select 1
-    from unnest(array['anon', 'authenticated', 'service_role']) api_role
-    cross join unnest(v_expected) table_name
-    where not has_table_privilege(
-      api_role,
-      format('public.%I', table_name),
-      'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'
+    -- pg_policies deparses `(select auth.uid())` as a scalar subquery with an
+    -- `AS uid` alias. Remove whitespace, parentheses, and optional public-schema
+    -- qualification before exact set comparison; operators and identifiers
+    -- remain significant.
+    with expected(
+      table_name,
+      policy_name,
+      permissive_mode,
+      policy_roles,
+      command,
+      using_expression,
+      check_expression
+    ) as (
+      values
+        ('profiles', 'profiles_select_own', 'permissive', array['authenticated']::text[], 'SELECT', 'selectauth.uidasuid=id', ''),
+        ('profiles', 'profiles_update_own', 'permissive', array['authenticated']::text[], 'UPDATE', 'selectauth.uidasuid=id', 'selectauth.uidasuid=id'),
+        ('subjects', 'subjects_public_read', 'permissive', array['anon', 'authenticated']::text[], 'SELECT', 'true', ''),
+        ('questions', 'questions_public_read', 'permissive', array['anon', 'authenticated']::text[], 'SELECT', 'true', ''),
+        ('submissions', 'submissions_select_own', 'permissive', array['authenticated']::text[], 'SELECT', 'selectauth.uidasuid=user_id', ''),
+        ('submissions', 'submissions_insert_own', 'permissive', array['authenticated']::text[], 'INSERT', '', 'selectauth.uidasuid=user_id'),
+        ('grading_results', 'grading_results_select_own', 'permissive', array['authenticated']::text[], 'SELECT', 'existsselect1fromsubmissionswheresubmissions.id=grading_results.submission_idandsubmissions.user_id=selectauth.uidasuid', ''),
+        ('grade_disputes', 'grade_disputes_select_own', 'permissive', array['authenticated']::text[], 'SELECT', 'selectauth.uidasuid=user_id', ''),
+        ('grade_disputes', 'grade_disputes_insert_own', 'permissive', array['authenticated']::text[], 'INSERT', '', 'selectauth.uidasuid=user_id')
+    ),
+    actual as (
+      select
+        p.tablename::text as table_name,
+        p.policyname::text as policy_name,
+        lower(p.permissive)::text as permissive_mode,
+        array(
+          select policy_role::text
+          from unnest(p.roles) policy_role
+          order by policy_role::text
+        ) as policy_roles,
+        p.cmd::text as command,
+        replace(
+          regexp_replace(lower(coalesce(p.qual, '')), '[[:space:]()]', '', 'g'),
+          'public.',
+          ''
+        ) as using_expression,
+        replace(
+          regexp_replace(lower(coalesce(p.with_check, '')), '[[:space:]()]', '', 'g'),
+          'public.',
+          ''
+        ) as check_expression
+      from pg_policies p
+      where p.schemaname = 'public'
+        and p.tablename = any(v_expected)
+    )
+    (
+      select * from expected
+      except
+      select * from actual
+    )
+    union all
+    (
+      select * from actual
+      except
+      select * from expected
     )
   ) then
     raise exception
-      'PHASE1_PREFLIGHT_GRANT_DRIFT: legacy broad grants are not present exactly as expected';
+      'PHASE1_PREFLIGHT_POLICY_DRIFT: policy names, tables, commands, roles, modes, USING expressions, or WITH CHECK expressions differ from the Phase 1B inventory';
+  end if;
+
+  if exists (
+    with expected(table_name, grantor, grantee, privilege_type, is_grantable) as (
+      select
+        table_name,
+        'postgres'::text,
+        api_role,
+        privilege_type,
+        false
+      from unnest(v_expected) table_name
+      cross join unnest(array['anon', 'authenticated', 'service_role']) api_role
+      cross join unnest(array[
+        'SELECT',
+        'INSERT',
+        'UPDATE',
+        'DELETE',
+        'TRUNCATE',
+        'REFERENCES',
+        'TRIGGER',
+        'MAINTAIN'
+      ]) privilege_type
+    ),
+    actual as (
+      select
+        c.relname::text as table_name,
+        grantor_role.rolname::text as grantor,
+        case
+          when acl.grantee = 0 then 'PUBLIC'
+          else grantee_role.rolname::text
+        end as grantee,
+        acl.privilege_type::text,
+        acl.is_grantable
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      cross join lateral aclexplode(
+        coalesce(c.relacl, acldefault('r', c.relowner))
+      ) acl
+      left join pg_roles grantor_role on grantor_role.oid = acl.grantor
+      left join pg_roles grantee_role on grantee_role.oid = acl.grantee
+      where n.nspname = 'public'
+        and c.relname = any(v_expected)
+        and (
+          acl.grantee = 0
+          or grantee_role.rolname in ('anon', 'authenticated', 'service_role')
+        )
+    )
+    (
+      select * from expected
+      except
+      select * from actual
+    )
+    union all
+    (
+      select * from actual
+      except
+      select * from expected
+    )
+  ) then
+    raise exception
+      'PHASE1_PREFLIGHT_GRANT_DRIFT: direct API-role grant provenance differs or an unexpected PUBLIC grant exists';
   end if;
 
   if exists (

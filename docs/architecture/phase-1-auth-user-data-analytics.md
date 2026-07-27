@@ -62,9 +62,10 @@ migration.
 
 `supabase/review/phase1_production_preflight.sql` is read-only and fail-fast. It
 checks the exact audited table/column/default/nullability signature, absence of
-unobserved unique/check constraints, expected primary-key indexes, nine
-existing RLS policies, legacy broad grants, absence of Phase 1 functions,
-triggers, and tables, and the audited row counts. Any drift blocks migration.
+unobserved unique/check constraints, exact primary- and foreign-key columns,
+all nine RLS policy names/roles/modes/commands/expressions, direct grant
+provenance, absence of PUBLIC grants, absence of Phase 1 functions, triggers,
+and tables, and the audited row counts. Any drift blocks migration.
 
 PostgreSQL cannot prove the Supabase project reference from SQL alone. A future
 operator must independently confirm `hbllomlijfznnuudpdvr` before running the
@@ -137,6 +138,10 @@ completion, and marketing-consent changes. `user_id` is nullable for guests,
 while `anonymous_session_id` preserves unique-session analysis. It stores
 question identifiers but never answer text.
 
+The shared `jsonb_has_forbidden_keys` constraint helper recursively traverses
+objects and arrays. It rejects answer content, email, credentials, tokens, API
+keys, and IP-address fields even when nested below another metadata key.
+
 There are no client write policies. A future Worker/service-role integration
 will validate and write events. Administrators receive read-only access for
 operational reporting.
@@ -173,12 +178,17 @@ No INSERT/UPDATE/DELETE policy exists for roles, analytics, entitlements, or
 audit records. Trusted server operations use the service role and keep that key
 outside the repository and browser.
 
+The existing `grade_disputes_insert_own` policy is strengthened during Phase 1:
+the inserted `user_id` must equal `auth.uid()`, and the referenced submission
+must also belong to that same authenticated user.
+
 ## Rollback
 
-Because the migration is additive, the safest rollback is application-level:
-leave the new schema unused and revert the migration commit. Existing
-production behavior will continue because Phase 1 does not connect any client
-code to these objects.
+Because the migration changes grants and policies, reverting the Git commit does
+not reverse database state. A production rollback requires a separately
+reviewed forward migration that restores prior grants and policies. Until that
+rollback migration exists, the safest application response is to leave the new
+schema unused and disable any new authentication UI.
 
 If database-object removal is later required, create a separately reviewed
 forward migration that:
@@ -206,6 +216,19 @@ Applying this migration would:
 7. leave all new analytics and entitlement tables disconnected and inactive;
 8. leave questions, LAB identifiers, grading, subscriptions, guest access,
    frontend code, Worker code, secrets, and payment behavior unchanged.
+
+## Deferred operational risks
+
+- Before any future `supabase db push`, inspect
+  `supabase_migrations.schema_migrations` and the CLI dry-run. The repository
+  contains the earlier Labor RAG migration; production must not receive that
+  migration accidentally when Phase 1 is approved.
+- `bootstrap_first_super_admin` is restricted to `service_role`, but concurrent
+  first-bootstrap calls could race. Operators must execute it once, serially. A
+  later hardening migration may add a database advisory lock.
+- `supabase/config.toml` describes local development. Its permissive local Auth
+  settings are not approved production Auth configuration and must not be
+  applied with a configuration push.
 
 ## Required operator information before production approval
 

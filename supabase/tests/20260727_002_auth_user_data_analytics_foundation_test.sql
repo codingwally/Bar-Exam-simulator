@@ -9,7 +9,7 @@
 
 begin;
 set local search_path = public, extensions, auth, pg_temp;
-select plan(53);
+select plan(57);
 
 select has_column('public', 'profiles', 'school', 'profiles.school exists');
 select has_column('public', 'profiles', 'enrollment_status', 'profiles.enrollment_status exists');
@@ -122,6 +122,13 @@ select has_function(
   'bootstrap_first_super_admin',
   array['uuid', 'text'],
   'service-only first-super-admin bootstrap exists'
+);
+
+select has_function(
+  'public',
+  'jsonb_has_forbidden_keys',
+  array['jsonb', 'text[]'],
+  'recursive analytics metadata validator exists'
 );
 
 select col_default_is(
@@ -346,6 +353,48 @@ select ok(
     'EXECUTE'
   ),
   'service role can execute the one-time super-admin bootstrap'
+);
+
+select isnt(
+  has_function_privilege(
+    'authenticated',
+    'public.jsonb_has_forbidden_keys(jsonb, text[])',
+    'EXECUTE'
+  ),
+  true,
+  'browser clients cannot execute the internal metadata validator'
+);
+
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.jsonb_has_forbidden_keys(jsonb, text[])',
+    'EXECUTE'
+  ),
+  'trusted service role can satisfy recursive metadata constraints'
+);
+
+select ok(
+  not exists (
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    cross join lateral aclexplode(
+      coalesce(c.relacl, acldefault('r', c.relowner))
+    ) acl
+    where n.nspname = 'public'
+      and c.relname in (
+        'profiles',
+        'subjects',
+        'questions',
+        'submissions',
+        'grading_results',
+        'calibration_examples',
+        'grade_disputes'
+      )
+      and acl.grantee = 0
+  ),
+  'no PUBLIC grants remain on any core table'
 );
 
 select policies_are(

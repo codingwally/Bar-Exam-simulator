@@ -3,7 +3,7 @@
 
 begin;
 set local search_path = public, extensions, auth, pg_temp;
-select plan(46);
+select plan(52);
 
 insert into auth.users (
   id,
@@ -280,6 +280,39 @@ select is(
   0::bigint,
   'student cannot read another grade dispute'
 );
+select lives_ok(
+  $test$
+    insert into public.grade_disputes (
+      id,
+      submission_id,
+      user_id,
+      reason
+    )
+    values (
+      '51000000-0000-4000-8000-000000000003',
+      '40000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000001',
+      'Student A may dispute Student A submission.'
+    )
+  $test$,
+  'student can create a dispute for their own submission'
+);
+select throws_ok(
+  $test$
+    insert into public.grade_disputes (
+      id,
+      submission_id,
+      user_id,
+      reason
+    )
+    values (
+      '51000000-0000-4000-8000-000000000004',
+      '40000000-0000-4000-8000-000000000002',
+      '10000000-0000-4000-8000-000000000001',
+      'Student A must not dispute Student B submission.'
+    )
+  $test$
+);
 select throws_ok(
   $test$
     select public.complete_profile_onboarding(
@@ -499,6 +532,68 @@ select throws_ok(
     )
   $test$
 );
+select throws_ok(
+  $test$
+    insert into public.usage_sessions (
+      id,
+      user_id,
+      auth_state,
+      metadata
+    )
+    values (
+      '60000000-0000-4000-8000-000000000002',
+      '10000000-0000-4000-8000-000000000001',
+      'signed_in',
+      '{"context":{"ip":"192.0.2.1"}}'::jsonb
+    )
+  $test$
+);
+select throws_ok(
+  $test$
+    insert into public.usage_events (
+      session_id,
+      user_id,
+      event_type,
+      metadata
+    )
+    values (
+      '60000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000001',
+      'answer_submitted',
+      '{"payload":{"student_answer":"must not be stored"}}'::jsonb
+    )
+  $test$
+);
+select throws_ok(
+  $test$
+    insert into public.usage_events (
+      session_id,
+      user_id,
+      event_type,
+      metadata
+    )
+    values (
+      '60000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000001',
+      'question_viewed',
+      '{"items":[{"raw_ip":"192.0.2.2"}]}'::jsonb
+    )
+  $test$
+);
+select throws_ok(
+  $test$
+    insert into public.admin_audit_log (
+      actor_user_id,
+      action_type,
+      details
+    )
+    values (
+      '10000000-0000-4000-8000-000000000002',
+      'security_setting_changed',
+      '{"context":{"email":"private@example.invalid"}}'::jsonb
+    )
+  $test$
+);
 select is(
   (
     select count(*)
@@ -526,10 +621,17 @@ select is(
   (
     select count(*)
     from public.usage_events
-    where metadata ?| array['answer_text', 'raw_ip', 'ip_address']
+    where public.jsonb_has_forbidden_keys(
+      metadata,
+      array[
+        'answer', 'answer_text', 'student_answer', 'submission_text',
+        'raw_answer', 'email', 'password', 'token', 'api_key',
+        'service_role_key', 'ip', 'ip_address', 'raw_ip'
+      ]
+    )
   ),
   0::bigint,
-  'analytics stores neither answer text nor raw IP fields'
+  'analytics recursively excludes answer, personal, secret, and IP fields'
 );
 
 set local role anon;

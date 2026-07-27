@@ -18,6 +18,8 @@ Before any command:
    password, or founder identity has been copied into the repository.
 5. Record the staging project name, reference, region, owner, and planned
    deletion date in the test notes.
+6. Treat `supabase/config.toml` as local-development configuration only. Do not
+   push its Auth settings to staging or production as part of this procedure.
 
 Stop immediately if any project identity is ambiguous.
 
@@ -61,6 +63,12 @@ constraints absent from the Phase 1B production inventory. Run
 `read_only_existing_access_inventory.sql` and retain the output as the
 before-state artifact.
 
+The two negative fixtures
+`20260728_staging_malformed_primary_key.sql` and
+`20260728_staging_malformed_foreign_key.sql` are never part of a successful
+baseline. Apply each separately in a disposable reset and confirm that the
+preflight rejects it before testing the valid fixture.
+
 ### 3. Local contract tests
 
 From the repository root:
@@ -95,6 +103,10 @@ supabase db push
 
 Do not pass database passwords on the command line or commit generated local
 link state.
+
+Before any future production push, inspect both the CLI dry-run and
+`supabase_migrations.schema_migrations`. The earlier Labor RAG migration must
+not be applied implicitly while approving Phase 1.
 
 ### 5. Execute pgTAP
 
@@ -134,6 +146,10 @@ Create synthetic test users only—never founders—and verify:
 - Onboarding fails until the approved Terms and Privacy versions are accepted.
 - Marketing consent defaults to false and withdrawal appends a new record.
 - Active-viewer queries use an unended session seen within five minutes.
+- Student A may create a dispute for Student A's submission but cannot attach a
+  dispute to Student B's submission.
+- Forbidden analytics/audit keys are rejected recursively inside nested objects
+  and arrays.
 
 Do not seed founder roles. Use synthetic staging UUIDs.
 
@@ -149,3 +165,8 @@ Run the read-only inventory again and compare it with the before-state. Save:
 
 After review, unlink the CLI and delete the disposable project according to the
 owner's retention decision. Do not proceed to Phase 2.
+
+Reverting a Git commit does not reverse database grants, policies, triggers, or
+tables. Any production rollback requires a separately reviewed forward SQL
+migration. The first-super-admin bootstrap must also be run once and serially;
+concurrent bootstrap calls are not an approved operating procedure.

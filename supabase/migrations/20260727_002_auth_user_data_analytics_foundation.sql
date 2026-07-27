@@ -33,7 +33,7 @@ revoke all privileges on table
   public.grading_results,
   public.calibration_examples,
   public.grade_disputes
-from anon, authenticated;
+from public, anon, authenticated;
 
 -- Public question discovery remains read-only.
 grant select on table public.subjects, public.questions
@@ -181,6 +181,48 @@ $$;
 -- table-level privilege was revoked above; grant only approved personal fields.
 grant update (display_name, school, enrollment_status, year_level)
   on public.profiles to authenticated;
+
+-- A dispute must belong to the authenticated user and must reference that
+-- same user's submission. Checking only grade_disputes.user_id would allow a
+-- student who learned another submission UUID to attach a dispute to it.
+do $$
+begin
+  if exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'grade_disputes'
+      and policyname = 'grade_disputes_insert_own'
+  ) then
+    alter policy grade_disputes_insert_own
+      on public.grade_disputes
+      to authenticated
+      with check (
+        (select auth.uid()) = user_id
+        and exists (
+          select 1
+          from public.submissions
+          where submissions.id = grade_disputes.submission_id
+            and submissions.user_id = (select auth.uid())
+        )
+      );
+  else
+    create policy grade_disputes_insert_own
+      on public.grade_disputes
+      for insert
+      to authenticated
+      with check (
+        (select auth.uid()) = user_id
+        and exists (
+          select 1
+          from public.submissions
+          where submissions.id = grade_disputes.submission_id
+            and submissions.user_id = (select auth.uid())
+        )
+      );
+  end if;
+end
+$$;
 
 -- ---------------------------------------------------------------------------
 -- Versioned terms acceptance and optional marketing consent history
@@ -526,6 +568,54 @@ $$;
 -- Analytics and current-viewer foundation
 -- ---------------------------------------------------------------------------
 
+-- Recursively inspect JSON objects and arrays so forbidden data cannot be
+-- hidden below the top metadata level. The function is immutable and has no
+-- table access; it exists solely for CHECK constraints.
+create or replace function public.jsonb_has_forbidden_keys(
+  p_value jsonb,
+  p_forbidden_keys text[]
+)
+returns boolean
+language plpgsql
+immutable
+strict
+security invoker
+set search_path = pg_catalog, pg_temp
+as $$
+declare
+  v_key text;
+  v_child jsonb;
+begin
+  if jsonb_typeof(p_value) = 'object' then
+    for v_key, v_child in
+      select key, value
+      from pg_catalog.jsonb_each(p_value)
+    loop
+      if lower(v_key) = any(p_forbidden_keys)
+         or public.jsonb_has_forbidden_keys(v_child, p_forbidden_keys) then
+        return true;
+      end if;
+    end loop;
+  elsif jsonb_typeof(p_value) = 'array' then
+    for v_child in
+      select value
+      from pg_catalog.jsonb_array_elements(p_value)
+    loop
+      if public.jsonb_has_forbidden_keys(v_child, p_forbidden_keys) then
+        return true;
+      end if;
+    end loop;
+  end if;
+
+  return false;
+end;
+$$;
+
+revoke all on function public.jsonb_has_forbidden_keys(jsonb, text[])
+  from public, anon, authenticated;
+grant execute on function public.jsonb_has_forbidden_keys(jsonb, text[])
+  to service_role;
+
 create table if not exists public.usage_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete set null,
@@ -540,11 +630,15 @@ create table if not exists public.usage_sessions (
     (auth_state = 'guest' and user_id is null and anonymous_session_id is not null)
     or (auth_state = 'signed_in' and user_id is not null)
   ),
-  check (
-    not (metadata ?| array[
-      'answer', 'answer_text', 'submission_text', 'raw_answer',
-      'password', 'token', 'api_key', 'ip_address', 'raw_ip'
-    ])
+  constraint usage_sessions_metadata_safe_check check (
+    not public.jsonb_has_forbidden_keys(
+      metadata,
+      array[
+        'answer', 'answer_text', 'student_answer', 'submission_text',
+        'raw_answer', 'email', 'password', 'token', 'api_key',
+        'service_role_key', 'ip', 'ip_address', 'raw_ip'
+      ]
+    )
   )
 );
 
@@ -559,13 +653,64 @@ create table if not exists public.usage_events (
   occurred_at timestamptz not null default now(),
   metadata jsonb not null default '{}'::jsonb,
   check (user_id is not null or anonymous_session_id is not null),
-  check (
-    not (metadata ?| array[
-      'answer', 'answer_text', 'submission_text', 'raw_answer',
-      'password', 'token', 'api_key', 'ip_address', 'raw_ip'
-    ])
+  constraint usage_events_metadata_safe_check check (
+    not public.jsonb_has_forbidden_keys(
+      metadata,
+      array[
+        'answer', 'answer_text', 'student_answer', 'submission_text',
+        'raw_answer', 'email', 'password', 'token', 'api_key',
+        'service_role_key', 'ip', 'ip_address', 'raw_ip'
+      ]
+    )
   )
 );
+
+-- `CREATE TABLE IF NOT EXISTS` does not amend a table created by an earlier
+-- staging run. Add the named recursive constraints when upgrading such a
+-- disposable database, while remaining repeatable.
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.usage_sessions'::regclass
+      and conname = 'usage_sessions_metadata_safe_check'
+  ) then
+    alter table public.usage_sessions
+      add constraint usage_sessions_metadata_safe_check
+      check (
+        not public.jsonb_has_forbidden_keys(
+          metadata,
+          array[
+            'answer', 'answer_text', 'student_answer', 'submission_text',
+            'raw_answer', 'email', 'password', 'token', 'api_key',
+            'service_role_key', 'ip', 'ip_address', 'raw_ip'
+          ]
+        )
+      );
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.usage_events'::regclass
+      and conname = 'usage_events_metadata_safe_check'
+  ) then
+    alter table public.usage_events
+      add constraint usage_events_metadata_safe_check
+      check (
+        not public.jsonb_has_forbidden_keys(
+          metadata,
+          array[
+            'answer', 'answer_text', 'student_answer', 'submission_text',
+            'raw_answer', 'email', 'password', 'token', 'api_key',
+            'service_role_key', 'ip', 'ip_address', 'raw_ip'
+          ]
+        )
+      );
+  end if;
+end
+$$;
 
 create index if not exists usage_sessions_last_seen_idx
   on public.usage_sessions (last_seen_at desc);
@@ -665,13 +810,41 @@ create table if not exists public.admin_audit_log (
   reason text,
   details jsonb not null default '{}'::jsonb,
   occurred_at timestamptz not null default now(),
-  check (
-    not (details ?| array[
-      'password', 'token', 'api_key', 'service_role_key',
-      'ip_address', 'raw_ip'
-    ])
+  constraint admin_audit_log_details_safe_check check (
+    not public.jsonb_has_forbidden_keys(
+      details,
+      array[
+        'answer', 'answer_text', 'student_answer', 'submission_text',
+        'raw_answer', 'email', 'password', 'token', 'api_key',
+        'service_role_key', 'ip', 'ip_address', 'raw_ip'
+      ]
+    )
   )
 );
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.admin_audit_log'::regclass
+      and conname = 'admin_audit_log_details_safe_check'
+  ) then
+    alter table public.admin_audit_log
+      add constraint admin_audit_log_details_safe_check
+      check (
+        not public.jsonb_has_forbidden_keys(
+          details,
+          array[
+            'answer', 'answer_text', 'student_answer', 'submission_text',
+            'raw_answer', 'email', 'password', 'token', 'api_key',
+            'service_role_key', 'ip', 'ip_address', 'raw_ip'
+          ]
+        )
+      );
+  end if;
+end
+$$;
 
 create index if not exists admin_audit_log_occurred_idx
   on public.admin_audit_log (occurred_at desc);

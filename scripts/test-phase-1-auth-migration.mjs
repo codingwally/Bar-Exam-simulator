@@ -22,6 +22,20 @@ const preflight = await readFile(
   "utf8",
 );
 const preflightExecutable = preflight.replace(/--.*$/gm, "");
+const malformedPrimaryKeyFixture = await readFile(
+  new URL(
+    "../supabase/tests/fixtures/20260728_staging_malformed_primary_key.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const malformedForeignKeyFixture = await readFile(
+  new URL(
+    "../supabase/tests/fixtures/20260728_staging_malformed_foreign_key.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 function has(pattern, message) {
   assert.match(sql, pattern, message);
@@ -71,8 +85,8 @@ for (const table of [
   );
 }
 has(
-  /revoke all privileges on table[\s\S]*public\.profiles[\s\S]*public\.subjects[\s\S]*public\.questions[\s\S]*public\.submissions[\s\S]*public\.grading_results[\s\S]*public\.calibration_examples[\s\S]*public\.grade_disputes[\s\S]*from anon, authenticated/i,
-  "all broad client grants on the seven core tables must be revoked",
+  /revoke all privileges on table[\s\S]*public\.profiles[\s\S]*public\.subjects[\s\S]*public\.questions[\s\S]*public\.submissions[\s\S]*public\.grading_results[\s\S]*public\.calibration_examples[\s\S]*public\.grade_disputes[\s\S]*from public, anon, authenticated/i,
+  "all PUBLIC and broad client grants on the seven core tables must be revoked",
 );
 has(
   /grant select on table public\.subjects, public\.questions[\s\S]*to anon, authenticated/i,
@@ -93,6 +107,10 @@ has(
 lacks(
   /grant update\s*\([^)]*(subscription_tier|subscription_status|profile_completed_at)/i,
   "subscription and administrative profile columns must never be client-updateable",
+);
+has(
+  /grade_disputes_insert_own[\s\S]*submissions\.id = grade_disputes\.submission_id[\s\S]*submissions\.user_id = \(select auth\.uid\(\)\)/i,
+  "grade disputes must reference a submission owned by the authenticated user",
 );
 
 // Onboarding requires a matching versioned acceptance.
@@ -149,9 +167,24 @@ has(
   /last_seen_at >= now\(\) - interval '5 minutes'/i,
   "active viewers must use the approved five-minute heartbeat window",
 );
-for (const forbiddenKey of ["answer_text", "password", "token", "api_key", "ip_address"]) {
+for (const forbiddenKey of [
+  "answer",
+  "answer_text",
+  "student_answer",
+  "email",
+  "password",
+  "token",
+  "api_key",
+  "ip",
+  "ip_address",
+  "raw_ip",
+]) {
   assert.ok(normalized.includes(`'${forbiddenKey}'`), `${forbiddenKey} must be rejected from analytics metadata`);
 }
+has(
+  /jsonb_has_forbidden_keys[\s\S]*jsonb_each[\s\S]*jsonb_array_elements/i,
+  "analytics metadata validation must recurse through objects and arrays",
+);
 has(/revoke all on public\.usage_sessions from anon, authenticated/i, "session writes must be backend-only");
 has(/revoke all on public\.usage_events from anon, authenticated/i, "event writes must be backend-only");
 
@@ -209,6 +242,36 @@ assert.match(
   preflight,
   /PHASE1_PREFLIGHT_FOREIGN_KEY_DRIFT/,
   "preflight must fail on foreign-key drift",
+);
+assert.match(
+  preflight,
+  /source_columns[\s\S]*referenced_columns[\s\S]*unnest\(con\.conkey\)[\s\S]*unnest\(con\.confkey\)/i,
+  "preflight must compare exact foreign-key source and referenced columns",
+);
+assert.match(
+  preflight,
+  /with expected\(table_name, constraint_name, key_columns\)[\s\S]*PHASE1_PREFLIGHT_PRIMARY_KEY_DRIFT/i,
+  "preflight must compare exact primary-key constraints and columns",
+);
+assert.match(
+  malformedPrimaryKeyFixture,
+  /grade_disputes_pkey primary key \(user_id\)/i,
+  "negative staging fixture must preserve the PK name while changing its constrained column",
+);
+assert.match(
+  malformedForeignKeyFixture,
+  /submissions_question_id_fkey[\s\S]*references public\.subjects\(id\)/i,
+  "negative staging fixture must preserve the FK name while changing its referenced table",
+);
+assert.match(
+  preflight,
+  /policy_roles[\s\S]*permissive_mode[\s\S]*using_expression[\s\S]*check_expression/i,
+  "preflight must compare complete RLS policy signatures",
+);
+assert.match(
+  preflight,
+  /aclexplode[\s\S]*acl\.grantee = 0[\s\S]*unexpected PUBLIC grant/i,
+  "preflight must validate direct grant provenance and reject PUBLIC grants",
 );
 assert.match(
   preflight,

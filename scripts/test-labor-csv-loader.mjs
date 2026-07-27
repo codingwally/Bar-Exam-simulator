@@ -33,8 +33,8 @@ assert.equal(result.questions.length, 59, 'All 59 Labor Law questions must load.
 assert.equal(new Set(result.questions.map((question) => question.id)).size, 59, 'Question IDs must be unique.');
 assert.deepEqual(Array.from(result.questions, (question) => question.id), Array.from({ length: 59 }, (_, index) => `LAB-${String(index + 1).padStart(3, '0')}`), 'LAB-001 through LAB-059 must all be present.');
 
-const yearCounts = Object.fromEntries(['2019', '2024', '2025'].map((year) => [year, result.questions.filter((question) => question.bar_year === year).length]));
-assert.deepEqual(yearCounts, { 2019: 20, 2024: 20, 2025: 19 }, 'Published question counts must match the approved Sheet.');
+const yearCounts = Object.fromEntries(['2019', '2023', '2024', '2025'].map((year) => [year, result.questions.filter((question) => question.bar_year === year).length]));
+assert.deepEqual(yearCounts, { 2019: 6, 2023: 14, 2024: 20, 2025: 19 }, 'Published question counts must match the approved Sheet.');
 assert.ok(result.questions.every((question) => question.model), 'Every loaded question must retain its suggested answer.');
 
 const header = matrix[result.headerIndex];

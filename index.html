@@ -725,9 +725,10 @@
     .signin-prompt-actions{grid-template-columns:1fr;}
   }
 </style>
- <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="assets/labor-csv-normalizer.js"></script>
 <script src="assets/exam-session-controller.js"></script>
+<script src="assets/website-question-bank.js"></script>
 </head>
 <body>
 
@@ -1584,6 +1585,7 @@ let historyLog = [];
 let timerInterval = null;
 let timeLeft = 720;
 let laborQuestionBankStatus = "loading";
+let websiteQuestionBankStatus = "loading";
 let gradingInProgress = false;
 let onboardingStage = "welcome";
 let examStage = "idle";
@@ -1613,11 +1615,31 @@ const sessionController = DueDiligenceExamSession.createExamSessionController({
   onExpire: () => onTimeUp(),
 });
 
-function init() {
+async function init() {
   historyLog = loadAttempts();
   setupEventListeners();
+  await loadWebsiteQuestionBank();
   renderSubjectSelection();
   showWelcome();
+}
+
+async function loadWebsiteQuestionBank() {
+  if (!window.DueDiligenceWebsiteQuestionBank) {
+    websiteQuestionBankStatus = "error";
+    console.error('The unified website question-bank loader is unavailable.');
+    return;
+  }
+  try {
+    const imported = await window.DueDiligenceWebsiteQuestionBank.load();
+    for (const subject of SUBJECTS) {
+      BAR_QUESTIONS[subject] = imported.bySubject[subject];
+    }
+    websiteQuestionBankStatus = "ready";
+    laborQuestionBankStatus = "ready";
+  } catch (error) {
+    websiteQuestionBankStatus = "error";
+    console.error('The unified website question bank could not be loaded; legacy sources remain available.', error);
+  }
 }
 
 function startTimer() {
@@ -2376,7 +2398,7 @@ window.addEventListener('DOMContentLoaded', init);
             caseLaw: row.caseLaw || ''
           }));
 
-        if (typeof BAR_QUESTIONS !== 'undefined') {
+        if (typeof BAR_QUESTIONS !== 'undefined' && websiteQuestionBankStatus !== "ready") {
           BAR_QUESTIONS["Remedial Law"] = sheetQuestions;
         }
       }
@@ -2409,7 +2431,9 @@ window.addEventListener('DOMContentLoaded', init);
         try {
           const parsed = window.DueDiligenceLaborCsv.parseRows(results.data);
           if (parsed.questions.length !== 59) throw new Error(`Expected 59 valid Labor Law questions; received ${parsed.questions.length}.`);
-          BAR_QUESTIONS["Labor Law"] = parsed.questions;
+          if (websiteQuestionBankStatus !== "ready") {
+            BAR_QUESTIONS["Labor Law"] = parsed.questions;
+          }
           laborQuestionBankStatus = "ready";
           if (parsed.invalidRows.length) console.warn('Ignored invalid Labor Law CSV rows.', parsed.invalidRows);
           if (pendingSubjectSelection === "Labor Law") {

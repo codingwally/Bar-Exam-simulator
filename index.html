@@ -502,6 +502,8 @@
   .footer-links{display:flex;gap:16px;flex-wrap:wrap;}
   .footer-links a{font-family:var(--mono);font-size:11px;letter-spacing:.5px;color:var(--gold);text-decoration:none;cursor:pointer;}
   .footer-links a:hover{text-decoration:underline;}
+  a.tabbtn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;}
+  a.btn-primary{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;}
 
   /* ---- Responsive additions ---- */
   @media (max-width:980px){
@@ -824,7 +826,7 @@
     <div class="exam-subnav">
       <button class="tabbtn active" id="tab-write">Write &amp; Practice</button>
       <button class="tabbtn" id="tab-history">History</button>
-      <button class="tabbtn feedback-btn" id="btn-open-feedback">Send Feedback</button>
+      <button class="tabbtn feedback-btn" id="btn-open-feedback">Support</button>
     </div>
 
     <div class="layout">
@@ -840,7 +842,7 @@
         <div class="svc">Architectural Planning, Structural Design &amp; Blueprint Services.</div>
         <div class="contact">
           <span>📱 <a href="tel:+639499176005">0949 917 6005</a></span>
-          <span>✉️ <a href="mailto:francismallari1020@yahoo.com">francismallari1020@yahoo.com</a></span>
+          <span>✉️ <a href="mailto:advertise@duediligence.ph?subject=Advertising%20and%20Partnership%20Inquiry" aria-label="Email Due Diligence about advertising and partnerships">advertise@duediligence.ph</a></span>
         </div>
       </div>
     </div>
@@ -894,8 +896,10 @@
     </div>
     <div class="footer-links">
       <a onclick="openModal('investor-modal')">🏛️ Angel Investors</a>
-      <a onclick="openModal('subscribe-modal')">Go Plus</a>
-      <a onclick="document.getElementById('btn-open-feedback').click()">Send Feedback</a>
+      <a href="mailto:support@duediligence.ph?subject=Due%20Diligence%20Support%20Request">Support</a>
+      <a href="mailto:premium@duediligence.ph?subject=Premium%20Plan%20Inquiry">Plans &amp; Pricing</a>
+      <a href="mailto:advertise@duediligence.ph?subject=Advertising%20and%20Partnership%20Inquiry">Advertise</a>
+      <a href="mailto:invest@duediligence.ph?subject=Investment%20Inquiry">Invest</a>
     </div>
   </div>
 </footer>
@@ -957,18 +961,13 @@
 
 <div class="modal-overlay" id="feedback-modal">
   <div class="modal-card">
-    <h3 class="modal-title">Submit Trainer Feedback</h3>
-    <div class="modal-sub">Direct Transmission to wallyesteban1993@gmail.com</div>
+    <h3 class="modal-title">Due Diligence Support</h3>
+    <div class="modal-sub">Email support@duediligence.ph</div>
     <form id="feedback-form">
-      <label style="font-family:'IBM Plex Mono',monospace; font-size:11px; display:block; margin-bottom:4px; text-transform:uppercase;">Your Name / Examinee ID</label>
-      <input type="text" class="modal-input" id="fb-name" placeholder="e.g., Atty. Future Bar Topnotcher" required>
-      
-      <label style="font-family:'IBM Plex Mono',monospace; font-size:11px; display:block; margin-bottom:4px; text-transform:uppercase;">Feedback / Suggested Scenario Adjustment</label>
-      <textarea class="modal-textarea" id="fb-message" placeholder="Describe any bug, complex case critique, or feature suggestion..." required></textarea>
-      
+      <p class="checking-copy">Open your email application to request technical help, report a problem, or send platform feedback.</p>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="btn-close-feedback">Cancel</button>
-        <button type="submit" class="btn-primary">Transmit Feedback</button>
+        <a class="btn-primary" href="mailto:support@duediligence.ph?subject=Due%20Diligence%20Support%20Request">Email Support</a>
       </div>
     </form>
   </div>
@@ -998,6 +997,7 @@
     <div class="mock-note">Demo checkout — no live payment is processed in this preview build.</div>
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn-secondary" onclick="closeModal('subscribe-modal')">Maybe later</button>
+      <a class="btn-primary" href="mailto:premium@duediligence.ph?subject=Premium%20Plan%20Inquiry">Plans &amp; Pricing</a>
     </div>
   </div>
 </div>
@@ -1038,7 +1038,7 @@
     </div>
     <div class="patron-cta">
       <p>Interested in joining our Seed Round as a future Angel Investor?</p>
-      <a class="btn-primary" href="mailto:wallyesteban1993@gmail.com?subject=Angel%20Investment%20Inquiry&body=I%20am%20interested%20in%20learning%20more%20about%20joining%20the%20Due%20Diligence%20seed%20round%20as%20an%20Angel%20Investor.">Become a Patron / Contact Founders</a>
+      <a class="btn-primary" href="mailto:invest@duediligence.ph?subject=Investment%20Inquiry">Become a Patron / Contact Founders</a>
     </div>
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn-secondary" onclick="closeModal('investor-modal')">Close</button>
@@ -1060,7 +1060,7 @@
 </div>
 
 
-<!-- Suggest Correction / Better Answer modal (Web3Forms + mailto fallback) -->
+<!-- Suggest Correction / Better Answer modal (mailto only) -->
 <div class="modal-overlay" id="suggest-modal">
   <div class="modal-card">
     <h3 class="modal-title">Suggest a Correction</h3>
@@ -1073,9 +1073,9 @@
     <input class="modal-input" type="email" id="suggest-email" placeholder="you@example.com" autocomplete="off">
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('suggest-modal')">Cancel</button>
-      <button class="btn-primary" onclick="submitSuggestion()">Send to Editorial Board</button>
+      <a class="btn-primary" id="suggest-mailto" href="mailto:support@duediligence.ph?subject=Due%20Diligence%20Support%20Request" onclick="return submitSuggestion(this)">Email Editorial Support</a>
     </div>
-    <div class="mock-note" style="margin-top:12px;">Delivered to the Bar Review Editorial Board via secure form (Web3Forms), with an email fallback.</div>
+    <div class="mock-note" style="margin-top:12px;">Opens your email application; no contact-form backend is used.</div>
   </div>
 </div>
 
@@ -1104,7 +1104,7 @@
     <div class="b2b-cta">
       <h4>Equip your entire cohort</h4>
       <p>Seat-based licensing, proctored timed exams, and instructor dashboards for law schools and bar review centers.</p>
-      <a class="btn-primary" href="mailto:wallyesteban1993@gmail.com?subject=Institutional%20Licensing%20Inquiry%20-%20Due%20Diligence&body=We%20are%20interested%20in%20B2B%20licensing%20for%20our%20institution.">Inquire for Institutional Licensing</a>
+      <a class="btn-primary" href="mailto:premium@duediligence.ph?subject=Premium%20Plan%20Inquiry">Inquire for Institutional Licensing</a>
     </div>
     <div class="modal-actions" style="margin-top:16px;">
       <button class="btn-secondary" onclick="closeModal('b2b-modal')">Close</button>
@@ -1889,20 +1889,11 @@ function setupEventListeners() {
     renderMainHistory();
   });
 
-  const fbModal = document.getElementById("feedback-modal");
   document.getElementById("btn-open-feedback").addEventListener("click", () => {
     openModal("feedback-modal");
   });
   document.getElementById("btn-close-feedback").addEventListener("click", () => {
     closeModal("feedback-modal");
-  });
-  document.getElementById("feedback-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const name = document.getElementById("fb-name").value;
-    const msg = document.getElementById("fb-message").value;
-    window.location.href = `mailto:wallyesteban1993@gmail.com?subject=Due%20Diligence%20Trainer%20Feedback%20from%20${encodeURIComponent(name)}&body=${encodeURIComponent(msg)}`;
-    fbModal.classList.remove("open");
-    alert("Feedback client prepared for dispatch to wallyesteban1993@gmail.com!");
   });
 }
 
@@ -2706,14 +2697,12 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script>
 /* =====================================================================
-   ROUND 3 layer — session clock, toast, feedback loop, Web3Forms email
-   dispatch, B2B toggle, voice dictation. Reuses existing globals.
+   ROUND 3 layer — session clock, toast, mailto feedback loop,
+   B2B toggle, voice dictation. Reuses existing globals.
    ===================================================================== */
 
-/* Web3Forms access key (public by design — lives client-side).
-   If unset/placeholder, submissions fall back to a mailto: to the editor. */
-const WEB3FORMS_KEY = '651c6e33-9972-496f-ac1b-d8e49a0bc496';
-const EDITOR_EMAIL  = 'wallyesteban1993@gmail.com';
+const SUPPORT_EMAIL = 'support@duediligence.ph';
+const SUPPORT_SUBJECT = 'Due Diligence Support Request';
 
 /* ---------- Toast ---------- */
 function toast(msg, type) {
@@ -2767,44 +2756,28 @@ function openSuggest() {
   if (orig) orig.textContent = q.model;
   openModal('suggest-modal');
 }
-async function submitSuggestion() {
+function submitSuggestion(link) {
   const q = BAR_QUESTIONS[currentSubj][currentIdx];
   const suggestion = (document.getElementById('suggest-text').value || '').trim();
   const email = (document.getElementById('suggest-email').value || '').trim();
-  if (suggestion.length < 5) { toast('Please enter your suggested answer first.', 'warn'); return; }
+  if (suggestion.length < 5) {
+    toast('Please enter your suggested answer first.', 'warn');
+    return false;
+  }
 
-  const subject = `[Due Diligence Bar AI] Suggested Correction - Item #${q.id}`;
   const message =
-    `Question ID: ${q.id}\nSubject: ${currentSubj}\nSubmitted: ${new Date().toLocaleString()}\n` +
+    `Suggested correction for ${q.id}\nSubject area: ${currentSubj}\nSubmitted: ${new Date().toLocaleString()}\n` +
     `Submitter email: ${email || '(not provided)'}\n\n` +
     `--- ORIGINAL MODEL ANSWER ---\n${q.model}\n\n` +
     `--- USER SUGGESTED ANSWER ---\n${suggestion}\n`;
 
-  const onSuccess = () => {
+  link.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(SUPPORT_SUBJECT)}&body=${encodeURIComponent(message)}`;
+  setTimeout(() => {
     document.getElementById('suggest-text').value = '';
     closeModal('suggest-modal');
-    toast('Suggested answer sent directly to the Bar Review Editorial Board (' + EDITOR_EMAIL + ')!', 'ok');
-  };
-  const mailtoFallback = () => {
-    window.location.href = `mailto:${EDITOR_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
-    onSuccess();
-  };
-
-  if (!WEB3FORMS_KEY || WEB3FORMS_KEY.indexOf('YOUR_') !== -1) { mailtoFallback(); return; }
-  try {
-    const res = await fetch('https://api.web3forms.com/submit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        access_key: WEB3FORMS_KEY,
-        from_name: 'Due Diligence Legal AI',
-        subject: subject,
-        email: email || 'no-reply@duediligence.app',
-        message: message
-      })
-    });
-    if (res.ok) { onSuccess(); } else { mailtoFallback(); }
-  } catch (e) { mailtoFallback(); }
+    toast('Email draft prepared for ' + SUPPORT_EMAIL + '.', 'ok');
+  }, 0);
+  return true;
 }
 
 /* ---------- B2B view switch ---------- */

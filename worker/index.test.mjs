@@ -175,3 +175,118 @@ test('Worker applies the cap after Gemini returns a high score', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+const reliabilityOrigin = 'https://duediligence.ph';
+const reliabilityBankUrl = `${reliabilityOrigin}/content/question-bank/website-upload.json`;
+const reliabilityAnswer = [
+  'Answer: Yes. The claim succeeds.',
+  'Legal Basis: Article 1174 of the Civil Code governs fortuitous events.',
+  'Application: The fortuitous event in the question prevented performance and satisfies the governing rule.',
+  'Conclusion: Therefore, the claim succeeds.',
+].join('\n\n');
+
+function reliabilityBankRecord(index) {
+  return {
+    'Question ID': index === 0 ? 'CIV-2024-Q01' : `TEST-${String(index).padStart(3, '0')}`,
+    Subject: 'Civil Law',
+    'Essay Question': index === 0
+      ? 'Did a fortuitous event prevent performance and allow the claim to succeed?'
+      : `Question ${index}`,
+    'Suggested Answer': reliabilityAnswer,
+    'Legal Basis / Provision': 'Civil Code, Article 1174',
+    'Jurisprudence / Case': 'Virginia Real v. Belo',
+    'Citation / G.R. No.': 'G.R. No. 146224',
+    'Source URL': 'https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/40783',
+  };
+}
+
+function reliabilityModelResult() {
+  return {
+    ...modelAssessment(4),
+    tier: '4.0',
+    performanceLabel: 'Strong answer',
+    rationale: 'The answer states the rule and applies it to the facts.',
+    strengths: ['Direct answer'],
+    improvements: ['Add more factual detail'],
+    legalExplanation: 'Article 1174 governs fortuitous events.',
+    modelAnswerALAC: {
+      answer: 'Yes.',
+      legalBasis: 'Article 1174 of the Civil Code applies.',
+      application: 'The stated facts satisfy the rule.',
+      conclusion: 'Therefore, the claim succeeds.',
+    },
+  };
+}
+
+function reliabilityGradingRequest() {
+  return new Request('https://worker.example', {
+    method: 'POST',
+    headers: {
+      Origin: reliabilityOrigin,
+      'Content-Type': 'application/json',
+      'CF-Connecting-IP': '203.0.113.10',
+    },
+    body: JSON.stringify({
+      questionId: 'CIV-2024-Q01',
+      studentAnswer: reliabilityAnswer,
+    }),
+  });
+}
+
+test('transient Gemini failures are retried and do not lock a failed submission', async () => {
+  const originalFetch = globalThis.fetch;
+  let providerMode = 'fail';
+  let providerCalls = 0;
+
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target === reliabilityBankUrl) {
+      return Response.json({
+        records: Array.from({ length: 320 }, (_, index) => reliabilityBankRecord(index)),
+      });
+    }
+    if (target.startsWith('https://generativelanguage.googleapis.com/')) {
+      providerCalls += 1;
+      if (providerMode === 'fail') {
+        return Response.json(
+          { error: { status: 'UNAVAILABLE', message: 'temporary outage' } },
+          { status: 503 },
+        );
+      }
+      return Response.json({
+        candidates: [{
+          content: {
+            parts: [{ text: JSON.stringify(reliabilityModelResult()) }],
+          },
+        }],
+      });
+    }
+    throw new Error(`Unexpected fetch: ${target}`);
+  };
+
+  try {
+    const env = {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      GEMINI_API_KEY: 'test-key',
+      GEMINI_MODEL: 'gemini-test',
+      GEMINI_GROUNDING_ENABLED: 'false',
+      WEBSITE_BANK_URL: reliabilityBankUrl,
+    };
+
+    const failedResponse = await worker.fetch(reliabilityGradingRequest(), env);
+    const failedPayload = await failedResponse.json();
+    assert.equal(failedResponse.status, 502);
+    assert.equal(failedPayload.error.code, 'EXAMINER_UNAVAILABLE');
+    assert.ok(providerCalls >= 2, 'the Worker should retry transient provider failures');
+
+    providerMode = 'success';
+    const retryResponse = await worker.fetch(reliabilityGradingRequest(), env);
+    const retryPayload = await retryResponse.json();
+    assert.equal(retryResponse.status, 200);
+    assert.equal(retryPayload.ok, true);
+    assert.equal(retryPayload.assessment.score, 4);
+    assert.equal(retryPayload.assessment.questionAuthority, 'server_question_bank');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

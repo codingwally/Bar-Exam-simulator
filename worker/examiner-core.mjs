@@ -128,15 +128,24 @@ export function questionFromBankRow(row) {
   if (!row) return null;
   const caseName = cleanText(row['Jurisprudence / Case'] || row.case_name);
   const caseCitation = cleanText(row['Citation / G.R. No.'] || row.case_citation);
+  const sourceText = [
+    row['Legal Basis / Provision'],
+    row['Source URL'],
+    row.source_url,
+  ].map((value) => cleanText(value)).join('\n');
+  const sourceUrl =
+    sourceText.match(/https:\/\/elibrary\.judiciary\.gov\.ph[^\s;,)]*/i)?.[0]
+    || sourceText.match(/https:\/\/(?:sc\.judiciary\.gov\.ph|lawphil\.net)[^\s;,)]*/i)?.[0]
+    || '';
   return {
     subject: cleanText(row.Subject || row.subject),
-    question: cleanText(row['Essay Question'] || row.question),
-    suggestedAnswer: cleanText(row['Suggested Answer'] || row.suggested_answer),
-    legalBasis: cleanText(row['Legal Basis / Provision'] || row.legal_basis),
+    question: cleanText(row['Essay Question'] || row.question).replace(/\s*\(noun\)/gi, ''),
+    suggestedAnswer: cleanText(row['Suggested Answer'] || row.suggested_answer).replace(/\s*\(noun\)/gi, ''),
+    legalBasis: cleanText(row['Legal Basis / Provision'] || row.legal_basis).replace(/\s*\(noun\)/gi, ''),
     caseName,
     caseCitation,
     sourceTitle: cleanText(row['Source Title'] || row.source_title || [caseName, caseCitation].filter(Boolean).join(', ')),
-    sourceUrl: cleanText(row['Source URL'] || row.source_url),
+    sourceUrl,
     verified: /^(true|yes|verified|1)$/i.test(cleanText(row.Verified || row.verified)),
     lawCutoffDate: cleanText(row['Law Cutoff Date'] || row.law_cutoff_date),
     authority: 'server_question_bank',

@@ -18,9 +18,11 @@ const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
 const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
+const WEBSITE_BANK_URL = 'https://duediligence.ph/content/question-bank/website-upload.json';
 const rateWindows = new Map();
 const recentSubmissions = new Map();
 let laborBankCache = null;
+let websiteBankCache = null;
 
 function corsHeaders(origin, allowedOrigin) {
   return {
@@ -98,6 +100,36 @@ async function loadLaborBank(csvUrl) {
   return records;
 }
 
+async function loadWebsiteBank(url) {
+  const now = Date.now();
+  if (websiteBankCache && now - websiteBankCache.loadedAt < 5 * 60 * 1000) {
+    return websiteBankCache.records;
+  }
+  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!response.ok) {
+    throw new ExaminerError('QUESTION_BANK_UNAVAILABLE', 'The website question bank is temporarily unavailable.', 503);
+  }
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank returned invalid JSON.', 502);
+  }
+  if (!Array.isArray(payload?.records) || payload.records.length !== 320) {
+    throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank must contain exactly 320 records.', 502);
+  }
+  const records = new Map();
+  for (const row of payload.records) {
+    const id = String(row?.['Question ID'] || '').trim();
+    if (!id || records.has(id)) {
+      throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank contains an invalid or duplicate ID.', 502);
+    }
+    records.set(id, row);
+  }
+  websiteBankCache = { records, loadedAt: now };
+  return records;
+}
+
 function orderedModels(configuredModel) {
   return [...new Set([configuredModel || DEFAULT_MODEL, ...MODEL_FALLBACKS])];
 }
@@ -137,6 +169,7 @@ async function callGemini(env, prompt, groundingEnabled) {
 
   let lastUnsupported = '';
   let quotaSeen = false;
+  let providerFailureSeen = false;
   for (const model of orderedModels(env.GEMINI_MODEL)) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
@@ -184,28 +217,38 @@ async function callGemini(env, prompt, groundingEnabled) {
             quotaSeen = true;
             break;
           }
-          throw new ExaminerError('EXAMINER_UNAVAILABLE', 'The examiner could not complete this assessment.', 502);
+          if (response.status === 401 || response.status === 403) {
+            throw new ExaminerError('EXAMINER_NOT_CONFIGURED', 'The AI examiner is not configured correctly. Please contact the administrator.', 503);
+          }
+          providerFailureSeen = true;
+          break;
         }
 
         let payload;
         try {
           payload = JSON.parse(responseText);
         } catch {
-          throw new ExaminerError('MALFORMED_MODEL_RESPONSE', 'The examiner returned an unreadable assessment.', 502);
+          providerFailureSeen = true;
+          break;
         }
         const answerText = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim();
-        if (!answerText) throw new ExaminerError('MALFORMED_MODEL_RESPONSE', 'The examiner returned an empty assessment.', 502);
+        if (!answerText) {
+          providerFailureSeen = true;
+          break;
+        }
         let result;
         try {
           result = JSON.parse(answerText);
         } catch {
-          throw new ExaminerError('MALFORMED_MODEL_RESPONSE', 'The examiner returned invalid structured data.', 502);
+          providerFailureSeen = true;
+          break;
         }
         return { model, result, groundedSources: groundedSources(payload), groundingUsed: useGrounding };
       }
     } catch (error) {
       if (error?.name === 'AbortError') {
-        throw new ExaminerError('EXAMINER_TIMEOUT', 'The assessment timed out. Please try again.', 504);
+        providerFailureSeen = true;
+        continue;
       }
       throw error;
     } finally {
@@ -214,6 +257,9 @@ async function callGemini(env, prompt, groundingEnabled) {
   }
   if (quotaSeen) {
     throw new ExaminerError('EXAMINER_QUOTA_EXCEEDED', 'The examiner is temporarily busy. Please try again later.', 503);
+  }
+  if (providerFailureSeen) {
+    throw new ExaminerError('EXAMINER_UNAVAILABLE', 'The examiner could not complete this assessment.', 502);
   }
   throw new ExaminerError(
     'UNSUPPORTED_MODEL',
@@ -234,12 +280,22 @@ async function handleGrade(request, env, origin, allowedOrigin) {
   await rejectRecentDuplicate(gradingRequest, request);
 
   let bankContext = null;
-  if (/^LAB-\d{3}$/i.test(gradingRequest.questionId)) {
+  try {
+    const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
+    bankContext = questionFromBankRow(records.get(gradingRequest.questionId));
+  } catch (error) {
+    console.warn('Unified website question bank unavailable; using compatibility context.', {
+      code: error?.code || 'UNKNOWN',
+    });
+  }
+  if (!bankContext && /^LAB-\d{3}$/i.test(gradingRequest.questionId)) {
     try {
       const records = await loadLaborBank(env.LABOR_CSV_URL || LABOR_CSV_URL);
       bankContext = questionFromBankRow(records.get(gradingRequest.questionId));
     } catch (error) {
-      if (!(error instanceof ExaminerError)) throw error;
+      console.warn('Labor compatibility bank unavailable; using client context.', {
+        code: error?.code || 'UNKNOWN',
+      });
     }
   }
 
@@ -252,17 +308,31 @@ async function handleGrade(request, env, origin, allowedOrigin) {
     policy,
   });
   const groundingEnabled = String(env.GEMINI_GROUNDING_ENABLED).toLowerCase() === 'true';
-  const gemini = await callGemini(env, prompt, groundingEnabled);
   const storedSources = sanitizeSources(context.sourceUrl ? [{
     title: context.sourceTitle || context.caseName || 'Stored question-bank source',
     url: context.sourceUrl,
     type: 'stored',
   }] : []);
-  const assessment = validateExaminerResult(
-    gemini.result,
-    policy,
-    [...storedSources, ...gemini.groundedSources],
-  );
+  let gemini;
+  let assessment;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const attemptPrompt = attempt === 0
+      ? prompt
+      : `${prompt}\n\nRETRY: The previous response failed validation. Return complete schema-valid JSON, and start the conclusion with "Therefore,".`;
+    gemini = await callGemini(env, attemptPrompt, groundingEnabled);
+    try {
+      assessment = validateExaminerResult(
+        gemini.result,
+        policy,
+        [...storedSources, ...gemini.groundedSources],
+      );
+      break;
+    } catch (error) {
+      if (!(error instanceof ExaminerError) || error.code !== 'MALFORMED_MODEL_RESPONSE' || attempt === 1) {
+        throw error;
+      }
+    }
+  }
 
   return jsonResponse({
     ok: true,

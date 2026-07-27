@@ -55,6 +55,13 @@ function text(value) {
   return String(value ?? '');
 }
 
+export function stripNounMarkers(value) {
+  return text(value)
+    .replace(/\s*\(noun\)/gi, '')
+    .replace(/[ \t]+([,.;:!?])/g, '$1')
+    .replace(/[ \t]{2,}/g, ' ');
+}
+
 function recordsFromCsv(csv) {
   const rows = parseCsv(csv);
   const selected = rows.slice(0, 321);
@@ -67,7 +74,7 @@ function recordsFromCsv(csv) {
   }
   return selected.slice(1).map((cells, offset) => ({
     __rowNumber: offset + 2,
-    ...Object.fromEntries(HEADERS.map((header, index) => [header, text(cells[index])])),
+    ...Object.fromEntries(HEADERS.map((header, index) => [header, stripNounMarkers(cells[index])])),
   }));
 }
 
@@ -96,6 +103,7 @@ export function validateRecords(records) {
     if (record['Editorial Status'].trim() !== 'Approved') reasons.push('Editorial Status is not Approved');
     if (record['Publication Ready?'].trim() !== 'Yes') reasons.push('Publication Ready? is not Yes');
     if (!record.Notes.includes(NOTES_PHRASE)) reasons.push('Required Notes phrase is missing');
+    if (/\(noun\)/i.test(JSON.stringify(record))) reasons.push('Internal noun marker is still present');
     for (const heading of ALAC_HEADINGS) {
       if (!new RegExp(`(^|\\n)\\s*${heading}\\s*:`, 'i').test(answer)) {
         reasons.push(`Suggested Answer lacks ${heading}`);
@@ -121,7 +129,7 @@ export function validateRecords(records) {
 }
 
 function cleanRecord(record) {
-  return Object.fromEntries(HEADERS.map((header) => [header, record[header]]));
+  return Object.fromEntries(HEADERS.map((header) => [header, stripNounMarkers(record[header])]));
 }
 
 async function readExisting() {

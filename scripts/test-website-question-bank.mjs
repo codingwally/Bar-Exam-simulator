@@ -10,6 +10,7 @@ import {
 const payload = JSON.parse(await fs.readFile(OUTPUT_PATH, 'utf8'));
 assert.deepEqual(payload.headers, HEADERS, 'A:U headers must remain exact.');
 assert.equal(payload.records.length, 320, 'Rows 2–321 must produce exactly 320 records.');
+assert.doesNotMatch(JSON.stringify(payload.records), /\(noun\)/i, 'Internal noun markers must never reach the website bank.');
 
 const validation = validateRecords(
   payload.records.map((record, index) => ({ __rowNumber: index + 2, ...record })),
@@ -26,5 +27,6 @@ for (const subject of APPROVED_SUBJECTS) {
 const html = await fs.readFile(new URL('../index.html', import.meta.url), 'utf8');
 assert.match(html, /assets\/website-question-bank\.js/, 'Frontend loader must be included.');
 assert.match(html, /loadWebsiteQuestionBank\(\)/, 'Frontend must initialize the imported bank.');
+assert.doesNotMatch(html, />← Prev Question</, 'The Previous question control must remain removed.');
 
 console.log('Website Upload question-bank tests passed.');

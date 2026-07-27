@@ -4,6 +4,7 @@ import {
   LABOR_CSV_URL,
   MODEL_FALLBACKS,
   RESPONSE_SCHEMA,
+  applyDeterministicScoreCap,
   assessmentPolicy,
   buildExaminerPrompt,
   chooseQuestionContext,
@@ -258,10 +259,15 @@ async function handleGrade(request, env, origin, allowedOrigin) {
     url: context.sourceUrl,
     type: 'stored',
   }] : []);
-  const assessment = validateExaminerResult(
+  const validatedAssessment = validateExaminerResult(
     gemini.result,
     policy,
     [...storedSources, ...gemini.groundedSources],
+  );
+  const assessment = applyDeterministicScoreCap(
+    validatedAssessment,
+    gradingRequest.studentAnswer,
+    context,
   );
 
   return jsonResponse({

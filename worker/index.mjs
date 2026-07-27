@@ -35,6 +35,18 @@ import {
   normalizeSupportRequest,
   supportInsertRecord,
 } from './support-core.mjs';
+import {
+  AnalyticsValidationError,
+  analyticsRpcPayload,
+  normalizeAnalyticsEvent,
+} from './analytics-core.mjs';
+import {
+  AdminValidationError,
+  aggregateCsv,
+  normalizeAdminAction,
+  normalizeDashboardRequest,
+  normalizeOperationalRequest,
+} from './admin-core.mjs';
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
@@ -48,6 +60,8 @@ const WEBSITE_BANK_URL = 'https://duediligence.ph/content/question-bank/website-
 const rateWindows = new Map();
 const correctionRateWindows = new Map();
 const supportRateWindows = new Map();
+const analyticsRateWindows = new Map();
+const adminRateWindows = new Map();
 const recentSubmissions = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
@@ -56,7 +70,16 @@ function corsHeaders(origin, allowedOrigin) {
   return {
     'Access-Control-Allow-Origin': origin === allowedOrigin ? origin : allowedOrigin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Guest-Device-ID, X-Request-ID',
+    'Access-Control-Allow-Headers': [
+      'Content-Type',
+      'Authorization',
+      'X-Guest-Device-ID',
+      'X-Request-ID',
+      'X-DD-Session-ID',
+      'X-DD-Visitor-ID',
+      'X-DD-Event-Key',
+      'X-DD-Page-Area',
+    ].join(', '),
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
@@ -124,6 +147,24 @@ async function enforceSupportRateLimit(request, env) {
     await transientRateKey(request, env, 'support'),
     MAX_SUPPORT_REQUESTS_PER_WINDOW,
     'Too many support requests. Please wait a few minutes and try again.',
+  );
+}
+
+async function enforceAnalyticsRateLimit(request, env) {
+  enforceWindow(
+    analyticsRateWindows,
+    await transientRateKey(request, env, 'analytics'),
+    60,
+    'Too many analytics events.',
+  );
+}
+
+async function enforceAdminRateLimit(request, env) {
+  enforceWindow(
+    adminRateWindows,
+    await transientRateKey(request, env, 'admin'),
+    90,
+    'Too many administrator requests. Please wait and try again.',
   );
 }
 
@@ -201,6 +242,38 @@ async function supabaseRpc(env, functionName, body) {
     );
   }
   return response.json().catch(() => null);
+}
+
+async function protectedSupabaseRpc(env, functionName, body) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) {
+    const denied = response.status === 401
+      || response.status === 403
+      || /authorization|capability|required|not allowed/i.test(String(result?.message || ''));
+    console.error('Protected storage request failed', {
+      operation: functionName,
+      status: response.status,
+      denied,
+    });
+    throw new ExaminerError(
+      denied ? 'ADMIN_FORBIDDEN' : 'ADMIN_DATA_UNAVAILABLE',
+      denied
+        ? 'You are not authorized for this administrator operation.'
+        : 'Administrator data is temporarily unavailable.',
+      denied ? 403 : 503,
+    );
+  }
+  return result;
 }
 
 async function verifiedAuthenticatedUser(request, env) {
@@ -588,6 +661,7 @@ async function handleGrade(request, env, origin, allowedOrigin) {
       assessment: {
         ...assessment,
         modelUsed: gemini.model,
+        workerVersion: env.WORKER_RELEASE || 'phase3-admin-analytics',
         gradedAt: new Date().toISOString(),
         questionAuthority: context.authority,
         groundingEnabled: gemini.groundingUsed,
@@ -661,6 +735,7 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
     );
   }
 
+  const correctionUser = await verifiedAuthenticatedUser(request, env);
   const insertResponse = await fetch(
     new URL('/rest/v1/question_corrections', supabaseUrl),
     {
@@ -671,7 +746,10 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
         'Content-Type': 'application/json',
         Prefer: 'return=minimal',
       },
-      body: JSON.stringify(correctionInsertRecord(correction)),
+      body: JSON.stringify({
+        ...correctionInsertRecord(correction),
+        user_id: correctionUser?.id || null,
+      }),
     },
   );
 
@@ -716,6 +794,7 @@ async function handleSupport(request, env, origin, allowedOrigin) {
     throw error;
   }
 
+  const supportUser = await verifiedAuthenticatedUser(request, env);
   const supabaseUrl = configuredSupabaseUrl(env);
   const response = await fetch(new URL('/rest/v1/support_requests', supabaseUrl), {
     method: 'POST',
@@ -725,7 +804,10 @@ async function handleSupport(request, env, origin, allowedOrigin) {
       'Content-Type': 'application/json',
       Prefer: 'return=minimal',
     },
-    body: JSON.stringify(supportInsertRecord(supportRequest)),
+    body: JSON.stringify({
+      ...supportInsertRecord(supportRequest),
+      user_id: supportUser?.id || null,
+    }),
   });
   if (!response.ok) {
     console.error('Support storage request failed', { status: response.status });
@@ -739,6 +821,216 @@ async function handleSupport(request, env, origin, allowedOrigin) {
     ok: true,
     message: 'Your support request was received.',
   }, 201, origin, allowedOrigin);
+}
+
+async function parseBoundedJson(request, maximumBytes = 20_000) {
+  const declaredLength = Number(request.headers.get('Content-Length') || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
+    throw new ExaminerError('REQUEST_TOO_LARGE', 'The request is too large.', 413);
+  }
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).byteLength > maximumBytes) {
+    throw new ExaminerError('REQUEST_TOO_LARGE', 'The request is too large.', 413);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new ExaminerError('INVALID_JSON', 'The request contains invalid JSON.', 400);
+  }
+}
+
+async function requireAdministrator(request, env) {
+  const user = await verifiedAuthenticatedUser(request, env);
+  if (!user) throw new ExaminerError('ADMIN_SIGN_IN_REQUIRED', 'Administrator sign-in is required.', 401);
+  return user;
+}
+
+async function handleAnalytics(request, env, origin, allowedOrigin) {
+  await enforceAnalyticsRateLimit(request, env);
+  const payload = await parseBoundedJson(request, 12_000);
+  let event;
+  try {
+    event = normalizeAnalyticsEvent(payload);
+  } catch (error) {
+    if (error instanceof AnalyticsValidationError) {
+      throw new ExaminerError('INVALID_ANALYTICS_EVENT', error.message, 400);
+    }
+    throw error;
+  }
+  const user = await verifiedAuthenticatedUser(request, env);
+  const result = await protectedSupabaseRpc(
+    env,
+    'record_usage_event',
+    analyticsRpcPayload(event, user?.id || null),
+  );
+  return jsonResponse({ ok: true, accepted: Boolean(result?.accepted) }, 202, origin, allowedOrigin);
+}
+
+async function handleAdminSession(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const result = await protectedSupabaseRpc(env, 'admin_authorization_context', {
+    p_actor_user_id: user.id,
+  });
+  return jsonResponse({ ok: true, ...result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminDashboard(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let report;
+  try {
+    report = normalizeDashboardRequest(await parseBoundedJson(request));
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_dashboard_snapshot', {
+    p_actor_user_id: user.id,
+    p_from: report.from,
+    p_to: report.to,
+    p_previous_from: report.previousFrom,
+    p_previous_to: report.previousTo,
+  });
+  try {
+    const bank = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
+    const subjects = new Set(Array.from(bank.values()).map((row) => String(row.Subject || row.subject || '').trim()).filter(Boolean));
+    result.inventory = {
+      ...(result.inventory || {}),
+      public_question_bank: bank.size,
+      public_subjects: subjects.size,
+      source: 'Published Website Upload question bank',
+    };
+  } catch {
+    result.inventory = {
+      ...(result.inventory || {}),
+      public_question_bank: null,
+      public_subjects: null,
+      source: 'Published question bank temporarily unavailable',
+    };
+  }
+  return jsonResponse({ ok: true, report: result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminData(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let query;
+  try {
+    query = normalizeOperationalRequest(await parseBoundedJson(request));
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_operational_data', {
+    p_actor_user_id: user.id,
+    p_section: query.section,
+    p_search: query.search,
+    p_limit: query.limit,
+    p_offset: query.offset,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminAction(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let action;
+  try {
+    action = normalizeAdminAction(await parseBoundedJson(request));
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_ACTION', error.message, 400);
+    }
+    throw error;
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_execute_action', {
+    p_actor_user_id: user.id,
+    p_action: action.action,
+    p_target_id: action.targetId,
+    p_payload: action.payload,
+    p_reason: action.reason,
+    p_request_key: action.requestKey,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminEmailReveal(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const payload = await parseBoundedJson(request, 4_000);
+  const targetUserId = String(payload?.targetUserId || '');
+  const reason = String(payload?.reason || '').trim();
+  if (!/^[0-9a-f-]{36}$/i.test(targetUserId) || reason.length < 5 || reason.length > 1000) {
+    throw new ExaminerError('INVALID_ADMIN_ACTION', 'A valid user and reason are required.', 400);
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_reveal_user_email', {
+    p_actor_user_id: user.id,
+    p_target_user_id: targetUserId,
+    p_reason: reason,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminEmailSearch(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const payload = await parseBoundedJson(request, 4_000);
+  const email = String(payload?.email || '').trim().toLowerCase();
+  const reason = String(payload?.reason || '').trim();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+      || reason.length < 5 || reason.length > 1000) {
+    throw new ExaminerError('INVALID_ADMIN_ACTION', 'A valid exact email and reason are required.', 400);
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_find_user_by_email', {
+    p_actor_user_id: user.id,
+    p_email: email,
+    p_reason: reason,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminExport(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let report;
+  try {
+    report = normalizeDashboardRequest(await parseBoundedJson(request));
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  const snapshot = await protectedSupabaseRpc(env, 'admin_dashboard_snapshot', {
+    p_actor_user_id: user.id,
+    p_from: report.from,
+    p_to: report.to,
+    p_previous_from: report.previousFrom,
+    p_previous_to: report.previousTo,
+  });
+  await protectedSupabaseRpc(env, 'admin_execute_action', {
+    p_actor_user_id: user.id,
+    p_action: 'aggregate_export',
+    p_target_id: null,
+    p_payload: { aggregate_only: true },
+    p_reason: 'Authorized aggregate business report export',
+    p_request_key: crypto.randomUUID().replace(/-/g, ''),
+  });
+  return new Response(aggregateCsv(snapshot), {
+    status: 200,
+    headers: {
+      ...corsHeaders(origin, allowedOrigin),
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="due-diligence-aggregate-report.csv"',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
 }
 
 export default {
@@ -759,6 +1051,30 @@ export default {
       }
       if (pathname === '/support') {
         return await handleSupport(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/analytics/events') {
+        return await handleAnalytics(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/session') {
+        return await handleAdminSession(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/dashboard') {
+        return await handleAdminDashboard(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/data') {
+        return await handleAdminData(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/action') {
+        return await handleAdminAction(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/reveal-email') {
+        return await handleAdminEmailReveal(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/find-email') {
+        return await handleAdminEmailSearch(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/export') {
+        return await handleAdminExport(request, env, origin, allowedOrigin);
       }
       if (pathname !== '/') {
         throw new ExaminerError('NOT_FOUND', 'This endpoint does not exist.', 404);

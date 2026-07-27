@@ -569,7 +569,7 @@ test('support validation rejects exam answers and stores only approved fields', 
     category: 'technical',
     message: 'The page remains on the loading state after I submit the form.',
     reply_email: 'student@example.com',
-    status: 'new',
+    status: 'pending',
   });
   assert.throws(() => normalizeSupportRequest({
     category: 'content',

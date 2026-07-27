@@ -16,6 +16,7 @@
     previousFocus: null,
     reminderResolve: null,
     guestUsage: null,
+    admin: null,
   };
 
   const originalContinueAsGuest = global.continueAsGuest;
@@ -322,7 +323,9 @@
       const avatarInitials = avatar.querySelector('.av');
       const tier = avatar.querySelector('.tier');
       if (avatarInitials) avatarInitials.textContent = signedIn ? initials() : 'DD';
-      if (tier) tier.textContent = signedIn ? 'Student account' : 'Guest';
+      if (tier) tier.textContent = signedIn
+        ? (state.admin?.authorized ? (state.admin.role === 'super_admin' ? 'Super Admin' : 'Administrator') : 'Student account')
+        : 'Guest';
     }
     const badge = document.getElementById('dd2-guest-badge');
     if (badge) {
@@ -353,6 +356,23 @@
     ]);
     state.profile = profile || null;
     state.marketingOptIn = Boolean(marketing?.[0]?.opted_in);
+    state.admin = null;
+    if (state.session?.access_token && config.features.adminDashboard) {
+      try {
+        const response = await fetch(`${config.workerUrl}/admin/session`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${state.session.access_token}`,
+          },
+          body: '{}',
+        });
+        const admin = await response.json().catch(() => null);
+        if (response.ok && admin?.authorized) state.admin = admin;
+      } catch {
+        state.admin = null;
+      }
+    }
     syncAuthUi();
     if (!profile?.profile_completed_at || !terms?.length) {
       openOnboarding();
@@ -452,6 +472,7 @@
         global.completeOnboardingSignIn?.();
       }
       global.toast?.(`Welcome, ${displayName}.`, 'ok');
+      global.DueDiligenceAnalytics?.track('onboarding_completed');
     } catch {
       setStatus(
         'dd2-onboarding-status',
@@ -528,6 +549,7 @@
             <select class="dd2-field" id="dd2-support-category" required>
               <option value="technical">Technical issue</option>
               <option value="account">Account</option>
+              <option value="account_recovery">Account Recovery</option>
               <option value="content">Content or source</option>
               <option value="accessibility">Accessibility</option>
               <option value="other">Other</option>
@@ -592,6 +614,14 @@
         <button class="dd2-button dd2-button-secondary" id="dd2-logout" type="button">Sign out</button>
       </form>
       <div class="dd2-copy">
+        ${state.admin?.authorized ? `
+          <h3>Administration</h3>
+          <p>Your account has verified administrator access.</p>
+          <a class="dd2-button dd2-button-primary" href="/admin/">Open Admin Dashboard</a>
+        ` : ''}
+        <h3>Account recovery</h3>
+        <p>Contact Support. We respond within 24 hours.</p>
+        <p>Direct public email changes and account transfers are not available. Choose Account Recovery in Support so identity verification can be documented safely.</p>
         <h3>Future account controls</h3>
         <p>Data export, deletion, billing, device management, and coaching bookings are prepared as future account areas but are not active in this Beta.</p>
       </div>`;
@@ -656,7 +686,10 @@
     try {
       const response = await fetch(`${config.workerUrl}/support`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(state.session?.access_token ? { Authorization: `Bearer ${state.session.access_token}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
       const body = await response.json().catch(() => null);
@@ -665,6 +698,9 @@
       }
       document.getElementById('dd2-support-form').reset();
       setStatus('dd2-support-status', 'Your support request was received.', 'success');
+      global.DueDiligenceAnalytics?.track('support_submitted', {
+        resultCategory: payload.category,
+      });
     } catch (error) {
       setStatus('dd2-support-status', error.message || 'Your support request could not be submitted. Please retry.', 'error');
       submit.disabled = false;
@@ -818,6 +854,13 @@
       state.user = session?.user || null;
       syncAuthUi();
       if (session && ['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'].includes(event)) {
+        if (event === 'SIGNED_IN') {
+          global.DueDiligenceAnalytics?.track('sign_in_completed');
+          const createdAt = new Date(session.user?.created_at || 0).getTime();
+          if (createdAt && Date.now() - createdAt < 10 * 60 * 1000) {
+            global.DueDiligenceAnalytics?.track('registration_completed');
+          }
+        }
         setTimeout(() => loadUserState(), 0);
       }
     });

@@ -130,6 +130,12 @@ test('a complete, substantially aligned ALAC answer may retain 4.0–5.0', () =>
   assert.equal(capped(answer, 5).score, 5);
 });
 
+test('compact single-line ALAC headings may retain decimal scores above 3.5', () => {
+  const answer = 'Answer: No. The delegation was improper. Legal Basis: Under Canons II and IV of the CPRA and Rebarter v. Villa, a lawyer must personally supervise legal work and may not allow a nonlawyer to exercise professional judgment or sign counsel’s name. Application: Sandro prepared the appellate brief, signed Cassandra’s name, and filed it before Cassandra reviewed it, so the required prior supervision was absent. Conclusion: Cassandra improperly delegated professional legal work.';
+  assert.equal(capped(answer, 3.8).score, 3.8);
+  assert.equal(capped(answer, 4.2).score, 4.2);
+});
+
 test('Worker applies the cap after Gemini returns a high score', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {

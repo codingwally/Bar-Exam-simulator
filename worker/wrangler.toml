@@ -8,6 +8,7 @@ GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMINI_GROUNDING_ENABLED = "false"
 ALLOWED_ORIGIN = "https://duediligence.ph"
 WEBSITE_BANK_URL = "https://duediligence.ph/content/question-bank/website-upload.json"
+ALLOW_LEGACY_GUESTS = "false"
 
 [observability]
 enabled = true

@@ -14,6 +14,17 @@ import {
   correctionInsertRecord,
   normalizeCorrectionRequest,
 } from './correction-core.mjs';
+import {
+  GUEST_GRADE_LIMIT,
+  deriveGuestHashes,
+  normalizeUserAgent,
+  requireGuestHeaders,
+} from './guest-access-core.mjs';
+import {
+  SupportValidationError,
+  normalizeSupportRequest,
+  supportInsertRecord,
+} from './support-core.mjs';
 
 const remedialContext = {
   subject: 'Remedial Law',
@@ -145,8 +156,20 @@ test('compact single-line ALAC headings may retain decimal scores above 3.5', ()
 test('Worker applies the cap after Gemini returns a high score', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
-    if (!String(url).includes('generativelanguage.googleapis.com')) {
-      throw new Error(`Unexpected request: ${url}`);
+    const target = String(url);
+    if (target.endsWith('/rest/v1/rpc/reserve_guest_grade')) {
+      return Response.json({
+        allowed: true,
+        reservation_id: '11111111-1111-4111-8111-111111111111',
+        remaining: 2,
+        consumed: 0,
+      });
+    }
+    if (target.endsWith('/rest/v1/rpc/finalize_guest_grade')) {
+      return Response.json({ allowed: true, remaining: 2, consumed: 1 });
+    }
+    if (!target.includes('generativelanguage.googleapis.com')) {
+      throw new Error(`Unexpected request: ${target}`);
     }
     return new Response(JSON.stringify({
       candidates: [{
@@ -162,6 +185,9 @@ test('Worker applies the cap after Gemini returns a high score', async () => {
         Origin: 'https://duediligence.ph',
         'Content-Type': 'application/json',
         'CF-Connecting-IP': '192.0.2.91',
+        'User-Agent': 'TestBrowser/1.0',
+        'X-Guest-Device-ID': 'device_test_1234567890_1234567890',
+        'X-Request-ID': 'request_test_1234567890',
       },
       body: JSON.stringify({
         questionId: 'REM-2024-Q18',
@@ -174,6 +200,9 @@ test('Worker applies the cap after Gemini returns a high score', async () => {
       GEMINI_API_KEY: 'test-only-placeholder',
       GEMINI_MODEL: 'gemini-3.5-flash-lite',
       GEMINI_GROUNDING_ENABLED: 'false',
+      GUEST_USAGE_HMAC_KEY: 'test-only-guest-hmac-key',
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
     });
     const body = await response.json();
 
@@ -196,6 +225,7 @@ const reliabilityAnswer = [
   'Application: The fortuitous event in the question prevented performance and satisfies the governing rule.',
   'Conclusion: Therefore, the claim succeeds.',
 ].join('\n\n');
+let reliabilityRequestCounter = 0;
 
 function reliabilityBankRecord(index) {
   return {
@@ -231,12 +261,16 @@ function reliabilityModelResult() {
 }
 
 function reliabilityGradingRequest() {
+  reliabilityRequestCounter += 1;
   return new Request('https://worker.example', {
     method: 'POST',
     headers: {
       Origin: reliabilityOrigin,
       'Content-Type': 'application/json',
       'CF-Connecting-IP': '203.0.113.10',
+      'User-Agent': 'TestBrowser/1.0',
+      'X-Guest-Device-ID': 'device_reliability_123456789012345',
+      'X-Request-ID': `request_reliability_${String(reliabilityRequestCounter).padStart(4, '0')}`,
     },
     body: JSON.stringify({
       questionId: 'CIV-2024-Q01',
@@ -252,6 +286,20 @@ test('transient Gemini failures are retried and do not lock a failed submission'
 
   globalThis.fetch = async (url) => {
     const target = String(url);
+    if (target.endsWith('/rest/v1/rpc/reserve_guest_grade')) {
+      return Response.json({
+        allowed: true,
+        reservation_id: '22222222-2222-4222-8222-222222222222',
+        remaining: 2,
+        consumed: 0,
+      });
+    }
+    if (target.endsWith('/rest/v1/rpc/finalize_guest_grade')) {
+      return Response.json({ allowed: true, remaining: 2, consumed: 1 });
+    }
+    if (target.endsWith('/rest/v1/rpc/release_guest_grade')) {
+      return Response.json(null);
+    }
     if (target === reliabilityBankUrl) {
       return Response.json({
         records: Array.from({ length: 320 }, (_, index) => reliabilityBankRecord(index)),
@@ -283,6 +331,9 @@ test('transient Gemini failures are retried and do not lock a failed submission'
       GEMINI_MODEL: 'gemini-test',
       GEMINI_GROUNDING_ENABLED: 'false',
       WEBSITE_BANK_URL: reliabilityBankUrl,
+      GUEST_USAGE_HMAC_KEY: 'test-only-guest-hmac-key',
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
     };
 
     const failedResponse = await worker.fetch(reliabilityGradingRequest(), env);
@@ -301,6 +352,229 @@ test('transient Gemini failures are retried and do not lock a failed submission'
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('guest identifiers are validated and converted to non-reversible keyed hashes', async () => {
+  const request = new Request('https://worker.example', {
+    headers: {
+      'X-Guest-Device-ID': 'device_privacy_12345678901234567890',
+      'X-Request-ID': 'request_privacy_123456',
+      'CF-Connecting-IP': '198.51.100.44',
+      'User-Agent': 'Mozilla/5.0 Chrome/137.0.1 Windows NT 10.0',
+    },
+  });
+  const identifiers = requireGuestHeaders(request);
+  const hashes = await deriveGuestHashes(request, 'unit-test-hmac-secret', identifiers.deviceId);
+  assert.match(hashes.deviceHash, /^[0-9a-f]{64}$/);
+  assert.match(hashes.recoveryHash, /^[0-9a-f]{64}$/);
+  assert.notEqual(hashes.deviceHash, identifiers.deviceId);
+  assert.doesNotMatch(JSON.stringify(hashes), /198\.51\.100\.44|mozilla|chrome/i);
+  assert.equal(
+    normalizeUserAgent('Chrome/137.0.1 Windows NT 10.0'),
+    'chrome/major windows nt/major',
+  );
+  assert.equal(GUEST_GRADE_LIMIT, 3);
+});
+
+test('the fourth guest grading request is blocked before question-bank or Gemini calls', async () => {
+  const originalFetch = globalThis.fetch;
+  let geminiCalls = 0;
+  let bankCalls = 0;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/rest/v1/rpc/reserve_guest_grade')) {
+      return Response.json({
+        allowed: false,
+        reason: 'limit_reached',
+        remaining: 0,
+        consumed: 3,
+      });
+    }
+    if (target.includes('generativelanguage.googleapis.com')) geminiCalls += 1;
+    if (target.includes('website-upload.json')) bankCalls += 1;
+    throw new Error(`Unexpected request after guest limit: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(new Request('https://worker.example', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '203.0.113.30',
+        'User-Agent': 'TestBrowser/1.0',
+        'X-Guest-Device-ID': 'device_blocked_1234567890123456789',
+        'X-Request-ID': 'request_blocked_000004',
+      },
+      body: JSON.stringify({
+        questionId: 'CIV-2024-Q01',
+        studentAnswer: reliabilityAnswer,
+      }),
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      GEMINI_API_KEY: 'must-not-be-used',
+      GUEST_USAGE_HMAC_KEY: 'test-only-guest-hmac-key',
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 403);
+    assert.equal(payload.error.code, 'GUEST_LIMIT_REACHED');
+    assert.equal(geminiCalls, 0);
+    assert.equal(bankCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('legacy clients are accepted only during the explicit zero-downtime compatibility window', async () => {
+  const originalFetch = globalThis.fetch;
+  let guestRpcCalls = 0;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.includes('/rpc/')) {
+      guestRpcCalls += 1;
+      throw new Error('Guest RPC must not run for an authorized legacy request');
+    }
+    if (target === reliabilityBankUrl) {
+      return Response.json({
+        records: Array.from({ length: 320 }, (_, index) => reliabilityBankRecord(index)),
+      });
+    }
+    if (target.startsWith('https://generativelanguage.googleapis.com/')) {
+      return Response.json({
+        candidates: [{
+          content: { parts: [{ text: JSON.stringify(reliabilityModelResult()) }] },
+        }],
+      });
+    }
+    throw new Error(`Unexpected fetch: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(new Request('https://worker.example', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '203.0.113.32',
+      },
+      body: JSON.stringify({
+        questionId: 'CIV-2024-Q01',
+        studentAnswer: reliabilityAnswer,
+      }),
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      ALLOW_LEGACY_GUESTS: 'true',
+      GEMINI_API_KEY: 'test-key',
+      GEMINI_MODEL: 'gemini-test',
+      GEMINI_GROUNDING_ENABLED: 'false',
+      WEBSITE_BANK_URL: reliabilityBankUrl,
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload.access, { signedIn: false, guest: null });
+    assert.equal(guestRpcCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('legacy clients are rejected after the compatibility window closes', async () => {
+  const response = await worker.fetch(new Request('https://worker.example', {
+    method: 'POST',
+    headers: {
+      Origin: reliabilityOrigin,
+      'Content-Type': 'application/json',
+      'CF-Connecting-IP': '203.0.113.33',
+    },
+    body: JSON.stringify({
+      questionId: 'CIV-2024-Q01',
+      studentAnswer: reliabilityAnswer,
+    }),
+  }), {
+    ALLOWED_ORIGIN: reliabilityOrigin,
+    ALLOW_LEGACY_GUESTS: 'false',
+  });
+  const payload = await response.json();
+  assert.equal(response.status, 400);
+  assert.equal(payload.error.code, 'GUEST_ID_REQUIRED');
+});
+
+test('a verified Supabase session bypasses guest reservation without trusting a client flag', async () => {
+  const originalFetch = globalThis.fetch;
+  let guestRpcCalls = 0;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '33333333-3333-4333-8333-333333333333' });
+    }
+    if (target.includes('/rpc/')) {
+      guestRpcCalls += 1;
+      throw new Error('Guest RPC must not run for an authenticated user');
+    }
+    if (target === reliabilityBankUrl) {
+      return Response.json({
+        records: Array.from({ length: 320 }, (_, index) => reliabilityBankRecord(index)),
+      });
+    }
+    if (target.startsWith('https://generativelanguage.googleapis.com/')) {
+      return Response.json({
+        candidates: [{
+          content: { parts: [{ text: JSON.stringify(reliabilityModelResult()) }] },
+        }],
+      });
+    }
+    throw new Error(`Unexpected fetch: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(new Request('https://worker.example', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        Authorization: 'Bearer verified-user-token',
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '203.0.113.31',
+      },
+      body: JSON.stringify({
+        questionId: 'CIV-2024-Q01',
+        studentAnswer: reliabilityAnswer,
+      }),
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      GEMINI_API_KEY: 'test-key',
+      GEMINI_MODEL: 'gemini-test',
+      GEMINI_GROUNDING_ENABLED: 'false',
+      WEBSITE_BANK_URL: reliabilityBankUrl,
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload.access, { signedIn: true });
+    assert.equal(guestRpcCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('support validation rejects exam answers and stores only approved fields', () => {
+  const normalized = normalizeSupportRequest({
+    category: 'technical',
+    message: 'The page remains on the loading state after I submit the form.',
+    replyEmail: 'student@example.com',
+  });
+  assert.deepEqual(supportInsertRecord(normalized), {
+    category: 'technical',
+    message: 'The page remains on the loading state after I submit the form.',
+    reply_email: 'student@example.com',
+    status: 'new',
+  });
+  assert.throws(() => normalizeSupportRequest({
+    category: 'content',
+    message: `Answer: Yes.\nLegal Basis: Article 1174.\nApplication: ${'facts '.repeat(120)}\nConclusion: Yes.`,
+  }), SupportValidationError);
 });
 
 const correctionQuestion = {

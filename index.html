@@ -743,6 +743,7 @@
     .signin-prompt-actions{grid-template-columns:1fr;}
   }
 </style>
+<link rel="stylesheet" href="assets/phase2.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="assets/labor-csv-normalizer.js"></script>
 <script src="assets/exam-session-controller.js"></script>
@@ -798,7 +799,7 @@
     <button class="btn-angel" id="btn-angel" onclick="openModal('investor-modal')">🏛️ Angel Investors</button>
     <button class="icon-btn hide-sm" id="btn-b2b" onclick="toggleViewMode()">🏢 Individual</button>
     <button class="icon-btn hide-sm" id="btn-analytics" onclick="openAnalytics()">📈 Analytics</button>
-    <button class="btn-subscribe" id="btn-subscribe" onclick="openModal('subscribe-modal')">✦ Subscribe</button>
+    <button class="icon-btn" id="btn-subscribe" onclick="openModal('subscribe-modal')">Plans &amp; Pricing</button>
     <button class="icon-btn hide-sm" id="btn-signin" onclick="openModal('auth-modal')">Sign In</button>
     <div class="avatar-pill" id="avatar-pill" onclick="openModal('auth-modal')">
       <span class="av">DD</span><span class="tier">Free Tier</span>
@@ -917,6 +918,8 @@
       <a onclick="openModal('investor-modal')">🏛️ Angel Investors</a>
       <a href="mailto:support@duediligence.ph?subject=Due%20Diligence%20Support%20Request">Support</a>
       <a href="mailto:premium@duediligence.ph?subject=Premium%20Plan%20Inquiry">Plans &amp; Pricing</a>
+      <a href="#terms" data-dd2-view="terms">Terms</a>
+      <a href="#privacy" data-dd2-view="privacy">Privacy</a>
       <a href="mailto:advertise@duediligence.ph?subject=Advertising%20and%20Partnership%20Inquiry">Advertise</a>
       <a href="mailto:invest@duediligence.ph?subject=Investment%20Inquiry">Invest</a>
     </div>
@@ -2218,6 +2221,10 @@ async function evaluateAnswer() {
     toast('Answers are limited to 12,000 characters.', 'warn');
     return;
   }
+  if (window.DueDiligencePhase2) {
+    const mayContinue = await window.DueDiligencePhase2.beforeGrade();
+    if (!mayContinue) return;
+  }
 
   gradingInProgress = true;
   examStage = 'evaluating';
@@ -2233,7 +2240,10 @@ async function evaluateAnswer() {
   try {
     const response = await fetch(EXAMINER_WORKER_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(window.DueDiligencePhase2?.gradingHeaders() || {}),
+      },
       body: JSON.stringify({
         questionId: q.id,
         studentAnswer,
@@ -2243,7 +2253,11 @@ async function evaluateAnswer() {
     let payload = null;
     try { payload = await response.json(); } catch (error) { /* controlled below */ }
     if (!response.ok || !payload?.ok || !payload.assessment) {
-      throw new Error(payload?.error?.message || 'The examiner is temporarily unavailable. Please try again.');
+      const assessmentError = new Error(
+        payload?.error?.message || 'The examiner is temporarily unavailable. Please try again.',
+      );
+      assessmentError.code = payload?.error?.code || 'ASSESSMENT_UNAVAILABLE';
+      throw assessmentError;
     }
 
     const assessment = payload.assessment;
@@ -2276,7 +2290,9 @@ async function evaluateAnswer() {
       setQuestionControlsDisabled(true);
       resultArea.scrollIntoView({ behavior: 'smooth' });
     }
+    window.DueDiligencePhase2?.afterGrade(payload.access);
   } catch (error) {
+    if (window.DueDiligencePhase2?.handleGradeError(error)) return;
     const offline = !navigator.onLine ? 'You appear to be offline. Reconnect and try again.' : '';
     showCheckingError(offline || error.message || 'The examiner could not complete this assessment.');
   } finally {
@@ -2954,6 +2970,10 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && examStage === 'answering') sessionController.tick();
 });
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"
+  crossorigin="anonymous"></script>
+<script src="assets/phase2-config.js"></script>
+<script src="assets/phase2-experience.js"></script>
 
 </body>
 </html>

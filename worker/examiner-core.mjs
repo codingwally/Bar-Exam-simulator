@@ -575,8 +575,9 @@ GRADE FROM 0.0 TO 5.0 POINTS USING AT MOST ONE DECIMAL PLACE:
 - 5.0 requires a correct conclusion, correct legal basis, meaningful application to facts, and a conclusion substantially aligned with the suggested answer.
 - 4.0 to 4.5 reflects a substantially correct answer with identifiable omissions or imprecision.
 - 3.6 to 3.9 reflects a correct core answer with material but non-fatal gaps in authority, application, or nuance.
+- Distinguish an omitted citation from an affirmatively incorrect authority. A materially wrong article, rule, statute, or doctrine is a substantive legal-basis error and ordinarily places an otherwise coherent answer in the 3.0 to 3.9 range.
 - 0.0 is appropriate for a blank, irrelevant, incoherent, or nonsensical response.
-Do not penalize solely for missing exact article, section, case, or docket numbers when the controlling doctrine and application are correct.
+Do not penalize solely for omitting exact article, section, case, or docket numbers when the controlling doctrine and application are correct. This protection does not apply when the student affirmatively cites an incorrect authority.
 
 REFERENCE RULES:
 - The stored suggested answer and legal basis are primary when present.

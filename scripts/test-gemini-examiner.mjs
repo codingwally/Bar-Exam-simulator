@@ -229,7 +229,7 @@ try {
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'https://duediligence.ph');
   assert.equal(responseBody.assessment.score, 4.5);
   assert.equal(responseBody.assessment.maxScore, 5);
-  assert.equal(responseBody.assessment.modelUsed, 'gemini-3.5-flash-lite');
+  assert.equal(responseBody.assessment.modelUsed, 'gemini-3.6-flash');
   assert.equal(responseBody.assessment.questionAuthority, 'server_question_bank');
   assert.equal(responseBody.assessment.sources.length, 2);
   assert.equal(geminiCalls, 2);

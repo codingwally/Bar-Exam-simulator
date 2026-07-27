@@ -346,7 +346,7 @@ function tokenOverlap(source, reference) {
 
 function alacSections(value) {
   const text = cleanText(value, MAX_ANSWER_LENGTH);
-  const headingPattern = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:[IVX]+[.)]\s*)?(ANSWER|LEGAL\s+BASIS|APPLICATION|CONCLUSION)\s*(?::|—|-)\s*/gim;
+  const headingPattern = /(?:^|\n|[.!?]\s+)\s*(?:#{1,6}\s*)?(?:[IVX]+[.)]\s*)?(ANSWER|LEGAL\s+BASIS|APPLICATION|CONCLUSION)\s*(?::|\u2014|-)\s*/gim;
   const matches = [...text.matchAll(headingPattern)];
   const sections = {};
 
@@ -361,7 +361,7 @@ function alacSections(value) {
 
 function stripAnswerHeading(value) {
   return cleanText(value, 1_000)
-    .replace(/^\s*(?:#{1,6}\s*)?(?:I[.)]\s*)?ANSWER\s*(?::|—|-)\s*/i, '')
+    .replace(/^\s*(?:#{1,6}\s*)?(?:I[.)]\s*)?ANSWER\s*(?::|\u2014|-)\s*/i, '')
     .trim();
 }
 

@@ -13,7 +13,10 @@
   });
 
   function text(value) {
-    return String(value ?? '');
+    return String(value ?? '')
+      .replace(/\s*\(noun\)/gi, '')
+      .replace(/[ \t]+([,.;:!?])/g, '$1')
+      .replace(/[ \t]{2,}/g, ' ');
   }
 
   function firstELibraryUrl(record) {

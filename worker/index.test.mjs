@@ -1,17 +1,198 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-
 import worker from './index.mjs';
+import {
+  RUBRIC_VERSION,
+  applyDeterministicScoreCap,
+  assessmentPolicy,
+  scoreIsValid,
+  validateExaminerResult,
+} from './examiner-core.mjs';
 
-const origin = 'https://duediligence.ph';
-const bankUrl = `${origin}/content/question-bank/website-upload.json`;
+const remedialContext = {
+  subject: 'Remedial Law',
+  question: 'Counsel allowed a nonlawyer employee to prepare an appellate brief, sign counsel’s name, and file it before counsel reviewed it. Was the delegation proper?',
+  suggestedAnswer: 'No. The delegation was improper because a lawyer must personally supervise legal work and cannot permit a nonlawyer to exercise professional judgment or sign pleadings in the lawyer’s name.',
+  legalBasis: 'Canons II and IV of the Code of Professional Responsibility and Accountability; Rebarter v. Villa.',
+  sourceUrl: 'https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/68904',
+  authority: 'legacy_client_context',
+};
 
-function bankRecord(index) {
+function modelAssessment(score = 5) {
+  return {
+    score,
+    maxScore: 5,
+    percentagePointValue: score,
+    tier: '5.0',
+    performanceLabel: 'Excellent answer',
+    assessmentType: 'question_bank',
+    label: 'Question-bank assessment',
+    rationale: 'The answer reaches the expected result.',
+    strengths: ['Direct conclusion'],
+    errors: [],
+    improvements: [],
+    legalExplanation: 'A lawyer must personally supervise delegated legal work.',
+    modelAnswerALAC: {
+      answer: 'No. The delegation was improper.',
+      legalBasis: 'Canons II and IV of the CPRA require personal supervision of legal work.',
+      application: 'Sandro prepared, signed, and filed the brief before Cassandra reviewed it.',
+      conclusion: 'Therefore, Cassandra improperly delegated professional legal work.',
+    },
+    sources: [],
+    sourceStatus: 'stored',
+    reviewRequired: false,
+    rubricVersion: RUBRIC_VERSION,
+  };
+}
+
+function capped(answer, score = 5) {
+  return applyDeterministicScoreCap(modelAssessment(score), answer, remedialContext);
+}
+
+test('scores accept 0.0–5.0 with at most one decimal place', () => {
+  for (const score of [0, 0.1, 1.2, 2.7, 3.7, 3.8, 4.2, 4.6, 5]) {
+    assert.equal(scoreIsValid(score), true, `${score} should be valid`);
+  }
+  for (const score of [-0.1, 3.75, 5.1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(scoreIsValid(score), false, `${score} should be invalid`);
+  }
+});
+
+test('model scores with excess precision are safely rounded before return', () => {
+  const result = validateExaminerResult(
+    modelAssessment(3.75),
+    assessmentPolicy(remedialContext),
+  );
+  assert.equal(result.score, 3.8);
+  assert.equal(result.percentagePointValue, 3.8);
+});
+
+test('target decimal scores 3.8 and 4.2 are preserved exactly', () => {
+  for (const score of [3.8, 4.2]) {
+    const result = validateExaminerResult(
+      modelAssessment(score),
+      assessmentPolicy(remedialContext),
+    );
+    assert.equal(result.score, score);
+    assert.equal(result.percentagePointValue, score);
+  }
+});
+
+test('REM-2024-Q18 bare no answer cannot exceed 1.0', () => {
+  const result = capped('no');
+  assert.equal(result.score, 1);
+  assert.equal(result.percentagePointValue, 1);
+  assert.equal(result.tier, '1.0');
+  assert.equal(result.performanceLabel, 'Weak answer');
+  assert.match(result.errors.join(' '), /bare conclusion/i);
+});
+
+test('an Answer heading does not let a bare conclusion evade the 1.0 cap', () => {
+  assert.equal(capped('Answer: No.').score, 1);
+});
+
+test('irrelevant or nonsensical content cannot exceed 0.5', () => {
+  const irrelevant = capped('Bananas and bicycles float through purple weather.');
+  const nonsensical = capped('aaaaaaaaaaaaaaaa');
+  assert.equal(irrelevant.score, 0.5);
+  assert.equal(nonsensical.score, 0.5);
+});
+
+test('correct conclusion without legal basis cannot exceed 1.5', () => {
+  const result = capped('No. Cassandra acted improperly by delegating the brief to Sandro.');
+  assert.equal(result.score, 1.5);
+  assert.match(result.errors.join(' '), /without legal basis or application/i);
+});
+
+test('generic legal basis without factual application cannot exceed 2.5', () => {
+  const result = capped('No. Under the applicable law and governing rule, the delegation was improper.');
+  assert.equal(result.score, 2.5);
+  assert.match(result.errors.join(' '), /does not meaningfully apply/i);
+});
+
+test('legal basis with some application but incomplete ALAC cannot exceed 3.5', () => {
+  const result = capped(
+    'No. Under Canons II and IV of the CPRA, a lawyer must supervise delegated legal work. Here, Sandro prepared the appellate brief, signed Cassandra’s name, and filed it before Cassandra reviewed the filing.',
+  );
+  assert.equal(result.score, 3.5);
+});
+
+test('a complete, substantially aligned ALAC answer may retain 4.0–5.0', () => {
+  const answer = [
+    'Answer: No. The delegation was improper.',
+    'Legal Basis: Under Canons II and IV of the CPRA and Rebarter v. Villa, a lawyer must personally supervise legal work and may not allow a nonlawyer to exercise professional judgment or sign counsel’s name.',
+    'Application: Sandro prepared the appellate brief, signed Cassandra’s name, and filed it before Cassandra reviewed it. Her intended post-filing review did not provide the required prior supervision.',
+    'Conclusion: Cassandra improperly delegated professional legal work.',
+  ].join('\n\n');
+  assert.equal(capped(answer, 3.8).score, 3.8);
+  assert.equal(capped(answer, 4.2).score, 4.2);
+  assert.equal(capped(answer, 4.6).score, 4.6);
+  assert.equal(capped(answer, 5).score, 5);
+});
+
+test('Worker applies the cap after Gemini returns a high score', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (!String(url).includes('generativelanguage.googleapis.com')) {
+      throw new Error(`Unexpected request: ${url}`);
+    }
+    return new Response(JSON.stringify({
+      candidates: [{
+        content: { parts: [{ text: JSON.stringify(modelAssessment(5)) }] },
+      }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const request = new Request('https://worker.example/', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://duediligence.ph',
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '192.0.2.91',
+      },
+      body: JSON.stringify({
+        questionId: 'REM-2024-Q18',
+        studentAnswer: 'no',
+        questionContext: remedialContext,
+      }),
+    });
+    const response = await worker.fetch(request, {
+      ALLOWED_ORIGIN: 'https://duediligence.ph',
+      GEMINI_API_KEY: 'test-only-placeholder',
+      GEMINI_MODEL: 'gemini-3.5-flash-lite',
+      GEMINI_GROUNDING_ENABLED: 'false',
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.assessment.score, 1);
+    assert.equal(body.assessment.percentagePointValue, 1);
+    assert.equal(body.assessment.tier, '1.0');
+    assert.equal(body.assessment.performanceLabel, 'Weak answer');
+    assert.match(body.assessment.errors.join(' '), /bare conclusion/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+const reliabilityOrigin = 'https://duediligence.ph';
+const reliabilityBankUrl = `${reliabilityOrigin}/content/question-bank/website-upload.json`;
+const reliabilityAnswer = [
+  'Answer: Yes. The claim succeeds.',
+  'Legal Basis: Article 1174 of the Civil Code governs fortuitous events.',
+  'Application: The fortuitous event in the question prevented performance and satisfies the governing rule.',
+  'Conclusion: Therefore, the claim succeeds.',
+].join('\n\n');
+
+function reliabilityBankRecord(index) {
   return {
     'Question ID': index === 0 ? 'CIV-2024-Q01' : `TEST-${String(index).padStart(3, '0')}`,
     Subject: 'Civil Law',
-    'Essay Question': `Question ${index}`,
-    'Suggested Answer': 'Answer: Yes. Legal Basis: Article 1174. Application: The facts satisfy the rule. Conclusion: Therefore, the claim succeeds.',
+    'Essay Question': index === 0
+      ? 'Did a fortuitous event prevent performance and allow the claim to succeed?'
+      : `Question ${index}`,
+    'Suggested Answer': reliabilityAnswer,
     'Legal Basis / Provision': 'Civil Code, Article 1174',
     'Jurisprudence / Case': 'Virginia Real v. Belo',
     'Citation / G.R. No.': 'G.R. No. 146224',
@@ -19,18 +200,13 @@ function bankRecord(index) {
   };
 }
 
-function modelResult() {
+function reliabilityModelResult() {
   return {
-    score: 4,
-    maxScore: 5,
-    percentagePointValue: 4,
+    ...modelAssessment(4),
     tier: '4.0',
     performanceLabel: 'Strong answer',
-    assessmentType: 'question_bank',
-    label: 'Question-bank assessment',
     rationale: 'The answer states the rule and applies it to the facts.',
     strengths: ['Direct answer'],
-    errors: [],
     improvements: ['Add more factual detail'],
     legalExplanation: 'Article 1174 governs fortuitous events.',
     modelAnswerALAC: {
@@ -39,24 +215,20 @@ function modelResult() {
       application: 'The stated facts satisfy the rule.',
       conclusion: 'Therefore, the claim succeeds.',
     },
-    sources: [],
-    sourceStatus: 'stored',
-    reviewRequired: false,
-    rubricVersion: 'SC-2025-BB4-PER-QUESTION-v1',
   };
 }
 
-function gradingRequest() {
+function reliabilityGradingRequest() {
   return new Request('https://worker.example', {
     method: 'POST',
     headers: {
-      Origin: origin,
+      Origin: reliabilityOrigin,
       'Content-Type': 'application/json',
       'CF-Connecting-IP': '203.0.113.10',
     },
     body: JSON.stringify({
       questionId: 'CIV-2024-Q01',
-      studentAnswer: 'Answer: Yes. Legal Basis: Article 1174. Application: The facts satisfy the rule. Conclusion: Therefore, the claim succeeds.',
+      studentAnswer: reliabilityAnswer,
     }),
   });
 }
@@ -68,18 +240,23 @@ test('transient Gemini failures are retried and do not lock a failed submission'
 
   globalThis.fetch = async (url) => {
     const target = String(url);
-    if (target === bankUrl) {
-      return Response.json({ records: Array.from({ length: 320 }, (_, index) => bankRecord(index)) });
+    if (target === reliabilityBankUrl) {
+      return Response.json({
+        records: Array.from({ length: 320 }, (_, index) => reliabilityBankRecord(index)),
+      });
     }
     if (target.startsWith('https://generativelanguage.googleapis.com/')) {
       providerCalls += 1;
       if (providerMode === 'fail') {
-        return Response.json({ error: { status: 'UNAVAILABLE', message: 'temporary outage' } }, { status: 503 });
+        return Response.json(
+          { error: { status: 'UNAVAILABLE', message: 'temporary outage' } },
+          { status: 503 },
+        );
       }
       return Response.json({
         candidates: [{
           content: {
-            parts: [{ text: JSON.stringify(modelResult()) }],
+            parts: [{ text: JSON.stringify(reliabilityModelResult()) }],
           },
         }],
       });
@@ -89,21 +266,21 @@ test('transient Gemini failures are retried and do not lock a failed submission'
 
   try {
     const env = {
-      ALLOWED_ORIGIN: origin,
+      ALLOWED_ORIGIN: reliabilityOrigin,
       GEMINI_API_KEY: 'test-key',
       GEMINI_MODEL: 'gemini-test',
       GEMINI_GROUNDING_ENABLED: 'false',
-      WEBSITE_BANK_URL: bankUrl,
+      WEBSITE_BANK_URL: reliabilityBankUrl,
     };
 
-    const failedResponse = await worker.fetch(gradingRequest(), env);
+    const failedResponse = await worker.fetch(reliabilityGradingRequest(), env);
     const failedPayload = await failedResponse.json();
     assert.equal(failedResponse.status, 502);
     assert.equal(failedPayload.error.code, 'EXAMINER_UNAVAILABLE');
     assert.ok(providerCalls >= 2, 'the Worker should retry transient provider failures');
 
     providerMode = 'success';
-    const retryResponse = await worker.fetch(gradingRequest(), env);
+    const retryResponse = await worker.fetch(reliabilityGradingRequest(), env);
     const retryPayload = await retryResponse.json();
     assert.equal(retryResponse.status, 200);
     assert.equal(retryPayload.ok, true);

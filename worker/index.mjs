@@ -4,6 +4,7 @@ import {
   LABOR_CSV_URL,
   MODEL_FALLBACKS,
   RESPONSE_SCHEMA,
+  applyDeterministicScoreCap,
   assessmentPolicy,
   buildExaminerPrompt,
   chooseQuestionContext,
@@ -363,10 +364,15 @@ async function handleGrade(request, env, origin, allowedOrigin) {
         : `${prompt}\n\nRETRY: The previous response failed validation. Return complete schema-valid JSON, and start the conclusion with "Therefore,".`;
       gemini = await callGemini(env, attemptPrompt, groundingEnabled);
       try {
-        assessment = validateExaminerResult(
+        const validatedAssessment = validateExaminerResult(
           gemini.result,
           policy,
           [...storedSources, ...gemini.groundedSources],
+        );
+        assessment = applyDeterministicScoreCap(
+          validatedAssessment,
+          gradingRequest.studentAnswer,
+          context,
         );
         break;
       } catch (error) {

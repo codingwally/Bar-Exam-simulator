@@ -18,6 +18,8 @@ const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
 const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
+const GEMINI_TRANSIENT_ATTEMPTS = 2;
+const GEMINI_RETRY_DELAY_MS = 750;
 const WEBSITE_BANK_URL = 'https://duediligence.ph/content/question-bank/website-upload.json';
 const rateWindows = new Map();
 const recentSubmissions = new Map();
@@ -75,7 +77,7 @@ async function submissionFingerprint(requestData, request) {
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function rejectRecentDuplicate(requestData, request) {
+async function registerSubmission(requestData, request) {
   const now = Date.now();
   const fingerprint = await submissionFingerprint(requestData, request);
   const previous = recentSubmissions.get(fingerprint);
@@ -88,6 +90,11 @@ async function rejectRecentDuplicate(requestData, request) {
       if (now - timestamp > DUPLICATE_TTL_MS) recentSubmissions.delete(key);
     }
   }
+  return fingerprint;
+}
+
+function retryDelay(attempt) {
+  return new Promise((resolve) => setTimeout(resolve, GEMINI_RETRY_DELAY_MS * (attempt + 1)));
 }
 
 async function loadLaborBank(csvUrl) {
@@ -171,12 +178,13 @@ async function callGemini(env, prompt, groundingEnabled) {
   let quotaSeen = false;
   let providerFailureSeen = false;
   for (const model of orderedModels(env.GEMINI_MODEL)) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-    try {
-      const canGround = groundingEnabled && model !== 'gemini-1.5-flash';
-      const groundingAttempts = canGround ? [true, false] : [false];
-      for (const useGrounding of groundingAttempts) {
+    const canGround = groundingEnabled && model !== 'gemini-1.5-flash';
+    const groundingAttempts = canGround ? [true, false] : [false];
+    let modelUnsupported = false;
+
+    for (const useGrounding of groundingAttempts) {
+      let groundingRejected = false;
+      for (let requestAttempt = 0; requestAttempt < GEMINI_TRANSIENT_ATTEMPTS; requestAttempt += 1) {
         const body = {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
@@ -186,41 +194,68 @@ async function callGemini(env, prompt, groundingEnabled) {
         };
         if (useGrounding) body.tools = [{ google_search: {} }];
 
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': env.GEMINI_API_KEY,
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+        let response;
+        let responseText = '';
+        try {
+          response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': env.GEMINI_API_KEY,
+              },
+              body: JSON.stringify(body),
+              signal: controller.signal,
             },
-            body: JSON.stringify(body),
-            signal: controller.signal,
-          },
-        );
-        const responseText = await response.text();
+          );
+          responseText = await response.text();
+        } catch (error) {
+          providerFailureSeen = true;
+          console.warn('Gemini request failed before a response was received', {
+            model,
+            grounding: useGrounding,
+            attempt: requestAttempt + 1,
+            reason: error?.name === 'AbortError' ? 'timeout' : 'network',
+          });
+          if (requestAttempt + 1 < GEMINI_TRANSIENT_ATTEMPTS) {
+            await retryDelay(requestAttempt);
+            continue;
+          }
+          break;
+        } finally {
+          clearTimeout(timeout);
+        }
+
         if (!response.ok) {
           console.warn('Gemini request rejected', {
             model,
             status: response.status,
             grounding: useGrounding,
+            attempt: requestAttempt + 1,
             provider: safeProviderErrorSummary(responseText, env.GEMINI_API_KEY),
           });
           if (useGrounding && response.status === 400 && /ground|google_search|tool|not supported/i.test(responseText)) {
-            continue;
+            groundingRejected = true;
+            break;
           }
           if (isUnsupportedModel(response.status, responseText)) {
             lastUnsupported = model;
-            break;
-          }
-          if (response.status === 429) {
-            quotaSeen = true;
+            modelUnsupported = true;
             break;
           }
           if (response.status === 401 || response.status === 403) {
             throw new ExaminerError('EXAMINER_NOT_CONFIGURED', 'The AI examiner is not configured correctly. Please contact the administrator.', 503);
           }
-          providerFailureSeen = true;
+          const transient = response.status === 408 || response.status === 429 || response.status >= 500;
+          quotaSeen ||= response.status === 429;
+          providerFailureSeen ||= response.status !== 429;
+          if (transient && requestAttempt + 1 < GEMINI_TRANSIENT_ATTEMPTS) {
+            await retryDelay(requestAttempt);
+            continue;
+          }
           break;
         }
 
@@ -229,11 +264,19 @@ async function callGemini(env, prompt, groundingEnabled) {
           payload = JSON.parse(responseText);
         } catch {
           providerFailureSeen = true;
+          if (requestAttempt + 1 < GEMINI_TRANSIENT_ATTEMPTS) {
+            await retryDelay(requestAttempt);
+            continue;
+          }
           break;
         }
         const answerText = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim();
         if (!answerText) {
           providerFailureSeen = true;
+          if (requestAttempt + 1 < GEMINI_TRANSIENT_ATTEMPTS) {
+            await retryDelay(requestAttempt);
+            continue;
+          }
           break;
         }
         let result;
@@ -241,18 +284,16 @@ async function callGemini(env, prompt, groundingEnabled) {
           result = JSON.parse(answerText);
         } catch {
           providerFailureSeen = true;
+          if (requestAttempt + 1 < GEMINI_TRANSIENT_ATTEMPTS) {
+            await retryDelay(requestAttempt);
+            continue;
+          }
           break;
         }
         return { model, result, groundedSources: groundedSources(payload), groundingUsed: useGrounding };
       }
-    } catch (error) {
-      if (error?.name === 'AbortError') {
-        providerFailureSeen = true;
-        continue;
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeout);
+      if (modelUnsupported) break;
+      if (groundingRejected) continue;
     }
   }
   if (quotaSeen) {
@@ -277,73 +318,78 @@ async function handleGrade(request, env, origin, allowedOrigin) {
     throw new ExaminerError('INVALID_JSON', 'The grading request contains invalid JSON.');
   }
   const gradingRequest = normalizeRequest(payload);
-  await rejectRecentDuplicate(gradingRequest, request);
+  const submissionId = await registerSubmission(gradingRequest, request);
 
-  let bankContext = null;
   try {
-    const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
-    bankContext = questionFromBankRow(records.get(gradingRequest.questionId));
-  } catch (error) {
-    console.warn('Unified website question bank unavailable; using compatibility context.', {
-      code: error?.code || 'UNKNOWN',
-    });
-  }
-  if (!bankContext && /^LAB-\d{3}$/i.test(gradingRequest.questionId)) {
+    let bankContext = null;
     try {
-      const records = await loadLaborBank(env.LABOR_CSV_URL || LABOR_CSV_URL);
+      const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
       bankContext = questionFromBankRow(records.get(gradingRequest.questionId));
     } catch (error) {
-      console.warn('Labor compatibility bank unavailable; using client context.', {
+      console.warn('Unified website question bank unavailable; using compatibility context.', {
         code: error?.code || 'UNKNOWN',
       });
     }
-  }
-
-  const context = chooseQuestionContext(bankContext, gradingRequest.questionContext);
-  const policy = assessmentPolicy(context);
-  const prompt = buildExaminerPrompt({
-    questionId: gradingRequest.questionId,
-    studentAnswer: gradingRequest.studentAnswer,
-    context,
-    policy,
-  });
-  const groundingEnabled = String(env.GEMINI_GROUNDING_ENABLED).toLowerCase() === 'true';
-  const storedSources = sanitizeSources(context.sourceUrl ? [{
-    title: context.sourceTitle || context.caseName || 'Stored question-bank source',
-    url: context.sourceUrl,
-    type: 'stored',
-  }] : []);
-  let gemini;
-  let assessment;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const attemptPrompt = attempt === 0
-      ? prompt
-      : `${prompt}\n\nRETRY: The previous response failed validation. Return complete schema-valid JSON, and start the conclusion with "Therefore,".`;
-    gemini = await callGemini(env, attemptPrompt, groundingEnabled);
-    try {
-      assessment = validateExaminerResult(
-        gemini.result,
-        policy,
-        [...storedSources, ...gemini.groundedSources],
-      );
-      break;
-    } catch (error) {
-      if (!(error instanceof ExaminerError) || error.code !== 'MALFORMED_MODEL_RESPONSE' || attempt === 1) {
-        throw error;
+    if (!bankContext && /^LAB-\d{3}$/i.test(gradingRequest.questionId)) {
+      try {
+        const records = await loadLaborBank(env.LABOR_CSV_URL || LABOR_CSV_URL);
+        bankContext = questionFromBankRow(records.get(gradingRequest.questionId));
+      } catch (error) {
+        console.warn('Labor compatibility bank unavailable; using client context.', {
+          code: error?.code || 'UNKNOWN',
+        });
       }
     }
-  }
 
-  return jsonResponse({
-    ok: true,
-    assessment: {
-      ...assessment,
-      modelUsed: gemini.model,
-      gradedAt: new Date().toISOString(),
-      questionAuthority: context.authority,
-      groundingEnabled: gemini.groundingUsed,
-    },
-  }, 200, origin, allowedOrigin);
+    const context = chooseQuestionContext(bankContext, gradingRequest.questionContext);
+    const policy = assessmentPolicy(context);
+    const prompt = buildExaminerPrompt({
+      questionId: gradingRequest.questionId,
+      studentAnswer: gradingRequest.studentAnswer,
+      context,
+      policy,
+    });
+    const groundingEnabled = String(env.GEMINI_GROUNDING_ENABLED).toLowerCase() === 'true';
+    const storedSources = sanitizeSources(context.sourceUrl ? [{
+      title: context.sourceTitle || context.caseName || 'Stored question-bank source',
+      url: context.sourceUrl,
+      type: 'stored',
+    }] : []);
+    let gemini;
+    let assessment;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const attemptPrompt = attempt === 0
+        ? prompt
+        : `${prompt}\n\nRETRY: The previous response failed validation. Return complete schema-valid JSON, and start the conclusion with "Therefore,".`;
+      gemini = await callGemini(env, attemptPrompt, groundingEnabled);
+      try {
+        assessment = validateExaminerResult(
+          gemini.result,
+          policy,
+          [...storedSources, ...gemini.groundedSources],
+        );
+        break;
+      } catch (error) {
+        if (!(error instanceof ExaminerError) || error.code !== 'MALFORMED_MODEL_RESPONSE' || attempt === 1) {
+          throw error;
+        }
+      }
+    }
+
+    return jsonResponse({
+      ok: true,
+      assessment: {
+        ...assessment,
+        modelUsed: gemini.model,
+        gradedAt: new Date().toISOString(),
+        questionAuthority: context.authority,
+        groundingEnabled: gemini.groundingUsed,
+      },
+    }, 200, origin, allowedOrigin);
+  } catch (error) {
+    recentSubmissions.delete(submissionId);
+    throw error;
+  }
 }
 
 export default {

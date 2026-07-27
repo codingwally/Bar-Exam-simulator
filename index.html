@@ -1969,7 +1969,6 @@ function legacyRenderMainWrite() {
 
     <div class="toolbar">
       <div class="nav-group">
-        <button class="btn-tool" onclick="prevQuestion()">← Prev Question</button>
         <button class="btn-tool" onclick="nextQuestion()">Next Question →</button>
         <button class="btn-tool random" onclick="randomQuestion()">🔀 Randomize</button>
       </div>
@@ -2028,7 +2027,6 @@ function renderMainWrite() {
     ${timerMarkup}
     <div class="toolbar">
       <div class="nav-group">
-        <button class="btn-tool" onclick="prevQuestion()" ${workspaceLocked ? 'disabled' : ''}>← Prev Question</button>
         <button class="btn-tool" onclick="nextQuestion()" ${workspaceLocked ? 'disabled' : ''}>Next Question →</button>
         <button class="btn-tool random" onclick="randomQuestion()" ${workspaceLocked ? 'disabled' : ''}>🔀 Randomize</button>
       </div>

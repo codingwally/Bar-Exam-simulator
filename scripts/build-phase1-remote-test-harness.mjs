@@ -22,13 +22,16 @@ const tests = [
     source: "supabase/tests/20260727_002_auth_user_data_analytics_foundation_test.sql",
     target:
       "supabase/migrations/20260727000300_structural_pgtap_staging_only.sql",
+    planMode: "combined",
   },
   {
     source: "supabase/tests/20260727_003_phase1_behavioral_security_test.sql",
     target:
       "supabase/migrations/20260727000400_behavioral_pgtap_staging_only.sql",
+    planMode: "continue",
   },
 ];
+const combinedAssertionCount = 58 + 53;
 
 const assertionFunctions = [
   "has_column",
@@ -44,7 +47,7 @@ const assertionFunctions = [
   "throws_ok",
 ].join("|");
 
-for (const { source, target } of tests) {
+for (const { source, target, planMode } of tests) {
   const sourcePath = path.join(repositoryRoot, source);
   const targetPath = path.join(harnessRoot, target);
   const original = await readFile(sourcePath, "utf8");
@@ -77,7 +80,7 @@ $phase1_require_ok$;
         .replace(/^select\s+/i, "select pg_temp.phase1_require_ok(")
         .replace(/\);\s*$/, "));"),
   );
-  const remoteRunnable = fatalAssertions
+  let remoteRunnable = fatalAssertions
     .replace(
       /do \$phase1_structural_finish\$[\s\S]*?\$phase1_structural_finish\$;/i,
       "select 1;",
@@ -87,6 +90,35 @@ $phase1_require_ok$;
       "select 1;",
     )
     .concat("\nset local role postgres;\n");
+  if (planMode === "combined") {
+    remoteRunnable = remoteRunnable.replace(
+      /select plan\(\d+\);/i,
+      `select plan(${combinedAssertionCount});`,
+    );
+  } else {
+    remoteRunnable = remoteRunnable.replace(/select plan\(\d+\);\s*/i, "");
+    remoteRunnable += `
+-- Remote staging tests cannot rely on a transaction rollback because the CLI
+-- executes this file as a migration. Remove only the fixed synthetic fixtures.
+delete from public.question_corrections
+where id = '51000000-0000-4000-8000-000000000001'::uuid;
+delete from public.usage_sessions
+where id in (
+  '60000000-0000-4000-8000-000000000001'::uuid,
+  '60000000-0000-4000-8000-000000000002'::uuid
+);
+delete from public.admin_audit_log
+where target_resource_type = 'synthetic_test'
+  and target_resource_id = 'phase-1';
+delete from public.subjects
+where id = '20000000-0000-4000-8000-000000000001'::uuid;
+delete from auth.users
+where id in (
+  '10000000-0000-4000-8000-000000000001'::uuid,
+  '10000000-0000-4000-8000-000000000002'::uuid
+);
+`;
+  }
 
   assert.notEqual(withoutBegin, original, `${source} must begin a transaction`);
   assert.notEqual(
@@ -105,6 +137,19 @@ $phase1_require_ok$;
     /pg_temp\.phase1_require_ok\(/,
     `${source} assertions must be fatal in the remote harness`,
   );
+  if (planMode === "combined") {
+    assert.match(
+      remoteRunnable,
+      new RegExp(`select plan\\(${combinedAssertionCount}\\)`, "i"),
+      "the first staging pgTAP migration must plan both suites",
+    );
+  } else {
+    assert.doesNotMatch(
+      remoteRunnable,
+      /select plan\(/i,
+      "the second staging pgTAP migration must continue the existing plan",
+    );
+  }
 
   await writeFile(targetPath, remoteRunnable, "utf8");
 }

@@ -31,9 +31,20 @@ revoke all privileges on table
   public.questions,
   public.submissions,
   public.grading_results,
-  public.calibration_examples,
-  public.grade_disputes
+  public.calibration_examples
 from public, anon, authenticated;
+
+do $$
+begin
+  if to_regclass('public.grade_disputes') is not null then
+    revoke all privileges on table public.grade_disputes
+      from public, anon, authenticated;
+  elsif to_regclass('public.question_corrections') is not null then
+    revoke all privileges on table public.question_corrections
+      from public, anon, authenticated;
+  end if;
+end
+$$;
 
 -- Public question discovery remains read-only.
 grant select on table public.subjects, public.questions
@@ -43,7 +54,6 @@ grant select on table public.subjects, public.questions
 grant select on table public.profiles to authenticated;
 grant select, insert on table public.submissions to authenticated;
 grant select on table public.grading_results to authenticated;
-grant select, insert on table public.grade_disputes to authenticated;
 
 -- Calibration data and every core-table write not listed above remain
 -- backend-only. The service role keeps full operational access.
@@ -53,11 +63,10 @@ grant all privileges on table
   public.questions,
   public.submissions,
   public.grading_results,
-  public.calibration_examples,
-  public.grade_disputes
+  public.calibration_examples
 to service_role;
 
--- Rebuild the nine legacy policies from a known state. Production originally
+-- Rebuild the seven retained legacy policies from a known state. Production originally
 -- created these policies for PUBLIC (and used different names for the two
 -- public-read policies). Grants still limited effective access, but retaining
 -- PUBLIC policy roles would make future grant changes unnecessarily risky.
@@ -70,8 +79,205 @@ drop policy if exists questions_public_read on public.questions;
 drop policy if exists submissions_select_own on public.submissions;
 drop policy if exists submissions_insert_own on public.submissions;
 drop policy if exists grading_results_select_own on public.grading_results;
-drop policy if exists grade_disputes_select_own on public.grade_disputes;
-drop policy if exists grade_disputes_insert_own on public.grade_disputes;
+do $$
+begin
+  if to_regclass('public.grade_disputes') is not null then
+    drop policy if exists grade_disputes_select_own on public.grade_disputes;
+    drop policy if exists grade_disputes_insert_own on public.grade_disputes;
+  end if;
+end
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Suggest a Correction/Better Answer
+-- ---------------------------------------------------------------------------
+
+-- Production Phase 1B confirmed that the legacy grade_disputes table is empty.
+-- Rename it instead of dropping it. If either that assumption or the expected
+-- one-table state changes, abort before altering any columns so records cannot
+-- be silently deleted, overwritten, or reinterpreted.
+do $$
+begin
+  if to_regclass('public.grade_disputes') is not null
+     and to_regclass('public.question_corrections') is not null then
+    raise exception
+      'PHASE1_CORRECTION_CONVERSION_BLOCKED: grade_disputes and question_corrections both exist';
+  end if;
+
+  if to_regclass('public.grade_disputes') is not null then
+    if exists (select 1 from public.grade_disputes limit 1) then
+      raise exception
+        'PHASE1_CORRECTION_CONVERSION_BLOCKED: grade_disputes contains records requiring manual review';
+    end if;
+
+    alter table public.grade_disputes rename to question_corrections;
+  elsif to_regclass('public.question_corrections') is null then
+    raise exception
+      'PHASE1_CORRECTION_CONVERSION_BLOCKED: neither expected correction table exists';
+  end if;
+end
+$$;
+
+alter table public.question_corrections
+  drop constraint if exists grade_disputes_submission_id_fkey,
+  drop constraint if exists grade_disputes_user_id_fkey,
+  drop column if exists submission_id;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'question_corrections'
+      and column_name = 'reason'
+  ) and not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'question_corrections'
+      and column_name = 'proposed_correction'
+  ) then
+    alter table public.question_corrections
+      rename column reason to proposed_correction;
+  end if;
+end
+$$;
+
+alter table public.question_corrections
+  add column if not exists question_bank_id text not null,
+  add column if not exists subject text not null,
+  add column if not exists correction_type text not null,
+  add column if not exists proposed_correction text not null,
+  add column if not exists explanation text not null,
+  add column if not exists source_urls text[] not null default '{}'::text[],
+  add column if not exists updated_at timestamptz not null default now();
+
+alter table public.question_corrections
+  alter column user_id drop not null,
+  alter column status set default 'pending',
+  alter column status set not null,
+  alter column created_at set default now(),
+  alter column created_at set not null;
+
+do $$
+begin
+  if exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.question_corrections'::regclass
+      and conname = 'grade_disputes_pkey'
+  ) and not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.question_corrections'::regclass
+      and conname = 'question_corrections_pkey'
+  ) then
+    alter table public.question_corrections
+      rename constraint grade_disputes_pkey to question_corrections_pkey;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.question_corrections'::regclass
+      and conname = 'question_corrections_user_id_fkey'
+  ) then
+    alter table public.question_corrections
+      add constraint question_corrections_user_id_fkey
+      foreign key (user_id) references auth.users(id) on delete set null;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.question_corrections'::regclass
+      and conname = 'question_corrections_type_check'
+  ) then
+    alter table public.question_corrections
+      add constraint question_corrections_type_check
+      check (
+        correction_type in (
+          'question_text',
+          'suggested_answer',
+          'legal_basis',
+          'source',
+          'other'
+        )
+      );
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.question_corrections'::regclass
+      and conname = 'question_corrections_status_check'
+  ) then
+    alter table public.question_corrections
+      add constraint question_corrections_status_check
+      check (status in ('pending', 'accepted', 'rejected'));
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.question_corrections'::regclass
+      and conname = 'question_corrections_content_check'
+  ) then
+    alter table public.question_corrections
+      add constraint question_corrections_content_check
+      check (
+        question_bank_id ~ '^[A-Za-z0-9][A-Za-z0-9._-]{1,119}$'
+        and char_length(subject) between 2 and 120
+        and char_length(btrim(proposed_correction)) between 10 and 6000
+        and char_length(btrim(explanation)) between 10 and 3000
+        and cardinality(source_urls) <= 5
+      );
+  end if;
+end
+$$;
+
+create index if not exists question_corrections_status_created_idx
+  on public.question_corrections (status, created_at desc);
+
+create or replace function public.set_question_correction_updated_at()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgrelid = 'public.question_corrections'::regclass
+      and tgname = 'question_corrections_set_updated_at'
+      and not tgisinternal
+  ) then
+    create trigger question_corrections_set_updated_at
+      before update on public.question_corrections
+      for each row
+      execute function public.set_question_correction_updated_at();
+  end if;
+end
+$$;
+
+alter table public.question_corrections enable row level security;
+revoke all privileges on table public.question_corrections
+  from public, anon, authenticated;
+grant select, insert, update, delete on table public.question_corrections
+  to service_role;
+revoke all on function public.set_question_correction_updated_at()
+  from public, anon, authenticated;
+grant execute on function public.set_question_correction_updated_at()
+  to service_role;
 
 create policy profiles_select_own
   on public.profiles
@@ -119,26 +325,6 @@ create policy grading_results_select_own
       select 1
       from public.submissions
       where submissions.id = grading_results.submission_id
-        and submissions.user_id = (select auth.uid())
-    )
-  );
-
-create policy grade_disputes_select_own
-  on public.grade_disputes
-  for select
-  to authenticated
-  using ((select auth.uid()) = user_id);
-
-create policy grade_disputes_insert_own
-  on public.grade_disputes
-  for insert
-  to authenticated
-  with check (
-    (select auth.uid()) = user_id
-    and exists (
-      select 1
-      from public.submissions
-      where submissions.id = grade_disputes.submission_id
         and submissions.user_id = (select auth.uid())
     )
   );

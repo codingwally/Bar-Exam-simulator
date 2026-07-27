@@ -9,7 +9,7 @@
 
 begin;
 set local search_path = public, extensions, auth, pg_temp;
-select plan(57);
+select plan(58);
 
 select has_column('public', 'profiles', 'school', 'profiles.school exists');
 select has_column('public', 'profiles', 'enrollment_status', 'profiles.enrollment_status exists');
@@ -24,6 +24,7 @@ select has_table('public', 'usage_sessions', 'usage_sessions exists');
 select has_table('public', 'usage_events', 'usage_events exists');
 select has_table('public', 'user_entitlements', 'user_entitlements exists');
 select has_table('public', 'admin_audit_log', 'admin_audit_log exists');
+select has_table('public', 'question_corrections', 'Suggest a Correction/Better Answer storage exists');
 
 select policies_are(
   'public',
@@ -76,9 +77,9 @@ select policies_are(
 
 select policies_are(
   'public',
-  'grade_disputes',
-  array['grade_disputes_insert_own', 'grade_disputes_select_own'],
-  'grade disputes retain only owner-scoped policies'
+  'question_corrections',
+  array[]::text[],
+  'Suggest a Correction/Better Answer has no direct browser policies'
 );
 
 select function_returns(
@@ -242,7 +243,7 @@ select ok(
         ('submissions'),
         ('grading_results'),
         ('calibration_examples'),
-        ('grade_disputes')
+        ('question_corrections')
     ) core(table_name)
     cross join (
       values ('INSERT'), ('UPDATE'), ('DELETE')
@@ -267,7 +268,7 @@ select ok(
         ('submissions'),
         ('grading_results'),
         ('calibration_examples'),
-        ('grade_disputes')
+        ('question_corrections')
     ) core(table_name)
     cross join (
       values ('UPDATE'), ('DELETE')
@@ -283,13 +284,13 @@ select ok(
 
 select ok(
   has_table_privilege('authenticated', 'public.submissions', 'INSERT')
-  and has_table_privilege('authenticated', 'public.grade_disputes', 'INSERT')
+  and not has_table_privilege('authenticated', 'public.question_corrections', 'INSERT')
   and not has_table_privilege('authenticated', 'public.profiles', 'INSERT')
   and not has_table_privilege('authenticated', 'public.subjects', 'INSERT')
   and not has_table_privilege('authenticated', 'public.questions', 'INSERT')
   and not has_table_privilege('authenticated', 'public.grading_results', 'INSERT')
   and not has_table_privilege('authenticated', 'public.calibration_examples', 'INSERT'),
-  'authenticated INSERT is limited to submissions and grade disputes'
+  'authenticated INSERT is limited to submissions; corrections require the Worker'
 );
 
 select ok(
@@ -299,7 +300,7 @@ select ok(
   and not has_table_privilege('anon', 'public.submissions', 'SELECT')
   and not has_table_privilege('anon', 'public.grading_results', 'SELECT')
   and not has_table_privilege('anon', 'public.calibration_examples', 'SELECT')
-  and not has_table_privilege('anon', 'public.grade_disputes', 'SELECT'),
+  and not has_table_privilege('anon', 'public.question_corrections', 'SELECT'),
   'anon SELECT is limited to public subjects and questions'
 );
 
@@ -309,7 +310,7 @@ select ok(
   and has_table_privilege('authenticated', 'public.questions', 'SELECT')
   and has_table_privilege('authenticated', 'public.submissions', 'SELECT')
   and has_table_privilege('authenticated', 'public.grading_results', 'SELECT')
-  and has_table_privilege('authenticated', 'public.grade_disputes', 'SELECT')
+  and not has_table_privilege('authenticated', 'public.question_corrections', 'SELECT')
   and not has_table_privilege('authenticated', 'public.calibration_examples', 'SELECT'),
   'authenticated SELECT excludes backend-only calibration examples'
 );
@@ -325,7 +326,7 @@ select ok(
         ('submissions'),
         ('grading_results'),
         ('calibration_examples'),
-        ('grade_disputes')
+        ('question_corrections')
     ) core(table_name)
     where not has_table_privilege(
       'service_role',
@@ -390,7 +391,7 @@ select ok(
         'submissions',
         'grading_results',
         'calibration_examples',
-        'grade_disputes'
+        'question_corrections'
       )
       and acl.grantee = 0
   ),

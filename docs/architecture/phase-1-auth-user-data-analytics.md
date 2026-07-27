@@ -18,7 +18,7 @@ modifying the Worker, examiner, timer, question bank, submissions, or grading.
 
 The read-only production review found seven public tables:
 `profiles`, `subjects`, `questions`, `submissions`, `grading_results`,
-`calibration_examples`, and `grade_disputes`. RLS is enabled, but legacy broad
+`calibration_examples`, and the legacy `grade_disputes` table. RLS is enabled, but legacy broad
 table grants give both `anon` and `authenticated` API roles privileges beyond
 their intended workflows. In particular, authenticated users have effective
 UPDATE access to protected profile columns.
@@ -46,10 +46,36 @@ this minimum matrix:
 | `profiles` | none | SELECT; UPDATE only on approved personal columns |
 | `submissions` | none | SELECT, INSERT (owner RLS) |
 | `grading_results` | none | SELECT (owner RLS through submission) |
-| `grade_disputes` | none | SELECT, INSERT (owner RLS) |
+| `question_corrections` | none | none; Worker/service-role only |
 | `calibration_examples` | none | none |
 
 The service role retains operational access and must remain server-side.
+
+### Suggest a Correction/Better Answer
+
+The public question-bank identifier (for example, `LAB-001`) is the stable key
+used by the frontend and Worker. It is stored as `question_bank_id`; this
+workflow does not assume that a corresponding Supabase question UUID exists.
+
+Phase 1 converts the unused legacy `grade_disputes` table by renaming it to
+`question_corrections` and replacing submission-specific fields with the
+minimum editorial-review fields. The migration first verifies that the legacy
+table contains no rows. If any record unexpectedly exists—or both old and new
+tables exist—it stops before conversion so data is never silently deleted,
+overwritten, or reinterpreted.
+
+“Suggest a Correction/Better Answer” submissions contain the question-bank ID,
+trusted subject, approved correction type, proposed correction, explanation,
+up to five supporting URLs, optional authenticated user ID, review status,
+timestamps, and optional administrative notes. They never contain an
+examinee’s submitted answer, email address, IP address, credential, or API key.
+
+The correction table has RLS enabled and no browser policies or grants.
+`PUBLIC`, `anon`, and `authenticated` receive no SELECT, INSERT, UPDATE, or
+DELETE privilege. The frontend submits to the Worker’s narrow `/corrections`
+endpoint, which validates the stable question against the server-loaded public
+bank and writes through the server-only Supabase service role. No Gemini call
+is made for this workflow.
 
 ### Deliberately unresolved production constraints
 
@@ -186,10 +212,6 @@ No INSERT/UPDATE/DELETE policy exists for roles, analytics, entitlements, or
 audit records. Trusted server operations use the service role and keep that key
 outside the repository and browser.
 
-The existing `grade_disputes_insert_own` policy is strengthened during Phase 1:
-the inserted `user_id` must equal `auth.uid()`, and the referenced submission
-must also belong to that same authenticated user.
-
 ## Rollback
 
 Because the migration changes grants and policies, reverting the Git commit does
@@ -216,14 +238,17 @@ Applying this migration would:
 
 1. add five nullable/defaulted profile fields and two onboarding constraints;
 2. enforce column-level profile update permissions;
-3. create seven new tables, supporting indexes, and RLS policies;
+3. create seven new tables, convert the empty legacy correction table, and add
+   supporting indexes and RLS policies;
 4. add server-timestamped Terms, consent, onboarding, role, and role-helper RPCs;
 5. add a safe Auth-user trigger that creates a profile and `student` role;
 6. backfill a `student` role for every existing profile without overwriting any
    role already present;
 7. leave all new analytics and entitlement tables disconnected and inactive;
 8. leave questions, LAB identifiers, grading, subscriptions, guest access,
-   frontend code, Worker code, secrets, and payment behavior unchanged.
+   authentication behavior, secrets, and payment behavior unchanged;
+9. add only the “Suggest a Correction/Better Answer” frontend form and Worker
+   submission endpoint.
 
 ## Deferred operational risks
 

@@ -79,6 +79,9 @@ create table if not exists public.calibration_examples (
   created_at timestamptz not null default now()
 );
 
+-- Production-faithful pre-migration legacy table. It intentionally remains
+-- empty in staging so Phase 1 can prove a data-preserving rename to
+-- question_corrections; any unexpected row makes the migration fail closed.
 create table if not exists public.grade_disputes (
   id uuid primary key default gen_random_uuid(),
   submission_id uuid not null references public.submissions(id) on delete cascade,

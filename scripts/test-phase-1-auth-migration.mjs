@@ -22,6 +22,14 @@ const preflight = await readFile(
   "utf8",
 );
 const preflightExecutable = preflight.replace(/--.*$/gm, "");
+const postMigrationInventory = await readFile(
+  new URL(
+    "../supabase/review/phase1_post_migration_access_inventory.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const postMigrationInventoryExecutable = postMigrationInventory.replace(/--.*$/gm, "");
 const malformedPrimaryKeyFixture = await readFile(
   new URL(
     "../supabase/tests/fixtures/20260728_staging_malformed_primary_key.sql",
@@ -65,7 +73,32 @@ has(/add column if not exists enrollment_status text/i, "enrollment status must 
 has(/add column if not exists year_level text/i, "year level must be additive");
 has(/add column if not exists profile_completed_at timestamptz/i, "completion timestamp must be additive");
 has(/add column if not exists updated_at timestamptz/i, "updated timestamp must be additive");
-lacks(/\bdrop\s+(table|column|schema)\b/i, "migration must not destructively drop schema objects");
+lacks(/\bdrop\s+(table|schema)\b/i, "migration must not destructively drop tables or schemas");
+assert.equal(
+  (sql.match(/\bdrop column if exists submission_id\b/gi) || []).length,
+  1,
+  "only the empty legacy correction table submission_id column may be removed",
+);
+has(
+  /if exists \(select 1 from public\.grade_disputes limit 1\)[\s\S]*PHASE1_CORRECTION_CONVERSION_BLOCKED/i,
+  "legacy correction conversion must stop before altering a table that contains records",
+);
+has(
+  /alter table public\.grade_disputes rename to question_corrections/i,
+  "the empty legacy table must be renamed instead of dropped",
+);
+has(
+  /question_bank_id text not null[\s\S]*correction_type text not null[\s\S]*proposed_correction text not null[\s\S]*explanation text not null[\s\S]*source_urls text\[\]/i,
+  "Suggest a Correction/Better Answer must store only its reviewed content fields",
+);
+has(
+  /correction_type in \([\s\S]*'question_text'[\s\S]*'suggested_answer'[\s\S]*'legal_basis'[\s\S]*'source'[\s\S]*'other'/i,
+  "correction type must use the approved vocabulary",
+);
+has(
+  /status in \('pending', 'accepted', 'rejected'\)/i,
+  "correction review status must use the approved vocabulary",
+);
 
 // Profile ownership and field-level protection.
 has(/profiles_select_own[\s\S]*auth\.uid\(\)[\s\S]*=\s*id/i, "profiles must be readable only by owner");
@@ -78,6 +111,7 @@ for (const table of [
   "grading_results",
   "calibration_examples",
   "grade_disputes",
+  "question_corrections",
 ]) {
   assert.ok(
     normalized.includes(`public.${table}`),
@@ -85,8 +119,16 @@ for (const table of [
   );
 }
 has(
-  /revoke all privileges on table[\s\S]*public\.profiles[\s\S]*public\.subjects[\s\S]*public\.questions[\s\S]*public\.submissions[\s\S]*public\.grading_results[\s\S]*public\.calibration_examples[\s\S]*public\.grade_disputes[\s\S]*from public, anon, authenticated/i,
-  "all PUBLIC and broad client grants on the seven core tables must be revoked",
+  /revoke all privileges on table[\s\S]*public\.profiles[\s\S]*public\.subjects[\s\S]*public\.questions[\s\S]*public\.submissions[\s\S]*public\.grading_results[\s\S]*public\.calibration_examples[\s\S]*from public, anon, authenticated/i,
+  "all PUBLIC and broad client grants on the retained core tables must be revoked",
+);
+has(
+  /revoke all privileges on table public\.grade_disputes[\s\S]*from public, anon, authenticated/i,
+  "legacy correction storage must lose all direct browser grants before conversion",
+);
+has(
+  /revoke all privileges on table public\.question_corrections[\s\S]*from public, anon, authenticated/i,
+  "converted correction storage must retain no direct browser grants",
 );
 has(
   /grant select on table public\.subjects, public\.questions[\s\S]*to anon, authenticated/i,
@@ -96,9 +138,13 @@ has(
   /grant select, insert on table public\.submissions to authenticated/i,
   "authenticated students must retain owner-scoped submission creation",
 );
+lacks(
+  /grant\s+[\s\S]{0,80}on table public\.question_corrections to (?:public|anon|authenticated)/i,
+  "browsers must not receive direct correction-table privileges",
+);
 has(
-  /grant select, insert on table public\.grade_disputes to authenticated/i,
-  "authenticated students must retain owner-scoped dispute creation",
+  /grant select, insert, update, delete on table public\.question_corrections[\s\S]*to service_role/i,
+  "only the trusted service role may manage correction records",
 );
 has(
   /grant update \(display_name, school, enrollment_status, year_level\)[\s\S]*on public\.profiles to authenticated/i,
@@ -107,10 +153,6 @@ has(
 lacks(
   /grant update\s*\([^)]*(subscription_tier|subscription_status|profile_completed_at)/i,
   "subscription and administrative profile columns must never be client-updateable",
-);
-has(
-  /grade_disputes_insert_own[\s\S]*submissions\.id = grade_disputes\.submission_id[\s\S]*submissions\.user_id = \(select auth\.uid\(\)\)/i,
-  "grade disputes must reference a submission owned by the authenticated user",
 );
 for (const legacyPolicy of [
   "subjects_select_all",
@@ -129,14 +171,16 @@ for (const securedPolicy of [
   "submissions_select_own",
   "submissions_insert_own",
   "grading_results_select_own",
-  "grade_disputes_select_own",
-  "grade_disputes_insert_own",
 ]) {
   has(
     new RegExp(`create policy ${securedPolicy}[\\s\\S]*?to (?:authenticated|anon, authenticated)`, "i"),
     `${securedPolicy} must be recreated for explicit API roles instead of PUBLIC`,
   );
 }
+lacks(
+  /create policy [^\s]+[\s\S]{0,120}on public\.question_corrections/i,
+  "correction records must not have a direct browser RLS policy",
+);
 
 // Onboarding requires a matching versioned acceptance.
 has(/unique \(user_id, terms_version, privacy_version\)/i, "terms acceptance must be versioned");
@@ -362,6 +406,21 @@ assert.doesNotMatch(
   preflightExecutable,
   /\b(create|alter|drop|insert|update|delete|truncate|grant|revoke)\s+(table|schema|function|policy|trigger|into|on|from)\b/i,
   "preflight must not mutate schema, data, policies, or grants",
+);
+assert.match(
+  postMigrationInventory,
+  /question_corrections/i,
+  "post-migration inventory must inspect correction storage",
+);
+assert.doesNotMatch(
+  postMigrationInventory,
+  /grade_disputes/i,
+  "post-migration inventory must not query the converted legacy table",
+);
+assert.doesNotMatch(
+  postMigrationInventoryExecutable,
+  /\b(create|alter|drop|insert|update|delete|truncate|grant|revoke)\s+(table|schema|function|policy|trigger|into|on|from)\b/i,
+  "post-migration inventory must remain read-only",
 );
 
 console.log("Phase 1 authentication migration contract tests passed.");

@@ -43,7 +43,9 @@ Review, without executing:
 
 - `supabase/migrations/20260727_002_auth_user_data_analytics_foundation.sql`
 - `supabase/tests/20260727_002_auth_user_data_analytics_foundation_test.sql`
+- `supabase/tests/20260727_003_phase1_behavioral_security_test.sql`
 - `supabase/review/read_only_existing_access_inventory.sql`
+- `supabase/review/phase1_post_migration_access_inventory.sql`
 - `supabase/review/phase1_production_preflight.sql` (review only; do not run
   against production without a separate approval)
 
@@ -121,6 +123,12 @@ supabase test db supabase/tests/20260727_002_auth_user_data_analytics_foundation
 
 The suite must pass before any production recommendation.
 
+The remote staging harness combines the structural 58 assertions and
+behavioral 53 assertions into one 111-assertion pgTAP plan because consecutive
+Supabase migration files may execute in the same database session. The source
+test files remain separate, transactional suites for normal `supabase test db`
+execution.
+
 ### 6. Repeatability test
 
 Run a second dry run:
@@ -149,8 +157,10 @@ Create synthetic test users only—never founders—and verify:
 - Onboarding fails until the approved Terms and Privacy versions are accepted.
 - Marketing consent defaults to false and withdrawal appends a new record.
 - Active-viewer queries use an unended session seen within five minutes.
-- Student A may create a dispute for Student A's submission but cannot attach a
-  dispute to Student B's submission.
+- Browsers cannot SELECT, INSERT, UPDATE, or DELETE
+  `question_corrections` directly.
+- The trusted service role can store “Suggest a Correction/Better Answer”
+  records without an examinee answer, email address, IP address, or credential.
 - Forbidden analytics/audit keys are rejected recursively inside nested objects
   and arrays.
 
@@ -165,6 +175,11 @@ Run the read-only inventory again and compare it with the before-state. Save:
 - behavioral-test results;
 - before/after grants and policy inventories;
 - any warnings or deviations.
+
+Use `phase1_post_migration_access_inventory.sql` for the after-state because the
+legacy table name no longer exists after the safe conversion. The remote
+behavioral harness removes only its fixed synthetic UUID fixtures after all
+assertions pass.
 
 After review, unlink the CLI and delete the disposable project according to the
 owner's retention decision. Do not proceed to Phase 2.

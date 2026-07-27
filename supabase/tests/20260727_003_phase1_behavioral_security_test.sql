@@ -3,7 +3,7 @@
 
 begin;
 set local search_path = public, extensions, auth, pg_temp;
-select plan(52);
+select plan(53);
 
 insert into auth.users (
   id,
@@ -131,26 +131,6 @@ values
     false
   );
 
-insert into public.grade_disputes (
-  id,
-  submission_id,
-  user_id,
-  reason
-)
-values
-  (
-    '51000000-0000-4000-8000-000000000001',
-    '40000000-0000-4000-8000-000000000001',
-    '10000000-0000-4000-8000-000000000001',
-    'Synthetic dispute A.'
-  ),
-  (
-    '51000000-0000-4000-8000-000000000002',
-    '40000000-0000-4000-8000-000000000002',
-    '10000000-0000-4000-8000-000000000002',
-    'Synthetic dispute B.'
-  );
-
 set local role authenticated;
 select set_config(
   'request.jwt.claim.sub',
@@ -266,50 +246,41 @@ select is(
   0::bigint,
   'student cannot read another grading result'
 );
-select is(
-  (select count(*) from public.grade_disputes),
-  1::bigint,
-  'student sees only their own grade dispute'
-);
-select is(
-  (
-    select count(*)
-    from public.grade_disputes
-    where id = '51000000-0000-4000-8000-000000000002'
-  ),
-  0::bigint,
-  'student cannot read another grade dispute'
-);
-select lives_ok(
+select throws_ok(
   $test$
-    insert into public.grade_disputes (
-      id,
-      submission_id,
-      user_id,
-      reason
-    )
-    values (
-      '51000000-0000-4000-8000-000000000003',
-      '40000000-0000-4000-8000-000000000001',
-      '10000000-0000-4000-8000-000000000001',
-      'Student A may dispute Student A submission.'
-    )
-  $test$,
-  'student can create a dispute for their own submission'
+    select count(*) from public.question_corrections
+  $test$
 );
 select throws_ok(
   $test$
-    insert into public.grade_disputes (
-      id,
-      submission_id,
+    update public.question_corrections
+    set status = 'accepted'
+  $test$
+);
+select throws_ok(
+  $test$
+    delete from public.question_corrections
+  $test$
+);
+select throws_ok(
+  $test$
+    insert into public.question_corrections (
+      question_bank_id,
+      subject,
+      correction_type,
+      proposed_correction,
+      explanation,
       user_id,
-      reason
+      source_urls
     )
     values (
-      '51000000-0000-4000-8000-000000000004',
-      '40000000-0000-4000-8000-000000000002',
+      'LAB-001',
+      'Labor Law',
+      'suggested_answer',
+      'A browser must not write this proposed correction.',
+      'Suggest a Correction/Better Answer must pass through the Worker.',
       '10000000-0000-4000-8000-000000000001',
-      'Student A must not dispute Student B submission.'
+      array['https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/12345']
     )
   $test$
 );
@@ -445,6 +416,29 @@ select throws_ok(
 reset role;
 set local role service_role;
 
+select lives_ok(
+  $test$
+    insert into public.question_corrections (
+      id,
+      question_bank_id,
+      subject,
+      correction_type,
+      proposed_correction,
+      explanation,
+      source_urls
+    )
+    values (
+      '51000000-0000-4000-8000-000000000001',
+      'LAB-001',
+      'Labor Law',
+      'legal_basis',
+      'The legal basis should identify the controlling Labor Code provision.',
+      'The proposed citation is more specific and remains subject to editorial review.',
+      array['https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/12345']
+    )
+  $test$,
+  'trusted backend can store Suggest a Correction/Better Answer'
+);
 select lives_ok(
   $test$
     insert into public.usage_sessions (

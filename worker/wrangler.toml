@@ -15,4 +15,6 @@ enabled = true
 [observability.logs]
 enabled = true
 
-# GEMINI_API_KEY must remain a Cloudflare secret. Never add it to this file.
+# GEMINI_API_KEY and SUPABASE_SERVICE_ROLE_KEY must remain Cloudflare secrets.
+# SUPABASE_URL must be configured as a Worker environment variable.
+# Never add secret values to this file.

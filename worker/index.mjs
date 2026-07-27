@@ -14,15 +14,23 @@ import {
   sanitizeSources,
   validateExaminerResult,
 } from './examiner-core.mjs';
+import {
+  CORRECTION_LIMITS,
+  CorrectionValidationError,
+  correctionInsertRecord,
+  normalizeCorrectionRequest,
+} from './correction-core.mjs';
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
+const MAX_CORRECTIONS_PER_WINDOW = 5;
 const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
 const GEMINI_TRANSIENT_ATTEMPTS = 2;
 const GEMINI_RETRY_DELAY_MS = 750;
 const WEBSITE_BANK_URL = 'https://duediligence.ph/content/question-bank/website-upload.json';
 const rateWindows = new Map();
+const correctionRateWindows = new Map();
 const recentSubmissions = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
@@ -68,6 +76,24 @@ function enforceRateLimit(request) {
   current.count += 1;
   if (current.count > MAX_REQUESTS_PER_WINDOW) {
     throw new ExaminerError('RATE_LIMITED', 'Too many grading requests. Please wait a few minutes and try again.', 429);
+  }
+}
+
+function enforceCorrectionRateLimit(request) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Date.now();
+  const current = correctionRateWindows.get(ip);
+  if (!current || now - current.startedAt >= WINDOW_MS) {
+    correctionRateWindows.set(ip, { startedAt: now, count: 1 });
+    return;
+  }
+  current.count += 1;
+  if (current.count > MAX_CORRECTIONS_PER_WINDOW) {
+    throw new ExaminerError(
+      'RATE_LIMITED',
+      'Too many correction submissions. Please wait a few minutes and try again.',
+      429,
+    );
   }
 }
 
@@ -398,6 +424,91 @@ async function handleGrade(request, env, origin, allowedOrigin) {
   }
 }
 
+async function handleCorrection(request, env, origin, allowedOrigin) {
+  enforceCorrectionRateLimit(request);
+  const declaredLength = Number(request.headers.get('Content-Length') || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > CORRECTION_LIMITS.requestBytes) {
+    throw new ExaminerError('INVALID_CORRECTION', 'The correction request is too large.', 413);
+  }
+
+  const rawBody = await request.text();
+  if (new TextEncoder().encode(rawBody).byteLength > CORRECTION_LIMITS.requestBytes) {
+    throw new ExaminerError('INVALID_CORRECTION', 'The correction request is too large.', 413);
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    throw new ExaminerError('INVALID_JSON', 'The correction request contains invalid JSON.');
+  }
+
+  const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
+  let correction;
+  try {
+    correction = normalizeCorrectionRequest(payload, records.get(String(payload?.questionId || '').trim()));
+  } catch (error) {
+    if (error instanceof CorrectionValidationError) {
+      throw new ExaminerError(error.code, error.message, 400);
+    }
+    throw error;
+  }
+
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new ExaminerError(
+      'CORRECTIONS_NOT_CONFIGURED',
+      'Correction submissions are temporarily unavailable.',
+      503,
+    );
+  }
+
+  let supabaseUrl;
+  try {
+    supabaseUrl = new URL(env.SUPABASE_URL);
+  } catch {
+    throw new ExaminerError(
+      'CORRECTIONS_NOT_CONFIGURED',
+      'Correction submissions are temporarily unavailable.',
+      503,
+    );
+  }
+  if (supabaseUrl.protocol !== 'https:') {
+    throw new ExaminerError(
+      'CORRECTIONS_NOT_CONFIGURED',
+      'Correction submissions are temporarily unavailable.',
+      503,
+    );
+  }
+
+  const insertResponse = await fetch(
+    new URL('/rest/v1/question_corrections', supabaseUrl),
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(correctionInsertRecord(correction)),
+    },
+  );
+
+  if (!insertResponse.ok) {
+    console.error('Correction storage request failed', { status: insertResponse.status });
+    throw new ExaminerError(
+      'CORRECTION_SUBMISSION_FAILED',
+      'Suggest a Correction/Better Answer could not be submitted. Please try again.',
+      502,
+    );
+  }
+
+  return jsonResponse({
+    ok: true,
+    message: 'Suggest a Correction/Better Answer submitted successfully.',
+  }, 201, origin, allowedOrigin);
+}
+
 export default {
   async fetch(request, env) {
     const allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
@@ -408,7 +519,14 @@ export default {
         return new Response(null, { status: 204, headers: corsHeaders(origin, allowedOrigin) });
       }
       if (request.method !== 'POST') {
-        throw new ExaminerError('METHOD_NOT_ALLOWED', 'Only POST grading requests are accepted.', 405);
+        throw new ExaminerError('METHOD_NOT_ALLOWED', 'Only POST requests are accepted.', 405);
+      }
+      const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+      if (pathname === '/corrections') {
+        return await handleCorrection(request, env, origin, allowedOrigin);
+      }
+      if (pathname !== '/') {
+        throw new ExaminerError('NOT_FOUND', 'This endpoint does not exist.', 404);
       }
       return await handleGrade(request, env, origin, allowedOrigin);
     } catch (error) {

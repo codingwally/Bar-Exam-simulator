@@ -89,7 +89,7 @@ begin
   end if;
 
   if to_regprocedure('public.reserve_guest_grade(text,text,text,smallint,integer)') is null
-     or to_regprocedure('public.finalize_guest_grade(uuid)') is null
+     or to_regprocedure('public.finalize_guest_grade(uuid,smallint)') is null
      or to_regprocedure('public.release_guest_grade(uuid)') is null
      or to_regprocedure('public.jsonb_has_forbidden_keys(jsonb,text[])') is null then
     raise exception 'PHASE3_PREFLIGHT_FUNCTION_DRIFT: required Phase 1/2 functions are missing';

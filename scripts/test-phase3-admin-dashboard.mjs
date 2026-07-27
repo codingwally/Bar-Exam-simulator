@@ -81,6 +81,7 @@ assert.match(migration, /latest_success/);
 assert.match(migration, /repeated_success/);
 assert.match(migration, /'retention', retention\.metrics/);
 assert.match(preflight, /READ-ONLY \/ FAIL-FAST/);
+assert.match(preflight, /finalize_guest_grade\(uuid,smallint\)/);
 assert.doesNotMatch(preflight, /\b(insert|update|delete|alter|drop|create|grant|revoke)\b/i);
 
 console.log('Phase 3 admin, analytics, privacy, and preflight contract tests passed.');

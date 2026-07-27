@@ -20,10 +20,26 @@ import {
   correctionInsertRecord,
   normalizeCorrectionRequest,
 } from './correction-core.mjs';
+import {
+  GUEST_GRADE_LIMIT,
+  GuestAccessError,
+  deriveGuestHashes,
+  hmacHex,
+  normalizeReservationResponse,
+  publicGuestUsage,
+  requireGuestHeaders,
+} from './guest-access-core.mjs';
+import {
+  SUPPORT_LIMITS,
+  SupportValidationError,
+  normalizeSupportRequest,
+  supportInsertRecord,
+} from './support-core.mjs';
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
 const MAX_CORRECTIONS_PER_WINDOW = 5;
+const MAX_SUPPORT_REQUESTS_PER_WINDOW = 4;
 const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
 const GEMINI_TRANSIENT_ATTEMPTS = 2;
@@ -31,6 +47,7 @@ const GEMINI_RETRY_DELAY_MS = 750;
 const WEBSITE_BANK_URL = 'https://duediligence.ph/content/question-bank/website-upload.json';
 const rateWindows = new Map();
 const correctionRateWindows = new Map();
+const supportRateWindows = new Map();
 const recentSubmissions = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
@@ -39,7 +56,7 @@ function corsHeaders(origin, allowedOrigin) {
   return {
     'Access-Control-Allow-Origin': origin === allowedOrigin ? origin : allowedOrigin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Guest-Device-ID, X-Request-ID',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
@@ -65,36 +82,49 @@ function assertOrigin(request, allowedOrigin) {
   return origin;
 }
 
-function enforceRateLimit(request) {
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+async function transientRateKey(request, env, scope) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unavailable';
+  return hmacHex(env.GUEST_USAGE_HMAC_KEY || 'local-transient-rate-key', `${scope}\0${ip}`);
+}
+
+function enforceWindow(rateMap, key, maximum, message) {
   const now = Date.now();
-  const current = rateWindows.get(ip);
+  const current = rateMap.get(key);
   if (!current || now - current.startedAt >= WINDOW_MS) {
-    rateWindows.set(ip, { startedAt: now, count: 1 });
+    rateMap.set(key, { startedAt: now, count: 1 });
     return;
   }
   current.count += 1;
-  if (current.count > MAX_REQUESTS_PER_WINDOW) {
-    throw new ExaminerError('RATE_LIMITED', 'Too many grading requests. Please wait a few minutes and try again.', 429);
+  if (current.count > maximum) {
+    throw new ExaminerError('RATE_LIMITED', message, 429);
   }
 }
 
-function enforceCorrectionRateLimit(request) {
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const now = Date.now();
-  const current = correctionRateWindows.get(ip);
-  if (!current || now - current.startedAt >= WINDOW_MS) {
-    correctionRateWindows.set(ip, { startedAt: now, count: 1 });
-    return;
-  }
-  current.count += 1;
-  if (current.count > MAX_CORRECTIONS_PER_WINDOW) {
-    throw new ExaminerError(
-      'RATE_LIMITED',
-      'Too many correction submissions. Please wait a few minutes and try again.',
-      429,
-    );
-  }
+async function enforceRateLimit(request, env) {
+  enforceWindow(
+    rateWindows,
+    await transientRateKey(request, env, 'grade'),
+    MAX_REQUESTS_PER_WINDOW,
+    'Too many grading requests. Please wait a few minutes and try again.',
+  );
+}
+
+async function enforceCorrectionRateLimit(request, env) {
+  enforceWindow(
+    correctionRateWindows,
+    await transientRateKey(request, env, 'correction'),
+    MAX_CORRECTIONS_PER_WINDOW,
+    'Too many correction submissions. Please wait a few minutes and try again.',
+  );
+}
+
+async function enforceSupportRateLimit(request, env) {
+  enforceWindow(
+    supportRateWindows,
+    await transientRateKey(request, env, 'support'),
+    MAX_SUPPORT_REQUESTS_PER_WINDOW,
+    'Too many support requests. Please wait a few minutes and try again.',
+  );
 }
 
 async function submissionFingerprint(requestData, request) {
@@ -118,6 +148,148 @@ async function registerSubmission(requestData, request) {
     }
   }
   return fingerprint;
+}
+
+function configuredSupabaseUrl(env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new GuestAccessError(
+      'GUEST_ACCESS_NOT_CONFIGURED',
+      'Guest grading is temporarily unavailable.',
+      503,
+    );
+  }
+  let url;
+  try {
+    url = new URL(env.SUPABASE_URL);
+  } catch {
+    throw new GuestAccessError(
+      'GUEST_ACCESS_NOT_CONFIGURED',
+      'Guest grading is temporarily unavailable.',
+      503,
+    );
+  }
+  if (url.protocol !== 'https:') {
+    throw new GuestAccessError(
+      'GUEST_ACCESS_NOT_CONFIGURED',
+      'Guest grading is temporarily unavailable.',
+      503,
+    );
+  }
+  return url;
+}
+
+async function supabaseRpc(env, functionName, body) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    console.error('Guest quota storage request failed', {
+      operation: functionName,
+      status: response.status,
+    });
+    throw new GuestAccessError(
+      'GUEST_ACCESS_UNAVAILABLE',
+      'Guest grading is temporarily unavailable.',
+      503,
+    );
+  }
+  return response.json().catch(() => null);
+}
+
+async function verifiedAuthenticatedUser(request, env) {
+  const authorization = String(request.headers.get('Authorization') || '').trim();
+  if (!authorization) return null;
+  if (!/^Bearer\s+\S+$/i.test(authorization)) {
+    throw new GuestAccessError('INVALID_SESSION', 'Your session is invalid. Please sign in again.', 401);
+  }
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL('/auth/v1/user', baseUrl), {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: authorization,
+    },
+  });
+  if (!response.ok) {
+    throw new GuestAccessError('INVALID_SESSION', 'Your session expired. Please sign in again.', 401);
+  }
+  const user = await response.json().catch(() => null);
+  if (!user?.id) {
+    throw new GuestAccessError('INVALID_SESSION', 'Your session expired. Please sign in again.', 401);
+  }
+  return { id: String(user.id) };
+}
+
+async function reserveGradeAccess(request, env) {
+  const authenticatedUser = await verifiedAuthenticatedUser(request, env);
+  if (authenticatedUser) {
+    return { signedIn: true, reservationId: null, usage: null };
+  }
+  const hasGuestHeaders = request.headers.has('X-Guest-Device-ID')
+    && request.headers.has('X-Request-ID');
+  if (!hasGuestHeaders && String(env.ALLOW_LEGACY_GUESTS).toLowerCase() === 'true') {
+    return { signedIn: false, legacy: true, reservationId: null, usage: null };
+  }
+  const { deviceId, requestId } = requireGuestHeaders(request);
+  const { deviceHash, recoveryHash } = await deriveGuestHashes(
+    request,
+    env.GUEST_USAGE_HMAC_KEY,
+    deviceId,
+  );
+  const reservation = normalizeReservationResponse(await supabaseRpc(env, 'reserve_guest_grade', {
+    p_device_hash: deviceHash,
+    p_recovery_hash: recoveryHash,
+    p_request_key: requestId,
+    p_limit: GUEST_GRADE_LIMIT,
+    p_reservation_seconds: 120,
+  }));
+  if (!reservation.allowed) {
+    if (reservation.reason === 'duplicate_request') {
+      throw new GuestAccessError(
+        'DUPLICATE_SUBMISSION',
+        'This answer is already being checked. Please wait for the result.',
+        409,
+      );
+    }
+    throw new GuestAccessError(
+      'GUEST_LIMIT_REACHED',
+      'You have completed your 3 guest questions. Sign in to continue.',
+      403,
+    );
+  }
+  return {
+    signedIn: false,
+    reservationId: reservation.reservationId,
+    usage: publicGuestUsage(reservation),
+  };
+}
+
+async function finalizeGradeAccess(access, env) {
+  if (access.signedIn || access.legacy) return null;
+  const result = normalizeReservationResponse(await supabaseRpc(env, 'finalize_guest_grade', {
+    p_reservation_id: access.reservationId,
+    p_limit: GUEST_GRADE_LIMIT,
+  }));
+  return publicGuestUsage(result);
+}
+
+async function releaseGradeAccess(access, env) {
+  if (!access || access.signedIn || !access.reservationId) return;
+  try {
+    await supabaseRpc(env, 'release_guest_grade', {
+      p_reservation_id: access.reservationId,
+    });
+  } catch (error) {
+    console.error('Guest quota reservation release failed', {
+      code: error?.code || 'UNKNOWN',
+    });
+  }
 }
 
 function retryDelay(attempt) {
@@ -337,7 +509,7 @@ async function callGemini(env, prompt, groundingEnabled) {
 }
 
 async function handleGrade(request, env, origin, allowedOrigin) {
-  enforceRateLimit(request);
+  await enforceRateLimit(request, env);
   let payload;
   try {
     payload = await request.json();
@@ -346,8 +518,10 @@ async function handleGrade(request, env, origin, allowedOrigin) {
   }
   const gradingRequest = normalizeRequest(payload);
   const submissionId = await registerSubmission(gradingRequest, request);
+  let gradeAccess = null;
 
   try {
+    gradeAccess = await reserveGradeAccess(request, env);
     let bankContext = null;
     try {
       const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
@@ -408,6 +582,7 @@ async function handleGrade(request, env, origin, allowedOrigin) {
       }
     }
 
+    const guestUsage = await finalizeGradeAccess(gradeAccess, env);
     return jsonResponse({
       ok: true,
       assessment: {
@@ -417,15 +592,21 @@ async function handleGrade(request, env, origin, allowedOrigin) {
         questionAuthority: context.authority,
         groundingEnabled: gemini.groundingUsed,
       },
+      access: gradeAccess.signedIn
+        ? { signedIn: true }
+        : gradeAccess.legacy
+          ? { signedIn: false, guest: null }
+          : { signedIn: false, guest: guestUsage },
     }, 200, origin, allowedOrigin);
   } catch (error) {
+    await releaseGradeAccess(gradeAccess, env);
     recentSubmissions.delete(submissionId);
     throw error;
   }
 }
 
 async function handleCorrection(request, env, origin, allowedOrigin) {
-  enforceCorrectionRateLimit(request);
+  await enforceCorrectionRateLimit(request, env);
   const declaredLength = Number(request.headers.get('Content-Length') || 0);
   if (Number.isFinite(declaredLength) && declaredLength > CORRECTION_LIMITS.requestBytes) {
     throw new ExaminerError('INVALID_CORRECTION', 'The correction request is too large.', 413);
@@ -509,6 +690,57 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
   }, 201, origin, allowedOrigin);
 }
 
+async function handleSupport(request, env, origin, allowedOrigin) {
+  await enforceSupportRateLimit(request, env);
+  const declaredLength = Number(request.headers.get('Content-Length') || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > SUPPORT_LIMITS.requestBytes) {
+    throw new ExaminerError('INVALID_SUPPORT_REQUEST', 'The support request is too large.', 413);
+  }
+  const rawBody = await request.text();
+  if (new TextEncoder().encode(rawBody).byteLength > SUPPORT_LIMITS.requestBytes) {
+    throw new ExaminerError('INVALID_SUPPORT_REQUEST', 'The support request is too large.', 413);
+  }
+  let payload;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    throw new ExaminerError('INVALID_JSON', 'The support request contains invalid JSON.');
+  }
+  let supportRequest;
+  try {
+    supportRequest = normalizeSupportRequest(payload);
+  } catch (error) {
+    if (error instanceof SupportValidationError) {
+      throw new ExaminerError(error.code, error.message, 400);
+    }
+    throw error;
+  }
+
+  const supabaseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL('/rest/v1/support_requests', supabaseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(supportInsertRecord(supportRequest)),
+  });
+  if (!response.ok) {
+    console.error('Support storage request failed', { status: response.status });
+    throw new ExaminerError(
+      'SUPPORT_SUBMISSION_FAILED',
+      'Your support request could not be submitted. Please try again.',
+      502,
+    );
+  }
+  return jsonResponse({
+    ok: true,
+    message: 'Your support request was received.',
+  }, 201, origin, allowedOrigin);
+}
+
 export default {
   async fetch(request, env) {
     const allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
@@ -525,12 +757,15 @@ export default {
       if (pathname === '/corrections') {
         return await handleCorrection(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/support') {
+        return await handleSupport(request, env, origin, allowedOrigin);
+      }
       if (pathname !== '/') {
         throw new ExaminerError('NOT_FOUND', 'This endpoint does not exist.', 404);
       }
       return await handleGrade(request, env, origin, allowedOrigin);
     } catch (error) {
-      const known = error instanceof ExaminerError;
+      const known = error instanceof ExaminerError || error instanceof GuestAccessError;
       return jsonResponse({
         ok: false,
         error: {

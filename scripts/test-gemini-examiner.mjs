@@ -247,6 +247,7 @@ try {
     GEMINI_API_KEY: 'test-only-placeholder',
     GEMINI_MODEL: 'gemini-3.6-flash',
     GEMINI_GROUNDING_ENABLED: 'true',
+    ALLOW_LEGACY_GUESTS: 'true',
   };
   const request = new Request('https://worker.example/', {
     method: 'POST',

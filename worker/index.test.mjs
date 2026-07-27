@@ -76,6 +76,10 @@ test('REM-2024-Q18 bare no answer cannot exceed 1.0', () => {
   assert.match(result.errors.join(' '), /bare conclusion/i);
 });
 
+test('an Answer heading does not let a bare conclusion evade the 1.0 cap', () => {
+  assert.equal(capped('Answer: No.').score, 1);
+});
+
 test('irrelevant or nonsensical content cannot exceed 0.5', () => {
   const irrelevant = capped('Bananas and bicycles float through purple weather.');
   const nonsensical = capped('aaaaaaaaaaaaaaaa');
@@ -104,11 +108,11 @@ test('legal basis with some application but incomplete ALAC cannot exceed 3.5', 
 
 test('a complete, substantially aligned ALAC answer may retain 4.0–5.0', () => {
   const answer = [
-    'No. The delegation was improper.',
-    'Under Canons II and IV of the CPRA and Rebarter v. Villa, a lawyer must personally supervise legal work and may not allow a nonlawyer to exercise professional judgment or sign counsel’s name.',
-    'Here, Sandro prepared the appellate brief, signed Cassandra’s name, and filed it before Cassandra reviewed it. Her intended post-filing review did not provide the required prior supervision.',
-    'Therefore, Cassandra improperly delegated professional legal work.',
-  ].join(' ');
+    'Answer: No. The delegation was improper.',
+    'Legal Basis: Under Canons II and IV of the CPRA and Rebarter v. Villa, a lawyer must personally supervise legal work and may not allow a nonlawyer to exercise professional judgment or sign counsel’s name.',
+    'Application: Sandro prepared the appellate brief, signed Cassandra’s name, and filed it before Cassandra reviewed it. Her intended post-filing review did not provide the required prior supervision.',
+    'Conclusion: Cassandra improperly delegated professional legal work.',
+  ].join('\n\n');
   assert.equal(capped(answer, 4.6).score, 4.6);
   assert.equal(capped(answer, 5).score, 5);
 });

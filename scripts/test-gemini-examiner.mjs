@@ -23,6 +23,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'deploy.yml'), 'utf8');
 const workerSource = fs.readFileSync(path.join(root, 'worker', 'index.mjs'), 'utf8');
+const websiteQuestionBank = JSON.parse(
+  fs.readFileSync(path.join(root, 'content', 'question-bank', 'website-upload.json'), 'utf8'),
+);
 
 function baseResult(overrides = {}) {
   return {
@@ -152,6 +155,24 @@ assert.equal(bareConclusion.percentagePointValue, 1);
 assert.equal(bareConclusion.tier, '1.0');
 assert.equal(bareConclusion.performanceLabel, 'Weak answer');
 assert.match(bareConclusion.errors.join(' '), /bare conclusion/i);
+
+// Every exact stored ALAC answer must remain eligible for a 4.0–5.0 score.
+for (const record of websiteQuestionBank.records) {
+  const storedAnswerResult = applyDeterministicScoreCap(
+    baseResult({ score: 5, errors: [] }),
+    record['Suggested Answer'],
+    {
+      question: record['Essay Question'],
+      suggestedAnswer: record['Suggested Answer'],
+      legalBasis: record['Legal Basis / Provision'],
+    },
+  );
+  assert.equal(
+    storedAnswerResult.score,
+    5,
+    `${record['Question ID']} exact stored ALAC answer was incorrectly capped`,
+  );
+}
 
 // Frontend and deployment regression checks.
 assert.match(html, /EXAMINER_WORKER_URL\s*=\s*'https:\/\/duediligence-gemini-examiner\.wallyesteban1993\.workers\.dev'/);

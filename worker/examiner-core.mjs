@@ -335,8 +335,29 @@ function tokenOverlap(source, reference) {
   return matches;
 }
 
+function alacSections(value) {
+  const text = cleanText(value, MAX_ANSWER_LENGTH);
+  const headingPattern = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:[IVX]+[.)]\s*)?(ANSWER|LEGAL\s+BASIS|APPLICATION|CONCLUSION)\s*(?::|—|-)\s*/gim;
+  const matches = [...text.matchAll(headingPattern)];
+  const sections = {};
+
+  for (let index = 0; index < matches.length; index += 1) {
+    const heading = matches[index][1].toLowerCase().replace(/\s+/g, '');
+    const contentStart = matches[index].index + matches[index][0].length;
+    const contentEnd = matches[index + 1]?.index ?? text.length;
+    sections[heading] = cleanText(text.slice(contentStart, contentEnd));
+  }
+  return sections;
+}
+
+function stripAnswerHeading(value) {
+  return cleanText(value, 1_000)
+    .replace(/^\s*(?:#{1,6}\s*)?(?:I[.)]\s*)?ANSWER\s*(?::|—|-)\s*/i, '')
+    .trim();
+}
+
 function categoricalPosition(value) {
-  const opening = cleanText(value, 400).toLowerCase();
+  const opening = stripAnswerHeading(value).toLowerCase();
   if (/^(no\b|invalid\b|not\s+(?:valid|liable|proper|entitled|allowed)\b|will not\b|cannot\b)/.test(opening)) return 'negative';
   if (/^(yes\b|valid\b|liable\b|proper\b|entitled\b|allowed\b|will\b|may\b)/.test(opening)) return 'affirmative';
   return '';
@@ -344,20 +365,52 @@ function categoricalPosition(value) {
 
 export function analyzeStudentAnswer(studentAnswer, context = {}) {
   const answer = cleanText(studentAnswer, MAX_ANSWER_LENGTH);
+  const sections = alacSections(answer);
+  const expectedSections = alacSections(context?.suggestedAnswer || '');
   const words = answer.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g) || [];
   const wordCount = words.length;
   const lower = answer.toLowerCase();
-  const bareConclusion = /^(?:yes|no|valid|invalid|liable|not liable|proper|improper|allowed|not allowed|may|may not|will|will not|cannot)[.!?]?$/i.test(answer);
-  const directAnswer = categoricalPosition(answer);
-  const expectedAnswer = categoricalPosition(context?.suggestedAnswer || '');
-  const conclusionAligned = Boolean(directAnswer && expectedAnswer && directAnswer === expectedAnswer);
+  const answerSection = sections.answer || '';
+  const expectedAnswerSection = expectedSections.answer || '';
+  const strippedAnswer = stripAnswerHeading(answer);
+  const bareConclusion = /^(?:yes|no|valid|invalid|liable|not liable|proper|improper|allowed|not allowed|may|may not|will|will not|cannot)[.!?]?$/i.test(strippedAnswer);
+  const directPosition = categoricalPosition(answerSection || answer);
+  const expectedPosition = categoricalPosition(expectedAnswerSection || context?.suggestedAnswer || '');
+  const hasAnswerSection = meaningfulTokens(answerSection).length >= 1;
+  const directAnswer = Boolean(directPosition || hasAnswerSection);
+  const sectionAnswerAligned = Boolean(
+    answerSection
+    && expectedAnswerSection
+    && tokenOverlap(answerSection, expectedAnswerSection) >= 1
+  );
+  const conclusionAligned = Boolean(
+    (directPosition && expectedPosition && directPosition === expectedPosition)
+    || sectionAnswerAligned
+  );
   const genericLegalBasis = /\b(?:under (?:the )?law|the law provides|applicable law|legal rule|governing rule|rule applies|legal basis|doctrine)\b/i.test(answer);
-  const specificLegalBasis = /\b(?:article|section|rule\s+\d|canon|constitution|constitutional|labor code|civil code|revised penal code|rules of court|cpra|republic act|r\.?\s*a\.?\s*\d|presidential decree|p\.?\s*d\.?\s*\d|jurisprudence|supreme court|[A-Z][A-Za-z.-]+\s+v\.?\s+[A-Z][A-Za-z.-]+)\b/i.test(answer);
+  const citedAuthority = /\b(?:article|section|rule\s+\d|canon|constitution|constitutional|[\w-]+\s+code|rules? of (?:court|evidence|civil procedure)|cpra|nirc|republic act|r\.?\s*a\.?\s*\d|presidential decree|p\.?\s*d\.?\s*\d|b\.?\s*p\.?\s*\d|administrative matter|a\.?\s*m\.?\s*(?:no\.)?|jurisprudence|supreme court|[A-Z][A-Za-z.-]+\s+v\.?\s+[A-Z][A-Za-z.-]+)\b/i.test(answer);
+  const legalSection = sections.legalbasis || '';
+  const specificLegalBasis = citedAuthority || Boolean(
+    meaningfulTokens(legalSection).length >= 4
+    && tokenOverlap(legalSection, context?.legalBasis || '') >= 2
+  );
   const applicationConnector = /\b(?:here|in this case|in the present case|applying|because|since|given that|on these facts|the facts show|as applied)\b/i.test(answer);
-  const conclusionMarker = /\b(?:therefore|accordingly|hence|thus|in view thereof|consequently)\b/i.test(answer);
+  const applicationSection = sections.application || '';
+  const expectedApplicationSection = expectedSections.application || '';
+  const conclusionSection = sections.conclusion || '';
+  const conclusionMarker = /\b(?:therefore|accordingly|hence|thus|in view thereof|consequently)\b/i.test(answer)
+    || meaningfulTokens(conclusionSection).length >= 2;
   const questionOverlap = tokenOverlap(answer, context?.question || '');
+  const applicationQuestionOverlap = tokenOverlap(applicationSection, context?.question || '');
+  const applicationReferenceOverlap = tokenOverlap(
+    applicationSection,
+    expectedApplicationSection || context?.suggestedAnswer || '',
+  );
   const referenceOverlap = tokenOverlap(answer, `${context?.suggestedAnswer || ''} ${context?.legalBasis || ''}`);
-  const meaningfulApplication = wordCount >= 18 && applicationConnector && questionOverlap >= 2;
+  const structuredApplication = meaningfulTokens(applicationSection).length >= 8
+    && (applicationQuestionOverlap >= 2 || applicationReferenceOverlap >= 3);
+  const meaningfulApplication = structuredApplication
+    || (wordCount >= 18 && applicationConnector && questionOverlap >= 2);
   const hasLegalBasis = genericLegalBasis || specificLegalBasis;
   const incoherent = /(.)\1{5,}/.test(lower)
     || (wordCount >= 4 && new Set(words.map((word) => word.toLowerCase())).size <= Math.ceil(wordCount / 4));
@@ -366,7 +419,8 @@ export function analyzeStudentAnswer(studentAnswer, context = {}) {
     && !hasLegalBasis
     && questionOverlap === 0
     && referenceOverlap === 0;
-  const substantiallyAligned = conclusionAligned && (referenceOverlap >= 3 || (specificLegalBasis && questionOverlap >= 3));
+  const substantiallyAligned = conclusionAligned
+    && (referenceOverlap >= 3 || (specificLegalBasis && questionOverlap >= 3));
 
   return {
     wordCount,

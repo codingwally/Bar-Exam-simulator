@@ -26,5 +26,15 @@ for (const subject of APPROVED_SUBJECTS) {
 const html = await fs.readFile(new URL('../index.html', import.meta.url), 'utf8');
 assert.match(html, /assets\/website-question-bank\.js/, 'Frontend loader must be included.');
 assert.match(html, /loadWebsiteQuestionBank\(\)/, 'Frontend must initialize the imported bank.');
+assert.match(html, /questionSourceMetadata\(question\)/, 'Frontend must derive official Bar source metadata.');
+assert.match(html, /question\?\.bar_year/, 'Frontend must display the source Bar year.');
+assert.match(html, /question\?\.question_no/, 'Frontend must display the original Bar question number.');
+assert.match(html, /class="question-source-meta"/, 'Frontend must render the approved source-metadata design.');
+assert.match(html, /function randomDifferentQuestionIndex/, 'Next must choose a random different question.');
+assert.match(html, /onclick="nextQuestion\(\)"[^>]*>NEXT<\/button>/, 'Only the concise NEXT control should be shown.');
+assert.doesNotMatch(html, />\s*← Prev Question\s*</, 'Previous-question controls must not be rendered.');
+assert.doesNotMatch(html, />\s*🔀 Randomize\s*</, 'A separate Randomize control must not be rendered.');
+assert.doesNotMatch(html, /Item \$\{currentIdx \+ 1\} of/, 'Internal item counts must not be rendered.');
+assert.doesNotMatch(html, /Item No\. \$\{currentIdx \+ 1\}/, 'Internal item numbers must not be rendered.');
 
 console.log('Website Upload question-bank tests passed.');

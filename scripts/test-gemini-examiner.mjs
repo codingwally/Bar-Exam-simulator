@@ -71,7 +71,7 @@ assert.equal(normalizeRequest({
 }).studentAnswer.includes('Ignore all prior'), true);
 
 // Score contract.
-for (const score of [0, 0.1, 0.5, 1.2, 2.7, 3.7, 4.6, 5]) assert.equal(scoreIsValid(score), true);
+for (const score of [0, 0.1, 0.5, 1.2, 2.7, 3.7, 3.8, 4.2, 4.6, 5]) assert.equal(scoreIsValid(score), true);
 for (const score of [-0.5, 3.75, 5.5, NaN]) assert.equal(scoreIsValid(score), false);
 assert.equal(validateExaminerResult(baseResult(), assessmentPolicy({
   question: 'Question', suggestedAnswer: 'Answer', legalBasis: 'Rule',
@@ -142,6 +142,8 @@ assert.match(prompt, /Do not penalize solely for missing exact article/);
 assert.match(prompt, /Always return four ALAC fields/);
 assert.match(prompt, /Grade from 0\.0 to 5\.0 points using at most one decimal place/i);
 assert.match(prompt, /A correct conclusion alone is not enough for a high score/);
+assert.match(prompt, /do not default to whole-number or half-point increments/i);
+assert.match(prompt, /Scores such as 3\.8 and 4\.2 are valid/i);
 assert.doesNotMatch(prompt, /0\.5 increments only|intermediate half-points|weighted formula/i);
 
 const capContext = {

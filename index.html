@@ -179,6 +179,19 @@
   .btn-tool:hover{background:var(--navy);color:#fff;border-color:var(--navy);transform:translateY(-1px);box-shadow:var(--shadow);}
   .btn-tool.random{border-color:var(--border-gold);color:var(--amber);}
   .btn-tool.random:hover{background:var(--gold-grad);color:#1a1204;border-color:transparent;}
+  .question-source-meta{
+    display:grid;justify-items:end;gap:2px;text-align:right;
+    font-family:var(--sans);line-height:1.15;
+  }
+  .question-source-meta .source-year{
+    font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:1.8px;
+    text-transform:uppercase;color:var(--gold);
+  }
+  .question-source-meta strong{font-size:18px;letter-spacing:.2px;color:#fff;}
+  .question-source-meta .source-subject{
+    font-family:var(--mono);font-size:10px;letter-spacing:1.3px;
+    text-transform:uppercase;color:#CBD5E1;
+  }
 
   /* ---------------- Cards ---------------- */
   .paper-card{
@@ -317,8 +330,9 @@
     .index-tabs button{width:auto;flex:1 0 auto;justify-content:center;box-shadow:none;}
     .index-tabs button.active{box-shadow:inset 0 -3px 0 var(--gold);}
     .toolbar{flex-direction:column;align-items:stretch;}
-    .nav-group{justify-content:space-between;}
+    .nav-group{justify-content:flex-start;}
     .nav-group .btn-tool{flex:1 1 auto;text-align:center;}
+    .question-source-meta{justify-items:start;text-align:left;padding-top:4px;}
     .result{grid-template-columns:1fr;}
     textarea{min-height:240px;font-size:16px;}
     .paper-card{padding:20px;}
@@ -1942,6 +1956,16 @@ function renderLaborQuestionBankMessage() {
   main.innerHTML = `<div class="err">Labor Law questions could not be loaded. <button class="btn-tool" onclick="loadLaborFromSheet()">Try Again</button></div>`;
 }
 
+function questionSourceMetadata(question) {
+  const id = String(question?.id || '');
+  const year = String(question?.bar_year || id.match(/\b(?:19|20)\d{2}\b/)?.[0] || '').trim();
+  const questionNo = String(question?.question_no || '').trim();
+  return {
+    yearLabel: year ? `${year} Bar Examination` : 'Philippine Bar Examination',
+    questionLabel: questionNo ? `Question No. ${questionNo}` : id,
+  };
+}
+
 function legacyRenderMainWrite() {
   if (currentSubj === "Labor Law" && laborQuestionBankStatus !== "ready") {
     renderLaborQuestionBankMessage();
@@ -1953,6 +1977,7 @@ function legacyRenderMainWrite() {
   const savedKey = `${currentSubj}-${currentIdx}`;
   const currentText = userAnswers[savedKey] || "";
   const hasSubmitted = submissionResults[savedKey] !== undefined;
+  const sourceMeta = questionSourceMetadata(q);
 
   let timerFormatted = "03:00:00";
   const h = Math.floor(timeLeft / 3600);
@@ -1969,19 +1994,19 @@ function legacyRenderMainWrite() {
 
     <div class="toolbar">
       <div class="nav-group">
-        <button class="btn-tool" onclick="prevQuestion()">← Prev Question</button>
-        <button class="btn-tool" onclick="nextQuestion()">Next Question →</button>
-        <button class="btn-tool random" onclick="randomQuestion()">🔀 Randomize</button>
+        <button class="btn-tool" onclick="nextQuestion()">NEXT</button>
       </div>
-      <div style="font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#CBD5E1;">
-        Item ${currentIdx + 1} of ${qList.length} (${currentSubj})
+      <div class="question-source-meta">
+        <span class="source-year">${escapeHtml(sourceMeta.yearLabel)}</span>
+        <strong>${escapeHtml(sourceMeta.questionLabel)}</strong>
+        <span class="source-subject">${escapeHtml(currentSubj)}</span>
       </div>
     </div>
 
     <div class="paper-card">
       <div class="q-header-info">
         <span class="q-label">${currentSubj.toUpperCase()} — VERBATIM CASE PROMPT</span>
-        <span class="q-counter">Item No. ${currentIdx + 1}</span>
+        <span class="q-counter">${escapeHtml(sourceMeta.yearLabel)} · ${escapeHtml(sourceMeta.questionLabel)}</span>
       </div>
       <div class="q-text">${escapeHtml(q.text)}</div>
     </div>
@@ -2018,6 +2043,7 @@ function renderMainWrite() {
   const currentText = restoreDraftForKey(savedKey);
   const hasSubmitted = submissionResults[savedKey] !== undefined;
   const workspaceLocked = examStage !== 'answering';
+  const sourceMeta = questionSourceMetadata(q);
   const timerMarkup = selectedSessionMode === 'strict'
     ? `<div class="timer-bar" id="timer-bar"><span class="timer-label">Strict Scrutiny · 12 minutes</span><span id="timer-display">12:00</span><span class="timer-limit">Advances once when time expires</span></div>`
     : selectedSessionMode === 'selfPaced'
@@ -2028,16 +2054,18 @@ function renderMainWrite() {
     ${timerMarkup}
     <div class="toolbar">
       <div class="nav-group">
-        <button class="btn-tool" onclick="prevQuestion()" ${workspaceLocked ? 'disabled' : ''}>← Prev Question</button>
-        <button class="btn-tool" onclick="nextQuestion()" ${workspaceLocked ? 'disabled' : ''}>Next Question →</button>
-        <button class="btn-tool random" onclick="randomQuestion()" ${workspaceLocked ? 'disabled' : ''}>🔀 Randomize</button>
+        <button class="btn-tool" onclick="nextQuestion()" ${workspaceLocked ? 'disabled' : ''}>NEXT</button>
       </div>
-      <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#CBD5E1;">Item ${currentIdx + 1} of ${qList.length} (${escapeHtml(currentSubj)})</div>
+      <div class="question-source-meta">
+        <span class="source-year">${escapeHtml(sourceMeta.yearLabel)}</span>
+        <strong>${escapeHtml(sourceMeta.questionLabel)}</strong>
+        <span class="source-subject">${escapeHtml(currentSubj)}</span>
+      </div>
     </div>
     <div class="paper-card">
       <div class="q-header-info">
         <span class="q-label">${escapeHtml(currentSubj.toUpperCase())} — VERBATIM CASE PROMPT</span>
-        <span class="q-counter">Item No. ${currentIdx + 1}</span>
+        <span class="q-counter">${escapeHtml(sourceMeta.yearLabel)} · ${escapeHtml(sourceMeta.questionLabel)}</span>
       </div>
       <div class="q-text">${escapeHtml(q.text)}</div>
     </div>
@@ -2082,17 +2110,26 @@ function prevQuestion() {
   renderMainWrite();
 }
 
+function randomDifferentQuestionIndex(questionList, currentIndex) {
+  if (!Array.isArray(questionList) || questionList.length <= 1) return 0;
+  let nextIndex = currentIndex;
+  while (nextIndex === currentIndex) {
+    nextIndex = Math.floor(Math.random() * questionList.length);
+  }
+  return nextIndex;
+}
+
 function nextQuestion() {
   if (gradingInProgress) return;
   const qList = BAR_QUESTIONS[currentSubj];
-  currentIdx = (currentIdx + 1) % qList.length;
+  currentIdx = randomDifferentQuestionIndex(qList, currentIdx);
   renderMainWrite();
 }
 
 function randomQuestion() {
   if (gradingInProgress) return;
   const qList = BAR_QUESTIONS[currentSubj];
-  currentIdx = Math.floor(Math.random() * qList.length);
+  currentIdx = randomDifferentQuestionIndex(qList, currentIdx);
   renderMainWrite();
 }
 
@@ -2103,12 +2140,12 @@ function prevQuestion() {
 
 function nextQuestion() {
   if (gradingInProgress || examStage !== 'answering') return;
-  transitionQuestion(currentIdx + 1);
+  transitionQuestion(randomDifferentQuestionIndex(BAR_QUESTIONS[currentSubj], currentIdx));
 }
 
 function randomQuestion() {
   if (gradingInProgress || examStage !== 'answering') return;
-  transitionQuestion(Math.floor(Math.random() * BAR_QUESTIONS[currentSubj].length));
+  transitionQuestion(randomDifferentQuestionIndex(BAR_QUESTIONS[currentSubj], currentIdx));
 }
 
 function questionContextForExaminer(q) {

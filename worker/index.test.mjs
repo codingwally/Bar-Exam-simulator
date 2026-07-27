@@ -50,7 +50,7 @@ function capped(answer, score = 5) {
 }
 
 test('scores accept 0.0–5.0 with at most one decimal place', () => {
-  for (const score of [0, 0.1, 1.2, 2.7, 3.7, 4.6, 5]) {
+  for (const score of [0, 0.1, 1.2, 2.7, 3.7, 3.8, 4.2, 4.6, 5]) {
     assert.equal(scoreIsValid(score), true, `${score} should be valid`);
   }
   for (const score of [-0.1, 3.75, 5.1, Number.NaN, Number.POSITIVE_INFINITY]) {
@@ -65,6 +65,17 @@ test('model scores with excess precision are safely rounded before return', () =
   );
   assert.equal(result.score, 3.8);
   assert.equal(result.percentagePointValue, 3.8);
+});
+
+test('target decimal scores 3.8 and 4.2 are preserved exactly', () => {
+  for (const score of [3.8, 4.2]) {
+    const result = validateExaminerResult(
+      modelAssessment(score),
+      assessmentPolicy(remedialContext),
+    );
+    assert.equal(result.score, score);
+    assert.equal(result.percentagePointValue, score);
+  }
 });
 
 test('REM-2024-Q18 bare no answer cannot exceed 1.0', () => {
@@ -113,6 +124,8 @@ test('a complete, substantially aligned ALAC answer may retain 4.0–5.0', () =>
     'Application: Sandro prepared the appellate brief, signed Cassandra’s name, and filed it before Cassandra reviewed it. Her intended post-filing review did not provide the required prior supervision.',
     'Conclusion: Cassandra improperly delegated professional legal work.',
   ].join('\n\n');
+  assert.equal(capped(answer, 3.8).score, 3.8);
+  assert.equal(capped(answer, 4.2).score, 4.2);
   assert.equal(capped(answer, 4.6).score, 4.6);
   assert.equal(capped(answer, 5).score, 5);
 });

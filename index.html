@@ -309,9 +309,9 @@
   .modal-card{background:var(--card);border:1px solid var(--border-gold);box-shadow:var(--shadow-lg);width:100%;max-width:540px;padding:32px;border-radius:18px;animation:pop .25s cubic-bezier(.22,.61,.36,1);}
   .modal-title{font-family:var(--serif);font-weight:700;font-size:25px;color:var(--ink);margin:0 0 6px;}
   .modal-sub{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:1.5px;color:var(--gold);margin-bottom:20px;}
-  .modal-input,.modal-textarea{width:100%;background:var(--card-2);border:1px solid var(--border);border-radius:10px;font-family:var(--sans);font-size:14.5px;padding:12px 14px;margin-bottom:16px;color:var(--charcoal);transition:border-color .2s,box-shadow .2s;}
+  .modal-input,.modal-textarea,.modal-select{width:100%;background:var(--card-2);border:1px solid var(--border);border-radius:10px;font-family:var(--sans);font-size:14.5px;padding:12px 14px;margin-bottom:16px;color:var(--charcoal);transition:border-color .2s,box-shadow .2s;}
   .modal-textarea{min-height:150px;resize:vertical;}
-  .modal-input:focus,.modal-textarea:focus{outline:none;border-color:var(--gold);box-shadow:var(--ring-gold);}
+  .modal-input:focus,.modal-textarea:focus,.modal-select:focus{outline:none;border-color:var(--gold);box-shadow:var(--ring-gold);}
   .modal-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:4px;}
   .btn-secondary{font-family:var(--sans);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.4px;background:transparent;border:1px solid var(--border);color:var(--ink-soft);padding:12px 18px;border-radius:10px;cursor:pointer;transition:all .2s;}
   .btn-secondary:hover{background:rgba(15,23,42,.05);color:var(--ink);}
@@ -615,6 +615,10 @@
   /* ---- Suggest-correction + B2B modals ---- */
   .field-label{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);display:block;margin-bottom:5px;}
   .orig-box{background:var(--card-2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:10px;padding:12px 14px;font-family:var(--serif);font-size:13.5px;line-height:1.55;color:var(--charcoal);margin-bottom:16px;max-height:150px;overflow:auto;white-space:pre-wrap;}
+  .suggest-status{min-height:20px;margin:2px 0 12px;font-family:var(--sans);font-size:13px;line-height:1.45;color:var(--ink-soft);}
+  .suggest-status.loading{color:var(--navy);}
+  .suggest-status.success{color:var(--pass);}
+  .suggest-status.error{color:var(--maroon);}
   .b2b-cta{margin-top:18px;padding:18px;border-radius:14px;text-align:center;background:linear-gradient(135deg,#0b2547,#08182f);border:1px solid rgba(197,160,89,.35);}
   .b2b-cta h4{font-family:var(--serif);color:#F6EFDD;margin:0 0 6px;font-size:18px;}
   .b2b-cta p{font-family:var(--sans);color:#c9d7ea;font-size:13px;margin:0 0 14px;}
@@ -1075,22 +1079,31 @@
 </div>
 
 
-<!-- Suggest Correction / Better Answer modal (mailto only) -->
+<!-- Suggest a Correction/Better Answer modal -->
 <div class="modal-overlay" id="suggest-modal">
   <div class="modal-card">
-    <h3 class="modal-title">Suggest a Correction</h3>
-    <div class="modal-sub" id="suggest-qid">Refine the model answer for the editorial board</div>
-    <span class="field-label">Current model answer (for reference)</span>
-    <div class="orig-box" id="suggest-orig"></div>
-    <span class="field-label">Your suggested / better legal answer</span>
-    <textarea class="modal-textarea" id="suggest-text" placeholder="Provide a refined ALAC answer, a corrected legal basis, or a better citation…"></textarea>
-    <span class="field-label">Your email (optional — for follow-up)</span>
-    <input class="modal-input" type="email" id="suggest-email" placeholder="you@example.com" autocomplete="off">
+    <h3 class="modal-title">Suggest a Correction/Better Answer</h3>
+    <div class="modal-sub" id="suggest-qid">Editorial review for the selected question</div>
+    <label class="field-label" for="suggest-type">Correction type</label>
+    <select class="modal-select" id="suggest-type">
+      <option value="question_text">Question text</option>
+      <option value="suggested_answer" selected>Suggested answer</option>
+      <option value="legal_basis">Legal basis</option>
+      <option value="source">Source</option>
+      <option value="other">Other</option>
+    </select>
+    <label class="field-label" for="suggest-text">Proposed correction or better answer</label>
+    <textarea class="modal-textarea" id="suggest-text" maxlength="6000" placeholder="Provide the precise corrected text or a better ALAC answer."></textarea>
+    <label class="field-label" for="suggest-explanation">Explanation</label>
+    <textarea class="modal-textarea" id="suggest-explanation" maxlength="3000" placeholder="Explain why the current material should be corrected." style="min-height:100px;"></textarea>
+    <label class="field-label" for="suggest-sources">Optional supporting source links</label>
+    <textarea class="modal-textarea" id="suggest-sources" placeholder="One http:// or https:// URL per line (maximum 5)." style="min-height:86px;"></textarea>
+    <div class="suggest-status" id="suggest-status" role="status" aria-live="polite"></div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('suggest-modal')">Cancel</button>
-      <a class="btn-primary" id="suggest-mailto" href="mailto:support@duediligence.ph?subject=Due%20Diligence%20Support%20Request" onclick="return submitSuggestion(this)">Email Editorial Support</a>
+      <button class="btn-primary" id="suggest-submit" type="button" onclick="submitSuggestion()">Suggest a Correction/Better Answer</button>
     </div>
-    <div class="mock-note" style="margin-top:12px;">Opens your email application; no contact-form backend is used.</div>
+    <div class="mock-note" style="margin-top:12px;">Question ID and subject are attached automatically. Do not include your exam answer or personal information.</div>
   </div>
 </div>
 
@@ -2350,7 +2363,7 @@ function renderResultHTML(key) {
           <span class="fb-label">Was this model answer helpful?</span>
           <button class="fb-btn" onclick="rateModel('up')">👍 Helpful</button>
           <button class="fb-btn" onclick="rateModel('down')">👎 Needs work</button>
-          <button class="fb-btn suggest" onclick="openSuggest()">✎ Suggest Correction / Better Answer</button>
+          <button class="fb-btn suggest" onclick="openSuggest()">✎ Suggest a Correction/Better Answer</button>
         </div>
         <div class="review-actions"><button class="btn-next" onclick="proceedAfterReview()">Continue to Next Item →</button></div>
       </div>
@@ -2812,33 +2825,99 @@ function rateModel(dir) {
 function openSuggest() {
   const q = BAR_QUESTIONS[currentSubj][currentIdx];
   const qid = document.getElementById('suggest-qid');
-  const orig = document.getElementById('suggest-orig');
-  if (qid) qid.textContent = 'Refining: ' + q.id;
-  if (orig) orig.textContent = q.model;
+  if (qid) qid.textContent = `${q.id} · ${q.sourceSubject || q.subject || currentSubj}`;
+  document.getElementById('suggest-type').value = 'suggested_answer';
+  document.getElementById('suggest-text').value = '';
+  document.getElementById('suggest-explanation').value = '';
+  document.getElementById('suggest-sources').value = '';
+  setSuggestStatus('', '');
+  const submitButton = document.getElementById('suggest-submit');
+  submitButton.disabled = false;
+  submitButton.textContent = 'Suggest a Correction/Better Answer';
   openModal('suggest-modal');
 }
-function submitSuggestion(link) {
+
+function setSuggestStatus(message, state) {
+  const status = document.getElementById('suggest-status');
+  if (!status) return;
+  status.textContent = message;
+  status.className = `suggest-status${state ? ` ${state}` : ''}`;
+}
+
+function correctionSourceUrls() {
+  const lines = (document.getElementById('suggest-sources').value || '')
+    .split(/\r?\n/)
+    .map(value => value.trim())
+    .filter(Boolean);
+  if (lines.length > 5) throw new Error('Provide no more than 5 supporting source links.');
+  return lines.map(value => {
+    let url;
+    try {
+      url = new URL(value);
+    } catch {
+      throw new Error('Each supporting source must be a valid http:// or https:// URL.');
+    }
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+      throw new Error('Each supporting source must be a valid http:// or https:// URL.');
+    }
+    return url.href;
+  });
+}
+
+async function submitSuggestion() {
   const q = BAR_QUESTIONS[currentSubj][currentIdx];
-  const suggestion = (document.getElementById('suggest-text').value || '').trim();
-  const email = (document.getElementById('suggest-email').value || '').trim();
-  if (suggestion.length < 5) {
-    toast('Please enter your suggested answer first.', 'warn');
-    return false;
+  const proposedCorrection = (document.getElementById('suggest-text').value || '').trim();
+  const explanation = (document.getElementById('suggest-explanation').value || '').trim();
+  let sourceUrls;
+  try {
+    if (proposedCorrection.length < 10) {
+      throw new Error('Proposed correction or better answer must contain at least 10 characters.');
+    }
+    if (explanation.length < 10) {
+      throw new Error('Explanation must contain at least 10 characters.');
+    }
+    sourceUrls = correctionSourceUrls();
+  } catch (error) {
+    setSuggestStatus(error.message, 'error');
+    toast(error.message, 'warn');
+    return;
   }
 
-  const message =
-    `Suggested correction for ${q.id}\nSubject area: ${currentSubj}\nSubmitted: ${new Date().toLocaleString()}\n` +
-    `Submitter email: ${email || '(not provided)'}\n\n` +
-    `--- ORIGINAL MODEL ANSWER ---\n${q.model}\n\n` +
-    `--- USER SUGGESTED ANSWER ---\n${suggestion}\n`;
+  const submitButton = document.getElementById('suggest-submit');
+  submitButton.disabled = true;
+  submitButton.textContent = 'Submitting…';
+  setSuggestStatus('Submitting Suggest a Correction/Better Answer…', 'loading');
 
-  link.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(SUPPORT_SUBJECT)}&body=${encodeURIComponent(message)}`;
-  setTimeout(() => {
-    document.getElementById('suggest-text').value = '';
-    closeModal('suggest-modal');
-    toast('Email draft prepared for ' + SUPPORT_EMAIL + '.', 'ok');
-  }, 0);
-  return true;
+  try {
+    const response = await fetch(`${EXAMINER_WORKER_URL}/corrections`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        questionId: q.id,
+        subject: q.sourceSubject || q.subject || currentSubj,
+        correctionType: document.getElementById('suggest-type').value,
+        proposedCorrection,
+        explanation,
+        sourceUrls,
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error?.message || 'Suggest a Correction/Better Answer could not be submitted.');
+    }
+
+    setSuggestStatus('Suggest a Correction/Better Answer submitted successfully.', 'success');
+    toast('Suggest a Correction/Better Answer submitted successfully.', 'ok');
+    submitButton.textContent = 'Submitted';
+  } catch (error) {
+    setSuggestStatus(
+      error.message || 'Suggest a Correction/Better Answer could not be submitted. Please try again.',
+      'error',
+    );
+    toast('Suggest a Correction/Better Answer could not be submitted.', 'warn');
+    submitButton.disabled = false;
+    submitButton.textContent = 'Suggest a Correction/Better Answer';
+  }
 }
 
 /* ---------- B2B view switch ---------- */

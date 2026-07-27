@@ -8,6 +8,12 @@ import {
   scoreIsValid,
   validateExaminerResult,
 } from './examiner-core.mjs';
+import {
+  CORRECTION_TYPES,
+  CorrectionValidationError,
+  correctionInsertRecord,
+  normalizeCorrectionRequest,
+} from './correction-core.mjs';
 
 const remedialContext = {
   subject: 'Remedial Law',
@@ -292,6 +298,217 @@ test('transient Gemini failures are retried and do not lock a failed submission'
     assert.equal(retryPayload.ok, true);
     assert.equal(retryPayload.assessment.score, 4);
     assert.equal(retryPayload.assessment.questionAuthority, 'server_question_bank');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+const correctionQuestion = {
+  'Question ID': 'CIV-2024-Q01',
+  Subject: 'Civil Law',
+  'Essay Question': 'Was the contract valid?',
+  'Suggested Answer': 'Answer: No. Legal Basis: Article 1409. Application: The facts show absolute simulation. Conclusion: The contract is void.',
+};
+
+function validCorrection(overrides = {}) {
+  return {
+    questionId: 'CIV-2024-Q01',
+    subject: 'Civil Law',
+    correctionType: 'suggested_answer',
+    proposedCorrection: 'The suggested answer should identify absolute simulation.',
+    explanation: 'Article 1409 more precisely supports the stated conclusion.',
+    sourceUrls: ['https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/12345'],
+    ...overrides,
+  };
+}
+
+test('correction validation accepts every supported correction type', () => {
+  for (const correctionType of CORRECTION_TYPES) {
+    const normalized = normalizeCorrectionRequest(
+      validCorrection({ correctionType }),
+      correctionQuestion,
+    );
+    assert.equal(normalized.correctionType, correctionType);
+  }
+});
+
+test('correction validation rejects every unsupported correction type shape', () => {
+  for (const correctionType of ['', 'Question text', 'answer', 'grade_dispute', null, 7]) {
+    assert.throws(
+      () => normalizeCorrectionRequest(validCorrection({ correctionType }), correctionQuestion),
+      CorrectionValidationError,
+    );
+  }
+});
+
+test('correction validation rejects empty and oversized fields', () => {
+  for (const overrides of [
+    { proposedCorrection: '' },
+    { proposedCorrection: 'x'.repeat(6001) },
+    { explanation: '' },
+    { explanation: 'x'.repeat(3001) },
+    { questionId: '' },
+    { subject: '' },
+  ]) {
+    assert.throws(
+      () => normalizeCorrectionRequest(validCorrection(overrides), correctionQuestion),
+      CorrectionValidationError,
+    );
+  }
+});
+
+test('correction validation rejects malformed, credentialed, and excessive source URLs', () => {
+  for (const sourceUrls of [
+    ['not-a-url'],
+    ['ftp://example.com/source'],
+    ['https://test-user:test-password@example.invalid/source'],
+    Array.from({ length: 6 }, (_, index) => `https://example.com/${index}`),
+    'https://example.com/not-an-array',
+  ]) {
+    assert.throws(
+      () => normalizeCorrectionRequest(validCorrection({ sourceUrls }), correctionQuestion),
+      CorrectionValidationError,
+    );
+  }
+});
+
+test('correction validation rejects unexpected personal, answer, credential, token, key, and IP fields', () => {
+  for (const field of [
+    'studentAnswer',
+    'answerText',
+    'email',
+    'password',
+    'token',
+    'apiKey',
+    'serviceRoleKey',
+    'ip',
+    'rawIp',
+    'userId',
+  ]) {
+    assert.throws(
+      () => normalizeCorrectionRequest(validCorrection({ [field]: 'must-not-be-stored' }), correctionQuestion),
+      CorrectionValidationError,
+      `${field} must be rejected`,
+    );
+  }
+});
+
+test('correction insert record contains only approved storage fields', () => {
+  const record = correctionInsertRecord(
+    normalizeCorrectionRequest(validCorrection(), correctionQuestion),
+  );
+  assert.deepEqual(Object.keys(record).sort(), [
+    'correction_type',
+    'explanation',
+    'proposed_correction',
+    'question_bank_id',
+    'source_urls',
+    'subject',
+    'user_id',
+  ]);
+  assert.equal(record.user_id, null);
+  const serialized = JSON.stringify(record);
+  for (const forbidden of [
+    'studentAnswer',
+    'answerText',
+    'email',
+    'password',
+    'token',
+    'apiKey',
+    'serviceRoleKey',
+    'rawIp',
+  ]) {
+    assert.doesNotMatch(serialized, new RegExp(forbidden, 'i'));
+  }
+});
+
+test('correction endpoint stores an approved payload without calling Gemini', async () => {
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  let storedBody;
+  let storedHeaders;
+
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target === reliabilityBankUrl) {
+      return Response.json({
+        records: Array.from({ length: 320 }, (_, index) => reliabilityBankRecord(index)),
+      });
+    }
+    if (target === 'https://staging-project.supabase.co/rest/v1/question_corrections') {
+      storedBody = JSON.parse(init.body);
+      storedHeaders = init.headers;
+      return new Response(null, { status: 201 });
+    }
+    if (target.startsWith('https://generativelanguage.googleapis.com/')) {
+      providerCalls += 1;
+    }
+    throw new Error(`Unexpected fetch: ${target}`);
+  };
+
+  try {
+    const request = new Request('https://worker.example/corrections', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '203.0.113.201',
+      },
+      body: JSON.stringify(validCorrection()),
+    });
+    const response = await worker.fetch(request, {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      WEBSITE_BANK_URL: reliabilityBankUrl,
+      SUPABASE_URL: 'https://staging-project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-placeholder',
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 201);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.message, 'Suggest a Correction/Better Answer submitted successfully.');
+    assert.equal(providerCalls, 0);
+    assert.deepEqual(storedBody, correctionInsertRecord(
+      normalizeCorrectionRequest(validCorrection(), correctionQuestion),
+    ));
+    assert.equal(storedHeaders.apikey, 'test-service-role-placeholder');
+    assert.equal(storedHeaders.Authorization, 'Bearer test-service-role-placeholder');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('correction endpoint fails generically when storage configuration is absent', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url) === reliabilityBankUrl) {
+      return Response.json({
+        records: Array.from({ length: 320 }, (_, index) => reliabilityBankRecord(index)),
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+
+  try {
+    const request = new Request('https://worker.example/corrections', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '203.0.113.202',
+      },
+      body: JSON.stringify(validCorrection()),
+    });
+    const response = await worker.fetch(request, {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      WEBSITE_BANK_URL: reliabilityBankUrl,
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(payload.error.code, 'CORRECTIONS_NOT_CONFIGURED');
+    assert.equal(payload.error.message, 'Correction submissions are temporarily unavailable.');
+    assert.doesNotMatch(JSON.stringify(payload), /service.role|supabase.*key|credential/i);
   } finally {
     globalThis.fetch = originalFetch;
   }

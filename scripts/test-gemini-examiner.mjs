@@ -167,8 +167,32 @@ const geminiPayload = {
     },
   }],
 };
+const websiteRecords = Array.from({ length: 320 }, (_, index) => ({
+  'Question ID': index === 0 ? 'CIV-2024-Q01' : `TEST-${String(index).padStart(3, '0')}`,
+  Subject: index === 0 ? 'Civil Law' : 'Labor Law',
+  'Essay Question': index === 0 ? 'Will the civil claim prosper?' : `Test question ${index}`,
+  'Suggested Answer': index === 0 ? 'Yes. The civil claim will prosper.' : 'No.',
+  'Legal Basis / Provision': 'Civil Code: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/12345',
+  'Jurisprudence / Case': 'Test Case',
+  'Citation / G.R. No.': 'G.R. No. 12345',
+  'Source URL': 'https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/12345',
+}));
+let geminiCalls = 0;
 globalThis.fetch = async (url) => {
+  if (String(url).includes('/content/question-bank/website-upload.json')) {
+    return new Response(JSON.stringify({ records: websiteRecords }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
   if (String(url).includes('generativelanguage.googleapis.com')) {
+    geminiCalls += 1;
+    if (geminiCalls === 1) {
+      return new Response(JSON.stringify({ error: { message: 'Transient provider failure' } }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     return new Response(JSON.stringify(geminiPayload), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
   throw new Error(`Unexpected fetch: ${url}`);
@@ -188,7 +212,7 @@ try {
       'CF-Connecting-IP': '192.0.2.10',
     },
     body: JSON.stringify({
-      questionId: 'Civil Law Q.1',
+      questionId: 'CIV-2024-Q01',
       studentAnswer: 'Yes. Under the law, the rule applies because the facts satisfy it. Therefore, the claim will prosper.',
       questionContext: {
         subject: 'Civil Law',
@@ -205,8 +229,10 @@ try {
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'https://duediligence.ph');
   assert.equal(responseBody.assessment.score, 4.5);
   assert.equal(responseBody.assessment.maxScore, 5);
-  assert.equal(responseBody.assessment.modelUsed, 'gemini-3.6-flash');
+  assert.equal(responseBody.assessment.modelUsed, 'gemini-3.5-flash-lite');
+  assert.equal(responseBody.assessment.questionAuthority, 'server_question_bank');
   assert.equal(responseBody.assessment.sources.length, 2);
+  assert.equal(geminiCalls, 2);
 
   const preflight = await worker.fetch(new Request('https://worker.example/', {
     method: 'OPTIONS',

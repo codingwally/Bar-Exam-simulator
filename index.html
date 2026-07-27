@@ -3,6 +3,7 @@
 <head>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='9' fill='%23081225'/%3E%3Cg stroke='%23C5A059' stroke-width='2' fill='none' stroke-linecap='round'%3E%3Cline x1='24' y1='11' x2='24' y2='36'/%3E%3Cline x1='12' y1='16' x2='36' y2='16'/%3E%3Cpath d='M12 16 L7 25 M12 16 L17 25'/%3E%3Cpath d='M36 16 L31 25 M36 16 L41 25'/%3E%3C/g%3E%3Cpath d='M6 25 Q12 31 18 25' fill='%23D4AF37'/%3E%3Cpath d='M30 25 Q36 31 42 25' fill='%23D4AF37'/%3E%3Crect x='18' y='35' width='12' height='2.5' rx='1' fill='%23D4AF37'/%3E%3Ccircle cx='24' cy='10' r='2.5' fill='%23D4AF37'/%3E%3C/svg%3E">
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Due Diligence — PH Bar Essay Trainer (Advanced Pro Repository)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -512,6 +513,10 @@
   }
   @media (max-width:560px){
     .topbar .brand-sub{display:none;}
+    .topbar-actions{width:100%;max-width:100%;margin-left:0;flex-wrap:wrap;justify-content:flex-start;gap:8px;}
+    .topbar-actions > *{max-width:100%;}
+    .avatar-pill{padding-right:6px;}
+    .avatar-pill .tier{display:none;}
     .btn-subscribe{padding:9px 12px;}
     .icon-btn.hide-sm{display:none;}
     .price-hero .amt{font-size:32px;}
@@ -673,9 +678,54 @@
     .assessment-body{padding:22px 18px;}
   }
 
+  /* ---- Deliberate exam entry and session controls ---- */
+  [hidden]{display:none!important;}
+  .onboarding-state{max-width:1040px;margin:0 auto;padding:64px 28px 72px;}
+  .welcome-card,.subject-selection-card{position:relative;overflow:hidden;max-width:850px;margin:0 auto;padding:56px;border:1px solid rgba(197,160,89,.5);border-top:4px solid var(--gold);border-radius:24px;background:rgba(250,249,246,.97);box-shadow:0 28px 70px rgba(2,12,35,.22);}
+  .welcome-card:after,.subject-selection-card:after{content:"";position:absolute;right:-90px;bottom:-120px;width:330px;height:330px;border:1px solid rgba(197,160,89,.18);border-radius:50%;pointer-events:none;}
+  .welcome-kicker,.selection-kicker{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#8a681e;margin-bottom:14px;}
+  .welcome-card h1,.subject-selection-card h1{max-width:700px;margin:0;color:var(--navy);font-family:var(--serif);font-size:clamp(38px,6vw,66px);line-height:1.04;letter-spacing:-1.5px;}
+  .welcome-card>p,.subject-selection-card>p{max-width:690px;margin:22px 0 30px;color:#334155;font-family:var(--sans);font-size:17px;line-height:1.75;}
+  .welcome-actions{display:flex;align-items:center;gap:15px;flex-wrap:wrap;}
+  .welcome-actions .btn-primary{padding:14px 25px;border-radius:10px;font-size:13px;}
+  .patron-banner{display:flex;align-items:center;justify-content:center;gap:10px;max-width:850px;width:100%;margin:18px auto 0;padding:12px 18px;border:1px solid rgba(197,160,89,.35);border-radius:12px;background:rgba(8,18,37,.8);color:#f8e9bd;cursor:pointer;font-family:var(--sans);font-size:12px;line-height:1.45;text-align:center;}
+  .patron-banner:hover,.patron-banner:focus-visible{border-color:#e6c96c;background:#102747;outline:none;}
+  .subject-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:28px;}
+  .subject-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 18px;border:1px solid #d8dee8;border-radius:12px;background:#fff;color:#10233e;cursor:pointer;text-align:left;font-family:var(--sans);font-weight:700;font-size:14px;}
+  .subject-choice:after{content:"→";color:#9b7829;font-size:18px;}
+  .subject-choice:hover,.subject-choice:focus-visible{border-color:var(--gold);box-shadow:0 8px 24px rgba(2,12,35,.08);outline:none;}
+  .subject-loading{min-height:24px;margin-top:18px;color:#725715;font-family:var(--sans);font-size:13px;}
+  #exam-shell{min-height:70vh;}
+  #exam-shell.session-locked .layout{filter:saturate(.75);pointer-events:none;user-select:none;}
+  #exam-shell.session-locked #answer-box{opacity:.7;}
+  .session-mode-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:24px 0 20px;}
+  .session-mode-option{min-height:210px;padding:22px 18px;border:1px solid #d7dee8;border-top:3px solid var(--gold);border-radius:14px;background:#fff;color:#17263a;cursor:pointer;text-align:left;transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease;}
+  .session-mode-option:hover,.session-mode-option:focus-visible{border-color:var(--gold);box-shadow:0 12px 28px rgba(2,12,35,.12);transform:translateY(-2px);outline:none;}
+  .session-mode-option strong{display:block;font-family:var(--serif);font-size:21px;color:var(--navy);}
+  .session-mode-option span{display:block;margin:5px 0 14px;font-family:var(--mono);font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:#8a681e;}
+  .session-mode-option p{margin:0;font-family:var(--sans);font-size:13px;line-height:1.6;color:#526277;}
+  .pacing-guide{padding:14px 16px;border-radius:10px;background:#f5f1e5;color:#56451f;font-family:var(--sans);font-size:12.5px;line-height:1.6;}
+  .timer-bar.warning-soft #timer-display{color:#b45309;}
+  .timer-bar.warning-strong #timer-display{color:#b91c1c;}
+  .review-actions{display:flex;justify-content:flex-end;margin-top:20px;}
+  .modal-overlay.blocking{background:rgba(2,12,35,.78);backdrop-filter:blur(8px);}
+  .modal-overlay.blocking .modal-card{border-top:4px solid var(--gold);}
+  .terms-copy{max-height:44vh;overflow:auto;padding:16px;border:1px solid #dce2ea;border-radius:10px;background:#fff;font-family:var(--sans);font-size:14px;line-height:1.75;color:#334155;}
+  .signin-prompt-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px;}
+  body.onboarding-active .exam-only-action{display:none!important;}
+  @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}}
+  @media(max-width:760px){
+    .onboarding-state{padding:34px 16px 52px;}
+    .welcome-card,.subject-selection-card{padding:34px 24px;border-radius:18px;}
+    .welcome-card h1,.subject-selection-card h1{font-size:38px;}
+    .subject-choice-grid,.session-mode-grid{grid-template-columns:1fr;}
+    .session-mode-option{min-height:0;}
+    .signin-prompt-actions{grid-template-columns:1fr;}
+  }
 </style>
  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="assets/labor-csv-normalizer.js"></script>
+<script src="assets/exam-session-controller.js"></script>
 </head>
 <body>
 
@@ -723,7 +773,7 @@
   </nav>
 
   <div class="topbar-actions">
-    <div class="session-clock" id="session-clock" title="Total Session Time">⏳ 00:00:00</div>
+    <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>⏳ 00:00:00</div>
     <button class="btn-angel" id="btn-angel" onclick="openModal('investor-modal')">🏛️ Angel Investors</button>
     <button class="icon-btn hide-sm" id="btn-b2b" onclick="toggleViewMode()">🏢 Individual</button>
     <button class="icon-btn hide-sm" id="btn-analytics" onclick="openAnalytics()">📈 Analytics</button>
@@ -737,42 +787,65 @@
 
 <main id="spa-root">
 <section id="page-mock" class="page active">
-  <div class="page-wrap" style="padding-bottom:0;">
-    <div class="page-head" style="margin-bottom:14px;">
-      <div class="eyebrow">Split-Screen Essay Workspace</div>
-      <h2>Mock Bar Exam</h2>
-    </div>
-    <div class="angel-callout" onclick="openModal('investor-modal')">✨ Backed by Visionary Angel Investors — Meet our Patrons</div>
-  </div>
-  <div class="exam-subnav">
-    <button class="tabbtn active" id="tab-write">Write &amp; Practice</button>
-    <button class="tabbtn" id="tab-history">History</button>
-    <button class="tabbtn feedback-btn" id="btn-open-feedback">Send Feedback</button>
-    <div class="mode-toggle" role="tablist" aria-label="Exam mode">
-      <button class="untimed active" id="mode-untimed" onclick="setExamMode('untimed')">Untimed Review</button>
-      <button class="timed" id="mode-timed" onclick="setExamMode('timed')">⏱ Timed Bar Mode</button>
-    </div>
+  <div id="welcome-state" class="onboarding-state">
+    <article class="welcome-card" aria-labelledby="welcome-title">
+      <div class="welcome-kicker">Philippine Bar Essay Preparation</div>
+      <h1 id="welcome-title">Prepare with purpose.</h1>
+      <p>Practice Philippine Bar questions, structure answers using ALAC, and receive source-based feedback designed for serious legal study.</p>
+      <div class="welcome-actions">
+        <button type="button" class="btn-primary" id="start-practice" onclick="startPractice()">Start Practice</button>
+      </div>
+    </article>
+    <button type="button" class="patron-banner" id="welcome-patron-banner" onclick="openModal('investor-modal')">
+      <span aria-hidden="true">✦</span>
+      <span>Backed by Visionary Angel Investors — Meet our Patrons</span>
+    </button>
   </div>
 
+  <div id="subject-selection-state" class="onboarding-state" hidden>
+    <article class="subject-selection-card" aria-labelledby="subject-selection-title">
+      <div class="selection-kicker">Choose Your Review Subject</div>
+      <h1 id="subject-selection-title">What will you practise today?</h1>
+      <p>Select a Philippine Bar subject. Its first valid question will load before you choose a session mode; no timer starts during selection.</p>
+      <div class="subject-choice-grid" id="subject-choice-grid"></div>
+      <div class="subject-loading" id="subject-loading-status" role="status" aria-live="polite"></div>
+    </article>
+  </div>
 
-<div class="layout">
-  <div class="index-tabs" id="subject-tabs"></div>
-  <div class="main" id="main"></div>
-</div>
+  <div id="exam-shell" hidden>
+    <div class="page-wrap" style="padding-bottom:0;">
+      <div class="page-head" style="margin-bottom:14px;">
+        <div class="eyebrow">Focused Essay Workspace</div>
+        <h2>Mock Bar Exam</h2>
+      </div>
+      <button type="button" class="patron-banner" onclick="openModal('investor-modal')">✦ Backed by Visionary Angel Investors — Meet our Patrons</button>
+    </div>
 
-  <div class="sponsor-card">
-    <div class="sponsor-inner">
-      <span class="sponsor-tag">Sponsored Partner</span>
-      <h3>FGMallari Designs — Architect</h3>
-      <div class="lead">Lead Architect: Francis Fidel G. Mallari</div>
-      <div class="svc">Architectural Planning, Structural Design &amp; Blueprint Services.</div>
-      <div class="contact">
-        <span>📱 <a href="tel:+639499176005">0949 917 6005</a></span>
-        <span>✉️ <a href="mailto:francismallari1020@yahoo.com">francismallari1020@yahoo.com</a></span>
+    <div class="exam-subnav">
+      <button class="tabbtn active" id="tab-write">Write &amp; Practice</button>
+      <button class="tabbtn" id="tab-history">History</button>
+      <button class="tabbtn feedback-btn" id="btn-open-feedback">Send Feedback</button>
+    </div>
+
+    <div class="layout">
+      <div class="index-tabs" id="subject-tabs"></div>
+      <div class="main" id="main"></div>
+    </div>
+
+    <div class="sponsor-card">
+      <div class="sponsor-inner">
+        <span class="sponsor-tag">Sponsored Partner</span>
+        <h3>FGMallari Designs — Architect</h3>
+        <div class="lead">Lead Architect: Francis Fidel G. Mallari</div>
+        <div class="svc">Architectural Planning, Structural Design &amp; Blueprint Services.</div>
+        <div class="contact">
+          <span>📱 <a href="tel:+639499176005">0949 917 6005</a></span>
+          <span>✉️ <a href="mailto:francismallari1020@yahoo.com">francismallari1020@yahoo.com</a></span>
+        </div>
       </div>
     </div>
   </div>
-</section><!-- /page-mock -->
+</section>
 
 <section id="page-midterms" class="page">
   <div class="page-wrap">
@@ -827,6 +900,60 @@
   </div>
 </footer>
 
+<!-- Versioned, blocking onboarding terms -->
+<div class="modal-overlay blocking" id="terms-modal" role="dialog" aria-modal="true" aria-labelledby="terms-title" aria-describedby="terms-copy">
+  <div class="modal-card lg" tabindex="-1">
+    <h3 class="modal-title" id="terms-title">Before You Begin</h3>
+    <div class="modal-sub">Educational use and source-verification notice</div>
+    <div class="terms-copy" id="terms-copy">
+      Due Diligence is a Philippine Bar review and study platform. Legal provisions, jurisprudence, and references are manually verified against primary sources where available. However, the suggested answers, assessments, scores, and AI-generated explanations presented by the platform are not official answers prescribed, issued, or endorsed by the Supreme Court of the Philippines.
+      <br><br>
+      Due Diligence is intended solely for legal education and Bar examination preparation. It does not provide legal advice and should not replace independent verification using official sources.
+    </div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button type="button" class="btn-primary" id="accept-terms" onclick="acceptTerms()">I Understand and Accept</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sign-in choice shown once per onboarding session -->
+<div class="modal-overlay blocking" id="signin-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="signin-prompt-title" aria-describedby="signin-prompt-copy">
+  <div class="modal-card" tabindex="-1">
+    <h3 class="modal-title" id="signin-prompt-title">Save Your Progress</h3>
+    <p class="checking-copy" id="signin-prompt-copy">Sign in to save your progress, review previous attempts, and continue your study sessions across devices.</p>
+    <span class="tier-badge">Guest practice remains available. Cross-device syncing requires an account.</span>
+    <div class="signin-prompt-actions">
+      <button type="button" class="btn-primary" id="onboarding-signin" onclick="beginOnboardingSignIn()">Sign In</button>
+      <button type="button" class="btn-secondary" id="guest-continue" onclick="continueAsGuest()">Maybe Later</button>
+    </div>
+  </div>
+</div>
+
+<!-- Session mode is chosen only after a valid question is ready -->
+<div class="modal-overlay blocking" id="session-choice-modal" role="dialog" aria-modal="true" aria-labelledby="session-choice-title" aria-describedby="session-choice-copy">
+  <div class="modal-card xl" tabindex="-1">
+    <h3 class="modal-title" id="session-choice-title">Would you like to begin your session?</h3>
+    <p class="checking-copy" id="session-choice-copy">Choose how you want to practise. Your timer will begin only after you select a mode.</p>
+    <div class="session-mode-grid">
+      <button type="button" class="session-mode-option" id="mode-timed" onclick="chooseSessionMode('strict')">
+        <strong>Strict Scrutiny</strong>
+        <span>Bar Simulation</span>
+        <p>12 minutes per question. Automatically proceeds when time expires.</p>
+      </button>
+      <button type="button" class="session-mode-option" id="mode-self-paced" onclick="chooseSessionMode('selfPaced')">
+        <strong>Quantum Meruit</strong>
+        <span>Self-Paced Practice</span>
+        <p>Track your writing time without a deadline or automatic advance.</p>
+      </button>
+      <button type="button" class="session-mode-option" id="mode-untimed" onclick="chooseSessionMode('none')">
+        <strong>Summary Judgment</strong>
+        <span>Untimed Review</span>
+        <p>Study and answer without a visible timer.</p>
+      </button>
+    </div>
+    <div class="pacing-guide">Bar pacing guide: A four-hour subject examination provides 240 minutes. With an average of 20 questions, allow approximately 12 minutes per question.</div>
+  </div>
+</div>
 
 <div class="modal-overlay" id="feedback-modal">
   <div class="modal-card">
@@ -889,7 +1016,7 @@
     <input class="modal-input" type="email" id="auth-email" placeholder="you@example.com" autocomplete="off">
     <input class="modal-input" type="password" id="auth-pass" placeholder="Password" autocomplete="off">
     <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeModal('auth-modal')">Cancel</button>
+      <button class="btn-secondary" onclick="cancelAuthModal()">Cancel</button>
       <button class="btn-primary" onclick="mockAuth('Email')">Sign In</button>
     </div>
     <div class="mock-note" style="margin-top:14px;">UI preview only — no credentials are collected, stored, or transmitted.</div>
@@ -1449,80 +1576,314 @@ const BAR_QUESTIONS = {
   ]
 };
 
-let currentSubj = "Civil Law";
+let currentSubj = null;
 let currentIdx = 0;
 let userAnswers = {};
 let submissionResults = {};
 let historyLog = [];
 let timerInterval = null;
-let timeLeft = 10800;
+let timeLeft = 720;
 let laborQuestionBankStatus = "loading";
 let gradingInProgress = false;
+let onboardingStage = "welcome";
+let examStage = "idle";
+let selectedSessionMode = null;
+let pendingSubjectSelection = null;
+let historyPausedStage = null;
+let questionStartTs = null;
+let examMode = "none";
+let elapsed = 0;
+let currentQuestionIndex = 0;
+const PER_Q_SECONDS = 720;
+const TERMS_ACCEPTANCE_KEY = "duediligence.terms.accepted.v1";
+const GUEST_PROMPT_SESSION_KEY = "duediligence.guest.prompt.dismissed.v1";
+const DRAFTS_KEY = "duediligence.answer.drafts.v1";
 const EXAMINER_WORKER_URL = 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev';
 const SC_RUBRIC_VERSION = 'SC-2025-BB4-PER-QUESTION-v1';
 const SC_2025_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/08/2025-Bar-Bar-Bulletin-No.-4-August-8-2025-Approved.pdf';
 const SC_2026_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/10/2026-BAR-Bar-Bulletin-No.-1-October-16-2025.pdf';
+const sessionController = DueDiligenceExamSession.createExamSessionController({
+  onTick: (state) => {
+    timeLeft = state.remainingSeconds;
+    elapsed = state.questionElapsedSeconds;
+    sessionSeconds = state.totalElapsedSeconds;
+    updateTimerDisplay(state);
+    updateSessionClock(state);
+  },
+  onExpire: () => onTimeUp(),
+});
 
 function init() {
   historyLog = loadAttempts();
-  renderSubjectTabs();
-  renderMainWrite();
-  startTimer();
   setupEventListeners();
+  renderSubjectSelection();
+  showWelcome();
 }
 
 function startTimer() {
-  if (timerInterval) clearInterval(timerInterval);
-  timerInterval = setInterval(() => {
-    if (examMode === 'timed') {
-      timeLeft--;
-      if (timeLeft <= 0) {
-        timeLeft = 0;
-        clearInterval(timerInterval);
-        updateTimerDisplay();
-        onTimeUp();
-        return;
-      }
-    } else {
-      elapsed++;
-    }
-    updateTimerDisplay();
-  }, 1000);
+  if (examStage === "answering") sessionController.resume();
 }
 
-function updateTimerDisplay() {
+function updateTimerDisplay(timerState = sessionController.snapshot()) {
   const disp = document.getElementById("timer-display");
   if (!disp) return;
   const bar = disp.closest('.timer-bar');
-  if (examMode === 'timed') {
-    const m = Math.floor(timeLeft / 60);
-    const s = timeLeft % 60;
+  if (selectedSessionMode === 'strict') {
+    const remaining = Math.max(0, timerState.remainingSeconds);
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
     disp.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    if (bar) { bar.classList.toggle('danger', timeLeft <= 60); bar.classList.remove('warn'); }
-  } else {
-    const h = Math.floor(elapsed / 3600);
-    const m = Math.floor((elapsed % 3600) / 60);
-    const s = elapsed % 60;
-    disp.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    if (bar) { bar.classList.remove('danger'); bar.classList.remove('warn'); }
+    if (bar) {
+      bar.classList.toggle('warning-soft', remaining <= 120 && remaining > 30);
+      bar.classList.toggle('warning-strong', remaining <= 30);
+    }
+  } else if (selectedSessionMode === 'selfPaced') {
+    const total = Math.max(0, timerState.questionElapsedSeconds);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    disp.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    if (bar) bar.classList.remove('warning-soft', 'warning-strong');
   }
 }
 
-// Auto-submit when the timed clock hits zero
 function onTimeUp() {
+  if (selectedSessionMode !== 'strict' || examStage !== 'answering') return;
+  if (!sessionController.markAutomaticAdvanceHandled()) return;
+  saveDraftForCurrentQuestion();
+  transitionQuestion(currentIdx + 1, { automatic: true });
+}
+
+function safeStorageGet(storage, key) {
+  try { return storage.getItem(key); } catch (error) { return null; }
+}
+
+function safeStorageSet(storage, key, value) {
+  try { storage.setItem(key, value); return true; } catch (error) { return false; }
+}
+
+function setOnboardingView(stage) {
+  onboardingStage = stage;
+  const welcome = document.getElementById('welcome-state');
+  const subjects = document.getElementById('subject-selection-state');
+  const exam = document.getElementById('exam-shell');
+  if (welcome) welcome.hidden = stage !== 'welcome';
+  if (subjects) subjects.hidden = stage !== 'subjectSelection';
+  if (exam) exam.hidden = stage !== 'complete';
+  document.body.classList.toggle('onboarding-active', stage !== 'complete');
+}
+
+function showWelcome() {
+  stopExamSession({ reset: true });
+  currentSubj = null;
+  currentIdx = 0;
+  pendingSubjectSelection = null;
+  selectedSessionMode = null;
+  examStage = 'idle';
+  setOnboardingView('welcome');
+  closeAllBlockingModals();
+  const start = document.getElementById('start-practice');
+  if (start) requestAnimationFrame(() => start.focus());
+}
+
+function startPractice() {
+  stopExamSession({ reset: true });
+  if (safeStorageGet(localStorage, TERMS_ACCEPTANCE_KEY) !== 'accepted') {
+    onboardingStage = 'terms';
+    openModal('terms-modal', { blocking: true });
+    return;
+  }
+  continueAfterTerms();
+}
+
+function acceptTerms() {
+  safeStorageSet(localStorage, TERMS_ACCEPTANCE_KEY, 'accepted');
+  closeModal('terms-modal', { restoreFocus: false });
+  continueAfterTerms();
+}
+
+function continueAfterTerms() {
+  if (safeStorageGet(sessionStorage, GUEST_PROMPT_SESSION_KEY) === 'dismissed') {
+    showSubjectSelection();
+    return;
+  }
+  onboardingStage = 'signIn';
+  openModal('signin-prompt-modal', { blocking: true });
+}
+
+function beginOnboardingSignIn() {
+  closeModal('signin-prompt-modal', { restoreFocus: false });
+  openModal('auth-modal', { blocking: true });
+}
+
+function continueAsGuest() {
+  safeStorageSet(sessionStorage, GUEST_PROMPT_SESSION_KEY, 'dismissed');
+  closeModal('signin-prompt-modal', { restoreFocus: false });
+  showSubjectSelection();
+}
+
+function completeOnboardingSignIn() {
+  safeStorageSet(sessionStorage, GUEST_PROMPT_SESSION_KEY, 'dismissed');
+  closeModal('auth-modal', { restoreFocus: false });
+  showSubjectSelection();
+}
+
+function cancelAuthModal() {
+  closeModal('auth-modal', { restoreFocus: false });
+  if (onboardingStage === 'signIn') openModal('signin-prompt-modal', { blocking: true });
+}
+
+function renderSubjectSelection() {
+  const grid = document.getElementById('subject-choice-grid');
+  if (!grid) return;
+  grid.innerHTML = SUBJECTS.map((subject) => `
+    <button type="button" class="subject-choice" onclick="selectSubjectForSession('${subject}')">
+      <span>${escapeHtml(subject)}</span>
+    </button>`).join('');
+}
+
+function showSubjectSelection() {
+  stopExamSession({ reset: true });
+  examStage = 'idle';
+  selectedSessionMode = null;
+  setOnboardingView('subjectSelection');
+  renderSubjectSelection();
+  const status = document.getElementById('subject-loading-status');
+  if (status) status.textContent = '';
+  const first = document.querySelector('#subject-choice-grid .subject-choice');
+  if (first) requestAnimationFrame(() => first.focus());
+}
+
+function selectSubjectForSession(subject) {
+  if (!SUBJECTS.includes(subject) || examStage === 'subjectLoading') return;
+  stopExamSession({ reset: true });
+  pendingSubjectSelection = subject;
+  currentSubj = subject;
+  currentIdx = 0;
+  examStage = 'subjectLoading';
+  if (onboardingStage === 'complete') {
+    setWorkspaceLocked(true);
+    const main = document.getElementById('main');
+    if (main) main.innerHTML = `<div class="loading" role="status">Loading ${escapeHtml(subject)} questions…</div>`;
+  }
+  const status = document.getElementById('subject-loading-status');
+  if (status) status.textContent = `Loading ${subject} questions…`;
+  if (subject === 'Labor Law' && laborQuestionBankStatus !== 'ready') {
+    if (laborQuestionBankStatus === 'error') loadLaborFromSheet();
+    return;
+  }
+  completeSubjectSelection(subject);
+}
+
+function completeSubjectSelection(subject) {
+  if (pendingSubjectSelection !== subject || !BAR_QUESTIONS[subject]?.length) return;
+  safeStorageSet(localStorage, 'duediligence.selected.subject.v1', subject);
+  pendingSubjectSelection = null;
+  currentSubj = subject;
+  currentIdx = 0;
+  examStage = 'modeSelection';
+  selectedSessionMode = null;
+  setOnboardingView('complete');
+  renderSubjectTabs();
+  renderMainWrite();
+  setWorkspaceLocked(true);
+  requestAnimationFrame(() => openModal('session-choice-modal', { blocking: true }));
+}
+
+function chooseSessionMode(mode) {
+  if (!['strict', 'selfPaced', 'none'].includes(mode) || examStage !== 'modeSelection') return;
+  selectedSessionMode = mode;
+  examMode = mode;
+  safeStorageSet(localStorage, 'duediligence.timer.mode.v1', mode);
+  examStage = 'answering';
+  const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+  closeModal('session-choice-modal', { restoreFocus: false });
+  setWorkspaceLocked(false);
+  renderMainWrite();
+  sessionController.beginSession(mode, question?.id || null);
+  questionStartTs = Date.now();
+  updateSessionClock(sessionController.snapshot());
+  const box = document.getElementById('answer-box');
+  if (box) requestAnimationFrame(() => box.focus());
+}
+
+function setWorkspaceLocked(locked) {
+  const shell = document.getElementById('exam-shell');
+  if (shell) shell.classList.toggle('session-locked', locked);
+  document.querySelectorAll('#exam-shell button, #exam-shell textarea').forEach((control) => {
+    if (control.closest('.patron-banner')) return;
+    control.disabled = Boolean(locked);
+  });
+}
+
+function setQuestionControlsDisabled(disabled) {
+  document.querySelectorAll('#main .toolbar button, #answer-box, #submit-btn, #main .mic').forEach((control) => {
+    control.disabled = Boolean(disabled);
+  });
+}
+
+function loadDrafts() {
+  try { return JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}'); } catch (error) { return {}; }
+}
+
+function saveDraftForCurrentQuestion() {
+  if (!currentSubj || !BAR_QUESTIONS[currentSubj]?.[currentIdx]) return;
   const key = `${currentSubj}-${currentIdx}`;
-  if ((userAnswers[key] || '').trim().length >= 15) { evaluateAnswer(); }
-  else { submitAndNext(); }
+  const drafts = loadDrafts();
+  drafts[key] = userAnswers[key] || '';
+  safeStorageSet(localStorage, DRAFTS_KEY, JSON.stringify(drafts));
+}
+
+function restoreDraftForKey(key) {
+  if (Object.prototype.hasOwnProperty.call(userAnswers, key)) return userAnswers[key];
+  const drafts = loadDrafts();
+  userAnswers[key] = typeof drafts[key] === 'string' ? drafts[key] : '';
+  return userAnswers[key];
+}
+
+function stopExamSession(options = {}) {
+  sessionController.stop({ reset: options.reset !== false });
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  const clock = document.getElementById('session-clock');
+  if (clock) clock.hidden = true;
+}
+
+function transitionQuestion(index, options = {}) {
+  if (gradingInProgress || examStage === 'transitioning' || !currentSubj) return;
+  saveDraftForCurrentQuestion();
+  examStage = 'transitioning';
+  sessionController.pause();
+  const list = BAR_QUESTIONS[currentSubj];
+  currentIdx = ((index % list.length) + list.length) % list.length;
+  currentQuestionIndex = currentIdx;
+  examStage = 'answering';
+  renderMainWrite();
+  const question = list[currentIdx];
+  sessionController.startQuestion(question.id);
+  questionStartTs = Date.now();
+  if (!options.automatic) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function setupEventListeners() {
   document.getElementById("tab-write").addEventListener("click", () => {
     document.getElementById("tab-write").classList.add("active");
     document.getElementById("tab-history").classList.remove("active");
+    if (historyPausedStage === 'answering') {
+      examStage = 'answering';
+      historyPausedStage = null;
+      renderMainWrite();
+      sessionController.resume();
+      return;
+    }
+    historyPausedStage = null;
     renderMainWrite();
   });
 
   document.getElementById("tab-history").addEventListener("click", () => {
+    historyPausedStage = examStage;
+    if (examStage === 'answering') sessionController.pause();
     document.getElementById("tab-history").classList.add("active");
     document.getElementById("tab-write").classList.remove("active");
     renderMainHistory();
@@ -1530,10 +1891,10 @@ function setupEventListeners() {
 
   const fbModal = document.getElementById("feedback-modal");
   document.getElementById("btn-open-feedback").addEventListener("click", () => {
-    fbModal.classList.add("open");
+    openModal("feedback-modal");
   });
   document.getElementById("btn-close-feedback").addEventListener("click", () => {
-    fbModal.classList.remove("open");
+    closeModal("feedback-modal");
   });
   document.getElementById("feedback-form").addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1555,15 +1916,8 @@ function renderSubjectTabs() {
 }
 
 function switchSubject(subj) {
-  if (gradingInProgress) return;
-  currentSubj = subj;
-  currentIdx = 0;
-  renderSubjectTabs();
-  if (subj === "Labor Law" && laborQuestionBankStatus !== "ready") {
-    renderLaborQuestionBankMessage();
-    return;
-  }
-  renderMainWrite();
+  if (gradingInProgress || subj === currentSubj) return;
+  selectSubjectForSession(subj);
 }
 
 function renderLaborQuestionBankMessage() {
@@ -1575,7 +1929,7 @@ function renderLaborQuestionBankMessage() {
   main.innerHTML = `<div class="err">Labor Law questions could not be loaded. <button class="btn-tool" onclick="loadLaborFromSheet()">Try Again</button></div>`;
 }
 
-function renderMainWrite() {
+function legacyRenderMainWrite() {
   if (currentSubj === "Labor Law" && laborQuestionBankStatus !== "ready") {
     renderLaborQuestionBankMessage();
     return;
@@ -1595,9 +1949,9 @@ function renderMainWrite() {
 
   main.innerHTML = `
     <div class="timer-bar" id="timer-bar">
-      <span class="timer-label">⏱️ ${examMode === 'timed' ? 'Timed Bar Mode — 7:00 per item' : 'Untimed Review Clock'}</span>
+      <span class="timer-label">${examMode === 'strict' ? 'Strict Scrutiny — 12:00 per item' : 'Quantum Meruit — Writing time'}</span>
       <span id="timer-display">--:--</span>
-      <span class="timer-limit">${examMode === 'timed' ? 'Auto-submits at 0:00 · turns red under 60s' : 'Recommended: 35–45 mins per essay'}</span>
+      <span class="timer-limit">${examMode === 'strict' ? 'Advances once at 0:00' : 'No deadline or automatic advance'}</span>
     </div>
 
     <div class="toolbar">
@@ -1638,6 +1992,59 @@ function renderMainWrite() {
   applyExamEnhancements();
 }
 
+function renderMainWrite() {
+  if (!currentSubj || !BAR_QUESTIONS[currentSubj]?.length) return;
+  if (currentSubj === 'Labor Law' && laborQuestionBankStatus !== 'ready') {
+    renderLaborQuestionBankMessage();
+    return;
+  }
+  const main = document.getElementById('main');
+  const qList = BAR_QUESTIONS[currentSubj];
+  const q = qList[currentIdx];
+  const savedKey = `${currentSubj}-${currentIdx}`;
+  const currentText = restoreDraftForKey(savedKey);
+  const hasSubmitted = submissionResults[savedKey] !== undefined;
+  const workspaceLocked = examStage !== 'answering';
+  const timerMarkup = selectedSessionMode === 'strict'
+    ? `<div class="timer-bar" id="timer-bar"><span class="timer-label">Strict Scrutiny · 12 minutes</span><span id="timer-display">12:00</span><span class="timer-limit">Advances once when time expires</span></div>`
+    : selectedSessionMode === 'selfPaced'
+      ? `<div class="timer-bar" id="timer-bar"><span class="timer-label">Quantum Meruit · Writing time</span><span id="timer-display">00:00</span><span class="timer-limit">No deadline or automatic advance</span></div>`
+      : '';
+
+  main.innerHTML = `
+    ${timerMarkup}
+    <div class="toolbar">
+      <div class="nav-group">
+        <button class="btn-tool" onclick="prevQuestion()" ${workspaceLocked ? 'disabled' : ''}>← Prev Question</button>
+        <button class="btn-tool" onclick="nextQuestion()" ${workspaceLocked ? 'disabled' : ''}>Next Question →</button>
+        <button class="btn-tool random" onclick="randomQuestion()" ${workspaceLocked ? 'disabled' : ''}>🔀 Randomize</button>
+      </div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#CBD5E1;">Item ${currentIdx + 1} of ${qList.length} (${escapeHtml(currentSubj)})</div>
+    </div>
+    <div class="paper-card">
+      <div class="q-header-info">
+        <span class="q-label">${escapeHtml(currentSubj.toUpperCase())} — VERBATIM CASE PROMPT</span>
+        <span class="q-counter">Item No. ${currentIdx + 1}</span>
+      </div>
+      <div class="q-text">${escapeHtml(q.text)}</div>
+    </div>
+    <div class="paper-card" style="background:#fff;">
+      <div class="panel-title">Examinee Answer Workspace (ANSWER • LEGAL BASIS • APPLICATION • CONCLUSION)</div>
+      <textarea id="answer-box" oninput="handleInput(this)" ${workspaceLocked ? 'disabled' : ''} placeholder="Structure your answer using the ALAC method:&#10;&#10;I. ANSWER — State your direct answer (Yes/No, Valid/Invalid).&#10;II. LEGAL BASIS — Cite the codal article, section, or doctrine.&#10;III. APPLICATION — Apply the specific facts to the law.&#10;IV. CONCLUSION — Reaffirm your position.">${escapeHtml(currentText)}</textarea>
+      <div class="row">
+        <span class="wc" id="word-count">${countWords(currentText)} words</span>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation (Beta)" ${workspaceLocked ? 'disabled' : ''}>🎙️ Dictate<span class="beta-tag">BETA</span></button>
+          <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${workspaceLocked || !currentText.trim() ? 'disabled' : ''}>Evaluate &amp; Grade Essay</button>
+        </div>
+      </div>
+    </div>
+    <div id="evaluation-result-area">${hasSubmitted ? renderResultHTML(savedKey) : ''}</div>
+  `;
+  applyExamEnhancements();
+  updateTimerDisplay();
+}
+
 function countWords(str) {
   const matches = str.trim().match(/\S+/g);
   return matches ? matches.length : 0;
@@ -1647,6 +2054,7 @@ function handleInput(el) {
   const val = el.value;
   const key = `${currentSubj}-${currentIdx}`;
   userAnswers[key] = val;
+  saveDraftForCurrentQuestion();
   document.getElementById("word-count").textContent = `${countWords(val)} words`;
   const btn = document.getElementById("submit-btn");
   if (btn) {
@@ -1673,6 +2081,21 @@ function randomQuestion() {
   const qList = BAR_QUESTIONS[currentSubj];
   currentIdx = Math.floor(Math.random() * qList.length);
   renderMainWrite();
+}
+
+function prevQuestion() {
+  if (gradingInProgress || examStage !== 'answering') return;
+  transitionQuestion(currentIdx - 1);
+}
+
+function nextQuestion() {
+  if (gradingInProgress || examStage !== 'answering') return;
+  transitionQuestion(currentIdx + 1);
+}
+
+function randomQuestion() {
+  if (gradingInProgress || examStage !== 'answering') return;
+  transitionQuestion(Math.floor(Math.random() * BAR_QUESTIONS[currentSubj].length));
 }
 
 function questionContextForExaminer(q) {
@@ -1711,10 +2134,14 @@ function showCheckingError(message) {
 
 function closeCheckingModal() {
   closeModal('checking-modal');
+  if (examStage === 'evaluating' && !gradingInProgress) {
+    examStage = 'answering';
+    sessionController.resume();
+  }
 }
 
 async function evaluateAnswer() {
-  if (gradingInProgress) return;
+  if (gradingInProgress || examStage !== 'answering') return;
   const subjectAtSubmission = currentSubj;
   const indexAtSubmission = currentIdx;
   const key = `${subjectAtSubmission}-${indexAtSubmission}`;
@@ -1730,6 +2157,9 @@ async function evaluateAnswer() {
   }
 
   gradingInProgress = true;
+  examStage = 'evaluating';
+  saveDraftForCurrentQuestion();
+  sessionController.pause();
   const submitButton = document.getElementById('submit-btn');
   if (submitButton) {
     submitButton.disabled = true;
@@ -1754,7 +2184,7 @@ async function evaluateAnswer() {
     }
 
     const assessment = payload.assessment;
-    const timeSpent = Math.max(0, Math.round((Date.now() - questionStartTs) / 1000));
+    const timeSpent = sessionController.snapshot().questionElapsedSeconds;
     const resultObj = {
       ...assessment,
       score: Number(assessment.score),
@@ -1774,11 +2204,13 @@ async function evaluateAnswer() {
     submissionResults[key] = resultObj;
     historyLog.unshift(resultObj);
     resultObj.historySaved = logAttempt(resultObj);
+    examStage = 'reviewing';
     closeCheckingModal();
 
     if (currentSubj === subjectAtSubmission && currentIdx === indexAtSubmission) {
       const resultArea = document.getElementById('evaluation-result-area');
       resultArea.innerHTML = renderResultHTML(key);
+      setQuestionControlsDisabled(true);
       resultArea.scrollIntoView({ behavior: 'smooth' });
     }
   } catch (error) {
@@ -1788,7 +2220,7 @@ async function evaluateAnswer() {
     gradingInProgress = false;
     const activeButton = document.getElementById('submit-btn');
     if (activeButton) {
-      activeButton.disabled = !(userAnswers[`${currentSubj}-${currentIdx}`] || '').trim();
+      activeButton.disabled = examStage !== 'answering' || !(userAnswers[`${currentSubj}-${currentIdx}`] || '').trim();
       activeButton.textContent = 'Evaluate & Grade Essay';
     }
   }
@@ -1870,7 +2302,7 @@ function renderResultHTML(key) {
           <button class="fb-btn" onclick="rateModel('down')">👎 Needs work</button>
           <button class="fb-btn suggest" onclick="openSuggest()">✎ Suggest Correction / Better Answer</button>
         </div>
-        <button class="btn-next" onclick="submitAndNext()">Continue to Next Item →</button>
+        <div class="review-actions"><button class="btn-next" onclick="proceedAfterReview()">Continue to Next Item →</button></div>
       </div>
     </article>
   `;
@@ -1971,6 +2403,8 @@ window.addEventListener('DOMContentLoaded', init);
     if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
     if (typeof Papa === 'undefined' || !window.DueDiligenceLaborCsv) {
       laborQuestionBankStatus = "error";
+      examStage = "idle";
+      pendingSubjectSelection = null;
       console.error('Labor Law question bank could not start because the CSV parser is unavailable.');
       if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
       return;
@@ -1987,19 +2421,31 @@ window.addEventListener('DOMContentLoaded', init);
           BAR_QUESTIONS["Labor Law"] = parsed.questions;
           laborQuestionBankStatus = "ready";
           if (parsed.invalidRows.length) console.warn('Ignored invalid Labor Law CSV rows.', parsed.invalidRows);
-          if (currentSubj === "Labor Law") {
+          if (pendingSubjectSelection === "Labor Law") {
+            completeSubjectSelection("Labor Law");
+          } else if (currentSubj === "Labor Law" && onboardingStage === 'complete') {
             currentIdx = Math.min(currentIdx, BAR_QUESTIONS["Labor Law"].length - 1);
             renderMainWrite();
           }
         } catch (error) {
+          const wasPending = pendingSubjectSelection === "Labor Law";
           laborQuestionBankStatus = "error";
+          examStage = "idle";
+          pendingSubjectSelection = null;
           console.error('Labor Law question bank could not be loaded.', error);
+          const status = document.getElementById('subject-loading-status');
+          if (wasPending && status) status.textContent = 'Labor Law questions could not be loaded. Choose Labor Law again to retry.';
           if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
         }
       },
       error: function(error) {
+        const wasPending = pendingSubjectSelection === "Labor Law";
         laborQuestionBankStatus = "error";
+        examStage = "idle";
+        pendingSubjectSelection = null;
         console.error('Labor Law question bank request failed.', error);
+        const status = document.getElementById('subject-loading-status');
+        if (wasPending && status) status.textContent = 'Labor Law questions could not be loaded. Choose Labor Law again to retry.';
         if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
       }
     });
@@ -2013,81 +2459,111 @@ window.addEventListener('DOMContentLoaded', init);
    userAnswers, timeLeft, startTimer, renderMainWrite, evaluateAnswer.
    ===================================================================== */
 
-let examMode = 'untimed';
-let currentQuestionIndex = 0;
-const PER_Q_SECONDS = 420;      // 7 minutes per item (Timed Bar Mode)
-let elapsed = 0;                // count-up seconds for Untimed Review
-let questionStartTs = Date.now();
-
 /* ---------- SPA navigation ---------- */
 function showPage(page, el) {
+  const leavingMock = document.getElementById('page-mock')?.classList.contains('active') && page !== 'mock';
+  if (leavingMock) {
+    saveDraftForCurrentQuestion();
+    stopExamSession({ reset: true });
+    examStage = 'idle';
+  }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
   document.querySelectorAll('.spa-tab').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
+  if (page === 'mock' && onboardingStage === 'complete' && examStage === 'idle') showWelcome();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 /* ---------- Modals ---------- */
-function openModal(id) { const m = document.getElementById(id); if (m) m.classList.add('open'); }
-function closeModal(id) { const m = document.getElementById(id); if (m) m.classList.remove('open'); }
+const BLOCKING_MODAL_IDS = new Set(['terms-modal', 'signin-prompt-modal', 'session-choice-modal']);
+const modalFocusOrigins = new Map();
+const modalResumeStates = new Map();
+
+function openModal(id, options = {}) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  modalFocusOrigins.set(id, document.activeElement);
+  const shouldPause = examStage === 'answering' && id !== 'checking-modal';
+  if (shouldPause) {
+    sessionController.pause();
+    modalResumeStates.set(id, true);
+  }
+  if (options.blocking || BLOCKING_MODAL_IDS.has(id)) modal.classList.add('blocking');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  const focusable = modal.querySelector('button:not([disabled]),a[href],input:not([disabled]),textarea:not([disabled]),[tabindex="0"]');
+  const card = modal.querySelector('.modal-card');
+  requestAnimationFrame(() => (focusable || card)?.focus());
+}
+
+function closeModal(id, options = {}) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+  if (modalResumeStates.get(id) && examStage === 'answering') sessionController.resume();
+  modalResumeStates.delete(id);
+  if (options.restoreFocus !== false) {
+    const origin = modalFocusOrigins.get(id);
+    if (origin?.isConnected) requestAnimationFrame(() => origin.focus());
+  }
+  modalFocusOrigins.delete(id);
+}
+
+function closeAllBlockingModals() {
+  document.querySelectorAll('.modal-overlay.open').forEach((modal) => {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+  });
+  modalResumeStates.clear();
+}
+
 function mockCheckout(method) { alert('Demo build: ' + method + ' checkout is not connected to a live payment processor.'); }
-function mockAuth(provider) { alert('Demo build: ' + provider + ' sign-in is a UI mockup. No credentials are collected or transmitted.'); }
+function mockAuth(provider) {
+  alert('Demo build: ' + provider + ' sign-in is a UI mockup. No credentials are collected or transmitted.');
+  if (onboardingStage === 'signIn') completeOnboardingSignIn();
+}
 
 /* Welcome patrons on the first load of each browser tab without repeatedly
    interrupting an active study session after refreshes or navigation. */
 const INVESTOR_WELCOME_SESSION_KEY = 'dd_investor_welcome_seen';
 function showInvestorWelcome() {
-  try {
-    if (sessionStorage.getItem(INVESTOR_WELCOME_SESSION_KEY)) return;
-    sessionStorage.setItem(INVESTOR_WELCOME_SESSION_KEY, '1');
-  } catch (e) {
-    /* Privacy-restricted browsers may block storage; showing the welcome once is safe. */
-  }
-  openModal('investor-modal');
+  /* Preserved compatibility hook. Patron recognition is now user-invoked only. */
 }
 
 /* ---------- Exam mode + per-question clock ---------- */
 function setExamMode(mode) {
-  examMode = mode;
-  const t = document.getElementById('mode-timed');
-  const u = document.getElementById('mode-untimed');
-  if (t && u) {
-    t.classList.toggle('active', mode === 'timed');
-    u.classList.toggle('active', mode === 'untimed');
-  }
-  renderMainWrite();   // re-render workspace; applyExamEnhancements resets the clock
+  const normalized = mode === 'timed' ? 'strict' : mode === 'untimed' ? 'none' : mode;
+  chooseSessionMode(normalized);
 }
 
 function resetQuestionClock() {
+  if (examStage !== 'answering' || !currentSubj) return;
+  const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+  if (question) sessionController.startQuestion(question.id);
   questionStartTs = Date.now();
-  if (examMode === 'timed') { timeLeft = PER_Q_SECONDS; } else { elapsed = 0; }
-  startTimer();
-  updateTimerDisplay();
 }
 
 /* loadQuestion(idx): bind a fresh clock to a specific item (spec API) */
 function loadQuestion(idx) {
-  const qList = BAR_QUESTIONS[currentSubj];
-  currentIdx = ((idx % qList.length) + qList.length) % qList.length;
-  currentQuestionIndex = currentIdx;
-  renderMainWrite();
+  transitionQuestion(idx);
 }
 
 /* Auto-advance: clear textarea, increment, load next, restart timer */
 function submitAndNext() {
-  if (gradingInProgress) return;
-  const key = `${currentSubj}-${currentIdx}`;
-  userAnswers[key] = '';
-  loadQuestion(currentIdx + 1);   // increments + auto-loads next prompt + resets the 7:00 clock
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  proceedAfterReview();
+}
+
+function proceedAfterReview() {
+  if (gradingInProgress || examStage !== 'reviewing') return;
+  transitionQuestion(currentIdx + 1);
 }
 
 /* Called at the end of every renderMainWrite() */
 function applyExamEnhancements() {
   currentQuestionIndex = currentIdx;
-  resetQuestionClock();
   const box = document.getElementById('answer-box');
   if (box && !box.dataset.locked) {
     box.dataset.locked = '1';
@@ -2196,14 +2672,35 @@ function seedContentPages() {
 document.addEventListener('DOMContentLoaded', () => {
   enableSecurity();
   seedContentPages();
-  // close any modal on backdrop click or ESC
   document.querySelectorAll('.modal-overlay').forEach(ov => {
-    ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); });
+    ov.setAttribute('aria-hidden', 'true');
+    ov.addEventListener('click', e => {
+      if (e.target === ov && !BLOCKING_MODAL_IDS.has(ov.id)) closeModal(ov.id);
+    });
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+    const openModals = Array.from(document.querySelectorAll('.modal-overlay.open'));
+    const modal = openModals[openModals.length - 1];
+    if (!modal) return;
+    if (e.key === 'Escape' && !BLOCKING_MODAL_IDS.has(modal.id) && modal.id !== 'checking-modal') {
+      e.preventDefault();
+      closeModal(modal.id);
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focusable = Array.from(modal.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),textarea:not([disabled]),[tabindex="0"]'))
+      .filter(element => element.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   });
-  requestAnimationFrame(showInvestorWelcome);
 });
 
 </script>
@@ -2232,7 +2729,7 @@ function toast(msg, type) {
 
 /* ---------- Global session clock ---------- */
 let sessionSeconds = 0;
-function tickSession() {
+function legacyTickSession() {
   sessionSeconds++;
   const el = document.getElementById('session-clock');
   if (el) {
@@ -2240,6 +2737,20 @@ function tickSession() {
     el.textContent = '⏳ ' + [h, m, s].map(x => String(x).padStart(2, '0')).join(':');
   }
 }
+
+function updateSessionClock(timerState = sessionController.snapshot()) {
+  const el = document.getElementById('session-clock');
+  if (!el) return;
+  const visible = onboardingStage === 'complete' && selectedSessionMode !== 'none';
+  el.hidden = !visible;
+  const total = Math.max(0, timerState.totalElapsedSeconds || 0);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  el.textContent = '⏳ ' + [h, m, s].map(value => String(value).padStart(2, '0')).join(':');
+}
+
+function tickSession() { updateSessionClock(); }
 
 /* ---------- Model-answer feedback loop ---------- */
 function rateModel(dir) {
@@ -2326,7 +2837,9 @@ function startDictation() {
   } catch (e) { toast('Voice dictation could not start.', 'warn'); }
 }
 
-document.addEventListener('DOMContentLoaded', () => { setInterval(tickSession, 1000); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && examStage === 'answering') sessionController.tick();
+});
 </script>
 
 </body>

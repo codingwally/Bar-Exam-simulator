@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+
+const html = await fs.readFile(new URL('../index.html', import.meta.url), 'utf8');
+
+assert.match(html, /id="welcome-state"/);
+assert.match(html, /Prepare with purpose\./);
+assert.match(html, /id="start-practice"/);
+assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1">/, 'Mobile layouts require an explicit viewport declaration.');
+assert.match(html, /let currentSubj = null;/, 'A new visitor must not silently start in Civil Law.');
+assert.doesNotMatch(html, /requestAnimationFrame\(showInvestorWelcome\)/, 'Patron modal must not auto-open.');
+assert.match(html, /duediligence\.terms\.accepted\.v1/);
+assert.match(html, /id="terms-modal"[\s\S]*aria-modal="true"/);
+assert.match(html, /id="signin-prompt-modal"[\s\S]*Save Your Progress/);
+assert.match(html, /id="subject-choice-grid"/);
+assert.match(html, /id="session-choice-modal"[\s\S]*Would you like to begin your session\?/);
+assert.match(html, /Strict Scrutiny[\s\S]*12 minutes per question/);
+assert.match(html, /Quantum Meruit[\s\S]*Track your writing time/);
+assert.match(html, /Summary Judgment[\s\S]*without a visible timer/);
+assert.match(html, /const PER_Q_SECONDS = 720;/);
+assert.doesNotMatch(html, /Recommended:\s*35[–-]45 mins per essay/);
+assert.doesNotMatch(html, /setInterval\(tickSession/);
+assert.match(html, /sessionController\.beginSession/);
+assert.match(html, /sessionController\.pause\(\)/);
+assert.match(html, /sessionController\.startQuestion/);
+assert.match(html, /markAutomaticAdvanceHandled/);
+assert.match(html, /selectedSessionMode !== 'none'/);
+assert.match(html, /setQuestionControlsDisabled\(true\)/, 'The submitted question must lock while its assessment is under review.');
+
+const inlineScripts = Array.from(html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi))
+  .filter((match) => !/\ssrc=/.test(match[0]))
+  .map((match) => match[1]);
+for (const [index, source] of inlineScripts.entries()) {
+  assert.doesNotThrow(() => new vm.Script(source, { filename: `index-inline-${index + 1}.js` }));
+}
+
+console.log('Onboarding and session-flow static tests passed.');

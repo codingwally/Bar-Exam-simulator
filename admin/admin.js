@@ -475,8 +475,8 @@
           {
             html: true,
             value: `<div class="row-actions">
-              ${actionButton('Review', 'payment_review', row.id, { status: row.status })}
-              ${actionButton('View private proof', 'view_payment_proof', row.id, {})}
+              ${actionButton('Review', 'payment_review', row.id, { status: row.status }).value}
+              ${actionButton('View private proof', 'view_payment_proof', row.id, {}).value}
             </div>`,
           },
         ]),

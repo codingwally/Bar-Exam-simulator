@@ -306,6 +306,13 @@
     }
   }
 
+  function requireSignInForGuestLimit() {
+    setOverlay(false, 'dd2-guest-reminder');
+    state.reminderResolve?.(false);
+    state.reminderResolve = null;
+    showEntry({ completed: true });
+  }
+
   function initials() {
     const source = state.profile?.display_name || state.user?.user_metadata?.full_name || 'Due Diligence';
     return source.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
@@ -871,6 +878,74 @@
     }
   }
 
+  async function requestGuestAccessStatus(headers) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6_000);
+    try {
+      const response = await fetch(`${config.workerUrl}/guest-access`, {
+        method: 'POST',
+        headers,
+        signal: controller.signal,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok || !payload.access) {
+        const error = new Error(
+          payload?.error?.message || 'Guest access could not be checked.',
+        );
+        error.code = payload?.error?.code || 'GUEST_ACCESS_UNAVAILABLE';
+        throw error;
+      }
+      return payload.access;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function reconcileGuestAccess(options = {}) {
+    const promptWhenExhausted = options.promptWhenExhausted === true;
+    let access;
+    try {
+      if (state.session?.access_token) {
+        try {
+          access = await requestGuestAccessStatus({
+            Authorization: `Bearer ${state.session.access_token}`,
+          });
+        } catch (error) {
+          if (error?.code !== 'INVALID_SESSION') throw error;
+          state.session = null;
+          state.user = null;
+          state.profile = null;
+          state.admin = null;
+          syncAuthUi();
+          access = await requestGuestAccessStatus({
+            'X-Guest-Device-ID': guestDeviceId(),
+          });
+        }
+      } else {
+        access = await requestGuestAccessStatus({
+          'X-Guest-Device-ID': guestDeviceId(),
+        });
+      }
+    } catch {
+      return { known: false, signedIn: Boolean(state.session?.access_token), exhausted: false };
+    }
+
+    if (access.signedIn) {
+      state.guestUsage = null;
+      syncAuthUi();
+      return { known: true, signedIn: true, exhausted: false };
+    }
+
+    state.guestUsage = {
+      remaining: Math.max(0, Math.min(config.guest.gradeLimit, Number(access.guest?.remaining) || 0)),
+      completed: Math.max(0, Math.min(config.guest.gradeLimit, Number(access.guest?.completed) || 0)),
+    };
+    syncAuthUi();
+    const exhausted = state.guestUsage.remaining === 0;
+    if (exhausted && promptWhenExhausted) requireSignInForGuestLimit();
+    return { known: true, signedIn: false, exhausted };
+  }
+
   function firstPatronWelcome() {
     if (new URLSearchParams(location.search).has('auth')) return;
     const key = 'dd_investor_welcome_seen';
@@ -929,11 +1004,14 @@
       else hideNativeView();
     });
     await initializeAuth();
+    await reconcileGuestAccess({ promptWhenExhausted: true });
     firstPatronWelcome();
   }
 
   async function beforeGrade() {
-    if (state.session?.access_token) return true;
+    const access = await reconcileGuestAccess({ promptWhenExhausted: true });
+    if (access.signedIn) return true;
+    if (access.exhausted) return false;
     let shown = false;
     try {
       shown = localStorage.getItem(config.guest.reminderStorageKey) === 'shown';
@@ -967,7 +1045,7 @@
     if (state.guestUsage.remaining === 2) global.toast?.('2 guest grades remaining.', 'ok');
     if (state.guestUsage.remaining === 1) global.toast?.('1 guest grade remaining.', 'warn');
     if (state.guestUsage.remaining === 0) {
-      setTimeout(() => showEntry({ completed: true }), 900);
+      setTimeout(requireSignInForGuestLimit, 900);
     }
   }
 
@@ -975,7 +1053,7 @@
     if (error?.code !== 'GUEST_LIMIT_REACHED') return false;
     if (typeof examStage !== 'undefined') examStage = 'answering';
     global.closeModal?.('checking-modal', { restoreFocus: false });
-    showEntry({ completed: true });
+    requireSignInForGuestLimit();
     return true;
   }
 

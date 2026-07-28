@@ -376,6 +376,245 @@ test('guest identifiers are validated and converted to non-reversible keyed hash
   assert.equal(GUEST_GRADE_LIMIT, 3);
 });
 
+test('guest-access status reports zero through three successful grades without reserving or grading', async (t) => {
+  for (const completed of [0, 1, 2, 3]) {
+    await t.test(`${completed} successful grades`, async () => {
+      const originalFetch = globalThis.fetch;
+      const storageRequests = [];
+      let unexpectedCalls = 0;
+      globalThis.fetch = async (url, options = {}) => {
+        const target = String(url);
+        storageRequests.push({ target, method: options.method || 'GET' });
+        if (target.includes('/rest/v1/guest_grading_devices')) {
+          return Response.json([{ usage_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }]);
+        }
+        if (target.includes('/rest/v1/guest_grading_usage')) {
+          return Response.json([{ successful_grades: completed }]);
+        }
+        unexpectedCalls += 1;
+        throw new Error(`Unexpected guest status request: ${target}`);
+      };
+
+      try {
+        const rawDeviceId = `device_status_${completed}_123456789012345678901234`;
+        const response = await worker.fetch(new Request('https://worker.example/guest-access', {
+          method: 'POST',
+          headers: {
+            Origin: reliabilityOrigin,
+            'CF-Connecting-IP': '203.0.113.55',
+            'User-Agent': 'StatusBrowser/1.0',
+            'X-Guest-Device-ID': rawDeviceId,
+          },
+        }), {
+          ALLOWED_ORIGIN: reliabilityOrigin,
+          GUEST_USAGE_HMAC_KEY: 'test-only-guest-hmac-key',
+          SUPABASE_URL: 'https://test.supabase.co',
+          SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+        });
+        const payload = await response.json();
+        assert.equal(response.status, 200);
+        assert.deepEqual(payload.access, {
+          signedIn: false,
+          guest: {
+            limit: 3,
+            remaining: 3 - completed,
+            completed,
+          },
+        });
+        assert.equal(unexpectedCalls, 0);
+        assert.equal(storageRequests.length, 2);
+        assert.ok(storageRequests.every((entry) => entry.method === 'GET'));
+        assert.doesNotMatch(
+          storageRequests.map((entry) => entry.target).join('\n'),
+          /device_status_|203\.0\.113\.55|StatusBrowser/i,
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+  }
+});
+
+test('guest-access status treats a new guest as unused without creating storage rows', async () => {
+  const originalFetch = globalThis.fetch;
+  const storageRequests = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const target = String(url);
+    storageRequests.push({ target, method: options.method || 'GET' });
+    if (target.includes('/rest/v1/guest_grading_devices')) return Response.json([]);
+    if (target.includes('/rest/v1/guest_grading_usage')) return Response.json([]);
+    throw new Error(`Unexpected guest status request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/guest-access', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        'CF-Connecting-IP': '203.0.113.56',
+        'User-Agent': 'FreshBrowser/1.0',
+        'X-Guest-Device-ID': 'fresh_device_1234567890123456789012345678',
+      },
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      GUEST_USAGE_HMAC_KEY: 'test-only-guest-hmac-key',
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload.access.guest, { limit: 3, remaining: 3, completed: 0 });
+    assert.ok(storageRequests.every((entry) => entry.method === 'GET'));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('guest-access status follows the same single-candidate recovery rule as reservation', async () => {
+  const originalFetch = globalThis.fetch;
+  let usageReads = 0;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.includes('/rest/v1/guest_grading_devices')) return Response.json([]);
+    if (target.includes('/rest/v1/guest_grading_usage')) {
+      usageReads += 1;
+      const parsed = new URL(target);
+      assert.match(parsed.searchParams.get('recovery_hash') || '', /^eq\.[0-9a-f]{64}$/);
+      assert.match(parsed.searchParams.get('last_seen_at') || '', /^gte\./);
+      assert.equal(parsed.searchParams.get('limit'), '2');
+      return Response.json([{ successful_grades: 2 }]);
+    }
+    throw new Error(`Unexpected recovery status request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/guest-access', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        'CF-Connecting-IP': '203.0.113.57',
+        'User-Agent': 'RecoveryBrowser/1.0',
+        'X-Guest-Device-ID': 'recovery_device_1234567890123456789012345',
+      },
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      GUEST_USAGE_HMAC_KEY: 'test-only-guest-hmac-key',
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload.access.guest, { limit: 3, remaining: 1, completed: 2 });
+    assert.equal(usageReads, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('ambiguous recovery candidates do not merge unrelated guest identities', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.includes('/rest/v1/guest_grading_devices')) return Response.json([]);
+    if (target.includes('/rest/v1/guest_grading_usage')) {
+      return Response.json([
+        { successful_grades: 3 },
+        { successful_grades: 3 },
+      ]);
+    }
+    throw new Error(`Unexpected ambiguous recovery request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/guest-access', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        'CF-Connecting-IP': '203.0.113.58',
+        'User-Agent': 'SharedNetworkBrowser/1.0',
+        'X-Guest-Device-ID': 'ambiguous_device_123456789012345678901234',
+      },
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      GUEST_USAGE_HMAC_KEY: 'test-only-guest-hmac-key',
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload.access.guest, { limit: 3, remaining: 3, completed: 0 });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('guest-access status verifies signed-in users and never reads guest quota', async () => {
+  const originalFetch = globalThis.fetch;
+  let guestStorageCalls = 0;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '44444444-4444-4444-8444-444444444444' });
+    }
+    if (target.includes('guest_grading_')) guestStorageCalls += 1;
+    throw new Error(`Unexpected signed-in status request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/guest-access', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        Authorization: 'Bearer verified-user-token',
+      },
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload.access, { signedIn: true, guest: null });
+    assert.equal(guestStorageCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('guest-access status rejects an invalid authenticated session without trusting guest headers', async () => {
+  const originalFetch = globalThis.fetch;
+  let guestStorageCalls = 0;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      return Response.json({ message: 'expired' }, { status: 401 });
+    }
+    if (target.includes('guest_grading_')) guestStorageCalls += 1;
+    throw new Error(`Unexpected invalid-session status request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/guest-access', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        Authorization: 'Bearer expired-user-token',
+        'X-Guest-Device-ID': 'fallback_device_1234567890123456789012345',
+      },
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 401);
+    assert.equal(payload.error.code, 'INVALID_SESSION');
+    assert.equal(guestStorageCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('the fourth guest grading request is blocked before question-bank or Gemini calls', async () => {
   const originalFetch = globalThis.fetch;
   let geminiCalls = 0;

@@ -1027,7 +1027,8 @@
     setOverlay(true, 'dd2-native-view');
     bindNativeViewHandlers(view);
     if (options.push !== false) {
-      history.pushState({ dd2View: view }, '', `#${view}`);
+      const updateHistory = history.state?.dd2View ? 'replaceState' : 'pushState';
+      history[updateHistory]({ dd2View: view }, '', `#${view}`);
     }
   }
 
@@ -1037,8 +1038,9 @@
   }
 
   function closeNativeView() {
-    if (history.state?.dd2View) history.back();
-    else hideNativeView();
+    const shouldRewindHistory = Boolean(history.state?.dd2View);
+    hideNativeView();
+    if (shouldRewindHistory) history.back();
   }
 
   async function submitSupport(event) {

@@ -45,6 +45,8 @@
         <button id="admin-signout" type="button">Sign out</button>
       </div>
     </aside>
+    <button class="sidebar-scrim" id="sidebar-scrim" type="button"
+      aria-label="Close administration navigation" hidden></button>
 
     <main id="admin-main">
       <header class="topbar">
@@ -131,11 +133,34 @@
     </form>
   </dialog>
 
+  <dialog class="insight-dialog" id="insight-dialog" aria-labelledby="insight-title">
+    <form method="dialog">
+      <header>
+        <div>
+          <p class="eyebrow">Verified operational detail</p>
+          <h2 id="insight-title">Metric detail</h2>
+        </div>
+        <button class="icon-button" id="insight-dialog-close" type="button"
+          aria-label="Close metric detail">×</button>
+      </header>
+      <div class="insight-value" id="insight-value">Not available</div>
+      <p class="insight-copy" id="insight-copy"></p>
+      <dl class="definition-list insight-provenance">
+        <dt>Source</dt><dd id="insight-source">Verified production aggregate</dd>
+        <dt>Reporting window</dt><dd id="insight-window">Current selected period</dd>
+        <dt>Generated</dt><dd id="insight-generated">Not available</dd>
+      </dl>
+      <div class="dialog-actions">
+        <button class="primary-button" id="insight-dialog-dismiss" type="button">Close</button>
+      </div>
+    </form>
+  </dialog>
+
   <div class="toast" id="admin-toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="../assets/phase2-config.js"></script>
-  <script src="subscription-actions-core.js?v=admin-actions-20260729-1"></script>
-  <script src="admin.js?v=admin-actions-20260729-1"></script>
+  <script src="subscription-actions-core.js?v=admin-actions-20260729-2"></script>
+  <script src="admin.js?v=admin-actions-20260729-2"></script>
 </body>
 </html>

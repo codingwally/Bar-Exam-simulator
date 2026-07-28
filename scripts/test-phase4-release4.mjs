@@ -112,8 +112,8 @@ assert.match(
 assert.match(publicPage, /assets\/phase2-experience\.js\?v=phase4-20260728-3/);
 assert.match(publicPage, /assets\/phase4-experience\.js\?v=phase4-20260728-1/);
 assert.match(text('admin/index.html'), /admin\.css\?v=phase4-20260728-2/);
-assert.match(text('admin/index.html'), /subscription-actions-core\.js\?v=admin-actions-20260729-1/);
-assert.match(text('admin/index.html'), /admin\.js\?v=admin-actions-20260729-1/);
+assert.match(text('admin/index.html'), /subscription-actions-core\.js\?v=admin-actions-20260729-2/);
+assert.match(text('admin/index.html'), /admin\.js\?v=admin-actions-20260729-2/);
 assert.match(
   adminStyles,
   /\.gate\[hidden\]\s*\{\s*display:\s*none;\s*\}/,

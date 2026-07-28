@@ -103,9 +103,22 @@
     return `<em class="${className}">${prefix}${change.toFixed(1)}% vs prior period</em>`;
   }
 
-  function metric(label, value, comparison = null, formatter = number) {
-    return `<div class="metric"><small title="${escapeHtml(label)}">${escapeHtml(label)}</small>
-      <strong>${escapeHtml(formatter(value))}</strong>${comparison == null ? '<em>Verified current period</em>' : trend(value, comparison)}</div>`;
+  function insightData(label, value, options = {}) {
+    return escapeHtml(JSON.stringify({
+      label,
+      value,
+      copy: options.copy || 'Verified aggregate for the currently selected reporting period.',
+      source: options.source || 'Due Diligence production analytics aggregate',
+    }));
+  }
+
+  function metric(label, value, comparison = null, formatter = number, options = {}) {
+    const displayValue = formatter(value);
+    return `<button type="button" class="metric" data-insight="${insightData(label, displayValue, options)}"
+      aria-label="View details for ${escapeHtml(label)}: ${escapeHtml(displayValue)}">
+      <small title="${escapeHtml(label)}">${escapeHtml(label)}</small>
+      <strong>${escapeHtml(displayValue)}</strong>${comparison == null ? '<em>Verified current period</em>' : trend(value, comparison)}
+      <span class="metric-cue">View verified detail</span></button>`;
   }
 
   function heading(title, copy, actions = '') {
@@ -114,6 +127,12 @@
 
   function empty(copy) {
     return `<div class="empty">${escapeHtml(copy)}</div>`;
+  }
+
+  function queueLink(label, copy, section) {
+    return `<button type="button" class="queue-link" data-admin-section="${escapeHtml(section)}">
+      <strong>${escapeHtml(label)}</strong><span>${escapeHtml(copy)}</span><span aria-hidden="true">View queue</span>
+    </button>`;
   }
 
   function reportingWindow() {
@@ -220,12 +239,12 @@
         </section>
         <section class="panel">
           <h3>Action queue</h3>
-          <dl class="definition-list">
-            <dt>Support</dt><dd>${number(report.queues?.pending_support)} open cases</dd>
-            <dt>Corrections</dt><dd>${number(report.queues?.pending_corrections)} pending editorial reviews</dd>
-            <dt>Recovery</dt><dd>${number(report.queues?.open_recovery_cases)} open cases; final transfer disabled</dd>
-            <dt>Manual access</dt><dd>${number(report.queues?.active_manual_entitlements)} active entitlements</dd>
-          </dl>
+          <div class="queue-grid">
+            ${queueLink('Support', `${number(report.queues?.pending_support)} open cases`, 'support')}
+            ${queueLink('Corrections', `${number(report.queues?.pending_corrections)} pending editorial reviews`, 'corrections')}
+            ${queueLink('Recovery', `${number(report.queues?.open_recovery_cases)} open cases; final transfer disabled`, 'support')}
+            ${queueLink('Manual access', `${number(report.queues?.active_manual_entitlements)} active entitlements`, 'subscriptions')}
+          </div>
         </section>
       </div>
       <section class="panel">
@@ -239,9 +258,12 @@
     const maximum = Math.max(1, ...rows.map((row) => Number(row[1]) || 0));
     if (!rows.some((row) => Number(row[1]) > 0)) return empty('No verified events in this period.');
     return `<div class="bar-list">${rows.map(([label, value]) => `
-      <div class="bar-row"><span>${escapeHtml(label)}</span>
-        <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, (Number(value) || 0) / maximum * 100)}%"></div></div>
-        <strong>${number(value)}</strong></div>`).join('')}</div>`;
+      <button type="button" class="bar-row" data-insight="${insightData(label, number(value), {
+    copy: 'Verified event count for this step in the selected reporting period.',
+    source: 'Due Diligence production event aggregate',
+  })}"><span>${escapeHtml(label)}</span>
+        <span class="bar-track"><span class="bar-fill" style="width:${Math.min(100, (Number(value) || 0) / maximum * 100)}%"></span></span>
+        <strong>${number(value)}</strong></button>`).join('')}</div>`;
   }
 
   function renderRealtime(report) {
@@ -309,10 +331,19 @@
       </section>`;
   }
 
+  function cellText(cell) {
+    if (cell == null || cell === '') return 'Not available';
+    if (Array.isArray(cell)) return cell.map(cellText).join(', ');
+    if (typeof cell === 'object') {
+      try { return JSON.stringify(cell); } catch { return 'Structured record'; }
+    }
+    return String(cell);
+  }
+
   function table(headers, rows) {
     if (!rows?.length) return empty('No verified records are available.');
     return `<div class="table-wrap"><table><thead><tr>${headers.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join('')}</tr></thead>
-      <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell?.html === true ? cell.value : escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      <tbody>${rows.map((row) => `<tr>${row.map((cell, index) => `<td data-label="${escapeHtml(headers[index] || `Column ${index + 1}`)}">${cell?.html === true ? cell.value : escapeHtml(cellText(cell))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
 
   function actionButton(label, action, target, payload = {}) {
@@ -623,8 +654,8 @@
       'aria-current',
       button.dataset.section === section ? 'page' : 'false',
     ));
-    $('#sidebar').classList.remove('open');
-    $('#menu-button').setAttribute('aria-expanded', 'false');
+    setSidebarOpen(false);
+    $('#dashboard-view').setAttribute('aria-busy', 'true');
     $('#dashboard-view').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
     try {
       const report = await loadReport();
@@ -649,6 +680,8 @@
     } catch (error) {
       $('#dashboard-view').innerHTML = heading('Dashboard unavailable', error.message || 'Administrator data could not be loaded.')
         + empty('No production data was changed. Refresh after connectivity or authorization is restored.');
+    } finally {
+      $('#dashboard-view').removeAttribute('aria-busy');
     }
   }
 
@@ -694,20 +727,39 @@
         row,
         state.authorization?.role,
       ) || [];
+      if (!descriptors.length) {
+        mount.textContent = 'No permitted actions';
+        return;
+      }
+      const menu = document.createElement('details');
+      menu.className = 'action-menu';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Actions';
+      summary.setAttribute(
+        'aria-label',
+        `Actions for ${row?.display_name || row?.user_id || 'student'}`,
+      );
+      const popover = document.createElement('div');
+      popover.className = 'action-menu-popover';
+      popover.setAttribute('role', 'menu');
       for (const descriptor of descriptors) {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = descriptor.label;
         button.dataset.tone = descriptor.tone;
+        button.setAttribute('role', 'menuitem');
         button.addEventListener('click', () => {
+          menu.open = false;
           openAction(
             descriptor.action,
             row.user_id,
             accessActionPayload(row, descriptor),
           );
         });
-        mount.append(button);
+        popover.append(button);
       }
+      menu.append(summary, popover);
+      mount.append(menu);
     });
   }
 
@@ -892,6 +944,35 @@
       container.append(article);
     }
     $('#audit-dialog').showModal();
+  }
+
+  function openInsight(button) {
+    let detail = {};
+    try { detail = JSON.parse(button.dataset.insight || '{}'); } catch { detail = {}; }
+    $('#insight-title').textContent = detail.label || 'Verified metric detail';
+    $('#insight-value').textContent = detail.value || 'Not available';
+    $('#insight-copy').textContent = detail.copy
+      || 'Verified aggregate for the currently selected reporting period.';
+    $('#insight-source').textContent = detail.source
+      || 'Due Diligence production analytics aggregate';
+    const window = reportingWindow();
+    $('#insight-window').textContent = `${dateTime(window.from)} to ${dateTime(window.to)}`;
+    $('#insight-generated').textContent = dateTime(state.report?.meta?.generated_at);
+    $('#insight-dialog').showModal();
+  }
+
+  function closeInsight() {
+    const dialog = $('#insight-dialog');
+    if (dialog?.open) dialog.close('cancel');
+  }
+
+  function setSidebarOpen(open) {
+    const sidebar = $('#sidebar');
+    const scrim = $('#sidebar-scrim');
+    sidebar?.classList.toggle('open', open);
+    $('#menu-button')?.setAttribute('aria-expanded', String(open));
+    if (scrim) scrim.hidden = !open;
+    document.body.classList.toggle('admin-nav-open', open);
   }
 
   function cancelActionDialog(options = {}) {
@@ -1183,6 +1264,11 @@
 
   function bindDynamic() {
     mountSubscriptionActions();
+    $$('[data-insight]').forEach((button) => button.addEventListener('click', () => openInsight(button)));
+    $$('[data-admin-section]').forEach((button) => button.addEventListener('click', () => {
+      const section = button.dataset.adminSection;
+      if (titles[section]) renderSection(section);
+    }));
     $$('[data-admin-action]').forEach((button) => button.addEventListener('click', () => {
       let payload = {};
       try { payload = JSON.parse(button.dataset.payload || '{}'); } catch { payload = {}; }
@@ -1278,14 +1364,22 @@
     await renderSection(state.section);
   });
   $('#refresh-dashboard')?.addEventListener('click', async () => {
+    const button = $('#refresh-dashboard');
+    button.disabled = true;
+    button.textContent = 'Refreshing…';
     state.report = null;
     state.operational.clear();
-    await renderSection(state.section);
+    try {
+      await renderSection(state.section);
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Refresh';
+    }
   });
   $('#menu-button')?.addEventListener('click', () => {
-    const open = $('#sidebar').classList.toggle('open');
-    $('#menu-button').setAttribute('aria-expanded', String(open));
+    setSidebarOpen(!$('#sidebar').classList.contains('open'));
   });
+  $('#sidebar-scrim')?.addEventListener('click', () => setSidebarOpen(false));
   $('#admin-signout')?.addEventListener('click', async () => {
     await state.client?.auth.signOut();
     location.replace('../');
@@ -1299,6 +1393,16 @@
   });
   $('#action-dialog')?.addEventListener('click', (event) => {
     if (event.target === event.currentTarget) cancelActionDialog();
+  });
+  $('#insight-dialog-close')?.addEventListener('click', closeInsight);
+  $('#insight-dialog-dismiss')?.addEventListener('click', closeInsight);
+  $('#insight-dialog')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) closeInsight();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && $('#sidebar')?.classList.contains('open')) {
+      setSidebarOpen(false);
+    }
   });
   global.addEventListener('popstate', () => {
     if ($('#action-dialog')?.open) cancelActionDialog({ consumeHistory: false });

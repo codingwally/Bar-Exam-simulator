@@ -315,6 +315,7 @@
   .hist-score{font-family:var(--mono);font-weight:600;font-size:19px;width:58px;text-align:center;padding:6px 0;border-radius:10px;}
   .hist-score.pass{background:var(--pass-bg);color:var(--pass);}
   .hist-score.fail{background:var(--fail-bg);color:var(--maroon);}
+  .hist-score.neutral{background:#e8edf3;color:#526276;}
   .hist-meta{flex:1;min-width:0;}
   .hist-subj{font-family:var(--mono);font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--gold);font-weight:600;}
   .hist-q{font-family:var(--serif);font-size:15px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;}
@@ -1322,18 +1323,25 @@ function clearPersistedWorkspace() {
   safeStorageRemove(localStorage, EXAM_WORKSPACE_KEY);
 }
 
+function normalizeFivePointScore(value) {
+  if (value === null || value === undefined || String(value).trim() === '') return null;
+  const score = Number(value);
+  return Number.isFinite(score) && score >= 0 && score <= 5 ? score : null;
+}
+
 function normalizeRemoteHistoryItem(item) {
   const assessment = item?.assessment && typeof item.assessment === 'object'
     ? item.assessment
     : {};
   const unanswered = item?.status === 'unanswered';
   const submittedAt = item?.submittedAt || item?.completedAt || new Date().toISOString();
+  const score = unanswered ? null : normalizeFivePointScore(item?.score ?? assessment.score);
   return {
     ...assessment,
     id: item?.id || null,
     unanswered,
     status: item?.status || assessment.status || 'completed',
-    score: unanswered ? null : Number(item?.score ?? assessment.score),
+    score,
     maxScore: 5,
     subject: item?.subject || assessment.subject || '',
     qId: item?.questionId || assessment.questionId || '',
@@ -2403,16 +2411,36 @@ function renderMainHistory() {
   main.innerHTML = `
     <div class="panel-title on-navy" style="margin-bottom:16px;">Examinee Performance Archive (${historyLog.length} Evaluations)</div>
     <div style="background:#fbf9f2; border:1px solid var(--ink); padding:12px 20px;">
-      ${historyLog.map(item => `
+      ${historyLog.map(item => {
+        const fivePointScore = item.maxScore === 5 ? normalizeFivePointScore(item.score) : null;
+        const unavailable = item.unanswered || (item.maxScore === 5 && fivePointScore === null);
+        const scoreClass = unavailable
+          ? 'neutral'
+          : item.maxScore === 5
+            ? 'pass'
+            : item.passed ? 'pass' : 'fail';
+        const scoreText = unavailable
+          ? '—/5'
+          : item.maxScore === 5
+            ? `${fivePointScore.toFixed(1)}/5`
+            : escapeHtml(item.score);
+        const recordLabel = item.unanswered
+          ? 'Unanswered Strict Scrutiny expiration'
+          : item.maxScore === 5 && fivePointScore === null
+            ? 'Assessment score unavailable'
+            : item.maxScore === 5
+              ? escapeHtml(item.performanceLabel || 'Five-point assessment')
+              : 'Legacy record';
+        return `
         <div class="hist-row">
-          <div class="hist-score ${item.unanswered ? 'fail' : item.maxScore === 5 ? 'pass' : (item.passed ? 'pass' : 'fail')}">${item.unanswered ? '—/5' : item.maxScore === 5 ? `${Number(item.score).toFixed(1)}/5` : escapeHtml(item.score)}</div>
+          <div class="hist-score ${scoreClass}">${scoreText}</div>
           <div class="hist-meta">
             <div class="hist-subj">${escapeHtml(item.subject)}</div>
-            <div class="hist-q">${escapeHtml(item.qId)} · ${item.unanswered ? 'Unanswered Strict Scrutiny expiration' : item.maxScore === 5 ? escapeHtml(item.performanceLabel || 'Five-point assessment') : 'Legacy record'}</div>
+            <div class="hist-q">${escapeHtml(item.qId)} · ${recordLabel}</div>
           </div>
           <div class="hist-date">${escapeHtml(item.timestamp)}</div>
-        </div>
-      `).join('')}
+        </div>`;
+      }).join('')}
     </div>
   `;
 }
@@ -2582,11 +2610,21 @@ function openAnalytics() {
     openModal('analytics-modal');
     return;
   }
-  const current = list.filter((attempt) => attempt.maxScore === 5 && attempt.rubricVersion === SC_RUBRIC_VERSION);
-  const legacy = list.filter((attempt) => attempt.maxScore !== 5);
+  const current = list.filter((attempt) => (
+    attempt.maxScore === 5
+    && attempt.rubricVersion === SC_RUBRIC_VERSION
+    && normalizeFivePointScore(attempt.score) !== null
+  ));
+  const legacy = list.filter((attempt) => !current.includes(attempt));
   const rows = list.slice(0, 40).map(a => `
     <tr>
-      <td class="sc">${a.unanswered ? '— / 5' : a.maxScore === 5 ? `${Number(a.score).toFixed(1)} / 5` : `${escapeHtml(a.score)} (legacy)`}</td>
+      <td class="sc">${a.unanswered
+        ? '— / 5'
+        : a.maxScore === 5
+          ? normalizeFivePointScore(a.score) === null
+            ? '— / 5'
+            : `${normalizeFivePointScore(a.score).toFixed(1)} / 5`
+          : `${escapeHtml(a.score)} (legacy)`}</td>
       <td>${escapeHtml(a.subject || '')}</td>
       <td>${escapeHtml(a.qId || '')}</td>
       <td>${a.timeSpent != null ? fmtSecs(a.timeSpent) : '—'}</td>

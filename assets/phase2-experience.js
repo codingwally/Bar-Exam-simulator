@@ -964,7 +964,7 @@
   }
 
   function firstPatronWelcome() {
-    if (new URLSearchParams(location.search).has('auth')) return;
+    if (new URLSearchParams(location.search).has('auth')) return Promise.resolve(false);
     const key = 'dd_investor_welcome_seen';
     let seen = false;
     try {
@@ -974,8 +974,14 @@
       seen = true;
     }
     if (!seen && typeof global.openModal === 'function') {
-      setTimeout(() => global.openModal('investor-modal'), 280);
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          global.openModal('investor-modal');
+          resolve(true);
+        }, 280);
+      });
     }
+    return Promise.resolve(false);
   }
 
   async function initialize() {
@@ -1021,8 +1027,8 @@
       else hideNativeView();
     });
     await initializeAuth();
+    await firstPatronWelcome();
     await reconcileGuestAccess({ promptWhenExhausted: true });
-    firstPatronWelcome();
   }
 
   async function beforeGrade() {

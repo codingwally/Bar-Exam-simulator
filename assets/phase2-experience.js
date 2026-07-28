@@ -908,6 +908,7 @@
 
   async function submitPayment(event) {
     event.preventDefault();
+    const form = event.currentTarget;
     const submit = document.getElementById('dd2-payment-submit');
     const proof = document.getElementById('dd2-payment-proof').files?.[0];
     if (!proof) {
@@ -931,7 +932,7 @@
     try {
       const payload = await nativeWorkerRequest('/payments/submit', { body: data });
       setStatus('dd2-payment-status', payload.message, 'success');
-      event.currentTarget.reset();
+      form.reset();
       document.getElementById('dd2-payment-plan').value = payload.payment.planCode;
       document.getElementById('dd2-payment-amount').value = Number(payload.payment.amountPhp).toFixed(2);
       await loadBillingAndAccess();
@@ -1034,6 +1035,7 @@
 
   async function submitPartnership(event) {
     event.preventDefault();
+    const form = event.currentTarget;
     const submit = document.getElementById('dd2-partnership-submit');
     submit.disabled = true;
     setStatus('dd2-partnership-status', 'Sending securely…');
@@ -1049,7 +1051,7 @@
           consent: document.getElementById('dd2-partnership-consent').checked,
         },
       });
-      event.currentTarget.reset();
+      form.reset();
       setStatus('dd2-partnership-status', payload.message, 'success');
     } catch (error) {
       setStatus('dd2-partnership-status', error.message, 'error');

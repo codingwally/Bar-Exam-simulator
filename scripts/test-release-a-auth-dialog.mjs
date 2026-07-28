@@ -57,6 +57,16 @@ assert.match(
   /pendingSubmission|submissionDraft|draft.*sign.?in/is,
   'Safe form drafts must survive a required sign-in redirect.',
 );
+assert.equal(
+  (phase2.match(/dd2-native-close'\)\?\.addEventListener\('click', closeNativeView\)/g) || []).length,
+  1,
+  'The native-view close control must have one stable listener instead of stacking per render.',
+);
+assert.doesNotMatch(
+  phase2,
+  /dd2-native-close'[\s\S]{0,120}\{\s*once:\s*true\s*\}/,
+  'The persistent native-view close control must not consume its listener after one use.',
+);
 assert.match(
   phase4,
   /AUTHENTICATION_REQUIRED/,

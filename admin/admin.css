@@ -96,6 +96,7 @@ tbody tr:hover { background: #fbfcfe; }
 .scenario label, .field { display: grid; gap: .35rem; color: var(--muted); font-size: .7rem; font-weight: 600; }
 .scenario-output { margin-top: 1rem; padding: .8rem; background: var(--soft); font-weight: 700; color: var(--navy); }
 .gate { min-height: 100vh; display: grid; place-content: center; text-align: center; padding: 2rem; background: var(--navy); color: white; }
+.gate[hidden] { display: none; }
 .gate-mark { font-size: 2.4rem; color: var(--gold); }
 .gate h1 { margin: .4rem 0; font-size: clamp(1.7rem, 4vw, 2.5rem); }
 .gate p:not(.eyebrow) { color: #cbd5e1; max-width: 540px; line-height: 1.6; }

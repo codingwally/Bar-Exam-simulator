@@ -12,6 +12,7 @@ const paymentCore = text('worker/payment-core.mjs');
 const frontend = text('assets/phase2-experience.js');
 const publicPage = text('index.html');
 const admin = text('admin/admin.js');
+const adminStyles = text('admin/admin.css');
 const workflow = text('.github/workflows/deploy.yml');
 const productionBundleBuilder = text('scripts/build-phase4-production-bundle.mjs');
 
@@ -100,6 +101,11 @@ assert.match(
 assert.match(admin, /Payment Verification/);
 assert.match(admin, /Refund Requests/);
 assert.match(admin, /Partnership Inquiries/);
+assert.match(
+  adminStyles,
+  /\.gate\[hidden\]\s*\{\s*display:\s*none;\s*\}/,
+  'The authorized dashboard must not remain blocked by its hidden verification gate.',
+);
 assert.doesNotMatch(publicPage, /Angel Investors|Sponsored placement|FGMALLARI|Investor solicitation/i);
 assert.doesNotMatch(publicPage, /content\/question-bank|website-upload\.json/);
 assert.match(workflow, /node scripts\/build-pages-artifact\.mjs/);

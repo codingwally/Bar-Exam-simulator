@@ -109,6 +109,19 @@ assert.match(migration, /forum_posts_no_email_check/);
 assert.match(migration, /forum_comments_no_email_check/);
 assert.match(migration, /forum_reposts_no_email_check/);
 assert.match(migration, /moderation_status = 'visible'/);
+for (const rowVariable of [
+  ['v_post', 'forum_posts'],
+  ['v_comment', 'forum_comments'],
+  ['v_repost', 'forum_reposts'],
+  ['v_report', 'forum_reports'],
+  ['v_restriction', 'forum_user_restrictions'],
+]) {
+  assert.match(
+    migration,
+    new RegExp(`${rowVariable[0]}\\s+public\\.${rowVariable[1]}%rowtype;`),
+    `${rowVariable[0]} must be declared with %rowtype so production validates its composite target`,
+  );
+}
 assert.match(migration, /perform public\.phase4_require_founder/);
 assert.match(migration, /insert into public\.admin_audit_log/);
 assert.match(migration, /'content_management_action'/);

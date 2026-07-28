@@ -613,7 +613,7 @@ as $$
 declare
   v_body text := btrim(coalesce(p_body, ''));
   v_source text := nullif(btrim(coalesce(p_source_url, '')), '');
-  v_post public.forum_posts;
+  v_post public.forum_posts%rowtype;
 begin
   perform public.forum_assert_can_publish(p_user_id);
   if char_length(v_body) not between 1 and 4000 then
@@ -781,7 +781,7 @@ set search_path = public, pg_temp
 as $$
 declare
   v_body text := btrim(coalesce(p_body, ''));
-  v_comment public.forum_comments;
+  v_comment public.forum_comments%rowtype;
 begin
   perform public.forum_assert_can_publish(p_user_id);
   if char_length(v_body) not between 1 and 2000 then
@@ -894,7 +894,7 @@ set search_path = public, pg_temp
 as $$
 declare
   v_commentary text := nullif(btrim(coalesce(p_commentary, '')), '');
-  v_repost public.forum_reposts;
+  v_repost public.forum_reposts%rowtype;
 begin
   perform public.forum_assert_can_publish(p_user_id);
   if v_commentary is not null and char_length(v_commentary) > 1000 then
@@ -973,7 +973,7 @@ declare
   v_type text := lower(btrim(coalesce(p_target_type, '')));
   v_category text := lower(btrim(coalesce(p_category, '')));
   v_explanation text := nullif(btrim(coalesce(p_explanation, '')), '');
-  v_report public.forum_reports;
+  v_report public.forum_reports%rowtype;
 begin
   perform public.forum_assert_member(p_user_id);
   if v_type not in ('post', 'comment')
@@ -1166,10 +1166,10 @@ as $$
 declare
   v_action text := lower(btrim(coalesce(p_action, '')));
   v_reason text := btrim(coalesce(p_reason, ''));
-  v_report public.forum_reports;
+  v_report public.forum_reports%rowtype;
   v_target_user uuid;
   v_target_resource_id uuid;
-  v_restriction public.forum_user_restrictions;
+  v_restriction public.forum_user_restrictions%rowtype;
   v_request_key text := nullif(btrim(coalesce(p_request_key, '')), '');
   v_existing_details jsonb;
 begin

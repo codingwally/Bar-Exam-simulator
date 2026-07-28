@@ -450,8 +450,16 @@ assert.match(experience, /requestGuestAccessStatus/);
 assert.match(experience, /\/guest-access/);
 assert.match(experience, /controller\.abort\(\), 6_000/);
 assert.match(experience, /error\?\.code !== 'INVALID_SESSION'/);
-assert.match(experience, /reconcileGuestAccess\(\{ promptWhenExhausted: true \}\)/);
-assert.match(experience, /if \(access\.exhausted\) return false;/);
+assert.match(
+  experience,
+  /requireSubmissionAuthentication\('grade', \{ questionId \}\)/,
+  'The browser must require sign-in before submitting an examination answer.',
+);
+assert.match(
+  experience,
+  /if \(state\.session\?\.access_token && state\.user\) return true;/,
+  'A verified browser session may proceed to grading.',
+);
 assert.doesNotMatch(
   experience,
   /await firstPatronWelcome\(\)/,
@@ -461,8 +469,8 @@ assert.match(experience, /setOverlay\(false, 'dd2-guest-reminder'\)/);
 assert.match(experience, /showEntry\(\{ completed: true \}\)/);
 assert.match(worker, /pathname === '\/guest-access'/);
 assert.ok(
-  worker.indexOf('reserveGradeAccess(request, env)') < worker.indexOf('callGemini(env'),
-  'The authoritative guest reservation must remain before Gemini',
+  worker.indexOf('requireAuthenticatedSubmission(request, env') < worker.indexOf('callGemini(env'),
+  'Production authentication enforcement must run before Gemini',
 );
 assert.match(worker, /await releaseGradeAccess\(gradeAccess, env\)/);
 assert.match(worker, /if \(authenticatedUser\) \{\s*return \{ signedIn: true/);

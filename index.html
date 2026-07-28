@@ -890,7 +890,7 @@
       <p class="checking-copy">Open your email application to request technical help, report a problem, or send platform feedback.</p>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="btn-close-feedback">Cancel</button>
-        <a class="btn-primary" href="mailto:support@duediligence.ph?subject=Due%20Diligence%20Support%20Request">Email Support</a>
+        <a class="btn-primary" href="#support">Open Co-Counsel</a>
       </div>
     </form>
   </div>
@@ -903,8 +903,8 @@
     <div class="modal-sub">Your bar-prep drill history &amp; ALAC mastery</div>
     <div id="analytics-body"></div>
     <div class="modal-actions" style="margin-top:18px;">
-      <button class="btn-secondary" onclick="exportProgressPDF()">⤓ Export Progress Report (PDF)</button>
-      <button class="btn-primary" onclick="closeModal('analytics-modal')">Done</button>
+      <button type="button" class="btn-secondary" onclick="exportProgressPDF()">⤓ Export Progress Report (PDF)</button>
+      <button type="button" class="btn-primary" onclick="closeModal('analytics-modal')">Done</button>
     </div>
   </div>
 </div>
@@ -931,7 +931,7 @@
     <textarea class="modal-textarea" id="suggest-sources" placeholder="One http:// or https:// URL per line (maximum 5)." style="min-height:86px;"></textarea>
     <div class="suggest-status" id="suggest-status" role="status" aria-live="polite"></div>
     <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeModal('suggest-modal')">Cancel</button>
+      <button type="button" class="btn-secondary" onclick="closeModal('suggest-modal')">Cancel</button>
       <button class="btn-primary" id="suggest-submit" type="button" onclick="submitSuggestion()">Suggest a Correction/Better Answer</button>
     </div>
     <div class="mock-note" style="margin-top:12px;">Question ID and subject are attached automatically. Do not include your exam answer or personal information.</div>
@@ -2575,13 +2575,24 @@ function rateModel(dir) {
     dir === 'up' ? 'ok' : 'warn');
 }
 function openSuggest() {
+  openSuggestWithDraft(null);
+}
+
+function openSuggestWithDraft(restoredDraft) {
   const q = BAR_QUESTIONS[currentSubj][currentIdx];
+  const authDraft = restoredDraft || { questionId: q.id };
+  if (globalThis.DueDiligencePhase2?.requireSubmissionAuthentication
+      && !globalThis.DueDiligencePhase2.requireSubmissionAuthentication('correction', authDraft)) {
+    return;
+  }
   const qid = document.getElementById('suggest-qid');
   if (qid) qid.textContent = `${q.id} · ${q.sourceSubject || q.subject || currentSubj}`;
-  document.getElementById('suggest-type').value = 'suggested_answer';
-  document.getElementById('suggest-text').value = '';
-  document.getElementById('suggest-explanation').value = '';
-  document.getElementById('suggest-sources').value = '';
+  document.getElementById('suggest-type').value = restoredDraft?.correctionType || 'suggested_answer';
+  document.getElementById('suggest-text').value = restoredDraft?.proposedCorrection || '';
+  document.getElementById('suggest-explanation').value = restoredDraft?.explanation || '';
+  document.getElementById('suggest-sources').value = Array.isArray(restoredDraft?.sourceUrls)
+    ? restoredDraft.sourceUrls.join('\n')
+    : '';
   setSuggestStatus('', '');
   const submitButton = document.getElementById('suggest-submit');
   submitButton.disabled = false;
@@ -2620,6 +2631,23 @@ async function submitSuggestion() {
   const q = BAR_QUESTIONS[currentSubj][currentIdx];
   const proposedCorrection = (document.getElementById('suggest-text').value || '').trim();
   const explanation = (document.getElementById('suggest-explanation').value || '').trim();
+  const rawSourceUrls = (document.getElementById('suggest-sources').value || '')
+    .split(/\r?\n/)
+    .map(value => value.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  const submissionDraft = {
+    questionId: q.id,
+    correctionType: document.getElementById('suggest-type').value,
+    proposedCorrection,
+    explanation,
+    sourceUrls: rawSourceUrls,
+  };
+  if (globalThis.DueDiligencePhase2?.requireSubmissionAuthentication
+      && !globalThis.DueDiligencePhase2.requireSubmissionAuthentication('correction', submissionDraft)) {
+    closeModal('suggest-modal', { restoreFocus: false });
+    return;
+  }
   let sourceUrls;
   try {
     if (proposedCorrection.length < 10) {
@@ -2658,7 +2686,20 @@ async function submitSuggestion() {
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
-      throw new Error(payload?.error?.message || 'Suggest a Correction/Better Answer could not be submitted.');
+      const submissionError = new Error(
+        payload?.error?.message || 'Suggest a Correction/Better Answer could not be submitted.',
+      );
+      submissionError.code = payload?.error?.code
+        || (response.status === 401 ? 'AUTHENTICATION_REQUIRED' : 'CORRECTION_FAILED');
+      if (response.status === 401
+          || ['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(submissionError.code)) {
+        await globalThis.DueDiligencePhase2?.handleSubmissionUnauthorized?.(
+          'correction',
+          { ...submissionDraft, sourceUrls },
+        );
+        closeModal('suggest-modal', { restoreFocus: false });
+      }
+      throw submissionError;
     }
 
     setSuggestStatus('Suggest a Correction/Better Answer submitted successfully.', 'success');
@@ -2679,6 +2720,17 @@ async function submitSuggestion() {
     submitButton.textContent = 'Suggest a Correction/Better Answer';
   }
 }
+
+globalThis.addEventListener?.('duediligence:submission-resume', (event) => {
+  const pending = event.detail;
+  if (pending?.view !== 'correction') return;
+  const q = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+  if (!q || (pending.draft?.questionId && pending.draft.questionId !== q.id)) {
+    toast('Signed in. Return to the original question to restore the correction draft.', 'warn');
+    return;
+  }
+  openSuggestWithDraft(pending.draft || null);
+});
 
 /* ---------- Voice-to-text dictation (real, with fallback) ---------- */
 function startDictation() {

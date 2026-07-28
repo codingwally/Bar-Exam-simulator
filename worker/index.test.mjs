@@ -1302,3 +1302,39 @@ test('native partnership endpoint queues a consented inquiry without external re
     globalThis.fetch = originalFetch;
   }
 });
+
+test('production submission enforcement rejects every anonymous user-generated submission before validation', async () => {
+  const originalFetch = globalThis.fetch;
+  let downstreamCalls = 0;
+  globalThis.fetch = async () => {
+    downstreamCalls += 1;
+    throw new Error('Anonymous submissions must not reach a downstream service.');
+  };
+
+  try {
+    for (const path of ['/', '/support', '/partnerships', '/corrections']) {
+      const response = await worker.fetch(new Request(`https://worker.example${path}`, {
+        method: 'POST',
+        headers: {
+          Origin: reliabilityOrigin,
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': `203.0.113.${path.length + 100}`,
+        },
+        body: '{}',
+      }), {
+        ALLOWED_ORIGIN: reliabilityOrigin,
+        REQUIRE_AUTHENTICATED_SUBMISSIONS: 'true',
+        PHASE4_ACCESS_ENFORCEMENT: 'true',
+        SUPABASE_URL: 'https://test.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+      });
+      const payload = await response.json();
+      assert.equal(response.status, 401, `${path} must reject an anonymous request`);
+      assert.equal(payload.error.code, 'AUTHENTICATION_REQUIRED');
+      assert.match(payload.error.message, /sign in/i);
+    }
+    assert.equal(downstreamCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

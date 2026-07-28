@@ -30,7 +30,8 @@ for (const mailbox of [
   assert.match(migration, new RegExp(mailbox.replace('.', '\\.')), `${mailbox} must be used for operational routing.`);
 }
 
-assert.match(experience, /mailto:founders@duediligence\.ph\?subject=Partnership%20Inquiry/);
-assert.match(html, /mailto:support@duediligence\.ph\?subject=Due%20Diligence%20Support%20Request/);
+assert.match(experience, /mailto:invest@duediligence\.ph\?subject=Investment%20Inquiry/);
+assert.match(html, /href="#support">Open Co-Counsel</);
+assert.doesNotMatch(html, /mailto:support@duediligence\.ph/);
 
 console.log('Native support, payment, and partnership route tests passed.');

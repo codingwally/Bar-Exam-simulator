@@ -91,7 +91,7 @@
           <p class="eyebrow">Audited administrator action</p>
           <h2 id="action-title">Confirm action</h2>
         </div>
-        <button class="icon-button" value="cancel" aria-label="Close">×</button>
+        <button class="icon-button" id="action-dialog-close" type="button" aria-label="Close">×</button>
       </header>
       <dl class="action-context" id="action-context" hidden>
         <div><dt>Target student</dt><dd id="action-target">Not available</dd></div>
@@ -108,8 +108,8 @@
         <span>I have verified the target, current access, and proposed change. I understand this action is immediate and audited.</span>
       </label>
       <div class="dialog-actions">
-        <button class="secondary-button" value="cancel">Cancel</button>
-        <button class="primary-button" id="action-confirm" value="default">Confirm audited action</button>
+        <button class="secondary-button" id="action-dialog-cancel" type="button">Cancel</button>
+        <button class="primary-button" id="action-confirm" type="submit" value="default">Confirm audited action</button>
       </div>
     </form>
   </dialog>

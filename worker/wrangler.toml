@@ -13,6 +13,7 @@ ALLOWED_ORIGIN = "https://duediligence.ph"
 ALLOW_LEGACY_GUESTS = "false"
 PHASE4_ACCESS_ENFORCEMENT = "true"
 PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
+REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
 
 [observability]
 enabled = true

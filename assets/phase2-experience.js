@@ -17,10 +17,18 @@
     reminderResolve: null,
     guestUsage: null,
     admin: null,
+    authInFlight: false,
+    authStartedAt: 0,
+    authTimeout: null,
   };
 
   const originalContinueAsGuest = global.continueAsGuest;
   const legalReviewNotice = 'Beta document — prepared for independent legal review.';
+  const authReturnStorageKey = 'duediligence.auth.return.v1';
+  const authAttemptStorageKey = 'duediligence.auth.attempt.v1';
+  const pendingSubmissionStorageKey = 'duediligence.pending-submission.v1';
+  const authTimeoutMs = 12_000;
+  const pendingSubmissionMaxAgeMs = 30 * 60 * 1000;
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, (character) => ({
@@ -229,6 +237,200 @@
     element.className = `dd2-status${kind ? ` is-${kind}` : ''}`;
   }
 
+  function safeSessionRead(key) {
+    try {
+      return sessionStorage.getItem(key) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  function safeSessionWrite(key, value) {
+    try {
+      sessionStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function safeSessionRemove(key) {
+    try {
+      sessionStorage.removeItem(key);
+    } catch {
+      // Session storage is an enhancement, never an authentication dependency.
+    }
+  }
+
+  function resetGoogleSignIn(message = '', kind = '') {
+    if (state.authTimeout) clearTimeout(state.authTimeout);
+    state.authTimeout = null;
+    state.authInFlight = false;
+    state.authStartedAt = 0;
+    const button = document.getElementById('dd2-google-signin');
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Continue with Google';
+    }
+    if (message) setStatus('dd2-auth-status', message, kind);
+  }
+
+  function armAuthTimeout() {
+    if (state.authTimeout) clearTimeout(state.authTimeout);
+    state.authTimeout = setTimeout(() => {
+      if (state.session?.access_token) return;
+      resetGoogleSignIn(
+        'Google sign-in did not complete. You can retry now, or check that pop-ups and redirects are allowed.',
+        'error',
+      );
+    }, authTimeoutMs);
+  }
+
+  function sanitizeSubmissionDraft(view, draft = {}) {
+    const source = draft && typeof draft === 'object' ? draft : {};
+    if (view === 'support') {
+      return {
+        category: String(source.category || 'technical').slice(0, 40),
+        message: String(source.message || '').slice(0, 4000),
+        replyEmail: String(source.replyEmail || '').slice(0, 254),
+      };
+    }
+    if (view === 'partnership') {
+      return {
+        inquiryType: String(source.inquiryType || 'institutional_license').slice(0, 60),
+        contactName: String(source.contactName || '').slice(0, 120),
+        contactEmail: String(source.contactEmail || '').slice(0, 254),
+        organization: String(source.organization || '').slice(0, 180),
+        message: String(source.message || '').slice(0, 5000),
+        consent: source.consent === true,
+      };
+    }
+    if (view === 'correction') {
+      return {
+        questionId: String(source.questionId || '').slice(0, 120),
+        correctionType: String(source.correctionType || 'suggested_answer').slice(0, 40),
+        proposedCorrection: String(source.proposedCorrection || '').slice(0, 6000),
+        explanation: String(source.explanation || '').slice(0, 3000),
+        sourceUrls: Array.isArray(source.sourceUrls)
+          ? source.sourceUrls.slice(0, 5).map((value) => String(value).slice(0, 2000))
+          : [],
+      };
+    }
+    if (view === 'grade') {
+      return { questionId: String(source.questionId || '').slice(0, 120) };
+    }
+    if (view === 'payment') {
+      return { planCode: String(source.planCode || '').slice(0, 80) };
+    }
+    if (view === 'refund') {
+      return {
+        paymentRequestId: String(source.paymentRequestId || '').slice(0, 80),
+        reason: String(source.reason || '').slice(0, 2000),
+      };
+    }
+    return {};
+  }
+
+  function queuePendingSubmission(view, draft = {}) {
+    if (!['support', 'partnership', 'correction', 'grade', 'payment', 'refund'].includes(view)) return;
+    safeSessionWrite(pendingSubmissionStorageKey, JSON.stringify({
+      view,
+      draft: sanitizeSubmissionDraft(view, draft),
+      createdAt: Date.now(),
+    }));
+  }
+
+  function readPendingSubmission() {
+    const raw = safeSessionRead(pendingSubmissionStorageKey);
+    if (!raw) return null;
+    try {
+      const pending = JSON.parse(raw);
+      if (!pending?.view
+          || !Number.isFinite(Number(pending.createdAt))
+          || Date.now() - Number(pending.createdAt) > pendingSubmissionMaxAgeMs) {
+        safeSessionRemove(pendingSubmissionStorageKey);
+        return null;
+      }
+      return {
+        view: pending.view,
+        draft: sanitizeSubmissionDraft(pending.view, pending.draft),
+      };
+    } catch {
+      safeSessionRemove(pendingSubmissionStorageKey);
+      return null;
+    }
+  }
+
+  function requireSubmissionAuthentication(view, draft = {}) {
+    if (state.session?.access_token && state.user) return true;
+    queuePendingSubmission(view, draft);
+    showEntry({
+      message: 'Sign in with Google to submit securely. Your non-sensitive draft will be restored after sign-in.',
+    });
+    return false;
+  }
+
+  function restoreFormValue(id, value, property = 'value') {
+    const element = document.getElementById(id);
+    if (element && value !== undefined && value !== null) element[property] = value;
+  }
+
+  function resumePendingSubmission() {
+    if (!state.session?.access_token || !state.profile?.profile_completed_at) return;
+    const pending = readPendingSubmission();
+    if (!pending) return;
+    safeSessionRemove(pendingSubmissionStorageKey);
+    if (pending.view === 'support') {
+      renderNativeView('support');
+      restoreFormValue('dd2-support-category', pending.draft.category);
+      restoreFormValue('dd2-support-email', pending.draft.replyEmail);
+      restoreFormValue('dd2-support-message', pending.draft.message);
+    } else if (pending.view === 'partnership') {
+      renderNativeView('partnership');
+      restoreFormValue('dd2-partnership-type', pending.draft.inquiryType);
+      restoreFormValue('dd2-partnership-name', pending.draft.contactName);
+      restoreFormValue('dd2-partnership-email', pending.draft.contactEmail);
+      restoreFormValue('dd2-partnership-organization', pending.draft.organization);
+      restoreFormValue('dd2-partnership-message', pending.draft.message);
+      restoreFormValue('dd2-partnership-consent', pending.draft.consent, 'checked');
+    } else if (pending.view === 'payment') {
+      renderNativeView('pricing');
+      global.toast?.('Signed in. Re-select the payment proof file before submitting.', 'warn');
+    } else if (pending.view === 'refund') {
+      renderNativeView('pricing');
+    }
+    global.dispatchEvent(new CustomEvent('duediligence:submission-resume', {
+      detail: pending,
+    }));
+    global.toast?.(
+      pending.view === 'grade'
+        ? 'Signed in. Your saved examination draft is ready when you are.'
+        : 'Signed in. Your saved draft has been restored.',
+      'ok',
+    );
+  }
+
+  async function clearInvalidLocalSession() {
+    try {
+      await state.client?.auth?.signOut?.({ scope: 'local' });
+    } catch {
+      // Local state is cleared below even if the auth client cannot reach the provider.
+    }
+    state.session = null;
+    state.user = null;
+    state.profile = null;
+    state.admin = null;
+    syncAuthUi();
+  }
+
+  async function handleSubmissionUnauthorized(view, draft = {}) {
+    queuePendingSubmission(view, draft);
+    await clearInvalidLocalSession();
+    showEntry({
+      message: 'Your secure session expired. Sign in again and your non-sensitive draft will be restored.',
+    });
+  }
+
   function trapOverlayFocus(event) {
     if (event.key !== 'Tab') return;
     const overlays = Array.from(document.querySelectorAll('.dd2-overlay.is-open'));
@@ -266,7 +468,7 @@
       ? 'Sign in to continue.'
       : 'Your chamber for serious Bar preparation.';
     if (guestButton) guestButton.hidden = completed;
-    setStatus('dd2-auth-status', '');
+    setStatus('dd2-auth-status', options.message || '');
     setOverlay(true, 'dd2-entry-overlay');
   }
 
@@ -275,6 +477,7 @@
   }
 
   async function signInWithGoogle() {
+    if (state.authInFlight) return;
     if (!state.client) {
       setStatus('dd2-auth-status', 'Sign-in is temporarily unavailable. Please try again shortly.', 'error');
       return;
@@ -284,10 +487,17 @@
       return;
     }
     const button = document.getElementById('dd2-google-signin');
-    if (button) button.disabled = true;
+    state.authInFlight = true;
+    state.authStartedAt = Date.now();
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Opening Google securely…';
+    }
     setStatus('dd2-auth-status', 'Opening Google securely…');
+    armAuthTimeout();
     try {
-      sessionStorage.setItem('duediligence.auth.return.v1', location.href);
+      safeSessionWrite(authReturnStorageKey, location.href);
+      safeSessionWrite(authAttemptStorageKey, String(Date.now()));
       const { error } = await state.client.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -297,8 +507,12 @@
       });
       if (error) throw error;
     } catch {
-      setStatus('dd2-auth-status', 'Google sign-in could not start. Please try again.', 'error');
-      if (button) button.disabled = false;
+      resetGoogleSignIn(
+        navigator.onLine
+          ? 'Google sign-in could not start. Please try again.'
+          : 'You appear to be offline. Reconnect and try again.',
+        'error',
+      );
     }
   }
 
@@ -383,6 +597,7 @@
       closeEntry();
       setOverlay(false, 'dd2-onboarding-overlay');
       global.toast?.(`Welcome back, ${profile.display_name || 'future counsel'}.`, 'ok');
+      resumePendingSubmission();
     }
   }
 
@@ -483,10 +698,14 @@
       }
       global.toast?.(`Welcome, ${displayName}.`, 'ok');
       global.DueDiligenceAnalytics?.track('onboarding_completed');
-    } catch {
+      resumePendingSubmission();
+    } catch (error) {
+      const unavailable = /network|fetch|offline/i.test(String(error?.message || ''));
       setStatus(
         'dd2-onboarding-status',
-        'Your profile could not be saved. No protected account fields were changed. Please try again.',
+        unavailable
+          ? 'Your profile could not be saved because the connection was interrupted. Reconnect and try again.'
+          : 'Your profile could not be saved. Your sign-in is still secure; review the fields and try again.',
         'error',
       );
     } finally {
@@ -631,6 +850,14 @@
   }
 
   function supportContent() {
+    if (!state.session?.access_token) {
+      return `
+        <div class="dd2-copy dd2-auth-gate">
+          <p>Co-Counsel requests are attached to a verified account so we can protect your request and reply securely.</p>
+          <button class="dd2-button dd2-button-primary" id="dd2-support-signin" type="button">Sign in to contact Co-Counsel</button>
+          <p class="dd2-form-note">Viewing help information remains public. Sending a request requires sign-in.</p>
+        </div>`;
+    }
     return `
       <div class="dd2-copy">
         <p>Request technical, account, accessibility, or content help without leaving Due Diligence. Do not paste an examination answer here.</p>
@@ -731,6 +958,13 @@
   }
 
   function partnershipContent() {
+    if (!state.session?.access_token) {
+      return `
+        <div class="dd2-copy dd2-auth-gate">
+          <p>Joint Venture inquiries require a verified account to reduce impersonation and protect follow-up correspondence.</p>
+          <button class="dd2-button dd2-button-primary" id="dd2-partnership-signin" type="button">Sign in to send an inquiry</button>
+        </div>`;
+    }
     return `
       <div class="dd2-copy">
         <p>Discuss institutional licensing, academic collaboration, technology, content, or media opportunities without leaving Due Diligence.</p>
@@ -764,7 +998,7 @@
           <div class="dd2-status" id="dd2-partnership-status" role="status" aria-live="polite"></div>
           <button class="dd2-button dd2-button-primary" id="dd2-partnership-submit" type="submit">Send partnership inquiry</button>
         </form>
-        <p>For a direct follow-up, write to <a href="mailto:founders@duediligence.ph?subject=Partnership%20Inquiry">founders@duediligence.ph</a>.</p>
+        <p>For a direct follow-up, write to <a href="mailto:invest@duediligence.ph?subject=Investment%20Inquiry">invest@duediligence.ph</a>.</p>
       </div>`;
   }
 
@@ -815,6 +1049,7 @@
       message: document.getElementById('dd2-support-message').value.trim(),
       replyEmail: document.getElementById('dd2-support-email').value.trim(),
     };
+    if (!requireSubmissionAuthentication('support', payload)) return;
     if (payload.message.length < 20) {
       setStatus('dd2-support-status', 'Describe the issue in at least 20 characters.', 'error');
       return;
@@ -826,18 +1061,11 @@
     submit.disabled = true;
     setStatus('dd2-support-status', 'Sending securely…');
     try {
-      const response = await fetch(`${config.workerUrl}/support`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(state.session?.access_token ? { Authorization: `Bearer ${state.session.access_token}` } : {}),
-        },
-        body: JSON.stringify(payload),
+      await nativeWorkerRequest('/support', {
+        body: payload,
+        submissionView: 'support',
+        submissionDraft: payload,
       });
-      const body = await response.json().catch(() => null);
-      if (!response.ok || !body?.ok) {
-        throw new Error(body?.error?.message || 'Your support request could not be submitted.');
-      }
       document.getElementById('dd2-support-form').reset();
       setStatus('dd2-support-status', 'Your support request was received.', 'success');
       global.DueDiligenceAnalytics?.track('support_submitted', {
@@ -858,8 +1086,11 @@
         ? { Authorization: `Bearer ${state.session.access_token}` }
         : {}),
     };
-    if (options.authRequired !== false && !state.session?.access_token) {
-      showEntry();
+    if (!state.session?.access_token || !state.user) {
+      requireSubmissionAuthentication(
+        options.submissionView || 'account',
+        options.submissionDraft || {},
+      );
       throw new Error('Sign in with Google to continue.');
     }
     const response = await fetch(`${config.workerUrl}${path}`, {
@@ -869,7 +1100,17 @@
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
-      throw new Error(payload?.error?.message || 'The request could not be completed.');
+      const error = new Error(payload?.error?.message || 'The request could not be completed.');
+      error.code = payload?.error?.code
+        || (response.status === 401 ? 'AUTHENTICATION_REQUIRED' : 'REQUEST_FAILED');
+      if (response.status === 401
+          || ['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(error.code)) {
+        await handleSubmissionUnauthorized(
+          options.submissionView || 'account',
+          options.submissionDraft || {},
+        );
+      }
+      throw error;
     }
     return payload;
   }
@@ -930,7 +1171,11 @@
     submit.disabled = true;
     setStatus('dd2-payment-status', 'Encrypting and submitting proof for Founder review…');
     try {
-      const payload = await nativeWorkerRequest('/payments/submit', { body: data });
+      const payload = await nativeWorkerRequest('/payments/submit', {
+        body: data,
+        submissionView: 'payment',
+        submissionDraft: { planCode: document.getElementById('dd2-payment-plan').value },
+      });
       setStatus('dd2-payment-status', payload.message, 'success');
       form.reset();
       document.getElementById('dd2-payment-plan').value = payload.payment.planCode;
@@ -1015,14 +1260,18 @@
   async function submitRefund(event) {
     event.preventDefault();
     const submit = document.getElementById('dd2-refund-submit');
+    const draft = {
+      paymentRequestId: document.getElementById('dd2-refund-payment').value,
+      reason: document.getElementById('dd2-refund-reason').value.trim(),
+    };
+    if (!requireSubmissionAuthentication('refund', draft)) return;
     submit.disabled = true;
     setStatus('dd2-refund-status', 'Submitting refund request…');
     try {
       const payload = await nativeWorkerRequest('/refunds/submit', {
-        body: {
-          paymentRequestId: document.getElementById('dd2-refund-payment').value,
-          reason: document.getElementById('dd2-refund-reason').value.trim(),
-        },
+        body: draft,
+        submissionView: 'refund',
+        submissionDraft: draft,
       });
       setStatus('dd2-refund-status', payload.message, 'success');
       document.getElementById('dd2-refund-reason').value = '';
@@ -1037,19 +1286,22 @@
     event.preventDefault();
     const form = event.currentTarget;
     const submit = document.getElementById('dd2-partnership-submit');
+    const draft = {
+      inquiryType: document.getElementById('dd2-partnership-type').value,
+      contactName: document.getElementById('dd2-partnership-name').value.trim(),
+      contactEmail: document.getElementById('dd2-partnership-email').value.trim(),
+      organization: document.getElementById('dd2-partnership-organization').value.trim(),
+      message: document.getElementById('dd2-partnership-message').value.trim(),
+      consent: document.getElementById('dd2-partnership-consent').checked,
+    };
+    if (!requireSubmissionAuthentication('partnership', draft)) return;
     submit.disabled = true;
     setStatus('dd2-partnership-status', 'Sending securely…');
     try {
       const payload = await nativeWorkerRequest('/partnerships', {
-        authRequired: false,
-        body: {
-          inquiryType: document.getElementById('dd2-partnership-type').value,
-          contactName: document.getElementById('dd2-partnership-name').value.trim(),
-          contactEmail: document.getElementById('dd2-partnership-email').value.trim(),
-          organization: document.getElementById('dd2-partnership-organization').value.trim(),
-          message: document.getElementById('dd2-partnership-message').value.trim(),
-          consent: document.getElementById('dd2-partnership-consent').checked,
-        },
+        body: draft,
+        submissionView: 'partnership',
+        submissionDraft: draft,
       });
       form.reset();
       setStatus('dd2-partnership-status', payload.message, 'success');
@@ -1134,6 +1386,12 @@
       hideNativeView();
       showEntry();
     });
+    document.getElementById('dd2-support-signin')?.addEventListener('click', () => {
+      requireSubmissionAuthentication('support');
+    });
+    document.getElementById('dd2-partnership-signin')?.addEventListener('click', () => {
+      requireSubmissionAuthentication('partnership');
+    });
     if (view === 'account') {
       document.getElementById('dd2-account-enrollment')?.addEventListener('change', () => {
         const enrolled = document.getElementById('dd2-account-enrollment').value === 'enrolled';
@@ -1206,8 +1464,8 @@
         },
       },
     );
-    const { data } = await state.client.auth.getSession();
-    state.session = data?.session || null;
+    const { data, error: sessionError } = await state.client.auth.getSession();
+    state.session = sessionError ? null : data?.session || null;
     state.user = state.session?.user || null;
     syncAuthUi();
     global.dispatchEvent(new CustomEvent('duediligence:session', {
@@ -1217,10 +1475,22 @@
       },
     }));
     if (state.user) closeEntry();
+    if (state.session?.access_token) {
+      safeSessionRemove(authAttemptStorageKey);
+      resetGoogleSignIn();
+    } else if (new URLSearchParams(location.search).has('error')) {
+      resetGoogleSignIn('Google sign-in was not completed. You can try again now.', 'error');
+    }
 
     state.client.auth.onAuthStateChange((event, session) => {
       state.session = session || null;
       state.user = session?.user || null;
+      if (session?.access_token) {
+        safeSessionRemove(authAttemptStorageKey);
+        resetGoogleSignIn();
+      } else if (event === 'SIGNED_OUT') {
+        resetGoogleSignIn();
+      }
       syncAuthUi();
       global.dispatchEvent(new CustomEvent('duediligence:session', {
         detail: {
@@ -1242,8 +1512,36 @@
     });
 
     if (state.user) await loadUserState();
-    if (new URLSearchParams(location.search).has('auth')) {
+    if (new URLSearchParams(location.search).has('auth')
+        || new URLSearchParams(location.search).has('code')
+        || new URLSearchParams(location.search).has('error')) {
       history.replaceState({}, '', `${location.pathname}${location.hash || ''}`);
+    }
+  }
+
+  async function recoverAuthAfterNavigation() {
+    if (!state.client) {
+      resetGoogleSignIn();
+      return;
+    }
+    try {
+      const { data } = await state.client.auth.getSession();
+      if (data?.session?.access_token) {
+        state.session = data.session;
+        state.user = data.session.user || null;
+        safeSessionRemove(authAttemptStorageKey);
+        resetGoogleSignIn();
+        syncAuthUi();
+        return;
+      }
+    } catch {
+      // The retry control is restored below.
+    }
+    if (safeSessionRead(authAttemptStorageKey) || state.authInFlight) {
+      safeSessionRemove(authAttemptStorageKey);
+      resetGoogleSignIn('Google sign-in was not completed. You can try again now.', 'error');
+    } else {
+      resetGoogleSignIn();
     }
   }
 
@@ -1324,6 +1622,9 @@
     document.getElementById('dd2-guest-continue')?.addEventListener('click', continueGuestFromEntry);
     document.getElementById('dd2-onboarding-form')?.addEventListener('submit', submitOnboarding);
     document.getElementById('dd2-enrollment-status')?.addEventListener('change', updateEnrollmentFields);
+    document.getElementById('dd2-native-view')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget && state.nativeView) closeNativeView();
+    });
     document.getElementById('dd2-reminder-continue')?.addEventListener('click', () => {
       try {
         localStorage.setItem(config.guest.reminderStorageKey, 'shown');
@@ -1356,35 +1657,34 @@
       if (nativeDefinition(hashView)) renderNativeView(hashView, { push: false });
       else hideNativeView();
     });
+    global.addEventListener('pageshow', recoverAuthAfterNavigation);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible'
+          && state.authInFlight
+          && Date.now() - state.authStartedAt > 1_000) {
+        recoverAuthAfterNavigation();
+      }
+    });
     await initializeAuth();
     if (!state.user) syncAuthUi();
   }
 
   async function beforeGrade() {
-    const access = await reconcileGuestAccess({ promptWhenExhausted: true });
-    if (access.signedIn) return true;
-    if (access.exhausted) return false;
-    let shown = false;
-    try {
-      shown = localStorage.getItem(config.guest.reminderStorageKey) === 'shown';
-    } catch {
-      shown = false;
-    }
-    if (shown) return true;
-    setOverlay(true, 'dd2-guest-reminder');
-    return new Promise((resolve) => {
-      state.reminderResolve = resolve;
-    });
+    if (state.session?.access_token && state.user) return true;
+    const questionId = typeof currentSubj !== 'undefined'
+      && typeof currentIdx !== 'undefined'
+      && typeof BAR_QUESTIONS !== 'undefined'
+      ? BAR_QUESTIONS?.[currentSubj]?.[currentIdx]?.id || ''
+      : '';
+    requireSubmissionAuthentication('grade', { questionId });
+    return false;
   }
 
   function gradingHeaders() {
     if (state.session?.access_token) {
       return { Authorization: `Bearer ${state.session.access_token}` };
     }
-    return {
-      'X-Guest-Device-ID': guestDeviceId(),
-      'X-Request-ID': randomId(18),
-    };
+    return { 'X-Request-ID': randomId(18) };
   }
 
   function afterGrade(access) {
@@ -1402,10 +1702,18 @@
   }
 
   function handleGradeError(error) {
-    if (error?.code !== 'GUEST_LIMIT_REACHED') return false;
+    if (!['GUEST_LIMIT_REACHED', 'AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(error?.code)) {
+      return false;
+    }
     if (typeof examStage !== 'undefined') examStage = 'answering';
     global.closeModal?.('checking-modal', { restoreFocus: false });
-    requireSignInForGuestLimit();
+    if (error?.code === 'GUEST_LIMIT_REACHED') requireSignInForGuestLimit();
+    else handleSubmissionUnauthorized('grade', {
+      questionId: typeof currentSubj !== 'undefined' && typeof currentIdx !== 'undefined'
+        && typeof BAR_QUESTIONS !== 'undefined'
+        ? BAR_QUESTIONS?.[currentSubj]?.[currentIdx]?.id || ''
+        : '',
+    });
     return true;
   }
 
@@ -1417,6 +1725,8 @@
     handleGradeError,
     openView: renderNativeView,
     openSignIn: showEntry,
+    requireSubmissionAuthentication,
+    handleSubmissionUnauthorized,
     getSession: () => state.session,
     config,
   });

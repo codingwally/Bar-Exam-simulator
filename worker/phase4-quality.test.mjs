@@ -127,7 +127,7 @@ test('Phase 4 grading preserves decimal score, rich ALAC, and trusted sources tr
         replayed: false,
       });
     }
-    if (target.endsWith('/rest/v1/rpc/phase4_prepare_exam_attempt')) {
+    if (target.endsWith('/rest/v1/rpc/phase4_prepare_exam_attempt_v2')) {
       const body = JSON.parse(init.body);
       assert.equal(body.p_answer_text, laborRow['Suggested Answer']);
       operations.push('preserve');
@@ -184,7 +184,7 @@ test('an incomplete model answer receives exactly one controlled repair call', a
         replayed: false,
       });
     }
-    if (target.endsWith('/rest/v1/rpc/phase4_prepare_exam_attempt')) {
+    if (target.endsWith('/rest/v1/rpc/phase4_prepare_exam_attempt_v2')) {
       return Response.json({ attemptId, status: 'grading' });
     }
     if (target.endsWith('/rest/v1/rpc/phase4_finalize_exam_grade')) {
@@ -243,7 +243,7 @@ test('provider capacity preserves the answer, releases the grade, and returns co
         replayed: false,
       });
     }
-    if (target.endsWith('/rest/v1/rpc/phase4_prepare_exam_attempt')) {
+    if (target.endsWith('/rest/v1/rpc/phase4_prepare_exam_attempt_v2')) {
       operations.push('preserve');
       return Response.json({ attemptId, status: 'grading' });
     }

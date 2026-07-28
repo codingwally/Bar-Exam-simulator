@@ -105,6 +105,18 @@ export function selectProtectedQuestion(records, options = {}) {
       : [],
   );
   const questions = protectedQuestionInventory(records)[subject];
+  const requestedQuestionId = clean(options.questionId);
+  if (requestedQuestionId) {
+    const exact = questions.find((question) => question.id === requestedQuestionId);
+    if (!exact) {
+      throw new AccessValidationError(
+        'QUESTION_NOT_FOUND',
+        'The protected question could not be restored.',
+        404,
+      );
+    }
+    return exact;
+  }
   const candidates = questions.filter((question) => !excluded.has(question.id));
   const pool = candidates.length ? candidates : questions;
   const random = typeof options.random === 'function' ? options.random : Math.random;

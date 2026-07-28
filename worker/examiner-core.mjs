@@ -68,7 +68,30 @@ export function normalizeRequest(payload) {
       }
     : null;
 
-  return { questionId, studentAnswer, questionContext: context };
+  const rawSession = payload.session && typeof payload.session === 'object'
+    ? payload.session
+    : {};
+  const mode = ['strict', 'selfPaced', 'none'].includes(rawSession.mode)
+    ? rawSession.mode
+    : 'none';
+  const elapsedSeconds = Math.floor(Number(rawSession.elapsedSeconds) || 0);
+  const submissionReason = rawSession.submissionReason === 'strict_expiry'
+    ? 'strict_expiry'
+    : 'manual';
+  const expired = rawSession.expired === true;
+  if (elapsedSeconds < 0 || elapsedSeconds > 86_400) {
+    throw new ExaminerError('INVALID_TIMER_STATE', 'The timer state is invalid.');
+  }
+  if (submissionReason === 'strict_expiry' && (mode !== 'strict' || !expired)) {
+    throw new ExaminerError('INVALID_TIMER_STATE', 'The expiration state is invalid.');
+  }
+
+  return {
+    questionId,
+    studentAnswer,
+    questionContext: context,
+    session: { mode, elapsedSeconds, submissionReason, expired },
+  };
 }
 
 export function parseCsv(csvText) {

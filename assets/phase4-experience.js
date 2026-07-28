@@ -29,7 +29,9 @@
     return {
       Authorization: `Bearer ${active.access_token}`,
       ...(options.json === false ? {} : { 'Content-Type': 'application/json' }),
-      ...(options.requestId === false ? {} : { 'X-Request-ID': randomId(18) }),
+      ...(options.requestId === false
+        ? {}
+        : { 'X-Request-ID': options.requestIdValue || randomId(18) }),
     };
   }
 
@@ -93,6 +95,8 @@
       const error = new Error(payload?.error?.message || 'The request could not be completed.');
       error.code = payload?.error?.code || 'REQUEST_FAILED';
       error.status = response.status;
+      error.pendingAttemptId = payload?.error?.pendingAttemptId || null;
+      error.retryAfterHours = Number(payload?.error?.retryAfterHours) || null;
       throw error;
     }
     return payload;
@@ -134,15 +138,16 @@
     }
   }
 
-  function gradingHeaders() {
-    return authenticatedHeaders() || {};
+  function gradingHeaders(requestId = null) {
+    return authenticatedHeaders({ requestIdValue: requestId || undefined }) || {};
   }
 
-  async function loadProtectedQuestion(subject, excludeQuestionIds = []) {
+  async function loadProtectedQuestion(subject, excludeQuestionIds = [], questionId = null) {
     if (!requireAuthentication()) return null;
     const payload = await request('/exam/question', {
       body: {
         subject,
+        questionId,
         excludeQuestionIds,
         requestId: randomId(18),
       },
@@ -162,6 +167,25 @@
       verified: false,
       protected: true,
     };
+  }
+
+  async function recordUnanswered(question, elapsedSeconds, requestId) {
+    return request('/exam/unanswered', {
+      body: {
+        questionId: question.id,
+        subject: question.subject,
+        elapsedSeconds,
+        requestId,
+      },
+    });
+  }
+
+  async function loadHistory(limit = 100, offset = 0) {
+    const payload = await request('/exam/history', {
+      body: { limit, offset },
+      requestId: false,
+    });
+    return Array.isArray(payload.history?.items) ? payload.history.items : [];
   }
 
   function afterGrade(accessPayload) {
@@ -199,6 +223,8 @@
     afterGrade,
     handleGradeError,
     loadProtectedQuestion,
+    recordUnanswered,
+    loadHistory,
     refreshAccess,
     requireAuthentication,
     getAccess: () => state.access,

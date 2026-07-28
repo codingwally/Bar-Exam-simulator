@@ -54,6 +54,9 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
     BAR_QUESTIONS: { 'Political Law': [{ id: 'POL-2024-Q01' }] },
     localStorage: {},
     safeStorageSet() { return true; },
+    newAttemptKey() { return 'release3-attempt-key'; },
+    persistWorkspace() {},
+    currentAttemptKey: null,
     closeModal(id) { calls.push(['close', id]); },
     setWorkspaceLocked(value) { calls.push(['locked', value]); },
     renderMainWrite() { calls.push(['render']); },
@@ -233,6 +236,13 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
     userAnswers: {
       'Political Law-0': 'Original answer with legal basis and application.',
     },
+    localStorage: {},
+    crypto: { randomUUID() { return '00000000-0000-4000-8000-000000000001'; } },
+    safeStorageGet() { return null; },
+    safeStorageSet() { return true; },
+    sessionController: {
+      snapshot() { return { questionElapsedSeconds: 12 }; },
+    },
     window: {
       DueDiligencePhase2: {
         beforeGrade() {
@@ -250,7 +260,7 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
     },
   };
   vm.runInNewContext(
-    between(index, 'async function evaluateAnswer()', 'function renderResultHTML(key)'),
+    between(index, 'async function evaluateAnswer(options = {})', 'function renderResultHTML(key)'),
     context,
   );
   const firstAttempt = context.evaluateAnswer();
@@ -279,6 +289,13 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
       'Political Law': [{ id: 'POL-2024-Q01', text: 'Question' }],
     },
     userAnswers: { 'Political Law-0': answer },
+    localStorage: {},
+    crypto: { randomUUID() { return '00000000-0000-4000-8000-000000000002'; } },
+    safeStorageGet() { return null; },
+    safeStorageSet() { return true; },
+    sessionController: {
+      snapshot() { return { questionElapsedSeconds: 12 }; },
+    },
     window: {
       DueDiligencePhase2: {
         async beforeGrade() { return false; },
@@ -290,7 +307,7 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
     fetch() { fetchCalls += 1; },
   };
   vm.runInNewContext(
-    between(index, 'async function evaluateAnswer()', 'function renderResultHTML(key)'),
+    between(index, 'async function evaluateAnswer(options = {})', 'function renderResultHTML(key)'),
     context,
   );
   await context.evaluateAnswer();
@@ -479,10 +496,10 @@ assert.match(experience, /controller\.abort\(\), 6_000/);
 assert.match(experience, /error\?\.code !== 'INVALID_SESSION'/);
 assert.match(experience, /reconcileGuestAccess\(\{ promptWhenExhausted: true \}\)/);
 assert.match(experience, /if \(access\.exhausted\) return false;/);
-assert.match(
+assert.doesNotMatch(
   experience,
-  /await firstPatronWelcome\(\);\s*await reconcileGuestAccess\(\{ promptWhenExhausted: true \}\)/,
-  'First-load Patron welcome must open before an exhausted-guest sign-in gate',
+  /await firstPatronWelcome\(\)/,
+  'The retired Patron welcome must not interrupt authentication or practice',
 );
 assert.match(experience, /setOverlay\(false, 'dd2-guest-reminder'\)/);
 assert.match(experience, /showEntry\(\{ completed: true \}\)/);

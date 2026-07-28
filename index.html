@@ -238,6 +238,27 @@
   .timer-limit{font-family:var(--mono);font-size:10.5px;color:rgba(233,226,207,.7);margin-left:auto;}
   .timer-bar.warn{border-color:rgba(197,45,60,.6);}
   .timer-bar.warn #timer-display{color:#ff9d9d;}
+  .exam-control-bar{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;
+    padding:14px 16px;margin-bottom:22px;border:1px solid rgba(197,160,89,.32);
+    border-radius:14px;background:var(--navy-grad);box-shadow:var(--shadow);
+  }
+  .exam-mode-switcher{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+  .exam-mode-label{margin-right:5px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.35px;text-transform:uppercase;color:var(--gold);}
+  .exam-mode-button{
+    padding:9px 11px;border:1px solid rgba(241,245,249,.2);border-radius:9px;
+    background:rgba(255,255,255,.05);color:#dbe5f2;cursor:pointer;
+    font-family:var(--sans);font-size:11px;font-weight:700;line-height:1.15;
+  }
+  .exam-mode-button:hover,.exam-mode-button:focus-visible{border-color:var(--gold);outline:none;}
+  .exam-mode-button.active{border-color:var(--gold);background:rgba(197,160,89,.18);color:#fff4ce;}
+  .exam-clock{display:flex;align-items:center;gap:12px;min-width:245px;justify-content:flex-end;}
+  .exam-clock-copy{display:flex;flex-direction:column;gap:3px;text-align:right;}
+  .exam-clock-title{font-family:var(--mono);font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--gold);}
+  .exam-clock-note{font-family:var(--sans);font-size:10px;color:#cbd5e1;}
+  .exam-clock #timer-display{min-width:76px;text-align:right;}
+  .exam-clock.no-digits{min-width:250px;}
+  .exam-clock.no-digits .exam-clock-copy{text-align:left;}
 
   /* ---------------- Primary CTA ---------------- */
   .btn-primary{
@@ -741,6 +762,12 @@
     .subject-choice-grid,.session-mode-grid{grid-template-columns:1fr;}
     .session-mode-option{min-height:0;}
     .signin-prompt-actions{grid-template-columns:1fr;}
+    .exam-control-bar{grid-template-columns:1fr;gap:12px;}
+    .exam-mode-switcher{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));}
+    .exam-mode-label{grid-column:1/-1;}
+    .exam-mode-button{padding:9px 7px;font-size:10px;}
+    .exam-clock,.exam-clock.no-digits{min-width:0;justify-content:space-between;border-top:1px solid rgba(241,245,249,.12);padding-top:11px;}
+    .exam-clock-copy,.exam-clock.no-digits .exam-clock-copy{text-align:left;}
   }
 </style>
 <link rel="stylesheet" href="assets/phase2.css">
@@ -964,7 +991,7 @@
       <button type="button" class="session-mode-option" id="mode-timed" onclick="chooseSessionMode('strict')">
         <strong>Strict Scrutiny</strong>
         <span>Bar Simulation</span>
-        <p>12 minutes per question. Automatically proceeds when time expires.</p>
+        <p>12 minutes per question. At zero, the current answer is submitted and the result remains on screen.</p>
       </button>
       <button type="button" class="session-mode-option" id="mode-self-paced" onclick="chooseSessionMode('selfPaced')">
         <strong>Quantum Meruit</strong>
@@ -1627,15 +1654,23 @@ let questionStartTs = null;
 let examMode = "none";
 let elapsed = 0;
 let currentQuestionIndex = 0;
+let currentAttemptKey = null;
+let workspaceRestoreInProgress = false;
+let workspaceRestoreCompletedForUser = null;
+let remoteHistoryLoadedForUser = null;
+let examPausedForPage = false;
 const PER_Q_SECONDS = 720;
 const TERMS_ACCEPTANCE_KEY = "duediligence.terms.accepted.v1";
 const GUEST_PROMPT_SESSION_KEY = "duediligence.guest.prompt.dismissed.v1";
 const DRAFTS_KEY = "duediligence.answer.drafts.v1";
+const EXAM_WORKSPACE_KEY = "duediligence.exam.workspace.v2";
 const EXAMINER_WORKER_URL = 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev';
 const SC_RUBRIC_VERSION = 'SC-2025-BB4-PER-QUESTION-v1';
 const SC_2025_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/08/2025-Bar-Bar-Bulletin-No.-4-August-8-2025-Approved.pdf';
 const SC_2026_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/10/2026-BAR-Bar-Bulletin-No.-1-October-16-2025.pdf';
 const sessionController = DueDiligenceExamSession.createExamSessionController({
+  storage: localStorage,
+  storageKey: 'duediligence.exam.timer.v2',
   onTick: (state) => {
     timeLeft = state.remainingSeconds;
     elapsed = state.questionElapsedSeconds;
@@ -1651,7 +1686,7 @@ async function init() {
   setupEventListeners();
   await loadWebsiteQuestionBank();
   renderSubjectSelection();
-  showWelcome();
+  showWelcome({ preserveSession: Boolean(readPersistedWorkspace()) });
 }
 
 async function loadWebsiteQuestionBank() {
@@ -1674,7 +1709,7 @@ function updateTimerDisplay(timerState = sessionController.snapshot()) {
     const s = remaining % 60;
     disp.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     if (bar) {
-      bar.classList.toggle('warning-soft', remaining <= 120 && remaining > 30);
+      bar.classList.toggle('warning-soft', remaining <= 60 && remaining > 30);
       bar.classList.toggle('warning-strong', remaining <= 30);
     }
   } else if (selectedSessionMode === 'selfPaced') {
@@ -1686,11 +1721,73 @@ function updateTimerDisplay(timerState = sessionController.snapshot()) {
   }
 }
 
-function onTimeUp() {
+async function onTimeUp() {
   if (selectedSessionMode !== 'strict' || examStage !== 'answering') return;
   if (!sessionController.markAutomaticAdvanceHandled()) return;
   saveDraftForCurrentQuestion();
-  transitionQuestion(currentIdx + 1, { automatic: true });
+  const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+  if (!question) return;
+  const key = `${currentSubj}-${currentIdx}`;
+  const studentAnswer = (userAnswers[key] || '').trim();
+  const timerState = sessionController.snapshot();
+
+  if (studentAnswer) {
+    await evaluateAnswer({
+      submissionReason: 'strict_expiry',
+      expired: true,
+    });
+    return;
+  }
+
+  gradingInProgress = true;
+  examStage = 'evaluating';
+  showCheckingModal();
+  try {
+    const requestStorageKey = `duediligence.strict-expiry.${currentAttemptKey || question.id}`;
+    let requestId = safeStorageGet(localStorage, requestStorageKey);
+    if (!requestId) {
+      requestId = `strict_expiry_${crypto.randomUUID().replace(/-/g, '')}`;
+      safeStorageSet(localStorage, requestStorageKey, requestId);
+    }
+    const payload = await window.DueDiligencePhase4.recordUnanswered(
+      question,
+      Math.max(PER_Q_SECONDS, timerState.questionElapsedSeconds),
+      requestId,
+    );
+    const resultObj = {
+      id: payload.attempt?.id,
+      unanswered: true,
+      status: 'unanswered',
+      score: null,
+      maxScore: 5,
+      timestamp: new Date().toLocaleString(),
+      gradedAt: null,
+      subject: currentSubj,
+      qId: question.id,
+      questionText: question.text,
+      studentAnswer: '',
+      timerMode: 'strict',
+      timeSpent: Math.max(PER_Q_SECONDS, timerState.questionElapsedSeconds),
+      submissionReason: 'strict_expiry',
+      expired: true,
+      historyVersion: 3,
+    };
+    submissionResults[key] = resultObj;
+    historyLog.unshift(resultObj);
+    resultObj.historySaved = logAttempt(resultObj);
+    examStage = 'reviewing';
+    sessionController.stop({ reset: false });
+    clearPersistedWorkspace();
+    closeCheckingModal();
+    renderMainWrite();
+    setQuestionControlsDisabled(true);
+    document.getElementById('evaluation-result-area')?.scrollIntoView({ behavior: 'smooth' });
+  } catch (error) {
+    examStage = 'answering';
+    showCheckingError(error.message || 'The unanswered expiration could not be recorded.');
+  } finally {
+    gradingInProgress = false;
+  }
 }
 
 function safeStorageGet(storage, key) {
@@ -1700,6 +1797,159 @@ function safeStorageGet(storage, key) {
 function safeStorageSet(storage, key, value) {
   try { storage.setItem(key, value); return true; } catch (error) { return false; }
 }
+
+function safeStorageRemove(storage, key) {
+  try { storage.removeItem(key); return true; } catch (error) { return false; }
+}
+
+function newAttemptKey() {
+  if (crypto?.randomUUID) return crypto.randomUUID().replace(/-/g, '');
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+}
+
+function readPersistedWorkspace() {
+  try {
+    const saved = JSON.parse(safeStorageGet(localStorage, EXAM_WORKSPACE_KEY) || 'null');
+    if (
+      saved?.version !== 2
+      || !SUBJECTS.includes(saved.subject)
+      || !/^[A-Z]{2,8}-(?:\d{3}|\d{4}-Q\d{1,3})$/i.test(String(saved.questionId || ''))
+      || !['strict', 'selfPaced', 'none'].includes(saved.mode)
+      || typeof saved.draft !== 'string'
+      || saved.draft.length > 12000
+      || Date.now() - Number(saved.savedAt || 0) > 7 * 24 * 60 * 60 * 1000
+    ) return null;
+    return saved;
+  } catch (error) {
+    return null;
+  }
+}
+
+function persistWorkspace() {
+  const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+  if (!question || !selectedSessionMode || !['answering', 'evaluating'].includes(examStage)) return;
+  if (!currentAttemptKey) currentAttemptKey = newAttemptKey();
+  safeStorageSet(localStorage, EXAM_WORKSPACE_KEY, JSON.stringify({
+    version: 2,
+    subject: currentSubj,
+    questionId: question.id,
+    mode: selectedSessionMode,
+    draft: userAnswers[`${currentSubj}-${currentIdx}`] || '',
+    attemptKey: currentAttemptKey,
+    savedAt: Date.now(),
+  }));
+}
+
+function clearPersistedWorkspace() {
+  safeStorageRemove(localStorage, EXAM_WORKSPACE_KEY);
+}
+
+function normalizeRemoteHistoryItem(item) {
+  const assessment = item?.assessment && typeof item.assessment === 'object'
+    ? item.assessment
+    : {};
+  const unanswered = item?.status === 'unanswered';
+  const submittedAt = item?.submittedAt || item?.completedAt || new Date().toISOString();
+  return {
+    ...assessment,
+    id: item?.id || null,
+    unanswered,
+    status: item?.status || assessment.status || 'completed',
+    score: unanswered ? null : Number(item?.score ?? assessment.score),
+    maxScore: 5,
+    subject: item?.subject || assessment.subject || '',
+    qId: item?.questionId || assessment.questionId || '',
+    studentAnswer: item?.answerText || '',
+    timerMode: item?.timerMode || 'none',
+    timeSpent: Number(item?.elapsedSeconds) || 0,
+    submissionReason: item?.submissionReason || 'manual',
+    expired: item?.expired === true,
+    gradedAt: item?.completedAt || assessment.gradedAt || null,
+    timestamp: new Date(submittedAt).toLocaleString(),
+    historyVersion: 3,
+    historySaved: true,
+  };
+}
+
+async function syncRemoteExamHistory(userId) {
+  if (!userId || remoteHistoryLoadedForUser === userId || !window.DueDiligencePhase4?.loadHistory) return;
+  remoteHistoryLoadedForUser = userId;
+  try {
+    const remote = (await window.DueDiligencePhase4.loadHistory(200, 0)).map(normalizeRemoteHistoryItem);
+    const combined = [...remote, ...loadAttempts()];
+    const seen = new Set();
+    historyLog = combined.filter((item) => {
+      const identity = item.id
+        ? `id:${item.id}`
+        : `legacy:${item.qId || ''}:${item.gradedAt || item.timestamp || ''}:${item.score ?? 'unanswered'}`;
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      return true;
+    }).slice(0, 500);
+    safeStorageSet(localStorage, LS_KEY, JSON.stringify(historyLog));
+  } catch (error) {
+    remoteHistoryLoadedForUser = null;
+    console.warn('Cross-device history could not be synchronized.', { code: error?.code || 'HISTORY_UNAVAILABLE' });
+  }
+}
+
+async function restorePersistedWorkspace(userId) {
+  if (
+    !userId
+    || workspaceRestoreInProgress
+    || workspaceRestoreCompletedForUser === userId
+    || examStage === 'answering'
+  ) return;
+  workspaceRestoreCompletedForUser = userId;
+  const saved = readPersistedWorkspace();
+  if (!saved) return;
+  workspaceRestoreInProgress = true;
+  try {
+    const question = await window.DueDiligencePhase4.loadProtectedQuestion(
+      saved.subject,
+      [],
+      saved.questionId,
+    );
+    if (!question || question.id !== saved.questionId) throw new Error('The saved question is no longer available.');
+    currentSubj = saved.subject;
+    BAR_QUESTIONS[currentSubj] = [question];
+    currentIdx = 0;
+    currentQuestionIndex = 0;
+    currentAttemptKey = saved.attemptKey || newAttemptKey();
+    userAnswers[`${currentSubj}-0`] = saved.draft;
+    selectedSessionMode = saved.mode;
+    examMode = saved.mode;
+    examStage = 'answering';
+    websiteQuestionBankStatus = 'ready';
+    if (currentSubj === 'Labor Law') laborQuestionBankStatus = 'ready';
+    setOnboardingView('complete');
+    renderSubjectTabs();
+    renderMainWrite();
+    sessionController.beginSession(saved.mode, saved.questionId, { restore: true });
+    updateTimerDisplay();
+    updateSessionClock();
+    toast('Your in-progress answer and timer were restored.', 'ok');
+  } catch (error) {
+    workspaceRestoreCompletedForUser = null;
+    console.warn('Saved examination workspace could not be restored.', { code: error?.code || 'RESTORE_UNAVAILABLE' });
+  } finally {
+    workspaceRestoreInProgress = false;
+  }
+}
+
+window.addEventListener('duediligence:access', (event) => {
+  const activeSession = window.DueDiligencePhase4?.getSession?.();
+  const userId = activeSession?.user?.id || null;
+  if (!userId) {
+    workspaceRestoreCompletedForUser = null;
+    remoteHistoryLoadedForUser = null;
+    return;
+  }
+  if (event.detail) {
+    syncRemoteExamHistory(userId);
+    restorePersistedWorkspace(userId);
+  }
+});
 
 function setOnboardingView(stage) {
   onboardingStage = stage;
@@ -1712,8 +1962,8 @@ function setOnboardingView(stage) {
   document.body.classList.toggle('onboarding-active', stage !== 'complete');
 }
 
-function showWelcome() {
-  stopExamSession({ reset: true });
+function showWelcome(options = {}) {
+  if (!options.preserveSession) stopExamSession({ reset: true });
   currentSubj = null;
   currentIdx = 0;
   pendingSubjectSelection = null;
@@ -1797,6 +2047,8 @@ function showSubjectSelection() {
 async function selectSubjectForSession(subject) {
   if (!SUBJECTS.includes(subject) || examStage === 'subjectLoading') return;
   stopExamSession({ reset: true });
+  clearPersistedWorkspace();
+  currentAttemptKey = null;
   pendingSubjectSelection = subject;
   currentSubj = subject;
   currentIdx = 0;
@@ -1848,9 +2100,11 @@ function chooseSessionMode(mode) {
   const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
   closeModal('session-choice-modal', { restoreFocus: false });
   setWorkspaceLocked(false);
+  currentAttemptKey = newAttemptKey();
   renderMainWrite();
-  sessionController.beginSession(mode, question?.id || null);
+  sessionController.beginSession(mode, question?.id || null, { restore: false });
   questionStartTs = Date.now();
+  persistWorkspace();
   updateSessionClock(sessionController.snapshot());
   const box = document.getElementById('answer-box');
   if (box) requestAnimationFrame(() => box.focus());
@@ -1881,6 +2135,7 @@ function saveDraftForCurrentQuestion() {
   const drafts = loadDrafts();
   drafts[key] = userAnswers[key] || '';
   safeStorageSet(localStorage, DRAFTS_KEY, JSON.stringify(drafts));
+  persistWorkspace();
 }
 
 function restoreDraftForKey(key) {
@@ -1908,11 +2163,13 @@ function transitionQuestion(index, options = {}) {
   const list = BAR_QUESTIONS[currentSubj];
   currentIdx = ((index % list.length) + list.length) % list.length;
   currentQuestionIndex = currentIdx;
+  currentAttemptKey = newAttemptKey();
   examStage = 'answering';
   renderMainWrite();
   const question = list[currentIdx];
   sessionController.startQuestion(question.id);
   questionStartTs = Date.now();
+  persistWorkspace();
   if (!options.automatic) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1937,11 +2194,13 @@ async function transitionToProtectedRandomQuestion() {
     }
     currentIdx = index;
     currentQuestionIndex = index;
+    currentAttemptKey = newAttemptKey();
     examStage = 'answering';
     setWorkspaceLocked(false);
     renderMainWrite();
     sessionController.startQuestion(question.id);
     questionStartTs = Date.now();
+    persistWorkspace();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (error) {
     examStage = 'answering';
@@ -2081,6 +2340,85 @@ function legacyRenderMainWrite() {
   applyExamEnhancements();
 }
 
+function renderExamControlBar(workspaceLocked) {
+  const mode = selectedSessionMode || 'none';
+  const disabled = workspaceLocked ? 'disabled' : '';
+  const modeButton = (value, label) => `
+    <button type="button" class="exam-mode-button ${mode === value ? 'active' : ''}"
+      aria-pressed="${mode === value}" onclick="switchSessionMode('${value}')" ${disabled}>${label}</button>`;
+  let clock = '';
+  if (mode === 'strict') {
+    clock = `
+      <div class="exam-clock">
+        <div class="exam-clock-copy">
+          <span class="exam-clock-title">Strict Scrutiny</span>
+          <span class="exam-clock-note">At zero, your answer submits; the result stays here.</span>
+        </div>
+        <span id="timer-display" aria-live="polite">12:00</span>
+      </div>`;
+  } else if (mode === 'selfPaced') {
+    clock = `
+      <div class="exam-clock">
+        <div class="exam-clock-copy">
+          <span class="exam-clock-title">Quantum Meruit</span>
+          <span class="exam-clock-note">Elapsed writing time</span>
+        </div>
+        <span id="timer-display" aria-live="polite">00:00</span>
+      </div>`;
+  } else {
+    clock = `
+      <div class="exam-clock no-digits">
+        <div class="exam-clock-copy">
+          <span class="exam-clock-title">Summary Judgment</span>
+          <span class="exam-clock-note">No visible clock. Active writing time is still recorded.</span>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="exam-control-bar timer-bar" id="timer-bar">
+      <div class="exam-mode-switcher" aria-label="Exam timing mode">
+        <span class="exam-mode-label">Session mode</span>
+        ${modeButton('strict', 'Strict Scrutiny')}
+        ${modeButton('selfPaced', 'Quantum Meruit')}
+        ${modeButton('none', 'Summary Judgment')}
+      </div>
+      ${clock}
+    </div>`;
+}
+
+function switchSessionMode(mode) {
+  if (
+    !['strict', 'selfPaced', 'none'].includes(mode)
+    || examStage !== 'answering'
+    || mode === selectedSessionMode
+  ) return;
+  const fromLabel = selectedSessionMode === 'strict'
+    ? 'Strict Scrutiny'
+    : selectedSessionMode === 'selfPaced'
+      ? 'Quantum Meruit'
+      : 'Summary Judgment';
+  const toLabel = mode === 'strict'
+    ? 'Strict Scrutiny'
+    : mode === 'selfPaced'
+      ? 'Quantum Meruit'
+      : 'Summary Judgment';
+  const detail = mode === 'strict'
+    ? 'Time already spent will be deducted from the twelve-minute limit; switching will not restart the clock.'
+    : selectedSessionMode === 'strict'
+      ? 'Your elapsed time and draft will be preserved.'
+      : 'Your draft and total active time will be preserved.';
+  if (!window.confirm(`Switch from ${fromLabel} to ${toLabel}?\n\n${detail}`)) return;
+  saveDraftForCurrentQuestion();
+  selectedSessionMode = mode;
+  examMode = mode;
+  safeStorageSet(localStorage, 'duediligence.timer.mode.v1', mode);
+  sessionController.switchMode(mode);
+  persistWorkspace();
+  renderMainWrite();
+  updateTimerDisplay();
+  updateSessionClock();
+}
+
 function renderMainWrite() {
   if (!currentSubj || !BAR_QUESTIONS[currentSubj]?.length) return;
   if (currentSubj === 'Labor Law' && laborQuestionBankStatus !== 'ready') {
@@ -2095,11 +2433,7 @@ function renderMainWrite() {
   const hasSubmitted = submissionResults[savedKey] !== undefined;
   const workspaceLocked = examStage !== 'answering';
   const sourceMeta = questionSourceMetadata(q);
-  const timerMarkup = selectedSessionMode === 'strict'
-    ? `<div class="timer-bar" id="timer-bar"><span class="timer-label">Strict Scrutiny · 12 minutes</span><span id="timer-display">12:00</span><span class="timer-limit">Advances once when time expires</span></div>`
-    : selectedSessionMode === 'selfPaced'
-      ? `<div class="timer-bar" id="timer-bar"><span class="timer-label">Quantum Meruit · Writing time</span><span id="timer-display">00:00</span><span class="timer-limit">No deadline or automatic advance</span></div>`
-      : '';
+  const timerMarkup = renderExamControlBar(workspaceLocked);
 
   main.innerHTML = `
     ${timerMarkup}
@@ -2241,13 +2575,32 @@ function closeCheckingModal() {
   }
 }
 
-async function evaluateAnswer() {
+async function evaluateAnswer(options = {}) {
   if (gradingInProgress || gradingAccessCheckInProgress || examStage !== 'answering') return;
   const subjectAtSubmission = currentSubj;
   const indexAtSubmission = currentIdx;
   const key = `${subjectAtSubmission}-${indexAtSubmission}`;
   const q = BAR_QUESTIONS[subjectAtSubmission][indexAtSubmission];
   const studentAnswer = (userAnswers[key] || '').trim();
+  const submissionReason = options.submissionReason === 'strict_expiry'
+    ? 'strict_expiry'
+    : 'manual';
+  const expired = options.expired === true;
+  const timerAtSubmission = sessionController.snapshot();
+  const gradeRequestStorageKey = `duediligence.grade-request.${q.id}`;
+  let gradeRequest = null;
+  try {
+    gradeRequest = JSON.parse(safeStorageGet(localStorage, gradeRequestStorageKey) || 'null');
+  } catch (error) {
+    gradeRequest = null;
+  }
+  if (!gradeRequest?.requestId || gradeRequest.answer !== studentAnswer) {
+    gradeRequest = {
+      requestId: `grade_${crypto.randomUUID().replace(/-/g, '')}`,
+      answer: studentAnswer,
+    };
+    safeStorageSet(localStorage, gradeRequestStorageKey, JSON.stringify(gradeRequest));
+  }
   if (!studentAnswer) {
     toast('Write an answer before requesting an assessment.', 'warn');
     return;
@@ -2301,12 +2654,18 @@ async function evaluateAnswer() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(window.DueDiligencePhase2?.gradingHeaders() || {}),
+        ...(window.DueDiligencePhase2?.gradingHeaders(gradeRequest.requestId) || {}),
       },
       body: JSON.stringify({
         questionId: q.id,
         studentAnswer,
         questionContext: questionContextForExaminer(q),
+        session: {
+          mode: selectedSessionMode || 'none',
+          elapsedSeconds: timerAtSubmission.questionElapsedSeconds,
+          submissionReason,
+          expired,
+        },
       }),
     });
     let payload = null;
@@ -2325,10 +2684,14 @@ async function evaluateAnswer() {
     const timeSpent = sessionController.snapshot().questionElapsedSeconds;
     const resultObj = {
       ...assessment,
+      id: payload.attemptId || null,
       score: Number(assessment.score),
       maxScore: 5,
       percentagePointValue: Number(assessment.score),
       timeSpent,
+      timerMode: selectedSessionMode || 'none',
+      submissionReason,
+      expired,
       timestamp: new Date(assessment.gradedAt || Date.now()).toLocaleString(),
       gradedAt: assessment.gradedAt || new Date().toISOString(),
       subject: subjectAtSubmission,
@@ -2343,6 +2706,8 @@ async function evaluateAnswer() {
     historyLog.unshift(resultObj);
     resultObj.historySaved = logAttempt(resultObj);
     examStage = 'reviewing';
+    sessionController.stop({ reset: false });
+    clearPersistedWorkspace();
     closeCheckingModal();
 
     if (currentSubj === subjectAtSubmission && currentIdx === indexAtSubmission) {
@@ -2352,6 +2717,7 @@ async function evaluateAnswer() {
       resultArea.scrollIntoView({ behavior: 'smooth' });
     }
     window.DueDiligencePhase2?.afterGrade(payload.access);
+    safeStorageRemove(localStorage, gradeRequestStorageKey);
     window.DueDiligenceAnalytics?.track('grading_success', {
       subject: subjectAtSubmission,
       questionId: q.id,
@@ -2369,6 +2735,9 @@ async function evaluateAnswer() {
       window.DueDiligenceAnalytics?.track('guest_third_grade', { subject: subjectAtSubmission, questionId: q.id });
     }
   } catch (error) {
+    if (error?.code !== 'AI_GRADING_CAPACITY') {
+      safeStorageRemove(localStorage, gradeRequestStorageKey);
+    }
     if (error?.code === 'AI_GRADING_CAPACITY') {
       examStage = 'answering';
       sessionController.resume();
@@ -2402,6 +2771,28 @@ async function evaluateAnswer() {
 function renderResultHTML(key) {
   const res = submissionResults[key];
   if (!res) return '';
+  if (res.unanswered) {
+    return `
+      <article class="assessment-card" aria-label="Unanswered Strict Scrutiny attempt">
+        <div class="assessment-hero">
+          <div class="score-medallion"><div><strong>— / 5</strong><span>No grade</span></div></div>
+          <div>
+            <div class="assessment-kicker">Strict Scrutiny Expiration</div>
+            <h3 class="assessment-title">Unanswered attempt recorded</h3>
+            <p class="assessment-rationale">The twelve-minute period expired with a blank answer. Gemini was not called, and no lifetime AI grade was consumed.</p>
+            <div class="assessment-badges">
+              <span class="assessment-badge">Unanswered</span>
+              <span class="assessment-badge">12:00 elapsed</span>
+            </div>
+          </div>
+        </div>
+        <div class="assessment-body">
+          <div class="assessment-warning"><strong>Result retained.</strong> Review your pacing, then manually choose the next question when ready.</div>
+          <div class="review-actions"><button class="btn-next" onclick="proceedAfterReview()">Continue to Next Item →</button></div>
+        </div>
+      </article>
+    `;
+  }
   const alac = res.modelAnswerALAC || {};
   const warning = res.sourceStatus === 'conflict'
     ? 'An online official source may materially conflict with the stored answer key. This assessment requires human editorial review before reliance.'
@@ -2418,7 +2809,7 @@ function renderResultHTML(key) {
         <div>
           <div class="assessment-kicker">Individual Question Assessment</div>
           <h3 class="assessment-title">${escapeHtml(res.performanceLabel || 'Bar essay assessment')}</h3>
-          <div class="assessment-equivalent">Equivalent value: ${Number(res.percentagePointValue).toFixed(1)} percentage points for this question only</div>
+          <div class="assessment-equivalent">Scored on the 0.0–5.0 Philippine Bar essay practice scale</div>
           <div class="assessment-badges">
             <span class="assessment-badge">${escapeHtml(res.label || 'Question-bank assessment')}</span>
             <span class="assessment-badge">Official tier ${escapeHtml(res.tier || '')}</span>
@@ -2461,8 +2852,6 @@ function renderResultHTML(key) {
         <div class="assessment-meta">
           <strong>Grading basis:</strong> The five-point qualitative assessment is adapted from
           <a href="${SC_2025_BULLETIN_URL}" target="_blank" rel="noopener noreferrer">Supreme Court 2025 Bar Bulletin No. 4, “Answering the Bar Examinations,” pp. 12–15</a>.
-          The five-percentage-point question value follows
-          <a href="${SC_2026_BULLETIN_URL}" target="_blank" rel="noopener noreferrer">2026 Bar Bulletin No. 1</a>.
           <br><br>
           This AI-generated assessment is provided solely for Bar review and coaching. It is not an official Supreme Court grade and does not guarantee or predict the examinee’s actual Bar Examination result.
           <br>Examiner model: ${escapeHtml(res.modelUsed || 'unavailable')} · Rubric: ${escapeHtml(res.rubricVersion || SC_RUBRIC_VERSION)} · ${escapeHtml(res.timestamp || '')}
@@ -2493,7 +2882,12 @@ function renderAssessmentSources(sources) {
   if (!safe.length) return '<div class="legal-explanation">No verified online source is currently available.</div>';
   return `<div class="source-list">${safe.map((source) => `
     <a class="source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">
-      <span>${escapeHtml(source.title || 'Legal source')}</span><small>${escapeHtml(source.type || 'source')} ↗</small>
+      <span>
+        ${escapeHtml(source.title || 'Legal source')}
+        ${source.reference ? `<small>${escapeHtml(source.reference)}</small>` : ''}
+        ${source.relevance ? `<small>${escapeHtml(source.relevance)}</small>` : ''}
+      </span>
+      <small>${escapeHtml(source.authority || source.type || 'source')} ↗</small>
     </a>`).join('')}</div>`;
 }
 
@@ -2512,10 +2906,10 @@ function renderMainHistory() {
     <div style="background:#fbf9f2; border:1px solid var(--ink); padding:12px 20px;">
       ${historyLog.map(item => `
         <div class="hist-row">
-          <div class="hist-score ${item.maxScore === 5 ? 'pass' : (item.passed ? 'pass' : 'fail')}">${item.maxScore === 5 ? `${Number(item.score).toFixed(1)}/5` : escapeHtml(item.score)}</div>
+          <div class="hist-score ${item.unanswered ? 'fail' : item.maxScore === 5 ? 'pass' : (item.passed ? 'pass' : 'fail')}">${item.unanswered ? '—/5' : item.maxScore === 5 ? `${Number(item.score).toFixed(1)}/5` : escapeHtml(item.score)}</div>
           <div class="hist-meta">
             <div class="hist-subj">${escapeHtml(item.subject)}</div>
-            <div class="hist-q">${escapeHtml(item.qId)} · ${item.maxScore === 5 ? escapeHtml(item.performanceLabel || 'Five-point assessment') : 'Legacy 100-point record'}</div>
+            <div class="hist-q">${escapeHtml(item.qId)} · ${item.unanswered ? 'Unanswered Strict Scrutiny expiration' : item.maxScore === 5 ? escapeHtml(item.performanceLabel || 'Five-point assessment') : 'Legacy record'}</div>
           </div>
           <div class="hist-date">${escapeHtml(item.timestamp)}</div>
         </div>
@@ -2637,17 +3031,23 @@ window.addEventListener('DOMContentLoaded', init);
 /* ---------- SPA navigation ---------- */
 function showPage(page, el) {
   const leavingMock = document.getElementById('page-mock')?.classList.contains('active') && page !== 'mock';
-  if (leavingMock) {
+  if (leavingMock && examStage === 'answering') {
     saveDraftForCurrentQuestion();
-    stopExamSession({ reset: true });
-    examStage = 'idle';
+    sessionController.pause();
+    examPausedForPage = true;
   }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
   document.querySelectorAll('.spa-tab').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
-  if (page === 'mock' && onboardingStage === 'complete' && examStage === 'idle') showWelcome();
+  if (page === 'mock' && examPausedForPage && examStage === 'answering') {
+    examPausedForPage = false;
+    renderMainWrite();
+    sessionController.resume();
+  } else if (page === 'mock' && onboardingStage === 'complete' && examStage === 'idle') {
+    showWelcome();
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -2790,7 +3190,7 @@ function openAnalytics() {
   const legacy = list.filter((attempt) => attempt.maxScore !== 5);
   const rows = list.slice(0, 40).map(a => `
     <tr>
-      <td class="sc">${a.maxScore === 5 ? `${Number(a.score).toFixed(1)} / 5` : `${escapeHtml(a.score)} (legacy)`}</td>
+      <td class="sc">${a.unanswered ? '— / 5' : a.maxScore === 5 ? `${Number(a.score).toFixed(1)} / 5` : `${escapeHtml(a.score)} (legacy)`}</td>
       <td>${escapeHtml(a.subject || '')}</td>
       <td>${escapeHtml(a.qId || '')}</td>
       <td>${a.timeSpent != null ? fmtSecs(a.timeSpent) : '—'}</td>
@@ -3075,6 +3475,24 @@ function startDictation() {
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && examStage === 'answering') sessionController.tick();
+});
+
+window.addEventListener('storage', (event) => {
+  if (event.key === 'duediligence.exam.timer.v2' && examStage === 'answering') {
+    sessionController.syncFromStorage();
+  }
+  if (event.key === EXAM_WORKSPACE_KEY && examStage === 'answering') {
+    const saved = readPersistedWorkspace();
+    const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+    if (saved?.questionId === question?.id && saved.draft !== userAnswers[`${currentSubj}-${currentIdx}`]) {
+      userAnswers[`${currentSubj}-${currentIdx}`] = saved.draft;
+      const box = document.getElementById('answer-box');
+      if (box && document.activeElement !== box) {
+        box.value = saved.draft;
+        document.getElementById('word-count').textContent = `${countWords(saved.draft)} words`;
+      }
+    }
+  }
 });
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"

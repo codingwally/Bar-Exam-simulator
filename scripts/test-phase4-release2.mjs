@@ -22,7 +22,6 @@ for (const table of ['exam_attempts', 'provider_incidents']) {
 
 for (const rpc of [
   'phase4_reserve_grade_v2',
-  'phase4_prepare_exam_attempt',
   'phase4_mark_exam_capacity',
   'phase4_finalize_exam_grade',
   'phase4_fail_exam_attempt',

@@ -950,6 +950,7 @@ Rewrite the entire JSON response once. Preserve the stored legal substance, retu
     });
     return jsonResponse({
       ok: true,
+      attemptId,
       assessment: {
         ...assessment,
         modelUsed: gemini.model,
@@ -1002,13 +1003,17 @@ Rewrite the entire JSON response once. Preserve the stored legal substance, retu
 
 async function prepareExamAttempt(access, gradingRequest, context, env) {
   if (!access?.phase4) return null;
-  const result = await phase4Rpc(env, 'phase4_prepare_exam_attempt', {
+  const result = await phase4Rpc(env, 'phase4_prepare_exam_attempt_v2', {
     p_user_id: access.userId,
     p_reservation_id: access.reservationId,
     p_request_key: access.requestId,
     p_question_bank_id: gradingRequest.questionId,
     p_subject: context.subject || 'Unknown subject',
     p_answer_text: gradingRequest.studentAnswer,
+    p_timer_mode: gradingRequest.session.mode,
+    p_elapsed_seconds: gradingRequest.session.elapsedSeconds,
+    p_submission_reason: gradingRequest.session.submissionReason,
+    p_expired: gradingRequest.session.expired,
   });
   if (!result?.attemptId) {
     throw new ExaminerError(
@@ -1068,6 +1073,7 @@ async function handleProtectedQuestion(request, env, origin, allowedOrigin) {
   const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
   const question = selectProtectedQuestion(records, {
     subject,
+    questionId: payload?.questionId,
     excludeQuestionIds: payload?.excludeQuestionIds,
   });
   return jsonResponse({
@@ -1080,6 +1086,68 @@ async function handleProtectedQuestion(request, env, origin, allowedOrigin) {
       totalQuestions: 320,
     },
   }, 200, origin, allowedOrigin);
+}
+
+async function handleUnansweredAttempt(request, env, origin, allowedOrigin) {
+  await enforceRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const payload = await parseBoundedJson(request, 8_000);
+  const questionId = String(payload?.questionId || '').trim();
+  const subject = normalizeSubject(payload?.subject);
+  const requestKey = normalizeRequestKey(
+    payload?.requestId || request.headers.get('X-Request-ID'),
+  );
+  const elapsedSeconds = Math.floor(Number(payload?.elapsedSeconds) || 0);
+  if (!/^[A-Z]{2,8}-(?:\d{3}|\d{4}-Q\d{1,3})$/i.test(questionId)) {
+    throw new ExaminerError('INVALID_QUESTION', 'A valid protected question is required.', 400);
+  }
+  if (elapsedSeconds < 720 || elapsedSeconds > 86_400) {
+    throw new ExaminerError('INVALID_TIMER_STATE', 'The Strict Scrutiny expiration state is invalid.', 400);
+  }
+
+  const access = await phase4AccessForUser(env, user.id);
+  if (!access.allowed) throw accessDeniedError(access);
+  const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
+  const context = questionFromBankRow(records.get(questionId));
+  if (!context?.question || normalizeSubject(context.subject) !== subject) {
+    throw new ExaminerError('INVALID_QUESTION', 'The protected question could not be verified.', 400);
+  }
+
+  const result = await phase4Rpc(env, 'phase4_record_unanswered_attempt', {
+    p_user_id: user.id,
+    p_request_key: requestKey,
+    p_question_bank_id: questionId,
+    p_subject: context.subject,
+    p_elapsed_seconds: elapsedSeconds,
+  });
+  return jsonResponse({
+    ok: true,
+    attempt: {
+      id: String(result?.attemptId || ''),
+      status: 'unanswered',
+      replayed: result?.replayed === true,
+      questionId,
+      subject: context.subject,
+      timerMode: 'strict',
+      elapsedSeconds,
+      submissionReason: 'strict_expiry',
+      expired: true,
+    },
+  }, 201, origin, allowedOrigin);
+}
+
+async function handleExamHistory(request, env, origin, allowedOrigin) {
+  await enforceGuestStatusRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const payload = await parseBoundedJson(request, 4_000);
+  const limit = Math.min(200, Math.max(1, Math.floor(Number(payload?.limit) || 100)));
+  const offset = Math.min(10_000, Math.max(0, Math.floor(Number(payload?.offset) || 0)));
+  const result = await phase4Rpc(env, 'phase4_exam_history', {
+    p_user_id: user.id,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  return jsonResponse({ ok: true, history: result }, 200, origin, allowedOrigin);
 }
 
 async function handleGuestAccess(request, env, origin, allowedOrigin) {
@@ -1477,6 +1545,12 @@ export default {
       }
       if (pathname === '/exam/question') {
         return await handleProtectedQuestion(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam/unanswered') {
+        return await handleUnansweredAttempt(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam/history') {
+        return await handleExamHistory(request, env, origin, allowedOrigin);
       }
       if (pathname === '/support') {
         return await handleSupport(request, env, origin, allowedOrigin);

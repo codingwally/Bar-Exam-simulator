@@ -397,6 +397,7 @@
   .topbar .crest{width:42px;height:42px;filter:drop-shadow(0 2px 5px rgba(0,0,0,.4));}
   .topbar .brand-name{font-family:var(--serif-display);font-weight:700;font-size:18px;letter-spacing:2px;color:#F6EFDD;text-transform:uppercase;line-height:1;}
   .topbar .brand-sub{font-family:var(--mono);font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-top:3px;}
+  .site-menu-toggle{display:none;font-family:var(--sans);font-weight:700;font-size:12px;color:#F6EFDD;background:rgba(255,255,255,.05);border:1px solid rgba(197,160,89,.45);border-radius:8px;padding:8px 12px;cursor:pointer;}
 
   .spa-nav{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap;}
   .spa-tab{
@@ -486,10 +487,18 @@
   /* ---- Responsive additions ---- */
   @media (max-width:980px){
     .topbar{flex-wrap:wrap;gap:12px;padding:12px 16px;}
-    .spa-nav{order:3;width:100%;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-bottom:2px;}
+    .spa-nav{order:3;width:100%;justify-content:flex-start;flex-wrap:wrap;padding-bottom:2px;}
     .topbar-actions{margin-left:auto;}
     .exam-subnav{padding:16px 16px 0;}
     .mode-toggle{margin-left:0;}
+  }
+  @media (max-width:700px){
+    .topbar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;}
+    .site-menu-toggle{display:inline-flex;align-items:center;justify-content:center;min-height:40px;}
+    .topbar-actions{width:auto;max-width:none;margin:0;justify-content:flex-end;}
+    .spa-nav{display:none;grid-column:1/-1;order:initial;width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:8px 0 2px;}
+    .spa-nav.is-open{display:grid;}
+    .spa-tab{width:100%;min-height:42px;text-align:left;border:1px solid rgba(197,160,89,.18);background:rgba(255,255,255,.035);}
   }
   @media (max-width:560px){
     .topbar{gap:8px;padding:10px 12px;}
@@ -497,12 +506,18 @@
     .topbar .crest{width:34px;height:34px;}
     .topbar .brand-name{font-size:14px;letter-spacing:1.4px;}
     .topbar .brand-sub{display:none;}
-    .topbar-actions{width:auto;max-width:48%;margin-left:auto;flex-wrap:nowrap;justify-content:flex-end;gap:6px;}
+    .topbar-actions{width:auto;max-width:none;margin:0;flex-wrap:nowrap;justify-content:flex-end;gap:6px;}
     .topbar-actions > *{max-width:100%;}
     .topbar-actions .dd2-guest-badge{display:none!important;}
     .icon-btn.hide-sm{display:inline-flex;padding:7px 10px;}
-    .spa-nav{margin:0 -2px;padding-bottom:3px;}
+    .spa-nav{grid-template-columns:1fr;margin:0;padding-bottom:3px;}
     .spa-tab{font-size:11.5px;padding:8px 11px;}
+  }
+  @media (max-width:380px){
+    .topbar{grid-template-columns:minmax(0,1fr) auto;}
+    .site-menu-toggle{grid-column:2;grid-row:1;}
+    .topbar-actions{grid-column:1/-1;grid-row:2;justify-content:stretch;}
+    .topbar-actions .icon-btn{width:100%;justify-content:center;min-height:42px;}
   }
 
 
@@ -712,7 +727,9 @@
     </div>
   </div>
 
-  <nav class="spa-nav">
+  <button class="site-menu-toggle" id="site-menu-toggle" type="button"
+    aria-controls="spa-nav" aria-expanded="false">Menu</button>
+  <nav class="spa-nav" id="spa-nav" aria-label="Primary navigation">
     <button class="spa-tab active" id="spa-mock" onclick="showPage('mock', this)">Practice</button>
     <button class="spa-tab" id="spa-progress" onclick="openAnalytics()">Progress</button>
     <button class="spa-tab" id="spa-pricing" data-dd2-view="pricing">Plans &amp; Access</button>
@@ -1554,7 +1571,25 @@ async function transitionToProtectedRandomQuestion() {
   }
 }
 
+function setSiteMenuOpen(open) {
+  const menu = document.getElementById('spa-nav');
+  const toggle = document.getElementById('site-menu-toggle');
+  if (!menu || !toggle) return;
+  menu.classList.toggle('is-open', open);
+  toggle.setAttribute('aria-expanded', String(open));
+}
+
 function setupEventListeners() {
+  document.getElementById('site-menu-toggle')?.addEventListener('click', () => {
+    const menu = document.getElementById('spa-nav');
+    setSiteMenuOpen(!menu?.classList.contains('is-open'));
+  });
+  document.getElementById('spa-nav')?.addEventListener('click', (event) => {
+    if (event.target.closest('button,a')) setSiteMenuOpen(false);
+  });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 700) setSiteMenuOpen(false);
+  });
   document.getElementById("tab-write").addEventListener("click", () => {
     document.getElementById("tab-write").classList.add("active");
     document.getElementById("tab-history").classList.remove("active");
@@ -2281,6 +2316,7 @@ window.addEventListener('DOMContentLoaded', init);
 
 /* ---------- SPA navigation ---------- */
 function showPage(page, el) {
+  setSiteMenuOpen(false);
   const leavingMock = document.getElementById('page-mock')?.classList.contains('active') && page !== 'mock';
   if (leavingMock && examStage === 'answering') {
     saveDraftForCurrentQuestion();

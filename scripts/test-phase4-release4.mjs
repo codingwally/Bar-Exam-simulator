@@ -78,6 +78,16 @@ assert.match(paymentCore, /PLAN_UNAVAILABLE/);
 assert.match(paymentCore, /!\['early_access_beta', 'standard'\]\.includes\(planCode\)/);
 assert.match(frontend, /assets\/payments\/gcash\.png/);
 assert.match(frontend, /maribank/);
+assert.match(
+  frontend,
+  /async function submitPayment\(event\) \{\s*event\.preventDefault\(\);\s*const form = event\.currentTarget;[\s\S]*?form\.reset\(\);/,
+  'Payment success must reset the captured form after awaiting the Worker.',
+);
+assert.match(
+  frontend,
+  /async function submitPartnership\(event\) \{\s*event\.preventDefault\(\);\s*const form = event\.currentTarget;[\s\S]*?form\.reset\(\);/,
+  'Partnership success must reset the captured form after awaiting the Worker.',
+);
 assert.match(frontend, /Held in Abeyance/);
 assert.match(frontend, /Further proceedings pending\. Premium enrollment is not yet available\./);
 assert.match(frontend, /Partner With Us/);

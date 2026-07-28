@@ -2,6 +2,7 @@
   'use strict';
 
   const config = global.DueDiligencePhase2Config;
+  const subscriptionActions = global.DueDiligenceSubscriptionActions;
   const titles = Object.freeze({
     executive: 'Executive Overview',
     realtime: 'Realtime and Traffic',
@@ -39,6 +40,8 @@
     section: 'executive',
     operational: new Map(),
     action: null,
+    actionInFlight: false,
+    subscriptionRows: new Map(),
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -419,32 +422,25 @@
 
   async function renderSubscriptions(report) {
     const data = await loadPhase4Operational('access');
-    const rows = (data.items || []).map((row) => [
-      row.display_name || 'Not provided',
-      row.user_id,
-      row.role,
-      row.trial_expires_at ? dateTime(row.trial_expires_at) : 'Not started',
-      `${number(row.successful_grades)} used · ${number(row.free_grades_remaining)} remaining`,
-      row.free_beta_enabled ? `Enabled${row.free_beta_expires_at ? ` until ${dateTime(row.free_beta_expires_at)}` : ''}` : 'Disabled',
-      row.plan_code || 'None',
-      { html: true, value: `<span class="status ${row.subscription_status === 'active' ? 'ok' : 'warn'}">${escapeHtml(row.subscription_status || 'none')}</span>` },
-      row.expires_at ? dateTime(row.expires_at) : 'Not available',
-      {
-        html: true,
-        value: `<div class="row-actions">
-          ${actionButton('Manage access', 'subscription_change', row.subscription_id || row.user_id, {
-            userId: row.user_id,
-            subscriptionId: row.subscription_id,
-            planCode: row.plan_code,
-            status: row.subscription_status,
-          })}
-          ${actionButton(row.free_beta_enabled ? 'Revoke Free Beta' : 'Enable Free Beta', 'free_beta_change', row.user_id, {
-            enabled: !row.free_beta_enabled,
-            expiresAt: row.free_beta_expires_at,
-          })}
-        </div>`,
-      },
-    ]);
+    state.subscriptionRows.clear();
+    const rows = (data.items || []).map((row) => {
+      state.subscriptionRows.set(row.user_id, Object.freeze({ ...row }));
+      return [
+        row.display_name || 'Not provided',
+        row.user_id,
+        row.role,
+        row.trial_expires_at ? dateTime(row.trial_expires_at) : 'Not started',
+        `${number(row.successful_grades)} used · ${number(row.free_grades_remaining)} remaining`,
+        row.free_beta_enabled ? `Enabled${row.free_beta_expires_at ? ` until ${dateTime(row.free_beta_expires_at)}` : ''}` : 'Disabled',
+        row.plan_code || 'None',
+        { html: true, value: `<span class="status ${row.subscription_status === 'active' ? 'ok' : 'warn'}">${escapeHtml(row.subscription_status || 'none')}</span>` },
+        row.expires_at ? dateTime(row.expires_at) : 'Not available',
+        {
+          html: true,
+          value: `<div class="row-actions" data-subscription-actions-for="${escapeHtml(row.user_id)}" aria-label="Subscription actions for ${escapeHtml(row.display_name || row.user_id)}"></div>`,
+        },
+      ];
+    });
     return `
       ${heading('Access and subscription operations', 'Founder actions are immediate, reason-required, transactional, and audited. Manual payments never renew automatically.')}
       <div class="notice danger"><strong>Access-impacting action.</strong> Verify the student UUID, plan, dates, and reason before confirming.</div>
@@ -660,8 +656,247 @@
     return `<label class="field">${escapeHtml(label)}<input id="${escapeHtml(id)}" type="${escapeHtml(type)}" value="${escapeHtml(value)}"></label>`;
   }
 
+  function localDateTimeValue(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    const offset = date.getTimezoneOffset() * 60_000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  }
+
+  function isoFromLocalInput(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+  }
+
+  function accessActionPayload(row, descriptor) {
+    return {
+      operation: descriptor.operation,
+      controlLabel: descriptor.label,
+      displayName: row.display_name || 'Not provided',
+      userId: row.user_id,
+      subscriptionId: row.subscription_id || null,
+      planCode: row.plan_code || null,
+      status: row.subscription_status || null,
+      startsAt: row.starts_at || null,
+      expiresAt: row.expires_at || null,
+      freeBetaEnabled: Boolean(row.free_beta_enabled),
+      freeBetaExpiresAt: row.free_beta_expires_at || null,
+    };
+  }
+
+  function mountSubscriptionActions() {
+    $$('[data-subscription-actions-for]').forEach((mount) => {
+      mount.replaceChildren();
+      const row = state.subscriptionRows.get(mount.dataset.subscriptionActionsFor);
+      const descriptors = subscriptionActions?.actionsForSubscription(
+        row,
+        state.authorization?.role,
+      ) || [];
+      for (const descriptor of descriptors) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = descriptor.label;
+        button.dataset.tone = descriptor.tone;
+        button.addEventListener('click', () => {
+          openAction(
+            descriptor.action,
+            row.user_id,
+            accessActionPayload(row, descriptor),
+          );
+        });
+        mount.append(button);
+      }
+    });
+  }
+
+  function appendInputField(container, labelText, id, options = {}) {
+    const label = document.createElement('label');
+    label.className = 'field';
+    label.textContent = labelText;
+    const input = document.createElement('input');
+    input.id = id;
+    input.type = options.type || 'text';
+    input.value = options.value || '';
+    if (options.min != null) input.min = String(options.min);
+    if (options.max != null) input.max = String(options.max);
+    if (options.required) input.required = true;
+    if (options.placeholder) input.placeholder = options.placeholder;
+    label.append(input);
+    container.append(label);
+    return input;
+  }
+
+  function selectedPlan() {
+    return document.querySelector('input[name="subscription-plan"]:checked')?.value || '';
+  }
+
+  function planDisplayName(planCode) {
+    return config.plans.items.find((plan) => plan.id === planCode)?.name || planCode || 'No plan';
+  }
+
+  function proposedAccessDescription(action, payload) {
+    const operation = payload.operation;
+    if (action === 'free_beta_change') {
+      return payload.enabled ? 'Enable Free Beta access' : 'Disable Free Beta access';
+    }
+    if (action === 'discount_assign') {
+      const code = $('#action-discount-code')?.value?.trim().toUpperCase();
+      return code ? `Apply verified discount code ${code}` : 'Apply a verified active discount code';
+    }
+    if (action === 'subscription_audit_view') return 'View this student’s immutable access history';
+    if (['activate', 'complimentary', 'replace_plan'].includes(operation)) {
+      const plan = selectedPlan() || payload.planCode || 'standard';
+      const verb = operation === 'activate' ? 'Activate'
+        : operation === 'complimentary' ? 'Grant complimentary'
+          : 'Change plan to';
+      return `${verb} ${planDisplayName(plan)} · trusted 30-day catalog terms`;
+    }
+    if (operation === 'pause') return 'Pause the active subscription';
+    if (operation === 'resume') return 'Resume the paused subscription';
+    if (operation === 'cancel') return 'Cancel the current subscription';
+    if (operation === 'extend') {
+      return `Extend access by ${$('#action-days')?.value || 30} day(s)`;
+    }
+    if (operation === 'set_start_date') {
+      return `Change start date to ${$('#action-starts')?.value || 'the selected date'}`;
+    }
+    if (operation === 'set_expiration_date') {
+      return `Change expiration date to ${$('#action-expires')?.value || 'the selected date'}`;
+    }
+    return 'Apply the selected access change';
+  }
+
+  function updateActionContext() {
+    if (!state.action || !subscriptionActions?.isAccessAction(state.action.action)) return;
+    const payload = state.action.payload;
+    $('#action-target').textContent = `${payload.displayName || 'Not provided'} · ${payload.userId || state.action.targetId}`;
+    $('#action-current').textContent = `${planDisplayName(payload.planCode)} · ${payload.status || 'no subscription'}`
+      + `${payload.expiresAt ? ` · expires ${dateTime(payload.expiresAt)}` : ''}`;
+    $('#action-proposed').textContent = proposedAccessDescription(state.action.action, payload);
+  }
+
+  function appendPlanOptions(container, payload) {
+    const fieldset = document.createElement('fieldset');
+    fieldset.className = 'plan-options';
+    const legend = document.createElement('legend');
+    legend.textContent = 'Select the trusted plan';
+    fieldset.append(legend);
+    const plans = subscriptionActions?.availablePlans(config.plans) || [];
+    const preferred = plans.some((plan) => plan.id === payload.planCode && !plan.disabled)
+      ? payload.planCode : 'standard';
+    for (const plan of plans) {
+      const label = document.createElement('label');
+      label.className = `plan-option${plan.disabled ? ' disabled' : ''}`;
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'subscription-plan';
+      input.value = plan.id;
+      input.disabled = plan.disabled;
+      input.checked = !plan.disabled && plan.id === preferred;
+      const copy = document.createElement('span');
+      const name = document.createElement('strong');
+      name.textContent = plan.name;
+      const details = document.createElement('small');
+      details.textContent = plan.disabled
+        ? `${plan.statusLabel}. ${plan.note}`
+        : `${plan.durationDays} days · catalog-controlled access`;
+      copy.append(name, details);
+      const price = document.createElement('strong');
+      price.className = 'plan-price';
+      price.textContent = `₱${number(plan.pricePhp, 2)}`;
+      label.append(input, copy, price);
+      fieldset.append(label);
+      input.addEventListener('change', updateActionContext);
+    }
+    container.append(fieldset);
+  }
+
+  function buildAccessActionFields(action, payload) {
+    const container = $('#action-fields');
+    container.replaceChildren();
+    if (action === 'subscription_change') {
+      if (['activate', 'complimentary', 'replace_plan'].includes(payload.operation)) {
+        appendPlanOptions(container, payload);
+      } else if (payload.operation === 'extend') {
+        const input = appendInputField(container, 'Extension in calendar days', 'action-days', {
+          type: 'number', value: '30', min: 1, max: 366, required: true,
+        });
+        input.addEventListener('input', updateActionContext);
+      } else if (payload.operation === 'set_start_date') {
+        const input = appendInputField(container, 'New subscription start date and time', 'action-starts', {
+          type: 'datetime-local', value: localDateTimeValue(payload.startsAt), required: true,
+        });
+        input.addEventListener('input', updateActionContext);
+      } else if (payload.operation === 'set_expiration_date') {
+        const input = appendInputField(container, 'New subscription expiration date and time', 'action-expires', {
+          type: 'datetime-local', value: localDateTimeValue(payload.expiresAt), required: true,
+        });
+        input.addEventListener('input', updateActionContext);
+      }
+    } else if (action === 'free_beta_change') {
+      payload.enabled = payload.operation === 'enable';
+      if (payload.enabled) {
+        appendInputField(container, 'Optional Free Beta expiration', 'action-expires', {
+          type: 'datetime-local', value: localDateTimeValue(payload.freeBetaExpiresAt),
+        }).addEventListener('input', updateActionContext);
+      }
+    } else if (action === 'discount_assign') {
+      appendInputField(container, 'Active discount code', 'action-discount-code', {
+        required: true, placeholder: 'Example: FOUNDING25',
+      }).addEventListener('input', updateActionContext);
+    }
+  }
+
+  function renderAuditHistory(result, payload) {
+    const container = $('#audit-history');
+    container.replaceChildren();
+    $('#audit-target').textContent = `${payload.displayName || 'Not provided'} · ${payload.userId}`;
+    const entries = [
+      ...(result?.subscriptionHistory || []).map((entry) => ({
+        title: `Subscription · ${entry.action}`,
+        time: entry.occurredAt,
+        copy: `${entry.planCode || 'No plan'} · ${entry.status || 'unknown'} · ${entry.reason || 'No reason recorded'}`,
+      })),
+      ...(result?.freeBetaHistory || []).map((entry) => ({
+        title: `Free Beta · ${entry.enabled ? 'enabled' : 'disabled'}`,
+        time: entry.occurredAt,
+        copy: entry.reason || 'No reason recorded',
+      })),
+      ...(result?.discountHistory || []).map((entry) => ({
+        title: `Discount · ${entry.code || 'Unknown code'}`,
+        time: entry.occurredAt,
+        copy: entry.reason || 'No reason recorded',
+      })),
+      ...(result?.auditHistory || []).map((entry) => ({
+        title: `Administrator audit · ${entry.actionType}`,
+        time: entry.occurredAt,
+        copy: entry.reason || 'No reason recorded',
+      })),
+    ].sort((left, right) => new Date(right.time || 0) - new Date(left.time || 0));
+    if (!entries.length) {
+      const emptyState = document.createElement('p');
+      emptyState.className = 'empty';
+      emptyState.textContent = 'No access changes have been recorded for this student.';
+      container.append(emptyState);
+    }
+    for (const entry of entries) {
+      const article = document.createElement('article');
+      article.className = 'audit-entry';
+      const title = document.createElement('strong');
+      title.textContent = entry.title;
+      const copy = document.createElement('span');
+      copy.textContent = `${dateTime(entry.time)} · ${entry.copy}`;
+      article.append(title, copy);
+      container.append(article);
+    }
+    $('#audit-dialog').showModal();
+  }
+
   function openAction(action, targetId, payload) {
     state.action = { action, targetId: targetId || null, payload: { ...(payload || {}) } };
+    state.actionInFlight = false;
     let fields = '';
     let title = 'Confirm action';
     let warning = 'This operation is transactional, reason-required, and recorded in the administrator audit log.';
@@ -703,27 +938,32 @@
       ${actionField('Approved refund in PHP', 'action-refund-amount', payload.approvedRefundPhp ?? payload.suggestedRefundPhp ?? '', 'number')}`;
       warning = 'Confirm the verified paid amount, timing, consumption, outage evidence, and statutory rights. Mark paid only after funds were actually returned.';
     } else if (action === 'subscription_change') {
-      title = 'Change subscription or grant access';
-      fields = `<label class="field">Operation<select id="action-operation">
-        <option value="complimentary">Grant complimentary access</option>
-        ${payload.subscriptionId ? `
-          <option value="pause">Pause</option>
-          <option value="resume">Resume</option>
-          <option value="cancel">Cancel</option>
-          <option value="extend">Extend</option>
-          <option value="replace_plan">Replace plan</option>
-          <option value="set_dates">Set start and expiration dates</option>` : ''}
-      </select></label>
-      ${actionField('Plan code', 'action-plan', payload.planCode || 'standard')}
-      ${actionField('Duration / extension days', 'action-days', '30', 'number')}
-      ${actionField('Starts at (ISO, for set dates)', 'action-starts')}
-      ${actionField('Expires at (ISO, for set dates)', 'action-expires')}`;
-      warning = 'This action immediately changes access. Verify the user UUID, plan, status, and dates. Complimentary access does not represent a payment.';
+      const titlesByOperation = {
+        activate: 'Activate subscription',
+        complimentary: 'Grant complimentary access',
+        pause: 'Pause subscription',
+        resume: 'Resume subscription',
+        cancel: 'Cancel subscription',
+        extend: 'Extend subscription',
+        replace_plan: 'Change plan',
+        set_start_date: 'Change subscription start date',
+        set_expiration_date: 'Change subscription expiration date',
+      };
+      title = payload.controlLabel === 'Change Plan'
+        ? 'Change plan'
+        : titlesByOperation[payload.operation] || 'Manage subscription';
+      warning = payload.operation === 'complimentary'
+        ? 'This immediately grants access without recording a payment. Confirm the student, trusted plan, and reason.'
+        : 'This immediately changes access. Confirm the student, current status, proposed value, and reason before continuing.';
     } else if (action === 'free_beta_change') {
-      title = payload.enabled ? 'Enable Free Beta Access' : 'Revoke Free Beta Access';
-      fields = `<label class="field"><span><input id="action-enabled" type="checkbox"${payload.enabled ? ' checked' : ''}> Free Beta enabled</span></label>
-        ${actionField('Optional expiration (ISO date)', 'action-expires', payload.expiresAt || '')}`;
+      title = payload.operation === 'enable' ? 'Enable Free Beta access' : 'Disable Free Beta access';
       warning = 'Free Beta unlocks all current digital features without payment. It creates no coaching or future Premium rights.';
+    } else if (action === 'discount_assign') {
+      title = 'Apply verified discount';
+      warning = 'Only an active server-verified code can be assigned. The browser cannot choose a discount value or trusted plan price.';
+    } else if (action === 'subscription_audit_view') {
+      title = 'View subscription audit history';
+      warning = 'This sensitive read is reason-required and creates its own immutable audit record.';
     } else if (action === 'partnership_update') {
       title = 'Update partnership inquiry';
       fields = `<label class="field">Status<select id="action-status">${['new','reviewing','awaiting_reply','qualified','closed'].map((value) => `<option value="${value}"${payload.status === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
@@ -751,9 +991,17 @@
       warning = 'Exact email search is server-side, capability-restricted, rate-limited, reason-required, and audited.';
     }
     $('#action-title').textContent = title;
-    $('#action-fields').innerHTML = fields;
+    const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
+    if (isAccessAction) buildAccessActionFields(action, state.action.payload);
+    else $('#action-fields').innerHTML = fields;
+    $('#action-context').hidden = !isAccessAction;
+    $('#action-confirmation').hidden = !isAccessAction;
+    $('#action-confirm-risk').checked = false;
+    $('#action-confirm').textContent = action === 'subscription_audit_view'
+      ? 'View audited history' : 'Confirm audited action';
     $('#action-warning').textContent = warning;
     $('#action-reason').value = '';
+    if (isAccessAction) updateActionContext();
     $('#action-dialog').showModal();
   }
 
@@ -761,9 +1009,15 @@
     event.preventDefault();
     if (event.submitter?.value === 'cancel') {
       $('#action-dialog').close();
+      state.action = null;
       return;
     }
-    if (!state.action) return;
+    if (!state.action || state.actionInFlight) return;
+    const accessAction = Boolean(subscriptionActions?.isAccessAction(state.action.action));
+    if (accessAction && !$('#action-confirm-risk').checked) {
+      toast('Confirm that you verified the target and proposed access change.');
+      return;
+    }
     const reason = $('#action-reason').value.trim();
     if (reason.length < 5) {
       toast('Enter a reason of at least five characters.');
@@ -791,14 +1045,38 @@
       payload.status = $('#action-status').value;
       payload.approvedRefundPhp = Number($('#action-refund-amount').value);
     } else if (action === 'subscription_change') {
-      payload.operation = $('#action-operation').value;
-      payload.planCode = $('#action-plan').value.trim();
-      payload.durationDays = Number($('#action-days').value || 30);
-      payload.startsAt = $('#action-starts').value.trim() || null;
-      payload.expiresAt = $('#action-expires').value.trim() || null;
+      if (['activate', 'complimentary', 'replace_plan'].includes(payload.operation)) {
+        payload.planCode = selectedPlan();
+        if (!payload.planCode || payload.planCode === 'premium') {
+          toast('Select an available plan. Premium remains held in abeyance.');
+          return;
+        }
+      }
+      if (payload.operation === 'extend') {
+        payload.durationDays = Number($('#action-days').value);
+      } else if (payload.operation === 'set_start_date') {
+        payload.startsAt = isoFromLocalInput($('#action-starts').value);
+        if (!payload.startsAt) {
+          toast('Select a valid subscription start date.');
+          return;
+        }
+      } else if (payload.operation === 'set_expiration_date') {
+        payload.expiresAt = isoFromLocalInput($('#action-expires').value);
+        if (!payload.expiresAt) {
+          toast('Select a valid subscription expiration date.');
+          return;
+        }
+      }
     } else if (action === 'free_beta_change') {
-      payload.enabled = $('#action-enabled').checked;
-      payload.expiresAt = $('#action-expires').value.trim() || null;
+      payload.enabled = payload.operation === 'enable';
+      payload.expiresAt = payload.enabled
+        ? isoFromLocalInput($('#action-expires')?.value) : null;
+    } else if (action === 'discount_assign') {
+      payload.code = $('#action-discount-code').value.trim().toUpperCase();
+      if (!/^[A-Z0-9][A-Z0-9_-]{2,39}$/.test(payload.code)) {
+        toast('Enter a valid active discount code.');
+        return;
+      }
     } else if (action === 'partnership_update') {
       payload.status = $('#action-status').value;
       payload.contactVerified = $('#action-contact-verified').checked;
@@ -813,6 +1091,8 @@
       }
       payload.is_published = $('#action-published').checked;
     }
+    state.action.requestKey ||= uuidKey();
+    state.actionInFlight = true;
     $('#action-confirm').disabled = true;
     try {
       if (action === 'reveal_email') {
@@ -844,26 +1124,34 @@
         const phase4Actions = new Set([
           'payment_review','refund_review','subscription_change',
           'free_beta_change','partnership_update','provider_incident_clear',
-          'role_change',
+          'role_change','discount_assign','subscription_audit_view',
         ]);
         const actionRequest = {
           action,
           targetId: state.action.targetId,
           payload,
           reason,
-          requestKey: uuidKey(),
+          requestKey: state.action.requestKey,
         };
+        let response;
         if (phase4Actions.has(action)) {
-          await api('/admin/phase4-action', actionRequest);
-        } else await api('/admin/action', actionRequest);
-        toast('Audited action completed.');
+          response = await api('/admin/phase4-action', actionRequest);
+        } else response = await api('/admin/action', actionRequest);
+        if (action === 'subscription_audit_view') {
+          renderAuditHistory(response.data, payload);
+          toast('Audited access history loaded.');
+        } else {
+          toast('Audited access action completed and the row was refreshed.');
+        }
       }
       $('#action-dialog').close();
       state.operational.clear();
       await renderSection(state.section);
+      state.action = null;
     } catch (error) {
       toast(error.message || 'Action failed without changing production data.');
     } finally {
+      state.actionInFlight = false;
       $('#action-confirm').disabled = false;
     }
   }
@@ -877,6 +1165,7 @@
   }
 
   function bindDynamic() {
+    mountSubscriptionActions();
     $$('[data-admin-action]').forEach((button) => button.addEventListener('click', () => {
       let payload = {};
       try { payload = JSON.parse(button.dataset.payload || '{}'); } catch { payload = {}; }
@@ -933,7 +1222,9 @@
   }
 
   async function initialize() {
-    if (!config?.features?.adminDashboard || !global.supabase?.createClient) {
+    if (!config?.features?.adminDashboard
+        || !global.supabase?.createClient
+        || !subscriptionActions?.actionsForSubscription) {
       deny('The protected dashboard is not configured.');
       return;
     }

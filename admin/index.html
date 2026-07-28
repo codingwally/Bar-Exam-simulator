@@ -93,14 +93,40 @@
         </div>
         <button class="icon-button" value="cancel" aria-label="Close">×</button>
       </header>
+      <dl class="action-context" id="action-context" hidden>
+        <div><dt>Target student</dt><dd id="action-target">Not available</dd></div>
+        <div><dt>Current access</dt><dd id="action-current">Not available</dd></div>
+        <div><dt>Proposed change</dt><dd id="action-proposed">Not available</dd></div>
+      </dl>
       <div id="action-fields"></div>
       <label class="field">Reason
         <textarea id="action-reason" minlength="5" maxlength="1000" required></textarea>
       </label>
       <p class="action-warning" id="action-warning"></p>
+      <label class="action-confirmation" id="action-confirmation" hidden>
+        <input id="action-confirm-risk" type="checkbox">
+        <span>I have verified the target, current access, and proposed change. I understand this action is immediate and audited.</span>
+      </label>
       <div class="dialog-actions">
         <button class="secondary-button" value="cancel">Cancel</button>
         <button class="primary-button" id="action-confirm" value="default">Confirm audited action</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="audit-dialog" aria-labelledby="audit-title">
+    <form method="dialog">
+      <header>
+        <div>
+          <p class="eyebrow">Immutable access record</p>
+          <h2 id="audit-title">Subscription audit history</h2>
+        </div>
+        <button class="icon-button" value="cancel" aria-label="Close audit history">×</button>
+      </header>
+      <p class="panel-note" id="audit-target"></p>
+      <div class="audit-history" id="audit-history"></div>
+      <div class="dialog-actions">
+        <button class="primary-button" value="cancel">Close</button>
       </div>
     </form>
   </dialog>
@@ -109,6 +135,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="../assets/phase2-config.js"></script>
-  <script src="admin.js?v=phase4-20260728-3"></script>
+  <script src="subscription-actions-core.js?v=admin-actions-20260729-1"></script>
+  <script src="admin.js?v=admin-actions-20260729-1"></script>
 </body>
 </html>

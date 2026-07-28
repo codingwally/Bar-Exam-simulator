@@ -2316,6 +2316,8 @@ async function evaluateAnswer() {
         payload?.error?.message || 'The examiner is temporarily unavailable. Please try again.',
       );
       assessmentError.code = payload?.error?.code || 'ASSESSMENT_UNAVAILABLE';
+      assessmentError.pendingAttemptId = payload?.error?.pendingAttemptId || null;
+      assessmentError.retryAfterHours = Number(payload?.error?.retryAfterHours) || null;
       throw assessmentError;
     }
 
@@ -2367,6 +2369,10 @@ async function evaluateAnswer() {
       window.DueDiligenceAnalytics?.track('guest_third_grade', { subject: subjectAtSubmission, questionId: q.id });
     }
   } catch (error) {
+    if (error?.code === 'AI_GRADING_CAPACITY') {
+      examStage = 'answering';
+      sessionController.resume();
+    }
     window.DueDiligenceAnalytics?.track(
       error?.code === 'GUEST_LIMIT_REACHED'
         ? 'guest_limit_reached'

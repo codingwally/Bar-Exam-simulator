@@ -338,8 +338,9 @@ test('transient Gemini failures are retried and do not lock a failed submission'
 
     const failedResponse = await worker.fetch(reliabilityGradingRequest(), env);
     const failedPayload = await failedResponse.json();
-    assert.equal(failedResponse.status, 502);
-    assert.equal(failedPayload.error.code, 'EXAMINER_UNAVAILABLE');
+    assert.equal(failedResponse.status, 503);
+    assert.equal(failedPayload.error.code, 'AI_GRADING_CAPACITY');
+    assert.match(failedPayload.error.message, /answer has been preserved and no attempt was consumed/i);
     assert.ok(providerCalls >= 2, 'the Worker should retry transient provider failures');
 
     providerMode = 'success';

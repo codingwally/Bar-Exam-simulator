@@ -8,6 +8,7 @@ import {
   assessmentPolicy,
   buildExaminerPrompt,
   chooseQuestionContext,
+  modelAnswerQualityIssues,
   normalizeRequest,
   parseQuestionBank,
   questionFromBankRow,
@@ -384,6 +385,10 @@ function phase4AccessEnforced(env) {
   return String(env.PHASE4_ACCESS_ENFORCEMENT).toLowerCase() === 'true';
 }
 
+function phase4ModelQualityEnforced(env) {
+  return String(env.PHASE4_MODEL_QUALITY_ENFORCEMENT).toLowerCase() === 'true';
+}
+
 async function requireAuthenticatedUser(request, env) {
   const user = await verifiedAuthenticatedUser(request, env);
   if (!user) {
@@ -409,11 +414,22 @@ async function reserveGradeAccess(request, env, gradingRequest) {
   if (phase4AccessEnforced(env)) {
     const authenticatedUser = await requireAuthenticatedUser(request, env);
     const requestId = normalizeRequestKey(request.headers.get('X-Request-ID'));
-    const reservation = await phase4Rpc(env, 'phase4_reserve_grade', {
+    const reservation = await phase4Rpc(env, 'phase4_reserve_grade_v2', {
       p_user_id: authenticatedUser.id,
       p_request_key: requestId,
       p_question_bank_id: gradingRequest.questionId,
     });
+    if (reservation?.reason === 'duplicate_active'
+        || reservation?.reason === 'duplicate_completed'
+        || reservation?.reason === 'duplicate_closed') {
+      throw new ExaminerError(
+        'DUPLICATE_SUBMISSION',
+        reservation.reason === 'duplicate_completed'
+          ? 'This grading request has already been completed.'
+          : 'This answer is already being checked. Please wait for the result.',
+        409,
+      );
+    }
     const access = normalizeAccessSnapshot(reservation);
     if (!access.allowed) throw accessDeniedError(access);
     if (!reservation?.reservationId) {
@@ -427,6 +443,7 @@ async function reserveGradeAccess(request, env, gradingRequest) {
       signedIn: true,
       phase4: true,
       userId: authenticatedUser.id,
+      requestId,
       reservationId: String(reservation.reservationId),
       access,
       usage: null,
@@ -533,11 +550,22 @@ async function guestAccessStatus(request, env) {
   };
 }
 
-async function finalizeGradeAccess(access, env) {
+async function finalizeGradeAccess(access, env, completion = null) {
   if (access?.phase4) {
-    const result = await phase4Rpc(env, 'phase4_finalize_grade', {
+    if (!completion?.attemptId || !completion?.assessment || !completion?.model) {
+      throw new ExaminerError(
+        'ATTEMPT_PERSISTENCE_FAILED',
+        'The completed assessment could not be preserved. No grade was consumed.',
+        503,
+      );
+    }
+    const result = await phase4Rpc(env, 'phase4_finalize_exam_grade', {
       p_user_id: access.userId,
       p_reservation_id: access.reservationId,
+      p_attempt_id: completion.attemptId,
+      p_score: completion.assessment.score,
+      p_assessment: completion.assessment,
+      p_provider_model: completion.model,
     });
     return {
       limit: 3,
@@ -553,14 +581,14 @@ async function finalizeGradeAccess(access, env) {
   return publicGuestUsage(result);
 }
 
-async function releaseGradeAccess(access, env) {
+async function releaseGradeAccess(access, env, reason = 'grading_failed') {
   if (!access || !access.reservationId) return;
   if (access.phase4) {
     try {
       await phase4Rpc(env, 'phase4_release_grade', {
         p_user_id: access.userId,
         p_reservation_id: access.reservationId,
-        p_reason: 'grading_failed',
+        p_reason: reason,
       });
     } catch (error) {
       console.error('Authenticated grade reservation release failed', {
@@ -661,6 +689,17 @@ function groundedSources(payload) {
   })));
 }
 
+function providerCapacityError(category = 'unavailable') {
+  const error = new ExaminerError(
+    'AI_GRADING_CAPACITY',
+    'AI grading is temporarily at capacity. Your answer has been preserved and no attempt was consumed. Please return within 12 hours to continue.',
+    503,
+  );
+  error.capacityCategory = category;
+  error.retryAfterHours = 12;
+  return error;
+}
+
 async function callGemini(env, prompt, groundingEnabled) {
   if (!env.GEMINI_API_KEY) {
     throw new ExaminerError('EXAMINER_NOT_CONFIGURED', 'The AI examiner is not configured. Please contact the administrator.', 503);
@@ -669,6 +708,7 @@ async function callGemini(env, prompt, groundingEnabled) {
   let lastUnsupported = '';
   let quotaSeen = false;
   let providerFailureSeen = false;
+  let timeoutSeen = false;
   for (const model of orderedModels(env.GEMINI_MODEL)) {
     const canGround = groundingEnabled && model !== 'gemini-1.5-flash';
     const groundingAttempts = canGround ? [true, false] : [false];
@@ -706,6 +746,7 @@ async function callGemini(env, prompt, groundingEnabled) {
           responseText = await response.text();
         } catch (error) {
           providerFailureSeen = true;
+          timeoutSeen ||= error?.name === 'AbortError';
           console.warn('Gemini request failed before a response was received', {
             model,
             grounding: useGrounding,
@@ -789,10 +830,10 @@ async function callGemini(env, prompt, groundingEnabled) {
     }
   }
   if (quotaSeen) {
-    throw new ExaminerError('EXAMINER_QUOTA_EXCEEDED', 'The examiner is temporarily busy. Please try again later.', 503);
+    throw providerCapacityError('rate_limit');
   }
   if (providerFailureSeen) {
-    throw new ExaminerError('EXAMINER_UNAVAILABLE', 'The examiner could not complete this assessment.', 502);
+    throw providerCapacityError(timeoutSeen ? 'timeout' : 'unavailable');
   }
   throw new ExaminerError(
     'UNSUPPORTED_MODEL',
@@ -812,6 +853,7 @@ async function handleGrade(request, env, origin, allowedOrigin) {
   const gradingRequest = normalizeRequest(payload);
   const submissionId = await registerSubmission(gradingRequest, request);
   let gradeAccess = null;
+  let attemptId = null;
 
   try {
     gradeAccess = await reserveGradeAccess(request, env, gradingRequest);
@@ -836,6 +878,7 @@ async function handleGrade(request, env, origin, allowedOrigin) {
     }
 
     const context = chooseQuestionContext(bankContext, gradingRequest.questionContext);
+    attemptId = await prepareExamAttempt(gradeAccess, gradingRequest, context, env);
     const policy = assessmentPolicy(context);
     const prompt = buildExaminerPrompt({
       questionId: gradingRequest.questionId,
@@ -844,17 +887,28 @@ async function handleGrade(request, env, origin, allowedOrigin) {
       policy,
     });
     const groundingEnabled = String(env.GEMINI_GROUNDING_ENABLED).toLowerCase() === 'true';
-    const storedSources = sanitizeSources(context.sourceUrl ? [{
-      title: context.sourceTitle || context.caseName || 'Stored question-bank source',
-      url: context.sourceUrl,
-      type: 'stored',
-    }] : []);
+    const storedSources = sanitizeSources(
+      Array.isArray(context.sourceUrls) && context.sourceUrls.length
+        ? context.sourceUrls
+        : context.sourceUrl
+          ? [{
+            title: context.sourceTitle || context.caseName || 'Stored question-bank source',
+            url: context.sourceUrl,
+            type: 'stored',
+          }]
+          : [],
+    );
     let gemini;
     let assessment;
+    let repairIssues = [];
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const attemptPrompt = attempt === 0
         ? prompt
-        : `${prompt}\n\nRETRY: The previous response failed validation. Return complete schema-valid JSON, and start the conclusion with "Therefore,".`;
+        : `${prompt}
+
+CONTROLLED REPAIR: The previous response failed these quality checks:
+${repairIssues.map((issue) => `- ${issue}`).join('\n') || '- Schema or ALAC completeness failure.'}
+Rewrite the entire JSON response once. Preserve the stored legal substance, return complete schema-valid JSON, make Application fact-specific and the most developed section, and start Conclusion with "Therefore,".`;
       gemini = await callGemini(env, attemptPrompt, groundingEnabled);
       try {
         const validatedAssessment = validateExaminerResult(
@@ -862,8 +916,22 @@ async function handleGrade(request, env, origin, allowedOrigin) {
           policy,
           [...storedSources, ...gemini.groundedSources],
         );
+        repairIssues = phase4ModelQualityEnforced(env)
+          ? modelAnswerQualityIssues(validatedAssessment, context)
+          : [];
+        if (repairIssues.length) {
+          throw new ExaminerError(
+            'MALFORMED_MODEL_RESPONSE',
+            'The examiner returned an educationally incomplete ALAC model answer.',
+            502,
+          );
+        }
         assessment = applyDeterministicScoreCap(
-          validatedAssessment,
+          {
+            ...validatedAssessment,
+            humanVerified: context.verified === true,
+            educationalNotice: 'AI-generated educational material. Not independently verified. Consult the linked official authorities.',
+          },
           gradingRequest.studentAnswer,
           context,
         );
@@ -875,7 +943,11 @@ async function handleGrade(request, env, origin, allowedOrigin) {
       }
     }
 
-    const finalizedUsage = await finalizeGradeAccess(gradeAccess, env);
+    const finalizedUsage = await finalizeGradeAccess(gradeAccess, env, {
+      attemptId,
+      assessment,
+      model: gemini.model,
+    });
     return jsonResponse({
       ok: true,
       assessment: {
@@ -899,9 +971,76 @@ async function handleGrade(request, env, origin, allowedOrigin) {
           : { signedIn: false, guest: finalizedUsage },
     }, 200, origin, allowedOrigin);
   } catch (error) {
-    await releaseGradeAccess(gradeAccess, env);
+    const isCapacity = error instanceof ExaminerError && error.code === 'AI_GRADING_CAPACITY';
+    if (isCapacity && attemptId) {
+      try {
+        await markExamAttemptCapacity(
+          gradeAccess,
+          attemptId,
+          error.capacityCategory || 'unavailable',
+          env,
+        );
+      } catch (storageError) {
+        console.error('Capacity-state persistence failed', {
+          code: storageError?.code || 'UNKNOWN',
+        });
+      }
+      error.pendingAttemptId = attemptId;
+      await releaseGradeAccess(
+        gradeAccess,
+        env,
+        `provider_${error.capacityCategory || 'unavailable'}`,
+      );
+    } else {
+      await markExamAttemptFailed(gradeAccess, attemptId, error?.code, env);
+      await releaseGradeAccess(gradeAccess, env);
+    }
     recentSubmissions.delete(submissionId);
     throw error;
+  }
+}
+
+async function prepareExamAttempt(access, gradingRequest, context, env) {
+  if (!access?.phase4) return null;
+  const result = await phase4Rpc(env, 'phase4_prepare_exam_attempt', {
+    p_user_id: access.userId,
+    p_reservation_id: access.reservationId,
+    p_request_key: access.requestId,
+    p_question_bank_id: gradingRequest.questionId,
+    p_subject: context.subject || 'Unknown subject',
+    p_answer_text: gradingRequest.studentAnswer,
+  });
+  if (!result?.attemptId) {
+    throw new ExaminerError(
+      'ATTEMPT_PERSISTENCE_FAILED',
+      'Your answer could not be preserved. No grade was consumed.',
+      503,
+    );
+  }
+  return String(result.attemptId);
+}
+
+async function markExamAttemptCapacity(access, attemptId, category, env) {
+  if (!access?.phase4 || !attemptId) return;
+  await phase4Rpc(env, 'phase4_mark_exam_capacity', {
+    p_user_id: access.userId,
+    p_attempt_id: attemptId,
+    p_category: category,
+  });
+}
+
+async function markExamAttemptFailed(access, attemptId, code, env) {
+  if (!access?.phase4 || !attemptId) return;
+  try {
+    await phase4Rpc(env, 'phase4_fail_exam_attempt', {
+      p_user_id: access.userId,
+      p_attempt_id: attemptId,
+      p_safe_error_code: code || 'grading_failed',
+    });
+  } catch (error) {
+    console.error('Exam attempt failure-state update failed', {
+      code: error?.code || 'UNKNOWN',
+    });
   }
 }
 
@@ -1379,6 +1518,12 @@ export default {
         error: {
           code: known ? error.code : 'INTERNAL_ERROR',
           message: known ? error.message : 'The examiner encountered an unexpected error.',
+          ...(known && error.pendingAttemptId
+            ? { pendingAttemptId: String(error.pendingAttemptId) }
+            : {}),
+          ...(known && Number.isFinite(error.retryAfterHours)
+            ? { retryAfterHours: Number(error.retryAfterHours) }
+            : {}),
         },
       }, known ? error.status : 500, requestOrigin, allowedOrigin);
     }

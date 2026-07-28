@@ -9,6 +9,7 @@ GEMINI_GROUNDING_ENABLED = "false"
 ALLOWED_ORIGIN = "https://duediligence.ph"
 ALLOW_LEGACY_GUESTS = "false"
 PHASE4_ACCESS_ENFORCEMENT = "true"
+PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
 
 [observability]
 enabled = true

@@ -280,7 +280,7 @@ try {
   assert.equal(responseBody.assessment.maxScore, 5);
   assert.equal(responseBody.assessment.modelUsed, 'gemini-3.6-flash');
   assert.equal(responseBody.assessment.questionAuthority, 'server_question_bank');
-  assert.equal(responseBody.assessment.sources.length, 2);
+  assert.ok(responseBody.assessment.sources.length >= 2);
   assert.equal(geminiCalls, 2);
 
   const preflight = await worker.fetch(new Request('https://worker.example/', {

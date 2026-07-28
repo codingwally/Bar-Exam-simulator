@@ -133,10 +133,33 @@ export function questionFromBankRow(row) {
     row['Source URL'],
     row.source_url,
   ].map((value) => cleanText(value)).join('\n');
-  const sourceUrl =
-    sourceText.match(/https:\/\/elibrary\.judiciary\.gov\.ph[^\s;,)]*/i)?.[0]
-    || sourceText.match(/https:\/\/(?:sc\.judiciary\.gov\.ph|lawphil\.net)[^\s;,)]*/i)?.[0]
-    || '';
+  const sourceUrls = sanitizeSources(
+    sourceText.split(/\r?\n/).flatMap((line) => {
+      const urls = line.match(/https:\/\/[^\s;,)]*/gi) || [];
+      const label = cleanText(line.split(/https:\/\//i)[0], 500)
+        .replace(/[\s:—-]+$/, '');
+      return urls.map((url) => ({
+        title: label
+          || [caseName, caseCitation].filter(Boolean).join(', ')
+          || 'Stored question-bank authority',
+        url,
+        type: /(?:elibrary|sc\.judiciary|officialgazette|dole|congress|senate)\./i.test(url)
+          ? 'primary'
+          : 'secondary',
+        authority: /elibrary\.judiciary\.gov\.ph/i.test(url)
+          ? 'Supreme Court E-Library'
+          : /sc\.judiciary\.gov\.ph/i.test(url)
+            ? 'Supreme Court of the Philippines'
+            : /lawphil\.net/i.test(url)
+              ? 'Lawphil'
+              : 'Official government source',
+        reference: [caseName, caseCitation].filter(Boolean).join(', '),
+        relevance: label || 'Supports the stored question and controlling legal basis.',
+      }));
+    }),
+  );
+  const primarySource = sourceUrls.find((source) => source.type === 'primary') || sourceUrls[0];
+  const sourceUrl = primarySource?.url || '';
   return {
     subject: cleanText(row.Subject || row.subject),
     question: cleanText(row['Essay Question'] || row.question).replace(/\s*\(noun\)/gi, ''),
@@ -146,6 +169,7 @@ export function questionFromBankRow(row) {
     caseCitation,
     sourceTitle: cleanText(row['Source Title'] || row.source_title || [caseName, caseCitation].filter(Boolean).join(', ')),
     sourceUrl,
+    sourceUrls,
     verified: /^(true|yes|verified|1)$/i.test(cleanText(row.Verified || row.verified)),
     lawCutoffDate: cleanText(row['Law Cutoff Date'] || row.law_cutoff_date),
     authority: 'server_question_bank',
@@ -217,6 +241,9 @@ export function sanitizeSources(values) {
       title: cleanText(source?.title, 500) || new URL(url).hostname,
       url,
       type: cleanText(source?.type, 50) || 'online',
+      authority: cleanText(source?.authority, 200),
+      reference: cleanText(source?.reference, 500),
+      relevance: cleanText(source?.relevance, 800),
     });
   }
   return result.slice(0, 8);
@@ -294,7 +321,9 @@ export function validateExaminerResult(raw, policy, supplementalSources = []) {
     reviewRequired = true;
     label = 'Source conflict — human review required';
   } else if (policy.assessmentType === 'question_bank' && !sources.length) {
-    sourceStatus = 'stored';
+    sourceStatus = 'not_found';
+    reviewRequired = true;
+    label = 'Verified authority unavailable — quality review required';
   }
 
   return {
@@ -316,6 +345,49 @@ export function validateExaminerResult(raw, policy, supplementalSources = []) {
     reviewRequired,
     rubricVersion: RUBRIC_VERSION,
   };
+}
+
+export function modelAnswerQualityIssues(assessment, context = {}) {
+  const alac = assessment?.modelAnswerALAC || {};
+  const answer = cleanText(alac.answer, 3_000);
+  const legalBasis = cleanText(alac.legalBasis, 6_000);
+  const application = cleanText(alac.application, 6_000);
+  const conclusion = cleanText(alac.conclusion, 3_000);
+  const wordCount = (value) => (
+    cleanText(value).match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g) || []
+  ).length;
+  const issues = [];
+
+  if (wordCount(answer) < 3 || wordCount(answer) > 90) {
+    issues.push('Answer must give a direct, responsive position in one to three concise sentences.');
+  }
+  if (wordCount(legalBasis) < 18) {
+    issues.push('Legal Basis must explain the controlling rule, not merely list a citation.');
+  }
+  if (context?.legalBasis && tokenOverlap(legalBasis, context.legalBasis) < 2) {
+    issues.push('Legal Basis must remain anchored to the stored legal basis.');
+  }
+  const requiredApplicationWords = wordCount(context?.question) < 45 ? 24 : 34;
+  if (wordCount(application) < requiredApplicationWords) {
+    issues.push('Application must be the most developed ALAC section.');
+  }
+  if (context?.question && tokenOverlap(application, context.question) < 2) {
+    issues.push('Application must connect the rule to material facts from the exact question.');
+  }
+  if (/^(?:here|in this case),?\s+the facts (?:satisfy|show|establish) the (?:rule|elements)/i.test(application)) {
+    issues.push('Application is generic and must explain why the material facts matter.');
+  }
+  if (!/^(Therefore,|Accordingly,|In view thereof,)/i.test(conclusion) || wordCount(conclusion) < 4) {
+    issues.push('Conclusion must give a definite result consistent with the reasoning.');
+  }
+  const answerPosition = categoricalPosition(answer);
+  const conclusionPosition = categoricalPosition(
+    conclusion.replace(/^(?:Therefore,|Accordingly,|In view thereof,)\s*/i, ''),
+  );
+  if (answerPosition && conclusionPosition && answerPosition !== conclusionPosition) {
+    issues.push('Answer and Conclusion contradict each other.');
+  }
+  return issues;
 }
 
 const ANALYSIS_STOP_WORDS = new Set([
@@ -407,8 +479,7 @@ export function analyzeStudentAnswer(studentAnswer, context = {}) {
   const applicationSection = sections.application || '';
   const expectedApplicationSection = expectedSections.application || '';
   const conclusionSection = sections.conclusion || '';
-  const conclusionMarker = /\b(?:therefore|accordingly|hence|thus|in view thereof|consequently)\b/i.test(answer)
-    || meaningfulTokens(conclusionSection).length >= 2;
+  const conclusionMarker = meaningfulTokens(conclusionSection).length >= 2;
   const questionOverlap = tokenOverlap(answer, context?.question || '');
   const applicationQuestionOverlap = tokenOverlap(applicationSection, context?.question || '');
   const applicationReferenceOverlap = tokenOverlap(
@@ -543,6 +614,9 @@ export const RESPONSE_SCHEMA = {
           title: { type: 'string' },
           url: { type: 'string' },
           type: { type: 'string' },
+          authority: { type: 'string' },
+          reference: { type: 'string' },
+          relevance: { type: 'string' },
         },
       },
     },
@@ -562,7 +636,11 @@ export function buildExaminerPrompt({ questionId, studentAnswer, context, policy
     legalBasis: context.legalBasis || null,
     caseName: context.caseName || null,
     caseCitation: context.caseCitation || null,
-    storedSourceUrl: context.sourceUrl || null,
+    storedSources: Array.isArray(context.sourceUrls) && context.sourceUrls.length
+      ? context.sourceUrls
+      : context.sourceUrl
+        ? [{ title: context.sourceTitle || null, url: context.sourceUrl }]
+        : [],
     verified: context.verified,
     lawCutoffDate: context.lawCutoffDate || null,
     requiredAssessmentType: policy.assessmentType,
@@ -597,6 +675,12 @@ REFERENCE RULES:
 - Prefer stored source URLs, Supreme Court E-Library, Supreme Court, Official Gazette, Lawphil, then clearly labeled reputable secondary sources.
 
 MODEL ANSWER: Always return four ALAC fields. "answer" is 1–2 categorical sentences. "legalBasis" states governing rules. "application" applies those rules to the exact facts. "conclusion" starts with "Therefore,", "Accordingly,", or "In view thereof,".
+- Answer: give a direct and responsive position, ordinarily in one to three sentences.
+- Legal Basis: explain the controlling constitutional, statutory, procedural, ethical, or jurisprudential rule. Include material elements, exceptions, qualifications, and doctrine when applicable. Do not merely list citations.
+- Application: make this the most developed section. Connect each decisive fact to the corresponding rule, explain why the fact matters, and address a plausible counterargument or exception when relevant. Generic language such as "the facts satisfy the rule" is insufficient.
+- Conclusion: give a definite result consistent with the Answer and reasoning.
+- Use the stored legal substance as the controlling corpus. Improve explanation and organization without replacing or embellishing it.
+- Do not claim "Human Verified" unless the input explicitly marks the record verified.
 
 Return JSON only matching the supplied schema. Keep rationale to 2–4 concise sentences, strengths/errors to at most 3 each, and improvements to at most 5.
 

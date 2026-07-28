@@ -13,6 +13,7 @@ const frontend = text('assets/phase2-experience.js');
 const publicPage = text('index.html');
 const admin = text('admin/admin.js');
 const workflow = text('.github/workflows/deploy.yml');
+const productionBundleBuilder = text('scripts/build-phase4-production-bundle.mjs');
 
 for (const table of [
   'payment_requests',
@@ -93,6 +94,16 @@ assert.doesNotMatch(publicPage, /Angel Investors|Sponsored placement|FGMALLARI|I
 assert.doesNotMatch(publicPage, /content\/question-bank|website-upload\.json/);
 assert.match(workflow, /node scripts\/build-pages-artifact\.mjs/);
 assert.match(workflow, /path:\s*'\.pages-dist'/);
+for (const version of ['20260730005', '20260730006', '20260730007', '20260730008']) {
+  assert.match(productionBundleBuilder, new RegExp(version));
+}
+assert.match(productionBundleBuilder, /must contain exactly one outer BEGIN and COMMIT/);
+assert.match(productionBundleBuilder, /flag: 'wx'/);
+assert.match(productionBundleBuilder, /insert into supabase_migrations\.schema_migrations/);
+assert.match(productionBundleBuilder, /begin;[\s\S]*commit;/);
+assert.match(productionBundleBuilder, /rollbackOnly \? 'rollback' : 'commit'/);
+assert.match(productionBundleBuilder, /omitLedger \? 'omitted' : 'included'/);
+assert.doesNotMatch(productionBundleBuilder, /db push|service.role|access.token/i);
 
 for (const [relative, expected] of Object.entries({
   'assets/payments/gcash.png':

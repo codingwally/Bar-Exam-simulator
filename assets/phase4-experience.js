@@ -234,6 +234,15 @@
   global.DueDiligencePhase2 = phase4;
   global.DueDiligencePhase4 = phase4;
 
+  global.addEventListener('duediligence:session', (event) => {
+    if (event.detail?.authenticated) {
+      refreshAccess().catch(() => {});
+      return;
+    }
+    state.access = null;
+    syncAccessUi();
+  });
+
   global.addEventListener('load', () => {
     if (session()?.access_token) refreshAccess().catch(() => {});
     const guestButton = document.getElementById('dd2-guest-continue');

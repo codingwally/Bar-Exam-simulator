@@ -36,10 +36,14 @@ assert.ok(frontend.includes('No visible clock. Active writing time is still reco
 assert.ok(frontend.includes('clearPersistedWorkspace'));
 assert.ok(frontend.includes('restorePersistedWorkspace'));
 assert.ok(frontend.includes('switchSessionMode'));
+assert.ok(frontend.includes('function questionAnswerKey('));
+assert.ok(frontend.includes('userAnswers[questionAnswerKey()]'));
+assert.doesNotMatch(frontend, /userAnswers\[`?\$\{currentSubj\}-\$\{currentIdx\}`?\]/);
 assert.ok(frontend.includes("submissionReason: 'strict_expiry'"));
 assert.ok(frontend.includes('Unanswered attempt recorded'));
 assert.ok(experience.includes("request('/exam/unanswered'"));
 assert.ok(experience.includes("request('/exam/history'"));
+assert.ok(experience.includes("global.addEventListener('duediligence:session'"));
 assert.doesNotMatch(frontend, /Advances once when time expires/i);
 assert.doesNotMatch(frontend, /Automatically proceeds when time expires/i);
 

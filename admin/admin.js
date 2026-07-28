@@ -894,6 +894,22 @@
     $('#audit-dialog').showModal();
   }
 
+  function cancelActionDialog(options = {}) {
+    const dialog = $('#action-dialog');
+    if (!dialog?.open) {
+      state.action = null;
+      return;
+    }
+    const consumeHistory = options.consumeHistory !== false;
+    const historyArmed = history.state?.dueDiligenceAdminAction === true;
+    dialog.close('cancel');
+    state.action = null;
+    state.actionInFlight = false;
+    const confirm = $('#action-confirm');
+    if (confirm) confirm.disabled = false;
+    if (consumeHistory && historyArmed) history.back();
+  }
+
   function openAction(action, targetId, payload) {
     state.action = { action, targetId: targetId || null, payload: { ...(payload || {}) } };
     state.actionInFlight = false;
@@ -1003,15 +1019,17 @@
     $('#action-reason').value = '';
     if (isAccessAction) updateActionContext();
     $('#action-dialog').showModal();
+    if (history.state?.dueDiligenceAdminAction !== true) {
+      history.pushState(
+        { ...(history.state || {}), dueDiligenceAdminAction: true },
+        '',
+        location.href,
+      );
+    }
   }
 
   async function confirmAction(event) {
     event.preventDefault();
-    if (event.submitter?.value === 'cancel') {
-      $('#action-dialog').close();
-      state.action = null;
-      return;
-    }
     if (!state.action || state.actionInFlight) return;
     const accessAction = Boolean(subscriptionActions?.isAccessAction(state.action.action));
     if (accessAction && !$('#action-confirm-risk').checked) {
@@ -1144,10 +1162,9 @@
           toast('Audited access action completed and the row was refreshed.');
         }
       }
-      $('#action-dialog').close();
+      cancelActionDialog();
       state.operational.clear();
       await renderSection(state.section);
-      state.action = null;
     } catch (error) {
       toast(error.message || 'Action failed without changing production data.');
     } finally {
@@ -1274,6 +1291,18 @@
     location.replace('../');
   });
   $('#action-form')?.addEventListener('submit', confirmAction);
+  $('#action-dialog-close')?.addEventListener('click', () => cancelActionDialog());
+  $('#action-dialog-cancel')?.addEventListener('click', () => cancelActionDialog());
+  $('#action-dialog')?.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    cancelActionDialog();
+  });
+  $('#action-dialog')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) cancelActionDialog();
+  });
+  global.addEventListener('popstate', () => {
+    if ($('#action-dialog')?.open) cancelActionDialog({ consumeHistory: false });
+  });
 
   initialize().catch(() => deny('The dashboard could not be initialized. No production data was changed.'));
 })(window);

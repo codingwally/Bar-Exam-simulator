@@ -554,6 +554,11 @@ function phase4AccessEnforced(env) {
   return String(env.PHASE4_ACCESS_ENFORCEMENT).toLowerCase() === 'true';
 }
 
+function authenticatedSubmissionsEnforced(env) {
+  return phase4AccessEnforced(env)
+    || String(env.REQUIRE_AUTHENTICATED_SUBMISSIONS).toLowerCase() === 'true';
+}
+
 function phase4ModelQualityEnforced(env) {
   return String(env.PHASE4_MODEL_QUALITY_ENFORCEMENT).toLowerCase() === 'true';
 }
@@ -570,6 +575,21 @@ async function requireAuthenticatedUser(request, env) {
   return user;
 }
 
+async function requireAuthenticatedSubmission(request, env, activity = 'submitting this request') {
+  if (!authenticatedSubmissionsEnforced(env)) {
+    return verifiedAuthenticatedUser(request, env);
+  }
+  const user = await verifiedAuthenticatedUser(request, env);
+  if (!user) {
+    throw new AccessValidationError(
+      'AUTHENTICATION_REQUIRED',
+      `Sign in with Google before ${activity}.`,
+      401,
+    );
+  }
+  return user;
+}
+
 async function phase4AccessForUser(env, userId, options = {}) {
   const result = await phase4Rpc(env, 'phase4_access_snapshot', {
     p_user_id: userId,
@@ -579,9 +599,9 @@ async function phase4AccessForUser(env, userId, options = {}) {
   return normalizeAccessSnapshot(result);
 }
 
-async function reserveGradeAccess(request, env, gradingRequest) {
+async function reserveGradeAccess(request, env, gradingRequest, verifiedUser = null) {
   if (phase4AccessEnforced(env)) {
-    const authenticatedUser = await requireAuthenticatedUser(request, env);
+    const authenticatedUser = verifiedUser || await requireAuthenticatedUser(request, env);
     const requestId = normalizeRequestKey(request.headers.get('X-Request-ID'));
     const reservation = await phase4Rpc(env, 'phase4_reserve_grade_v2', {
       p_user_id: authenticatedUser.id,
@@ -1013,6 +1033,11 @@ async function callGemini(env, prompt, groundingEnabled) {
 
 async function handleGrade(request, env, origin, allowedOrigin) {
   await enforceRateLimit(request, env);
+  const submissionUser = await requireAuthenticatedSubmission(
+    request,
+    env,
+    'submitting an examination answer',
+  );
   let payload;
   try {
     payload = await request.json();
@@ -1025,7 +1050,7 @@ async function handleGrade(request, env, origin, allowedOrigin) {
   let attemptId = null;
 
   try {
-    gradeAccess = await reserveGradeAccess(request, env, gradingRequest);
+    gradeAccess = await reserveGradeAccess(request, env, gradingRequest, submissionUser);
     let bankContext = null;
     try {
       const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
@@ -1336,6 +1361,11 @@ async function handleGuestAccess(request, env, origin, allowedOrigin) {
 
 async function handleCorrection(request, env, origin, allowedOrigin) {
   await enforceCorrectionRateLimit(request, env);
+  const correctionUser = await requireAuthenticatedSubmission(
+    request,
+    env,
+    'suggesting a correction or better answer',
+  );
   const declaredLength = Number(request.headers.get('Content-Length') || 0);
   if (Number.isFinite(declaredLength) && declaredLength > CORRECTION_LIMITS.requestBytes) {
     throw new ExaminerError('INVALID_CORRECTION', 'The correction request is too large.', 413);
@@ -1390,9 +1420,6 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
     );
   }
 
-  const correctionUser = phase4AccessEnforced(env)
-    ? await requireAuthenticatedUser(request, env)
-    : await verifiedAuthenticatedUser(request, env);
   const insertResponse = await fetch(
     new URL('/rest/v1/question_corrections', supabaseUrl),
     {
@@ -1427,6 +1454,11 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
 
 async function handleSupport(request, env, origin, allowedOrigin) {
   await enforceSupportRateLimit(request, env);
+  const supportUser = await requireAuthenticatedSubmission(
+    request,
+    env,
+    'sending a Co-Counsel request',
+  );
   const declaredLength = Number(request.headers.get('Content-Length') || 0);
   if (Number.isFinite(declaredLength) && declaredLength > SUPPORT_LIMITS.requestBytes) {
     throw new ExaminerError('INVALID_SUPPORT_REQUEST', 'The support request is too large.', 413);
@@ -1451,7 +1483,6 @@ async function handleSupport(request, env, origin, allowedOrigin) {
     throw error;
   }
 
-  const supportUser = await verifiedAuthenticatedUser(request, env);
   const supabaseUrl = configuredSupabaseUrl(env);
   const response = await fetch(new URL('/rest/v1/support_requests', supabaseUrl), {
     method: 'POST',
@@ -1804,7 +1835,11 @@ async function handleRefundSubmit(request, env, origin, allowedOrigin) {
 
 async function handlePartnershipSubmit(request, env, origin, allowedOrigin) {
   await enforcePartnershipRateLimit(request, env);
-  const user = await verifiedAuthenticatedUser(request, env);
+  const user = await requireAuthenticatedSubmission(
+    request,
+    env,
+    'sending a Joint Venture inquiry',
+  );
   const input = normalizePartnershipRequest(await parseBoundedJson(request, 12_000));
   const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
   const result = await commerceRpc(env, 'phase4_create_partnership_inquiry', {

@@ -6,7 +6,7 @@
   const titles = Object.freeze({
     executive: 'Chambers',
     realtime: 'Live Activity',
-    acquisition: 'Visitors and Sign-ups',
+    acquisition: 'Visitors & Sign-ups',
     users: 'Students',
     learning: 'Performance',
     subjects: 'Question Bank',
@@ -18,7 +18,7 @@
     corrections: 'Answer Corrections',
     partnerships: 'Joint Ventures',
     controls: 'Website Settings',
-    security: 'Access and Activity Log',
+    security: 'Access & Activity Log',
   });
   const requirements = Object.freeze({
     users: 'analytics_viewer',
@@ -304,7 +304,7 @@
       ];
     });
     return `
-      ${heading('Visitors and Sign-ups', 'Sanitized sources and activation steps. A zero denominator is reported as unavailable, never as infinity.')}
+      ${heading('Visitors & Sign-ups', 'Sanitized sources and activation steps. A zero denominator is reported as unavailable, never as infinity.')}
       <div class="work-grid">
         <section class="panel"><h3>Source and medium</h3>${table(
           ['Source', 'Medium', 'Sessions'],
@@ -633,7 +633,7 @@
   async function renderSecurity() {
     const data = await loadOperational('security');
     return `
-      ${heading('Access and Activity Log', 'Only the Super Admin may grant administrator roles or capabilities. Administrators cannot grant privileges to themselves or create another Super Admin.')}
+      ${heading('Access & Activity Log', 'Only the Super Admin may grant administrator roles or capabilities. Administrators cannot grant privileges to themselves or create another Super Admin.')}
       <div class="notice">Wally remains the sole Super Admin. Founder Admin assignments use verified Auth UUIDs; no founder email is hardcoded in authorization logic.</div>
       ${table(
         ['Time', 'Action', 'Actor UUID', 'Target type', 'Target', 'Reason'],

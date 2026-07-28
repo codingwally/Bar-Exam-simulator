@@ -63,7 +63,7 @@
       } else if (access.basis === 'free_beta') {
         badge.textContent = 'Free Beta Access';
       } else if (access.basis === 'paid_subscription') {
-        badge.textContent = 'Active subscription';
+        badge.textContent = 'Active Retainer';
       } else {
         badge.textContent = `${access.freeGrades?.remaining ?? 0} lifetime grades remaining`;
       }

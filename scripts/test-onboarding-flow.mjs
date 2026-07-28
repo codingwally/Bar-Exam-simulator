@@ -14,7 +14,7 @@ assert.match(html, /let currentSubj = null;/, 'A new visitor must not silently s
 assert.doesNotMatch(html, /requestAnimationFrame\(showInvestorWelcome\)/, 'Patron modal must not auto-open.');
 assert.match(html, /duediligence\.terms\.accepted\.v1/);
 assert.match(html, /id="terms-modal"[\s\S]*aria-modal="true"/);
-assert.match(html, /id="signin-prompt-modal"[\s\S]*Save Your Progress/);
+assert.match(html, /id="signin-prompt-modal"[\s\S]*Enter the Moot Court/);
 assert.match(
   html,
   /function continueAfterTerms\(\) \{\s*if \(window\.DueDiligencePhase4\?\.getSession\?\.\(\)\?\.access_token\) \{\s*showSubjectSelection\(\);\s*return;/,

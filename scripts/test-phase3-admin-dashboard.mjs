@@ -12,28 +12,28 @@ const [html, css, js, analytics, worker, migration, preflight] = await Promise.a
 ]);
 
 const sectionLabels = [
-  'Executive Overview',
-  'Realtime &amp; Traffic',
-  'Acquisition &amp; Conversion',
-  'Users &amp; Cohorts',
-  'Learning &amp; Scores',
-  'Subjects &amp; Questions',
-  'Gemini &amp; Reliability',
-  'Access &amp; Subscriptions',
-  'Payment Verification',
-  'Refund Requests',
-  'Support &amp; Recovery',
-  'Correction Queue',
-  'Partnership Inquiries',
-  'Website Controls',
-  'Roles, Security &amp; Audit',
+  'Chambers',
+  'Live Activity',
+  'Visitors &amp; Sign-ups',
+  'Students',
+  'Performance',
+  'Question Bank',
+  'AI Grading Health',
+  'Retainer Management',
+  'Payment Review',
+  'Refunds',
+  'Co-Counsel Requests',
+  'Answer Corrections',
+  'Joint Ventures',
+  'Website Settings',
+  'Access &amp; Activity Log',
 ];
 for (const label of sectionLabels) assert.match(html, new RegExp(label.replace(/[&]/g, '&')));
 assert.doesNotMatch(html, /Advertiser &amp; Investor/);
 
 assert.match(html, /aria-label="Admin sections"/);
 assert.match(html, /aria-live="polite"/);
-assert.match(html, /Skip to dashboard/);
+assert.match(html, /Skip to Chambers/);
 assert.match(css, /prefers-reduced-motion/);
 assert.match(css, /@media \(max-width: 560px\)/);
 assert.match(css, /@media print/);
@@ -41,7 +41,7 @@ assert.match(css, /@media print/);
 assert.match(js, /Paid subscribers: Not connected/);
 assert.match(js, /Scenario only — not actual performance/);
 assert.match(js, /Final identity transfer is disabled/);
-assert.match(js, /Contact Support\. We respond within 24 hours\./);
+assert.match(js, /Contact Co-Counsel\. We respond within 24 hours\./);
 assert.match(js, /No production data was changed/);
 assert.match(js, /No verified events/);
 assert.match(js, /Administrator request failed/);

@@ -371,7 +371,12 @@
 
   /* ---- Cinematic atmosphere backdrop ---- */
   #atmosphere{position:fixed;inset:0;z-index:-2;overflow:hidden;background:#04101f;}
-  #atmosphere video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.5;}
+  #atmosphere:before{
+    content:"";position:absolute;inset:-4%;
+    background:url("assets/phase2-law-library.jpg") center/cover no-repeat;
+    opacity:.16;filter:saturate(.72) contrast(1.06);
+    animation:ambient-library-drift 32s ease-in-out infinite alternate;
+  }
   #atmosphere .marble{
     position:absolute;inset:0;
     background:
@@ -382,24 +387,43 @@
   }
   #atmosphere .glass{position:absolute;inset:0;background:rgba(0,33,71,.85);backdrop-filter:blur(8px);}
   @keyframes drift{from{transform:scale(1.05) translateX(-1%);}to{transform:scale(1.12) translateX(1%);}}
+  @keyframes ambient-library-drift{
+    from{transform:scale(1.03) translate3d(-.5%,0,0);}
+    to{transform:scale(1.08) translate3d(.5%,-.4%,0);}
+  }
 
   /* ---- Top bar (SPA) ---- */
+  .beta-notice{
+    position:relative;z-index:1001;display:flex;align-items:center;justify-content:center;gap:8px;
+    min-height:30px;padding:6px 20px;background:#f5efe2;border-bottom:1px solid rgba(197,160,89,.46);
+    color:#66512a;font-family:var(--sans);font-size:11px;line-height:1.4;text-align:center;
+  }
+  .beta-notice strong{color:#8a681e;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;}
+  .beta-notice button{
+    padding:0;border:0;border-bottom:1px solid currentColor;background:transparent;color:#7b5b16;
+    font:inherit;font-weight:700;cursor:pointer;
+  }
+  .beta-notice button:hover,.beta-notice button:focus-visible{color:#3e2c09;outline-offset:3px;}
   .topbar{
     position:sticky;top:0;z-index:1000;
-    display:flex;align-items:center;gap:22px;
-    padding:12px 26px;
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px 22px;
+    padding:12px 26px 9px;
     background:linear-gradient(180deg, rgba(8,18,37,.96), rgba(8,18,37,.88));
     border-bottom:1px solid rgba(197,160,89,.30);
     box-shadow:0 8px 30px rgba(0,15,35,.35);
     backdrop-filter:blur(10px);
   }
-  .topbar .brand{display:flex;align-items:center;gap:12px;flex:none;}
+  .topbar .brand{display:flex;align-items:center;gap:12px;flex:none;text-decoration:none;border-radius:8px;}
+  .topbar .brand:focus-visible{outline:2px solid var(--gold);outline-offset:4px;}
   .topbar .crest{width:42px;height:42px;filter:drop-shadow(0 2px 5px rgba(0,0,0,.4));}
   .topbar .brand-name{font-family:var(--serif-display);font-weight:700;font-size:18px;letter-spacing:2px;color:#F6EFDD;text-transform:uppercase;line-height:1;}
   .topbar .brand-sub{font-family:var(--mono);font-size:8.5px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-top:3px;}
   .site-menu-toggle{display:none;font-family:var(--sans);font-weight:700;font-size:12px;color:#F6EFDD;background:rgba(255,255,255,.05);border:1px solid rgba(197,160,89,.45);border-radius:8px;padding:8px 12px;cursor:pointer;}
 
-  .spa-nav{display:flex;gap:4px;flex:1;justify-content:center;flex-wrap:wrap;}
+  .spa-nav{
+    display:flex;grid-column:1/-1;grid-row:2;gap:4px;justify-content:center;flex-wrap:wrap;
+    padding-top:7px;border-top:1px solid rgba(197,160,89,.16);
+  }
   .spa-tab{
     font-family:var(--sans);font-weight:600;font-size:12.5px;letter-spacing:.3px;
     color:#cdd6e4;background:transparent;border:none;border-radius:9px;
@@ -407,8 +431,9 @@
   }
   .spa-tab:hover{background:rgba(255,255,255,.06);color:#fff;}
   .spa-tab.active{background:linear-gradient(180deg,rgba(197,160,89,.22),rgba(197,160,89,.08));color:#F6EFDD;box-shadow:inset 0 -2px 0 var(--gold);}
+  .spa-tab.account-tab{border:1px solid rgba(197,160,89,.42);color:#f8edcf;}
 
-  .topbar-actions{display:flex;align-items:center;gap:9px;flex:none;}
+  .topbar-actions{display:flex;grid-column:3;grid-row:1;align-items:center;justify-content:flex-end;gap:9px;flex:none;}
   .icon-btn{font-family:var(--sans);font-weight:600;font-size:12px;color:#e7ecf4;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);padding:8px 13px;border-radius:9px;cursor:pointer;transition:all .2s;}
   .icon-btn:hover{background:rgba(255,255,255,.12);}
   /* ---- SPA pages ---- */
@@ -486,8 +511,8 @@
 
   /* ---- Responsive additions ---- */
   @media (max-width:980px){
-    .topbar{flex-wrap:wrap;gap:12px;padding:12px 16px;}
-    .spa-nav{order:3;width:100%;justify-content:flex-start;flex-wrap:wrap;padding-bottom:2px;}
+    .topbar{gap:12px;padding:12px 16px 9px;}
+    .spa-nav{width:100%;justify-content:flex-start;flex-wrap:wrap;padding-bottom:2px;}
     .topbar-actions{margin-left:auto;}
     .exam-subnav{padding:16px 16px 0;}
     .mode-toggle{margin-left:0;}
@@ -501,6 +526,8 @@
     .spa-tab{width:100%;min-height:42px;text-align:left;border:1px solid rgba(197,160,89,.18);background:rgba(255,255,255,.035);}
   }
   @media (max-width:560px){
+    .beta-notice{flex-wrap:wrap;gap:2px 6px;padding:7px 10px;}
+    .beta-notice button{flex-basis:100%;margin-top:2px;}
     .topbar{gap:8px;padding:10px 12px;}
     .topbar .brand{gap:8px;min-width:0;}
     .topbar .crest{width:34px;height:34px;}
@@ -517,6 +544,7 @@
     .topbar{grid-template-columns:minmax(0,1fr) auto;}
     .site-menu-toggle{grid-column:2;grid-row:1;}
     .topbar-actions{grid-column:1/-1;grid-row:2;justify-content:stretch;}
+    .spa-nav{grid-row:3;}
     .topbar-actions .icon-btn{width:100%;justify-content:center;min-height:42px;}
   }
 
@@ -641,15 +669,38 @@
   [hidden]{display:none!important;}
   .onboarding-state{max-width:1040px;margin:0 auto;padding:64px 28px 72px;}
   .welcome-card,.subject-selection-card{position:relative;overflow:hidden;max-width:850px;margin:0 auto;padding:56px;border:1px solid rgba(197,160,89,.5);border-top:4px solid var(--gold);border-radius:24px;background:rgba(250,249,246,.97);box-shadow:0 28px 70px rgba(2,12,35,.22);}
-  .welcome-card:after,.subject-selection-card:after{content:"";position:absolute;right:-90px;bottom:-120px;width:330px;height:330px;border:1px solid rgba(197,160,89,.18);border-radius:50%;pointer-events:none;}
+  .subject-selection-card:after{content:"";position:absolute;right:-90px;bottom:-120px;width:330px;height:330px;border:1px solid rgba(197,160,89,.18);border-radius:50%;pointer-events:none;}
+  .welcome-card{
+    max-width:1120px;min-height:570px;padding:70px 46px 0;display:flex;flex-direction:column;justify-content:space-between;
+    background:
+      linear-gradient(90deg,rgba(3,20,39,.98) 0%,rgba(4,25,48,.92) 44%,rgba(4,24,45,.52) 72%,rgba(4,20,37,.36) 100%),
+      linear-gradient(0deg,rgba(3,18,34,.96) 0%,transparent 54%),
+      url("assets/phase2-law-library.jpg") 68% center/cover no-repeat,
+      #06172b;
+    border-color:rgba(197,160,89,.58);border-radius:18px;
+  }
+  .welcome-content{position:relative;z-index:1;max-width:650px;}
   .welcome-kicker,.selection-kicker{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#8a681e;margin-bottom:14px;}
   .welcome-card h1,.subject-selection-card h1{max-width:700px;margin:0;color:var(--navy);font-family:var(--serif);font-size:clamp(38px,6vw,66px);line-height:1.04;letter-spacing:-1.5px;}
-  .welcome-card>p,.subject-selection-card>p{max-width:690px;margin:22px 0 30px;color:#334155;font-family:var(--sans);font-size:17px;line-height:1.75;}
+  .welcome-card .welcome-kicker{color:#d8b35c;}
+  .welcome-card h1{color:#fff;font-size:clamp(48px,6.2vw,76px);letter-spacing:-2px;text-shadow:0 3px 28px rgba(0,0,0,.35);}
+  .welcome-content>p,.subject-selection-card>p{max-width:690px;margin:22px 0 30px;color:#334155;font-family:var(--sans);font-size:17px;line-height:1.75;}
+  .welcome-content>p{max-width:590px;color:#eef3f8;font-size:16.5px;line-height:1.72;text-shadow:0 2px 16px rgba(0,0,0,.3);}
   .welcome-actions{display:flex;align-items:center;gap:15px;flex-wrap:wrap;}
-  .welcome-actions .btn-primary{padding:14px 25px;border-radius:10px;font-size:13px;}
+  .welcome-actions .btn-primary{min-width:226px;padding:15px 25px;border-radius:7px;font-size:12px;letter-spacing:1.2px;box-shadow:0 12px 28px rgba(0,0,0,.24);}
+  .welcome-proof{display:flex;gap:10px 24px;flex-wrap:wrap;margin-top:20px;color:#c8d3df;font-family:var(--mono);font-size:9.5px;letter-spacing:.7px;text-transform:uppercase;}
+  .welcome-proof span{display:inline-flex;align-items:center;gap:7px;}
+  .welcome-proof span:before{content:"";width:4px;height:4px;border-radius:50%;background:var(--gold);}
+  .welcome-feature-grid{
+    position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:62px -46px 0;
+    border-top:1px solid rgba(197,160,89,.36);background:rgba(3,17,32,.66);backdrop-filter:blur(8px);
+  }
+  .welcome-feature{min-height:142px;padding:22px 26px;border-right:1px solid rgba(197,160,89,.24);}
+  .welcome-feature:last-child{border-right:0;}
+  .welcome-feature strong{display:block;margin-bottom:8px;color:#f7ecd1;font-family:var(--serif);font-size:16px;}
+  .welcome-feature p{margin:0;color:#cbd5e1;font-family:var(--sans);font-size:12px;line-height:1.55;}
   .subject-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:28px;}
   .subject-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 18px;border:1px solid #d8dee8;border-radius:12px;background:#fff;color:#10233e;cursor:pointer;text-align:left;font-family:var(--sans);font-weight:700;font-size:14px;}
-  .subject-choice:after{content:"→";color:#9b7829;font-size:18px;}
   .subject-choice:hover,.subject-choice:focus-visible{border-color:var(--gold);box-shadow:0 8px 24px rgba(2,12,35,.08);outline:none;}
   .subject-loading{min-height:24px;margin-top:18px;color:#725715;font-family:var(--sans);font-size:13px;}
   #exam-shell{min-height:70vh;}
@@ -671,10 +722,20 @@
   .signin-prompt-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px;}
   body.onboarding-active .exam-only-action{display:none!important;}
   @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}}
+  @media(max-width:920px){
+    .welcome-card{min-height:0;padding:54px 34px 0;}
+    .welcome-feature-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin:48px -34px 0;}
+    .welcome-feature:nth-child(2){border-right:0;}
+    .welcome-feature:nth-child(-n+2){border-bottom:1px solid rgba(197,160,89,.24);}
+  }
   @media(max-width:760px){
     .onboarding-state{padding:34px 16px 52px;}
     .welcome-card,.subject-selection-card{padding:34px 24px;border-radius:18px;}
+    .welcome-card{padding-bottom:0;}
     .welcome-card h1,.subject-selection-card h1{font-size:38px;}
+    .welcome-feature-grid{grid-template-columns:1fr;margin:40px -24px 0;}
+    .welcome-feature{min-height:0;padding:19px 24px;border-right:0;border-bottom:1px solid rgba(197,160,89,.24);}
+    .welcome-feature:last-child{border-bottom:0;}
     .subject-choice-grid,.session-mode-grid{grid-template-columns:1fr;}
     .session-mode-option{min-height:0;}
     .signin-prompt-actions{grid-template-columns:1fr;}
@@ -692,15 +753,18 @@
 <body>
 
 <div id="atmosphere" aria-hidden="true">
-  <video autoplay muted loop playsinline poster="">
-    <source src="assets/atmosphere.mp4" type="video/mp4">
-  </video>
   <div class="marble"></div>
   <div class="glass"></div>
 </div>
 
+<div class="beta-notice" role="status">
+  <strong>Early Access Beta:</strong>
+  <span>Some features are still being refined.</span>
+  <button type="button" data-dd2-view="support">Report to Co-Counsel</button>
+</div>
+
 <header class="topbar">
-  <div class="brand">
+  <a class="brand" href="/" aria-label="Due Diligence home">
     <svg class="crest" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Scales of Justice crest">
       <circle cx="24" cy="24" r="22.5" stroke="#C5A059" stroke-width="1.5" fill="#0a1a30"/>
       <circle cx="24" cy="24" r="18.5" stroke="#C5A059" stroke-width="0.8" opacity="0.6"/>
@@ -725,22 +789,31 @@
       <div class="brand-name">Due Diligence</div>
       <div class="brand-sub">PH Bar Exam Simulator</div>
     </div>
-  </div>
+  </a>
 
   <button class="site-menu-toggle" id="site-menu-toggle" type="button"
     aria-controls="spa-nav" aria-expanded="false">Menu</button>
   <nav class="spa-nav" id="spa-nav" aria-label="Primary navigation">
-    <button class="spa-tab active" id="spa-mock" onclick="showPage('mock', this)">Practice</button>
-    <button class="spa-tab" id="spa-progress" onclick="openAnalytics()">Progress</button>
-    <button class="spa-tab" id="spa-pricing" data-dd2-view="pricing">Plans &amp; Access</button>
-    <button class="spa-tab" id="spa-jurisprudence" onclick="showPage('jurisprudence', this)">Legal Updates</button>
-    <button class="spa-tab" id="spa-support" data-dd2-view="support">Support</button>
-    <button class="spa-tab" id="spa-partner" data-dd2-view="partnership">Partner With Us</button>
+    <button class="spa-tab active" id="spa-mock" title="Practice Philippine Bar-style questions."
+      onclick="showPage('mock', this)">Moot Court</button>
+    <button class="spa-tab" id="spa-progress" title="Review scores, feedback, and performance."
+      onclick="openAnalytics()">The Verdict</button>
+    <button class="spa-tab" id="spa-pricing" title="Manage your plan and platform access."
+      data-dd2-view="pricing">Retainer</button>
+    <button class="spa-tab" id="spa-community" title="Discuss doctrines, questions, and study strategies."
+      onclick="showPage('community', this)">Lex Forum</button>
+    <button class="spa-tab" id="spa-jurisprudence" title="Review important legal developments and cases."
+      onclick="showPage('jurisprudence', this)">Recent Jurisprudence</button>
+    <button class="spa-tab" id="spa-support" title="Get technical and account assistance."
+      data-dd2-view="support">Co-Counsel</button>
+    <button class="spa-tab" id="spa-partner" title="Explore school, sponsor, and institutional partnerships."
+      data-dd2-view="partnership">Joint Venture</button>
+    <button class="spa-tab account-tab" id="btn-signin" type="button"
+      title="Manage your profile, preferences, and activity.">The Docket · Sign In</button>
   </nav>
 
   <div class="topbar-actions">
     <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>00:00:00</div>
-    <button class="icon-btn hide-sm" id="btn-signin" type="button">Sign In</button>
   </div>
 </header>
 
@@ -748,11 +821,36 @@
 <section id="page-mock" class="page active">
   <div id="welcome-state" class="onboarding-state">
     <article class="welcome-card" aria-labelledby="welcome-title">
-      <div class="welcome-kicker">Philippine Bar Essay Preparation</div>
-      <h1 id="welcome-title">Prepare with purpose.</h1>
-      <p>Practice Philippine Bar questions, structure answers using ALAC, and receive source-based feedback designed for serious legal study.</p>
-      <div class="welcome-actions">
-        <button type="button" class="btn-primary" id="start-practice" onclick="startPractice()">Start Practice</button>
+      <div class="welcome-content">
+        <div class="welcome-kicker">Philippine Bar Essay Preparation</div>
+        <h1 id="welcome-title">Prepare with purpose.</h1>
+        <p>Build disciplined Bar answers through realistic essay simulations, the Philippine ALAC method, and source-based coaching designed for serious legal study.</p>
+        <div class="welcome-actions">
+          <button type="button" class="btn-primary" id="start-practice" onclick="startPractice()">Commence Examination</button>
+        </div>
+        <div class="welcome-proof" aria-label="Platform scope">
+          <span>8 Bar subjects</span>
+          <span>320 curated questions</span>
+          <span>0–5 assessment scale</span>
+        </div>
+      </div>
+      <div class="welcome-feature-grid" aria-label="Moot Court features">
+        <div class="welcome-feature">
+          <strong>Realistic practice</strong>
+          <p>Deliberate timed and self-paced essay sessions modeled for Bar preparation.</p>
+        </div>
+        <div class="welcome-feature">
+          <strong>ALAC feedback</strong>
+          <p>Per-question coaching on Answer, Legal Basis, Application, and Conclusion.</p>
+        </div>
+        <div class="welcome-feature">
+          <strong>Track your verdicts</strong>
+          <p>Review saved attempts and individual five-point assessments without invented averages.</p>
+        </div>
+        <div class="welcome-feature">
+          <strong>Study with authority</strong>
+          <p>Use curated legal sources and verify cited authorities against official repositories.</p>
+        </div>
       </div>
     </article>
   </div>
@@ -760,7 +858,7 @@
   <div id="subject-selection-state" class="onboarding-state" hidden>
     <article class="subject-selection-card" aria-labelledby="subject-selection-title">
       <div class="selection-kicker">Choose Your Review Subject</div>
-      <h1 id="subject-selection-title">What will you practice today?</h1>
+      <h1 id="subject-selection-title">Choose your Moot Court subject.</h1>
       <p>Select a Philippine Bar subject. Its first valid question will load before you choose a session mode; no timer starts during selection.</p>
       <div class="subject-choice-grid" id="subject-choice-grid"></div>
       <div class="subject-loading" id="subject-loading-status" role="status" aria-live="polite"></div>
@@ -771,14 +869,14 @@
     <div class="page-wrap" style="padding-bottom:0;">
       <div class="page-head" style="margin-bottom:14px;">
         <div class="eyebrow">Focused Essay Workspace</div>
-        <h2>Mock Bar Exam</h2>
+        <h2>Moot Court</h2>
       </div>
     </div>
 
     <div class="exam-subnav">
-      <button class="tabbtn active" id="tab-write">Write &amp; Practice</button>
-      <button class="tabbtn" id="tab-history">History</button>
-      <button class="tabbtn feedback-btn" id="btn-open-feedback">Support</button>
+      <button class="tabbtn active" id="tab-write">Answer &amp; Review</button>
+      <button class="tabbtn" id="tab-history">The Verdict</button>
+      <button class="tabbtn feedback-btn" id="btn-open-feedback">Co-Counsel</button>
     </div>
 
     <div class="layout">
@@ -786,6 +884,30 @@
       <div class="main" id="main"></div>
     </div>
 
+  </div>
+</section>
+
+<section id="page-community" class="page">
+  <div class="page-wrap">
+    <div class="page-head">
+      <div class="eyebrow">Early Access Preview</div>
+      <h2>Lex Forum</h2>
+      <p>A future moderated space for doctrine-focused study discussions. Community publishing is not active during Early Access Beta.</p>
+    </div>
+    <div class="card-grid">
+      <article class="info-card">
+        <div class="tag">Read-only Preview</div>
+        <h4>Editorially moderated by design</h4>
+        <p>Lex Forum is being refined with account safety, source verification, and responsible moderation controls before student posting is enabled.</p>
+        <div class="meta">No public posts or user-generated claims are displayed.</div>
+      </article>
+      <article class="info-card">
+        <div class="tag">Source Discipline</div>
+        <h4>Doctrine before debate</h4>
+        <p>Future discussions will encourage links to official provisions, Supreme Court decisions, and clearly identified educational commentary.</p>
+        <div class="meta">Early Access Beta</div>
+      </article>
+    </div>
   </div>
 </section>
 
@@ -815,7 +937,7 @@
   <div class="page-wrap">
     <div class="page-head">
       <div class="eyebrow">Landmark Decisions</div>
-      <h2>Latest Jurisprudence</h2>
+      <h2>Recent Jurisprudence</h2>
       <p>Curated Supreme Court landmark rulings with one-line syllabus digests. Read the full decisions on the Supreme Court E-Library or LawPhil before citing.</p>
     </div>
     <div class="card-grid" id="jurisprudence-grid"></div>
@@ -835,11 +957,11 @@
       </p>
     </div>
     <div class="footer-links">
-      <a href="#support" data-dd2-view="support">Support</a>
-      <a href="#pricing" data-dd2-view="pricing">Plans &amp; Access</a>
+      <a href="#support" data-dd2-view="support">Co-Counsel</a>
+      <a href="#pricing" data-dd2-view="pricing">Retainer</a>
       <a href="#terms" data-dd2-view="terms">Terms</a>
       <a href="#privacy" data-dd2-view="privacy">Privacy</a>
-      <a href="#partnership" data-dd2-view="partnership">Partner With Us</a>
+      <a href="#partnership" data-dd2-view="partnership">Joint Venture</a>
     </div>
   </div>
 </footer>
@@ -863,7 +985,7 @@
 <!-- Sign-in choice shown once per onboarding session -->
 <div class="modal-overlay blocking" id="signin-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="signin-prompt-title" aria-describedby="signin-prompt-copy">
   <div class="modal-card" tabindex="-1">
-    <h3 class="modal-title" id="signin-prompt-title">Save Your Progress</h3>
+    <h3 class="modal-title" id="signin-prompt-title">Enter the Moot Court</h3>
     <p class="checking-copy" id="signin-prompt-copy">Sign in to open protected questions, save progress, and continue study sessions across devices.</p>
     <span class="tier-badge">Authentication is required before an examination question is displayed.</span>
     <div class="signin-prompt-actions">
@@ -886,7 +1008,7 @@
       </button>
       <button type="button" class="session-mode-option" id="mode-self-paced" onclick="chooseSessionMode('selfPaced')">
         <strong>Quantum Meruit</strong>
-        <span>Self-Paced Practice</span>
+        <span>Self-Paced Review</span>
         <p>Track your writing time without a deadline or automatic advance.</p>
       </button>
       <button type="button" class="session-mode-option" id="mode-untimed" onclick="chooseSessionMode('none')">
@@ -901,7 +1023,7 @@
 
 <div class="modal-overlay" id="feedback-modal">
   <div class="modal-card">
-    <h3 class="modal-title">Due Diligence Support</h3>
+    <h3 class="modal-title">Due Diligence Co-Counsel</h3>
     <div class="modal-sub">Email support@duediligence.ph</div>
     <form id="feedback-form">
       <p class="checking-copy">Open your email application to request technical help, report a problem, or send platform feedback.</p>
@@ -916,11 +1038,11 @@
 <!-- Analytics dashboard modal -->
 <div class="modal-overlay" id="analytics-modal">
   <div class="modal-card xl">
-    <h3 class="modal-title">Performance Analytics</h3>
-    <div class="modal-sub">Your bar-prep drill history &amp; ALAC mastery</div>
+    <h3 class="modal-title">The Verdict</h3>
+    <div class="modal-sub">Your Bar-prep drill history &amp; ALAC record</div>
     <div id="analytics-body"></div>
     <div class="modal-actions" style="margin-top:18px;">
-      <button type="button" class="btn-secondary" onclick="exportProgressPDF()">⤓ Export Progress Report (PDF)</button>
+      <button type="button" class="btn-secondary" onclick="exportProgressPDF()">Export Verdict Report (PDF)</button>
       <button type="button" class="btn-primary" onclick="closeModal('analytics-modal')">Done</button>
     </div>
   </div>
@@ -2165,7 +2287,7 @@ function renderResultHTML(key) {
         </div>
         <div class="assessment-body">
           <div class="assessment-warning"><strong>Result retained.</strong> Review your pacing, then manually choose the next question when ready.</div>
-          <div class="review-actions"><button class="btn-next" onclick="proceedAfterReview()">Continue to Next Item →</button></div>
+          <div class="review-actions"><button class="btn-next" onclick="proceedAfterReview()">Next</button></div>
         </div>
       </article>
     `;
@@ -2241,7 +2363,7 @@ function renderResultHTML(key) {
           <button class="fb-btn" onclick="rateModel('down')">👎 Needs work</button>
           <button class="fb-btn suggest" onclick="openSuggest()">✎ Suggest a Correction/Better Answer</button>
         </div>
-        <div class="review-actions"><button class="btn-next" onclick="proceedAfterReview()">Continue to Next Item →</button></div>
+        <div class="review-actions"><button class="btn-next" onclick="proceedAfterReview()">Next</button></div>
       </div>
     </article>
   `;
@@ -2264,7 +2386,7 @@ function renderAssessmentSources(sources) {
         ${source.reference ? `<small>${escapeHtml(source.reference)}</small>` : ''}
         ${source.relevance ? `<small>${escapeHtml(source.relevance)}</small>` : ''}
       </span>
-      <small>${escapeHtml(source.authority || source.type || 'source')} ↗</small>
+      <small>${escapeHtml(source.authority || source.type || 'source')} · External source</small>
     </a>`).join('')}</div>`;
 }
 
@@ -2273,7 +2395,7 @@ function renderMainHistory() {
   if (historyLog.length === 0) {
     main.innerHTML = `
       <div class="panel-title on-navy" style="margin-bottom:16px;">Examinee Performance Archive</div>
-      <div class="empty on-navy">No essays evaluated yet. Complete a practice scenario under 'Write & Practice' to generate your performance audit trail.</div>
+      <div class="empty on-navy">No essays evaluated yet. Complete a Moot Court scenario under “Answer & Review” to generate your performance audit trail.</div>
     `;
     return;
   }
@@ -2456,7 +2578,7 @@ function openAnalytics() {
   const list = loadAttempts();
   const body = document.getElementById('analytics-body');
   if (!list.length) {
-    body.innerHTML = '<div class="empty">No drills logged yet. Grade an essay under Mock Bar Exam to build your performance history.</div>';
+    body.innerHTML = '<div class="empty">No drills logged yet. Grade an essay in Moot Court to build The Verdict history.</div>';
     openModal('analytics-modal');
     return;
   }
@@ -2487,7 +2609,7 @@ function openAnalytics() {
   openModal('analytics-modal');
 }
 function fmtSecs(s) { s = Number(s) || 0; const m = Math.floor(s / 60), r = s % 60; return `${m}:${String(r).padStart(2, '0')}`; }
-function exportProgressPDF() { alert('Export Progress Report (PDF) — coming soon in Due Diligence Plus.'); }
+function exportProgressPDF() { alert('Export Verdict Report (PDF) — coming soon in a future Retainer release.'); }
 
 /* ---------- Content pages (curated placeholders — verify before citing) ---------- */
 function seedContentPages() {
@@ -2815,7 +2937,7 @@ window.addEventListener('storage', (event) => {
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"
   crossorigin="anonymous"></script>
 <script src="assets/phase2-config.js"></script>
-<script src="assets/phase2-experience.js?v=phase4-20260728-3"></script>
+<script src="assets/phase2-experience.js?v=release-c-20260729-1"></script>
 <script src="assets/phase4-experience.js?v=phase4-20260728-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 

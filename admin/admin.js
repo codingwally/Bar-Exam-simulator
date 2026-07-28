@@ -4,21 +4,21 @@
   const config = global.DueDiligencePhase2Config;
   const subscriptionActions = global.DueDiligenceSubscriptionActions;
   const titles = Object.freeze({
-    executive: 'Executive Overview',
-    realtime: 'Realtime and Traffic',
-    acquisition: 'Acquisition and Conversion',
-    users: 'Users and Cohorts',
-    learning: 'Learning and Scores',
-    subjects: 'Subjects and Question Performance',
-    reliability: 'Gemini and Platform Reliability',
-    subscriptions: 'Access and Subscriptions',
-    payments: 'Payment Verification',
-    refunds: 'Refund Requests',
-    support: 'Support and Account Recovery',
-    corrections: 'Correction / Better Answer Queue',
-    partnerships: 'Partnership Inquiries',
-    controls: 'Website Controls and Roadmap',
-    security: 'Roles, Security, and Audit',
+    executive: 'Chambers',
+    realtime: 'Live Activity',
+    acquisition: 'Visitors and Sign-ups',
+    users: 'Students',
+    learning: 'Performance',
+    subjects: 'Question Bank',
+    reliability: 'AI Grading Health',
+    subscriptions: 'Retainer Management',
+    payments: 'Payment Review',
+    refunds: 'Refunds',
+    support: 'Co-Counsel Requests',
+    corrections: 'Answer Corrections',
+    partnerships: 'Joint Ventures',
+    controls: 'Website Settings',
+    security: 'Access and Activity Log',
   });
   const requirements = Object.freeze({
     users: 'analytics_viewer',
@@ -240,7 +240,7 @@
         <section class="panel">
           <h3>Action queue</h3>
           <div class="queue-grid">
-            ${queueLink('Support', `${number(report.queues?.pending_support)} open cases`, 'support')}
+            ${queueLink('Co-Counsel', `${number(report.queues?.pending_support)} open cases`, 'support')}
             ${queueLink('Corrections', `${number(report.queues?.pending_corrections)} pending editorial reviews`, 'corrections')}
             ${queueLink('Recovery', `${number(report.queues?.open_recovery_cases)} open cases; final transfer disabled`, 'support')}
             ${queueLink('Manual access', `${number(report.queues?.active_manual_entitlements)} active entitlements`, 'subscriptions')}
@@ -270,7 +270,7 @@
     const current = report.current?.traffic || {};
     const previous = report.previous?.traffic || {};
     return `
-      ${heading('Validated audience activity', 'Current viewers use the last five minutes of visible-page session heartbeats. Sessions are not page views.')}
+      ${heading('Live Activity', 'Current viewers use the last five minutes of visible-page session heartbeats. Sessions are not page views.')}
       <div class="metric-strip">
         ${metric('Current viewers', report.realtime?.current_viewers)}
         ${metric('Sessions', current.sessions, previous.sessions)}
@@ -304,7 +304,7 @@
       ];
     });
     return `
-      ${heading('Acquisition and conversion', 'Sanitized sources and activation steps. A zero denominator is reported as unavailable, never as infinity.')}
+      ${heading('Visitors and Sign-ups', 'Sanitized sources and activation steps. A zero denominator is reported as unavailable, never as infinity.')}
       <div class="work-grid">
         <section class="panel"><h3>Source and medium</h3>${table(
           ['Source', 'Medium', 'Sessions'],
@@ -374,7 +374,7 @@
       },
     ]);
     return `
-      ${heading('Users and cohorts', 'Normal administrator views use masked identities. Exact email reveal is reason-required, rate-limited, capability-restricted, and audited.')}
+      ${heading('Students', 'Normal administrator views use masked identities. Exact email reveal is reason-required, rate-limited, capability-restricted, and audited.')}
       <div class="table-tools"><input id="user-search" type="search" placeholder="Search display name or school" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="exact-email-search" type="button">Find exact email</button></div>
       ${table(['Name', 'Masked email', 'School', 'Enrollment', 'Role', 'Last active', 'Grades', 'Action'], rows)}
       <p class="panel-note">${number(data.total)} registered profile record(s). Cohort retention appears only after maturity and sufficient data.</p>`;
@@ -384,7 +384,7 @@
     const data = await loadOperational('learning');
     const current = report.current?.learning || {};
     return `
-      ${heading('Learning and scores', 'Scores remain on the existing 0–5 scale with one-decimal display. Failed, timed-out, blocked, missing, and ungraded requests are excluded from score averages.')}
+      ${heading('Performance', 'Scores remain on the existing 0–5 scale with one-decimal display. Failed, timed-out, blocked, missing, and ungraded requests are excluded from score averages.')}
       <div class="metric-strip">
         ${metric('Attempt average', current.attempt_average, null, (v) => v == null ? 'Not available' : `${number(v, 1)} / 5`)}
         ${metric('Mastery average', current.mastery_average, null, (v) => v == null ? 'Not available' : `${number(v, 1)} / 5`)}
@@ -409,7 +409,7 @@
 
   function renderSubjects(report) {
     return `
-      ${heading('Subjects and question performance', 'Content counts come from the published Website Upload bank; database inventory is shown separately for operational transparency.')}
+      ${heading('Question Bank', 'Content counts come from the published Website Upload bank; database inventory is shown separately for operational transparency.')}
       <div class="metric-strip">
         ${metric('Published subjects', report.inventory?.public_subjects)}
         ${metric('Published questions', report.inventory?.public_question_bank)}
@@ -431,7 +431,7 @@
   function renderReliability(report) {
     const reliability = report.current?.reliability || {};
     return `
-      ${heading('Gemini and platform reliability', 'Service telemetry, not a guaranteed uptime monitor. Provider bodies, prompts, answers, credentials, and stack traces are excluded.')}
+      ${heading('AI Grading Health', 'Service telemetry, not a guaranteed uptime monitor. Provider bodies, prompts, answers, credentials, and stack traces are excluded.')}
       <div class="metric-strip">
         ${metric('Grading starts', reliability.grading_started)}
         ${metric('Successes', reliability.grading_success)}
@@ -458,7 +458,6 @@
       state.subscriptionRows.set(row.user_id, Object.freeze({ ...row }));
       return [
         row.display_name || 'Not provided',
-        row.user_id,
         row.role,
         row.trial_expires_at ? dateTime(row.trial_expires_at) : 'Not started',
         `${number(row.successful_grades)} used · ${number(row.free_grades_remaining)} remaining`,
@@ -468,14 +467,14 @@
         row.expires_at ? dateTime(row.expires_at) : 'Not available',
         {
           html: true,
-          value: `<div class="row-actions" data-subscription-actions-for="${escapeHtml(row.user_id)}" aria-label="Subscription actions for ${escapeHtml(row.display_name || row.user_id)}"></div>`,
+          value: `<div class="row-actions" data-subscription-actions-for="${escapeHtml(row.user_id)}" aria-label="Retainer actions for ${escapeHtml(row.display_name || row.user_id)}"></div>`,
         },
       ];
     });
     return `
-      ${heading('Access and subscription operations', 'Founder actions are immediate, reason-required, transactional, and audited. Manual payments never renew automatically.')}
-      <div class="notice danger"><strong>Access-impacting action.</strong> Verify the student UUID, plan, dates, and reason before confirming.</div>
-      ${table(['Student', 'User UUID', 'Role', 'Trial expires', 'Lifetime grades', 'Free Beta', 'Plan', 'Subscription', 'Expires', 'Actions'], rows)}
+      ${heading('Retainer Management', 'Founder actions are immediate, reason-required, transactional, and audited. Manual payments never renew automatically.')}
+      <div class="notice danger"><strong>Access-impacting action.</strong> Verify the student, plan, dates, and reason before confirming.</div>
+      ${table(['Student', 'Role', 'Trial expires', 'Lifetime grades', 'Free Beta', 'Plan', 'Retainer status', 'Expires', 'Actions'], rows)}
       <section class="panel">
         <h3>Production plan catalog</h3>
         ${table(['Plan', 'Planning price', 'Status'], config.plans.items.map((plan) => [
@@ -489,12 +488,12 @@
   async function renderPayments() {
     const data = await loadPhase4Operational('payments');
     return `
-      ${heading('Manual payment verification', 'Review GCash and MariBank requests. Private proofs open through five-minute signed links and every view is audited.')}
+      ${heading('Payment Review', 'Review GCash and MariBank requests. Private proofs open through five-minute signed links and every view is audited.')}
       <div class="notice danger"><strong>Money and access warning.</strong> Approval activates the exact selected 30-day plan. Confirm channel, amount, reference, date, and proof before proceeding.</div>
       ${table(
-        ['Student', 'User UUID', 'Plan', 'Amount', 'Channel', 'Date', 'Reference', 'Status', 'Submitted', 'Actions'],
+        ['Student', 'Plan', 'Amount', 'Channel', 'Date', 'Reference', 'Status', 'Submitted', 'Actions'],
         (data.items || []).map((row) => [
-          row.display_name || 'Not provided', row.user_id, row.plan_code,
+          row.display_name || 'Not provided', row.plan_code,
           `₱${number(row.trusted_amount_php,2)}`, row.payment_method,
           row.payment_date, row.transaction_reference,
           { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(row.status)}</span>` },
@@ -513,7 +512,7 @@
   async function renderRefunds() {
     const data = await loadPhase4Operational('refunds');
     return `
-      ${heading('Refund requests', 'Apply the published Philippine-peso policy, document consumption and outage evidence, and preserve statutory remedies.')}
+      ${heading('Refunds', 'Apply the published Philippine-peso policy, document consumption and outage evidence, and preserve statutory remedies.')}
       ${table(
         ['Student', 'Paid', 'Suggested', 'Approved', 'Status', 'Calculation', 'Submitted', 'Action'],
         (data.items || []).map((row) => [
@@ -542,8 +541,8 @@
       actionButton('Update', 'support_update', row.id, { status: row.status, priority: row.priority }),
     ]);
     return `
-      ${heading('Support and account recovery', 'Resolve only what is necessary. Support content may contain personal context and is limited to authorized operators.')}
-      <div class="notice"><strong>Public recovery copy:</strong> Contact Support. We respond within 24 hours.</div>
+      ${heading('Co-Counsel Requests', 'Resolve only what is necessary. Co-Counsel content may contain personal context and is limited to authorized operators.')}
+      <div class="notice"><strong>Public recovery copy:</strong> Contact Co-Counsel. We respond within 24 hours.</div>
       ${table(['Category', 'Message', 'Priority', 'Status', 'Created', '24-hour target', 'Action'], supportRows)}
       <section class="panel">
         <h3>Recovery cases</h3>
@@ -554,7 +553,7 @@
             row.id, row.user_id, row.status, dateTime(row.updated_at), 'Disabled',
           ]),
         )}
-        <p class="panel-note">A Support request alone never authorizes transfer. Case management preserves the immutable user UUID, but no final transfer action exists.</p>
+        <p class="panel-note">A Co-Counsel request alone never authorizes transfer. Case management preserves the immutable user UUID, but no final transfer action exists.</p>
       </section>`;
   }
 
@@ -577,14 +576,14 @@
       actionButton('Review', 'correction_review', row.id, { status: row.status }),
     ]);
     return `
-      ${heading('Editorial correction queue', 'Accept or reject is an editorial decision only. It never modifies live questions or suggested answers automatically.')}
+      ${heading('Answer Corrections', 'Accept or reject is an editorial decision only. It never modifies live questions or suggested answers automatically.')}
       ${table(['Question', 'Subject', 'Type', 'Proposed correction', 'Explanation', 'Sources', 'Status', 'Action'], rows)}`;
   }
 
   async function renderPartnerships() {
     const data = await loadPhase4Operational('partnerships');
     return `
-      ${heading('Partnership inquiries', 'Native institutional, academic, content, technology, and media inquiries. Contact details are operationally sensitive and access is audited.')}
+      ${heading('Joint Ventures', 'Native institutional, academic, content, technology, and media inquiries. Contact details are operationally sensitive and access is audited.')}
       ${table(
         ['Type','Contact','Email','Organization','Message','Verified','Status','Assignee','Created','Action'],
         (data.items || []).map((row) => [
@@ -606,13 +605,13 @@
     const allowed = [
       ['announcement_text', 'Announcement text'],
       ['beta_label', 'Beta label'],
-      ['support_availability_message', 'Support availability message'],
+      ['support_availability_message', 'Co-Counsel availability message'],
       ['pricing_section_visible', 'Pricing-section visibility'],
       ['promotional_content_visible', 'Approved promotional content visibility'],
       ['future_feature_status', 'Future-feature status'],
     ];
     return `
-      ${heading('Safe website controls', 'Only allowlisted, non-destructive content is accepted. Raw HTML, scripts, SQL, secrets, grading prompts, security settings, and guest-limit values are forbidden.')}
+      ${heading('Website Settings', 'Only allowlisted, non-destructive content is accepted. Raw HTML, scripts, SQL, secrets, grading prompts, security settings, and guest-limit values are forbidden.')}
       ${table(
         ['Control', 'Current value', 'Published', 'Updated', 'Action'],
         allowed.map(([key, label]) => {
@@ -634,7 +633,7 @@
   async function renderSecurity() {
     const data = await loadOperational('security');
     return `
-      ${heading('Roles, security, and audit', 'Only the Super Admin may grant administrator roles or capabilities. Administrators cannot grant privileges to themselves or create another Super Admin.')}
+      ${heading('Access and Activity Log', 'Only the Super Admin may grant administrator roles or capabilities. Administrators cannot grant privileges to themselves or create another Super Admin.')}
       <div class="notice">Wally remains the sole Super Admin. Founder Admin assignments use verified Auth UUIDs; no founder email is hardcoded in authorization logic.</div>
       ${table(
         ['Time', 'Action', 'Actor UUID', 'Target type', 'Target', 'Reason'],
@@ -678,7 +677,7 @@
       $('#dashboard-view').innerHTML = html;
       bindDynamic();
     } catch (error) {
-      $('#dashboard-view').innerHTML = heading('Dashboard unavailable', error.message || 'Administrator data could not be loaded.')
+      $('#dashboard-view').innerHTML = heading('Chambers unavailable', error.message || 'Administrator data could not be loaded.')
         + empty('No production data was changed. Refresh after connectivity or authorization is restored.');
     } finally {
       $('#dashboard-view').removeAttribute('aria-busy');
@@ -805,9 +804,9 @@
           : 'Change plan to';
       return `${verb} ${planDisplayName(plan)} · trusted 30-day catalog terms`;
     }
-    if (operation === 'pause') return 'Pause the active subscription';
-    if (operation === 'resume') return 'Resume the paused subscription';
-    if (operation === 'cancel') return 'Cancel the current subscription';
+    if (operation === 'pause') return 'Pause the active Retainer';
+    if (operation === 'resume') return 'Resume the paused Retainer';
+    if (operation === 'cancel') return 'Cancel the current Retainer';
     if (operation === 'extend') {
       return `Extend access by ${$('#action-days')?.value || 30} day(s)`;
     }
@@ -824,7 +823,7 @@
     if (!state.action || !subscriptionActions?.isAccessAction(state.action.action)) return;
     const payload = state.action.payload;
     $('#action-target').textContent = `${payload.displayName || 'Not provided'} · ${payload.userId || state.action.targetId}`;
-    $('#action-current').textContent = `${planDisplayName(payload.planCode)} · ${payload.status || 'no subscription'}`
+    $('#action-current').textContent = `${planDisplayName(payload.planCode)} · ${payload.status || 'no Retainer'}`
       + `${payload.expiresAt ? ` · expires ${dateTime(payload.expiresAt)}` : ''}`;
     $('#action-proposed').textContent = proposedAccessDescription(state.action.action, payload);
   }
@@ -877,12 +876,12 @@
         });
         input.addEventListener('input', updateActionContext);
       } else if (payload.operation === 'set_start_date') {
-        const input = appendInputField(container, 'New subscription start date and time', 'action-starts', {
+        const input = appendInputField(container, 'New Retainer start date and time', 'action-starts', {
           type: 'datetime-local', value: localDateTimeValue(payload.startsAt), required: true,
         });
         input.addEventListener('input', updateActionContext);
       } else if (payload.operation === 'set_expiration_date') {
-        const input = appendInputField(container, 'New subscription expiration date and time', 'action-expires', {
+        const input = appendInputField(container, 'New Retainer expiration date and time', 'action-expires', {
           type: 'datetime-local', value: localDateTimeValue(payload.expiresAt), required: true,
         });
         input.addEventListener('input', updateActionContext);
@@ -907,7 +906,7 @@
     $('#audit-target').textContent = `${payload.displayName || 'Not provided'} · ${payload.userId}`;
     const entries = [
       ...(result?.subscriptionHistory || []).map((entry) => ({
-        title: `Subscription · ${entry.action}`,
+        title: `Retainer · ${entry.action}`,
         time: entry.occurredAt,
         copy: `${entry.planCode || 'No plan'} · ${entry.status || 'unknown'} · ${entry.reason || 'No reason recorded'}`,
       })),
@@ -998,7 +997,7 @@
     let title = 'Confirm action';
     let warning = 'This operation is transactional, reason-required, and recorded in the administrator audit log.';
     if (action === 'support_update') {
-      title = 'Update support case';
+      title = 'Update Co-Counsel request';
       fields = `<label class="field">Status<select id="action-status">${['pending','in_progress','waiting_for_student','resolved','closed'].map((value) => `<option${payload.status === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
         <label class="field">Priority<select id="action-priority">${['low','normal','high','urgent'].map((value) => `<option${payload.priority === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
         <label class="field">Internal note<textarea id="action-note" maxlength="4000"></textarea></label>`;
@@ -1036,19 +1035,19 @@
       warning = 'Confirm the verified paid amount, timing, consumption, outage evidence, and statutory rights. Mark paid only after funds were actually returned.';
     } else if (action === 'subscription_change') {
       const titlesByOperation = {
-        activate: 'Activate subscription',
+        activate: 'Activate Retainer',
         complimentary: 'Grant complimentary access',
-        pause: 'Pause subscription',
-        resume: 'Resume subscription',
-        cancel: 'Cancel subscription',
-        extend: 'Extend subscription',
+        pause: 'Pause Retainer',
+        resume: 'Resume Retainer',
+        cancel: 'Cancel Retainer',
+        extend: 'Extend Retainer',
         replace_plan: 'Change plan',
-        set_start_date: 'Change subscription start date',
-        set_expiration_date: 'Change subscription expiration date',
+        set_start_date: 'Change Retainer start date',
+        set_expiration_date: 'Change Retainer expiration date',
       };
       title = payload.controlLabel === 'Change Plan'
         ? 'Change plan'
-        : titlesByOperation[payload.operation] || 'Manage subscription';
+        : titlesByOperation[payload.operation] || 'Manage Retainer';
       warning = payload.operation === 'complimentary'
         ? 'This immediately grants access without recording a payment. Confirm the student, trusted plan, and reason.'
         : 'This immediately changes access. Confirm the student, current status, proposed value, and reason before continuing.';
@@ -1059,7 +1058,7 @@
       title = 'Apply verified discount';
       warning = 'Only an active server-verified code can be assigned. The browser cannot choose a discount value or trusted plan price.';
     } else if (action === 'subscription_audit_view') {
-      title = 'View subscription audit history';
+      title = 'View Retainer audit history';
       warning = 'This sensitive read is reason-required and creates its own immutable audit record.';
     } else if (action === 'partnership_update') {
       title = 'Update partnership inquiry';
@@ -1080,10 +1079,10 @@
         <label class="field"><span><input id="action-published" type="checkbox"${payload.is_published ? ' checked' : ''}> Publish this value</span></label>`;
       warning = 'Raw HTML, scripts, SQL, secrets, grading controls, and destructive settings are rejected.';
     } else if (action === 'reveal_email') {
-      title = 'Reveal exact account email';
+      title = 'Reveal exact Docket email';
       warning = 'Exact email access is capability-restricted, rate-limited, reason-required, and audited.';
     } else if (action === 'find_email') {
-      title = 'Find account by exact email';
+      title = 'Find Docket by exact email';
       fields = actionField('Exact email', 'action-email', '', 'email');
       warning = 'Exact email search is server-side, capability-restricted, rate-limited, reason-required, and audited.';
     }
@@ -1156,13 +1155,13 @@
       } else if (payload.operation === 'set_start_date') {
         payload.startsAt = isoFromLocalInput($('#action-starts').value);
         if (!payload.startsAt) {
-          toast('Select a valid subscription start date.');
+          toast('Select a valid Retainer start date.');
           return;
         }
       } else if (payload.operation === 'set_expiration_date') {
         payload.expiresAt = isoFromLocalInput($('#action-expires').value);
         if (!payload.expiresAt) {
-          toast('Select a valid subscription expiration date.');
+          toast('Select a valid Retainer expiration date.');
           return;
         }
       }
@@ -1206,8 +1205,8 @@
           reason,
         });
         toast(response.data.found
-          ? `Match: ${response.data.display_name || 'Unnamed account'} (${response.data.masked_email})`
-          : 'No account matched that exact email.');
+          ? `Match: ${response.data.display_name || 'Unnamed Docket'} (${response.data.masked_email})`
+          : 'No Docket matched that exact email.');
       } else if (action === 'view_payment_proof') {
         const response = await api('/admin/payment-proof', {
           paymentRequestId: state.action.targetId,
@@ -1328,7 +1327,7 @@
     if (!config?.features?.adminDashboard
         || !global.supabase?.createClient
         || !subscriptionActions?.actionsForSubscription) {
-      deny('The protected dashboard is not configured.');
+      deny('Protected Chambers is not configured.');
       return;
     }
     state.client = global.supabase.createClient(config.supabase.url, config.supabase.publishableKey, {
@@ -1408,5 +1407,5 @@
     if ($('#action-dialog')?.open) cancelActionDialog({ consumeHistory: false });
   });
 
-  initialize().catch(() => deny('The dashboard could not be initialized. No production data was changed.'));
+  initialize().catch(() => deny('Chambers could not be initialized. No production data was changed.'));
 })(window);

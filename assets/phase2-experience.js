@@ -17,6 +17,7 @@
     reminderResolve: null,
     guestUsage: null,
     admin: null,
+    investorGateObserver: null,
   };
 
   const originalContinueAsGuest = global.continueAsGuest;
@@ -307,6 +308,22 @@
   }
 
   function requireSignInForGuestLimit() {
+    const investorModal = document.getElementById('investor-modal');
+    if (investorModal?.classList.contains('open')) {
+      if (!state.investorGateObserver && typeof MutationObserver === 'function') {
+        state.investorGateObserver = new MutationObserver(() => {
+          if (investorModal.classList.contains('open')) return;
+          state.investorGateObserver.disconnect();
+          state.investorGateObserver = null;
+          requireSignInForGuestLimit();
+        });
+        state.investorGateObserver.observe(investorModal, {
+          attributes: true,
+          attributeFilter: ['class'],
+        });
+      }
+      return;
+    }
     setOverlay(false, 'dd2-guest-reminder');
     state.reminderResolve?.(false);
     state.reminderResolve = null;

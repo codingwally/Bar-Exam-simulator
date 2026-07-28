@@ -1833,7 +1833,7 @@ async function handlePhase4AdminData(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
   const query = normalizePhase4AdminRequest(await parseBoundedJson(request, 8_000));
-  const result = await phase4Rpc(env, 'phase4_admin_operational_data', {
+  const result = await protectedSupabaseRpc(env, 'phase4_admin_operational_data', {
     p_actor_user_id: user.id,
     p_section: query.section,
     p_search: query.search,
@@ -1847,14 +1847,34 @@ async function handlePhase4AdminAction(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
   const action = normalizePhase4AdminAction(await parseBoundedJson(request, 16_000));
-  const result = await phase4Rpc(env, 'phase4_admin_execute_action', {
-    p_actor_user_id: user.id,
-    p_action: action.action,
-    p_target_id: action.targetId,
-    p_payload: action.payload,
-    p_reason: action.reason,
-    p_request_key: action.requestKey,
-  });
+  let result;
+  if (action.action === 'subscription_audit_view') {
+    result = await protectedSupabaseRpc(env, 'phase4_admin_subscription_audit', {
+      p_actor_user_id: user.id,
+      p_target_user_id: action.targetId,
+      p_reason: action.reason,
+      p_request_key: action.requestKey,
+    });
+  } else if (['subscription_change', 'free_beta_change', 'discount_assign'].includes(action.action)) {
+    result = await protectedSupabaseRpc(env, 'phase4_admin_manage_access', {
+      p_actor_user_id: user.id,
+      p_action: action.action,
+      p_target_user_id: action.targetId,
+      p_subscription_id: action.payload.subscriptionId || null,
+      p_payload: action.payload,
+      p_reason: action.reason,
+      p_request_key: action.requestKey,
+    });
+  } else {
+    result = await protectedSupabaseRpc(env, 'phase4_admin_execute_action', {
+      p_actor_user_id: user.id,
+      p_action: action.action,
+      p_target_id: action.targetId,
+      p_payload: action.payload,
+      p_reason: action.reason,
+      p_request_key: action.requestKey,
+    });
+  }
   return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
 }
 

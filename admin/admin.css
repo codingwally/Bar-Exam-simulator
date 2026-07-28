@@ -86,6 +86,10 @@ tbody tr:hover { background: #fbfcfe; }
 .status.danger { border-color: #e7aaa6; color: var(--danger); background: #fff4f3; }
 .row-actions { display: flex; gap: .35rem; flex-wrap: wrap; }
 .row-actions button { border: 1px solid #b9c5d3; background: white; padding: .32rem .5rem; border-radius: 4px; color: var(--navy); cursor: pointer; font-size: .66rem; }
+.row-actions button:hover, .row-actions button:focus-visible { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(197,160,89,.18); }
+.row-actions button[data-tone="primary"] { border-color: var(--navy-2); background: var(--navy-2); color: white; }
+.row-actions button[data-tone="danger"] { border-color: #dca29d; color: var(--danger); background: #fff8f7; }
+.row-actions button:disabled { cursor: not-allowed; opacity: .55; }
 .notice { border: 1px solid #dec99a; background: #fffaf0; color: #705927; padding: .85rem; font-size: .74rem; line-height: 1.55; margin-bottom: 1rem; }
 .notice.danger { border-color: #e3b1ad; background: #fff5f4; color: #8d231b; }
 .definition-list { display: grid; grid-template-columns: 180px 1fr; margin: 0; font-size: .74rem; }
@@ -112,6 +116,26 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
 #action-fields { display: grid; gap: .8rem; margin-bottom: .8rem; }
 #action-reason { min-height: 90px; resize: vertical; }
 .action-warning { color: var(--warning); background: #fff9ec; padding: .7rem; font-size: .72rem; line-height: 1.5; }
+.action-context { display: grid; grid-template-columns: repeat(3, 1fr); gap: .55rem; margin: 0 0 1rem; }
+.action-context[hidden], .action-confirmation[hidden] { display: none; }
+.action-context div { min-width: 0; border: 1px solid var(--line); background: #f8fafc; padding: .65rem; }
+.action-context dt { color: var(--muted); font-size: .58rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.action-context dd { margin: .25rem 0 0; color: var(--navy); font-size: .72rem; line-height: 1.45; overflow-wrap: anywhere; }
+.action-confirmation { display: flex; align-items: flex-start; gap: .55rem; border: 1px solid #d9aa61; background: #fff9ec; color: #6c511f; padding: .75rem; font-size: .72rem; font-weight: 700; line-height: 1.45; }
+.action-confirmation input { flex: none; margin-top: .15rem; }
+.plan-options { display: grid; gap: .55rem; margin: 0; padding: 0; border: 0; }
+.plan-options legend { color: var(--navy); font-size: .7rem; font-weight: 800; margin-bottom: .35rem; }
+.plan-option { display: grid; grid-template-columns: auto 1fr auto; gap: .65rem; align-items: start; border: 1px solid #cbd5e1; background: white; padding: .75rem; cursor: pointer; }
+.plan-option:has(input:checked) { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(197,160,89,.18); }
+.plan-option.disabled { cursor: not-allowed; color: #64748b; background: #f1f5f9; }
+.plan-option strong, .plan-option small { display: block; }
+.plan-option small { color: var(--muted); font-weight: 400; line-height: 1.45; margin-top: .2rem; }
+.plan-option .plan-price { color: var(--navy); white-space: nowrap; }
+.audit-history { display: grid; gap: .65rem; max-height: min(58vh, 520px); overflow: auto; }
+.audit-entry { border-left: 3px solid var(--gold); background: #f8fafc; padding: .7rem .8rem; }
+.audit-entry strong, .audit-entry span { display: block; }
+.audit-entry strong { color: var(--navy); font-size: .72rem; }
+.audit-entry span { color: var(--muted); font-size: .66rem; line-height: 1.5; margin-top: .2rem; overflow-wrap: anywhere; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1rem; }
 .toast { position: fixed; right: 1rem; bottom: 1rem; background: var(--navy); color: white; padding: .8rem 1rem; border-left: 3px solid var(--gold); opacity: 0; pointer-events: none; transform: translateY(8px); transition: .2s; z-index: 100; max-width: 360px; font-size: .75rem; }
 .toast.show { opacity: 1; transform: none; }
@@ -152,4 +176,11 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
   .definition-list { grid-template-columns: 1fr; }
   .definition-list dt { padding-bottom: .15rem; border: 0; }
   .definition-list dd { padding-top: 0; }
+  dialog { width: calc(100% - 1rem); max-height: calc(100dvh - 1rem); overflow: auto; }
+  .action-context { grid-template-columns: 1fr; }
+  .plan-option { grid-template-columns: auto 1fr; }
+  .plan-option .plan-price { grid-column: 2; }
+  .dialog-actions { align-items: stretch; flex-direction: column-reverse; }
+  .dialog-actions button { width: 100%; }
+  .row-actions { min-width: 190px; }
 }

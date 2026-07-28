@@ -25,6 +25,7 @@ const publicFiles = Object.freeze([
   'admin/index.html',
   'admin/admin.css',
   'admin/admin.js',
+  'admin/subscription-actions-core.js',
   'assets/exam-session-controller.js',
   'assets/phase2-config.js',
   'assets/phase2-experience.js',

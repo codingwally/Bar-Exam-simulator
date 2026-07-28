@@ -201,13 +201,14 @@ export function normalizePhase4AdminAction(payload) {
   const allowed = new Set([
     'payment_review', 'refund_review', 'subscription_change',
     'free_beta_change', 'partnership_update', 'provider_incident_clear',
-    'role_change',
+    'role_change', 'discount_assign', 'subscription_audit_view',
   ]);
   if (!allowed.has(action)) {
     throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Unsupported Phase 4 admin action.');
   }
   const targetId = String(payload?.targetId || '').trim();
-  if (!/^[0-9a-f-]{36}$/i.test(targetId)) {
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidPattern.test(targetId)) {
     throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'A valid target is required.');
   }
   const reason = text(payload?.reason, 1000, 'Reason', 5);
@@ -215,7 +216,105 @@ export function normalizePhase4AdminAction(payload) {
   if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {
     throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'A valid request key is required.');
   }
-  const actionPayload = payload?.payload && typeof payload.payload === 'object'
+  const rawActionPayload = payload?.payload && typeof payload.payload === 'object'
     && !Array.isArray(payload.payload) ? payload.payload : {};
+  let actionPayload = rawActionPayload;
+
+  if (action === 'subscription_change') {
+    const operation = String(rawActionPayload.operation || '').trim().toLowerCase();
+    const allowedOperations = new Set([
+      'activate', 'complimentary', 'pause', 'resume', 'cancel', 'extend',
+      'replace_plan', 'set_start_date', 'set_expiration_date',
+    ]);
+    if (!allowedOperations.has(operation)) {
+      throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid subscription operation.');
+    }
+    const suppliedUserId = String(rawActionPayload.userId || targetId).trim();
+    if (suppliedUserId !== targetId) {
+      throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'The target user does not match the subscription action.');
+    }
+    const subscriptionId = rawActionPayload.subscriptionId == null
+      || rawActionPayload.subscriptionId === ''
+      ? null : String(rawActionPayload.subscriptionId).trim();
+    if (subscriptionId && !uuidPattern.test(subscriptionId)) {
+      throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'The subscription identifier is invalid.');
+    }
+    if (!['activate', 'complimentary'].includes(operation) && !subscriptionId) {
+      throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'An existing subscription is required for this action.');
+    }
+
+    let planCode = null;
+    if (['activate', 'complimentary', 'replace_plan'].includes(operation)) {
+      planCode = String(rawActionPayload.planCode || '').trim().toLowerCase();
+      if (!['early_access_beta', 'standard'].includes(planCode)) {
+        throw new PaymentValidationError(
+          'PLAN_UNAVAILABLE',
+          'Premium is held in abeyance. Select Early Access Beta or Standard.',
+        );
+      }
+    }
+
+    let durationDays = null;
+    if (operation === 'extend') {
+      durationDays = Number(rawActionPayload.durationDays);
+      if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 366) {
+        throw new PaymentValidationError(
+          'INVALID_ADMIN_ACTION',
+          'Extension days must be a whole number from 1 to 366.',
+        );
+      }
+    }
+
+    let startsAt = null;
+    let expiresAt = null;
+    if (operation === 'set_start_date') {
+      const date = new Date(String(rawActionPayload.startsAt || ''));
+      if (!Number.isFinite(date.getTime())) {
+        throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid subscription start date.');
+      }
+      startsAt = date.toISOString();
+    }
+    if (operation === 'set_expiration_date') {
+      const date = new Date(String(rawActionPayload.expiresAt || ''));
+      if (!Number.isFinite(date.getTime())) {
+        throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid subscription expiration date.');
+      }
+      expiresAt = date.toISOString();
+    }
+    actionPayload = {
+      operation,
+      userId: targetId,
+      subscriptionId,
+      planCode,
+      durationDays,
+      startsAt,
+      expiresAt,
+    };
+  } else if (action === 'free_beta_change') {
+    if (typeof rawActionPayload.enabled !== 'boolean') {
+      throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Free Beta state must be enabled or disabled.');
+    }
+    let expiresAt = null;
+    if (rawActionPayload.expiresAt) {
+      const date = new Date(String(rawActionPayload.expiresAt));
+      if (!Number.isFinite(date.getTime())) {
+        throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Free Beta expiration is invalid.');
+      }
+      expiresAt = date.toISOString();
+    }
+    actionPayload = { enabled: rawActionPayload.enabled, expiresAt };
+  } else if (action === 'discount_assign') {
+    const code = String(rawActionPayload.code || '').trim().toUpperCase();
+    if (!/^[A-Z0-9][A-Z0-9_-]{2,39}$/.test(code)) {
+      throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Enter a valid active discount code.');
+    }
+    actionPayload = { code };
+  } else if (action === 'subscription_audit_view') {
+    actionPayload = {};
+  }
+
+  if (JSON.stringify(actionPayload).length > 16_000) {
+    throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'The action payload is too large.');
+  }
   return { action, targetId, reason, requestKey, payload: actionPayload };
 }

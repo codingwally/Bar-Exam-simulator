@@ -1375,7 +1375,6 @@
   }
 
   function bindNativeViewHandlers(view) {
-    document.getElementById('dd2-native-close')?.addEventListener('click', closeNativeView, { once: true });
     document.getElementById('dd2-support-form')?.addEventListener('submit', submitSupport);
     document.getElementById('dd2-account-form')?.addEventListener('submit', submitAccount);
     document.getElementById('dd2-payment-form')?.addEventListener('submit', submitPayment);
@@ -1622,6 +1621,7 @@
     document.getElementById('dd2-guest-continue')?.addEventListener('click', continueGuestFromEntry);
     document.getElementById('dd2-onboarding-form')?.addEventListener('submit', submitOnboarding);
     document.getElementById('dd2-enrollment-status')?.addEventListener('change', updateEnrollmentFields);
+    document.getElementById('dd2-native-close')?.addEventListener('click', closeNativeView);
     document.getElementById('dd2-native-view')?.addEventListener('click', (event) => {
       if (event.target === event.currentTarget && state.nativeView) closeNativeView();
     });

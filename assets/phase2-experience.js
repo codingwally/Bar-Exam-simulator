@@ -458,16 +458,17 @@
   function showEntry(options = {}) {
     const completed = Boolean(options.completed);
     hideNativeView();
+    const allowGuest = options.allowGuest !== false && !completed;
     const title = document.getElementById('dd2-entry-title');
     const copy = document.getElementById('dd2-entry-copy');
     const guestButton = document.getElementById('dd2-guest-continue');
-    if (title) title.textContent = completed
+    if (title) title.textContent = options.title || (completed
       ? 'You have completed your 3 guest questions.'
-      : 'Welcome to Due Diligence';
-    if (copy) copy.textContent = completed
+      : 'Welcome to Due Diligence');
+    if (copy) copy.textContent = options.copy || (completed
       ? 'Sign in to continue.'
-      : 'Your chamber for serious Bar preparation.';
-    if (guestButton) guestButton.hidden = completed;
+      : 'Your chamber for serious Bar preparation.');
+    if (guestButton) guestButton.hidden = !allowGuest;
     setStatus('dd2-auth-status', options.message || '');
     setOverlay(true, 'dd2-entry-overlay');
   }

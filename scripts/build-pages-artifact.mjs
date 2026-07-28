@@ -33,6 +33,8 @@ const publicFiles = Object.freeze([
   'assets/phase2.css',
   'assets/phase3-analytics.js',
   'assets/phase4-experience.js',
+  'assets/lex-forum.css',
+  'assets/lex-forum.js',
   'assets/payments/gcash.png',
   'assets/payments/maribank.png',
 ]);

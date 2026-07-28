@@ -106,10 +106,10 @@
             </ul>
             <div class="dd2-entry-actions">
               <button type="button" class="dd2-button dd2-button-primary" id="dd2-google-signin">Continue with Google</button>
-              <button type="button" class="dd2-button dd2-button-secondary" id="dd2-guest-continue">Continue as Guest</button>
+              <button type="button" class="dd2-button dd2-button-secondary" id="dd2-guest-continue" hidden>Continue as Guest</button>
             </div>
             <div class="dd2-status" id="dd2-auth-status" role="status" aria-live="polite"></div>
-            <p class="dd2-entry-note">Google opens its secure consent screen. Guest answers remain on this browser and are never uploaded after sign-in.</p>
+            <p class="dd2-entry-note">Google opens its secure consent screen. Authentication is required before any examination question is displayed.</p>
           </div>
         </section>
       </div>
@@ -167,6 +167,10 @@
             <label class="dd2-check">
               <input type="checkbox" id="dd2-marketing-consent">
               <span>Send me optional product and Bar-review updates. I can withdraw this at any time.</span>
+            </label>
+            <label class="dd2-check">
+              <input type="checkbox" id="dd2-ai-improvement-consent">
+              <span>Optionally allow de-identified answer content to improve internal rubrics and quality. I can withdraw this without losing simulator access.</span>
             </label>
             <div class="dd2-status" id="dd2-onboarding-status" role="status" aria-live="polite"></div>
             <button class="dd2-button dd2-button-primary" id="dd2-onboarding-submit" type="submit">Enter Due Diligence</button>
@@ -272,7 +276,7 @@
 
   async function signInWithGoogle() {
     if (!state.client) {
-      setStatus('dd2-auth-status', 'Sign-in is temporarily unavailable. Continue as Guest.', 'error');
+      setStatus('dd2-auth-status', 'Sign-in is temporarily unavailable. Please try again shortly.', 'error');
       return;
     }
     if (!navigator.onLine) {
@@ -293,7 +297,7 @@
       });
       if (error) throw error;
     } catch {
-      setStatus('dd2-auth-status', 'Google sign-in could not start. Continue as Guest or try again.', 'error');
+      setStatus('dd2-auth-status', 'Google sign-in could not start. Please try again.', 'error');
       if (button) button.disabled = false;
     }
   }
@@ -348,8 +352,12 @@
       const tier = avatar.querySelector('.tier');
       if (avatarInitials) avatarInitials.textContent = signedIn ? initials() : 'DD';
       if (tier) tier.textContent = signedIn
-        ? (state.admin?.authorized ? (state.admin.role === 'super_admin' ? 'Super Admin' : 'Administrator') : 'Student account')
-        : 'Guest';
+        ? (state.admin?.authorized
+          ? (state.admin.role === 'super_admin'
+            ? 'Super Admin'
+            : state.admin.role === 'founder_admin' ? 'Founder Admin' : 'Administrator')
+          : 'Student account')
+        : 'Sign in required';
     }
     const badge = document.getElementById('dd2-guest-badge');
     if (badge) {
@@ -442,6 +450,7 @@
     const yearLevel = document.getElementById('dd2-year-level').value;
     const accepted = document.getElementById('dd2-legal-acceptance').checked;
     const marketingOptIn = document.getElementById('dd2-marketing-consent').checked;
+    const aiImprovementOptIn = document.getElementById('dd2-ai-improvement-consent').checked;
     if (displayName.length < 2) {
       setStatus('dd2-onboarding-status', 'Enter the name you want shown in Due Diligence.', 'error');
       return;
@@ -471,6 +480,12 @@
         p_source: 'web_onboarding',
       });
       if (marketingError) throw marketingError;
+      const { error: aiConsentError } = await state.client.rpc('record_ai_improvement_consent', {
+        p_opted_in: aiImprovementOptIn,
+        p_consent_version: config.legal.aiImprovementConsentVersion,
+        p_source: 'web_onboarding',
+      });
+      if (aiConsentError) throw aiConsentError;
       const { error: profileError } = await state.client.rpc('complete_profile_onboarding', {
         p_display_name: displayName,
         p_school: school || null,
@@ -519,10 +534,20 @@
         <p>Questions, suggested answers, scores, AI assessments, and explanations are for education only. They do not constitute legal advice, an official Bar grade, or a guarantee of examination performance. Verify authorities against official sources.</p>
         <h3>AI limitations</h3>
         <p>Gemini helps assess and explain answers using curated platform context. AI output may be incomplete or inaccurate. Use the correction workflow when material appears wrong.</p>
-        <h3>Beta availability</h3>
-        <p>Features and planned prices may change during Beta. Payments, subscriptions, coaching bookings, and paid entitlements are not active.</p>
+        <h3>AI, grading, and authority limitations</h3>
+        <p>AI-generated grading and suggested answers may be incomplete or inaccurate. They are not official Supreme Court or Bar Examiner grades. A “Human Verified” label appears only after a genuine editorial review record exists. Provider capacity may temporarily interrupt grading; no grade or authority will be fabricated.</p>
+        <h3>Access and subscriptions</h3>
+        <p>Eligible accounts receive a non-restartable 72-hour trial and three lifetime AI grades. Active trial, Free Beta, or paid access has no product-level daily grading limit. Paid plans are activated for the stated period only after manual Philippine-peso payment verification. There is no automatic renewal.</p>
+        <h3>Payments, cancellation, and refunds</h3>
+        <p>GCash and MariBank payments are manually verified. A voluntary cancellation requested within five calendar days of activation is eligible for an 80% refund. Later requests are reviewed using unused time and documented consumption. Verified continuous outages of twenty days qualify for a prorated refund or equivalent extension, subject to applicable law. Initial response target is 24 hours; ordinary review is seven calendar days and complex review may take up to 14 days without waiving statutory remedies.</p>
+        <h3>Your submissions</h3>
+        <p>You remain responsible for submitted content. Do not submit confidential, privileged, unlawful, or third-party personal information. Service processing of an answer is necessary to provide grading. Separate optional consent governs retention of de-identified answer content for internal quality improvement.</p>
         <h3>Acceptable use</h3>
-        <p>Do not misuse the service, attempt to evade technical safeguards, submit unlawful material, or rely on the platform for representation of a client.</p>
+        <p>Do not scrape the platform, share credentials, bypass access controls, interfere with service, commit fraud, harass others, or submit unlawful material. We may proportionately suspend or terminate access after notice and an opportunity to raise a support complaint, except where immediate action is reasonably necessary for security or law.</p>
+        <h3>Ownership and lawful use</h3>
+        <p>Due Diligence owns its original software, branding, interface, and proprietary curation. It does not claim ownership over Philippine laws, jurisprudence, government works, or official Bar materials. Unauthorized commercial reproduction and unlawful access may be pursued, while lawful fair use, criticism, reporting, and statutory rights remain respected.</p>
+        <h3>Governing law and complaints</h3>
+        <p>These Beta Terms are governed by Philippine law. Submit a complaint through native Support; we will document and review it before taking further internal action where practicable.</p>
       </div>`;
   }
 
@@ -534,13 +559,20 @@
         <p>For signed-in users, Supabase stores account identity, approved profile fields, legal-document acceptance, marketing preference, roles, and future account records. Google processes the secure sign-in consent flow.</p>
         <h3>Essay assessment</h3>
         <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to Gemini for assessment. Do not place client secrets or confidential case information in practice answers.</p>
-        <h3>Guest preview</h3>
-        <p>Guest access is limited to three successful grades. The browser keeps an opaque first-party device identifier. The Worker stores only keyed HMAC values derived from that identifier and, as a conservative reset-abuse signal, Cloudflare's trusted network address plus a normalized browser agent. Raw IP addresses, raw user-agent strings, guest emails, credentials, and guest answers are not stored in the quota database.</p>
-        <p>Changing device, network, VPN, and browser identity cannot be made impossible to bypass without requiring sign-in. The recovery signal may correlate repeat activity but is not intended to identify a person or impose one shared quota on an entire household or institution.</p>
+        <h3>Access records</h3>
+        <p>Protected examinations require authentication. Supabase UUIDs anchor trial activation, lifetime-grade usage, Free Beta access, subscriptions, progress, and history so refreshes or device changes do not reset access.</p>
         <h3>Support and corrections</h3>
         <p>Native Support stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Support. Correction submissions store only the reviewed correction fields described in that form.</p>
-        <h3>Your choices</h3>
-        <p>Marketing consent is optional and may be withdrawn in Account. Data export, deletion, device management, billing, and coaching controls are planned but not yet active; Support can receive an account request in the meantime.</p>
+        <h3>Payments and infrastructure</h3>
+        <p>Payment amount, channel, date, reference, status, and proof are processed for manual verification. Proofs are private and available only through short-lived authorized review. Supabase, Cloudflare, GitHub Pages, Google authentication, and Gemini process data only as needed for their platform roles.</p>
+        <h3>Purpose and legal basis</h3>
+        <p>We process account and answer data to perform the requested educational service, secure the platform, prevent fraud, maintain records, and meet legal obligations. Optional marketing and AI-improvement processing relies on separate consent that may be withdrawn.</p>
+        <h3>Retention and security</h3>
+        <p>Account, legal-acceptance, grading, payment, support, and audit records are retained only as needed for the service, disputes, security, and applicable law. Payment proofs are removed under the approved retention schedule. Controls include least-privilege access, private storage, row-level security, authenticated Worker routes, and audit trails.</p>
+        <h3>Your rights</h3>
+        <p>You may request access, correction, deletion where applicable, restriction, objection, consent withdrawal, or account-recovery assistance through Support. Identity verification may be required. Google identity transfer is not offered unless the same internal UUID and attached data can be preserved safely.</p>
+        <h3>AI-improvement choice</h3>
+        <p>Answer processing for an immediate grade is required service processing. Retaining de-identified answer content for internal model, rubric, and quality improvement is optional and may be withdrawn without losing paid simulator access.</p>
       </div>`;
   }
 
@@ -591,7 +623,7 @@
         </form>
         <h3>Frequently asked</h3>
         <p><strong>How is an answer scored?</strong><br>Each answer receives an independent 0–5 ALAC assessment. It is not an official Bar grade.</p>
-        <p><strong>How many guest grades are available?</strong><br>Three successful grades total across all subjects. Views, drafts, failed requests, and validation errors do not count.</p>
+        <p><strong>How does free access work?</strong><br>Every authenticated student receives three lifetime AI grades. The 72-hour trial unlocks the simulator, and successful trial grades count toward those three. Failed provider calls and blank timer expirations do not count.</p>
         <p><strong>Where should I report a model-answer issue?</strong><br>Use “Suggest a Correction/Better Answer” beneath the assessment so the editorial context stays attached.</p>
       </div>`;
   }
@@ -989,7 +1021,6 @@
     state.initialized = true;
     injectShell();
     bindNavigation();
-    guestDeviceId();
     document.getElementById('dd2-google-signin')?.addEventListener('click', signInWithGoogle);
     document.getElementById('dd2-guest-continue')?.addEventListener('click', continueGuestFromEntry);
     document.getElementById('dd2-onboarding-form')?.addEventListener('submit', submitOnboarding);
@@ -1027,8 +1058,7 @@
       else hideNativeView();
     });
     await initializeAuth();
-    await firstPatronWelcome();
-    await reconcileGuestAccess({ promptWhenExhausted: true });
+    if (!state.user) syncAuthUi();
   }
 
   async function beforeGrade() {

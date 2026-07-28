@@ -1655,22 +1655,9 @@ async function init() {
 }
 
 async function loadWebsiteQuestionBank() {
-  if (!window.DueDiligenceWebsiteQuestionBank) {
-    websiteQuestionBankStatus = "error";
-    console.error('The unified website question-bank loader is unavailable.');
-    return;
-  }
-  try {
-    const imported = await window.DueDiligenceWebsiteQuestionBank.load();
-    for (const subject of SUBJECTS) {
-      BAR_QUESTIONS[subject] = imported.bySubject[subject];
-    }
-    websiteQuestionBankStatus = "ready";
-    laborQuestionBankStatus = "ready";
-  } catch (error) {
-    websiteQuestionBankStatus = "error";
-    console.error('The unified website question bank could not be loaded; legacy sources remain available.', error);
-  }
+  for (const subject of SUBJECTS) BAR_QUESTIONS[subject] = [];
+  websiteQuestionBankStatus = "protected";
+  laborQuestionBankStatus = "protected";
 }
 
 function startTimer() {
@@ -1740,6 +1727,7 @@ function showWelcome() {
 
 function startPractice() {
   stopExamSession({ reset: true });
+  if (!window.DueDiligencePhase4?.requireAuthentication()) return;
   if (safeStorageGet(localStorage, TERMS_ACCEPTANCE_KEY) !== 'accepted') {
     onboardingStage = 'terms';
     openModal('terms-modal', { blocking: true });
@@ -1806,7 +1794,7 @@ function showSubjectSelection() {
   if (first) requestAnimationFrame(() => first.focus());
 }
 
-function selectSubjectForSession(subject) {
+async function selectSubjectForSession(subject) {
   if (!SUBJECTS.includes(subject) || examStage === 'subjectLoading') return;
   stopExamSession({ reset: true });
   pendingSubjectSelection = subject;
@@ -1820,11 +1808,20 @@ function selectSubjectForSession(subject) {
   }
   const status = document.getElementById('subject-loading-status');
   if (status) status.textContent = `Loading ${subject} questions…`;
-  if (subject === 'Labor Law' && laborQuestionBankStatus !== 'ready') {
-    if (laborQuestionBankStatus === 'error') loadLaborFromSheet();
-    return;
+  try {
+    const question = await window.DueDiligencePhase4?.loadProtectedQuestion(subject, []);
+    if (!question || pendingSubjectSelection !== subject) return;
+    BAR_QUESTIONS[subject] = [question];
+    websiteQuestionBankStatus = 'ready';
+    if (subject === 'Labor Law') laborQuestionBankStatus = 'ready';
+    completeSubjectSelection(subject);
+  } catch (error) {
+    pendingSubjectSelection = null;
+    currentSubj = null;
+    examStage = 'idle';
+    if (status) status.textContent = error.message || `${subject} questions are temporarily unavailable.`;
+    window.DueDiligencePhase2?.handleGradeError?.(error);
   }
-  completeSubjectSelection(subject);
 }
 
 function completeSubjectSelection(subject) {
@@ -1917,6 +1914,43 @@ function transitionQuestion(index, options = {}) {
   sessionController.startQuestion(question.id);
   questionStartTs = Date.now();
   if (!options.automatic) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function transitionToProtectedRandomQuestion() {
+  if (gradingInProgress || examStage === 'transitioning' || !currentSubj) return;
+  saveDraftForCurrentQuestion();
+  examStage = 'transitioning';
+  sessionController.pause();
+  setWorkspaceLocked(true);
+  const previousQuestion = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+  try {
+    const question = await window.DueDiligencePhase4.loadProtectedQuestion(
+      currentSubj,
+      previousQuestion?.id ? [previousQuestion.id] : [],
+    );
+    if (!question) throw new Error('The next protected question could not be loaded.');
+    const list = BAR_QUESTIONS[currentSubj];
+    let index = list.findIndex((item) => item.id === question.id);
+    if (index < 0) {
+      list.push(question);
+      index = list.length - 1;
+    }
+    currentIdx = index;
+    currentQuestionIndex = index;
+    examStage = 'answering';
+    setWorkspaceLocked(false);
+    renderMainWrite();
+    sessionController.startQuestion(question.id);
+    questionStartTs = Date.now();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (error) {
+    examStage = 'answering';
+    setWorkspaceLocked(false);
+    renderMainWrite();
+    sessionController.resume();
+    window.DueDiligencePhase2?.handleGradeError?.(error);
+    toast(error.message || 'The next question is temporarily unavailable.', 'warn');
+  }
 }
 
 function setupEventListeners() {
@@ -2157,7 +2191,7 @@ function prevQuestion() {
 
 function nextQuestion() {
   if (gradingInProgress || examStage !== 'answering') return;
-  transitionQuestion(randomDifferentQuestionIndex(BAR_QUESTIONS[currentSubj], currentIdx));
+  transitionToProtectedRandomQuestion();
 }
 
 function randomQuestion() {
@@ -2693,7 +2727,7 @@ function submitAndNext() {
 
 function proceedAfterReview() {
   if (gradingInProgress || examStage !== 'reviewing') return;
-  transitionQuestion(currentIdx + 1);
+  transitionToProtectedRandomQuestion();
 }
 
 /* Called at the end of every renderMainWrite() */
@@ -3041,6 +3075,7 @@ document.addEventListener('visibilitychange', () => {
   crossorigin="anonymous"></script>
 <script src="assets/phase2-config.js"></script>
 <script src="assets/phase2-experience.js"></script>
+<script src="assets/phase4-experience.js"></script>
 <script src="assets/phase3-analytics.js"></script>
 
 </body>

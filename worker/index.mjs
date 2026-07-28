@@ -48,6 +48,15 @@ import {
   normalizeDashboardRequest,
   normalizeOperationalRequest,
 } from './admin-core.mjs';
+import {
+  AccessValidationError,
+  accessDeniedError,
+  normalizeAccessSnapshot,
+  normalizeRequestKey,
+  normalizeSubject,
+  selectProtectedQuestion,
+} from './access-core.mjs';
+import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
@@ -57,7 +66,6 @@ const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
 const GEMINI_TRANSIENT_ATTEMPTS = 2;
 const GEMINI_RETRY_DELAY_MS = 750;
-const WEBSITE_BANK_URL = 'https://duediligence.ph/content/question-bank/website-upload.json';
 const rateWindows = new Map();
 const correctionRateWindows = new Map();
 const supportRateWindows = new Map();
@@ -323,6 +331,32 @@ async function protectedSupabaseRpc(env, functionName, body) {
   return result;
 }
 
+async function phase4Rpc(env, functionName, body) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) {
+    console.error('Phase 4 storage request failed', {
+      operation: functionName,
+      status: response.status,
+    });
+    throw new ExaminerError(
+      'ACCESS_UNAVAILABLE',
+      'Your access status is temporarily unavailable.',
+      503,
+    );
+  }
+  return result;
+}
+
 async function verifiedAuthenticatedUser(request, env) {
   const authorization = String(request.headers.get('Authorization') || '').trim();
   if (!authorization) return null;
@@ -346,7 +380,59 @@ async function verifiedAuthenticatedUser(request, env) {
   return { id: String(user.id) };
 }
 
-async function reserveGradeAccess(request, env) {
+function phase4AccessEnforced(env) {
+  return String(env.PHASE4_ACCESS_ENFORCEMENT).toLowerCase() === 'true';
+}
+
+async function requireAuthenticatedUser(request, env) {
+  const user = await verifiedAuthenticatedUser(request, env);
+  if (!user) {
+    throw new AccessValidationError(
+      'AUTHENTICATION_REQUIRED',
+      'Sign in with Google before opening or submitting an examination.',
+      401,
+    );
+  }
+  return user;
+}
+
+async function phase4AccessForUser(env, userId, options = {}) {
+  const result = await phase4Rpc(env, 'phase4_access_snapshot', {
+    p_user_id: userId,
+    p_activate_trial: options.activateTrial === true,
+    p_request_key: options.requestKey || null,
+  });
+  return normalizeAccessSnapshot(result);
+}
+
+async function reserveGradeAccess(request, env, gradingRequest) {
+  if (phase4AccessEnforced(env)) {
+    const authenticatedUser = await requireAuthenticatedUser(request, env);
+    const requestId = normalizeRequestKey(request.headers.get('X-Request-ID'));
+    const reservation = await phase4Rpc(env, 'phase4_reserve_grade', {
+      p_user_id: authenticatedUser.id,
+      p_request_key: requestId,
+      p_question_bank_id: gradingRequest.questionId,
+    });
+    const access = normalizeAccessSnapshot(reservation);
+    if (!access.allowed) throw accessDeniedError(access);
+    if (!reservation?.reservationId) {
+      throw new ExaminerError(
+        'ACCESS_UNAVAILABLE',
+        'Your grading request could not be reserved. Please try again.',
+        503,
+      );
+    }
+    return {
+      signedIn: true,
+      phase4: true,
+      userId: authenticatedUser.id,
+      reservationId: String(reservation.reservationId),
+      access,
+      usage: null,
+    };
+  }
+
   const authenticatedUser = await verifiedAuthenticatedUser(request, env);
   if (authenticatedUser) {
     return { signedIn: true, reservationId: null, usage: null };
@@ -448,6 +534,17 @@ async function guestAccessStatus(request, env) {
 }
 
 async function finalizeGradeAccess(access, env) {
+  if (access?.phase4) {
+    const result = await phase4Rpc(env, 'phase4_finalize_grade', {
+      p_user_id: access.userId,
+      p_reservation_id: access.reservationId,
+    });
+    return {
+      limit: 3,
+      used: Math.max(0, Math.min(3, Number(result?.used) || 0)),
+      remaining: Math.max(0, Math.min(3, Number(result?.remaining) || 0)),
+    };
+  }
   if (access.signedIn || access.legacy) return null;
   const result = normalizeReservationResponse(await supabaseRpc(env, 'finalize_guest_grade', {
     p_reservation_id: access.reservationId,
@@ -457,7 +554,22 @@ async function finalizeGradeAccess(access, env) {
 }
 
 async function releaseGradeAccess(access, env) {
-  if (!access || access.signedIn || !access.reservationId) return;
+  if (!access || !access.reservationId) return;
+  if (access.phase4) {
+    try {
+      await phase4Rpc(env, 'phase4_release_grade', {
+        p_user_id: access.userId,
+        p_reservation_id: access.reservationId,
+        p_reason: 'grading_failed',
+      });
+    } catch (error) {
+      console.error('Authenticated grade reservation release failed', {
+        code: error?.code || 'UNKNOWN',
+      });
+    }
+    return;
+  }
+  if (access.signedIn) return;
   try {
     await supabaseRpc(env, 'release_guest_grade', {
       p_reservation_id: access.reservationId,
@@ -488,15 +600,19 @@ async function loadWebsiteBank(url) {
   if (websiteBankCache && now - websiteBankCache.loadedAt < 5 * 60 * 1000) {
     return websiteBankCache.records;
   }
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!response.ok) {
-    throw new ExaminerError('QUESTION_BANK_UNAVAILABLE', 'The website question bank is temporarily unavailable.', 503);
-  }
   let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank returned invalid JSON.', 502);
+  if (url) {
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) {
+      throw new ExaminerError('QUESTION_BANK_UNAVAILABLE', 'The website question bank is temporarily unavailable.', 503);
+    }
+    try {
+      payload = await response.json();
+    } catch {
+      throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank returned invalid JSON.', 502);
+    }
+  } else {
+    payload = embeddedWebsiteQuestionBank;
   }
   if (!Array.isArray(payload?.records) || payload.records.length !== 320) {
     throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank must contain exactly 320 records.', 502);
@@ -698,10 +814,10 @@ async function handleGrade(request, env, origin, allowedOrigin) {
   let gradeAccess = null;
 
   try {
-    gradeAccess = await reserveGradeAccess(request, env);
+    gradeAccess = await reserveGradeAccess(request, env, gradingRequest);
     let bankContext = null;
     try {
-      const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
+      const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
       bankContext = questionFromBankRow(records.get(gradingRequest.questionId));
     } catch (error) {
       console.warn('Unified website question bank unavailable; using compatibility context.', {
@@ -759,7 +875,7 @@ async function handleGrade(request, env, origin, allowedOrigin) {
       }
     }
 
-    const guestUsage = await finalizeGradeAccess(gradeAccess, env);
+    const finalizedUsage = await finalizeGradeAccess(gradeAccess, env);
     return jsonResponse({
       ok: true,
       assessment: {
@@ -770,11 +886,17 @@ async function handleGrade(request, env, origin, allowedOrigin) {
         questionAuthority: context.authority,
         groundingEnabled: gemini.groundingUsed,
       },
-      access: gradeAccess.signedIn
-        ? { signedIn: true }
+      access: gradeAccess.phase4
+        ? {
+          signedIn: true,
+          access: gradeAccess.access,
+          freeGrades: finalizedUsage,
+        }
+        : gradeAccess.signedIn
+          ? { signedIn: true }
         : gradeAccess.legacy
           ? { signedIn: false, guest: null }
-          : { signedIn: false, guest: guestUsage },
+          : { signedIn: false, guest: finalizedUsage },
     }, 200, origin, allowedOrigin);
   } catch (error) {
     await releaseGradeAccess(gradeAccess, env);
@@ -783,7 +905,48 @@ async function handleGrade(request, env, origin, allowedOrigin) {
   }
 }
 
+async function handleAccess(request, env, origin, allowedOrigin) {
+  await enforceGuestStatusRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const access = await phase4AccessForUser(env, user.id);
+  return jsonResponse({ ok: true, access }, 200, origin, allowedOrigin);
+}
+
+async function handleProtectedQuestion(request, env, origin, allowedOrigin) {
+  await enforceRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const payload = await parseBoundedJson(request, 12_000);
+  const subject = normalizeSubject(payload?.subject);
+  const requestKey = normalizeRequestKey(
+    payload?.requestId || request.headers.get('X-Request-ID'),
+  );
+  const access = await phase4AccessForUser(env, user.id, {
+    activateTrial: true,
+    requestKey,
+  });
+  if (!access.allowed) throw accessDeniedError(access);
+
+  const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
+  const question = selectProtectedQuestion(records, {
+    subject,
+    excludeQuestionIds: payload?.excludeQuestionIds,
+  });
+  return jsonResponse({
+    ok: true,
+    access,
+    question,
+    inventory: {
+      subjects: 8,
+      questionsPerSubject: 40,
+      totalQuestions: 320,
+    },
+  }, 200, origin, allowedOrigin);
+}
+
 async function handleGuestAccess(request, env, origin, allowedOrigin) {
+  if (phase4AccessEnforced(env)) {
+    return handleAccess(request, env, origin, allowedOrigin);
+  }
   await enforceGuestStatusRateLimit(request, env);
   const access = await guestAccessStatus(request, env);
   return jsonResponse({
@@ -814,7 +977,7 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
     throw new ExaminerError('INVALID_JSON', 'The correction request contains invalid JSON.');
   }
 
-  const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
+  const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
   let correction;
   try {
     correction = normalizeCorrectionRequest(payload, records.get(String(payload?.questionId || '').trim()));
@@ -851,7 +1014,9 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
     );
   }
 
-  const correctionUser = await verifiedAuthenticatedUser(request, env);
+  const correctionUser = phase4AccessEnforced(env)
+    ? await requireAuthenticatedUser(request, env)
+    : await verifiedAuthenticatedUser(request, env);
   const insertResponse = await fetch(
     new URL('/rest/v1/question_corrections', supabaseUrl),
     {
@@ -1011,7 +1176,7 @@ async function handleAdminDashboard(request, env, origin, allowedOrigin) {
     p_previous_to: report.previousTo,
   });
   try {
-    const bank = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
+    const bank = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
     const subjects = new Set(Array.from(bank.values()).map((row) => String(row.Subject || row.subject || '').trim()).filter(Boolean));
     result.inventory = {
       ...(result.inventory || {}),
@@ -1168,6 +1333,12 @@ export default {
       if (pathname === '/guest-access') {
         return await handleGuestAccess(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/access') {
+        return await handleAccess(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam/question') {
+        return await handleProtectedQuestion(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/support') {
         return await handleSupport(request, env, origin, allowedOrigin);
       }
@@ -1200,7 +1371,9 @@ export default {
       }
       return await handleGrade(request, env, origin, allowedOrigin);
     } catch (error) {
-      const known = error instanceof ExaminerError || error instanceof GuestAccessError;
+      const known = error instanceof ExaminerError
+        || error instanceof GuestAccessError
+        || error instanceof AccessValidationError;
       return jsonResponse({
         ok: false,
         error: {

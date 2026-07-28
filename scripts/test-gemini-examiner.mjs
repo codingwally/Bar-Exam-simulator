@@ -272,7 +272,11 @@ try {
   const responseBody = await response.json();
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'https://duediligence.ph');
-  assert.equal(responseBody.assessment.score, 4.5);
+  assert.equal(
+    responseBody.assessment.score,
+    2.5,
+    'generic application must remain capped even when the provider proposes 4.5',
+  );
   assert.equal(responseBody.assessment.maxScore, 5);
   assert.equal(responseBody.assessment.modelUsed, 'gemini-3.6-flash');
   assert.equal(responseBody.assessment.questionAuthority, 'server_question_bank');

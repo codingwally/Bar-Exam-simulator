@@ -1208,12 +1208,14 @@
     state.session = data?.session || null;
     state.user = state.session?.user || null;
     syncAuthUi();
+    if (state.user) closeEntry();
 
     state.client.auth.onAuthStateChange((event, session) => {
       state.session = session || null;
       state.user = session?.user || null;
       syncAuthUi();
       if (session && ['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'].includes(event)) {
+        closeEntry();
         if (event === 'SIGNED_IN') {
           global.DueDiligenceAnalytics?.track('sign_in_completed');
           const createdAt = new Date(session.user?.created_at || 0).getTime();

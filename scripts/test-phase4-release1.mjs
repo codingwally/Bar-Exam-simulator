@@ -8,6 +8,7 @@ const migrationPath = new URL(
 const migration = readFileSync(migrationPath, 'utf8');
 const worker = readFileSync(new URL('../worker/index.mjs', import.meta.url), 'utf8');
 const frontend = readFileSync(new URL('../assets/phase4-experience.js', import.meta.url), 'utf8');
+const shellExperience = readFileSync(new URL('../assets/phase2-experience.js', import.meta.url), 'utf8');
 const config = readFileSync(new URL('../assets/phase2-config.js', import.meta.url), 'utf8');
 
 for (const table of [
@@ -49,6 +50,16 @@ assert.match(worker, /pathname === '\/exam\/question'/);
 assert.match(worker, /phase4_reserve_grade/);
 assert.match(frontend, /loadProtectedQuestion/);
 assert.match(frontend, /AUTHENTICATION_REQUIRED/);
+assert.match(
+  shellExperience,
+  /state\.user = state\.session\?\.user \|\| null;\s*syncAuthUi\(\);\s*if \(state\.user\) closeEntry\(\);/,
+  'A restored session must close a stale guest or sign-in gate.',
+);
+assert.match(
+  shellExperience,
+  /if \(session && \['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'\]\.includes\(event\)\) \{\s*closeEntry\(\);/,
+  'Verified auth events must close a stale guest gate.',
+);
 assert.match(config, /terms-beta-v2-2026-07-28/);
 assert.match(config, /subscriptionEnforcement:\s*true/);
 

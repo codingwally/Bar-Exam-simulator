@@ -541,7 +541,7 @@
     const signedIn = Boolean(state.session?.access_token && state.user);
     const signInButton = document.getElementById('btn-signin');
     if (signInButton) {
-      signInButton.textContent = signedIn ? 'Account' : 'Sign In';
+      signInButton.textContent = signedIn ? 'The Docket' : 'The Docket · Sign In';
       signInButton.hidden = false;
     }
     const badge = document.getElementById('dd2-guest-badge');
@@ -726,7 +726,7 @@
         <p>Gemini helps assess and explain answers using curated platform context. AI output may be incomplete or inaccurate. Use the correction workflow when material appears wrong.</p>
         <h3>AI, grading, and authority limitations</h3>
         <p>AI-generated grading and suggested answers may be incomplete or inaccurate. They are not official Supreme Court or Bar Examiner grades. A “Human Verified” label appears only after a genuine editorial review record exists. Provider capacity may temporarily interrupt grading; no grade or authority will be fabricated.</p>
-        <h3>Access and subscriptions</h3>
+        <h3>Retainer and access</h3>
         <p>Eligible accounts receive a non-restartable 72-hour trial and three lifetime AI grades. Active trial, Free Beta, or paid access has no product-level daily grading limit. Paid plans are activated for the stated period only after manual Philippine-peso payment verification. There is no automatic renewal.</p>
         <h3>Payments, cancellation, and refunds</h3>
         <p>GCash and MariBank payments are manually verified. A voluntary cancellation requested within five calendar days of activation is eligible for an 80% refund. Later requests are reviewed using unused time and documented consumption. Verified continuous outages of twenty days qualify for a prorated refund or equivalent extension, subject to applicable law. Initial response target is 24 hours; ordinary review is seven calendar days and complex review may take up to 14 days without waiving statutory remedies.</p>
@@ -737,7 +737,7 @@
         <h3>Ownership and lawful use</h3>
         <p>Due Diligence owns its original software, branding, interface, and proprietary curation. It does not claim ownership over Philippine laws, jurisprudence, government works, or official Bar materials. Unauthorized commercial reproduction and unlawful access may be pursued, while lawful fair use, criticism, reporting, and statutory rights remain respected.</p>
         <h3>Governing law and complaints</h3>
-        <p>These Beta Terms are governed by Philippine law. Submit a complaint through native Support; we will document and review it before taking further internal action where practicable.</p>
+        <p>These Beta Terms are governed by Philippine law. Submit a complaint through Co-Counsel; we will document and review it before taking further internal action where practicable.</p>
       </div>`;
   }
 
@@ -751,8 +751,8 @@
         <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to Gemini for assessment. Do not place client secrets or confidential case information in practice answers.</p>
         <h3>Access records</h3>
         <p>Protected examinations require authentication. Supabase UUIDs anchor trial activation, lifetime-grade usage, Free Beta access, subscriptions, progress, and history so refreshes or device changes do not reset access.</p>
-        <h3>Support and corrections</h3>
-        <p>Native Support stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Support. Correction submissions store only the reviewed correction fields described in that form.</p>
+        <h3>Co-Counsel and corrections</h3>
+        <p>Co-Counsel stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Co-Counsel. Correction submissions store only the reviewed correction fields described in that form.</p>
         <h3>Payments and infrastructure</h3>
         <p>Payment amount, channel, date, reference, status, and proof are processed for manual verification. Proofs are private and available only through short-lived authorized review. Supabase, Cloudflare, GitHub Pages, Google authentication, and Gemini process data only as needed for their platform roles.</p>
         <h3>Purpose and legal basis</h3>
@@ -760,7 +760,7 @@
         <h3>Retention and security</h3>
         <p>Account, legal-acceptance, grading, payment, support, and audit records are retained only as needed for the service, disputes, security, and applicable law. Payment proofs are removed under the approved retention schedule. Controls include least-privilege access, private storage, row-level security, authenticated Worker routes, and audit trails.</p>
         <h3>Your rights</h3>
-        <p>You may request access, correction, deletion where applicable, restriction, objection, consent withdrawal, or account-recovery assistance through Support. Identity verification may be required. Google identity transfer is not offered unless the same internal UUID and attached data can be preserved safely.</p>
+        <p>You may request access, correction, deletion where applicable, restriction, objection, consent withdrawal, or account-recovery assistance through Co-Counsel. Identity verification may be required. Google identity transfer is not offered unless the same internal UUID and attached data can be preserved safely.</p>
         <h3>AI-improvement choice</h3>
         <p>Answer processing for an immediate grade is required service processing. Retaining de-identified answer content for internal model, rubric, and quality improvement is optional and may be withdrawn without losing paid simulator access.</p>
       </div>`;
@@ -865,8 +865,8 @@
           <label class="dd2-label">Category
             <select class="dd2-field" id="dd2-support-category" required>
               <option value="technical">Technical issue</option>
-              <option value="account">Account</option>
-              <option value="account_recovery">Account Recovery</option>
+              <option value="account">The Docket</option>
+              <option value="account_recovery">Docket Recovery</option>
               <option value="content">Content or source</option>
               <option value="accessibility">Accessibility</option>
               <option value="other">Other</option>
@@ -880,7 +880,7 @@
               placeholder="Describe what happened, what you expected, and the browser or device you used."></textarea>
           </label>
           <div class="dd2-status" id="dd2-support-status" role="status" aria-live="polite"></div>
-          <button class="dd2-button dd2-button-primary" id="dd2-support-submit" type="submit">Send support request</button>
+          <button class="dd2-button dd2-button-primary" id="dd2-support-submit" type="submit">Send Co-Counsel request</button>
         </form>
         <h3>Frequently asked</h3>
         <p><strong>How is an answer scored?</strong><br>Each answer receives an independent 0–5 ALAC assessment. It is not an official Bar grade.</p>
@@ -934,12 +934,12 @@
         ${state.admin?.authorized ? `
           <h3>Administration</h3>
           <p>Your account has verified administrator access.</p>
-          <a class="dd2-button dd2-button-primary" href="/admin/">Open Admin Dashboard</a>
+          <a class="dd2-button dd2-button-primary" href="/admin/">Open Chambers</a>
         ` : ''}
-        <h3>Account recovery</h3>
-        <p>Contact Support. We respond within 24 hours.</p>
-        <p>Direct public email changes and account transfers are not available. Choose Account Recovery in Support so identity verification can be documented safely.</p>
-        <h3>Plans &amp; access</h3>
+        <h3>Docket recovery</h3>
+        <p>Contact Co-Counsel. We respond within 24 hours.</p>
+        <p>Direct public email changes and account transfers are not available. Choose Docket Recovery in Co-Counsel so identity verification can be documented safely.</p>
+        <h3>Retainer and access</h3>
         <div id="dd2-account-access"><p>Loading verified access status…</p></div>
         <h3>Payments and refunds</h3>
         <div id="dd2-account-billing"><p>Loading billing records…</p></div>
@@ -996,7 +996,7 @@
             <span>I consent to the founders using these details to respond to this inquiry.</span>
           </label>
           <div class="dd2-status" id="dd2-partnership-status" role="status" aria-live="polite"></div>
-          <button class="dd2-button dd2-button-primary" id="dd2-partnership-submit" type="submit">Send partnership inquiry</button>
+          <button class="dd2-button dd2-button-primary" id="dd2-partnership-submit" type="submit">Send Joint Venture inquiry</button>
         </form>
         <p>For a direct follow-up, write to <a href="mailto:invest@duediligence.ph?subject=Investment%20Inquiry">invest@duediligence.ph</a>.</p>
       </div>`;
@@ -1004,12 +1004,12 @@
 
   function nativeDefinition(view) {
     const definitions = {
-      support: ['Member assistance', 'Support', supportContent],
-      pricing: ['Access options', 'Plans & Access', pricingContent],
+      support: ['Member assistance', 'Co-Counsel', supportContent],
+      pricing: ['Access options', 'Retainer', pricingContent],
       terms: ['Legal', 'Beta Terms', termsContent],
       privacy: ['Legal', 'Beta Privacy Notice', privacyContent],
-      account: ['Your chamber', 'Account', accountContent],
-      partnership: ['Collaborate', 'Partner With Us', partnershipContent],
+      account: ['Your chamber', 'The Docket', accountContent],
+      partnership: ['Collaborate', 'Joint Venture', partnershipContent],
     };
     return definitions[view] || null;
   }
@@ -1069,12 +1069,12 @@
         submissionDraft: payload,
       });
       document.getElementById('dd2-support-form').reset();
-      setStatus('dd2-support-status', 'Your support request was received.', 'success');
+      setStatus('dd2-support-status', 'Your Co-Counsel request was received.', 'success');
       global.DueDiligenceAnalytics?.track('support_submitted', {
         resultCategory: payload.category,
       });
     } catch (error) {
-      setStatus('dd2-support-status', error.message || 'Your support request could not be submitted. Please retry.', 'error');
+      setStatus('dd2-support-status', error.message || 'Your Co-Counsel request could not be submitted. Please retry.', 'error');
       submit.disabled = false;
     }
   }
@@ -1354,9 +1354,9 @@
       };
       state.marketingOptIn = values.marketing;
       syncAuthUi();
-      setStatus('dd2-account-status', 'Account preferences saved.', 'success');
+      setStatus('dd2-account-status', 'Docket preferences saved.', 'success');
     } catch {
-      setStatus('dd2-account-status', 'Account preferences could not be saved. Please try again.', 'error');
+      setStatus('dd2-account-status', 'Docket preferences could not be saved. Please try again.', 'error');
     }
   }
 

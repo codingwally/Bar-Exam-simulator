@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#071a33">
-  <title>Admin Dashboard — Due Diligence</title>
+  <title>Chambers — Due Diligence</title>
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="admin.css?v=phase4-20260728-2">
 </head>
 <body>
-  <a class="skip-link" href="#admin-main">Skip to dashboard</a>
+  <a class="skip-link" href="#admin-main">Skip to Chambers</a>
   <div class="admin-shell" id="admin-shell" hidden>
     <aside class="sidebar" id="sidebar">
       <a class="brand" href="../" aria-label="Due Diligence home">
@@ -24,21 +24,21 @@
         <span><strong>Due Diligence</strong><small>Operations</small></span>
       </a>
       <nav aria-label="Admin sections" id="admin-nav">
-        <button data-section="executive" aria-current="page"><span>01</span> Executive Overview</button>
-        <button data-section="realtime"><span>02</span> Realtime &amp; Traffic</button>
-        <button data-section="acquisition"><span>03</span> Acquisition &amp; Conversion</button>
-        <button data-section="users"><span>04</span> Users &amp; Cohorts</button>
-        <button data-section="learning"><span>05</span> Learning &amp; Scores</button>
-        <button data-section="subjects"><span>06</span> Subjects &amp; Questions</button>
-        <button data-section="reliability"><span>07</span> Gemini &amp; Reliability</button>
-        <button data-section="subscriptions"><span>08</span> Access &amp; Subscriptions</button>
-        <button data-section="payments"><span>09</span> Payment Verification</button>
-        <button data-section="refunds"><span>10</span> Refund Requests</button>
-        <button data-section="support"><span>11</span> Support &amp; Recovery</button>
-        <button data-section="corrections"><span>12</span> Correction Queue</button>
-        <button data-section="partnerships"><span>13</span> Partnership Inquiries</button>
-        <button data-section="controls"><span>14</span> Website Controls</button>
-        <button data-section="security"><span>15</span> Roles, Security &amp; Audit</button>
+        <button data-section="executive" aria-current="page"><span>01</span> Chambers</button>
+        <button data-section="realtime"><span>02</span> Live Activity</button>
+        <button data-section="acquisition"><span>03</span> Visitors &amp; Sign-ups</button>
+        <button data-section="users"><span>04</span> Students</button>
+        <button data-section="learning"><span>05</span> Performance</button>
+        <button data-section="subjects"><span>06</span> Question Bank</button>
+        <button data-section="reliability"><span>07</span> AI Grading Health</button>
+        <button data-section="subscriptions"><span>08</span> Retainer Management</button>
+        <button data-section="payments"><span>09</span> Payment Review</button>
+        <button data-section="refunds"><span>10</span> Refunds</button>
+        <button data-section="support"><span>11</span> Co-Counsel Requests</button>
+        <button data-section="corrections"><span>12</span> Answer Corrections</button>
+        <button data-section="partnerships"><span>13</span> Joint Ventures</button>
+        <button data-section="controls"><span>14</span> Website Settings</button>
+        <button data-section="security"><span>15</span> Access &amp; Activity Log</button>
       </nav>
       <div class="sidebar-foot">
         <a href="../">Return to simulator</a>
@@ -53,7 +53,7 @@
         <button class="menu-button" id="menu-button" type="button" aria-label="Open navigation" aria-expanded="false">Menu</button>
         <div>
           <p class="eyebrow">Protected administration</p>
-          <h1 id="section-title">Executive Overview</h1>
+          <h1 id="section-title">Chambers</h1>
         </div>
         <div class="topbar-tools">
           <label>Date range
@@ -81,7 +81,7 @@
     <div class="gate-mark" aria-hidden="true">DD</div>
     <p class="eyebrow">Due Diligence administration</p>
     <h1 id="gate-title">Verifying your secure session</h1>
-    <p id="gate-copy">The dashboard opens only for a verified administrator account.</p>
+    <p id="gate-copy">Chambers opens only for a verified administrator account.</p>
     <div class="gate-spinner" id="gate-spinner"></div>
     <a class="primary-link" id="gate-action" href="../" hidden>Return to Due Diligence</a>
   </section>
@@ -121,7 +121,7 @@
       <header>
         <div>
           <p class="eyebrow">Immutable access record</p>
-          <h2 id="audit-title">Subscription audit history</h2>
+          <h2 id="audit-title">Retainer audit history</h2>
         </div>
         <button class="icon-button" value="cancel" aria-label="Close audit history">×</button>
       </header>
@@ -161,6 +161,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="../assets/phase2-config.js"></script>
   <script src="subscription-actions-core.js?v=admin-actions-20260729-2"></script>
-  <script src="admin.js?v=admin-actions-20260729-2"></script>
+  <script src="admin.js?v=release-c-20260729-1"></script>
 </body>
 </html>

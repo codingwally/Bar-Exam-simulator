@@ -91,16 +91,16 @@ assert.match(
 );
 assert.match(frontend, /Held in Abeyance/);
 assert.match(frontend, /Further proceedings pending\. Premium enrollment is not yet available\./);
-assert.match(frontend, /Partner With Us/);
+assert.match(frontend, /Joint Venture/);
 assert.match(frontend, /plansandpricing@duediligence\.ph|Founder verifies the payment/);
 assert.match(
   frontend,
   /function showEntry\(options = \{\}\) \{\s*const completed = Boolean\(options\.completed\);\s*hideNativeView\(\);/,
   'Authentication must replace, not stack behind, a native commerce view.',
 );
-assert.match(admin, /Payment Verification/);
-assert.match(admin, /Refund Requests/);
-assert.match(admin, /Partnership Inquiries/);
+assert.match(admin, /Payment Review/);
+assert.match(admin, /Refunds/);
+assert.match(admin, /Joint Ventures/);
 assert.match(
   admin,
   /actionButton\('Review', 'payment_review', row\.id, \{ status: row\.status \}\)\.value/,
@@ -109,11 +109,11 @@ assert.match(
   admin,
   /actionButton\('View private proof', 'view_payment_proof', row\.id, \{\}\)\.value/,
 );
-assert.match(publicPage, /assets\/phase2-experience\.js\?v=phase4-20260728-3/);
+assert.match(publicPage, /assets\/phase2-experience\.js\?v=release-c-20260729-1/);
 assert.match(publicPage, /assets\/phase4-experience\.js\?v=phase4-20260728-1/);
 assert.match(text('admin/index.html'), /admin\.css\?v=phase4-20260728-2/);
 assert.match(text('admin/index.html'), /subscription-actions-core\.js\?v=admin-actions-20260729-2/);
-assert.match(text('admin/index.html'), /admin\.js\?v=admin-actions-20260729-2/);
+assert.match(text('admin/index.html'), /admin\.js\?v=release-c-20260729-1/);
 assert.match(
   adminStyles,
   /\.gate\[hidden\]\s*\{\s*display:\s*none;\s*\}/,

@@ -1327,6 +1327,10 @@ function acceptTerms() {
 }
 
 function continueAfterTerms() {
+  if (window.DueDiligencePhase4?.getSession?.()?.access_token) {
+    showSubjectSelection();
+    return;
+  }
   if (safeStorageGet(sessionStorage, GUEST_PROMPT_SESSION_KEY) === 'dismissed') {
     showSubjectSelection();
     return;

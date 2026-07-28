@@ -68,6 +68,21 @@ import {
   proofExtension,
   validateProofSignature,
 } from './payment-core.mjs';
+import {
+  FORUM_LIMITS,
+  ForumValidationError,
+  forumDatabaseError,
+  forumUuid,
+  normalizeForumAdminAction,
+  normalizeForumAdminQueue,
+  normalizeForumCommentRequest,
+  normalizeForumDeleteRequest,
+  normalizeForumFeedRequest,
+  normalizeForumPostRequest,
+  normalizeForumReactionRequest,
+  normalizeForumReportRequest,
+  normalizeForumRepostRequest,
+} from './forum-core.mjs';
 import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
 const WINDOW_MS = 10 * 60 * 1000;
@@ -86,6 +101,8 @@ const adminRateWindows = new Map();
 const guestStatusRateWindows = new Map();
 const paymentRateWindows = new Map();
 const partnershipRateWindows = new Map();
+const forumReadRateWindows = new Map();
+const forumWriteRateWindows = new Map();
 const recentSubmissions = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
@@ -189,6 +206,17 @@ async function enforceAdminRateLimit(request, env) {
     await transientRateKey(request, env, 'admin'),
     90,
     'Too many administrator requests. Please wait and try again.',
+  );
+}
+
+async function enforceForumRateLimit(request, env, mutation = false) {
+  enforceWindow(
+    mutation ? forumWriteRateWindows : forumReadRateWindows,
+    await transientRateKey(request, env, mutation ? 'forum-write' : 'forum-read'),
+    mutation ? 90 : 180,
+    mutation
+      ? 'Too many forum actions. Please wait and try again.'
+      : 'Too many forum requests. Please wait and try again.',
   );
 }
 
@@ -341,6 +369,33 @@ async function protectedSupabaseRpc(env, functionName, body) {
         : 'Administrator data is temporarily unavailable.',
       denied ? 403 : 503,
     );
+  }
+  return result;
+}
+
+async function forumRpc(env, functionName, body) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) {
+    console.error('Lex Forum storage request failed', {
+      operation: functionName,
+      status: response.status,
+      code: String(result?.code || 'unknown').slice(0, 32),
+    });
+    throw forumDatabaseError([
+      result?.message,
+      result?.details,
+      result?.hint,
+    ].filter(Boolean).join(' '));
   }
   return result;
 }
@@ -1243,6 +1298,214 @@ async function markExamAttemptFailed(access, attemptId, code, env) {
   }
 }
 
+async function handleForumFeed(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const query = normalizeForumFeedRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+  );
+  const feed = await forumRpc(env, 'forum_feed', {
+    p_user_id: user.id,
+    p_limit: query.limit,
+    p_cursor_at: query.cursorAt,
+    p_cursor_id: query.cursorId,
+    p_post_id: query.postId,
+  });
+  return jsonResponse({ ok: true, feed }, 200, origin, allowedOrigin);
+}
+
+async function handleForumComments(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const payload = await parseBoundedJson(request, FORUM_LIMITS.requestBytes);
+  const postId = forumUuid(payload?.postId, 'Post');
+  const limit = Math.min(200, Math.max(1, Math.floor(Number(payload?.limit) || 100)));
+  const comments = await forumRpc(env, 'forum_comments_for_post', {
+    p_user_id: user.id,
+    p_post_id: postId,
+    p_limit: limit,
+  });
+  return jsonResponse({ ok: true, comments }, 200, origin, allowedOrigin);
+}
+
+async function handleForumPostCreate(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const post = normalizeForumPostRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+  );
+  const result = await forumRpc(env, 'forum_create_post', {
+    p_user_id: user.id,
+    p_body: post.body,
+    p_source_url: post.sourceUrl,
+  });
+  return jsonResponse({ ok: true, post: result }, 201, origin, allowedOrigin);
+}
+
+async function handleForumPostUpdate(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const post = normalizeForumPostRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+    'update',
+  );
+  const result = await forumRpc(env, 'forum_update_post', {
+    p_user_id: user.id,
+    p_post_id: post.postId,
+    p_body: post.body,
+    p_source_url: post.sourceUrl,
+  });
+  return jsonResponse({ ok: true, post: result }, 200, origin, allowedOrigin);
+}
+
+async function handleForumPostDelete(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const { id } = normalizeForumDeleteRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+  );
+  const result = await forumRpc(env, 'forum_delete_post', {
+    p_user_id: user.id,
+    p_post_id: id,
+  });
+  return jsonResponse({ ok: true, post: result }, 200, origin, allowedOrigin);
+}
+
+async function handleForumReaction(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const reaction = normalizeForumReactionRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+  );
+  const result = await forumRpc(env, 'forum_set_reaction', {
+    p_user_id: user.id,
+    p_post_id: reaction.postId,
+    p_liked: reaction.liked,
+  });
+  return jsonResponse({ ok: true, reaction: result }, 200, origin, allowedOrigin);
+}
+
+async function handleForumCommentCreate(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const comment = normalizeForumCommentRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+  );
+  const result = await forumRpc(env, 'forum_create_comment', {
+    p_user_id: user.id,
+    p_post_id: comment.postId,
+    p_body: comment.body,
+  });
+  return jsonResponse({ ok: true, comment: result }, 201, origin, allowedOrigin);
+}
+
+async function handleForumCommentUpdate(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const comment = normalizeForumCommentRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+    'update',
+  );
+  const result = await forumRpc(env, 'forum_update_comment', {
+    p_user_id: user.id,
+    p_comment_id: comment.commentId,
+    p_body: comment.body,
+  });
+  return jsonResponse({ ok: true, comment: result }, 200, origin, allowedOrigin);
+}
+
+async function handleForumCommentDelete(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const { id } = normalizeForumDeleteRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+    'Comment',
+  );
+  const result = await forumRpc(env, 'forum_delete_comment', {
+    p_user_id: user.id,
+    p_comment_id: id,
+  });
+  return jsonResponse({ ok: true, comment: result }, 200, origin, allowedOrigin);
+}
+
+async function handleForumRepostCreate(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const repost = normalizeForumRepostRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+  );
+  const result = await forumRpc(env, 'forum_create_repost', {
+    p_user_id: user.id,
+    p_post_id: repost.postId,
+    p_commentary: repost.commentary,
+  });
+  return jsonResponse({ ok: true, repost: result }, 201, origin, allowedOrigin);
+}
+
+async function handleForumRepostDelete(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const { id } = normalizeForumDeleteRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+    'Repost',
+  );
+  const result = await forumRpc(env, 'forum_delete_repost', {
+    p_user_id: user.id,
+    p_repost_id: id,
+  });
+  return jsonResponse({ ok: true, repost: result }, 200, origin, allowedOrigin);
+}
+
+async function handleForumReport(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const report = normalizeForumReportRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+  );
+  const result = await forumRpc(env, 'forum_create_report', {
+    p_user_id: user.id,
+    p_target_type: report.targetType,
+    p_target_id: report.targetId,
+    p_category: report.category,
+    p_explanation: report.explanation,
+  });
+  return jsonResponse({ ok: true, report: result }, 201, origin, allowedOrigin);
+}
+
+async function handleForumAdminQueue(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const query = normalizeForumAdminQueue(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+  );
+  const queue = await forumRpc(env, 'forum_admin_queue', {
+    p_actor_user_id: user.id,
+    p_status: query.status,
+    p_limit: query.limit,
+    p_offset: query.offset,
+  });
+  return jsonResponse({ ok: true, queue }, 200, origin, allowedOrigin);
+}
+
+async function handleForumAdminAction(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const payload = await parseBoundedJson(request, FORUM_LIMITS.requestBytes);
+  const action = normalizeForumAdminAction(
+    payload,
+    payload?.requestId || request.headers.get('X-Request-ID'),
+  );
+  const result = await forumRpc(env, 'forum_admin_action', {
+    p_actor_user_id: user.id,
+    p_action: action.action,
+    p_target_id: action.targetId,
+    p_reason: action.reason,
+    p_duration_hours: action.durationHours,
+    p_request_key: action.requestId,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
 async function handleAccess(request, env, origin, allowedOrigin) {
   await enforceGuestStatusRateLimit(request, env);
   const user = await requireAuthenticatedUser(request, env);
@@ -1996,8 +2259,50 @@ export default {
       if (pathname === '/analytics/events') {
         return await handleAnalytics(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/forum/feed') {
+        return await handleForumFeed(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/comments') {
+        return await handleForumComments(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/posts/create') {
+        return await handleForumPostCreate(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/posts/update') {
+        return await handleForumPostUpdate(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/posts/delete') {
+        return await handleForumPostDelete(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/reactions') {
+        return await handleForumReaction(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/comments/create') {
+        return await handleForumCommentCreate(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/comments/update') {
+        return await handleForumCommentUpdate(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/comments/delete') {
+        return await handleForumCommentDelete(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/reposts/create') {
+        return await handleForumRepostCreate(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/reposts/delete') {
+        return await handleForumRepostDelete(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/forum/reports') {
+        return await handleForumReport(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/admin/session') {
         return await handleAdminSession(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/forum/queue') {
+        return await handleForumAdminQueue(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/forum/action') {
+        return await handleForumAdminAction(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/dashboard') {
         return await handleAdminDashboard(request, env, origin, allowedOrigin);
@@ -2034,7 +2339,8 @@ export default {
       const known = error instanceof ExaminerError
         || error instanceof GuestAccessError
         || error instanceof AccessValidationError
-        || error instanceof PaymentValidationError;
+        || error instanceof PaymentValidationError
+        || error instanceof ForumValidationError;
       return jsonResponse({
         ok: false,
         error: {

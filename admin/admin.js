@@ -19,6 +19,7 @@
     partnerships: 'Joint Ventures',
     controls: 'Website Settings',
     security: 'Access & Activity Log',
+    forum: 'Lex Forum Moderation',
   });
   const requirements = Object.freeze({
     users: 'analytics_viewer',
@@ -225,6 +226,18 @@
     });
     state.operational.set(key, payload.data);
     return payload.data;
+  }
+
+  async function loadForumModeration(force = false) {
+    const key = 'forum:all';
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const payload = await api('/admin/forum/queue', {
+      status: 'all',
+      limit: 200,
+      offset: 0,
+    });
+    state.operational.set(key, payload.queue);
+    return payload.queue;
   }
 
   function renderExecutive(report) {
@@ -668,6 +681,64 @@
       <section class="panel"><h3>Capability model</h3><p class="panel-note">Founder and Super Admins receive full operational access. Limited Admin accounts receive only explicitly assigned, revocable capabilities.</p></section>`;
   }
 
+  function forumActionButtons(row) {
+    const actions = [];
+    const addAction = (label, action, target, payload = {}) => {
+      const control = actionButton(label, action, target, payload).value;
+      actions.push(control.replace(/^<span class="row-actions">|<\/span>$/g, ''));
+    };
+    if (row.contentStatus === 'visible') {
+      addAction('Hide', 'forum_hide_content', row.id);
+    } else {
+      addAction('Restore', 'forum_restore_content', row.id);
+    }
+    if (row.contentStatus !== 'removed') {
+      addAction('Remove', 'forum_remove_content', row.id);
+    }
+    if (row.status === 'pending') {
+      addAction('Dismiss report', 'forum_dismiss_report', row.id);
+    }
+    addAction('Restrict author', 'forum_restrict_user', row.id, {
+      durationHours: 24,
+    });
+    return { html: true, value: `<span class="row-actions">${actions.join('')}</span>` };
+  }
+
+  async function renderForumModeration() {
+    const data = await loadForumModeration();
+    const reportRows = (data.reports || []).map((row) => [
+      dateTime(row.createdAt),
+      row.targetType,
+      row.category,
+      row.explanation || 'No explanation supplied',
+      row.content || 'Content is unavailable',
+      `${row.author?.displayName || 'Due Diligence Member'}${row.author?.school ? ` · ${row.author.school}` : ''}`,
+      row.contentStatus || 'Unavailable',
+      row.status,
+      forumActionButtons(row),
+    ]);
+    const restrictionRows = (data.restrictions || []).map((row) => [
+      `${row.displayName || 'Due Diligence Member'}${row.school ? ` · ${row.school}` : ''}`,
+      row.reason,
+      dateTime(row.restrictedUntil),
+      actionButton('Remove restriction', 'forum_remove_restriction', row.id),
+    ]);
+    return `
+      ${heading('Lex Forum Moderation', 'Founder and Super Admin review only. Reports never reveal the reporting member, and moderation never changes subscriptions or examination records.')}
+      <div class="notice"><strong>Under Construction safeguards:</strong> Plain-text publishing, source-link validation, persistent rate limits, duplicate throttling, private reporting, posting restrictions, and audited moderation are active.</div>
+      <section class="panel">
+        <h3>Reported posts and comments</h3>
+        ${table(
+          ['Reported', 'Type', 'Category', 'Explanation', 'Content', 'Author', 'Content state', 'Report state', 'Actions'],
+          reportRows,
+        )}
+      </section>
+      <section class="panel">
+        <h3>Active posting restrictions</h3>
+        ${table(['Member', 'Reason', 'Restricted until', 'Action'], restrictionRows)}
+      </section>`;
+  }
+
   async function renderSection(section) {
     state.section = section;
     $('#section-title').textContent = titles[section];
@@ -696,6 +767,7 @@
       else if (section === 'partnerships') html = await renderPartnerships();
       else if (section === 'controls') html = await renderControls();
       else if (section === 'security') html = await renderSecurity();
+      else if (section === 'forum') html = await renderForumModeration();
       $('#dashboard-view').innerHTML = html;
       bindDynamic();
     } catch (error) {
@@ -1107,16 +1179,45 @@
       title = 'Find Docket by exact email';
       fields = actionField('Exact email', 'action-email', '', 'email');
       warning = 'Exact email search is server-side, capability-restricted, rate-limited, reason-required, and audited.';
+    } else if (action.startsWith('forum_')) {
+      const forumAction = action.slice('forum_'.length);
+      const forumTitles = {
+        hide_content: 'Hide reported forum content',
+        restore_content: 'Restore reported forum content',
+        remove_content: 'Remove reported forum content',
+        dismiss_report: 'Dismiss forum report',
+        restrict_user: 'Restrict forum publishing',
+        remove_restriction: 'Remove forum publishing restriction',
+      };
+      title = forumTitles[forumAction] || 'Moderate Lex Forum';
+      if (forumAction === 'restrict_user') {
+        fields = `<label class="field">Restriction period<select id="action-duration">
+          <option value="1">1 hour</option>
+          <option value="24" selected>24 hours</option>
+          <option value="72">3 days</option>
+          <option value="168">7 days</option>
+          <option value="720">30 days</option>
+          <option value="8760">365 days</option>
+        </select></label>`;
+      }
+      warning = forumAction === 'restrict_user' || forumAction === 'remove_restriction'
+        ? 'This changes only the member’s ability to publish in Lex Forum. It does not change examination, subscription, or payment access.'
+        : 'This changes the visibility or review state of user-generated forum content and is recorded in the administrator audit log.';
     }
     $('#action-title').textContent = title;
     const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
+    const isForumAction = action.startsWith('forum_');
     if (isAccessAction) buildAccessActionFields(action, state.action.payload);
     else $('#action-fields').innerHTML = fields;
     $('#action-context').hidden = !isAccessAction;
-    $('#action-confirmation').hidden = !isAccessAction;
+    $('#action-confirmation').hidden = !(isAccessAction || isForumAction);
+    $('#action-confirmation-copy').textContent = isForumAction
+      ? 'I have verified the report, target content, and proposed moderation action. I understand this action is immediate and audited.'
+      : 'I have verified the target, current access, and proposed change. I understand this action is immediate and audited.';
     $('#action-confirm-risk').checked = false;
     $('#action-confirm').textContent = action === 'subscription_audit_view'
-      ? 'View audited history' : 'Confirm audited action';
+      ? 'View audited history'
+      : isForumAction ? 'Confirm moderation action' : 'Confirm audited action';
     $('#action-warning').textContent = warning;
     $('#action-reason').value = '';
     if (isAccessAction) updateActionContext();
@@ -1134,8 +1235,11 @@
     event.preventDefault();
     if (!state.action || state.actionInFlight) return;
     const accessAction = Boolean(subscriptionActions?.isAccessAction(state.action.action));
-    if (accessAction && !$('#action-confirm-risk').checked) {
-      toast('Confirm that you verified the target and proposed access change.');
+    const forumAction = state.action.action.startsWith('forum_');
+    if ((accessAction || forumAction) && !$('#action-confirm-risk').checked) {
+      toast(forumAction
+        ? 'Confirm that you verified the report and moderation action.'
+        : 'Confirm that you verified the target and proposed access change.');
       return;
     }
     const reason = $('#action-reason').value.trim();
@@ -1210,6 +1314,8 @@
         return;
       }
       payload.is_published = $('#action-published').checked;
+    } else if (action === 'forum_restrict_user') {
+      payload.durationHours = Number($('#action-duration').value);
     }
     state.action.requestKey ||= uuidKey();
     state.actionInFlight = true;
@@ -1240,6 +1346,15 @@
         link.rel = 'noopener noreferrer';
         link.click();
         toast('Private proof opened in a five-minute authorized view.');
+      } else if (action.startsWith('forum_')) {
+        await api('/admin/forum/action', {
+          action: action.slice('forum_'.length),
+          targetId: state.action.targetId,
+          reason,
+          durationHours: payload.durationHours || null,
+          requestId: state.action.requestKey,
+        });
+        toast('Audited Lex Forum moderation action completed.');
       } else {
         const phase4Actions = new Set([
           'payment_review','refund_review','subscription_change',
@@ -1334,7 +1449,13 @@
   function applyNavigationAuthorization() {
     $$('#admin-nav button').forEach((button) => {
       const needed = requirements[button.dataset.section];
-      button.hidden = Boolean(needed && !has(needed));
+      const founderOnly = button.dataset.section === 'forum';
+      const founderAuthorized = ['founder_admin', 'super_admin'].includes(
+        state.authorization?.role,
+      );
+      button.hidden = founderOnly
+        ? !founderAuthorized
+        : Boolean(needed && !has(needed));
     });
   }
 

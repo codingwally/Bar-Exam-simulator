@@ -749,6 +749,7 @@
   }
 </style>
 <link rel="stylesheet" href="assets/phase2.css">
+<link rel="stylesheet" href="assets/lex-forum.css?v=lex-forum-beta-20260802-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body>
@@ -801,8 +802,10 @@
       onclick="openAnalytics()">The Verdict</button>
     <button class="spa-tab" id="spa-pricing" title="Manage your plan and platform access."
       data-dd2-view="pricing">Retainer</button>
-    <button class="spa-tab" id="spa-community" title="Discuss doctrines, questions, and study strategies."
-      onclick="showPage('community', this)">Lex Forum</button>
+    <button class="spa-tab" id="spa-community"
+      title="Open Lex Forum (Under Construction), the signed-in member discussion space."
+      aria-label="Lex Forum (Under Construction)"
+      onclick="window.DueDiligenceLexForum?.open(this) || showPage('community', this)">Lex Forum (Under Construction)</button>
     <button class="spa-tab" id="spa-jurisprudence" title="Review important legal developments and cases."
       onclick="showPage('jurisprudence', this)">Recent Jurisprudence</button>
     <button class="spa-tab" id="spa-support" title="Get technical and account assistance."
@@ -889,25 +892,77 @@
 </section>
 
 <section id="page-community" class="page">
-  <div class="page-wrap">
-    <div class="page-head">
-      <div class="eyebrow">Early Access Preview</div>
-      <h2>Lex Forum</h2>
-      <p>A future moderated space for doctrine-focused study discussions. Lex Forum publishing is not active during Early Access Beta.</p>
+  <div class="page-wrap lex-page-wrap">
+    <header class="page-head lex-page-head">
+      <div class="eyebrow">Authenticated Member Discussion</div>
+      <div class="lex-title-row">
+        <h2>Lex Forum</h2>
+        <span class="lex-beta-badge">Under Construction</span>
+      </div>
+      <p>A source-conscious discussion space for Philippine law students. Core publishing and moderation are live while the community experience continues to be refined.</p>
+    </header>
+
+    <div class="lex-auth-state" id="lex-auth-state" role="status" aria-live="polite">
+      Verifying your signed-in member session&hellip;
     </div>
-    <div class="card-grid">
-      <article class="info-card">
-        <div class="tag">Read-only Preview</div>
-        <h4>Editorially moderated by design</h4>
-        <p>Lex Forum is being refined with account safety, source verification, and responsible moderation controls before student posting is enabled.</p>
-        <div class="meta">No public posts or user-generated claims are displayed.</div>
-      </article>
-      <article class="info-card">
-        <div class="tag">Source Discipline</div>
-        <h4>Doctrine before debate</h4>
-        <p>Future discussions will encourage links to official provisions, Supreme Court decisions, and clearly identified educational commentary.</p>
-        <div class="meta">Early Access Beta</div>
-      </article>
+
+    <div id="lex-forum-app" hidden>
+      <div class="lex-layout">
+        <main class="lex-primary" aria-label="Lex Forum feed">
+          <form class="lex-composer" id="lex-composer">
+            <div class="lex-composer-heading">
+              <div>
+                <span class="lex-kicker">Open a discussion</span>
+                <h3>Share a doctrine, question, or study insight.</h3>
+              </div>
+              <span class="lex-member-mark" aria-hidden="true">DD</span>
+            </div>
+            <label class="lex-field-label" for="lex-post-body">Post</label>
+            <textarea id="lex-post-body" maxlength="4000" rows="5"
+              placeholder="Write in plain text. Identify the issue clearly and distinguish your analysis from quoted authority."
+              required></textarea>
+            <div class="lex-composer-meta">
+              <label class="lex-source-field" for="lex-post-source">
+                <span>Official or reliable source URL <em>optional</em></span>
+                <input id="lex-post-source" type="url" maxlength="2000"
+                  inputmode="url" placeholder="https://elibrary.judiciary.gov.ph/…">
+              </label>
+              <div class="lex-composer-actions">
+                <span id="lex-post-counter" aria-live="polite">0 / 4,000</span>
+                <button class="lex-button lex-button-primary" id="lex-post-submit" type="submit">Publish post</button>
+              </div>
+            </div>
+          </form>
+
+          <div class="lex-feed-toolbar">
+            <div>
+              <span class="lex-kicker">Member feed</span>
+              <h3>Latest discussions</h3>
+            </div>
+            <button class="lex-button lex-button-quiet" id="lex-feed-refresh" type="button">Refresh</button>
+          </div>
+          <div class="lex-status" id="lex-feed-status" role="status" aria-live="polite"></div>
+          <div class="lex-feed" id="lex-feed" aria-live="polite" aria-busy="false"></div>
+          <button class="lex-button lex-load-more" id="lex-load-more" type="button" hidden>Load more discussions</button>
+        </main>
+
+        <aside class="lex-secondary" aria-label="Lex Forum guidance">
+          <section class="lex-guidance-card">
+            <span class="lex-kicker">Community standard</span>
+            <h3>Contribute with professional care.</h3>
+            <ul>
+              <li>Discuss doctrine and legal study respectfully.</li>
+              <li>Link official authorities when a proposition depends on them.</li>
+              <li>Do not publish private, identifying, or examination-answer data.</li>
+              <li>Report unsafe links, harassment, spam, or material legal misinformation.</li>
+            </ul>
+          </section>
+          <section class="lex-notice-card">
+            <strong>Educational discussion only</strong>
+            <p>Lex Forum is an educational discussion space. Posts are user-generated and do not constitute legal advice. Verify legal authorities using official sources.</p>
+          </section>
+        </aside>
+      </div>
     </div>
   </div>
 </section>
@@ -2975,8 +3030,9 @@ window.addEventListener('storage', (event) => {
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"
   crossorigin="anonymous"></script>
 <script src="assets/phase2-config.js"></script>
-<script src="assets/phase2-experience.js?v=release-c-20260729-1"></script>
+<script src="assets/phase2-experience.js?v=release-c-20260729-1-lex-forum-beta-20260802-1"></script>
 <script src="assets/phase4-experience.js?v=phase4-20260729-2"></script>
+<script src="assets/lex-forum.js?v=lex-forum-beta-20260802-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 
 </body>

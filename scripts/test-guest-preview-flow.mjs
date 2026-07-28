@@ -479,6 +479,11 @@ assert.match(experience, /controller\.abort\(\), 6_000/);
 assert.match(experience, /error\?\.code !== 'INVALID_SESSION'/);
 assert.match(experience, /reconcileGuestAccess\(\{ promptWhenExhausted: true \}\)/);
 assert.match(experience, /if \(access\.exhausted\) return false;/);
+assert.match(
+  experience,
+  /await firstPatronWelcome\(\);\s*await reconcileGuestAccess\(\{ promptWhenExhausted: true \}\)/,
+  'First-load Patron welcome must open before an exhausted-guest sign-in gate',
+);
 assert.match(experience, /setOverlay\(false, 'dd2-guest-reminder'\)/);
 assert.match(experience, /showEntry\(\{ completed: true \}\)/);
 assert.match(worker, /pathname === '\/guest-access'/);

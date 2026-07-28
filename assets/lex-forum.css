@@ -749,7 +749,7 @@
   }
 
   .lex-secondary {
-    grid-row: 1;
+    grid-row: auto;
     position: static;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

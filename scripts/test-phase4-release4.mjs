@@ -101,6 +101,8 @@ assert.match(
 assert.match(admin, /Payment Verification/);
 assert.match(admin, /Refund Requests/);
 assert.match(admin, /Partnership Inquiries/);
+assert.match(publicPage, /assets\/phase2-experience\.js\?v=phase4-20260728-2/);
+assert.match(text('admin/index.html'), /admin\.css\?v=phase4-20260728-2/);
 assert.match(
   adminStyles,
   /\.gate\[hidden\]\s*\{\s*display:\s*none;\s*\}/,

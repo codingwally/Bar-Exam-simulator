@@ -39,6 +39,11 @@ assert.ok(migration.includes('student_answer'));
 assert.ok(examiner.includes('modelAnswerQualityIssues'));
 assert.ok(examiner.includes('Application must be the most developed ALAC section.'));
 assert.ok(examiner.includes('Do not claim "Human Verified"'));
+assert.match(
+  wrangler,
+  /\[placement\]\s*region\s*=\s*"gcp:us-east4"/,
+  'The Gemini examiner must execute from a supported, explicit Cloudflare placement.',
+);
 assert.match(wrangler, /PHASE4_MODEL_QUALITY_ENFORCEMENT\s*=\s*"true"/);
 assert.ok(worker.includes('CONTROLLED REPAIR'));
 assert.ok(worker.includes('AI_GRADING_CAPACITY'));

@@ -3,6 +3,9 @@ main = "index.mjs"
 compatibility_date = "2026-07-26"
 preview_urls = false
 
+[placement]
+region = "gcp:us-east4"
+
 [vars]
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMINI_GROUNDING_ENABLED = "false"

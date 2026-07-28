@@ -23,7 +23,7 @@
     const actions = [];
 
     if (!hasSubscription || FINAL_STATUSES.has(status) || !status) {
-      actions.push(descriptor('Activate Subscription', 'subscription_change', 'activate', 'primary'));
+      actions.push(descriptor('Activate Retainer', 'subscription_change', 'activate', 'primary'));
     }
 
     actions.push(descriptor(

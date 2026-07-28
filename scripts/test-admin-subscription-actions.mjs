@@ -48,7 +48,7 @@ for (const role of ['super_admin', 'founder_admin']) {
 
 assert.ok(labels(pausedRow, 'founder_admin').includes('Resume'));
 assert.ok(labels(pausedRow, 'founder_admin').includes('Disable Free Beta'));
-assert.ok(labels(noSubscriptionRow, 'super_admin').includes('Activate Subscription'));
+assert.ok(labels(noSubscriptionRow, 'super_admin').includes('Activate Retainer'));
 assert.ok(labels(noSubscriptionRow, 'super_admin').includes('Change Plan'));
 assert.equal(labels(activeRow, 'student').length, 0);
 assert.equal(labels(activeRow, '').length, 0);

@@ -74,9 +74,12 @@ for (const label of [
   assert.ok(adminHtml.includes(label), `Chambers navigation must include “${label}”.`);
 }
 assert.match(admin, /executive: 'Chambers'/);
+assert.match(admin, /acquisition: 'Visitors & Sign-ups'/);
 assert.match(admin, /subscriptions: 'Retainer Management'/);
 assert.match(admin, /support: 'Co-Counsel Requests'/);
 assert.match(admin, /partnerships: 'Joint Ventures'/);
+assert.match(admin, /security: 'Access & Activity Log'/);
+assert.doesNotMatch(admin, /Visitors and Sign-ups|Access and Activity Log/);
 assert.doesNotMatch(
   admin,
   /table\(\['Student', 'User UUID', 'Role'|table\(\['Student', 'User UUID', 'Plan'/,

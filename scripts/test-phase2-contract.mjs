@@ -19,8 +19,8 @@ vm.runInNewContext(configSource, sandbox);
 const config = sandbox.window.DueDiligencePhase2Config;
 
 assert.equal(config.guest.gradeLimit, 3);
-assert.equal(config.legal.termsVersion, 'terms-beta-v1-2026-08-15');
-assert.equal(config.legal.privacyVersion, 'privacy-beta-v1-2026-08-15');
+assert.equal(config.legal.termsVersion, 'terms-beta-v2-2026-07-28');
+assert.equal(config.legal.privacyVersion, 'privacy-beta-v2-2026-07-28');
 assert.deepEqual(
   Array.from(config.plans.items, (plan) => [plan.id, plan.pricePhp]),
   [
@@ -29,8 +29,8 @@ assert.deepEqual(
     ['premium', 499],
   ],
 );
-assert.equal(config.features.payments, false);
-assert.equal(config.features.subscriptionEnforcement, false);
+assert.equal(config.features.payments, true);
+assert.equal(config.features.subscriptionEnforcement, true);
 assert.equal(config.features.coachingBooking, false);
 
 for (const expected of [

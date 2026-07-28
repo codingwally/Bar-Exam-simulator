@@ -6,4 +6,5 @@
 !.env.example
 .wrangler/
 node_modules/
+.pages-dist/
 

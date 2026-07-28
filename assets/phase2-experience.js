@@ -17,7 +17,6 @@
     reminderResolve: null,
     guestUsage: null,
     admin: null,
-    investorGateObserver: null,
   };
 
   const originalContinueAsGuest = global.continueAsGuest;
@@ -106,10 +105,10 @@
             </ul>
             <div class="dd2-entry-actions">
               <button type="button" class="dd2-button dd2-button-primary" id="dd2-google-signin">Continue with Google</button>
-              <button type="button" class="dd2-button dd2-button-secondary" id="dd2-guest-continue">Continue as Guest</button>
+              <button type="button" class="dd2-button dd2-button-secondary" id="dd2-guest-continue" hidden>Continue as Guest</button>
             </div>
             <div class="dd2-status" id="dd2-auth-status" role="status" aria-live="polite"></div>
-            <p class="dd2-entry-note">Google opens its secure consent screen. Guest answers remain on this browser and are never uploaded after sign-in.</p>
+            <p class="dd2-entry-note">Google opens its secure consent screen. Authentication is required before any examination question is displayed.</p>
           </div>
         </section>
       </div>
@@ -167,6 +166,10 @@
             <label class="dd2-check">
               <input type="checkbox" id="dd2-marketing-consent">
               <span>Send me optional product and Bar-review updates. I can withdraw this at any time.</span>
+            </label>
+            <label class="dd2-check">
+              <input type="checkbox" id="dd2-ai-improvement-consent">
+              <span>Optionally allow de-identified answer content to improve internal rubrics and quality. I can withdraw this without losing simulator access.</span>
             </label>
             <div class="dd2-status" id="dd2-onboarding-status" role="status" aria-live="polite"></div>
             <button class="dd2-button dd2-button-primary" id="dd2-onboarding-submit" type="submit">Enter Due Diligence</button>
@@ -252,6 +255,7 @@
 
   function showEntry(options = {}) {
     const completed = Boolean(options.completed);
+    hideNativeView();
     const title = document.getElementById('dd2-entry-title');
     const copy = document.getElementById('dd2-entry-copy');
     const guestButton = document.getElementById('dd2-guest-continue');
@@ -272,7 +276,7 @@
 
   async function signInWithGoogle() {
     if (!state.client) {
-      setStatus('dd2-auth-status', 'Sign-in is temporarily unavailable. Continue as Guest.', 'error');
+      setStatus('dd2-auth-status', 'Sign-in is temporarily unavailable. Please try again shortly.', 'error');
       return;
     }
     if (!navigator.onLine) {
@@ -293,7 +297,7 @@
       });
       if (error) throw error;
     } catch {
-      setStatus('dd2-auth-status', 'Google sign-in could not start. Continue as Guest or try again.', 'error');
+      setStatus('dd2-auth-status', 'Google sign-in could not start. Please try again.', 'error');
       if (button) button.disabled = false;
     }
   }
@@ -308,22 +312,6 @@
   }
 
   function requireSignInForGuestLimit() {
-    const investorModal = document.getElementById('investor-modal');
-    if (investorModal?.classList.contains('open')) {
-      if (!state.investorGateObserver && typeof MutationObserver === 'function') {
-        state.investorGateObserver = new MutationObserver(() => {
-          if (investorModal.classList.contains('open')) return;
-          state.investorGateObserver.disconnect();
-          state.investorGateObserver = null;
-          requireSignInForGuestLimit();
-        });
-        state.investorGateObserver.observe(investorModal, {
-          attributes: true,
-          attributeFilter: ['class'],
-        });
-      }
-      return;
-    }
     setOverlay(false, 'dd2-guest-reminder');
     state.reminderResolve?.(false);
     state.reminderResolve = null;
@@ -338,18 +326,9 @@
   function syncAuthUi() {
     const signedIn = Boolean(state.session?.access_token && state.user);
     const signInButton = document.getElementById('btn-signin');
-    const avatar = document.getElementById('avatar-pill');
     if (signInButton) {
       signInButton.textContent = signedIn ? 'Account' : 'Sign In';
       signInButton.hidden = false;
-    }
-    if (avatar) {
-      const avatarInitials = avatar.querySelector('.av');
-      const tier = avatar.querySelector('.tier');
-      if (avatarInitials) avatarInitials.textContent = signedIn ? initials() : 'DD';
-      if (tier) tier.textContent = signedIn
-        ? (state.admin?.authorized ? (state.admin.role === 'super_admin' ? 'Super Admin' : 'Administrator') : 'Student account')
-        : 'Guest';
     }
     const badge = document.getElementById('dd2-guest-badge');
     if (badge) {
@@ -442,6 +421,7 @@
     const yearLevel = document.getElementById('dd2-year-level').value;
     const accepted = document.getElementById('dd2-legal-acceptance').checked;
     const marketingOptIn = document.getElementById('dd2-marketing-consent').checked;
+    const aiImprovementOptIn = document.getElementById('dd2-ai-improvement-consent').checked;
     if (displayName.length < 2) {
       setStatus('dd2-onboarding-status', 'Enter the name you want shown in Due Diligence.', 'error');
       return;
@@ -471,6 +451,12 @@
         p_source: 'web_onboarding',
       });
       if (marketingError) throw marketingError;
+      const { error: aiConsentError } = await state.client.rpc('record_ai_improvement_consent', {
+        p_opted_in: aiImprovementOptIn,
+        p_consent_version: config.legal.aiImprovementConsentVersion,
+        p_source: 'web_onboarding',
+      });
+      if (aiConsentError) throw aiConsentError;
       const { error: profileError } = await state.client.rpc('complete_profile_onboarding', {
         p_display_name: displayName,
         p_school: school || null,
@@ -519,10 +505,20 @@
         <p>Questions, suggested answers, scores, AI assessments, and explanations are for education only. They do not constitute legal advice, an official Bar grade, or a guarantee of examination performance. Verify authorities against official sources.</p>
         <h3>AI limitations</h3>
         <p>Gemini helps assess and explain answers using curated platform context. AI output may be incomplete or inaccurate. Use the correction workflow when material appears wrong.</p>
-        <h3>Beta availability</h3>
-        <p>Features and planned prices may change during Beta. Payments, subscriptions, coaching bookings, and paid entitlements are not active.</p>
+        <h3>AI, grading, and authority limitations</h3>
+        <p>AI-generated grading and suggested answers may be incomplete or inaccurate. They are not official Supreme Court or Bar Examiner grades. A “Human Verified” label appears only after a genuine editorial review record exists. Provider capacity may temporarily interrupt grading; no grade or authority will be fabricated.</p>
+        <h3>Access and subscriptions</h3>
+        <p>Eligible accounts receive a non-restartable 72-hour trial and three lifetime AI grades. Active trial, Free Beta, or paid access has no product-level daily grading limit. Paid plans are activated for the stated period only after manual Philippine-peso payment verification. There is no automatic renewal.</p>
+        <h3>Payments, cancellation, and refunds</h3>
+        <p>GCash and MariBank payments are manually verified. A voluntary cancellation requested within five calendar days of activation is eligible for an 80% refund. Later requests are reviewed using unused time and documented consumption. Verified continuous outages of twenty days qualify for a prorated refund or equivalent extension, subject to applicable law. Initial response target is 24 hours; ordinary review is seven calendar days and complex review may take up to 14 days without waiving statutory remedies.</p>
+        <h3>Your submissions</h3>
+        <p>You remain responsible for submitted content. Do not submit confidential, privileged, unlawful, or third-party personal information. Service processing of an answer is necessary to provide grading. Separate optional consent governs retention of de-identified answer content for internal quality improvement.</p>
         <h3>Acceptable use</h3>
-        <p>Do not misuse the service, attempt to evade technical safeguards, submit unlawful material, or rely on the platform for representation of a client.</p>
+        <p>Do not scrape the platform, share credentials, bypass access controls, interfere with service, commit fraud, harass others, or submit unlawful material. We may proportionately suspend or terminate access after notice and an opportunity to raise a support complaint, except where immediate action is reasonably necessary for security or law.</p>
+        <h3>Ownership and lawful use</h3>
+        <p>Due Diligence owns its original software, branding, interface, and proprietary curation. It does not claim ownership over Philippine laws, jurisprudence, government works, or official Bar materials. Unauthorized commercial reproduction and unlawful access may be pursued, while lawful fair use, criticism, reporting, and statutory rights remain respected.</p>
+        <h3>Governing law and complaints</h3>
+        <p>These Beta Terms are governed by Philippine law. Submit a complaint through native Support; we will document and review it before taking further internal action where practicable.</p>
       </div>`;
   }
 
@@ -534,33 +530,103 @@
         <p>For signed-in users, Supabase stores account identity, approved profile fields, legal-document acceptance, marketing preference, roles, and future account records. Google processes the secure sign-in consent flow.</p>
         <h3>Essay assessment</h3>
         <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to Gemini for assessment. Do not place client secrets or confidential case information in practice answers.</p>
-        <h3>Guest preview</h3>
-        <p>Guest access is limited to three successful grades. The browser keeps an opaque first-party device identifier. The Worker stores only keyed HMAC values derived from that identifier and, as a conservative reset-abuse signal, Cloudflare's trusted network address plus a normalized browser agent. Raw IP addresses, raw user-agent strings, guest emails, credentials, and guest answers are not stored in the quota database.</p>
-        <p>Changing device, network, VPN, and browser identity cannot be made impossible to bypass without requiring sign-in. The recovery signal may correlate repeat activity but is not intended to identify a person or impose one shared quota on an entire household or institution.</p>
+        <h3>Access records</h3>
+        <p>Protected examinations require authentication. Supabase UUIDs anchor trial activation, lifetime-grade usage, Free Beta access, subscriptions, progress, and history so refreshes or device changes do not reset access.</p>
         <h3>Support and corrections</h3>
         <p>Native Support stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Support. Correction submissions store only the reviewed correction fields described in that form.</p>
-        <h3>Your choices</h3>
-        <p>Marketing consent is optional and may be withdrawn in Account. Data export, deletion, device management, billing, and coaching controls are planned but not yet active; Support can receive an account request in the meantime.</p>
+        <h3>Payments and infrastructure</h3>
+        <p>Payment amount, channel, date, reference, status, and proof are processed for manual verification. Proofs are private and available only through short-lived authorized review. Supabase, Cloudflare, GitHub Pages, Google authentication, and Gemini process data only as needed for their platform roles.</p>
+        <h3>Purpose and legal basis</h3>
+        <p>We process account and answer data to perform the requested educational service, secure the platform, prevent fraud, maintain records, and meet legal obligations. Optional marketing and AI-improvement processing relies on separate consent that may be withdrawn.</p>
+        <h3>Retention and security</h3>
+        <p>Account, legal-acceptance, grading, payment, support, and audit records are retained only as needed for the service, disputes, security, and applicable law. Payment proofs are removed under the approved retention schedule. Controls include least-privilege access, private storage, row-level security, authenticated Worker routes, and audit trails.</p>
+        <h3>Your rights</h3>
+        <p>You may request access, correction, deletion where applicable, restriction, objection, consent withdrawal, or account-recovery assistance through Support. Identity verification may be required. Google identity transfer is not offered unless the same internal UUID and attached data can be preserved safely.</p>
+        <h3>AI-improvement choice</h3>
+        <p>Answer processing for an immediate grade is required service processing. Retaining de-identified answer content for internal model, rubric, and quality improvement is optional and may be withdrawn without losing paid simulator access.</p>
       </div>`;
   }
 
   function pricingContent() {
+    const features = {
+      early_access_beta: [
+        'Complete current digital simulator',
+        'AI ALAC grading and suggested answers',
+        'Legal sources, progress, history, and timer modes',
+        '30 calendar days from Founder approval',
+      ],
+      standard: [
+        'Everything in Early Access Beta',
+        'Student analytics and mastery history',
+        'Corrections and complete subject access',
+        '30 calendar days from Founder approval',
+      ],
+      premium: [
+        'Held in Abeyance',
+        'Further proceedings pending. Premium enrollment is not yet available.',
+      ],
+    };
     const plans = config.plans.items.map((plan) => `
-      <article class="dd2-plan">
+      <article class="dd2-plan${plan.previewStatus === 'disabled' ? ' is-disabled' : ''}">
         <div class="dd2-plan-head">
           <h3>${escapeHtml(plan.name)}</h3>
-          <div class="dd2-price">₱${plan.pricePhp}<small>planned price</small></div>
+          <div class="dd2-price">₱${plan.pricePhp}<small>${plan.durationDays ? ' / 30 days' : ''}</small></div>
         </div>
-        ${plan.featurePlaceholders.length
-          ? `<ul>${plan.featurePlaceholders.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>`
-          : '<p class="dd2-form-note">Feature packaging will be finalized before subscriptions are activated.</p>'}
+        <ul>${features[plan.id].map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>
+        ${plan.previewStatus === 'disabled'
+          ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Enrollment unavailable</button>'
+          : `<button class="dd2-button dd2-button-primary dd2-select-plan" type="button"
+              data-plan-code="${escapeHtml(plan.id)}" data-plan-price="${plan.pricePhp}">
+              Select ${escapeHtml(plan.name)}
+            </button>`}
       </article>
     `).join('');
     return `
       <div class="dd2-copy">
         <p><strong>${escapeHtml(config.plans.notice)}</strong></p>
         <div class="dd2-plan-grid">${plans}</div>
-        <p>No payment, checkout, entitlement enforcement, coaching booking, or paid access is active.</p>
+        <p>There is no automatic renewal. Access starts only after a Founder verifies the payment and approves the selected plan.</p>
+      </div>
+      <section class="dd2-payment-panel" id="dd2-payment-panel" hidden>
+        <div class="dd2-view-kicker">Manual verification</div>
+        <h3 id="dd2-payment-heading">Submit payment proof</h3>
+        <p>Pay the exact trusted amount in Philippine pesos using GCash or MariBank, then submit the reference and proof below.</p>
+        <div class="dd2-payment-tabs" role="tablist" aria-label="Payment channel">
+          <button type="button" class="dd2-payment-tab is-active" data-method="gcash" role="tab" aria-selected="true">GCash</button>
+          <button type="button" class="dd2-payment-tab" data-method="maribank" role="tab" aria-selected="false">MariBank</button>
+        </div>
+        <figure class="dd2-qr-frame">
+          <img id="dd2-payment-qr" src="assets/payments/gcash.png" alt="GCash payment QR code">
+          <figcaption id="dd2-payment-channel-label">GCash payment channel</figcaption>
+        </figure>
+        <form class="dd2-form" id="dd2-payment-form">
+          <input type="hidden" id="dd2-payment-plan">
+          <input type="hidden" id="dd2-payment-method" value="gcash">
+          <label class="dd2-label">Amount paid (PHP)
+            <input class="dd2-field" id="dd2-payment-amount" type="number" step=".01" readonly required>
+          </label>
+          <label class="dd2-label">Payment date
+            <input class="dd2-field" id="dd2-payment-date" type="date" required>
+          </label>
+          <label class="dd2-label">Transaction reference
+            <input class="dd2-field" id="dd2-payment-reference" minlength="4" maxlength="100"
+              autocomplete="off" required>
+          </label>
+          <label class="dd2-label">Optional note
+            <textarea class="dd2-field" id="dd2-payment-note" maxlength="2000"></textarea>
+          </label>
+          <label class="dd2-label">Payment proof
+            <input class="dd2-field" id="dd2-payment-proof" type="file"
+              accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" required>
+          </label>
+          <p class="dd2-form-note">PNG, JPEG, or PDF only; maximum 6 MiB. Proofs are private and available to authorized Founders through short-lived review links.</p>
+          <div class="dd2-status" id="dd2-payment-status" role="status" aria-live="polite"></div>
+          <button class="dd2-button dd2-button-primary" id="dd2-payment-submit" type="submit">Submit for verification</button>
+        </form>
+      </section>
+      <section class="dd2-copy">
+        <h3>Your payment requests</h3>
+        <div id="dd2-billing-history"><p>Sign in to view payment status.</p></div>
       </div>`;
   }
 
@@ -591,7 +657,7 @@
         </form>
         <h3>Frequently asked</h3>
         <p><strong>How is an answer scored?</strong><br>Each answer receives an independent 0–5 ALAC assessment. It is not an official Bar grade.</p>
-        <p><strong>How many guest grades are available?</strong><br>Three successful grades total across all subjects. Views, drafts, failed requests, and validation errors do not count.</p>
+        <p><strong>How does free access work?</strong><br>Every authenticated student receives three lifetime AI grades. The 72-hour trial unlocks the simulator, and successful trial grades count toward those three. Failed provider calls and blank timer expirations do not count.</p>
         <p><strong>Where should I report a model-answer issue?</strong><br>Use “Suggest a Correction/Better Answer” beneath the assessment so the editorial context stays attached.</p>
       </div>`;
   }
@@ -646,18 +712,70 @@
         <h3>Account recovery</h3>
         <p>Contact Support. We respond within 24 hours.</p>
         <p>Direct public email changes and account transfers are not available. Choose Account Recovery in Support so identity verification can be documented safely.</p>
-        <h3>Future account controls</h3>
-        <p>Data export, deletion, billing, device management, and coaching bookings are prepared as future account areas but are not active in this Beta.</p>
+        <h3>Plans &amp; access</h3>
+        <div id="dd2-account-access"><p>Loading verified access status…</p></div>
+        <h3>Payments and refunds</h3>
+        <div id="dd2-account-billing"><p>Loading billing records…</p></div>
+        <form class="dd2-form" id="dd2-refund-form" hidden>
+          <label class="dd2-label">Approved payment
+            <select class="dd2-field" id="dd2-refund-payment" required></select>
+          </label>
+          <label class="dd2-label">Refund request reason
+            <textarea class="dd2-field" id="dd2-refund-reason" minlength="10" maxlength="2000" required></textarea>
+          </label>
+          <div class="dd2-status" id="dd2-refund-status" role="status" aria-live="polite"></div>
+          <button class="dd2-button dd2-button-secondary" id="dd2-refund-submit" type="submit">Request refund review</button>
+        </form>
+        <p class="dd2-form-note">Initial response target: 24 hours. Ordinary internal resolution: seven calendar days; complex review may take up to 14 days without waiving statutory remedies.</p>
+      </div>`;
+  }
+
+  function partnershipContent() {
+    return `
+      <div class="dd2-copy">
+        <p>Discuss institutional licensing, academic collaboration, technology, content, or media opportunities without leaving Due Diligence.</p>
+        <form class="dd2-form" id="dd2-partnership-form">
+          <label class="dd2-label">Inquiry type
+            <select class="dd2-field" id="dd2-partnership-type" required>
+              <option value="institutional_license">Institutional license</option>
+              <option value="academic_partnership">Academic partnership</option>
+              <option value="content_collaboration">Content collaboration</option>
+              <option value="technology_partnership">Technology partnership</option>
+              <option value="media">Media inquiry</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label class="dd2-label">Name
+            <input class="dd2-field" id="dd2-partnership-name" minlength="2" maxlength="120" autocomplete="name" required>
+          </label>
+          <label class="dd2-label">Contact email
+            <input class="dd2-field" id="dd2-partnership-email" type="email" maxlength="254" autocomplete="email" required>
+          </label>
+          <label class="dd2-label">Organization (optional)
+            <input class="dd2-field" id="dd2-partnership-organization" maxlength="180" autocomplete="organization">
+          </label>
+          <label class="dd2-label">Message
+            <textarea class="dd2-field" id="dd2-partnership-message" minlength="20" maxlength="5000" required></textarea>
+          </label>
+          <label class="dd2-check">
+            <input type="checkbox" id="dd2-partnership-consent" required>
+            <span>I consent to the founders using these details to respond to this inquiry.</span>
+          </label>
+          <div class="dd2-status" id="dd2-partnership-status" role="status" aria-live="polite"></div>
+          <button class="dd2-button dd2-button-primary" id="dd2-partnership-submit" type="submit">Send partnership inquiry</button>
+        </form>
+        <p>For a direct follow-up, write to <a href="mailto:founders@duediligence.ph?subject=Partnership%20Inquiry">founders@duediligence.ph</a>.</p>
       </div>`;
   }
 
   function nativeDefinition(view) {
     const definitions = {
       support: ['Member assistance', 'Support', supportContent],
-      pricing: ['Planned membership', 'Plans & Pricing', pricingContent],
+      pricing: ['Access options', 'Plans & Access', pricingContent],
       terms: ['Legal', 'Beta Terms', termsContent],
       privacy: ['Legal', 'Beta Privacy Notice', privacyContent],
       account: ['Your chamber', 'Account', accountContent],
+      partnership: ['Collaborate', 'Partner With Us', partnershipContent],
     };
     return definitions[view] || null;
   }
@@ -731,6 +849,214 @@
     }
   }
 
+  async function nativeWorkerRequest(path, options = {}) {
+    const form = options.body instanceof FormData;
+    const headers = {
+      'X-Request-ID': options.requestId || randomId(18),
+      ...(form ? {} : { 'Content-Type': 'application/json' }),
+      ...(state.session?.access_token
+        ? { Authorization: `Bearer ${state.session.access_token}` }
+        : {}),
+    };
+    if (options.authRequired !== false && !state.session?.access_token) {
+      showEntry();
+      throw new Error('Sign in with Google to continue.');
+    }
+    const response = await fetch(`${config.workerUrl}${path}`, {
+      method: 'POST',
+      headers,
+      body: form ? options.body : JSON.stringify(options.body || {}),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error?.message || 'The request could not be completed.');
+    }
+    return payload;
+  }
+
+  function beginPayment(planCode, pricePhp) {
+    if (!state.session?.access_token) {
+      showEntry();
+      return;
+    }
+    const panel = document.getElementById('dd2-payment-panel');
+    if (!panel) return;
+    document.getElementById('dd2-payment-plan').value = planCode;
+    document.getElementById('dd2-payment-amount').value = Number(pricePhp).toFixed(2);
+    document.getElementById('dd2-payment-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('dd2-payment-heading').textContent =
+      `Submit ${planCode === 'standard' ? 'Standard' : 'Early Access Beta'} payment`;
+    panel.hidden = false;
+    setStatus('dd2-payment-status', '');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function selectPaymentMethod(method) {
+    const isMariBank = method === 'maribank';
+    document.getElementById('dd2-payment-method').value = method;
+    const image = document.getElementById('dd2-payment-qr');
+    image.src = `assets/payments/${isMariBank ? 'maribank' : 'gcash'}.png`;
+    image.alt = `${isMariBank ? 'MariBank' : 'GCash'} payment QR code`;
+    document.getElementById('dd2-payment-channel-label').textContent =
+      `${isMariBank ? 'MariBank' : 'GCash'} payment channel`;
+    document.querySelectorAll('.dd2-payment-tab').forEach((button) => {
+      const selected = button.dataset.method === method;
+      button.classList.toggle('is-active', selected);
+      button.setAttribute('aria-selected', String(selected));
+    });
+  }
+
+  async function submitPayment(event) {
+    event.preventDefault();
+    const submit = document.getElementById('dd2-payment-submit');
+    const proof = document.getElementById('dd2-payment-proof').files?.[0];
+    if (!proof) {
+      setStatus('dd2-payment-status', 'Upload a PNG, JPEG, or PDF payment proof.', 'error');
+      return;
+    }
+    if (proof.size > 6 * 1024 * 1024) {
+      setStatus('dd2-payment-status', 'Payment proof exceeds the 6 MiB limit.', 'error');
+      return;
+    }
+    const data = new FormData();
+    data.set('planCode', document.getElementById('dd2-payment-plan').value);
+    data.set('amountPhp', document.getElementById('dd2-payment-amount').value);
+    data.set('paymentMethod', document.getElementById('dd2-payment-method').value);
+    data.set('paymentDate', document.getElementById('dd2-payment-date').value);
+    data.set('transactionReference', document.getElementById('dd2-payment-reference').value.trim());
+    data.set('note', document.getElementById('dd2-payment-note').value.trim());
+    data.set('proof', proof);
+    submit.disabled = true;
+    setStatus('dd2-payment-status', 'Encrypting and submitting proof for Founder review…');
+    try {
+      const payload = await nativeWorkerRequest('/payments/submit', { body: data });
+      setStatus('dd2-payment-status', payload.message, 'success');
+      event.currentTarget.reset();
+      document.getElementById('dd2-payment-plan').value = payload.payment.planCode;
+      document.getElementById('dd2-payment-amount').value = Number(payload.payment.amountPhp).toFixed(2);
+      await loadBillingAndAccess();
+    } catch (error) {
+      setStatus('dd2-payment-status', error.message, 'error');
+      submit.disabled = false;
+    }
+  }
+
+  function billingMarkup(billing) {
+    const payments = Array.isArray(billing?.payments) ? billing.payments : [];
+    const refunds = Array.isArray(billing?.refunds) ? billing.refunds : [];
+    if (!payments.length && !refunds.length) {
+      return '<p>No payment or refund requests yet.</p>';
+    }
+    return `
+      <div class="dd2-record-list">
+        ${payments.map((item) => `
+          <article class="dd2-record">
+            <strong>${escapeHtml(item.planCode.replaceAll('_', ' '))} · ₱${Number(item.amountPhp).toFixed(2)}</strong>
+            <span class="dd2-record-status">${escapeHtml(item.status.replaceAll('_', ' '))}</span>
+            <small>${escapeHtml(item.method)} · ${escapeHtml(item.paymentDate)} · reference ${escapeHtml(item.reference)}</small>
+            ${item.reviewReason ? `<p>${escapeHtml(item.reviewReason)}</p>` : ''}
+          </article>`).join('')}
+        ${refunds.map((item) => `
+          <article class="dd2-record">
+            <strong>Refund review · ₱${Number(item.approvedRefundPhp ?? item.suggestedRefundPhp).toFixed(2)}</strong>
+            <span class="dd2-record-status">${escapeHtml(item.status.replaceAll('_', ' '))}</span>
+            <small>${escapeHtml(item.calculationNote)}</small>
+          </article>`).join('')}
+      </div>`;
+  }
+
+  async function loadBillingAndAccess() {
+    if (!state.session?.access_token) return;
+    try {
+      const [billingPayload, accessPayload] = await Promise.all([
+        nativeWorkerRequest('/payments/status', { requestId: randomId(18) }),
+        nativeWorkerRequest('/access', { requestId: randomId(18) }),
+      ]);
+      const history = document.getElementById('dd2-billing-history');
+      const accountBilling = document.getElementById('dd2-account-billing');
+      const markup = billingMarkup(billingPayload.billing);
+      if (history) history.innerHTML = markup;
+      if (accountBilling) accountBilling.innerHTML = markup;
+
+      const access = accessPayload.access || {};
+      const accountAccess = document.getElementById('dd2-account-access');
+      if (accountAccess) {
+        const trial = access.trial?.expiresAt
+          ? `Trial expires ${new Date(access.trial.expiresAt).toLocaleString()}.`
+          : 'Trial begins only when you open your first protected examination.';
+        accountAccess.innerHTML = `
+          <div class="dd2-access-summary">
+            <strong>${escapeHtml(String(access.basis || 'locked').replaceAll('_', ' '))}</strong>
+            <span>${escapeHtml(trial)}</span>
+            <span>${Number(access.freeGrades?.remaining || 0)} lifetime AI grades remaining.</span>
+          </div>`;
+      }
+
+      const approved = (billingPayload.billing?.payments || []).filter(
+        (item) => item.status === 'approved',
+      );
+      const refundForm = document.getElementById('dd2-refund-form');
+      const refundSelect = document.getElementById('dd2-refund-payment');
+      if (refundForm && refundSelect && approved.length) {
+        refundSelect.innerHTML = approved.map((item) => `
+          <option value="${escapeHtml(item.id)}">${escapeHtml(item.planCode)} · ₱${Number(item.amountPhp).toFixed(2)} · ${escapeHtml(item.paymentDate)}</option>
+        `).join('');
+        refundForm.hidden = false;
+      }
+    } catch (error) {
+      for (const id of ['dd2-billing-history','dd2-account-billing','dd2-account-access']) {
+        const element = document.getElementById(id);
+        if (element) element.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
+      }
+    }
+  }
+
+  async function submitRefund(event) {
+    event.preventDefault();
+    const submit = document.getElementById('dd2-refund-submit');
+    submit.disabled = true;
+    setStatus('dd2-refund-status', 'Submitting refund request…');
+    try {
+      const payload = await nativeWorkerRequest('/refunds/submit', {
+        body: {
+          paymentRequestId: document.getElementById('dd2-refund-payment').value,
+          reason: document.getElementById('dd2-refund-reason').value.trim(),
+        },
+      });
+      setStatus('dd2-refund-status', payload.message, 'success');
+      document.getElementById('dd2-refund-reason').value = '';
+      await loadBillingAndAccess();
+    } catch (error) {
+      setStatus('dd2-refund-status', error.message, 'error');
+      submit.disabled = false;
+    }
+  }
+
+  async function submitPartnership(event) {
+    event.preventDefault();
+    const submit = document.getElementById('dd2-partnership-submit');
+    submit.disabled = true;
+    setStatus('dd2-partnership-status', 'Sending securely…');
+    try {
+      const payload = await nativeWorkerRequest('/partnerships', {
+        authRequired: false,
+        body: {
+          inquiryType: document.getElementById('dd2-partnership-type').value,
+          contactName: document.getElementById('dd2-partnership-name').value.trim(),
+          contactEmail: document.getElementById('dd2-partnership-email').value.trim(),
+          organization: document.getElementById('dd2-partnership-organization').value.trim(),
+          message: document.getElementById('dd2-partnership-message').value.trim(),
+          consent: document.getElementById('dd2-partnership-consent').checked,
+        },
+      });
+      event.currentTarget.reset();
+      setStatus('dd2-partnership-status', payload.message, 'success');
+    } catch (error) {
+      setStatus('dd2-partnership-status', error.message, 'error');
+      submit.disabled = false;
+    }
+  }
+
   async function submitAccount(event) {
     event.preventDefault();
     if (!state.client || !state.user) return;
@@ -798,6 +1124,9 @@
     document.getElementById('dd2-native-close')?.addEventListener('click', closeNativeView, { once: true });
     document.getElementById('dd2-support-form')?.addEventListener('submit', submitSupport);
     document.getElementById('dd2-account-form')?.addEventListener('submit', submitAccount);
+    document.getElementById('dd2-payment-form')?.addEventListener('submit', submitPayment);
+    document.getElementById('dd2-refund-form')?.addEventListener('submit', submitRefund);
+    document.getElementById('dd2-partnership-form')?.addEventListener('submit', submitPartnership);
     document.getElementById('dd2-logout')?.addEventListener('click', signOut);
     document.getElementById('dd2-account-signin')?.addEventListener('click', () => {
       hideNativeView();
@@ -810,23 +1139,24 @@
         document.getElementById('dd2-account-year').required = enrolled;
       });
     }
+    document.querySelectorAll('.dd2-select-plan').forEach((button) => {
+      button.addEventListener('click', () => beginPayment(
+        button.dataset.planCode,
+        Number(button.dataset.planPrice),
+      ));
+    });
+    document.querySelectorAll('.dd2-payment-tab').forEach((button) => {
+      button.addEventListener('click', () => selectPaymentMethod(button.dataset.method));
+    });
+    if (['pricing','account'].includes(view) && state.user) {
+      loadBillingAndAccess();
+    }
   }
 
   function bindNavigation() {
     const signIn = document.getElementById('btn-signin');
-    const avatar = document.getElementById('avatar-pill');
-    const pricing = document.getElementById('btn-subscribe');
-    for (const element of [signIn, avatar, pricing]) {
-      if (element) element.onclick = null;
-    }
+    if (signIn) signIn.onclick = null;
     signIn?.addEventListener('click', () => state.user ? renderNativeView('account') : showEntry());
-    avatar?.addEventListener('click', () => state.user ? renderNativeView('account') : showEntry());
-    if (pricing) {
-      pricing.textContent = 'Plans & Pricing';
-      pricing.classList.remove('btn-subscribe');
-      pricing.classList.add('icon-btn');
-      pricing.addEventListener('click', () => renderNativeView('pricing'));
-    }
 
     const feedback = document.getElementById('btn-open-feedback');
     feedback?.addEventListener('click', (event) => {
@@ -847,6 +1177,12 @@
       link.addEventListener('click', (event) => {
         event.preventDefault();
         renderNativeView('pricing');
+      });
+    });
+    document.querySelectorAll('[data-dd2-view="partnership"]').forEach((element) => {
+      element.addEventListener('click', (event) => {
+        event.preventDefault();
+        renderNativeView('partnership');
       });
     });
   }
@@ -872,12 +1208,14 @@
     state.session = data?.session || null;
     state.user = state.session?.user || null;
     syncAuthUi();
+    if (state.user) closeEntry();
 
     state.client.auth.onAuthStateChange((event, session) => {
       state.session = session || null;
       state.user = session?.user || null;
       syncAuthUi();
       if (session && ['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'].includes(event)) {
+        closeEntry();
         if (event === 'SIGNED_IN') {
           global.DueDiligenceAnalytics?.track('sign_in_completed');
           const createdAt = new Date(session.user?.created_at || 0).getTime();
@@ -963,33 +1301,11 @@
     return { known: true, signedIn: false, exhausted };
   }
 
-  function firstPatronWelcome() {
-    if (new URLSearchParams(location.search).has('auth')) return Promise.resolve(false);
-    const key = 'dd_investor_welcome_seen';
-    let seen = false;
-    try {
-      seen = sessionStorage.getItem(key) === '1';
-      if (!seen) sessionStorage.setItem(key, '1');
-    } catch {
-      seen = true;
-    }
-    if (!seen && typeof global.openModal === 'function') {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          global.openModal('investor-modal');
-          resolve(true);
-        }, 280);
-      });
-    }
-    return Promise.resolve(false);
-  }
-
   async function initialize() {
     if (state.initialized) return;
     state.initialized = true;
     injectShell();
     bindNavigation();
-    guestDeviceId();
     document.getElementById('dd2-google-signin')?.addEventListener('click', signInWithGoogle);
     document.getElementById('dd2-guest-continue')?.addEventListener('click', continueGuestFromEntry);
     document.getElementById('dd2-onboarding-form')?.addEventListener('submit', submitOnboarding);
@@ -1027,8 +1343,7 @@
       else hideNativeView();
     });
     await initializeAuth();
-    await firstPatronWelcome();
-    await reconcileGuestAccess({ promptWhenExhausted: true });
+    if (!state.user) syncAuthUi();
   }
 
   async function beforeGrade() {

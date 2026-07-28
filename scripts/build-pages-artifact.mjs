@@ -1,0 +1,119 @@
+import { createHash } from 'node:crypto';
+import {
+  cp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const outputRoot = path.join(repositoryRoot, '.pages-dist');
+
+if (path.dirname(outputRoot) !== repositoryRoot || path.basename(outputRoot) !== '.pages-dist') {
+  throw new Error('Refusing to build outside the repository .pages-dist directory.');
+}
+
+const publicFiles = Object.freeze([
+  'index.html',
+  'CNAME',
+  'favicon.svg',
+  'admin/index.html',
+  'admin/admin.css',
+  'admin/admin.js',
+  'assets/exam-session-controller.js',
+  'assets/phase2-config.js',
+  'assets/phase2-experience.js',
+  'assets/phase2-law-library.jpg',
+  'assets/phase2.css',
+  'assets/phase3-analytics.js',
+  'assets/phase4-experience.js',
+  'assets/payments/gcash.png',
+  'assets/payments/maribank.png',
+]);
+
+const qrHashes = Object.freeze({
+  'assets/payments/gcash.png':
+    'E750530C71EB0445FD8F801B70DE25B338504C63CEB55881B311B3AA48FA2D7F',
+  'assets/payments/maribank.png':
+    '1F6269F117AC35BB0B7D45636605413D610903732347211E1591399905972CD1',
+});
+
+function sha256(buffer) {
+  return createHash('sha256').update(buffer).digest('hex').toUpperCase();
+}
+
+async function copyPublicFile(relativePath) {
+  const source = path.join(repositoryRoot, relativePath);
+  const destination = path.join(outputRoot, relativePath);
+  if (!(await stat(source)).isFile()) {
+    throw new Error(`Public artifact source is not a file: ${relativePath}`);
+  }
+  await mkdir(path.dirname(destination), { recursive: true });
+  await cp(source, destination, { force: true });
+}
+
+async function listFiles(directory, prefix = '') {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const relative = path.posix.join(prefix, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listFiles(path.join(directory, entry.name), relative));
+    } else if (entry.isFile()) {
+      files.push(relative);
+    } else {
+      throw new Error(`Public artifact contains an unsupported filesystem entry: ${relative}`);
+    }
+  }
+  return files.sort();
+}
+
+await rm(outputRoot, { recursive: true, force: true });
+await mkdir(outputRoot, { recursive: true });
+await Promise.all(publicFiles.map(copyPublicFile));
+await writeFile(path.join(outputRoot, '.nojekyll'), '', 'utf8');
+
+for (const [relativePath, expectedHash] of Object.entries(qrHashes)) {
+  const actualHash = sha256(await readFile(path.join(outputRoot, relativePath)));
+  if (actualHash !== expectedHash) {
+    throw new Error(`${relativePath} does not match the approved payment QR pixels.`);
+  }
+}
+
+const files = await listFiles(outputRoot);
+const forbidden = files.filter((file) => (
+  /(^|\/)(content|worker|supabase|scripts|docs|node_modules|\.git)(\/|$)/i.test(file)
+  || /\.(json|sql|mjs|csv)$/i.test(file)
+));
+if (forbidden.length) {
+  throw new Error(`Private repository material entered the Pages artifact: ${forbidden.join(', ')}`);
+}
+
+const textFiles = files.filter((file) => /\.(?:html|js|css|svg|txt)$/i.test(file));
+const searchableArtifact = (
+  await Promise.all(textFiles.map((file) => readFile(path.join(outputRoot, file), 'utf8')))
+).join('\n');
+
+if (/content\/question-bank|website-upload\.json|DueDiligenceWebsiteQuestionBank/i.test(searchableArtifact)) {
+  throw new Error('The Pages artifact still references the private question corpus.');
+}
+
+const corpus = JSON.parse(
+  await readFile(path.join(repositoryRoot, 'content/question-bank/website-upload.json'), 'utf8'),
+);
+for (const record of corpus.records.slice(0, 8)) {
+  for (const field of ['Essay Question', 'Suggested Answer', 'Legal Basis / Provision']) {
+    const sample = String(record[field] || '').trim().slice(0, 120);
+    if (sample.length >= 40 && searchableArtifact.includes(sample)) {
+      throw new Error(`Curated ${field} content leaked into the Pages artifact.`);
+    }
+  }
+}
+
+console.log(`Built sanitized GitHub Pages artifact with ${files.length} files.`);
+for (const file of files) console.log(`- ${file}`);

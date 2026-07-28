@@ -238,6 +238,27 @@
   .timer-limit{font-family:var(--mono);font-size:10.5px;color:rgba(233,226,207,.7);margin-left:auto;}
   .timer-bar.warn{border-color:rgba(197,45,60,.6);}
   .timer-bar.warn #timer-display{color:#ff9d9d;}
+  .exam-control-bar{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;
+    padding:14px 16px;margin-bottom:22px;border:1px solid rgba(197,160,89,.32);
+    border-radius:14px;background:var(--navy-grad);box-shadow:var(--shadow);
+  }
+  .exam-mode-switcher{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+  .exam-mode-label{margin-right:5px;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:1.35px;text-transform:uppercase;color:var(--gold);}
+  .exam-mode-button{
+    padding:9px 11px;border:1px solid rgba(241,245,249,.2);border-radius:9px;
+    background:rgba(255,255,255,.05);color:#dbe5f2;cursor:pointer;
+    font-family:var(--sans);font-size:11px;font-weight:700;line-height:1.15;
+  }
+  .exam-mode-button:hover,.exam-mode-button:focus-visible{border-color:var(--gold);outline:none;}
+  .exam-mode-button.active{border-color:var(--gold);background:rgba(197,160,89,.18);color:#fff4ce;}
+  .exam-clock{display:flex;align-items:center;gap:12px;min-width:245px;justify-content:flex-end;}
+  .exam-clock-copy{display:flex;flex-direction:column;gap:3px;text-align:right;}
+  .exam-clock-title{font-family:var(--mono);font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--gold);}
+  .exam-clock-note{font-family:var(--sans);font-size:10px;color:#cbd5e1;}
+  .exam-clock #timer-display{min-width:76px;text-align:right;}
+  .exam-clock.no-digits{min-width:250px;}
+  .exam-clock.no-digits .exam-clock-copy{text-align:left;}
 
   /* ---------------- Primary CTA ---------------- */
   .btn-primary{
@@ -345,8 +366,7 @@
 
 
   /* ==========================================================================
-     ENTERPRISE / INVESTOR LAYER — SPA nav, atmosphere, commercial modals
-     (additive; original selectors above are untouched)
+     PROFESSIONAL APPLICATION LAYER — navigation, atmosphere, and native views
      ========================================================================== */
 
   /* ---- Cinematic atmosphere backdrop ---- */
@@ -390,17 +410,6 @@
   .topbar-actions{display:flex;align-items:center;gap:9px;flex:none;}
   .icon-btn{font-family:var(--sans);font-weight:600;font-size:12px;color:#e7ecf4;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);padding:8px 13px;border-radius:9px;cursor:pointer;transition:all .2s;}
   .icon-btn:hover{background:rgba(255,255,255,.12);}
-  .btn-subscribe{
-    font-family:var(--sans);font-weight:700;font-size:12.5px;letter-spacing:.4px;text-transform:uppercase;
-    color:#1a1204;background:var(--gold-grad);border:none;padding:9px 18px;border-radius:10px;cursor:pointer;
-    box-shadow:0 0 0 rgba(212,175,55,.6);animation:glow 2.4s ease-in-out infinite;
-  }
-  @keyframes glow{0%,100%{box-shadow:0 0 8px rgba(212,175,55,.35);}50%{box-shadow:0 0 22px rgba(212,175,55,.75);}}
-  .btn-subscribe:hover{filter:brightness(1.07);transform:translateY(-1px);}
-  .avatar-pill{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(197,160,89,.35);border-radius:999px;padding:5px 12px 5px 6px;cursor:pointer;}
-  .avatar-pill .av{width:26px;height:26px;border-radius:50%;background:var(--gold-grad);color:#1a1204;font-family:var(--serif-display);font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;}
-  .avatar-pill .tier{font-family:var(--mono);font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--gold);}
-
   /* ---- SPA pages ---- */
   #spa-root{position:relative;z-index:1;}
   .page{display:none;animation:fadeIn .25s ease;}
@@ -426,26 +435,6 @@
   .timer-bar.danger #timer-display{color:#ff6b6b!important;animation:pulse 1s steps(2) infinite;}
   @keyframes pulse{50%{opacity:.55;}}
 
-  /* ---- Sponsored partner card (FGMallari) ---- */
-  .sponsor-card{
-    max-width:1200px;margin:8px auto 0;padding:0 26px;
-  }
-  .sponsor-inner{
-    position:relative;overflow:hidden;border-radius:16px;padding:24px 26px;
-    background:
-      repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 26px),
-      repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 26px),
-      linear-gradient(135deg,#0b1b33,#132a4a);
-    border:1px solid rgba(120,160,210,.28);
-    box-shadow:var(--shadow-md);
-  }
-  .sponsor-tag{position:absolute;top:12px;right:14px;font-family:var(--mono);font-size:8.5px;letter-spacing:1.5px;text-transform:uppercase;color:#8fb2e0;opacity:.8;}
-  .sponsor-inner h3{font-family:var(--serif-display);font-weight:700;font-size:20px;letter-spacing:1px;color:#DCE7F5;margin:0 0 4px;text-transform:uppercase;}
-  .sponsor-inner .lead{font-family:var(--sans);font-weight:600;font-size:13px;color:#9fc0e8;margin-bottom:8px;}
-  .sponsor-inner .svc{font-family:var(--serif);font-style:italic;font-size:14px;color:#c9d7ea;margin-bottom:12px;}
-  .sponsor-inner .contact{display:flex;gap:20px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:#b7cbe6;}
-  .sponsor-inner .contact a{color:#e5c987;text-decoration:none;}
-
   /* ---- Content pages (news / jurisprudence / midterms) ---- */
   .page-wrap{max-width:1120px;margin:0 auto;padding:28px 26px 60px;}
   .page-head{margin-bottom:22px;}
@@ -464,26 +453,7 @@
   /* ---- Enlarged / commercial modals ---- */
   .modal-card.lg{max-width:720px;}
   .modal-card.xl{max-width:860px;}
-  .price-hero{text-align:center;padding:8px 0 4px;}
-  .price-hero .amt{font-family:var(--serif-display);font-weight:700;font-size:40px;color:var(--ink);}
-  .price-hero .amt small{font-family:var(--sans);font-size:15px;color:var(--ink-soft);font-weight:500;}
-  .price-hero .usd{font-family:var(--mono);font-size:12px;color:var(--gold);margin-top:4px;}
-  .feature-list{list-style:none;padding:0;margin:20px 0;display:grid;gap:10px;}
-  .feature-list li{display:flex;gap:10px;align-items:flex-start;font-family:var(--sans);font-size:14px;color:var(--charcoal);}
-  .feature-list li::before{content:"✓";color:var(--pass);font-weight:800;flex:none;}
-  .pay-row{display:flex;gap:12px;flex-wrap:wrap;}
-  .pay-btn{flex:1;min-width:150px;font-family:var(--sans);font-weight:700;font-size:13px;padding:14px;border-radius:12px;border:none;cursor:pointer;transition:all .2s;}
-  .pay-btn.gcash{background:#0057ff;color:#fff;}
-  .pay-btn.visa{background:linear-gradient(135deg,#1a1f71,#2b3fa0);color:#fff;}
-  .pay-btn:hover{filter:brightness(1.08);transform:translateY(-1px);}
-  .mock-note{font-family:var(--mono);font-size:10px;letter-spacing:.5px;color:var(--ink-soft);text-align:center;margin-top:12px;opacity:.8;}
-
-  .sso-row{display:grid;gap:10px;margin-bottom:16px;}
-  .sso-btn{display:flex;align-items:center;justify-content:center;gap:10px;font-family:var(--sans);font-weight:600;font-size:13.5px;padding:12px;border-radius:11px;border:1px solid var(--border);background:var(--card);color:var(--ink);cursor:pointer;transition:all .2s;}
-  .sso-btn:hover{background:var(--card-2);border-color:var(--gold);}
   .tier-badge{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);background:rgba(197,160,89,.12);border:1px solid var(--border-gold);padding:4px 10px;border-radius:999px;}
-  .divider-or{display:flex;align-items:center;gap:12px;color:var(--ink-soft);font-family:var(--mono);font-size:11px;margin:14px 0;}
-  .divider-or::before,.divider-or::after{content:"";flex:1;height:1px;background:var(--border);}
 
   /* ---- Analytics dashboard ---- */
   .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:22px;}
@@ -501,12 +471,6 @@
   .attempt-table .sc.fail{color:var(--maroon);font-weight:700;}
   .table-scroll{max-height:230px;overflow:auto;border:1px solid var(--border-soft);border-radius:12px;}
 
-  /* ---- Investor / patrons ---- */
-  .patron{display:flex;align-items:center;gap:16px;padding:16px;background:var(--card-2);border:1px solid var(--border-soft);border-left:3px solid var(--gold);border-radius:12px;margin-bottom:12px;}
-  .patron .medal{width:44px;height:44px;border-radius:50%;background:var(--gold-grad);display:flex;align-items:center;justify-content:center;font-size:20px;flex:none;}
-  .patron .nm{font-family:var(--serif);font-weight:700;font-size:17px;color:var(--ink);}
-  .patron .role{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--gold);}
-
   /* ---- Footer + disclaimer ---- */
   .site-footer{position:relative;z-index:1;background:linear-gradient(180deg,rgba(8,18,37,.94),rgba(4,12,24,.97));border-top:1px solid rgba(197,160,89,.28);padding:30px 26px 40px;margin-top:10px;}
   .footer-inner{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;gap:22px;justify-content:space-between;align-items:flex-start;}
@@ -522,26 +486,28 @@
   /* ---- Responsive additions ---- */
   @media (max-width:980px){
     .topbar{flex-wrap:wrap;gap:12px;padding:12px 16px;}
-    .spa-nav{order:3;width:100%;justify-content:flex-start;overflow-x:auto;}
+    .spa-nav{order:3;width:100%;justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;padding-bottom:2px;}
     .topbar-actions{margin-left:auto;}
     .exam-subnav{padding:16px 16px 0;}
     .mode-toggle{margin-left:0;}
   }
   @media (max-width:560px){
+    .topbar{gap:8px;padding:10px 12px;}
+    .topbar .brand{gap:8px;min-width:0;}
+    .topbar .crest{width:34px;height:34px;}
+    .topbar .brand-name{font-size:14px;letter-spacing:1.4px;}
     .topbar .brand-sub{display:none;}
-    .topbar-actions{width:100%;max-width:100%;margin-left:0;flex-wrap:wrap;justify-content:flex-start;gap:8px;}
+    .topbar-actions{width:auto;max-width:48%;margin-left:auto;flex-wrap:nowrap;justify-content:flex-end;gap:6px;}
     .topbar-actions > *{max-width:100%;}
-    .avatar-pill{padding-right:6px;}
-    .avatar-pill .tier{display:none;}
-    .btn-subscribe{padding:9px 12px;}
-    .icon-btn.hide-sm{display:none;}
-    .price-hero .amt{font-size:32px;}
+    .topbar-actions .dd2-guest-badge{display:none!important;}
+    .icon-btn.hide-sm{display:inline-flex;padding:7px 10px;}
+    .spa-nav{margin:0 -2px;padding-bottom:3px;}
+    .spa-tab{font-size:11.5px;padding:8px 11px;}
   }
 
 
   /* ==========================================================================
-     ROUND 3 — contrast fixes, conspicuous angel badge, feedback loop, session
-     clock, passability heatmap, voice mic, luxury patrons modal. Additive.
+     CONTRAST, FEEDBACK, SESSION CLOCK, AND ASSESSMENT ENHANCEMENTS
      ========================================================================== */
 
   /* Reveal the cinematic atmosphere as the app backdrop; keep chrome dark */
@@ -558,26 +524,6 @@
 
   /* ---- Global session clock ---- */
   .session-clock{font-family:var(--mono);font-size:11.5px;letter-spacing:.5px;color:#EAD9A6;background:rgba(255,255,255,.05);border:1px solid rgba(197,160,89,.30);border-radius:999px;padding:7px 12px;white-space:nowrap;}
-
-  /* ---- Conspicuous Angel Investors badge (metallic gold, shimmering) ---- */
-  .btn-angel{
-    position:relative;font-family:var(--sans);font-weight:800;font-size:12px;letter-spacing:.4px;text-transform:uppercase;
-    color:#241803;border:1px solid rgba(255,240,200,.6);border-radius:999px;padding:9px 16px;cursor:pointer;white-space:nowrap;
-    background:linear-gradient(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B);
-    background-size:220% 100%;box-shadow:0 4px 16px rgba(197,160,89,.5);animation:sheen 3.2s linear infinite;
-  }
-  @keyframes sheen{0%{background-position:200% 0;}100%{background-position:-40% 0;}}
-  .btn-angel:hover{filter:brightness(1.06);transform:translateY(-1px);}
-  .btn-b2b{white-space:nowrap;}
-
-  /* ---- Angel callout in the upper workspace ---- */
-  .angel-callout{
-    display:flex;align-items:center;gap:10px;justify-content:center;cursor:pointer;
-    margin:2px 0 4px;padding:11px 18px;border-radius:12px;font-family:var(--sans);font-weight:700;font-size:13px;letter-spacing:.3px;
-    color:#3a2a06;background:linear-gradient(120deg,#EAD79A,#F7ECC2 50%,#D9BE73);
-    border:1px solid rgba(255,245,214,.8);box-shadow:0 6px 20px rgba(197,160,89,.35);
-  }
-  .angel-callout:hover{filter:brightness(1.04);}
 
   /* ---- Feedback loop under model answer ---- */
   .fb-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px;padding-top:16px;border-top:1px dashed var(--border);}
@@ -612,35 +558,13 @@
   .heat-cell .v{font-family:var(--serif-display);font-weight:700;font-size:22px;line-height:1.1;}
   .heat-cell.none{background:#eceff3;color:#7a879a;}
 
-  /* ---- Suggest-correction + B2B modals ---- */
+  /* ---- Suggest-correction modal ---- */
   .field-label{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);display:block;margin-bottom:5px;}
   .orig-box{background:var(--card-2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:10px;padding:12px 14px;font-family:var(--serif);font-size:13.5px;line-height:1.55;color:var(--charcoal);margin-bottom:16px;max-height:150px;overflow:auto;white-space:pre-wrap;}
   .suggest-status{min-height:20px;margin:2px 0 12px;font-family:var(--sans);font-size:13px;line-height:1.45;color:var(--ink-soft);}
   .suggest-status.loading{color:var(--navy);}
   .suggest-status.success{color:var(--pass);}
   .suggest-status.error{color:var(--maroon);}
-  .b2b-cta{margin-top:18px;padding:18px;border-radius:14px;text-align:center;background:linear-gradient(135deg,#0b2547,#08182f);border:1px solid rgba(197,160,89,.35);}
-  .b2b-cta h4{font-family:var(--serif);color:#F6EFDD;margin:0 0 6px;font-size:18px;}
-  .b2b-cta p{font-family:var(--sans);color:#c9d7ea;font-size:13px;margin:0 0 14px;}
-
-  /* ---- Luxury patrons modal (gold foil border + crest watermark) ---- */
-  .modal-card.patrons-lux{
-    position:relative;overflow:hidden;border:none;
-    background:
-      linear-gradient(#fffdf7,#fffdf7) padding-box,
-      linear-gradient(135deg,#B8860B,#F5E6B8 40%,#D4AF37 60%,#B8860B) border-box;
-    border:2.5px solid transparent;border-radius:20px;
-    box-shadow:0 30px 70px rgba(2,12,35,.5), 0 0 0 1px rgba(197,160,89,.3);
-  }
-  .modal-card.patrons-lux::before{
-    content:"";position:absolute;right:-40px;top:-30px;width:260px;height:260px;opacity:.06;pointer-events:none;
-    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cg stroke='%23002147' stroke-width='2' fill='none'%3E%3Cline x1='24' y1='11' x2='24' y2='36'/%3E%3Cline x1='12' y1='16' x2='36' y2='16'/%3E%3Cpath d='M12 16 L7 25 M12 16 L17 25'/%3E%3Cpath d='M36 16 L31 25 M36 16 L41 25'/%3E%3C/g%3E%3Cpath d='M6 25 Q12 31 18 25' fill='%23002147'/%3E%3Cpath d='M30 25 Q36 31 42 25' fill='%23002147'/%3E%3C/svg%3E") center/contain no-repeat;
-  }
-  .patrons-lux .modal-title{color:#0b2547;}
-  .patron-cta{margin-top:18px;padding:18px;border-radius:14px;text-align:center;background:linear-gradient(135deg,#08182f,#0d2a4d);border:1px solid rgba(212,175,55,.5);}
-  .patron-cta p{font-family:var(--sans);font-size:13px;color:#e7dcbf;margin:0 0 12px;}
-  .patron-cta .btn-primary{display:inline-block;text-decoration:none;}
-
   @media (max-width:980px){
     .session-clock{display:none;}
   }
@@ -708,8 +632,6 @@
   .welcome-card>p,.subject-selection-card>p{max-width:690px;margin:22px 0 30px;color:#334155;font-family:var(--sans);font-size:17px;line-height:1.75;}
   .welcome-actions{display:flex;align-items:center;gap:15px;flex-wrap:wrap;}
   .welcome-actions .btn-primary{padding:14px 25px;border-radius:10px;font-size:13px;}
-  .patron-banner{display:flex;align-items:center;justify-content:center;gap:10px;max-width:850px;width:100%;margin:18px auto 0;padding:12px 18px;border:1px solid rgba(197,160,89,.35);border-radius:12px;background:rgba(8,18,37,.8);color:#f8e9bd;cursor:pointer;font-family:var(--sans);font-size:12px;line-height:1.45;text-align:center;}
-  .patron-banner:hover,.patron-banner:focus-visible{border-color:#e6c96c;background:#102747;outline:none;}
   .subject-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:28px;}
   .subject-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 18px;border:1px solid #d8dee8;border-radius:12px;background:#fff;color:#10233e;cursor:pointer;text-align:left;font-family:var(--sans);font-weight:700;font-size:14px;}
   .subject-choice:after{content:"→";color:#9b7829;font-size:18px;}
@@ -741,13 +663,16 @@
     .subject-choice-grid,.session-mode-grid{grid-template-columns:1fr;}
     .session-mode-option{min-height:0;}
     .signin-prompt-actions{grid-template-columns:1fr;}
+    .exam-control-bar{grid-template-columns:1fr;gap:12px;}
+    .exam-mode-switcher{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));}
+    .exam-mode-label{grid-column:1/-1;}
+    .exam-mode-button{padding:9px 7px;font-size:10px;}
+    .exam-clock,.exam-clock.no-digits{min-width:0;justify-content:space-between;border-top:1px solid rgba(241,245,249,.12);padding-top:11px;}
+    .exam-clock-copy,.exam-clock.no-digits .exam-clock-copy{text-align:left;}
   }
 </style>
 <link rel="stylesheet" href="assets/phase2.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script src="assets/labor-csv-normalizer.js"></script>
 <script src="assets/exam-session-controller.js"></script>
-<script src="assets/website-question-bank.js"></script>
 </head>
 <body>
 
@@ -788,22 +713,17 @@
   </div>
 
   <nav class="spa-nav">
-    <button class="spa-tab active" id="spa-mock" onclick="showPage('mock', this)">🏛️ Mock Bar Exam</button>
-    <button class="spa-tab" id="spa-midterms" onclick="showPage('midterms', this)">🎓 Midterms &amp; Finals</button>
-    <button class="spa-tab" id="spa-news" onclick="showPage('news', this)">📰 Bar News</button>
-    <button class="spa-tab" id="spa-jurisprudence" onclick="showPage('jurisprudence', this)">⚖️ Latest Jurisprudence</button>
+    <button class="spa-tab active" id="spa-mock" onclick="showPage('mock', this)">Practice</button>
+    <button class="spa-tab" id="spa-progress" onclick="openAnalytics()">Progress</button>
+    <button class="spa-tab" id="spa-pricing" data-dd2-view="pricing">Plans &amp; Access</button>
+    <button class="spa-tab" id="spa-jurisprudence" onclick="showPage('jurisprudence', this)">Legal Updates</button>
+    <button class="spa-tab" id="spa-support" data-dd2-view="support">Support</button>
+    <button class="spa-tab" id="spa-partner" data-dd2-view="partnership">Partner With Us</button>
   </nav>
 
   <div class="topbar-actions">
-    <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>⏳ 00:00:00</div>
-    <button class="btn-angel" id="btn-angel" onclick="openModal('investor-modal')">🏛️ Angel Investors</button>
-    <button class="icon-btn hide-sm" id="btn-b2b" onclick="toggleViewMode()">🏢 Individual</button>
-    <button class="icon-btn hide-sm" id="btn-analytics" onclick="openAnalytics()">📈 Analytics</button>
-    <button class="icon-btn" id="btn-subscribe" onclick="openModal('subscribe-modal')">Plans &amp; Pricing</button>
-    <button class="icon-btn hide-sm" id="btn-signin" onclick="openModal('auth-modal')">Sign In</button>
-    <div class="avatar-pill" id="avatar-pill" onclick="openModal('auth-modal')">
-      <span class="av">DD</span><span class="tier">Free Tier</span>
-    </div>
+    <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>00:00:00</div>
+    <button class="icon-btn hide-sm" id="btn-signin" type="button">Sign In</button>
   </div>
 </header>
 
@@ -818,10 +738,6 @@
         <button type="button" class="btn-primary" id="start-practice" onclick="startPractice()">Start Practice</button>
       </div>
     </article>
-    <button type="button" class="patron-banner" id="welcome-patron-banner" onclick="openModal('investor-modal')">
-      <span aria-hidden="true">✦</span>
-      <span>Backed by Visionary Angel Investors — Meet our Patrons</span>
-    </button>
   </div>
 
   <div id="subject-selection-state" class="onboarding-state" hidden>
@@ -840,7 +756,6 @@
         <div class="eyebrow">Focused Essay Workspace</div>
         <h2>Mock Bar Exam</h2>
       </div>
-      <button type="button" class="patron-banner" onclick="openModal('investor-modal')">✦ Backed by Visionary Angel Investors — Meet our Patrons</button>
     </div>
 
     <div class="exam-subnav">
@@ -854,18 +769,6 @@
       <div class="main" id="main"></div>
     </div>
 
-    <div class="sponsor-card">
-      <div class="sponsor-inner">
-        <span class="sponsor-tag">Sponsored Partner</span>
-        <h3>FGMallari Designs — Architect</h3>
-        <div class="lead">Lead Architect: Francis Fidel G. Mallari</div>
-        <div class="svc">Architectural Planning, Structural Design &amp; Blueprint Services.</div>
-        <div class="contact">
-          <span>📱 <a href="tel:+639499176005">0949 917 6005</a></span>
-          <span>✉️ <a href="mailto:advertise@duediligence.ph?subject=Advertising%20and%20Partnership%20Inquiry" aria-label="Email Due Diligence about advertising and partnerships">advertise@duediligence.ph</a></span>
-        </div>
-      </div>
-    </div>
   </div>
 </section>
 
@@ -915,13 +818,11 @@
       </p>
     </div>
     <div class="footer-links">
-      <a onclick="openModal('investor-modal')">🏛️ Angel Investors</a>
-      <a href="mailto:support@duediligence.ph?subject=Due%20Diligence%20Support%20Request">Support</a>
-      <a href="mailto:premium@duediligence.ph?subject=Premium%20Plan%20Inquiry">Plans &amp; Pricing</a>
+      <a href="#support" data-dd2-view="support">Support</a>
+      <a href="#pricing" data-dd2-view="pricing">Plans &amp; Access</a>
       <a href="#terms" data-dd2-view="terms">Terms</a>
       <a href="#privacy" data-dd2-view="privacy">Privacy</a>
-      <a href="mailto:advertise@duediligence.ph?subject=Advertising%20and%20Partnership%20Inquiry">Advertise</a>
-      <a href="mailto:invest@duediligence.ph?subject=Investment%20Inquiry">Invest</a>
+      <a href="#partnership" data-dd2-view="partnership">Partner With Us</a>
     </div>
   </div>
 </footer>
@@ -946,11 +847,11 @@
 <div class="modal-overlay blocking" id="signin-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="signin-prompt-title" aria-describedby="signin-prompt-copy">
   <div class="modal-card" tabindex="-1">
     <h3 class="modal-title" id="signin-prompt-title">Save Your Progress</h3>
-    <p class="checking-copy" id="signin-prompt-copy">Sign in to save your progress, review previous attempts, and continue your study sessions across devices.</p>
-    <span class="tier-badge">Guest practice remains available. Cross-device syncing requires an account.</span>
+    <p class="checking-copy" id="signin-prompt-copy">Sign in to open protected questions, save progress, and continue study sessions across devices.</p>
+    <span class="tier-badge">Authentication is required before an examination question is displayed.</span>
     <div class="signin-prompt-actions">
       <button type="button" class="btn-primary" id="onboarding-signin" onclick="beginOnboardingSignIn()">Sign In</button>
-      <button type="button" class="btn-secondary" id="guest-continue" onclick="continueAsGuest()">Maybe Later</button>
+      <button type="button" class="btn-secondary" id="guest-continue" onclick="continueAsGuest()" hidden>Maybe Later</button>
     </div>
   </div>
 </div>
@@ -964,7 +865,7 @@
       <button type="button" class="session-mode-option" id="mode-timed" onclick="chooseSessionMode('strict')">
         <strong>Strict Scrutiny</strong>
         <span>Bar Simulation</span>
-        <p>12 minutes per question. Automatically proceeds when time expires.</p>
+        <p>12 minutes per question. At zero, the current answer is submitted and the result remains on screen.</p>
       </button>
       <button type="button" class="session-mode-option" id="mode-self-paced" onclick="chooseSessionMode('selfPaced')">
         <strong>Quantum Meruit</strong>
@@ -992,79 +893,6 @@
         <a class="btn-primary" href="mailto:support@duediligence.ph?subject=Due%20Diligence%20Support%20Request">Email Support</a>
       </div>
     </form>
-  </div>
-</div>
-
-<!-- Subscribe / Pricing modal -->
-<div class="modal-overlay" id="subscribe-modal">
-  <div class="modal-card lg">
-    <h3 class="modal-title">Due Diligence <span style="color:var(--gold)">Plus</span></h3>
-    <div class="modal-sub">Unlock the full bar-prep arsenal</div>
-    <div class="price-hero">
-      <div class="amt">₱1,386.22<small>&nbsp;/ month</small></div>
-      <div class="usd">≈ $22.40 USD / month · cancel anytime</div>
-    </div>
-    <ul class="feature-list">
-      <li>Unlimited timed mock bar essays across all 8 subjects</li>
-      <li>AI ALAC grading with per-component rubric feedback</li>
-      <li>Performance analytics &amp; ALAC mastery tracking</li>
-      <li>Midterms &amp; Finals law-school module library</li>
-      <li>Curated jurisprudence digests &amp; bar bulletin alerts</li>
-      <li>Exportable progress reports (PDF)</li>
-    </ul>
-    <div class="pay-row">
-      <button class="pay-btn gcash" onclick="mockCheckout('GCash')">Pay with GCash</button>
-      <button class="pay-btn visa" onclick="mockCheckout('Visa / Card')">Pay with Visa / Card</button>
-    </div>
-    <div class="mock-note">Demo checkout — no live payment is processed in this preview build.</div>
-    <div class="modal-actions" style="margin-top:16px;">
-      <button class="btn-secondary" onclick="closeModal('subscribe-modal')">Maybe later</button>
-      <a class="btn-primary" href="mailto:premium@duediligence.ph?subject=Premium%20Plan%20Inquiry">Plans &amp; Pricing</a>
-    </div>
-  </div>
-</div>
-
-<!-- Auth modal -->
-<div class="modal-overlay" id="auth-modal">
-  <div class="modal-card">
-    <h3 class="modal-title">Sign in to Due Diligence</h3>
-    <div class="modal-sub">Your progress syncs across devices</div>
-    <span class="tier-badge">Free Practice Tier — upgrade to Go Plus Unlimited</span>
-    <div class="sso-row" style="margin-top:16px;">
-      <button class="sso-btn" onclick="mockAuth('Google')"><span>🅶</span> Continue with Google</button>
-      <button class="sso-btn" onclick="mockAuth('Apple')"><span></span> Continue with Apple</button>
-    </div>
-    <div class="divider-or">or use email</div>
-    <input class="modal-input" type="email" id="auth-email" placeholder="you@example.com" autocomplete="off">
-    <input class="modal-input" type="password" id="auth-pass" placeholder="Password" autocomplete="off">
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="cancelAuthModal()">Cancel</button>
-      <button class="btn-primary" onclick="mockAuth('Email')">Sign In</button>
-    </div>
-    <div class="mock-note" style="margin-top:14px;">UI preview only — no credentials are collected, stored, or transmitted.</div>
-  </div>
-</div>
-
-<!-- Angel Investors modal -->
-<div class="modal-overlay" id="investor-modal">
-  <div class="modal-card patrons-lux">
-    <h3 class="modal-title">Patrons &amp; Angel Investors</h3>
-    <div class="modal-sub">Honoring the visionary patrons backing the next generation of Philippine legal technology</div>
-    <div class="patron">
-      <div class="medal">🏛️</div>
-      <div><div class="nm">Gilmar P. De Castro</div><div class="role">Angel Investor &amp; Founding Patron</div></div>
-    </div>
-    <div class="patron">
-      <div class="medal">⚖️</div>
-      <div><div class="nm">Francis Mallari</div><div class="role">Angel Investor &amp; Founding Patron</div></div>
-    </div>
-    <div class="patron-cta">
-      <p>Interested in joining our Seed Round as a future Angel Investor?</p>
-      <a class="btn-primary" href="mailto:invest@duediligence.ph?subject=Investment%20Inquiry">Become a Patron / Contact Founders</a>
-    </div>
-    <div class="modal-actions" style="margin-top:16px;">
-      <button class="btn-secondary" onclick="closeModal('investor-modal')">Close</button>
-    </div>
   </div>
 </div>
 
@@ -1110,39 +938,6 @@
   </div>
 </div>
 
-<!-- B2B Review Center dashboard modal -->
-<div class="modal-overlay" id="b2b-modal">
-  <div class="modal-card xl">
-    <h3 class="modal-title">B2B Review Center Dashboard</h3>
-    <div class="modal-sub">Institutional cohort analytics — law school &amp; bar review preview</div>
-    <div class="metric-grid">
-      <div class="metric"><div class="val">248</div><div class="lbl">Enrolled Candidates</div></div>
-      <div class="metric"><div class="val">8</div><div class="lbl">Active Subject Modules</div></div>
-      <div class="metric"><div class="val">12,940</div><div class="lbl">Essays Drilled</div></div>
-      <div class="metric"><div class="val">24</div><div class="lbl">Faculty Review Seats</div></div>
-    </div>
-    <div class="panel-title">Cohort Mastery by Subject (sample)</div>
-    <div class="heatmap">
-      <div class="heat-cell" style="background:#bfe3c4"><div class="s">Political Law</div><div class="v">81</div></div>
-      <div class="heat-cell" style="background:#e7f0be"><div class="s">Labor Law</div><div class="v">74</div></div>
-      <div class="heat-cell" style="background:#f6e0b8"><div class="s">Civil Law</div><div class="v">66</div></div>
-      <div class="heat-cell" style="background:#f6cbb8"><div class="s">Taxation</div><div class="v">58</div></div>
-      <div class="heat-cell" style="background:#cfe8c4"><div class="s">Mercantile</div><div class="v">78</div></div>
-      <div class="heat-cell" style="background:#f6e0b8"><div class="s">Criminal</div><div class="v">69</div></div>
-      <div class="heat-cell" style="background:#e7f0be"><div class="s">Remedial</div><div class="v">72</div></div>
-      <div class="heat-cell" style="background:#bfe3c4"><div class="s">Legal Ethics</div><div class="v">83</div></div>
-    </div>
-    <div class="b2b-cta">
-      <h4>Equip your entire cohort</h4>
-      <p>Seat-based licensing, proctored timed exams, and instructor dashboards for law schools and bar review centers.</p>
-      <a class="btn-primary" href="mailto:premium@duediligence.ph?subject=Premium%20Plan%20Inquiry">Inquire for Institutional Licensing</a>
-    </div>
-    <div class="modal-actions" style="margin-top:16px;">
-      <button class="btn-secondary" onclick="closeModal('b2b-modal')">Close</button>
-    </div>
-  </div>
-</div>
-
 
 <!-- Gemini examiner progress / controlled error modal -->
 <div class="modal-overlay" id="checking-modal" role="dialog" aria-modal="true" aria-labelledby="checking-title">
@@ -1169,443 +964,9 @@ const SUBJECTS = [
 ];
 
 // Fully populated authentic Philippine Bar exam case scenarios and UPLC suggested answers across all 8 subjects (fully distinct items per number)
-const BAR_QUESTIONS = {
-  "Civil Law": [
-    {
-      id: "Civil Law Q.1",
-      text: "In 2010, spouses Bernardo and Elena executed a notarized deed of absolute sale over a prime commercial parcel of land in Binondo in favor of their only son, Dante, to shield the property from an impending corporate liability suit. No actual monetary consideration was paid, though Dante secured a TCT in his name. In 2015, Dante mortgaged the property to Cornerstone Bank for PHP 5,000,000. Bernardo passed away in 2020. Elena and Dante's sister Chloe filed a complaint for nullity of sale and recovery of ownership. Cornerstone Bank invoked the mirror doctrine.\n\n(A) Is the deed of sale absolutely or relatively simulated, and what is its legal effect inter se?\n(B) Can Cornerstone Bank successfully invoke the mirror doctrine?",
-      model: "I. ANSWER. (A) The deed is ABSOLUTELY simulated and void ab initio; inter se it transfers nothing. (B) Yes, Cornerstone Bank, as a mortgagee in good faith, may invoke the mirror doctrine.\n\nII. LEGAL BASIS. Under Arts. 1345-1346 of the Civil Code, simulation is absolute when the parties do not intend to be bound at all; such a contract is void under Art. 1409(2), and the action to declare its nullity is imprescriptible under Art. 1410. Conversely, under the Torrens system (P.D. 1529), a person dealing with registered land may rely on the face of a clean certificate of title — the 'mirror doctrine' — which protects a mortgagee in good faith and for value.\n\nIII. APPLICATION. Here, no consideration was paid and the conveyance to Dante was merely to shield the land from an impending suit; the parties never intended a true sale, so the deed is absolutely simulated and void, produced no effect between the spouses and Dante, and prescription never ran. When Dante later mortgaged the land, however, Cornerstone Bank dealt with a clean TCT in his name, without notice of the infirmity, and was not bound to look beyond the title.\n\nIV. CONCLUSION. The sale is void inter se, but the mortgage constituted by Cornerstone Bank in good faith is protected under the mirror doctrine.",
-      caseLaw: "Spouses Peralta v. Heirs of Abling, G.R. No. 198536"
-    },
-    {
-      id: "Civil Law Q.2",
-      text: "Don Victorino executed a holographic will dated October 15, 2021, but completely unsigned at the bottom. Instead, he wrote on the cover envelope his full signature and date October 16, 2021. Oppositor Clara argues the will is void for lack of a proper signature under Art. 810.\n\n(A) Is the holographic will valid despite the absence of a signature at the end of the text?\n(B) Does mild vascular dementia invalidate the holographic will?",
-      model: "(A) No. Under Art. 810, a holographic will must be signed by the testator himself at the end of the instrument. A signature on an envelope does not satisfy the requirement.\n(B) Mild vascular dementia per se does not incapacitate unless total deprivation of reason at execution is proven.",
-      caseLaw: "Ajero v. Court of Appeals, G.R. No. 106720"
-    },
-    {
-      id: "Civil Law Q.3",
-      text: "Spouses Mateo and Teresa adopted minor child Ben in judicial proceedings in 2015. In 2018, Mateo and Teresa legally divorced abroad, and Teresa contracted a new marriage. Mateo filed a petition to rescind the adoption of Ben on the ground that the subsequent dissolution of his marriage with Teresa created a hostile environment for the adopted child.\n\nCan an adopter legally rescind an adoption decree on the ground of subsequent divorce or estrangement from the co-adopter?",
-      model: "No. Under the Domestic Adoption Act and R.A. 11642, adoption cannot be rescinded by the adopter based on subsequent divorce, separation, or change of civil status. Grounds for rescission are strictly limited to acts of the adopted child.",
-      caseLaw: "Republic v. Court of Appeals (Tampepe), G.R. No. 190666"
-    },
-    {
-      id: "Civil Law Q.4",
-      text: "A parcel of registered land was sold by Mario to Nestor under a private instrument in 2012. Nestor took physical possession but did not register the sale. In 2015, Mario sold the same parcel to Paul via a public instrument, and Paul immediately registered the deed and obtained a TCT in good faith.\n\nBetween Nestor and Paul, who has a better right over the property under the Torrens system?",
-      model: "Paul has a better right. Under Art. 1544 of the Civil Code governing double sales of registered land, ownership belongs to the buyer who first registers the transaction in good faith.",
-      caseLaw: "Uraca v. Court of Appeals, G.R. No. 115158"
-    },
-    {
-      id: "Civil Law Q.5",
-      text: "Esteban leased a commercial building from Spouses Gomez for 5 years. The contract stipulated that any improvements made by the lessee shall belong to the lessors upon lease termination without reimbursement. Esteban constructed a mezzanine and storage facility worth PHP 1,000,000. Upon lease expiration, Esteban demanded reimbursement for useful improvements.\n\nIs Esteban entitled to reimbursement or removal of the improvements?",
-      model: "No reimbursement. Under Art. 1678, the lessor may pay one-half of the value of useful improvements upon expiration, but where the contract expressly stipulates that improvements shall accrue to the lessor without indemnity, the stipulation governs.",
-      caseLaw: "Lopez v. Roces, G.R. No. L-25741"
-    },
-    {
-      id: "Civil Law Q.6",
-      text: "A public bus owned by Rapid Transit Co. careened off the highway due to sudden steering knuckle fatigue caused by a hidden latent factory defect, crashing into a roadside convenience store and injuring customer Liza. Liza sued Rapid Transit Co. for breach of contract of carriage and quasi-delict.\n\nIs Rapid Transit Co. liable despite the mechanical defect being a hidden factory flaw?",
-      model: "Yes. Under Art. 1755, common carriers are bound to carry passengers safely as far as human care and foresight can provide. Mechanical defects or latent factory flaws do not exempt the carrier from liability.",
-      caseLaw: "Nacar v. Gallery Frames, G.R. No. 189871"
-    },
-    {
-      id: "Civil Law Q.7",
-      text: "In 2010, Rogelio executed a deed of donation inter vivos over a residential house and lot in favor of his daughter Katrina, imposing a condition that Katrina must support Rogelio's medical needs. Katrina accepted the donation in a public instrument. In 2023, Katrina refused to pay Rogelio's hospital bills amounting to PHP 300,000 despite ample means. Rogelio filed an action to revoke the donation for non-compliance with conditioned charges.\n\nWill Rogelio's action prosper?",
-      model: "Yes. Under Art. 764, a donation inter vivos may be revoked at the instance of the donor when the donee fails to comply with any of the conditions imposed. The action prescribes in 4 years from non-compliance.",
-      caseLaw: "De Luna v. Abrigo, G.R. No. L-57455"
-    },
-    {
-      id: "Civil Law Q.8",
-      text: "A homeowner association (HOA) passed a board resolution prohibiting homeowners from leasing their residential units for short-term stays (less than 6 months) to preserve neighborhood tranquility. Owner Damian, who operated a thriving Airbnb unit, challenged the resolution as an invalid restriction on the right of ownership.\n\nIs the HOA restriction valid?",
-      model: "Yes. Under the Corporation Code and the Master Deed/By-laws, HOAs possess regulatory police power and autonomy to enforce reasonable restrictions protecting residential zoning, peace, and security against commercial transitory lodging.",
-      caseLaw: "Atrium Management Corp. v. Court of Appeals, G.R. No. 109131"
-    },
-    {
-      id: "Civil Law Q.9",
-      text: "A debtor issued a promissory note to a creditor payable 'on or before December 31, 2025'. In November 2024, the debtor experienced severe financial collapse and became insolvent. The creditor immediately demanded full payment.\n\nCan the creditor demand immediate payment before December 31, 2025?",
-      model: "Yes. Under Art. 1198 of the Civil Code, the debtor loses every right to make use of the period when the debtor becomes insolvent, unless guaranteed by security.",
-      caseLaw: "Development Bank of the Philippines v. Court of Appeals, G.R. No. 110006"
-    },
-    {
-      id: "Civil Law Q.10",
-      text: "A parcel of land is co-owned by four siblings in equal shares. One co-owner, Arturo, sold the entire parcel to a third person without the consent or knowledge of the other three co-owners.\n\nWhat is the legal status of the sale with respect to the shares of the other co-owners?",
-      model: "The sale is valid only with respect to Arturo's ideal 1/4 share. As to the remaining 3/4 shares belonging to his siblings, the sale is void because a co-owner cannot dispose of a specific portion or more than their own share without consent.",
-      caseLaw: "Bailon-Casilao v. Court of Appeals, G.R. No. L-78178"
-    }
-  ],
-  "Criminal Law": [
-    {
-      id: "Criminal Law Q.1",
-      text: "At midnight, Anselmo went to Bruno's house armed with a pistol, entered the dark bedroom, and repeatedly stabbed the figure under the blanket. It turned out Bruno was at a motel, and the person killed was Bruno's visiting uncle Mateo. Anselmo raised mistake of fact.\n\n(A) Does mistake of fact exonerate Anselmo?\n(B) What is his criminal liability?",
-      model: "(A) Mistake of fact does not exonerate Anselmo. Under aberratio ictus or error in personae, a felon is responsible for all consequences of his intentional felony.\n(B) Anselmo is guilty of Homicide, not Murder, because treachery cannot qualify the crime when the actual victim killed was different from the intended target.",
-      caseLaw: "People v. Oanis, G.R. No. L-47722"
-    },
-    {
-      id: "Criminal Law Q.2",
-      text: "Dante staged a fake kidnapping of his own 5-year-old daughter and demanded PHP 1,000,000 ransom from his wealthy wife, Elena, with whom he had bitter marital disputes. Dante was arrested by police during the payoff.\n\nIs Dante criminally liable for Kidnapping and Serious Illegal Detention under Article 267 of the Revised Penal Code?",
-      model: "Yes. Dante is criminally liable for Kidnapping and Serious Illegal Detention under Article 267 of the Revised Penal Code, as the law penalizes anyone who kidnaps or detains another, regardless of familial relationship when deprivation of liberty is actual and ransom is demanded.",
-      caseLaw: "People v. Santos, G.R. No. L-29532"
-    },
-    {
-      id: "Criminal Law Q.3",
-      text: "Ramil surprised an intruder attempting to pick the lock of his motorcycle parked in his yard. Ramil grabbed a bladed weapon and struck the fleeing intruder on the back, causing fatal injuries. Ramil invoked self-defense.\n\nDoes Ramil's plea of self-defense prosper?",
-      model: "No. Self-defense requires unlawful aggression on the part of the victim, reasonable necessity of the means employed, and lack of sufficient provocation. When the intruder was already fleeing and no longer presented an imminent threat, unlawful aggression ceased.",
-      caseLaw: "People v. Escarlos, G.R. No. 148912"
-    },
-    {
-      id: "Criminal Law Q.4",
-      text: "A municipal treasurer collected public funds amounting to PHP 500,000, pocketed the cash, and subsequently falsified official cash registry books to conceal the shortage. The prosecution filed separate charges for Malversation and Falsification.\n\nAre the separate charges correct, or is it a complex crime?",
-      model: "It is a complex crime of malversation through falsification under Article 48 of the Revised Penal Code because the falsification was committed as a necessary means to conceal and commit the malversation.",
-      caseLaw: "People v. Pantaleon, Jr., G.R. No. L-34842"
-    },
-    {
-      id: "Criminal Law Q.5",
-      text: "A domestic helper entrusted with the master bedroom keys took jewelry worth PHP 200,000 from a locked safe while the employers were out of town. She was charged with Qualified Theft.\n\nIs the charge of Qualified Theft proper?",
-      model: "Yes. Under Article 310 of the Revised Penal Code, theft is qualified when committed by a domestic servant or with grave abuse of confidence, given the special trust reposed in the employee.",
-      caseLaw: "People v. Sison, G.R. No. 238453"
-    },
-    {
-      id: "Criminal Law Q.6",
-      text: "Ignacio and Maria lived together openly as husband and wife without the benefit of marriage. During a violent quarrel, Ignacio fatally struck Maria. The information charged Ignacio with Parricide.\n\nCan Ignacio be convicted of Parricide?",
-      model: "No. Under Article 246, parricide requires a legal marriage between the offender and the victim. Common-law relationships do not satisfy the legal tie required for parricide; hence, Ignacio is guilty only of Homicide.",
-      caseLaw: "People v. Yap, G.R. No. L-41312"
-    },
-    {
-      id: "Criminal Law Q.7",
-      text: "A pregnant minor delivered a baby girl and, out of extreme maternal embarrassment, placed the newborn inside a closed garbage container without ventilation, resulting in the baby's death within hours.\n\nWhat crime was committed?",
-      model: "The mother committed Infanticide under Article 255 of the Revised Penal Code, which penalizes the killing of a child less than three days of age by its mother to conceal her dishonor.",
-      caseLaw: "People v. Lucero, G.R. No. L-17905"
-    },
-    {
-      id: "Criminal Law Q.8",
-      text: "Believing his bitter rival was sleeping inside a hospital bed, Tomas sneaked into the room at midnight and pumped five bullets into the bedsheets. It turned out the rival had passed away from natural causes two hours earlier.\n\nWhat is Tomas's criminal liability?",
-      model: "Tomas is guilty of an impossible crime under Article 4(2) of the Revised Penal Code because the commission of the offense is inherently impossible due to the legal or factual impossibility of accomplishing the intended crime (the victim was already dead).",
-      caseLaw: "Intod v. Court of Appeals, G.R. No. 103119"
-    },
-    {
-      id: "Criminal Law Q.9",
-      text: "A group of armed military officers seized a government broadcasting station, proclaimed a revolutionary council, and demanded the immediate resignation of the President, without engaging in widespread armed public uprising across the country.\n\nIs the crime Rebellion or Coup d'Etat?",
-      model: "It constitutes Coup d'Etat under Article 134-A of the Revised Penal Code, as it is a swift attack directed against duly constituted authorities of the government, characterized by stealth, speed, and abuse of military authority, without requiring public uprising.",
-      caseLaw: "People v. Hernandez, G.R. No. L-6025"
-    },
-    {
-      id: "Criminal Law Q.10",
-      text: "A high-ranking government official amassed ill-gotten wealth totaling PHP 45,000,000 through a complex web of kickbacks and ghost projects. The anti-graft court prosecuted him under R.A. 7080.\n\nDoes the total amount meet the statutory threshold for Plunder?",
-      model: "No. Under R.A. 7080 (Plunder Law), as amended, the aggregate amount or total value of ill-gotten wealth amassed, acquired, or accumulated must be at least PHP 50,000,000 to constitute Plunder. Since the official amassed only PHP 45,000,000, the statutory threshold is not met; hence, he cannot be held liable for Plunder. He may instead be prosecuted for Malversation and/or violation of the Anti-Graft and Corrupt Practices Act (R.A. 3019) for the underlying acts.",
-      caseLaw: "Estrada v. Sandiganbayan, G.R. No. 148560"
-    }
-  ],
-  "Remedial Law": [
-    {
-      id: "Remedial Law Q.1",
-      text: "A petition for declaration of nullity of marriage was filed by a husband before the Regional Trial Court. The wife filed a motion to dismiss, arguing that the Family Courts have exclusive original jurisdiction and the petition must be filed in her current residence city.\n\nDoes the Family Court have exclusive jurisdiction, and is venue jurisdictional in family cases?",
-      model: "Family Courts have exclusive original jurisdiction over nullity cases. However, venue in family courts is procedural, not jurisdictional, and may be waived if not timely raised in a motion to dismiss.",
-      caseLaw: "Arado v. Alcoran, G.R. No. 176336"
-    },
-    {
-      id: "Remedial Law Q.2",
-      text: "A lessor filed an unlawful detainer case under the Rule on Summary Procedure before the Metropolitan Trial Court. The defendant-lessee filed a motion to dismiss based on lack of cause of action and submitted voluminous counter-affidavits.\n\nAre motions to dismiss allowed under the Rule on Summary Procedure?",
-      model: "No. Under the Revised Rule on Summary Procedure, motions to dismiss are strictly prohibited, except for lack of jurisdiction over the subject matter or failure to comply with barangay conciliation requisites.",
-      caseLaw: "Macasaet v. Macasaet, G.R. No. 154391"
-    },
-    {
-      id: "Remedial Law Q.3",
-      text: "A plaintiff filed a civil complaint for collection of sum of money but omitted to attach or state a certificate against forum shopping in the initiatory pleading. The defendant moved to dismiss.\n\nCan the omission of the certificate against forum shopping be cured later?",
-      model: "The submission of a certificate against forum shopping is mandatory. While non-compliance is not strictly curable by mere afterthought, jurisprudence allows liberal construction if substantial compliance or subsequent execution is demonstrated.",
-      caseLaw: "Spouses Tolentino v. Court of Appeals, G.R. No. 123014"
-    },
-    {
-      id: "Remedial Law Q.4",
-      text: "An aggrieved party filed a special civil action for certiorari under Rule 65 against an interlocutory order of the trial court denying a motion to dismiss, instead of waiting for final judgment and filing an ordinary appeal.\n\nIs certiorari the proper remedy against an interlocutory order denying a motion to dismiss?",
-      model: "Generally, no. Certiorari is not a substitute for appeal. However, where the interlocutory order is issued with grave abuse of discretion amounting to lack or excess of jurisdiction, certiorari lies.",
-      caseLaw: "Chua v. Court of Appeals, G.R. No. 119255"
-    },
-    {
-      id: "Remedial Law Q.5",
-      text: "Under the Judicial Affidavit Rule, a plaintiff offered direct testimony by submitting judicial affidavits of witnesses 5 days before the pre-trial conference. The opposing party moved to expunge the affidavits for late filing.\n\nWhat is the consequence of failing to submit judicial affidavits within the prescribed period?",
-      model: "Under the Judicial Affidavit Rule, failure to submit judicial affidavits on time shall be deemed a waiver of the submission of testimony, subject to payment of a fine and court discretion for valid cause.",
-      caseLaw: "Sia v. People, G.R. No. 224469"
-    },
-    {
-      id: "Remedial Law Q.6",
-      text: "A plaintiff applied ex parte for a Writ of Preliminary Injunction to enjoin the foreclosure of a mortgage without posting any injunctive bond or establishing clear legal right.\n\nMay a writ of preliminary injunction be issued ex parte and without a bond?",
-      model: "No. Under Rule 58, a writ of preliminary injunction cannot be granted without prior notice to the party or person sought to be enjoined, and the applicant must file a bond executed to the party enjoined.",
-      caseLaw: "Bicolandia Drug Corporation v. Court of Appeals, G.R. No. 132208"
-    },
-    {
-      id: "Remedial Law Q.7",
-      text: "A dying stabbing victim told a responding police officer the name of her assailant while gasping for breath. The victim survived for three days before passing away. The prosecution offered the officer's testimony as a dying declaration.\n\nIs the statement admissible as a dying declaration?",
-      model: "Yes. Under the Rules of Evidence, a dying declaration is admissible if made under the consciousness of an impending death, concerning the cause and surrounding circumstances of the declarant's death, in a case where the death is the subject of the inquiry.",
-      caseLaw: "People v. Palanas, G.R. No. 214453"
-    },
-    {
-      id: "Remedial Law Q.8",
-      text: "A witness gave testimony in court directly contradicting a statement he previously made in a sworn police affidavit. The cross-examining counsel confronted the witness with the prior statement.\n\nHow is a witness impeached by prior inconsistent statements under the Rules of Evidence?",
-      model: "Under Rule 132, a witness may be impeached by evidence that he has made at prior statements inconsistent with his present testimony, provided the statements are related to him with the circumstances of time, place, and persons present.",
-      caseLaw: "People v. Escleto, G.R. No. L-8360"
-    },
-    {
-      id: "Remedial Law Q.9",
-      text: "A detained suspect was interrogated by police officers without the assistance of counsel, resulting in an oral confession pointing to the location of the murder weapon. The weapon was subsequently recovered.\n\nIs the recovered weapon admissible in evidence?",
-      model: "Under the exclusionary rule of the Constitution (Miranda rights / custodial investigation), uncounselled extrajudicial confessions are inadmissible. However, physical evidence discovered as a direct consequence of inadmissible confessions is evaluated under fruit of the poisonous tree doctrine, though voluntary spontaneous utterances may have varying admissibility.",
-      caseLaw: "People v. Ayson, G.R. No. 85155"
-    },
-    {
-      id: "Remedial Law Q.10",
-      text: "A defendant filed a motion to dismiss a complaint based on improper venue. The trial court denied the motion. Subsequently, the defendant filed an answer raising lack of jurisdiction and prescription.\n\nDid the defendant violate the omnibus motion rule?",
-      model: "No. Improper venue is an objection that must be raised in the earliest motion or answer, but defenses like lack of jurisdiction over the subject matter and prescription are exempt from the omnibus motion rule and can be raised later.",
-      caseLaw: "Development Bank of the Philippines v. Court of Appeals, G.R. No. 129471"
-    }
-  ],
-  "Mercantile Law": [
-    {
-      id: "Mercantile Law Q.1",
-      text: "A professional graphic designer established a One Person Corporation (OPC) under the Revised Corporation Code. After two years of successful operations, the sole stockholder passed away. The heirs seek to continue operations.\n\nWhat are the legal requirements under the Revised Corporation Code upon the death of the single stockholder of an OPC?",
-      model: "Under the Revised Corporation Code, upon the death of the single stockholder, the nominee must take over management within 3 days, and within 60 days thereafter, inform the SEC of the death and designate a legal representative or heirs to transfer shares.",
-      caseLaw: "Revised Corporation Code provisions on OPC (Sec. 116-132)"
-    },
-    {
-      id: "Mercantile Law Q.2",
-      text: "A drawer issued a check payable to cash. The check was stolen, and the thief forged the drawer's signature, negotiating it to a bank that encashed it without verification. The drawer sued the drawee bank.\n\nWho bears the loss between the drawer and the drawee bank when the drawer's signature is forged?",
-      model: "The drawee bank generally bears the loss because it is charged with absolute knowledge of the drawer's signature and cannot debit the drawer's account for a forged check, unless the drawer's negligence facilitated the forgery.",
-      caseLaw: "Associated Bank v. Court of Appeals, G.R. No. 107382"
-    },
-    {
-      id: "Mercantile Law Q.3",
-      text: "An owner insured his commercial building against fire for PHP 10,000,000 with Company A and took out another policy for PHP 10,000,000 with Company B without notifying Company A. A fire destroyed the building.\n\nWhat is the legal effect of taking out double insurance without notice?",
-      model: "Under the Insurance Code, double insurance without notice to insurers violates the 'other insurance clause' commonly stipulated in policies, which may render the policies void or reduce recovery proportionally if fraudulent intent is absent.",
-      caseLaw: "Geagonia v. Court of Appeals, G.R. No. 114427"
-    },
-    {
-      id: "Mercantile Law Q.4",
-      text: "A local cosmetic company adopted a brand name 'SunGlow' identical to a registered international trademark for sunscreen. The international company filed an action for trademark infringement and unfair competition.\n\nWhat distinguishes trademark infringement from unfair competition?",
-      model: "Trademark infringement requires unauthorized use of a registered mark leading to likelihood of confusion. Unfair competition does not require registration and centers on fraudulent passing off of one's goods as those of another.",
-      caseLaw: "Prosource International v. Horphag Research, G.R. No. 180073"
-    },
-    {
-      id: "Mercantile Law Q.5",
-      text: "A depositor maintained a dollar savings account in a commercial bank. The Ombudsman issued a subpoena duces tecum ordering the bank to produce bank records in relation to an unexplained wealth investigation.\n\nAre foreign currency deposits covered by the Secrecy of Bank Deposits Act?",
-      model: "Yes, foreign currency deposits are strictly confidential under R.A. 6426 (Foreign Currency Deposit Act), with even stricter exceptions than Philippine peso deposits under R.A. 1405.",
-      caseLaw: "Ejercito v. Sandiganbayan, G.R. No. 157294"
-    },
-    {
-      id: "Mercantile Law Q.6",
-      text: "A transport cooperative failed to pay its loan obligations to a financing institution. The creditor instituted insolvency proceedings against individual cooperative members.\n\nAre individual members of a registered cooperative personally liable for debts of the cooperative?",
-      model: "No. Cooperatives registered under the Philippine Cooperative Code enjoy a distinct juridical personality, limiting the liability of individual members up to the extent of their respective subscribed share capital.",
-      caseLaw: "Republic v. Proconsumers, G.R. No. L-48356"
-    },
-    {
-      id: "Mercantile Law Q.7",
-      text: "A financially distressed corporation filed a petition for corporate rehabilitation under the FRIA. Prior to the issuance of a Commencement Order, a secured creditor initiated foreclosure proceedings on mortgaged machineries.\n\nWhat is the effect of the Commencement Order and Stay Order on pending foreclosure proceedings?",
-      model: "Under the Financial Rehabilitation and Insolvency Act (FRIA), the issuance of a Commencement Order includes a Stay Order suspending all actions or proceedings, in court or otherwise, for foreclosure or execution against the debtor.",
-      caseLaw: "Pacific Wide Realty v. Puerto Azul Land, G.R. No. 178768"
-    },
-    {
-      id: "Mercantile Law Q.8",
-      text: "A merchant executed a trust receipt in favor of a bank to secure the importation of industrial chemicals. The merchant failed to turn over the proceeds of the sale or return the goods upon maturity. The bank filed criminal charges for estafa.\n\nDoes violation of the Trust Receipts Law constitute estafa?",
-      model: "Yes. Under P.D. 115 (Trust Receipts Law), failure of the entrustee to turn over the proceeds of the sale of goods covered by a trust receipt or to return the goods constitutes estafa under Article 315 of the Revised Penal Code.",
-      caseLaw: "Colinares v. Court of Appeals, G.R. No. 90828"
-    },
-    {
-      id: "Mercantile Law Q.9",
-      text: "A business processing outsourcing firm collected personal data from EU nationals. A former employee leaked database files containing sensitive personal information. The National Privacy Commission initiated motu proprio investigations.\n\nWhat are the primary obligations under the Data Privacy Act of 2012?",
-      model: "Under the Data Privacy Act (R.A. 10173), personal information controllers must adhere to transparency, legitimate purpose, and proportionality principles, and implement rigorous security measures to protect data against unauthorized access or breaches.",
-      caseLaw: "Data Privacy Act jurisprudence and NPC advisory opinions"
-    },
-    {
-      id: "Mercantile Law Q.10",
-      text: "The Anti-Money Laundering Council (AMLC) requested a bank to freeze several accounts suspected of holding proceeds from illegal drug trafficking without securing prior court authorization.\n\nCan the AMLC issue an ex parte freeze order without court intervention?",
-      model: "Under the Anti-Money Laundering Act (AMLA), the AMLC may issue an ex parte freeze order on monetary instruments or property for a period not exceeding 20 days, during which it must file a petition for extension or civil forfeiture before the Court of Appeals.",
-      caseLaw: "Republic v. Glasgow Credit and Collection Services, G.R. No. 170281"
-    }
-  ],
-  "Political Law": [
-    {
-      id: "Political Law Q.1",
-      text: "A local government unit passed an ordinance expropriating a private parcel of agricultural land to construct a public market. The landowner challenged the ordinance, arguing that national infrastructure agencies hold exclusive power of eminent domain.\n\nDo local government units possess the power of eminent domain under the Local Government Code?",
-      model: "Yes. Under Section 19 of the Local Government Code, LGUs exercise the power of eminent domain through an ordinance for public use, purpose, or welfare, upon payment of just compensation.",
-      caseLaw: "Municipality of Parañaque v. V.M. Realty Corporation, G.R. No. 127820"
-    },
-    {
-      id: "Political Law Q.2",
-      text: "The principal of a public high school suspended the publication of the campus student newspaper after student editors published an investigative article criticizing school fund allocations. Editors challenged the suspension under freedom of expression.\n\nDoes school censorship violate freedom of speech and expression of campus journalists?",
-      model: "Under the Campus Journalism Act and constitutional free speech guarantees, student publications enjoy editorial independence, and prior restraint by school authorities is unconstitutional unless clear and present danger to school discipline is established.",
-      caseLaw: "Chavez v. Gonzales, G.R. No. 168338"
-    },
-    {
-      id: "Political Law Q.3",
-      text: "A civil service employee was summarily dismissed from his administrative position by a department head without formal notice, investigation, or hearing, on grounds of alleged disloyalty.\n\nDid the department head violate the constitutional right to due process?",
-      model: "Yes. Under Article III, Section 1 of the Constitution and Civil Service laws, government employees enjoy security of tenure and cannot be dismissed without procedural due process consisting of written notice and opportunity to be heard.",
-      caseLaw: "Velasco v. Civil Service Commission, G.R. No. L-45536"
-    },
-    {
-      id: "Political Law Q.4",
-      text: "A sitting President was sued in a civil court for alleged breach of a private commercial contract entered into prior to assuming office. The President invoked presidential immunity from suit.\n\nDoes presidential immunity from suit cover private and prior acts during incumbency?",
-      model: "No. Presidential immunity from suit covers official acts performed during tenure, but does not extend to unofficial, private, or prior civil acts committed before assuming office.",
-      caseLaw: "Soliven v. Makasiar, G.R. No. L-82585"
-    },
-    {
-      id: "Political Law Q.5",
-      text: "Congress enacted a statute delegating to an administrative board the broad authority to promulgate rules and regulations 'as necessary to maintain economic stability', without providing specific policy standards or limits.\n\nIs the legislative delegation valid under the non-delegability doctrine?",
-      model: "No. Under the principle of separation of powers, legislative power cannot be delegated unless the law establishes a complete standard (completeness test) and sufficient guidelines (sufficient standard test) to confine administrative discretion.",
-      caseLaw: "Abakada Guro Party List v. Ermita, G.R. No. 168056"
-    },
-    {
-      id: "Political Law Q.6",
-      text: "A candidate for municipal mayor was born in the United States to Filipino parents, later acquired US citizenship, but subsequently reacquired Philippine citizenship under R.A. 9225 while maintaining dual citizenship. Opponents challenge his qualification.\n\nDoes dual citizenship disqualify a person from running for elective public office?",
-      model: "Dual citizenship per se does not disqualify a candidate, provided that upon filing the certificate of candidacy, the candidate makes a personal and sworn renunciation of foreign citizenship under R.A. 9225.",
-      caseLaw: "Mercado v. Manzano, G.R. No. 135083"
-    },
-    {
-      id: "Political Law Q.7",
-      text: "A human rights activist was abducted and detained by unidentified armed men. Relatives filed a petition for a Writ of Amparo before the Regional Trial Court to compel military authorities to produce the victim.\n\nWill the petition for a Writ of Amparo prosper? Explain with legal basis.",
-      model: "I. ANSWER. Yes, the petition for the Writ of Amparo will prosper.\n\nII. LEGAL BASIS. Under the Rule on the Writ of Amparo (A.M. No. 07-9-12-SC) and Secretary of National Defense v. Manalo (G.R. No. 180906), the writ is available to any person whose right to life, liberty, or security is violated or threatened by an unlawful act or omission of a public official or a private individual, particularly in cases of extralegal killings and enforced disappearances. Public respondents must discharge the burden of extraordinary diligence in the performance of their duty.\n\nIII. APPLICATION. Here, the activist was abducted and detained by armed men and remains missing — a classic enforced disappearance that threatens his rights to life, liberty, and security. His relatives, as aggrieved parties, may file the petition; the military respondents cannot rely on a mere general denial but must prove they exercised extraordinary diligence to locate and produce him.\n\nIV. CONCLUSION. The threat to life, liberty, and security being established, the petition for the Writ of Amparo will prosper, and the court may grant interim reliefs such as production and inspection orders.",
-      caseLaw: "Secretary of National Defense v. Manalo, G.R. No. 179090"
-    },
-    {
-      id: "Political Law Q.8",
-      text: "A municipal ordinance imposed a heavy fee on delivery trucks passing through national highways within the municipality, labeling it as a 'regulatory police fee'. Transport groups challenge the exaction.\n\nWhat is the distinction between police power and the power of taxation in relation to regulatory fees?",
-      model: "Police power regulates conduct and promotes general welfare, where fees collected must only cover cost of regulation. If the exaction is primarily intended to raise revenue, it is an exercise of the power of taxation.",
-      caseLaw: "Progressive Development Corp. v. Quezon City, G.R. No. L-36081"
-    },
-    {
-      id: "Political Law Q.9",
-      text: "Congress passed a national budget law reducing the internal revenue allotment (IRA / NTA) share of local government units below constitutional computations. LGUs challenged the statute before the Supreme Court.\n\nWill the LGUs' challenge prosper? Explain with legal basis.",
-      model: "Under the Constitution and the Mandanas-Garcia ruling, all national taxes—not just collections from the Bureau of Internal Revenue—must be included in computing the just share of local government units.",
-      caseLaw: "Mandanas v. Executive Secretary, G.R. Nos. 199802 & 208488"
-    },
-    {
-      id: "Political Law Q.10",
-      text: "The House of Representatives initiated impeachment proceedings against a constitutional commissioner. Oppositors filed a petition for certiorari seeking to enjoin the Senate impeachment court, arguing grave procedural errors.",
-      model: "Impeachment proceedings are political questions exclusively committed to Congress under the Constitution, and courts generally lack power to review internal congressional rules unless constitutional limits are violated.",
-      caseLaw: "Francisco v. House of Representatives, G.R. No. 160261"
-    }
-  ],
-  "Labor Law": [],
-  "Taxation Law": [
-    {
-      id: "Taxation Law Q.1",
-      text: "Congress enacted a revenue statute imposing a special tax on all income derived from agricultural exports, exempting agricultural cooperatives. Taxpayers challenged the tax as violating uniformity and equality principles.\n\nDoes the tax violate the constitutional rule of uniformity and equality of taxation?",
-      model: "No. The constitutional guarantee of uniformity and equality requires that all subjects or properties similarly situated be treated alike. Reasonable classification based on substantial distinctions (such as cooperatives) is permitted.",
-      caseLaw: "Tiu v. Court of Appeals, G.R. No. 127410"
-    },
-    {
-      id: "Taxation Law Q.2",
-      text: "An individual taxpayer sold a residential house and lot classified as a capital asset. The BIR assessed Capital Gains Tax (CGT) based on the zonal value, while the taxpayer argued actual selling price was lower.\n\nWhich valuation governs the assessment of Capital Gains Tax on real property sales?",
-      model: "Under the National Internal Revenue Code (NIRC), CGT is based on the gross selling price or fair market value determined by the Commissioner of Internal Revenue (zonal value) or the provincial/city assessor, whichever is higher.",
-      caseLaw: "Commissioner of Internal Revenue v. Court of Appeals, G.R. No. 123206"
-    },
-    {
-      id: "Taxation Law Q.3",
-      text: "A VAT-registered manufacturing enterprise exported finished goods to foreign buyers. The enterprise applied for a tax credit or refund of input VAT directly attributable to export sales.\n\nWhat is the tax treatment of export sales under the Value-Added Tax system?",
-      model: "Export sales by a VAT-registered person are zero-rated transactions under the NIRC, allowing the taxpayer to claim a refund or tax credit certificate for unutilized input VAT directly attributable to such exports.",
-      caseLaw: "CIR v. Mirant Pagbilao Corporation, G.R. No. 172129"
-    },
-    {
-      id: "Taxation Law Q.4",
-      text: "In computing the gross estate of a decedent, the heirs included a residential property claimed as family home, alongside unsecured personal debts incurred by the decedent prior to death.\n\nWhat are the allowable deductions from the gross estate for a family home and claims against the estate?",
-      model: "Under the NIRC, the family home is a deductible item up to statutory limits, provided it is certified as the actual family residence. Claims against the estate are deductible if substantiated by notarized documents and valid legal consideration.",
-      caseLaw: "CIR v. Court of Appeals (Heirs of Tan Eng Kee), G.R. No. 123486"
-    },
-    {
-      id: "Taxation Law Q.5",
-      text: "A wealthy philanthropist transferred substantial real estate properties to her children during her lifetime without valuable consideration. The BIR assessed donor's tax based on total fair market value.\n\nIs a gratuitous transfer inter vivos subject to donor's tax?",
-      model: "Yes. Under the NIRC, any transfer of property gratuitously (whether direct or indirect, in trust or otherwise) is subject to donor's tax computed based on the net gifts made during the calendar year.",
-      caseLaw: "Siasoco v. Court of Appeals, G.R. No. 132922"
-    },
-    {
-      id: "Taxation Law Q.6",
-      text: "The BIR issued a Final Assessment Notice (FAN) for deficiency income taxes against a corporation 4 years after the tax return was filed without any waiver of the prescriptive period.\n\nIs the tax assessment barred by prescription?",
-      model: "Yes. Under Section 203 of the NIRC, internal revenue taxes must be assessed within 3 years after the last day prescribed by law for filing the return. Assessments issued after 4 years without a valid waiver are void due to prescription.",
-      caseLaw: "CIR v. Procter & Gamble, G.R. No. L-66838"
-    },
-    {
-      id: "Taxation Law Q.7",
-      text: "A taxpayer received a Final Assessment Notice from the BIR and wished to contest it. Instead of filing an administrative protest with the Commissioner within 30 days, the taxpayer directly filed a petition for review before the Court of Tax Appeals (CTA).\n\nDoes the CTA acquire jurisdiction over a direct petition without exhausting administrative remedies?",
-      model: "No. Under the NIRC and CTA law, an administrative protest (request for reconsideration or reinvestigation) must first be filed with the CIR within 30 days from receipt of assessment before elevating the case to the CTA.",
-      caseLaw: "Lascona Land Co. v. CIR, G.R. No. 171251"
-    },
-    {
-      id: "Taxation Law Q.8",
-      text: "A provincial government enacted an ordinance imposing local business taxes on gross receipts of banks operating within its municipality. Banks challenged the local taxing power.\n\nIs the local business tax on the banks' gross receipts valid? Explain with legal basis.",
-      model: "Under the Local Government Code, LGUs are prohibited from imposing taxes on gross receipts of banks and financial institutions already subject to specific national taxes, unless expressly authorized.",
-      caseLaw: "First Philippine International Bank v. Court of Appeals, G.R. No. 115849"
-    },
-    {
-      id: "Taxation Law Q.9",
-      text: "Customs authorities seized smuggled electronic goods found hidden in commercial containers at the port of Manila. Importers argue for administrative release upon payment of storage fees without forfeiture proceedings.\n\nMay the goods be released without forfeiture proceedings? Explain with legal basis.",
-      model: "Smuggled goods unlawfully imported are subject to administrative forfeiture proceedings under the Customs Modernization and Tariff Act (CMTA), and release cannot be granted without forfeiture compliance.",
-      caseLaw: "Republic v. CFI of Manila, G.R. No. L-38435"
-    },
-    {
-      id: "Taxation Law Q.10",
-      text: "A non-stock, non-profit educational institution operated a canteen and bookstore inside its campus, generating commercial revenues. The local government assessed real property taxes on the entire campus.\n\nIs the entire campus subject to real property tax? Explain with legal basis.",
-      model: "Under Article XIV, Section 4 of the Constitution and the Local Government Code, lands, buildings, and improvements used actually, directly, and exclusively for educational purposes are exempt from real property taxes, though commercial ventures may be segregated.",
-      caseLaw: "Lung Center of the Philippines v. Quezon City, G.R. No. 141044"
-    }
-  ],
-  "Legal Ethics": [
-    {
-      id: "Legal Ethics Q.1",
-      text: "A lawyer represented a corporate client in contract negotiations against a supplier. Six months later, the same lawyer agreed to represent the supplier in a collection suit filed against the former corporate client arising from the exact same contract.\n\nDoes this situation constitute a conflict of interest under the Code of Professional Responsibility and Accountability (CPRA)?",
-      model: "Yes. Under the CPRA, a lawyer represents conflicting interests when, in behalf of one client, it is incumbent upon the lawyer to contend for that which duty to another client requires him to oppose, even if in different proceedings.",
-      caseLaw: "Hilado v. David, G.R. No. L-961"
-    },
-    {
-      id: "Legal Ethics Q.2",
-      text: "A client failed to pay agreed attorney's fees after winning a major property case. The lawyer asserted a retaining lien over case documents and a charging lien over the awarded real property.\n\nWhat is the difference between a retaining lien and a charging lien?",
-      model: "A retaining lien covers funds, documents, and papers lawfully coming into the lawyer's professional possession until fees are paid. A charging lien attaches to all judgments and executions for payment of services rendered in the specific case.",
-      caseLaw: "Metropolitan Bank v. Court of Appeals, G.R. No. 112567"
-    },
-    {
-      id: "Legal Ethics Q.3",
-      text: "A practicing lawyer was convicted by final judgment of a crime involving moral turpitude (estafa through falsification). The Integrated Bar of the Philippines initiated disbarment proceedings.\n\nWhat is the effect of conviction of a crime involving moral turpitude on a lawyer's license?",
-      model: "Under Rule 138 of the Rules of Court and the CPRA, conviction of a crime involving moral turpitude is a statutory ground for disbarment or suspension, as it demonstrates unfitness to remain a member of the legal profession.",
-      caseLaw: "In re: Alcantara, G.R. No. L-1546"
-    },
-    {
-      id: "Legal Ethics Q.4",
-      text: "During a private consultation, a client confessed to his lawyer that he concealed smuggled artifacts in his garage. Police later subpoenaed the lawyer to testify regarding the conversation.\n\nDoes the attorney-client privilege protect communications regarding past criminal acts disclosed in confidence?",
-      model: "Yes. The attorney-client privilege protects confidential communications made by a client to a lawyer in professional confidence, unless the communication is made in furtherance of a future crime or fraud.",
-      caseLaw: "Regala v. Sandiganbayan, G.R. No. 105938"
-    },
-    {
-      id: "Legal Ethics Q.5",
-      text: "A notary public notarized a deed of sale without requiring the affiant to personally appear before him, relying instead on a telephone call from a mutual friend confirming the identity of the signer.\n\nis notarizing a document without the physical presence of the affiant permissible?",
-      model: "No. Under the 2004 Rules on Notarial Practice, a notary public is strictly prohibited from notarizing a document unless the signer is physically present and personally known to the notary or identified through competent evidence of identity.",
-      caseLaw: "Dela Cruz v. Malic, A.C. No. 7942"
-    },
-    {
-      id: "Legal Ethics Q.6",
-      text: "A lawyer suspended from the practice of law for one year continued to draft pleadings for colleagues and signed briefs using another lawyer's roll number.\n\nWhat is the consequence of practicing law while under suspension?",
-      model: "Practicing law while under suspension constitutes contempt of court and serious professional misconduct, which warrants disbarment.",
-      caseLaw: "Ulep v. Legal Clinic, Bar Matter No. 553"
-    },
-    {
-      id: "Legal Ethics Q.7",
-      text: "A lawyer entered into a contingency fee agreement stipulating 80% of the property recovered as compensation for legal services. Client later contests the fee as excessive.\n\nAre excessive contingent attorney's fees valid under legal ethics?",
-      model: "Contingent fee agreements are valid in the Philippines, but courts may reduce them if unconscionable or excessive, considering the nature of the case, labor required, and professional standing.",
-      caseLaw: "Taganas v. Emuslan, G.R. No. 146980"
-    },
-    {
-      id: "Legal Ethics Q.8",
-      text: "A public prosecutor concealed exculpatory ballistic evidence during trial that pointed to the suspect's innocence, aiming solely for a conviction record.\n\nWhat is the primary ethical duty of a public prosecutor in criminal proceedings?",
-      model: "A public prosecutor's primary duty is not to secure a conviction, but to see that justice is done; hence, suppression of exculpatory evidence violates constitutional due process and prosecutorial ethics.",
-      caseLaw: "People v. Court of Appeals, G.R. No. 118841"
-    },
-    {
-      id: "Legal Ethics Q.9",
-      text: "A newly admitted lawyer published billboard advertisements and solicited clients outside hospital emergency rooms, offering free legal assistance for vehicular accidents.\n\nis lawyer advertising and ambulance chasing permissible under the CPRA?",
-      model: "No. Under the CPRA and professional ethics rules, ambulance chasing and commercial solicitation of legal business through public billboards or direct canvassing are strictly prohibited as degrading to the legal profession.",
-      caseLaw: "Ledesma v. Climaco, G.R. No. L-27153"
-    },
-    {
-      id: "Legal Ethics Q.10",
-      text: "A counsel of record wished to withdraw from active litigation due to irreconcilable differences with the client, but filed no formal motion and simply stopped attending hearings.\n\nWhat is the proper procedure for a lawyer seeking to withdraw from a case?",
-      model: "A lawyer cannot simply abandon a case. Withdrawal requires filing a written motion with notice to the client and adverse party, and securing the written consent of the client or approval of the court.",
-      caseLaw: "Republic v. Issuance of Warrant, G.R. No. 154380"
-    }
-  ]
-};
+const BAR_QUESTIONS = Object.fromEntries(
+  SUBJECTS.map((subject) => [subject, []])
+);
 
 let currentSubj = null;
 let currentIdx = 0;
@@ -1627,15 +988,23 @@ let questionStartTs = null;
 let examMode = "none";
 let elapsed = 0;
 let currentQuestionIndex = 0;
+let currentAttemptKey = null;
+let workspaceRestoreInProgress = false;
+let workspaceRestoreCompletedForUser = null;
+let remoteHistoryLoadedForUser = null;
+let examPausedForPage = false;
 const PER_Q_SECONDS = 720;
 const TERMS_ACCEPTANCE_KEY = "duediligence.terms.accepted.v1";
 const GUEST_PROMPT_SESSION_KEY = "duediligence.guest.prompt.dismissed.v1";
 const DRAFTS_KEY = "duediligence.answer.drafts.v1";
+const EXAM_WORKSPACE_KEY = "duediligence.exam.workspace.v2";
 const EXAMINER_WORKER_URL = 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev';
 const SC_RUBRIC_VERSION = 'SC-2025-BB4-PER-QUESTION-v1';
 const SC_2025_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/08/2025-Bar-Bar-Bulletin-No.-4-August-8-2025-Approved.pdf';
 const SC_2026_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/10/2026-BAR-Bar-Bulletin-No.-1-October-16-2025.pdf';
 const sessionController = DueDiligenceExamSession.createExamSessionController({
+  storage: localStorage,
+  storageKey: 'duediligence.exam.timer.v2',
   onTick: (state) => {
     timeLeft = state.remainingSeconds;
     elapsed = state.questionElapsedSeconds;
@@ -1651,26 +1020,13 @@ async function init() {
   setupEventListeners();
   await loadWebsiteQuestionBank();
   renderSubjectSelection();
-  showWelcome();
+  showWelcome({ preserveSession: Boolean(readPersistedWorkspace()) });
 }
 
 async function loadWebsiteQuestionBank() {
-  if (!window.DueDiligenceWebsiteQuestionBank) {
-    websiteQuestionBankStatus = "error";
-    console.error('The unified website question-bank loader is unavailable.');
-    return;
-  }
-  try {
-    const imported = await window.DueDiligenceWebsiteQuestionBank.load();
-    for (const subject of SUBJECTS) {
-      BAR_QUESTIONS[subject] = imported.bySubject[subject];
-    }
-    websiteQuestionBankStatus = "ready";
-    laborQuestionBankStatus = "ready";
-  } catch (error) {
-    websiteQuestionBankStatus = "error";
-    console.error('The unified website question bank could not be loaded; legacy sources remain available.', error);
-  }
+  for (const subject of SUBJECTS) BAR_QUESTIONS[subject] = [];
+  websiteQuestionBankStatus = "protected";
+  laborQuestionBankStatus = "protected";
 }
 
 function startTimer() {
@@ -1687,7 +1043,7 @@ function updateTimerDisplay(timerState = sessionController.snapshot()) {
     const s = remaining % 60;
     disp.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     if (bar) {
-      bar.classList.toggle('warning-soft', remaining <= 120 && remaining > 30);
+      bar.classList.toggle('warning-soft', remaining <= 60 && remaining > 30);
       bar.classList.toggle('warning-strong', remaining <= 30);
     }
   } else if (selectedSessionMode === 'selfPaced') {
@@ -1699,11 +1055,73 @@ function updateTimerDisplay(timerState = sessionController.snapshot()) {
   }
 }
 
-function onTimeUp() {
+async function onTimeUp() {
   if (selectedSessionMode !== 'strict' || examStage !== 'answering') return;
   if (!sessionController.markAutomaticAdvanceHandled()) return;
   saveDraftForCurrentQuestion();
-  transitionQuestion(currentIdx + 1, { automatic: true });
+  const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+  if (!question) return;
+  const key = `${currentSubj}-${currentIdx}`;
+  const studentAnswer = (userAnswers[key] || '').trim();
+  const timerState = sessionController.snapshot();
+
+  if (studentAnswer) {
+    await evaluateAnswer({
+      submissionReason: 'strict_expiry',
+      expired: true,
+    });
+    return;
+  }
+
+  gradingInProgress = true;
+  examStage = 'evaluating';
+  showCheckingModal();
+  try {
+    const requestStorageKey = `duediligence.strict-expiry.${currentAttemptKey || question.id}`;
+    let requestId = safeStorageGet(localStorage, requestStorageKey);
+    if (!requestId) {
+      requestId = `strict_expiry_${crypto.randomUUID().replace(/-/g, '')}`;
+      safeStorageSet(localStorage, requestStorageKey, requestId);
+    }
+    const payload = await window.DueDiligencePhase4.recordUnanswered(
+      question,
+      Math.max(PER_Q_SECONDS, timerState.questionElapsedSeconds),
+      requestId,
+    );
+    const resultObj = {
+      id: payload.attempt?.id,
+      unanswered: true,
+      status: 'unanswered',
+      score: null,
+      maxScore: 5,
+      timestamp: new Date().toLocaleString(),
+      gradedAt: null,
+      subject: currentSubj,
+      qId: question.id,
+      questionText: question.text,
+      studentAnswer: '',
+      timerMode: 'strict',
+      timeSpent: Math.max(PER_Q_SECONDS, timerState.questionElapsedSeconds),
+      submissionReason: 'strict_expiry',
+      expired: true,
+      historyVersion: 3,
+    };
+    submissionResults[key] = resultObj;
+    historyLog.unshift(resultObj);
+    resultObj.historySaved = logAttempt(resultObj);
+    examStage = 'reviewing';
+    sessionController.stop({ reset: false });
+    clearPersistedWorkspace();
+    closeCheckingModal();
+    renderMainWrite();
+    setQuestionControlsDisabled(true);
+    document.getElementById('evaluation-result-area')?.scrollIntoView({ behavior: 'smooth' });
+  } catch (error) {
+    examStage = 'answering';
+    showCheckingError(error.message || 'The unanswered expiration could not be recorded.');
+  } finally {
+    gradingInProgress = false;
+  }
 }
 
 function safeStorageGet(storage, key) {
@@ -1713,6 +1131,159 @@ function safeStorageGet(storage, key) {
 function safeStorageSet(storage, key, value) {
   try { storage.setItem(key, value); return true; } catch (error) { return false; }
 }
+
+function safeStorageRemove(storage, key) {
+  try { storage.removeItem(key); return true; } catch (error) { return false; }
+}
+
+function newAttemptKey() {
+  if (crypto?.randomUUID) return crypto.randomUUID().replace(/-/g, '');
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+}
+
+function readPersistedWorkspace() {
+  try {
+    const saved = JSON.parse(safeStorageGet(localStorage, EXAM_WORKSPACE_KEY) || 'null');
+    if (
+      saved?.version !== 2
+      || !SUBJECTS.includes(saved.subject)
+      || !/^[A-Z]{2,8}-(?:\d{3}|\d{4}-Q\d{1,3})$/i.test(String(saved.questionId || ''))
+      || !['strict', 'selfPaced', 'none'].includes(saved.mode)
+      || typeof saved.draft !== 'string'
+      || saved.draft.length > 12000
+      || Date.now() - Number(saved.savedAt || 0) > 7 * 24 * 60 * 60 * 1000
+    ) return null;
+    return saved;
+  } catch (error) {
+    return null;
+  }
+}
+
+function persistWorkspace() {
+  const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+  if (!question || !selectedSessionMode || !['answering', 'evaluating'].includes(examStage)) return;
+  if (!currentAttemptKey) currentAttemptKey = newAttemptKey();
+  safeStorageSet(localStorage, EXAM_WORKSPACE_KEY, JSON.stringify({
+    version: 2,
+    subject: currentSubj,
+    questionId: question.id,
+    mode: selectedSessionMode,
+    draft: userAnswers[`${currentSubj}-${currentIdx}`] || '',
+    attemptKey: currentAttemptKey,
+    savedAt: Date.now(),
+  }));
+}
+
+function clearPersistedWorkspace() {
+  safeStorageRemove(localStorage, EXAM_WORKSPACE_KEY);
+}
+
+function normalizeRemoteHistoryItem(item) {
+  const assessment = item?.assessment && typeof item.assessment === 'object'
+    ? item.assessment
+    : {};
+  const unanswered = item?.status === 'unanswered';
+  const submittedAt = item?.submittedAt || item?.completedAt || new Date().toISOString();
+  return {
+    ...assessment,
+    id: item?.id || null,
+    unanswered,
+    status: item?.status || assessment.status || 'completed',
+    score: unanswered ? null : Number(item?.score ?? assessment.score),
+    maxScore: 5,
+    subject: item?.subject || assessment.subject || '',
+    qId: item?.questionId || assessment.questionId || '',
+    studentAnswer: item?.answerText || '',
+    timerMode: item?.timerMode || 'none',
+    timeSpent: Number(item?.elapsedSeconds) || 0,
+    submissionReason: item?.submissionReason || 'manual',
+    expired: item?.expired === true,
+    gradedAt: item?.completedAt || assessment.gradedAt || null,
+    timestamp: new Date(submittedAt).toLocaleString(),
+    historyVersion: 3,
+    historySaved: true,
+  };
+}
+
+async function syncRemoteExamHistory(userId) {
+  if (!userId || remoteHistoryLoadedForUser === userId || !window.DueDiligencePhase4?.loadHistory) return;
+  remoteHistoryLoadedForUser = userId;
+  try {
+    const remote = (await window.DueDiligencePhase4.loadHistory(200, 0)).map(normalizeRemoteHistoryItem);
+    const combined = [...remote, ...loadAttempts()];
+    const seen = new Set();
+    historyLog = combined.filter((item) => {
+      const identity = item.id
+        ? `id:${item.id}`
+        : `legacy:${item.qId || ''}:${item.gradedAt || item.timestamp || ''}:${item.score ?? 'unanswered'}`;
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      return true;
+    }).slice(0, 500);
+    safeStorageSet(localStorage, LS_KEY, JSON.stringify(historyLog));
+  } catch (error) {
+    remoteHistoryLoadedForUser = null;
+    console.warn('Cross-device history could not be synchronized.', { code: error?.code || 'HISTORY_UNAVAILABLE' });
+  }
+}
+
+async function restorePersistedWorkspace(userId) {
+  if (
+    !userId
+    || workspaceRestoreInProgress
+    || workspaceRestoreCompletedForUser === userId
+    || examStage === 'answering'
+  ) return;
+  workspaceRestoreCompletedForUser = userId;
+  const saved = readPersistedWorkspace();
+  if (!saved) return;
+  workspaceRestoreInProgress = true;
+  try {
+    const question = await window.DueDiligencePhase4.loadProtectedQuestion(
+      saved.subject,
+      [],
+      saved.questionId,
+    );
+    if (!question || question.id !== saved.questionId) throw new Error('The saved question is no longer available.');
+    currentSubj = saved.subject;
+    BAR_QUESTIONS[currentSubj] = [question];
+    currentIdx = 0;
+    currentQuestionIndex = 0;
+    currentAttemptKey = saved.attemptKey || newAttemptKey();
+    userAnswers[`${currentSubj}-0`] = saved.draft;
+    selectedSessionMode = saved.mode;
+    examMode = saved.mode;
+    examStage = 'answering';
+    websiteQuestionBankStatus = 'ready';
+    if (currentSubj === 'Labor Law') laborQuestionBankStatus = 'ready';
+    setOnboardingView('complete');
+    renderSubjectTabs();
+    renderMainWrite();
+    sessionController.beginSession(saved.mode, saved.questionId, { restore: true });
+    updateTimerDisplay();
+    updateSessionClock();
+    toast('Your in-progress answer and timer were restored.', 'ok');
+  } catch (error) {
+    workspaceRestoreCompletedForUser = null;
+    console.warn('Saved examination workspace could not be restored.', { code: error?.code || 'RESTORE_UNAVAILABLE' });
+  } finally {
+    workspaceRestoreInProgress = false;
+  }
+}
+
+window.addEventListener('duediligence:access', (event) => {
+  const activeSession = window.DueDiligencePhase4?.getSession?.();
+  const userId = activeSession?.user?.id || null;
+  if (!userId) {
+    workspaceRestoreCompletedForUser = null;
+    remoteHistoryLoadedForUser = null;
+    return;
+  }
+  if (event.detail) {
+    syncRemoteExamHistory(userId);
+    restorePersistedWorkspace(userId);
+  }
+});
 
 function setOnboardingView(stage) {
   onboardingStage = stage;
@@ -1725,8 +1296,8 @@ function setOnboardingView(stage) {
   document.body.classList.toggle('onboarding-active', stage !== 'complete');
 }
 
-function showWelcome() {
-  stopExamSession({ reset: true });
+function showWelcome(options = {}) {
+  if (!options.preserveSession) stopExamSession({ reset: true });
   currentSubj = null;
   currentIdx = 0;
   pendingSubjectSelection = null;
@@ -1740,6 +1311,7 @@ function showWelcome() {
 
 function startPractice() {
   stopExamSession({ reset: true });
+  if (!window.DueDiligencePhase4?.requireAuthentication()) return;
   if (safeStorageGet(localStorage, TERMS_ACCEPTANCE_KEY) !== 'accepted') {
     onboardingStage = 'terms';
     openModal('terms-modal', { blocking: true });
@@ -1806,9 +1378,11 @@ function showSubjectSelection() {
   if (first) requestAnimationFrame(() => first.focus());
 }
 
-function selectSubjectForSession(subject) {
+async function selectSubjectForSession(subject) {
   if (!SUBJECTS.includes(subject) || examStage === 'subjectLoading') return;
   stopExamSession({ reset: true });
+  clearPersistedWorkspace();
+  currentAttemptKey = null;
   pendingSubjectSelection = subject;
   currentSubj = subject;
   currentIdx = 0;
@@ -1820,11 +1394,20 @@ function selectSubjectForSession(subject) {
   }
   const status = document.getElementById('subject-loading-status');
   if (status) status.textContent = `Loading ${subject} questions…`;
-  if (subject === 'Labor Law' && laborQuestionBankStatus !== 'ready') {
-    if (laborQuestionBankStatus === 'error') loadLaborFromSheet();
-    return;
+  try {
+    const question = await window.DueDiligencePhase4?.loadProtectedQuestion(subject, []);
+    if (!question || pendingSubjectSelection !== subject) return;
+    BAR_QUESTIONS[subject] = [question];
+    websiteQuestionBankStatus = 'ready';
+    if (subject === 'Labor Law') laborQuestionBankStatus = 'ready';
+    completeSubjectSelection(subject);
+  } catch (error) {
+    pendingSubjectSelection = null;
+    currentSubj = null;
+    examStage = 'idle';
+    if (status) status.textContent = error.message || `${subject} questions are temporarily unavailable.`;
+    window.DueDiligencePhase2?.handleGradeError?.(error);
   }
-  completeSubjectSelection(subject);
 }
 
 function completeSubjectSelection(subject) {
@@ -1851,9 +1434,11 @@ function chooseSessionMode(mode) {
   const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
   closeModal('session-choice-modal', { restoreFocus: false });
   setWorkspaceLocked(false);
+  currentAttemptKey = newAttemptKey();
   renderMainWrite();
-  sessionController.beginSession(mode, question?.id || null);
+  sessionController.beginSession(mode, question?.id || null, { restore: false });
   questionStartTs = Date.now();
+  persistWorkspace();
   updateSessionClock(sessionController.snapshot());
   const box = document.getElementById('answer-box');
   if (box) requestAnimationFrame(() => box.focus());
@@ -1863,7 +1448,6 @@ function setWorkspaceLocked(locked) {
   const shell = document.getElementById('exam-shell');
   if (shell) shell.classList.toggle('session-locked', locked);
   document.querySelectorAll('#exam-shell button, #exam-shell textarea').forEach((control) => {
-    if (control.closest('.patron-banner')) return;
     control.disabled = Boolean(locked);
   });
 }
@@ -1884,6 +1468,7 @@ function saveDraftForCurrentQuestion() {
   const drafts = loadDrafts();
   drafts[key] = userAnswers[key] || '';
   safeStorageSet(localStorage, DRAFTS_KEY, JSON.stringify(drafts));
+  persistWorkspace();
 }
 
 function restoreDraftForKey(key) {
@@ -1911,12 +1496,53 @@ function transitionQuestion(index, options = {}) {
   const list = BAR_QUESTIONS[currentSubj];
   currentIdx = ((index % list.length) + list.length) % list.length;
   currentQuestionIndex = currentIdx;
+  currentAttemptKey = newAttemptKey();
   examStage = 'answering';
   renderMainWrite();
   const question = list[currentIdx];
   sessionController.startQuestion(question.id);
   questionStartTs = Date.now();
+  persistWorkspace();
   if (!options.automatic) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function transitionToProtectedRandomQuestion() {
+  if (gradingInProgress || examStage === 'transitioning' || !currentSubj) return;
+  saveDraftForCurrentQuestion();
+  examStage = 'transitioning';
+  sessionController.pause();
+  setWorkspaceLocked(true);
+  const previousQuestion = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+  try {
+    const question = await window.DueDiligencePhase4.loadProtectedQuestion(
+      currentSubj,
+      previousQuestion?.id ? [previousQuestion.id] : [],
+    );
+    if (!question) throw new Error('The next protected question could not be loaded.');
+    const list = BAR_QUESTIONS[currentSubj];
+    let index = list.findIndex((item) => item.id === question.id);
+    if (index < 0) {
+      list.push(question);
+      index = list.length - 1;
+    }
+    currentIdx = index;
+    currentQuestionIndex = index;
+    currentAttemptKey = newAttemptKey();
+    examStage = 'answering';
+    setWorkspaceLocked(false);
+    renderMainWrite();
+    sessionController.startQuestion(question.id);
+    questionStartTs = Date.now();
+    persistWorkspace();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (error) {
+    examStage = 'answering';
+    setWorkspaceLocked(false);
+    renderMainWrite();
+    sessionController.resume();
+    window.DueDiligencePhase2?.handleGradeError?.(error);
+    toast(error.message || 'The next question is temporarily unavailable.', 'warn');
+  }
 }
 
 function setupEventListeners() {
@@ -2034,7 +1660,7 @@ function legacyRenderMainWrite() {
       <div class="row">
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation (Beta)">🎙️ Dictate<span class="beta-tag">BETA</span></button>
+          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation (Beta)">Dictate<span class="beta-tag">BETA</span></button>
           <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${!currentText.trim() ? 'disabled' : ''}>Evaluate & Grade Essay</button>
         </div>
       </div>
@@ -2045,6 +1671,85 @@ function legacyRenderMainWrite() {
     </div>
   `;
   applyExamEnhancements();
+}
+
+function renderExamControlBar(workspaceLocked) {
+  const mode = selectedSessionMode || 'none';
+  const disabled = workspaceLocked ? 'disabled' : '';
+  const modeButton = (value, label) => `
+    <button type="button" class="exam-mode-button ${mode === value ? 'active' : ''}"
+      aria-pressed="${mode === value}" onclick="switchSessionMode('${value}')" ${disabled}>${label}</button>`;
+  let clock = '';
+  if (mode === 'strict') {
+    clock = `
+      <div class="exam-clock">
+        <div class="exam-clock-copy">
+          <span class="exam-clock-title">Strict Scrutiny</span>
+          <span class="exam-clock-note">At zero, your answer submits; the result stays here.</span>
+        </div>
+        <span id="timer-display" aria-live="polite">12:00</span>
+      </div>`;
+  } else if (mode === 'selfPaced') {
+    clock = `
+      <div class="exam-clock">
+        <div class="exam-clock-copy">
+          <span class="exam-clock-title">Quantum Meruit</span>
+          <span class="exam-clock-note">Elapsed writing time</span>
+        </div>
+        <span id="timer-display" aria-live="polite">00:00</span>
+      </div>`;
+  } else {
+    clock = `
+      <div class="exam-clock no-digits">
+        <div class="exam-clock-copy">
+          <span class="exam-clock-title">Summary Judgment</span>
+          <span class="exam-clock-note">No visible clock. Active writing time is still recorded.</span>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="exam-control-bar timer-bar" id="timer-bar">
+      <div class="exam-mode-switcher" aria-label="Exam timing mode">
+        <span class="exam-mode-label">Session mode</span>
+        ${modeButton('strict', 'Strict Scrutiny')}
+        ${modeButton('selfPaced', 'Quantum Meruit')}
+        ${modeButton('none', 'Summary Judgment')}
+      </div>
+      ${clock}
+    </div>`;
+}
+
+function switchSessionMode(mode) {
+  if (
+    !['strict', 'selfPaced', 'none'].includes(mode)
+    || examStage !== 'answering'
+    || mode === selectedSessionMode
+  ) return;
+  const fromLabel = selectedSessionMode === 'strict'
+    ? 'Strict Scrutiny'
+    : selectedSessionMode === 'selfPaced'
+      ? 'Quantum Meruit'
+      : 'Summary Judgment';
+  const toLabel = mode === 'strict'
+    ? 'Strict Scrutiny'
+    : mode === 'selfPaced'
+      ? 'Quantum Meruit'
+      : 'Summary Judgment';
+  const detail = mode === 'strict'
+    ? 'Time already spent will be deducted from the twelve-minute limit; switching will not restart the clock.'
+    : selectedSessionMode === 'strict'
+      ? 'Your elapsed time and draft will be preserved.'
+      : 'Your draft and total active time will be preserved.';
+  if (!window.confirm(`Switch from ${fromLabel} to ${toLabel}?\n\n${detail}`)) return;
+  saveDraftForCurrentQuestion();
+  selectedSessionMode = mode;
+  examMode = mode;
+  safeStorageSet(localStorage, 'duediligence.timer.mode.v1', mode);
+  sessionController.switchMode(mode);
+  persistWorkspace();
+  renderMainWrite();
+  updateTimerDisplay();
+  updateSessionClock();
 }
 
 function renderMainWrite() {
@@ -2061,11 +1766,7 @@ function renderMainWrite() {
   const hasSubmitted = submissionResults[savedKey] !== undefined;
   const workspaceLocked = examStage !== 'answering';
   const sourceMeta = questionSourceMetadata(q);
-  const timerMarkup = selectedSessionMode === 'strict'
-    ? `<div class="timer-bar" id="timer-bar"><span class="timer-label">Strict Scrutiny · 12 minutes</span><span id="timer-display">12:00</span><span class="timer-limit">Advances once when time expires</span></div>`
-    : selectedSessionMode === 'selfPaced'
-      ? `<div class="timer-bar" id="timer-bar"><span class="timer-label">Quantum Meruit · Writing time</span><span id="timer-display">00:00</span><span class="timer-limit">No deadline or automatic advance</span></div>`
-      : '';
+  const timerMarkup = renderExamControlBar(workspaceLocked);
 
   main.innerHTML = `
     ${timerMarkup}
@@ -2092,7 +1793,7 @@ function renderMainWrite() {
       <div class="row">
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation (Beta)" ${workspaceLocked ? 'disabled' : ''}>🎙️ Dictate<span class="beta-tag">BETA</span></button>
+          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation (Beta)" ${workspaceLocked ? 'disabled' : ''}>Dictate<span class="beta-tag">BETA</span></button>
           <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${workspaceLocked || !currentText.trim() ? 'disabled' : ''}>Evaluate &amp; Grade Essay</button>
         </div>
       </div>
@@ -2157,7 +1858,7 @@ function prevQuestion() {
 
 function nextQuestion() {
   if (gradingInProgress || examStage !== 'answering') return;
-  transitionQuestion(randomDifferentQuestionIndex(BAR_QUESTIONS[currentSubj], currentIdx));
+  transitionToProtectedRandomQuestion();
 }
 
 function randomQuestion() {
@@ -2207,13 +1908,32 @@ function closeCheckingModal() {
   }
 }
 
-async function evaluateAnswer() {
+async function evaluateAnswer(options = {}) {
   if (gradingInProgress || gradingAccessCheckInProgress || examStage !== 'answering') return;
   const subjectAtSubmission = currentSubj;
   const indexAtSubmission = currentIdx;
   const key = `${subjectAtSubmission}-${indexAtSubmission}`;
   const q = BAR_QUESTIONS[subjectAtSubmission][indexAtSubmission];
   const studentAnswer = (userAnswers[key] || '').trim();
+  const submissionReason = options.submissionReason === 'strict_expiry'
+    ? 'strict_expiry'
+    : 'manual';
+  const expired = options.expired === true;
+  const timerAtSubmission = sessionController.snapshot();
+  const gradeRequestStorageKey = `duediligence.grade-request.${q.id}`;
+  let gradeRequest = null;
+  try {
+    gradeRequest = JSON.parse(safeStorageGet(localStorage, gradeRequestStorageKey) || 'null');
+  } catch (error) {
+    gradeRequest = null;
+  }
+  if (!gradeRequest?.requestId || gradeRequest.answer !== studentAnswer) {
+    gradeRequest = {
+      requestId: `grade_${crypto.randomUUID().replace(/-/g, '')}`,
+      answer: studentAnswer,
+    };
+    safeStorageSet(localStorage, gradeRequestStorageKey, JSON.stringify(gradeRequest));
+  }
   if (!studentAnswer) {
     toast('Write an answer before requesting an assessment.', 'warn');
     return;
@@ -2267,12 +1987,18 @@ async function evaluateAnswer() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(window.DueDiligencePhase2?.gradingHeaders() || {}),
+        ...(window.DueDiligencePhase2?.gradingHeaders(gradeRequest.requestId) || {}),
       },
       body: JSON.stringify({
         questionId: q.id,
         studentAnswer,
         questionContext: questionContextForExaminer(q),
+        session: {
+          mode: selectedSessionMode || 'none',
+          elapsedSeconds: timerAtSubmission.questionElapsedSeconds,
+          submissionReason,
+          expired,
+        },
       }),
     });
     let payload = null;
@@ -2282,6 +2008,8 @@ async function evaluateAnswer() {
         payload?.error?.message || 'The examiner is temporarily unavailable. Please try again.',
       );
       assessmentError.code = payload?.error?.code || 'ASSESSMENT_UNAVAILABLE';
+      assessmentError.pendingAttemptId = payload?.error?.pendingAttemptId || null;
+      assessmentError.retryAfterHours = Number(payload?.error?.retryAfterHours) || null;
       throw assessmentError;
     }
 
@@ -2289,10 +2017,14 @@ async function evaluateAnswer() {
     const timeSpent = sessionController.snapshot().questionElapsedSeconds;
     const resultObj = {
       ...assessment,
+      id: payload.attemptId || null,
       score: Number(assessment.score),
       maxScore: 5,
       percentagePointValue: Number(assessment.score),
       timeSpent,
+      timerMode: selectedSessionMode || 'none',
+      submissionReason,
+      expired,
       timestamp: new Date(assessment.gradedAt || Date.now()).toLocaleString(),
       gradedAt: assessment.gradedAt || new Date().toISOString(),
       subject: subjectAtSubmission,
@@ -2307,6 +2039,8 @@ async function evaluateAnswer() {
     historyLog.unshift(resultObj);
     resultObj.historySaved = logAttempt(resultObj);
     examStage = 'reviewing';
+    sessionController.stop({ reset: false });
+    clearPersistedWorkspace();
     closeCheckingModal();
 
     if (currentSubj === subjectAtSubmission && currentIdx === indexAtSubmission) {
@@ -2316,6 +2050,7 @@ async function evaluateAnswer() {
       resultArea.scrollIntoView({ behavior: 'smooth' });
     }
     window.DueDiligencePhase2?.afterGrade(payload.access);
+    safeStorageRemove(localStorage, gradeRequestStorageKey);
     window.DueDiligenceAnalytics?.track('grading_success', {
       subject: subjectAtSubmission,
       questionId: q.id,
@@ -2333,6 +2068,13 @@ async function evaluateAnswer() {
       window.DueDiligenceAnalytics?.track('guest_third_grade', { subject: subjectAtSubmission, questionId: q.id });
     }
   } catch (error) {
+    if (error?.code !== 'AI_GRADING_CAPACITY') {
+      safeStorageRemove(localStorage, gradeRequestStorageKey);
+    }
+    if (error?.code === 'AI_GRADING_CAPACITY') {
+      examStage = 'answering';
+      sessionController.resume();
+    }
     window.DueDiligenceAnalytics?.track(
       error?.code === 'GUEST_LIMIT_REACHED'
         ? 'guest_limit_reached'
@@ -2362,6 +2104,28 @@ async function evaluateAnswer() {
 function renderResultHTML(key) {
   const res = submissionResults[key];
   if (!res) return '';
+  if (res.unanswered) {
+    return `
+      <article class="assessment-card" aria-label="Unanswered Strict Scrutiny attempt">
+        <div class="assessment-hero">
+          <div class="score-medallion"><div><strong>— / 5</strong><span>No grade</span></div></div>
+          <div>
+            <div class="assessment-kicker">Strict Scrutiny Expiration</div>
+            <h3 class="assessment-title">Unanswered attempt recorded</h3>
+            <p class="assessment-rationale">The twelve-minute period expired with a blank answer. Gemini was not called, and no lifetime AI grade was consumed.</p>
+            <div class="assessment-badges">
+              <span class="assessment-badge">Unanswered</span>
+              <span class="assessment-badge">12:00 elapsed</span>
+            </div>
+          </div>
+        </div>
+        <div class="assessment-body">
+          <div class="assessment-warning"><strong>Result retained.</strong> Review your pacing, then manually choose the next question when ready.</div>
+          <div class="review-actions"><button class="btn-next" onclick="proceedAfterReview()">Continue to Next Item →</button></div>
+        </div>
+      </article>
+    `;
+  }
   const alac = res.modelAnswerALAC || {};
   const warning = res.sourceStatus === 'conflict'
     ? 'An online official source may materially conflict with the stored answer key. This assessment requires human editorial review before reliance.'
@@ -2378,7 +2142,7 @@ function renderResultHTML(key) {
         <div>
           <div class="assessment-kicker">Individual Question Assessment</div>
           <h3 class="assessment-title">${escapeHtml(res.performanceLabel || 'Bar essay assessment')}</h3>
-          <div class="assessment-equivalent">Equivalent value: ${Number(res.percentagePointValue).toFixed(1)} percentage points for this question only</div>
+          <div class="assessment-equivalent">Scored on the 0.0–5.0 Philippine Bar essay practice scale</div>
           <div class="assessment-badges">
             <span class="assessment-badge">${escapeHtml(res.label || 'Question-bank assessment')}</span>
             <span class="assessment-badge">Official tier ${escapeHtml(res.tier || '')}</span>
@@ -2421,8 +2185,6 @@ function renderResultHTML(key) {
         <div class="assessment-meta">
           <strong>Grading basis:</strong> The five-point qualitative assessment is adapted from
           <a href="${SC_2025_BULLETIN_URL}" target="_blank" rel="noopener noreferrer">Supreme Court 2025 Bar Bulletin No. 4, “Answering the Bar Examinations,” pp. 12–15</a>.
-          The five-percentage-point question value follows
-          <a href="${SC_2026_BULLETIN_URL}" target="_blank" rel="noopener noreferrer">2026 Bar Bulletin No. 1</a>.
           <br><br>
           This AI-generated assessment is provided solely for Bar review and coaching. It is not an official Supreme Court grade and does not guarantee or predict the examinee’s actual Bar Examination result.
           <br>Examiner model: ${escapeHtml(res.modelUsed || 'unavailable')} · Rubric: ${escapeHtml(res.rubricVersion || SC_RUBRIC_VERSION)} · ${escapeHtml(res.timestamp || '')}
@@ -2453,7 +2215,12 @@ function renderAssessmentSources(sources) {
   if (!safe.length) return '<div class="legal-explanation">No verified online source is currently available.</div>';
   return `<div class="source-list">${safe.map((source) => `
     <a class="source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">
-      <span>${escapeHtml(source.title || 'Legal source')}</span><small>${escapeHtml(source.type || 'source')} ↗</small>
+      <span>
+        ${escapeHtml(source.title || 'Legal source')}
+        ${source.reference ? `<small>${escapeHtml(source.reference)}</small>` : ''}
+        ${source.relevance ? `<small>${escapeHtml(source.relevance)}</small>` : ''}
+      </span>
+      <small>${escapeHtml(source.authority || source.type || 'source')} ↗</small>
     </a>`).join('')}</div>`;
 }
 
@@ -2472,10 +2239,10 @@ function renderMainHistory() {
     <div style="background:#fbf9f2; border:1px solid var(--ink); padding:12px 20px;">
       ${historyLog.map(item => `
         <div class="hist-row">
-          <div class="hist-score ${item.maxScore === 5 ? 'pass' : (item.passed ? 'pass' : 'fail')}">${item.maxScore === 5 ? `${Number(item.score).toFixed(1)}/5` : escapeHtml(item.score)}</div>
+          <div class="hist-score ${item.unanswered ? 'fail' : item.maxScore === 5 ? 'pass' : (item.passed ? 'pass' : 'fail')}">${item.unanswered ? '—/5' : item.maxScore === 5 ? `${Number(item.score).toFixed(1)}/5` : escapeHtml(item.score)}</div>
           <div class="hist-meta">
             <div class="hist-subj">${escapeHtml(item.subject)}</div>
-            <div class="hist-q">${escapeHtml(item.qId)} · ${item.maxScore === 5 ? escapeHtml(item.performanceLabel || 'Five-point assessment') : 'Legacy 100-point record'}</div>
+            <div class="hist-q">${escapeHtml(item.qId)} · ${item.unanswered ? 'Unanswered Strict Scrutiny expiration' : item.maxScore === 5 ? escapeHtml(item.performanceLabel || 'Five-point assessment') : 'Legacy record'}</div>
           </div>
           <div class="hist-date">${escapeHtml(item.timestamp)}</div>
         </div>
@@ -2496,97 +2263,6 @@ function escapeHtml(text) {
 }
 
 window.addEventListener('DOMContentLoaded', init);
-// Dynamic Google Sheet Loader for Remedial Law
-  const REMEDIAL_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR_YII93J9lprfOT4cyQ0HSX3PEzcYa2DcjUul6qmKK-iyOuJiJjl6CiOUt3NRnS2VCS-ybmaFRmwDs/pub?output=csv';
-
-  function loadRemedialFromSheet() {
-    if (typeof Papa === 'undefined') return;
-    
-    Papa.parse(REMEDIAL_CSV_URL, {
-      download: true,
-      header: true,
-      complete: function(results) {
-        const sheetQuestions = results.data
-          .filter(row => row.text && row.model)
-          .map(row => ({
-            id: row.id,
-            subject: row.subject,
-            bar_year: row.bar_year,
-            question_no: row.question_no,
-            text: row.text,
-            model: row.model,
-            caseLaw: row.caseLaw || ''
-          }));
-
-        if (typeof BAR_QUESTIONS !== 'undefined' && websiteQuestionBankStatus !== "ready") {
-          BAR_QUESTIONS["Remedial Law"] = sheetQuestions;
-        }
-      }
-    });
-  }
-
-  loadRemedialFromSheet();
-
-  // Labor Law is maintained in the published question bank. Papa Parse receives
-  // the full matrix so the real header can be found after the introductory rows.
-  const LABOR_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=1486762536&single=true&output=csv';
-
-  function loadLaborFromSheet() {
-    laborQuestionBankStatus = "loading";
-    if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
-    if (typeof Papa === 'undefined' || !window.DueDiligenceLaborCsv) {
-      laborQuestionBankStatus = "error";
-      examStage = "idle";
-      pendingSubjectSelection = null;
-      console.error('Labor Law question bank could not start because the CSV parser is unavailable.');
-      if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
-      return;
-    }
-
-    Papa.parse(LABOR_CSV_URL, {
-      download: true,
-      header: false,
-      skipEmptyLines: false,
-      complete: function(results) {
-        try {
-          const parsed = window.DueDiligenceLaborCsv.parseRows(results.data);
-          if (parsed.questions.length !== 59) throw new Error(`Expected 59 valid Labor Law questions; received ${parsed.questions.length}.`);
-          if (websiteQuestionBankStatus !== "ready") {
-            BAR_QUESTIONS["Labor Law"] = parsed.questions;
-          }
-          laborQuestionBankStatus = "ready";
-          if (parsed.invalidRows.length) console.warn('Ignored invalid Labor Law CSV rows.', parsed.invalidRows);
-          if (pendingSubjectSelection === "Labor Law") {
-            completeSubjectSelection("Labor Law");
-          } else if (currentSubj === "Labor Law" && onboardingStage === 'complete') {
-            currentIdx = Math.min(currentIdx, BAR_QUESTIONS["Labor Law"].length - 1);
-            renderMainWrite();
-          }
-        } catch (error) {
-          const wasPending = pendingSubjectSelection === "Labor Law";
-          laborQuestionBankStatus = "error";
-          examStage = "idle";
-          pendingSubjectSelection = null;
-          console.error('Labor Law question bank could not be loaded.', error);
-          const status = document.getElementById('subject-loading-status');
-          if (wasPending && status) status.textContent = 'Labor Law questions could not be loaded. Choose Labor Law again to retry.';
-          if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
-        }
-      },
-      error: function(error) {
-        const wasPending = pendingSubjectSelection === "Labor Law";
-        laborQuestionBankStatus = "error";
-        examStage = "idle";
-        pendingSubjectSelection = null;
-        console.error('Labor Law question bank request failed.', error);
-        const status = document.getElementById('subject-loading-status');
-        if (wasPending && status) status.textContent = 'Labor Law questions could not be loaded. Choose Labor Law again to retry.';
-        if (currentSubj === "Labor Law") renderLaborQuestionBankMessage();
-      }
-    });
-  }
-
-  loadLaborFromSheet();
 
 /* =====================================================================
    ENTERPRISE LAYER — SPA nav, exam modes, security, analytics, modals.
@@ -2597,17 +2273,23 @@ window.addEventListener('DOMContentLoaded', init);
 /* ---------- SPA navigation ---------- */
 function showPage(page, el) {
   const leavingMock = document.getElementById('page-mock')?.classList.contains('active') && page !== 'mock';
-  if (leavingMock) {
+  if (leavingMock && examStage === 'answering') {
     saveDraftForCurrentQuestion();
-    stopExamSession({ reset: true });
-    examStage = 'idle';
+    sessionController.pause();
+    examPausedForPage = true;
   }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
   document.querySelectorAll('.spa-tab').forEach(t => t.classList.remove('active'));
   if (el) el.classList.add('active');
-  if (page === 'mock' && onboardingStage === 'complete' && examStage === 'idle') showWelcome();
+  if (page === 'mock' && examPausedForPage && examStage === 'answering') {
+    examPausedForPage = false;
+    renderMainWrite();
+    sessionController.resume();
+  } else if (page === 'mock' && onboardingStage === 'complete' && examStage === 'idle') {
+    showWelcome();
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -2655,19 +2337,6 @@ function closeAllBlockingModals() {
   modalResumeStates.clear();
 }
 
-function mockCheckout(method) { alert('Demo build: ' + method + ' checkout is not connected to a live payment processor.'); }
-function mockAuth(provider) {
-  alert('Demo build: ' + provider + ' sign-in is a UI mockup. No credentials are collected or transmitted.');
-  if (onboardingStage === 'signIn') completeOnboardingSignIn();
-}
-
-/* Welcome patrons on the first load of each browser tab without repeatedly
-   interrupting an active study session after refreshes or navigation. */
-const INVESTOR_WELCOME_SESSION_KEY = 'dd_investor_welcome_seen';
-function showInvestorWelcome() {
-  /* Preserved compatibility hook. Patron recognition is now user-invoked only. */
-}
-
 /* ---------- Exam mode + per-question clock ---------- */
 function setExamMode(mode) {
   const normalized = mode === 'timed' ? 'strict' : mode === 'untimed' ? 'none' : mode;
@@ -2693,7 +2362,7 @@ function submitAndNext() {
 
 function proceedAfterReview() {
   if (gradingInProgress || examStage !== 'reviewing') return;
-  transitionQuestion(currentIdx + 1);
+  transitionToProtectedRandomQuestion();
 }
 
 /* Called at the end of every renderMainWrite() */
@@ -2750,7 +2419,7 @@ function openAnalytics() {
   const legacy = list.filter((attempt) => attempt.maxScore !== 5);
   const rows = list.slice(0, 40).map(a => `
     <tr>
-      <td class="sc">${a.maxScore === 5 ? `${Number(a.score).toFixed(1)} / 5` : `${escapeHtml(a.score)} (legacy)`}</td>
+      <td class="sc">${a.unanswered ? '— / 5' : a.maxScore === 5 ? `${Number(a.score).toFixed(1)} / 5` : `${escapeHtml(a.score)} (legacy)`}</td>
       <td>${escapeHtml(a.subject || '')}</td>
       <td>${escapeHtml(a.qId || '')}</td>
       <td>${a.timeSpent != null ? fmtSecs(a.timeSpent) : '—'}</td>
@@ -2846,8 +2515,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script>
 /* =====================================================================
-   ROUND 3 layer — session clock, toast, mailto feedback loop,
-   B2B toggle, voice dictation. Reuses existing globals.
+   SESSION CLOCK, TOAST, SUPPORT FEEDBACK, AND VOICE DICTATION
    ===================================================================== */
 
 const SUPPORT_EMAIL = 'support@duediligence.ph';
@@ -2872,7 +2540,7 @@ function legacyTickSession() {
   const el = document.getElementById('session-clock');
   if (el) {
     const h = Math.floor(sessionSeconds / 3600), m = Math.floor((sessionSeconds % 3600) / 60), s = sessionSeconds % 60;
-    el.textContent = '⏳ ' + [h, m, s].map(x => String(x).padStart(2, '0')).join(':');
+    el.textContent = [h, m, s].map(x => String(x).padStart(2, '0')).join(':');
   }
 }
 
@@ -2885,7 +2553,7 @@ function updateSessionClock(timerState = sessionController.snapshot()) {
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  el.textContent = '⏳ ' + [h, m, s].map(value => String(value).padStart(2, '0')).join(':');
+  el.textContent = [h, m, s].map(value => String(value).padStart(2, '0')).join(':');
 }
 
 function tickSession() { updateSessionClock(); }
@@ -3003,15 +2671,6 @@ async function submitSuggestion() {
   }
 }
 
-/* ---------- B2B view switch ---------- */
-let b2bMode = false;
-function toggleViewMode() {
-  b2bMode = !b2bMode;
-  const b = document.getElementById('btn-b2b');
-  if (b) b.textContent = b2bMode ? '🏢 B2B Review Center' : '🏢 Individual';
-  openModal('b2b-modal');
-}
-
 /* ---------- Voice-to-text dictation (real, with fallback) ---------- */
 function startDictation() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -3021,7 +2680,7 @@ function startDictation() {
   try {
     const rec = new SR();
     rec.lang = 'en-PH'; rec.interimResults = false; rec.continuous = true;
-    toast('🎙️ Listening — dictate your answer. Click Dictate again to stop.', 'ok');
+    toast('Listening — dictate your answer. Click Dictate again to stop.', 'ok');
     rec.onresult = e => {
       let txt = '';
       for (let i = e.resultIndex; i < e.results.length; i++) txt += e.results[i][0].transcript;
@@ -3036,11 +2695,30 @@ function startDictation() {
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && examStage === 'answering') sessionController.tick();
 });
+
+window.addEventListener('storage', (event) => {
+  if (event.key === 'duediligence.exam.timer.v2' && examStage === 'answering') {
+    sessionController.syncFromStorage();
+  }
+  if (event.key === EXAM_WORKSPACE_KEY && examStage === 'answering') {
+    const saved = readPersistedWorkspace();
+    const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+    if (saved?.questionId === question?.id && saved.draft !== userAnswers[`${currentSubj}-${currentIdx}`]) {
+      userAnswers[`${currentSubj}-${currentIdx}`] = saved.draft;
+      const box = document.getElementById('answer-box');
+      if (box && document.activeElement !== box) {
+        box.value = saved.draft;
+        document.getElementById('word-count').textContent = `${countWords(saved.draft)} words`;
+      }
+    }
+  }
+});
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"
   crossorigin="anonymous"></script>
 <script src="assets/phase2-config.js"></script>
 <script src="assets/phase2-experience.js"></script>
+<script src="assets/phase4-experience.js"></script>
 <script src="assets/phase3-analytics.js"></script>
 
 </body>

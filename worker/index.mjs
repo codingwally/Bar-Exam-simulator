@@ -8,6 +8,7 @@ import {
   assessmentPolicy,
   buildExaminerPrompt,
   chooseQuestionContext,
+  modelAnswerQualityIssues,
   normalizeRequest,
   parseQuestionBank,
   questionFromBankRow,
@@ -48,6 +49,26 @@ import {
   normalizeDashboardRequest,
   normalizeOperationalRequest,
 } from './admin-core.mjs';
+import {
+  AccessValidationError,
+  accessDeniedError,
+  normalizeAccessSnapshot,
+  normalizeRequestKey,
+  normalizeSubject,
+  selectProtectedQuestion,
+} from './access-core.mjs';
+import {
+  PAYMENT_LIMITS,
+  PaymentValidationError,
+  normalizePartnershipRequest,
+  normalizePaymentFields,
+  normalizePhase4AdminAction,
+  normalizePhase4AdminRequest,
+  normalizeRefundRequest,
+  proofExtension,
+  validateProofSignature,
+} from './payment-core.mjs';
+import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
@@ -57,13 +78,14 @@ const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
 const GEMINI_TRANSIENT_ATTEMPTS = 2;
 const GEMINI_RETRY_DELAY_MS = 750;
-const WEBSITE_BANK_URL = 'https://duediligence.ph/content/question-bank/website-upload.json';
 const rateWindows = new Map();
 const correctionRateWindows = new Map();
 const supportRateWindows = new Map();
 const analyticsRateWindows = new Map();
 const adminRateWindows = new Map();
 const guestStatusRateWindows = new Map();
+const paymentRateWindows = new Map();
+const partnershipRateWindows = new Map();
 const recentSubmissions = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
@@ -323,6 +345,188 @@ async function protectedSupabaseRpc(env, functionName, body) {
   return result;
 }
 
+async function enforcePaymentRateLimit(request, env) {
+  enforceWindow(
+    paymentRateWindows,
+    await transientRateKey(request, env, 'payment'),
+    8,
+    'Too many payment requests. Please wait and try again.',
+  );
+}
+
+async function enforcePartnershipRateLimit(request, env) {
+  enforceWindow(
+    partnershipRateWindows,
+    await transientRateKey(request, env, 'partnership'),
+    4,
+    'Too many partnership requests. Please wait and try again.',
+  );
+}
+
+async function phase4Rpc(env, functionName, body) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) {
+    console.error('Phase 4 storage request failed', {
+      operation: functionName,
+      status: response.status,
+    });
+    throw new ExaminerError(
+      'ACCESS_UNAVAILABLE',
+      'Your access status is temporarily unavailable.',
+      503,
+    );
+  }
+  return result;
+}
+
+async function commerceRpc(env, functionName, body) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (response.ok) return result;
+  const databaseMessage = String(result?.message || '');
+  console.error('Commerce storage request failed', {
+    operation: functionName,
+    status: response.status,
+  });
+  if (/already been submitted|already exists|request key already used/i.test(databaseMessage)) {
+    throw new PaymentValidationError(
+      'DUPLICATE_PAYMENT',
+      'This payment or refund request has already been submitted.',
+      409,
+    );
+  }
+  if (/not available|must match|unsupported|outside the accepted|reason must|valid request/i.test(databaseMessage)) {
+    throw new PaymentValidationError(
+      'INVALID_COMMERCE_REQUEST',
+      'The request did not pass secure validation. Review the details and try again.',
+      400,
+    );
+  }
+  throw new PaymentValidationError(
+    'COMMERCE_UNAVAILABLE',
+    'Secure payment services are temporarily unavailable. No access change was made.',
+    503,
+  );
+}
+
+function encodedStoragePath(path) {
+  return String(path || '').split('/').map((part) => encodeURIComponent(part)).join('/');
+}
+
+async function uploadPrivateProof(env, objectPath, bytes, mimeType) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(
+    new URL(`/storage/v1/object/payment-proofs/${encodedStoragePath(objectPath)}`, baseUrl),
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': mimeType,
+        'x-upsert': 'false',
+      },
+      body: bytes,
+    },
+  );
+  if (!response.ok) {
+    console.error('Private payment proof upload failed', { status: response.status });
+    throw new PaymentValidationError(
+      'PAYMENT_PROOF_UNAVAILABLE',
+      'The payment proof could not be stored securely. Please try again.',
+      503,
+    );
+  }
+}
+
+async function deletePrivateProof(env, objectPath) {
+  try {
+    const baseUrl = configuredSupabaseUrl(env);
+    await fetch(
+      new URL(`/storage/v1/object/payment-proofs/${encodedStoragePath(objectPath)}`, baseUrl),
+      {
+        method: 'DELETE',
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      },
+    );
+  } catch {
+    console.error('Private payment proof cleanup requires operator review');
+  }
+}
+
+async function signedPrivateProofUrl(env, objectPath) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(
+    new URL(`/storage/v1/object/sign/payment-proofs/${encodedStoragePath(objectPath)}`, baseUrl),
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ expiresIn: 300 }),
+    },
+  );
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result?.signedURL) {
+    console.error('Private payment proof signing failed', { status: response.status });
+    throw new PaymentValidationError(
+      'PAYMENT_PROOF_UNAVAILABLE',
+      'The proof is temporarily unavailable for secure review.',
+      503,
+    );
+  }
+  return new URL(result.signedURL, baseUrl).href;
+}
+
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function sendSecureNotification(env, { mailbox, subject, adminPath }) {
+  if (!env.WEB3FORMS_ACCESS_KEY) return { sent: false, queued: true };
+  const response = await fetch('https://api.web3forms.com/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      access_key: env.WEB3FORMS_ACCESS_KEY,
+      from_name: 'Due Diligence Operations',
+      subject,
+      email: mailbox,
+      message: `A new production request is ready for authorized review: https://duediligence.ph${adminPath}`,
+    }),
+  });
+  if (!response.ok) {
+    console.error('Operations notification dispatch failed', { status: response.status });
+    return { sent: false, queued: true };
+  }
+  return { sent: true, queued: true };
+}
+
 async function verifiedAuthenticatedUser(request, env) {
   const authorization = String(request.headers.get('Authorization') || '').trim();
   if (!authorization) return null;
@@ -346,7 +550,75 @@ async function verifiedAuthenticatedUser(request, env) {
   return { id: String(user.id) };
 }
 
-async function reserveGradeAccess(request, env) {
+function phase4AccessEnforced(env) {
+  return String(env.PHASE4_ACCESS_ENFORCEMENT).toLowerCase() === 'true';
+}
+
+function phase4ModelQualityEnforced(env) {
+  return String(env.PHASE4_MODEL_QUALITY_ENFORCEMENT).toLowerCase() === 'true';
+}
+
+async function requireAuthenticatedUser(request, env) {
+  const user = await verifiedAuthenticatedUser(request, env);
+  if (!user) {
+    throw new AccessValidationError(
+      'AUTHENTICATION_REQUIRED',
+      'Sign in with Google before opening or submitting an examination.',
+      401,
+    );
+  }
+  return user;
+}
+
+async function phase4AccessForUser(env, userId, options = {}) {
+  const result = await phase4Rpc(env, 'phase4_access_snapshot', {
+    p_user_id: userId,
+    p_activate_trial: options.activateTrial === true,
+    p_request_key: options.requestKey || null,
+  });
+  return normalizeAccessSnapshot(result);
+}
+
+async function reserveGradeAccess(request, env, gradingRequest) {
+  if (phase4AccessEnforced(env)) {
+    const authenticatedUser = await requireAuthenticatedUser(request, env);
+    const requestId = normalizeRequestKey(request.headers.get('X-Request-ID'));
+    const reservation = await phase4Rpc(env, 'phase4_reserve_grade_v2', {
+      p_user_id: authenticatedUser.id,
+      p_request_key: requestId,
+      p_question_bank_id: gradingRequest.questionId,
+    });
+    if (reservation?.reason === 'duplicate_active'
+        || reservation?.reason === 'duplicate_completed'
+        || reservation?.reason === 'duplicate_closed') {
+      throw new ExaminerError(
+        'DUPLICATE_SUBMISSION',
+        reservation.reason === 'duplicate_completed'
+          ? 'This grading request has already been completed.'
+          : 'This answer is already being checked. Please wait for the result.',
+        409,
+      );
+    }
+    const access = normalizeAccessSnapshot(reservation);
+    if (!access.allowed) throw accessDeniedError(access);
+    if (!reservation?.reservationId) {
+      throw new ExaminerError(
+        'ACCESS_UNAVAILABLE',
+        'Your grading request could not be reserved. Please try again.',
+        503,
+      );
+    }
+    return {
+      signedIn: true,
+      phase4: true,
+      userId: authenticatedUser.id,
+      requestId,
+      reservationId: String(reservation.reservationId),
+      access,
+      usage: null,
+    };
+  }
+
   const authenticatedUser = await verifiedAuthenticatedUser(request, env);
   if (authenticatedUser) {
     return { signedIn: true, reservationId: null, usage: null };
@@ -447,7 +719,29 @@ async function guestAccessStatus(request, env) {
   };
 }
 
-async function finalizeGradeAccess(access, env) {
+async function finalizeGradeAccess(access, env, completion = null) {
+  if (access?.phase4) {
+    if (!completion?.attemptId || !completion?.assessment || !completion?.model) {
+      throw new ExaminerError(
+        'ATTEMPT_PERSISTENCE_FAILED',
+        'The completed assessment could not be preserved. No grade was consumed.',
+        503,
+      );
+    }
+    const result = await phase4Rpc(env, 'phase4_finalize_exam_grade', {
+      p_user_id: access.userId,
+      p_reservation_id: access.reservationId,
+      p_attempt_id: completion.attemptId,
+      p_score: completion.assessment.score,
+      p_assessment: completion.assessment,
+      p_provider_model: completion.model,
+    });
+    return {
+      limit: 3,
+      used: Math.max(0, Math.min(3, Number(result?.used) || 0)),
+      remaining: Math.max(0, Math.min(3, Number(result?.remaining) || 0)),
+    };
+  }
   if (access.signedIn || access.legacy) return null;
   const result = normalizeReservationResponse(await supabaseRpc(env, 'finalize_guest_grade', {
     p_reservation_id: access.reservationId,
@@ -456,8 +750,23 @@ async function finalizeGradeAccess(access, env) {
   return publicGuestUsage(result);
 }
 
-async function releaseGradeAccess(access, env) {
-  if (!access || access.signedIn || !access.reservationId) return;
+async function releaseGradeAccess(access, env, reason = 'grading_failed') {
+  if (!access || !access.reservationId) return;
+  if (access.phase4) {
+    try {
+      await phase4Rpc(env, 'phase4_release_grade', {
+        p_user_id: access.userId,
+        p_reservation_id: access.reservationId,
+        p_reason: reason,
+      });
+    } catch (error) {
+      console.error('Authenticated grade reservation release failed', {
+        code: error?.code || 'UNKNOWN',
+      });
+    }
+    return;
+  }
+  if (access.signedIn) return;
   try {
     await supabaseRpc(env, 'release_guest_grade', {
       p_reservation_id: access.reservationId,
@@ -488,15 +797,19 @@ async function loadWebsiteBank(url) {
   if (websiteBankCache && now - websiteBankCache.loadedAt < 5 * 60 * 1000) {
     return websiteBankCache.records;
   }
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!response.ok) {
-    throw new ExaminerError('QUESTION_BANK_UNAVAILABLE', 'The website question bank is temporarily unavailable.', 503);
-  }
   let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank returned invalid JSON.', 502);
+  if (url) {
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!response.ok) {
+      throw new ExaminerError('QUESTION_BANK_UNAVAILABLE', 'The website question bank is temporarily unavailable.', 503);
+    }
+    try {
+      payload = await response.json();
+    } catch {
+      throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank returned invalid JSON.', 502);
+    }
+  } else {
+    payload = embeddedWebsiteQuestionBank;
   }
   if (!Array.isArray(payload?.records) || payload.records.length !== 320) {
     throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank must contain exactly 320 records.', 502);
@@ -545,6 +858,17 @@ function groundedSources(payload) {
   })));
 }
 
+function providerCapacityError(category = 'unavailable') {
+  const error = new ExaminerError(
+    'AI_GRADING_CAPACITY',
+    'AI grading is temporarily at capacity. Your answer has been preserved and no attempt was consumed. Please return within 12 hours to continue.',
+    503,
+  );
+  error.capacityCategory = category;
+  error.retryAfterHours = 12;
+  return error;
+}
+
 async function callGemini(env, prompt, groundingEnabled) {
   if (!env.GEMINI_API_KEY) {
     throw new ExaminerError('EXAMINER_NOT_CONFIGURED', 'The AI examiner is not configured. Please contact the administrator.', 503);
@@ -553,6 +877,7 @@ async function callGemini(env, prompt, groundingEnabled) {
   let lastUnsupported = '';
   let quotaSeen = false;
   let providerFailureSeen = false;
+  let timeoutSeen = false;
   for (const model of orderedModels(env.GEMINI_MODEL)) {
     const canGround = groundingEnabled && model !== 'gemini-1.5-flash';
     const groundingAttempts = canGround ? [true, false] : [false];
@@ -590,6 +915,7 @@ async function callGemini(env, prompt, groundingEnabled) {
           responseText = await response.text();
         } catch (error) {
           providerFailureSeen = true;
+          timeoutSeen ||= error?.name === 'AbortError';
           console.warn('Gemini request failed before a response was received', {
             model,
             grounding: useGrounding,
@@ -673,10 +999,10 @@ async function callGemini(env, prompt, groundingEnabled) {
     }
   }
   if (quotaSeen) {
-    throw new ExaminerError('EXAMINER_QUOTA_EXCEEDED', 'The examiner is temporarily busy. Please try again later.', 503);
+    throw providerCapacityError('rate_limit');
   }
   if (providerFailureSeen) {
-    throw new ExaminerError('EXAMINER_UNAVAILABLE', 'The examiner could not complete this assessment.', 502);
+    throw providerCapacityError(timeoutSeen ? 'timeout' : 'unavailable');
   }
   throw new ExaminerError(
     'UNSUPPORTED_MODEL',
@@ -696,12 +1022,13 @@ async function handleGrade(request, env, origin, allowedOrigin) {
   const gradingRequest = normalizeRequest(payload);
   const submissionId = await registerSubmission(gradingRequest, request);
   let gradeAccess = null;
+  let attemptId = null;
 
   try {
-    gradeAccess = await reserveGradeAccess(request, env);
+    gradeAccess = await reserveGradeAccess(request, env, gradingRequest);
     let bankContext = null;
     try {
-      const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
+      const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
       bankContext = questionFromBankRow(records.get(gradingRequest.questionId));
     } catch (error) {
       console.warn('Unified website question bank unavailable; using compatibility context.', {
@@ -720,6 +1047,7 @@ async function handleGrade(request, env, origin, allowedOrigin) {
     }
 
     const context = chooseQuestionContext(bankContext, gradingRequest.questionContext);
+    attemptId = await prepareExamAttempt(gradeAccess, gradingRequest, context, env);
     const policy = assessmentPolicy(context);
     const prompt = buildExaminerPrompt({
       questionId: gradingRequest.questionId,
@@ -728,17 +1056,28 @@ async function handleGrade(request, env, origin, allowedOrigin) {
       policy,
     });
     const groundingEnabled = String(env.GEMINI_GROUNDING_ENABLED).toLowerCase() === 'true';
-    const storedSources = sanitizeSources(context.sourceUrl ? [{
-      title: context.sourceTitle || context.caseName || 'Stored question-bank source',
-      url: context.sourceUrl,
-      type: 'stored',
-    }] : []);
+    const storedSources = sanitizeSources(
+      Array.isArray(context.sourceUrls) && context.sourceUrls.length
+        ? context.sourceUrls
+        : context.sourceUrl
+          ? [{
+            title: context.sourceTitle || context.caseName || 'Stored question-bank source',
+            url: context.sourceUrl,
+            type: 'stored',
+          }]
+          : [],
+    );
     let gemini;
     let assessment;
+    let repairIssues = [];
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const attemptPrompt = attempt === 0
         ? prompt
-        : `${prompt}\n\nRETRY: The previous response failed validation. Return complete schema-valid JSON, and start the conclusion with "Therefore,".`;
+        : `${prompt}
+
+CONTROLLED REPAIR: The previous response failed these quality checks:
+${repairIssues.map((issue) => `- ${issue}`).join('\n') || '- Schema or ALAC completeness failure.'}
+Rewrite the entire JSON response once. Preserve the stored legal substance, return complete schema-valid JSON, make Application fact-specific and the most developed section, and start Conclusion with "Therefore,".`;
       gemini = await callGemini(env, attemptPrompt, groundingEnabled);
       try {
         const validatedAssessment = validateExaminerResult(
@@ -746,8 +1085,22 @@ async function handleGrade(request, env, origin, allowedOrigin) {
           policy,
           [...storedSources, ...gemini.groundedSources],
         );
+        repairIssues = phase4ModelQualityEnforced(env)
+          ? modelAnswerQualityIssues(validatedAssessment, context)
+          : [];
+        if (repairIssues.length) {
+          throw new ExaminerError(
+            'MALFORMED_MODEL_RESPONSE',
+            'The examiner returned an educationally incomplete ALAC model answer.',
+            502,
+          );
+        }
         assessment = applyDeterministicScoreCap(
-          validatedAssessment,
+          {
+            ...validatedAssessment,
+            humanVerified: context.verified === true,
+            educationalNotice: 'AI-generated educational material. Not independently verified. Consult the linked official authorities.',
+          },
           gradingRequest.studentAnswer,
           context,
         );
@@ -759,9 +1112,14 @@ async function handleGrade(request, env, origin, allowedOrigin) {
       }
     }
 
-    const guestUsage = await finalizeGradeAccess(gradeAccess, env);
+    const finalizedUsage = await finalizeGradeAccess(gradeAccess, env, {
+      attemptId,
+      assessment,
+      model: gemini.model,
+    });
     return jsonResponse({
       ok: true,
+      attemptId,
       assessment: {
         ...assessment,
         modelUsed: gemini.model,
@@ -770,20 +1128,201 @@ async function handleGrade(request, env, origin, allowedOrigin) {
         questionAuthority: context.authority,
         groundingEnabled: gemini.groundingUsed,
       },
-      access: gradeAccess.signedIn
-        ? { signedIn: true }
+      access: gradeAccess.phase4
+        ? {
+          signedIn: true,
+          access: gradeAccess.access,
+          freeGrades: finalizedUsage,
+        }
+        : gradeAccess.signedIn
+          ? { signedIn: true }
         : gradeAccess.legacy
           ? { signedIn: false, guest: null }
-          : { signedIn: false, guest: guestUsage },
+          : { signedIn: false, guest: finalizedUsage },
     }, 200, origin, allowedOrigin);
   } catch (error) {
-    await releaseGradeAccess(gradeAccess, env);
+    const isCapacity = error instanceof ExaminerError && error.code === 'AI_GRADING_CAPACITY';
+    if (isCapacity && attemptId) {
+      try {
+        await markExamAttemptCapacity(
+          gradeAccess,
+          attemptId,
+          error.capacityCategory || 'unavailable',
+          env,
+        );
+      } catch (storageError) {
+        console.error('Capacity-state persistence failed', {
+          code: storageError?.code || 'UNKNOWN',
+        });
+      }
+      error.pendingAttemptId = attemptId;
+      await releaseGradeAccess(
+        gradeAccess,
+        env,
+        `provider_${error.capacityCategory || 'unavailable'}`,
+      );
+    } else {
+      await markExamAttemptFailed(gradeAccess, attemptId, error?.code, env);
+      await releaseGradeAccess(gradeAccess, env);
+    }
     recentSubmissions.delete(submissionId);
     throw error;
   }
 }
 
+async function prepareExamAttempt(access, gradingRequest, context, env) {
+  if (!access?.phase4) return null;
+  const result = await phase4Rpc(env, 'phase4_prepare_exam_attempt_v2', {
+    p_user_id: access.userId,
+    p_reservation_id: access.reservationId,
+    p_request_key: access.requestId,
+    p_question_bank_id: gradingRequest.questionId,
+    p_subject: context.subject || 'Unknown subject',
+    p_answer_text: gradingRequest.studentAnswer,
+    p_timer_mode: gradingRequest.session.mode,
+    p_elapsed_seconds: gradingRequest.session.elapsedSeconds,
+    p_submission_reason: gradingRequest.session.submissionReason,
+    p_expired: gradingRequest.session.expired,
+  });
+  if (!result?.attemptId) {
+    throw new ExaminerError(
+      'ATTEMPT_PERSISTENCE_FAILED',
+      'Your answer could not be preserved. No grade was consumed.',
+      503,
+    );
+  }
+  return String(result.attemptId);
+}
+
+async function markExamAttemptCapacity(access, attemptId, category, env) {
+  if (!access?.phase4 || !attemptId) return;
+  await phase4Rpc(env, 'phase4_mark_exam_capacity', {
+    p_user_id: access.userId,
+    p_attempt_id: attemptId,
+    p_category: category,
+  });
+}
+
+async function markExamAttemptFailed(access, attemptId, code, env) {
+  if (!access?.phase4 || !attemptId) return;
+  try {
+    await phase4Rpc(env, 'phase4_fail_exam_attempt', {
+      p_user_id: access.userId,
+      p_attempt_id: attemptId,
+      p_safe_error_code: code || 'grading_failed',
+    });
+  } catch (error) {
+    console.error('Exam attempt failure-state update failed', {
+      code: error?.code || 'UNKNOWN',
+    });
+  }
+}
+
+async function handleAccess(request, env, origin, allowedOrigin) {
+  await enforceGuestStatusRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const access = await phase4AccessForUser(env, user.id);
+  return jsonResponse({ ok: true, access }, 200, origin, allowedOrigin);
+}
+
+async function handleProtectedQuestion(request, env, origin, allowedOrigin) {
+  await enforceRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const payload = await parseBoundedJson(request, 12_000);
+  const subject = normalizeSubject(payload?.subject);
+  const requestKey = normalizeRequestKey(
+    payload?.requestId || request.headers.get('X-Request-ID'),
+  );
+  const access = await phase4AccessForUser(env, user.id, {
+    activateTrial: true,
+    requestKey,
+  });
+  if (!access.allowed) throw accessDeniedError(access);
+
+  const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
+  const question = selectProtectedQuestion(records, {
+    subject,
+    questionId: payload?.questionId,
+    excludeQuestionIds: payload?.excludeQuestionIds,
+  });
+  return jsonResponse({
+    ok: true,
+    access,
+    question,
+    inventory: {
+      subjects: 8,
+      questionsPerSubject: 40,
+      totalQuestions: 320,
+    },
+  }, 200, origin, allowedOrigin);
+}
+
+async function handleUnansweredAttempt(request, env, origin, allowedOrigin) {
+  await enforceRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const payload = await parseBoundedJson(request, 8_000);
+  const questionId = String(payload?.questionId || '').trim();
+  const subject = normalizeSubject(payload?.subject);
+  const requestKey = normalizeRequestKey(
+    payload?.requestId || request.headers.get('X-Request-ID'),
+  );
+  const elapsedSeconds = Math.floor(Number(payload?.elapsedSeconds) || 0);
+  if (!/^[A-Z]{2,8}-(?:\d{3}|\d{4}-Q\d{1,3})$/i.test(questionId)) {
+    throw new ExaminerError('INVALID_QUESTION', 'A valid protected question is required.', 400);
+  }
+  if (elapsedSeconds < 720 || elapsedSeconds > 86_400) {
+    throw new ExaminerError('INVALID_TIMER_STATE', 'The Strict Scrutiny expiration state is invalid.', 400);
+  }
+
+  const access = await phase4AccessForUser(env, user.id);
+  if (!access.allowed) throw accessDeniedError(access);
+  const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
+  const context = questionFromBankRow(records.get(questionId));
+  if (!context?.question || normalizeSubject(context.subject) !== subject) {
+    throw new ExaminerError('INVALID_QUESTION', 'The protected question could not be verified.', 400);
+  }
+
+  const result = await phase4Rpc(env, 'phase4_record_unanswered_attempt', {
+    p_user_id: user.id,
+    p_request_key: requestKey,
+    p_question_bank_id: questionId,
+    p_subject: context.subject,
+    p_elapsed_seconds: elapsedSeconds,
+  });
+  return jsonResponse({
+    ok: true,
+    attempt: {
+      id: String(result?.attemptId || ''),
+      status: 'unanswered',
+      replayed: result?.replayed === true,
+      questionId,
+      subject: context.subject,
+      timerMode: 'strict',
+      elapsedSeconds,
+      submissionReason: 'strict_expiry',
+      expired: true,
+    },
+  }, 201, origin, allowedOrigin);
+}
+
+async function handleExamHistory(request, env, origin, allowedOrigin) {
+  await enforceGuestStatusRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const payload = await parseBoundedJson(request, 4_000);
+  const limit = Math.min(200, Math.max(1, Math.floor(Number(payload?.limit) || 100)));
+  const offset = Math.min(10_000, Math.max(0, Math.floor(Number(payload?.offset) || 0)));
+  const result = await phase4Rpc(env, 'phase4_exam_history', {
+    p_user_id: user.id,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  return jsonResponse({ ok: true, history: result }, 200, origin, allowedOrigin);
+}
+
 async function handleGuestAccess(request, env, origin, allowedOrigin) {
+  if (phase4AccessEnforced(env)) {
+    return handleAccess(request, env, origin, allowedOrigin);
+  }
   await enforceGuestStatusRateLimit(request, env);
   const access = await guestAccessStatus(request, env);
   return jsonResponse({
@@ -814,7 +1353,7 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
     throw new ExaminerError('INVALID_JSON', 'The correction request contains invalid JSON.');
   }
 
-  const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
+  const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
   let correction;
   try {
     correction = normalizeCorrectionRequest(payload, records.get(String(payload?.questionId || '').trim()));
@@ -851,7 +1390,9 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
     );
   }
 
-  const correctionUser = await verifiedAuthenticatedUser(request, env);
+  const correctionUser = phase4AccessEnforced(env)
+    ? await requireAuthenticatedUser(request, env)
+    : await verifiedAuthenticatedUser(request, env);
   const insertResponse = await fetch(
     new URL('/rest/v1/question_corrections', supabaseUrl),
     {
@@ -1011,7 +1552,7 @@ async function handleAdminDashboard(request, env, origin, allowedOrigin) {
     p_previous_to: report.previousTo,
   });
   try {
-    const bank = await loadWebsiteBank(env.WEBSITE_BANK_URL || WEBSITE_BANK_URL);
+    const bank = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
     const subjects = new Set(Array.from(bank.values()).map((row) => String(row.Subject || row.subject || '').trim()).filter(Boolean));
     result.inventory = {
       ...(result.inventory || {}),
@@ -1149,6 +1690,205 @@ async function handleAdminExport(request, env, origin, allowedOrigin) {
   });
 }
 
+async function handlePlans(request, env, origin, allowedOrigin) {
+  const plans = await phase4Rpc(env, 'phase4_plan_catalog', {});
+  return jsonResponse({ ok: true, plans: Array.isArray(plans) ? plans : [] }, 200, origin, allowedOrigin);
+}
+
+async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
+  await enforcePaymentRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const contentLength = Number(request.headers.get('Content-Length') || 0);
+  if (contentLength > PAYMENT_LIMITS.maxProofBytes + 100_000) {
+    throw new PaymentValidationError(
+      'PAYMENT_REQUEST_TOO_LARGE',
+      'Payment proof exceeds the 6 MiB limit.',
+      413,
+    );
+  }
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
+    throw new PaymentValidationError(
+      'INVALID_PAYMENT',
+      'Submit payment details and one payment-proof file.',
+    );
+  }
+  const fields = normalizePaymentFields({
+    planCode: form.get('planCode'),
+    amountPhp: form.get('amountPhp'),
+    paymentMethod: form.get('paymentMethod'),
+    paymentDate: form.get('paymentDate'),
+    transactionReference: form.get('transactionReference'),
+    note: form.get('note'),
+  });
+  const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
+  const proof = form.get('proof');
+  if (!proof || typeof proof.arrayBuffer !== 'function') {
+    throw new PaymentValidationError('PAYMENT_PROOF_REQUIRED', 'Upload a PNG, JPEG, or PDF payment proof.');
+  }
+  const originalName = String(proof.name || 'payment-proof').trim();
+  const mimeType = String(proof.type || '').toLowerCase();
+  const extension = proofExtension(originalName, mimeType);
+  const arrayBuffer = await proof.arrayBuffer();
+  const bytes = validateProofSignature(new Uint8Array(arrayBuffer), mimeType);
+  const proofSha256 = await sha256Hex(bytes);
+  const objectId = crypto.randomUUID();
+  const objectPath = `${user.id}/${objectId}.${extension}`;
+  await uploadPrivateProof(env, objectPath, bytes, mimeType);
+  let result;
+  try {
+    result = await commerceRpc(env, 'phase4_create_payment_request', {
+      p_user_id: user.id,
+      p_plan_code: fields.planCode,
+      p_amount_php: fields.amountPhp,
+      p_payment_method: fields.paymentMethod,
+      p_payment_date: fields.paymentDate,
+      p_transaction_reference: fields.transactionReference,
+      p_student_note: fields.note,
+      p_proof_object_path: objectPath,
+      p_proof_original_name: originalName.slice(0, 180),
+      p_proof_mime_type: mimeType,
+      p_proof_size_bytes: bytes.byteLength,
+      p_proof_sha256: proofSha256,
+      p_request_key: requestKey,
+    });
+  } catch (error) {
+    await deletePrivateProof(env, objectPath);
+    throw error;
+  }
+  if (result?.replayed) await deletePrivateProof(env, objectPath);
+  await sendSecureNotification(env, {
+    mailbox: 'plansandpricing@duediligence.ph',
+    subject: 'Due Diligence payment verification request',
+    adminPath: `/admin/payments?request=${encodeURIComponent(result.id)}`,
+  });
+  return jsonResponse({
+    ok: true,
+    payment: result,
+    message: 'Payment proof submitted for Founder verification. Access begins only after approval.',
+  }, 201, origin, allowedOrigin);
+}
+
+async function handleBillingStatus(request, env, origin, allowedOrigin) {
+  const user = await requireAuthenticatedUser(request, env);
+  const result = await commerceRpc(env, 'phase4_student_billing_snapshot', {
+    p_user_id: user.id,
+  });
+  return jsonResponse({ ok: true, billing: result }, 200, origin, allowedOrigin);
+}
+
+async function handleRefundSubmit(request, env, origin, allowedOrigin) {
+  await enforcePaymentRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const input = normalizeRefundRequest(await parseBoundedJson(request, 8_000));
+  const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
+  const result = await commerceRpc(env, 'phase4_create_refund_request', {
+    p_user_id: user.id,
+    p_payment_request_id: input.paymentRequestId,
+    p_reason: input.reason,
+    p_request_key: requestKey,
+  });
+  await sendSecureNotification(env, {
+    mailbox: 'plansandpricing@duediligence.ph',
+    subject: 'Due Diligence refund review request',
+    adminPath: `/admin/refunds?request=${encodeURIComponent(result.id)}`,
+  });
+  return jsonResponse({
+    ok: true,
+    refund: result,
+    message: 'Refund request received. Initial response target: 24 hours.',
+  }, 201, origin, allowedOrigin);
+}
+
+async function handlePartnershipSubmit(request, env, origin, allowedOrigin) {
+  await enforcePartnershipRateLimit(request, env);
+  const user = await verifiedAuthenticatedUser(request, env);
+  const input = normalizePartnershipRequest(await parseBoundedJson(request, 12_000));
+  const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
+  const result = await commerceRpc(env, 'phase4_create_partnership_inquiry', {
+    p_user_id: user?.id || null,
+    p_inquiry_type: input.inquiryType,
+    p_contact_name: input.contactName,
+    p_contact_email: input.contactEmail,
+    p_organization: input.organization,
+    p_message: input.message,
+    p_consent: input.consent,
+    p_request_key: requestKey,
+  });
+  await sendSecureNotification(env, {
+    mailbox: 'founders@duediligence.ph',
+    subject: 'Due Diligence partnership inquiry',
+    adminPath: `/admin/partnerships?inquiry=${encodeURIComponent(result.id)}`,
+  });
+  return jsonResponse({
+    ok: true,
+    inquiry: result,
+    message: 'Your inquiry has been sent to the Due Diligence founders.',
+  }, 201, origin, allowedOrigin);
+}
+
+async function handlePhase4AdminData(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const query = normalizePhase4AdminRequest(await parseBoundedJson(request, 8_000));
+  const result = await phase4Rpc(env, 'phase4_admin_operational_data', {
+    p_actor_user_id: user.id,
+    p_section: query.section,
+    p_search: query.search,
+    p_limit: query.limit,
+    p_offset: query.offset,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handlePhase4AdminAction(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const action = normalizePhase4AdminAction(await parseBoundedJson(request, 16_000));
+  const result = await phase4Rpc(env, 'phase4_admin_execute_action', {
+    p_actor_user_id: user.id,
+    p_action: action.action,
+    p_target_id: action.targetId,
+    p_payload: action.payload,
+    p_reason: action.reason,
+    p_request_key: action.requestKey,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminPaymentProof(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const payload = await parseBoundedJson(request, 4_000);
+  const paymentRequestId = String(payload?.paymentRequestId || '').trim();
+  const reason = String(payload?.reason || '').trim();
+  const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
+  if (!/^[0-9a-f-]{36}$/i.test(paymentRequestId) || reason.length < 5 || reason.length > 1000) {
+    throw new PaymentValidationError(
+      'INVALID_ADMIN_ACTION',
+      'A payment request and review reason are required.',
+    );
+  }
+  const context = await phase4Rpc(env, 'phase4_payment_proof_context', {
+    p_actor_user_id: user.id,
+    p_payment_request_id: paymentRequestId,
+    p_reason: reason,
+    p_request_key: requestKey,
+  });
+  const url = await signedPrivateProofUrl(env, context.objectPath);
+  return jsonResponse({
+    ok: true,
+    proof: {
+      url,
+      mimeType: context.mimeType,
+      sizeBytes: context.sizeBytes,
+      expiresInSeconds: 300,
+    },
+  }, 200, origin, allowedOrigin);
+}
+
 export default {
   async fetch(request, env) {
     const allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
@@ -1167,6 +1907,33 @@ export default {
       }
       if (pathname === '/guest-access') {
         return await handleGuestAccess(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/access') {
+        return await handleAccess(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam/question') {
+        return await handleProtectedQuestion(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam/unanswered') {
+        return await handleUnansweredAttempt(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam/history') {
+        return await handleExamHistory(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/plans') {
+        return await handlePlans(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/payments/submit') {
+        return await handlePaymentSubmit(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/payments/status') {
+        return await handleBillingStatus(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/refunds/submit') {
+        return await handleRefundSubmit(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/partnerships') {
+        return await handlePartnershipSubmit(request, env, origin, allowedOrigin);
       }
       if (pathname === '/support') {
         return await handleSupport(request, env, origin, allowedOrigin);
@@ -1195,17 +1962,35 @@ export default {
       if (pathname === '/admin/export') {
         return await handleAdminExport(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/admin/phase4-data') {
+        return await handlePhase4AdminData(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/phase4-action') {
+        return await handlePhase4AdminAction(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/payment-proof') {
+        return await handleAdminPaymentProof(request, env, origin, allowedOrigin);
+      }
       if (pathname !== '/') {
         throw new ExaminerError('NOT_FOUND', 'This endpoint does not exist.', 404);
       }
       return await handleGrade(request, env, origin, allowedOrigin);
     } catch (error) {
-      const known = error instanceof ExaminerError || error instanceof GuestAccessError;
+      const known = error instanceof ExaminerError
+        || error instanceof GuestAccessError
+        || error instanceof AccessValidationError
+        || error instanceof PaymentValidationError;
       return jsonResponse({
         ok: false,
         error: {
           code: known ? error.code : 'INTERNAL_ERROR',
           message: known ? error.message : 'The examiner encountered an unexpected error.',
+          ...(known && error.pendingAttemptId
+            ? { pendingAttemptId: String(error.pendingAttemptId) }
+            : {}),
+          ...(known && Number.isFinite(error.retryAfterHours)
+            ? { retryAfterHours: Number(error.retryAfterHours) }
+            : {}),
         },
       }, known ? error.status : 500, requestOrigin, allowedOrigin);
     }

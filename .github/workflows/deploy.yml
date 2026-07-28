@@ -24,13 +24,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build sanitized Pages artifact
+        run: node scripts/build-pages-artifact.mjs
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: '.pages-dist'
 
       - name: Deploy to GitHub Pages
         id: deployment

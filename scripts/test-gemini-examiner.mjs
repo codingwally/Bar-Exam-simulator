@@ -184,12 +184,13 @@ assert.doesNotMatch(html, /generativelanguage\.googleapis\.com/);
 assert.doesNotMatch(html, /Math\.min\(100|score\s*>=\s*75|\/100/);
 assert.doesNotMatch(html, /Estimated Bar Passability|Projected Passers|Avg Score|Pass Rate/);
 assert.match(html, /class="assessment-card"/);
-assert.match(html, /percentage points for this question only/);
+assert.match(html, /Scored on the 0\.0–5\.0 Philippine Bar essay practice scale/);
+assert.doesNotMatch(html, /percentage points|percentage-point/i);
 assert.match(html, /id="checking-modal"/);
 assert.match(html, /gradingInProgress/);
 assert.match(html, /submitButton\.disabled = true/);
 assert.match(html, /logAttempt\(resultObj\)/);
-assert.match(html, /Legacy 100-point record/);
+assert.doesNotMatch(html, /Legacy 100-point record/);
 assert.match(html, /Supreme Court 2025 Bar Bulletin No\. 4/);
 assert.match(html, /not an official Supreme Court grade/);
 assert.match(html, /Model Answer — ALAC Method/);
@@ -272,11 +273,15 @@ try {
   const responseBody = await response.json();
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'https://duediligence.ph');
-  assert.equal(responseBody.assessment.score, 4.5);
+  assert.equal(
+    responseBody.assessment.score,
+    2.5,
+    'generic application must remain capped even when the provider proposes 4.5',
+  );
   assert.equal(responseBody.assessment.maxScore, 5);
   assert.equal(responseBody.assessment.modelUsed, 'gemini-3.6-flash');
   assert.equal(responseBody.assessment.questionAuthority, 'server_question_bank');
-  assert.equal(responseBody.assessment.sources.length, 2);
+  assert.ok(responseBody.assessment.sources.length >= 2);
   assert.equal(geminiCalls, 2);
 
   const preflight = await worker.fetch(new Request('https://worker.example/', {

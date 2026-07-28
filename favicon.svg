@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Due Diligence scales of justice">
+  <rect width="48" height="48" rx="9" fill="#081225"/>
+  <g fill="none" stroke="#c5a059" stroke-linecap="round" stroke-width="2">
+    <path d="M24 11v25M12 16h24M12 16 7 25m5-9 5 9m19-9-5 9m5-9 5 9"/>
+  </g>
+  <g fill="#d4af37">
+    <path d="M6 25q6 6 12 0zM30 25q6 6 12 0z"/>
+    <rect x="18" y="35" width="12" height="2.5" rx="1"/>
+    <circle cx="24" cy="10" r="2.5"/>
+  </g>
+</svg>

@@ -19,14 +19,17 @@ const sectionLabels = [
   'Learning &amp; Scores',
   'Subjects &amp; Questions',
   'Gemini &amp; Reliability',
-  'Entitlements &amp; Discounts',
+  'Access &amp; Subscriptions',
+  'Payment Verification',
+  'Refund Requests',
   'Support &amp; Recovery',
   'Correction Queue',
-  'Advertiser &amp; Investor',
+  'Partnership Inquiries',
   'Website Controls',
   'Roles, Security &amp; Audit',
 ];
 for (const label of sectionLabels) assert.match(html, new RegExp(label.replace(/[&]/g, '&')));
+assert.doesNotMatch(html, /Advertiser &amp; Investor/);
 
 assert.match(html, /aria-label="Admin sections"/);
 assert.match(html, /aria-live="polite"/);
@@ -42,7 +45,7 @@ assert.match(js, /Contact Support\. We respond within 24 hours\./);
 assert.match(js, /No production data was changed/);
 assert.match(js, /No verified events/);
 assert.match(js, /Administrator request failed/);
-assert.match(js, /safeCsv|aggregate CSV|Export aggregate CSV/i);
+assert.match(js, /Aggregate export|aggregate-report\.csv/i);
 assert.match(js, /Mastery average/);
 assert.match(js, /D1, D7, and D30/);
 

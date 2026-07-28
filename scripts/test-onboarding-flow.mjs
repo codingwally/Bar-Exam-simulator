@@ -13,6 +13,11 @@ assert.doesNotMatch(html, /requestAnimationFrame\(showInvestorWelcome\)/, 'Patro
 assert.match(html, /duediligence\.terms\.accepted\.v1/);
 assert.match(html, /id="terms-modal"[\s\S]*aria-modal="true"/);
 assert.match(html, /id="signin-prompt-modal"[\s\S]*Save Your Progress/);
+assert.match(
+  html,
+  /function continueAfterTerms\(\) \{\s*if \(window\.DueDiligencePhase4\?\.getSession\?\.\(\)\?\.access_token\) \{\s*showSubjectSelection\(\);\s*return;/,
+  'An authenticated user must bypass the obsolete guest sign-in prompt.',
+);
 assert.match(html, /id="subject-choice-grid"/);
 assert.match(html, /id="session-choice-modal"[\s\S]*Would you like to begin your session\?/);
 assert.match(html, /Strict Scrutiny[\s\S]*12 minutes per question/);

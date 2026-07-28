@@ -25,8 +25,22 @@ for (const subject of APPROVED_SUBJECTS) {
 }
 
 const html = await fs.readFile(new URL('../index.html', import.meta.url), 'utf8');
-assert.match(html, /assets\/website-question-bank\.js/, 'Frontend loader must be included.');
+assert.doesNotMatch(
+  html,
+  /assets\/website-question-bank\.js|content\/question-bank|website-upload\.json/,
+  'The public frontend must not reference the private question corpus.',
+);
 assert.match(html, /loadWebsiteQuestionBank\(\)/, 'Frontend must initialize the imported bank.');
+assert.match(
+  html,
+  /websiteQuestionBankStatus = "protected"/,
+  'The public frontend must mark the corpus as protected.',
+);
+assert.match(
+  html,
+  /loadProtectedQuestion/,
+  'Questions must be requested through the authenticated Worker flow.',
+);
 assert.match(html, /questionSourceMetadata\(question\)/, 'Frontend must derive official Bar source metadata.');
 assert.match(html, /question\?\.bar_year/, 'Frontend must display the source Bar year.');
 assert.match(html, /question\?\.question_no/, 'Frontend must display the original Bar question number.');

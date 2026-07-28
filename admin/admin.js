@@ -10,10 +10,12 @@
     learning: 'Learning and Scores',
     subjects: 'Subjects and Question Performance',
     reliability: 'Gemini and Platform Reliability',
-    subscriptions: 'Subscriptions, Entitlements, and Discounts',
+    subscriptions: 'Access and Subscriptions',
+    payments: 'Payment Verification',
+    refunds: 'Refund Requests',
     support: 'Support and Account Recovery',
     corrections: 'Correction / Better Answer Queue',
-    advertiser: 'Advertiser and Investor Reports',
+    partnerships: 'Partnership Inquiries',
     controls: 'Website Controls and Roadmap',
     security: 'Roles, Security, and Audit',
   });
@@ -21,9 +23,11 @@
     users: 'analytics_viewer',
     learning: 'learner_analytics_viewer',
     subscriptions: 'subscription_admin',
+    payments: 'subscription_admin',
+    refunds: 'subscription_admin',
     support: 'support_admin',
     corrections: 'correction_admin',
-    advertiser: 'advertiser_report_viewer',
+    partnerships: 'advertiser_report_viewer',
     controls: 'role_admin',
     security: 'role_admin',
   });
@@ -131,6 +135,7 @@
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
+        'X-Request-ID': uuidKey(),
       },
       body: JSON.stringify(body),
     });
@@ -162,6 +167,19 @@
     const key = `${section}:${search || ''}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await api('/admin/data', { section, search, limit: 100, offset: 0 });
+    state.operational.set(key, payload.data);
+    return payload.data;
+  }
+
+  async function loadPhase4Operational(section, force = false, search = null) {
+    const key = `phase4:${section}:${search || ''}`;
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const payload = await api('/admin/phase4-data', {
+      section,
+      search: search || '',
+      limit: 100,
+      offset: 0,
+    });
     state.operational.set(key, payload.data);
     return payload.data;
   }
@@ -210,7 +228,7 @@
       <section class="panel">
         <h3>Commercial truth</h3>
         <div class="notice">${escapeHtml(report.financial?.paid_subscribers_status || 'Paid subscribers: Not connected — payment integration pending.')}</div>
-        <p class="panel-note">Revenue, MRR, ARR, ARPU, paid churn, advertising impressions, clicks, CTR, and sponsorship income remain “No verified data” until connected systems exist.</p>
+        <p class="panel-note">Revenue, MRR, ARR, ARPU, and paid churn remain “No verified data” until verified financial records exist.</p>
       </section>`;
   }
 
@@ -311,7 +329,15 @@
       user.role,
       dateTime(user.last_active_at),
       number(user.successful_grade_count),
-      actionButton('Reveal email', 'reveal_email', user.id),
+      {
+        html: true,
+        value: `<div class="row-actions">
+          ${actionButton('Reveal email', 'reveal_email', user.id).value}
+          ${state.authorization?.role === 'super_admin' && user.role !== 'super_admin'
+            ? actionButton('Change role', 'role_change', user.id, { role: user.role }).value
+            : ''}
+        </div>`,
+      },
     ]);
     return `
       ${heading('Users and cohorts', 'Normal administrator views use masked identities. Exact email reveal is reason-required, rate-limited, capability-restricted, and audited.')}
@@ -392,26 +418,89 @@
   }
 
   async function renderSubscriptions(report) {
-    const data = await loadOperational('subscriptions');
+    const data = await loadPhase4Operational('access');
     const rows = (data.items || []).map((row) => [
-      row.display_name || 'Not provided', row.masked_email, row.plan_code,
-      { html: true, value: `<span class="status ${row.status === 'active' ? 'ok' : 'warn'}">${escapeHtml(row.status)}</span>` },
-      dateTime(row.effective_from), dateTime(row.effective_until),
-      actionButton('Adjust', 'entitlement_change', row.user_id, {
-        plan_code: row.plan_code, status: row.status, entitlement_action: 'adjust',
-      }),
+      row.display_name || 'Not provided',
+      row.user_id,
+      row.role,
+      row.trial_expires_at ? dateTime(row.trial_expires_at) : 'Not started',
+      `${number(row.successful_grades)} used · ${number(row.free_grades_remaining)} remaining`,
+      row.free_beta_enabled ? `Enabled${row.free_beta_expires_at ? ` until ${dateTime(row.free_beta_expires_at)}` : ''}` : 'Disabled',
+      row.plan_code || 'None',
+      { html: true, value: `<span class="status ${row.subscription_status === 'active' ? 'ok' : 'warn'}">${escapeHtml(row.subscription_status || 'none')}</span>` },
+      row.expires_at ? dateTime(row.expires_at) : 'Not available',
+      {
+        html: true,
+        value: `<div class="row-actions">
+          ${actionButton('Manage access', 'subscription_change', row.subscription_id || row.user_id, {
+            userId: row.user_id,
+            subscriptionId: row.subscription_id,
+            planCode: row.plan_code,
+            status: row.subscription_status,
+          })}
+          ${actionButton(row.free_beta_enabled ? 'Revoke Free Beta' : 'Enable Free Beta', 'free_beta_change', row.user_id, {
+            enabled: !row.free_beta_enabled,
+            expiresAt: row.free_beta_expires_at,
+          })}
+        </div>`,
+      },
     ]);
     return `
-      ${heading('Manual access and future pricing', 'No payment provider is connected. These controls change internal access only and do not charge, refund, or cancel a payment mandate.')}
-      <div class="notice"><strong>Paid subscribers: Not connected — payment integration pending.</strong><br>Manual access control — no payment provider is connected.</div>
-      ${table(['Student', 'Masked email', 'Plan', 'Status', 'Effective', 'Until', 'Action'], rows)}
+      ${heading('Access and subscription operations', 'Founder actions are immediate, reason-required, transactional, and audited. Manual payments never renew automatically.')}
+      <div class="notice danger"><strong>Access-impacting action.</strong> Verify the student UUID, plan, dates, and reason before confirming.</div>
+      ${table(['Student', 'User UUID', 'Role', 'Trial expires', 'Lifetime grades', 'Free Beta', 'Plan', 'Subscription', 'Expires', 'Actions'], rows)}
       <section class="panel">
-        <h3>Draft plan catalog — not active</h3>
+        <h3>Production plan catalog</h3>
         ${table(['Plan', 'Planning price', 'Status'], config.plans.items.map((plan) => [
-          plan.name, `₱${number(plan.pricePhp, 2)}`, 'DRAFT / NOT ACTIVE',
+          plan.name, `₱${number(plan.pricePhp, 2)}`,
+          plan.previewStatus === 'disabled' ? 'Held in Abeyance' : 'Active · manual verification',
         ]))}
       </section>
-      <section class="panel"><h3>Discount configuration</h3><p class="panel-note">Draft, active, paused, and expired codes are future checkout configuration or manual entitlement promises only. They are not completed financial discounts or payments.</p></section>`;
+      <section class="panel"><h3>Refund policy</h3><p class="panel-note">Five-calendar-day cancellations suggest an 80% refund. Later requests use unused time and documented consumption. A verified 20-day continuous outage supports prorated refund or equivalent extension. All decisions require Founder documentation.</p></section>`;
+  }
+
+  async function renderPayments() {
+    const data = await loadPhase4Operational('payments');
+    return `
+      ${heading('Manual payment verification', 'Review GCash and MariBank requests. Private proofs open through five-minute signed links and every view is audited.')}
+      <div class="notice danger"><strong>Money and access warning.</strong> Approval activates the exact selected 30-day plan. Confirm channel, amount, reference, date, and proof before proceeding.</div>
+      ${table(
+        ['Student', 'User UUID', 'Plan', 'Amount', 'Channel', 'Date', 'Reference', 'Status', 'Submitted', 'Actions'],
+        (data.items || []).map((row) => [
+          row.display_name || 'Not provided', row.user_id, row.plan_code,
+          `₱${number(row.trusted_amount_php,2)}`, row.payment_method,
+          row.payment_date, row.transaction_reference,
+          { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(row.status)}</span>` },
+          dateTime(row.submitted_at),
+          {
+            html: true,
+            value: `<div class="row-actions">
+              ${actionButton('Review', 'payment_review', row.id, { status: row.status })}
+              ${actionButton('View private proof', 'view_payment_proof', row.id, {})}
+            </div>`,
+          },
+        ]),
+      )}`;
+  }
+
+  async function renderRefunds() {
+    const data = await loadPhase4Operational('refunds');
+    return `
+      ${heading('Refund requests', 'Apply the published Philippine-peso policy, document consumption and outage evidence, and preserve statutory remedies.')}
+      ${table(
+        ['Student', 'Paid', 'Suggested', 'Approved', 'Status', 'Calculation', 'Submitted', 'Action'],
+        (data.items || []).map((row) => [
+          row.display_name || row.user_id, `₱${number(row.paid_amount_php,2)}`,
+          `₱${number(row.suggested_refund_php,2)}`,
+          row.approved_refund_php == null ? 'Pending decision' : `₱${number(row.approved_refund_php,2)}`,
+          row.status, row.calculation_note, dateTime(row.submitted_at),
+          actionButton('Review', 'refund_review', row.id, {
+            status: row.status,
+            suggestedRefundPhp: row.suggested_refund_php,
+            approvedRefundPhp: row.approved_refund_php,
+          }),
+        ]),
+      )}`;
   }
 
   async function renderSupport() {
@@ -465,41 +554,24 @@
       ${table(['Question', 'Subject', 'Type', 'Proposed correction', 'Explanation', 'Sources', 'Status', 'Action'], rows)}`;
   }
 
-  async function renderAdvertiser(report) {
-    const data = await loadOperational('advertiser');
-    const traffic = report.current?.traffic || {};
+  async function renderPartnerships() {
+    const data = await loadPhase4Operational('partnerships');
     return `
-      ${heading('Aggregate advertiser and investor report', 'Printable, aggregate-only reporting. Actual production metrics are separated from future opportunities and scenario assumptions.',
-        '<div class="row-actions"><button id="print-report" type="button">Print / PDF</button><button id="export-report" type="button">Export aggregate CSV</button></div>')}
-      <div class="metric-strip">
-        ${metric('Page views', traffic.page_views)}
-        ${metric('Unique visitors', traffic.unique_visitors)}
-        ${metric('Sessions', traffic.sessions)}
-        ${metric('Registered profiles', data.total)}
-        ${metric('Successful grades', report.current?.learning?.successful_grades)}
-        ${metric('Grading success', report.current?.reliability?.success_rate, null, percentage)}
-      </div>
-      <section class="panel"><h3>Verified school representation</h3>${table(
-        ['School grouping', 'Registered profiles'],
-        (data.items || []).map((row) => [row.school, row.member_count == null ? 'Suppressed' : number(row.member_count)]),
-      )}<p class="panel-note">Groups below five registered profiles are suppressed. No student list is exposed.</p></section>
-      <section class="panel"><h3>Financial and advertising systems</h3>${table(
-        ['Metric', 'Production status'],
-        [
-          ['Paid subscribers', 'Not connected'],
-          ['Revenue / MRR / ARR / ARPU', 'No verified data'],
-          ['Paid churn', 'Not connected'],
-          ['Advertising impressions / clicks / CTR', 'Not configured'],
-          ['Sponsorship income', 'No verified data'],
-        ],
-      )}</section>
-      <section class="panel"><h3>Planning calculator</h3><div class="notice">Scenario only — not actual performance</div>
-        <div class="scenario">
-          <label>Monthly visitors<input id="scenario-visitors" type="number" min="0" value="10000"></label>
-          <label>Conversion assumption (%)<input id="scenario-rate" type="number" min="0" max="100" step=".1" value="2"></label>
-          <label>Average plan assumption (₱)<input id="scenario-price" type="number" min="0" value="249"></label>
-        </div><div class="scenario-output" id="scenario-output">Scenario only — not actual performance</div>
-      </section>`;
+      ${heading('Partnership inquiries', 'Native institutional, academic, content, technology, and media inquiries. Contact details are operationally sensitive and access is audited.')}
+      ${table(
+        ['Type','Contact','Email','Organization','Message','Verified','Status','Assignee','Created','Action'],
+        (data.items || []).map((row) => [
+          row.inquiry_type, row.contact_name, row.contact_email,
+          row.organization || 'Not provided', row.message,
+          row.contact_verified ? 'Yes' : 'No', row.status,
+          row.assignee_user_id || 'Unassigned', dateTime(row.created_at),
+          actionButton('Update', 'partnership_update', row.id, {
+            status: row.status,
+            contactVerified: row.contact_verified,
+            assigneeUserId: row.assignee_user_id,
+          }),
+        ]),
+      )}`;
   }
 
   async function renderControls() {
@@ -529,14 +601,14 @@
           ];
         }),
       )}
-      <section class="panel"><h3>Roadmap extension points</h3><p class="panel-note">Prepared, but not active: PayMongo, renewals, coaching scheduling, organizations and Bar Operations cohorts, institution dashboards, ad placements, sponsorship reports, notifications, editorial CMS, experiments, daily rollups, and privacy-aware retention automation.</p></section>`;
+      <section class="panel"><h3>Roadmap extension points</h3><p class="panel-note">Prepared, but not active: automated payment providers, renewals, coaching scheduling, organizations and Bar Operations cohorts, institution dashboards, notifications, editorial CMS, experiments, daily rollups, and privacy-aware retention automation.</p></section>`;
   }
 
   async function renderSecurity() {
     const data = await loadOperational('security');
     return `
       ${heading('Roles, security, and audit', 'Only the Super Admin may grant administrator roles or capabilities. Administrators cannot grant privileges to themselves or create another Super Admin.')}
-      <div class="notice">Wally remains the sole verified Super Admin. Additional founders remain awaiting first Google sign-in until genuine Auth UUIDs are verified; no founder email is hardcoded.</div>
+      <div class="notice">Wally remains the sole Super Admin. Founder Admin assignments use verified Auth UUIDs; no founder email is hardcoded in authorization logic.</div>
       ${table(
         ['Time', 'Action', 'Actor UUID', 'Target type', 'Target', 'Reason'],
         (data.items || []).map((row) => [
@@ -545,7 +617,7 @@
           row.reason || 'Not provided',
         ]),
       )}
-      <section class="panel"><h3>Capability model</h3><p class="panel-note">analytics_viewer · learner_analytics_viewer · support_admin · correction_admin · subscription_admin · account_recovery_admin · advertiser_report_viewer · role_admin</p></section>`;
+      <section class="panel"><h3>Capability model</h3><p class="panel-note">Founder and Super Admins receive full operational access. Limited Admin accounts receive only explicitly assigned, revocable capabilities.</p></section>`;
   }
 
   async function renderSection(section) {
@@ -569,9 +641,11 @@
       else if (section === 'subjects') html = renderSubjects(report);
       else if (section === 'reliability') html = renderReliability(report);
       else if (section === 'subscriptions') html = await renderSubscriptions(report);
+      else if (section === 'payments') html = await renderPayments();
+      else if (section === 'refunds') html = await renderRefunds();
       else if (section === 'support') html = await renderSupport();
       else if (section === 'corrections') html = await renderCorrections();
-      else if (section === 'advertiser') html = await renderAdvertiser(report);
+      else if (section === 'partnerships') html = await renderPartnerships();
       else if (section === 'controls') html = await renderControls();
       else if (section === 'security') html = await renderSecurity();
       $('#dashboard-view').innerHTML = html;
@@ -607,6 +681,61 @@
         <label class="field">Status<select id="action-status">${['active','paused','canceled','expired'].map((value) => `<option${payload.status === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
         ${actionField('Effective until (optional ISO date)', 'action-until')}`;
       warning = 'This action changes the student’s access and may affect future billing records. Confirm the requested change and effective dates before continuing.';
+    } else if (action === 'payment_review') {
+      title = 'Review manual payment';
+      fields = `<label class="field">Decision<select id="action-status">
+        <option value="needs_information">Needs information</option>
+        <option value="approved">Approve and activate exact 30-day plan</option>
+        <option value="rejected">Reject</option>
+      </select></label>`;
+      warning = 'Approval is immediate: it activates the exact selected plan for 30 calendar days. Verify amount, channel, reference, date, and private proof before confirming.';
+    } else if (action === 'view_payment_proof') {
+      title = 'Open private payment proof';
+      warning = 'This sensitive read creates an audit record and opens a private proof through a five-minute signed link. Do not download or redistribute it unnecessarily.';
+    } else if (action === 'refund_review') {
+      title = 'Review refund request';
+      fields = `<label class="field">Decision<select id="action-status">
+        <option value="needs_information">Needs information</option>
+        <option value="approved">Approve amount</option>
+        <option value="rejected">Reject</option>
+        ${payload.status === 'approved' ? '<option value="paid">Mark paid</option>' : ''}
+      </select></label>
+      ${actionField('Approved refund in PHP', 'action-refund-amount', payload.approvedRefundPhp ?? payload.suggestedRefundPhp ?? '', 'number')}`;
+      warning = 'Confirm the verified paid amount, timing, consumption, outage evidence, and statutory rights. Mark paid only after funds were actually returned.';
+    } else if (action === 'subscription_change') {
+      title = 'Change subscription or grant access';
+      fields = `<label class="field">Operation<select id="action-operation">
+        <option value="complimentary">Grant complimentary access</option>
+        ${payload.subscriptionId ? `
+          <option value="pause">Pause</option>
+          <option value="resume">Resume</option>
+          <option value="cancel">Cancel</option>
+          <option value="extend">Extend</option>
+          <option value="replace_plan">Replace plan</option>
+          <option value="set_dates">Set start and expiration dates</option>` : ''}
+      </select></label>
+      ${actionField('Plan code', 'action-plan', payload.planCode || 'standard')}
+      ${actionField('Duration / extension days', 'action-days', '30', 'number')}
+      ${actionField('Starts at (ISO, for set dates)', 'action-starts')}
+      ${actionField('Expires at (ISO, for set dates)', 'action-expires')}`;
+      warning = 'This action immediately changes access. Verify the user UUID, plan, status, and dates. Complimentary access does not represent a payment.';
+    } else if (action === 'free_beta_change') {
+      title = payload.enabled ? 'Enable Free Beta Access' : 'Revoke Free Beta Access';
+      fields = `<label class="field"><span><input id="action-enabled" type="checkbox"${payload.enabled ? ' checked' : ''}> Free Beta enabled</span></label>
+        ${actionField('Optional expiration (ISO date)', 'action-expires', payload.expiresAt || '')}`;
+      warning = 'Free Beta unlocks all current digital features without payment. It creates no coaching or future Premium rights.';
+    } else if (action === 'partnership_update') {
+      title = 'Update partnership inquiry';
+      fields = `<label class="field">Status<select id="action-status">${['new','reviewing','awaiting_reply','qualified','closed'].map((value) => `<option value="${value}"${payload.status === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
+        <label class="field"><span><input id="action-contact-verified" type="checkbox"${payload.contactVerified ? ' checked' : ''}> Contact ownership verified</span></label>
+        ${actionField('Assignee user UUID (optional)', 'action-assignee', payload.assigneeUserId || '')}`;
+      warning = 'Contact verification means ownership was actually checked; do not mark it based only on valid email formatting.';
+    } else if (action === 'role_change') {
+      title = 'Change administrator role';
+      fields = `<label class="field">Role<select id="action-role">
+        ${['student','admin','founder_admin'].map((value) => `<option value="${value}"${payload.role === value ? ' selected' : ''}>${value}</option>`).join('')}
+      </select></label>`;
+      warning = 'Only the Super Admin may perform this action. Self-promotion, self-demotion, and creation of another Super Admin are prohibited.';
     } else if (action === 'website_control_update') {
       title = 'Update allowlisted website control';
       fields = `${actionField('Control key', 'action-control', payload.control_key)}
@@ -656,6 +785,26 @@
       payload.entitlement_action = payload.status === 'paused' ? 'pause'
         : payload.status === 'canceled' ? 'cancel'
           : payload.status === 'expired' ? 'expire' : 'adjust';
+    } else if (action === 'payment_review') {
+      payload.status = $('#action-status').value;
+    } else if (action === 'refund_review') {
+      payload.status = $('#action-status').value;
+      payload.approvedRefundPhp = Number($('#action-refund-amount').value);
+    } else if (action === 'subscription_change') {
+      payload.operation = $('#action-operation').value;
+      payload.planCode = $('#action-plan').value.trim();
+      payload.durationDays = Number($('#action-days').value || 30);
+      payload.startsAt = $('#action-starts').value.trim() || null;
+      payload.expiresAt = $('#action-expires').value.trim() || null;
+    } else if (action === 'free_beta_change') {
+      payload.enabled = $('#action-enabled').checked;
+      payload.expiresAt = $('#action-expires').value.trim() || null;
+    } else if (action === 'partnership_update') {
+      payload.status = $('#action-status').value;
+      payload.contactVerified = $('#action-contact-verified').checked;
+      payload.assigneeUserId = $('#action-assignee').value.trim() || null;
+    } else if (action === 'role_change') {
+      payload.role = $('#action-role').value;
     } else if (action === 'website_control_update') {
       payload.control_key = $('#action-control').value;
       try { payload.value = JSON.parse($('#action-value').value); } catch {
@@ -680,14 +829,33 @@
         toast(response.data.found
           ? `Match: ${response.data.display_name || 'Unnamed account'} (${response.data.masked_email})`
           : 'No account matched that exact email.');
+      } else if (action === 'view_payment_proof') {
+        const response = await api('/admin/payment-proof', {
+          paymentRequestId: state.action.targetId,
+          reason,
+        });
+        const link = document.createElement('a');
+        link.href = response.proof.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.click();
+        toast('Private proof opened in a five-minute authorized view.');
       } else {
-        await api('/admin/action', {
+        const phase4Actions = new Set([
+          'payment_review','refund_review','subscription_change',
+          'free_beta_change','partnership_update','provider_incident_clear',
+          'role_change',
+        ]);
+        const actionRequest = {
           action,
           targetId: state.action.targetId,
           payload,
           reason,
           requestKey: uuidKey(),
-        });
+        };
+        if (phase4Actions.has(action)) {
+          await api('/admin/phase4-action', actionRequest);
+        } else await api('/admin/action', actionRequest);
         toast('Audited action completed.');
       }
       $('#action-dialog').close();

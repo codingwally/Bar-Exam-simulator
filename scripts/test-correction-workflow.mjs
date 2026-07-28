@@ -31,7 +31,7 @@ assert.doesNotMatch(html, /ORIGINAL MODEL ANSWER/);
 assert.doesNotMatch(html, /Submitter email/);
 
 const functionSource = html.match(
-  /function openSuggest\(\) \{[\s\S]*?(?=\/\* ---------- B2B view switch ---------- \*\/)/,
+  /function openSuggest\(\) \{[\s\S]*?(?=\/\* ---------- Voice-to-text dictation \(real, with fallback\) ---------- \*\/)/,
 )?.[0];
 assert.ok(functionSource, 'Correction workflow functions must be extractable for behavioral tests.');
 

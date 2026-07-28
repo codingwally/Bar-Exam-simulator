@@ -13,6 +13,130 @@
   --dd2-shadow: 0 24px 80px rgba(3, 14, 31, .28);
 }
 
+.dd2-plan.is-disabled {
+  opacity: .72;
+  background: #f0ede7;
+}
+
+.dd2-plan .dd2-button {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.dd2-payment-panel {
+  margin: 32px 0;
+  padding: clamp(20px, 4vw, 34px);
+  color: var(--dd2-charcoal);
+  background: var(--dd2-paper);
+  border: 1px solid var(--dd2-line);
+  border-top: 3px solid var(--dd2-gold);
+  border-radius: 6px;
+}
+
+.dd2-payment-panel h3 {
+  margin: 8px 0;
+  color: var(--dd2-navy);
+  font: 700 26px/1.2 var(--serif, Georgia, serif);
+}
+
+.dd2-payment-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 22px 0 14px;
+}
+
+.dd2-payment-tab {
+  min-height: 44px;
+  color: var(--dd2-navy);
+  background: #fff;
+  border: 1px solid var(--dd2-line);
+  border-radius: 4px;
+  font: 750 13px/1 var(--sans, sans-serif);
+  cursor: pointer;
+}
+
+.dd2-payment-tab.is-active {
+  color: #fff;
+  background: var(--dd2-navy);
+  border-color: var(--dd2-navy);
+}
+
+.dd2-qr-frame {
+  width: min(360px, 100%);
+  margin: 18px auto 26px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--dd2-line);
+}
+
+.dd2-qr-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.dd2-qr-frame figcaption {
+  padding-top: 10px;
+  color: var(--dd2-muted);
+  font: 650 12px/1.4 var(--sans, sans-serif);
+  text-align: center;
+}
+
+.dd2-record-list {
+  display: grid;
+  gap: 10px;
+}
+
+.dd2-record {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 16px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--dd2-line);
+  border-left: 3px solid var(--dd2-gold);
+  border-radius: 4px;
+}
+
+.dd2-record strong {
+  color: var(--dd2-navy);
+  text-transform: capitalize;
+}
+
+.dd2-record small,
+.dd2-record p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--dd2-muted);
+}
+
+.dd2-record-status {
+  color: #5c4316;
+  font: 750 10px/1.4 var(--mono, monospace);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dd2-access-summary {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--dd2-line);
+  border-left: 3px solid var(--dd2-gold);
+}
+
+.dd2-access-summary strong {
+  color: var(--dd2-navy);
+  text-transform: capitalize;
+}
+
+.dd2-access-summary span {
+  color: var(--dd2-muted);
+}
+
 .dd2-sr-only {
   position: absolute !important;
   width: 1px !important;

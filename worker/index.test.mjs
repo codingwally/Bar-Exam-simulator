@@ -25,6 +25,14 @@ import {
   normalizeSupportRequest,
   supportInsertRecord,
 } from './support-core.mjs';
+import {
+  PaymentValidationError,
+  normalizePartnershipRequest,
+  normalizePaymentFields,
+  normalizeRefundRequest,
+  proofExtension,
+  validateProofSignature,
+} from './payment-core.mjs';
 
 const remedialContext = {
   subject: 'Remedial Law',
@@ -1023,6 +1031,273 @@ test('correction endpoint fails generically when storage configuration is absent
     assert.equal(payload.error.code, 'CORRECTIONS_NOT_CONFIGURED');
     assert.equal(payload.error.message, 'Correction submissions are temporarily unavailable.');
     assert.doesNotMatch(JSON.stringify(payload), /service.role|supabase.*key|credential/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('payment field validation accepts trusted-plan shaped GCash and MariBank submissions', () => {
+  for (const paymentMethod of ['gcash', 'maribank']) {
+    const value = normalizePaymentFields({
+      planCode: 'standard',
+      amountPhp: '249.00',
+      paymentMethod,
+      paymentDate: '2026-07-28',
+      transactionReference: 'REF-2026-0001',
+      note: 'Paid through the selected channel.',
+    });
+    assert.equal(value.planCode, 'standard');
+    assert.equal(value.paymentMethod, paymentMethod);
+    assert.equal(value.amountPhp, 249);
+  }
+});
+
+test('payment validation rejects Premium checkout, unsupported channels, and malformed references', () => {
+  for (const input of [
+    { planCode: 'premium', amountPhp: 499, paymentMethod: 'gcash', paymentDate: '2026-07-28', transactionReference: 'REF-1' },
+    { planCode: 'standard', amountPhp: 249, paymentMethod: 'maya', paymentDate: '2026-07-28', transactionReference: 'REF-1' },
+    { planCode: 'standard', amountPhp: 249, paymentMethod: 'gcash', paymentDate: '2026-07-28', transactionReference: '<script>' },
+  ]) {
+    assert.throws(() => normalizePaymentFields(input), PaymentValidationError);
+  }
+});
+
+test('proof validation enforces matching PNG, JPEG, and PDF signatures', () => {
+  const fixtures = [
+    ['proof.png', 'image/png', new Uint8Array([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,1])],
+    ['proof.jpeg', 'image/jpeg', new Uint8Array([0xff,0xd8,0xff,0xe0,1])],
+    ['proof.pdf', 'application/pdf', new TextEncoder().encode('%PDF-1.7')],
+  ];
+  for (const [name, mime, bytes] of fixtures) {
+    assert.ok(proofExtension(name, mime));
+    assert.equal(validateProofSignature(bytes, mime).byteLength, bytes.byteLength);
+  }
+  assert.throws(
+    () => validateProofSignature(new TextEncoder().encode('<html>'), 'image/png'),
+    PaymentValidationError,
+  );
+  assert.throws(() => proofExtension('proof.svg', 'image/svg+xml'), PaymentValidationError);
+  assert.throws(() => proofExtension('proof.pdf', 'image/png'), PaymentValidationError);
+});
+
+test('refund and partnership validation require strong identifiers, contact, message, and consent', () => {
+  assert.deepEqual(normalizeRefundRequest({
+    paymentRequestId: '11111111-1111-4111-8111-111111111111',
+    reason: 'I request review under the published refund policy.',
+  }), {
+    paymentRequestId: '11111111-1111-4111-8111-111111111111',
+    reason: 'I request review under the published refund policy.',
+  });
+  assert.throws(() => normalizeRefundRequest({ paymentRequestId: 'bad', reason: 'short' }), PaymentValidationError);
+  assert.equal(normalizePartnershipRequest({
+    inquiryType: 'institutional_license',
+    contactName: 'Dean Test',
+    contactEmail: 'dean@example.edu',
+    organization: 'Example College of Law',
+    message: 'We would like to discuss an institutional license for our students.',
+    consent: true,
+  }).consent, true);
+  assert.throws(() => normalizePartnershipRequest({
+    inquiryType: 'other',
+    contactName: 'Test',
+    contactEmail: 'bad',
+    message: 'This message is long enough for validation.',
+    consent: true,
+  }), PaymentValidationError);
+  assert.throws(() => normalizePartnershipRequest({
+    inquiryType: 'other',
+    contactName: 'Test',
+    contactEmail: 'test@example.com',
+    message: 'This message is long enough for validation.',
+    consent: false,
+  }), PaymentValidationError);
+});
+
+test('plans endpoint returns database-configured plans including disabled Premium', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/rest/v1/rpc/phase4_plan_catalog')) {
+      return Response.json([
+        { planCode: 'early_access_beta', pricePhp: 149, checkoutEnabled: true },
+        { planCode: 'standard', pricePhp: 249, checkoutEnabled: true },
+        { planCode: 'premium', pricePhp: 499, checkoutEnabled: false, status: 'disabled' },
+      ]);
+    }
+    throw new Error(`Unexpected plans fetch: ${url}`);
+  };
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/plans', {
+      method: 'POST',
+      headers: { Origin: reliabilityOrigin },
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.plans.length, 3);
+    assert.equal(payload.plans[2].checkoutEnabled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('payment endpoint authenticates, verifies file bytes, uploads privately, and stores trusted metadata', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    calls.push({ target, init });
+    if (target.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '11111111-1111-4111-8111-111111111111' });
+    }
+    if (target.includes('/storage/v1/object/payment-proofs/')) {
+      assert.equal(init.headers['x-upsert'], 'false');
+      assert.equal(init.headers['Content-Type'], 'image/png');
+      return Response.json({ Key: 'private-object' });
+    }
+    if (target.endsWith('/rest/v1/rpc/phase4_create_payment_request')) {
+      const body = JSON.parse(init.body);
+      assert.equal(body.p_user_id, '11111111-1111-4111-8111-111111111111');
+      assert.equal(body.p_plan_code, 'standard');
+      assert.equal(body.p_payment_method, 'gcash');
+      assert.equal(body.p_amount_php, 249);
+      assert.match(body.p_proof_object_path, /^11111111-1111-4111-8111-111111111111\/[0-9a-f-]+\.png$/);
+      assert.match(body.p_proof_sha256, /^[0-9a-f]{64}$/);
+      return Response.json({
+        id: '22222222-2222-4222-8222-222222222222',
+        status: 'pending',
+        planCode: 'standard',
+        amountPhp: 249,
+        replayed: false,
+      });
+    }
+    throw new Error(`Unexpected payment fetch: ${target}`);
+  };
+  try {
+    const form = new FormData();
+    form.set('planCode', 'standard');
+    form.set('amountPhp', '249');
+    form.set('paymentMethod', 'gcash');
+    form.set('paymentDate', '2026-07-28');
+    form.set('transactionReference', 'GCASH-TEST-001');
+    form.set('note', 'Synthetic Worker test');
+    form.set(
+      'proof',
+      new File(
+        [new Uint8Array([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,1])],
+        'proof.png',
+        { type: 'image/png' },
+      ),
+    );
+    const response = await worker.fetch(new Request('https://worker.example/payments/submit', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        Authorization: 'Bearer verified-user-token',
+        'X-Request-ID': 'payment_worker_test_0001',
+        'CF-Connecting-IP': '203.0.113.241',
+      },
+      body: form,
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 201);
+    assert.equal(payload.payment.status, 'pending');
+    assert.equal(calls.filter((call) => call.target.includes('/storage/v1/object/')).length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('unsafe payment proof fails before any private upload or database call', async () => {
+  const originalFetch = globalThis.fetch;
+  let protectedCalls = 0;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '11111111-1111-4111-8111-111111111111' });
+    }
+    protectedCalls += 1;
+    throw new Error(`Unexpected protected call: ${target}`);
+  };
+  try {
+    const form = new FormData();
+    form.set('planCode', 'standard');
+    form.set('amountPhp', '249');
+    form.set('paymentMethod', 'maribank');
+    form.set('paymentDate', '2026-07-28');
+    form.set('transactionReference', 'MARIBANK-TEST-001');
+    form.set('proof', new File(['<html>unsafe</html>'], 'proof.png', { type: 'image/png' }));
+    const response = await worker.fetch(new Request('https://worker.example/payments/submit', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        Authorization: 'Bearer verified-user-token',
+        'X-Request-ID': 'payment_worker_test_unsafe_0002',
+        'CF-Connecting-IP': '203.0.113.242',
+      },
+      body: form,
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 415);
+    assert.equal(payload.error.code, 'UNSAFE_PROOF_FILE');
+    assert.equal(protectedCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('native partnership endpoint queues a consented inquiry without external redirect', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target.endsWith('/rest/v1/rpc/phase4_create_partnership_inquiry')) {
+      const body = JSON.parse(init.body);
+      assert.equal(body.p_user_id, null);
+      assert.equal(body.p_contact_email, 'dean@example.edu');
+      assert.equal(body.p_consent, true);
+      return Response.json({
+        id: '33333333-3333-4333-8333-333333333333',
+        status: 'new',
+        replayed: false,
+      });
+    }
+    throw new Error(`Unexpected partnership fetch: ${target}`);
+  };
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/partnerships', {
+      method: 'POST',
+      headers: {
+        Origin: reliabilityOrigin,
+        'Content-Type': 'application/json',
+        'X-Request-ID': 'partnership_worker_test_0001',
+        'CF-Connecting-IP': '203.0.113.243',
+      },
+      body: JSON.stringify({
+        inquiryType: 'institutional_license',
+        contactName: 'Dean Test',
+        contactEmail: 'dean@example.edu',
+        organization: 'Example College of Law',
+        message: 'We would like to discuss an institutional license for our students.',
+        consent: true,
+      }),
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 201);
+    assert.equal(payload.inquiry.status, 'new');
   } finally {
     globalThis.fetch = originalFetch;
   }

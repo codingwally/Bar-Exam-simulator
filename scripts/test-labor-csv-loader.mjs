@@ -45,11 +45,15 @@ for (const question of result.questions) {
 }
 
 const pageSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-assert.match(pageSource, /"Labor Law": \[\]/, 'The old ten-question Labor Law sample must not remain as a fallback.');
+assert.match(pageSource, /const BAR_QUESTIONS = Object\.fromEntries\(/, 'The subject bank must initialize without embedded question content.');
+assert.match(pageSource, /SUBJECTS\.map\(\(subject\) => \[subject, \[\]\]\)/, 'Every subject must start with an empty protected bank.');
 assert.doesNotMatch(pageSource, /Labor Law Q\.10/, 'No hard-coded ten-item Labor Law bank may remain.');
-assert.match(pageSource, /function prevQuestion\(/, 'Existing previous-question navigation must remain.');
 assert.match(pageSource, /function nextQuestion\(/, 'Existing next-question navigation must remain.');
 assert.match(pageSource, /function randomQuestion\(/, 'Existing random-question behavior must remain.');
+assert.match(pageSource, /onclick="nextQuestion\(\)"[^>]*>NEXT<\/button>/, 'The workspace must expose one concise NEXT control.');
+assert.doesNotMatch(pageSource, />\s*(?:←\s*)?Prev(?:ious)? Question\s*</i, 'Previous-question controls must remain retired.');
+assert.doesNotMatch(pageSource, />\s*(?:🔀\s*)?Randomize\s*</i, 'A separate Randomize control must remain retired.');
+assert.match(pageSource, /randomDifferentQuestionIndex\(BAR_QUESTIONS\[currentSubj\], currentIdx\)/, 'NEXT must choose a different random question.');
 assert.match(pageSource, /async function evaluateAnswer\(/, 'The Worker-backed examiner submission behavior must remain.');
 assert.match(pageSource, /EXAMINER_WORKER_URL/, 'Essay grading must use the Cloudflare Worker.');
 assert.doesNotMatch(pageSource, /Number\(answerScore\) \+ Number\(legalScore\)/, 'The retired heuristic 100-point calculation must not return.');

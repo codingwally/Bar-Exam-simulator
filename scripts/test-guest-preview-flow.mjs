@@ -129,61 +129,6 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
 }
 
 {
-  const calls = [];
-  let observerCallback;
-  const investorModal = {
-    open: true,
-    classList: {
-      contains(name) {
-        return name === 'open' && investorModal.open;
-      },
-    },
-  };
-  const context = {
-    state: {
-      investorGateObserver: null,
-      reminderResolve: null,
-    },
-    document: {
-      getElementById(id) {
-        return id === 'investor-modal' ? investorModal : null;
-      },
-    },
-    MutationObserver: class {
-      constructor(callback) {
-        observerCallback = callback;
-      }
-      observe() {
-        calls.push('observe');
-      }
-      disconnect() {
-        calls.push('disconnect');
-      }
-    },
-    setOverlay() {
-      calls.push('close-reminder');
-    },
-    showEntry(options) {
-      calls.push(['entry', options.completed]);
-    },
-  };
-  vm.runInNewContext(
-    `${between(experience, 'function requireSignInForGuestLimit()', 'function initials()')}
-     requireSignInForGuestLimit();`,
-    context,
-  );
-  assert.deepEqual(calls, ['observe'], 'Patron modal must retain first-load priority');
-  investorModal.open = false;
-  observerCallback();
-  assert.deepEqual(calls, [
-    'observe',
-    'disconnect',
-    'close-reminder',
-    ['entry', true],
-  ], 'Exhausted guest sign-in prompt must follow immediately after the Patron modal closes');
-}
-
-{
   const wordCount = { textContent: '' };
   const submit = { disabled: true };
   let draftsSaved = 0;
@@ -348,7 +293,7 @@ async function reconcileScenario({ session = null, responses }) {
     requireSignInForGuestLimit() { promptCount += 1; },
   };
   vm.runInNewContext(
-    between(experience, 'async function requestGuestAccessStatus(headers)', 'function firstPatronWelcome()'),
+    between(experience, 'async function requestGuestAccessStatus(headers)', 'async function initialize()'),
     context,
   );
   const result = await context.reconcileGuestAccess({ promptWhenExhausted: true });
@@ -459,7 +404,7 @@ for (const completed of [0, 1, 2, 3]) {
     requireSignInForGuestLimit() {},
   };
   vm.runInNewContext(
-    between(experience, 'async function requestGuestAccessStatus(headers)', 'function firstPatronWelcome()'),
+    between(experience, 'async function requestGuestAccessStatus(headers)', 'async function initialize()'),
     context,
   );
   const reconciliation = context.reconcileGuestAccess({ promptWhenExhausted: true });

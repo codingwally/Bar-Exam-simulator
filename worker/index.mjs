@@ -57,6 +57,17 @@ import {
   normalizeSubject,
   selectProtectedQuestion,
 } from './access-core.mjs';
+import {
+  PAYMENT_LIMITS,
+  PaymentValidationError,
+  normalizePartnershipRequest,
+  normalizePaymentFields,
+  normalizePhase4AdminAction,
+  normalizePhase4AdminRequest,
+  normalizeRefundRequest,
+  proofExtension,
+  validateProofSignature,
+} from './payment-core.mjs';
 import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
 const WINDOW_MS = 10 * 60 * 1000;
@@ -73,6 +84,8 @@ const supportRateWindows = new Map();
 const analyticsRateWindows = new Map();
 const adminRateWindows = new Map();
 const guestStatusRateWindows = new Map();
+const paymentRateWindows = new Map();
+const partnershipRateWindows = new Map();
 const recentSubmissions = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
@@ -332,6 +345,24 @@ async function protectedSupabaseRpc(env, functionName, body) {
   return result;
 }
 
+async function enforcePaymentRateLimit(request, env) {
+  enforceWindow(
+    paymentRateWindows,
+    await transientRateKey(request, env, 'payment'),
+    8,
+    'Too many payment requests. Please wait and try again.',
+  );
+}
+
+async function enforcePartnershipRateLimit(request, env) {
+  enforceWindow(
+    partnershipRateWindows,
+    await transientRateKey(request, env, 'partnership'),
+    4,
+    'Too many partnership requests. Please wait and try again.',
+  );
+}
+
 async function phase4Rpc(env, functionName, body) {
   const baseUrl = configuredSupabaseUrl(env);
   const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
@@ -356,6 +387,144 @@ async function phase4Rpc(env, functionName, body) {
     );
   }
   return result;
+}
+
+async function commerceRpc(env, functionName, body) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (response.ok) return result;
+  const databaseMessage = String(result?.message || '');
+  console.error('Commerce storage request failed', {
+    operation: functionName,
+    status: response.status,
+  });
+  if (/already been submitted|already exists|request key already used/i.test(databaseMessage)) {
+    throw new PaymentValidationError(
+      'DUPLICATE_PAYMENT',
+      'This payment or refund request has already been submitted.',
+      409,
+    );
+  }
+  if (/not available|must match|unsupported|outside the accepted|reason must|valid request/i.test(databaseMessage)) {
+    throw new PaymentValidationError(
+      'INVALID_COMMERCE_REQUEST',
+      'The request did not pass secure validation. Review the details and try again.',
+      400,
+    );
+  }
+  throw new PaymentValidationError(
+    'COMMERCE_UNAVAILABLE',
+    'Secure payment services are temporarily unavailable. No access change was made.',
+    503,
+  );
+}
+
+function encodedStoragePath(path) {
+  return String(path || '').split('/').map((part) => encodeURIComponent(part)).join('/');
+}
+
+async function uploadPrivateProof(env, objectPath, bytes, mimeType) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(
+    new URL(`/storage/v1/object/payment-proofs/${encodedStoragePath(objectPath)}`, baseUrl),
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': mimeType,
+        'x-upsert': 'false',
+      },
+      body: bytes,
+    },
+  );
+  if (!response.ok) {
+    console.error('Private payment proof upload failed', { status: response.status });
+    throw new PaymentValidationError(
+      'PAYMENT_PROOF_UNAVAILABLE',
+      'The payment proof could not be stored securely. Please try again.',
+      503,
+    );
+  }
+}
+
+async function deletePrivateProof(env, objectPath) {
+  try {
+    const baseUrl = configuredSupabaseUrl(env);
+    await fetch(
+      new URL(`/storage/v1/object/payment-proofs/${encodedStoragePath(objectPath)}`, baseUrl),
+      {
+        method: 'DELETE',
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        },
+      },
+    );
+  } catch {
+    console.error('Private payment proof cleanup requires operator review');
+  }
+}
+
+async function signedPrivateProofUrl(env, objectPath) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(
+    new URL(`/storage/v1/object/sign/payment-proofs/${encodedStoragePath(objectPath)}`, baseUrl),
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ expiresIn: 300 }),
+    },
+  );
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result?.signedURL) {
+    console.error('Private payment proof signing failed', { status: response.status });
+    throw new PaymentValidationError(
+      'PAYMENT_PROOF_UNAVAILABLE',
+      'The proof is temporarily unavailable for secure review.',
+      503,
+    );
+  }
+  return new URL(result.signedURL, baseUrl).href;
+}
+
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function sendSecureNotification(env, { mailbox, subject, adminPath }) {
+  if (!env.WEB3FORMS_ACCESS_KEY) return { sent: false, queued: true };
+  const response = await fetch('https://api.web3forms.com/submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      access_key: env.WEB3FORMS_ACCESS_KEY,
+      from_name: 'Due Diligence Operations',
+      subject,
+      email: mailbox,
+      message: `A new production request is ready for authorized review: https://duediligence.ph${adminPath}`,
+    }),
+  });
+  if (!response.ok) {
+    console.error('Operations notification dispatch failed', { status: response.status });
+    return { sent: false, queued: true };
+  }
+  return { sent: true, queued: true };
 }
 
 async function verifiedAuthenticatedUser(request, env) {
@@ -1521,6 +1690,205 @@ async function handleAdminExport(request, env, origin, allowedOrigin) {
   });
 }
 
+async function handlePlans(request, env, origin, allowedOrigin) {
+  const plans = await phase4Rpc(env, 'phase4_plan_catalog', {});
+  return jsonResponse({ ok: true, plans: Array.isArray(plans) ? plans : [] }, 200, origin, allowedOrigin);
+}
+
+async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
+  await enforcePaymentRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const contentLength = Number(request.headers.get('Content-Length') || 0);
+  if (contentLength > PAYMENT_LIMITS.maxProofBytes + 100_000) {
+    throw new PaymentValidationError(
+      'PAYMENT_REQUEST_TOO_LARGE',
+      'Payment proof exceeds the 6 MiB limit.',
+      413,
+    );
+  }
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
+    throw new PaymentValidationError(
+      'INVALID_PAYMENT',
+      'Submit payment details and one payment-proof file.',
+    );
+  }
+  const fields = normalizePaymentFields({
+    planCode: form.get('planCode'),
+    amountPhp: form.get('amountPhp'),
+    paymentMethod: form.get('paymentMethod'),
+    paymentDate: form.get('paymentDate'),
+    transactionReference: form.get('transactionReference'),
+    note: form.get('note'),
+  });
+  const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
+  const proof = form.get('proof');
+  if (!proof || typeof proof.arrayBuffer !== 'function') {
+    throw new PaymentValidationError('PAYMENT_PROOF_REQUIRED', 'Upload a PNG, JPEG, or PDF payment proof.');
+  }
+  const originalName = String(proof.name || 'payment-proof').trim();
+  const mimeType = String(proof.type || '').toLowerCase();
+  const extension = proofExtension(originalName, mimeType);
+  const arrayBuffer = await proof.arrayBuffer();
+  const bytes = validateProofSignature(new Uint8Array(arrayBuffer), mimeType);
+  const proofSha256 = await sha256Hex(bytes);
+  const objectId = crypto.randomUUID();
+  const objectPath = `${user.id}/${objectId}.${extension}`;
+  await uploadPrivateProof(env, objectPath, bytes, mimeType);
+  let result;
+  try {
+    result = await commerceRpc(env, 'phase4_create_payment_request', {
+      p_user_id: user.id,
+      p_plan_code: fields.planCode,
+      p_amount_php: fields.amountPhp,
+      p_payment_method: fields.paymentMethod,
+      p_payment_date: fields.paymentDate,
+      p_transaction_reference: fields.transactionReference,
+      p_student_note: fields.note,
+      p_proof_object_path: objectPath,
+      p_proof_original_name: originalName.slice(0, 180),
+      p_proof_mime_type: mimeType,
+      p_proof_size_bytes: bytes.byteLength,
+      p_proof_sha256: proofSha256,
+      p_request_key: requestKey,
+    });
+  } catch (error) {
+    await deletePrivateProof(env, objectPath);
+    throw error;
+  }
+  if (result?.replayed) await deletePrivateProof(env, objectPath);
+  await sendSecureNotification(env, {
+    mailbox: 'plansandpricing@duediligence.ph',
+    subject: 'Due Diligence payment verification request',
+    adminPath: `/admin/payments?request=${encodeURIComponent(result.id)}`,
+  });
+  return jsonResponse({
+    ok: true,
+    payment: result,
+    message: 'Payment proof submitted for Founder verification. Access begins only after approval.',
+  }, 201, origin, allowedOrigin);
+}
+
+async function handleBillingStatus(request, env, origin, allowedOrigin) {
+  const user = await requireAuthenticatedUser(request, env);
+  const result = await commerceRpc(env, 'phase4_student_billing_snapshot', {
+    p_user_id: user.id,
+  });
+  return jsonResponse({ ok: true, billing: result }, 200, origin, allowedOrigin);
+}
+
+async function handleRefundSubmit(request, env, origin, allowedOrigin) {
+  await enforcePaymentRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const input = normalizeRefundRequest(await parseBoundedJson(request, 8_000));
+  const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
+  const result = await commerceRpc(env, 'phase4_create_refund_request', {
+    p_user_id: user.id,
+    p_payment_request_id: input.paymentRequestId,
+    p_reason: input.reason,
+    p_request_key: requestKey,
+  });
+  await sendSecureNotification(env, {
+    mailbox: 'plansandpricing@duediligence.ph',
+    subject: 'Due Diligence refund review request',
+    adminPath: `/admin/refunds?request=${encodeURIComponent(result.id)}`,
+  });
+  return jsonResponse({
+    ok: true,
+    refund: result,
+    message: 'Refund request received. Initial response target: 24 hours.',
+  }, 201, origin, allowedOrigin);
+}
+
+async function handlePartnershipSubmit(request, env, origin, allowedOrigin) {
+  await enforcePartnershipRateLimit(request, env);
+  const user = await verifiedAuthenticatedUser(request, env);
+  const input = normalizePartnershipRequest(await parseBoundedJson(request, 12_000));
+  const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
+  const result = await commerceRpc(env, 'phase4_create_partnership_inquiry', {
+    p_user_id: user?.id || null,
+    p_inquiry_type: input.inquiryType,
+    p_contact_name: input.contactName,
+    p_contact_email: input.contactEmail,
+    p_organization: input.organization,
+    p_message: input.message,
+    p_consent: input.consent,
+    p_request_key: requestKey,
+  });
+  await sendSecureNotification(env, {
+    mailbox: 'founders@duediligence.ph',
+    subject: 'Due Diligence partnership inquiry',
+    adminPath: `/admin/partnerships?inquiry=${encodeURIComponent(result.id)}`,
+  });
+  return jsonResponse({
+    ok: true,
+    inquiry: result,
+    message: 'Your inquiry has been sent to the Due Diligence founders.',
+  }, 201, origin, allowedOrigin);
+}
+
+async function handlePhase4AdminData(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const query = normalizePhase4AdminRequest(await parseBoundedJson(request, 8_000));
+  const result = await phase4Rpc(env, 'phase4_admin_operational_data', {
+    p_actor_user_id: user.id,
+    p_section: query.section,
+    p_search: query.search,
+    p_limit: query.limit,
+    p_offset: query.offset,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handlePhase4AdminAction(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const action = normalizePhase4AdminAction(await parseBoundedJson(request, 16_000));
+  const result = await phase4Rpc(env, 'phase4_admin_execute_action', {
+    p_actor_user_id: user.id,
+    p_action: action.action,
+    p_target_id: action.targetId,
+    p_payload: action.payload,
+    p_reason: action.reason,
+    p_request_key: action.requestKey,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminPaymentProof(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const payload = await parseBoundedJson(request, 4_000);
+  const paymentRequestId = String(payload?.paymentRequestId || '').trim();
+  const reason = String(payload?.reason || '').trim();
+  const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
+  if (!/^[0-9a-f-]{36}$/i.test(paymentRequestId) || reason.length < 5 || reason.length > 1000) {
+    throw new PaymentValidationError(
+      'INVALID_ADMIN_ACTION',
+      'A payment request and review reason are required.',
+    );
+  }
+  const context = await phase4Rpc(env, 'phase4_payment_proof_context', {
+    p_actor_user_id: user.id,
+    p_payment_request_id: paymentRequestId,
+    p_reason: reason,
+    p_request_key: requestKey,
+  });
+  const url = await signedPrivateProofUrl(env, context.objectPath);
+  return jsonResponse({
+    ok: true,
+    proof: {
+      url,
+      mimeType: context.mimeType,
+      sizeBytes: context.sizeBytes,
+      expiresInSeconds: 300,
+    },
+  }, 200, origin, allowedOrigin);
+}
+
 export default {
   async fetch(request, env) {
     const allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
@@ -1552,6 +1920,21 @@ export default {
       if (pathname === '/exam/history') {
         return await handleExamHistory(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/plans') {
+        return await handlePlans(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/payments/submit') {
+        return await handlePaymentSubmit(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/payments/status') {
+        return await handleBillingStatus(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/refunds/submit') {
+        return await handleRefundSubmit(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/partnerships') {
+        return await handlePartnershipSubmit(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/support') {
         return await handleSupport(request, env, origin, allowedOrigin);
       }
@@ -1579,6 +1962,15 @@ export default {
       if (pathname === '/admin/export') {
         return await handleAdminExport(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/admin/phase4-data') {
+        return await handlePhase4AdminData(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/phase4-action') {
+        return await handlePhase4AdminAction(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/payment-proof') {
+        return await handleAdminPaymentProof(request, env, origin, allowedOrigin);
+      }
       if (pathname !== '/') {
         throw new ExaminerError('NOT_FOUND', 'This endpoint does not exist.', 404);
       }
@@ -1586,7 +1978,8 @@ export default {
     } catch (error) {
       const known = error instanceof ExaminerError
         || error instanceof GuestAccessError
-        || error instanceof AccessValidationError;
+        || error instanceof AccessValidationError
+        || error instanceof PaymentValidationError;
       return jsonResponse({
         ok: false,
         error: {

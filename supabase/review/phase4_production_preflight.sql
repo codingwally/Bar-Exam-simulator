@@ -20,7 +20,7 @@ begin
     'account_recovery_audit','account_recovery_cases','admin_action_requests',
     'admin_audit_log','admin_capabilities','calibration_examples',
     'discount_assignments','discount_codes','entitlement_history',
-    'grade_disputes','grading_results','guest_grading_devices','guest_grading_reservations',
+    'grading_results','guest_grading_devices','guest_grading_reservations',
     'guest_grading_usage','marketing_consents','plan_catalog','profiles',
     'question_correction_history','question_corrections','questions','subjects',
     'submissions','support_request_history',
@@ -30,6 +30,10 @@ begin
   where to_regclass('public.' || name) is null;
   if v_missing is not null then
     raise exception 'PHASE4_PREFLIGHT_MISSING_PHASE3_OBJECTS: %', v_missing;
+  end if;
+
+  if to_regclass('public.grade_disputes') is not null then
+    raise exception 'PHASE4_PREFLIGHT_LEGACY_GRADE_DISPUTES_PRESENT: Phase 1 should have renamed this table to question_corrections';
   end if;
 
   select array_agg(name order by name) into v_unexpected
@@ -47,14 +51,20 @@ begin
   end if;
 
   if not exists (
-    select 1 from supabase_migrations.schema_migrations where version = '20260725'
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260724005821' and name = 'initial_schema'
   ) or not exists (
-    select 1 from supabase_migrations.schema_migrations where version = '20260727'
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260727' and name = '002_auth_user_data_analytics_foundation'
   ) or not exists (
-    select 1 from supabase_migrations.schema_migrations where version = '20260728'
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260728' and name = '003_phase2_guest_access_support'
   ) or not exists (
-    select 1 from supabase_migrations.schema_migrations where version = '20260729'
-  ) then
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260729' and name = '004_phase3_admin_analytics'
+  ) or (
+    select count(*) from supabase_migrations.schema_migrations
+  ) <> 4 then
     raise exception 'PHASE4_PREFLIGHT_LEDGER_DRIFT: baseline and Phase 1-3 ledger entries are required';
   end if;
 
@@ -71,9 +81,6 @@ begin
   end if;
   if (select count(*) from public.questions) <> 2 then
     raise exception 'PHASE4_PREFLIGHT_QUESTION_DRIFT: expected exactly 2 database question rows';
-  end if;
-  if (select count(*) from public.grade_disputes) <> 0 then
-    raise exception 'PHASE4_PREFLIGHT_GRADE_DISPUTE_DRIFT: expected zero legacy disputes';
   end if;
   if (select count(*) from public.user_roles where role = 'super_admin') <> 1 then
     raise exception 'PHASE4_PREFLIGHT_SUPER_ADMIN_DRIFT: exactly one Super Admin is required';
@@ -150,7 +157,6 @@ select jsonb_build_object(
   'profiles', (select count(*) from public.profiles),
   'submissions', (select count(*) from public.submissions),
   'grading_results', (select count(*) from public.grading_results),
-  'grade_disputes', (select count(*) from public.grade_disputes),
   'question_corrections', (select count(*) from public.question_corrections),
   'support_requests', (select count(*) from public.support_requests),
   'usage_sessions', (select count(*) from public.usage_sessions),

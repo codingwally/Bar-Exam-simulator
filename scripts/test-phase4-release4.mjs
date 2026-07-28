@@ -109,6 +109,14 @@ assert.doesNotMatch(preflight, /\b(insert|update|delete|alter|create|drop|trunca
 assert.match(preflight, /expected exactly 8 subjects/);
 assert.match(preflight, /expected exactly 2 database question rows/);
 assert.match(preflight, /payment-proofs bucket already exists/);
+assert.match(preflight, /version = '20260724005821' and name = 'initial_schema'/);
+assert.match(preflight, /select count\(\*\) from supabase_migrations\.schema_migrations/);
+assert.match(preflight, /PHASE4_PREFLIGHT_LEGACY_GRADE_DISPUTES_PRESENT/);
+assert.doesNotMatch(
+  preflight,
+  /select count\(\*\) from public\.grade_disputes/,
+  'Phase 1 intentionally renamed grade_disputes to question_corrections.',
+);
 
 for (const source of [migration, preflight, worker, paymentCore, frontend, publicPage, admin]) {
   assert.doesNotMatch(source, /AIza[0-9A-Za-z_-]{20,}/);

@@ -80,6 +80,9 @@ assert.match(admin, /support: 'Co-Counsel Requests'/);
 assert.match(admin, /partnerships: 'Joint Ventures'/);
 assert.match(admin, /security: 'Access & Activity Log'/);
 assert.doesNotMatch(admin, /Visitors and Sign-ups|Access and Activity Log/);
+assert.match(admin, /function maskOperationalIdentifier/);
+assert.match(admin, /\['Time', 'Action', 'Actor', 'Record type', 'Record', 'Reason'\]/);
+assert.doesNotMatch(admin, /Actor UUID|Auth UUIDs/);
 assert.doesNotMatch(
   admin,
   /table\(\['Student', 'User UUID', 'Role'|table\(\['Student', 'User UUID', 'Plan'/,

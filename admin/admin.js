@@ -49,6 +49,27 @@
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
   }[character]));
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  function maskOperationalIdentifier(value, prefix = '') {
+    const text = String(value || '').trim();
+    if (!text) return prefix || 'Not available';
+    if (!UUID_PATTERN.test(text)) return text;
+    return `${prefix ? `${prefix} · ` : ''}${text.slice(0, 8)}…${text.slice(-4)}`;
+  }
+
+  function humanizeAuditValue(value) {
+    const text = String(value || '').trim().replace(/^phase4_/, '').replace(/_/g, ' ');
+    if (!text) return 'Not available';
+    return text.replace(/\b\w/g, (character) => character.toUpperCase());
+  }
+
+  function auditTargetLabel(row) {
+    const target = String(row?.target_resource_id || '').trim();
+    if (!target) return 'Not available';
+    if (row?.target_resource_type === 'phase4_admin_section' && titles[target]) return titles[target];
+    return maskOperationalIdentifier(target);
+  }
 
   function toast(message) {
     const node = $('#admin-toast');
@@ -634,12 +655,13 @@
     const data = await loadOperational('security');
     return `
       ${heading('Access & Activity Log', 'Only the Super Admin may grant administrator roles or capabilities. Administrators cannot grant privileges to themselves or create another Super Admin.')}
-      <div class="notice">Wally remains the sole Super Admin. Founder Admin assignments use verified Auth UUIDs; no founder email is hardcoded in authorization logic.</div>
+      <div class="notice">Wally remains the sole Super Admin. Founder Admin assignments use verified account identities; no founder email is hardcoded in authorization logic.</div>
       ${table(
-        ['Time', 'Action', 'Actor UUID', 'Target type', 'Target', 'Reason'],
+        ['Time', 'Action', 'Actor', 'Record type', 'Record', 'Reason'],
         (data.items || []).map((row) => [
-          dateTime(row.occurred_at), row.action_type, row.actor_user_id || 'System',
-          row.target_resource_type || 'Not available', row.target_resource_id || 'Not available',
+          dateTime(row.occurred_at), humanizeAuditValue(row.action_type),
+          row.actor_user_id ? maskOperationalIdentifier(row.actor_user_id, 'Administrator') : 'System',
+          humanizeAuditValue(row.target_resource_type), auditTargetLabel(row),
           row.reason || 'Not provided',
         ]),
       )}

@@ -21,6 +21,7 @@ import {
   normalizeCorrectionRequest,
 } from './correction-core.mjs';
 import {
+  GUEST_DEVICE_ID_PATTERN,
   GUEST_GRADE_LIMIT,
   GuestAccessError,
   deriveGuestHashes,
@@ -62,6 +63,7 @@ const correctionRateWindows = new Map();
 const supportRateWindows = new Map();
 const analyticsRateWindows = new Map();
 const adminRateWindows = new Map();
+const guestStatusRateWindows = new Map();
 const recentSubmissions = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
@@ -244,6 +246,51 @@ async function supabaseRpc(env, functionName, body) {
   return response.json().catch(() => null);
 }
 
+async function enforceGuestStatusRateLimit(request, env) {
+  enforceWindow(
+    guestStatusRateWindows,
+    await transientRateKey(request, env, 'guest-status'),
+    60,
+    'Too many guest access checks. Please wait a few minutes and try again.',
+  );
+}
+
+async function supabaseGuestRows(env, tableName, query) {
+  const allowedTables = new Set(['guest_grading_devices', 'guest_grading_usage']);
+  if (!allowedTables.has(tableName)) {
+    throw new GuestAccessError(
+      'GUEST_ACCESS_UNAVAILABLE',
+      'Guest grading is temporarily unavailable.',
+      503,
+    );
+  }
+  const baseUrl = configuredSupabaseUrl(env);
+  const url = new URL(`/rest/v1/${tableName}`, baseUrl);
+  for (const [name, value] of Object.entries(query)) {
+    url.searchParams.set(name, value);
+  }
+  const response = await fetch(url, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      Accept: 'application/json',
+    },
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !Array.isArray(result)) {
+    console.error('Guest quota status request failed', {
+      operation: `select_${tableName}`,
+      status: response.status,
+    });
+    throw new GuestAccessError(
+      'GUEST_ACCESS_UNAVAILABLE',
+      'Guest grading is temporarily unavailable.',
+      503,
+    );
+  }
+  return result;
+}
+
 async function protectedSupabaseRpc(env, functionName, body) {
   const baseUrl = configuredSupabaseUrl(env);
   const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
@@ -340,6 +387,63 @@ async function reserveGradeAccess(request, env) {
     signedIn: false,
     reservationId: reservation.reservationId,
     usage: publicGuestUsage(reservation),
+  };
+}
+
+async function guestAccessStatus(request, env) {
+  const authenticatedUser = await verifiedAuthenticatedUser(request, env);
+  if (authenticatedUser) {
+    return { signedIn: true, usage: null };
+  }
+
+  const deviceId = String(request.headers.get('X-Guest-Device-ID') || '').trim();
+  if (!GUEST_DEVICE_ID_PATTERN.test(deviceId)) {
+    throw new GuestAccessError(
+      'GUEST_ID_REQUIRED',
+      'Guest access could not be verified. Refresh the page and try again.',
+      400,
+    );
+  }
+  const { deviceHash, recoveryHash } = await deriveGuestHashes(
+    request,
+    env.GUEST_USAGE_HMAC_KEY,
+    deviceId,
+  );
+
+  const deviceRows = await supabaseGuestRows(env, 'guest_grading_devices', {
+    select: 'usage_id',
+    device_hash: `eq.${deviceHash}`,
+    limit: '1',
+  });
+  let usageRows = [];
+  if (deviceRows[0]?.usage_id) {
+    usageRows = await supabaseGuestRows(env, 'guest_grading_usage', {
+      select: 'successful_grades',
+      id: `eq.${String(deviceRows[0].usage_id)}`,
+      limit: '1',
+    });
+  } else {
+    const recoveryCutoff = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000)).toISOString();
+    const recoveryRows = await supabaseGuestRows(env, 'guest_grading_usage', {
+      select: 'successful_grades',
+      recovery_hash: `eq.${recoveryHash}`,
+      last_seen_at: `gte.${recoveryCutoff}`,
+      order: 'last_seen_at.desc',
+      limit: '2',
+    });
+    if (recoveryRows.length === 1) usageRows = recoveryRows;
+  }
+
+  const consumed = Math.max(
+    0,
+    Math.min(GUEST_GRADE_LIMIT, Number(usageRows[0]?.successful_grades) || 0),
+  );
+  return {
+    signedIn: false,
+    usage: publicGuestUsage({
+      remaining: GUEST_GRADE_LIMIT - consumed,
+      consumed,
+    }),
   };
 }
 
@@ -677,6 +781,18 @@ async function handleGrade(request, env, origin, allowedOrigin) {
     recentSubmissions.delete(submissionId);
     throw error;
   }
+}
+
+async function handleGuestAccess(request, env, origin, allowedOrigin) {
+  await enforceGuestStatusRateLimit(request, env);
+  const access = await guestAccessStatus(request, env);
+  return jsonResponse({
+    ok: true,
+    access: {
+      signedIn: access.signedIn,
+      guest: access.signedIn ? null : access.usage,
+    },
+  }, 200, origin, allowedOrigin);
 }
 
 async function handleCorrection(request, env, origin, allowedOrigin) {
@@ -1048,6 +1164,9 @@ export default {
       const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
       if (pathname === '/corrections') {
         return await handleCorrection(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/guest-access') {
+        return await handleGuestAccess(request, env, origin, allowedOrigin);
       }
       if (pathname === '/support') {
         return await handleSupport(request, env, origin, allowedOrigin);

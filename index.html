@@ -1617,6 +1617,7 @@ let timeLeft = 720;
 let laborQuestionBankStatus = "loading";
 let websiteQuestionBankStatus = "loading";
 let gradingInProgress = false;
+let gradingAccessCheckInProgress = false;
 let onboardingStage = "welcome";
 let examStage = "idle";
 let selectedSessionMode = null;
@@ -2207,7 +2208,7 @@ function closeCheckingModal() {
 }
 
 async function evaluateAnswer() {
-  if (gradingInProgress || examStage !== 'answering') return;
+  if (gradingInProgress || gradingAccessCheckInProgress || examStage !== 'answering') return;
   const subjectAtSubmission = currentSubj;
   const indexAtSubmission = currentIdx;
   const key = `${subjectAtSubmission}-${indexAtSubmission}`;
@@ -2222,8 +2223,26 @@ async function evaluateAnswer() {
     return;
   }
   if (window.DueDiligencePhase2) {
-    const mayContinue = await window.DueDiligencePhase2.beforeGrade();
-    if (!mayContinue) return;
+    gradingAccessCheckInProgress = true;
+    setQuestionControlsDisabled(true);
+    try {
+      saveDraftForCurrentQuestion();
+      const mayContinue = await window.DueDiligencePhase2.beforeGrade();
+      if (!mayContinue) return;
+    } finally {
+      gradingAccessCheckInProgress = false;
+      setQuestionControlsDisabled(false);
+    }
+    const currentAnswer = (userAnswers[key] || '').trim();
+    if (
+      currentSubj !== subjectAtSubmission
+      || currentIdx !== indexAtSubmission
+      || examStage !== 'answering'
+      || currentAnswer !== studentAnswer
+    ) {
+      toast('Your question or answer changed while access was being checked. Review it and submit again.', 'warn');
+      return;
+    }
   }
 
   gradingInProgress = true;
@@ -2681,10 +2700,15 @@ function proceedAfterReview() {
 function applyExamEnhancements() {
   currentQuestionIndex = currentIdx;
   const box = document.getElementById('answer-box');
-  if (box && !box.dataset.locked) {
-    box.dataset.locked = '1';
-    ['copy', 'paste', 'cut', 'drop', 'dragstart'].forEach(evt =>
+  if (box && !box.dataset.integrityBound) {
+    box.dataset.integrityBound = '1';
+    ['copy', 'cut', 'drop', 'dragstart'].forEach(evt =>
       box.addEventListener(evt, e => { e.preventDefault(); return false; }));
+    box.addEventListener('paste', event => {
+      if (window.DueDiligencePhase2?.getSession()?.access_token) {
+        event.preventDefault();
+      }
+    });
   }
 }
 

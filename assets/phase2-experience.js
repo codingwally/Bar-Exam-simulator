@@ -1210,12 +1210,24 @@
     state.session = data?.session || null;
     state.user = state.session?.user || null;
     syncAuthUi();
+    global.dispatchEvent(new CustomEvent('duediligence:session', {
+      detail: {
+        authenticated: Boolean(state.session?.access_token),
+        userId: state.user?.id || null,
+      },
+    }));
     if (state.user) closeEntry();
 
     state.client.auth.onAuthStateChange((event, session) => {
       state.session = session || null;
       state.user = session?.user || null;
       syncAuthUi();
+      global.dispatchEvent(new CustomEvent('duediligence:session', {
+        detail: {
+          authenticated: Boolean(state.session?.access_token),
+          userId: state.user?.id || null,
+        },
+      }));
       if (session && ['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'].includes(event)) {
         closeEntry();
         if (event === 'SIGNED_IN') {

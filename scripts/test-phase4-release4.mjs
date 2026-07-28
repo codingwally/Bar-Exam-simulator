@@ -109,7 +109,8 @@ assert.match(
   admin,
   /actionButton\('View private proof', 'view_payment_proof', row\.id, \{\}\)\.value/,
 );
-assert.match(publicPage, /assets\/phase2-experience\.js\?v=phase4-20260728-2/);
+assert.match(publicPage, /assets\/phase2-experience\.js\?v=phase4-20260728-3/);
+assert.match(publicPage, /assets\/phase4-experience\.js\?v=phase4-20260728-1/);
 assert.match(text('admin/index.html'), /admin\.css\?v=phase4-20260728-2/);
 assert.match(text('admin/index.html'), /admin\.js\?v=phase4-20260728-3/);
 assert.match(

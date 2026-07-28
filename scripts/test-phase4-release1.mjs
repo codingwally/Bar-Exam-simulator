@@ -52,8 +52,13 @@ assert.match(frontend, /loadProtectedQuestion/);
 assert.match(frontend, /AUTHENTICATION_REQUIRED/);
 assert.match(
   shellExperience,
-  /state\.user = state\.session\?\.user \|\| null;\s*syncAuthUi\(\);\s*if \(state\.user\) closeEntry\(\);/,
+  /state\.user = state\.session\?\.user \|\| null;\s*syncAuthUi\(\);[\s\S]*?if \(state\.user\) closeEntry\(\);/,
   'A restored session must close a stale guest or sign-in gate.',
+);
+assert.match(
+  shellExperience,
+  /dispatchEvent\(new CustomEvent\('duediligence:session'/,
+  'The protected exam layer must be notified after a persisted auth session is restored.',
 );
 assert.match(
   shellExperience,

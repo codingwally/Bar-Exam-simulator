@@ -3,6 +3,8 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
 const html = await fs.readFile(new URL('../index.html', import.meta.url), 'utf8');
+const phase2 = await fs.readFile(new URL('../assets/phase2-experience.js', import.meta.url), 'utf8');
+const phase4 = await fs.readFile(new URL('../assets/phase4-experience.js', import.meta.url), 'utf8');
 
 assert.match(html, /id="welcome-state"/);
 assert.match(html, /Prepare with purpose\./);
@@ -31,6 +33,15 @@ assert.match(html, /sessionController\.pause\(\)/);
 assert.match(html, /sessionController\.startQuestion/);
 assert.match(html, /markAutomaticAdvanceHandled/);
 assert.match(html, /selectedSessionMode !== 'none'/);
+assert.match(html, /function questionAnswerKey\(subject = currentSubj, index = currentIdx\)/);
+assert.doesNotMatch(
+  html,
+  /userAnswers\[`?\$\{currentSubj\}-\$\{currentIdx\}`?\]/,
+  'Answer drafts must use stable question IDs rather than list indexes.',
+);
+assert.match(phase2, /dispatchEvent\(new CustomEvent\('duediligence:session'/);
+assert.match(phase4, /addEventListener\('duediligence:session'/);
+assert.match(phase4, /refreshAccess\(\)\.catch/);
 assert.match(html, /setQuestionControlsDisabled\(true\)/, 'The submitted question must lock while its assessment is under review.');
 
 const inlineScripts = Array.from(html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi))

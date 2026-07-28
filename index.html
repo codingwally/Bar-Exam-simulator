@@ -1061,7 +1061,7 @@ async function onTimeUp() {
   saveDraftForCurrentQuestion();
   const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
   if (!question) return;
-  const key = `${currentSubj}-${currentIdx}`;
+  const key = questionAnswerKey();
   const studentAnswer = (userAnswers[key] || '').trim();
   const timerState = sessionController.snapshot();
 
@@ -1141,6 +1141,11 @@ function newAttemptKey() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
 }
 
+function questionAnswerKey(subject = currentSubj, index = currentIdx) {
+  const questionId = BAR_QUESTIONS[subject]?.[index]?.id;
+  return questionId ? `${subject}::${questionId}` : `${subject}-${index}`;
+}
+
 function readPersistedWorkspace() {
   try {
     const saved = JSON.parse(safeStorageGet(localStorage, EXAM_WORKSPACE_KEY) || 'null');
@@ -1168,7 +1173,7 @@ function persistWorkspace() {
     subject: currentSubj,
     questionId: question.id,
     mode: selectedSessionMode,
-    draft: userAnswers[`${currentSubj}-${currentIdx}`] || '',
+    draft: userAnswers[questionAnswerKey()] || '',
     attemptKey: currentAttemptKey,
     savedAt: Date.now(),
   }));
@@ -1250,7 +1255,7 @@ async function restorePersistedWorkspace(userId) {
     currentIdx = 0;
     currentQuestionIndex = 0;
     currentAttemptKey = saved.attemptKey || newAttemptKey();
-    userAnswers[`${currentSubj}-0`] = saved.draft;
+    userAnswers[questionAnswerKey(saved.subject, 0)] = saved.draft;
     selectedSessionMode = saved.mode;
     examMode = saved.mode;
     examStage = 'answering';
@@ -1468,7 +1473,7 @@ function loadDrafts() {
 
 function saveDraftForCurrentQuestion() {
   if (!currentSubj || !BAR_QUESTIONS[currentSubj]?.[currentIdx]) return;
-  const key = `${currentSubj}-${currentIdx}`;
+  const key = questionAnswerKey();
   const drafts = loadDrafts();
   drafts[key] = userAnswers[key] || '';
   safeStorageSet(localStorage, DRAFTS_KEY, JSON.stringify(drafts));
@@ -1621,7 +1626,7 @@ function legacyRenderMainWrite() {
   const main = document.getElementById("main");
   const qList = BAR_QUESTIONS[currentSubj];
   const q = qList[currentIdx];
-  const savedKey = `${currentSubj}-${currentIdx}`;
+  const savedKey = questionAnswerKey();
   const currentText = userAnswers[savedKey] || "";
   const hasSubmitted = submissionResults[savedKey] !== undefined;
   const sourceMeta = questionSourceMetadata(q);
@@ -1765,7 +1770,7 @@ function renderMainWrite() {
   const main = document.getElementById('main');
   const qList = BAR_QUESTIONS[currentSubj];
   const q = qList[currentIdx];
-  const savedKey = `${currentSubj}-${currentIdx}`;
+  const savedKey = questionAnswerKey();
   const currentText = restoreDraftForKey(savedKey);
   const hasSubmitted = submissionResults[savedKey] !== undefined;
   const workspaceLocked = examStage !== 'answering';
@@ -1815,7 +1820,7 @@ function countWords(str) {
 
 function handleInput(el) {
   const val = el.value;
-  const key = `${currentSubj}-${currentIdx}`;
+  const key = questionAnswerKey();
   userAnswers[key] = val;
   saveDraftForCurrentQuestion();
   document.getElementById("word-count").textContent = `${countWords(val)} words`;
@@ -1916,7 +1921,7 @@ async function evaluateAnswer(options = {}) {
   if (gradingInProgress || gradingAccessCheckInProgress || examStage !== 'answering') return;
   const subjectAtSubmission = currentSubj;
   const indexAtSubmission = currentIdx;
-  const key = `${subjectAtSubmission}-${indexAtSubmission}`;
+  const key = questionAnswerKey(subjectAtSubmission, indexAtSubmission);
   const q = BAR_QUESTIONS[subjectAtSubmission][indexAtSubmission];
   const studentAnswer = (userAnswers[key] || '').trim();
   const submissionReason = options.submissionReason === 'strict_expiry'
@@ -2099,7 +2104,7 @@ async function evaluateAnswer(options = {}) {
     gradingInProgress = false;
     const activeButton = document.getElementById('submit-btn');
     if (activeButton) {
-      activeButton.disabled = examStage !== 'answering' || !(userAnswers[`${currentSubj}-${currentIdx}`] || '').trim();
+      activeButton.disabled = examStage !== 'answering' || !(userAnswers[questionAnswerKey()] || '').trim();
       activeButton.textContent = 'Evaluate & Grade Essay';
     }
   }
@@ -2707,8 +2712,9 @@ window.addEventListener('storage', (event) => {
   if (event.key === EXAM_WORKSPACE_KEY && examStage === 'answering') {
     const saved = readPersistedWorkspace();
     const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
-    if (saved?.questionId === question?.id && saved.draft !== userAnswers[`${currentSubj}-${currentIdx}`]) {
-      userAnswers[`${currentSubj}-${currentIdx}`] = saved.draft;
+    const activeAnswerKey = questionAnswerKey();
+    if (saved?.questionId === question?.id && saved.draft !== userAnswers[activeAnswerKey]) {
+      userAnswers[activeAnswerKey] = saved.draft;
       const box = document.getElementById('answer-box');
       if (box && document.activeElement !== box) {
         box.value = saved.draft;
@@ -2721,8 +2727,8 @@ window.addEventListener('storage', (event) => {
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"
   crossorigin="anonymous"></script>
 <script src="assets/phase2-config.js"></script>
-<script src="assets/phase2-experience.js?v=phase4-20260728-2"></script>
-<script src="assets/phase4-experience.js"></script>
+<script src="assets/phase2-experience.js?v=phase4-20260728-3"></script>
+<script src="assets/phase4-experience.js?v=phase4-20260728-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 
 </body>

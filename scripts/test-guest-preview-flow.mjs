@@ -135,6 +135,9 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
   const context = {
     currentSubj: 'Political Law',
     currentIdx: 0,
+    BAR_QUESTIONS: {
+      'Political Law': [{ id: 'POL-001' }],
+    },
     userAnswers: {},
     saveDraftForCurrentQuestion() { draftsSaved += 1; },
     document: {
@@ -145,15 +148,21 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
       },
     },
   };
+  const questionAnswerKey = between(
+    index,
+    'function questionAnswerKey(subject = currentSubj, index = currentIdx)',
+    'function readPersistedWorkspace()',
+  );
   const countWords = between(index, 'function countWords(str)', 'function handleInput(el)');
   const handleInput = between(index, 'function handleInput(el)', 'function prevQuestion()');
   vm.runInNewContext(
-    `${countWords}
+    `${questionAnswerKey}
+     ${countWords}
      ${handleInput}
      handleInput({ value: 'A legally meaningful guest answer.' });`,
     context,
   );
-  assert.equal(context.userAnswers['Political Law-0'], 'A legally meaningful guest answer.');
+  assert.equal(context.userAnswers['Political Law::POL-001'], 'A legally meaningful guest answer.');
   assert.equal(wordCount.textContent, '5 words');
   assert.equal(submit.disabled, false);
   assert.equal(draftsSaved, 1);
@@ -179,8 +188,9 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
       }],
     },
     userAnswers: {
-      'Political Law-0': 'Original answer with legal basis and application.',
+      'Political Law::POL-2024-Q01': 'Original answer with legal basis and application.',
     },
+    questionAnswerKey() { return 'Political Law::POL-2024-Q01'; },
     localStorage: {},
     crypto: { randomUUID() { return '00000000-0000-4000-8000-000000000001'; } },
     safeStorageGet() { return null; },
@@ -210,7 +220,7 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
   );
   const firstAttempt = context.evaluateAnswer();
   const duplicateAttempt = context.evaluateAnswer();
-  context.userAnswers['Political Law-0'] = 'Edited answer while status is pending.';
+  context.userAnswers['Political Law::POL-2024-Q01'] = 'Edited answer while status is pending.';
   resolveAccess(true);
   await Promise.all([firstAttempt, duplicateAttempt]);
   assert.equal(accessChecks, 1, 'A double click must create only one access check');
@@ -233,7 +243,8 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
     BAR_QUESTIONS: {
       'Political Law': [{ id: 'POL-2024-Q01', text: 'Question' }],
     },
-    userAnswers: { 'Political Law-0': answer },
+    userAnswers: { 'Political Law::POL-2024-Q01': answer },
+    questionAnswerKey() { return 'Political Law::POL-2024-Q01'; },
     localStorage: {},
     crypto: { randomUUID() { return '00000000-0000-4000-8000-000000000002'; } },
     safeStorageGet() { return null; },
@@ -256,7 +267,7 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
     context,
   );
   await context.evaluateAnswer();
-  assert.equal(context.userAnswers['Political Law-0'], answer);
+  assert.equal(context.userAnswers['Political Law::POL-2024-Q01'], answer);
   assert.deepEqual(controlStates, [true, false]);
   assert.equal(fetchCalls, 0);
 }

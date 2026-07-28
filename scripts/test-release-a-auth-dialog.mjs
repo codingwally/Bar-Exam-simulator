@@ -68,6 +68,16 @@ assert.doesNotMatch(
   'The persistent native-view close control must not consume its listener after one use.',
 );
 assert.match(
+  phase2,
+  /function closeNativeView\(\)\s*\{[\s\S]{0,180}hideNativeView\(\);[\s\S]{0,100}history\.back\(\)/,
+  'Closing a native view must hide it immediately before asynchronous history navigation.',
+);
+assert.match(
+  phase2,
+  /history\.state\?\.dd2View\s*\?\s*'replaceState'\s*:\s*'pushState'/,
+  'Switching between native views must replace, rather than stack, modal history entries.',
+);
+assert.match(
   phase4,
   /AUTHENTICATION_REQUIRED/,
   'Protected exam access must retain an explicit authentication error.',

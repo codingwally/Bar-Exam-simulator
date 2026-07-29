@@ -558,7 +558,7 @@
         const opened = await global.openQuorumMappedQuestion?.(item.subject, item.practiceQuestionId);
         if (!opened) practice.disabled = false;
       });
-      practice.title = 'Open the genuinely mapped Moot Court question; existing plan access still applies.';
+      practice.title = 'Open the genuinely mapped Mock Bar question; existing plan access still applies.';
       inner.append(practice);
     }
 

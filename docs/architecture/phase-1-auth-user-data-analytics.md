@@ -183,7 +183,7 @@ operational reporting.
 ### `user_entitlements`
 
 Inactive future configuration for plan entitlements and an optional
-per-subject daily question limit. No rows are required and no application code
+subject-level daily question limit. No rows are required and no application code
 consults the table in Phase 1. Existing subscription columns remain the source
 fields already present on `profiles`.
 

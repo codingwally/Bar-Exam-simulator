@@ -12,7 +12,7 @@ const adminHtml = read('admin/index.html');
 const admin = read('admin/admin.js');
 
 for (const label of [
-  'Moot Court',
+  'Mock Bar',
   'The Verdict',
   'Retainer',
   'Quorum',

@@ -28,6 +28,8 @@ for (const required of [
   'CNAME',
   'favicon.svg',
   'admin/index.html',
+  'assets/examinations.css',
+  'assets/examinations.js',
   'assets/payments/gcash.png',
   'assets/payments/maribank.png',
 ]) {

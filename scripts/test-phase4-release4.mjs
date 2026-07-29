@@ -113,7 +113,7 @@ assert.match(publicPage, /assets\/phase2-experience\.js\?v=release-c-20260729-1/
 assert.match(publicPage, /assets\/phase4-experience\.js\?v=phase4-20260729-2/);
 assert.match(text('admin/index.html'), /admin\.css\?v=phase4-20260728-2/);
 assert.match(text('admin/index.html'), /subscription-actions-core\.js\?v=admin-actions-20260729-3/);
-assert.match(text('admin/index.html'), /admin\.js\?v=quorum-20260803-1/);
+assert.match(text('admin/index.html'), /admin\.js\?v=examinations-20260729-2/);
 assert.match(
   adminStyles,
   /\.gate\[hidden\]\s*\{\s*display:\s*none;\s*\}/,

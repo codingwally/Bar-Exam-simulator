@@ -1467,6 +1467,9 @@
     setFeedStatus('Loading notifications…');
     try {
       const result = await query('notifications', { limit: 20 });
+      const unreadCount = Math.max(0, Number(result.unreadCount || 0));
+      $('#quorum-notification-count').textContent = unreadCount;
+      if (state.bootstrap?.counts) state.bootstrap.counts.unreadNotifications = unreadCount;
       const panel = document.createElement('section');
       panel.className = 'quorum-panel';
       const head = document.createElement('div');
@@ -1485,7 +1488,7 @@
           handleError(error, null);
         }
       });
-      markAll.disabled = Number(result.unreadCount || 0) === 0;
+      markAll.disabled = unreadCount === 0;
       head.append(title, markAll);
       const list = document.createElement('div');
       list.className = 'quorum-notification-list';

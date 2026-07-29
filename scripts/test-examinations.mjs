@@ -15,6 +15,8 @@ const [
   seedSql,
   seedJsonText,
   preflight,
+  productionWorkerConfig,
+  stagingWorkerConfig,
 ] = await Promise.all([
   read('index.html'),
   read('assets/examinations.js'),
@@ -26,6 +28,8 @@ const [
   read('supabase/migrations/20260729120726_approved_examination_test_bank.sql'),
   read('content/examinations/leb-y1-y2-approved-system-test.json'),
   read('supabase/review/examinations_production_preflight.sql'),
+  read('worker/wrangler.toml'),
+  read('worker/wrangler.staging.toml'),
 ]);
 const seedDocument = JSON.parse(seedJsonText);
 const seed = seedDocument.rows;
@@ -111,6 +115,13 @@ assert.match(worker, /EXAMINATION_EMAIL_MODE/);
 assert.match(worker, /RESEND_API_KEY/);
 assert.match(worker, /questions\[0\]/, 'AI assessment must use bounded one-question batches');
 assert.doesNotMatch(worker, /console\.(?:log|error)\([^)]*(?:SERVICE_ROLE|API_KEY|RESEND)/);
+assert.match(productionWorkerConfig, /EXAMINATION_EMAIL_MODE\s*=\s*"enabled"/);
+assert.match(
+  productionWorkerConfig,
+  /EXAMINATION_EMAIL_FROM\s*=\s*"Due Diligence Examinations <examinations@duediligence\.ph>"/,
+);
+assert.doesNotMatch(productionWorkerConfig, /EXAMINATION_EMAIL_TEST_RECIPIENT/);
+assert.match(stagingWorkerConfig, /EXAMINATION_EMAIL_MODE\s*=\s*"suppressed"/);
 
 const tables = [
   'examination_questions',

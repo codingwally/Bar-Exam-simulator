@@ -14,6 +14,8 @@ ALLOW_LEGACY_GUESTS = "false"
 PHASE4_ACCESS_ENFORCEMENT = "true"
 PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
 REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
+EXAMINATION_EMAIL_MODE = "enabled"
+EXAMINATION_EMAIL_FROM = "Due Diligence Examinations <examinations@duediligence.ph>"
 
 [observability]
 enabled = true

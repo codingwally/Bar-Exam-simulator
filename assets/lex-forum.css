@@ -1,4 +1,4 @@
-/* Lex Forum social beta — scoped to the existing Due Diligence visual system. */
+/* Quorum — scoped to the existing Due Diligence visual system. */
 
 .lex-page-wrap {
   max-width: 1180px;
@@ -743,9 +743,461 @@
   opacity: 1;
 }
 
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.quorum-motto {
+  margin: 2px 0 7px !important;
+  color: #d7bd72 !important;
+  font-family: var(--serif-display);
+  font-size: 15px !important;
+  font-style: italic;
+}
+
+.dd2-entry-panel {
+  position: relative;
+}
+
+.dd2-entry-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+}
+
+.lex-page-wrap {
+  max-width: 1440px;
+}
+
+.lex-layout {
+  grid-template-columns: minmax(190px, 220px) minmax(0, 720px) minmax(240px, 280px);
+  gap: 20px;
+}
+
+.quorum-navigation {
+  position: sticky;
+  top: 104px;
+  display: grid;
+  gap: 14px;
+}
+
+.quorum-side-nav,
+.quorum-filter-panel {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12px;
+  background: rgba(250, 249, 246, 0.98);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.07);
+}
+
+.quorum-side-nav {
+  display: grid;
+  padding: 8px;
+}
+
+.quorum-side-link,
+.quorum-filter-link {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #22304a;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.quorum-side-link:hover,
+.quorum-filter-link:hover,
+.quorum-side-link.is-active,
+.quorum-filter-link.is-active {
+  color: #071a33;
+  background: rgba(197, 160, 89, 0.14);
+}
+
+.quorum-side-link:focus-visible,
+.quorum-filter-link:focus-visible,
+.quorum-text-button:focus-visible,
+.quorum-search input:focus-visible,
+.quorum-toolbar-actions select:focus-visible,
+.quorum-composer-grid input:focus-visible,
+.quorum-composer-grid select:focus-visible {
+  outline: 3px solid rgba(197, 160, 89, 0.55);
+  outline-offset: 2px;
+}
+
+.quorum-nav-count {
+  min-width: 22px;
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #475569;
+  background: #e8edf3;
+  font-size: 10px;
+  text-align: center;
+}
+
+.quorum-nav-count.is-alert:not(:empty) {
+  color: #fff;
+  background: #8f2434;
+}
+
+.quorum-filter-panel {
+  padding: 4px 8px 8px;
+}
+
+.quorum-filter-panel summary {
+  padding: 10px 4px;
+  color: #8b681f;
+  cursor: pointer;
+  font-family: var(--mono, "IBM Plex Mono", monospace);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.quorum-filter-links {
+  display: grid;
+  gap: 2px;
+}
+
+.quorum-filter-link {
+  min-height: 36px;
+  padding: 7px 8px;
+  font-size: 11px;
+}
+
+.quorum-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+
+.quorum-search input,
+.quorum-toolbar-actions select,
+.quorum-composer-grid input,
+.quorum-composer-grid select {
+  min-height: 44px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #172033;
+  background: #fff;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.quorum-composer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.quorum-composer-grid .lex-source-field {
+  margin: 0;
+}
+
+.quorum-case-title {
+  grid-column: 1 / -1;
+}
+
+.quorum-opinion-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: #334155;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.quorum-opinion-control input {
+  width: 17px;
+  height: 17px;
+  accent-color: #8b681f;
+}
+
+.quorum-image-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #64748b;
+  font-family: var(--sans);
+  font-size: 10.5px;
+}
+
+.quorum-image-control .lex-button {
+  min-height: 36px;
+}
+
+.quorum-toolbar-actions,
+.quorum-card-head,
+.quorum-active-filters,
+.quorum-chip-row,
+.quorum-entry-indicators {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quorum-toolbar-actions select {
+  min-height: 38px;
+  width: auto;
+}
+
+.quorum-active-filters {
+  margin: -6px 0 14px;
+  padding: 9px 11px;
+  border: 1px solid rgba(197, 160, 89, 0.35);
+  border-radius: 8px;
+  color: #475569;
+  background: rgba(250, 249, 246, 0.9);
+  font-family: var(--sans);
+  font-size: 11px;
+}
+
+.quorum-chip,
+.quorum-indicator {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 1px solid #d6dee8;
+  border-radius: 999px;
+  color: #334155;
+  background: #f8fafc;
+  font-family: var(--sans);
+  font-size: 9.5px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.quorum-indicator {
+  border-color: rgba(197, 160, 89, 0.48);
+  color: #765719;
+  background: #fffaf0;
+}
+
+.quorum-entry-heading {
+  margin: 8px 0 4px;
+  color: #071a33;
+  font-family: var(--serif-display);
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.quorum-entry-image {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  margin-top: 14px;
+  border: 1px solid #d6dee8;
+  border-radius: 9px;
+  object-fit: cover;
+  background: #eef2f6;
+}
+
+.quorum-card-head {
+  justify-content: space-between;
+}
+
+.quorum-text-button {
+  min-height: 32px;
+  padding: 4px;
+  border: 0;
+  color: #8b681f;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.quorum-compact-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.quorum-compact-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  color: #172033;
+  background: #fff;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.quorum-compact-item small {
+  color: #64748b;
+}
+
+.quorum-practice-card {
+  padding: 18px;
+  border: 1px solid rgba(197, 160, 89, 0.52);
+  border-radius: 12px;
+  color: #e2e8f0;
+  background: #071a33;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1);
+}
+
+.quorum-practice-card h3 {
+  margin: 5px 0 7px;
+  color: #fff;
+  font-family: var(--serif-display);
+  font-size: 17px;
+}
+
+.quorum-practice-card p {
+  margin: 0 0 12px;
+  color: #cbd5e1;
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.quorum-panel {
+  padding: 22px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-top: 3px solid #c5a059;
+  border-radius: 12px;
+  background: #faf9f6;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+}
+
+.quorum-panel h3 {
+  margin: 4px 0 8px;
+  color: #071a33;
+  font-family: var(--serif-display);
+  font-size: 22px;
+}
+
+.quorum-panel-copy,
+.quorum-empty-copy {
+  color: #64748b;
+  font-family: var(--sans);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.quorum-circle-grid,
+.quorum-search-groups,
+.quorum-notification-list,
+.quorum-profile-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.quorum-circle-card,
+.quorum-notification,
+.quorum-profile-card {
+  padding: 15px;
+  border: 1px solid #dbe2ea;
+  border-radius: 9px;
+  background: #fff;
+  font-family: var(--sans);
+}
+
+.quorum-circle-card h4,
+.quorum-profile-card h4 {
+  margin: 0 0 6px;
+  color: #0b1e3b;
+  font-family: var(--serif-display);
+  font-size: 16px;
+}
+
+.quorum-notification {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.quorum-notification.is-unread {
+  border-left: 3px solid #c5a059;
+  background: #fffaf0;
+}
+
+.quorum-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.quorum-form-grid .is-wide {
+  grid-column: 1 / -1;
+}
+
+.quorum-profile-actions,
+.quorum-circle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.quorum-dialog-preview {
+  padding: 15px;
+  border: 1px solid #dbe2ea;
+  border-radius: 9px;
+  color: #1e293b;
+  background: #fff;
+  font-family: var(--sans);
+  white-space: pre-wrap;
+}
+
 @media (max-width: 920px) {
   .lex-layout {
     grid-template-columns: minmax(0, 760px);
+  }
+
+  .quorum-navigation {
+    position: static;
+    grid-template-columns: 1fr;
+  }
+
+  .quorum-side-nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .quorum-side-link {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .quorum-filter-panel {
+    display: none;
   }
 
   .lex-secondary {
@@ -771,6 +1223,36 @@
 
   .lex-secondary {
     grid-template-columns: 1fr;
+  }
+
+  .quorum-side-nav {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .quorum-side-link {
+    flex: 0 0 auto;
+    min-width: 132px;
+    scroll-snap-align: start;
+  }
+
+  .quorum-search {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #quorum-search-clear {
+    grid-column: 1 / -1;
+  }
+
+  .quorum-composer-grid,
+  .quorum-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quorum-case-title,
+  .quorum-form-grid .is-wide {
+    grid-column: auto;
   }
 
   .lex-composer {

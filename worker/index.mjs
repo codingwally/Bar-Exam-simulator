@@ -70,6 +70,7 @@ import {
 } from './payment-core.mjs';
 import {
   FORUM_LIMITS,
+  QUORUM_LIMITS,
   ForumValidationError,
   forumDatabaseError,
   forumUuid,
@@ -79,6 +80,10 @@ import {
   normalizeForumDeleteRequest,
   normalizeForumFeedRequest,
   normalizeForumPostRequest,
+  normalizeQuorumAdminRequest,
+  normalizeQuorumCommandRequest,
+  normalizeQuorumImage,
+  normalizeQuorumQueryRequest,
   normalizeForumReactionRequest,
   normalizeForumReportRequest,
   normalizeForumRepostRequest,
@@ -386,7 +391,7 @@ async function forumRpc(env, functionName, body) {
   });
   const result = await response.json().catch(() => null);
   if (!response.ok) {
-    console.error('Lex Forum storage request failed', {
+    console.error('Quorum storage request failed', {
       operation: functionName,
       status: response.status,
       code: String(result?.code || 'unknown').slice(0, 32),
@@ -398,6 +403,158 @@ async function forumRpc(env, functionName, body) {
     ].filter(Boolean).join(' '));
   }
   return result;
+}
+
+function quorumStorageObjectUrl(env, objectPath, suffix = '') {
+  const baseUrl = configuredSupabaseUrl(env);
+  const encodedPath = String(objectPath || '')
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+  return new URL(
+    `/storage/v1/object${suffix}/quorum-images/${encodedPath}`,
+    baseUrl,
+  );
+}
+
+function quorumRandomHex(byteLength = 12) {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+async function uploadQuorumImage(env, entryId, image) {
+  const objectPath = `entries/${entryId}/${quorumRandomHex(12)}.${image.extension}`;
+  const response = await fetch(quorumStorageObjectUrl(env, objectPath), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': image.mimeType,
+      'x-upsert': 'false',
+      'Cache-Control': 'max-age=3600',
+    },
+    body: image.bytes,
+  });
+  if (!response.ok) {
+    console.error('Quorum image upload failed', { status: response.status });
+    throw new ForumValidationError(
+      'QUORUM_IMAGE_UNAVAILABLE',
+      'The image could not be stored. Your entry was not published.',
+      502,
+    );
+  }
+  return objectPath;
+}
+
+async function deleteQuorumImage(env, objectPath) {
+  if (!objectPath) return true;
+  const response = await fetch(quorumStorageObjectUrl(env, objectPath), {
+    method: 'DELETE',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  if (!response.ok && response.status !== 404) {
+    console.error('Quorum image cleanup failed', { status: response.status });
+    return false;
+  }
+  return true;
+}
+
+function collectQuorumImagePaths(value, paths = new Set()) {
+  if (!value || typeof value !== 'object') return paths;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectQuorumImagePaths(item, paths));
+    return paths;
+  }
+  if (typeof value.imagePath === 'string' && value.imagePath) paths.add(value.imagePath);
+  Object.values(value).forEach((item) => collectQuorumImagePaths(item, paths));
+  return paths;
+}
+
+async function signedQuorumImageUrls(env, paths) {
+  const uniquePaths = Array.from(paths);
+  if (!uniquePaths.length) return new Map();
+  const baseUrl = configuredSupabaseUrl(env);
+  const batchResponse = await fetch(
+    new URL('/storage/v1/object/sign/quorum-images', baseUrl),
+    {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ expiresIn: 900, paths: uniquePaths }),
+    },
+  );
+  const map = new Map();
+  if (batchResponse.ok) {
+    const signed = await batchResponse.json().catch(() => []);
+    const rows = Array.isArray(signed) ? signed : signed?.data || [];
+    rows.forEach((row, index) => {
+      const path = row?.path || uniquePaths[index];
+      const signedPath = row?.signedURL || row?.signedUrl || row?.signed_url;
+      if (!path || !signedPath) return;
+      map.set(
+        path,
+        /^https?:\/\//i.test(signedPath)
+          ? signedPath
+          : new URL(signedPath, baseUrl).href,
+      );
+    });
+  }
+  if (map.size === uniquePaths.length) return map;
+
+  for (const path of uniquePaths) {
+    if (map.has(path)) continue;
+    const response = await fetch(quorumStorageObjectUrl(env, path, '/sign'), {
+      method: 'POST',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ expiresIn: 900 }),
+    });
+    if (!response.ok) {
+      console.error('Quorum image signing failed', { status: response.status });
+      continue;
+    }
+    const row = await response.json().catch(() => null);
+    const signedPath = row?.signedURL || row?.signedUrl || row?.signed_url;
+    if (signedPath) {
+      map.set(
+        path,
+        /^https?:\/\//i.test(signedPath)
+          ? signedPath
+          : new URL(signedPath, baseUrl).href,
+      );
+    }
+  }
+  return map;
+}
+
+function replaceQuorumImagePaths(value, signedUrls) {
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => replaceQuorumImagePaths(item, signedUrls));
+  const result = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (key === 'imagePath') {
+      result.imageUrl = item ? signedUrls.get(item) || null : null;
+      continue;
+    }
+    result[key] = replaceQuorumImagePaths(item, signedUrls);
+  }
+  return result;
+}
+
+async function withSignedQuorumImages(value, env) {
+  const paths = collectQuorumImagePaths(value);
+  const urls = await signedQuorumImageUrls(env, paths);
+  return replaceQuorumImagePaths(value, urls);
 }
 
 async function enforcePaymentRateLimit(request, env) {
@@ -1506,6 +1663,111 @@ async function handleForumAdminAction(request, env, origin, allowedOrigin) {
   return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
 }
 
+async function handleQuorumQuery(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env);
+  const user = await requireAuthenticatedUser(request, env);
+  const query = normalizeQuorumQueryRequest(
+    await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
+  );
+  const result = await forumRpc(env, 'forum_quorum_query', {
+    p_user_id: user.id,
+    p_operation: query.operation,
+    p_payload: query.payload,
+  });
+  return jsonResponse(
+    { ok: true, data: await withSignedQuorumImages(result, env) },
+    200,
+    origin,
+    allowedOrigin,
+  );
+}
+
+async function handleQuorumCommand(request, env, origin, allowedOrigin) {
+  await enforceForumRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const raw = await parseBoundedJson(request, QUORUM_LIMITS.requestBytes);
+  const command = normalizeQuorumCommandRequest(raw);
+  const image = command.operation === 'create_entry'
+    ? normalizeQuorumImage(raw?.image)
+    : null;
+  if (raw?.image && command.operation !== 'create_entry') {
+    throw new ForumValidationError(
+      'INVALID_QUORUM_IMAGE',
+      'An image can be attached only while creating an entry.',
+    );
+  }
+
+  let result = await forumRpc(env, 'forum_quorum_command', {
+    p_user_id: user.id,
+    p_operation: command.operation,
+    p_payload: command.payload,
+  });
+
+  if (command.operation === 'create_entry' && image) {
+    let objectPath = null;
+    try {
+      objectPath = await uploadQuorumImage(env, result.entryId, image);
+      await forumRpc(env, 'forum_quorum_command', {
+        p_user_id: user.id,
+        p_operation: 'register_attachment',
+        p_payload: {
+          entryId: result.entryId,
+          objectPath,
+          mimeType: image.mimeType,
+          byteSize: image.byteSize,
+        },
+      });
+      result = { ...result, imagePath: objectPath };
+    } catch (error) {
+      if (objectPath) await deleteQuorumImage(env, objectPath);
+      try {
+        await forumRpc(env, 'forum_quorum_command', {
+          p_user_id: user.id,
+          p_operation: 'delete_entry',
+          p_payload: { entryId: result.entryId },
+        });
+      } catch (cleanupError) {
+        console.error('Quorum entry cleanup failed after image error', {
+          code: cleanupError?.code || 'UNKNOWN',
+        });
+      }
+      throw error;
+    }
+  }
+
+  if (['delete_entry', 'remove_attachment'].includes(command.operation) && result?.imagePath) {
+    await deleteQuorumImage(env, result.imagePath);
+  }
+
+  return jsonResponse(
+    { ok: true, data: await withSignedQuorumImages(result, env) },
+    command.operation.startsWith('create_') ? 201 : 200,
+    origin,
+    allowedOrigin,
+  );
+}
+
+async function handleQuorumAdmin(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const raw = await parseBoundedJson(request, FORUM_LIMITS.requestBytes);
+  const normalized = normalizeQuorumAdminRequest(
+    raw,
+    raw?.payload?.requestId || request.headers.get('X-Request-ID'),
+  );
+  const result = await forumRpc(env, 'forum_quorum_admin', {
+    p_actor_user_id: user.id,
+    p_operation: normalized.operation,
+    p_payload: normalized.payload,
+  });
+  return jsonResponse(
+    { ok: true, data: await withSignedQuorumImages(result, env) },
+    200,
+    origin,
+    allowedOrigin,
+  );
+}
+
 async function handleAccess(request, env, origin, allowedOrigin) {
   await enforceGuestStatusRateLimit(request, env);
   const user = await requireAuthenticatedUser(request, env);
@@ -2258,6 +2520,15 @@ export default {
       }
       if (pathname === '/analytics/events') {
         return await handleAnalytics(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/quorum/query') {
+        return await handleQuorumQuery(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/quorum/command') {
+        return await handleQuorumCommand(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/quorum') {
+        return await handleQuorumAdmin(request, env, origin, allowedOrigin);
       }
       if (pathname === '/forum/feed') {
         return await handleForumFeed(request, env, origin, allowedOrigin);

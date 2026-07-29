@@ -19,7 +19,7 @@
     partnerships: 'Joint Ventures',
     controls: 'Website Settings',
     security: 'Access & Activity Log',
-    forum: 'Lex Forum Moderation',
+    forum: 'Quorum Moderation & Analytics',
   });
   const requirements = Object.freeze({
     users: 'analytics_viewer',
@@ -229,15 +229,22 @@
   }
 
   async function loadForumModeration(force = false) {
-    const key = 'forum:all';
+    const window = reportingWindow();
+    const key = `quorum:${window.from}:${window.to}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
-    const payload = await api('/admin/forum/queue', {
-      status: 'all',
-      limit: 200,
-      offset: 0,
-    });
-    state.operational.set(key, payload.queue);
-    return payload.queue;
+    const [queue, analytics] = await Promise.all([
+      api('/admin/quorum', {
+        operation: 'queue',
+        payload: { status: 'pending' },
+      }),
+      api('/admin/quorum', {
+        operation: 'analytics',
+        payload: { from: window.from, to: window.to },
+      }),
+    ]);
+    const data = { queue: queue.data, analytics: analytics.data };
+    state.operational.set(key, data);
+    return data;
   }
 
   function renderExecutive(report) {
@@ -724,8 +731,8 @@
       actionButton('Remove restriction', 'forum_remove_restriction', row.id),
     ]);
     return `
-      ${heading('Lex Forum Moderation', 'Founder and Super Admin review only. Reports never reveal the reporting member, and moderation never changes subscriptions or examination records.')}
-      <div class="notice"><strong>Under Construction safeguards:</strong> Plain-text publishing, source-link validation, persistent rate limits, duplicate throttling, private reporting, posting restrictions, and audited moderation are active.</div>
+      ${heading('Quorum Moderation', 'Founder and Super Admin review only. Reports never reveal the reporting member, and moderation never changes subscriptions or examination records.')}
+      <div class="notice"><strong>Quorum safeguards:</strong> Plain-text publishing, source-link validation, persistent rate limits, duplicate throttling, private reporting, posting restrictions, and audited moderation are active.</div>
       <section class="panel">
         <h3>Reported posts and comments</h3>
         ${table(
@@ -736,6 +743,150 @@
       <section class="panel">
         <h3>Active posting restrictions</h3>
         ${table(['Member', 'Reason', 'Restricted until', 'Action'], restrictionRows)}
+      </section>`;
+  }
+
+  function quorumModerationActions(row) {
+    const actions = [];
+    const add = (label, action, target, payload = {}) => {
+      const html = actionButton(label, action, target, payload).value;
+      actions.push(html.replace(/^<span class="row-actions">|<\/span>$/g, ''));
+    };
+    const suffix = row.targetType === 'entry'
+      ? 'entry'
+      : row.targetType === 'comment' ? 'comment' : 'circle';
+    if (['visible', 'active'].includes(row.contentStatus)) {
+      add('Hide', `quorum_hide_${suffix}`, row.targetId);
+    } else {
+      add('Restore', `quorum_restore_${suffix}`, row.targetId);
+    }
+    if (row.contentStatus !== 'removed') add('Remove', `quorum_remove_${suffix}`, row.targetId);
+    if (row.targetType === 'entry') {
+      add(
+        row.commentsLocked ? 'Unlock comments' : 'Lock comments',
+        row.commentsLocked ? 'quorum_unlock_comments' : 'quorum_lock_comments',
+        row.targetId,
+      );
+      add('Citation checked', 'quorum_set_indicator', row.targetId, {
+        indicator: 'citation_checked',
+        enabled: true,
+      });
+      add('Community correction', 'quorum_set_indicator', row.targetId, {
+        indicator: 'community_correction',
+        enabled: true,
+      });
+      add('Moderator reviewed', 'quorum_set_indicator', row.targetId, {
+        indicator: 'moderator_reviewed',
+        enabled: true,
+      });
+    }
+    if (row.status === 'pending') add('Dismiss report', 'quorum_dismiss_report', row.reportId);
+    if (row.author?.memberId) {
+      add('Restrict author', 'quorum_restrict_user', row.author.memberId, { durationHours: 24 });
+      add(
+        row.author.verifiedAcademicIdentity ? 'Remove verified identity' : 'Verify academic identity',
+        row.author.verifiedAcademicIdentity ? 'quorum_unverify_profile' : 'quorum_verify_profile',
+        row.author.memberId,
+      );
+    }
+    return { html: true, value: `<span class="row-actions">${actions.join('')}</span>` };
+  }
+
+  async function renderQuorumModeration() {
+    const data = await loadForumModeration();
+    const queue = data.queue || {};
+    const analytics = data.analytics || {};
+    const values = analytics.metrics || {};
+    const definitions = analytics.definitions || {};
+    const metricSource = `Quorum production records; server-generated ${dateTime(analytics.lastUpdatedAt)}`;
+    const reportRows = (queue.reports || []).map((row) => [
+      dateTime(row.createdAt),
+      row.targetType,
+      row.category,
+      row.explanation || 'No explanation supplied',
+      row.content || 'Content is unavailable',
+      `${row.author?.displayName || 'Due Diligence Member'}${row.author?.school ? ` · ${row.author.school}` : ''}`,
+      row.contentStatus || 'Unavailable',
+      row.status,
+      quorumModerationActions(row),
+    ]);
+    const announcementRows = (queue.announcements || []).map((row) => [
+      dateTime(row.createdAt),
+      row.subject || 'Not classified',
+      row.body,
+      row.sourceUrl
+        ? { html: true, value: `<a href="${escapeHtml(row.sourceUrl)}" target="_blank" rel="noopener noreferrer">Review source</a>` }
+        : 'No source supplied',
+      row.author?.displayName || 'Due Diligence Member',
+      {
+        html: true,
+        value: `<span class="row-actions">
+          ${actionButton('Approve', 'quorum_approve_announcement', row.entryId).value}
+          ${actionButton('Reject', 'quorum_reject_announcement', row.entryId).value}
+        </span>`,
+      },
+    ]);
+    const restrictionRows = (queue.restrictions || []).map((row) => [
+      `${row.member?.displayName || 'Due Diligence Member'}${row.member?.school ? ` · ${row.member.school}` : ''}`,
+      row.reason,
+      dateTime(row.restrictedUntil),
+      actionButton('Remove restriction', 'quorum_remove_restriction', row.restrictionId),
+    ]);
+    return `
+      ${heading('Quorum Moderation & Analytics', 'Founder and Super Admin review only. Reporter identity remains private, and moderation never changes subscriptions or examination records.')}
+      <div class="notice"><strong>Truthful reporting window:</strong> ${escapeHtml(dateTime(analytics.from))} to ${escapeHtml(dateTime(analytics.to))}. Last updated ${escapeHtml(dateTime(analytics.lastUpdatedAt))}. Every metric opens its definition and source.</div>
+      <div class="metric-strip">
+        ${metric('Active Quorum users', values.activeUsers, null, number, { copy: definitions.activeUsers, source: metricSource })}
+        ${metric('Entries created', values.entries, null, number, { copy: definitions.entries, source: metricSource })}
+        ${metric('Comments & replies', values.commentsReplies, null, number, { copy: definitions.commentsReplies, source: metricSource })}
+        ${metric('Helpful reactions', values.helpful, null, number, { copy: definitions.helpful, source: metricSource })}
+        ${metric('Internal citations', values.citations, null, number, { copy: definitions.citations, source: metricSource })}
+        ${metric('Saved authorities', values.saves, null, number, { copy: definitions.saves, source: metricSource })}
+        ${metric('Study Circles', values.circles, null, number, { copy: definitions.circles, source: metricSource })}
+        ${metric('Reports', values.reports, null, number, { copy: definitions.reports, source: metricSource })}
+        ${metric('Moderation actions', values.moderationActions, null, number, { copy: definitions.moderationActions, source: metricSource })}
+        ${metric('Unanswered questions', values.unansweredQuestions, null, number, { copy: definitions.unansweredQuestions, source: metricSource })}
+        ${metric('Practice conversions', values.practiceConversions, null, number, { copy: definitions.practiceConversions, source: metricSource })}
+        ${metric('Failed Quorum API requests', values.failedRequests, null, number, { copy: definitions.failedRequests, source: metricSource })}
+      </div>
+      <div class="work-grid">
+        <section class="panel"><h3>Activity by subject</h3>
+          ${(analytics.bySubject || []).length
+            ? barList(analytics.bySubject.map((row) => [row.label, row.count]))
+            : empty('No data yet for this reporting window.')}
+        </section>
+        <section class="panel"><h3>Activity by entry type</h3>
+          ${(analytics.byEntryType || []).length
+            ? barList(analytics.byEntryType.map((row) => [humanizeAuditValue(row.label), row.count]))
+            : empty('No data yet for this reporting window.')}
+        </section>
+      </div>
+      <section class="panel">
+        <h3>Private moderation queue</h3>
+        ${table(
+          ['Reported', 'Type', 'Category', 'Explanation', 'Content', 'Author', 'Content state', 'Report state', 'Actions'],
+          reportRows,
+        )}
+      </section>
+      <section class="panel">
+        <h3>Pending school and Bar announcements</h3>
+        ${table(['Submitted', 'Subject', 'Announcement', 'Source', 'Author', 'Actions'], announcementRows)}
+      </section>
+      <section class="panel">
+        <h3>Active posting restrictions</h3>
+        ${table(['Member', 'Reason', 'Restricted until', 'Action'], restrictionRows)}
+      </section>
+      <section class="panel">
+        <h3>Recent Quorum activity</h3>
+        ${table(
+          ['Time', 'Type', 'Record', 'Activity'],
+          (analytics.recentActivity || []).map((row) => [
+            dateTime(row.occurredAt),
+            row.type,
+            row.entryId || row.commentId || 'Not available',
+            row.label,
+          ]),
+        )}
       </section>`;
   }
 
@@ -767,7 +918,7 @@
       else if (section === 'partnerships') html = await renderPartnerships();
       else if (section === 'controls') html = await renderControls();
       else if (section === 'security') html = await renderSecurity();
-      else if (section === 'forum') html = await renderForumModeration();
+      else if (section === 'forum') html = await renderQuorumModeration();
       $('#dashboard-view').innerHTML = html;
       bindDynamic();
     } catch (error) {
@@ -1179,6 +1330,43 @@
       title = 'Find Docket by exact email';
       fields = actionField('Exact email', 'action-email', '', 'email');
       warning = 'Exact email search is server-side, capability-restricted, rate-limited, reason-required, and audited.';
+    } else if (action.startsWith('quorum_')) {
+      const quorumAction = action.slice('quorum_'.length);
+      const quorumTitles = {
+        approve_announcement: 'Approve Quorum announcement',
+        reject_announcement: 'Reject Quorum announcement',
+        hide_entry: 'Hide Quorum entry',
+        restore_entry: 'Restore Quorum entry',
+        remove_entry: 'Remove Quorum entry',
+        hide_comment: 'Hide Quorum comment',
+        restore_comment: 'Restore Quorum comment',
+        remove_comment: 'Remove Quorum comment',
+        hide_circle: 'Hide Study Circle',
+        restore_circle: 'Restore Study Circle',
+        remove_circle: 'Remove Study Circle',
+        lock_comments: 'Lock comments',
+        unlock_comments: 'Unlock comments',
+        dismiss_report: 'Dismiss Quorum report',
+        restrict_user: 'Restrict Quorum publishing',
+        remove_restriction: 'Remove Quorum restriction',
+        verify_profile: 'Approve Verified Academic Identity',
+        unverify_profile: 'Remove Verified Academic Identity',
+        set_indicator: 'Apply credibility indicator',
+      };
+      title = quorumTitles[quorumAction] || 'Moderate Quorum';
+      if (quorumAction === 'restrict_user') {
+        fields = `<label class="field">Restriction period<select id="action-duration">
+          <option value="1">1 hour</option>
+          <option value="24" selected>24 hours</option>
+          <option value="72">3 days</option>
+          <option value="168">7 days</option>
+          <option value="720">30 days</option>
+          <option value="8760">365 days</option>
+        </select></label>`;
+      }
+      warning = ['restrict_user', 'remove_restriction'].includes(quorumAction)
+        ? 'This changes only the member’s ability to publish in Quorum. Examination, subscription, and payment access remain unchanged.'
+        : 'This consequential Quorum action is reason-required, server-authorized, and recorded in the administrator audit log.';
     } else if (action.startsWith('forum_')) {
       const forumAction = action.slice('forum_'.length);
       const forumTitles = {
@@ -1189,7 +1377,7 @@
         restrict_user: 'Restrict forum publishing',
         remove_restriction: 'Remove forum publishing restriction',
       };
-      title = forumTitles[forumAction] || 'Moderate Lex Forum';
+      title = forumTitles[forumAction] || 'Moderate legacy community record';
       if (forumAction === 'restrict_user') {
         fields = `<label class="field">Restriction period<select id="action-duration">
           <option value="1">1 hour</option>
@@ -1201,18 +1389,18 @@
         </select></label>`;
       }
       warning = forumAction === 'restrict_user' || forumAction === 'remove_restriction'
-        ? 'This changes only the member’s ability to publish in Lex Forum. It does not change examination, subscription, or payment access.'
+        ? 'This changes only the member’s legacy community publishing state. It does not change examination, subscription, or payment access.'
         : 'This changes the visibility or review state of user-generated forum content and is recorded in the administrator audit log.';
     }
     $('#action-title').textContent = title;
     const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
-    const isForumAction = action.startsWith('forum_');
+    const isForumAction = action.startsWith('forum_') || action.startsWith('quorum_');
     if (isAccessAction) buildAccessActionFields(action, state.action.payload);
     else $('#action-fields').innerHTML = fields;
     $('#action-context').hidden = !isAccessAction;
     $('#action-confirmation').hidden = !(isAccessAction || isForumAction);
     $('#action-confirmation-copy').textContent = isForumAction
-      ? 'I have verified the report, target content, and proposed moderation action. I understand this action is immediate and audited.'
+      ? 'I have verified the report or target content and the proposed moderation action. I understand this action is immediate and audited.'
       : 'I have verified the target, current access, and proposed change. I understand this action is immediate and audited.';
     $('#action-confirm-risk').checked = false;
     $('#action-confirm').textContent = action === 'subscription_audit_view'
@@ -1235,7 +1423,8 @@
     event.preventDefault();
     if (!state.action || state.actionInFlight) return;
     const accessAction = Boolean(subscriptionActions?.isAccessAction(state.action.action));
-    const forumAction = state.action.action.startsWith('forum_');
+    const forumAction = state.action.action.startsWith('forum_')
+      || state.action.action.startsWith('quorum_');
     if ((accessAction || forumAction) && !$('#action-confirm-risk').checked) {
       toast(forumAction
         ? 'Confirm that you verified the report and moderation action.'
@@ -1314,7 +1503,7 @@
         return;
       }
       payload.is_published = $('#action-published').checked;
-    } else if (action === 'forum_restrict_user') {
+    } else if (action === 'forum_restrict_user' || action === 'quorum_restrict_user') {
       payload.durationHours = Number($('#action-duration').value);
     }
     state.action.requestKey ||= uuidKey();
@@ -1346,6 +1535,34 @@
         link.rel = 'noopener noreferrer';
         link.click();
         toast('Private proof opened in a five-minute authorized view.');
+      } else if (action.startsWith('quorum_')) {
+        const quorumAction = action.slice('quorum_'.length);
+        const actionPayload = {
+          action: quorumAction,
+          reason,
+          requestId: state.action.requestKey,
+        };
+        if (quorumAction === 'dismiss_report') {
+          actionPayload.reportId = state.action.targetId;
+        } else if (quorumAction === 'remove_restriction') {
+          actionPayload.restrictionId = state.action.targetId;
+        } else if (['restrict_user', 'verify_profile', 'unverify_profile'].includes(quorumAction)) {
+          actionPayload.memberId = state.action.targetId;
+        } else {
+          actionPayload.targetId = state.action.targetId;
+        }
+        if (quorumAction === 'restrict_user') {
+          actionPayload.durationHours = payload.durationHours;
+        }
+        if (quorumAction === 'set_indicator') {
+          actionPayload.indicator = payload.indicator;
+          actionPayload.enabled = payload.enabled;
+        }
+        await api('/admin/quorum', {
+          operation: 'action',
+          payload: actionPayload,
+        });
+        toast('Audited Quorum moderation action completed.');
       } else if (action.startsWith('forum_')) {
         await api('/admin/forum/action', {
           action: action.slice('forum_'.length),
@@ -1354,7 +1571,7 @@
           durationHours: payload.durationHours || null,
           requestId: state.action.requestKey,
         });
-        toast('Audited Lex Forum moderation action completed.');
+        toast('Audited legacy community moderation action completed.');
       } else {
         const phase4Actions = new Set([
           'payment_review','refund_review','subscription_change',

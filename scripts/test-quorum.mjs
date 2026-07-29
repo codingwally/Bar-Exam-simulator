@@ -107,6 +107,7 @@ for (const route of ['/quorum/query', '/quorum/command', '/admin/quorum']) {
 }
 assert.match(client, /api\('\/quorum\/query'/);
 assert.match(client, /api\('\/quorum\/command'/);
+assert.match(client, /\$\('#quorum-notification-count'\)\.textContent = unreadCount/);
 assert.match(client, /allowDismiss:\s*true/);
 assert.match(phase2, /id="dd2-entry-close"/);
 assert.match(phase2, /options\.allowDismiss === true/);

@@ -15,7 +15,7 @@ for (const label of [
   'Moot Court',
   'The Verdict',
   'Retainer',
-  'Lex Forum',
+  'Quorum',
   'Recent Jurisprudence',
   'Co-Counsel',
   'Joint Venture',

@@ -27,11 +27,12 @@ const build = files['scripts/build-pages-artifact.mjs'];
 const migration = files['supabase/migrations/20260802_011_lex_forum_social_beta.sql'];
 const preflight = files['supabase/review/lex_forum_production_preflight.sql'];
 
-assert.match(page, />Lex Forum \(Under Construction\)<\/button>/);
-assert.match(page, /aria-label="Lex Forum \(Under Construction\)"/);
-assert.match(page, /<h2>Lex Forum<\/h2>[\s\S]*lex-beta-badge">Under Construction</);
+assert.match(page, />Quorum<\/button>/);
+assert.match(page, /aria-label="Open Quorum"/);
+assert.match(page, /<h2>Quorum<\/h2>[\s\S]*Disce, disputa, diligenter age\./);
 assert.match(page, /id="lex-forum-app" hidden/);
-assert.match(page, /Lex Forum is an educational discussion space/);
+assert.match(page, /Quorum is an educational discussion space/);
+assert.doesNotMatch(page, /Lex Forum|Under Construction|Read-only/i);
 assert.match(page, /assets\/lex-forum\.css/);
 assert.match(page, /assets\/lex-forum\.js/);
 
@@ -39,14 +40,16 @@ assert.match(auth, /options\.allowGuest !== false/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);
 assert.match(forum, /allowGuest: false/);
 assert.match(forum, /duediligence:session/);
-assert.match(forum, /sessionStorage\.setItem\(pendingKey/);
+assert.match(forum, /safeStorage\(sessionStorage, 'set', destinationKey/);
+assert.match(forum, /safeStorage\(localStorage, 'set', draftKey/);
 assert.match(forum, /forumPost/);
 assert.match(forum, /rel = 'noopener noreferrer ugc'/);
 assert.match(forum, /textContent = String\(value/);
 assert.doesNotMatch(forum, /\.innerHTML\s*=/);
 assert.match(forum, /navigator\.onLine/);
-assert.match(forum, /cursor: append \? state\.cursor/);
-assert.match(forum, /known\.has\(`\$\{item\.kind\}:\$\{item\.id\}`\)/);
+assert.match(forum, /payload\.cursorAt = state\.cursor\.createdAt/);
+assert.match(forum, /payload\.cursorId = state\.cursor\.id/);
+assert.match(forum, /state\.items = append \? state\.items\.concat/);
 assert.match(css, /@media \(max-width: 640px\)/);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(css, /outline: 3px solid/);
@@ -75,8 +78,8 @@ assert.match(core, /typeof payload\.liked !== 'boolean'/);
 assert.match(core, /https?:/);
 assert.match(core, /FORUM_PRIVATE_CONTACT/);
 
-assert.match(adminPage, /Lex Forum Moderation<\/button>/);
-assert.match(admin, /forum_admin_queue|\/admin\/forum\/queue/);
+assert.match(adminPage, /Quorum Moderation<\/button>/);
+assert.match(admin, /\/admin\/quorum/);
 assert.match(admin, /founder_admin.*super_admin|super_admin.*founder_admin/s);
 assert.match(admin, /forum_hide_content/);
 assert.match(admin, /forum_restore_content/);
@@ -135,4 +138,4 @@ assert.doesNotMatch(preflight, /\b(?:insert|update|delete|alter|create|drop|gran
 assert.match(build, /'assets\/lex-forum\.css'/);
 assert.match(build, /'assets\/lex-forum\.js'/);
 
-console.log('Lex Forum frontend, Worker, admin, migration, and safety contracts passed.');
+console.log('Quorum frontend, Worker, admin, migration, and safety contracts passed.');

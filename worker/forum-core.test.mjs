@@ -11,12 +11,19 @@ import {
   normalizeForumPostRequest,
   normalizeForumReactionRequest,
   normalizeForumReportRequest,
+  normalizeQuorumAdminRequest,
+  normalizeQuorumCommandRequest,
+  normalizeQuorumImage,
+  normalizeQuorumQueryRequest,
 } from './forum-core.mjs';
 
 const origin = 'https://duediligence.ph';
 const userA = '11111111-1111-4111-8111-111111111111';
 const postA = '22222222-2222-4222-8222-222222222222';
 const reportA = '33333333-3333-4333-8333-333333333333';
+const entryA = 'qe_aaaaaaaaaaaaaaaaaaaa';
+const commentA = 'qc_bbbbbbbbbbbbbbbbbbbb';
+const memberA = 'qm_cccccccccccccccccccc';
 const baseEnv = Object.freeze({
   ALLOWED_ORIGIN: origin,
   GUEST_USAGE_HMAC_KEY: 'test-only-rate-key',
@@ -301,6 +308,230 @@ test('forum errors do not expose service-role credentials or request content', a
   try {
     const response = await worker.fetch(
       forumRequest('/forum/reactions', { postId: postA, liked: true }),
+      baseEnv,
+    );
+    const raw = await response.text();
+    assert.equal(response.status, 404);
+    assert.doesNotMatch(raw, /test-only-service-role/);
+    assert.doesNotMatch(raw, /verified-forum-session/);
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum queries validate opaque identifiers and bound pagination', () => {
+  const normalized = normalizeQuorumQueryRequest({
+    operation: 'feed',
+    payload: {
+      limit: 500,
+      subject: 'Labor Law',
+      entryType: 'discuss_legal_issue',
+      cursorAt: '2026-08-03T00:00:00Z',
+      cursorId: entryA,
+    },
+  });
+  assert.equal(normalized.operation, 'feed');
+  assert.equal(normalized.payload.limit, 20);
+  assert.equal(normalized.payload.cursorId, entryA);
+  assert.throws(
+    () => normalizeQuorumQueryRequest({
+      operation: 'entry',
+      payload: { entryId: postA },
+    }),
+    /Entry is invalid/i,
+  );
+});
+
+test('Quorum entry normalization enforces taxonomy and ignores spoofed ownership', () => {
+  const normalized = normalizeQuorumCommandRequest({
+    operation: 'create_entry',
+    payload: {
+      authorUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      body: 'Article 279 applies to the dismissal because the employer supplied no lawful cause.',
+      entryType: 'discuss_legal_issue',
+      subject: 'Labor Law',
+      category: 'bar_examination',
+      sourceUrl: 'https://elibrary.judiciary.gov.ph/',
+      opinionOnly: false,
+    },
+  });
+  assert.equal(normalized.operation, 'create_entry');
+  assert.equal(normalized.payload.subject, 'Labor Law');
+  assert.equal('authorUserId' in normalized.payload, false);
+  assert.throws(
+    () => normalizeQuorumCommandRequest({
+      operation: 'create_entry',
+      payload: {
+        body: 'A case note without the case title.',
+        entryType: 'share_case_note',
+        subject: 'Labor Law',
+        category: 'philippine_jurisprudence',
+      },
+    }),
+    /case title/i,
+  );
+});
+
+test('Quorum entry and comment payloads remain plain text and reject unsafe links', () => {
+  const xss = '<img src=x onerror=alert(1)> The doctrine should be checked.';
+  const normalized = normalizeQuorumCommandRequest({
+    operation: 'create_comment',
+    payload: { entryId: entryA, parentCommentId: commentA, body: xss },
+  });
+  assert.equal(normalized.payload.body, xss);
+  assert.throws(
+    () => normalizeQuorumCommandRequest({
+      operation: 'create_entry',
+      payload: {
+        body: 'Unsafe source attempt.',
+        entryType: 'ask_community',
+        category: 'law_school_life',
+        sourceUrl: 'javascript:alert(1)',
+      },
+    }),
+    /URL/i,
+  );
+});
+
+test('Quorum image validation accepts real signatures and rejects disguised files', () => {
+  const pngBytes = Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
+  ]);
+  const png = normalizeQuorumImage({
+    mimeType: 'image/png',
+    dataBase64: Buffer.from(pngBytes).toString('base64'),
+  });
+  assert.equal(png.mimeType, 'image/png');
+  assert.equal(png.extension, 'png');
+  assert.throws(
+    () => normalizeQuorumImage({
+      mimeType: 'image/png',
+      dataBase64: Buffer.from('MZ executable').toString('base64'),
+    }),
+    /file contents/i,
+  );
+});
+
+test('Quorum moderation requires exact safe duration and opaque targets', () => {
+  const normalized = normalizeQuorumAdminRequest({
+    operation: 'action',
+    payload: {
+      action: 'restrict_user',
+      memberId: memberA,
+      durationHours: 24,
+      reason: 'Repeated unauthorized advertising after warning.',
+      requestId: 'quorumrequest1234567890',
+    },
+  }, 'quorumrequest1234567890');
+  assert.equal(normalized.payload.durationHours, 24);
+  assert.throws(
+    () => normalizeQuorumAdminRequest({
+      operation: 'action',
+      payload: {
+        action: 'restrict_user',
+        memberId: memberA,
+        durationHours: 0,
+        reason: 'Repeated unauthorized advertising.',
+        requestId: 'quorumrequest1234567890',
+      },
+    }, 'quorumrequest1234567890'),
+    /1 hour/i,
+  );
+});
+
+test('signed-out users cannot query any Quorum data', async () => {
+  let storageCalled = false;
+  const restore = installForumFetch(async () => {
+    storageCalled = true;
+    throw new Error('Quorum storage must not be called.');
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/query', { operation: 'feed', payload: { limit: 10 } }, false),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 401);
+    assert.equal(payload.error.code, 'AUTHENTICATION_REQUIRED');
+    assert.equal(storageCalled, false);
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum reads use the verified session identity and controlled RPC', async () => {
+  let rpcBody;
+  const restore = installForumFetch(async (url, options) => {
+    assert.match(url, /\/rest\/v1\/rpc\/forum_quorum_query$/);
+    rpcBody = JSON.parse(options.body);
+    return Response.json({ items: [], hasMore: false, nextCursor: null });
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/query', {
+        operation: 'feed',
+        payload: { limit: 10, subject: 'Labor Law' },
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload.data.items, []);
+    assert.equal(rpcBody.p_user_id, userA);
+    assert.equal(rpcBody.p_operation, 'feed');
+    assert.equal(rpcBody.p_payload.subject, 'Labor Law');
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum commands cannot spoof author identity', async () => {
+  let rpcBody;
+  const restore = installForumFetch(async (url, options) => {
+    assert.match(url, /\/rest\/v1\/rpc\/forum_quorum_command$/);
+    rpcBody = JSON.parse(options.body);
+    return Response.json({
+      entryId: entryA,
+      publicationStatus: 'published',
+      message: 'Entry published in Quorum.',
+    });
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'create_entry',
+        payload: {
+          authorUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          body: 'The Labor Code applies to this question.',
+          entryType: 'discuss_legal_issue',
+          subject: 'Labor Law',
+          category: 'bar_examination',
+          opinionOnly: false,
+        },
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 201);
+    assert.equal(payload.data.entryId, entryA);
+    assert.equal(rpcBody.p_user_id, userA);
+    assert.equal('authorUserId' in rpcBody.p_payload, false);
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum failures never expose credentials or session tokens', async () => {
+  const restore = installForumFetch(async () => Response.json(
+    { message: 'FORUM_POST_NOT_FOUND' },
+    { status: 404 },
+  ));
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'set_helpful',
+        payload: { entryId: entryA, enabled: true },
+      }),
       baseEnv,
     );
     const raw = await response.text();

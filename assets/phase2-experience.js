@@ -103,6 +103,8 @@
             <p>Serious essay practice, disciplined ALAC structure, and source-based feedback in a private chamber built for future lawyers.</p>
           </div>
           <div class="dd2-entry-panel">
+            <button type="button" class="dd2-close dd2-entry-close" id="dd2-entry-close"
+              aria-label="Close sign-in" hidden>×</button>
             <div class="dd2-mark">${crestMarkup()}</div>
             <h3 id="dd2-entry-title">Welcome to Due Diligence</h3>
             <p id="dd2-entry-copy">Your chamber for serious Bar preparation.</p>
@@ -459,9 +461,12 @@
     const completed = Boolean(options.completed);
     hideNativeView();
     const allowGuest = options.allowGuest !== false && !completed;
+    const allowDismiss = options.allowDismiss === true;
+    const overlay = document.getElementById('dd2-entry-overlay');
     const title = document.getElementById('dd2-entry-title');
     const copy = document.getElementById('dd2-entry-copy');
     const guestButton = document.getElementById('dd2-guest-continue');
+    const closeButton = document.getElementById('dd2-entry-close');
     if (title) title.textContent = options.title || (completed
       ? 'You have completed your 3 guest questions.'
       : 'Welcome to Due Diligence');
@@ -469,11 +474,17 @@
       ? 'Sign in to continue.'
       : 'Your chamber for serious Bar preparation.');
     if (guestButton) guestButton.hidden = !allowGuest;
+    if (closeButton) closeButton.hidden = !allowDismiss;
+    if (overlay) overlay.dataset.dismissible = allowDismiss ? 'true' : 'false';
     setStatus('dd2-auth-status', options.message || '');
     setOverlay(true, 'dd2-entry-overlay');
   }
 
   function closeEntry() {
+    const overlay = document.getElementById('dd2-entry-overlay');
+    const closeButton = document.getElementById('dd2-entry-close');
+    if (overlay) overlay.dataset.dismissible = 'false';
+    if (closeButton) closeButton.hidden = true;
     setOverlay(false, 'dd2-entry-overlay');
   }
 
@@ -1622,6 +1633,12 @@
     bindNavigation();
     document.getElementById('dd2-google-signin')?.addEventListener('click', signInWithGoogle);
     document.getElementById('dd2-guest-continue')?.addEventListener('click', continueGuestFromEntry);
+    document.getElementById('dd2-entry-close')?.addEventListener('click', closeEntry);
+    document.getElementById('dd2-entry-overlay')?.addEventListener('click', (event) => {
+      if (event.target === event.currentTarget && event.currentTarget.dataset.dismissible === 'true') {
+        closeEntry();
+      }
+    });
     document.getElementById('dd2-onboarding-form')?.addEventListener('submit', submitOnboarding);
     document.getElementById('dd2-enrollment-status')?.addEventListener('change', updateEnrollmentFields);
     document.getElementById('dd2-native-close')?.addEventListener('click', closeNativeView);
@@ -1650,6 +1667,14 @@
     });
     document.addEventListener('keydown', (event) => {
       trapOverlayFocus(event);
+      const entryOverlay = document.getElementById('dd2-entry-overlay');
+      if (event.key === 'Escape'
+          && entryOverlay?.getAttribute('aria-hidden') === 'false'
+          && entryOverlay.dataset.dismissible === 'true') {
+        event.preventDefault();
+        closeEntry();
+        return;
+      }
       if (event.key === 'Escape' && state.nativeView) {
         event.preventDefault();
         closeNativeView();

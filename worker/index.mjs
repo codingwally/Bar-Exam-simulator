@@ -88,6 +88,16 @@ import {
   normalizeForumReportRequest,
   normalizeForumRepostRequest,
 } from './forum-core.mjs';
+import {
+  EXAMINATION_LIMITS,
+  ExaminationValidationError,
+  examinationDatabaseError,
+  extractUploadedQuestions,
+  normalizeExaminationAdmin,
+  normalizeExaminationCommand,
+  normalizeExaminationQuery,
+  normalizeUploadRequest,
+} from './examinations-core.mjs';
 import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
 const WINDOW_MS = 10 * 60 * 1000;
@@ -108,6 +118,8 @@ const paymentRateWindows = new Map();
 const partnershipRateWindows = new Map();
 const forumReadRateWindows = new Map();
 const forumWriteRateWindows = new Map();
+const examinationReadRateWindows = new Map();
+const examinationWriteRateWindows = new Map();
 const recentSubmissions = new Map();
 let laborBankCache = null;
 let websiteBankCache = null;
@@ -222,6 +234,17 @@ async function enforceForumRateLimit(request, env, mutation = false) {
     mutation
       ? 'Too many forum actions. Please wait and try again.'
       : 'Too many forum requests. Please wait and try again.',
+  );
+}
+
+async function enforceExaminationRateLimit(request, env, mutation = false) {
+  enforceWindow(
+    mutation ? examinationWriteRateWindows : examinationReadRateWindows,
+    await transientRateKey(request, env, mutation ? 'examination-write' : 'examination-read'),
+    mutation ? 180 : 240,
+    mutation
+      ? 'Too many examination actions. Wait briefly and try again.'
+      : 'Too many examination requests. Wait briefly and try again.',
   );
 }
 
@@ -401,6 +424,52 @@ async function forumRpc(env, functionName, body) {
       result?.details,
       result?.hint,
     ].filter(Boolean).join(' '));
+  }
+  return result;
+}
+
+async function examinationRpc(env, functionName, body) {
+  const allowedFunctions = new Set([
+    'examination_query',
+    'examination_command',
+    'examination_admin',
+    'examination_register_upload',
+    'examination_store_ai_assessment',
+    'examination_fail_ai_job',
+    'examination_record_delivery',
+  ]);
+  if (!allowedFunctions.has(functionName)) {
+    throw new ExaminationValidationError(
+      'UNSUPPORTED_OPERATION',
+      'This examination operation is not supported.',
+    );
+  }
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) {
+    console.error('Examination storage request failed', {
+      operation: functionName,
+      status: response.status,
+      code: String(result?.code || 'unknown').slice(0, 32),
+    });
+    const mapped = examinationDatabaseError({
+      message: [result?.message, result?.details, result?.hint].filter(Boolean).join(' '),
+    });
+    if (mapped instanceof ExaminationValidationError) throw mapped;
+    throw new ExaminationValidationError(
+      'EXAMINATION_UNAVAILABLE',
+      'The examination service is temporarily unavailable. Your saved work is preserved.',
+      503,
+    );
   }
   return result;
 }
@@ -719,6 +788,86 @@ async function sha256Hex(bytes) {
     .map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+function examinationUploadObjectUrl(env, objectPath) {
+  const baseUrl = configuredSupabaseUrl(env);
+  return new URL(
+    `/storage/v1/object/examination-uploads/${encodedStoragePath(objectPath)}`,
+    baseUrl,
+  );
+}
+
+async function uploadPrivateExamination(env, objectPath, bytes, mimeType) {
+  const response = await fetch(examinationUploadObjectUrl(env, objectPath), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': mimeType,
+      'x-upsert': 'false',
+    },
+    body: bytes,
+  });
+  if (response.ok) return { created: true };
+  if (response.status === 409) return { created: false };
+  console.error('Private examination upload failed', { status: response.status });
+  throw new ExaminationValidationError(
+    'UPLOAD_UNAVAILABLE',
+    'The examination file could not be stored privately. Try again.',
+    503,
+  );
+}
+
+async function deletePrivateExamination(env, objectPath) {
+  const response = await fetch(examinationUploadObjectUrl(env, objectPath), {
+    method: 'DELETE',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  if (response.ok || response.status === 404) return true;
+  console.error('Private examination cleanup failed', { status: response.status });
+  return false;
+}
+
+function examinationEmailMode(env) {
+  const mode = String(env.EXAMINATION_EMAIL_MODE || '').trim().toLowerCase();
+  return ['suppressed', 'enabled'].includes(mode) ? mode : 'not_configured';
+}
+
+async function sendExaminationEmail(env, { recipient, subject, text }) {
+  const mode = examinationEmailMode(env);
+  if (mode === 'suppressed') return { status: 'suppressed', providerId: null };
+  if (
+    mode !== 'enabled'
+    || !env.RESEND_API_KEY
+    || !env.EXAMINATION_EMAIL_FROM
+  ) {
+    return { status: 'not_configured', providerId: null };
+  }
+  const target = String(env.EXAMINATION_EMAIL_TEST_RECIPIENT || recipient || '').trim();
+  if (!target) return { status: 'failed', safeErrorCode: 'recipient_missing' };
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: env.EXAMINATION_EMAIL_FROM,
+      to: [target],
+      subject,
+      text,
+    }),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result?.id) {
+    console.error('Examination email dispatch failed', { status: response.status });
+    return { status: 'failed', safeErrorCode: `provider_${response.status}` };
+  }
+  return { status: 'sent', providerId: String(result.id).slice(0, 180) };
+}
+
 async function sendSecureNotification(env, { mailbox, subject, adminPath }) {
   if (!env.WEB3FORMS_ACCESS_KEY) return { sent: false, queued: true };
   const response = await fetch('https://api.web3forms.com/submit', {
@@ -759,7 +908,10 @@ async function verifiedAuthenticatedUser(request, env) {
   if (!user?.id) {
     throw new GuestAccessError('INVALID_SESSION', 'Your session expired. Please sign in again.', 401);
   }
-  return { id: String(user.id) };
+  return {
+    id: String(user.id),
+    email: String(user.email || '').trim().toLowerCase() || null,
+  };
 }
 
 function phase4AccessEnforced(env) {
@@ -1768,6 +1920,321 @@ async function handleQuorumAdmin(request, env, origin, allowedOrigin) {
   );
 }
 
+function examinationQuestionContext(question) {
+  const jurisprudence = Array.isArray(question?.jurisprudence)
+    ? question.jurisprudence.filter(Boolean).join('; ')
+    : String(question?.jurisprudence || '');
+  return {
+    subject: String(question?.subject || 'Philippine law'),
+    question: String(question?.prompt || ''),
+    suggestedAnswer: String(question?.modelAnswer || ''),
+    legalBasis: String(question?.legalBasis || ''),
+    application: String(question?.application || ''),
+    conclusion: String(question?.conclusion || ''),
+    caseName: jurisprudence,
+    citation: String(question?.citation || ''),
+    sourceUrls: Array.isArray(question?.sourceUrls) ? question.sourceUrls : [],
+    verified: true,
+    authority: 'curated-approved-examination-snapshot',
+  };
+}
+
+async function gradeExaminationQuestion(env, question) {
+  const context = examinationQuestionContext(question);
+  const policy = assessmentPolicy(context);
+  const prompt = buildExaminerPrompt({
+    questionId: String(question.questionId),
+    studentAnswer: String(question.studentAnswer || ''),
+    context,
+    policy,
+  });
+  const storedSources = sanitizeSources(
+    context.sourceUrls.map((source) => ({
+      title: source?.title || 'Stored official authority',
+      url: source?.url || source,
+      type: 'stored',
+    })),
+  );
+  const groundingEnabled = String(env.GEMINI_GROUNDING_ENABLED).toLowerCase() === 'true';
+  let gemini;
+  let assessment;
+  let repairIssues = [];
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const attemptPrompt = attempt === 0
+      ? prompt
+      : `${prompt}
+
+CONTROLLED REPAIR: The previous response failed these checks:
+${repairIssues.map((issue) => `- ${issue}`).join('\n') || '- Schema or ALAC completeness failure.'}
+Return one complete schema-valid JSON assessment. Preserve the stored legal substance.`;
+    gemini = await callGemini(env, attemptPrompt, groundingEnabled);
+    try {
+      const validated = validateExaminerResult(
+        gemini.result,
+        policy,
+        [...storedSources, ...gemini.groundedSources],
+      );
+      repairIssues = phase4ModelQualityEnforced(env)
+        ? modelAnswerQualityIssues(validated, context)
+        : [];
+      if (repairIssues.length) {
+        throw new ExaminerError(
+          'MALFORMED_MODEL_RESPONSE',
+          'The examiner returned an incomplete ALAC assessment.',
+          502,
+        );
+      }
+      assessment = applyDeterministicScoreCap(
+        {
+          ...validated,
+          humanVerified: true,
+          educationalNotice: 'AI-generated educational assessment based on the stored approved answer and linked authorities. Not legal advice.',
+        },
+        String(question.studentAnswer || ''),
+        context,
+      );
+      break;
+    } catch (error) {
+      if (
+        !(error instanceof ExaminerError)
+        || error.code !== 'MALFORMED_MODEL_RESPONSE'
+        || attempt === 1
+      ) throw error;
+    }
+  }
+  return {
+    assessment,
+    model: gemini.model,
+  };
+}
+
+async function processExaminationAiJob(env, user, gradingPackage) {
+  const questions = Array.isArray(gradingPackage?.questions)
+    ? gradingPackage.questions
+    : [];
+  if (!gradingPackage?.jobId) {
+    throw new ExaminationValidationError(
+      'EXAM_MODEL_NOT_AVAILABLE',
+      'The approved grading package is unavailable.',
+      409,
+    );
+  }
+  if (!questions.length && gradingPackage.status === 'completed') {
+    return {
+      status: 'completed',
+      completedQuestions: Number(gradingPackage.questionCount) || 0,
+      questionCount: Number(gradingPackage.questionCount) || 0,
+      modelsReleased: false,
+    };
+  }
+  if (!questions.length) {
+    throw new ExaminationValidationError(
+      'EXAM_GRADING_JOB_NOT_FOUND',
+      'No unassessed examination response is available for this grading request.',
+      409,
+    );
+  }
+  try {
+    let finalState = null;
+    const question = questions[0];
+    const { assessment, model } = await gradeExaminationQuestion(env, question);
+    finalState = await examinationRpc(env, 'examination_store_ai_assessment', {
+      p_user_id: user.id,
+      p_job_id: gradingPackage.jobId,
+      p_question_id: question.questionId,
+      p_score: assessment.score,
+      p_assessment: assessment,
+      p_grader_model: model,
+      p_model_answer_hash: question.modelAnswerHash,
+    });
+    if (finalState?.modelsReleased) {
+      const delivery = await sendExaminationEmail(env, {
+        recipient: user.email,
+        subject: 'Due Diligence model answers are available',
+        text: [
+          'Your model answers and individual ALAC assessments are now available in The Verdict.',
+          '',
+          'Open https://duediligence.ph and select Mock Bar, then sign in to review them.',
+          '',
+          'Educational use only. This message contains no examination answers.',
+        ].join('\n'),
+      });
+      await examinationRpc(env, 'examination_record_delivery', {
+        p_actor_user_id: user.id,
+        p_target_type: 'model_answers_released',
+        p_target_id: gradingPackage.attemptId,
+        p_status: delivery.status,
+        p_provider_id: delivery.providerId || null,
+        p_safe_error_code: delivery.safeErrorCode || null,
+      });
+      finalState.modelAnswerEmailStatus = delivery.status;
+    }
+    return finalState;
+  } catch (error) {
+    try {
+      await examinationRpc(env, 'examination_fail_ai_job', {
+        p_user_id: user.id,
+        p_job_id: gradingPackage.jobId,
+        p_safe_error_code: error?.code || 'grading_failed',
+      });
+    } catch {
+      console.error('Examination grading failure state requires operator review');
+    }
+    throw error;
+  }
+}
+
+async function handleExaminationQuery(request, env, origin, allowedOrigin) {
+  await enforceExaminationRateLimit(request, env);
+  const raw = await parseBoundedJson(request, 24_000);
+  const query = normalizeExaminationQuery(raw);
+  const user = query.operation === 'assignment'
+    ? null
+    : await requireAuthenticatedUser(request, env);
+  const result = await examinationRpc(env, 'examination_query', {
+    p_user_id: user?.id || null,
+    p_operation: query.operation,
+    p_payload: query,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handleExaminationCommand(request, env, origin, allowedOrigin) {
+  await enforceExaminationRateLimit(request, env, true);
+  const raw = await parseBoundedJson(request, 80_000);
+  const command = normalizeExaminationCommand(raw);
+  const tokenOperations = new Set([
+    'claim_examiner_assignment',
+    'save_examiner_review',
+    'finalize_examiner_review',
+  ]);
+  const user = tokenOperations.has(command.operation)
+    ? null
+    : await requireAuthenticatedUser(request, env);
+  const result = await examinationRpc(env, 'examination_command', {
+    p_user_id: user?.id || null,
+    p_operation: command.operation,
+    p_payload: command,
+  });
+
+  if (command.operation === 'request_ai_grading') {
+    const state = await processExaminationAiJob(env, user, result);
+    return jsonResponse({
+      ok: true,
+      data: {
+        jobId: result.jobId,
+        attemptId: result.attemptId,
+        status: state?.status || 'completed',
+        completedQuestions: state?.completedQuestions || 0,
+        questionCount: state?.questionCount || 0,
+        modelsReleased: state?.modelsReleased === true,
+        modelAnswerEmailStatus: state?.modelAnswerEmailStatus || null,
+      },
+    }, 200, origin, allowedOrigin);
+  }
+
+  if (command.operation === 'create_examiner_assignment') {
+    const assignmentUrl = `${allowedOrigin}/?assignment=${encodeURIComponent(
+      command.assignmentToken,
+    )}#examiner-review`;
+    const delivery = await sendExaminationEmail(env, {
+      recipient: command.examinerEmail,
+      subject: 'Due Diligence Human Examiner Review invitation',
+      text: [
+        'You have been invited to review a submitted Due Diligence examination.',
+        '',
+        `Secure assignment link (expires ${result.expiresAt}):`,
+        assignmentUrl,
+        '',
+        'The email contains no student answer or model answer. Open the secure link to review.',
+      ].join('\n'),
+    });
+    await examinationRpc(env, 'examination_record_delivery', {
+      p_actor_user_id: user.id,
+      p_target_type: 'examiner_invitation',
+      p_target_id: result.assignmentId,
+      p_status: delivery.status,
+      p_provider_id: delivery.providerId || null,
+      p_safe_error_code: delivery.safeErrorCode || null,
+    });
+    result.invitationStatus = delivery.status;
+  }
+
+  if (command.operation === 'delete_upload' && result?.objectPath) {
+    result.storageDeleted = await deletePrivateExamination(env, result.objectPath);
+    delete result.objectPath;
+  }
+
+  return jsonResponse(
+    { ok: true, data: result },
+    ['start_attempt', 'create_examiner_assignment'].includes(command.operation) ? 201 : 200,
+    origin,
+    allowedOrigin,
+  );
+}
+
+async function handleExaminationUpload(request, env, origin, allowedOrigin) {
+  await enforceExaminationRateLimit(request, env, true);
+  const user = await requireAuthenticatedUser(request, env);
+  const raw = await parseBoundedJson(request, EXAMINATION_LIMITS.maximumJsonBytes);
+  const upload = normalizeUploadRequest(raw);
+  const contentHash = await sha256Hex(upload.bytes);
+  const objectPath = `${user.id}/${contentHash}/${upload.fileName}`;
+  const questions = await extractUploadedQuestions(upload.bytes, upload.mimeType);
+  const stored = await uploadPrivateExamination(
+    env,
+    objectPath,
+    upload.bytes,
+    upload.mimeType,
+  );
+  try {
+    const result = await examinationRpc(env, 'examination_register_upload', {
+      p_user_id: user.id,
+      p_object_path: objectPath,
+      p_safe_file_name: upload.fileName,
+      p_mime_type: upload.mimeType,
+      p_size_bytes: upload.bytes.length,
+      p_content_hash: contentHash,
+      p_extracted_questions: questions,
+      p_request_key: upload.requestKey,
+    });
+    return jsonResponse({
+      ok: true,
+      data: {
+        uploadId: result.uploadId,
+        publicId: result.publicId,
+        status: result.status,
+        fileName: result.fileName,
+        mimeType: result.mimeType,
+        sizeBytes: result.sizeBytes,
+        questionCount: result.questionCount,
+        questions: result.questions,
+        retentionUntil: result.retentionUntil,
+        gradingRoute: upload.gradingRoute,
+        timerMode: upload.timerMode,
+        durationSeconds: upload.durationSeconds,
+        title: upload.title,
+      },
+    }, 201, origin, allowedOrigin);
+  } catch (error) {
+    if (stored.created) await deletePrivateExamination(env, objectPath);
+    throw error;
+  }
+}
+
+async function handleExaminationAdmin(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const raw = await parseBoundedJson(request, 120_000);
+  const command = normalizeExaminationAdmin(raw);
+  const result = await examinationRpc(env, 'examination_admin', {
+    p_actor_user_id: user.id,
+    p_operation: command.operation,
+    p_payload: command,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
 async function handleAccess(request, env, origin, allowedOrigin) {
   await enforceGuestStatusRateLimit(request, env);
   const user = await requireAuthenticatedUser(request, env);
@@ -2470,7 +2937,7 @@ async function handleAdminPaymentProof(request, env, origin, allowedOrigin) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
     const requestOrigin = request.headers.get('Origin') || '';
     try {
@@ -2520,6 +2987,18 @@ export default {
       }
       if (pathname === '/analytics/events') {
         return await handleAnalytics(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/examinations/query') {
+        return await handleExaminationQuery(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/examinations/command') {
+        return await handleExaminationCommand(request, env, origin, allowedOrigin, ctx);
+      }
+      if (pathname === '/examinations/upload') {
+        return await handleExaminationUpload(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/examinations') {
+        return await handleExaminationAdmin(request, env, origin, allowedOrigin);
       }
       if (pathname === '/quorum/query') {
         return await handleQuorumQuery(request, env, origin, allowedOrigin);
@@ -2611,7 +3090,8 @@ export default {
         || error instanceof GuestAccessError
         || error instanceof AccessValidationError
         || error instanceof PaymentValidationError
-        || error instanceof ForumValidationError;
+        || error instanceof ForumValidationError
+        || error instanceof ExaminationValidationError;
       return jsonResponse({
         ok: false,
         error: {

@@ -1,21 +1,25 @@
-name = "duediligence-gemini-examiner"
+name = "duediligence-examinations-staging"
 main = "index.mjs"
 compatibility_date = "2026-07-26"
-preview_urls = false
+preview_urls = true
 
 [placement]
 region = "gcp:us-east4"
 
 [vars]
+SUPABASE_URL = "https://hlzqmreeoghbldnhlybr.supabase.co"
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMINI_GROUNDING_ENABLED = "false"
-ALLOWED_ORIGIN = "https://duediligence.ph"
+ALLOWED_ORIGIN = "https://duediligence-examinations-staging.wallyesteban1993.workers.dev"
 ALLOW_LEGACY_GUESTS = "false"
 PHASE4_ACCESS_ENFORCEMENT = "true"
 PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
 REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
-EXAMINATION_EMAIL_MODE = "enabled"
+EXAMINATION_EMAIL_MODE = "suppressed"
 EXAMINATION_EMAIL_FROM = "Due Diligence Examinations <examinations@duediligence.ph>"
+
+[assets]
+directory = "../.staging-dist"
 
 [observability]
 enabled = true
@@ -23,6 +27,7 @@ enabled = true
 [observability.logs]
 enabled = true
 
-# GEMINI_API_KEY and SUPABASE_SERVICE_ROLE_KEY must remain Cloudflare secrets.
-# SUPABASE_URL must be configured as a Worker environment variable.
-# Never add secret values to this file.
+# Staging secrets are configured directly in Cloudflare and never committed:
+# GEMINI_API_KEY
+# GUEST_USAGE_HMAC_KEY
+# SUPABASE_SERVICE_ROLE_KEY

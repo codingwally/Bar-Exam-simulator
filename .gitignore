@@ -7,4 +7,5 @@
 .wrangler/
 node_modules/
 .pages-dist/
+.staging-dist/
 

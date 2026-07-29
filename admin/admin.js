@@ -20,6 +20,7 @@
     controls: 'Website Settings',
     security: 'Access & Activity Log',
     forum: 'Quorum Moderation & Analytics',
+    examinations: 'Examination Management',
   });
   const requirements = Object.freeze({
     users: 'analytics_viewer',
@@ -43,6 +44,7 @@
     action: null,
     actionInFlight: false,
     subscriptionRows: new Map(),
+    examinationData: null,
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -890,6 +892,335 @@
       </section>`;
   }
 
+  async function examinationAdmin(operation, payload = {}) {
+    const response = await api('/admin/examinations', { operation, ...payload });
+    return response.data;
+  }
+
+  function examinationReason(form) {
+    const reason = String(new FormData(form).get('reason') || '').trim();
+    if (reason.length < 5) throw new Error('Provide an audit reason of at least five characters.');
+    return reason;
+  }
+
+  function examinationOptions(items, valueKey, labelBuilder) {
+    return (items || []).map((item) => `<option value="${escapeHtml(item[valueKey])}">
+      ${escapeHtml(labelBuilder(item))}
+    </option>`).join('');
+  }
+
+  async function renderExaminations(force = false) {
+    if (!state.examinationData || force) {
+      const [dashboard, audit] = await Promise.all([
+        examinationAdmin('dashboard'),
+        examinationAdmin('audit', { limit: 50, offset: 0 }),
+      ]);
+      state.examinationData = { ...dashboard, audit: audit.items || [] };
+    }
+    const data = state.examinationData;
+    const definitions = data.definitions || [];
+    const versions = data.versions || [];
+    const draftVersions = versions.filter((version) => version.status === 'draft');
+    const questions = data.approvedQuestions || [];
+    const inventory = data.questionInventory || [];
+    const recentAttempts = data.recentAttempts || [];
+    const assignments = data.examinerAssignments || [];
+    const definitionOptions = examinationOptions(
+      definitions.filter((exam) => exam.status !== 'closed'),
+      'examId',
+      (exam) => `${exam.title} · ${exam.status}`,
+    );
+    const draftOptions = examinationOptions(
+      draftVersions,
+      'versionId',
+      (version) => `${definitions.find((exam) => exam.examId === version.examId)?.title || version.examId} · ${version.label}`,
+    );
+
+    return `${heading(
+      'Examination Management',
+      'Create immutable versions, publish only approved question snapshots, control beta access, and monitor genuine attempts.',
+      '<button class="secondary-button" type="button" data-exam-admin-refresh>Refresh examination data</button>',
+    )}
+      <div class="metric-grid">
+        ${metric('Examination definitions', definitions.length)}
+        ${metric('Approved source questions', questions.length)}
+        ${metric('Queued AI jobs', data.gradingQueue?.queued || 0)}
+        ${metric('Pending human reviews', data.gradingQueue?.humanPending || 0)}
+      </div>
+
+      <section class="panel">
+        <h3>Publication inventory</h3>
+        ${inventory.length ? table(
+          ['Subject', 'Approved', 'Pending', 'Total'],
+          inventory.map((row) => [row.subject, row.approved, row.pending, row.total]),
+        ) : empty('No examination-source questions have been imported.')}
+        <p class="panel-note">A complete production Midterm or Final requires twenty unique approved questions. Controlled tests remain visibly labeled and may use fewer.</p>
+      </section>
+
+      <div class="panel-grid">
+        <section class="panel">
+          <h3>Create examination definition</h3>
+          <form class="exam-admin-form" data-exam-admin-form="create_exam">
+            <label>Title<input name="title" minlength="3" maxlength="180" required></label>
+            <label>Track<select name="track"><option value="per_subject">Subject Matter</option><option value="bar_feels">Bar Feels</option></select></label>
+            <label>Kind<select name="assessmentKind"><option value="midterm">Midterm</option><option value="final">Final</option><option value="curated">Curated</option><option value="system_test">System test</option></select></label>
+            <label>Subject<input name="subject" maxlength="120"></label>
+            <label>Year level<input name="yearLevel" type="number" min="1" max="4"></label>
+            <label class="check-row"><input name="testOnly" type="checkbox" checked> Controlled system test</label>
+            <label>Audit reason<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+            <button class="primary-button" type="submit">Create draft definition</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <h3>Create immutable version</h3>
+          <form class="exam-admin-form" data-exam-admin-form="create_version">
+            <label>Examination<select name="examId" required><option value="">Select…</option>${definitionOptions}</select></label>
+            <label>Version label<input name="label" value="Controlled beta v1" required></label>
+            <label>Duration in minutes<input name="durationMinutes" type="number" min="1" max="240" value="60" required></label>
+            <label>Timer mode<select name="timerMode"><option value="strict">Strict Scrutiny</option><option value="selfPaced">Quantum Meruit</option><option value="none">Summary Judgment</option></select></label>
+            <label>Grading route<select name="gradingRoute"><option value="either">AI or Human</option><option value="ai">AI Assessment</option><option value="human">Human Examiner</option><option value="provisional">Provisional only</option></select></label>
+            <label>Answer release<select name="answerReleaseRule"><option value="after_ai">After AI finalization</option><option value="after_human">After human finalization</option><option value="manual">Manual</option></select></label>
+            <label>Instructions<textarea name="instructions" maxlength="8000">Answer every item using ALAC. Review all answers before final submission.</textarea></label>
+            <label>Syllabus topics, one per line<textarea name="syllabus" maxlength="4000"></textarea></label>
+            <label>Audit reason<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+            <button class="primary-button" type="submit" ${definitionOptions ? '' : 'disabled'}>Create version</button>
+          </form>
+        </section>
+      </div>
+
+      <section class="panel">
+        <h3>Attach approved questions and publish</h3>
+        <form class="exam-admin-form exam-admin-question-form" data-exam-admin-form="set_questions">
+          <label>Draft version<select name="versionId" required><option value="">Select…</option>${draftOptions}</select></label>
+          <label>Approved questions
+            <select name="questionIds" multiple size="10" required>
+              ${questions.map((question) => `<option value="${escapeHtml(question.questionId)}"
+                data-subject="${escapeHtml(question.subject)}">${escapeHtml(`${question.sourceQuestionId} · ${question.subject} · ${question.topic || 'Topic not specified'}`)}</option>`).join('')}
+            </select>
+          </label>
+          <p class="panel-note">Order follows the selected option order. Hold Ctrl or Command to select multiple unique questions.</p>
+          <label>Audit reason<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+          <div class="dialog-actions">
+            <button class="secondary-button" type="submit" ${draftOptions ? '' : 'disabled'}>Save question order</button>
+            <button class="primary-button" type="button" data-exam-admin-publish ${draftOptions ? '' : 'disabled'}>Publish selected draft</button>
+          </div>
+        </form>
+      </section>
+
+      <div class="panel-grid">
+        <section class="panel">
+          <h3>Availability and lifecycle</h3>
+          ${definitions.length ? table(
+            ['Examination', 'Track', 'Version', 'Attempts', 'Actions'],
+            definitions.map((exam) => [
+              `${exam.title}${exam.testOnly ? ' · TEST' : ''}`,
+              `${exam.track} / ${exam.assessmentKind}`,
+              exam.version ? `${exam.version.label} · ${exam.version.questionCount} questions` : 'No active version',
+              `${exam.attemptCounts?.active || 0} active · ${exam.attemptCounts?.submitted || 0} submitted`,
+              { html: true, value: `<div class="admin-inline-actions">
+                <button type="button" data-exam-lifecycle="set_availability" data-exam-id="${escapeHtml(exam.examId)}">Availability</button>
+                <button type="button" data-exam-lifecycle="unpublish_exam" data-exam-id="${escapeHtml(exam.examId)}" ${exam.status !== 'published' ? 'disabled' : ''}>Unpublish</button>
+                <button type="button" data-exam-lifecycle="close_exam" data-exam-id="${escapeHtml(exam.examId)}" ${exam.status === 'closed' ? 'disabled' : ''}>Close</button>
+              </div>` },
+            ]),
+            true,
+          ) : empty('No examination definitions exist.')}
+        </section>
+        <section class="panel">
+          <h3>Allowlisted beta access</h3>
+          <form class="exam-admin-form" data-exam-admin-form="set_beta_access">
+            <label>Authenticated user UUID<input name="userId" pattern="[0-9a-fA-F-]{36}" required></label>
+            <label class="check-row"><input name="enabled" type="checkbox" checked> Enable examination beta</label>
+            <label>Expires at (optional)<input name="expiresAt" type="datetime-local"></label>
+            <label>Audit reason<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+            <button class="primary-button" type="submit">Update beta access</button>
+          </form>
+          <hr>
+          <form class="exam-admin-form" data-exam-admin-form="set_participant">
+            <label>Published version<select name="versionId" required><option value="">Select…</option>${examinationOptions(versions.filter((version) => version.status === 'published'), 'versionId', (version) => version.label)}</select></label>
+            <label>User UUID<input name="userId" pattern="[0-9a-fA-F-]{36}" required></label>
+            <label class="check-row"><input name="enabled" type="checkbox" checked> Permit this participant</label>
+            <label>Audit reason<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+            <button class="secondary-button" type="submit">Update participant</button>
+          </form>
+        </section>
+      </div>
+
+      <section class="panel">
+        <h3>Recent genuine attempts and grading state</h3>
+        ${recentAttempts.length ? table(
+          ['Started', 'Examination', 'Student', 'Status', 'Grading', 'Model answer'],
+          recentAttempts.map((attempt) => [
+            dateTime(attempt.startedAt),
+            `${attempt.title}${attempt.subject ? ` · ${attempt.subject}` : ''}`,
+            maskOperationalIdentifier(attempt.userId, 'Student'),
+            attempt.status,
+            attempt.gradingStatus,
+            { html: true, value: `<button type="button" data-exam-release="${escapeHtml(attempt.attemptId)}"
+              ${!['submitted', 'expired'].includes(attempt.status) ? 'disabled' : ''}>Release</button>` },
+          ]),
+          true,
+        ) : empty('No examination attempts have been created.')}
+      </section>
+
+      <section class="panel">
+        <h3>Human examiner assignments</h3>
+        ${assignments.length ? table(
+          ['Created', 'Assignment', 'Attempt', 'Status', 'Invitation', 'Expires'],
+          assignments.map((item) => [
+            dateTime(item.createdAt),
+            maskOperationalIdentifier(item.assignmentId),
+            maskOperationalIdentifier(item.attemptId),
+            item.status,
+            item.invitationStatus,
+            dateTime(item.expiresAt),
+          ]),
+        ) : empty('No human examiner assignments exist.')}
+      </section>
+
+      <section class="panel">
+        <h3>Examination audit history</h3>
+        ${(data.audit || []).length ? table(
+          ['Time', 'Action', 'Resource', 'Reason'],
+          data.audit.map((item) => [
+            dateTime(item.createdAt),
+            item.action,
+            `${item.resourceType} · ${maskOperationalIdentifier(item.resourceId)}`,
+            item.reason,
+          ]),
+        ) : empty('No examination administration actions have been recorded.')}
+      </section>`;
+  }
+
+  async function submitExaminationAdminForm(form) {
+    const operation = form.dataset.examAdminForm;
+    const values = Object.fromEntries(new FormData(form));
+    const reason = examinationReason(form);
+    const payload = { operation, reason, requestKey: uuidKey() };
+    if (operation === 'create_exam') {
+      Object.assign(payload, {
+        title: values.title,
+        track: values.track,
+        assessmentKind: values.assessmentKind,
+        subject: values.subject,
+        yearLevel: values.yearLevel || null,
+        testOnly: form.elements.testOnly.checked,
+      });
+    } else if (operation === 'create_version') {
+      Object.assign(payload, {
+        examId: values.examId,
+        label: values.label,
+        durationSeconds: Number(values.durationMinutes) * 60,
+        timerMode: values.timerMode,
+        gradingRoute: values.gradingRoute,
+        answerReleaseRule: values.answerReleaseRule,
+        instructions: values.instructions,
+        syllabus: String(values.syllabus || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean),
+      });
+    } else if (operation === 'set_questions') {
+      Object.assign(payload, {
+        versionId: values.versionId,
+        questionIds: [...form.elements.questionIds.selectedOptions].map((option) => option.value),
+      });
+    } else if (operation === 'set_beta_access') {
+      Object.assign(payload, {
+        userId: values.userId,
+        enabled: form.elements.enabled.checked,
+        expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
+      });
+    } else if (operation === 'set_participant') {
+      Object.assign(payload, {
+        versionId: values.versionId,
+        userId: values.userId,
+        enabled: form.elements.enabled.checked,
+      });
+    }
+    await examinationAdmin(operation, payload);
+    state.examinationData = null;
+    toast('Audited examination action completed.');
+    await renderSection('examinations');
+  }
+
+  function bindExaminationAdmin() {
+    $$('[data-exam-admin-form]').forEach((form) => form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        await submitExaminationAdminForm(form);
+      } catch (error) {
+        toast(error.message || 'The examination action could not be completed.');
+        button.disabled = false;
+      }
+    }));
+    $('[data-exam-admin-refresh]')?.addEventListener('click', async () => {
+      state.examinationData = null;
+      await renderSection('examinations');
+    });
+    $('[data-exam-admin-publish]')?.addEventListener('click', async () => {
+      const form = $('[data-exam-admin-form="set_questions"]');
+      const versionId = form?.elements.versionId.value;
+      const reason = form?.elements.reason.value.trim();
+      if (!versionId || reason.length < 5) {
+        toast('Select a draft and provide an audit reason before publishing.');
+        return;
+      }
+      if (!global.confirm('Publish this immutable examination version? Active attempts will use this exact snapshot.')) return;
+      try {
+        await examinationAdmin('publish_version', {
+          operation: 'publish_version',
+          versionId,
+          reason,
+          requestKey: uuidKey(),
+        });
+        state.examinationData = null;
+        toast('Examination version published.');
+        await renderSection('examinations');
+      } catch (error) { toast(error.message); }
+    });
+    $$('[data-exam-lifecycle]').forEach((button) => button.addEventListener('click', async () => {
+      const operation = button.dataset.examLifecycle;
+      const label = operation.replaceAll('_', ' ');
+      const reason = global.prompt(`Reason for ${label}:`, '');
+      if (!reason || reason.trim().length < 5) return toast('A five-character audit reason is required.');
+      const payload = {
+        operation,
+        examId: button.dataset.examId,
+        reason: reason.trim(),
+        requestKey: uuidKey(),
+      };
+      if (operation === 'set_availability') {
+        const availableFrom = global.prompt('Available from (ISO date/time; blank means immediately):', '') || '';
+        const availableUntil = global.prompt('Available until (ISO date/time; blank means no end):', '') || '';
+        payload.availableFrom = availableFrom ? new Date(availableFrom).toISOString() : null;
+        payload.availableUntil = availableUntil ? new Date(availableUntil).toISOString() : null;
+      } else if (!global.confirm(`Confirm ${label}? This access-impacting change is audited.`)) return;
+      try {
+        await examinationAdmin(operation, payload);
+        state.examinationData = null;
+        toast(`Examination ${label} completed.`);
+        await renderSection('examinations');
+      } catch (error) { toast(error.message); }
+    }));
+    $$('[data-exam-release]').forEach((button) => button.addEventListener('click', async () => {
+      const reason = global.prompt('Reason for releasing the stored model answers:', '');
+      if (!reason || reason.trim().length < 5) return toast('A five-character audit reason is required.');
+      if (!global.confirm('Release model answers to this attempt now? This cannot be hidden from the examinee afterward.')) return;
+      try {
+        await examinationAdmin('release_model_answers', {
+          operation: 'release_model_answers',
+          attemptId: button.dataset.examRelease,
+          reason: reason.trim(),
+          requestKey: uuidKey(),
+        });
+        state.examinationData = null;
+        toast('Model answers released. Email status remains provider-confirmed only.');
+        await renderSection('examinations');
+      } catch (error) { toast(error.message); }
+    }));
+  }
+
   async function renderSection(section) {
     state.section = section;
     $('#section-title').textContent = titles[section];
@@ -919,8 +1250,10 @@
       else if (section === 'controls') html = await renderControls();
       else if (section === 'security') html = await renderSecurity();
       else if (section === 'forum') html = await renderQuorumModeration();
+      else if (section === 'examinations') html = await renderExaminations();
       $('#dashboard-view').innerHTML = html;
       bindDynamic();
+      if (section === 'examinations') bindExaminationAdmin();
     } catch (error) {
       $('#dashboard-view').innerHTML = heading('Chambers unavailable', error.message || 'Administrator data could not be loaded.')
         + empty('No production data was changed. Refresh after connectivity or authorization is restored.');
@@ -1666,7 +1999,7 @@
   function applyNavigationAuthorization() {
     $$('#admin-nav button').forEach((button) => {
       const needed = requirements[button.dataset.section];
-      const founderOnly = button.dataset.section === 'forum';
+      const founderOnly = ['forum', 'examinations'].includes(button.dataset.section);
       const founderAuthorized = ['founder_admin', 'super_admin'].includes(
         state.authorization?.role,
       );

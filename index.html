@@ -399,7 +399,7 @@
     min-height:30px;padding:6px 20px;background:#f5efe2;border-bottom:1px solid rgba(197,160,89,.46);
     color:#66512a;font-family:var(--sans);font-size:11px;line-height:1.4;text-align:center;
   }
-  .beta-notice strong{color:#8a681e;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;}
+  .beta-notice strong{color:#715313;font-family:var(--mono);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;}
   .beta-notice button{
     padding:0;border:0;border-bottom:1px solid currentColor;background:transparent;color:#7b5b16;
     font:inherit;font-weight:700;cursor:pointer;
@@ -750,6 +750,7 @@
 </style>
 <link rel="stylesheet" href="assets/phase2.css">
 <link rel="stylesheet" href="assets/lex-forum.css?v=quorum-20260803-1">
+<link rel="stylesheet" href="assets/examinations.css?v=examinations-20260729-2">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body>
@@ -797,7 +798,7 @@
     aria-controls="spa-nav" aria-expanded="false">Menu</button>
   <nav class="spa-nav" id="spa-nav" aria-label="Primary navigation">
     <button class="spa-tab active" id="spa-mock" title="Practice Philippine Bar-style questions."
-      onclick="showPage('mock', this)">Moot Court</button>
+      onclick="showPage('mock', this)">Mock Bar</button>
     <button class="spa-tab" id="spa-progress" title="Review scores, feedback, and performance."
       onclick="openAnalytics()">The Verdict</button>
     <button class="spa-tab" id="spa-pricing" title="Manage your plan and platform access."
@@ -832,13 +833,32 @@
         <div class="welcome-actions">
           <button type="button" class="btn-primary" id="start-practice" onclick="startPractice()">Commence Examination</button>
         </div>
+        <div class="moot-hub" aria-label="Mock Bar study routes">
+          <button class="moot-hub-card" type="button" onclick="startPractice()">
+            <span>Quick Practice</span>
+            <strong>Bar-Subject Essays</strong>
+            <p>Open the existing eight-subject essay workspace with ALAC coaching and individual five-point assessment.</p>
+          </button>
+          <button class="moot-hub-card" type="button"
+            onclick="window.DueDiligenceExaminations?.openPerSubject()">
+            <span>Structured Assessment</span>
+            <strong>Subject Matter Examinations</strong>
+            <p>Enter reviewed Midterm and Final versions with autosave, navigation, and one overall timer.</p>
+          </button>
+          <button class="moot-hub-card" type="button"
+            onclick="window.DueDiligenceExaminations?.openBarFeels()">
+            <span>Examination Room</span>
+            <strong>Bar Feels</strong>
+            <p>Take a curated multi-question set or confirm a private authorized upload before the clock begins.</p>
+          </button>
+        </div>
         <div class="welcome-proof" aria-label="Platform scope">
           <span>8 Bar subjects</span>
           <span>320 curated questions</span>
           <span>0–5 assessment scale</span>
         </div>
       </div>
-      <div class="welcome-feature-grid" aria-label="Moot Court features">
+      <div class="welcome-feature-grid" aria-label="Mock Bar features">
         <div class="welcome-feature">
           <strong>Realistic practice</strong>
           <p>Deliberate timed and self-paced essay sessions modeled for Bar preparation.</p>
@@ -862,7 +882,7 @@
   <div id="subject-selection-state" class="onboarding-state" hidden>
     <article class="subject-selection-card" aria-labelledby="subject-selection-title">
       <div class="selection-kicker">Choose Your Review Subject</div>
-      <h1 id="subject-selection-title">Choose your Moot Court subject.</h1>
+      <h1 id="subject-selection-title">Choose your Mock Bar subject.</h1>
       <p>Select a Philippine Bar subject. Its first valid question will load before you choose a session mode; no timer starts during selection.</p>
       <div class="subject-choice-grid" id="subject-choice-grid"></div>
       <div class="subject-loading" id="subject-loading-status" role="status" aria-live="polite"></div>
@@ -873,7 +893,7 @@
     <div class="page-wrap" style="padding-bottom:0;">
       <div class="page-head" style="margin-bottom:14px;">
         <div class="eyebrow">Focused Essay Workspace</div>
-        <h2>Moot Court</h2>
+        <h2>Mock Bar</h2>
       </div>
     </div>
 
@@ -1074,10 +1094,10 @@
             <p>Quorum is an educational discussion space for the Due Diligence community. User-generated entries do not constitute legal advice. Verify statutes and jurisprudence through official sources.</p>
           </section>
           <section class="quorum-practice-card">
-            <span class="lex-kicker">Moot Court</span>
+            <span class="lex-kicker">Mock Bar</span>
             <h3>Turn discussion into deliberate practice.</h3>
             <p>Apply a genuine Quorum issue mapping to a Philippine Bar-style essay when one is available.</p>
-            <button class="lex-button lex-button-primary" type="button" onclick="showPage('mock', document.getElementById('spa-mock'))">Open Moot Court</button>
+            <button class="lex-button lex-button-primary" type="button" onclick="showPage('mock', document.getElementById('spa-mock'))">Open Mock Bar</button>
           </section>
         </aside>
       </div>
@@ -1086,14 +1106,11 @@
 </section>
 
 <section id="page-midterms" class="page">
-  <div class="page-wrap">
-    <div class="page-head">
-      <div class="eyebrow">Law School Modules</div>
-      <h2>Midterms &amp; Finals Mock Exams</h2>
-      <p>Subject-specific practice sets modeled on Philippine law school assessments — first year fundamentals through bar-prep review.</p>
-    </div>
-    <div class="card-grid" id="midterms-grid"></div>
-  </div>
+  <div id="dd-per-subject-app" aria-live="polite"></div>
+</section>
+
+<section id="page-bar-feels" class="page">
+  <div id="dd-bar-feels-app" aria-live="polite"></div>
 </section>
 
 <section id="page-news" class="page">
@@ -1159,7 +1176,7 @@
 <!-- Sign-in choice shown once per onboarding session -->
 <div class="modal-overlay blocking" id="signin-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="signin-prompt-title" aria-describedby="signin-prompt-copy">
   <div class="modal-card" tabindex="-1">
-    <h3 class="modal-title" id="signin-prompt-title">Enter the Moot Court</h3>
+    <h3 class="modal-title" id="signin-prompt-title">Enter the Mock Bar</h3>
     <p class="checking-copy" id="signin-prompt-copy">Sign in to open protected questions, save progress, and continue study sessions across devices.</p>
     <span class="tier-badge">Authentication is required before an examination question is displayed.</span>
     <div class="signin-prompt-actions">
@@ -2610,7 +2627,7 @@ function renderMainHistory() {
   if (historyLog.length === 0) {
     main.innerHTML = `
       <div class="panel-title on-navy" style="margin-bottom:16px;">Examinee Performance Archive</div>
-      <div class="empty on-navy">No essays evaluated yet. Complete a Moot Court scenario under “Answer & Review” to generate your performance audit trail.</div>
+      <div class="empty on-navy">No essays evaluated yet. Complete a Mock Bar scenario under “Answer & Review” to generate your performance audit trail.</div>
     `;
     return;
   }
@@ -2813,7 +2830,7 @@ function openAnalytics() {
   const list = loadAttempts();
   const body = document.getElementById('analytics-body');
   if (!list.length) {
-    body.innerHTML = '<div class="empty">No drills logged yet. Grade an essay in Moot Court to build The Verdict history.</div>';
+    body.innerHTML = '<div class="empty">No drills logged yet. Grade an essay in Mock Bar to build The Verdict history.</div>';
     openModal('analytics-modal');
     return;
   }
@@ -3184,7 +3201,8 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase2-config.js"></script>
 <script src="assets/phase2-experience.js?v=release-c-20260729-1-quorum-20260803-1"></script>
 <script src="assets/phase4-experience.js?v=phase4-20260729-2"></script>
-<script src="assets/lex-forum.js?v=quorum-20260803-1"></script>
+<script src="assets/lex-forum.js?v=quorum-20260803-2"></script>
+<script src="assets/examinations.js?v=examinations-20260729-2"></script>
 <script src="assets/phase3-analytics.js"></script>
 
 </body>

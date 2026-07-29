@@ -167,6 +167,72 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
 .toast { position: fixed; right: 1rem; bottom: 1rem; background: var(--navy); color: white; padding: .8rem 1rem; border-left: 3px solid var(--gold); opacity: 0; pointer-events: none; transform: translateY(8px); transition: .2s; z-index: 100; max-width: 360px; font-size: .75rem; }
 .toast.show { opacity: 1; transform: none; }
 .skeleton { min-height: 90px; background: #edf1f5; animation: pulse 1.2s ease-in-out infinite; }
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .8rem;
+  margin-bottom: 1rem;
+}
+.metric-grid .metric {
+  min-height: 118px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--gold);
+  border-radius: 6px;
+  background: white;
+}
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.exam-admin-form {
+  display: grid;
+  gap: .75rem;
+  margin-top: .8rem;
+}
+.exam-admin-form > label {
+  display: grid;
+  gap: .35rem;
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 700;
+}
+.exam-admin-form textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+.exam-admin-form select[multiple] {
+  min-height: 230px;
+  padding: .3rem;
+}
+.exam-admin-form select[multiple] option {
+  padding: .45rem .5rem;
+  white-space: normal;
+}
+.exam-admin-form .check-row {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+}
+.admin-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+.admin-inline-actions button,
+[data-exam-release] {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: white;
+  color: var(--navy);
+  cursor: pointer;
+}
+.admin-inline-actions button:disabled,
+[data-exam-release]:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
 @keyframes pulse { 50% { opacity: .55; } }
 @media print {
   .sidebar, .topbar-tools, .menu-button, .system-banner, .row-actions { display: none !important; }
@@ -196,6 +262,8 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
   .system-banner { margin: 1rem 1rem 0; }
   .dashboard-view { padding: 1rem; }
   .work-grid { grid-template-columns: 1fr; }
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .panel-grid { grid-template-columns: 1fr; }
   .table-wrap { overflow: visible; border: 0; background: transparent; }
   .table-wrap table, .table-wrap tbody, .table-wrap tr, .table-wrap td { display: block; width: 100%; }
   .table-wrap thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -216,6 +284,7 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
   .freshness { grid-column: 1 / -1; grid-row: 2; margin: .25rem 0 0; max-width: none; }
   .refresh-button { min-height: 42px; }
   .metric-strip { grid-template-columns: 1fr; }
+  .metric-grid { grid-template-columns: 1fr; }
   .metric { border-bottom: 1px solid var(--line); }
   .metric { border-right: 0; }
   .scenario { grid-template-columns: 1fr; }

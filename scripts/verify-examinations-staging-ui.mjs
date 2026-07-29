@@ -1,0 +1,388 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
+
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright');
+
+const siteUrl = String(process.env.STAGING_SITE_URL || '').replace(/\/+$/, '');
+const email = String(process.env.STAGING_UI_EMAIL || '');
+const password = String(process.env.STAGING_UI_PASSWORD || '');
+
+assert.match(siteUrl, /^https:\/\/[a-z0-9.-]+\.workers\.dev$/);
+assert.match(email, /^dd-ui-[a-z0-9-]+@example\.com$/);
+assert.ok(password.length >= 16, 'A disposable staging-user password is required.');
+
+const runId = `ui-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+const createdExamIds = [];
+const results = {
+  runId,
+  examinations: [],
+  responsive: {},
+  accessibility: {},
+  consoleErrors: [],
+  pageErrors: [],
+};
+
+const completeAnswers = [
+  [
+    'I. ANSWER: No. The accused should not be held criminally liable if the stated facts establish the recognized defense.',
+    'II. LEGAL BASIS: The Revised Penal Code and the controlling Supreme Court doctrine require each statutory element, criminal intent, and any justifying or exempting circumstance to be evaluated from the facts actually proved.',
+    'III. APPLICATION: The exact conduct, timing, danger, relationship, and state of mind described in the problem must be compared with those elements. The facts support the defense only where they establish a reasonable response and negate the criminal intent otherwise required.',
+    'IV. CONCLUSION: Therefore, the accused should be acquitted when the complete requisites of the defense are established.',
+  ].join('\n\n'),
+  [
+    'I. ANSWER: Liability depends on whether every element of the offense is established by the facts.',
+    'II. LEGAL BASIS: The applicable Revised Penal Code provision and the cited Supreme Court doctrine define the prohibited act, required intent, and any qualifying or mitigating circumstance.',
+    'III. APPLICATION: The actor’s specific conduct, intent, relationship to the other party, and the resulting consequence must be matched to each legal element. A bare conclusion cannot substitute for that element-by-element application.',
+    'IV. CONCLUSION: Accordingly, liability and the proper offense follow only to the extent supported by the stated facts and governing law.',
+  ].join('\n\n'),
+  [
+    'I. ANSWER: Yes, if the prosecution proves the required statutory elements beyond reasonable doubt.',
+    'II. LEGAL BASIS: The governing Code provision and controlling jurisprudence require proof of the act, criminal intent, and all circumstances that qualify or alter the offense.',
+    'III. APPLICATION: Here, the concrete acts and resulting injury described in the question must satisfy each element. Any defense or modifying circumstance must likewise be assessed against the precise timing and conduct alleged.',
+    'IV. CONCLUSION: Therefore, the legally supported offense and penalty should be imposed only after that complete analysis.',
+  ].join('\n\n'),
+];
+
+async function waitForSaved(page) {
+  await page.waitForFunction(() => {
+    const node = document.getElementById('dd-save-state');
+    return node && /^Saved\b/i.test(node.textContent || '');
+  }, null, { timeout: 15_000 });
+}
+
+async function runAccessibilityAudit(page, label) {
+  if (!await page.evaluate(() => Boolean(window.axe))) {
+    await page.addScriptTag({
+      url: 'https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.3/axe.min.js',
+    });
+  }
+  const audit = await page.evaluate(async () => window.axe.run(document, {
+    runOnly: {
+      type: 'tag',
+      values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'],
+    },
+  }));
+  results.accessibility[label] = audit.violations.map((violation) => ({
+    id: violation.id,
+    impact: violation.impact,
+    nodes: violation.nodes.length,
+    targets: violation.nodes.map((node) => node.target),
+    summaries: violation.nodes.map((node) => node.failureSummary),
+  }));
+  assert.deepEqual(
+    results.accessibility[label],
+    [],
+    `${label} has WCAG A/AA violations.`,
+  );
+}
+
+async function completeOnboardingIfShown(page) {
+  await page.waitForTimeout(2_500);
+  const onboarding = page.locator('#dd2-onboarding-overlay.is-open');
+  if (!await onboarding.isVisible().catch(() => false)) return;
+  await page.locator('#dd2-display-name').fill('Synthetic Staging Examinee');
+  await page.locator('#dd2-enrollment-status').selectOption('not_yet_enrolled');
+  await page.locator('#dd2-legal-acceptance').check();
+  await page.locator('#dd2-onboarding-submit').click();
+  await onboarding.waitFor({ state: 'hidden', timeout: 20_000 });
+}
+
+async function authenticate(page) {
+  await page.goto(`${siteUrl}/?qa=examinations`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 45_000,
+  });
+  await page.waitForFunction(
+    () => Boolean(window.supabase?.createClient && window.DueDiligencePhase2Config),
+    null,
+    { timeout: 15_000 },
+  );
+  const authentication = await page.evaluate(async (credentials) => {
+    const client = window.supabase.createClient(
+      window.DueDiligencePhase2Config.supabase.url,
+      window.DueDiligencePhase2Config.supabase.publishableKey,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+        },
+      },
+    );
+    const { data, error } = await client.auth.signInWithPassword(credentials);
+    return {
+      authenticated: Boolean(data?.session?.access_token),
+      error: error?.message || null,
+    };
+  }, { email, password });
+  assert.equal(authentication.error, null);
+  assert.equal(authentication.authenticated, true);
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 45_000 });
+  await page.waitForFunction(
+    () => Boolean(window.DueDiligencePhase4?.getSession?.()?.access_token),
+    null,
+    { timeout: 15_000 },
+  );
+  await completeOnboardingIfShown(page);
+  await page.evaluate(() => localStorage.removeItem('duediligence.examinations.recovery.v1'));
+}
+
+async function adminOperation(page, operation, payload = {}) {
+  return page.evaluate(async ({ operation: requestedOperation, payload: requestedPayload }) => {
+    const session = window.DueDiligencePhase4?.getSession?.();
+    if (!session?.access_token) throw new Error('The staging admin session is unavailable.');
+    const request = {
+      operation: requestedOperation,
+      ...requestedPayload,
+      ...(!['dashboard', 'audit'].includes(requestedOperation)
+        ? {
+            reason: requestedPayload.reason || 'Synthetic staging UI verification',
+            requestKey: requestedPayload.requestKey
+              || `qa_${requestedOperation}_${crypto.randomUUID()}`,
+          }
+        : {}),
+    };
+    const response = await fetch(
+      `${window.DueDiligencePhase2Config.workerUrl}/admin/examinations`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      },
+    );
+    const body = await response.json().catch(() => null);
+    if (!response.ok || !body?.ok) {
+      throw new Error(
+        `${body?.error?.code || response.status}: ${body?.error?.message || 'Admin request failed.'}`,
+      );
+    }
+    return body.data;
+  }, { operation, payload });
+}
+
+async function publishFixture(page, {
+  track,
+  assessmentKind,
+  subject,
+  title,
+  questionOffset = 0,
+}) {
+  const dashboard = await adminOperation(page, 'dashboard');
+  const questionIds = dashboard.approvedQuestions
+    .filter((question) => question.subject === subject)
+    .slice(questionOffset, questionOffset + 3)
+    .map((question) => question.questionId);
+  assert.equal(questionIds.length, 3, `Expected three approved ${subject} questions.`);
+
+  const examination = await adminOperation(page, 'create_exam', {
+    track,
+    assessmentKind,
+    title,
+    subject,
+    yearLevel: 1,
+    testOnly: true,
+  });
+  createdExamIds.push(examination.examId);
+  const version = await adminOperation(page, 'create_version', {
+    examId: examination.examId,
+    label: `Staging browser ${runId}`,
+    durationSeconds: 3_600,
+    timerMode: 'selfPaced',
+    gradingRoute: 'ai',
+    answerReleaseRule: 'after_ai',
+    instructions: 'Synthetic staging browser verification. Answer each item using ALAC.',
+    syllabus: ['Controlled staging browser verification'],
+  });
+  await adminOperation(page, 'set_questions', {
+    versionId: version.versionId,
+    questionIds,
+  });
+  const published = await adminOperation(page, 'publish_version', {
+    versionId: version.versionId,
+  });
+  assert.equal(published.status, 'published');
+  return {
+    examId: examination.examId,
+    versionId: version.versionId,
+    title,
+    track,
+  };
+}
+
+async function openCatalog(page, track) {
+  await page.evaluate(async (selectedTrack) => {
+    if (selectedTrack === 'bar_feels') {
+      await window.DueDiligenceExaminations.openBarFeels();
+    } else {
+      await window.DueDiligenceExaminations.openPerSubject();
+    }
+  }, track);
+  await page.waitForFunction(
+    (selectedTrack) => (
+      window.DueDiligenceExaminations?.getState?.().screen === 'catalog'
+      && window.DueDiligenceExaminations?.getState?.().track === selectedTrack
+    ),
+    track,
+    { timeout: 15_000 },
+  );
+}
+
+async function completeExamination(page, fixture) {
+  await completeOnboardingIfShown(page);
+  await openCatalog(page, fixture.track);
+  const rootSelector = fixture.track === 'bar_feels'
+    ? '#dd-bar-feels-app'
+    : '#dd-per-subject-app';
+  const catalogText = await page.locator(rootSelector).innerText();
+  assert.ok(
+    catalogText.includes(fixture.title),
+    `Published staging fixture was absent from ${fixture.track} catalog: ${catalogText.slice(0, 1_200)}`,
+  );
+  const title = page.getByText(fixture.title, { exact: true });
+  await title.waitFor({ state: 'visible', timeout: 15_000 });
+  const card = title.locator('xpath=ancestor::article[1]');
+  const setupButton = card.locator(`[data-exam-setup="${fixture.versionId}"]`);
+  await setupButton.click();
+  const dialog = page.locator('#dd-exam-setup-dialog[open]');
+  await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+  const dialogText = await dialog.innerText();
+  assert.match(dialogText, /1 hour\b/);
+  assert.doesNotMatch(dialogText, /1 hours\b/);
+  assert.match(dialogText, fixture.track === 'bar_feels'
+    ? /BAR FEELS/i
+    : /SUBJECT MATTER EXAMINATION/i);
+  await dialog.locator('[data-exam-begin]').click();
+  await page.waitForFunction(
+    () => window.DueDiligenceExaminations?.getState?.().screen === 'room',
+    null,
+    { timeout: 15_000 },
+  );
+  const attemptId = await page.evaluate(
+    () => window.DueDiligenceExaminations.getState().activeAttemptId,
+  );
+  assert.match(attemptId, /^[0-9a-f-]{36}$/i);
+
+  for (let index = 0; index < completeAnswers.length; index += 1) {
+    await page.locator('#dd-answer-editor').fill(completeAnswers[index]);
+    await waitForSaved(page);
+    if (index < completeAnswers.length - 1) {
+      await page.locator('[data-question-next]').click();
+      await page.waitForFunction(
+        ({ ordinal, selector }) => document.querySelector(selector)
+          ?.querySelector('.dd-question-label')
+          ?.textContent?.includes(`Question ${ordinal} of 3`),
+        { ordinal: index + 2, selector: rootSelector },
+        { timeout: 15_000 },
+      );
+    }
+  }
+
+  await page.locator('[data-review-all]').click();
+  await page.waitForFunction(
+    () => window.DueDiligenceExaminations?.getState?.().screen === 'review',
+    null,
+    { timeout: 15_000 },
+  );
+  const reviewText = await page.locator(rootSelector).innerText();
+  assert.match(reviewText, /3\s+ANSWERED/i);
+  assert.match(reviewText, /0\s+UNANSWERED/i);
+
+  await page.locator('[data-submit-exam]').click();
+  await page.waitForFunction(
+    () => window.DueDiligenceExaminations?.getState?.().screen === 'receipt',
+    null,
+    { timeout: 20_000 },
+  );
+  const receiptText = await page.locator('.dd-receipt-screen').innerText();
+  assert.match(receiptText, /Your examination is preserved/i);
+  assert.match(receiptText, /3\s+ANSWERED/i);
+
+  await page.locator('[data-request-ai]').click();
+  await page.locator(`${rootSelector} .dd-verdict-screen h1`).filter({
+    hasText: 'Individual ALAC assessments.',
+  }).waitFor({ state: 'visible', timeout: 150_000 });
+  const scores = await page.locator(`${rootSelector} .dd-score-five`).allTextContents();
+  assert.equal(scores.length, 3);
+  scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5\.0$/));
+  const verdictText = await page.locator(`${rootSelector} .dd-verdict-screen`).innerText();
+  assert.match(verdictText, /Released Model Answer/i);
+  assert.match(verdictText, /AI Assessment/i);
+  assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
+
+  return { track: fixture.track, attemptId, scores };
+}
+
+const browser = await chromium.launch({ headless: true, channel: 'chrome' });
+try {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1_100 } });
+  const page = await context.newPage();
+  page.on('console', (message) => {
+    if (message.type() === 'error') results.consoleErrors.push(message.text());
+  });
+  page.on('pageerror', (error) => results.pageErrors.push(String(error)));
+
+  await authenticate(page);
+  await adminOperation(page, 'set_beta_access', {
+    userId: await page.evaluate(() => window.DueDiligencePhase4.getSession().user.id),
+    enabled: true,
+    expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1_000).toISOString(),
+  });
+
+  const subjectFixture = await publishFixture(page, {
+    track: 'per_subject',
+    assessmentKind: 'final',
+    subject: 'Criminal Law I',
+    title: `[SYNTHETIC ${runId}] 00 Subject Matter UI`,
+    questionOffset: 6,
+  });
+  const barFeelsFixture = await publishFixture(page, {
+    track: 'bar_feels',
+    assessmentKind: 'curated',
+    subject: 'Persons and Family Law',
+    title: `[SYNTHETIC ${runId}] 00 Bar Feels UI`,
+    questionOffset: 6,
+  });
+
+  results.examinations.push(await completeExamination(page, subjectFixture));
+  results.examinations.push(await completeExamination(page, barFeelsFixture));
+
+  const viewportChecks = [
+    { width: 390, height: 844 },
+    { width: 768, height: 1_024 },
+    { width: 1_280, height: 900 },
+    { width: 1_440, height: 1_100 },
+  ];
+  const catalogChecks = [
+    { track: 'per_subject', label: 'subjectMatter', heading: 'Subject Matter Examinations' },
+    { track: 'bar_feels', label: 'barFeels', heading: 'Bar Feels' },
+  ];
+  for (const viewport of viewportChecks) {
+    await page.setViewportSize(viewport);
+    for (const catalog of catalogChecks) {
+      await openCatalog(page, catalog.track);
+      const label = `${catalog.label}-${viewport.width}`;
+      results.responsive[label] = {
+        overflow: await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+        headingVisible: await page.getByRole('heading', {
+          name: catalog.heading,
+          exact: true,
+        }).isVisible(),
+      };
+      assert.equal(results.responsive[label].overflow, false);
+      assert.equal(results.responsive[label].headingVisible, true);
+      await runAccessibilityAudit(page, label);
+    }
+  }
+  assert.deepEqual(results.consoleErrors, []);
+  assert.deepEqual(results.pageErrors, []);
+  results.ok = true;
+  results.createdExamIds = createdExamIds;
+  console.log(JSON.stringify(results, null, 2));
+} finally {
+  await browser.close();
+}

@@ -37,6 +37,8 @@ assert.match(admin, /setAttribute\('aria-busy', 'true'\)/);
 assert.match(admin, /button\.textContent = 'Refreshing…'/);
 
 assert.match(adminCss, /@media \(max-width: 820px\)[\s\S]*\.table-wrap td::before/);
+assert.match(adminCss, /@media \(max-width: 560px\)[\s\S]*\.exam-admin-form \{ grid-template-columns: minmax\(0, 1fr\); \}/);
+assert.match(adminCss, /\.exam-admin-form input,[\s\S]*min-width: 0; max-width: 100%;/);
 assert.match(adminCss, /\.action-menu-popover/);
 assert.match(adminCss, /\.insight-dialog/);
 assert.match(adminCss, /\.sidebar-scrim\[hidden\]/);

@@ -281,6 +281,12 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
   .topbar-tools { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
   .topbar-tools label { min-width: 0; }
   .topbar-tools select { width: 100%; }
+  .exam-admin-form { grid-template-columns: minmax(0, 1fr); }
+  .exam-admin-form > label,
+  .exam-admin-form input,
+  .exam-admin-form select,
+  .exam-admin-form textarea,
+  .exam-admin-form > button { width: 100%; min-width: 0; max-width: 100%; }
   .freshness { grid-column: 1 / -1; grid-row: 2; margin: .25rem 0 0; max-width: none; }
   .refresh-button { min-height: 42px; }
   .metric-strip { grid-template-columns: 1fr; }

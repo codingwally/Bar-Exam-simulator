@@ -433,6 +433,15 @@
   .spa-tab:hover{background:rgba(255,255,255,.06);color:#fff;}
   .spa-tab.active{background:linear-gradient(180deg,rgba(197,160,89,.22),rgba(197,160,89,.08));color:#F6EFDD;box-shadow:inset 0 -2px 0 var(--gold);}
   .spa-tab.account-tab{border:1px solid rgba(197,160,89,.42);color:#f8edcf;}
+  .btn-angel{
+    position:relative;font-family:var(--sans);font-weight:800;font-size:12px;letter-spacing:.4px;text-transform:uppercase;
+    color:#241803;border:1px solid rgba(255,240,200,.6);border-radius:999px;padding:9px 16px;cursor:pointer;white-space:nowrap;
+    background:linear-gradient(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B);
+    background-size:220% 100%;box-shadow:0 4px 16px rgba(197,160,89,.5);animation:sheen 3.2s linear infinite;
+  }
+  @keyframes sheen{0%{background-position:200% 0;}100%{background-position:-40% 0;}}
+  .btn-angel:hover{filter:brightness(1.06);transform:translateY(-1px);}
+  .btn-angel .menu-premium-badge{display:inline-block;margin-left:6px;padding:2px 6px;border:1px solid rgba(36,24,3,.38);border-radius:999px;background:rgba(255,255,255,.28);font-size:8px;letter-spacing:.7px;line-height:1;}
 
   .topbar-actions{display:flex;grid-column:3;grid-row:1;align-items:center;justify-content:flex-end;gap:9px;flex:none;}
   .icon-btn{font-family:var(--sans);font-weight:600;font-size:12px;color:#e7ecf4;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);padding:8px 13px;border-radius:9px;cursor:pointer;transition:all .2s;}
@@ -799,6 +808,12 @@
   <nav class="spa-nav" id="spa-nav" aria-label="Primary navigation">
     <button class="spa-tab active" id="spa-mock" title="Practice Philippine Bar-style questions."
       onclick="showPage('mock', this)">Mock Bar</button>
+    <button class="spa-tab" id="spa-subject-matter" title="Open Subject Matter examinations."
+      onclick="openSubjectMatterMenu()">Subject Matter</button>
+    <button class="spa-tab btn-angel" id="spa-bar-feels" title="Bar Feels — Premium only."
+      aria-label="Bar Feels — Premium only." onclick="openPremiumBarFeels()">
+      Bar Feels <span class="menu-premium-badge" aria-hidden="true">Premium</span>
+    </button>
     <button class="spa-tab" id="spa-progress" title="Review scores, feedback, and performance."
       onclick="openAnalytics()">The Verdict</button>
     <button class="spa-tab" id="spa-pricing" title="Manage your plan and platform access."
@@ -846,7 +861,7 @@
             <p>Enter reviewed Midterm and Final versions with autosave, navigation, and one overall timer.</p>
           </button>
           <button class="moot-hub-card" type="button"
-            onclick="window.DueDiligenceExaminations?.openBarFeels()">
+            onclick="openPremiumBarFeels()">
             <span>Examination Room</span>
             <strong>Bar Feels</strong>
             <p>Take a curated multi-question set or confirm a private authorized upload before the clock begins.</p>
@@ -1931,6 +1946,38 @@ function setSiteMenuOpen(open) {
   if (!menu || !toggle) return;
   menu.classList.toggle('is-open', open);
   toggle.setAttribute('aria-expanded', String(open));
+}
+
+function activatePrimaryMenuItem(id) {
+  document.querySelectorAll('.spa-tab').forEach((tab) => tab.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+}
+
+function openSubjectMatterMenu() {
+  const request = window.DueDiligenceExaminations?.openPerSubject();
+  activatePrimaryMenuItem('spa-subject-matter');
+  return request;
+}
+
+async function openPremiumBarFeels() {
+  const accessController = window.DueDiligencePhase4;
+  if (!accessController?.requireAuthentication?.()) return;
+  try {
+    const access = await accessController.refreshAccess();
+    const hasPremiumAccess = access?.subscription?.planCode === 'premium'
+      && access.subscription.status === 'active';
+    if (!hasPremiumAccess) {
+      toast('Bar Feels is available only with an active Premium plan.', 'warn');
+      accessController.openView?.('pricing');
+      return;
+    }
+    const request = window.DueDiligenceExaminations?.openBarFeels();
+    activatePrimaryMenuItem('spa-bar-feels');
+    return request;
+  } catch (error) {
+    toast(error?.message || 'Premium access could not be verified.', 'warn');
+    accessController?.openView?.('pricing');
+  }
 }
 
 function setupEventListeners() {

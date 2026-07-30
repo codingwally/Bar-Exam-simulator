@@ -110,6 +110,31 @@ async function grantSyntheticSuperAdmin(userId) {
 }
 
 async function deleteSyntheticExam(examId) {
+  const { body: versions } = await jsonRequest(
+    `${SUPABASE_URL}/rest/v1/examination_versions?select=id&exam_id=eq.${examId}`,
+    {
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+    },
+  );
+  const versionIds = versions.map((item) => item.id);
+  if (versionIds.length) {
+    await jsonRequest(
+      `${SUPABASE_URL}/rest/v1/examination_attempts_multi`
+        + `?version_id=in.(${versionIds.join(',')})`,
+      {
+        method: 'DELETE',
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          Prefer: 'return=minimal',
+        },
+      },
+      [200, 204],
+    );
+  }
   await jsonRequest(`${SUPABASE_URL}/rest/v1/examination_definitions?id=eq.${examId}`, {
     method: 'DELETE',
     headers: {
@@ -118,6 +143,16 @@ async function deleteSyntheticExam(examId) {
       Prefer: 'return=minimal',
     },
   }, [200, 204]);
+  const { body: remaining } = await jsonRequest(
+    `${SUPABASE_URL}/rest/v1/examination_definitions?select=id&id=eq.${examId}`,
+    {
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+    },
+  );
+  assert.equal(remaining.length, 0, `Synthetic exam ${examId} was not removed.`);
 }
 
 async function workerPost(path, payload, token = null, expected = [200]) {
@@ -583,11 +618,15 @@ try {
     createdUserCount: createdUsers.length,
   };
 } finally {
+  const cleanupErrors = [];
   for (const examId of [...new Set(createdExams)].reverse()) {
-    await deleteSyntheticExam(examId).catch(() => {});
+    await deleteSyntheticExam(examId).catch((error) => cleanupErrors.push(error));
   }
   for (const userId of createdUsers.reverse()) {
-    await deleteUser(userId).catch(() => {});
+    await deleteUser(userId).catch((error) => cleanupErrors.push(error));
+  }
+  if (cleanupErrors.length) {
+    throw new AggregateError(cleanupErrors, 'Synthetic staging cleanup failed.');
   }
 }
 

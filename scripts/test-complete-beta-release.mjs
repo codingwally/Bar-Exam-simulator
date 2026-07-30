@@ -18,7 +18,17 @@ const fetchCsv = async (url) => {
   return csv;
 };
 
-const [subjectCsv, mockBarCsv, html, examinations, forum, experience, worker] =
+const [
+  subjectCsv,
+  mockBarCsv,
+  html,
+  examinations,
+  forum,
+  experience,
+  worker,
+  migration,
+  preflight,
+] =
   await Promise.all([
     fetchCsv(SUBJECT_MATTER_CSV_URL),
     fetchCsv(WEBSITE_UPLOAD_CSV_URL),
@@ -27,6 +37,17 @@ const [subjectCsv, mockBarCsv, html, examinations, forum, experience, worker] =
     readFile(new URL('../assets/lex-forum.js', import.meta.url), 'utf8'),
     readFile(new URL('../assets/phase2-experience.js', import.meta.url), 'utf8'),
     readFile(new URL('../worker/index.mjs', import.meta.url), 'utf8'),
+    readFile(
+      new URL(
+        '../supabase/migrations/20260805120000_complete_beta_release_foundation.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+    readFile(
+      new URL('../supabase/review/complete_beta_production_preflight.sql', import.meta.url),
+      'utf8',
+    ),
   ]);
 
 const subjectMatter = await parseSubjectMatterSource(subjectCsv);
@@ -87,6 +108,19 @@ assert.match(forum, /set_affirm/);
 assert.match(forum, /affirm_roster/);
 assert.match(worker, /\/admin\/content\/sync/);
 assert.match(worker, /PUBLIC_PRICING_ENABLED/);
+assert.match(migration, /alter table public\.forum_posts force row level security;/);
+assert.match(
+  migration,
+  /revoke all on table[\s\S]*public\.forum_posts[\s\S]*from public, anon, authenticated;/,
+);
+assert.match(preflight, /set transaction read only;/);
+assert.match(preflight, /COMPLETE_BETA_PREFLIGHT_PASSED/);
+assert.match(preflight, /browser grant exists on public\.%/);
+assert.doesNotMatch(
+  preflight,
+  /^\s*(insert\s+into|update|delete\s+from|alter\s+table|create\s+(table|function|index)|drop|grant|revoke|truncate)\b/im,
+  'The complete beta production preflight must remain read-only.',
+);
 
 console.log(JSON.stringify({
   subjectMatterRows: subjectMatter.rows.length,

@@ -146,6 +146,45 @@ grant select, insert, update, delete on public.bar_feels_manifest
 grant select, insert, update, delete on public.subject_matter_cycles
   to service_role;
 
+-- Quorum remains Worker-mediated. FORCE RLS supplies defense in depth even for
+-- table owners, and explicit browser-role revocation prevents accidental Data
+-- API exposure if project-wide defaults change later.
+alter table public.forum_posts force row level security;
+alter table public.forum_comments force row level security;
+alter table public.forum_reactions force row level security;
+alter table public.forum_reposts force row level security;
+alter table public.forum_reports force row level security;
+alter table public.forum_user_restrictions force row level security;
+alter table public.forum_action_events force row level security;
+alter table public.forum_profile_settings force row level security;
+alter table public.forum_study_circles force row level security;
+alter table public.forum_circle_members force row level security;
+alter table public.forum_saved_entries force row level security;
+alter table public.forum_user_blocks force row level security;
+alter table public.forum_entry_indicators force row level security;
+alter table public.forum_post_attachments force row level security;
+alter table public.forum_notifications force row level security;
+alter table public.forum_telemetry_events force row level security;
+
+revoke all on table
+  public.forum_posts,
+  public.forum_comments,
+  public.forum_reactions,
+  public.forum_reposts,
+  public.forum_reports,
+  public.forum_user_restrictions,
+  public.forum_action_events,
+  public.forum_profile_settings,
+  public.forum_study_circles,
+  public.forum_circle_members,
+  public.forum_saved_entries,
+  public.forum_user_blocks,
+  public.forum_entry_indicators,
+  public.forum_post_attachments,
+  public.forum_notifications,
+  public.forum_telemetry_events
+from public, anon, authenticated;
+
 -- ---------------------------------------------------------------------------
 -- Trusted content import
 -- ---------------------------------------------------------------------------

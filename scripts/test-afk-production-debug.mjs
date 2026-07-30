@@ -8,12 +8,14 @@ const [
   phase2,
   examinations,
   quorum,
+  quorumStyles,
   timerMigration,
 ] = await Promise.all([
   read('index.html'),
   read('assets/phase2-experience.js'),
   read('assets/examinations.js'),
   read('assets/lex-forum.js'),
+  read('assets/lex-forum.css'),
   read('supabase/migrations/20260806_016_active_time_and_accessibility_hardening.sql'),
 ]);
 
@@ -60,6 +62,14 @@ assert.doesNotMatch(quorum, /create_simple_entry/);
 assert.match(quorum, /command\('create_entry'/);
 assert.match(quorum, /document\.createElement\('details'\)/);
 assert.match(quorum, /overflow\.className = 'quorum-overflow'/);
+assert.match(
+  quorumStyles,
+  /#page-community \.lex-composer-actions\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+);
+assert.match(
+  quorumStyles,
+  /#page-community #lex-post-submit\s*\{[\s\S]*?min-width:\s*0;/,
+);
 for (const retiredCopy of [
   'Search entries',
   'Sort entries',

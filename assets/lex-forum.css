@@ -1952,7 +1952,8 @@
   }
 
   #page-community .lex-composer-meta {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
   }
 
   #page-community .quorum-image-control,
@@ -1961,10 +1962,22 @@
   #page-community .lex-composer-actions {
     grid-column: 1;
     grid-row: auto;
+    width: 100%;
+    min-width: 0;
   }
 
   #page-community .lex-composer-actions {
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  #page-community .lex-composer-actions .lex-button,
+  #page-community #lex-post-submit {
+    width: 100%;
+    min-width: 0;
+    padding-right: 8px;
+    padding-left: 8px;
   }
 
   #page-community .lex-post-actions {

@@ -134,6 +134,23 @@ async function deleteSyntheticExam(examId) {
       },
       [200, 204],
     );
+    await jsonRequest(
+      `${SUPABASE_URL}/rest/v1/examination_versions?id=in.(${versionIds.join(',')})`,
+      {
+        method: 'PATCH',
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          status: 'retired',
+          retired_at: new Date().toISOString(),
+        }),
+      },
+      [200, 204],
+    );
   }
   await jsonRequest(`${SUPABASE_URL}/rest/v1/examination_definitions?id=eq.${examId}`, {
     method: 'DELETE',
@@ -153,6 +170,28 @@ async function deleteSyntheticExam(examId) {
     },
   );
   assert.equal(remaining.length, 0, `Synthetic exam ${examId} was not removed.`);
+}
+
+async function deleteSyntheticUserRecords(userIds) {
+  if (!userIds.length) return;
+  const filter = `in.(${userIds.join(',')})`;
+  const targets = [
+    ['examination_beta_access', `user_id=${filter}`],
+    ['examination_participants', `user_id=${filter}`],
+    ['examination_audit_log', `actor_user_id=${filter}`],
+    ['usage_events', `user_id=${filter}`],
+    ['usage_sessions', `user_id=${filter}`],
+  ];
+  for (const [table, query] of targets) {
+    await jsonRequest(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        Prefer: 'return=minimal',
+      },
+    }, [200, 204]);
+  }
 }
 
 async function workerPost(path, payload, token = null, expected = [200]) {
@@ -622,6 +661,8 @@ try {
   for (const examId of [...new Set(createdExams)].reverse()) {
     await deleteSyntheticExam(examId).catch((error) => cleanupErrors.push(error));
   }
+  await deleteSyntheticUserRecords(createdUsers)
+    .catch((error) => cleanupErrors.push(error));
   for (const userId of createdUsers.reverse()) {
     await deleteUser(userId).catch((error) => cleanupErrors.push(error));
   }

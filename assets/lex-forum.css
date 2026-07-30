@@ -1984,6 +1984,15 @@
     grid-template-columns: repeat(2, 1fr);
   }
 
+  #page-community .lex-feed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #page-community .lex-post-card {
+    width: 100%;
+    min-width: 0;
+  }
+
   #page-community .lex-secondary {
     display: grid;
     grid-template-columns: 1fr;

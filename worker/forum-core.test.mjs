@@ -400,10 +400,15 @@ test('Quorum entry normalization enforces taxonomy and ignores spoofed ownership
       category: 'bar_examination',
       sourceUrl: 'https://elibrary.judiciary.gov.ph/',
       opinionOnly: false,
+      imageAlt: 'A study desk with a Labor Code and handwritten case notes.',
     },
   });
   assert.equal(normalized.operation, 'create_entry');
   assert.equal(normalized.payload.subject, 'Labor Law');
+  assert.equal(
+    normalized.payload.imageAlt,
+    'A study desk with a Labor Code and handwritten case notes.',
+  );
   assert.equal('authorUserId' in normalized.payload, false);
   assert.throws(
     () => normalizeQuorumCommandRequest({

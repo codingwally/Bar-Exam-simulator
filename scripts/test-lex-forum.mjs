@@ -39,12 +39,13 @@ assert.doesNotMatch(page, /Lex Forum|Under Construction|Read-only/i);
 assert.match(page, /assets\/lex-forum\.css/);
 assert.match(page, /assets\/lex-forum\.js/);
 
-assert.match(auth, /options\.allowGuest !== false/);
+assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);
 assert.match(forum, /allowGuest: false/);
 assert.match(forum, /duediligence:session/);
 assert.match(forum, /safeStorage\(sessionStorage, 'set', destinationKey/);
-assert.match(forum, /safeStorage\(localStorage, 'set', draftKey/);
+assert.match(forum, /const key = draftKey\(\);/);
+assert.match(forum, /safeStorage\(localStorage, 'set', key/);
 assert.match(forum, /forumPost/);
 assert.match(forum, /rel = 'noopener noreferrer ugc'/);
 assert.match(forum, /textContent = String\(value/);

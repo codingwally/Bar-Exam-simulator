@@ -405,6 +405,7 @@
     dialog = document.createElement('dialog');
     dialog.id = 'dd-exam-setup-dialog';
     dialog.className = 'dd-exam-dialog';
+    dialog.setAttribute('aria-labelledby', 'dd-exam-setup-title');
     dialog.addEventListener('click', (event) => {
       const rect = dialog.getBoundingClientRect();
       const outside = event.clientX < rect.left || event.clientX > rect.right
@@ -429,7 +430,7 @@
       const compact = setup.track === 'per_subject';
       dialog.innerHTML = `<div class="dd-exam-dialog-inner">
         <p class="dd-exam-kicker">${escapeHtml(compact ? 'Subject Matter' : 'Bar Feels')}</p>
-        <h2>${escapeHtml(compact ? setup.subject : setup.title)}</h2>
+        <h2 id="dd-exam-setup-title">${escapeHtml(compact ? setup.subject : setup.title)}</h2>
         <p class="dd-exam-description">${compact
           ? 'Choose how you want to time this question. The clock starts only after you begin.'
           : 'Review your timer choice. The examination has not started.'}</p>
@@ -553,8 +554,7 @@
     showTrackPage(state.active.examination.track);
     renderRoom();
     saveRecovery();
-    state.clockTimer = setInterval(tickClock, 1000);
-    state.heartbeatTimer = setInterval(() => heartbeat(false), HEARTBEAT_MS);
+    resumeActiveClock();
     history.pushState({ dueDiligenceExamination: state.active.attempt.attemptId }, '', location.href);
   }
 
@@ -865,6 +865,22 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     clock.classList.toggle('is-warning', strict && Number(seconds) <= 300);
   }
 
+  function pauseActiveClock() {
+    clearInterval(state.heartbeatTimer);
+    clearInterval(state.clockTimer);
+    state.heartbeatTimer = null;
+    state.clockTimer = null;
+  }
+
+  function resumeActiveClock() {
+    if (!state.active || !['room', 'review'].includes(state.screen)
+        || document.visibilityState === 'hidden') return;
+    if (!state.clockTimer) state.clockTimer = setInterval(tickClock, 1000);
+    if (!state.heartbeatTimer) {
+      state.heartbeatTimer = setInterval(() => heartbeat(false), HEARTBEAT_MS);
+    }
+  }
+
   function updateCountsNodes() {
     const summary = counts();
     const answered = document.getElementById('dd-count-answered');
@@ -1077,9 +1093,10 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     dialog = document.createElement('dialog');
     dialog.id = 'dd-human-review-dialog';
     dialog.className = 'dd-exam-dialog';
+    dialog.setAttribute('aria-labelledby', 'dd-human-review-title');
     dialog.innerHTML = `<form class="dd-exam-dialog-inner" id="dd-human-form">
       <p class="dd-exam-kicker">Structured Review</p>
-      <h2>Invite a Human Examiner</h2>
+      <h2 id="dd-human-review-title">Invite a Human Examiner</h2>
       <p class="dd-exam-description">The invitation contains only an expiring secure link.
         No answer or model answer is attached to email.</p>
       <label class="dd-exam-field">Examiner email
@@ -1227,11 +1244,8 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
   }
 
   function stopActiveTimers() {
-    clearInterval(state.heartbeatTimer);
-    clearInterval(state.clockTimer);
+    pauseActiveClock();
     clearTimeout(state.saveTimer);
-    state.heartbeatTimer = null;
-    state.clockTimer = null;
     state.saveTimer = null;
   }
 
@@ -1317,6 +1331,7 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       dialog = document.createElement('dialog');
       dialog.id = 'dd-upload-preview-dialog';
       dialog.className = 'dd-exam-dialog';
+      dialog.setAttribute('aria-labelledby', 'dd-upload-preview-title');
       document.body.append(dialog);
     }
     return dialog;
@@ -1327,7 +1342,7 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     const dialog = uploadDialog();
     dialog.innerHTML = `<div class="dd-exam-dialog-inner">
       <p class="dd-exam-kicker">Extracted Question Preview</p>
-      <h2>${escapeHtml(preview.title)}</h2>
+      <h2 id="dd-upload-preview-title">${escapeHtml(preview.title)}</h2>
       <p class="dd-exam-description">${Number(preview.questionCount)} questions parsed from
         ${escapeHtml(preview.fileName)}. Confirm before any examination is created. The timer has not started.</p>
       <ol class="dd-syllabus-list">
@@ -1472,12 +1487,27 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     }
   }
 
-  function returnCatalog() {
+  async function returnCatalog() {
+    const activeAttempt = state.active?.attempt;
+    const attemptOpen = activeAttempt
+      && ['room', 'review'].includes(state.screen)
+      && !['submitted', 'expired', 'cancelled'].includes(
+        String(activeAttempt.status || 'in_progress'),
+      );
+    if (attemptOpen) {
+      saveRecovery();
+      const confirmed = global.confirm(
+        'Leave this examination? Your latest answer will be saved and you can resume it later.',
+      );
+      if (!confirmed) return;
+      const saved = await flushCurrentSave();
+      if (!saved) return;
+    }
     stopActiveTimers();
     state.active = null;
     state.setup = null;
     state.screen = 'catalog';
-    loadCatalog(state.track);
+    await loadCatalog(state.track);
   }
 
   function handleClick(event) {
@@ -1609,8 +1639,21 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
         saveCurrent({ silent: true }).then(() => heartbeat(false));
       }
     });
+    document.addEventListener('visibilitychange', () => {
+      if (!state.active || !['room', 'review'].includes(state.screen)) return;
+      if (document.visibilityState === 'hidden') {
+        saveRecovery();
+        pauseActiveClock();
+        return;
+      }
+      resumeActiveClock();
+      saveCurrent({ silent: true }).then(() => heartbeat(false));
+    });
     global.addEventListener('duediligence:session', (event) => {
-      if (!event.detail?.authenticated) stopActiveTimers();
+      if (!event.detail?.authenticated) {
+        if (state.active && ['room', 'review'].includes(state.screen)) saveRecovery();
+        stopActiveTimers();
+      }
     });
 
     const assignmentToken = new URLSearchParams(location.search).get('assignment');

@@ -104,7 +104,10 @@ assert.match(adminSource, /button\.addEventListener\('click'/);
 assert.match(adminSource, /state\.actionInFlight/);
 assert.match(adminSource, /state\.action\.requestKey \|\|= uuidKey\(\)/);
 assert.match(adminSource, /Confirm that you verified the target/);
-assert.match(adminHtml, /<dialog id="action-dialog">/);
+assert.match(
+  adminHtml,
+  /<dialog id="action-dialog"[^>]*aria-labelledby="action-title"/,
+);
 assert.match(adminHtml, /id="action-confirm-risk"/);
 assert.match(adminHtml, /subscription-actions-core\.js/);
 assert.match(adminCss, /@media \(max-width: 560px\)/);

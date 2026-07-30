@@ -1604,6 +1604,7 @@
 }
 
 #page-community .lex-post-inner {
+  position: relative;
   padding: 15px 18px 0;
 }
 
@@ -1731,9 +1732,58 @@
   background: #fffaf0;
 }
 
-#page-community .lex-post-owner-actions {
-  top: 13px;
-  right: 14px;
+#page-community .quorum-overflow {
+  position: absolute;
+  z-index: 20;
+  top: 12px;
+  right: 13px;
+}
+
+#page-community .quorum-overflow-trigger {
+  min-width: 42px;
+  min-height: 36px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #53647a;
+  background: #fff;
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 750;
+  list-style: none;
+  cursor: pointer;
+}
+
+#page-community .quorum-overflow-trigger::-webkit-details-marker {
+  display: none;
+}
+
+#page-community .quorum-overflow-trigger:hover,
+#page-community .quorum-overflow-trigger:focus-visible {
+  border-color: #d5dde8;
+  color: #17304f;
+  background: #f8fafc;
+  outline: none;
+}
+
+#page-community .quorum-overflow[open] .lex-post-owner-actions {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 170px;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #d5dde8;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(9, 31, 55, .16);
+}
+
+#page-community .quorum-overflow .lex-menu-button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 #page-community .lex-secondary {

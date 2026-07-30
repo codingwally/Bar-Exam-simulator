@@ -219,6 +219,7 @@
       'dd2-locked',
       Boolean(document.querySelector('.dd2-overlay.is-open')),
     );
+    global.syncModalIsolation?.();
     if (open) {
       state.previousFocus = document.activeElement;
       requestAnimationFrame(() => {
@@ -455,7 +456,7 @@
   function showEntry(options = {}) {
     const completed = Boolean(options.completed);
     hideNativeView();
-    const allowGuest = options.allowGuest !== false && !completed;
+    const allowGuest = options.allowGuest === true && !completed;
     const allowDismiss = options.allowDismiss === true;
     const overlay = document.getElementById('dd2-entry-overlay');
     const title = document.getElementById('dd2-entry-title');
@@ -1172,7 +1173,7 @@
     state.marketingOptIn = false;
     syncAuthUi();
     hideNativeView();
-    showEntry();
+    showEntry({ allowDismiss: true });
   }
 
   function bindNativeViewHandlers(view) {
@@ -1182,7 +1183,7 @@
     document.getElementById('dd2-logout')?.addEventListener('click', signOut);
     document.getElementById('dd2-account-signin')?.addEventListener('click', () => {
       hideNativeView();
-      showEntry();
+      showEntry({ allowDismiss: true });
     });
     document.getElementById('dd2-support-signin')?.addEventListener('click', () => {
       requireSubmissionAuthentication('support');
@@ -1205,7 +1206,9 @@
   function bindNavigation() {
     const signIn = document.getElementById('btn-signin');
     if (signIn) signIn.onclick = null;
-    signIn?.addEventListener('click', () => state.user ? renderNativeView('account') : showEntry());
+    signIn?.addEventListener('click', () => (
+      state.user ? renderNativeView('account') : showEntry({ allowDismiss: true })
+    ));
 
     const feedback = document.getElementById('btn-open-feedback');
     feedback?.addEventListener('click', (event) => {

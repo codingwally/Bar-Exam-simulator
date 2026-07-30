@@ -315,6 +315,11 @@ function normalizeEntryPayload(payload, mode) {
       : quorumBoolean(payload.opinionOnly, 'Opinion Only'),
     sourceUrl: forumSourceUrl(payload.sourceUrl),
     circleId: optionalPublicId(payload.circleId, ['qs'], 'Study Circle'),
+    imageAlt: forumPlainText(payload.imageAlt, {
+      label: 'Image description',
+      maximum: 500,
+      optional: true,
+    }),
   };
   if (mode === 'update') normalized.entryId = forumPublicId(payload.entryId, ['qe'], 'Entry');
   if (normalized.entryType === 'share_case_note' && !normalized.caseTitle) {

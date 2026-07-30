@@ -763,7 +763,7 @@
   }
 </style>
 <link rel="stylesheet" href="assets/phase2.css">
-<link rel="stylesheet" href="assets/lex-forum.css?v=afk-20260731-4">
+<link rel="stylesheet" href="assets/lex-forum.css?v=qa-cycle-20260731-1">
 <link rel="stylesheet" href="assets/examinations.css?v=leb-premium-20260804-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
@@ -944,7 +944,7 @@
             <button class="quorum-side-link is-active" type="button" data-quorum-view="home">
               Quorum Home
             </button>
-            <button class="quorum-side-link" type="button" data-quorum-view="profile">
+            <button class="quorum-side-link" type="button" data-quorum-view="my-posts">
               My Posts
             </button>
             <button class="quorum-side-link" type="button" data-quorum-view="saved">
@@ -1958,6 +1958,23 @@ function activatePrimaryMenuItem(id) {
   document.getElementById(id)?.classList.add('active');
 }
 
+/* PREMIUM NAVIGATION INTENT START */
+let premiumNavigationIntentVersion = 0;
+
+function beginPremiumNavigationIntent() {
+  premiumNavigationIntentVersion += 1;
+  return premiumNavigationIntentVersion;
+}
+
+function cancelPremiumNavigationIntent() {
+  premiumNavigationIntentVersion += 1;
+}
+
+function isPremiumNavigationIntentCurrent(version) {
+  return version === premiumNavigationIntentVersion;
+}
+/* PREMIUM NAVIGATION INTENT END */
+
 function openSubjectMatterMenu() {
   const request = window.DueDiligenceExaminations?.openPerSubject();
   activatePrimaryMenuItem('spa-subject-matter');
@@ -1965,10 +1982,12 @@ function openSubjectMatterMenu() {
 }
 
 async function openPremiumBarFeels() {
+  const navigationIntent = beginPremiumNavigationIntent();
   const accessController = window.DueDiligencePhase4;
   if (!accessController?.requireAuthentication?.()) return;
   try {
     const access = await accessController.refreshAccess();
+    if (!isPremiumNavigationIntentCurrent(navigationIntent)) return;
     const hasPremiumAccess = access?.subscription?.planCode === 'premium'
       && access.subscription.status === 'active';
     const hasOverrideAccess = ['super_admin', 'founder_admin'].includes(access?.role)
@@ -1982,6 +2001,7 @@ async function openPremiumBarFeels() {
     activatePrimaryMenuItem('spa-bar-feels');
     return request;
   } catch (error) {
+    if (!isPremiumNavigationIntentCurrent(navigationIntent)) return;
     toast(error?.message || 'Premium access could not be verified.', 'warn');
     accessController?.openView?.('pricing');
   }
@@ -1993,7 +2013,10 @@ function setupEventListeners() {
     setSiteMenuOpen(!menu?.classList.contains('is-open'));
   });
   document.getElementById('spa-nav')?.addEventListener('click', (event) => {
-    if (event.target.closest('button,a')) setSiteMenuOpen(false);
+    const control = event.target.closest('button,a');
+    if (!control) return;
+    if (control.id !== 'spa-bar-feels') cancelPremiumNavigationIntent();
+    setSiteMenuOpen(false);
   });
   window.addEventListener('resize', () => {
     if (window.innerWidth > 700) setSiteMenuOpen(false);
@@ -2788,6 +2811,7 @@ const SPA_PAGE_TABS = Object.freeze({
 });
 
 function showPage(page, el, options = {}) {
+  if (page !== 'bar-feels') cancelPremiumNavigationIntent();
   setSiteMenuOpen(false);
   const leavingMock = document.getElementById('page-mock')?.classList.contains('active') && page !== 'mock';
   if (leavingMock && examStage === 'answering') {
@@ -3342,10 +3366,10 @@ window.addEventListener('storage', (event) => {
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"
   crossorigin="anonymous"></script>
 <script src="assets/phase2-config.js?v=leb-premium-20260804-1"></script>
-<script src="assets/phase2-experience.js?v=leb-premium-20260804-1"></script>
+<script src="assets/phase2-experience.js?v=qa-cycle-20260731-1"></script>
 <script src="assets/phase4-experience.js?v=phase4-20260729-2"></script>
-<script src="assets/lex-forum.js?v=afk-20260731-1"></script>
-<script src="assets/examinations.js?v=leb-premium-20260804-1"></script>
+<script src="assets/lex-forum.js?v=qa-cycle-20260731-1"></script>
+<script src="assets/examinations.js?v=qa-cycle-20260731-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 
 </body>

@@ -1,0 +1,252 @@
+{
+  "cycle": "20260731-cycle-1",
+  "status": "partial-checkpoint",
+  "scope": {
+    "environment": "production",
+    "route": "#quorum",
+    "persona": "authenticated zero-credit member",
+    "browser": "Codex in-app Chromium",
+    "viewport": "desktop",
+    "rawVisibleControlCount": 85,
+    "personalContentStored": false
+  },
+  "sharedFields": {
+    "safeProductionRule": "Read-only navigation, open/close, search-with-empty-input, refresh, and local presentation controls only.",
+    "blockedProductionRule": "Posting, commenting, reacting, saving, reporting, disseminating, deleting, editing, grading, payment, email, upload, entitlement, and admin mutation controls require an authorized synthetic staging harness."
+  },
+  "controls": [
+    {
+      "stableId": "global-report-support",
+      "name": "Report to Support",
+      "container": "beta status banner",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed",
+      "evidence": "interaction-log.jsonl#prod-report-support-*"
+    },
+    {
+      "stableId": "home-link",
+      "name": "Due Diligence home",
+      "container": "header",
+      "safeInProduction": true,
+      "fiveTrialStatus": "not-yet-covered"
+    },
+    {
+      "stableId": "spa-mock",
+      "name": "Mock Bar",
+      "container": "primary navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed",
+      "evidence": "interaction-log.jsonl#prod-mock-*"
+    },
+    {
+      "stableId": "spa-subject-matter",
+      "name": "Subject Matter",
+      "container": "primary navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed",
+      "evidence": "interaction-log.jsonl#prod-subject-*"
+    },
+    {
+      "stableId": "spa-bar-feels",
+      "name": "Bar Feels — Premium only.",
+      "container": "primary navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "2/5 normal transition observed; 3/5 rapid-switch failures",
+      "relatedDefect": "QA-20260731-003"
+    },
+    {
+      "stableId": "spa-progress",
+      "name": "The Verdict",
+      "container": "primary navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed",
+      "evidence": "interaction-log.jsonl#prod-verdict-*"
+    },
+    {
+      "stableId": "spa-pricing",
+      "name": "Retainer",
+      "container": "primary navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed",
+      "evidence": "interaction-log.jsonl#prod-retainer-*"
+    },
+    {
+      "stableId": "spa-community",
+      "name": "Open Quorum",
+      "container": "primary navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 standalone passed plus recovery control in more than 15 recorded trials"
+    },
+    {
+      "stableId": "spa-jurisprudence",
+      "name": "Recent Jurisprudence",
+      "container": "primary navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed in browser session; route, active state, heading, lock release, and Quorum recovery verified"
+    },
+    {
+      "stableId": "spa-support",
+      "name": "Support",
+      "container": "primary navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed",
+      "evidence": "interaction-log.jsonl#prod-support-*"
+    },
+    {
+      "stableId": "spa-partner",
+      "name": "Partnerships",
+      "container": "primary navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed",
+      "evidence": "interaction-log.jsonl#prod-partnership-*"
+    },
+    {
+      "stableId": "btn-signin",
+      "name": "The Docket",
+      "container": "primary navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed",
+      "evidence": "interaction-log.jsonl#prod-docket-*"
+    },
+    {
+      "stableId": "quorum-nav-home",
+      "name": "Quorum Home",
+      "container": "Quorum navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed in browser session"
+    },
+    {
+      "stableId": "quorum-nav-my-posts",
+      "name": "My Posts",
+      "container": "Quorum navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 production failures before fix; local behavioral regression passed",
+      "relatedDefect": "QA-20260731-004"
+    },
+    {
+      "stableId": "quorum-nav-saved",
+      "name": "Saved",
+      "container": "Quorum navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 Back/Forward route-state trials passed"
+    },
+    {
+      "stableId": "quorum-nav-circles",
+      "name": "Study Circles",
+      "container": "Quorum navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "not-yet-covered"
+    },
+    {
+      "stableId": "quorum-nav-notifications",
+      "name": "Notifications",
+      "container": "Quorum navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "not-yet-covered"
+    },
+    {
+      "stableId": "quorum-nav-profile",
+      "name": "Profile",
+      "container": "Quorum navigation",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 production failures before fix; local behavioral regression passed",
+      "relatedDefect": "QA-20260731-004"
+    },
+    {
+      "stableId": "quorum-topic-filter",
+      "name": "Eight subject filters",
+      "instanceCount": 8,
+      "container": "Quorum topics",
+      "safeInProduction": true,
+      "fiveTrialStatus": "not-yet-covered"
+    },
+    {
+      "stableId": "quorum-purpose-filter",
+      "name": "Seven purpose filters",
+      "instanceCount": 7,
+      "container": "Quorum purpose filters",
+      "safeInProduction": true,
+      "fiveTrialStatus": "not-yet-covered"
+    },
+    {
+      "stableId": "quorum-search-input",
+      "name": "Search Quorum",
+      "container": "Quorum Feed",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 search-and-clear trials passed without mutation"
+    },
+    {
+      "stableId": "quorum-search-submit",
+      "name": "Search",
+      "container": "Quorum Feed",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 search-and-clear trials passed without mutation"
+    },
+    {
+      "stableId": "lex-post-body",
+      "name": "Share with Quorum",
+      "container": "composer",
+      "safeInProduction": false,
+      "requiredEnvironment": "authorized synthetic staging harness",
+      "fiveTrialStatus": "blocked—AFK"
+    },
+    {
+      "stableId": "quorum-composer-details",
+      "name": "Composer type, category, subject, year, circle, source, opinion-only, preview, cancel, and post controls",
+      "instanceCount": 12,
+      "container": "composer",
+      "safeInProduction": false,
+      "requiredEnvironment": "authorized synthetic staging harness",
+      "fiveTrialStatus": "blocked—AFK"
+    },
+    {
+      "stableId": "quorum-feed-sort",
+      "name": "Sort posts",
+      "container": "Quorum Feed",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5/5 passed; Latest restored after each trial"
+    },
+    {
+      "stableId": "lex-feed-refresh",
+      "name": "Refresh feed",
+      "container": "Quorum Feed",
+      "safeInProduction": true,
+      "fiveTrialStatus": "5 successful completions; one additional observation was inconclusive at 3.4 seconds and completed normally by 5.39 seconds"
+    },
+    {
+      "stableId": "quorum-post-actions",
+      "name": "Per-post profile, Affirm, affirmation count, Comment, Disseminate, Save, and More controls",
+      "instanceCount": 27,
+      "container": "four production post cards",
+      "safeInProduction": false,
+      "requiredEnvironment": "authorized synthetic staging harness",
+      "fiveTrialStatus": "blocked—AFK"
+    },
+    {
+      "stableId": "quorum-owner-actions",
+      "name": "Edit and Remove",
+      "instanceCount": 2,
+      "container": "owned production post",
+      "safeInProduction": false,
+      "requiredEnvironment": "authorized synthetic staging harness",
+      "fiveTrialStatus": "blocked—AFK"
+    },
+    {
+      "stableId": "quorum-supporting-controls",
+      "name": "Community pulse refresh, View all, question shortcut, Browse circles, and Open Mock Bar",
+      "instanceCount": 5,
+      "container": "Quorum supporting information",
+      "safeInProduction": true,
+      "fiveTrialStatus": "Community pulse refresh 5/5 passed; remaining four controls partially covered or pending"
+    },
+    {
+      "stableId": "footer-links",
+      "name": "Support, Retainer, Terms, Privacy, Partnerships",
+      "instanceCount": 5,
+      "container": "footer",
+      "safeInProduction": true,
+      "fiveTrialStatus": "not-yet-covered"
+    }
+  ],
+  "coverageCaveat": "The 85-control raw production Quorum state is inventoried here using repeated-instance groups. Mutation controls, unavailable personas, and several lower-priority read-only controls remain blocked, partial, or untested and are not counted as passed."
+}

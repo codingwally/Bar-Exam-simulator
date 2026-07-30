@@ -1,0 +1,165 @@
+{
+  "cycle": "20260731-cycle-1",
+  "defects": [
+    {
+      "id": "QA-20260731-001",
+      "severity": "high",
+      "status": "local-fix-verified",
+      "classification": "deterministic",
+      "surface": "signed-out Subject Matter authentication route",
+      "reproduction": {
+        "attempts": 5,
+        "failures": 5,
+        "rate": 1,
+        "observed": "Browser Back restored the home URL but left the authentication overlay open, body locked, and focus trapped."
+      },
+      "rootCause": "The examination route opened an authentication overlay without identifying it as route-bound, and the authentication layer did not reconcile the overlay with browser history.",
+      "regressionTest": "scripts/test-auth-route-overlay.mjs",
+      "fixFiles": [
+        "assets/examinations.js",
+        "assets/phase2-experience.js"
+      ],
+      "postFixEvidence": {
+        "desktopBackTrials": "5/5 passed",
+        "desktopForwardTrials": "5/5 passed",
+        "mobileBackTrialsAt320": "5/5 passed",
+        "responsiveWidths": [
+          320,
+          360,
+          375,
+          390,
+          430,
+          768,
+          1024,
+          1280,
+          1366,
+          1440
+        ],
+        "regressionTest": "passed"
+      },
+      "productionStatus": "pending deployment and five-trial live verification"
+    },
+    {
+      "id": "QA-20260731-002",
+      "severity": "medium",
+      "status": "local-fix-verified",
+      "classification": "deterministic responsive focus defect",
+      "surface": "authentication overlay focus restoration after responsive resize",
+      "reproduction": {
+        "attempts": 1,
+        "failures": 1,
+        "rate": 1,
+        "observed": "When the prior trigger became hidden after resizing to mobile, overlay dismissal restored focus to no usable control."
+      },
+      "rootCause": "Focus restoration trusted the previous element's connection state but not its rendered visibility.",
+      "regressionTest": "scripts/test-auth-route-overlay.mjs",
+      "fixFiles": [
+        "assets/phase2-experience.js"
+      ],
+      "postFixEvidence": {
+        "mobileTrialsAt320": "5/5 restored focus to site-menu-toggle",
+        "regressionTest": "passed"
+      },
+      "productionStatus": "pending deployment and live verification"
+    },
+    {
+      "id": "QA-20260731-003",
+      "severity": "high",
+      "status": "local-fix-verified",
+      "classification": "intermittent under rapid navigation",
+      "surface": "Premium Bar Feels navigation",
+      "reproduction": {
+        "attempts": 5,
+        "failures": 3,
+        "rate": 0.6,
+        "observed": "A delayed Premium entitlement response reopened Bar Feels after the user had already switched back to Quorum."
+      },
+      "rootCause": "The asynchronous entitlement request had no navigation-intent invalidation, so a stale response could win after a later menu choice.",
+      "regressionTest": "scripts/test-premium-navigation-race.mjs",
+      "fixFiles": [
+        "index.html"
+      ],
+      "postFixEvidence": {
+        "behavioralRegression": "passed",
+        "stalePremiumResponseIgnored": true
+      },
+      "productionStatus": "pending deployment and five-trial rapid-switch verification"
+    },
+    {
+      "id": "QA-20260731-004",
+      "severity": "high",
+      "status": "local-fix-verified",
+      "classification": "deterministic navigation-state defect",
+      "surface": "Quorum My Posts and Profile navigation",
+      "reproduction": {
+        "attemptsPerRoute": 5,
+        "failuresPerRoute": 5,
+        "rate": 1,
+        "observed": "My Posts and Profile shared the profile route identity, so both controls appeared active and exposed aria-current=page together."
+      },
+      "rootCause": "The My Posts control used data-quorum-view=\"profile\" instead of a distinct routable view while the active-state synchronizer correctly keyed from that shared identifier.",
+      "regressionTest": "scripts/test-quorum-navigation-state.mjs",
+      "fixFiles": [
+        "index.html",
+        "assets/lex-forum.js"
+      ],
+      "postFixEvidence": {
+        "distinctMyPostsRoute": true,
+        "singleActiveControl": true,
+        "singleAriaCurrent": true,
+        "deepLinkAndRefreshAllowlist": true,
+        "regressionTest": "passed"
+      },
+      "productionStatus": "pending deployment and five-trial live verification"
+    },
+    {
+      "id": "QA-20260731-005",
+      "severity": "medium",
+      "status": "local-fix-verified",
+      "classification": "deterministic accessibility semantics defect",
+      "surface": "Quorum page heading",
+      "reproduction": {
+        "attempts": 1,
+        "failures": 1,
+        "whyFewerThanFive": "The static CSS rule removed the same heading from the accessibility tree for every render; source inspection and a DOM snapshot established the invariant.",
+        "observed": "The visually hidden Quorum h2 used display:none and was absent from the accessibility tree."
+      },
+      "rootCause": "A combined CSS selector applied display:none to both the eyebrow and the semantic title row.",
+      "regressionTest": "scripts/test-quorum-navigation-state.mjs",
+      "fixFiles": [
+        "assets/lex-forum.css"
+      ],
+      "postFixEvidence": {
+        "visualDesignChanged": false,
+        "headingPresentInLocalDomSnapshot": true,
+        "regressionTest": "passed"
+      },
+      "productionStatus": "pending deployment and live semantic verification"
+    },
+    {
+      "id": "QA-20260731-006",
+      "severity": "medium",
+      "status": "local-fix-verified",
+      "classification": "deterministic accessibility contrast and target-size defects",
+      "surface": "Quorum metadata, status text, affirmation count, and dark practice card",
+      "reproduction": {
+        "attempts": 1,
+        "failures": 1,
+        "whyFewerThanFive": "These are static computed-style invariants. Source values, one production DOM/style inspection, and deterministic contrast calculations are stronger than repeated clicks.",
+        "observed": "Several small-text color pairs were below 4.5:1 and the affirmation-count control measured about 16 by 17 CSS pixels without its own focus-visible rule."
+      },
+      "rootCause": "Scoped Quorum CSS inherited muted colors that were too light on the corresponding surfaces and did not enforce a minimum compact-control target.",
+      "regressionTest": "scripts/test-quorum-navigation-state.mjs",
+      "fixFiles": [
+        "assets/lex-forum.css"
+      ],
+      "postFixEvidence": {
+        "minimumAffirmationTarget": "24x24 CSS pixels",
+        "focusVisibleRule": true,
+        "contrastThreshold": "all targeted pairs >= 4.5:1",
+        "regressionTest": "passed"
+      },
+      "productionStatus": "pending deployment and live computed-style verification"
+    }
+  ]
+}

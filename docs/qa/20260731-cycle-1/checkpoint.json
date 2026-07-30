@@ -1,0 +1,71 @@
+{
+  "cycle": "20260731-cycle-1",
+  "status": "in-progress",
+  "resumeFrom": [
+    "Commit the reviewed release candidate and push the scoped QA branch.",
+    "Open the pull request, require green CI, review the final patch, and merge through the normal release path.",
+    "Verify the deployed asset keys and all four fixes on the live site, then reconfirm the production data counts read-only.",
+    "Finalize the exact deployment manifest, post-release interaction evidence, and remaining Blocked-AFK coverage."
+  ],
+  "completed": [
+    "Production release identity, rollback, deployment, Worker, database, cache, asset hash, and row-count baseline.",
+    "Known authentication Back defect reproduced 5/5 and fixed locally with a behavioral regression.",
+    "Desktop Back 5/5, Forward 5/5, mobile Back 5/5, and ten responsive widths verified locally.",
+    "Responsive focus-restoration defect fixed and covered.",
+    "Rapid Premium navigation race reproduced 3/5 failures and fixed locally with a behavioral regression.",
+    "Quorum My Posts/Profile duplicate active-state defect reproduced 5/5 on each route and fixed locally with a behavioral regression.",
+    "Quorum semantic heading, focused contrast pairs, focus ring, and compact target-size defects fixed without redesigning the visible surface.",
+    "Safe primary navigation, dialog focus/lock recovery, Quorum read-only search/sort/refresh/history, and ten responsive widths were exercised.",
+    "Final sequential release gate passed: Worker 135/135, all 33 non-staging script suites, syntax checks, artifact checks, diff check, and changed-scope secret scan."
+  ],
+  "blocked": [
+    {
+      "item": "Staging examination integration scripts",
+      "status": "Blocked—AFK",
+      "dependency": "Authorized staging URL/environment variables are unavailable in the current secure environment."
+    },
+    {
+      "item": "Real Gemini benchmark calls",
+      "status": "Blocked—AFK pending secure non-credit harness confirmation",
+      "dependency": "No authorized non-credit Gemini test credential is available to the repository process; real user credits must not be consumed."
+    },
+    {
+      "item": "Two-user, premium, expired-session, and admin mutation journeys",
+      "status": "Blocked—AFK",
+      "dependency": "No authorized isolated synthetic persona set is available, and genuine production records must not be changed."
+    }
+  ],
+  "counters": {
+    "pagesRoutesReached": 10,
+    "uniqueStatesReached": 18,
+    "personasUsed": 2,
+    "browsersUsed": 1,
+    "responsiveWidthsUsed": 10,
+    "tabsOpenedByCycle": 2,
+    "rawControlsInventoriedInCurrentProductionState": 85,
+    "controlGroupsFullyCoveredByFiveTrials": 18,
+    "controlGroupsWithFiveTrialFailureBeforeFix": 3,
+    "controlGroupsBlockedOrUnsafe": 4,
+    "loggedInteractionRecords": 65,
+    "loggedPassingInteractions": 57,
+    "loggedFailingInteractions": 8,
+    "localHistoryActivationsLogged": 25,
+    "productionInteractionRecordsLogged": 45,
+    "backActionsLogged": 20,
+    "forwardActionsLogged": 5,
+    "rapidSwitchTrialsLogged": 3,
+    "defectsInvestigated": 6,
+    "defectsReproduced": 6,
+    "rootCausesEstablished": 6,
+    "regressionTestsAdded": 3,
+    "workerAssertionsPassed": 135,
+    "releaseGateTestCommandsPassed": 34,
+    "releaseGateTestCommandsFailed": 0,
+    "changedScopeProbableSecretsFound": 0,
+    "consoleErrorsObserved": 0,
+    "syntheticRecordsCreated": 0,
+    "syntheticRecordsRemaining": 0,
+    "deploymentsByCycle": 0
+  },
+  "lastUpdated": "2026-07-31T06:17:43+08:00"
+}

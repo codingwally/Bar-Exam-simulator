@@ -1,0 +1,56 @@
+{
+  "capturedAt": "2026-07-31T05:30:00+08:00",
+  "productionUrl": "https://duediligence.ph/",
+  "repository": "codingwally/Bar-Exam-simulator",
+  "git": {
+    "mainSha": "60cc707fd4ce7a14683cf491f4d195e97c83a3d8",
+    "qaBranch": "agent/qa-cycle-20260731",
+    "qaWorktree": "C:\\Users\\wally\\OneDrive\\Desktop\\DUEDILLEGENCE PROGRAM\\Bar-Exam-simulator-qa-cycle-20260731",
+    "rollbackReference": "rollback/pre-afk-production-debug-20260731",
+    "rollbackSha": "c879402be353e236ca6c72b67e9b087e76c57fc5"
+  },
+  "githubPages": {
+    "workflowRunId": 30579403202,
+    "deploymentId": 5681825327,
+    "deployedSha": "60cc707fd4ce7a14683cf491f4d195e97c83a3d8",
+    "status": "success",
+    "cacheControl": "max-age=600",
+    "liveAssetHashComparison": "matched local main after line-ending normalization"
+  },
+  "cloudflareWorker": {
+    "name": "duediligence-gemini-examiner",
+    "workflowRunId": 30579403230,
+    "versionId": "70cb0d02-f792-41a4-8947-2027cf8a06b1",
+    "status": "success",
+    "secretNamesVerified": [
+      "GEMINI_API_KEY",
+      "GUEST_USAGE_HMAC_KEY",
+      "RESEND_API_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_URL"
+    ],
+    "secretValuesAccessed": false
+  },
+  "supabase": {
+    "projectRef": "hbllomlijfznnuudpdvr",
+    "projectStatus": "ACTIVE_HEALTHY",
+    "postgresVersion": "17.6",
+    "latestMigration": "20260730195855",
+    "inspectionMode": "read-only"
+  },
+  "productionCounts": {
+    "authUsers": 7,
+    "profiles": 7,
+    "subjects": 8,
+    "legacyQuestions": 2,
+    "examinationQuestions": 736,
+    "examinationVersions": 634,
+    "examinationAttemptsMulti": 6,
+    "examinationResponses": 25,
+    "examinationAiAssessments": 3,
+    "forumPosts": 4,
+    "forumComments": 4,
+    "questionCorrections": 0
+  },
+  "productionMutationsPerformedDuringBaseline": false
+}

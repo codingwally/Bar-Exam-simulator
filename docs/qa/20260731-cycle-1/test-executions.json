@@ -216,6 +216,50 @@
       "stage": "continuation",
       "probableEmbeddedSecretValues": 0,
       "addedLinesScanned": 260
+    },
+    {
+      "command": "GitHub Pages workflow run 30591216674",
+      "status": "passed",
+      "stage": "production deployment",
+      "jobId": 91033764321,
+      "deploymentId": 5683991884,
+      "deployedSha": "bbdd931660c426b6b3c53066e25fcf70e132ba62"
+    },
+    {
+      "command": "live Comment disclosure semantics",
+      "status": "passed",
+      "stage": "post-deployment",
+      "desktopTrials": "5/5",
+      "narrowViewportTrialsAt320": "5/5",
+      "assertions": [
+        "aria-controls is non-empty",
+        "aria-controls resolves to the rendered comments region",
+        "aria-expanded is true while open",
+        "aria-expanded is false after close",
+        "the controlled region is removed after close",
+        "no horizontal overflow at 320px"
+      ]
+    },
+    {
+      "command": "in-app browser diagnostic log check",
+      "status": "passed",
+      "stage": "post-deployment",
+      "entries": 0
+    },
+    {
+      "command": "Supabase production aggregate row-count comparison",
+      "status": "passed",
+      "stage": "post-deployment",
+      "inspectionMode": "read-only",
+      "objectsCompared": 12,
+      "changedCounts": 0
+    },
+    {
+      "command": "final-evidence changed-scope probable-secret scan",
+      "status": "passed",
+      "stage": "final evidence",
+      "probableEmbeddedSecretValues": 0,
+      "addedLinesScannedBeforeRecordingResult": 84
     }
   ],
   "finalFullRegressionPending": false

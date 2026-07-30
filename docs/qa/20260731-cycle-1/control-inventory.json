@@ -1,6 +1,6 @@
 {
   "cycle": "20260731-cycle-1",
-  "status": "partial-checkpoint",
+  "status": "safe-scope-complete-with-blocked-afk",
   "scope": {
     "environment": "production",
     "route": "#quorum",
@@ -225,8 +225,8 @@
       "container": "four production post cards",
       "safeInProduction": false,
       "requiredEnvironment": "authorized synthetic staging harness",
-      "fiveTrialStatus": "Read-only profile, affirmation roster, Comment panel, Disseminate dialog, Report dialog, Affirm menu, and More menu surfaces each received five safe trials; Save, reaction selection, comment submission, dissemination submission, report submission, and profile mutations remain blocked—AFK",
-      "evidence": "interaction-log.jsonl#prod-member-profile-batch through prod-report-dialog-batch"
+      "fiveTrialStatus": "Read-only profile, affirmation roster, Comment panel, Disseminate dialog, Report dialog, Affirm menu, and More menu surfaces each received five safe trials; Comment semantics additionally passed 5/5 desktop and 5/5 narrow-viewport post-deployment trials; Save, reaction selection, comment submission, dissemination submission, report submission, and profile mutations remain blocked—AFK",
+      "evidence": "interaction-log.jsonl#prod-member-profile-batch through prod-comment-toggle-postdeploy-mobile-batch"
     },
     {
       "stableId": "quorum-owner-actions",

@@ -534,6 +534,11 @@
     .spa-nav{display:none;grid-column:1/-1;order:initial;width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:8px 0 2px;}
     .spa-nav.is-open{display:grid;}
     .spa-tab{width:100%;min-height:42px;text-align:left;border:1px solid rgba(197,160,89,.18);background:rgba(255,255,255,.035);}
+    .spa-tab.btn-angel{
+      color:#241803;border:1px solid rgba(255,240,200,.6);text-align:center;
+      background:linear-gradient(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B);
+      background-size:220% 100%;box-shadow:0 4px 16px rgba(197,160,89,.5);
+    }
   }
   @media (max-width:560px){
     .beta-notice{flex-wrap:wrap;gap:2px 6px;padding:7px 10px;}
@@ -972,7 +977,7 @@
           <form class="quorum-search" id="quorum-search-form" role="search">
             <label class="sr-only" for="quorum-search-input">Search Quorum</label>
             <input id="quorum-search-input" type="search" maxlength="120"
-              placeholder="Search entries, authorities, circles, or members">
+              placeholder="Search posts, authorities, circles, or members">
             <button class="lex-button lex-button-primary" type="submit">Search</button>
             <button class="lex-button lex-button-quiet" id="quorum-search-clear" type="button" hidden>Clear</button>
           </form>
@@ -1055,7 +1060,7 @@
               <h3 id="quorum-feed-title">Quorum Feed</h3>
             </div>
             <div class="quorum-toolbar-actions">
-              <label class="sr-only" for="quorum-feed-sort">Sort entries</label>
+              <label class="sr-only" for="quorum-feed-sort">Sort posts</label>
               <select id="quorum-feed-sort">
                 <option value="latest">Latest first</option>
                 <option value="oldest">Oldest first</option>
@@ -1066,7 +1071,7 @@
           <div class="quorum-active-filters" id="quorum-active-filters" hidden></div>
           <div class="lex-status" id="lex-feed-status" role="status" aria-live="polite"></div>
           <div class="lex-feed" id="lex-feed" aria-live="polite" aria-busy="false"></div>
-          <button class="lex-button lex-load-more" id="lex-load-more" type="button" hidden>Load more entries</button>
+          <button class="lex-button lex-load-more" id="lex-load-more" type="button" hidden>Load more posts</button>
         </main>
 
         <aside class="lex-secondary" aria-label="Quorum supporting information">
@@ -1106,7 +1111,7 @@
           </section>
           <section class="lex-notice-card">
             <strong>Educational discussion only</strong>
-            <p>Quorum is an educational discussion space for the Due Diligence community. User-generated entries do not constitute legal advice. Verify statutes and jurisprudence through official sources.</p>
+            <p>Quorum is an educational discussion space for the Due Diligence community. User-generated posts do not constitute legal advice. Verify statutes and jurisprudence through official sources.</p>
           </section>
           <section class="quorum-practice-card">
             <span class="lex-kicker">Mock Bar</span>
@@ -1227,9 +1232,9 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="feedback-modal">
+<div class="modal-overlay" id="feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
   <div class="modal-card">
-    <h3 class="modal-title">Due Diligence Support</h3>
+    <h3 class="modal-title" id="feedback-title">Due Diligence Support</h3>
     <div class="modal-sub">Email support@duediligence.ph</div>
     <form id="feedback-form">
       <p class="checking-copy">Open your email application to request technical help, report a problem, or send platform feedback.</p>
@@ -1242,13 +1247,13 @@
 </div>
 
 <!-- Analytics dashboard modal -->
-<div class="modal-overlay" id="analytics-modal">
+<div class="modal-overlay" id="analytics-modal" role="dialog" aria-modal="true" aria-labelledby="analytics-title">
   <div class="modal-card xl">
-    <h3 class="modal-title">The Verdict</h3>
+    <h3 class="modal-title" id="analytics-title">The Verdict</h3>
     <div class="modal-sub">Your Bar-prep drill history &amp; ALAC record</div>
     <div id="analytics-body"></div>
     <div class="modal-actions" style="margin-top:18px;">
-      <button type="button" class="btn-secondary" onclick="exportProgressPDF()">Export Verdict Report (PDF)</button>
+      <p class="mock-note" role="note">Downloadable Verdict reports are not yet available during Beta.</p>
       <button type="button" class="btn-primary" onclick="closeModal('analytics-modal')">Done</button>
     </div>
   </div>
@@ -1256,9 +1261,9 @@
 
 
 <!-- Suggest a Correction/Better Answer modal -->
-<div class="modal-overlay" id="suggest-modal">
+<div class="modal-overlay" id="suggest-modal" role="dialog" aria-modal="true" aria-labelledby="suggest-title">
   <div class="modal-card">
-    <h3 class="modal-title">Suggest a Correction/Better Answer</h3>
+    <h3 class="modal-title" id="suggest-title">Suggest a Correction/Better Answer</h3>
     <div class="modal-sub" id="suggest-qid">Editorial review for the selected question</div>
     <label class="field-label" for="suggest-type">Correction type</label>
     <select class="modal-select" id="suggest-type">
@@ -1286,7 +1291,7 @@
 
 <!-- Gemini examiner progress / controlled error modal -->
 <div class="modal-overlay" id="checking-modal" role="dialog" aria-modal="true" aria-labelledby="checking-title">
-  <div class="modal-card checking-card" id="checking-card">
+  <div class="modal-card checking-card" id="checking-card" tabindex="-1">
     <div class="checking-orbit" aria-hidden="true"></div>
     <h3 class="modal-title" id="checking-title">Checking your answer...</h3>
     <p class="checking-copy" id="checking-copy">We are comparing your answer with the question bank and available Philippine legal authorities.</p>
@@ -2034,7 +2039,32 @@ function renderSubjectTabs() {
 
 function switchSubject(subj) {
   if (gradingInProgress || subj === currentSubj) return;
+  if (!confirmMockWorkspaceExit(`change from ${currentSubj} to ${subj}`)) return;
   selectSubjectForSession(subj);
+}
+
+function confirmMockWorkspaceExit(destination) {
+  if (gradingInProgress) return false;
+  if (examStage !== 'answering') return true;
+  const answer = document.getElementById('answer-box')?.value
+    ?? userAnswers[questionAnswerKey()]
+    ?? '';
+  saveDraftForCurrentQuestion();
+  persistWorkspace();
+  if (!String(answer).trim()) return true;
+  return window.confirm(
+    `Leave this question to ${destination}?\n\nYour current answer is saved on this device and can be recovered when you return.`,
+  );
+}
+
+function changeMockBarSubject() {
+  if (!confirmMockWorkspaceExit('choose another subject')) return;
+  showSubjectSelection();
+}
+
+function exitMockBarPractice() {
+  if (!confirmMockWorkspaceExit('exit Mock Bar practice')) return;
+  showWelcome();
 }
 
 function renderLaborQuestionBankMessage() {
@@ -2085,6 +2115,8 @@ function legacyRenderMainWrite() {
     <div class="toolbar">
       <div class="nav-group">
         <button class="btn-tool" onclick="nextQuestion()">NEXT</button>
+        <button class="btn-tool" onclick="changeMockBarSubject()">Change Subject</button>
+        <button class="btn-tool" onclick="exitMockBarPractice()">Exit Practice</button>
       </div>
       <div class="question-source-meta">
         <span class="source-year">${escapeHtml(sourceMeta.yearLabel)}</span>
@@ -2220,6 +2252,8 @@ function renderMainWrite() {
     <div class="toolbar">
       <div class="nav-group">
         <button class="btn-tool" onclick="nextQuestion()" ${workspaceLocked ? 'disabled' : ''}>NEXT</button>
+        <button class="btn-tool" onclick="changeMockBarSubject()">Change Subject</button>
+        <button class="btn-tool" onclick="exitMockBarPractice()">Exit Practice</button>
       </div>
       <div class="question-source-meta">
         <span class="source-year">${escapeHtml(sourceMeta.yearLabel)}</span>
@@ -2738,7 +2772,22 @@ window.addEventListener('DOMContentLoaded', init);
    ===================================================================== */
 
 /* ---------- SPA navigation ---------- */
-function showPage(page, el) {
+const SPA_PAGE_HASHES = Object.freeze({
+  mock: 'mock-bar',
+  midterms: 'subject-matter',
+  'bar-feels': 'bar-feels',
+  community: 'quorum',
+  jurisprudence: 'jurisprudence',
+});
+const SPA_PAGE_TABS = Object.freeze({
+  mock: 'spa-mock',
+  midterms: 'spa-subject-matter',
+  'bar-feels': 'spa-bar-feels',
+  community: 'spa-community',
+  jurisprudence: 'spa-jurisprudence',
+});
+
+function showPage(page, el, options = {}) {
   setSiteMenuOpen(false);
   const leavingMock = document.getElementById('page-mock')?.classList.contains('active') && page !== 'mock';
   if (leavingMock && examStage === 'answering') {
@@ -2750,7 +2799,9 @@ function showPage(page, el) {
   const target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
   document.querySelectorAll('.spa-tab').forEach(t => t.classList.remove('active'));
-  if (el) el.classList.add('active');
+  const activeTab = el || document.getElementById(SPA_PAGE_TABS[page]);
+  if (activeTab) activeTab.classList.add('active');
+  if (page !== 'community') window.DueDiligenceQuorum?.deactivate?.();
   if (page === 'mock' && examPausedForPage && examStage === 'answering') {
     examPausedForPage = false;
     renderMainWrite();
@@ -2758,13 +2809,66 @@ function showPage(page, el) {
   } else if (page === 'mock' && onboardingStage === 'complete' && examStage === 'idle') {
     showWelcome();
   }
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (options.history !== false && SPA_PAGE_HASHES[page]) {
+    const url = new URL(location.href);
+    url.searchParams.delete('forumPost');
+    url.searchParams.delete('quorumEntry');
+    url.searchParams.delete('quorumView');
+    url.searchParams.delete('quorumCircle');
+    url.searchParams.delete('quorumQuery');
+    url.hash = SPA_PAGE_HASHES[page];
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    const method = options.replace === true ? 'replaceState' : 'pushState';
+    if (`${location.pathname}${location.search}${location.hash}` !== nextUrl) {
+      history[method]({
+        ...(history.state || {}),
+        dueDiligencePage: page,
+      }, '', nextUrl);
+    }
+  }
+  window.scrollTo({ top: 0, behavior: options.history === false ? 'auto' : 'smooth' });
 }
+
+window.addEventListener('popstate', () => {
+  const hash = location.hash.replace(/^#/, '');
+  const page = Object.entries(SPA_PAGE_HASHES)
+    .find(([, routeHash]) => routeHash === hash)?.[0]
+    || (hash === 'lex-forum' ? 'community' : hash ? null : 'mock');
+  if (!page) return;
+  if (page === 'community' && window.DueDiligenceQuorum?.restoreRoute) {
+    window.DueDiligenceQuorum.restoreRoute().catch(() => {});
+    return;
+  }
+  showPage(page, document.getElementById(SPA_PAGE_TABS[page]), { history: false });
+});
 
 /* ---------- Modals ---------- */
 const BLOCKING_MODAL_IDS = new Set(['terms-modal', 'signin-prompt-modal', 'session-choice-modal']);
 const modalFocusOrigins = new Map();
 const modalResumeStates = new Map();
+
+function syncModalIsolation() {
+  const openOverlays = Array.from(document.querySelectorAll(
+    '.modal-overlay.open, .dd2-overlay.is-open',
+  )).filter((overlay) => overlay.getAttribute('aria-hidden') !== 'true');
+  const topOverlay = openOverlays[openOverlays.length - 1] || null;
+
+  Array.from(document.body.children).forEach((child) => {
+    const containsTopOverlay = topOverlay && (child === topOverlay || child.contains(topOverlay));
+    if (topOverlay && !containsTopOverlay) {
+      if (!child.inert) {
+        child.inert = true;
+        child.dataset.ddModalInert = 'true';
+      }
+      return;
+    }
+    if (child.dataset.ddModalInert === 'true') {
+      child.inert = false;
+      delete child.dataset.ddModalInert;
+    }
+  });
+}
+window.syncModalIsolation = syncModalIsolation;
 
 function openModal(id, options = {}) {
   const modal = document.getElementById(id);
@@ -2778,8 +2882,10 @@ function openModal(id, options = {}) {
   if (options.blocking || BLOCKING_MODAL_IDS.has(id)) modal.classList.add('blocking');
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
-  const focusable = modal.querySelector('button:not([disabled]),a[href],input:not([disabled]),textarea:not([disabled]),[tabindex="0"]');
+  syncModalIsolation();
+  const focusable = modal.querySelector('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]');
   const card = modal.querySelector('.modal-card');
+  if (!focusable && card && !card.hasAttribute('tabindex')) card.setAttribute('tabindex', '-1');
   requestAnimationFrame(() => (focusable || card)?.focus());
 }
 
@@ -2788,6 +2894,7 @@ function closeModal(id, options = {}) {
   if (!modal) return;
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
+  syncModalIsolation();
   if (modalResumeStates.get(id) && examStage === 'answering') sessionController.resume();
   modalResumeStates.delete(id);
   if (options.restoreFocus !== false) {
@@ -2803,6 +2910,7 @@ function closeAllBlockingModals() {
     modal.setAttribute('aria-hidden', 'true');
   });
   modalResumeStates.clear();
+  syncModalIsolation();
 }
 
 /* ---------- Exam mode + per-question clock ---------- */
@@ -2847,17 +2955,6 @@ function applyExamEnhancements() {
       }
     });
   }
-}
-
-/* ---------- Exam-integrity security lockdown ---------- */
-function enableSecurity() {
-  document.addEventListener('contextmenu', e => e.preventDefault());
-  document.addEventListener('keydown', e => {
-    const k = (e.key || '').toLowerCase();
-    if (k === 'f12') { e.preventDefault(); return false; }
-    if (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(k)) { e.preventDefault(); return false; }
-    if (e.ctrlKey && ['u', 's'].includes(k)) { e.preventDefault(); return false; }
-  });
 }
 
 /* ---------- Analytics (localStorage) ---------- */
@@ -2920,8 +3017,6 @@ function openAnalytics() {
   openModal('analytics-modal');
 }
 function fmtSecs(s) { s = Number(s) || 0; const m = Math.floor(s / 60), r = s % 60; return `${m}:${String(r).padStart(2, '0')}`; }
-function exportProgressPDF() { alert('Export Verdict Report (PDF) — coming soon in a future Retainer release.'); }
-
 /* ---------- Content pages (curated placeholders — verify before citing) ---------- */
 function seedContentPages() {
   const midterms = [
@@ -2957,7 +3052,6 @@ function seedContentPages() {
 
 /* ---------- Enterprise bootstrap ---------- */
 document.addEventListener('DOMContentLoaded', () => {
-  enableSecurity();
   seedContentPages();
   document.querySelectorAll('.modal-overlay').forEach(ov => {
     ov.setAttribute('aria-hidden', 'true');
@@ -2975,7 +3069,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (e.key !== 'Tab') return;
-    const focusable = Array.from(modal.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),textarea:not([disabled]),[tabindex="0"]'))
+    const focusable = Array.from(modal.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]'))
       .filter(element => element.offsetParent !== null);
     if (!focusable.length) return;
     const first = focusable[0];

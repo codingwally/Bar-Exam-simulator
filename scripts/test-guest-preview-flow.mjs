@@ -112,7 +112,7 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
     },
   };
   vm.runInNewContext(
-    `${between(index, 'function applyExamEnhancements()', '/* ---------- Exam-integrity security lockdown ---------- */')}
+    `${between(index, 'function applyExamEnhancements()', '/* ---------- Analytics (localStorage) ---------- */')}
      applyExamEnhancements();
      applyExamEnhancements();`,
     context,

@@ -164,3 +164,80 @@ test('authenticated access endpoint does not start a trial', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('an authenticated zero-credit user is denied before question-bank, attempt, or Gemini work', async () => {
+  const originalFetch = globalThis.fetch;
+  let reservationCalls = 0;
+  let questionBankCalls = 0;
+  let attemptCalls = 0;
+  let geminiCalls = 0;
+
+  globalThis.fetch = async (url, init = {}) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) return Response.json({ id: userId });
+    if (target.endsWith('/rest/v1/rpc/phase4_reserve_grade_v2')) {
+      reservationCalls += 1;
+      const body = JSON.parse(init.body);
+      assert.equal(body.p_user_id, userId);
+      assert.equal(body.p_question_bank_id, 'LAB-001');
+      return Response.json(accessSnapshot({
+        allowed: false,
+        basis: 'none',
+        trial: {
+          startedAt: '2026-07-01T00:00:00Z',
+          expiresAt: '2026-07-02T00:00:00Z',
+          active: false,
+        },
+        freeGrades: { limit: 3, used: 3, remaining: 0 },
+      }));
+    }
+    if (target.includes('/content/question-bank/') || target.includes('output=csv')) {
+      questionBankCalls += 1;
+    }
+    if (target.includes('/rest/v1/rpc/phase4_prepare_exam_attempt_v2')) {
+      attemptCalls += 1;
+    }
+    if (target.includes('generativelanguage.googleapis.com')) {
+      geminiCalls += 1;
+    }
+    throw new Error(`Unexpected request: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/', {
+      method: 'POST',
+      headers: {
+        Origin: origin,
+        Authorization: 'Bearer verified-token',
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '192.0.2.210',
+        'X-Request-ID': 'zero_credit_request_20260731',
+      },
+      body: JSON.stringify({
+        questionId: 'LAB-001',
+        studentAnswer: 'No. The claim fails because the governing Labor Code rule is not satisfied by these facts.',
+        session: {
+          mode: 'selfPaced',
+          elapsedSeconds: 90,
+          submissionReason: 'manual',
+          expired: false,
+        },
+      }),
+    }), {
+      ...env,
+      PHASE4_ACCESS_ENFORCEMENT: 'true',
+      REQUIRE_AUTHENTICATED_SUBMISSIONS: 'true',
+      GEMINI_API_KEY: 'test-only-placeholder',
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 403);
+    assert.equal(payload.error.code, 'ACCESS_REQUIRED');
+    assert.equal(reservationCalls, 1);
+    assert.equal(questionBankCalls, 0);
+    assert.equal(attemptCalls, 0);
+    assert.equal(geminiCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

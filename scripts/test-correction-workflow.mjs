@@ -9,7 +9,10 @@ assert.ok(
   html.split(exactLabel).length - 1 >= 8,
   'The exact correction workflow label must be used consistently.',
 );
-assert.match(html, /<h3 class="modal-title">Suggest a Correction\/Better Answer<\/h3>/);
+assert.match(
+  html,
+  /<h3 class="modal-title"[^>]*>Suggest a Correction\/Better Answer<\/h3>/,
+);
 assert.match(html, /onclick="openSuggest\(\)">[^<]*Suggest a Correction\/Better Answer<\/button>/);
 assert.match(html, /id="suggest-type"/);
 assert.match(html, /id="suggest-text" maxlength="6000"/);

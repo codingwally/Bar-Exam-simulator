@@ -103,7 +103,7 @@ for (const operation of [
   'update_profile_settings',
   'mark_notification',
   'mark_all_notifications',
-  'create_simple_entry',
+  'create_entry',
   'set_affirm',
 ]) {
   assert.match(client, new RegExp(`['"]${operation}['"]`), `${operation} must be wired in the Quorum client.`);
@@ -114,6 +114,14 @@ for (const route of ['/quorum/query', '/quorum/command', '/admin/quorum']) {
 }
 assert.match(client, /api\('\/quorum\/query'/);
 assert.match(client, /api\('\/quorum\/command'/);
+assert.doesNotMatch(
+  client,
+  /['"]create_simple_entry['"]/,
+  'The composer must submit its full optional details through create_entry.',
+);
+assert.match(client, /Disseminate/);
+assert.doesNotMatch(client, /Cite \/ Send/);
+assert.match(client, /draftPrefix[\s\S]*currentUserId\(\)/);
 assert.match(client, /\$\('#quorum-notification-count'\)\.textContent = unreadCount/);
 assert.match(client, /allowDismiss:\s*true/);
 assert.match(phase2, /id="dd2-entry-close"/);

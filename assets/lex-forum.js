@@ -3,7 +3,7 @@
 
   const config = global.DueDiligencePhase2Config;
   const destinationKey = 'duediligence.quorum.destination.v1';
-  const draftKey = 'duediligence.quorum.draft.v1';
+  const draftPrefix = 'duediligence.quorum.draft.v2';
   const entryLimit = 4000;
   const commentLimit = 2000;
   const citationLimit = 1000;
@@ -52,10 +52,10 @@
     ['other', 'Other community-standard concern'],
   ]);
   const notificationLabels = {
-    entry_comment: 'commented on your entry',
+    entry_comment: 'commented on your post',
     comment_reply: 'replied to your comment',
-    helpful: 'marked your entry Helpful',
-    repost: 'cited your entry',
+    helpful: 'affirmed your post',
+    repost: 'disseminated your post',
     circle_activity: 'added activity in a Study Circle',
     moderation_decision: 'sent a moderation update',
   };
@@ -90,6 +90,7 @@
     dialogReturnFocus: null,
     searchController: null,
     pending: new Set(),
+    draftOwnerId: null,
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -101,6 +102,15 @@
 
   function hasSession() {
     return Boolean(session()?.access_token);
+  }
+
+  function currentUserId() {
+    return String(session()?.user?.id || '').trim();
+  }
+
+  function draftKey() {
+    const userId = currentUserId();
+    return userId ? `${draftPrefix}.${userId}` : null;
   }
 
   function requestId() {
@@ -164,7 +174,7 @@
 
   function askForSignIn() {
     rememberDestination();
-    global.showPage?.('community', state.trigger || $('#spa-community'));
+    global.showPage?.('community', state.trigger || $('#spa-community'), { history: false });
     setAuthView(false, 'Sign in to enter Quorum. No guest community access is available.');
     global.DueDiligencePhase2?.openSignIn?.({
       allowGuest: false,
@@ -175,14 +185,47 @@
     });
   }
 
+  const routableViews = new Set([
+    'home',
+    'saved',
+    'unanswered',
+    'circles',
+    'notifications',
+    'profile',
+    'circle',
+    'search',
+    'entry',
+  ]);
+
   function setStableLocation(entryId = null, { replace = true } = {}) {
     const url = new URL(location.href);
     url.searchParams.delete('forumPost');
+    url.searchParams.delete('quorumEntry');
+    url.searchParams.delete('quorumView');
+    url.searchParams.delete('quorumCircle');
+    url.searchParams.delete('quorumQuery');
+
+    const view = entryId ? 'entry' : (routableViews.has(state.view) ? state.view : 'home');
     if (entryId) url.searchParams.set('quorumEntry', entryId);
-    else url.searchParams.delete('quorumEntry');
+    if (view !== 'home' && view !== 'entry') url.searchParams.set('quorumView', view);
+    if (view === 'circle' && state.activeCircleId) {
+      url.searchParams.set('quorumCircle', state.activeCircleId);
+    }
+    if (view === 'search' && state.filters.query) {
+      url.searchParams.set('quorumQuery', state.filters.query);
+    }
     url.hash = 'quorum';
     const method = replace ? 'replaceState' : 'pushState';
-    history[method](history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    history[method]({
+      ...(history.state || {}),
+      dueDiligencePage: 'community',
+      dueDiligenceQuorum: {
+        view,
+        entryId: entryId || null,
+        circleId: view === 'circle' ? state.activeCircleId || null : null,
+        query: view === 'search' ? state.filters.query || null : null,
+      },
+    }, '', `${url.pathname}${url.search}${url.hash}`);
   }
 
   function stableEntryUrl(entryId) {
@@ -363,7 +406,7 @@
       document.execCommand('copy');
       field.remove();
     }
-    toast('Stable Quorum link copied.');
+    toast('Stable Quorum post link copied.');
   }
 
   function ensureDialog() {
@@ -510,7 +553,7 @@
       const banner = document.createElement('div');
       banner.className = 'lex-repost-banner';
       banner.append(
-        textElement('span', '', 'Cited by'),
+        textElement('span', '', 'Disseminated by'),
         authorBlock(item.citation.author || {}),
         textElement('span', '', relativeTime(item.citation.createdAt)),
       );
@@ -529,12 +572,13 @@
 
     const chips = document.createElement('div');
     chips.className = 'quorum-chip-row';
-    chips.append(chip(entryTypes.get(item.entryType) || 'Quorum Entry'));
+    const typeLabel = entryTypes.get(item.entryType);
+    if (typeLabel) chips.append(chip(typeLabel));
     if (item.subject) chips.append(chip(item.subject));
     if (item.category) chips.append(chip(categories.get(item.category) || item.category));
     if (item.lawSchoolYear) chips.append(chip(item.lawSchoolYear));
     if (item.circle?.name) chips.append(chip(`Study Circle: ${item.circle.name}`));
-    inner.append(chips);
+    if (chips.childElementCount) inner.append(chips);
 
     if (item.caseTitle) inner.append(textElement('h3', 'quorum-entry-heading', item.caseTitle));
     inner.append(textElement('p', 'lex-post-body', item.body));
@@ -551,7 +595,7 @@
       image.className = 'quorum-entry-image';
       image.src = item.imageUrl;
       image.alt = item.imageAlt
-        || `Image attached to the Quorum entry by ${item.author?.displayName || 'a member'}`;
+        || `Image attached to the Quorum post by ${item.author?.displayName || 'a member'}`;
       image.loading = 'lazy';
       image.decoding = 'async';
       inner.append(image);
@@ -580,6 +624,7 @@
         const expanded = menu.hidden;
         menu.hidden = !expanded;
         affirmTrigger.setAttribute('aria-expanded', String(expanded));
+        if (expanded) requestAnimationFrame(() => menu.querySelector('[role="menuitemradio"]')?.focus());
       },
     );
     affirmTrigger.setAttribute('aria-haspopup', 'menu');
@@ -605,34 +650,69 @@
       reaction.setAttribute('aria-checked', String(item.viewerReaction === type));
       affirmMenu.append(reaction);
     });
+    affirmTrigger.addEventListener('keydown', (event) => {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      affirmMenu.hidden = false;
+      affirmTrigger.setAttribute('aria-expanded', 'true');
+      const choices = $$('[role="menuitemradio"]', affirmMenu);
+      const target = event.key === 'ArrowUp' ? choices[choices.length - 1] : choices[0];
+      target?.focus();
+    });
+    affirmMenu.addEventListener('keydown', (event) => {
+      const choices = $$('[role="menuitemradio"]', affirmMenu);
+      const index = choices.indexOf(document.activeElement);
+      let next = null;
+      if (event.key === 'ArrowDown') next = choices[(index + 1 + choices.length) % choices.length];
+      else if (event.key === 'ArrowUp') next = choices[(index - 1 + choices.length) % choices.length];
+      else if (event.key === 'Home') next = choices[0];
+      else if (event.key === 'End') next = choices[choices.length - 1];
+      else if (event.key === 'Escape') {
+        event.preventDefault();
+        affirmMenu.hidden = true;
+        affirmTrigger.setAttribute('aria-expanded', 'false');
+        affirmTrigger.focus();
+        return;
+      } else if (event.key === 'Tab') {
+        affirmMenu.hidden = true;
+        affirmTrigger.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      if (next) {
+        event.preventDefault();
+        next.focus();
+      }
+    });
     affirm.append(affirmTrigger, affirmCount, affirmMenu);
     const comments = button(
       `Comment ${Number(item.counts?.comments || 0)}`,
       'lex-action',
       () => toggleComments(item, article),
     );
-    const cite = button(
-      `Cite / Send ${Number(item.counts?.citations || 0)}`,
+    const disseminate = button(
+      `Disseminate ${Number(item.counts?.citations || 0)}`,
       'lex-action',
       () => openCitationDialog(item),
     );
-    cite.title = 'Repost inside Quorum, copy a stable link, or use your device share sheet.';
+    disseminate.title = 'Disseminate inside Quorum, copy a stable link, or use your device share sheet.';
     const save = button(
       item.viewerSaved ? 'Saved' : 'Save',
       `lex-action${item.viewerSaved ? ' is-active' : ''}`,
       () => toggleSaved(item, save),
     );
     save.setAttribute('aria-pressed', item.viewerSaved ? 'true' : 'false');
-    actions.append(affirm, comments, cite, save);
+    actions.append(affirm, comments, disseminate, save);
     inner.append(actions);
 
+    const overflow = document.createElement('details');
+    overflow.className = 'quorum-overflow';
+    const overflowSummary = document.createElement('summary');
+    overflowSummary.className = 'quorum-overflow-trigger';
+    overflowSummary.textContent = 'More';
+    overflowSummary.setAttribute('aria-label', 'More post actions');
     const menu = document.createElement('div');
     menu.className = 'lex-post-owner-actions';
-    menu.append(
-      button('Open', 'lex-menu-button', () => openEntry(item.entryId, { push: true })),
-      button('Copy link', 'lex-menu-button', () => copyStableLink(item.entryId)),
-      button('Report', 'lex-menu-button', () => openReportDialog('entry', item.entryId)),
-    );
+    menu.append(button('Report', 'lex-menu-button', () => openReportDialog('entry', item.entryId)));
     if (item.viewerOwns) {
       menu.append(
         button('Edit', 'lex-menu-button', () => openEditEntryDialog(item)),
@@ -640,9 +720,10 @@
       );
     }
     if (item.kind === 'citation' && item.citation?.viewerOwns) {
-      menu.append(button('Remove citation', 'lex-menu-button is-danger', () => removeCitation(item.citation.citationId)));
+      menu.append(button('Remove dissemination', 'lex-menu-button is-danger', () => removeCitation(item.citation.citationId)));
     }
-    inner.append(menu);
+    overflow.append(overflowSummary, menu);
+    inner.append(overflow);
     article.append(inner);
 
     if (state.commentsOpen.has(item.entryId)) {
@@ -666,10 +747,10 @@
           ? 'No saved authorities yet.'
           : state.view === 'unanswered'
             ? 'No unanswered questions match these filters.'
-            : 'No Quorum entries match this view.'),
+            : 'No Quorum posts match this view.'),
         textElement('p', '', state.view === 'saved'
-          ? 'Save a useful entry to build your private authority list.'
-          : 'Clear filters, refresh, or contribute a focused entry.'),
+          ? 'Save a useful post to build your private authority list.'
+          : 'Clear filters, refresh, or contribute a focused post.'),
         button('Refresh', 'lex-button lex-button-quiet', () => refreshFeed()),
       );
       feed.append(empty);
@@ -703,7 +784,7 @@
     state.loading = true;
     const feed = $('#lex-feed');
     feed?.setAttribute('aria-busy', 'true');
-    setFeedStatus(append ? 'Loading more entries…' : 'Loading Quorum entries…');
+    setFeedStatus(append ? 'Loading more posts…' : 'Loading Quorum posts…');
     if (!append && feed) {
       feed.replaceChildren(
         Object.assign(document.createElement('div'), { className: 'lex-skeleton' }),
@@ -719,7 +800,7 @@
       state.loaded = true;
       renderFeed();
       setFeedStatus(state.items.length
-        ? `${state.items.length.toLocaleString()} ${state.items.length === 1 ? 'entry' : 'entries'} shown.`
+        ? `${state.items.length.toLocaleString()} ${state.items.length === 1 ? 'post' : 'posts'} shown.`
         : '');
     } catch (error) {
       if (!append) state.items = [];
@@ -736,13 +817,15 @@
     state.view = 'entry';
     state.directEntryId = entryId;
     state.legacyPostId = null;
-    setViewLabels('Entry', 'Stable Quorum entry');
+    setViewLabels('Quorum post', 'Stable community link');
     syncViewButtons();
-    setStableLocation(entryId, { replace: options.push !== true });
+    if (options.route !== false) {
+      setStableLocation(entryId, { replace: options.push !== true });
+    }
     $('#lex-composer').hidden = true;
     const feed = $('#lex-feed');
     feed?.setAttribute('aria-busy', 'true');
-    setFeedStatus('Opening entry…');
+    setFeedStatus('Opening post…');
     try {
       const payload = await query('entry', { entryId });
       state.items = [payload.entry];
@@ -761,8 +844,8 @@
   async function openLegacyEntry(legacyPostId) {
     state.view = 'entry';
     $('#lex-composer').hidden = true;
-    setViewLabels('Entry', 'Opening a legacy stable link');
-    setFeedStatus('Opening entry…');
+    setViewLabels('Quorum post', 'Opening a legacy stable link');
+    setFeedStatus('Opening post…');
     try {
       const payload = await query('entry', { legacyPostId });
       state.directEntryId = payload.entry.entryId;
@@ -1065,12 +1148,12 @@
   }
 
   function openCitationDialog(item) {
-    openDialog('Cite / Send', (body) => {
-      body.append(textElement('p', 'lex-dialog-copy', 'Create an attributed internal citation, copy a stable link, or use your device share sheet. Opening or cancelling this dialog does not change citation counts.'));
+    openDialog('Disseminate', (body) => {
+      body.append(textElement('p', 'lex-dialog-copy', 'Disseminate this post inside Quorum, copy its stable link, or use your device share sheet. Opening or cancelling this dialog does not change dissemination counts.'));
       const field = document.createElement('textarea');
       field.maxLength = citationLimit;
       field.rows = 4;
-      field.placeholder = 'Optional commentary for your internal citation.';
+      field.placeholder = 'Optional commentary for your Quorum dissemination.';
       const counter = textElement('span', 'lex-edit-counter', `0 / ${citationLimit.toLocaleString()}`);
       field.addEventListener('input', () => {
         counter.textContent = `${field.value.length.toLocaleString()} / ${citationLimit.toLocaleString()}`;
@@ -1084,31 +1167,31 @@
           return;
         }
         try {
-          await navigator.share({ title: 'Quorum entry', url: stableEntryUrl(item.entryId) });
+          await navigator.share({ title: 'Quorum post', url: stableEntryUrl(item.entryId) });
         } catch (failure) {
           if (failure?.name !== 'AbortError') error.textContent = 'The device share action could not be completed.';
         }
       });
       if (!navigator.share) nativeShare.hidden = true;
-      const cite = button('Cite in Quorum', 'lex-button lex-button-primary', async () => {
-        if (cite.disabled) return;
-        cite.disabled = true;
+      const disseminate = button('Disseminate in Quorum', 'lex-button lex-button-primary', async () => {
+        if (disseminate.disabled) return;
+        disseminate.disabled = true;
         try {
           const result = await command('create_repost', { entryId: item.entryId, body: field.value });
           item.counts.citations = Number(result.count || item.counts.citations || 0);
           closeDialog();
           await refreshFeed();
-          toast('Entry cited in Quorum.');
+          toast('Post disseminated in Quorum.');
         } catch (failure) {
-          cite.disabled = false;
-          error.textContent = failure?.message || 'The citation could not be published.';
+          disseminate.disabled = false;
+          error.textContent = failure?.message || 'The dissemination could not be published.';
         }
       });
       actions.append(
         button('Copy link', 'lex-button', () => copyStableLink(item.entryId)),
         nativeShare,
         button('Cancel', 'lex-button', closeDialog),
-        cite,
+        disseminate,
       );
       body.append(field, counter, error, actions);
     });
@@ -1116,13 +1199,13 @@
 
   function removeCitation(citationId) {
     confirmDialog({
-      title: 'Remove citation',
-      copy: 'Your internal citation will be removed. The original entry remains.',
-      confirmLabel: 'Remove citation',
+      title: 'Remove dissemination',
+      copy: 'Your Quorum dissemination will be removed. The original post remains.',
+      confirmLabel: 'Remove dissemination',
       onConfirm: async () => {
         await command('delete_repost', { citationId });
         await refreshFeed();
-        toast('Citation removed.');
+        toast('Dissemination removed.');
       },
     });
   }
@@ -1166,9 +1249,9 @@
   }
 
   function openEditEntryDialog(item) {
-    openDialog('Edit your entry', (body) => {
+    openDialog('Edit your post', (body) => {
       const bodyLabel = document.createElement('label');
-      bodyLabel.textContent = 'Entry';
+      bodyLabel.textContent = 'Post';
       const field = document.createElement('textarea');
       field.maxLength = entryLimit;
       field.rows = 8;
@@ -1197,7 +1280,7 @@
             await command('remove_attachment', { entryId: item.entryId });
             item.imageUrl = null;
             control.remove();
-            toast('Entry image removed.');
+            toast('Post image removed.');
           } catch (failure) {
             control.disabled = false;
             error.textContent = failure?.message || 'The image could not be removed.';
@@ -1222,10 +1305,10 @@
           });
           closeDialog();
           state.view === 'entry' ? openEntry(item.entryId) : refreshFeed();
-          toast('Entry updated.');
+          toast('Post updated.');
         } catch (failure) {
           save.disabled = false;
-          error.textContent = failure?.message || 'The entry could not be updated.';
+          error.textContent = failure?.message || 'The post could not be updated.';
         }
       });
       actions.append(button('Cancel', 'lex-button', closeDialog), save);
@@ -1235,16 +1318,16 @@
 
   function removeEntry(item) {
     confirmDialog({
-      title: 'Remove entry',
-      copy: 'This soft-deletes your entry and makes its attached image inaccessible.',
-      warning: 'Comments, citations, and stable links will no longer expose the removed entry.',
-      confirmLabel: 'Remove entry',
+      title: 'Remove post',
+      copy: 'This soft-deletes your post and makes its attached image inaccessible.',
+      warning: 'Comments, disseminations, and stable links will no longer expose the removed post.',
+      confirmLabel: 'Remove post',
       onConfirm: async () => {
         await command('delete_entry', { entryId: item.entryId });
         state.directEntryId = null;
         setStableLocation();
         await setView('home');
-        toast('Entry removed.');
+        toast('Post removed.');
       },
     });
   }
@@ -1258,7 +1341,10 @@
 
   function syncViewButtons() {
     $$('[data-quorum-view]').forEach((control) => {
-      control.classList.toggle('is-active', control.dataset.quorumView === state.view);
+      const active = control.dataset.quorumView === state.view;
+      control.classList.toggle('is-active', active);
+      if (active) control.setAttribute('aria-current', 'page');
+      else control.removeAttribute('aria-current');
     });
   }
 
@@ -1283,7 +1369,9 @@
     state.view = view;
     state.directEntryId = null;
     state.legacyPostId = null;
-    setStableLocation();
+    if (options.route !== false) {
+      setStableLocation(null, { replace: options.push !== true });
+    }
     syncViewButtons();
     const composer = $('#lex-composer');
     if (composer) composer.hidden = !['home', 'circle'].includes(view);
@@ -1302,7 +1390,7 @@
       setViewLabels('Quorum Feed', 'Academic community');
       await refreshFeed();
     } else if (view === 'saved') {
-      setViewLabels('My Authorities', 'Private saved entries');
+      setViewLabels('My Authorities', 'Private saved posts');
       await refreshFeed();
     } else if (view === 'unanswered') {
       setViewLabels('Unanswered questions', 'Help a fellow law student');
@@ -1408,11 +1496,16 @@
     chips.className = 'quorum-chip-row';
     if (circle.subject) chips.append(chip(circle.subject));
     if (circle.school) chips.append(chip(circle.school));
-    chips.append(chip(`${Number(circle.memberCount || 0)} members`), chip(`${Number(circle.entryCount || 0)} entries`));
+    chips.append(
+      chip(`${Number(circle.memberCount || 0)} members`),
+      chip(`${Number(circle.entryCount || 0)} posts`),
+    );
     card.append(chips);
     const actions = document.createElement('div');
     actions.className = 'quorum-circle-actions';
-    actions.append(button('Open circle', 'lex-button lex-button-quiet', () => openCircle(circle.circleId)));
+    actions.append(button('Open circle', 'lex-button lex-button-quiet', () => (
+      openCircle(circle.circleId, { push: true })
+    )));
     if (circle.status === 'active') {
       if (circle.viewerOwns) {
         actions.append(button('Archive', 'lex-button', () => archiveCircle(circle)));
@@ -1487,10 +1580,12 @@
     });
   }
 
-  async function openCircle(circleId) {
+  async function openCircle(circleId, options = {}) {
     state.view = 'circle';
     state.activeCircleId = circleId;
-    setStableLocation();
+    if (options.route !== false) {
+      setStableLocation(null, { replace: options.push !== true });
+    }
     syncViewButtons();
     $('#lex-composer').hidden = false;
     setViewLabels('Study Circle', 'Member circle feed');
@@ -1524,7 +1619,7 @@
   async function leaveCircle(circle) {
     confirmDialog({
       title: 'Leave Study Circle',
-      copy: `Leave “${circle.name}”? Your existing entries remain attributed to you.`,
+      copy: `Leave “${circle.name}”? Your existing posts remain attributed to you.`,
       confirmLabel: 'Leave circle',
       onConfirm: async () => {
         await command('leave_circle', { circleId: circle.circleId });
@@ -1598,7 +1693,9 @@
               loadBootstrap();
             }
             if (notification.entryId && notification.targetAvailable) openEntry(notification.entryId, { push: true });
-            else if (notification.circleId && notification.targetAvailable) openCircle(notification.circleId);
+            else if (notification.circleId && notification.targetAvailable) {
+              openCircle(notification.circleId, { push: true });
+            }
             else toast('The referenced content is no longer available.');
           });
           node.append(copy, open);
@@ -1638,7 +1735,7 @@
     const counts = document.createElement('div');
     counts.className = 'quorum-chip-row';
     counts.append(
-      chip(`${Number(profile.counts?.entries || 0)} public entries`),
+      chip(`${Number(profile.counts?.entries || 0)} public posts`),
       chip(`${Number(profile.counts?.circles || 0)} Study Circles`),
     );
     panel.append(counts);
@@ -1682,7 +1779,7 @@
           title: alreadyBlocked ? 'Unblock member' : 'Block member',
           copy: alreadyBlocked
             ? `Restore mutual Quorum visibility with ${profile.displayName || 'this member'}?`
-            : `Hide mutual Quorum entries, comments, notifications, circle activity, and direct links involving ${profile.displayName || 'this member'}?`,
+            : `Hide mutual Quorum posts, comments, notifications, circle activity, and direct links involving ${profile.displayName || 'this member'}?`,
           confirmLabel: alreadyBlocked ? 'Unblock' : 'Block',
           onConfirm: async () => {
             await command('set_block', { memberId: profile.memberId, enabled: !alreadyBlocked });
@@ -1760,6 +1857,9 @@
     }
     state.view = 'search';
     state.filters.query = value;
+    if (!append && options.route !== false) {
+      setStableLocation(null, { replace: options.push !== true });
+    }
     syncViewButtons();
     updateActiveFilters();
     $('#lex-composer').hidden = true;
@@ -1798,8 +1898,8 @@
       const entries = result.entries?.items || [];
       const groups = document.createElement('div');
       groups.className = 'quorum-search-groups';
-      groups.append(textElement('h4', '', `Entries (${entries.length})`));
-      if (!entries.length) groups.append(textElement('p', 'quorum-empty-copy', 'No matching entries.'));
+      groups.append(textElement('h4', '', `Posts (${entries.length})`));
+      if (!entries.length) groups.append(textElement('p', 'quorum-empty-copy', 'No matching posts.'));
       entries.forEach((item) => groups.append(renderEntry(item)));
       groups.append(textElement('h4', '', `Study Circles (${(result.circles || []).length})`));
       (result.circles || []).forEach((circle) => groups.append(circleCard(circle)));
@@ -1833,7 +1933,7 @@
     if (input) input.value = '';
     $('#quorum-search-clear').hidden = true;
     updateActiveFilters();
-    setView('home');
+    setView('home', { push: true });
   }
 
   function composerPayload() {
@@ -1853,12 +1953,14 @@
   }
 
   function saveDraft() {
+    const key = draftKey();
+    if (!key) return;
     const payload = composerPayload();
     if (!payload.body && !payload.sourceUrl && !state.selectedImage) {
-      safeStorage(localStorage, 'remove', draftKey);
+      safeStorage(localStorage, 'remove', key);
       return;
     }
-    safeStorage(localStorage, 'set', draftKey, JSON.stringify({
+    safeStorage(localStorage, 'set', key, JSON.stringify({
       ...payload,
       hasImage: Boolean(state.selectedImage),
       savedAt: Date.now(),
@@ -1866,14 +1968,18 @@
   }
 
   function restoreDraft() {
-    const raw = safeStorage(localStorage, 'get', draftKey);
+    const key = draftKey();
+    if (!key) return;
+    const raw = safeStorage(localStorage, 'get', key);
     if (!raw) return;
     try {
       const draft = JSON.parse(raw);
       if (!draft || Date.now() - Number(draft.savedAt || 0) > 7 * 24 * 60 * 60 * 1000) return;
       $('#lex-post-body').value = draft.body || '';
       $('#lex-post-source').value = draft.sourceUrl || '';
-      $('#quorum-entry-type').value = draft.kind === 'question' ? 'ask_community' : 'student_support';
+      $('#quorum-entry-type').value = entryTypes.has(draft.entryType)
+        ? draft.entryType
+        : draft.kind === 'question' ? 'ask_community' : 'student_support';
       $('#quorum-entry-category').value = categories.has(draft.category) ? draft.category : 'philippine_legal_education';
       $('#quorum-entry-subject').value = subjects.includes(draft.subject) ? draft.subject : '';
       $('#quorum-entry-year').value = draft.lawSchoolYear || '';
@@ -1883,36 +1989,44 @@
       syncCaseTitle();
       updateComposerCounter();
     } catch {
-      safeStorage(localStorage, 'remove', draftKey);
+      safeStorage(localStorage, 'remove', key);
     }
   }
 
-  function clearComposer({ announce = false } = {}) {
+  function resetComposerForSession() {
     $('#lex-composer')?.reset();
     state.selectedImage = null;
-    $('#quorum-entry-type').value = 'student_support';
-    $('#quorum-entry-category').value = 'law_school_life';
+    if ($('#quorum-entry-type')) $('#quorum-entry-type').value = 'student_support';
+    if ($('#quorum-entry-category')) $('#quorum-entry-category').value = 'law_school_life';
     if ($('#quorum-image-alt')) $('#quorum-image-alt').value = '';
-    $('#quorum-image-status').textContent = 'JPEG, PNG, or WebP · 3 MB maximum';
-    $('#quorum-image-remove').hidden = true;
-    safeStorage(localStorage, 'remove', draftKey);
+    if ($('#quorum-image-status')) {
+      $('#quorum-image-status').textContent = 'JPEG, PNG, or WebP · 3 MB maximum';
+    }
+    if ($('#quorum-image-remove')) $('#quorum-image-remove').hidden = true;
     syncCaseTitle();
-    updateComposerCounter();
-    if (announce) toast('Entry draft cleared.');
+    updateComposerCounter({ persist: false });
+    state.draftOwnerId = currentUserId() || null;
+  }
+
+  function clearComposer({ announce = false } = {}) {
+    const key = draftKey();
+    resetComposerForSession();
+    if (key) safeStorage(localStorage, 'remove', key);
+    if (announce) toast('Post draft cleared.');
   }
 
   function previewEntry() {
     const payload = composerPayload();
     if (!payload.body.trim()) {
-      toast('Write an entry before opening the preview.');
+      toast('Write a post before opening the preview.');
       $('#lex-post-body')?.focus();
       return;
     }
-    openDialog('Entry preview', (body, dialog) => {
+    openDialog('Post preview', (body, dialog) => {
       const preview = document.createElement('div');
       preview.className = 'quorum-dialog-preview';
       preview.append(
-        textElement('strong', '', entryTypes.get(payload.entryType) || 'Quorum Entry'),
+        textElement('strong', '', entryTypes.get(payload.entryType) || 'Quorum post'),
         textElement('p', '', payload.body),
       );
       if (payload.caseTitle) preview.prepend(textElement('h3', 'quorum-entry-heading', payload.caseTitle));
@@ -1941,8 +2055,8 @@
       return;
     }
     confirmDialog({
-      title: 'Discard entry draft',
-      copy: 'Clear this unfinished Quorum entry?',
+      title: 'Discard post draft',
+      copy: 'Clear this unfinished Quorum post?',
       confirmLabel: 'Discard draft',
       onConfirm: async () => clearComposer({ announce: true }),
     });
@@ -1967,26 +2081,30 @@
     const submit = $('#lex-post-submit');
     if (!submit || submit.disabled) return;
     submit.disabled = true;
-    setFeedStatus('Publishing entry…');
+    setFeedStatus('Publishing post…');
     try {
       const payload = composerPayload();
       if (state.selectedImage && !payload.imageAlt.trim()) {
         throw new Error('Add a short photo description so everyone can understand the image.');
       }
       const image = await imageToPayload(state.selectedImage);
-      const result = await command('create_simple_entry', {
+      const result = await command('create_entry', {
         body: payload.body,
-        kind: payload.kind,
+        entryType: payload.entryType,
         subject: payload.subject,
+        category: payload.category,
         lawSchoolYear: payload.lawSchoolYear,
+        caseTitle: payload.caseTitle,
+        opinionOnly: payload.opinionOnly,
         sourceUrl: payload.sourceUrl,
+        circleId: payload.circleId,
         imageAlt: payload.imageAlt,
       }, image);
       clearComposer();
       if (result.publicationStatus === 'pending') {
         toast('Announcement submitted for moderator approval.');
       } else {
-        toast('Entry published in Quorum.');
+        toast('Post published in Quorum.');
         await setView('home');
         if (result.entryId) await openEntry(result.entryId, { push: true });
       }
@@ -1999,11 +2117,11 @@
     }
   }
 
-  function updateComposerCounter() {
+  function updateComposerCounter(options = {}) {
     const field = $('#lex-post-body');
     const counter = $('#lex-post-counter');
     if (field && counter) counter.textContent = `${field.value.length.toLocaleString()} / ${entryLimit.toLocaleString()}`;
-    saveDraft();
+    if (options.persist !== false) saveDraft();
   }
 
   function syncCaseTitle() {
@@ -2112,7 +2230,7 @@
     }
     items.forEach((item) => {
       const control = button(item.caseTitle || item.body.slice(0, 80), 'quorum-compact-item', () => openEntry(item.entryId, { push: true }));
-      control.append(textElement('small', '', `${entryTypes.get(item.entryType) || 'Entry'} · ${Number(item.counts?.comments || 0)} comments`));
+      control.append(textElement('small', '', `${entryTypes.get(item.entryType) || 'Post'} · ${Number(item.counts?.comments || 0)} comments`));
       container.append(control);
     });
   }
@@ -2125,7 +2243,9 @@
       return;
     }
     circles.forEach((circle) => {
-      const control = button(circle.name, 'quorum-compact-item', () => openCircle(circle.circleId));
+      const control = button(circle.name, 'quorum-compact-item', () => (
+        openCircle(circle.circleId, { push: true })
+      ));
       control.append(textElement('small', '', `${Number(circle.memberCount || 0)} members · ${circle.subject || 'All subjects'}`));
       container.append(control);
     });
@@ -2199,12 +2319,59 @@
       await Promise.all([loadBootstrap(), populateJoinedCircles()]);
       loadSidebar();
       telemetry('quorum_opened');
-      if (state.directEntryId) await openEntry(state.directEntryId);
-      else if (state.legacyPostId) await openLegacyEntry(state.legacyPostId);
-      else if (!state.loaded) await setView('home');
+      await restoreRoute({ loadChrome: false });
     } catch (error) {
       handleError(error);
     }
+  }
+
+  async function restoreRoute(options = {}) {
+    if (!['#quorum', '#lex-forum'].includes(location.hash)) return false;
+    state.active = true;
+    global.showPage?.('community', state.trigger || $('#spa-community'), { history: false });
+    if (!hasSession()) {
+      askForSignIn();
+      return true;
+    }
+    setAuthView(true);
+    if (options.loadChrome !== false) {
+      await Promise.all([loadBootstrap(), populateJoinedCircles()]);
+      loadSidebar();
+    }
+
+    const params = new URLSearchParams(location.search);
+    const entryId = params.get('quorumEntry');
+    const legacyPostId = params.get('forumPost');
+    const requestedView = params.get('quorumView') || 'home';
+    const circleId = params.get('quorumCircle');
+    const queryText = params.get('quorumQuery');
+    state.directEntryId = entryId;
+    state.legacyPostId = legacyPostId;
+
+    if (entryId) await openEntry(entryId, { route: false });
+    else if (legacyPostId) await openLegacyEntry(legacyPostId);
+    else if (requestedView === 'circle' && circleId) {
+      await openCircle(circleId, { route: false });
+    } else if (requestedView === 'search' && queryText) {
+      await searchQuorum(queryText, { route: false });
+    } else if (routableViews.has(requestedView)
+        && !['entry', 'circle', 'search'].includes(requestedView)) {
+      await setView(requestedView, { route: false });
+    } else {
+      await setView('home', { route: false });
+    }
+    return true;
+  }
+
+  function deactivate() {
+    state.active = false;
+    state.searchController?.abort();
+    $$('.quorum-affirm-menu').forEach((menu) => {
+      menu.hidden = true;
+      menu.closest('.quorum-affirm-control')
+        ?.querySelector('.quorum-affirm-trigger')
+        ?.setAttribute('aria-expanded', 'false');
+    });
   }
 
   function open(trigger = null) {
@@ -2212,13 +2379,15 @@
     const params = new URLSearchParams(location.search);
     state.directEntryId = params.get('quorumEntry') || state.directEntryId;
     state.legacyPostId = params.get('forumPost') || state.legacyPostId;
-    setStableLocation(state.directEntryId);
+    if (!['#quorum', '#lex-forum'].includes(location.hash)) {
+      setStableLocation(state.directEntryId, { replace: false });
+    }
     if (!hasSession()) {
       askForSignIn();
       return true;
     }
     setAuthView(true);
-    global.showPage?.('community', state.trigger);
+    global.showPage?.('community', state.trigger, { history: false });
     activate();
     return true;
   }
@@ -2257,11 +2426,11 @@
     });
     $('#quorum-search-form')?.addEventListener('submit', (event) => {
       event.preventDefault();
-      searchQuorum($('#quorum-search-input')?.value);
+      searchQuorum($('#quorum-search-input')?.value, { push: true });
     });
     $('#quorum-search-clear')?.addEventListener('click', clearSearch);
     $$('[data-quorum-view]').forEach((control) => {
-      control.addEventListener('click', () => setView(control.dataset.quorumView));
+      control.addEventListener('click', () => setView(control.dataset.quorumView, { push: true }));
     });
     global.addEventListener('online', () => {
       if (state.active && state.authenticated) {
@@ -2269,10 +2438,15 @@
       }
     });
     global.addEventListener('offline', () => {
-      if (state.active) setFeedStatus('You are offline. Existing entries remain visible until you reconnect.', 'error');
+      if (state.active) setFeedStatus('You are offline. Existing posts remain visible until you reconnect.', 'error');
     });
     global.addEventListener('duediligence:session', (event) => {
       const authenticated = event.detail?.authenticated === true;
+      const nextUserId = authenticated ? currentUserId() : '';
+      if (state.draftOwnerId !== (nextUserId || null)) {
+        resetComposerForSession();
+        if (authenticated) restoreDraft();
+      }
       if (!authenticated) {
         clearPrivateView();
         if (state.active) askForSignIn();
@@ -2284,16 +2458,18 @@
       if (pending?.legacyPostId) state.legacyPostId = pending.legacyPostId;
       if (pending?.view) state.view = pending.view;
       if (state.active || pending || ['#quorum', '#lex-forum'].includes(location.hash)) {
-        global.showPage?.('community', state.trigger || $('#spa-community'));
+        global.showPage?.('community', state.trigger || $('#spa-community'), { history: false });
         activate();
       }
     });
-    global.addEventListener('popstate', () => {
-      if (!['#quorum', '#lex-forum'].includes(location.hash)) return;
-      const params = new URLSearchParams(location.search);
-      const entryId = params.get('quorumEntry');
-      if (entryId) openEntry(entryId);
-      else setView('home');
+    document.addEventListener('click', (event) => {
+      $$('.quorum-affirm-control').forEach((control) => {
+        if (control.contains(event.target)) return;
+        const menu = $('.quorum-affirm-menu', control);
+        const trigger = $('.quorum-affirm-trigger', control);
+        if (menu) menu.hidden = true;
+        trigger?.setAttribute('aria-expanded', 'false');
+      });
     });
   }
 
@@ -2302,6 +2478,7 @@
     state.initialized = true;
     populateControls();
     bind();
+    state.draftOwnerId = currentUserId() || null;
     restoreDraft();
     const params = new URLSearchParams(location.search);
     state.directEntryId = params.get('quorumEntry');
@@ -2320,6 +2497,8 @@
 
   const publicApi = Object.freeze({
     open,
+    restoreRoute,
+    deactivate,
     refresh: () => state.view === 'search' ? searchQuorum(state.filters.query) : setView(state.view),
     state: () => ({
       authenticated: state.authenticated,

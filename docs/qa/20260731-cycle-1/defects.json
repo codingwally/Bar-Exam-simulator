@@ -164,7 +164,7 @@
     {
       "id": "QA-20260731-007",
       "severity": "medium",
-      "status": "local-fix-verified",
+      "status": "production-verified",
       "classification": "deterministic accessibility state defect",
       "surface": "Quorum Comment toggle",
       "reproduction": {
@@ -187,7 +187,7 @@
         "ariaExpandedSynchronized": true,
         "visualDesignChanged": false
       },
-      "productionStatus": "pending deployment and five-trial live verification"
+      "productionStatus": "deployed in bbdd931660c426b6b3c53066e25fcf70e132ba62; 5/5 desktop and 5/5 narrow-viewport live trials passed, with zero browser diagnostic log entries"
     }
   ]
 }

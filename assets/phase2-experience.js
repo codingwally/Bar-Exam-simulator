@@ -228,8 +228,24 @@
         ) || overlay.querySelector('[tabindex="-1"]');
         target?.focus();
       });
-    } else if (state.previousFocus?.isConnected) {
-      requestAnimationFrame(() => state.previousFocus.focus());
+    } else {
+      const previousFocus = state.previousFocus;
+      requestAnimationFrame(() => {
+        const visibleTarget = (element) => {
+          if (!element?.isConnected || element.hidden || element.disabled) return false;
+          if (typeof element.getClientRects === 'function') {
+            return element.getClientRects().length > 0;
+          }
+          return element.offsetParent !== null;
+        };
+        const fallbackTargets = [
+          previousFocus,
+          document.getElementById('site-menu-toggle'),
+          document.querySelector('.spa-tab.active'),
+          document.getElementById('btn-signin'),
+        ];
+        fallbackTargets.find(visibleTarget)?.focus();
+      });
     }
   }
 
@@ -458,6 +474,7 @@
     hideNativeView();
     const allowGuest = options.allowGuest === true && !completed;
     const allowDismiss = options.allowDismiss === true;
+    const routeBound = options.routeBound === true;
     const overlay = document.getElementById('dd2-entry-overlay');
     const title = document.getElementById('dd2-entry-title');
     const copy = document.getElementById('dd2-entry-copy');
@@ -471,7 +488,10 @@
       : 'Your chamber for serious Bar preparation.');
     if (guestButton) guestButton.hidden = !allowGuest;
     if (closeButton) closeButton.hidden = !allowDismiss;
-    if (overlay) overlay.dataset.dismissible = allowDismiss ? 'true' : 'false';
+    if (overlay) {
+      overlay.dataset.dismissible = allowDismiss ? 'true' : 'false';
+      overlay.dataset.routeBound = routeBound ? 'true' : 'false';
+    }
     setStatus('dd2-auth-status', options.message || '');
     setOverlay(true, 'dd2-entry-overlay');
   }
@@ -479,9 +499,26 @@
   function closeEntry() {
     const overlay = document.getElementById('dd2-entry-overlay');
     const closeButton = document.getElementById('dd2-entry-close');
-    if (overlay) overlay.dataset.dismissible = 'false';
+    if (overlay) {
+      overlay.dataset.dismissible = 'false';
+      overlay.dataset.routeBound = 'false';
+    }
     if (closeButton) closeButton.hidden = true;
     setOverlay(false, 'dd2-entry-overlay');
+  }
+
+  function syncEntryWithHistoryRoute() {
+    const protectedRoute = ['subject-matter', 'bar-feels']
+      .includes(location.hash.replace(/^#/, ''));
+    if (protectedRoute && !state.session?.access_token) {
+      showEntry({ routeBound: true });
+      return;
+    }
+    const overlay = document.getElementById('dd2-entry-overlay');
+    if (overlay?.dataset.routeBound === 'true'
+        && overlay.classList.contains('is-open')) {
+      closeEntry();
+    }
   }
 
   async function signInWithGoogle() {
@@ -1460,6 +1497,7 @@
       }
     });
     global.addEventListener('popstate', () => {
+      syncEntryWithHistoryRoute();
       const hashView = location.hash.replace(/^#/, '');
       if (nativeDefinition(hashView)) renderNativeView(hashView, { push: false });
       else hideNativeView();

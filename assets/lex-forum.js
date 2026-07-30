@@ -191,6 +191,7 @@
     'unanswered',
     'circles',
     'notifications',
+    'my-posts',
     'profile',
     'circle',
     'search',
@@ -1401,6 +1402,9 @@
     } else if (view === 'notifications') {
       setViewLabels('Notifications', 'Activity relevant to you');
       await renderNotificationsView();
+    } else if (view === 'my-posts') {
+      setViewLabels('My Posts', 'Your Quorum contributions');
+      await renderProfileView();
     } else if (view === 'profile') {
       setViewLabels('Quorum profile', 'Your public academic identity');
       await renderProfileView();
@@ -2414,7 +2418,7 @@
       if (state.view === 'entry') setView('home');
       else if (state.view === 'circles') renderCirclesView();
       else if (state.view === 'notifications') renderNotificationsView();
-      else if (state.view === 'profile') renderProfileView();
+      else if (['my-posts', 'profile'].includes(state.view)) renderProfileView();
       else if (state.view === 'search') searchQuorum(state.filters.query);
       else refreshFeed();
       loadSidebar();

@@ -1079,6 +1079,10 @@
   font-size: 17px;
 }
 
+.quorum-practice-card .lex-kicker {
+  color: #f0cf76;
+}
+
 .quorum-practice-card p {
   margin: 0 0 12px;
   color: #cbd5e1;
@@ -1327,9 +1331,21 @@
   background: #061a35;
 }
 
-#page-community .lex-page-head .eyebrow,
-#page-community .lex-title-row {
+#page-community .lex-page-head .eyebrow {
   display: none;
+}
+
+#page-community .lex-title-row {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 #page-community .quorum-motto {
@@ -1453,7 +1469,7 @@
 
 #page-community .lex-composer-heading h3 {
   margin: 7px 0 3px;
-  color: #6c7890;
+  color: #64748b;
   font: 500 17px/1.45 Inter, sans-serif;
 }
 
@@ -1547,7 +1563,7 @@
 #page-community #quorum-image-status {
   max-width: 210px;
   overflow: hidden;
-  color: #778296;
+  color: #5b687b;
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1592,7 +1608,7 @@
 }
 
 #page-community .lex-status {
-  color: #64748b;
+  color: #5b687b;
 }
 
 #page-community .lex-feed {
@@ -1627,7 +1643,7 @@
 
 #page-community .lex-author-copy span,
 #page-community .lex-post-time {
-  color: #6c7890;
+  color: #64748b;
   font-size: 10px;
 }
 
@@ -1638,7 +1654,7 @@
 #page-community .quorum-chip {
   padding: 2px 7px;
   border: 0;
-  color: #7b8596;
+  color: #55657a;
   background: #f4f5f7;
   font-size: 9px;
 }
@@ -1685,12 +1701,21 @@
 }
 
 #page-community .quorum-affirm-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  min-height: 24px;
   padding: 3px 5px;
   border: 0;
   color: #68778d;
   background: transparent;
   font-size: 10px;
   cursor: pointer;
+}
+
+#page-community .quorum-affirm-count:focus-visible {
+  outline: 3px solid rgba(197, 160, 89, 0.55);
+  outline-offset: 2px;
 }
 
 #page-community .quorum-affirm-menu {
@@ -1850,7 +1875,7 @@
 }
 
 #page-community .quorum-ranked-item small {
-  color: #738096;
+  color: #59697f;
   font-size: 10px;
 }
 
@@ -1877,7 +1902,7 @@
 }
 
 #page-community .quorum-question-item small {
-  color: #718096;
+  color: #59697f;
   font-size: 10px;
   font-weight: 500;
 }

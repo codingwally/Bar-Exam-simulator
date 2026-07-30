@@ -1,0 +1,348 @@
+{
+  "benchmarkVersion": "dd-gemini-alac-20260731-v1",
+  "status": "blind-human-expectations-complete-provider-run-blocked",
+  "rubric": "Current 0.0–5.0 ALAC rubric with deterministic answer-quality caps",
+  "method": {
+    "blindExpectedScoresCreatedBeforeProviderRun": true,
+    "geminiOutputViewed": false,
+    "providerHarness": "authorized non-credit-consuming harness only",
+    "providerBlocker": "No secure non-credit Gemini credential is available to the repository process. No real member grading credit will be consumed.",
+    "authoritativeContent": "content/question-bank/website-upload.json",
+    "primarySourcePolicy": "Every fixture is anchored to its stored Supreme Court E-Library URL; substantive primary-source body verification remains pending."
+  },
+  "questions": [
+    {
+      "questionId": "POLI-2024-Q01",
+      "subject": "Political and Public International Law",
+      "legalBasis": "1987 Constitution, Article VI, Section 21; Ong v. Senate, G.R. No. 257401, March 28, 2023",
+      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69108"
+    },
+    {
+      "questionId": "LAB-001",
+      "subject": "Labor Law",
+      "legalBasis": "Labor Code, Article 294; Bartolome v. Toyota Quezon Avenue, Inc.",
+      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69528"
+    },
+    {
+      "questionId": "CIV-2024-Q01",
+      "subject": "Civil Law",
+      "legalBasis": "Civil Code, Articles 1169, 1170, and 1174; Virginia Real v. Belo",
+      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/40783"
+    },
+    {
+      "questionId": "COMM-2023-Q16",
+      "subject": "Taxation Law",
+      "legalBasis": "1987 Constitution, Article VI, Section 28(4); John Hay Peoples Alternative Coalition v. Lim",
+      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/47416"
+    },
+    {
+      "questionId": "COMM-2022-Q01",
+      "subject": "Commercial Law",
+      "legalBasis": "Insurance Code, Sections 13, 15, and 95; Malayan Insurance Co., Inc. v. Philippines First Insurance Co., Inc.",
+      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/55013"
+    },
+    {
+      "questionId": "CRIM-2024-Q04",
+      "subject": "Criminal Law",
+      "legalBasis": "Revised Penal Code, Article 4(2); Republic Act No. 10175, Section 6; Laurel v. Abrogar",
+      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/48437"
+    },
+    {
+      "questionId": "REM-2024-Q05",
+      "subject": "Remedial Law",
+      "legalBasis": "Family Code, Article 151; Rules of Court, Rule 75; Moreno v. Kahn",
+      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/64457"
+    },
+    {
+      "questionId": "REM-2024-Q18",
+      "subject": "Legal and Judicial Ethics",
+      "legalBasis": "Code of Professional Responsibility and Accountability, Canons II and IV; Rebarter v. Villa",
+      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/23/70033"
+    }
+  ],
+  "samples": [
+    {
+      "sampleId": "POLI-BLANK",
+      "questionId": "POLI-2024-Q01",
+      "qualityBand": "blank-or-non-responsive",
+      "answerTemplate": "",
+      "expectedScore": 0,
+      "expectedAlac": [],
+      "expectedDefects": ["No answer", "No legal basis", "No application", "No conclusion"],
+      "expectedRationale": "A real examiner has no written legal analysis to credit.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "POLI-WRONG",
+      "questionId": "POLI-2024-Q01",
+      "qualityBand": "confident-but-materially-wrong",
+      "answerTemplate": "Give the opposite conclusion and assert that legislative contempt is unrestricted, without due-process analysis.",
+      "expectedScore": 0.5,
+      "expectedAlac": ["Direct answer only"],
+      "expectedDefects": ["Wrong conclusion", "Wrong constitutional rule", "No fact-specific application"],
+      "expectedRationale": "The position and governing rule materially conflict with the stored answer and Article VI, Section 21.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "POLI-STRONG",
+      "questionId": "POLI-2024-Q01",
+      "qualityBand": "strong-alac",
+      "answerTemplate": "stored_suggested_answer_verbatim",
+      "expectedScore": 4.6,
+      "expectedAlac": ["Answer", "Legal Basis", "Application", "Conclusion"],
+      "expectedDefects": [],
+      "expectedRationale": "The stored answer supplies the correct conclusion, constitutional basis, specific application, and reaffirming conclusion.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "LAB-BLANK",
+      "questionId": "LAB-001",
+      "qualityBand": "blank-or-non-responsive",
+      "answerTemplate": "",
+      "expectedScore": 0,
+      "expectedAlac": [],
+      "expectedDefects": ["No answer", "No legal basis", "No application", "No conclusion"],
+      "expectedRationale": "A real examiner has no written legal analysis to credit.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "LAB-WRONG-RULE",
+      "questionId": "LAB-001",
+      "qualityBand": "issue-spotted-wrong-rule",
+      "answerTemplate": "Reach the constructive-dismissal issue but rely only on an unrelated overtime-pay rule.",
+      "expectedScore": 1.2,
+      "expectedAlac": ["Answer", "Issue recognition"],
+      "expectedDefects": ["Materially wrong legal basis", "Application does not connect the hostile treatment to constructive dismissal"],
+      "expectedRationale": "Issue recognition earns limited credit, but the rule and resulting analysis do not answer the legal problem.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "LAB-EXCELLENT",
+      "questionId": "LAB-001",
+      "qualityBand": "excellent",
+      "answerTemplate": "stored_suggested_answer_verbatim_with_accurate_primary_source_reference",
+      "expectedScore": 4.8,
+      "expectedAlac": ["Answer", "Specific legal basis", "Fact-by-fact application", "Conclusion"],
+      "expectedDefects": [],
+      "expectedRationale": "The answer is examiner-ready and uses the stored doctrine and authority without changing the legal substance.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "CIV-BLANK",
+      "questionId": "CIV-2024-Q01",
+      "qualityBand": "blank-or-non-responsive",
+      "answerTemplate": "",
+      "expectedScore": 0,
+      "expectedAlac": [],
+      "expectedDefects": ["No answer", "No legal basis", "No application", "No conclusion"],
+      "expectedRationale": "A real examiner has no written legal analysis to credit.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "CIV-WEAK-APPLICATION",
+      "questionId": "CIV-2024-Q01",
+      "qualityBand": "correct-rule-weak-application",
+      "answerTemplate": "State the stored conclusion and Articles 1169, 1170, and 1174, then say only that the law applies without connecting the facts.",
+      "expectedScore": 2.5,
+      "expectedAlac": ["Answer", "Legal Basis"],
+      "expectedDefects": ["Generic application", "Material facts not analyzed", "Conclusion not independently reasoned"],
+      "expectedRationale": "The correct rule earns credit, but the response does not show why the facts establish delay, negligence, or defeat a fortuitous-event defense.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "CIV-STRONG",
+      "questionId": "CIV-2024-Q01",
+      "qualityBand": "strong-alac",
+      "answerTemplate": "stored_suggested_answer_verbatim",
+      "expectedScore": 4.6,
+      "expectedAlac": ["Answer", "Legal Basis", "Application", "Conclusion"],
+      "expectedDefects": [],
+      "expectedRationale": "The stored answer applies the cited Civil Code provisions to the specific performance facts and reaches the supported result.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "TAX-BLANK",
+      "questionId": "COMM-2023-Q16",
+      "qualityBand": "blank-or-non-responsive",
+      "answerTemplate": "",
+      "expectedScore": 0,
+      "expectedAlac": [],
+      "expectedDefects": ["No answer", "No legal basis", "No application", "No conclusion"],
+      "expectedRationale": "A real examiner has no written legal analysis to credit.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "TAX-PARTIAL",
+      "questionId": "COMM-2023-Q16",
+      "qualityBand": "partially-correct",
+      "answerTemplate": "State the correct result and Congress's constitutional role, but omit the majority-concurrence requirement and specific application to the proclamation.",
+      "expectedScore": 3.2,
+      "expectedAlac": ["Answer", "General legal basis", "Partial application"],
+      "expectedDefects": ["Constitutional standard incomplete", "Application omits why the proclamation is insufficient"],
+      "expectedRationale": "The core allocation of taxing power is correct, but a material constitutional detail and fact-specific analysis are missing.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "TAX-EXCELLENT",
+      "questionId": "COMM-2023-Q16",
+      "qualityBand": "excellent",
+      "answerTemplate": "stored_suggested_answer_verbatim_with_accurate_primary_source_reference",
+      "expectedScore": 4.8,
+      "expectedAlac": ["Answer", "Specific constitutional basis", "Fact-specific application", "Conclusion"],
+      "expectedDefects": [],
+      "expectedRationale": "The answer accurately states the constitutional requirement and explains why executive action cannot substitute for a statutory grant.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "COMM-BLANK",
+      "questionId": "COMM-2022-Q01",
+      "qualityBand": "blank-or-non-responsive",
+      "answerTemplate": "",
+      "expectedScore": 0,
+      "expectedAlac": [],
+      "expectedDefects": ["No answer", "No legal basis", "No application", "No conclusion"],
+      "expectedRationale": "A real examiner has no written legal analysis to credit.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "COMM-FALSE-CITATION",
+      "questionId": "COMM-2022-Q01",
+      "qualityBand": "citation-rich-with-false-authority",
+      "answerTemplate": "Use the stored conclusion and rule but attribute the rule to an explicitly test-only nonexistent case instead of the stored authority.",
+      "expectedScore": 2.7,
+      "expectedAlac": ["Answer", "Substantive rule", "Some application", "Conclusion"],
+      "expectedDefects": ["Affirmatively false authority", "Citation must be rejected and flagged"],
+      "expectedRationale": "Substantive analysis may earn partial credit, but an invented authority is a material legal-reliability defect and must never improve the score.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "COMM-STRONG",
+      "questionId": "COMM-2022-Q01",
+      "qualityBand": "strong-alac",
+      "answerTemplate": "stored_suggested_answer_verbatim",
+      "expectedScore": 4.6,
+      "expectedAlac": ["Answer", "Legal Basis", "Application", "Conclusion"],
+      "expectedDefects": [],
+      "expectedRationale": "The stored response identifies the missing identity of insured interest and applies the statutory double-insurance elements.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "CRIM-BLANK",
+      "questionId": "CRIM-2024-Q04",
+      "qualityBand": "blank-or-non-responsive",
+      "answerTemplate": "",
+      "expectedScore": 0,
+      "expectedAlac": [],
+      "expectedDefects": ["No answer", "No legal basis", "No application", "No conclusion"],
+      "expectedRationale": "A real examiner has no written legal analysis to credit.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "CRIM-FAULTY-REASONING",
+      "questionId": "CRIM-2024-Q04",
+      "qualityBand": "correct-conclusion-faulty-reasoning",
+      "answerTemplate": "State the stored conclusion but reason only that liability exists because the accused had bad intent, omitting impossible-crime elements and cybercrime law.",
+      "expectedScore": 1.5,
+      "expectedAlac": ["Correct conclusion"],
+      "expectedDefects": ["No correct legal basis", "No impossible-crime element analysis", "Faulty intent-only reasoning"],
+      "expectedRationale": "A correct conclusion alone cannot receive high credit when the governing doctrine and application are absent.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "CRIM-EXCELLENT",
+      "questionId": "CRIM-2024-Q04",
+      "qualityBand": "excellent",
+      "answerTemplate": "stored_suggested_answer_verbatim_with_accurate_primary_source_reference",
+      "expectedScore": 4.8,
+      "expectedAlac": ["Answer", "Specific legal basis", "Element-by-element application", "Conclusion"],
+      "expectedDefects": [],
+      "expectedRationale": "The response integrates Article 4(2), the cybercrime provision, and the precise factual impossibility.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "REM-BLANK",
+      "questionId": "REM-2024-Q05",
+      "qualityBand": "blank-or-non-responsive",
+      "answerTemplate": "",
+      "expectedScore": 0,
+      "expectedAlac": [],
+      "expectedDefects": ["No answer", "No legal basis", "No application", "No conclusion"],
+      "expectedRationale": "A real examiner has no written legal analysis to credit.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "REM-DIFFERENT-WORDING",
+      "questionId": "REM-2024-Q05",
+      "qualityBand": "legally-sound-different-wording",
+      "answerTemplate": "Paraphrase the stored answer without copying its phrases while retaining Article 151, non-compromisability, probate application, and conclusion.",
+      "expectedScore": 4.4,
+      "expectedAlac": ["Answer", "Equivalent legal basis", "Fact-specific application", "Conclusion"],
+      "expectedDefects": [],
+      "expectedRationale": "A sound paraphrase should receive substantially the same credit as the stored answer; lexical similarity is not the grading standard.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "REM-STRONG",
+      "questionId": "REM-2024-Q05",
+      "qualityBand": "strong-alac",
+      "answerTemplate": "stored_suggested_answer_verbatim",
+      "expectedScore": 4.6,
+      "expectedAlac": ["Answer", "Legal Basis", "Application", "Conclusion"],
+      "expectedDefects": [],
+      "expectedRationale": "The stored answer explains the exception to earnest efforts and applies it to a probate matter.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "ETHICS-BLANK",
+      "questionId": "REM-2024-Q18",
+      "qualityBand": "blank-or-non-responsive",
+      "answerTemplate": "",
+      "expectedScore": 0,
+      "expectedAlac": [],
+      "expectedDefects": ["No answer", "No legal basis", "No application", "No conclusion"],
+      "expectedRationale": "A real examiner has no written legal analysis to credit.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "ETHICS-BARE-CONCLUSION",
+      "questionId": "REM-2024-Q18",
+      "qualityBand": "correct-conclusion-only",
+      "answerTemplate": "No.",
+      "expectedScore": 1,
+      "expectedAlac": ["Answer"],
+      "expectedDefects": ["No legal basis", "No application", "No developed conclusion"],
+      "expectedRationale": "The deterministic cap and real-examiner standard limit a bare yes/no answer to 1.0 even when directionally correct.",
+      "geminiScore": null
+    },
+    {
+      "sampleId": "ETHICS-STRONG",
+      "questionId": "REM-2024-Q18",
+      "qualityBand": "strong-alac",
+      "answerTemplate": "stored_suggested_answer_verbatim",
+      "expectedScore": 4.6,
+      "expectedAlac": ["Answer", "Legal Basis", "Application", "Conclusion"],
+      "expectedDefects": [],
+      "expectedRationale": "The stored answer states the limits of delegation, the lawyer's supervisory duty, and applies them to signing and filing the brief.",
+      "geminiScore": null
+    }
+  ],
+  "metrics": {
+    "sampleSize": 24,
+    "subjects": 8,
+    "samplesPerSubject": 3,
+    "providerSamplesCompleted": 0,
+    "meanAbsoluteError": null,
+    "medianAbsoluteError": null,
+    "agreementWithin0_5": null,
+    "agreementWithin1_0": null,
+    "alacIssueDetectionAgreement": null,
+    "legalBasisAccuracy": null,
+    "citationValidity": null,
+    "falseHighRate": null,
+    "falseLowRate": null,
+    "repeatedSampleVariance": null,
+    "parsingFailures": null,
+    "requestFailures": null,
+    "latencyMs": null
+  }
+}

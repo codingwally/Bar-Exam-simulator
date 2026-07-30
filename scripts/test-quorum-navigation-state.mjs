@@ -1,0 +1,133 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFile } from 'node:fs/promises';
+
+const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const source = await readFile(new URL('../assets/lex-forum.js', import.meta.url), 'utf8');
+const styles = await readFile(new URL('../assets/lex-forum.css', import.meta.url), 'utf8');
+
+function relativeLuminance(hex) {
+  const channels = [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16) / 255);
+  const linear = channels.map((value) => (
+    value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  ));
+  return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+}
+
+function contrastRatio(foreground, background) {
+  const first = relativeLuminance(foreground);
+  const second = relativeLuminance(background);
+  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+}
+
+assert.match(
+  html,
+  /data-quorum-view="my-posts">\s*My Posts/,
+  'My Posts must have a distinct route/view identity.',
+);
+assert.match(
+  html,
+  /data-quorum-view="profile">\s*Profile/,
+  'Profile must retain its own route/view identity.',
+);
+assert.match(
+  html,
+  /assets\/lex-forum\.css\?v=qa-cycle-20260731-1/,
+  'The Quorum accessibility fix must ship behind a fresh stylesheet cache key.',
+);
+assert.match(
+  html,
+  /assets\/lex-forum\.js\?v=qa-cycle-20260731-1/,
+  'The Quorum navigation fix must ship behind a fresh script cache key.',
+);
+assert.match(
+  source,
+  /const routableViews = new Set\(\[[\s\S]*?'my-posts'/,
+  'The My Posts view must survive Back, Forward, refresh, and deep links.',
+);
+assert.match(
+  source,
+  /else if \(view === 'my-posts'\) \{[\s\S]*?await renderProfileView\(\);/,
+  'The My Posts view must render the member contribution surface.',
+);
+
+const syncSource = source.match(
+  /function syncViewButtons\(\) \{[\s\S]*?\n  \}/,
+)?.[0];
+assert.ok(syncSource, 'syncViewButtons must remain available.');
+
+const controls = ['home', 'my-posts', 'profile'].map((view) => ({
+  dataset: { quorumView: view },
+  classes: new Set(),
+  attributes: new Map(),
+  classList: {
+    toggle(name, active) {
+      if (active) this.owner.classes.add(name);
+      else this.owner.classes.delete(name);
+    },
+    owner: null,
+  },
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  },
+  removeAttribute(name) {
+    this.attributes.delete(name);
+  },
+}));
+for (const control of controls) control.classList.owner = control;
+
+const context = vm.createContext({
+  state: { view: 'my-posts' },
+  $$: () => controls,
+});
+vm.runInContext(`${syncSource}\nsyncViewButtons();`, context);
+
+assert.deepEqual(
+  controls.filter((control) => control.classes.has('is-active')).map((control) => control.dataset.quorumView),
+  ['my-posts'],
+  'Only My Posts may be visually active on the My Posts route.',
+);
+assert.equal(controls[1].attributes.get('aria-current'), 'page');
+assert.equal(controls[2].attributes.has('aria-current'), false);
+
+assert.match(
+  styles,
+  /#page-community \.quorum-affirm-count \{[\s\S]*?min-width:\s*24px;[\s\S]*?min-height:\s*24px;/,
+  'The affirmation-count control must retain the WCAG 2.2 minimum target size.',
+);
+assert.match(
+  styles,
+  /#page-community \.quorum-affirm-count:focus-visible \{[\s\S]*?outline:/,
+  'The affirmation-count control must expose a visible keyboard focus indicator.',
+);
+assert.match(
+  styles,
+  /#page-community \.lex-title-row \{[\s\S]*?position:\s*absolute;[\s\S]*?clip-path:\s*inset\(50%\);/,
+  'The Quorum title must remain available to assistive technology without changing the visual design.',
+);
+assert.doesNotMatch(
+  styles,
+  /#page-community \.lex-page-head \.eyebrow,\s*#page-community \.lex-title-row\s*\{\s*display:\s*none;/,
+  'The Quorum title must not be removed from the accessibility tree.',
+);
+assert.match(
+  styles,
+  /#page-community \.lex-status \{\s*color:\s*#5b687b;/,
+  'Quorum feed-status text must retain its accessible contrast.',
+);
+assert.match(
+  styles,
+  /#page-community \.quorum-chip \{[\s\S]*?color:\s*#55657a;[\s\S]*?background:\s*#f4f5f7;/,
+  'Quorum metadata chips must retain their accessible contrast pair.',
+);
+assert.match(
+  styles,
+  /\.quorum-practice-card \.lex-kicker \{\s*color:\s*#f0cf76;/,
+  'The Mock Bar kicker must remain readable on its dark card.',
+);
+assert.ok(contrastRatio('#5b687b', '#f7f7f5') >= 4.5);
+assert.ok(contrastRatio('#55657a', '#f4f5f7') >= 4.5);
+assert.ok(contrastRatio('#59697f', '#ffffff') >= 4.5);
+assert.ok(contrastRatio('#f0cf76', '#071a33') >= 4.5);
+
+console.log('Quorum navigation and focused accessibility regressions passed.');

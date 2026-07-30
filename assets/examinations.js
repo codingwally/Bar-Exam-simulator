@@ -126,7 +126,7 @@
   async function api(path, body = {}) {
     const phase4 = global.DueDiligencePhase4;
     if (!phase4?.getSession?.()?.access_token) {
-      phase4?.openSignIn?.();
+      phase4?.openSignIn?.({ routeBound: true });
       const error = new Error('Sign in with Google to use the examination beta.');
       error.code = 'AUTHENTICATION_REQUIRED';
       throw error;

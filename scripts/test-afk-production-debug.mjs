@@ -78,6 +78,18 @@ assert.match(
   quorumStyles,
   /#page-community \.lex-post-card\s*\{[\s\S]*?min-width:\s*0;/,
 );
+assert.match(
+  quorumStyles,
+  /#page-community \.quorum-side-nav\s*\{[\s\S]*?width:\s*max-content;[\s\S]*?overflow:\s*visible;/,
+);
+assert.match(
+  quorumStyles,
+  /#page-community \.quorum-side-link\s*\{[\s\S]*?width:\s*auto;[\s\S]*?min-width:\s*132px;/,
+);
+assert.match(
+  quorumStyles,
+  /#page-community #lex-post-counter\s*\{\s*grid-column:\s*1\s*\/\s*-1;/,
+);
 for (const retiredCopy of [
   'Search entries',
   'Sort entries',

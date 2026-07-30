@@ -1928,7 +1928,17 @@
 
   #page-community .quorum-side-nav {
     display: flex;
-    min-width: max-content;
+    width: max-content;
+    min-width: 100%;
+    overflow: visible;
+  }
+
+  #page-community .quorum-side-link {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: 132px;
+    justify-content: center;
+    text-align: center;
   }
 
   #page-community .quorum-side-link,
@@ -1978,6 +1988,10 @@
     min-width: 0;
     padding-right: 8px;
     padding-left: 8px;
+  }
+
+  #page-community #lex-post-counter {
+    grid-column: 1 / -1;
   }
 
   #page-community .lex-post-actions {

@@ -158,6 +158,7 @@ export function normalizeAccessSnapshot(value) {
         id: clean(value.subscription.id),
         planCode: clean(value.subscription.planCode),
         status: clean(value.subscription.status),
+        source: clean(value.subscription.source),
         startsAt: value.subscription.startsAt || null,
         expiresAt: value.subscription.expiresAt || null,
       }

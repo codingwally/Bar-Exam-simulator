@@ -437,6 +437,7 @@ async function examinationRpc(env, functionName, body) {
     'examination_store_ai_assessment',
     'examination_fail_ai_job',
     'examination_record_delivery',
+    'examination_authorize_access',
   ]);
   if (!allowedFunctions.has(functionName)) {
     throw new ExaminationValidationError(
@@ -2084,6 +2085,16 @@ async function processExaminationAiJob(env, user, gradingPackage) {
   }
 }
 
+async function authorizeExaminationAccess(env, userId, options = {}) {
+  return examinationRpc(env, 'examination_authorize_access', {
+    p_user_id: userId,
+    p_track: options.track || null,
+    p_version_id: options.versionId || null,
+    p_attempt_id: options.attemptId || null,
+    p_allow_historical: options.allowHistorical === true,
+  });
+}
+
 async function handleExaminationQuery(request, env, origin, allowedOrigin) {
   await enforceExaminationRateLimit(request, env);
   const raw = await parseBoundedJson(request, 24_000);
@@ -2091,6 +2102,25 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
   const user = query.operation === 'assignment'
     ? null
     : await requireAuthenticatedUser(request, env);
+  if (user) {
+    if (query.operation === 'catalog') {
+      await authorizeExaminationAccess(env, user.id, { track: query.track });
+    } else if (query.operation === 'setup') {
+      await authorizeExaminationAccess(env, user.id, { versionId: query.versionId });
+    } else if (query.operation === 'resume') {
+      await authorizeExaminationAccess(env, user.id, {
+        attemptId: query.attemptId,
+        versionId: query.versionId,
+      });
+    } else if (query.operation === 'verdict') {
+      await authorizeExaminationAccess(env, user.id, {
+        attemptId: query.attemptId,
+        allowHistorical: true,
+      });
+    } else if (query.operation === 'history') {
+      await authorizeExaminationAccess(env, user.id, { allowHistorical: true });
+    }
+  }
   const result = await examinationRpc(env, 'examination_query', {
     p_user_id: user?.id || null,
     p_operation: query.operation,
@@ -2111,6 +2141,25 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
   const user = tokenOperations.has(command.operation)
     ? null
     : await requireAuthenticatedUser(request, env);
+  if (user) {
+    if (command.operation === 'start_attempt') {
+      await authorizeExaminationAccess(env, user.id, { versionId: command.versionId });
+    } else if (command.operation === 'confirm_upload') {
+      await authorizeExaminationAccess(env, user.id, { track: 'bar_feels' });
+    } else if (command.operation === 'delete_upload') {
+      await authorizeExaminationAccess(env, user.id, {
+        track: 'bar_feels',
+        allowHistorical: true,
+      });
+    } else if (command.attemptId) {
+      await authorizeExaminationAccess(env, user.id, {
+        attemptId: command.attemptId,
+        allowHistorical: ['request_ai_grading', 'release_model_answers'].includes(
+          command.operation,
+        ),
+      });
+    }
+  }
   const result = await examinationRpc(env, 'examination_command', {
     p_user_id: user?.id || null,
     p_operation: command.operation,
@@ -2176,6 +2225,7 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
 async function handleExaminationUpload(request, env, origin, allowedOrigin) {
   await enforceExaminationRateLimit(request, env, true);
   const user = await requireAuthenticatedUser(request, env);
+  await authorizeExaminationAccess(env, user.id, { track: 'bar_feels' });
   const raw = await parseBoundedJson(request, EXAMINATION_LIMITS.maximumJsonBytes);
   const upload = normalizeUploadRequest(raw);
   const contentHash = await sha256Hex(upload.bytes);
@@ -2238,7 +2288,14 @@ async function handleExaminationAdmin(request, env, origin, allowedOrigin) {
 async function handleAccess(request, env, origin, allowedOrigin) {
   await enforceGuestStatusRateLimit(request, env);
   const user = await requireAuthenticatedUser(request, env);
-  const access = await phase4AccessForUser(env, user.id);
+  const [access, subscriptionState] = await Promise.all([
+    phase4AccessForUser(env, user.id),
+    phase4Rpc(env, 'phase4_user_subscription_status', { p_user_id: user.id }),
+  ]);
+  access.subscriptionState = subscriptionState || {
+    subscription: access.subscription,
+    pendingPayment: null,
+  };
   return jsonResponse({ ok: true, access }, 200, origin, allowedOrigin);
 }
 
@@ -2860,13 +2917,21 @@ async function handlePhase4AdminData(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
   const query = normalizePhase4AdminRequest(await parseBoundedJson(request, 8_000));
-  const result = await protectedSupabaseRpc(env, 'phase4_admin_operational_data', {
-    p_actor_user_id: user.id,
-    p_section: query.section,
-    p_search: query.search,
-    p_limit: query.limit,
-    p_offset: query.offset,
-  });
+  const result = query.section === 'access'
+    ? await protectedSupabaseRpc(env, 'phase4_admin_premium_access', {
+      p_actor_user_id: user.id,
+      p_search: query.search,
+      p_status: query.premiumStatus,
+      p_limit: query.limit,
+      p_offset: query.offset,
+    })
+    : await protectedSupabaseRpc(env, 'phase4_admin_operational_data', {
+      p_actor_user_id: user.id,
+      p_section: query.section,
+      p_search: query.search,
+      p_limit: query.limit,
+      p_offset: query.offset,
+    });
   return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
 }
 
@@ -2875,14 +2940,31 @@ async function handlePhase4AdminAction(request, env, origin, allowedOrigin) {
   const user = await requireAdministrator(request, env);
   const action = normalizePhase4AdminAction(await parseBoundedJson(request, 16_000));
   let result;
-  if (action.action === 'subscription_audit_view') {
+  if (action.action === 'payment_review') {
+    result = await protectedSupabaseRpc(env, 'phase4_admin_review_payment', {
+      p_actor_user_id: user.id,
+      p_payment_request_id: action.targetId,
+      p_payload: action.payload,
+      p_reason: action.reason,
+      p_request_key: action.requestKey,
+    });
+  } else if (action.action === 'subscription_audit_view') {
     result = await protectedSupabaseRpc(env, 'phase4_admin_subscription_audit', {
       p_actor_user_id: user.id,
       p_target_user_id: action.targetId,
       p_reason: action.reason,
       p_request_key: action.requestKey,
     });
-  } else if (['subscription_change', 'free_beta_change', 'discount_assign'].includes(action.action)) {
+  } else if (action.action === 'subscription_change') {
+    result = await protectedSupabaseRpc(env, 'phase4_admin_manage_subscription', {
+      p_actor_user_id: user.id,
+      p_target_user_id: action.targetId,
+      p_subscription_id: action.payload.subscriptionId || null,
+      p_payload: action.payload,
+      p_reason: action.reason,
+      p_request_key: action.requestKey,
+    });
+  } else if (['free_beta_change', 'discount_assign'].includes(action.action)) {
     result = await protectedSupabaseRpc(env, 'phase4_admin_manage_access', {
       p_actor_user_id: user.id,
       p_action: action.action,

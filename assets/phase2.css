@@ -374,6 +374,10 @@
   box-shadow: -24px 0 72px rgba(2, 12, 35, .24);
 }
 
+.dd2-native-card .dd2-view-kicker {
+  color: #87651f;
+}
+
 .dd2-native-header {
   display: flex;
   align-items: flex-start;

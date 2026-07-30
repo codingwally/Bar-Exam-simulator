@@ -360,6 +360,7 @@ export function normalizeExaminationAdmin(value) {
     normalized.assessmentKind = [
       'midterm',
       'final',
+      'quiz',
       'curated',
       'uploaded',
       'system_test',
@@ -724,6 +725,8 @@ export function examinationDatabaseError(error) {
   const message = String(error?.message || '');
   const known = [
     'EXAM_BETA_ACCESS_REQUIRED',
+    'EXAM_ACCESS_REQUIRED',
+    'EXAM_PREMIUM_REQUIRED',
     'EXAM_NOT_AVAILABLE',
     'EXAM_VERSION_NOT_FOUND',
     'EXAM_VERSION_IMMUTABLE',
@@ -749,6 +752,8 @@ export function examinationDatabaseError(error) {
   if (!code) return error;
   const publicMessages = {
     EXAM_BETA_ACCESS_REQUIRED: 'This examination beta is limited to authorized test accounts.',
+    EXAM_ACCESS_REQUIRED: 'Your current access does not include this examination.',
+    EXAM_PREMIUM_REQUIRED: 'Bar Feels requires an active Premium plan.',
     EXAM_NOT_AVAILABLE: 'This examination is not currently available.',
     EXAM_VERSION_NOT_FOUND: 'The examination version could not be found.',
     EXAM_VERSION_IMMUTABLE: 'A published examination version cannot be changed.',
@@ -770,7 +775,12 @@ export function examinationDatabaseError(error) {
     EXAM_GRADING_JOB_CLOSED: 'The AI grading job is already closed.',
     EXAM_ACTIVE_ATTEMPTS_EXIST: 'This examination still has active attempts and cannot be closed.',
   };
-  const status = ['EXAM_BETA_ACCESS_REQUIRED', 'EXAM_ADMIN_REQUIRED'].includes(code)
+  const status = [
+    'EXAM_BETA_ACCESS_REQUIRED',
+    'EXAM_ACCESS_REQUIRED',
+    'EXAM_PREMIUM_REQUIRED',
+    'EXAM_ADMIN_REQUIRED',
+  ].includes(code)
     ? 403
     : code.includes('NOT_FOUND')
       ? 404

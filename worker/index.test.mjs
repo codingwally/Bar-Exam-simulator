@@ -1052,9 +1052,17 @@ test('payment field validation accepts trusted-plan shaped GCash and MariBank su
   }
 });
 
-test('payment validation rejects Premium checkout, unsupported channels, and malformed references', () => {
+test('payment validation accepts Premium and rejects unsupported channels and malformed references', () => {
+  const premium = normalizePaymentFields({
+    planCode: 'premium',
+    amountPhp: 499,
+    paymentMethod: 'gcash',
+    paymentDate: '2026-07-28',
+    transactionReference: 'PREMIUM-REF-1',
+  });
+  assert.equal(premium.planCode, 'premium');
+  assert.equal(premium.amountPhp, 499);
   for (const input of [
-    { planCode: 'premium', amountPhp: 499, paymentMethod: 'gcash', paymentDate: '2026-07-28', transactionReference: 'REF-1' },
     { planCode: 'standard', amountPhp: 249, paymentMethod: 'maya', paymentDate: '2026-07-28', transactionReference: 'REF-1' },
     { planCode: 'standard', amountPhp: 249, paymentMethod: 'gcash', paymentDate: '2026-07-28', transactionReference: '<script>' },
   ]) {
@@ -1113,14 +1121,14 @@ test('refund and partnership validation require strong identifiers, contact, mes
   }), PaymentValidationError);
 });
 
-test('plans endpoint returns database-configured plans including disabled Premium', async () => {
+test('plans endpoint returns database-configured plans including active Premium', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     if (String(url).endsWith('/rest/v1/rpc/phase4_plan_catalog')) {
       return Response.json([
         { planCode: 'early_access_beta', pricePhp: 149, checkoutEnabled: true },
         { planCode: 'standard', pricePhp: 249, checkoutEnabled: true },
-        { planCode: 'premium', pricePhp: 499, checkoutEnabled: false, status: 'disabled' },
+        { planCode: 'premium', pricePhp: 499, checkoutEnabled: true, status: 'active' },
       ]);
     }
     throw new Error(`Unexpected plans fetch: ${url}`);
@@ -1137,7 +1145,7 @@ test('plans endpoint returns database-configured plans including disabled Premiu
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.plans.length, 3);
-    assert.equal(payload.plans[2].checkoutEnabled, false);
+    assert.equal(payload.plans[2].checkoutEnabled, true);
   } finally {
     globalThis.fetch = originalFetch;
   }

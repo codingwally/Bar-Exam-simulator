@@ -539,6 +539,7 @@ test('Quorum reads use the verified session identity and controlled RPC', async 
 
 test('Quorum image signing preserves the Supabase storage API prefix', async () => {
   const imagePath = `entries/${entryA}/evidence.png`;
+  const absoluteImagePath = `entries/${entryA}/absolute-evidence.jpg`;
   const restore = installForumFetch(async (url) => {
     if (url.endsWith('/rest/v1/rpc/forum_quorum_query')) {
       return Response.json({
@@ -546,6 +547,10 @@ test('Quorum image signing preserves the Supabase storage API prefix', async () 
           entryId: entryA,
           body: 'A source-backed post with an image.',
           imagePath,
+        }, {
+          entryId: 'qe_bbbbbbbbbbbbbbbbbbbb',
+          body: 'A second source-backed post with an image.',
+          imagePath: absoluteImagePath,
         }],
         hasMore: false,
         nextCursor: null,
@@ -555,6 +560,9 @@ test('Quorum image signing preserves the Supabase storage API prefix', async () 
       return Response.json([{
         path: imagePath,
         signedURL: `/object/sign/quorum-images/${imagePath}?token=opaque-test-token`,
+      }, {
+        path: absoluteImagePath,
+        signedURL: `https://test.supabase.co/object/sign/quorum-images/${absoluteImagePath}?token=opaque-absolute-token`,
       }]);
     }
     throw new Error(`Unexpected Quorum image request: ${url}`);
@@ -573,7 +581,12 @@ test('Quorum image signing preserves the Supabase storage API prefix', async () 
       payload.data.items[0].imageUrl,
       `https://test.supabase.co/storage/v1/object/sign/quorum-images/${imagePath}?token=opaque-test-token`,
     );
+    assert.equal(
+      payload.data.items[1].imageUrl,
+      `https://test.supabase.co/storage/v1/object/sign/quorum-images/${absoluteImagePath}?token=opaque-absolute-token`,
+    );
     assert.equal('imagePath' in payload.data.items[0], false);
+    assert.equal('imagePath' in payload.data.items[1], false);
   } finally {
     restore();
   }

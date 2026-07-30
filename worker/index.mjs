@@ -559,14 +559,12 @@ function collectQuorumImagePaths(value, paths = new Set()) {
 }
 
 function absoluteSupabaseStorageUrl(baseUrl, signedPath) {
-  if (/^https?:\/\//i.test(signedPath)) return signedPath;
-  const path = String(signedPath || '').startsWith('/')
-    ? String(signedPath)
-    : `/${String(signedPath || '')}`;
-  return new URL(
-    path.startsWith('/storage/v1/') ? path : `/storage/v1${path}`,
-    baseUrl,
-  ).href;
+  const base = new URL(baseUrl);
+  const signed = new URL(String(signedPath || ''), base);
+  if (signed.origin === base.origin && signed.pathname.startsWith('/object/')) {
+    signed.pathname = `/storage/v1${signed.pathname}`;
+  }
+  return signed.href;
 }
 
 async function signedQuorumImageUrls(env, paths) {

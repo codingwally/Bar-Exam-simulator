@@ -117,6 +117,11 @@
     return crypto.randomUUID().replace(/-/g, '');
   }
 
+  function commentRegionId(entryId) {
+    const safeEntryId = String(entryId || '').replace(/[^a-zA-Z0-9_-]/g, '-');
+    return `quorum-comments-${safeEntryId}`;
+  }
+
   function safeStorage(storage, method, key, value) {
     try {
       if (method === 'get') return storage.getItem(key);
@@ -688,8 +693,10 @@
     const comments = button(
       `Comment ${Number(item.counts?.comments || 0)}`,
       'lex-action',
-      () => toggleComments(item, article),
+      () => toggleComments(item, article, comments),
     );
+    comments.setAttribute('aria-controls', commentRegionId(item.entryId));
+    comments.setAttribute('aria-expanded', String(state.commentsOpen.has(item.entryId)));
     const disseminate = button(
       `Disseminate ${Number(item.counts?.citations || 0)}`,
       'lex-action',
@@ -964,13 +971,15 @@
     }
   }
 
-  async function toggleComments(item, article) {
+  async function toggleComments(item, article, control) {
     if (state.commentsOpen.has(item.entryId)) {
       state.commentsOpen.delete(item.entryId);
+      control.setAttribute('aria-expanded', 'false');
       article.querySelector('.lex-comments')?.remove();
       return;
     }
     state.commentsOpen.add(item.entryId);
+    control.setAttribute('aria-expanded', 'true');
     article.append(renderCommentsSection(item, null));
     try {
       const comments = await query('comments', { entryId: item.entryId, limit: 200 });
@@ -983,6 +992,7 @@
 
   function renderCommentsSection(item, comments) {
     const section = document.createElement('section');
+    section.id = commentRegionId(item.entryId);
     section.className = 'lex-comments';
     section.setAttribute('aria-label', 'Comments and replies');
     const list = document.createElement('div');

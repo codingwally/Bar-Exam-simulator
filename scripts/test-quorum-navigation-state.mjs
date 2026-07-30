@@ -37,7 +37,7 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/lex-forum\.js\?v=qa-cycle-20260731-1/,
+  /assets\/lex-forum\.js\?v=qa-cycle-20260731-2/,
   'The Quorum navigation fix must ship behind a fresh script cache key.',
 );
 assert.match(
@@ -50,6 +50,81 @@ assert.match(
   /else if \(view === 'my-posts'\) \{[\s\S]*?await renderProfileView\(\);/,
   'The My Posts view must render the member contribution surface.',
 );
+assert.match(
+  source,
+  /comments\.setAttribute\('aria-controls', commentRegionId\(item\.entryId\)\);/,
+  'Each Comment toggle must identify its controlled comments region.',
+);
+assert.match(
+  source,
+  /comments\.setAttribute\('aria-expanded', String\(state\.commentsOpen\.has\(item\.entryId\)\)\);/,
+  'Each Comment toggle must expose its initial expanded state.',
+);
+assert.match(
+  source,
+  /\(\) => toggleComments\(item, article, comments\)/,
+  'The Comment toggle must pass its control to the state transition.',
+);
+assert.match(
+  source,
+  /async function toggleComments\(item, article, control\) \{[\s\S]*?control\.setAttribute\('aria-expanded', 'false'\);[\s\S]*?control\.setAttribute\('aria-expanded', 'true'\);/,
+  'Opening and closing comments must keep aria-expanded synchronized.',
+);
+assert.match(
+  source,
+  /section\.id = commentRegionId\(item\.entryId\);/,
+  'The comments region must use the same deterministic id referenced by its toggle.',
+);
+
+const toggleCommentsSource = source.match(
+  /async function toggleComments\(item, article, control\) \{[\s\S]*?(?=\r?\n\r?\n  function renderCommentsSection)/,
+)?.[0];
+assert.ok(toggleCommentsSource, 'toggleComments must remain available for behavioral regression coverage.');
+
+let currentCommentsRegion = null;
+const commentControlAttributes = new Map();
+const commentControl = {
+  setAttribute(name, value) {
+    commentControlAttributes.set(name, String(value));
+  },
+};
+const commentArticle = {
+  append(node) {
+    currentCommentsRegion = node;
+  },
+  querySelector() {
+    return currentCommentsRegion;
+  },
+};
+const commentContext = vm.createContext({
+  state: {
+    commentsOpen: new Set(),
+    comments: new Map(),
+  },
+  query: async () => [],
+  renderCommentsSection: () => ({
+    remove() {
+      currentCommentsRegion = null;
+    },
+    replaceWith(node) {
+      currentCommentsRegion = node;
+    },
+  }),
+  handleError: () => {},
+});
+vm.runInContext(toggleCommentsSource, commentContext);
+const toggleComments = vm.runInContext('toggleComments', commentContext);
+const commentItem = { entryId: 'entry-regression' };
+
+await toggleComments(commentItem, commentArticle, commentControl);
+assert.equal(commentControlAttributes.get('aria-expanded'), 'true');
+assert.equal(commentContext.state.commentsOpen.has(commentItem.entryId), true);
+assert.ok(currentCommentsRegion, 'Opening comments must render the controlled region.');
+
+await toggleComments(commentItem, commentArticle, commentControl);
+assert.equal(commentControlAttributes.get('aria-expanded'), 'false');
+assert.equal(commentContext.state.commentsOpen.has(commentItem.entryId), false);
+assert.equal(currentCommentsRegion, null, 'Closing comments must remove the controlled region.');
 
 const syncSource = source.match(
   /function syncViewButtons\(\) \{[\s\S]*?\n  \}/,

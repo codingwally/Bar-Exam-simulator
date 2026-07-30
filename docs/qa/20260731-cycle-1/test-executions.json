@@ -158,6 +158,64 @@
       "command": "node scripts/verify-examinations-staging-ui.mjs",
       "status": "blocked—AFK",
       "reason": "Standalone Playwright package is not installed; the selected in-app browser is used for product QA instead."
+    },
+    {
+      "command": "node scripts/test-quorum-navigation-state.mjs",
+      "status": "passed",
+      "stage": "continuation post-fix",
+      "redBeforeGreen": {
+        "initialFailure": "Each Comment toggle must identify its controlled comments region.",
+        "fixedResult": "Quorum navigation and focused accessibility regressions passed."
+      },
+      "coverage": [
+        "deterministic aria-controls target",
+        "initial aria-expanded state",
+        "behavioral open and close synchronization",
+        "comments region id"
+      ]
+    },
+    {
+      "command": "node --test worker/*.test.mjs",
+      "status": "passed",
+      "stage": "continuation full release gate",
+      "assertions": 135,
+      "failures": 0
+    },
+    {
+      "command": "all 32 non-staging scripts/test-*.mjs plus scripts/validate-labor-cms.mjs",
+      "status": "passed",
+      "stage": "continuation full release gate",
+      "commands": 33,
+      "failedCommands": 0
+    },
+    {
+      "command": "node scripts/build-pages-artifact.mjs and node scripts/test-pages-artifact.mjs",
+      "status": "passed",
+      "stage": "continuation full release gate",
+      "artifactFiles": 21
+    },
+    {
+      "command": "node scripts/build-staging-artifact.mjs",
+      "status": "blocked—AFK",
+      "stage": "continuation",
+      "reason": "The four approved staging environment variables, including the staging publishable key, are not available in the AFK process environment. No credential was requested or inferred."
+    },
+    {
+      "command": "node --check assets/lex-forum.js and scripts/test-quorum-navigation-state.mjs",
+      "status": "passed",
+      "stage": "continuation"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed",
+      "stage": "continuation"
+    },
+    {
+      "command": "changed-scope probable-secret scan",
+      "status": "passed",
+      "stage": "continuation",
+      "probableEmbeddedSecretValues": 0,
+      "addedLinesScanned": 260
     }
   ],
   "finalFullRegressionPending": false

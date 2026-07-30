@@ -78,6 +78,38 @@ test('authenticated examination catalog reaches only the allowlisted RPC', async
   });
 });
 
+test('Subject Matter random selection uses the dedicated no-repeat RPC', async () => {
+  await withFetchMock(async (url, options) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_next_question`);
+    const payload = JSON.parse(options.body);
+    assert.deepEqual(payload, {
+      p_user_id: userId,
+      p_subject: 'Criminal Law I',
+      p_year_level: 1,
+      p_term: 1,
+      p_reset_cycle: false,
+    });
+    return Response.json({
+      exhausted: false,
+      setup: { versionId, questionCount: 1 },
+    });
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'subject_next',
+      subject: 'Criminal Law I',
+      yearLevel: 1,
+      term: 1,
+      resetCycle: false,
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.data.exhausted, false);
+    assert.equal(body.data.setup.versionId, versionId);
+  });
+});
+
 test('examination query rejects a missing authenticated session before database access', async () => {
   await withFetchMock(async (url) => {
     if (String(url).endsWith('/auth/v1/user')) {

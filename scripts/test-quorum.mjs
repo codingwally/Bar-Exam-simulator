@@ -14,6 +14,7 @@ const [
   structural,
   behavioral,
   phase2,
+  releaseMigration,
 ] = await Promise.all([
   fs.readFile(new URL('../index.html', import.meta.url), 'utf8'),
   fs.readFile(new URL('../assets/lex-forum.js', import.meta.url), 'utf8'),
@@ -27,15 +28,20 @@ const [
   fs.readFile(new URL('../supabase/tests/20260803_013_quorum_structural_test.sql', import.meta.url), 'utf8'),
   fs.readFile(new URL('../supabase/tests/20260803_014_quorum_behavioral_security_test.sql', import.meta.url), 'utf8'),
   fs.readFile(new URL('../assets/phase2-experience.js', import.meta.url), 'utf8'),
+  fs.readFile(new URL('../supabase/migrations/20260805120000_complete_beta_release_foundation.sql', import.meta.url), 'utf8'),
 ]);
 
 assert.match(html, /id="spa-community"[\s\S]*?>Quorum<\/button>/);
 assert.match(html, /<h2>Quorum<\/h2>/);
-assert.match(html, /Disce, disputa, diligenter age\./);
+assert.match(
+  html,
+  /The floor is yours—speak your mind, ask questions, share your law school journey, and learn together\./,
+);
 assert.match(html, /Quorum Feed/);
-assert.match(html, /My Authorities/);
+assert.match(html, /Saved/);
 assert.match(html, /Study Circles/);
-assert.match(html, /Active Issues/);
+assert.match(html, /Trending in Quorum/);
+assert.match(html, /Questions Needing Answers/);
 assert.match(client, /Practice this issue/);
 assert.match(adminHtml, /Quorum Moderation/);
 assert.match(adminClient, /Quorum Moderation & Analytics/);
@@ -79,7 +85,6 @@ for (const id of [
 }
 
 for (const operation of [
-  'create_entry',
   'update_entry',
   'delete_entry',
   'set_helpful',
@@ -98,6 +103,8 @@ for (const operation of [
   'update_profile_settings',
   'mark_notification',
   'mark_all_notifications',
+  'create_simple_entry',
+  'set_affirm',
 ]) {
   assert.match(client, new RegExp(`['"]${operation}['"]`), `${operation} must be wired in the Quorum client.`);
 }
@@ -136,6 +143,20 @@ for (const fn of ['forum_quorum_query', 'forum_quorum_command', 'forum_quorum_ad
   assert.match(migration, new RegExp(`revoke all on function public\\.${fn}`), `${fn} must be browser-denied.`);
   assert.match(structural, new RegExp(fn), `${fn} must be structurally tested.`);
 }
+for (const fn of [
+  'forum_quorum_insights',
+  'forum_affirm_roster',
+  'forum_set_affirm',
+  'forum_publish_simple',
+  'forum_set_attachment_alt',
+]) {
+  assert.match(releaseMigration, new RegExp(`function public\\.${fn}`), `${fn} must exist.`);
+  assert.match(
+    releaseMigration,
+    new RegExp(`revoke all on function public\\.${fn}`),
+    `${fn} must remain browser-denied.`,
+  );
+}
 
 assert.match(
   migration,
@@ -162,7 +183,17 @@ assert.doesNotMatch(
   'The production preflight must remain read-only.',
 );
 
-for (const source of [html, client, adminHtml, adminClient, worker, core, migration, preflight]) {
+for (const source of [
+  html,
+  client,
+  adminHtml,
+  adminClient,
+  worker,
+  core,
+  migration,
+  releaseMigration,
+  preflight,
+]) {
   assert.doesNotMatch(source, /sbp_[A-Za-z0-9_-]{20,}/, 'Supabase access tokens must not be committed.');
   assert.doesNotMatch(source, /AIza[0-9A-Za-z_-]{30,}/, 'Google API keys must not be committed.');
   assert.doesNotMatch(source, /gmail\.com/i, 'Personal Gmail addresses must not be exposed.');

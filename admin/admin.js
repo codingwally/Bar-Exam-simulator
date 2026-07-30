@@ -14,9 +14,9 @@
     subscriptions: 'Retainer Management',
     payments: 'Payment Review',
     refunds: 'Refunds',
-    support: 'Co-Counsel Requests',
+    support: 'Support Requests',
     corrections: 'Answer Corrections',
-    partnerships: 'Joint Ventures',
+    partnerships: 'Partnerships',
     controls: 'Website Settings',
     security: 'Access & Activity Log',
     forum: 'Quorum Moderation & Analytics',
@@ -286,7 +286,7 @@
         <section class="panel">
           <h3>Action queue</h3>
           <div class="queue-grid">
-            ${queueLink('Co-Counsel', `${number(report.queues?.pending_support)} open cases`, 'support')}
+            ${queueLink('Support', `${number(report.queues?.pending_support)} open cases`, 'support')}
             ${queueLink('Corrections', `${number(report.queues?.pending_corrections)} pending editorial reviews`, 'corrections')}
             ${queueLink('Recovery', `${number(report.queues?.open_recovery_cases)} open cases; final transfer disabled`, 'support')}
             ${queueLink('Manual access', `${number(report.queues?.active_manual_entitlements)} active entitlements`, 'subscriptions')}
@@ -614,8 +614,8 @@
       actionButton('Update', 'support_update', row.id, { status: row.status, priority: row.priority }),
     ]);
     return `
-      ${heading('Co-Counsel Requests', 'Resolve only what is necessary. Co-Counsel content may contain personal context and is limited to authorized operators.')}
-      <div class="notice"><strong>Public recovery copy:</strong> Contact Co-Counsel. We respond within 24 hours.</div>
+      ${heading('Support Requests', 'Resolve only what is necessary. Support content may contain personal context and is limited to authorized operators.')}
+      <div class="notice"><strong>Public recovery copy:</strong> Contact Support. We respond within 24 hours.</div>
       ${table(['Category', 'Message', 'Priority', 'Status', 'Created', '24-hour target', 'Action'], supportRows)}
       <section class="panel">
         <h3>Recovery cases</h3>
@@ -626,7 +626,7 @@
             row.id, row.user_id, row.status, dateTime(row.updated_at), 'Disabled',
           ]),
         )}
-        <p class="panel-note">A Co-Counsel request alone never authorizes transfer. Case management preserves the immutable user UUID, but no final transfer action exists.</p>
+        <p class="panel-note">A Support request alone never authorizes transfer. Case management preserves the immutable user account, but no final transfer action exists.</p>
       </section>`;
   }
 
@@ -656,7 +656,7 @@
   async function renderPartnerships() {
     const data = await loadPhase4Operational('partnerships');
     return `
-      ${heading('Joint Ventures', 'Native institutional, academic, content, technology, and media inquiries. Contact details are operationally sensitive and access is audited.')}
+      ${heading('Partnerships', 'Native institutional, academic, content, technology, and media inquiries. Contact details are operationally sensitive and access is audited.')}
       ${table(
         ['Type','Contact','Email','Organization','Message','Verified','Status','Assignee','Created','Action'],
         (data.items || []).map((row) => [
@@ -678,7 +678,7 @@
     const allowed = [
       ['announcement_text', 'Announcement text'],
       ['beta_label', 'Beta label'],
-      ['support_availability_message', 'Co-Counsel availability message'],
+      ['support_availability_message', 'Support availability message'],
       ['pricing_section_visible', 'Pricing-section visibility'],
       ['promotional_content_visible', 'Approved promotional content visibility'],
       ['future_feature_status', 'Future-feature status'],
@@ -1625,7 +1625,7 @@
     let title = 'Confirm action';
     let warning = 'This operation is transactional, reason-required, and recorded in the administrator audit log.';
     if (action === 'support_update') {
-      title = 'Update Co-Counsel request';
+      title = 'Update Support request';
       fields = `<label class="field">Status<select id="action-status">${['pending','in_progress','waiting_for_student','resolved','closed'].map((value) => `<option${payload.status === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
         <label class="field">Priority<select id="action-priority">${['low','normal','high','urgent'].map((value) => `<option${payload.priority === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
         <label class="field">Internal note<textarea id="action-note" maxlength="4000"></textarea></label>`;

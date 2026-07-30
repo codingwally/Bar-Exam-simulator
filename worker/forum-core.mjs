@@ -26,12 +26,17 @@ const QUORUM_QUERY_OPERATIONS = new Set([
   'profile',
   'search',
   'active_issues',
+  'insights',
+  'affirm_roster',
 ]);
 const QUORUM_COMMAND_OPERATIONS = new Set([
   'create_entry',
+  'create_simple_entry',
   'update_entry',
+  'update_simple_entry',
   'delete_entry',
   'set_helpful',
+  'set_affirm',
   'create_comment',
   'update_comment',
   'delete_comment',
@@ -332,14 +337,61 @@ export function normalizeQuorumCommandRequest(input = {}) {
   let normalized;
   if (operation === 'create_entry') {
     normalized = normalizeEntryPayload(payload, 'create');
+  } else if (operation === 'create_simple_entry') {
+    normalized = {
+      body: forumPlainText(payload.body, {
+        label: 'Entry',
+        maximum: QUORUM_LIMITS.entryCharacters,
+      }),
+      kind: quorumEnum(
+        payload.kind || 'discussion',
+        new Set(['discussion', 'question']),
+        'Entry type',
+      ),
+      subject: quorumEnum(payload.subject, QUORUM_SUBJECTS, 'Subject', true),
+      lawSchoolYear: forumPlainText(payload.lawSchoolYear, {
+        label: 'Law-school year',
+        maximum: 80,
+        optional: true,
+      }),
+      sourceUrl: forumSourceUrl(payload.sourceUrl),
+      imageAlt: forumPlainText(payload.imageAlt, {
+        label: 'Image description',
+        maximum: 500,
+        optional: true,
+      }),
+    };
   } else if (operation === 'update_entry') {
     normalized = normalizeEntryPayload(payload, 'update');
+  } else if (operation === 'update_simple_entry') {
+    normalized = {
+      entryId: forumPublicId(payload.entryId, ['qe'], 'Entry'),
+      body: forumPlainText(payload.body, {
+        label: 'Entry',
+        maximum: QUORUM_LIMITS.entryCharacters,
+      }),
+      kind: quorumEnum(
+        payload.kind || 'discussion',
+        new Set(['discussion', 'question']),
+        'Entry type',
+      ),
+    };
   } else if (operation === 'delete_entry') {
     normalized = { entryId: forumPublicId(payload.entryId, ['qe'], 'Entry') };
   } else if (operation === 'set_helpful' || operation === 'set_saved') {
     normalized = {
       entryId: forumPublicId(payload.entryId, ['qe'], 'Entry'),
       enabled: quorumBoolean(payload.enabled, 'Requested state'),
+    };
+  } else if (operation === 'set_affirm') {
+    normalized = {
+      entryId: forumPublicId(payload.entryId, ['qe'], 'Entry'),
+      reaction: quorumEnum(
+        payload.reaction,
+        new Set(['hear', 'see', 'feel']),
+        'Affirm reaction',
+        true,
+      ),
     };
   } else if (operation === 'create_comment') {
     normalized = {

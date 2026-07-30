@@ -98,6 +98,14 @@ import {
   normalizeExaminationQuery,
   normalizeUploadRequest,
 } from './examinations-core.mjs';
+import {
+  ReleaseContentError,
+  SUBJECT_MATTER_CSV_URL,
+  WEBSITE_UPLOAD_CSV_URL,
+  buildBarFeelsManifest,
+  parseSubjectMatterSource,
+  parseWebsiteUploadSource,
+} from './release-content-core.mjs';
 import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
 const WINDOW_MS = 10 * 60 * 1000;
@@ -438,6 +446,12 @@ async function examinationRpc(env, functionName, body) {
     'examination_fail_ai_job',
     'examination_record_delivery',
     'examination_authorize_access',
+    'subject_matter_catalog',
+    'subject_matter_next_question',
+    'subject_matter_performance',
+    'release_sync_subject_matter',
+    'release_sync_bar_feels',
+    'release_sync_all_content',
   ]);
   if (!allowedFunctions.has(functionName)) {
     throw new ExaminationValidationError(
@@ -928,6 +942,34 @@ function phase4ModelQualityEnforced(env) {
   return String(env.PHASE4_MODEL_QUALITY_ENFORCEMENT).toLowerCase() === 'true';
 }
 
+function publicPricingEnabled(env) {
+  return String(env.PUBLIC_PRICING_ENABLED).toLowerCase() === 'true';
+}
+
+function concealedSubscriptionState(value) {
+  const subscription = value?.subscription && typeof value.subscription === 'object'
+    ? {
+        status: value.subscription.status || null,
+        startsAt: value.subscription.startsAt || null,
+        expiresAt: value.subscription.expiresAt || null,
+        betaAccessActive: value.subscription.status === 'active',
+      }
+    : null;
+  const pendingPayment = value?.pendingPayment && typeof value.pendingPayment === 'object'
+    ? {
+        status: value.pendingPayment.status || null,
+        submittedAt: value.pendingPayment.submittedAt || null,
+      }
+    : null;
+  return {
+    subscription,
+    pendingPayment,
+    examinationBeta: value?.examinationBeta || null,
+    pricingHidden: true,
+    message: 'Pricing will be announced after beta testing.',
+  };
+}
+
 async function requireAuthenticatedUser(request, env) {
   const user = await verifiedAuthenticatedUser(request, env);
   if (!user) {
@@ -1182,22 +1224,46 @@ async function loadWebsiteBank(url) {
   if (websiteBankCache && now - websiteBankCache.loadedAt < 5 * 60 * 1000) {
     return websiteBankCache.records;
   }
-  let payload;
+  let payload = null;
+  let sourceError = null;
   if (url) {
-    const response = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!response.ok) {
-      throw new ExaminerError('QUESTION_BANK_UNAVAILABLE', 'The website question bank is temporarily unavailable.', 503);
-    }
     try {
+      const response = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error(`source status ${response.status}`);
       payload = await response.json();
-    } catch {
-      throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank returned invalid JSON.', 502);
+    } catch (error) {
+      sourceError = error;
     }
   } else {
-    payload = embeddedWebsiteQuestionBank;
+    try {
+      const response = await fetch(WEBSITE_UPLOAD_CSV_URL, {
+        headers: { Accept: 'text/csv' },
+      });
+      if (!response.ok) throw new Error(`source status ${response.status}`);
+      const csvText = await response.text();
+      await parseWebsiteUploadSource(csvText);
+      const parsed = parseQuestionBank(csvText);
+      websiteBankCache = { records: parsed, loadedAt: now, source: WEBSITE_UPLOAD_CSV_URL };
+      return parsed;
+    } catch (error) {
+      sourceError = error;
+    }
   }
+
+  // Keep the last successfully validated live source available through a
+  // transient publication outage. The embedded reviewed snapshot remains the
+  // cold-start fallback and is never preferred over the published CSV.
+  if (websiteBankCache?.records) return websiteBankCache.records;
+  if (!payload) payload = embeddedWebsiteQuestionBank;
   if (!Array.isArray(payload?.records) || payload.records.length !== 320) {
-    throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank must contain exactly 320 records.', 502);
+    console.warn('Published website question bank unavailable and fallback invalid', {
+      code: sourceError?.code || 'QUESTION_BANK_UNAVAILABLE',
+    });
+    throw new ExaminerError(
+      'QUESTION_BANK_INVALID',
+      'The website question bank could not be prepared safely.',
+      502,
+    );
   }
   const records = new Map();
   for (const row of payload.records) {
@@ -1207,7 +1273,11 @@ async function loadWebsiteBank(url) {
     }
     records.set(id, row);
   }
-  websiteBankCache = { records, loadedAt: now };
+  websiteBankCache = {
+    records,
+    loadedAt: now,
+    source: url || 'embedded-reviewed-fallback',
+  };
   return records;
 }
 
@@ -1822,11 +1892,24 @@ async function handleQuorumQuery(request, env, origin, allowedOrigin) {
   const query = normalizeQuorumQueryRequest(
     await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
   );
-  const result = await forumRpc(env, 'forum_quorum_query', {
-    p_user_id: user.id,
-    p_operation: query.operation,
-    p_payload: query.payload,
-  });
+  let result;
+  if (query.operation === 'insights') {
+    result = await forumRpc(env, 'forum_quorum_insights', {
+      p_user_id: user.id,
+    });
+  } else if (query.operation === 'affirm_roster') {
+    result = await forumRpc(env, 'forum_affirm_roster', {
+      p_user_id: user.id,
+      p_entry_id: query.payload.entryId,
+      p_limit: query.payload.limit || 60,
+    });
+  } else {
+    result = await forumRpc(env, 'forum_quorum_query', {
+      p_user_id: user.id,
+      p_operation: query.operation,
+      p_payload: query.payload,
+    });
+  }
   return jsonResponse(
     { ok: true, data: await withSignedQuorumImages(result, env) },
     200,
@@ -1840,23 +1923,38 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
   const user = await requireAuthenticatedUser(request, env);
   const raw = await parseBoundedJson(request, QUORUM_LIMITS.requestBytes);
   const command = normalizeQuorumCommandRequest(raw);
-  const image = command.operation === 'create_entry'
+  const image = ['create_entry', 'create_simple_entry'].includes(command.operation)
     ? normalizeQuorumImage(raw?.image)
     : null;
-  if (raw?.image && command.operation !== 'create_entry') {
+  if (raw?.image && !['create_entry', 'create_simple_entry'].includes(command.operation)) {
     throw new ForumValidationError(
       'INVALID_QUORUM_IMAGE',
       'An image can be attached only while creating an entry.',
     );
   }
 
-  let result = await forumRpc(env, 'forum_quorum_command', {
-    p_user_id: user.id,
-    p_operation: command.operation,
-    p_payload: command.payload,
-  });
+  let result;
+  if (command.operation === 'set_affirm') {
+    result = await forumRpc(env, 'forum_set_affirm', {
+      p_user_id: user.id,
+      p_entry_id: command.payload.entryId,
+      p_reaction_type: command.payload.reaction,
+    });
+  } else if (['create_simple_entry', 'update_simple_entry'].includes(command.operation)) {
+    result = await forumRpc(env, 'forum_publish_simple', {
+      p_user_id: user.id,
+      p_operation: command.operation === 'create_simple_entry' ? 'create' : 'update',
+      p_payload: command.payload,
+    });
+  } else {
+    result = await forumRpc(env, 'forum_quorum_command', {
+      p_user_id: user.id,
+      p_operation: command.operation,
+      p_payload: command.payload,
+    });
+  }
 
-  if (command.operation === 'create_entry' && image) {
+  if (['create_entry', 'create_simple_entry'].includes(command.operation) && image) {
     let objectPath = null;
     try {
       objectPath = await uploadQuorumImage(env, result.entryId, image);
@@ -1870,6 +1968,13 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
           byteSize: image.byteSize,
         },
       });
+      if (command.payload.imageAlt) {
+        await forumRpc(env, 'forum_set_attachment_alt', {
+          p_user_id: user.id,
+          p_entry_id: result.entryId,
+          p_alt_text: command.payload.imageAlt,
+        });
+      }
       result = { ...result, imagePath: objectPath };
     } catch (error) {
       if (objectPath) await deleteQuorumImage(env, objectPath);
@@ -2102,6 +2207,30 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
   const user = query.operation === 'assignment'
     ? null
     : await requireAuthenticatedUser(request, env);
+  if (user && query.operation === 'subject_catalog') {
+    const result = await examinationRpc(env, 'subject_matter_catalog', {
+      p_user_id: user.id,
+    });
+    return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+  }
+  if (user && query.operation === 'subject_next') {
+    const result = await examinationRpc(env, 'subject_matter_next_question', {
+      p_user_id: user.id,
+      p_subject: query.subject,
+      p_year_level: query.yearLevel,
+      p_term: query.term,
+      p_reset_cycle: query.resetCycle,
+    });
+    return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+  }
+  if (user && query.operation === 'subject_performance') {
+    const result = await examinationRpc(env, 'subject_matter_performance', {
+      p_user_id: user.id,
+      p_subject: query.subject,
+      p_limit: query.limit,
+    });
+    return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+  }
   if (user) {
     if (query.operation === 'catalog') {
       await authorizeExaminationAccess(env, user.id, { track: query.track });
@@ -2285,6 +2414,62 @@ async function handleExaminationAdmin(request, env, origin, allowedOrigin) {
   return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
 }
 
+async function fetchPublishedCsv(url, label) {
+  const response = await fetch(url, {
+    headers: { Accept: 'text/csv' },
+  });
+  if (!response.ok) {
+    throw new ReleaseContentError(
+      'PUBLISHED_SOURCE_UNAVAILABLE',
+      `${label} could not be loaded from the reviewed publication.`,
+      503,
+    );
+  }
+  const text = await response.text();
+  if (new TextEncoder().encode(text).byteLength > 5_000_000) {
+    throw new ReleaseContentError(
+      'PUBLISHED_SOURCE_TOO_LARGE',
+      `${label} exceeds the reviewed publication limit.`,
+    );
+  }
+  return text;
+}
+
+async function handleReleaseContentSync(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const [subjectCsv, websiteCsv] = await Promise.all([
+    fetchPublishedCsv(SUBJECT_MATTER_CSV_URL, 'Subject Matter source'),
+    fetchPublishedCsv(WEBSITE_UPLOAD_CSV_URL, 'Mock Bar source'),
+  ]);
+  const [subjectSource, websiteSource] = await Promise.all([
+    parseSubjectMatterSource(subjectCsv),
+    parseWebsiteUploadSource(websiteCsv),
+  ]);
+  const barGroups = buildBarFeelsManifest(websiteSource.rows);
+  const result = await examinationRpc(env, 'release_sync_all_content', {
+    p_actor_user_id: user.id,
+    p_subject_rows: subjectSource.rows,
+    p_subject_digest: subjectSource.digest,
+    p_subject_endpoint: SUBJECT_MATTER_CSV_URL,
+    p_bar_groups: barGroups,
+    p_bar_digest: websiteSource.digest,
+    p_bar_endpoint: WEBSITE_UPLOAD_CSV_URL,
+  });
+  // Never echo question or answer content from the administrative sync.
+  return jsonResponse({
+    ok: true,
+    data: {
+      subjectMatter: result?.subjectMatter || null,
+      barFeels: result?.barFeels || null,
+      sources: {
+        subjectMatter: SUBJECT_MATTER_CSV_URL,
+        mockBar: WEBSITE_UPLOAD_CSV_URL,
+      },
+    },
+  }, 200, origin, allowedOrigin);
+}
+
 async function handleAccess(request, env, origin, allowedOrigin) {
   await enforceGuestStatusRateLimit(request, env);
   const user = await requireAuthenticatedUser(request, env);
@@ -2296,6 +2481,18 @@ async function handleAccess(request, env, origin, allowedOrigin) {
     subscription: access.subscription,
     pendingPayment: null,
   };
+  if (!publicPricingEnabled(env)) {
+    access.subscription = access.subscription
+      ? {
+          status: access.subscription.status || null,
+          startsAt: access.subscription.startsAt || null,
+          expiresAt: access.subscription.expiresAt || null,
+        }
+      : null;
+    access.subscriptionState = concealedSubscriptionState(access.subscriptionState);
+    access.pricingHidden = true;
+    access.pricingMessage = 'Pricing will be announced after beta testing.';
+  }
   return jsonResponse({ ok: true, access }, 200, origin, allowedOrigin);
 }
 
@@ -2506,7 +2703,7 @@ async function handleSupport(request, env, origin, allowedOrigin) {
   const supportUser = await requireAuthenticatedSubmission(
     request,
     env,
-    'sending a Co-Counsel request',
+    'sending a Support request',
   );
   const declaredLength = Number(request.headers.get('Content-Length') || 0);
   if (Number.isFinite(declaredLength) && declaredLength > SUPPORT_LIMITS.requestBytes) {
@@ -2771,11 +2968,27 @@ async function handleAdminExport(request, env, origin, allowedOrigin) {
 }
 
 async function handlePlans(request, env, origin, allowedOrigin) {
+  if (!publicPricingEnabled(env)) {
+    return jsonResponse({
+      ok: true,
+      plans: [],
+      betaAccessActive: true,
+      pricingHidden: true,
+      message: 'Pricing will be announced after beta testing.',
+    }, 200, origin, allowedOrigin);
+  }
   const plans = await phase4Rpc(env, 'phase4_plan_catalog', {});
   return jsonResponse({ ok: true, plans: Array.isArray(plans) ? plans : [] }, 200, origin, allowedOrigin);
 }
 
 async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
+  if (!publicPricingEnabled(env)) {
+    throw new PaymentValidationError(
+      'BETA_PRICING_NOT_PUBLISHED',
+      'Pricing will be announced after beta testing.',
+      403,
+    );
+  }
   await enforcePaymentRateLimit(request, env);
   const user = await requireAuthenticatedUser(request, env);
   const contentLength = Number(request.headers.get('Content-Length') || 0);
@@ -2856,10 +3069,23 @@ async function handleBillingStatus(request, env, origin, allowedOrigin) {
   const result = await commerceRpc(env, 'phase4_student_billing_snapshot', {
     p_user_id: user.id,
   });
+  if (!publicPricingEnabled(env)) {
+    return jsonResponse({
+      ok: true,
+      billing: concealedSubscriptionState(result),
+    }, 200, origin, allowedOrigin);
+  }
   return jsonResponse({ ok: true, billing: result }, 200, origin, allowedOrigin);
 }
 
 async function handleRefundSubmit(request, env, origin, allowedOrigin) {
+  if (!publicPricingEnabled(env)) {
+    throw new PaymentValidationError(
+      'BETA_PRICING_NOT_PUBLISHED',
+      'Account assistance remains available through Support during beta testing.',
+      403,
+    );
+  }
   await enforcePaymentRateLimit(request, env);
   const user = await requireAuthenticatedUser(request, env);
   const input = normalizeRefundRequest(await parseBoundedJson(request, 8_000));
@@ -2887,7 +3113,7 @@ async function handlePartnershipSubmit(request, env, origin, allowedOrigin) {
   const user = await requireAuthenticatedSubmission(
     request,
     env,
-    'sending a Joint Venture inquiry',
+    'sending a Partnership inquiry',
   );
   const input = normalizePartnershipRequest(await parseBoundedJson(request, 12_000));
   const requestKey = normalizeRequestKey(request.headers.get('X-Request-ID'));
@@ -3082,6 +3308,9 @@ export default {
       if (pathname === '/admin/examinations') {
         return await handleExaminationAdmin(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/admin/content/sync') {
+        return await handleReleaseContentSync(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/quorum/query') {
         return await handleQuorumQuery(request, env, origin, allowedOrigin);
       }
@@ -3173,7 +3402,8 @@ export default {
         || error instanceof AccessValidationError
         || error instanceof PaymentValidationError
         || error instanceof ForumValidationError
-        || error instanceof ExaminationValidationError;
+        || error instanceof ExaminationValidationError
+        || error instanceof ReleaseContentError;
       return jsonResponse({
         ok: false,
         error: {

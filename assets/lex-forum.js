@@ -59,6 +59,11 @@
     circle_activity: 'added activity in a Study Circle',
     moderation_decision: 'sent a moderation update',
   };
+  const affirmReactions = Object.freeze({
+    hear: { label: 'I Hear' },
+    see: { label: 'I See' },
+    feel: { label: 'I Feel' },
+  });
 
   const state = {
     active: false,
@@ -545,7 +550,8 @@
       const image = document.createElement('img');
       image.className = 'quorum-entry-image';
       image.src = item.imageUrl;
-      image.alt = `Image attached to the Quorum entry by ${item.author?.displayName || 'a member'}`;
+      image.alt = item.imageAlt
+        || `Image attached to the Quorum entry by ${item.author?.displayName || 'a member'}`;
       image.loading = 'lazy';
       image.decoding = 'async';
       inner.append(image);
@@ -564,12 +570,42 @@
 
     const actions = document.createElement('div');
     actions.className = 'lex-post-actions';
-    const helpful = button(
-      `Helpful ${Number(item.counts?.helpful || 0)}`,
-      `lex-action${item.viewerHelpful ? ' is-active' : ''}`,
-      () => toggleHelpful(item, helpful),
+    const affirm = document.createElement('div');
+    affirm.className = 'quorum-affirm-control';
+    const affirmTrigger = button(
+      'Affirm',
+      `lex-action quorum-affirm-trigger${item.viewerReaction ? ' is-active' : ''}`,
+      () => {
+        const menu = affirm.querySelector('.quorum-affirm-menu');
+        const expanded = menu.hidden;
+        menu.hidden = !expanded;
+        affirmTrigger.setAttribute('aria-expanded', String(expanded));
+      },
     );
-    helpful.setAttribute('aria-pressed', item.viewerHelpful ? 'true' : 'false');
+    affirmTrigger.setAttribute('aria-haspopup', 'menu');
+    affirmTrigger.setAttribute('aria-expanded', 'false');
+    affirmTrigger.setAttribute('aria-label', 'Affirm this post: choose I Hear, I See, or I Feel');
+    const affirmCount = button(
+      String(Number(item.counts?.reactions ?? item.counts?.helpful) || 0),
+      'quorum-affirm-count',
+      () => openAffirmRoster(item),
+    );
+    affirmCount.setAttribute('aria-label', `View ${Number(item.counts?.reactions ?? item.counts?.helpful) || 0} affirmations`);
+    const affirmMenu = document.createElement('div');
+    affirmMenu.className = 'quorum-affirm-menu';
+    affirmMenu.hidden = true;
+    affirmMenu.setAttribute('role', 'menu');
+    Object.entries(affirmReactions).forEach(([type, metadata]) => {
+      const reaction = button(
+        metadata.label,
+        `quorum-affirm-option${item.viewerReaction === type ? ' is-active' : ''}`,
+        () => setAffirm(item, type),
+      );
+      reaction.setAttribute('role', 'menuitemradio');
+      reaction.setAttribute('aria-checked', String(item.viewerReaction === type));
+      affirmMenu.append(reaction);
+    });
+    affirm.append(affirmTrigger, affirmCount, affirmMenu);
     const comments = button(
       `Comment ${Number(item.counts?.comments || 0)}`,
       'lex-action',
@@ -587,7 +623,7 @@
       () => toggleSaved(item, save),
     );
     save.setAttribute('aria-pressed', item.viewerSaved ? 'true' : 'false');
-    actions.append(helpful, comments, cite, save);
+    actions.append(affirm, comments, cite, save);
     inner.append(actions);
 
     const menu = document.createElement('div');
@@ -740,6 +776,59 @@
       setFeedStatus('');
     } catch (error) {
       handleError(error);
+    }
+  }
+
+  async function setAffirm(item, reaction) {
+    const previousReaction = item.viewerReaction || null;
+    const desired = previousReaction === reaction ? null : reaction;
+    try {
+      const result = await command('set_affirm', {
+        entryId: item.entryId,
+        reaction: desired,
+      });
+      item.viewerReaction = result.reaction || null;
+      item.viewerHelpful = Boolean(item.viewerReaction);
+      item.counts = {
+        ...(item.counts || {}),
+        reactions: Number(result.count) || 0,
+        helpful: Number(result.count) || 0,
+        hear: Number(result.counts?.hear) || 0,
+        see: Number(result.counts?.see) || 0,
+        feel: Number(result.counts?.feel) || 0,
+      };
+      renderFeed();
+      toast(item.viewerReaction
+        ? `${affirmReactions[item.viewerReaction].label} recorded.`
+        : 'Affirmation removed.');
+    } catch (error) {
+      handleError(error, null);
+    }
+  }
+
+  async function openAffirmRoster(item) {
+    try {
+      const roster = await query('affirm_roster', { entryId: item.entryId, limit: 60 });
+      openDialog('Affirmations', (body) => {
+        Object.entries(affirmReactions).forEach(([type, metadata]) => {
+          const members = roster.groups?.[type] || [];
+          const group = document.createElement('section');
+          group.className = 'quorum-roster-group';
+          group.append(textElement('h3', '', `${metadata.label} · ${members.length}`));
+          if (!members.length) {
+            group.append(textElement('p', 'lex-dialog-copy', 'No members yet.'));
+          } else {
+            members.forEach((member) => group.append(authorBlock(member)));
+          }
+          body.append(group);
+        });
+        const actions = document.createElement('div');
+        actions.className = 'lex-dialog-actions';
+        actions.append(button('Close', 'lex-button', closeDialog));
+        body.append(actions);
+      });
+    } catch (error) {
+      handleError(error, null);
     }
   }
 
@@ -1750,6 +1839,8 @@
   function composerPayload() {
     return {
       body: $('#lex-post-body')?.value || '',
+      kind: $('#quorum-entry-type')?.value === 'ask_community' ? 'question' : 'discussion',
+      imageAlt: $('#quorum-image-alt')?.value || '',
       sourceUrl: $('#lex-post-source')?.value || '',
       entryType: $('#quorum-entry-type')?.value || '',
       subject: $('#quorum-entry-subject')?.value || null,
@@ -1782,7 +1873,7 @@
       if (!draft || Date.now() - Number(draft.savedAt || 0) > 7 * 24 * 60 * 60 * 1000) return;
       $('#lex-post-body').value = draft.body || '';
       $('#lex-post-source').value = draft.sourceUrl || '';
-      $('#quorum-entry-type').value = entryTypes.has(draft.entryType) ? draft.entryType : 'ask_community';
+      $('#quorum-entry-type').value = draft.kind === 'question' ? 'ask_community' : 'student_support';
       $('#quorum-entry-category').value = categories.has(draft.category) ? draft.category : 'philippine_legal_education';
       $('#quorum-entry-subject').value = subjects.includes(draft.subject) ? draft.subject : '';
       $('#quorum-entry-year').value = draft.lawSchoolYear || '';
@@ -1799,8 +1890,9 @@
   function clearComposer({ announce = false } = {}) {
     $('#lex-composer')?.reset();
     state.selectedImage = null;
-    $('#quorum-entry-type').value = 'ask_community';
-    $('#quorum-entry-category').value = 'philippine_legal_education';
+    $('#quorum-entry-type').value = 'student_support';
+    $('#quorum-entry-category').value = 'law_school_life';
+    if ($('#quorum-image-alt')) $('#quorum-image-alt').value = '';
     $('#quorum-image-status').textContent = 'JPEG, PNG, or WebP · 3 MB maximum';
     $('#quorum-image-remove').hidden = true;
     safeStorage(localStorage, 'remove', draftKey);
@@ -1878,8 +1970,18 @@
     setFeedStatus('Publishing entry…');
     try {
       const payload = composerPayload();
+      if (state.selectedImage && !payload.imageAlt.trim()) {
+        throw new Error('Add a short photo description so everyone can understand the image.');
+      }
       const image = await imageToPayload(state.selectedImage);
-      const result = await command('create_entry', payload, image);
+      const result = await command('create_simple_entry', {
+        body: payload.body,
+        kind: payload.kind,
+        subject: payload.subject,
+        lawSchoolYear: payload.lawSchoolYear,
+        sourceUrl: payload.sourceUrl,
+        imageAlt: payload.imageAlt,
+      }, image);
       clearComposer();
       if (result.publicationStatus === 'pending') {
         toast('Announcement submitted for moderator approval.');
@@ -1925,6 +2027,8 @@
     state.selectedImage = file;
     $('#quorum-image-status').textContent = `${file.name} · ${(file.size / 1024).toFixed(0)} KB`;
     $('#quorum-image-remove').hidden = false;
+    if ($('#quorum-image-alt')) $('#quorum-image-alt').required = true;
+    $('.quorum-add-details')?.setAttribute('open', '');
     saveDraft();
   }
 
@@ -1934,6 +2038,10 @@
     if (field) field.value = '';
     $('#quorum-image-status').textContent = 'JPEG, PNG, or WebP · 3 MB maximum';
     $('#quorum-image-remove').hidden = true;
+    if ($('#quorum-image-alt')) {
+      $('#quorum-image-alt').required = false;
+      $('#quorum-image-alt').value = '';
+    }
     saveDraft();
   }
 
@@ -1948,13 +2056,51 @@
 
   async function loadSidebar() {
     const results = await Promise.allSettled([
-      query('active_issues', { limit: 4 }),
-      query('unanswered', { limit: 3 }),
+      query('insights'),
       query('circles', { limit: 3 }),
     ]);
-    renderCompactEntries($('#quorum-active-issues'), results[0].status === 'fulfilled' ? results[0].value : []);
-    renderCompactEntries($('#quorum-unanswered'), results[1].status === 'fulfilled' ? results[1].value.items : []);
-    renderCompactCircles($('#quorum-recommended-circles'), results[2].status === 'fulfilled' ? results[2].value.items : []);
+    const insights = results[0].status === 'fulfilled'
+      ? results[0].value
+      : { trending: [], questions: [] };
+    renderTrending($('#quorum-active-issues'), insights.trending || []);
+    renderQuestionsNeedingAnswers($('#quorum-unanswered'), insights.questions || []);
+    renderCompactCircles(
+      $('#quorum-recommended-circles'),
+      results[1].status === 'fulfilled' ? results[1].value.items : [],
+    );
+  }
+
+  function renderTrending(container, items = []) {
+    if (!container) return;
+    container.replaceChildren();
+    if (!items.length) {
+      container.append(textElement('p', 'quorum-empty-copy', 'No trending topics yet.'));
+      return;
+    }
+    items.forEach((item, index) => {
+      const row = document.createElement('div');
+      row.className = 'quorum-ranked-item';
+      row.append(
+        textElement('strong', 'quorum-rank', String(index + 1)),
+        textElement('span', '', item.topic),
+        textElement('small', '', `${Number(item.postCount) || 0} ${Number(item.postCount) === 1 ? 'post' : 'posts'}`),
+      );
+      container.append(row);
+    });
+  }
+
+  function renderQuestionsNeedingAnswers(container, items = []) {
+    if (!container) return;
+    container.replaceChildren();
+    if (!items.length) {
+      container.append(textElement('p', 'quorum-empty-copy', 'No unanswered questions yet.'));
+      return;
+    }
+    items.forEach((item) => {
+      const control = button(item.body, 'quorum-question-item', () => openEntry(item.entryId, { push: true }));
+      control.append(textElement('small', '', `${Number(item.answerCount) || 0} answers · ${relativeTime(item.createdAt)}`));
+      container.append(control);
+    });
   }
 
   function renderCompactEntries(container, items = []) {
@@ -1990,12 +2136,13 @@
     const category = $('#quorum-entry-category');
     const subject = $('#quorum-entry-subject');
     if (type) {
-      type.replaceChildren();
-      entryTypes.forEach((label, value) => type.append(option(value, label)));
+      type.replaceChildren(
+        option('student_support', 'Discussion'),
+        option('ask_community', 'Question'),
+      );
     }
     if (category) {
-      category.replaceChildren();
-      categories.forEach((label, value) => category.append(option(value, label)));
+      category.replaceChildren(option('law_school_life', 'Law-school life'));
     }
     if (subject) {
       subject.replaceChildren(option('', 'Not subject-specific'));
@@ -2084,7 +2231,7 @@
       syncCaseTitle();
       saveDraft();
     });
-    ['quorum-entry-category', 'quorum-entry-subject', 'quorum-entry-year', 'quorum-case-title', 'quorum-entry-circle', 'quorum-opinion-only']
+    ['quorum-entry-category', 'quorum-entry-subject', 'quorum-entry-year', 'quorum-case-title', 'quorum-entry-circle', 'quorum-opinion-only', 'quorum-image-alt']
       .forEach((id) => $(`#${id}`)?.addEventListener('change', saveDraft));
     $('#quorum-entry-image')?.addEventListener('change', handleImageSelection);
     $('#quorum-image-remove')?.addEventListener('click', removeSelectedImage);

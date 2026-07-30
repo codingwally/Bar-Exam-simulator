@@ -92,6 +92,34 @@ async function serviceRpc(name, payload) {
   return body;
 }
 
+async function grantSyntheticSuperAdmin(userId) {
+  await jsonRequest(`${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
+      role: 'super_admin',
+      assigned_by: userId,
+      updated_at: new Date().toISOString(),
+    }),
+  }, [200, 204]);
+}
+
+async function deleteSyntheticExam(examId) {
+  await jsonRequest(`${SUPABASE_URL}/rest/v1/examination_definitions?id=eq.${examId}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      Prefer: 'return=minimal',
+    },
+  }, [200, 204]);
+}
+
 async function workerPost(path, payload, token = null, expected = [200]) {
   const { body, response } = await jsonRequest(`${WORKER_URL}${path}`, {
     method: 'POST',
@@ -522,10 +550,7 @@ try {
   const admin = await createUser('admin');
   const firstStudent = await createUser('student-a');
   const secondStudent = await createUser('student-b');
-  await serviceRpc('bootstrap_first_super_admin', {
-    p_target_user_id: admin.id,
-    p_reason: `Synthetic staging bootstrap ${runId}`,
-  });
+  await grantSyntheticSuperAdmin(admin.id);
   const directDashboard = await serviceRpc('examination_admin', {
     p_actor_user_id: admin.id,
     p_operation: 'dashboard',
@@ -534,7 +559,7 @@ try {
   assert.ok(Array.isArray(directDashboard.definitions));
 
   const denied = await query(secondStudent.token, 'catalog', { track: 'per_subject' }, [403]);
-  assert.equal(denied.body.error.code, 'EXAM_BETA_ACCESS_REQUIRED');
+  assert.equal(denied.body.error.code, 'EXAM_ACCESS_REQUIRED');
 
   const cycles = [];
   cycles.push(await cycleStrictHuman(admin, firstStudent));
@@ -558,6 +583,9 @@ try {
     createdUserCount: createdUsers.length,
   };
 } finally {
+  for (const examId of [...new Set(createdExams)].reverse()) {
+    await deleteSyntheticExam(examId).catch(() => {});
+  }
   for (const userId of createdUsers.reverse()) {
     await deleteUser(userId).catch(() => {});
   }

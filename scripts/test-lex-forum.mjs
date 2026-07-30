@@ -29,7 +29,10 @@ const preflight = files['supabase/review/lex_forum_production_preflight.sql'];
 
 assert.match(page, />Quorum<\/button>/);
 assert.match(page, /aria-label="Open Quorum"/);
-assert.match(page, /<h2>Quorum<\/h2>[\s\S]*Disce, disputa, diligenter age\./);
+assert.match(
+  page,
+  /<h2>Quorum<\/h2>[\s\S]*The floor is yours—speak your mind, ask questions, share your law school journey, and learn together\./,
+);
 assert.match(page, /id="lex-forum-app" hidden/);
 assert.match(page, /Quorum is an educational discussion space/);
 assert.doesNotMatch(page, /Lex Forum|Under Construction|Read-only/i);

@@ -772,7 +772,7 @@
 <div class="beta-notice" role="status">
   <strong>Early Access Beta:</strong>
   <span>Some features are still being refined.</span>
-  <button type="button" data-dd2-view="support">Report to Co-Counsel</button>
+  <button type="button" data-dd2-view="support">Report to Support</button>
 </div>
 
 <header class="topbar">
@@ -825,9 +825,9 @@
     <button class="spa-tab" id="spa-jurisprudence" title="Review important legal developments and cases."
       onclick="showPage('jurisprudence', this)">Recent Jurisprudence</button>
     <button class="spa-tab" id="spa-support" title="Get technical and account assistance."
-      data-dd2-view="support">Co-Counsel</button>
+      data-dd2-view="support">Support</button>
     <button class="spa-tab" id="spa-partner" title="Explore school, sponsor, and institutional partnerships."
-      data-dd2-view="partnership">Joint Venture</button>
+      data-dd2-view="partnership">Partnerships</button>
     <button class="spa-tab account-tab" id="btn-signin" type="button"
       title="Manage your profile, preferences, and activity.">The Docket · Sign In</button>
   </nav>
@@ -867,28 +867,19 @@
             <p>Take a curated multi-question set or confirm a private authorized upload before the clock begins.</p>
           </button>
         </div>
-        <div class="welcome-proof" aria-label="Platform scope">
-          <span>8 Bar subjects</span>
-          <span>320 curated questions</span>
-          <span>0–5 assessment scale</span>
-        </div>
       </div>
       <div class="welcome-feature-grid" aria-label="Mock Bar features">
         <div class="welcome-feature">
-          <strong>Realistic practice</strong>
-          <p>Deliberate timed and self-paced essay sessions modeled for Bar preparation.</p>
+          <strong>Prepare by Subject</strong>
+          <p>Practice essay questions for your law-school courses and build confidence for quizzes, midterms, finals, and future Bar preparation.</p>
         </div>
         <div class="welcome-feature">
-          <strong>ALAC feedback</strong>
-          <p>Per-question coaching on Answer, Legal Basis, Application, and Conclusion.</p>
+          <strong>Strengthen Legal Analysis</strong>
+          <p>Improve issue spotting, legal reasoning, and structured A.L.A.C. writing through guided examination practice.</p>
         </div>
         <div class="welcome-feature">
-          <strong>Track your verdicts</strong>
-          <p>Review saved attempts and individual five-point assessments without invented averages.</p>
-        </div>
-        <div class="welcome-feature">
-          <strong>Study with authority</strong>
-          <p>Use curated legal sources and verify cited authorities against official repositories.</p>
+          <strong>Learn From Every Submission</strong>
+          <p>Receive actionable feedback, review the controlling legal authorities, and compare your work with a complete suggested answer after submission.</p>
         </div>
       </div>
     </article>
@@ -915,7 +906,7 @@
     <div class="exam-subnav">
       <button class="tabbtn active" id="tab-write">Answer &amp; Review</button>
       <button class="tabbtn" id="tab-history">The Verdict</button>
-      <button class="tabbtn feedback-btn" id="btn-open-feedback">Co-Counsel</button>
+      <button class="tabbtn feedback-btn" id="btn-open-feedback">Support</button>
     </div>
 
     <div class="layout">
@@ -928,14 +919,13 @@
 
 <section id="page-community" class="page">
   <div class="page-wrap lex-page-wrap">
-    <header class="page-head lex-page-head">
+    <header class="page-head lex-page-head quorum-community-banner">
       <div class="eyebrow">Due Diligence Academic Community</div>
       <div class="lex-title-row">
         <h2>Quorum</h2>
         <span class="lex-beta-badge">Members only</span>
       </div>
-      <p class="quorum-motto">Disce, disputa, diligenter age.</p>
-      <p>A source-conscious academic community for Philippine law students and Bar examinees.</p>
+      <p class="quorum-motto">The floor is yours—speak your mind, ask questions, share your law school journey, and learn together.</p>
     </header>
 
     <div class="lex-auth-state" id="lex-auth-state" role="status" aria-live="polite">
@@ -947,26 +937,29 @@
         <aside class="quorum-navigation" aria-label="Quorum navigation">
           <nav class="quorum-side-nav">
             <button class="quorum-side-link is-active" type="button" data-quorum-view="home">
-              <span aria-hidden="true">⌂</span> Quorum home
+              Quorum Home
+            </button>
+            <button class="quorum-side-link" type="button" data-quorum-view="profile">
+              My Posts
             </button>
             <button class="quorum-side-link" type="button" data-quorum-view="saved">
-              <span aria-hidden="true">◇</span> My Authorities
+              Saved
               <span class="quorum-nav-count" id="quorum-saved-count">0</span>
             </button>
             <button class="quorum-side-link" type="button" data-quorum-view="circles">
-              <span aria-hidden="true">◌</span> Study Circles
+              Study Circles
               <span class="quorum-nav-count" id="quorum-circle-count">0</span>
             </button>
             <button class="quorum-side-link" type="button" data-quorum-view="notifications">
-              <span aria-hidden="true">○</span> Notifications
+              Notifications
               <span class="quorum-nav-count is-alert" id="quorum-notification-count">0</span>
             </button>
             <button class="quorum-side-link" type="button" data-quorum-view="profile">
-              <span aria-hidden="true">□</span> Profile
+              Profile
             </button>
           </nav>
           <details class="quorum-filter-panel">
-            <summary>Browse by subject</summary>
+            <summary>Topics</summary>
             <div id="quorum-subject-links" class="quorum-filter-links"></div>
           </details>
           <details class="quorum-filter-panel">
@@ -987,64 +980,71 @@
           <form class="lex-composer" id="lex-composer">
             <div class="lex-composer-heading">
               <div>
-                <span class="lex-kicker">Contribute to Quorum</span>
-                <h3>Share a focused question, authority, or study insight.</h3>
+                <span class="lex-kicker">The floor is yours</span>
+                <h3>What do you want to ask or share about law school?</h3>
               </div>
               <span class="lex-member-mark" aria-hidden="true">DD</span>
             </div>
-            <div class="quorum-composer-grid">
-              <label class="lex-source-field" for="quorum-entry-type">
-                <span>Purpose</span>
-                <select id="quorum-entry-type" required></select>
-              </label>
-              <label class="lex-source-field" for="quorum-entry-category">
-                <span>Category</span>
-                <select id="quorum-entry-category" required></select>
-              </label>
-              <label class="lex-source-field" for="quorum-entry-subject">
-                <span>Bar subject <em>when relevant</em></span>
-                <select id="quorum-entry-subject"></select>
-              </label>
-              <label class="lex-source-field" for="quorum-entry-year">
-                <span>Law-school year <em>optional</em></span>
-                <input id="quorum-entry-year" maxlength="80" placeholder="e.g., 3L">
-              </label>
-              <label class="lex-source-field quorum-case-title" for="quorum-case-title" hidden>
-                <span>Case title</span>
-                <input id="quorum-case-title" maxlength="300" placeholder="Case title and citation">
-              </label>
-              <label class="lex-source-field" for="quorum-entry-circle">
-                <span>Study Circle <em>optional</em></span>
-                <select id="quorum-entry-circle">
-                  <option value="">Public Quorum Feed</option>
-                </select>
-              </label>
-            </div>
-            <label class="lex-field-label" for="lex-post-body">Entry</label>
-            <textarea id="lex-post-body" maxlength="4000" rows="5"
-              placeholder="Write in plain text. Identify the issue clearly and distinguish your analysis from quoted authority."
+            <label class="sr-only" for="lex-post-body">Share with Quorum</label>
+            <textarea id="lex-post-body" maxlength="4000" rows="2"
+              placeholder="What do you want to ask or share about law school?"
               required></textarea>
             <div class="lex-composer-meta">
-              <label class="lex-source-field" for="lex-post-source">
-                <span>Official or reliable source URL <em>optional</em></span>
-                <input id="lex-post-source" type="url" maxlength="2000"
-                  inputmode="url" placeholder="https://elibrary.judiciary.gov.ph/…">
-              </label>
-              <label class="quorum-opinion-control">
-                <input id="quorum-opinion-only" type="checkbox">
-                <span>Mark as Opinion Only</span>
-              </label>
               <div class="quorum-image-control">
-                <label class="lex-button lex-button-quiet" for="quorum-entry-image">Add image</label>
+                <label class="quorum-composer-tool" for="quorum-entry-image">Photo</label>
                 <input id="quorum-entry-image" type="file" accept="image/jpeg,image/png,image/webp" hidden>
                 <span id="quorum-image-status">JPEG, PNG, or WebP · 3 MB maximum</span>
                 <button class="lex-button lex-button-quiet" id="quorum-image-remove" type="button" hidden>Remove image</button>
+                <label class="lex-source-field quorum-image-alt" for="quorum-image-alt">
+                  <span>Photo description <em>required with a photo</em></span>
+                  <input id="quorum-image-alt" maxlength="500" placeholder="Describe the important content of the photo">
+                </label>
               </div>
+              <details class="quorum-add-details">
+                <summary>Add details</summary>
+                <div class="quorum-composer-grid">
+                  <label class="lex-source-field" for="quorum-entry-type">
+                    <span>Purpose</span>
+                    <select id="quorum-entry-type" required></select>
+                  </label>
+                  <label class="lex-source-field" for="quorum-entry-category">
+                    <span>Category</span>
+                    <select id="quorum-entry-category" required></select>
+                  </label>
+                  <label class="lex-source-field" for="quorum-entry-subject">
+                    <span>Bar subject <em>when relevant</em></span>
+                    <select id="quorum-entry-subject"></select>
+                  </label>
+                  <label class="lex-source-field" for="quorum-entry-year">
+                    <span>Law-school year <em>optional</em></span>
+                    <input id="quorum-entry-year" maxlength="80" placeholder="e.g., 3L">
+                  </label>
+                  <label class="lex-source-field quorum-case-title" for="quorum-case-title" hidden>
+                    <span>Case title</span>
+                    <input id="quorum-case-title" maxlength="300" placeholder="Case title and citation">
+                  </label>
+                  <label class="lex-source-field" for="quorum-entry-circle">
+                    <span>Study Circle <em>optional</em></span>
+                    <select id="quorum-entry-circle">
+                      <option value="">Public Quorum Feed</option>
+                    </select>
+                  </label>
+                  <label class="lex-source-field" for="lex-post-source">
+                    <span>Official or reliable source URL <em>optional</em></span>
+                    <input id="lex-post-source" type="url" maxlength="2000"
+                      inputmode="url" placeholder="https://elibrary.judiciary.gov.ph/…">
+                  </label>
+                  <label class="quorum-opinion-control">
+                    <input id="quorum-opinion-only" type="checkbox">
+                    <span>Mark as Opinion Only</span>
+                  </label>
+                </div>
+              </details>
               <div class="lex-composer-actions">
                 <span id="lex-post-counter" aria-live="polite">0 / 4,000</span>
                 <button class="lex-button lex-button-quiet" id="quorum-entry-preview" type="button">Preview</button>
                 <button class="lex-button lex-button-quiet" id="quorum-entry-cancel" type="button">Cancel</button>
-                <button class="lex-button lex-button-primary" id="lex-post-submit" type="submit">Publish entry</button>
+                <button class="lex-button lex-button-primary" id="lex-post-submit" type="submit">Post</button>
               </div>
             </div>
           </form>
@@ -1072,10 +1072,10 @@
         <aside class="lex-secondary" aria-label="Quorum supporting information">
           <section class="lex-guidance-card">
             <div class="quorum-card-head">
-              <span class="lex-kicker">Current discussions</span>
+              <span class="lex-kicker">Community pulse</span>
               <button class="quorum-text-button" id="quorum-active-refresh" type="button">Refresh</button>
             </div>
-            <h3>Active Issues</h3>
+            <h3>Trending in Quorum</h3>
             <div id="quorum-active-issues" class="quorum-compact-list"></div>
           </section>
           <section class="lex-guidance-card">
@@ -1083,7 +1083,7 @@
               <span class="lex-kicker">Needs a response</span>
               <button class="quorum-text-button" data-quorum-view="unanswered" type="button">View all</button>
             </div>
-            <h3>Unanswered questions</h3>
+            <h3>Questions Needing Answers</h3>
             <div id="quorum-unanswered" class="quorum-compact-list"></div>
           </section>
           <section class="lex-guidance-card">
@@ -1163,11 +1163,11 @@
       </p>
     </div>
     <div class="footer-links">
-      <a href="#support" data-dd2-view="support">Co-Counsel</a>
+      <a href="#support" data-dd2-view="support">Support</a>
       <a href="#pricing" data-dd2-view="pricing">Retainer</a>
       <a href="#terms" data-dd2-view="terms">Terms</a>
       <a href="#privacy" data-dd2-view="privacy">Privacy</a>
-      <a href="#partnership" data-dd2-view="partnership">Joint Venture</a>
+      <a href="#partnership" data-dd2-view="partnership">Partnerships</a>
     </div>
   </div>
 </footer>
@@ -1229,13 +1229,13 @@
 
 <div class="modal-overlay" id="feedback-modal">
   <div class="modal-card">
-    <h3 class="modal-title">Due Diligence Co-Counsel</h3>
+    <h3 class="modal-title">Due Diligence Support</h3>
     <div class="modal-sub">Email support@duediligence.ph</div>
     <form id="feedback-form">
       <p class="checking-copy">Open your email application to request technical help, report a problem, or send platform feedback.</p>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="btn-close-feedback">Cancel</button>
-        <a class="btn-primary" href="#support">Open Co-Counsel</a>
+        <a class="btn-primary" href="#support">Open Support</a>
       </div>
     </form>
   </div>

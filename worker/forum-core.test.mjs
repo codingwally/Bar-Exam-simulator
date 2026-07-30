@@ -537,6 +537,61 @@ test('Quorum reads use the verified session identity and controlled RPC', async 
   }
 });
 
+test('Quorum image signing preserves the Supabase storage API prefix', async () => {
+  const imagePath = `entries/${entryA}/evidence.png`;
+  const absoluteImagePath = `entries/${entryA}/absolute-evidence.jpg`;
+  const restore = installForumFetch(async (url) => {
+    if (url.endsWith('/rest/v1/rpc/forum_quorum_query')) {
+      return Response.json({
+        items: [{
+          entryId: entryA,
+          body: 'A source-backed post with an image.',
+          imagePath,
+        }, {
+          entryId: 'qe_bbbbbbbbbbbbbbbbbbbb',
+          body: 'A second source-backed post with an image.',
+          imagePath: absoluteImagePath,
+        }],
+        hasMore: false,
+        nextCursor: null,
+      });
+    }
+    if (url.endsWith('/storage/v1/object/sign/quorum-images')) {
+      return Response.json([{
+        path: imagePath,
+        signedURL: `/object/sign/quorum-images/${imagePath}?token=opaque-test-token`,
+      }, {
+        path: absoluteImagePath,
+        signedURL: `https://test.supabase.co/object/sign/quorum-images/${absoluteImagePath}?token=opaque-absolute-token`,
+      }]);
+    }
+    throw new Error(`Unexpected Quorum image request: ${url}`);
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/query', {
+        operation: 'feed',
+        payload: { limit: 10 },
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(
+      payload.data.items[0].imageUrl,
+      `https://test.supabase.co/storage/v1/object/sign/quorum-images/${imagePath}?token=opaque-test-token`,
+    );
+    assert.equal(
+      payload.data.items[1].imageUrl,
+      `https://test.supabase.co/storage/v1/object/sign/quorum-images/${absoluteImagePath}?token=opaque-absolute-token`,
+    );
+    assert.equal('imagePath' in payload.data.items[0], false);
+    assert.equal('imagePath' in payload.data.items[1], false);
+  } finally {
+    restore();
+  }
+});
+
 test('Quorum insights and Affirm rosters use dedicated least-privilege RPCs', async () => {
   const calls = [];
   const restore = installForumFetch(async (url, options) => {

@@ -558,6 +558,15 @@ function collectQuorumImagePaths(value, paths = new Set()) {
   return paths;
 }
 
+function absoluteSupabaseStorageUrl(baseUrl, signedPath) {
+  const base = new URL(baseUrl);
+  const signed = new URL(String(signedPath || ''), base);
+  if (signed.origin === base.origin && signed.pathname.startsWith('/object/')) {
+    signed.pathname = `/storage/v1${signed.pathname}`;
+  }
+  return signed.href;
+}
+
 async function signedQuorumImageUrls(env, paths) {
   const uniquePaths = Array.from(paths);
   if (!uniquePaths.length) return new Map();
@@ -584,9 +593,7 @@ async function signedQuorumImageUrls(env, paths) {
       if (!path || !signedPath) return;
       map.set(
         path,
-        /^https?:\/\//i.test(signedPath)
-          ? signedPath
-          : new URL(signedPath, baseUrl).href,
+        absoluteSupabaseStorageUrl(baseUrl, signedPath),
       );
     });
   }
@@ -612,9 +619,7 @@ async function signedQuorumImageUrls(env, paths) {
     if (signedPath) {
       map.set(
         path,
-        /^https?:\/\//i.test(signedPath)
-          ? signedPath
-          : new URL(signedPath, baseUrl).href,
+        absoluteSupabaseStorageUrl(baseUrl, signedPath),
       );
     }
   }

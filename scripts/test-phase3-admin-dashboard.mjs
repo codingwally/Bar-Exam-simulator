@@ -22,9 +22,9 @@ const sectionLabels = [
   'Retainer Management',
   'Payment Review',
   'Refunds',
-  'Co-Counsel Requests',
+  'Support Requests',
   'Answer Corrections',
-  'Joint Ventures',
+  'Partnerships',
   'Website Settings',
   'Access &amp; Activity Log',
 ];
@@ -41,7 +41,7 @@ assert.match(css, /@media print/);
 assert.match(js, /Paid subscribers: Not connected/);
 assert.match(js, /Scenario only — not actual performance/);
 assert.match(js, /Final identity transfer is disabled/);
-assert.match(js, /Contact Co-Counsel\. We respond within 24 hours\./);
+assert.match(js, /Contact Support\. We respond within 24 hours\./);
 assert.match(js, /No production data was changed/);
 assert.match(js, /No verified events/);
 assert.match(js, /Administrator request failed/);

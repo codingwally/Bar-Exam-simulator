@@ -94,6 +94,53 @@ test('source URL validation accepts HTTPS and rejects script or credentialed URL
   }
 });
 
+test('simple Quorum entries require only body and type while accepting optional details', () => {
+  const discussion = normalizeQuorumCommandRequest({
+    operation: 'create_simple_entry',
+    payload: {
+      body: 'Incoming first-year student asking when enrollment dates are usually announced.',
+      kind: 'discussion',
+    },
+  });
+  assert.equal(discussion.payload.kind, 'discussion');
+  assert.equal(discussion.payload.subject, null);
+  assert.equal(discussion.payload.sourceUrl, null);
+
+  const question = normalizeQuorumCommandRequest({
+    operation: 'create_simple_entry',
+    payload: {
+      body: 'Which codal should I read first for Civil Law?',
+      kind: 'question',
+      subject: 'Civil Law',
+      lawSchoolYear: '1L',
+      sourceUrl: 'https://elibrary.judiciary.gov.ph/',
+      imageAlt: 'A study desk with Philippine codals and handwritten notes.',
+    },
+  });
+  assert.equal(question.payload.kind, 'question');
+  assert.equal(question.payload.subject, 'Civil Law');
+  assert.equal(question.payload.lawSchoolYear, '1L');
+  assert.match(question.payload.sourceUrl, /^https:/);
+});
+
+test('Affirm supports exactly one of three reactions or removal', () => {
+  for (const reaction of ['hear', 'see', 'feel']) {
+    const normalized = normalizeQuorumCommandRequest({
+      operation: 'set_affirm',
+      payload: { entryId: entryA, reaction },
+    });
+    assert.equal(normalized.payload.reaction, reaction);
+  }
+  assert.equal(normalizeQuorumCommandRequest({
+    operation: 'set_affirm',
+    payload: { entryId: entryA, reaction: null },
+  }).payload.reaction, null);
+  assert.throws(() => normalizeQuorumCommandRequest({
+    operation: 'set_affirm',
+    payload: { entryId: entryA, reaction: 'like' },
+  }), ForumValidationError);
+});
+
 test('feed cursors are bounded and UUID validated', () => {
   const request = normalizeForumFeedRequest({
     limit: 500,
@@ -485,6 +532,47 @@ test('Quorum reads use the verified session identity and controlled RPC', async 
   }
 });
 
+test('Quorum insights and Affirm rosters use dedicated least-privilege RPCs', async () => {
+  const calls = [];
+  const restore = installForumFetch(async (url, options) => {
+    calls.push({
+      url,
+      body: JSON.parse(options.body),
+    });
+    if (url.endsWith('/rest/v1/rpc/forum_quorum_insights')) {
+      return Response.json({ trending: [], questions: [] });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_affirm_roster')) {
+      return Response.json({
+        entryId: entryA,
+        groups: { hear: [], see: [], feel: [] },
+      });
+    }
+    throw new Error(`Unexpected Quorum RPC: ${url}`);
+  });
+  try {
+    const insightsResponse = await worker.fetch(
+      forumRequest('/quorum/query', { operation: 'insights', payload: {} }),
+      baseEnv,
+    );
+    const rosterResponse = await worker.fetch(
+      forumRequest('/quorum/query', {
+        operation: 'affirm_roster',
+        payload: { entryId: entryA, limit: 60 },
+      }),
+      baseEnv,
+    );
+    assert.equal(insightsResponse.status, 200);
+    assert.equal(rosterResponse.status, 200);
+    assert.equal(calls[0].body.p_user_id, userA);
+    assert.equal(calls[1].body.p_user_id, userA);
+    assert.equal(calls[1].body.p_entry_id, entryA);
+    assert.equal(calls[1].body.p_limit, 20);
+  } finally {
+    restore();
+  }
+});
+
 test('Quorum commands cannot spoof author identity', async () => {
   let rpcBody;
   const restore = installForumFetch(async (url, options) => {
@@ -516,6 +604,66 @@ test('Quorum commands cannot spoof author identity', async () => {
     assert.equal(payload.data.entryId, entryA);
     assert.equal(rpcBody.p_user_id, userA);
     assert.equal('authorUserId' in rpcBody.p_payload, false);
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum simple publishing and atomic Affirm use dedicated RPCs', async () => {
+  const calls = [];
+  const restore = installForumFetch(async (url, options) => {
+    calls.push({
+      url,
+      body: JSON.parse(options.body),
+    });
+    if (url.endsWith('/rest/v1/rpc/forum_publish_simple')) {
+      return Response.json({
+        entryId: entryA,
+        publicationStatus: 'published',
+        message: 'Entry published in Quorum.',
+      });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_set_affirm')) {
+      return Response.json({
+        entryId: entryA,
+        reaction: 'feel',
+        counts: { hear: 0, see: 0, feel: 1 },
+      });
+    }
+    throw new Error(`Unexpected Quorum RPC: ${url}`);
+  });
+  try {
+    const postResponse = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'create_simple_entry',
+        payload: {
+          authorUserId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          body: 'How did you build a sustainable codal-reading routine?',
+          kind: 'question',
+        },
+      }),
+      baseEnv,
+    );
+    const affirmResponse = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'set_affirm',
+        payload: {
+          entryId: entryA,
+          reaction: 'feel',
+          userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        },
+      }),
+      baseEnv,
+    );
+    assert.equal(postResponse.status, 201);
+    assert.equal(affirmResponse.status, 200);
+    assert.equal(calls[0].body.p_user_id, userA);
+    assert.equal(calls[0].body.p_operation, 'create');
+    assert.equal('authorUserId' in calls[0].body.p_payload, false);
+    assert.equal(calls[1].body.p_user_id, userA);
+    assert.equal(calls[1].body.p_entry_id, entryA);
+    assert.equal(calls[1].body.p_reaction_type, 'feel');
+    assert.equal('userId' in calls[1].body, false);
   } finally {
     restore();
   }

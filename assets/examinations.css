@@ -613,6 +613,21 @@
   min-height: calc(100vh - 74px);
 }
 
+.dd-exam-room-layout.is-single-question {
+  grid-template-columns: minmax(0, 920px);
+  justify-content: center;
+  padding: 28px 20px 96px;
+}
+
+.dd-exam-room-layout.is-single-question .dd-writing-workspace {
+  width: 100%;
+  border: 1px solid var(--dd-exam-border);
+  border-top: 3px solid var(--dd-exam-gold);
+  border-radius: 14px;
+  background: var(--dd-exam-paper);
+  box-shadow: 0 16px 40px rgba(20, 36, 59, .08);
+}
+
 .dd-question-rail,
 .dd-exam-status-rail {
   padding: 22px 18px;

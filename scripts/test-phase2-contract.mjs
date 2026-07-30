@@ -21,15 +21,12 @@ const config = sandbox.window.DueDiligencePhase2Config;
 assert.equal(config.guest.gradeLimit, 3);
 assert.equal(config.legal.termsVersion, 'terms-beta-v2-2026-07-28');
 assert.equal(config.legal.privacyVersion, 'privacy-beta-v2-2026-07-28');
-assert.deepEqual(
-  Array.from(config.plans.items, (plan) => [plan.id, plan.pricePhp]),
-  [
-    ['early_access_beta', 149],
-    ['standard', 249],
-    ['premium', 499],
-  ],
-);
-assert.equal(config.features.payments, true);
+assert.deepEqual(Array.from(config.plans.items, (plan) => [
+  plan.id,
+  plan.pricingHidden,
+]), [['premium', true]]);
+assert.equal(config.plans.notice, 'Pricing will be announced after beta testing.');
+assert.equal(config.features.payments, false);
 assert.equal(config.features.subscriptionEnforcement, true);
 assert.equal(config.features.coachingBooking, false);
 
@@ -40,7 +37,7 @@ for (const expected of [
   'Continue as Guest',
   'Save progress',
   'Personal analytics',
-  '320 curated questions',
+  'Guided Subject Matter practice',
   'Guest access includes 3 graded questions across all subjects.',
   'You have completed your 3 guest questions.',
   'accept_terms',
@@ -102,4 +99,4 @@ for (const forbidden of [
   assert.doesNotMatch(`${index}\n${experience}\n${configSource}\n${migration}\n${worker}`, forbidden);
 }
 
-console.log('Phase 2 authentication, guest-limit, support, and pricing contract tests passed.');
+console.log('Phase 2 authentication, guest-limit, support, and concealed beta pricing contract tests passed.');

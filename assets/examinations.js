@@ -56,6 +56,7 @@
     expiryInFlight: false,
     assignment: null,
     uploadPreview: null,
+    preferredTimerMode: 'strict',
     initialized: false,
   };
 
@@ -209,161 +210,113 @@
     return String(value || '').trim().match(/\S+/g)?.length || 0;
   }
 
-  function examItemsForSubject(subject) {
-    return state.catalog.filter(
-      (item) => item.track === 'per_subject' && item.subject === subject,
-    );
+  function subjectCatalogItem(subjectName = state.selectedSubject) {
+    return state.catalog.find((item) => item.subject === subjectName) || state.catalog[0] || null;
   }
 
-  function availabilityMap() {
-    const map = new Map();
-    SUBJECTS.forEach((subject) => {
-      map.set(subject.source, examItemsForSubject(subject.source).length > 0);
+  function groupedSubjectButtons(selected) {
+    const groups = new Map();
+    state.catalog.forEach((item) => {
+      const key = `${item.yearLevel}-${item.term}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
     });
-    return map;
-  }
-
-  function perSubjectCard(item, subject) {
-    const labels = {
-      midterm: 'Midterm Examination',
-      final: 'Final Examination',
-      quiz: 'Subject Matter Practice',
-      system_test: 'Controlled System Test',
-    };
-    const label = labels[item?.assessmentKind] || 'Subject Matter Practice';
-    if (!item) {
-      return `<article class="dd-exam-card">
-        <div class="dd-exam-card-head">
-          <h3>${label}</h3>
-          <span class="dd-exam-pill is-pending">Editorial review pending</span>
-        </div>
-        <p class="dd-exam-description">
-          This examination is not published. The source rows for ${escapeHtml(subject.display)}
-          do not yet satisfy the Sheet&rsquo;s Approved / Publication Ready gate.
-        </p>
-        <button class="dd-exam-button" type="button" disabled>Not available</button>
-      </article>`;
-    }
-    const resume = item.resumableAttemptId
-      ? `<button class="dd-exam-button" type="button"
-          data-exam-resume="${escapeHtml(item.resumableAttemptId)}">Resume Examination</button>`
-      : '';
-    return `<article class="dd-exam-card">
-      <div class="dd-exam-card-head">
-        <div>
-          <h3>${escapeHtml(label)}</h3>
-          <p class="dd-exam-description">${escapeHtml(item.title)}</p>
-        </div>
-        <span class="dd-exam-pill">${item.testOnly ? 'Controlled system test' : 'Published'}</span>
-      </div>
-      <div class="dd-exam-meta">
-        <div><small>Questions</small><strong>${Number(item.questionCount)}</strong></div>
-        <div><small>Duration</small><strong>${escapeHtml(formatDuration(item.durationSeconds))}</strong></div>
-        <div><small>Assessment</small><strong>0.0&ndash;5.0 each</strong></div>
-      </div>
-      <p class="dd-exam-description">
-        ALAC assessment per answer. Stored sources remain attached for verification.
-        ${item.testOnly ? 'This is not represented as a complete twenty-question academic examination.' : ''}
-      </p>
-      <div class="dd-exam-actions">
-        <button class="dd-exam-button is-primary" type="button"
-          data-exam-setup="${escapeHtml(item.versionId)}">Begin Examination</button>
-        ${resume}
-      </div>
-    </article>`;
-  }
-
-  function groupedSubjectButtons(selected, availability) {
-    return [1, 2].map((year) => [1, 2].map((term) => {
-      const subjects = SUBJECTS.filter((subject) => subject.year === year && subject.term === term);
-      return `<section class="dd-subject-group">
-        <h3>Year ${year} · Term ${term}</h3>
-        ${subjects.map((subject) => {
-          const ready = availability.get(subject.source);
-          return `<button class="dd-subject-button ${subject.source === selected.source ? 'is-selected' : ''}"
-            type="button" data-exam-subject="${escapeHtml(subject.source)}">
-            <span>${escapeHtml(subject.display)}</span>
-            <small class="dd-subject-state ${ready ? 'is-ready' : ''}">
-              ${ready ? 'Practice ready' : 'Review pending'}
-            </small>
-          </button>`;
-        }).join('')}
-      </section>`;
-    }).join('')).join('');
+    return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, items]) => {
+        const [year, term] = key.split('-');
+        return `<section class="dd-subject-group">
+          <h3>Year ${escapeHtml(year)} · Term ${escapeHtml(term)}</h3>
+          ${items.sort((a, b) => a.subject.localeCompare(b.subject)).map((item) => `
+            <button class="dd-subject-button ${item.subject === selected?.subject ? 'is-selected' : ''}"
+              type="button" data-exam-subject="${escapeHtml(item.subject)}">
+              <span>${escapeHtml(item.subject)}</span>
+              <small class="dd-subject-state is-ready">
+                ${Number(item.completedCount) || 0} of ${Number(item.questionCount) || 0} completed
+              </small>
+            </button>`).join('')}
+        </section>`;
+      }).join('');
   }
 
   function renderPerSubject() {
     const root = pageRoot('per_subject');
     if (!root) return;
-    const selected = SUBJECTS.find((subject) => subject.source === state.selectedSubject)
-      || SUBJECTS[2];
-    const availability = availabilityMap();
-    const subjectItems = examItemsForSubject(selected.source);
-    const practiceItems = [...subjectItems].sort((left, right) => {
-      const rank = { quiz: 0, midterm: 1, final: 2, system_test: 3 };
-      return (rank[left.assessmentKind] ?? 9) - (rank[right.assessmentKind] ?? 9);
-    });
-    const syllabus = [...new Set(subjectItems.flatMap((item) => item.syllabus || []))];
-    const relatedHistory = state.history.filter((item) => item.subject === selected.source).slice(0, 5);
-
+    const selected = subjectCatalogItem();
+    if (!selected) {
+      root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
+        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">Guided essay practice</p>
+          <h1>Subject Matter</h1></div></header>
+        <div class="dd-exam-status is-error">No Subject Matter questions are available right now.</div>
+      </div></div>`;
+      return;
+    }
+    state.selectedSubject = selected.subject;
     root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
       <header class="dd-exam-hero">
         <div>
-          <p class="dd-exam-kicker">Mock Bar / Structured Assessment</p>
-          <h1>Subject Matter Examinations</h1>
-          <p>Published essay practice for LEB-required subjects, using one authoritative
-            timer, ALAC workspaces, autosave, and individual five-point assessments.</p>
+          <p class="dd-exam-kicker">Guided essay practice</p>
+          <h1>Subject Matter</h1>
+          <p>Choose a law-school subject, answer one randomly selected essay, and learn from
+            a focused A.L.A.C. assessment before moving to the next question.</p>
         </div>
-        <span class="dd-exam-beta">Allowlisted live beta</span>
+        <span class="dd-exam-beta">Beta access active</span>
       </header>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
       <div class="dd-subject-layout">
         <aside class="dd-exam-panel">
-          <p class="dd-exam-panel-title">First- and Second-Year LEB Subjects</p>
+          <p class="dd-exam-panel-title">Choose a subject</p>
           <label class="sr-only" for="dd-subject-search">Filter subjects</label>
           <input class="dd-subject-search" id="dd-subject-search" type="search"
             placeholder="Filter subjects">
           <label class="sr-only" for="dd-subject-mobile">Select subject</label>
           <select class="dd-subject-mobile" id="dd-subject-mobile">
-            ${SUBJECTS.map((subject) => `<option value="${escapeHtml(subject.source)}"
-              ${subject.source === selected.source ? 'selected' : ''}>${escapeHtml(subject.display)}</option>`).join('')}
+            ${state.catalog.map((item) => `<option value="${escapeHtml(item.subject)}"
+              ${item.subject === selected.subject ? 'selected' : ''}>${escapeHtml(item.subject)}</option>`).join('')}
           </select>
-          <div class="dd-subject-list">
-            ${groupedSubjectButtons(selected, availability)}
-          </div>
+          <div class="dd-subject-list">${groupedSubjectButtons(selected)}</div>
         </aside>
         <main>
           <header class="dd-selected-heading">
-            <p class="dd-exam-kicker">Year ${selected.year} · Term ${selected.term} LEB Subject</p>
-            <h2>${escapeHtml(selected.display)}</h2>
-            <p>One approved essay question, with a seven-minute strict mode and optional
-              self-paced or untimed review. No timer starts before setup confirmation.</p>
+            <p class="dd-exam-kicker">Year ${Number(selected.yearLevel)} · Term ${Number(selected.term)}</p>
+            <h2>${escapeHtml(selected.subject)}</h2>
+            <p>Questions appear in a random, no-repeat cycle. Choose one of the three
+              existing timer modes before your first question; the timer starts only after confirmation.</p>
           </header>
-          <div class="dd-exam-card-list">
-            ${practiceItems.length
-              ? practiceItems.map((item) => perSubjectCard(item, selected)).join('')
-              : perSubjectCard(null, selected)}
-          </div>
+          <article class="dd-exam-card">
+            <div class="dd-exam-card-head">
+              <div>
+                <h3>One-question A.L.A.C. practice</h3>
+                <p class="dd-exam-description">Each submission receives its own assessment,
+                  complete suggested answer, controlling legal basis, and available sources.</p>
+              </div>
+              <span class="dd-exam-pill">${Number(selected.questionCount)} questions</span>
+            </div>
+            <div class="dd-exam-meta">
+              <div><small>Completed</small><strong>${Number(selected.completedCount) || 0}</strong></div>
+              <div><small>Available</small><strong>${Number(selected.questionCount) || 0}</strong></div>
+              <div><small>Writing method</small><strong>A.L.A.C.</strong></div>
+            </div>
+            <div class="dd-exam-actions">
+              <button class="dd-exam-button is-primary" type="button"
+                data-subject-start="${escapeHtml(selected.subject)}"
+                data-year="${Number(selected.yearLevel)}" data-term="${Number(selected.term)}">
+                Start a Random Question
+              </button>
+              <button class="dd-exam-button" type="button"
+                data-subject-performance="${escapeHtml(selected.subject)}">Review My Performance</button>
+            </div>
+          </article>
         </main>
         <aside>
           <section class="dd-exam-panel">
-            <p class="dd-exam-panel-title">Syllabus Coverage</p>
-            <h3>${escapeHtml(selected.display)}</h3>
-            ${syllabus.length
-              ? `<ul class="dd-syllabus-list">${syllabus.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
-              : '<p class="dd-exam-description">Coverage appears only after a reviewed examination version is published.</p>'}
-          </section>
-          <section class="dd-exam-panel" style="margin-top:16px">
-            <p class="dd-exam-panel-title">The Verdict</p>
-            <h3>Recent Examination History</h3>
-            ${relatedHistory.length
-              ? `<div class="dd-history-list">${relatedHistory.map((item) => `
-                <button class="dd-history-item dd-exam-button" type="button"
-                  data-exam-verdict="${escapeHtml(item.attemptId)}">
-                  <strong>${escapeHtml(item.title)}</strong>
-                  <span>${escapeHtml(item.status)} &middot; ${escapeHtml(formatDate(item.submittedAt || item.startedAt))}</span>
-                </button>`).join('')}</div>`
-              : '<p class="dd-exam-description">No genuine attempts for this subject yet.</p>'}
+            <p class="dd-exam-panel-title">How it works</p>
+            <h3>Practice without repeats.</h3>
+            <ol class="dd-syllabus-list">
+              <li>Choose a timer mode.</li>
+              <li>Write and submit one answer.</li>
+              <li>Study the assessment and suggested answer.</li>
+              <li>Continue to a different random question.</li>
+            </ol>
           </section>
         </aside>
       </div>
@@ -374,24 +327,23 @@
     const items = state.catalog.filter((item) => item.track === 'bar_feels');
     if (!items.length) {
       return `<div class="dd-unavailable">
-        No curated Bar Feels examination is published for this beta account yet.
-        Founder Admins can publish a controlled test from Chambers.
+        Bar Feels is being prepared for this beta account.
       </div>`;
     }
     return items.map((item) => `<article class="dd-exam-card">
       <div class="dd-exam-card-head">
         <div><h3>${escapeHtml(item.title)}</h3>
           <p class="dd-exam-description">${escapeHtml(item.subject || 'Curated Philippine law examination')}</p></div>
-        <span class="dd-exam-pill">${item.testOnly ? 'System test' : 'Curated'}</span>
+        <span class="dd-exam-pill">Premium · Beta access active</span>
       </div>
       <div class="dd-exam-meta">
         <div><small>Questions</small><strong>${Number(item.questionCount)}</strong></div>
         <div><small>Duration</small><strong>${escapeHtml(formatDuration(item.durationSeconds))}</strong></div>
-        <div><small>Route</small><strong>${escapeHtml(item.gradingRoute)}</strong></div>
+        <div><small>Writing method</small><strong>A.L.A.C.</strong></div>
       </div>
       <div class="dd-exam-actions">
         <button class="dd-exam-button is-primary" data-exam-setup="${escapeHtml(item.versionId)}"
-          type="button">Open Examination Setup</button>
+          type="button">Choose Timer &amp; Begin</button>
         ${item.resumableAttemptId ? `<button class="dd-exam-button"
           data-exam-resume="${escapeHtml(item.resumableAttemptId)}" type="button">Resume</button>` : ''}
       </div>
@@ -406,18 +358,18 @@
         <div>
           <p class="dd-exam-kicker">Mock Bar / Examination Room</p>
           <h1>Bar Feels</h1>
-          <p>Enter a focused multi-question examination using a curated Due Diligence set
-            or a private authorized upload. No timer begins before you confirm the setup.</p>
+          <p>Enter one of six Premium Philippine Bar examination blocks. Every block contains
+            twenty distinct questions, and no timer begins before you confirm the setup.</p>
         </div>
-        <span class="dd-exam-beta">Allowlisted live beta</span>
+        <span class="dd-exam-beta">Premium · Beta access active</span>
       </header>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
       <div class="dd-bar-entry-grid">
         <section class="dd-bar-entry-card">
           <p class="dd-exam-kicker">Curated Route</p>
-          <h2>Due Diligence Examination</h2>
-          <p>Use approved question snapshots with stored model answers, legal bases,
-            and official source links. Each answer is assessed independently from 0.0 to 5.0.</p>
+          <h2>Six Bar Examination Destinations</h2>
+          <p>Practice twenty distinct essays in each destination, with individual A.L.A.C.
+            assessment and the full suggested answer released under the examination rules.</p>
           <div class="dd-exam-card-list">${curatedBarCards()}</div>
         </section>
         <section class="dd-bar-entry-card">
@@ -464,7 +416,7 @@
   }
 
   async function openSetup(versionId) {
-    setStatus('Loading secure examination setup…');
+    setStatus('Preparing your examination…');
     try {
       const setup = await api('/examinations/query', { operation: 'setup', versionId });
       state.setup = setup;
@@ -474,24 +426,22 @@
         ['selfPaced', 'Quantum Meruit', 'Counts upward from 0:00 with no automatic deadline.'],
         ['none', 'Summary Judgment', 'No visible timer; server timestamps remain recorded.'],
       ].filter(([mode]) => (setup.allowedTimerModes || []).includes(mode));
+      const compact = setup.track === 'per_subject';
       dialog.innerHTML = `<div class="dd-exam-dialog-inner">
-        <p class="dd-exam-kicker">${escapeHtml(setup.track === 'bar_feels' ? 'Bar Feels' : 'Subject Matter Examination')}</p>
-        <h2>${escapeHtml(setup.title)}</h2>
-        <p class="dd-exam-description">Review the complete setup. The timer has not started.</p>
-        <dl>
-          <dt>Source</dt><dd>${escapeHtml(setup.source)}</dd>
-          <dt>Subject / block</dt><dd>${escapeHtml(setup.subject || 'Curated mixed block')}</dd>
+        <p class="dd-exam-kicker">${escapeHtml(compact ? 'Subject Matter' : 'Bar Feels')}</p>
+        <h2>${escapeHtml(compact ? setup.subject : setup.title)}</h2>
+        <p class="dd-exam-description">${compact
+          ? 'Choose how you want to time this question. The clock starts only after you begin.'
+          : 'Review your timer choice. The examination has not started.'}</p>
+        ${compact ? '' : `<dl>
+          <dt>Examination</dt><dd>${escapeHtml(setup.subject || 'Curated mixed block')}</dd>
           <dt>Questions</dt><dd>${Number(setup.questionCount)}</dd>
           <dt>Duration</dt><dd>${escapeHtml(formatDuration(setup.durationSeconds))}</dd>
-          <dt>Grading route</dt><dd>${escapeHtml(setup.gradingRoute)}</dd>
-          <dt>Answer release</dt><dd>${escapeHtml(String(setup.answerReleaseRule).replaceAll('_', ' '))}</dd>
-          <dt>Examinee</dt><dd>${escapeHtml(setup.examinee || 'Authenticated examinee')}</dd>
-        </dl>
-        <p class="dd-exam-description">${escapeHtml(setup.instructions)}</p>
+        </dl>`}
         <label class="dd-exam-field">Timer mode
           <select id="dd-setup-timer">
             ${modes.map(([mode, title, copy]) => `<option value="${mode}"
-              ${mode === setup.timerMode ? 'selected' : ''}>${escapeHtml(title)} — ${escapeHtml(copy)}</option>`).join('')}
+              ${mode === state.preferredTimerMode ? 'selected' : ''}>${escapeHtml(title)} — ${escapeHtml(copy)}</option>`).join('')}
           </select>
         </label>
         <div class="dd-exam-dialog-actions">
@@ -508,12 +458,54 @@
     }
   }
 
+  async function requestSubjectQuestion(options = {}) {
+    const selected = subjectCatalogItem(options.subject || state.selectedSubject);
+    if (!selected) return;
+    setStatus('Selecting a new question from your no-repeat cycle…');
+    try {
+      const selection = await api('/examinations/query', {
+        operation: 'subject_next',
+        subject: selected.subject,
+        yearLevel: Number(selected.yearLevel),
+        term: Number(selected.term),
+        resetCycle: options.resetCycle === true,
+      });
+      if (selection.exhausted) {
+        const restart = global.confirm(
+          `You completed every available ${selected.subject} question in this cycle. Start a new randomized cycle?`,
+        );
+        if (restart) {
+          await requestSubjectQuestion({ subject: selected.subject, resetCycle: true });
+        } else {
+          setStatus('Cycle complete. Your performance history remains available.', 'success');
+        }
+        return;
+      }
+      state.setup = selection.setup;
+      if (options.autoStart === true) {
+        const active = await api('/examinations/command', {
+          operation: 'start_attempt',
+          versionId: selection.setup.versionId,
+          timerMode: state.preferredTimerMode,
+          requestKey: requestKey('start'),
+          tabToken: tabToken(),
+        });
+        activateAttempt(active);
+        return;
+      }
+      await openSetup(selection.setup.versionId);
+    } catch (error) {
+      setStatus(error.message, 'error');
+    }
+  }
+
   async function beginExamination() {
     if (!state.setup) return;
     const button = document.querySelector('[data-exam-begin]');
     if (button) button.disabled = true;
     try {
       const timerMode = document.getElementById('dd-setup-timer')?.value || state.setup.timerMode;
+      state.preferredTimerMode = timerMode;
       const active = await api('/examinations/command', {
         operation: 'start_attempt',
         versionId: state.setup.versionId,
@@ -521,7 +513,8 @@
         requestKey: requestKey('start'),
         tabToken: tabToken(),
       });
-      setupDialog().close('begin');
+      const dialog = setupDialog();
+      if (dialog.open) dialog.close('begin');
       activateAttempt(active);
     } catch (error) {
       setStatus(error.message, 'error');
@@ -603,6 +596,8 @@
     const question = currentQuestion();
     const summary = counts();
     const timerMode = state.active.attempt.timerMode;
+    const singleSubject = state.active.examination.track === 'per_subject'
+      && state.active.questions.length === 1;
     root.innerHTML = `<div class="dd-exam-room">
       <header class="dd-exam-room-bar">
         <div class="dd-room-brand"><strong>Due Diligence</strong><span>PH BAR EXAM SIMULATOR</span></div>
@@ -620,8 +615,8 @@
           )}</strong>
         </div>
       </header>
-      <div class="dd-exam-room-layout">
-        <aside class="dd-question-rail">
+      <div class="dd-exam-room-layout ${singleSubject ? 'is-single-question' : ''}">
+        ${singleSubject ? '' : `<aside class="dd-question-rail">
           <p class="dd-rail-title">Question Navigator</p>
           <div class="dd-question-grid">
             ${state.active.questions.map((item, index) => `<button type="button"
@@ -634,9 +629,9 @@
           <div class="dd-rail-legend">
             <span>Filled: answered</span><span>Gold dot: flagged</span><span>Navy: current</span>
           </div>
-        </aside>
+        </aside>`}
         <main class="dd-writing-workspace">
-          <p class="dd-question-label">Question ${state.currentIndex + 1} of ${summary.total}</p>
+          <p class="dd-question-label">${singleSubject ? 'Your practice question' : `Question ${state.currentIndex + 1} of ${summary.total}`}</p>
           <div class="dd-question-prompt">${escapeHtml(question.prompt)}</div>
           ${question.localRecoveryText != null ? `<div class="dd-exam-status is-error">
             A newer local draft differs from the server revision.
@@ -662,7 +657,7 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
             </footer>
           </section>
         </main>
-        <aside class="dd-exam-status-rail">
+        ${singleSubject ? '' : `<aside class="dd-exam-status-rail">
           <div>
             <p class="dd-rail-title">Exam Status</p>
             <div class="dd-status-stats">
@@ -677,16 +672,24 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
             </button>
             <button class="dd-exam-button is-gold" data-review-all type="button">Review All Answers</button>
           </div>
-        </aside>
+        </aside>`}
       </div>
       <nav class="dd-room-bottom" aria-label="Question navigation">
-        <button class="dd-exam-button" data-question-prev type="button"
-          ${state.currentIndex === 0 ? 'disabled' : ''}>Previous</button>
-        <span class="dd-room-bottom-status">${wordCount(question.answerText)} words &middot;
-          ${timerMode === 'strict' ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}</span>
-        <button class="dd-exam-button is-primary" data-question-next type="button">
-          ${state.currentIndex === summary.total - 1 ? 'Review All' : 'Next Question'}
-        </button>
+        ${singleSubject ? `
+          <button class="dd-exam-button" data-return-catalog type="button">Return to Subjects</button>
+          <span class="dd-room-bottom-status">${wordCount(question.answerText)} words &middot;
+            ${timerMode === 'strict' ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}</span>
+          <button class="dd-exam-button is-primary" data-submit-current type="button"
+            ${question.answerText?.trim() ? '' : 'disabled'}>Submit Answer</button>
+        ` : `
+          <button class="dd-exam-button" data-question-prev type="button"
+            ${state.currentIndex === 0 ? 'disabled' : ''}>Previous</button>
+          <span class="dd-room-bottom-status">${wordCount(question.answerText)} words &middot;
+            ${timerMode === 'strict' ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}</span>
+          <button class="dd-exam-button is-primary" data-question-next type="button">
+            ${state.currentIndex === summary.total - 1 ? 'Review All' : 'Next Question'}
+          </button>
+        `}
       </nav>
     </div>`;
     bindRoom();
@@ -700,6 +703,8 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       question.answerText = editor.value;
       question.localRecoveryText = null;
       document.getElementById('dd-word-count').textContent = `${wordCount(editor.value)} words`;
+      const submit = document.querySelector('[data-submit-current]');
+      if (submit) submit.disabled = !editor.value.trim();
       const stateNode = document.getElementById('dd-save-state');
       if (stateNode) {
         stateNode.textContent = 'Unsaved changes';
@@ -959,6 +964,49 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     }
   }
 
+  async function submitCurrentSubjectAnswer(button) {
+    const question = currentQuestion();
+    if (!question?.answerText?.trim() || !state.active) return;
+    button.disabled = true;
+    button.textContent = 'Submitting securely…';
+    setStatus('Saving your answer before assessment…');
+    try {
+      if (!await flushCurrentSave()) {
+        throw new Error('Your latest answer could not be confirmed. Nothing was submitted.');
+      }
+      const receipt = await api('/examinations/command', {
+        operation: 'submit_attempt',
+        attemptId: state.active.attempt.attemptId,
+        tabToken: tabToken(),
+        requestKey: requestKey('submit'),
+        confirmed: true,
+      });
+      stopActiveTimers();
+      clearRecovery();
+      state.active.attempt.status = receipt.status;
+      state.active.attempt.submittedAt = receipt.submittedAt;
+      button.textContent = 'Assessing your A.L.A.C. answer…';
+      const maximumBatches = Math.max(2, state.active.questions.length + 1);
+      let result = null;
+      for (let batch = 0; batch < maximumBatches; batch += 1) {
+        result = await api('/examinations/command', {
+          operation: 'request_ai_grading',
+          attemptId: state.active.attempt.attemptId,
+          requestKey: requestKey('ai'),
+        });
+        if (result.status === 'completed') break;
+      }
+      if (result?.status !== 'completed') {
+        throw new Error('Assessment paused before completion. Your submitted answer is preserved.');
+      }
+      await openVerdict(state.active.attempt.attemptId);
+    } catch (error) {
+      setStatus(error.message, 'error');
+      button.disabled = false;
+      button.textContent = 'Submit Answer';
+    }
+  }
+
   function showReceipt(receipt) {
     stopActiveTimers();
     state.expiryInFlight = false;
@@ -1109,13 +1157,71 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
               `<li><a href="${escapeHtml(source.url || source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title || source.url || source)}</a></li>`).join('')}</ul>` : ''}` : `<p class="dd-exam-description">Model answer not yet released under this examination&rsquo;s rule.</p>`}
         </article>`).join('')}
         <div class="dd-exam-actions" style="margin-top:24px">
-          <button class="dd-exam-button" type="button" data-return-catalog>Return to Examination Catalog</button>
+          ${state.active?.examination?.track === 'per_subject' ? `
+            <button class="dd-exam-button is-primary" type="button" data-subject-next>Next Random Question</button>
+            <button class="dd-exam-button" type="button" data-subject-change-timer>Change Timer</button>
+            <button class="dd-exam-button" type="button"
+              data-subject-performance="${escapeHtml(state.active.examination.subject || state.selectedSubject)}">
+              Review My Performance
+            </button>
+            <button class="dd-exam-button" type="button" data-return-catalog>Return to Subjects</button>
+          ` : '<button class="dd-exam-button" type="button" data-return-catalog>Return to Examination Catalog</button>'}
         </div>
       </section></div>`;
     } catch (error) {
       root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
         <p class="dd-exam-kicker">The Verdict</p><h1>Assessment unavailable.</h1>
         <div class="dd-exam-status is-error">${escapeHtml(error.message)}</div>
+      </section></div>`;
+    }
+  }
+
+  async function renderSubjectPerformance(subject = state.selectedSubject) {
+    const root = pageRoot('per_subject');
+    if (!root) return;
+    root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
+      <p class="dd-exam-kicker">Subject Matter</p><h1>Loading your performance…</h1>
+    </section></div>`;
+    try {
+      const performance = await api('/examinations/query', {
+        operation: 'subject_performance',
+        subject,
+        limit: 50,
+      });
+      const attempts = performance.recentAttempts || [];
+      root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
+        <p class="dd-exam-kicker">Your private learning record</p>
+        <h1>${escapeHtml(subject)} Performance</h1>
+        <div class="dd-review-summary">
+          <div><strong>${Number(performance.attemptedQuestions) || 0}</strong><span>Questions opened</span></div>
+          <div><strong>${Number(performance.completedQuestions) || 0}</strong><span>Answers submitted</span></div>
+        </div>
+        ${attempts.length ? attempts.map((item) => `<article class="dd-verdict-question">
+          <p class="dd-question-label">${escapeHtml(item.topic || subject)} · ${escapeHtml(formatDate(item.submittedAt))}</p>
+          ${item.score != null ? `<div class="dd-score-five">${Number(item.score).toFixed(1)} / 5.0</div>` : '<p>Assessment pending.</p>'}
+          <h3>Your answer</h3>
+          <div class="dd-model-answer">${escapeHtml(item.answerText || '')}</div>
+          ${item.assessment ? `<h3>Assessment</h3>
+            <p class="dd-exam-description">${escapeHtml(item.assessment.rationale || '')}</p>
+            ${(item.assessment.improvements || []).length
+              ? `<p><strong>Next focus:</strong> ${escapeHtml(item.assessment.improvements.join(' · '))}</p>` : ''}` : ''}
+          ${item.suggestedAnswer ? `<h3>Suggested answer</h3>
+            <div class="dd-model-answer">${escapeHtml(item.suggestedAnswer)}</div>` : ''}
+          ${item.legalBasis ? `<h3>Controlling legal basis</h3>
+            <div class="dd-model-answer">${escapeHtml(item.legalBasis)}</div>` : ''}
+          ${(item.sources || []).length ? `<ul class="dd-syllabus-list">${item.sources.map((source) =>
+            `<li><a href="${escapeHtml(source.url || source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title || source.url || source)}</a></li>`).join('')}</ul>` : ''}
+        </article>`).join('') : '<p class="dd-exam-description">Submit your first answer to begin this private performance record.</p>'}
+        <div class="dd-exam-actions" style="margin-top:24px">
+          <button class="dd-exam-button is-primary" type="button" data-return-catalog>Return to Subjects</button>
+        </div>
+      </section></div>`;
+    } catch (error) {
+      root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
+        <p class="dd-exam-kicker">Your private learning record</p>
+        <h1>Performance unavailable.</h1>
+        <div class="dd-exam-status is-error">${escapeHtml(error.message)}</div>
+        <button class="dd-exam-button" type="button" data-return-catalog>Return to Subjects</button>
       </section></div>`;
     }
   }
@@ -1133,15 +1239,24 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     showTrackPage(track);
     const root = pageRoot(track);
     if (root) root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
-      <div class="dd-exam-status">Verifying beta access and published examination versions…</div>
+      <div class="dd-exam-status">Preparing your examination choices…</div>
     </div></div>`;
     try {
-      const [catalog, history] = await Promise.all([
-        api('/examinations/query', { operation: 'catalog', track }),
-        api('/examinations/query', { operation: 'history', limit: 50, offset: 0 }),
-      ]);
+      const [catalog, history] = track === 'per_subject'
+        ? await Promise.all([
+          api('/examinations/query', { operation: 'subject_catalog' }),
+          Promise.resolve({ items: [] }),
+        ])
+        : await Promise.all([
+          api('/examinations/query', { operation: 'catalog', track }),
+          api('/examinations/query', { operation: 'history', limit: 50, offset: 0 }),
+        ]);
       state.catalog = catalog.items || [];
       state.history = history.items || [];
+      if (track === 'per_subject'
+          && !state.catalog.some((item) => item.subject === state.selectedSubject)) {
+        state.selectedSubject = state.catalog[0]?.subject || '';
+      }
       state.screen = 'catalog';
       if (track === 'per_subject') renderPerSubject();
       else renderBarFeels();
@@ -1372,6 +1487,18 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       renderPerSubject();
       return;
     }
+    const subjectStart = event.target.closest('[data-subject-start]');
+    if (subjectStart) {
+      state.selectedSubject = subjectStart.dataset.subjectStart;
+      requestSubjectQuestion({ subject: state.selectedSubject });
+      return;
+    }
+    const subjectPerformance = event.target.closest('[data-subject-performance]');
+    if (subjectPerformance) {
+      state.selectedSubject = subjectPerformance.dataset.subjectPerformance;
+      renderSubjectPerformance(state.selectedSubject);
+      return;
+    }
     const setup = event.target.closest('[data-exam-setup]');
     if (setup) { openSetup(setup.dataset.examSetup); return; }
     const resume = event.target.closest('[data-exam-resume]');
@@ -1402,6 +1529,8 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     }
     const submit = event.target.closest('[data-submit-exam]');
     if (submit) { submitExamination(submit); return; }
+    const submitCurrent = event.target.closest('[data-submit-current]');
+    if (submitCurrent) { submitCurrentSubjectAnswer(submitCurrent); return; }
     const verdict = event.target.closest('[data-exam-verdict]');
     if (verdict) { openVerdict(verdict.dataset.examVerdict); return; }
     const retry = event.target.closest('[data-retry-catalog]');
@@ -1411,6 +1540,19 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     }
     if (event.target.closest('[data-request-human]')) {
       humanDialog().showModal(); return;
+    }
+    if (event.target.closest('[data-subject-next]')) {
+      requestSubjectQuestion({
+        subject: state.active?.examination?.subject || state.selectedSubject,
+        autoStart: true,
+      });
+      return;
+    }
+    if (event.target.closest('[data-subject-change-timer]')) {
+      requestSubjectQuestion({
+        subject: state.active?.examination?.subject || state.selectedSubject,
+      });
+      return;
     }
     if (event.target.closest('[data-return-catalog]')) { returnCatalog(); return; }
     if (event.target.closest('[data-use-local-draft]')) {

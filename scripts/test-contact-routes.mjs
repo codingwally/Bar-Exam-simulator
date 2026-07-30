@@ -14,13 +14,16 @@ for (const source of [html, experience, worker, migration]) {
 assert.doesNotMatch(html, /web3forms/i, 'Third-party notification plumbing must not appear in public HTML.');
 assert.doesNotMatch(experience, /web3forms/i, 'Third-party notification plumbing must not appear in public JavaScript.');
 
-for (const id of ['dd2-support-form', 'dd2-partnership-form', 'dd2-payment-form']) {
+for (const id of ['dd2-support-form', 'dd2-partnership-form']) {
   assert.match(experience, new RegExp(`id="${id}"`), `${id} must remain available.`);
 }
-for (const route of ['/support', '/partnerships', '/payments/submit']) {
+for (const route of ['/support', '/partnerships']) {
   assert.match(experience, new RegExp(route.replace('/', '\\/')), `${route} must be submitted through the Worker.`);
   assert.match(worker, new RegExp(`pathname === '${route.replace('/', '\\/')}'`), `${route} must be handled by the Worker.`);
 }
+assert.doesNotMatch(experience, /id="dd2-payment-form"|\/payments\/submit/);
+assert.match(experience, /Pricing will be announced after beta testing\./);
+assert.match(experience, /Beta access active/);
 
 for (const mailbox of [
   'plansandpricing@duediligence.ph',
@@ -31,7 +34,7 @@ for (const mailbox of [
 }
 
 assert.match(experience, /mailto:invest@duediligence\.ph\?subject=Investment%20Inquiry/);
-assert.match(html, /href="#support">Open Co-Counsel</);
+assert.match(html, /href="#support">Open Support</);
 assert.doesNotMatch(html, /mailto:support@duediligence\.ph/);
 
-console.log('Native support, payment, and partnership route tests passed.');
+console.log('Native support, concealed beta pricing, and partnership route tests passed.');

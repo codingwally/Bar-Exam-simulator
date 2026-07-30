@@ -111,7 +111,7 @@
             <ul class="dd2-benefits">
               <li>Save progress</li>
               <li>Personal analytics</li>
-              <li>320 curated questions</li>
+              <li>Guided Subject Matter practice</li>
             </ul>
             <div class="dd2-entry-actions">
               <button type="button" class="dd2-button dd2-button-primary" id="dd2-google-signin">Continue with Google</button>
@@ -395,11 +395,6 @@
       restoreFormValue('dd2-partnership-organization', pending.draft.organization);
       restoreFormValue('dd2-partnership-message', pending.draft.message);
       restoreFormValue('dd2-partnership-consent', pending.draft.consent, 'checked');
-    } else if (pending.view === 'payment') {
-      renderNativeView('pricing');
-      global.toast?.('Signed in. Re-select the payment proof file before submitting.', 'warn');
-    } else if (pending.view === 'refund') {
-      renderNativeView('pricing');
     }
     global.dispatchEvent(new CustomEvent('duediligence:submission-resume', {
       detail: pending,
@@ -741,7 +736,7 @@
         <h3>Retainer and access</h3>
         <p>Eligible accounts receive a non-restartable 72-hour trial and three lifetime AI grades. Active trial, Free Beta, or paid access has no product-level daily grading limit. Paid plans are activated for the stated period only after manual Philippine-peso payment verification. There is no automatic renewal.</p>
         <h3>Payments, cancellation, and refunds</h3>
-        <p>GCash and MariBank payments are manually verified. A voluntary cancellation requested within five calendar days of activation is eligible for an 80% refund. Later requests are reviewed using unused time and documented consumption. Verified continuous outages of twenty days qualify for a prorated refund or equivalent extension, subject to applicable law. Initial response target is 24 hours; ordinary review is seven calendar days and complex review may take up to 14 days without waiving statutory remedies.</p>
+        <p>Commercial terms and payment instructions are not published during beta testing. Any future offer will present its applicable terms before a student is asked to decide.</p>
         <h3>Your submissions</h3>
         <p>You remain responsible for submitted content. Do not submit confidential, privileged, unlawful, or third-party personal information. Service processing of an answer is necessary to provide grading. Separate optional consent governs retention of de-identified answer content for internal quality improvement.</p>
         <h3>Acceptable use</h3>
@@ -749,7 +744,7 @@
         <h3>Ownership and lawful use</h3>
         <p>Due Diligence owns its original software, branding, interface, and proprietary curation. It does not claim ownership over Philippine laws, jurisprudence, government works, or official Bar materials. Unauthorized commercial reproduction and unlawful access may be pursued, while lawful fair use, criticism, reporting, and statutory rights remain respected.</p>
         <h3>Governing law and complaints</h3>
-        <p>These Beta Terms are governed by Philippine law. Submit a complaint through Co-Counsel; we will document and review it before taking further internal action where practicable.</p>
+        <p>These Beta Terms are governed by Philippine law. Submit a complaint through Support; we will document and review it before taking further internal action where practicable.</p>
       </div>`;
   }
 
@@ -763,8 +758,8 @@
         <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to Gemini for assessment. Do not place client secrets or confidential case information in practice answers.</p>
         <h3>Access records</h3>
         <p>Protected examinations require authentication. Supabase UUIDs anchor trial activation, lifetime-grade usage, Free Beta access, subscriptions, progress, and history so refreshes or device changes do not reset access.</p>
-        <h3>Co-Counsel and corrections</h3>
-        <p>Co-Counsel stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Co-Counsel. Correction submissions store only the reviewed correction fields described in that form.</p>
+        <h3>Support and corrections</h3>
+        <p>Support stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Support. Correction submissions store only the reviewed correction fields described in that form.</p>
         <h3>Payments and infrastructure</h3>
         <p>Payment amount, channel, date, reference, status, and proof are processed for manual verification. Proofs are private and available only through short-lived authorized review. Supabase, Cloudflare, GitHub Pages, Google authentication, and Gemini process data only as needed for their platform roles.</p>
         <h3>Purpose and legal basis</h3>
@@ -772,95 +767,37 @@
         <h3>Retention and security</h3>
         <p>Account, legal-acceptance, grading, payment, support, and audit records are retained only as needed for the service, disputes, security, and applicable law. Payment proofs are removed under the approved retention schedule. Controls include least-privilege access, private storage, row-level security, authenticated Worker routes, and audit trails.</p>
         <h3>Your rights</h3>
-        <p>You may request access, correction, deletion where applicable, restriction, objection, consent withdrawal, or account-recovery assistance through Co-Counsel. Identity verification may be required. Google identity transfer is not offered unless the same internal UUID and attached data can be preserved safely.</p>
+        <p>You may request access, correction, deletion where applicable, restriction, objection, consent withdrawal, or account-recovery assistance through Support. Identity verification may be required. Google identity transfer is not offered unless the same internal UUID and attached data can be preserved safely.</p>
         <h3>AI-improvement choice</h3>
         <p>Answer processing for an immediate grade is required service processing. Retaining de-identified answer content for internal model, rubric, and quality improvement is optional and may be withdrawn without losing paid simulator access.</p>
       </div>`;
   }
 
   function pricingContent() {
-    const features = {
-      early_access_beta: [
-        'Complete current digital simulator',
-        'AI ALAC grading and suggested answers',
-        'Legal sources, progress, history, and timer modes',
-        '30 calendar days from Founder approval',
-      ],
-      standard: [
-        'Everything in Early Access Beta',
-        'Student analytics and mastery history',
-        'Corrections and complete subject access',
-        '30 calendar days from Founder approval',
-      ],
-      premium: [
-        'Everything in Standard',
-        'All published Subject Matter practice categories',
-        'Premium-only Bar Feels and private examination uploads',
-        'Mock Bar access already included by the paid-plan hierarchy',
-        'Explicit expiration set during Founder payment verification',
-      ],
-    };
-    const plans = config.plans.items.map((plan) => `
-      <article class="dd2-plan${plan.previewStatus === 'disabled' ? ' is-disabled' : ''}">
-        <div class="dd2-plan-head">
-          <h3>${escapeHtml(plan.name)}</h3>
-          <div class="dd2-price">₱${plan.pricePhp}<small>${plan.durationDays ? ' / 30 days' : ''}</small></div>
-        </div>
-        <ul>${features[plan.id].map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>
-        ${plan.previewStatus === 'disabled'
-          ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Enrollment unavailable</button>'
-          : `<button class="dd2-button dd2-button-primary dd2-select-plan" type="button"
-              data-plan-code="${escapeHtml(plan.id)}" data-plan-price="${plan.pricePhp}">
-              Select ${escapeHtml(plan.name)}
-            </button>`}
-      </article>
-    `).join('');
+    const features = [
+      'All published Subject Matter practice categories',
+      'Premium-only Bar Feels',
+      'Private examination uploads',
+      'Automated and Human Examiner review routes',
+    ];
     return `
       <div class="dd2-copy">
-        <p><strong>${escapeHtml(config.plans.notice)}</strong></p>
-        <div class="dd2-plan-grid">${plans}</div>
-        <p>There is no automatic renewal. Access starts only after a Founder verifies the payment and approves the selected plan.</p>
-      </div>
-      <section class="dd2-payment-panel" id="dd2-payment-panel" hidden>
-        <div class="dd2-view-kicker">Manual verification</div>
-        <h3 id="dd2-payment-heading">Submit payment proof</h3>
-        <p>Pay the exact trusted amount in Philippine pesos using GCash or MariBank, then submit the reference and proof below.</p>
-        <div class="dd2-payment-tabs" role="tablist" aria-label="Payment channel">
-          <button type="button" class="dd2-payment-tab is-active" data-method="gcash" role="tab" aria-selected="true">GCash</button>
-          <button type="button" class="dd2-payment-tab" data-method="maribank" role="tab" aria-selected="false">MariBank</button>
+        <p><strong>Pricing will be announced after beta testing.</strong></p>
+        <div class="dd2-plan-grid">
+          <article class="dd2-plan">
+            <div class="dd2-plan-head">
+              <div><h3>Premium</h3><span class="dd2-badge">Beta access active</span></div>
+              <div class="dd2-price dd2-price-placeholder" aria-hidden="true">
+                <span>000</span><small> beta preview</small>
+              </div>
+            </div>
+            <ul>${features.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>
+            <button class="dd2-button dd2-button-secondary" type="button" disabled>
+              Pricing available after beta
+            </button>
+          </article>
         </div>
-        <figure class="dd2-qr-frame">
-          <img id="dd2-payment-qr" src="assets/payments/gcash.png" alt="GCash payment QR code">
-          <figcaption id="dd2-payment-channel-label">GCash payment channel</figcaption>
-        </figure>
-        <form class="dd2-form" id="dd2-payment-form">
-          <input type="hidden" id="dd2-payment-plan">
-          <input type="hidden" id="dd2-payment-method" value="gcash">
-          <label class="dd2-label">Amount paid (PHP)
-            <input class="dd2-field" id="dd2-payment-amount" type="number" step=".01" readonly required>
-          </label>
-          <label class="dd2-label">Payment date
-            <input class="dd2-field" id="dd2-payment-date" type="date" required>
-          </label>
-          <label class="dd2-label">Transaction reference
-            <input class="dd2-field" id="dd2-payment-reference" minlength="4" maxlength="100"
-              autocomplete="off" required>
-          </label>
-          <label class="dd2-label">Optional note
-            <textarea class="dd2-field" id="dd2-payment-note" maxlength="2000"></textarea>
-          </label>
-          <label class="dd2-label">Payment proof
-            <input class="dd2-field" id="dd2-payment-proof" type="file"
-              accept=".png,.jpg,.jpeg,.pdf,image/png,image/jpeg,application/pdf" required>
-          </label>
-          <p class="dd2-form-note">PNG, JPEG, or PDF only; maximum 6 MiB. Proofs are private and available to authorized Founders through short-lived review links.</p>
-          <div class="dd2-status" id="dd2-payment-status" role="status" aria-live="polite"></div>
-          <button class="dd2-button dd2-button-primary" id="dd2-payment-submit" type="submit">Submit for verification</button>
-        </form>
-      </section>
-      <section class="dd2-copy">
-        <h3>Your payment requests</h3>
-        <div id="dd2-billing-history"><p>Sign in to view payment status.</p></div>
+        <p>Premium remains clearly identified while commercial details stay private during beta testing.</p>
       </div>`;
   }
 
@@ -868,8 +805,8 @@
     if (!state.session?.access_token) {
       return `
         <div class="dd2-copy dd2-auth-gate">
-          <p>Co-Counsel requests are attached to a verified account so we can protect your request and reply securely.</p>
-          <button class="dd2-button dd2-button-primary" id="dd2-support-signin" type="button">Sign in to contact Co-Counsel</button>
+          <p>Support requests are attached to a verified account so we can protect your request and reply securely.</p>
+          <button class="dd2-button dd2-button-primary" id="dd2-support-signin" type="button">Sign in to contact Support</button>
           <p class="dd2-form-note">Viewing help information remains public. Sending a request requires sign-in.</p>
         </div>`;
     }
@@ -895,7 +832,7 @@
               placeholder="Describe what happened, what you expected, and the browser or device you used."></textarea>
           </label>
           <div class="dd2-status" id="dd2-support-status" role="status" aria-live="polite"></div>
-          <button class="dd2-button dd2-button-primary" id="dd2-support-submit" type="submit">Send Co-Counsel request</button>
+          <button class="dd2-button dd2-button-primary" id="dd2-support-submit" type="submit">Send Support request</button>
         </form>
         <h3>Frequently asked</h3>
         <p><strong>How is an answer scored?</strong><br>Each answer receives an independent 0–5 ALAC assessment. It is not an official Bar grade.</p>
@@ -952,22 +889,12 @@
           <a class="dd2-button dd2-button-primary" href="/admin/">Open Chambers</a>
         ` : ''}
         <h3>Docket recovery</h3>
-        <p>Contact Co-Counsel. We respond within 24 hours.</p>
-        <p>Direct public email changes and account transfers are not available. Choose Docket Recovery in Co-Counsel so identity verification can be documented safely.</p>
+        <p>Contact Support. We respond within 24 hours.</p>
+        <p>Direct public email changes and account transfers are not available. Choose Docket Recovery in Support so identity verification can be documented safely.</p>
         <h3>Retainer and access</h3>
         <div id="dd2-account-access"><p>Loading verified access status…</p></div>
-        <h3>Payments and refunds</h3>
-        <div id="dd2-account-billing"><p>Loading billing records…</p></div>
-        <form class="dd2-form" id="dd2-refund-form" hidden>
-          <label class="dd2-label">Approved payment
-            <select class="dd2-field" id="dd2-refund-payment" required></select>
-          </label>
-          <label class="dd2-label">Refund request reason
-            <textarea class="dd2-field" id="dd2-refund-reason" minlength="10" maxlength="2000" required></textarea>
-          </label>
-          <div class="dd2-status" id="dd2-refund-status" role="status" aria-live="polite"></div>
-          <button class="dd2-button dd2-button-secondary" id="dd2-refund-submit" type="submit">Request refund review</button>
-        </form>
+        <h3>Premium beta</h3>
+        <p><strong>Beta access active.</strong> Pricing will be announced after beta testing.</p>
         <p class="dd2-form-note">Initial response target: 24 hours. Ordinary internal resolution: seven calendar days; complex review may take up to 14 days without waiving statutory remedies.</p>
       </div>`;
   }
@@ -976,7 +903,7 @@
     if (!state.session?.access_token) {
       return `
         <div class="dd2-copy dd2-auth-gate">
-          <p>Joint Venture inquiries require a verified account to reduce impersonation and protect follow-up correspondence.</p>
+          <p>Partnership inquiries require a verified account to reduce impersonation and protect follow-up correspondence.</p>
           <button class="dd2-button dd2-button-primary" id="dd2-partnership-signin" type="button">Sign in to send an inquiry</button>
         </div>`;
     }
@@ -1011,7 +938,7 @@
             <span>I consent to the founders using these details to respond to this inquiry.</span>
           </label>
           <div class="dd2-status" id="dd2-partnership-status" role="status" aria-live="polite"></div>
-          <button class="dd2-button dd2-button-primary" id="dd2-partnership-submit" type="submit">Send Joint Venture inquiry</button>
+          <button class="dd2-button dd2-button-primary" id="dd2-partnership-submit" type="submit">Send Partnership inquiry</button>
         </form>
         <p>For a direct follow-up, write to <a href="mailto:invest@duediligence.ph?subject=Investment%20Inquiry">invest@duediligence.ph</a>.</p>
       </div>`;
@@ -1019,12 +946,12 @@
 
   function nativeDefinition(view) {
     const definitions = {
-      support: ['Member assistance', 'Co-Counsel', supportContent],
+      support: ['Member assistance', 'Support', supportContent],
       pricing: ['Access options', 'Retainer', pricingContent],
       terms: ['Legal', 'Beta Terms', termsContent],
       privacy: ['Legal', 'Beta Privacy Notice', privacyContent],
       account: ['Your chamber', 'The Docket', accountContent],
-      partnership: ['Collaborate', 'Joint Venture', partnershipContent],
+      partnership: ['Collaborate', 'Partnerships', partnershipContent],
     };
     return definitions[view] || null;
   }
@@ -1084,12 +1011,12 @@
         submissionDraft: payload,
       });
       document.getElementById('dd2-support-form').reset();
-      setStatus('dd2-support-status', 'Your Co-Counsel request was received.', 'success');
+      setStatus('dd2-support-status', 'Your Support request was received.', 'success');
       global.DueDiligenceAnalytics?.track('support_submitted', {
         resultCategory: payload.category,
       });
     } catch (error) {
-      setStatus('dd2-support-status', error.message || 'Your Co-Counsel request could not be submitted. Please retry.', 'error');
+      setStatus('dd2-support-status', error.message || 'Your Support request could not be submitted. Please retry.', 'error');
       submit.disabled = false;
     }
   }
@@ -1132,188 +1059,27 @@
     return payload;
   }
 
-  function beginPayment(planCode, pricePhp) {
-    if (!state.session?.access_token) {
-      showEntry();
-      return;
-    }
-    const panel = document.getElementById('dd2-payment-panel');
-    if (!panel) return;
-    document.getElementById('dd2-payment-plan').value = planCode;
-    document.getElementById('dd2-payment-amount').value = Number(pricePhp).toFixed(2);
-    document.getElementById('dd2-payment-date').value = new Date().toISOString().slice(0, 10);
-    const planName = config.plans.items.find((plan) => plan.id === planCode)?.name
-      || planCode.replaceAll('_', ' ');
-    document.getElementById('dd2-payment-heading').textContent =
-      `Submit ${planName} payment`;
-    panel.hidden = false;
-    setStatus('dd2-payment-status', '');
-    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function selectPaymentMethod(method) {
-    const isMariBank = method === 'maribank';
-    document.getElementById('dd2-payment-method').value = method;
-    const image = document.getElementById('dd2-payment-qr');
-    image.src = `assets/payments/${isMariBank ? 'maribank' : 'gcash'}.png`;
-    image.alt = `${isMariBank ? 'MariBank' : 'GCash'} payment QR code`;
-    document.getElementById('dd2-payment-channel-label').textContent =
-      `${isMariBank ? 'MariBank' : 'GCash'} payment channel`;
-    document.querySelectorAll('.dd2-payment-tab').forEach((button) => {
-      const selected = button.dataset.method === method;
-      button.classList.toggle('is-active', selected);
-      button.setAttribute('aria-selected', String(selected));
-    });
-  }
-
-  async function submitPayment(event) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const submit = document.getElementById('dd2-payment-submit');
-    const proof = document.getElementById('dd2-payment-proof').files?.[0];
-    if (!proof) {
-      setStatus('dd2-payment-status', 'Upload a PNG, JPEG, or PDF payment proof.', 'error');
-      return;
-    }
-    if (proof.size > 6 * 1024 * 1024) {
-      setStatus('dd2-payment-status', 'Payment proof exceeds the 6 MiB limit.', 'error');
-      return;
-    }
-    const data = new FormData();
-    data.set('planCode', document.getElementById('dd2-payment-plan').value);
-    data.set('amountPhp', document.getElementById('dd2-payment-amount').value);
-    data.set('paymentMethod', document.getElementById('dd2-payment-method').value);
-    data.set('paymentDate', document.getElementById('dd2-payment-date').value);
-    data.set('transactionReference', document.getElementById('dd2-payment-reference').value.trim());
-    data.set('note', document.getElementById('dd2-payment-note').value.trim());
-    data.set('proof', proof);
-    submit.disabled = true;
-    setStatus('dd2-payment-status', 'Encrypting and submitting proof for Founder review…');
-    try {
-      const payload = await nativeWorkerRequest('/payments/submit', {
-        body: data,
-        submissionView: 'payment',
-        submissionDraft: { planCode: document.getElementById('dd2-payment-plan').value },
-      });
-      setStatus('dd2-payment-status', payload.message, 'success');
-      form.reset();
-      document.getElementById('dd2-payment-plan').value = payload.payment.planCode;
-      document.getElementById('dd2-payment-amount').value = Number(payload.payment.amountPhp).toFixed(2);
-      await loadBillingAndAccess();
-    } catch (error) {
-      setStatus('dd2-payment-status', error.message, 'error');
-      submit.disabled = false;
-    }
-  }
-
-  function billingMarkup(billing) {
-    const payments = Array.isArray(billing?.payments) ? billing.payments : [];
-    const refunds = Array.isArray(billing?.refunds) ? billing.refunds : [];
-    if (!payments.length && !refunds.length) {
-      return '<p>No payment or refund requests yet.</p>';
-    }
-    return `
-      <div class="dd2-record-list">
-        ${payments.map((item) => `
-          <article class="dd2-record">
-            <strong>${escapeHtml(item.planCode.replaceAll('_', ' '))} · ₱${Number(item.amountPhp).toFixed(2)}</strong>
-            <span class="dd2-record-status">${escapeHtml(item.status.replaceAll('_', ' '))}</span>
-            <small>${escapeHtml(item.method)} · ${escapeHtml(item.paymentDate)} · reference ${escapeHtml(item.reference)}</small>
-            ${item.reviewReason ? `<p>${escapeHtml(item.reviewReason)}</p>` : ''}
-          </article>`).join('')}
-        ${refunds.map((item) => `
-          <article class="dd2-record">
-            <strong>Refund review · ₱${Number(item.approvedRefundPhp ?? item.suggestedRefundPhp).toFixed(2)}</strong>
-            <span class="dd2-record-status">${escapeHtml(item.status.replaceAll('_', ' '))}</span>
-            <small>${escapeHtml(item.calculationNote)}</small>
-          </article>`).join('')}
-      </div>`;
-  }
-
   async function loadBillingAndAccess() {
     if (!state.session?.access_token) return;
     try {
-      const [billingPayload, accessPayload] = await Promise.all([
-        nativeWorkerRequest('/payments/status', { requestId: randomId(18) }),
-        nativeWorkerRequest('/access', { requestId: randomId(18) }),
-      ]);
-      const history = document.getElementById('dd2-billing-history');
-      const accountBilling = document.getElementById('dd2-account-billing');
-      const markup = billingMarkup(billingPayload.billing);
-      if (history) history.innerHTML = markup;
-      if (accountBilling) accountBilling.innerHTML = markup;
-
+      const accessPayload = await nativeWorkerRequest('/access', { requestId: randomId(18) });
       const access = accessPayload.access || {};
       const accountAccess = document.getElementById('dd2-account-access');
       if (accountAccess) {
-        const current = access.subscriptionState?.subscription || access.subscription;
-        const pending = access.subscriptionState?.pendingPayment;
         const trial = access.trial?.expiresAt
           ? `Trial expires ${new Date(access.trial.expiresAt).toLocaleString()}.`
           : 'Trial begins only when you open your first protected examination.';
-        const subscription = current
-          ? `${String(current.planCode || 'Plan').replaceAll('_', ' ')} · ${String(
-            current.status || 'unknown',
-          ).replaceAll('_', ' ')}`
-            + `${current.startsAt ? ` · starts ${new Date(current.startsAt).toLocaleString()}` : ''}`
-            + `${current.expiresAt ? ` · expires ${new Date(current.expiresAt).toLocaleString()}` : ''}`
-          : 'No Retainer is currently recorded.';
-        const payment = pending
-          ? `Payment awaiting review: ${String(pending.planCode).replaceAll('_', ' ')} · ₱${Number(
-            pending.amountPhp,
-          ).toFixed(2)}.`
-          : 'No payment is awaiting review.';
         accountAccess.innerHTML = `
           <div class="dd2-access-summary">
-            <strong>${escapeHtml(String(access.basis || 'locked').replaceAll('_', ' '))}</strong>
-            <span>${escapeHtml(subscription)}</span>
-            <span>${escapeHtml(payment)}</span>
+            <strong>${access.premium ? 'Premium beta access' : 'Beta access'}</strong>
+            <span>Pricing will be announced after beta testing.</span>
             <span>${escapeHtml(trial)}</span>
             <span>${Number(access.freeGrades?.remaining || 0)} lifetime AI grades remaining.</span>
           </div>`;
       }
-
-      const approved = (billingPayload.billing?.payments || []).filter(
-        (item) => item.status === 'approved',
-      );
-      const refundForm = document.getElementById('dd2-refund-form');
-      const refundSelect = document.getElementById('dd2-refund-payment');
-      if (refundForm && refundSelect && approved.length) {
-        refundSelect.innerHTML = approved.map((item) => `
-          <option value="${escapeHtml(item.id)}">${escapeHtml(item.planCode)} · ₱${Number(item.amountPhp).toFixed(2)} · ${escapeHtml(item.paymentDate)}</option>
-        `).join('');
-        refundForm.hidden = false;
-      }
     } catch (error) {
-      for (const id of ['dd2-billing-history','dd2-account-billing','dd2-account-access']) {
-        const element = document.getElementById(id);
-        if (element) element.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
-      }
-    }
-  }
-
-  async function submitRefund(event) {
-    event.preventDefault();
-    const submit = document.getElementById('dd2-refund-submit');
-    const draft = {
-      paymentRequestId: document.getElementById('dd2-refund-payment').value,
-      reason: document.getElementById('dd2-refund-reason').value.trim(),
-    };
-    if (!requireSubmissionAuthentication('refund', draft)) return;
-    submit.disabled = true;
-    setStatus('dd2-refund-status', 'Submitting refund request…');
-    try {
-      const payload = await nativeWorkerRequest('/refunds/submit', {
-        body: draft,
-        submissionView: 'refund',
-        submissionDraft: draft,
-      });
-      setStatus('dd2-refund-status', payload.message, 'success');
-      document.getElementById('dd2-refund-reason').value = '';
-      await loadBillingAndAccess();
-    } catch (error) {
-      setStatus('dd2-refund-status', error.message, 'error');
-      submit.disabled = false;
+      const element = document.getElementById('dd2-account-access');
+      if (element) element.innerHTML = `<p>${escapeHtml(error.message)}</p>`;
     }
   }
 
@@ -1412,8 +1178,6 @@
   function bindNativeViewHandlers(view) {
     document.getElementById('dd2-support-form')?.addEventListener('submit', submitSupport);
     document.getElementById('dd2-account-form')?.addEventListener('submit', submitAccount);
-    document.getElementById('dd2-payment-form')?.addEventListener('submit', submitPayment);
-    document.getElementById('dd2-refund-form')?.addEventListener('submit', submitRefund);
     document.getElementById('dd2-partnership-form')?.addEventListener('submit', submitPartnership);
     document.getElementById('dd2-logout')?.addEventListener('click', signOut);
     document.getElementById('dd2-account-signin')?.addEventListener('click', () => {
@@ -1433,15 +1197,6 @@
         document.getElementById('dd2-account-year').required = enrolled;
       });
     }
-    document.querySelectorAll('.dd2-select-plan').forEach((button) => {
-      button.addEventListener('click', () => beginPayment(
-        button.dataset.planCode,
-        Number(button.dataset.planPrice),
-      ));
-    });
-    document.querySelectorAll('.dd2-payment-tab').forEach((button) => {
-      button.addEventListener('click', () => selectPaymentMethod(button.dataset.method));
-    });
     if (['pricing','account'].includes(view) && state.user) {
       loadBillingAndAccess();
     }

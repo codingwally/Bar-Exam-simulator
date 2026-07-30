@@ -92,6 +92,108 @@ async function serviceRpc(name, payload) {
   return body;
 }
 
+async function grantSyntheticSuperAdmin(userId) {
+  await jsonRequest(`${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
+      role: 'super_admin',
+      assigned_by: userId,
+      updated_at: new Date().toISOString(),
+    }),
+  }, [200, 204]);
+}
+
+async function deleteSyntheticExam(examId) {
+  const { body: versions } = await jsonRequest(
+    `${SUPABASE_URL}/rest/v1/examination_versions?select=id&exam_id=eq.${examId}`,
+    {
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+    },
+  );
+  const versionIds = versions.map((item) => item.id);
+  if (versionIds.length) {
+    await jsonRequest(
+      `${SUPABASE_URL}/rest/v1/examination_attempts_multi`
+        + `?version_id=in.(${versionIds.join(',')})`,
+      {
+        method: 'DELETE',
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          Prefer: 'return=minimal',
+        },
+      },
+      [200, 204],
+    );
+    await jsonRequest(
+      `${SUPABASE_URL}/rest/v1/examination_versions?id=in.(${versionIds.join(',')})`,
+      {
+        method: 'PATCH',
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          status: 'retired',
+          retired_at: new Date().toISOString(),
+        }),
+      },
+      [200, 204],
+    );
+  }
+  await jsonRequest(`${SUPABASE_URL}/rest/v1/examination_definitions?id=eq.${examId}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      Prefer: 'return=minimal',
+    },
+  }, [200, 204]);
+  const { body: remaining } = await jsonRequest(
+    `${SUPABASE_URL}/rest/v1/examination_definitions?select=id&id=eq.${examId}`,
+    {
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+    },
+  );
+  assert.equal(remaining.length, 0, `Synthetic exam ${examId} was not removed.`);
+}
+
+async function deleteSyntheticUserRecords(userIds) {
+  if (!userIds.length) return;
+  const filter = `in.(${userIds.join(',')})`;
+  const targets = [
+    ['examination_beta_access', `user_id=${filter}`],
+    ['examination_participants', `user_id=${filter}`],
+    ['examination_audit_log', `actor_user_id=${filter}`],
+    ['usage_events', `user_id=${filter}`],
+    ['usage_sessions', `user_id=${filter}`],
+  ];
+  for (const [table, query] of targets) {
+    await jsonRequest(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+      method: 'DELETE',
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        Prefer: 'return=minimal',
+      },
+    }, [200, 204]);
+  }
+}
+
 async function workerPost(path, payload, token = null, expected = [200]) {
   const { body, response } = await jsonRequest(`${WORKER_URL}${path}`, {
     method: 'POST',
@@ -522,10 +624,7 @@ try {
   const admin = await createUser('admin');
   const firstStudent = await createUser('student-a');
   const secondStudent = await createUser('student-b');
-  await serviceRpc('bootstrap_first_super_admin', {
-    p_target_user_id: admin.id,
-    p_reason: `Synthetic staging bootstrap ${runId}`,
-  });
+  await grantSyntheticSuperAdmin(admin.id);
   const directDashboard = await serviceRpc('examination_admin', {
     p_actor_user_id: admin.id,
     p_operation: 'dashboard',
@@ -534,7 +633,7 @@ try {
   assert.ok(Array.isArray(directDashboard.definitions));
 
   const denied = await query(secondStudent.token, 'catalog', { track: 'per_subject' }, [403]);
-  assert.equal(denied.body.error.code, 'EXAM_BETA_ACCESS_REQUIRED');
+  assert.equal(denied.body.error.code, 'EXAM_ACCESS_REQUIRED');
 
   const cycles = [];
   cycles.push(await cycleStrictHuman(admin, firstStudent));
@@ -558,8 +657,17 @@ try {
     createdUserCount: createdUsers.length,
   };
 } finally {
+  const cleanupErrors = [];
+  for (const examId of [...new Set(createdExams)].reverse()) {
+    await deleteSyntheticExam(examId).catch((error) => cleanupErrors.push(error));
+  }
+  await deleteSyntheticUserRecords(createdUsers)
+    .catch((error) => cleanupErrors.push(error));
   for (const userId of createdUsers.reverse()) {
-    await deleteUser(userId).catch(() => {});
+    await deleteUser(userId).catch((error) => cleanupErrors.push(error));
+  }
+  if (cleanupErrors.length) {
+    throw new AggregateError(cleanupErrors, 'Synthetic staging cleanup failed.');
   }
 }
 

@@ -160,11 +160,17 @@ assert.match(premiumMigration, /to service_role/);
 assert.doesNotMatch(premiumMigration, /grant\s+execute[\s\S]*to\s+(?:anon|authenticated)/i);
 assert.doesNotMatch(premiumMigration, /\bdrop table\b|\btruncate\b|\bdelete from\b/i);
 
-assert.match(phase2Config, /id: 'premium'[\s\S]*pricePhp: 499[\s\S]*priceCentavos: 49900/);
-assert.match(phase2Config, /id: 'premium'[\s\S]*previewStatus: 'active'/);
+assert.match(phase2Config, /id: 'premium'[\s\S]*pricingHidden: true/);
+assert.match(phase2Config, /id: 'premium'[\s\S]*previewStatus: 'beta'/);
+assert.match(phase2Config, /Pricing will be announced after beta testing\./);
+assert.doesNotMatch(phase2Config, /pricePhp|priceCentavos|amountPhp|₱/);
 assert.match(phase2Experience, /Premium-only Bar Feels/);
-assert.match(phase2Experience, /Payment awaiting review/);
-assert.doesNotMatch(phase2Experience, /Premium enrollment is not yet available/);
+assert.match(phase2Experience, /Beta access active/);
+assert.match(phase2Experience, /Pricing will be announced after beta testing\./);
+assert.doesNotMatch(
+  phase2Experience,
+  /Payment awaiting review|submitPayment\(|dd2-payment-form|pricePhp|amountPhp|₱/i,
+);
 
 assert.match(adminActions, /'Suspend'/);
 assert.match(adminActions, /'Expire now'/);
@@ -188,9 +194,14 @@ assert.match(
 assert.match(examinationCore, /EXAM_PREMIUM_REQUIRED/);
 assert.match(examinationCore, /'quiz'/);
 assert.match(examinationsCss, /\.dd-subject-group/);
-assert.match(examinations, /Year \$\{year\} · Term \$\{term\}/);
-assert.match(examinations, /Subject Matter Practice/);
-assert.match(examinations, /seven-minute strict mode/);
+assert.match(
+  examinations,
+  /Year \$\{escapeHtml\(year\)\} · Term \$\{escapeHtml\(term\)\}/,
+);
+assert.match(examinations, /Subject Matter/);
+for (const timerLabel of ['Strict Scrutiny', 'Quantum Meruit', 'Summary Judgment']) {
+  assert.match(examinations, new RegExp(timerLabel));
+}
 assert.match(examinations, /async function openVerdict\(attemptId\) \{\s*state\.screen = 'verdict';/);
 assert.match(phase2Css, /\.dd2-native-card \.dd2-view-kicker \{\s*color: #87651f;/);
 

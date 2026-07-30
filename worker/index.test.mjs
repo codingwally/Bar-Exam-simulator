@@ -1121,6 +1121,36 @@ test('refund and partnership validation require strong identifiers, contact, mes
   }), PaymentValidationError);
 });
 
+test('plans endpoint conceals commercial values throughout public beta by default', async () => {
+  const originalFetch = globalThis.fetch;
+  let storageCalled = false;
+  globalThis.fetch = async () => {
+    storageCalled = true;
+    throw new Error('Public beta plan requests must not query commercial storage.');
+  };
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/plans', {
+      method: 'POST',
+      headers: { Origin: reliabilityOrigin },
+    }), {
+      ALLOWED_ORIGIN: reliabilityOrigin,
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+    });
+    const raw = await response.text();
+    const payload = JSON.parse(raw);
+    assert.equal(response.status, 200);
+    assert.equal(payload.pricingHidden, true);
+    assert.equal(payload.betaAccessActive, true);
+    assert.deepEqual(payload.plans, []);
+    assert.equal(payload.message, 'Pricing will be announced after beta testing.');
+    assert.equal(storageCalled, false);
+    assert.doesNotMatch(raw, /price|amount|paymentMethod|gcash|maribank/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('plans endpoint returns database-configured plans including active Premium', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
@@ -1141,6 +1171,7 @@ test('plans endpoint returns database-configured plans including active Premium'
       ALLOWED_ORIGIN: reliabilityOrigin,
       SUPABASE_URL: 'https://test.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+      PUBLIC_PRICING_ENABLED: 'true',
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
@@ -1212,6 +1243,7 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
       ALLOWED_ORIGIN: reliabilityOrigin,
       SUPABASE_URL: 'https://test.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+      PUBLIC_PRICING_ENABLED: 'true',
     });
     const payload = await response.json();
     assert.equal(response.status, 201);
@@ -1254,6 +1286,7 @@ test('unsafe payment proof fails before any private upload or database call', as
       ALLOWED_ORIGIN: reliabilityOrigin,
       SUPABASE_URL: 'https://test.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+      PUBLIC_PRICING_ENABLED: 'true',
     });
     const payload = await response.json();
     assert.equal(response.status, 415);

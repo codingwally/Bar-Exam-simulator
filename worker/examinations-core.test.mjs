@@ -45,6 +45,32 @@ test('query operations normalize catalog and private assignment tokens', () => {
     operation: 'assignment',
     assignmentToken: token,
   }).assignmentToken, token);
+
+  assert.deepEqual(normalizeExaminationQuery({
+    operation: 'subject_catalog',
+  }), { operation: 'subject_catalog' });
+  assert.deepEqual(normalizeExaminationQuery({
+    operation: 'subject_next',
+    subject: 'Criminal Law I',
+    yearLevel: 1,
+    term: 1,
+    resetCycle: true,
+  }), {
+    operation: 'subject_next',
+    subject: 'Criminal Law I',
+    yearLevel: 1,
+    term: 1,
+    resetCycle: true,
+  });
+  assert.deepEqual(normalizeExaminationQuery({
+    operation: 'subject_performance',
+    subject: 'Criminal Law I',
+    limit: 25,
+  }), {
+    operation: 'subject_performance',
+    subject: 'Criminal Law I',
+    limit: 25,
+  });
 });
 
 test('start attempt requires a version, timer, request key, and tab token', () => {

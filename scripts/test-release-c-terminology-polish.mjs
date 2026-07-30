@@ -17,8 +17,8 @@ for (const label of [
   'Retainer',
   'Quorum',
   'Recent Jurisprudence',
-  'Co-Counsel',
-  'Joint Venture',
+  'Support',
+  'Partnerships',
   'The Docket',
   'Commence Examination',
 ]) {
@@ -42,17 +42,16 @@ for (const oldNavLabel of [
   '>Progress</button>',
   '>Plans &amp; Access</button>',
   '>Legal Updates</button>',
-  '>Support</button>',
   '>Partner With Us</button>',
 ]) {
   assert.ok(!index.includes(oldNavLabel), `Old navigation label remains: ${oldNavLabel}`);
 }
 
 assert.match(experience, /signedIn \? 'The Docket' : 'The Docket · Sign In'/);
-assert.match(experience, /support: \['Member assistance', 'Co-Counsel'/);
+assert.match(experience, /support: \['Member assistance', 'Support'/);
 assert.match(experience, /pricing: \['Access options', 'Retainer'/);
 assert.match(experience, /account: \['Your chamber', 'The Docket'/);
-assert.match(experience, /partnership: \['Collaborate', 'Joint Venture'/);
+assert.match(experience, /partnership: \['Collaborate', 'Partnerships'/);
 
 for (const label of [
   'Chambers',
@@ -65,9 +64,9 @@ for (const label of [
   'Retainer Management',
   'Payment Review',
   'Refunds',
-  'Co-Counsel Requests',
+  'Support Requests',
   'Answer Corrections',
-  'Joint Ventures',
+  'Partnerships',
   'Website Settings',
   'Access &amp; Activity Log',
 ]) {
@@ -76,8 +75,8 @@ for (const label of [
 assert.match(admin, /executive: 'Chambers'/);
 assert.match(admin, /acquisition: 'Visitors & Sign-ups'/);
 assert.match(admin, /subscriptions: 'Retainer Management'/);
-assert.match(admin, /support: 'Co-Counsel Requests'/);
-assert.match(admin, /partnerships: 'Joint Ventures'/);
+assert.match(admin, /support: 'Support Requests'/);
+assert.match(admin, /partnerships: 'Partnerships'/);
 assert.match(admin, /security: 'Access & Activity Log'/);
 assert.doesNotMatch(admin, /Visitors and Sign-ups|Access and Activity Log/);
 assert.match(admin, /function maskOperationalIdentifier/);

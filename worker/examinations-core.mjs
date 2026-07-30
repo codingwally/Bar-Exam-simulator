@@ -22,6 +22,9 @@ export const EXAMINATION_QUERY_OPERATIONS = new Set([
   'history',
   'verdict',
   'assignment',
+  'subject_catalog',
+  'subject_next',
+  'subject_performance',
 ]);
 
 export const EXAMINATION_COMMAND_OPERATIONS = new Set([
@@ -181,6 +184,14 @@ export function normalizeExaminationQuery(value) {
         'A valid examiner assignment token is required.',
       );
     }
+  } else if (operation === 'subject_next') {
+    normalized.subject = examinationText(payload.subject, 120);
+    normalized.yearLevel = integer(payload.yearLevel, 'Year level', 1, 4);
+    normalized.term = integer(payload.term, 'Term', 1, 3);
+    normalized.resetCycle = payload.resetCycle === true;
+  } else if (operation === 'subject_performance') {
+    normalized.subject = examinationText(payload.subject, 120) || null;
+    normalized.limit = integer(payload.limit ?? 50, 'History limit', 1, 100);
   }
 
   return normalized;

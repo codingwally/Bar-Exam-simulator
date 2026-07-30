@@ -81,22 +81,19 @@ assert.match(paymentCore, /application\/pdf/);
 assert.match(paymentCore, /6 \* 1024 \* 1024/);
 assert.match(paymentCore, /PLAN_UNAVAILABLE/);
 assert.match(paymentCore, /\['early_access_beta', 'standard', 'premium'\]\.includes\(planCode\)/);
-assert.match(frontend, /assets\/payments\/gcash\.png/);
-assert.match(frontend, /maribank/);
-assert.match(
-  frontend,
-  /async function submitPayment\(event\) \{\s*event\.preventDefault\(\);\s*const form = event\.currentTarget;[\s\S]*?form\.reset\(\);/,
-  'Payment success must reset the captured form after awaiting the Worker.',
-);
+assert.doesNotMatch(frontend, /assets\/payments\/gcash\.png|assets\/payments\/maribank\.png/);
+assert.doesNotMatch(frontend, /async function submitPayment\(|id="dd2-payment-form"/);
+assert.match(frontend, /Pricing will be announced after beta testing\./);
+assert.match(frontend, /Beta access active/);
 assert.match(
   frontend,
   /async function submitPartnership\(event\) \{\s*event\.preventDefault\(\);\s*const form = event\.currentTarget;[\s\S]*?form\.reset\(\);/,
   'Partnership success must reset the captured form after awaiting the Worker.',
 );
 assert.match(frontend, /Premium-only Bar Feels/);
-assert.match(frontend, /Explicit expiration set during Founder payment verification/);
-assert.match(frontend, /Joint Venture/);
-assert.match(frontend, /plansandpricing@duediligence\.ph|Founder verifies the payment/);
+assert.doesNotMatch(frontend, /Explicit expiration set during Founder payment verification/);
+assert.match(frontend, /Partnerships/);
+assert.doesNotMatch(frontend, /plansandpricing@duediligence\.ph|Founder verifies the payment/);
 assert.match(
   frontend,
   /function showEntry\(options = \{\}\) \{\s*const completed = Boolean\(options\.completed\);\s*hideNativeView\(\);/,
@@ -104,7 +101,7 @@ assert.match(
 );
 assert.match(admin, /Payment Review/);
 assert.match(admin, /Refunds/);
-assert.match(admin, /Joint Ventures/);
+assert.match(admin, /Partnerships/);
 assert.match(
   admin,
   /actionButton\('Review', 'payment_review', row\.id, \{[\s\S]*planCode: row\.plan_code/,

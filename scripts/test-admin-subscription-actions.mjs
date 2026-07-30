@@ -35,8 +35,9 @@ const labels = (row, role) => actions.actionsForSubscription(row, role)
 for (const role of ['super_admin', 'founder_admin']) {
   const activeLabels = labels(activeRow, role);
   assert.ok(activeLabels.includes('Change Plan'), `${role} can change plans`);
-  assert.ok(activeLabels.includes('Pause'), `${role} can pause active access`);
-  assert.ok(activeLabels.includes('Cancel'), `${role} can cancel active access`);
+  assert.ok(activeLabels.includes('Suspend'), `${role} can suspend active access`);
+  assert.ok(activeLabels.includes('Expire now'), `${role} can expire active access`);
+  assert.ok(activeLabels.includes('Revoke'), `${role} can revoke active access`);
   assert.ok(activeLabels.includes('Extend'), `${role} can extend active access`);
   assert.ok(activeLabels.includes('Change Start Date'), `${role} can change start date`);
   assert.ok(activeLabels.includes('Change Expiration Date'), `${role} can change expiration`);
@@ -57,16 +58,16 @@ const plans = actions.availablePlans({
   items: [
     { id: 'early_access_beta', name: 'Early Access Beta', pricePhp: 149, durationDays: 30, previewStatus: 'active' },
     { id: 'standard', name: 'Standard', pricePhp: 249, durationDays: 30, previewStatus: 'active' },
-    { id: 'premium', name: 'Premium', pricePhp: 499, durationDays: null, previewStatus: 'disabled' },
+    { id: 'premium', name: 'Premium', pricePhp: 499, durationDays: null, previewStatus: 'active' },
   ],
 });
 assert.equal(plans[0].disabled, false);
 assert.equal(plans[1].disabled, false);
-assert.equal(plans[2].disabled, true);
-assert.equal(plans[2].statusLabel, 'Held in Abeyance');
+assert.equal(plans[2].disabled, false);
+assert.equal(plans[2].statusLabel, 'Available');
 assert.equal(
   plans[2].note,
-  'Further proceedings pending. Premium enrollment is not yet available.',
+  'Explicit expiration required. Bar Feels included.',
 );
 
 const [
@@ -84,7 +85,7 @@ const [
     readFile(new URL('../admin/admin.css', import.meta.url), 'utf8'),
     readFile(new URL('../worker/index.mjs', import.meta.url), 'utf8'),
     readFile(
-      new URL('../supabase/migrations/20260731_009_admin_subscription_actions_hotfix.sql', import.meta.url),
+      new URL('../supabase/migrations/20260804_014_premium_499_entitlements.sql', import.meta.url),
       'utf8',
     ),
     readFile(new URL('./build-pages-artifact.mjs', import.meta.url), 'utf8'),
@@ -108,10 +109,10 @@ assert.match(adminHtml, /id="action-confirm-risk"/);
 assert.match(adminHtml, /subscription-actions-core\.js/);
 assert.match(adminCss, /@media \(max-width: 560px\)/);
 assert.match(adminCss, /\.plan-option\.disabled/);
-assert.match(workerSource, /phase4_admin_manage_access/);
+assert.match(workerSource, /phase4_admin_manage_subscription/);
 assert.match(workerSource, /phase4_admin_subscription_audit/);
 assert.match(migrationSource, /phase4_require_founder\(p_actor_user_id\)/);
-assert.match(migrationSource, /Premium remains held in abeyance/);
+assert.match(migrationSource, /Premium activation requires an explicit future expiration/);
 assert.match(migrationSource, /Subscription does not belong to target user/);
 assert.match(migrationSource, /insert into public\.subscription_history/);
 assert.match(migrationSource, /insert into public\.admin_audit_log/);

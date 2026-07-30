@@ -6,6 +6,7 @@ const read = (relative) => readFileSync(new URL(`../${relative}`, import.meta.ur
 const text = (relative) => read(relative).toString('utf8');
 const accessMigration = text('supabase/migrations/20260730_005_phase4_access_subscriptions.sql');
 const migration = text('supabase/migrations/20260730_008_phase4_payments_partnerships.sql');
+const premiumMigration = text('supabase/migrations/20260804_014_premium_499_entitlements.sql');
 const preflight = text('supabase/review/phase4_production_preflight.sql');
 const worker = text('worker/index.mjs');
 const paymentCore = text('worker/payment-core.mjs');
@@ -51,6 +52,9 @@ assert.match(accessMigration, /alter table public\.plan_catalog[\s\S]*duration_d
 assert.match(accessMigration, /price_php = 149\.00[\s\S]*where plan_code = 'early_access_beta'/);
 assert.match(accessMigration, /price_php = 249\.00[\s\S]*where plan_code = 'standard'/);
 assert.match(accessMigration, /price_php = 499\.00[\s\S]*checkout_enabled = false[\s\S]*where plan_code = 'premium'/);
+assert.match(premiumMigration, /price_php = 499\.00[\s\S]*checkout_enabled = true[\s\S]*where plan_code = 'premium'/);
+assert.match(premiumMigration, /duration_days = null/);
+assert.match(premiumMigration, /Premium payment approval requires an explicit future expiration/);
 assert.match(migration, /duration_days=30/);
 assert.match(migration, /make_interval\(days=>v_plan\.duration_days\)/);
 assert.match(migration, /payment_method,\s*reference_normalized/);
@@ -76,7 +80,7 @@ assert.match(paymentCore, /image\/jpeg/);
 assert.match(paymentCore, /application\/pdf/);
 assert.match(paymentCore, /6 \* 1024 \* 1024/);
 assert.match(paymentCore, /PLAN_UNAVAILABLE/);
-assert.match(paymentCore, /!\['early_access_beta', 'standard'\]\.includes\(planCode\)/);
+assert.match(paymentCore, /\['early_access_beta', 'standard', 'premium'\]\.includes\(planCode\)/);
 assert.match(frontend, /assets\/payments\/gcash\.png/);
 assert.match(frontend, /maribank/);
 assert.match(
@@ -89,8 +93,8 @@ assert.match(
   /async function submitPartnership\(event\) \{\s*event\.preventDefault\(\);\s*const form = event\.currentTarget;[\s\S]*?form\.reset\(\);/,
   'Partnership success must reset the captured form after awaiting the Worker.',
 );
-assert.match(frontend, /Held in Abeyance/);
-assert.match(frontend, /Further proceedings pending\. Premium enrollment is not yet available\./);
+assert.match(frontend, /Premium-only Bar Feels/);
+assert.match(frontend, /Explicit expiration set during Founder payment verification/);
 assert.match(frontend, /Joint Venture/);
 assert.match(frontend, /plansandpricing@duediligence\.ph|Founder verifies the payment/);
 assert.match(
@@ -103,17 +107,17 @@ assert.match(admin, /Refunds/);
 assert.match(admin, /Joint Ventures/);
 assert.match(
   admin,
-  /actionButton\('Review', 'payment_review', row\.id, \{ status: row\.status \}\)\.value/,
+  /actionButton\('Review', 'payment_review', row\.id, \{[\s\S]*planCode: row\.plan_code/,
 );
 assert.match(
   admin,
   /actionButton\('View private proof', 'view_payment_proof', row\.id, \{\}\)\.value/,
 );
-assert.match(publicPage, /assets\/phase2-experience\.js\?v=release-c-20260729-1/);
+assert.match(publicPage, /assets\/phase2-experience\.js\?v=leb-premium-20260804-1/);
 assert.match(publicPage, /assets\/phase4-experience\.js\?v=phase4-20260729-2/);
 assert.match(text('admin/index.html'), /admin\.css\?v=phase4-20260728-2/);
-assert.match(text('admin/index.html'), /subscription-actions-core\.js\?v=admin-actions-20260729-3/);
-assert.match(text('admin/index.html'), /admin\.js\?v=examinations-20260729-2/);
+assert.match(text('admin/index.html'), /subscription-actions-core\.js\?v=leb-premium-20260804-1/);
+assert.match(text('admin/index.html'), /admin\.js\?v=leb-premium-20260804-1/);
 assert.match(
   adminStyles,
   /\.gate\[hidden\]\s*\{\s*display:\s*none;\s*\}/,

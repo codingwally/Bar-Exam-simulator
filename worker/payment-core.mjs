@@ -33,10 +33,10 @@ function text(value, maximum, label, minimum = 1) {
 
 export function normalizePaymentFields(fields) {
   const planCode = text(fields?.planCode, 64, 'Plan', 3).toLowerCase();
-  if (!['early_access_beta', 'standard'].includes(planCode)) {
+  if (!['early_access_beta', 'standard', 'premium'].includes(planCode)) {
     throw new PaymentValidationError(
       'PLAN_UNAVAILABLE',
-      'Select an available Early Access Beta or Standard plan.',
+      'Select an available Early Access Beta, Standard, or Premium plan.',
     );
   }
   const paymentMethod = text(fields?.paymentMethod, 24, 'Payment method', 3).toLowerCase();
@@ -188,11 +188,21 @@ export function normalizePhase4AdminRequest(payload) {
   if (!['payments', 'refunds', 'partnerships', 'access'].includes(section)) {
     throw new PaymentValidationError('INVALID_ADMIN_REQUEST', 'Unsupported Phase 4 admin section.');
   }
+  const premiumStatus = String(payload?.premiumStatus || 'all').trim().toLowerCase();
+  if (!['all', 'active', 'pending', 'expired', 'suspended', 'revoked', 'beta'].includes(
+    premiumStatus,
+  )) {
+    throw new PaymentValidationError(
+      'INVALID_ADMIN_REQUEST',
+      'Select a valid Premium access filter.',
+    );
+  }
   return {
     section,
     search: String(payload?.search || '').trim().slice(0, 200),
     limit: Math.max(1, Math.min(100, Number(payload?.limit) || 50)),
     offset: Math.max(0, Number(payload?.offset) || 0),
+    premiumStatus,
   };
 }
 
@@ -220,11 +230,29 @@ export function normalizePhase4AdminAction(payload) {
     && !Array.isArray(payload.payload) ? payload.payload : {};
   let actionPayload = rawActionPayload;
 
-  if (action === 'subscription_change') {
+  if (action === 'payment_review') {
+    const status = String(rawActionPayload.status || '').trim().toLowerCase();
+    if (!['needs_information', 'approved', 'rejected'].includes(status)) {
+      throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid payment decision.');
+    }
+    let expiresAt = null;
+    if (rawActionPayload.expiresAt) {
+      const date = new Date(String(rawActionPayload.expiresAt));
+      if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
+        throw new PaymentValidationError(
+          'INVALID_ADMIN_ACTION',
+          'Premium payment approval requires a future expiration.',
+        );
+      }
+      expiresAt = date.toISOString();
+    }
+    actionPayload = { status, expiresAt };
+  } else if (action === 'subscription_change') {
     const operation = String(rawActionPayload.operation || '').trim().toLowerCase();
     const allowedOperations = new Set([
       'activate', 'complimentary', 'pause', 'resume', 'cancel', 'extend',
-      'replace_plan', 'set_start_date', 'set_expiration_date',
+      'expire', 'restore', 'replace_plan', 'set_start_date',
+      'set_expiration_date',
     ]);
     if (!allowedOperations.has(operation)) {
       throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid subscription operation.');
@@ -246,10 +274,10 @@ export function normalizePhase4AdminAction(payload) {
     let planCode = null;
     if (['activate', 'complimentary', 'replace_plan'].includes(operation)) {
       planCode = String(rawActionPayload.planCode || '').trim().toLowerCase();
-      if (!['early_access_beta', 'standard'].includes(planCode)) {
+      if (!['early_access_beta', 'standard', 'premium'].includes(planCode)) {
         throw new PaymentValidationError(
           'PLAN_UNAVAILABLE',
-          'Premium is held in abeyance. Select Early Access Beta or Standard.',
+          'Select an active Early Access Beta, Standard, or Premium plan.',
         );
       }
     }
@@ -274,10 +302,20 @@ export function normalizePhase4AdminAction(payload) {
       }
       startsAt = date.toISOString();
     }
-    if (operation === 'set_expiration_date') {
+    if (
+      operation === 'set_expiration_date'
+      || operation === 'restore'
+      || (
+        ['activate', 'complimentary', 'replace_plan'].includes(operation)
+        && planCode === 'premium'
+      )
+    ) {
       const date = new Date(String(rawActionPayload.expiresAt || ''));
-      if (!Number.isFinite(date.getTime())) {
-        throw new PaymentValidationError('INVALID_ADMIN_ACTION', 'Select a valid subscription expiration date.');
+      if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) {
+        throw new PaymentValidationError(
+          'INVALID_ADMIN_ACTION',
+          'Select a future subscription expiration date.',
+        );
       }
       expiresAt = date.toISOString();
     }

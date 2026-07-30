@@ -202,7 +202,20 @@
 
 .dd-subject-list {
   display: grid;
+  gap: 14px;
+}
+
+.dd-subject-group {
+  display: grid;
   gap: 7px;
+}
+
+.dd-subject-group h3 {
+  margin: 0 0 2px;
+  color: #80611f;
+  font: 800 10px/1.3 Inter, sans-serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
 }
 
 .dd-subject-button {

@@ -34,14 +34,19 @@
     ));
 
     if (status === 'active') {
-      actions.push(descriptor('Pause', 'subscription_change', 'pause'));
+      actions.push(
+        descriptor('Suspend', 'subscription_change', 'pause'),
+        descriptor('Expire now', 'subscription_change', 'expire', 'danger'),
+      );
     } else if (status === 'paused') {
       actions.push(descriptor('Resume', 'subscription_change', 'resume', 'primary'));
+    } else if (['cancelled', 'expired'].includes(status) && hasSubscription) {
+      actions.push(descriptor('Restore', 'subscription_change', 'restore', 'primary'));
     }
 
     if (hasSubscription && LIVE_STATUSES.has(status)) {
       actions.push(
-        descriptor('Cancel', 'subscription_change', 'cancel', 'danger'),
+        descriptor('Revoke', 'subscription_change', 'cancel', 'danger'),
         descriptor('Extend', 'subscription_change', 'extend'),
         descriptor('Change Start Date', 'subscription_change', 'set_start_date'),
         descriptor('Change Expiration Date', 'subscription_change', 'set_expiration_date'),
@@ -68,10 +73,10 @@
       name: String(plan.name || ''),
       pricePhp: Number(plan.pricePhp),
       durationDays: plan.durationDays == null ? null : Number(plan.durationDays),
-      disabled: plan.previewStatus === 'disabled' || plan.id === 'premium',
-      statusLabel: plan.id === 'premium' ? 'Held in Abeyance' : 'Available',
+      disabled: plan.previewStatus === 'disabled',
+      statusLabel: plan.previewStatus === 'disabled' ? 'Unavailable' : 'Available',
       note: plan.id === 'premium'
-        ? 'Further proceedings pending. Premium enrollment is not yet available.'
+        ? 'Explicit expiration required. Bar Feels included.'
         : '',
     }));
   }

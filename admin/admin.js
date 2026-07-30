@@ -44,6 +44,7 @@
     action: null,
     actionInFlight: false,
     subscriptionRows: new Map(),
+    premiumStatus: 'all',
     examinationData: null,
   };
 
@@ -218,13 +219,15 @@
   }
 
   async function loadPhase4Operational(section, force = false, search = null) {
-    const key = `phase4:${section}:${search || ''}`;
+    const premiumStatus = section === 'access' ? state.premiumStatus : 'all';
+    const key = `phase4:${section}:${search || ''}:${premiumStatus}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await api('/admin/phase4-data', {
       section,
       search: search || '',
       limit: 100,
       offset: 0,
+      premiumStatus,
     });
     state.operational.set(key, payload.data);
     return payload.data;
@@ -496,6 +499,7 @@
 
   async function renderSubscriptions(report) {
     const data = await loadPhase4Operational('access');
+    const premium = data.premiumSummary || {};
     state.subscriptionRows.clear();
     const rows = (data.items || []).map((row) => {
       state.subscriptionRows.set(row.user_id, Object.freeze({ ...row }));
@@ -506,6 +510,11 @@
         `${number(row.successful_grades)} used · ${number(row.free_grades_remaining)} remaining`,
         row.free_beta_enabled ? `Enabled${row.free_beta_expires_at ? ` until ${dateTime(row.free_beta_expires_at)}` : ''}` : 'Disabled',
         row.plan_code || 'None',
+        row.subscription_source === 'complimentary'
+          ? 'Complimentary Beta'
+          : row.subscription_source === 'manual_payment'
+            ? 'Paid'
+            : row.subscription_source || 'Not available',
         { html: true, value: `<span class="status ${row.subscription_status === 'active' ? 'ok' : 'warn'}">${escapeHtml(row.subscription_status || 'none')}</span>` },
         row.expires_at ? dateTime(row.expires_at) : 'Not available',
         {
@@ -517,12 +526,30 @@
     return `
       ${heading('Retainer Management', 'Founder actions are immediate, reason-required, transactional, and audited. Manual payments never renew automatically.')}
       <div class="notice danger"><strong>Access-impacting action.</strong> Verify the student, plan, dates, and reason before confirming.</div>
-      ${table(['Student', 'Role', 'Trial expires', 'Lifetime grades', 'Free Beta', 'Plan', 'Retainer status', 'Expires', 'Actions'], rows)}
+      <div class="metric-strip">
+        ${metric('Premium active', premium.active)}
+        ${metric('Premium pending', premium.pending)}
+        ${metric('Premium expired', premium.expired)}
+        ${metric('Premium suspended', premium.suspended)}
+        ${metric('Premium revoked', premium.revoked)}
+        ${metric('Premium beta', premium.beta)}
+      </div>
+      <div class="table-tools">
+        <label>Premium status
+          <select id="premium-status-filter">
+            ${['all','active','pending','expired','suspended','revoked','beta'].map((status) => `
+              <option value="${status}"${state.premiumStatus === status ? ' selected' : ''}>
+                ${status === 'all' ? 'All users' : status}
+              </option>`).join('')}
+          </select>
+        </label>
+      </div>
+      ${table(['Student', 'Role', 'Trial expires', 'Lifetime grades', 'Free Beta', 'Plan', 'Source', 'Retainer status', 'Expires', 'Actions'], rows)}
       <section class="panel">
         <h3>Production plan catalog</h3>
         ${table(['Plan', 'Planning price', 'Status'], config.plans.items.map((plan) => [
           plan.name, `₱${number(plan.pricePhp, 2)}`,
-          plan.previewStatus === 'disabled' ? 'Held in Abeyance' : 'Active · manual verification',
+          plan.previewStatus === 'disabled' ? 'Unavailable' : 'Active · manual verification',
         ]))}
       </section>
       <section class="panel"><h3>Refund policy</h3><p class="panel-note">Five-calendar-day cancellations suggest an 80% refund. Later requests use unused time and documented consumption. A verified 20-day continuous outage supports prorated refund or equivalent extension. All decisions require Founder documentation.</p></section>`;
@@ -532,7 +559,7 @@
     const data = await loadPhase4Operational('payments');
     return `
       ${heading('Payment Review', 'Review GCash and MariBank requests. Private proofs open through five-minute signed links and every view is audited.')}
-      <div class="notice danger"><strong>Money and access warning.</strong> Approval activates the exact selected 30-day plan. Confirm channel, amount, reference, date, and proof before proceeding.</div>
+      <div class="notice danger"><strong>Money and access warning.</strong> Approval activates the exact selected plan. Premium requires an explicit expiration. Confirm channel, amount, reference, date, proof, and access end date before proceeding.</div>
       ${table(
         ['Student', 'Plan', 'Amount', 'Channel', 'Date', 'Reference', 'Status', 'Submitted', 'Actions'],
         (data.items || []).map((row) => [
@@ -544,7 +571,10 @@
           {
             html: true,
             value: `<div class="row-actions">
-              ${actionButton('Review', 'payment_review', row.id, { status: row.status }).value}
+              ${actionButton('Review', 'payment_review', row.id, {
+                status: row.status,
+                planCode: row.plan_code,
+              }).value}
               ${actionButton('View private proof', 'view_payment_proof', row.id, {}).value}
             </div>`,
           },
@@ -1289,6 +1319,7 @@
       subscriptionId: row.subscription_id || null,
       planCode: row.plan_code || null,
       status: row.subscription_status || null,
+      source: row.subscription_source || null,
       startsAt: row.starts_at || null,
       expiresAt: row.expires_at || null,
       freeBetaEnabled: Boolean(row.free_beta_enabled),
@@ -1380,11 +1411,18 @@
       const verb = operation === 'activate' ? 'Activate'
         : operation === 'complimentary' ? 'Grant complimentary'
           : 'Change plan to';
-      return `${verb} ${planDisplayName(plan)} · trusted 30-day catalog terms`;
+      return `${verb} ${planDisplayName(plan)}`
+        + `${plan === 'premium'
+          ? ` · expires ${$('#action-expires')?.value || 'on the required selected date'}`
+          : ' · trusted 30-day catalog terms'}`;
     }
-    if (operation === 'pause') return 'Pause the active Retainer';
-    if (operation === 'resume') return 'Resume the paused Retainer';
-    if (operation === 'cancel') return 'Cancel the current Retainer';
+    if (operation === 'pause') return 'Suspend the active Retainer';
+    if (operation === 'resume') return 'Resume the suspended Retainer';
+    if (operation === 'cancel') return 'Revoke the current Retainer';
+    if (operation === 'expire') return 'Expire the current Retainer immediately';
+    if (operation === 'restore') {
+      return `Restore access until ${$('#action-expires')?.value || 'the required selected date'}`;
+    }
     if (operation === 'extend') {
       return `Extend access by ${$('#action-days')?.value || 30} day(s)`;
     }
@@ -1430,7 +1468,9 @@
       const details = document.createElement('small');
       details.textContent = plan.disabled
         ? `${plan.statusLabel}. ${plan.note}`
-        : `${plan.durationDays} days · catalog-controlled access`;
+        : plan.durationDays
+          ? `${plan.durationDays} days · catalog-controlled access`
+          : 'Explicit expiration required · Bar Feels included';
       copy.append(name, details);
       const price = document.createElement('strong');
       price.className = 'plan-price';
@@ -1448,6 +1488,16 @@
     if (action === 'subscription_change') {
       if (['activate', 'complimentary', 'replace_plan'].includes(payload.operation)) {
         appendPlanOptions(container, payload);
+        const input = appendInputField(
+          container,
+          'Expiration for Premium (required when Premium is selected)',
+          'action-expires',
+          {
+            type: 'datetime-local',
+            value: localDateTimeValue(payload.expiresAt),
+          },
+        );
+        input.addEventListener('input', updateActionContext);
       } else if (payload.operation === 'extend') {
         const input = appendInputField(container, 'Extension in calendar days', 'action-days', {
           type: 'number', value: '30', min: 1, max: 366, required: true,
@@ -1458,7 +1508,7 @@
           type: 'datetime-local', value: localDateTimeValue(payload.startsAt), required: true,
         });
         input.addEventListener('input', updateActionContext);
-      } else if (payload.operation === 'set_expiration_date') {
+      } else if (['set_expiration_date', 'restore'].includes(payload.operation)) {
         const input = appendInputField(container, 'New Retainer expiration date and time', 'action-expires', {
           type: 'datetime-local', value: localDateTimeValue(payload.expiresAt), required: true,
         });
@@ -1594,10 +1644,15 @@
       title = 'Review manual payment';
       fields = `<label class="field">Decision<select id="action-status">
         <option value="needs_information">Needs information</option>
-        <option value="approved">Approve and activate exact 30-day plan</option>
+        <option value="approved">Approve and activate selected plan</option>
         <option value="rejected">Reject</option>
-      </select></label>`;
-      warning = 'Approval is immediate: it activates the exact selected plan for 30 calendar days. Verify amount, channel, reference, date, and private proof before confirming.';
+      </select></label>
+      ${payload.planCode === 'premium'
+        ? actionField('Premium expiration date and time', 'action-expires', '', 'datetime-local')
+        : ''}`;
+      warning = payload.planCode === 'premium'
+        ? 'Approval is immediate and requires an explicit Premium expiration. Verify amount, channel, reference, date, private proof, and end date before confirming.'
+        : 'Approval is immediate: it activates the exact selected plan for its trusted catalog duration. Verify amount, channel, reference, date, and private proof before confirming.';
     } else if (action === 'view_payment_proof') {
       title = 'Open private payment proof';
       warning = 'This sensitive read creates an audit record and opens a private proof through a five-minute signed link. Do not download or redistribute it unnecessarily.';
@@ -1617,7 +1672,9 @@
         complimentary: 'Grant complimentary access',
         pause: 'Pause Retainer',
         resume: 'Resume Retainer',
-        cancel: 'Cancel Retainer',
+        cancel: 'Revoke Retainer',
+        expire: 'Expire Retainer',
+        restore: 'Restore Retainer',
         extend: 'Extend Retainer',
         replace_plan: 'Change plan',
         set_start_date: 'Change Retainer start date',
@@ -1727,11 +1784,12 @@
     }
     $('#action-title').textContent = title;
     const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
+    const isHighRiskPayment = action === 'payment_review';
     const isForumAction = action.startsWith('forum_') || action.startsWith('quorum_');
     if (isAccessAction) buildAccessActionFields(action, state.action.payload);
     else $('#action-fields').innerHTML = fields;
     $('#action-context').hidden = !isAccessAction;
-    $('#action-confirmation').hidden = !(isAccessAction || isForumAction);
+    $('#action-confirmation').hidden = !(isAccessAction || isForumAction || isHighRiskPayment);
     $('#action-confirmation-copy').textContent = isForumAction
       ? 'I have verified the report or target content and the proposed moderation action. I understand this action is immediate and audited.'
       : 'I have verified the target, current access, and proposed change. I understand this action is immediate and audited.';
@@ -1758,7 +1816,8 @@
     const accessAction = Boolean(subscriptionActions?.isAccessAction(state.action.action));
     const forumAction = state.action.action.startsWith('forum_')
       || state.action.action.startsWith('quorum_');
-    if ((accessAction || forumAction) && !$('#action-confirm-risk').checked) {
+    const highRiskPayment = state.action.action === 'payment_review';
+    if ((accessAction || forumAction || highRiskPayment) && !$('#action-confirm-risk').checked) {
       toast(forumAction
         ? 'Confirm that you verified the report and moderation action.'
         : 'Confirm that you verified the target and proposed access change.');
@@ -1787,15 +1846,31 @@
           : payload.status === 'expired' ? 'expire' : 'adjust';
     } else if (action === 'payment_review') {
       payload.status = $('#action-status').value;
+      if (payload.status === 'approved' && payload.planCode === 'premium') {
+        payload.expiresAt = isoFromLocalInput($('#action-expires')?.value);
+        if (!payload.expiresAt) {
+          toast('Select a future Premium expiration before approval.');
+          return;
+        }
+      }
     } else if (action === 'refund_review') {
       payload.status = $('#action-status').value;
       payload.approvedRefundPhp = Number($('#action-refund-amount').value);
     } else if (action === 'subscription_change') {
       if (['activate', 'complimentary', 'replace_plan'].includes(payload.operation)) {
         payload.planCode = selectedPlan();
-        if (!payload.planCode || payload.planCode === 'premium') {
-          toast('Select an available plan. Premium remains held in abeyance.');
+        if (!payload.planCode) {
+          toast('Select an available plan.');
           return;
+        }
+        if (payload.planCode === 'premium') {
+          payload.expiresAt = isoFromLocalInput($('#action-expires')?.value);
+          if (!payload.expiresAt) {
+            toast('Select a future Premium expiration.');
+            return;
+          }
+        } else {
+          payload.expiresAt = null;
         }
       }
       if (payload.operation === 'extend') {
@@ -1806,7 +1881,7 @@
           toast('Select a valid Retainer start date.');
           return;
         }
-      } else if (payload.operation === 'set_expiration_date') {
+      } else if (['set_expiration_date', 'restore'].includes(payload.operation)) {
         payload.expiresAt = isoFromLocalInput($('#action-expires').value);
         if (!payload.expiresAt) {
           toast('Select a valid Retainer expiration date.');
@@ -1950,6 +2025,11 @@
 
   function bindDynamic() {
     mountSubscriptionActions();
+    $('#premium-status-filter')?.addEventListener('change', async (event) => {
+      state.premiumStatus = event.currentTarget.value;
+      state.operational.clear();
+      await renderSection('subscriptions');
+    });
     $$('[data-insight]').forEach((button) => button.addEventListener('click', () => openInsight(button)));
     $$('[data-admin-section]').forEach((button) => button.addEventListener('click', () => {
       const section = button.dataset.adminSection;

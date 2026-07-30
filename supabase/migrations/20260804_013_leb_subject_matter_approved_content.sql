@@ -1,0 +1,779 @@
+-- Due Diligence: editorially approved LEB Year I Subject Matter practice content.
+-- Generated from the live "LEB Y1-Y2 Exam Bank" A:U rows on 2026-07-30.
+-- Source digest: d29e4715c9863811d126f2b57809f3d10c69e1282cd2cd9430733812e04ed544
+-- Exactly 11 rows are publishable. Thirteen Year II rows remain intentionally
+-- withheld because the authoritative Sheet marks them For Review / No.
+
+begin;
+
+alter table public.examination_definitions
+  drop constraint if exists examination_definitions_assessment_kind_check;
+alter table public.examination_definitions
+  add constraint examination_definitions_assessment_kind_check check (
+    assessment_kind in ('midterm', 'final', 'quiz', 'curated', 'uploaded', 'system_test')
+  );
+
+alter table public.examination_definitions
+  drop constraint if exists examination_definitions_track_kind_check;
+alter table public.examination_definitions
+  add constraint examination_definitions_track_kind_check check (
+    (track = 'per_subject' and assessment_kind in ('midterm', 'final', 'quiz', 'system_test'))
+    or (track = 'bar_feels' and assessment_kind in ('curated', 'uploaded', 'system_test'))
+  );
+
+do $migration$
+declare
+  v_actor uuid;
+  v_row jsonb;
+  v_question_id uuid;
+  v_exam_id uuid;
+  v_exam_public_id uuid;
+  v_version_id uuid;
+  v_uuid_hash text;
+  v_question_hash text;
+  v_version_hash text;
+  v_existing_hash text;
+  v_existing_question_count integer;
+  v_rows jsonb := $leb$
+[
+  {
+    "questionId": "LEB-Y1T1-JD101-20260730-Q01",
+    "subject": "Philosophy of Law",
+    "topic": "LEB Model Year 1 • Term 1 • JD101 • Quiz • Law and morality",
+    "barYear": "2026",
+    "questionNumber": "1",
+    "prompt": "Distinguish legal validity from moral legitimacy, then explain whether a morally objectionable ordinance can remain legally valid.",
+    "suggestedAnswer": "Answer: Legal validity and moral legitimacy are related but distinct inquiries. A rule may satisfy the legal system's recognized sources and procedures yet remain open to moral criticism.\n\nLegal Basis: This is a non-case-dependent analytical exercise under the JD101 course description in LEB Memorandum Order No. 24, s. 2021. The Constitution's supremacy and Article III, Section 1 provide positive-law limits against arbitrary deprivation; moral disapproval alone is not a substitute for an identified legal ground.\n\nApplication: If an ordinance was validly enacted, a positivist may recognize it as law while still condemning it. A court must invalidate it only through a superior legal norm, such as due process or equal protection, rather than personal moral preference.\n\nConclusion: The ordinance can be legally valid yet morally objectionable unless a controlling superior norm defeats it.",
+    "legalBasis": "LEB Memorandum Order No. 24, s. 2021, Section 10, JD101 course description; The Constitution's supremacy and Article III, Section 1 provide positive-law limits against arbitrary deprivation; moral disapproval alone is not a substitute for an identified legal ground.",
+    "doctrine": "Legal validity concerns pedigree and institutional authority; moral legitimacy concerns justification and justice.",
+    "jurisprudence": "Not case-dependent",
+    "citation": "N/A — analytical/skills exercise",
+    "sourceUrlText": "LEBMO No. 24: https://leb.gov.ph/wp-content/uploads/2021/07/LEBMO-No.-24.pdf\nOfficial framework: https://www.officialgazette.gov.ph/constitutions/1987-constitution/",
+    "sourceUrls": [
+      {
+        "title": "LEBMO No. 24",
+        "url": "https://leb.gov.ph/wp-content/uploads/2021/07/LEBMO-No.-24.pdf",
+        "type": "stored"
+      },
+      {
+        "title": "Official framework",
+        "url": "https://www.officialgazette.gov.ph/constitutions/1987-constitution/",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Foundational",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 55,
+    "sheetRange": "A55:U55",
+    "yearLevel": 1,
+    "term": 1,
+    "courseCode": "JD101",
+    "alac": {
+      "answer": "Legal validity and moral legitimacy are related but distinct inquiries. A rule may satisfy the legal system's recognized sources and procedures yet remain open to moral criticism.",
+      "legalBasis": "This is a non-case-dependent analytical exercise under the JD101 course description in LEB Memorandum Order No. 24, s. 2021. The Constitution's supremacy and Article III, Section 1 provide positive-law limits against arbitrary deprivation; moral disapproval alone is not a substitute for an identified legal ground.",
+      "application": "If an ordinance was validly enacted, a positivist may recognize it as law while still condemning it. A court must invalidate it only through a superior legal norm, such as due process or equal protection, rather than personal moral preference.",
+      "conclusion": "The ordinance can be legally valid yet morally objectionable unless a controlling superior norm defeats it."
+    }
+  },
+  {
+    "questionId": "LEB-Y1T1-JD102-20260730-Q01",
+    "subject": "Statutory Construction",
+    "topic": "LEB Model Year 1 • Term 1 • JD102 • Quiz • Publication of legislative administrative rules",
+    "barYear": "2026",
+    "questionNumber": "1",
+    "prompt": "An agency circular creates a new ₱20,000 annual permit fee for every private clinic but is sent only by email to regional offices; may the agency collect the fee immediately?",
+    "suggestedAnswer": "Answer: No. A legislative rule affecting persons outside the agency must be published before it can bind the public.\n\nLegal Basis: Civil Code Article 2, as amended by Executive Order No. 200, requires publication in the Official Gazette or a newspaper of general circulation. The controlling illustration is Lorenzo M. Tañada, Abraham F. Sarmiento, and Movement of Attorneys for Brotherhood, Integrity and Nationalism, Inc. (MABINI) v. Hon. Juan C. Tuvera, Hon. Joaquin Venus, Melquiades P. de la Cruz, et al., G.R. No. L-63915, December 29, 1986 — Cruz, J., En Banc; publication of covered issuances ordered and publication held indispensable to effectivity.\n\nApplication: The circular does more than explain existing law: it creates a new nationwide financial duty. Internal email circulation is not statutory publication.\n\nConclusion: The fee is unenforceable until proper publication and effectivity.",
+    "legalBasis": "Civil Code, Article 2, as amended by Executive Order No. 200.",
+    "doctrine": "Publication is indispensable for legislative rules of general application; internal and genuinely interpretative issuances are treated differently.",
+    "jurisprudence": "Lorenzo M. Tañada, Abraham F. Sarmiento, and Movement of Attorneys for Brotherhood, Integrity and Nationalism, Inc. (MABINI) v. Hon. Juan C. Tuvera, Hon. Joaquin Venus, Melquiades P. de la Cruz, et al.",
+    "citation": "G.R. No. L-63915, December 29, 1986 — Cruz, J., En Banc; publication of covered issuances ordered and publication held indispensable to effectivity.",
+    "sourceUrlText": "Lawphil decision mirror: https://lawphil.net/judjuris/juri1986/dec1986/gr_l-63915_1986.html\nExecutive Order No. 200: https://issuances-library.senate.gov.ph/executive-issuance/executive-order-no-200-s-1987",
+    "sourceUrls": [
+      {
+        "title": "Lawphil decision mirror",
+        "url": "https://lawphil.net/judjuris/juri1986/dec1986/gr_l-63915_1986.html",
+        "type": "stored"
+      },
+      {
+        "title": "Executive Order No. 200",
+        "url": "https://issuances-library.senate.gov.ph/executive-issuance/executive-order-no-200-s-1987",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Foundational",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 105,
+    "sheetRange": "A105:U105",
+    "yearLevel": 1,
+    "term": 1,
+    "courseCode": "JD102",
+    "alac": {
+      "answer": "No. A legislative rule affecting persons outside the agency must be published before it can bind the public.",
+      "legalBasis": "Civil Code Article 2, as amended by Executive Order No. 200, requires publication in the Official Gazette or a newspaper of general circulation. The controlling illustration is Lorenzo M. Tañada, Abraham F. Sarmiento, and Movement of Attorneys for Brotherhood, Integrity and Nationalism, Inc. (MABINI) v. Hon. Juan C. Tuvera, Hon. Joaquin Venus, Melquiades P. de la Cruz, et al., G.R. No. L-63915, December 29, 1986 — Cruz, J., En Banc; publication of covered issuances ordered and publication held indispensable to effectivity.",
+      "application": "The circular does more than explain existing law: it creates a new nationwide financial duty. Internal email circulation is not statutory publication.",
+      "conclusion": "The fee is unenforceable until proper publication and effectivity."
+    }
+  },
+  {
+    "questionId": "LEB-Y1T1-JD201-20260730-Q01",
+    "subject": "Basic Legal and Judicial Ethics",
+    "topic": "LEB Model Year 1 • Term 1 • JD201 • Quiz • Former-client conflict in the same matter",
+    "barYear": "2026",
+    "questionNumber": "1",
+    "prompt": "A lawyer who drafted a seller's disputed contract is later asked by the buyer to rescind that same contract against the former client; may the lawyer accept without consent?",
+    "suggestedAnswer": "Answer: No. The new matter is the same transaction and the new client's interests are materially adverse to the former client's interests.\n\nLegal Basis: Section 18(c) requires the former client's written informed consent, while Sections 18(a) and (b) preserve confidences and restrict their use. The directly relevant authority is VERA LAW (Del Rosario Bagamasbad & Raboca) v. Atty. Editha R. Hechanova; Benedicto Hornilla and Atty. Federico D. Ricafort v. Atty. Ernesto S. Salunat, A.C. No. 13986 (Formerly CBD Case No. 12-3681), February 26, 2025 — Gaerlan, J.; conflict violations sustained and suspension imposed; A.C. No. 5804, July 1, 2003 — Ynares-Santiago, J.; respondent admonished.\n\nApplication: The lawyer would attack the very instrument previously prepared for the seller and risks using knowledge gained in that engagement.\n\nConclusion: The lawyer must decline unless the former client gives valid written informed consent after full disclosure.",
+    "legalBasis": "CPRA, Canon III, Sections 13 and 18(a)-(c).",
+    "doctrine": "Loyalty and confidentiality survive termination and bar materially adverse representation in the same or a related matter without the prescribed consent.",
+    "jurisprudence": "VERA LAW (Del Rosario Bagamasbad & Raboca) v. Atty. Editha R. Hechanova; Benedicto Hornilla and Atty. Federico D. Ricafort v. Atty. Ernesto S. Salunat",
+    "citation": "A.C. No. 13986 (Formerly CBD Case No. 12-3681), February 26, 2025 — Gaerlan, J.; conflict violations sustained and suspension imposed; A.C. No. 5804, July 1, 2003 — Ynares-Santiago, J.; respondent admonished.",
+    "sourceUrlText": "Official CPRA: https://sc.judiciary.gov.ph/wp-content/uploads/2023/05/22-09-01-SC-FINAL.pdf\nSupreme Court E-Library — VERA LAW: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69853\nSupreme Court E-Library — Hornilla: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/48485",
+    "sourceUrls": [
+      {
+        "title": "Official CPRA",
+        "url": "https://sc.judiciary.gov.ph/wp-content/uploads/2023/05/22-09-01-SC-FINAL.pdf",
+        "type": "stored"
+      },
+      {
+        "title": "Supreme Court E-Library — VERA LAW",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69853",
+        "type": "stored"
+      },
+      {
+        "title": "Supreme Court E-Library — Hornilla",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/48485",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Foundational",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 155,
+    "sheetRange": "A155:U155",
+    "yearLevel": 1,
+    "term": 1,
+    "courseCode": "JD201",
+    "alac": {
+      "answer": "No. The new matter is the same transaction and the new client's interests are materially adverse to the former client's interests.",
+      "legalBasis": "Section 18(c) requires the former client's written informed consent, while Sections 18(a) and (b) preserve confidences and restrict their use. The directly relevant authority is VERA LAW (Del Rosario Bagamasbad & Raboca) v. Atty. Editha R. Hechanova; Benedicto Hornilla and Atty. Federico D. Ricafort v. Atty. Ernesto S. Salunat, A.C. No. 13986 (Formerly CBD Case No. 12-3681), February 26, 2025 — Gaerlan, J.; conflict violations sustained and suspension imposed; A.C. No. 5804, July 1, 2003 — Ynares-Santiago, J.; respondent admonished.",
+      "application": "The lawyer would attack the very instrument previously prepared for the seller and risks using knowledge gained in that engagement.",
+      "conclusion": "The lawyer must decline unless the former client gives valid written informed consent after full disclosure."
+    }
+  },
+  {
+    "questionId": "LEB-Y1T1-JD301-20260730-Q01",
+    "subject": "Constitutional Law I",
+    "topic": "LEB Model Year 1 • Term 1 • JD301 • Quiz • Judicial review and constitutional supremacy",
+    "barYear": "2026",
+    "questionNumber": "1",
+    "prompt": "Explain why a constitutional organ described as the sole judge of an electoral contest may still be reviewed by the Supreme Court for jurisdictional error.",
+    "suggestedAnswer": "Answer: The organ's merits determination is exclusive, but it remains confined by the Constitution and is reviewable for grave abuse or jurisdictional excess.\n\nLegal Basis: Article VIII, Section 1 of the 1987 Constitution vests judicial power, including the duty to determine grave abuse of discretion. José A. Angara v. Electoral Commission, G.R. No. 45081, July 15, 1936, teaches that Judicial review enforces constitutional boundaries even when a constitutional organ is the sole judge within its assigned sphere.\n\nApplication: If an electoral tribunal refuses to hear a contest the Constitution places within its authority, or decides one outside it, judicial review corrects the boundary error without retrying ordinary factual merits.\n\nConclusion: The Supreme Court may review jurisdictional or grave-abuse questions despite the tribunal's sole-judge clause.",
+    "legalBasis": "Article VIII, Section 1 of the 1987 Constitution vests judicial power, including the duty to determine grave abuse of discretion. Case authority: José A. Angara v. Electoral Commission, G.R. No. 45081, July 15, 1936.",
+    "doctrine": "Constitutional supremacy makes each branch supreme only within its assigned sphere; judicial review polices constitutional boundaries.",
+    "jurisprudence": "José A. Angara v. Electoral Commission",
+    "citation": "G.R. No. 45081, July 15, 1936; ponente: Laurel, J.",
+    "sourceUrlText": "Primary constitutional/statutory source: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/3/353 | Supreme Court decision: https://lawphil.net/judjuris/juri1936/jul1936/gr_45081_1936.html",
+    "sourceUrls": [
+      {
+        "title": "Primary constitutional/statutory source",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/3/353",
+        "type": "stored"
+      },
+      {
+        "title": "Supreme Court decision",
+        "url": "https://lawphil.net/judjuris/juri1936/jul1936/gr_45081_1936.html",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Foundational",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 205,
+    "sheetRange": "A205:U205",
+    "yearLevel": 1,
+    "term": 1,
+    "courseCode": "JD301",
+    "alac": {
+      "answer": "The organ's merits determination is exclusive, but it remains confined by the Constitution and is reviewable for grave abuse or jurisdictional excess.",
+      "legalBasis": "Article VIII, Section 1 of the 1987 Constitution vests judicial power, including the duty to determine grave abuse of discretion. José A. Angara v. Electoral Commission, G.R. No. 45081, July 15, 1936, teaches that Judicial review enforces constitutional boundaries even when a constitutional organ is the sole judge within its assigned sphere.",
+      "application": "If an electoral tribunal refuses to hear a contest the Constitution places within its authority, or decides one outside it, judicial review corrects the boundary error without retrying ordinary factual merits.",
+      "conclusion": "The Supreme Court may review jurisdictional or grave-abuse questions despite the tribunal's sole-judge clause."
+    }
+  },
+  {
+    "questionId": "LEB-Y1T1-JD401-20260730-Q01",
+    "subject": "Criminal Law I",
+    "topic": "LEB Model Year 1 • Term 1 • JD401 • Quiz • Mala in se and mistake of fact",
+    "barYear": "2026",
+    "questionNumber": "1",
+    "prompt": "What is a mistake of fact, and when does it exempt an accused from criminal liability?",
+    "suggestedAnswer": "Answer: It is a misapprehension of fact that negates criminal intent when the act would have been lawful had the facts been as reasonably believed, the intention was lawful, and the actor was without fault or negligence.\n\nLegal Basis: Revised Penal Code Articles 1 and 3 require dolo or culpa for felonies; mistake of fact is a jurisprudential application of the intent requirement. United States v. Ah Chong, G.R. No. L-5272, March 19, 1910, teaches that An honest mistake of fact may negate criminal intent when the act would have been lawful had the facts been as reasonably believed and the actor was without fault.\n\nApplication: A homeowner who reasonably mistakes a violent intruder for an attacker may lack dolo, while one who shoots without checking an obvious innocent target remains at fault.\n\nConclusion: A complete, non-negligent mistake of fact negates liability for the intentional felony.",
+    "legalBasis": "Revised Penal Code Articles 1 and 3 require dolo or culpa for felonies; mistake of fact is a jurisprudential application of the intent requirement. Case authority: United States v. Ah Chong, G.R. No. L-5272, March 19, 1910.",
+    "doctrine": "The mistake must be honest and reasonable; it does not excuse negligence, bad faith, or liability for a mala prohibita offense whose statute dispenses with intent.",
+    "jurisprudence": "United States v. Ah Chong",
+    "citation": "G.R. No. L-5272, March 19, 1910; ponente: Carson, J.",
+    "sourceUrlText": "Primary constitutional/statutory source: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/28/20426 | Supreme Court decision: https://lawphil.net/judjuris/juri1910/mar1910/gr_l-5272_1910.html",
+    "sourceUrls": [
+      {
+        "title": "Primary constitutional/statutory source",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/28/20426",
+        "type": "stored"
+      },
+      {
+        "title": "Supreme Court decision",
+        "url": "https://lawphil.net/judjuris/juri1910/mar1910/gr_l-5272_1910.html",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Foundational",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 255,
+    "sheetRange": "A255:U255",
+    "yearLevel": 1,
+    "term": 1,
+    "courseCode": "JD401",
+    "alac": {
+      "answer": "It is a misapprehension of fact that negates criminal intent when the act would have been lawful had the facts been as reasonably believed, the intention was lawful, and the actor was without fault or negligence.",
+      "legalBasis": "Revised Penal Code Articles 1 and 3 require dolo or culpa for felonies; mistake of fact is a jurisprudential application of the intent requirement. United States v. Ah Chong, G.R. No. L-5272, March 19, 1910, teaches that An honest mistake of fact may negate criminal intent when the act would have been lawful had the facts been as reasonably believed and the actor was without fault.",
+      "application": "A homeowner who reasonably mistakes a violent intruder for an attacker may lack dolo, while one who shoots without checking an obvious innocent target remains at fault.",
+      "conclusion": "A complete, non-negligent mistake of fact negates liability for the intentional felony."
+    }
+  },
+  {
+    "questionId": "LEB-Y1T1-JD601-20260730-Q04",
+    "subject": "Criminal Procedure",
+    "topic": "LEB Model Year 1 • Term 1 • JD601 • Quiz • control of prosecution after filing",
+    "barYear": "2026",
+    "questionNumber": "4",
+    "prompt": "After an information is filed, the Secretary of Justice reverses the prosecutor and directs dismissal; must the trial judge automatically dismiss the case?",
+    "suggestedAnswer": "Answer: No. The prosecutor may move to dismiss, but the court must independently evaluate and grant or deny the motion because the case is already under judicial control.\n\nLegal Basis: Rule 110, Section 5 of the Rules of Court. Once an information is filed, disposition of the criminal case belongs to the court; the prosecutor may move to dismiss after review, but cannot impose that view on the judge, who must independently grant or deny the motion.\n\nApplication: The executive review is persuasive to the prosecutor but cannot displace the judge's duty to decide the pending motion from the record and law.\n\nConclusion: Dismissal is not automatic.",
+    "legalBasis": "Rule 110, Section 5 of the Rules of Court. G.R. No. L-53373, June 30, 1987, Gancayco, J. — petition dismissed for lack of merit",
+    "doctrine": "Once an information is filed, the court controls its disposition although prosecution remains under the public prosecutor's direction.",
+    "jurisprudence": "Mario Fl. Crespo v. Hon. Leodegario L. Mogul, Presiding Judge, Circuit Criminal Court of Lucena City, 9th Judicial District, the People of the Philippines, represented by the Solicitor General, Ricardo Bautista, et al.",
+    "citation": "G.R. No. L-53373, June 30, 1987, Gancayco, J. — petition dismissed for lack of merit",
+    "sourceUrlText": "Supreme Court E-Library (official primary source) — Revised Rules of Criminal Procedure, Rules 110–127: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/11/369; Lawphil (mirror) — Revised Rules of Criminal Procedure, Rules 110–127: https://lawphil.net/courts/rules/rc_110-127_crim.html; Lawphil — Crespo: https://lawphil.net/judjuris/juri1987/jun1987/gr_l-53373_1987.html",
+    "sourceUrls": [
+      {
+        "title": "Supreme Court E-Library (official primary source) — Revised Rules of Criminal Procedure, Rules 110–127",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/11/369",
+        "type": "stored"
+      },
+      {
+        "title": "Lawphil (mirror) — Revised Rules of Criminal Procedure, Rules 110–127",
+        "url": "https://lawphil.net/courts/rules/rc_110-127_crim.html",
+        "type": "stored"
+      },
+      {
+        "title": "Lawphil — Crespo",
+        "url": "https://lawphil.net/judjuris/juri1987/jun1987/gr_l-53373_1987.html",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Intermediate",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 308,
+    "sheetRange": "A308:U308",
+    "yearLevel": 1,
+    "term": 1,
+    "courseCode": "JD601",
+    "alac": {
+      "answer": "No. The prosecutor may move to dismiss, but the court must independently evaluate and grant or deny the motion because the case is already under judicial control.",
+      "legalBasis": "Rule 110, Section 5 of the Rules of Court. Once an information is filed, disposition of the criminal case belongs to the court; the prosecutor may move to dismiss after review, but cannot impose that view on the judge, who must independently grant or deny the motion.",
+      "application": "The executive review is persuasive to the prosecutor but cannot displace the judge's duty to decide the pending motion from the record and law.",
+      "conclusion": "Dismissal is not automatic."
+    }
+  },
+  {
+    "questionId": "LEB-Y1T2-JD103-20260730-Q01",
+    "subject": "Legal Research and Writing",
+    "topic": "LEB Model Year 1 • Term 2 • JD103 • Quiz • Primary and secondary authorities",
+    "barYear": "2026",
+    "questionNumber": "1",
+    "prompt": "Distinguish primary authority from secondary authority and explain which should carry the legal conclusion in a Philippine memorandum.",
+    "suggestedAnswer": "Answer: Primary authority is law issued by a body with lawmaking or adjudicative power, while secondary authority explains, organizes, or comments on that law; the memorandum’s rule must ultimately rest on applicable primary authority.\n\nLegal Basis: The Supreme Court E-Library publishes official statutes, rules, issuances, and decisions, while the Philippine Reports is the authorized reference for Supreme Court decisions; the SC Stylebook requires accurate citation of those sources.\n\nApplication: A textbook may identify Article 1159 and a leading case, but the researcher should read and cite the Civil Code and the controlling Supreme Court decision rather than make the textbook the rule’s foundation.\n\nConclusion: Use secondary materials to find and understand the law, then verify and support the conclusion with current primary authority.",
+    "legalBasis": "The Supreme Court E-Library publishes official statutes, rules, issuances, and decisions, while the Philippine Reports is the authorized reference for Supreme Court decisions; the SC Stylebook requires accurate citation of those sources.",
+    "doctrine": "Primary authority controls; secondary authority is explanatory and must be verified against the primary text.",
+    "jurisprudence": "Not case-dependent",
+    "citation": "N/A — analytical/skills exercise",
+    "sourceUrlText": "SC E-Library: https://elibrary.judiciary.gov.ph/ | SC Stylebook: https://sc.judiciary.gov.ph/supreme-court-stylebook/",
+    "sourceUrls": [
+      {
+        "title": "SC E-Library",
+        "url": "https://elibrary.judiciary.gov.ph/",
+        "type": "stored"
+      },
+      {
+        "title": "SC Stylebook",
+        "url": "https://sc.judiciary.gov.ph/supreme-court-stylebook/",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Foundational",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 355,
+    "sheetRange": "A355:U355",
+    "yearLevel": 1,
+    "term": 2,
+    "courseCode": "JD103",
+    "alac": {
+      "answer": "Primary authority is law issued by a body with lawmaking or adjudicative power, while secondary authority explains, organizes, or comments on that law; the memorandum’s rule must ultimately rest on applicable primary authority.",
+      "legalBasis": "The Supreme Court E-Library publishes official statutes, rules, issuances, and decisions, while the Philippine Reports is the authorized reference for Supreme Court decisions; the SC Stylebook requires accurate citation of those sources.",
+      "application": "A textbook may identify Article 1159 and a leading case, but the researcher should read and cite the Civil Code and the controlling Supreme Court decision rather than make the textbook the rule’s foundation.",
+      "conclusion": "Use secondary materials to find and understand the law, then verify and support the conclusion with current primary authority."
+    }
+  },
+  {
+    "questionId": "LEB-Y1T2-JD302-20260730-Q01",
+    "subject": "Constitutional Law II",
+    "topic": "LEB Model Year 1 • Term 2 • JD302 • Quiz • State action requirement",
+    "barYear": "2026",
+    "questionNumber": "1",
+    "prompt": "A private freight employee opens a package under the company's routine inspection policy, discovers illegal drugs, and then turns them over to police who had no prior involvement; was there a constitutional search?",
+    "suggestedAnswer": "Answer: No. A purely private search without government instigation or participation is not governed by Article III, Section 2.\n\nLegal Basis: Article III, Sections 2 and 3(2) restrain unreasonable governmental searches and exclude evidence obtained in violation. People of the Philippines v. Andre Marti, G.R. No. 81561, January 18, 1991, teaches that The constitutional search-and-seizure guarantee restrains government, not a purely private search undertaken without police participation.\n\nApplication: The employee acted for the carrier and completed the inspection before police involvement; the officers merely received what the private actor found.\n\nConclusion: The drugs are not excluded on constitutional search-and-seizure grounds.",
+    "legalBasis": "Article III, Sections 2 and 3(2) restrain unreasonable governmental searches and exclude evidence obtained in violation. Case authority: People of the Philippines v. Andre Marti, G.R. No. 81561, January 18, 1991.",
+    "doctrine": "State action is ordinarily necessary for the constitutional exclusionary rule, although private conduct may be regulated by statute or civil law.",
+    "jurisprudence": "People of the Philippines v. Andre Marti",
+    "citation": "G.R. No. 81561, January 18, 1991; ponente: Bidin, J.",
+    "sourceUrlText": "Primary constitutional/statutory source: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/3/353 | Supreme Court decision: https://lawphil.net/judjuris/juri1991/jan1991/gr_81561_1991.html",
+    "sourceUrls": [
+      {
+        "title": "Primary constitutional/statutory source",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/3/353",
+        "type": "stored"
+      },
+      {
+        "title": "Supreme Court decision",
+        "url": "https://lawphil.net/judjuris/juri1991/jan1991/gr_81561_1991.html",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Foundational",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 405,
+    "sheetRange": "A405:U405",
+    "yearLevel": 1,
+    "term": 2,
+    "courseCode": "JD302",
+    "alac": {
+      "answer": "No. A purely private search without government instigation or participation is not governed by Article III, Section 2.",
+      "legalBasis": "Article III, Sections 2 and 3(2) restrain unreasonable governmental searches and exclude evidence obtained in violation. People of the Philippines v. Andre Marti, G.R. No. 81561, January 18, 1991, teaches that The constitutional search-and-seizure guarantee restrains government, not a purely private search undertaken without police participation.",
+      "application": "The employee acted for the carrier and completed the inspection before police involvement; the officers merely received what the private actor found.",
+      "conclusion": "The drugs are not excluded on constitutional search-and-seizure grounds."
+    }
+  },
+  {
+    "questionId": "LEB-Y1T2-JD402-20260730-Q22",
+    "subject": "Criminal Law II",
+    "topic": "LEB Model Year 1 • Term 2 • JD402 • Midterm • bigamy and void marriages",
+    "barYear": "2026",
+    "questionNumber": "22",
+    "prompt": "An accused proves that the first marriage was void from the beginning for total absence of a marriage license, although no nullity judgment existed before the second marriage; is that a defense to bigamy?",
+    "suggestedAnswer": "Answer: Yes. Pulido holds that a void ab initio first or second marriage may be collaterally shown as a defense to bigamy even without a prior nullity decree; the rule differs for a merely voidable marriage.\n\nLegal Basis: Article 349 of the Revised Penal Code and Articles 35, 40, and 41 of the Family Code. A void ab initio first or second marriage is a defense to bigamy even without a prior judicial declaration of nullity; a merely voidable marriage remains valid until annulled and does not provide the same defense.\n\nApplication: If the total absence of a license is competently proved and no exception applies, no valid subsisting first marriage existed as Article 349 requires.\n\nConclusion: The accused should be acquitted if the voidness is proved beyond the prosecution's case.",
+    "legalBasis": "Article 349 of the Revised Penal Code and Articles 35, 40, and 41 of the Family Code. G.R. No. 220149, July 27, 2021, Hernando, J. — petition granted; conviction reversed and petitioner acquitted",
+    "doctrine": "A void ab initio marriage negates bigamy; a voidable marriage remains subsisting until annulled.",
+    "jurisprudence": "Luisito G. Pulido v. People of the Philippines",
+    "citation": "G.R. No. 220149, July 27, 2021, Hernando, J. — petition granted; conviction reversed and petitioner acquitted",
+    "sourceUrlText": "Supreme Court E-Library — Act No. 3815 (Revised Penal Code): https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/28/20426; Lawphil — Pulido: https://lawphil.net/judjuris/juri2021/jul2021/gr_220149_2021.html",
+    "sourceUrls": [
+      {
+        "title": "Supreme Court E-Library — Act No. 3815 (Revised Penal Code)",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/28/20426",
+        "type": "stored"
+      },
+      {
+        "title": "Lawphil — Pulido",
+        "url": "https://lawphil.net/judjuris/juri2021/jul2021/gr_220149_2021.html",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Advanced",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 476,
+    "sheetRange": "A476:U476",
+    "yearLevel": 1,
+    "term": 2,
+    "courseCode": "JD402",
+    "alac": {
+      "answer": "Yes. Pulido holds that a void ab initio first or second marriage may be collaterally shown as a defense to bigamy even without a prior nullity decree; the rule differs for a merely voidable marriage.",
+      "legalBasis": "Article 349 of the Revised Penal Code and Articles 35, 40, and 41 of the Family Code. A void ab initio first or second marriage is a defense to bigamy even without a prior judicial declaration of nullity; a merely voidable marriage remains valid until annulled and does not provide the same defense.",
+      "application": "If the total absence of a license is competently proved and no exception applies, no valid subsisting first marriage existed as Article 349 requires.",
+      "conclusion": "The accused should be acquitted if the voidness is proved beyond the prosecution's case."
+    }
+  },
+  {
+    "questionId": "LEB-Y1T2-JD502-20260730-Q01",
+    "subject": "Obligations and Contracts",
+    "topic": "LEB Model Year 1 • Term 2 • JD502 • Quiz • Concept and elements of an obligation",
+    "barYear": "2026",
+    "questionNumber": "1",
+    "prompt": "Define a civil obligation and identify its four essential elements.",
+    "suggestedAnswer": "Answer: A civil obligation is a juridical necessity to give, to do, or not to do; its elements are an active subject or obligee, a passive subject or obligor, a prestation, and a juridical tie or efficient cause.\n\nLegal Basis: Civil Code Article 1156 defines obligation, and Article 1157 identifies the recognized sources of the juridical tie.\n\nApplication: In a loan, the lender is the active subject, the borrower the passive subject, repayment the prestation, and the contract the juridical tie.\n\nConclusion: All four elements must be identifiable before civil enforcement is possible.",
+    "legalBasis": "Civil Code Article 1156 defines obligation, and Article 1157 identifies the recognized sources of the juridical tie.",
+    "doctrine": "An obligation is an enforceable juridical relation connecting subjects to a determinate or determinable prestation.",
+    "jurisprudence": "Torres v. Board of Trustees, Government Service Insurance System",
+    "citation": "G.R. No. 225920, April 3, 2024 (Caguioa, J., Third Division)",
+    "sourceUrlText": "Civil Code: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/2/53360 | Official decision: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69381",
+    "sourceUrls": [
+      {
+        "title": "Civil Code",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/2/53360",
+        "type": "stored"
+      },
+      {
+        "title": "Official decision",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69381",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Foundational",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 505,
+    "sheetRange": "A505:U505",
+    "yearLevel": 1,
+    "term": 2,
+    "courseCode": "JD502",
+    "alac": {
+      "answer": "A civil obligation is a juridical necessity to give, to do, or not to do; its elements are an active subject or obligee, a passive subject or obligor, a prestation, and a juridical tie or efficient cause.",
+      "legalBasis": "Civil Code Article 1156 defines obligation, and Article 1157 identifies the recognized sources of the juridical tie.",
+      "application": "In a loan, the lender is the active subject, the borrower the passive subject, repayment the prestation, and the contract the juridical tie.",
+      "conclusion": "All four elements must be identifiable before civil enforcement is possible."
+    }
+  },
+  {
+    "questionId": "LEB-Y1T2-JD602-20260730-Q02",
+    "subject": "Civil Procedure I",
+    "topic": "LEB Model Year 1 • Term 2 • JD602 • Quiz • elements of a cause of action",
+    "barYear": "2026",
+    "questionNumber": "2",
+    "prompt": "Define a cause of action and illustrate its three elements using an unpaid matured loan?",
+    "suggestedAnswer": "Answer: A cause of action is the act or omission by which one party violates the right of another; its elements are a legal right in the plaintiff, a correlative obligation in the defendant, and an act or omission violating that right.\n\nLegal Basis: Rule 2, Section 2 of the Rules of Court. A cause of action is the act or omission violating another's right; failure to state one is tested from the complaint's allegations, hypothetically admitted, together with controlling law of which the court may take notice.\n\nApplication: A lender has the right to payment, the borrower must pay at maturity, and the borrower's unjustified nonpayment after maturity breaches that duty.\n\nConclusion: Those allegations state a cause of action for collection.",
+    "legalBasis": "Rule 2, Section 2 of the Rules of Court. G.R. No. 198680, July 8, 2013, Perlas-Bernabe, J. — petition denied; dismissal affirmed without prejudice",
+    "doctrine": "A cause of action consists of the plaintiff's right, the defendant's correlative duty, and the defendant's violation of that right.",
+    "jurisprudence": "Heirs of Magdaleno Ypon, namely, Alvaro Ypon, et al. v. Gaudioso Ponteras Ricaforte a.k.a. Gaudioso E. Ypon and the Register of Deeds of Toledo City",
+    "citation": "G.R. No. 198680, July 8, 2013, Perlas-Bernabe, J. — petition denied; dismissal affirmed without prejudice",
+    "sourceUrlText": "Supreme Court E-Library (official primary source) — 1997 Rules of Civil Procedure, Rules 1–71: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/11/374; Supreme Court E-Library (official primary source) — A.M. No. 19-10-20-SC, Rule 13-A, November 26, 2024: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/11/99055; Lawphil (mirror) — A.M. No. 19-10-20-SC, 2019 Amendments to the Rules of Civil Procedure: https://lawphil.net/courts/rules/am_19-10-20-sc_2019.html; Supreme Court E-Library — Heirs of Ypon: https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/55970",
+    "sourceUrls": [
+      {
+        "title": "Supreme Court E-Library (official primary source) — 1997 Rules of Civil Procedure, Rules 1–71",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/11/374",
+        "type": "stored"
+      },
+      {
+        "title": "Supreme Court E-Library (official primary source) — A.M. No. 19-10-20-SC, Rule 13-A, November 26, 2024",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/11/99055",
+        "type": "stored"
+      },
+      {
+        "title": "Lawphil (mirror) — A.M. No. 19-10-20-SC, 2019 Amendments to the Rules of Civil Procedure",
+        "url": "https://lawphil.net/courts/rules/am_19-10-20-sc_2019.html",
+        "type": "stored"
+      },
+      {
+        "title": "Supreme Court E-Library — Heirs of Ypon",
+        "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/55970",
+        "type": "stored"
+      }
+    ],
+    "difficulty": "Foundational",
+    "editorialStatus": "Approved",
+    "version": "1.0",
+    "lastUpdated": "2026-07-30",
+    "publicationReady": "Yes",
+    "sheetRow": 556,
+    "sheetRange": "A556:U556",
+    "yearLevel": 1,
+    "term": 2,
+    "courseCode": "JD602",
+    "alac": {
+      "answer": "A cause of action is the act or omission by which one party violates the right of another; its elements are a legal right in the plaintiff, a correlative obligation in the defendant, and an act or omission violating that right.",
+      "legalBasis": "Rule 2, Section 2 of the Rules of Court. A cause of action is the act or omission violating another's right; failure to state one is tested from the complaint's allegations, hypothetically admitted, together with controlling law of which the court may take notice.",
+      "application": "A lender has the right to payment, the borrower must pay at maturity, and the borrower's unjustified nonpayment after maturity breaches that duty.",
+      "conclusion": "Those allegations state a cause of action for collection."
+    }
+  }
+]
+$leb$::jsonb;
+begin
+  select ur.user_id
+  into v_actor
+  from public.user_roles ur
+  join auth.users au on au.id = ur.user_id
+  where ur.role in ('super_admin', 'founder_admin')
+  order by case ur.role when 'super_admin' then 0 else 1 end, ur.user_id
+  limit 1;
+
+  if v_actor is null then
+    raise exception 'LEB_CONTENT_ADMIN_REQUIRED';
+  end if;
+
+  if jsonb_array_length(v_rows) <> 11 then
+    raise exception 'LEB_CONTENT_APPROVED_COUNT_MISMATCH';
+  end if;
+
+  for v_row in select value from jsonb_array_elements(v_rows)
+  loop
+    if v_row->>'editorialStatus' <> 'Approved'
+       or v_row->>'publicationReady' <> 'Yes'
+       or nullif(btrim(v_row->>'prompt'), '') is null
+       or nullif(btrim(v_row->>'suggestedAnswer'), '') is null
+       or nullif(btrim(v_row->>'legalBasis'), '') is null
+       or nullif(btrim(v_row#>>'{alac,answer}'), '') is null
+       or nullif(btrim(v_row#>>'{alac,legalBasis}'), '') is null
+       or nullif(btrim(v_row#>>'{alac,application}'), '') is null
+       or nullif(btrim(v_row#>>'{alac,conclusion}'), '') is null
+    then
+      raise exception 'LEB_CONTENT_VALIDATION_FAILED: %', v_row->>'questionId';
+    end if;
+
+    -- Preserve deterministic identifiers while setting RFC 4122 version 5 and
+    -- variant bits so every ID passes the Worker UUID boundary validator.
+    v_uuid_hash := md5('leb-question:' || (v_row->>'questionId'));
+    v_question_id := (
+      substr(v_uuid_hash, 1, 12) || '5' || substr(v_uuid_hash, 14, 3)
+      || '8' || substr(v_uuid_hash, 18)
+    )::uuid;
+    v_uuid_hash := md5('leb-exam:' || (v_row->>'questionId'));
+    v_exam_id := (
+      substr(v_uuid_hash, 1, 12) || '5' || substr(v_uuid_hash, 14, 3)
+      || '8' || substr(v_uuid_hash, 18)
+    )::uuid;
+    v_uuid_hash := md5('leb-exam-public:' || (v_row->>'questionId'));
+    v_exam_public_id := (
+      substr(v_uuid_hash, 1, 12) || '5' || substr(v_uuid_hash, 14, 3)
+      || '8' || substr(v_uuid_hash, 18)
+    )::uuid;
+    v_uuid_hash := md5('leb-version:' || (v_row->>'questionId') || ':1');
+    v_version_id := (
+      substr(v_uuid_hash, 1, 12) || '5' || substr(v_uuid_hash, 14, 3)
+      || '8' || substr(v_uuid_hash, 18)
+    )::uuid;
+    v_question_hash := encode(extensions.digest(
+      concat_ws(E'\n',
+        v_row->>'questionId',
+        v_row->>'subject',
+        v_row->>'prompt',
+        v_row->>'suggestedAnswer',
+        v_row->>'legalBasis',
+        coalesce(v_row->>'doctrine', ''),
+        coalesce(v_row->>'jurisprudence', ''),
+        coalesce(v_row->>'citation', ''),
+        coalesce(v_row->>'sourceUrlText', '')
+      ),
+      'sha256'
+    ), 'hex');
+    v_version_hash := encode(extensions.digest(
+      v_question_hash || ':' || v_version_id::text,
+      'sha256'
+    ), 'hex');
+
+    select q.content_hash into v_existing_hash
+    from public.examination_questions q
+    where q.id = v_question_id;
+    if v_existing_hash is not null and v_existing_hash <> v_question_hash then
+      raise exception 'LEB_CONTENT_IMMUTABLE_CONFLICT: %', v_row->>'questionId';
+    end if;
+
+    insert into public.examination_questions (
+      id, source_key, source_type, owner_user_id, subject, topic, bar_year,
+      question_number, difficulty, prompt_text, model_answer, legal_basis,
+      doctrine, application_text, conclusion_text, jurisprudence, citation,
+      governing_provision, source_urls, source_metadata, review_status,
+      publication_ready, content_hash, source_updated_at, approved_at,
+      approved_by
+    )
+    values (
+      v_question_id,
+      v_row->>'questionId',
+      'google_sheet',
+      null,
+      v_row->>'subject',
+      nullif(v_row->>'topic', ''),
+      nullif(v_row->>'barYear', '')::integer,
+      nullif(v_row->>'questionNumber', ''),
+      nullif(v_row->>'difficulty', ''),
+      v_row->>'prompt',
+      v_row->>'suggestedAnswer',
+      v_row->>'legalBasis',
+      nullif(v_row->>'doctrine', ''),
+      v_row#>>'{alac,application}',
+      v_row#>>'{alac,conclusion}',
+      jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(
+        'case', nullif(v_row->>'jurisprudence', ''),
+        'citation', nullif(v_row->>'citation', '')
+      ))),
+      nullif(v_row->>'citation', ''),
+      v_row->>'legalBasis',
+      coalesce(v_row->'sourceUrls', '[]'::jsonb),
+      jsonb_build_object(
+        'spreadsheetId', '1DgDe_ObIoiTy9NJ3DmdM1ec7h7t0FS7RvFhBTjubZ8A',
+        'sheetName', 'LEB Y1-Y2 Exam Bank',
+        'sheetRow', (v_row->>'sheetRow')::integer,
+        'sheetRange', v_row->>'sheetRange',
+        'yearLevel', (v_row->>'yearLevel')::integer,
+        'term', (v_row->>'term')::integer,
+        'courseCode', v_row->>'courseCode',
+        'sourceVersion', v_row->>'version',
+        'lastUpdated', v_row->>'lastUpdated',
+        'sourceUrlText', v_row->>'sourceUrlText'
+      ),
+      'approved',
+      true,
+      v_question_hash,
+      (v_row->>'lastUpdated')::date::timestamptz,
+      now(),
+      v_actor
+    )
+    on conflict (id) do nothing;
+
+    insert into public.examination_definitions (
+      id, public_id, track, assessment_kind, title, subject, year_level,
+      semester, owner_user_id, test_only, status, active_version_id,
+      created_by
+    )
+    values (
+      v_exam_id,
+      v_exam_public_id,
+      'per_subject',
+      'quiz',
+      (v_row->>'subject') || ' — Subject Matter Practice',
+      v_row->>'subject',
+      (v_row->>'yearLevel')::smallint,
+      (v_row->>'term')::smallint,
+      null,
+      false,
+      'published',
+      null,
+      v_actor
+    )
+    on conflict (id) do update
+    set title = excluded.title,
+        subject = excluded.subject,
+        year_level = excluded.year_level,
+        semester = excluded.semester,
+        status = 'published',
+        updated_at = now();
+
+    select ev.snapshot_hash, ev.question_count
+    into v_existing_hash, v_existing_question_count
+    from public.examination_versions ev
+    where ev.id = v_version_id;
+    if v_existing_hash is not null
+       and (
+         v_existing_hash <> v_version_hash
+         or v_existing_question_count <> 1
+       )
+    then
+      raise exception 'LEB_VERSION_IMMUTABLE_CONFLICT: %', v_row->>'questionId';
+    end if;
+
+    insert into public.examination_versions (
+      id, exam_id, version_number, label, duration_seconds,
+      default_timer_mode, allowed_timer_modes, grading_route,
+      answer_release_rule, release_at, instructions, syllabus,
+      question_count, status, snapshot_hash, created_by, published_at
+    )
+    values (
+      v_version_id,
+      v_exam_id,
+      1,
+      '2026-07-30 approved one-question practice',
+      420,
+      'strict',
+      '["strict","selfPaced","none"]'::jsonb,
+      'ai',
+      'after_ai',
+      null,
+      'Answer the single essay using A.L.A.C.: Answer, Legal Basis, Application, and Conclusion. The suggested answer remains sealed until the authorized post-submission review stage.',
+      jsonb_build_array(v_row->>'topic'),
+      1,
+      'draft',
+      v_version_hash,
+      v_actor,
+      null
+    )
+    on conflict (id) do nothing;
+
+    if not exists (
+      select 1
+      from public.examination_version_questions
+      where version_id = v_version_id and question_id = v_question_id
+    ) then
+      insert into public.examination_version_questions (
+        version_id, question_id, ordinal, prompt_snapshot,
+        model_answer_snapshot, legal_basis_snapshot, application_snapshot,
+        conclusion_snapshot, jurisprudence_snapshot, citation_snapshot,
+        governing_provision_snapshot, source_urls_snapshot, snapshot_hash
+      )
+      values (
+        v_version_id,
+        v_question_id,
+        1,
+        v_row->>'prompt',
+        v_row->>'suggestedAnswer',
+        v_row->>'legalBasis',
+        v_row#>>'{alac,application}',
+        v_row#>>'{alac,conclusion}',
+        jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(
+          'case', nullif(v_row->>'jurisprudence', ''),
+          'citation', nullif(v_row->>'citation', '')
+        ))),
+        nullif(v_row->>'citation', ''),
+        v_row->>'legalBasis',
+        coalesce(v_row->'sourceUrls', '[]'::jsonb),
+        v_question_hash
+      );
+    end if;
+
+    update public.examination_versions
+    set status = 'published',
+        published_at = coalesce(published_at, now())
+    where id = v_version_id and status = 'draft';
+
+    update public.examination_definitions
+    set active_version_id = v_version_id,
+        status = 'published',
+        updated_at = now()
+    where id = v_exam_id;
+  end loop;
+
+  if (
+    select count(*)
+    from public.examination_questions
+    where source_type = 'google_sheet'
+      and source_key in (select value->>'questionId' from jsonb_array_elements(v_rows))
+      and review_status = 'approved'
+      and publication_ready
+  ) <> 11 then
+    raise exception 'LEB_CONTENT_FINAL_COUNT_MISMATCH';
+  end if;
+end;
+$migration$;
+
+commit;

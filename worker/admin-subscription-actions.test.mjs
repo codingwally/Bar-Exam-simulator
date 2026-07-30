@@ -63,7 +63,18 @@ test('subscription action normalization strips presentation fields and client pr
   assert.equal('displayName' in normalized.payload, false);
 });
 
-test('Premium and cross-user subscription mutations are rejected before storage', () => {
+test('Premium requires an explicit expiration and cross-user mutations are rejected', () => {
+  const premium = normalizePhase4AdminAction(actionPayload({
+      payload: {
+        operation: 'replace_plan',
+        userId: targetId,
+        subscriptionId,
+        planCode: 'premium',
+        expiresAt: '2027-07-30T00:00:00.000Z',
+      },
+    }));
+  assert.equal(premium.payload.planCode, 'premium');
+  assert.equal(premium.payload.expiresAt, '2027-07-30T00:00:00.000Z');
   assert.throws(
     () => normalizePhase4AdminAction(actionPayload({
       payload: {
@@ -73,7 +84,7 @@ test('Premium and cross-user subscription mutations are rejected before storage'
         planCode: 'premium',
       },
     })),
-    (error) => error instanceof PaymentValidationError && error.code === 'PLAN_UNAVAILABLE',
+    PaymentValidationError,
   );
   assert.throws(
     () => normalizePhase4AdminAction(actionPayload({
@@ -95,7 +106,7 @@ test('authenticated founder action uses the dedicated transactional RPC', async 
     const target = String(url);
     calls.push(target);
     if (target.endsWith('/auth/v1/user')) return Response.json({ id: actorId });
-    if (target.endsWith('/rest/v1/rpc/phase4_admin_manage_access')) {
+    if (target.endsWith('/rest/v1/rpc/phase4_admin_manage_subscription')) {
       const body = JSON.parse(init.body);
       assert.equal(body.p_actor_user_id, actorId);
       assert.equal(body.p_target_user_id, targetId);
@@ -116,7 +127,7 @@ test('authenticated founder action uses the dedicated transactional RPC', async 
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
-    assert.equal(calls.filter((url) => url.includes('phase4_admin_manage_access')).length, 1);
+    assert.equal(calls.filter((url) => url.includes('phase4_admin_manage_subscription')).length, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -127,7 +138,7 @@ test('student and anonymous callers receive backend authorization denials', asyn
   globalThis.fetch = async (url) => {
     const target = String(url);
     if (target.endsWith('/auth/v1/user')) return Response.json({ id: actorId });
-    if (target.endsWith('/rest/v1/rpc/phase4_admin_manage_access')) {
+    if (target.endsWith('/rest/v1/rpc/phase4_admin_manage_subscription')) {
       return Response.json(
         { message: 'Founder administrator authorization required' },
         { status: 400 },

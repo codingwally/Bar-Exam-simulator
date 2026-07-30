@@ -793,8 +793,11 @@
         '30 calendar days from Founder approval',
       ],
       premium: [
-        'Held in Abeyance',
-        'Further proceedings pending. Premium enrollment is not yet available.',
+        'Everything in Standard',
+        'All published Subject Matter practice categories',
+        'Premium-only Bar Feels and private examination uploads',
+        'Mock Bar access already included by the paid-plan hierarchy',
+        'Explicit expiration set during Founder payment verification',
       ],
     };
     const plans = config.plans.items.map((plan) => `
@@ -1139,8 +1142,10 @@
     document.getElementById('dd2-payment-plan').value = planCode;
     document.getElementById('dd2-payment-amount').value = Number(pricePhp).toFixed(2);
     document.getElementById('dd2-payment-date').value = new Date().toISOString().slice(0, 10);
+    const planName = config.plans.items.find((plan) => plan.id === planCode)?.name
+      || planCode.replaceAll('_', ' ');
     document.getElementById('dd2-payment-heading').textContent =
-      `Submit ${planCode === 'standard' ? 'Standard' : 'Early Access Beta'} payment`;
+      `Submit ${planName} payment`;
     panel.hidden = false;
     setStatus('dd2-payment-status', '');
     panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1241,12 +1246,28 @@
       const access = accessPayload.access || {};
       const accountAccess = document.getElementById('dd2-account-access');
       if (accountAccess) {
+        const current = access.subscriptionState?.subscription || access.subscription;
+        const pending = access.subscriptionState?.pendingPayment;
         const trial = access.trial?.expiresAt
           ? `Trial expires ${new Date(access.trial.expiresAt).toLocaleString()}.`
           : 'Trial begins only when you open your first protected examination.';
+        const subscription = current
+          ? `${String(current.planCode || 'Plan').replaceAll('_', ' ')} · ${String(
+            current.status || 'unknown',
+          ).replaceAll('_', ' ')}`
+            + `${current.startsAt ? ` · starts ${new Date(current.startsAt).toLocaleString()}` : ''}`
+            + `${current.expiresAt ? ` · expires ${new Date(current.expiresAt).toLocaleString()}` : ''}`
+          : 'No Retainer is currently recorded.';
+        const payment = pending
+          ? `Payment awaiting review: ${String(pending.planCode).replaceAll('_', ' ')} · ₱${Number(
+            pending.amountPhp,
+          ).toFixed(2)}.`
+          : 'No payment is awaiting review.';
         accountAccess.innerHTML = `
           <div class="dd2-access-summary">
             <strong>${escapeHtml(String(access.basis || 'locked').replaceAll('_', ' '))}</strong>
+            <span>${escapeHtml(subscription)}</span>
+            <span>${escapeHtml(payment)}</span>
             <span>${escapeHtml(trial)}</span>
             <span>${Number(access.freeGrades?.remaining || 0)} lifetime AI grades remaining.</span>
           </div>`;

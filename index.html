@@ -759,7 +759,7 @@
 </style>
 <link rel="stylesheet" href="assets/phase2.css">
 <link rel="stylesheet" href="assets/lex-forum.css?v=quorum-20260803-1">
-<link rel="stylesheet" href="assets/examinations.css?v=examinations-20260729-2">
+<link rel="stylesheet" href="assets/examinations.css?v=leb-premium-20260804-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body>
@@ -1966,7 +1966,9 @@ async function openPremiumBarFeels() {
     const access = await accessController.refreshAccess();
     const hasPremiumAccess = access?.subscription?.planCode === 'premium'
       && access.subscription.status === 'active';
-    if (!hasPremiumAccess) {
+    const hasOverrideAccess = ['super_admin', 'founder_admin'].includes(access?.role)
+      || access?.subscriptionState?.examinationBeta?.active === true;
+    if (!hasPremiumAccess && !hasOverrideAccess) {
       toast('Bar Feels is available only with an active Premium plan.', 'warn');
       accessController.openView?.('pricing');
       return;
@@ -3245,11 +3247,11 @@ window.addEventListener('storage', (event) => {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"
   crossorigin="anonymous"></script>
-<script src="assets/phase2-config.js"></script>
-<script src="assets/phase2-experience.js?v=release-c-20260729-1-quorum-20260803-1"></script>
+<script src="assets/phase2-config.js?v=leb-premium-20260804-1"></script>
+<script src="assets/phase2-experience.js?v=leb-premium-20260804-1"></script>
 <script src="assets/phase4-experience.js?v=phase4-20260729-2"></script>
 <script src="assets/lex-forum.js?v=quorum-20260803-2"></script>
-<script src="assets/examinations.js?v=examinations-20260729-2"></script>
+<script src="assets/examinations.js?v=leb-premium-20260804-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 
 </body>

@@ -144,6 +144,14 @@ test('authenticated access endpoint does not start a trial', async () => {
       assert.equal(body.p_request_key, null);
       return Response.json(accessSnapshot());
     }
+    if (target.endsWith('/rest/v1/rpc/phase4_user_subscription_status')) {
+      const body = JSON.parse(init.body);
+      assert.equal(body.p_user_id, userId);
+      return Response.json({
+        subscription: null,
+        pendingPayment: null,
+      });
+    }
     throw new Error(`Unexpected request: ${target}`);
   };
   try {

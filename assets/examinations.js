@@ -6,11 +6,30 @@
   if (!workerUrl) return;
 
   const SUBJECTS = Object.freeze([
-    { display: 'Statutory Construction', source: 'Statutory Construction', year: 1 },
-    { display: 'Basic Legal and Judicial Ethics', source: 'Basic Legal and Judicial Ethics', year: 1 },
-    { display: 'Criminal Law I', source: 'Criminal Law I', year: 1 },
-    { display: 'Constitutional Law I', source: 'Constitutional Law I', year: 1 },
-    { display: 'Persons and Family Relations', source: 'Persons and Family Law', year: 2 },
+    { display: 'Philosophy of Law', source: 'Philosophy of Law', year: 1, term: 1 },
+    { display: 'Statutory Construction', source: 'Statutory Construction', year: 1, term: 1 },
+    { display: 'Basic Legal and Judicial Ethics', source: 'Basic Legal and Judicial Ethics', year: 1, term: 1 },
+    { display: 'Constitutional Law I', source: 'Constitutional Law I', year: 1, term: 1 },
+    { display: 'Criminal Law I', source: 'Criminal Law I', year: 1, term: 1 },
+    { display: 'Criminal Procedure', source: 'Criminal Procedure', year: 1, term: 1 },
+    { display: 'Legal Research and Writing', source: 'Legal Research and Writing', year: 1, term: 2 },
+    { display: 'Constitutional Law II', source: 'Constitutional Law II', year: 1, term: 2 },
+    { display: 'Criminal Law II', source: 'Criminal Law II', year: 1, term: 2 },
+    { display: 'Obligations and Contracts', source: 'Obligations and Contracts', year: 1, term: 2 },
+    { display: 'Civil Procedure I', source: 'Civil Procedure I', year: 1, term: 2 },
+    { display: 'Public International Law', source: 'Public International Law', year: 2, term: 1 },
+    { display: 'Persons and Family Law', source: 'Persons and Family Law', year: 2, term: 1 },
+    { display: 'Civil Procedure II', source: 'Civil Procedure II', year: 2, term: 1 },
+    { display: 'Agency, Trust and Partnership Law', source: 'Agency, Trust and Partnership Law', year: 2, term: 1 },
+    { display: 'Corporation and Basic Securities Law', source: 'Corporation and Basic Securities Law', year: 2, term: 1 },
+    { display: 'Labor Law and Social Legislation', source: 'Labor Law and Social Legislation', year: 2, term: 1 },
+    { display: 'Clinical Legal Education', source: 'Clinical Legal Education', year: 2, term: 1 },
+    { display: 'Administrative Law and Law on Public Officers', source: 'Administrative Law and Law on Public Officers', year: 2, term: 2 },
+    { display: 'Property and Land Law', source: 'Property and Land Law', year: 2, term: 2 },
+    { display: 'Basic Succession Law', source: 'Basic Succession Law', year: 2, term: 2 },
+    { display: 'Evidence', source: 'Evidence', year: 2, term: 2 },
+    { display: 'Commercial Laws I', source: 'Commercial Laws I', year: 2, term: 2 },
+    { display: 'Basic Taxation Law', source: 'Basic Taxation Law', year: 2, term: 2 },
   ]);
   const LOCAL_KEY = 'duediligence.examinations.recovery.v1';
   const TAB_KEY = 'duediligence.examinations.tab-token.v1';
@@ -204,8 +223,14 @@
     return map;
   }
 
-  function perSubjectCard(kind, item, subject) {
-    const label = kind === 'midterm' ? 'Midterm Examination' : 'Final Examination';
+  function perSubjectCard(item, subject) {
+    const labels = {
+      midterm: 'Midterm Examination',
+      final: 'Final Examination',
+      quiz: 'Subject Matter Practice',
+      system_test: 'Controlled System Test',
+    };
+    const label = labels[item?.assessmentKind] || 'Subject Matter Practice';
     if (!item) {
       return `<article class="dd-exam-card">
         <div class="dd-exam-card-head">
@@ -248,6 +273,25 @@
     </article>`;
   }
 
+  function groupedSubjectButtons(selected, availability) {
+    return [1, 2].map((year) => [1, 2].map((term) => {
+      const subjects = SUBJECTS.filter((subject) => subject.year === year && subject.term === term);
+      return `<section class="dd-subject-group">
+        <h3>Year ${year} · Term ${term}</h3>
+        ${subjects.map((subject) => {
+          const ready = availability.get(subject.source);
+          return `<button class="dd-subject-button ${subject.source === selected.source ? 'is-selected' : ''}"
+            type="button" data-exam-subject="${escapeHtml(subject.source)}">
+            <span>${escapeHtml(subject.display)}</span>
+            <small class="dd-subject-state ${ready ? 'is-ready' : ''}">
+              ${ready ? 'Practice ready' : 'Review pending'}
+            </small>
+          </button>`;
+        }).join('')}
+      </section>`;
+    }).join('')).join('');
+  }
+
   function renderPerSubject() {
     const root = pageRoot('per_subject');
     if (!root) return;
@@ -255,9 +299,10 @@
       || SUBJECTS[2];
     const availability = availabilityMap();
     const subjectItems = examItemsForSubject(selected.source);
-    const midterm = subjectItems.find((item) => item.assessmentKind === 'midterm')
-      || subjectItems.find((item) => item.assessmentKind === 'system_test');
-    const final = subjectItems.find((item) => item.assessmentKind === 'final');
+    const practiceItems = [...subjectItems].sort((left, right) => {
+      const rank = { quiz: 0, midterm: 1, final: 2, system_test: 3 };
+      return (rank[left.assessmentKind] ?? 9) - (rank[right.assessmentKind] ?? 9);
+    });
     const syllabus = [...new Set(subjectItems.flatMap((item) => item.syllabus || []))];
     const relatedHistory = state.history.filter((item) => item.subject === selected.source).slice(0, 5);
 
@@ -266,8 +311,8 @@
         <div>
           <p class="dd-exam-kicker">Mock Bar / Structured Assessment</p>
           <h1>Subject Matter Examinations</h1>
-          <p>Midterm and Final essay examinations for LEB-required subjects, with one
-            authoritative overall timer, ALAC workspaces, autosave, and individual five-point assessments.</p>
+          <p>Published essay practice for LEB-required subjects, using one authoritative
+            timer, ALAC workspaces, autosave, and individual five-point assessments.</p>
         </div>
         <span class="dd-exam-beta">Allowlisted live beta</span>
       </header>
@@ -284,28 +329,20 @@
               ${subject.source === selected.source ? 'selected' : ''}>${escapeHtml(subject.display)}</option>`).join('')}
           </select>
           <div class="dd-subject-list">
-            ${SUBJECTS.map((subject) => {
-              const ready = availability.get(subject.source);
-              return `<button class="dd-subject-button ${subject.source === selected.source ? 'is-selected' : ''}"
-                type="button" data-exam-subject="${escapeHtml(subject.source)}">
-                <span>${escapeHtml(subject.display)}</span>
-                <small class="dd-subject-state ${ready ? 'is-ready' : ''}">
-                  ${ready ? 'Test ready' : 'Review pending'}
-                </small>
-              </button>`;
-            }).join('')}
+            ${groupedSubjectButtons(selected, availability)}
           </div>
         </aside>
         <main>
           <header class="dd-selected-heading">
-            <p class="dd-exam-kicker">${selected.year === 1 ? 'First-Year' : 'Second-Year'} LEB Subject</p>
+            <p class="dd-exam-kicker">Year ${selected.year} · Term ${selected.term} LEB Subject</p>
             <h2>${escapeHtml(selected.display)}</h2>
-            <p>Four hours &divide; twenty questions = approximately twelve minutes per question.
-              This is a pacing guide, not twenty separate timers.</p>
+            <p>One approved essay question, with a seven-minute strict mode and optional
+              self-paced or untimed review. No timer starts before setup confirmation.</p>
           </header>
           <div class="dd-exam-card-list">
-            ${perSubjectCard('midterm', midterm, selected)}
-            ${perSubjectCard('final', final, selected)}
+            ${practiceItems.length
+              ? practiceItems.map((item) => perSubjectCard(item, selected)).join('')
+              : perSubjectCard(null, selected)}
           </div>
         </main>
         <aside>
@@ -1038,6 +1075,7 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
   }
 
   async function openVerdict(attemptId) {
+    state.screen = 'verdict';
     showTrackPage(state.active?.examination?.track || state.track);
     const root = pageRoot(state.active?.examination?.track || state.track);
     root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">

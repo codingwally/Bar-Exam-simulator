@@ -50,9 +50,17 @@ test('authenticated examination catalog reaches only the allowlisted RPC', async
   await withFetchMock(async (url, options) => {
     const auth = authResponse(url);
     if (auth) return auth;
-    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/examination_query`);
     assert.equal(options.method, 'POST');
     const payload = JSON.parse(options.body);
+    if (String(url) === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      assert.equal(payload.p_user_id, userId);
+      assert.equal(payload.p_track, 'per_subject');
+      assert.equal(payload.p_version_id, null);
+      assert.equal(payload.p_attempt_id, null);
+      assert.equal(payload.p_allow_historical, false);
+      return Response.json({ allowed: true, basis: 'standard_access' });
+    }
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/examination_query`);
     assert.equal(payload.p_user_id, userId);
     assert.equal(payload.p_operation, 'catalog');
     assert.equal(payload.p_payload.track, 'per_subject');
@@ -92,8 +100,16 @@ test('start attempt preserves server response and returns HTTP 201', async () =>
   await withFetchMock(async (url, options) => {
     const auth = authResponse(url);
     if (auth) return auth;
-    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/examination_command`);
     const payload = JSON.parse(options.body);
+    if (String(url) === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      assert.equal(payload.p_user_id, userId);
+      assert.equal(payload.p_track, null);
+      assert.equal(payload.p_version_id, versionId);
+      assert.equal(payload.p_attempt_id, null);
+      assert.equal(payload.p_allow_historical, false);
+      return Response.json({ allowed: true, basis: 'standard_access' });
+    }
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/examination_command`);
     assert.equal(payload.p_operation, 'start_attempt');
     assert.equal(payload.p_payload.versionId, versionId);
     return Response.json({

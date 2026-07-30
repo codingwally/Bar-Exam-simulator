@@ -70,6 +70,14 @@ assert.match(
   quorumStyles,
   /#page-community #lex-post-submit\s*\{[\s\S]*?min-width:\s*0;/,
 );
+assert.match(
+  quorumStyles,
+  /#page-community \.lex-feed\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+);
+assert.match(
+  quorumStyles,
+  /#page-community \.lex-post-card\s*\{[\s\S]*?min-width:\s*0;/,
+);
 for (const retiredCopy of [
   'Search entries',
   'Sort entries',

@@ -37,7 +37,7 @@
         ],
         "regressionTest": "passed"
       },
-      "productionStatus": "pending deployment and five-trial live verification"
+      "productionStatus": "deployed in 2a3d570608a2ae408ed9325686121f9745a7ebae; canonical signed-out production trials remain blocked—AFK because the selected browser is authenticated; the signed-out local behavioral regression passed"
     },
     {
       "id": "QA-20260731-002",
@@ -60,12 +60,12 @@
         "mobileTrialsAt320": "5/5 restored focus to site-menu-toggle",
         "regressionTest": "passed"
       },
-      "productionStatus": "pending deployment and live verification"
+      "productionStatus": "deployed in 2a3d570608a2ae408ed9325686121f9745a7ebae; responsive signed-out live focus verification remains blocked—AFK because the selected browser is authenticated; the local 320px behavioral regression passed"
     },
     {
       "id": "QA-20260731-003",
       "severity": "high",
-      "status": "local-fix-verified",
+      "status": "production-verified",
       "classification": "intermittent under rapid navigation",
       "surface": "Premium Bar Feels navigation",
       "reproduction": {
@@ -83,12 +83,12 @@
         "behavioralRegression": "passed",
         "stalePremiumResponseIgnored": true
       },
-      "productionStatus": "pending deployment and five-trial rapid-switch verification"
+      "productionStatus": "deployed in 2a3d570608a2ae408ed9325686121f9745a7ebae; 5/5 live rapid-switch trials passed"
     },
     {
       "id": "QA-20260731-004",
       "severity": "high",
-      "status": "local-fix-verified",
+      "status": "production-verified",
       "classification": "deterministic navigation-state defect",
       "surface": "Quorum My Posts and Profile navigation",
       "reproduction": {
@@ -110,12 +110,12 @@
         "deepLinkAndRefreshAllowlist": true,
         "regressionTest": "passed"
       },
-      "productionStatus": "pending deployment and five-trial live verification"
+      "productionStatus": "deployed in 2a3d570608a2ae408ed9325686121f9745a7ebae; My Posts and Profile each passed 5/5 live route and active-state trials, and My Posts deep-link refresh passed"
     },
     {
       "id": "QA-20260731-005",
       "severity": "medium",
-      "status": "local-fix-verified",
+      "status": "production-verified",
       "classification": "deterministic accessibility semantics defect",
       "surface": "Quorum page heading",
       "reproduction": {
@@ -134,12 +134,12 @@
         "headingPresentInLocalDomSnapshot": true,
         "regressionTest": "passed"
       },
-      "productionStatus": "pending deployment and live semantic verification"
+      "productionStatus": "deployed in 2a3d570608a2ae408ed9325686121f9745a7ebae; the Quorum h2 is present in the live accessibility tree"
     },
     {
       "id": "QA-20260731-006",
       "severity": "medium",
-      "status": "local-fix-verified",
+      "status": "production-verified",
       "classification": "deterministic accessibility contrast and target-size defects",
       "surface": "Quorum metadata, status text, affirmation count, and dark practice card",
       "reproduction": {
@@ -159,7 +159,35 @@
         "contrastThreshold": "all targeted pairs >= 4.5:1",
         "regressionTest": "passed"
       },
-      "productionStatus": "pending deployment and live computed-style verification"
+      "productionStatus": "deployed in 2a3d570608a2ae408ed9325686121f9745a7ebae; live target measured 24x24 CSS pixels and targeted contrast pairs passed"
+    },
+    {
+      "id": "QA-20260731-007",
+      "severity": "medium",
+      "status": "local-fix-verified",
+      "classification": "deterministic accessibility state defect",
+      "surface": "Quorum Comment toggle",
+      "reproduction": {
+        "attempts": 5,
+        "failures": 5,
+        "rate": 1,
+        "observed": "The comments panel opened and closed functionally, but its trigger exposed neither aria-expanded nor aria-controls in any trial."
+      },
+      "rootCause": "The post renderer created the Comment trigger without a deterministic relationship to the comments region, and toggleComments changed only visual state.",
+      "regressionTest": "scripts/test-quorum-navigation-state.mjs",
+      "fixFiles": [
+        "assets/lex-forum.js",
+        "index.html"
+      ],
+      "postFixEvidence": {
+        "redBeforeGreen": "The new regression first failed with: Each Comment toggle must identify its controlled comments region.",
+        "behavioralOpenCloseRegression": "passed",
+        "deterministicRegionId": true,
+        "ariaControls": true,
+        "ariaExpandedSynchronized": true,
+        "visualDesignChanged": false
+      },
+      "productionStatus": "pending deployment and five-trial live verification"
     }
   ]
 }

@@ -1,11 +1,11 @@
 {
   "cycle": "20260731-cycle-1",
-  "status": "in-progress",
+  "status": "release-candidate-ready",
   "resumeFrom": [
-    "Commit the reviewed release candidate and push the scoped QA branch.",
+    "Commit and push the scoped Comment-toggle accessibility release candidate.",
     "Open the pull request, require green CI, review the final patch, and merge through the normal release path.",
-    "Verify the deployed asset keys and all four fixes on the live site, then reconfirm the production data counts read-only.",
-    "Finalize the exact deployment manifest, post-release interaction evidence, and remaining Blocked-AFK coverage."
+    "Verify the deployed JavaScript cache key and Comment aria-controls/aria-expanded behavior in five live trials, then reconfirm console and production data counts read-only.",
+    "Finalize the exact deployment manifest and completion checkpoint."
   ],
   "completed": [
     "Production release identity, rollback, deployment, Worker, database, cache, asset hash, and row-count baseline.",
@@ -16,7 +16,10 @@
     "Quorum My Posts/Profile duplicate active-state defect reproduced 5/5 on each route and fixed locally with a behavioral regression.",
     "Quorum semantic heading, focused contrast pairs, focus ring, and compact target-size defects fixed without redesigning the visible surface.",
     "Safe primary navigation, dialog focus/lock recovery, Quorum read-only search/sort/refresh/history, and ten responsive widths were exercised.",
-    "Final sequential release gate passed: Worker 135/135, all 33 non-staging script suites, syntax checks, artifact checks, diff check, and changed-scope secret scan."
+    "The first scoped release was deployed at 2a3d570608a2ae408ed9325686121f9745a7ebae and its My Posts/Profile, Bar Feels, semantic heading, contrast, and target-size fixes were verified live.",
+    "Every safely testable read-only Quorum control group received five production trials; mutation controls remained untouched.",
+    "Comment toggle semantics failed 5/5 live, then passed a red-before-green static and behavioral regression after the smallest source fix.",
+    "Continuation release gate passed: Worker 135/135, all 33 non-staging script commands, syntax, Pages artifact, diff, JSON, and changed-scope secret checks."
   ],
   "blocked": [
     {
@@ -43,29 +46,31 @@
     "responsiveWidthsUsed": 10,
     "tabsOpenedByCycle": 2,
     "rawControlsInventoriedInCurrentProductionState": 85,
-    "controlGroupsFullyCoveredByFiveTrials": 18,
-    "controlGroupsWithFiveTrialFailureBeforeFix": 3,
+    "controlGroupsFullyCoveredByFiveTrials": 26,
+    "controlGroupsWithFiveTrialFailureBeforeFix": 4,
     "controlGroupsBlockedOrUnsafe": 4,
-    "loggedInteractionRecords": 65,
-    "loggedPassingInteractions": 57,
-    "loggedFailingInteractions": 8,
+    "loggedInteractionRecords": 96,
+    "loggedPassingInteractions": 86,
+    "loggedFailingInteractions": 9,
+    "loggedInconclusiveInteractions": 1,
     "localHistoryActivationsLogged": 25,
-    "productionInteractionRecordsLogged": 45,
+    "productionInteractionRecordsLogged": 76,
     "backActionsLogged": 20,
     "forwardActionsLogged": 5,
     "rapidSwitchTrialsLogged": 3,
-    "defectsInvestigated": 6,
-    "defectsReproduced": 6,
-    "rootCausesEstablished": 6,
-    "regressionTestsAdded": 3,
+    "defectsInvestigated": 7,
+    "defectsReproduced": 7,
+    "rootCausesEstablished": 7,
+    "regressionTestsAdded": 4,
     "workerAssertionsPassed": 135,
     "releaseGateTestCommandsPassed": 34,
+    "continuationReleaseGateCommandsPassed": 39,
     "releaseGateTestCommandsFailed": 0,
     "changedScopeProbableSecretsFound": 0,
     "consoleErrorsObserved": 0,
     "syntheticRecordsCreated": 0,
     "syntheticRecordsRemaining": 0,
-    "deploymentsByCycle": 0
+    "deploymentsByCycle": 1
   },
-  "lastUpdated": "2026-07-31T06:17:43+08:00"
+  "lastUpdated": "2026-07-31T07:37:20+08:00"
 }

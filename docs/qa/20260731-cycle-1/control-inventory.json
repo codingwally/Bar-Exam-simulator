@@ -28,7 +28,8 @@
       "name": "Due Diligence home",
       "container": "header",
       "safeInProduction": true,
-      "fiveTrialStatus": "not-yet-covered"
+      "fiveTrialStatus": "5/5 passed with Quorum recovery",
+      "evidence": "interaction-log.jsonl#prod-home-link-batch"
     },
     {
       "stableId": "spa-mock",
@@ -51,7 +52,7 @@
       "name": "Bar Feels — Premium only.",
       "container": "primary navigation",
       "safeInProduction": true,
-      "fiveTrialStatus": "2/5 normal transition observed; 3/5 rapid-switch failures",
+      "fiveTrialStatus": "5/5 rapid-switch trials passed after deployment",
       "relatedDefect": "QA-20260731-003"
     },
     {
@@ -120,7 +121,7 @@
       "name": "My Posts",
       "container": "Quorum navigation",
       "safeInProduction": true,
-      "fiveTrialStatus": "5/5 production failures before fix; local behavioral regression passed",
+      "fiveTrialStatus": "5/5 live route, active-state, and aria-current trials passed after deployment",
       "relatedDefect": "QA-20260731-004"
     },
     {
@@ -135,21 +136,23 @@
       "name": "Study Circles",
       "container": "Quorum navigation",
       "safeInProduction": true,
-      "fiveTrialStatus": "not-yet-covered"
+      "fiveTrialStatus": "5/5 navigation, 5/5 history, and 5/5 deep-link reload trials passed",
+      "evidence": "interaction-log.jsonl#prod-circles-nav-batch"
     },
     {
       "stableId": "quorum-nav-notifications",
       "name": "Notifications",
       "container": "Quorum navigation",
       "safeInProduction": true,
-      "fiveTrialStatus": "not-yet-covered"
+      "fiveTrialStatus": "5/5 navigation trials passed",
+      "evidence": "interaction-log.jsonl#prod-notifications-nav-batch"
     },
     {
       "stableId": "quorum-nav-profile",
       "name": "Profile",
       "container": "Quorum navigation",
       "safeInProduction": true,
-      "fiveTrialStatus": "5/5 production failures before fix; local behavioral regression passed",
+      "fiveTrialStatus": "5/5 live route, active-state, and aria-current trials passed after deployment",
       "relatedDefect": "QA-20260731-004"
     },
     {
@@ -158,7 +161,8 @@
       "instanceCount": 8,
       "container": "Quorum topics",
       "safeInProduction": true,
-      "fiveTrialStatus": "not-yet-covered"
+      "fiveTrialStatus": "Five complete cycles passed across All subjects plus all eight subject choices",
+      "evidence": "interaction-log.jsonl#prod-filter-matrix-five-cycles"
     },
     {
       "stableId": "quorum-purpose-filter",
@@ -166,7 +170,8 @@
       "instanceCount": 7,
       "container": "Quorum purpose filters",
       "safeInProduction": true,
-      "fiveTrialStatus": "not-yet-covered"
+      "fiveTrialStatus": "Five complete cycles passed across All purposes plus all seven purpose choices",
+      "evidence": "interaction-log.jsonl#prod-filter-matrix-five-cycles"
     },
     {
       "stableId": "quorum-search-input",
@@ -220,7 +225,8 @@
       "container": "four production post cards",
       "safeInProduction": false,
       "requiredEnvironment": "authorized synthetic staging harness",
-      "fiveTrialStatus": "blocked—AFK"
+      "fiveTrialStatus": "Read-only profile, affirmation roster, Comment panel, Disseminate dialog, Report dialog, Affirm menu, and More menu surfaces each received five safe trials; Save, reaction selection, comment submission, dissemination submission, report submission, and profile mutations remain blocked—AFK",
+      "evidence": "interaction-log.jsonl#prod-member-profile-batch through prod-report-dialog-batch"
     },
     {
       "stableId": "quorum-owner-actions",
@@ -229,7 +235,8 @@
       "container": "owned production post",
       "safeInProduction": false,
       "requiredEnvironment": "authorized synthetic staging harness",
-      "fiveTrialStatus": "blocked—AFK"
+      "fiveTrialStatus": "Edit and Remove dialogs each opened and cancelled 5/5; saving or deleting remains blocked—AFK",
+      "evidence": "interaction-log.jsonl#prod-edit-dialog-batch and prod-remove-dialog-batch"
     },
     {
       "stableId": "quorum-supporting-controls",
@@ -237,7 +244,8 @@
       "instanceCount": 5,
       "container": "Quorum supporting information",
       "safeInProduction": true,
-      "fiveTrialStatus": "Community pulse refresh 5/5 passed; remaining four controls partially covered or pending"
+      "fiveTrialStatus": "All five controls passed five safe trials; no grading or mutation occurred",
+      "evidence": "interaction-log.jsonl#prod-unanswered-shortcut-batch through prod-open-mock-shortcut-batch"
     },
     {
       "stableId": "footer-links",
@@ -245,8 +253,9 @@
       "instanceCount": 5,
       "container": "footer",
       "safeInProduction": true,
-      "fiveTrialStatus": "not-yet-covered"
+      "fiveTrialStatus": "Support, Retainer, Terms, Privacy, and Partnerships each passed five open/close trials; no form was submitted",
+      "evidence": "interaction-log.jsonl#prod-terms-footer-batch through prod-footer-partnerships-batch"
     }
   ],
-  "coverageCaveat": "The 85-control raw production Quorum state is inventoried here using repeated-instance groups. Mutation controls, unavailable personas, and several lower-priority read-only controls remain blocked, partial, or untested and are not counted as passed."
+  "coverageCaveat": "The 85-control raw production Quorum state is inventoried here using repeated-instance groups. Every safely testable read-only group received five trials. Mutation controls and unavailable personas remain blocked—AFK and are not counted as passed."
 }

@@ -14,15 +14,15 @@ const sitemap = await readFile(path.join(root, 'sitemap.xml'), 'utf8');
 assert.match(index, /<html lang="en-PH">/);
 assert.match(
   index,
-  /<title>Due Diligence — Philippine Law School &amp; Bar Review<\/title>/,
+  /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/,
 );
 assert.match(
   index,
-  /<meta name="description" content="Study Philippine law and prepare for the Bar with source-based essay practice, ALAC feedback, Subject Matter examinations, Mock Bar sessions, and a law-school community\.">/,
+  /<meta name="description" content="A private-beta learning companion for Philippine law students to practice legal reasoning, refine essay writing, and prepare with source-based educational feedback\.">/,
 );
 assert.match(index, /<link rel="canonical" href="https:\/\/duediligence\.ph\/">/);
 assert.match(index, /<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">/);
-assert.match(index, /<meta property="og:title" content="Due Diligence — Philippine Law School &amp; Bar Review">/);
+assert.match(index, /<meta property="og:title" content="Due Diligence — A Friend on Your Journey Through the Study of Law">/);
 assert.match(index, /<meta property="og:url" content="https:\/\/duediligence\.ph\/">/);
 assert.match(index, /<meta property="og:locale" content="en_PH">/);
 assert.match(index, /<meta property="og:image" content="https:\/\/duediligence\.ph\/favicon\.svg">/);

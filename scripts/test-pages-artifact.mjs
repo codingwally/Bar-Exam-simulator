@@ -31,6 +31,9 @@ for (const required of [
   'sitemap.xml',
   'admin/index.html',
   'assets/private-beta-session.js',
+  'assets/private-beta-landing.css',
+  'assets/private-beta-landing.js',
+  'assets/private-beta/library-student-1440.avif',
   'assets/examinations.css',
   'assets/examinations.js',
   'assets/payments/gcash.png',
@@ -49,8 +52,15 @@ const sitemap = await readFile(path.join(output, 'sitemap.xml'), 'utf8');
 assert.doesNotMatch(index, /content\/question-bank|website-upload\.json|DueDiligenceWebsiteQuestionBank/i);
 assert.doesNotMatch(index, /const BAR_QUESTIONS\s*=\s*\{/);
 assert.doesNotMatch(index, /PH Bar Essay Trainer|Advanced Pro Repository|PH Bar Exam Simulator/);
-assert.match(index, /<title>Due Diligence — Philippine Law School &amp; Bar Review<\/title>/);
+assert.match(index, /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/);
 assert.match(index, /<html lang="en-PH">/);
+assert.match(index, /id="private-beta-landing"/);
+assert.match(
+  index,
+  /A platform to express<br>\s*your perspective, sharpen<br>\s*your legal reasoning, and<br>\s*strengthen your performance<br>\s*throughout law school\./,
+);
+assert.match(index, /Practice the reasoning\. Refine the writing\./);
+assert.match(index, /id="authenticated-app-shell" hidden inert/);
 assert.match(index, /loadProtectedQuestion/);
 assert.match(index, /Authentication is required before an examination question is displayed/);
 assert.match(robots, /Disallow: \/admin\//);

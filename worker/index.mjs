@@ -58,6 +58,17 @@ import {
   selectProtectedQuestion,
 } from './access-core.mjs';
 import {
+  PRIVATE_BETA_ACCESS_SECONDS,
+  PRIVATE_BETA_PENDING_SECONDS,
+  PrivateBetaError,
+  createPrivateBetaToken,
+  hmacHex as privateBetaHmacHex,
+  sha256Hex as privateBetaSha256Hex,
+  validatePrivateBetaAcknowledgements,
+  verifyPrivateBetaAccessCode,
+  verifyPrivateBetaToken,
+} from './private-beta-core.mjs';
+import {
   PAYMENT_LIMITS,
   PaymentValidationError,
   normalizePartnershipRequest,
@@ -129,6 +140,7 @@ const forumWriteRateWindows = new Map();
 const examinationReadRateWindows = new Map();
 const examinationWriteRateWindows = new Map();
 const recentSubmissions = new Map();
+const authenticatedUserCache = new WeakMap();
 let laborBankCache = null;
 let websiteBankCache = null;
 
@@ -145,6 +157,8 @@ function corsHeaders(origin, allowedOrigin) {
       'X-DD-Visitor-ID',
       'X-DD-Event-Key',
       'X-DD-Page-Area',
+      'X-DD-Beta-Access',
+      'X-DD-Beta-Flow-ID',
     ].join(', '),
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
@@ -909,6 +923,9 @@ async function sendSecureNotification(env, { mailbox, subject, adminPath }) {
 }
 
 async function verifiedAuthenticatedUser(request, env) {
+  if (authenticatedUserCache.has(request)) {
+    return authenticatedUserCache.get(request);
+  }
   const authorization = String(request.headers.get('Authorization') || '').trim();
   if (!authorization) return null;
   if (!/^Bearer\s+\S+$/i.test(authorization)) {
@@ -928,10 +945,12 @@ async function verifiedAuthenticatedUser(request, env) {
   if (!user?.id) {
     throw new GuestAccessError('INVALID_SESSION', 'Your session expired. Please sign in again.', 401);
   }
-  return {
+  const verified = {
     id: String(user.id),
     email: String(user.email || '').trim().toLowerCase() || null,
   };
+  authenticatedUserCache.set(request, verified);
+  return verified;
 }
 
 function phase4AccessEnforced(env) {
@@ -945,6 +964,119 @@ function authenticatedSubmissionsEnforced(env) {
 
 function phase4ModelQualityEnforced(env) {
   return String(env.PHASE4_MODEL_QUALITY_ENFORCEMENT).toLowerCase() === 'true';
+}
+
+function privateBetaGateEnabled(env) {
+  return String(env.PRIVATE_BETA_GATE_ENABLED).toLowerCase() === 'true';
+}
+
+function privateBetaDisclosureVersion(env) {
+  const version = String(
+    env.PRIVATE_BETA_DISCLOSURE_VERSION
+    || 'beta-disclosure-v1-2026-07-31',
+  ).trim();
+  if (!/^beta-disclosure-v[0-9]+-[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(version)) {
+    throw new PrivateBetaError(
+      'PRIVATE_BETA_NOT_CONFIGURED',
+      'Private-beta access is temporarily unavailable.',
+      503,
+    );
+  }
+  return version;
+}
+
+function privateBetaAccessToken(request) {
+  const token = String(request.headers.get('X-DD-Beta-Access') || '').trim();
+  if (!token || token.length > 4096) {
+    throw new PrivateBetaError(
+      'PRIVATE_BETA_ADMISSION_REQUIRED',
+      'Complete private-beta admission before continuing.',
+      403,
+    );
+  }
+  return token;
+}
+
+function privateBetaFlowId(request) {
+  const value = String(request.headers.get('X-DD-Beta-Flow-ID') || '').trim();
+  if (!/^[A-Za-z0-9_-]{22,128}$/.test(value)) {
+    throw new PrivateBetaError(
+      'PRIVATE_BETA_ACCESS_DENIED',
+      'Private-beta access could not be verified. Review the access details and try again later.',
+      401,
+    );
+  }
+  return value;
+}
+
+async function privateBetaRateSubjectHashes(request, env) {
+  const ip = String(request.headers.get('CF-Connecting-IP') || 'unavailable');
+  const flowId = privateBetaFlowId(request);
+  const [flowHash, networkHash] = await Promise.all([
+    privateBetaHmacHex(
+      env.GUEST_USAGE_HMAC_KEY,
+      `private-beta-flow\0${flowId}`,
+    ),
+    privateBetaHmacHex(
+      env.GUEST_USAGE_HMAC_KEY,
+      `private-beta-network\0${ip}`,
+    ),
+  ]);
+  return { flowHash, networkHash };
+}
+
+async function privateBetaAccessForUser(env, userId, accessJti) {
+  const result = await phase4Rpc(env, 'private_beta_access_snapshot', {
+    p_user_id: userId,
+    p_access_jti_hash: await privateBetaSha256Hex(accessJti),
+  });
+  return {
+    allowed: result?.allowed === true,
+    admissionKind: result?.admissionKind || null,
+    disclosureVersion: result?.disclosureVersion || null,
+    expiresAt: result?.expiresAt || null,
+  };
+}
+
+async function requirePrivateBetaAdmission(request, env) {
+  if (!privateBetaGateEnabled(env)) return null;
+  const user = await requireAuthenticatedUser(request, env);
+  const disclosureVersion = privateBetaDisclosureVersion(env);
+  const token = privateBetaAccessToken(request);
+  const payload = await verifyPrivateBetaToken(
+    token,
+    env.PRIVATE_BETA_FLOW_SIGNING_KEY,
+    {
+      expectedType: 'access',
+      expectedSubject: user.id,
+      disclosureVersion,
+    },
+  );
+  const access = await privateBetaAccessForUser(env, user.id, payload.jti);
+  if (!access.allowed || access.disclosureVersion !== disclosureVersion) {
+    throw new PrivateBetaError(
+      'PRIVATE_BETA_ADMISSION_REQUIRED',
+      'Complete private-beta admission before continuing.',
+      403,
+    );
+  }
+  return { user, access, tokenPayload: payload };
+}
+
+async function privateBetaCapabilityExempt(request, pathname) {
+  if (pathname === '/examinations/query') {
+    const payload = await parseBoundedJson(request.clone(), 24_000);
+    return payload?.operation === 'assignment';
+  }
+  if (pathname === '/examinations/command') {
+    const payload = await parseBoundedJson(request.clone(), 80_000);
+    return new Set([
+      'claim_examiner_assignment',
+      'save_examiner_review',
+      'finalize_examiner_review',
+    ]).has(payload?.operation);
+  }
+  return false;
 }
 
 function publicPricingEnabled(env) {
@@ -2475,6 +2607,143 @@ async function handleReleaseContentSync(request, env, origin, allowedOrigin) {
   }, 200, origin, allowedOrigin);
 }
 
+async function handlePrivateBetaCodeVerification(
+  request,
+  env,
+  origin,
+  allowedOrigin,
+) {
+  const payload = await parseBoundedJson(request, 12_000);
+  const disclosureVersion = privateBetaDisclosureVersion(env);
+  const submittedVersion = String(payload?.disclosureVersion || '').trim();
+  if (submittedVersion !== disclosureVersion
+      || payload?.disclosureEndReached !== true
+      || !validatePrivateBetaAcknowledgements(payload?.acknowledgements)) {
+    throw new PrivateBetaError(
+      'PRIVATE_BETA_DISCLOSURE_REQUIRED',
+      'Complete the current Beta Disclosure before continuing.',
+      400,
+    );
+  }
+
+  const codeMatches = await verifyPrivateBetaAccessCode(payload?.accessCode, {
+    verifier: env.PRIVATE_BETA_ACCESS_CODE_VERIFIER,
+    pepper: env.PRIVATE_BETA_ACCESS_CODE_PEPPER,
+  });
+  const rateSubjects = await privateBetaRateSubjectHashes(request, env);
+  const rateResult = await phase4Rpc(
+    env,
+    'private_beta_evaluate_code_attempt',
+    {
+      p_flow_hash: rateSubjects.flowHash,
+      p_network_hash: rateSubjects.networkHash,
+      p_code_valid: codeMatches,
+    },
+  );
+  if (rateResult?.allowed !== true) {
+    throw new PrivateBetaError(
+      'PRIVATE_BETA_ACCESS_DENIED',
+      'Private-beta access could not be verified. Review the access details and try again later.',
+      rateResult?.blocked === true ? 429 : 401,
+    );
+  }
+
+  const pending = await createPrivateBetaToken({
+    type: 'pending',
+    disclosureVersion,
+    lifetimeSeconds: PRIVATE_BETA_PENDING_SECONDS,
+  }, env.PRIVATE_BETA_FLOW_SIGNING_KEY);
+
+  return jsonResponse({
+    ok: true,
+    pending: {
+      token: pending.token,
+      disclosureVersion,
+      expiresAt: new Date(pending.payload.exp * 1000).toISOString(),
+    },
+  }, 200, origin, allowedOrigin);
+}
+
+async function handlePrivateBetaAdmissionCompletion(
+  request,
+  env,
+  origin,
+  allowedOrigin,
+) {
+  const user = await requireAuthenticatedUser(request, env);
+  const payload = await parseBoundedJson(request, 16_000);
+  const disclosureVersion = privateBetaDisclosureVersion(env);
+  if (payload?.disclosureEndReached !== true
+      || !validatePrivateBetaAcknowledgements(payload?.acknowledgements)) {
+    throw new PrivateBetaError(
+      'PRIVATE_BETA_ACKNOWLEDGMENTS_REQUIRED',
+      'Confirm all required acknowledgments to continue.',
+      400,
+    );
+  }
+
+  const pending = await verifyPrivateBetaToken(
+    payload?.pendingToken,
+    env.PRIVATE_BETA_FLOW_SIGNING_KEY,
+    {
+      expectedType: 'pending',
+      disclosureVersion,
+    },
+  );
+  const access = await createPrivateBetaToken({
+    type: 'access',
+    subject: user.id,
+    disclosureVersion,
+    lifetimeSeconds: PRIVATE_BETA_ACCESS_SECONDS,
+  }, env.PRIVATE_BETA_FLOW_SIGNING_KEY);
+
+  const admission = await phase4Rpc(env, 'private_beta_complete_admission', {
+    p_user_id: user.id,
+    p_disclosure_version: disclosureVersion,
+    p_pending_jti_hash: await privateBetaSha256Hex(pending.jti),
+    p_access_jti_hash: await privateBetaSha256Hex(access.payload.jti),
+    p_acknowledged_ai_limitations: true,
+    p_acknowledged_educational_only: true,
+    p_acknowledged_terms_and_privacy: true,
+  });
+
+  return jsonResponse({
+    ok: true,
+    access: {
+      allowed: admission?.admitted === true,
+      token: access.token,
+      admissionKind: admission?.admissionKind || null,
+      disclosureVersion,
+      expiresAt: new Date(access.payload.exp * 1000).toISOString(),
+    },
+  }, 200, origin, allowedOrigin);
+}
+
+async function handlePrivateBetaStatus(request, env, origin, allowedOrigin) {
+  const user = await requireAuthenticatedUser(request, env);
+  const disclosureVersion = privateBetaDisclosureVersion(env);
+  const token = privateBetaAccessToken(request);
+  const payload = await verifyPrivateBetaToken(
+    token,
+    env.PRIVATE_BETA_FLOW_SIGNING_KEY,
+    {
+      expectedType: 'access',
+      expectedSubject: user.id,
+      disclosureVersion,
+    },
+  );
+  const access = await privateBetaAccessForUser(env, user.id, payload.jti);
+  return jsonResponse({
+    ok: true,
+    access: {
+      allowed: access.allowed,
+      admissionKind: access.admissionKind,
+      disclosureVersion: access.disclosureVersion,
+      expiresAt: access.expiresAt,
+    },
+  }, 200, origin, allowedOrigin);
+}
+
 async function handleAccess(request, env, origin, allowedOrigin) {
   await enforceGuestStatusRateLimit(request, env);
   const user = await requireAuthenticatedUser(request, env);
@@ -3262,6 +3531,34 @@ export default {
         throw new ExaminerError('METHOD_NOT_ALLOWED', 'Only POST requests are accepted.', 405);
       }
       const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+      if (privateBetaGateEnabled(env) && pathname === '/beta/access/verify') {
+        return await handlePrivateBetaCodeVerification(
+          request,
+          env,
+          origin,
+          allowedOrigin,
+        );
+      }
+      if (privateBetaGateEnabled(env) && pathname === '/beta/access/complete') {
+        return await handlePrivateBetaAdmissionCompletion(
+          request,
+          env,
+          origin,
+          allowedOrigin,
+        );
+      }
+      if (privateBetaGateEnabled(env) && pathname === '/beta/access/status') {
+        return await handlePrivateBetaStatus(
+          request,
+          env,
+          origin,
+          allowedOrigin,
+        );
+      }
+      if (privateBetaGateEnabled(env)
+          && !(await privateBetaCapabilityExempt(request, pathname))) {
+        await requirePrivateBetaAdmission(request, env);
+      }
       if (pathname === '/corrections') {
         return await handleCorrection(request, env, origin, allowedOrigin);
       }
@@ -3405,6 +3702,7 @@ export default {
       const known = error instanceof ExaminerError
         || error instanceof GuestAccessError
         || error instanceof AccessValidationError
+        || error instanceof PrivateBetaError
         || error instanceof PaymentValidationError
         || error instanceof ForumValidationError
         || error instanceof ExaminationValidationError

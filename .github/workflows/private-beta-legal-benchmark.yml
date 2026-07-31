@@ -1,0 +1,59 @@
+name: Private beta legal benchmark
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/private-beta-legal-benchmark.yml"
+      - "content/question-bank/website-upload.json"
+      - "docs/qa/20260731-cycle-1/grading-benchmark-v1.json"
+      - "docs/qa/20260731-private-beta-admission/primary-source-verification.json"
+      - "scripts/run-private-beta-grading-benchmark.mjs"
+      - "scripts/test-private-beta-grading-benchmark.mjs"
+      - "worker/examiner-core.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blind-legal-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_MODEL: gemini-3.5-flash-lite
+      BENCHMARK_REPEAT_RUNS: "2"
+      BENCHMARK_CONCURRENCY: "1"
+      BENCHMARK_REQUEST_INTERVAL_MS: "7000"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify benchmark harness without a credential
+        run: node scripts/test-private-beta-grading-benchmark.mjs
+
+      - name: Require repository-scoped Gemini release-gate credential
+        shell: bash
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "Required repository release-gate credential is not configured."
+            exit 1
+          fi
+
+      - name: Run frozen blind benchmark without member credits
+        run: node scripts/run-private-beta-grading-benchmark.mjs --output=artifacts/private-beta-grading-benchmark.json
+
+      - name: Upload redacted benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-beta-grading-benchmark
+          path: artifacts/private-beta-grading-benchmark.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,40 @@
+{
+  "runId": 30628813720,
+  "headCommit": "dc571e270ea5971ccbe6a2e4006a8220cafbf0a8",
+  "executedAt": "2026-07-31T11:57:08Z",
+  "purpose": "Frozen blind baseline before the narrow wrong-rule scoring correction and provider-rate pacing.",
+  "model": "gemini-3.5-flash-lite",
+  "groundingEnabled": false,
+  "samples": 24,
+  "nonblankProviderSamples": 16,
+  "repeatRunsPerNonblankSample": 2,
+  "concurrency": 2,
+  "results": {
+    "samplesCompleted": 14,
+    "successfulProviderRequests": 11,
+    "requestFailures": 21,
+    "requestFailureStatus": 429,
+    "agreementWithin0_5": 0.9286,
+    "falseHighRate": 0.0714,
+    "falseHighSamples": [
+      {
+        "sampleId": "LAB-WRONG-RULE",
+        "expectedScore": 1.2,
+        "runScores": [3.0, 3.0],
+        "finding": "The provider correctly identified Article 87 as irrelevant but the then-current prompt expressly anchored a materially wrong rule in the 3.0-3.9 range."
+      }
+    ],
+    "p95LatencyMsForSuccessfulRequests": 6779,
+    "fabricatedAuthorityRate": 0
+  },
+  "sourceReachability": {
+    "githubHostedRunner": "The eight E-Library requests failed at the runner network boundary.",
+    "ownerAuthorizedReleaseWorkstation": "All eight exact URLs subsequently returned HTTP 200 and matched the expected case identity; see primary-source-verification.json."
+  },
+  "security": {
+    "memberGradingCreditsConsumed": 0,
+    "userAttemptsCreated": 0,
+    "secretValuesLoggedOrPersisted": false
+  },
+  "decision": "NO-GO BASELINE; correct the proven wrong-rule anchor, pace requests within measured quota, then rerun the complete frozen benchmark."
+}

@@ -135,6 +135,41 @@ test('generic legal basis without factual application cannot exceed 2.5', () => 
   assert.match(result.errors.join(' '), /does not meaningfully apply/i);
 });
 
+test('a materially wrong governing rule cannot inflate an otherwise coherent answer', () => {
+  const assessment = modelAssessment(3);
+  assessment.rationale = 'The conclusion is correct, but Article 87 is an incorrect and irrelevant legal basis for constructive dismissal.';
+  assessment.errors = ['The student affirmatively relied on the wrong legal basis.'];
+  const result = applyDeterministicScoreCap(
+    assessment,
+    [
+      'Answer: No. The delegation was improper.',
+      'Legal Basis: Article 87 of the Labor Code on overtime pay governs.',
+      'Application: Sandro filed the brief, so the overtime-pay rule makes the delegation improper.',
+      'Conclusion: Therefore, the delegation was improper.',
+    ].join('\n\n'),
+    remedialContext,
+  );
+  assert.equal(result.score, 1.5);
+  assert.match(result.errors.join(' '), /materially incorrect or irrelevant governing rule/i);
+});
+
+test('a false authority cannot improve a substantively coherent answer', () => {
+  const assessment = modelAssessment(4);
+  assessment.errors = ['The cited case is nonexistent and is a false authority.'];
+  const result = applyDeterministicScoreCap(
+    assessment,
+    [
+      'Answer: No. The delegation was improper.',
+      'Legal Basis: A lawyer must supervise legal work, supposedly under the nonexistent Test v. Only case.',
+      'Application: Sandro prepared, signed, and filed the brief before Cassandra reviewed it.',
+      'Conclusion: Therefore, the delegation was improper.',
+    ].join('\n\n'),
+    remedialContext,
+  );
+  assert.equal(result.score, 2.5);
+  assert.match(result.errors.join(' '), /false or nonexistent legal authority/i);
+});
+
 test('legal basis with some application but incomplete ALAC cannot exceed 3.5', () => {
   const result = capped(
     'No. Under Canons II and IV of the CPRA, a lawyer must supervise delegated legal work. Here, Sandro prepared the appellate brief, signed Cassandra’s name, and filed it before Cassandra reviewed the filing.',

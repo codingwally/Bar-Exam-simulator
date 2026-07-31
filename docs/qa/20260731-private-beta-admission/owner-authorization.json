@@ -1,0 +1,17 @@
+{
+  "recordedAt": "2026-07-31T19:56:21+08:00",
+  "authorizationSource": "Explicit authorization supplied by the Due Diligence product owner in the private-beta launch directive.",
+  "authorizedScope": [
+    "Implemented private-beta disclosure",
+    "Beta Terms presented by the admission flow",
+    "Privacy Notice presented by the admission flow",
+    "Implemented retention language",
+    "Implemented AI-processing language"
+  ],
+  "decision": "OWNER AUTHORIZATION RECORDED FOR CONTROLLED PRIVATE-BETA RELEASE REVIEW",
+  "limitations": [
+    "This record documents the product owner's approval; it is not an invented or implied opinion of independent legal counsel.",
+    "Any later substantive change to the approved text requires a new recorded review.",
+    "The authorization does not waive technical, privacy, security, legal-accuracy, or launch quality gates."
+  ]
+}

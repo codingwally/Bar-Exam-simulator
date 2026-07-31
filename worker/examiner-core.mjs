@@ -569,6 +569,22 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     note = 'Score capped because a score of 4.0 or higher requires a legally meaningful answer, specific legal basis, application to the facts, and conclusion aligned with the suggested answer.';
   }
 
+  const examinerFindings = [
+    assessment?.rationale,
+    assessment?.legalExplanation,
+    ...(Array.isArray(assessment?.errors) ? assessment.errors : []),
+  ].map((value) => cleanText(value, 2_000)).filter(Boolean).join(' ');
+  const falseAuthorityFinding = /(?:false|fabricated|invented|non-?existent)\s+(?:case|citation|authority)|(?:case|citation|authority)\s+(?:is\s+)?(?:false|fabricated|invented|non-?existent)/i.test(examinerFindings);
+  const materiallyWrongRuleFinding = /(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)|(?:legal\s+basis|article|section|rule|statute|doctrine|authority)[\s\S]{0,80}(?:incorrect|wrong|irrelevant|unrelated|inapplicable)/i.test(examinerFindings);
+
+  if (falseAuthorityFinding && cap > 2.5) {
+    cap = 2.5;
+    note = 'Score capped because the student answer relies on a false or nonexistent legal authority.';
+  } else if (materiallyWrongRuleFinding && cap > 1.5) {
+    cap = 1.5;
+    note = 'Score capped because the student answer relies on a materially incorrect or irrelevant governing rule.';
+  }
+
   const originalScore = roundScoreToOneDecimal(assessment.score);
   const score = roundScoreToOneDecimal(Math.min(originalScore, cap));
   if (score === originalScore) {
@@ -685,7 +701,7 @@ GRADE FROM 0.0 TO 5.0 POINTS USING AT MOST ONE DECIMAL PLACE:
 - 5.0 requires a correct conclusion, correct legal basis, meaningful application to facts, and a conclusion substantially aligned with the suggested answer.
 - 4.0 to 4.5 reflects a substantially correct answer with identifiable omissions or imprecision.
 - 3.6 to 3.9 reflects a correct core answer with material but non-fatal gaps in authority, application, or nuance.
-- Distinguish an omitted citation from an affirmatively incorrect authority. A materially wrong article, rule, statute, or doctrine is a substantive legal-basis error and ordinarily places an otherwise coherent answer in the 3.0 to 3.9 range.
+- Distinguish an omitted citation from an affirmatively incorrect authority. A materially wrong article, rule, statute, or doctrine earns no credit as legal basis and ordinarily limits an otherwise coherent answer to 1.0 to 2.0. An expressly fabricated or nonexistent authority is a separate reliability defect: where the underlying rule and application are otherwise correct, it ordinarily limits the answer to 2.0 to 3.0, must be flagged, and must never improve the score.
 - 0.0 is appropriate for a blank, irrelevant, incoherent, or nonsensical response.
 Do not penalize solely for omitting exact article, section, case, or docket numbers when the controlling doctrine and application are correct. This protection does not apply when the student affirmatively cites an incorrect authority.
 

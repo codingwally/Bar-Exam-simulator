@@ -22,6 +22,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify Worker and private-beta contracts
+        run: |
+          node --check worker/index.mjs
+          node --test worker/*.test.mjs
+          node scripts/test-private-beta-admission.mjs
+
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:

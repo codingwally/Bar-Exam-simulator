@@ -1,0 +1,50 @@
+{
+  "runId": 30629264515,
+  "headCommit": "802bad62688d16075cd17928d56edd447a18ef4d",
+  "executedAt": "2026-07-31T12:04:29Z",
+  "purpose": "Full frozen benchmark after wrong-rule cap and measured provider pacing.",
+  "model": "gemini-3.5-flash-lite",
+  "samplesCompleted": 24,
+  "successfulProviderRequests": 32,
+  "requestFailures": 0,
+  "requestFailureRate": 0,
+  "p95LatencyMs": 6306,
+  "agreementWithin0_5": 0.875,
+  "meanAbsoluteError": 0.2625,
+  "alacIssueDetectionAgreement": 0.9783,
+  "legalBasisAccuracy": 1,
+  "citationValidity": 1,
+  "fabricatedAuthorityRate": 0,
+  "unsupportedAuthorityDetected": true,
+  "repeatScoreMeanAbsoluteDelta": 0.0292,
+  "repeatScoreMaximumDelta": 0.5,
+  "remainingFindings": [
+    {
+      "sampleId": "TAX-PARTIAL",
+      "expectedScore": 3.2,
+      "actualScore": 3.8,
+      "classification": "fixture-expansion defect",
+      "reason": "The concrete synthetic answer added the exact proclamation/resolution application that the frozen answerTemplate required it to omit."
+    },
+    {
+      "sampleId": "REM-DIFFERENT-WORDING",
+      "expectedScore": 4.4,
+      "actualScore": 5.0,
+      "classification": "fixture-expansion defect",
+      "reason": "The concrete paraphrase materially expanded the stored answer instead of remaining an equivalent paraphrase."
+    },
+    {
+      "sampleId": "COMM-FALSE-CITATION",
+      "expectedScore": 2.7,
+      "actualScore": 1.5,
+      "classification": "rubric-clarity defect",
+      "reason": "The prompt did not distinguish a correct substantive rule paired with a fabricated citation from a wholly wrong governing rule."
+    }
+  ],
+  "security": {
+    "memberGradingCreditsConsumed": 0,
+    "userAttemptsCreated": 0,
+    "secretValuesLoggedOrPersisted": false
+  },
+  "decision": "NO-GO; correct only the two concrete fixture expansions and the fabricated-authority rubric distinction, then rerun the complete benchmark."
+}

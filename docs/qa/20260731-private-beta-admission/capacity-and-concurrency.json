@@ -1,0 +1,116 @@
+{
+  "measuredAt": "2026-07-31T12:23:29.510Z",
+  "scope": "Controlled private-beta release envelope; this is not a claim of maximum platform capacity.",
+  "productionChangesMadeByProbe": false,
+  "credentialsLoggedOrPersisted": false,
+  "databaseInventory": {
+    "productionProject": "hbllomlijfznnuudpdvr",
+    "databaseBytes": 28929171,
+    "maxConnections": 60,
+    "connectionsObserved": 7,
+    "activeConnectionsObserved": 1,
+    "subjects": 8,
+    "examinationQuestions": 736,
+    "profiles": 7,
+    "userRoles": 7,
+    "gradingResults": 0
+  },
+  "readOnlyProductionProbe": {
+    "script": "scripts/measure-private-beta-read-capacity.mjs",
+    "concurrencyLevels": [1, 2, 4, 8, 16],
+    "workerCorsPreflight": {
+      "requests": 31,
+      "successes": 31,
+      "failures": 0,
+      "highestMeasuredConcurrency": 16,
+      "status": 204,
+      "worstP95LatencyMs": 644,
+      "corsOrigin": "https://duediligence.ph"
+    },
+    "supabasePublicSubjectRead": {
+      "requests": 31,
+      "successes": 31,
+      "failures": 0,
+      "highestMeasuredConcurrency": 16,
+      "status": 200,
+      "rowsPerResponse": 8,
+      "worstP95LatencyMs": 1240
+    }
+  },
+  "geminiProviderEvidence": {
+    "model": "gemini-3.5-flash-lite",
+    "groundingEnabled": false,
+    "safeMeasuredConcurrency": 1,
+    "safeRequestIntervalMs": 7000,
+    "safeRunRequests": 32,
+    "safeRunFailures": 0,
+    "safeRunP95LatencyMs": 6021,
+    "safeRunMaximumLatencyMs": 6735,
+    "unsafeProbeConcurrency": 2,
+    "unsafeProbeRequests": 32,
+    "unsafeProbeRateLimitedRequests": 21,
+    "rateLimitSignal": "HTTP 429",
+    "evidence": [
+      "docs/qa/20260731-private-beta-admission/grading-benchmark-baseline.json",
+      "docs/qa/20260731-private-beta-admission/grading-benchmark-final.json"
+    ]
+  },
+  "authenticationSessionAndDataSafety": {
+    "stagingProject": "hlzqmreeoghbldnhlybr",
+    "privateBetaPgTapAssertionsPassed": 60,
+    "privateBetaPgTapAssertionsFailed": 0,
+    "workerAssertionsPassed": 147,
+    "workerAssertionsFailed": 0,
+    "propertiesCovered": [
+      "one-use admission token and absolute session expiry",
+      "founder role preservation and ordinary beta-tester assignment",
+      "no duplicate users or roles on replay",
+      "cross-user isolation and user-bound admission sessions",
+      "single active examination tab",
+      "idempotent autosave and submission contracts",
+      "provider-capacity answer preservation and credit release",
+      "timer and recovery contracts"
+    ],
+    "syntheticRowsRemaining": 0,
+    "note": "Authentication and mutation safety use the passed production-faithful staging and Worker suites. Production capacity probes were intentionally read-only to protect genuine accounts and records."
+  },
+  "safeOperatingEnvelope": {
+    "totalInvitedBetaUsers": 20,
+    "expectedDailyActiveUsers": 8,
+    "maximumConcurrentSignedInUsers": 4,
+    "maximumConcurrentExaminationSessions": 2,
+    "maximumSimultaneousGeminiGradingRequests": 1,
+    "minimumDelayBetweenGeminiRequestsMs": 7000,
+    "dailyGradedAnswerCapPerUser": 3,
+    "totalDailyGeminiGradingCap": 20,
+    "basis": "The user-facing envelope remains substantially below the 16-concurrent-request edge/database probe, the 60-connection database ceiling, and the provider's measured single-request safe lane. The Gemini lane, not static delivery or public database reads, is the binding capacity constraint."
+  },
+  "monitoringThresholds": {
+    "gradingRequestFailureRateMaximum": 0.02,
+    "gradingP95LatencyMsMaximum": 30000,
+    "autosaveSuccessMinimum": 0.995,
+    "timerDriftSecondsMaximum": 5,
+    "duplicateSubmissionsMaximum": 0,
+    "fabricatedAuthorityRateMaximum": 0,
+    "unsafeFalseHighRateMaximum": 0.02,
+    "supportResponseTarget": "one business day"
+  },
+  "pauseTriggers": [
+    "any privacy or cross-user isolation defect",
+    "any lost draft or duplicate submission",
+    "any verified fabricated legal authority",
+    "any materially unsafe false-high score",
+    "two provider failures within 15 minutes",
+    "provider capacity errors persisting for 15 minutes",
+    "grading p95 above 30 seconds for 15 minutes",
+    "autosave success below 99.5 percent"
+  ],
+  "rollbackAndEmergencyControls": [
+    "disable PRIVATE_BETA_GATE_ENABLED to close new private-beta admission",
+    "roll back Worker traffic to the previously verified version",
+    "roll back GitHub Pages to rollback/pre-private-beta-admission-20260731",
+    "retain additive database structures during application rollback",
+    "stop grading expansion while preserving pending answers and releasing unconsumed attempts"
+  ],
+  "decision": "PASS for the documented controlled private-beta envelope; do not exceed it without a new measured capacity cycle."
+}

@@ -259,6 +259,7 @@
         'Content-Type': 'application/json',
         Authorization: `Bearer ${currentSession.access_token}`,
         'X-Request-ID': requestId(),
+        ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
       },
       body: JSON.stringify(body),
       signal: options.signal,

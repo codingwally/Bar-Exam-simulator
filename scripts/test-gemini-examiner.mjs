@@ -146,6 +146,8 @@ assert.match(prompt, /do not default to whole-number or half-point increments/i)
 assert.match(prompt, /Scores such as 3\.8 and 4\.2 are valid/i);
 assert.match(prompt, /affirmatively incorrect authority/i);
 assert.match(prompt, /materially wrong article, rule, statute, or doctrine/i);
+assert.match(prompt, /limits an otherwise coherent answer to 1\.0 to 2\.0/i);
+assert.match(prompt, /underlying rule and application are otherwise correct[\s\S]*limits the answer to 2\.0 to 3\.0/i);
 assert.doesNotMatch(prompt, /0\.5 increments only|intermediate half-points|weighted formula/i);
 
 const capContext = {
@@ -159,6 +161,24 @@ assert.equal(bareConclusion.percentagePointValue, 1);
 assert.equal(bareConclusion.tier, '1.0');
 assert.equal(bareConclusion.performanceLabel, 'Weak answer');
 assert.match(bareConclusion.errors.join(' '), /bare conclusion/i);
+
+const wrongRuleAssessment = baseResult({
+  score: 3,
+  rationale: 'The conclusion is correct, but Article 87 is an incorrect and irrelevant legal basis for constructive dismissal.',
+  errors: ['The student relied on the wrong governing rule.'],
+});
+const wrongRuleResult = applyDeterministicScoreCap(
+  wrongRuleAssessment,
+  [
+    'Answer: No. The delegation was improper.',
+    'Legal Basis: Article 87 of the Labor Code on overtime pay controls.',
+    'Application: Sandro filed the brief, so the overtime rule makes the delegation improper.',
+    'Conclusion: Therefore, the delegation was improper.',
+  ].join('\n\n'),
+  capContext,
+);
+assert.equal(wrongRuleResult.score, 1.5);
+assert.match(wrongRuleResult.errors.join(' '), /materially incorrect or irrelevant governing rule/i);
 
 // Every exact stored ALAC answer must remain eligible for a 4.0–5.0 score.
 for (const record of websiteQuestionBank.records) {

@@ -57,3 +57,49 @@ concept contains fixture identities, photographs, engagement counts, and
 navigation labels that the production application must not copy. The combined
 comparison and overlay therefore remain the authoritative QA evidence for the
 approved structural target and intentional product-content differences.
+
+# Private Beta Landing Design QA
+
+## Scope
+
+- Approved reference: `docs/visual-references/private-beta/Due_Diligence_Private_Beta_Landing_Approved_Reference.png`
+- Reference SHA-256: `DD56E1526845086D11EF0F9FA1FB6819EFDBEA2941CA5D029237BC37C6A7BE4C`
+- Reference and desktop implementation viewport: 1487 × 1058.
+- Desktop implementation capture: `docs/qa/20260731-private-beta-admission/landing-implementation-1487x1058.png`
+- Same-viewport comparison: `docs/qa/20260731-private-beta-admission/landing-reference-comparison.png`
+- Comparison harness: `docs/qa/20260731-private-beta-admission/landing-comparison.html`
+- Mobile landing capture: `docs/qa/20260731-private-beta-admission/landing-mobile-390x844.png`
+- Mobile admission-dialog capture: `docs/qa/20260731-private-beta-admission/admission-mobile-390x844.png`
+
+## Issues found and resolved
+
+1. The initial hero crop obscured the student's face relative to the approved reference.
+   - Regenerated the responsive library-student variants with a north-weighted crop while preserving the approved source image.
+2. Explicit desktop headline breaks concatenated words at the compact breakpoint.
+   - Preserved the five-line desktop composition and restored natural mobile wrapping with accessible source spacing.
+3. Directional rail cues conflicted with an existing terminology contract.
+   - Kept semantic labels free of decorative characters and rendered the cues through presentation-only CSS.
+4. The brand descriptor could render inline with the wordmark at some widths.
+   - Restored block layout for the wordmark and descriptor.
+5. Continuous photo motion required an explicit user control.
+   - Added a visible pause/resume control and honored reduced-motion and document-visibility preferences.
+
+## Responsive and interaction checks
+
+- Desktop: 1487 × 1058, with the approved header, split hero, dual image rails, CTA hierarchy, and three-part summary band preserved.
+- Mobile: 390 × 844, with no page-level horizontal overflow and a fully operable admission dialog.
+- High-zoom approximation: 744 × 529, with stable wrapping and no horizontal overflow.
+- Keyboard-accessible native dialog, disclosure-end control, acknowledgement gating, access-code form, and existing legal-notice links verified.
+- Browser console: no relevant warnings or errors during the verified journey.
+
+## Intentional differences
+
+- The implementation uses the five approved supplied photographs in responsive, moving rails rather than copying fixture imagery from the reference.
+- A visible Pause Motion control is retained as an accessibility improvement.
+- Minor crop and rail-frame differences reflect responsive production behavior while preserving the approved hierarchy and visual direction.
+
+## Final QA result
+
+**PASS — no P0, P1, or P2 visual defects found in the implemented landing experience.**
+
+This design-quality result does not authorize launch. Founder-role verification, legal/editorial approval, a measured blind grading benchmark, and verified production capacity are separate launch gates.

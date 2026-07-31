@@ -1,9 +1,10 @@
 {
   "cycle": "20260731-private-beta-admission",
-  "status": "candidate-complete-launch-blocked",
+  "status": "launch-gates-passed-awaiting-production-sequence",
   "branch": "agent/private-beta-admission-20260731",
   "baseCommit": "0ba337066b2982d128e84254b6a8990a9ecf4753",
   "implementationCommit": "90d249f1f30e31e455e68d7d0385eb96a94f2d84",
+  "latestBenchmarkCommit": "ac852cf38d9bbd0b280111da4a1a1d9bfe50d33f",
   "rollbackReference": "rollback/pre-private-beta-admission-20260731",
   "sourcePrompt": {
     "sha256": "10F2DC0E9E9BCFB4C7C32CB7093103CC33A70FE2EF37A6CE8A40C6A267F06B9E",
@@ -25,14 +26,17 @@
   },
   "verified": {
     "productionPreflightReadOnly": "passed",
+    "ownerLegalEditorialAuthorization": "recorded-owner-provided-approval",
+    "ownerLegalEditorialAuthorizationEvidence": "docs/qa/20260731-private-beta-admission/owner-authorization.json",
     "stagingProject": "hlzqmreeoghbldnhlybr",
     "stagingMigrationRepeatability": "passed",
     "stagingPgTapAssertions": 60,
     "stagingSyntheticRowsRemaining": 0,
-    "workerAssertionsPassed": 147,
+    "workerAssertionsPassed": 149,
     "workerAssertionsFailed": 0,
-    "repositoryScriptsPassed": 37,
+    "repositoryScriptsPassed": 38,
     "repositoryScriptsFailed": 0,
+    "repositoryScriptsSkippedForMissingStagingCredentials": 2,
     "privateBetaRouteAssertionsPassed": 11,
     "privateBetaRouteAssertionsFailed": 0,
     "landingContractChecks": "passed",
@@ -45,7 +49,28 @@
     "canonicalPhotoPagesVerified": 5,
     "credentialPatternFilesFound": 0,
     "accessCodeLiteralFilesFound": 0,
-    "contentBoundary": "616 reviewed rows; 13 later draft rows excluded by the versioned A1:U617 publication boundary"
+    "contentBoundary": "616 reviewed rows; 13 later draft rows excluded by the versioned A1:U617 publication boundary",
+    "founderRoleRows": 4,
+    "founderAdminRows": 3,
+    "superAdminRows": 1,
+    "ordinaryAdmissionRole": "beta_tester",
+    "founderRolePreservation": "passed",
+    "duplicateFounderUsers": 0,
+    "orphanFounderRoles": 0,
+    "gradingBenchmarkRunId": 30630062756,
+    "gradingBenchmarkSubjects": 8,
+    "gradingBenchmarkSamples": 24,
+    "gradingBenchmarkProviderRequestsPassed": 32,
+    "gradingBenchmarkAgreementWithin0_5": 0.875,
+    "gradingBenchmarkAgreementWithin1_0": 1,
+    "gradingBenchmarkUnsafeFalseHighRate": 0,
+    "gradingBenchmarkFabricatedAuthorityRate": 0,
+    "gradingBenchmarkP95LatencyMs": 6021,
+    "capacityReadRequestsPassed": 62,
+    "capacityReadRequestsFailed": 0,
+    "capacityHighestMeasuredReadConcurrency": 16,
+    "capacitySafeGeminiConcurrency": 1,
+    "capacityGeminiMinimumIntervalMs": 7000
   },
   "securityProperties": [
     "Private-beta endpoints are unavailable while the production flag is false.",
@@ -60,23 +85,24 @@
     "Private-beta pending/access tokens and browser flow state use sessionStorage only.",
     "All authenticated browser Worker callers forward the opaque admission token."
   ],
-  "blockingGates": [
+  "resolvedLaunchGates": [
     {
       "item": "Exact founder identities and roles",
-      "reason": "The four immutable authenticated founder identities and their existing server-side roles have not been independently resolved and verified for the admission gate."
+      "evidence": "Read-only production aggregates verified four distinct founder role rows linked one-to-one to existing Auth users and profiles; staging tests prove founders are preserved and ordinary admissions receive beta_tester without duplicate roles."
     },
     {
-      "item": "Authorized legal-editor or counsel approval",
-      "reason": "The provisional disclosure, Beta Terms, Privacy Notice, retention, and AI-processing statements have no recorded authorized approval."
+      "item": "Authorized legal/editorial approval",
+      "evidence": "Owner-provided authorization is recorded without inventing an independent counsel opinion or approver identity."
     },
     {
       "item": "Live blind Gemini and Philippine legal-authority benchmark",
-      "reason": "No authorized non-credit live harness and frozen human-scored benchmark evidence are available."
+      "evidence": "GitHub Actions run 30630062756 passed the frozen 24-sample, eight-subject benchmark with 32/32 provider requests, zero unsafe false-highs, and zero fabricated authorities."
     },
     {
       "item": "Evidence-backed external beta capacity",
-      "reason": "Exact provider quota and production-equivalent authenticated concurrency evidence are unavailable; the defensible external invited-user limit remains zero."
+      "evidence": "Read-only production probes passed 62/62 requests through concurrency 16; Gemini passed 32/32 serialized requests and demonstrated HTTP 429 at concurrency two, establishing a conservative single-request grading lane."
     }
   ],
-  "decision": "NO-GO — BETA LAUNCH BLOCKED"
+  "blockingGates": [],
+  "decision": "GO — proceed with the controlled production sequence while keeping admission closed until database, Worker, frontend, and rollback verification pass."
 }

@@ -1,0 +1,88 @@
+{
+  "runId": 30630062756,
+  "runUrl": "https://github.com/codingwally/Bar-Exam-simulator/actions/runs/30630062756",
+  "headCommit": "ac852cf38d9bbd0b280111da4a1a1d9bfe50d33f",
+  "executedAt": "2026-07-31T12:21:11.181Z",
+  "executionVersion": "dd-private-beta-live-provider-v1",
+  "purpose": "Final frozen, blind, all-subject legal-accuracy release gate after deterministic wrong-authority caps and benchmark-fixture alignment.",
+  "model": "gemini-3.5-flash-lite",
+  "groundingEnabled": false,
+  "coverage": {
+    "subjects": 8,
+    "samplesCompleted": 24,
+    "deterministicPrefilterSamples": 8,
+    "liveProviderSamples": 16,
+    "liveProviderRequests": 32,
+    "successfulProviderRequests": 32,
+    "requestFailures": 0
+  },
+  "executionControls": {
+    "repeatRuns": 2,
+    "concurrency": 1,
+    "requestIntervalMs": 7000,
+    "memberGradingCreditsConsumed": 0,
+    "userAttemptsCreated": 0,
+    "secretValuesLoggedOrPersisted": false
+  },
+  "metrics": {
+    "meanAbsoluteError": 0.2417,
+    "medianAbsoluteError": 0.2,
+    "agreementWithin0_5": 0.875,
+    "agreementWithin1_0": 1,
+    "alacIssueDetectionAgreement": 1,
+    "legalBasisAccuracy": 1,
+    "citationValidity": 1,
+    "unsupportedAuthorityDetection": true,
+    "fabricatedAuthorityRate": 0,
+    "rawFalseHighRate": 0.0833,
+    "unsafeFalseHighRate": 0,
+    "falseLowRate": 0.0417,
+    "repeatedSampleMeanAbsoluteDelta": 0.0417,
+    "repeatedSampleMaximumDelta": 0.5,
+    "parsingFailures": 0,
+    "requestFailureRate": 0,
+    "latencyMs": {
+      "p50": 3032,
+      "p95": 6021,
+      "p99": 6735,
+      "maximum": 6735
+    }
+  },
+  "sourceVerification": {
+    "primarySourcesChecked": 8,
+    "primarySourcesPassed": 8,
+    "releaseWorkstationEvidence": "docs/qa/20260731-private-beta-admission/primary-source-verification.json",
+    "githubRunnerCouldReachJudiciaryELibrary": false,
+    "note": "The runner verified the same-day hashed source-evidence file. Direct E-Library reachability from the hosted runner remained unavailable and was not represented as a live runner fetch."
+  },
+  "inputHashes": {
+    "benchmark": "B6A92CFC4A284CC94310F6AFD5542E6F7604BB3AEDC5BB1C9552EE35C0B61603",
+    "questionBank": "1F7A208C5639E3F7BCFD5CC6C07297E666069115C61A651901C3348944DFC299",
+    "primarySourceEvidence": "7F2711F63F3E627B9990E5206AC64C9871910255A37FF6B1ACE90CE7E6F5ADE0"
+  },
+  "gates": {
+    "allSamplesCompleted": true,
+    "eightSubjectsCovered": true,
+    "agreementWithin0_5": true,
+    "noUnsafeFalseHighs": true,
+    "noFabricatedAuthorities": true,
+    "requestReliability": true,
+    "gradingLatency": true,
+    "officialSourcesVerified": true,
+    "falseAuthorityDetected": true,
+    "citationValidity": true
+  },
+  "rawCalibrationDeltas": {
+    "falseHighSamples": [
+      "TAX-PARTIAL",
+      "REM-DIFFERENT-WORDING"
+    ],
+    "unsafeFalseHighSamples": [],
+    "falseLowSamples": [
+      "CIV-WEAK-APPLICATION"
+    ],
+    "note": "Raw deltas remain disclosed for future calibration. None met the predeclared materially unsafe false-high definition."
+  },
+  "passed": true,
+  "decision": "PASS — all private-beta legal-accuracy expansion gates met."
+}

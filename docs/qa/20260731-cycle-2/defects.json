@@ -4,7 +4,7 @@
     {
       "id": "QA-20260731-008",
       "severity": "high",
-      "status": "local-fix-verified",
+      "status": "Verified fixed",
       "classification": "deterministic publication-boundary regression",
       "surface": "Subject Matter release-content synchronization",
       "reproduction": {
@@ -28,7 +28,7 @@
         "reviewedRowsPreserved": 616,
         "questionTextChanged": false
       },
-      "productionStatus": "pending deployment"
+      "productionStatus": "Deployed by Worker workflow 30606559513 as version 4f563434-3367-46a5-81c2-a1df2fd08adf; production CORS remained healthy and no content sync or database mutation was invoked."
     }
   ],
   "observationsNotClassifiedAsDefects": [

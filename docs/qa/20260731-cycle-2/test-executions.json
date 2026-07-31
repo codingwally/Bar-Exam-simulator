@@ -118,6 +118,71 @@
       "command": "live Gemini benchmark",
       "status": "Blocked—AFK",
       "reason": "No authorized non-credit provider harness is available."
+    },
+    {
+      "command": "GitHub Pages workflow 30606559546",
+      "status": "passed",
+      "deploymentId": 5686791655,
+      "deployedSha": "d4f52ddb77d4404694d9c686e7099f62a4dcbf37"
+    },
+    {
+      "command": "Cloudflare Worker workflow 30606559513",
+      "status": "passed",
+      "deploymentId": "f8d244de-cd16-44d3-9761-319186b3e868",
+      "versionId": "4f563434-3367-46a5-81c2-a1df2fd08adf",
+      "trafficPercentage": 100
+    },
+    {
+      "command": "production root copy and metadata checks",
+      "status": "passed",
+      "trials": 5,
+      "failures": 0
+    },
+    {
+      "command": "production tooltip tap and Escape",
+      "status": "passed",
+      "trials": 5,
+      "failures": 0
+    },
+    {
+      "command": "production tooltip reload recovery",
+      "status": "passed",
+      "trials": 5,
+      "failures": 0
+    },
+    {
+      "command": "production Quid Pro Quo to existing Partnerships destination",
+      "status": "passed",
+      "trials": 5,
+      "failures": 0
+    },
+    {
+      "command": "production Quorum composer copy and control preservation",
+      "status": "passed",
+      "trials": 5,
+      "failures": 0,
+      "mutations": 0
+    },
+    {
+      "command": "production robots, sitemap, admin noindex, share-image, JSON-LD, Open Graph, and Twitter checks",
+      "status": "passed"
+    },
+    {
+      "command": "production browser diagnostic log",
+      "status": "passed",
+      "warningsAndErrors": 0
+    },
+    {
+      "command": "post-release Supabase aggregate count comparison",
+      "status": "passed",
+      "objectsCompared": 12,
+      "changedCounts": 0,
+      "inspectionMode": "read-only"
+    },
+    {
+      "command": "final live mobile Lighthouse rerun",
+      "status": "Environment-specific",
+      "reason": "The Windows Lighthouse process exited without creating a report. Candidate local and untouched-main comparison reports remain valid; live metadata and functionality were verified independently."
     }
   ]
 }

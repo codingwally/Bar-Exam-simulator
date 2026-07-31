@@ -1,13 +1,13 @@
 {
-  "capturedAt": "2026-07-31T13:14:02+08:00",
+  "capturedAt": "2026-07-31T13:32:03+08:00",
   "productionUrl": "https://duediligence.ph/",
   "repository": "codingwally/Bar-Exam-simulator",
   "git": {
     "verifiedMainSha": "0b06358d56d47695b5365f7bab4ecb37fff90880",
     "candidateBranch": "agent/beta-readiness-copy-seo-20260731",
-    "candidateCommit": null,
-    "pullRequest": null,
-    "mergeCommit": null,
+    "candidateCommit": "5e7b4fa7bda4e6e30078316a6bee1349bade7f30",
+    "pullRequest": 55,
+    "mergeCommit": "d4f52ddb77d4404694d9c686e7099f62a4dcbf37",
     "rollbackReference": "rollback/pre-beta-readiness-copy-seo-20260731",
     "rollbackSha": "0b06358d56d47695b5365f7bab4ecb37fff90880"
   },
@@ -15,18 +15,19 @@
     "baselineWorkflowRunId": 30591597656,
     "baselineDeploymentId": 5684054362,
     "baselineStatus": "success",
-    "candidateWorkflowRunId": null,
-    "candidateDeploymentId": null,
-    "candidateStatus": "pending"
+    "candidateWorkflowRunId": 30606559546,
+    "candidateDeploymentId": 5686791655,
+    "candidateStatus": "success"
   },
   "cloudflareWorker": {
     "name": "duediligence-gemini-examiner",
     "baselineVersionId": "70cb0d02-f792-41a4-8947-2027cf8a06b1",
     "baselineDeploymentId": "0b375cf1-3a9b-4da7-aca8-449518d6c78b",
     "baselineTrafficPercentage": 100,
-    "candidateVersionId": null,
-    "candidateWorkflowRunId": null,
-    "candidateStatus": "pending",
+    "candidateVersionId": "4f563434-3367-46a5-81c2-a1df2fd08adf",
+    "candidateDeploymentId": "f8d244de-cd16-44d3-9761-319186b3e868",
+    "candidateWorkflowRunId": 30606559513,
+    "candidateStatus": "success at 100% traffic",
     "secretValuesAccessed": false
   },
   "supabase": {
@@ -42,12 +43,38 @@
     "subjects": 8,
     "legacyQuestions": 2,
     "examinationQuestions": 736,
+    "submissions": 0,
+    "gradingResults": 0,
     "examAttempts": 14,
     "examinationAttemptsMulti": 6,
     "forumPosts": 4,
     "forumComments": 4,
     "questionCorrections": 0,
     "releaseContentSyncs": 2
+  },
+  "productionCountsAfterRelease": {
+    "authUsers": 7,
+    "profiles": 7,
+    "subjects": 8,
+    "legacyQuestions": 2,
+    "submissions": 0,
+    "gradingResults": 0,
+    "examAttempts": 14,
+    "examinationAttemptsMulti": 6,
+    "forumPosts": 4,
+    "forumComments": 4,
+    "questionCorrections": 0,
+    "releaseContentSyncs": 2
+  },
+  "postReleaseVerification": {
+    "workerCors": "204; production origin allowed",
+    "rootCacheAge": 0,
+    "oldPublicTitleMatches": 0,
+    "liveBrowserDiagnosticEntries": 0,
+    "liveTooltipTrials": "5/5",
+    "liveTooltipReloadTrials": "5/5",
+    "liveQuidProQuoDestinationTrials": "5/5",
+    "liveQuorumComposerTrials": "5/5"
   },
   "productionMutationsPerformedBeforeRelease": false,
   "gradingCreditsConsumed": 0,

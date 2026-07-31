@@ -27,6 +27,8 @@ for (const required of [
   'index.html',
   'CNAME',
   'favicon.svg',
+  'robots.txt',
+  'sitemap.xml',
   'admin/index.html',
   'assets/examinations.css',
   'assets/examinations.js',
@@ -41,9 +43,18 @@ assert.ok(files.every((file) => !/content|worker|supabase|scripts|docs/i.test(fi
 assert.ok(files.every((file) => !/\.(json|sql|mjs|csv)$/i.test(file)));
 
 const index = await readFile(path.join(output, 'index.html'), 'utf8');
+const robots = await readFile(path.join(output, 'robots.txt'), 'utf8');
+const sitemap = await readFile(path.join(output, 'sitemap.xml'), 'utf8');
 assert.doesNotMatch(index, /content\/question-bank|website-upload\.json|DueDiligenceWebsiteQuestionBank/i);
 assert.doesNotMatch(index, /const BAR_QUESTIONS\s*=\s*\{/);
+assert.doesNotMatch(index, /PH Bar Essay Trainer|Advanced Pro Repository|PH Bar Exam Simulator/);
+assert.match(index, /<title>Due Diligence — Philippine Law School &amp; Bar Review<\/title>/);
+assert.match(index, /<html lang="en-PH">/);
 assert.match(index, /loadProtectedQuestion/);
 assert.match(index, /Authentication is required before an examination question is displayed/);
+assert.match(robots, /Disallow: \/admin\//);
+assert.match(robots, /Sitemap: https:\/\/duediligence\.ph\/sitemap\.xml/);
+assert.match(sitemap, /<loc>https:\/\/duediligence\.ph\/<\/loc>/);
+assert.doesNotMatch(sitemap, /\/admin\//);
 
 console.log('Sanitized GitHub Pages artifact tests passed.');

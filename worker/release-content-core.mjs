@@ -4,7 +4,7 @@ export const WEBSITE_UPLOAD_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=141335489&single=true&output=csv';
 
 export const SUBJECT_MATTER_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=1729202601&single=true&output=csv';
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=1729202601&single=true&output=csv&range=A1%3AU617';
 
 export const MOCK_BAR_SUBJECTS = Object.freeze([
   'Political and Public International Law',

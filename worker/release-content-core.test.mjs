@@ -113,6 +113,10 @@ function websiteRows() {
   ));
 }
 
+test('Subject Matter publication source is pinned to the reviewed 616-row boundary', () => {
+  assert.equal(new URL(SUBJECT_MATTER_CSV_URL).searchParams.get('range'), 'A1:U617');
+});
+
 test('Subject Matter import preserves all 616 complete rows including owner overrides', async () => {
   const parsed = await parseSubjectMatterSource(csv(subjectRows()));
   assert.equal(parsed.rows.length, 616);

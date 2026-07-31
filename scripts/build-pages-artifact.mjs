@@ -22,6 +22,8 @@ const publicFiles = Object.freeze([
   'index.html',
   'CNAME',
   'favicon.svg',
+  'robots.txt',
+  'sitemap.xml',
   'admin/index.html',
   'admin/admin.css',
   'admin/admin.js',

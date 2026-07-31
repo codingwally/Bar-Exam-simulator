@@ -1,0 +1,79 @@
+{
+  "cycle": "20260731-cycle-2",
+  "verdict": "READY FOR CONTROLLED BETA WITH CONDITIONS",
+  "confidence": "moderate",
+  "strongestAreas": [
+    "Deterministic release, grading-cap, authorization, question-bank, session, Quorum, and sanitized-artifact regression coverage.",
+    "Responsive behavior across ten tested widths and Lighthouse accessibility scores of 100.",
+    "Truthful student-centered technical SEO with deterministic regression protection.",
+    "Existing rollback, GitHub Pages deployment, Worker versioning, and read-only production inventory discipline."
+  ],
+  "weakestAreas": [
+    "No completed live, blind, non-credit Gemini legal-accuracy benchmark.",
+    "No authorized remote staging credentials for the two staging integration scripts.",
+    "No isolated two-user synthetic persona set for cross-user mutation journeys in this cycle.",
+    "Mobile performance remains only moderate and is sensitive to the large single-page application and external-font timing."
+  ],
+  "launchConditions": [
+    "Keep the beta invitation-only and monitor Worker errors, provider quota, grading latency, and support volume daily.",
+    "Do not expand beyond the provisional limits until the 24-sample blind benchmark has real provider results.",
+    "Pause grading expansion on any fabricated authority, privacy defect, cross-user isolation failure, or repeated false-high score.",
+    "Retain manual primary-source verification language for all model answers."
+  ],
+  "provisionalLimits": {
+    "totalInvitedBetaUsers": {
+      "limit": 20,
+      "basis": "Inference from seven current accounts, static regression coverage, and unmeasured provider quota.",
+      "monitoringTrigger": "More than 10 daily active users or support response time above one business day.",
+      "pauseTrigger": "Any critical security/legal defect or two unresolved high-severity incidents."
+    },
+    "expectedDailyActiveUsers": {
+      "limit": 8,
+      "basis": "Conservative support and observability envelope; not a measured platform ceiling.",
+      "monitoringTrigger": "Daily grading failures above 2% or p95 grading latency above 30 seconds.",
+      "pauseTrigger": "Provider capacity errors persist for 15 minutes."
+    },
+    "maximumConcurrentSignedInUsers": {
+      "limit": 4,
+      "basis": "No isolated concurrency test has established a higher safe operational limit.",
+      "monitoringTrigger": "Authentication, autosave, or database errors during overlapping sessions.",
+      "pauseTrigger": "Any cross-user data exposure or duplicate submission."
+    },
+    "maximumConcurrentExaminationSessions": {
+      "limit": 2,
+      "basis": "Session and timer contracts pass, but live multi-session recovery was not load-tested this cycle.",
+      "monitoringTrigger": "Autosave success below 99.5% or timer drift above 5 seconds.",
+      "pauseTrigger": "Any lost draft or unrecoverable active attempt."
+    },
+    "maximumSimultaneousGeminiGradingRequests": {
+      "limit": 1,
+      "basis": "Provider quota and safe non-credit concurrency remain unknown.",
+      "monitoringTrigger": "Any 429, 5xx, timeout, or fallback response.",
+      "pauseTrigger": "Two provider failures within 15 minutes."
+    },
+    "dailyGradedAnswerCapPerUser": {
+      "limit": 3,
+      "basis": "Matches the established guest-preview cap and limits legal/reliability exposure during validation.",
+      "monitoringTrigger": "Disputes, corrections, or false-high reports exceed one per 20 grades.",
+      "pauseTrigger": "Any verified fabricated authority or materially unsafe false-high."
+    },
+    "totalDailyGeminiGradingCap": {
+      "limit": 20,
+      "basis": "Operational inference, not measured capacity; preserves a small reviewable daily corpus.",
+      "monitoringTrigger": "At 15 daily grades, review provider errors, latency, and correction reports before continuing.",
+      "pauseTrigger": "Any quota warning or unresolved grading incident."
+    }
+  },
+  "expansionGates": {
+    "criticalOpenDefects": 0,
+    "unresolvedPrivacyOrIsolationDefects": 0,
+    "blindBenchmarkAgreementWithin0_5Minimum": 0.8,
+    "blindBenchmarkFalseHighMaximum": 0.02,
+    "fabricatedAuthorityRateMaximum": 0,
+    "requestFailureRateMaximum": 0.02,
+    "gradingP95LatencySecondsMaximum": 30,
+    "autosaveSuccessMinimum": 0.995,
+    "duplicateSubmissionsMaximum": 0,
+    "supportResponseTarget": "one business day"
+  }
+}

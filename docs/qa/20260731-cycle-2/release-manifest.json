@@ -1,0 +1,56 @@
+{
+  "capturedAt": "2026-07-31T13:14:02+08:00",
+  "productionUrl": "https://duediligence.ph/",
+  "repository": "codingwally/Bar-Exam-simulator",
+  "git": {
+    "verifiedMainSha": "0b06358d56d47695b5365f7bab4ecb37fff90880",
+    "candidateBranch": "agent/beta-readiness-copy-seo-20260731",
+    "candidateCommit": null,
+    "pullRequest": null,
+    "mergeCommit": null,
+    "rollbackReference": "rollback/pre-beta-readiness-copy-seo-20260731",
+    "rollbackSha": "0b06358d56d47695b5365f7bab4ecb37fff90880"
+  },
+  "githubPages": {
+    "baselineWorkflowRunId": 30591597656,
+    "baselineDeploymentId": 5684054362,
+    "baselineStatus": "success",
+    "candidateWorkflowRunId": null,
+    "candidateDeploymentId": null,
+    "candidateStatus": "pending"
+  },
+  "cloudflareWorker": {
+    "name": "duediligence-gemini-examiner",
+    "baselineVersionId": "70cb0d02-f792-41a4-8947-2027cf8a06b1",
+    "baselineDeploymentId": "0b375cf1-3a9b-4da7-aca8-449518d6c78b",
+    "baselineTrafficPercentage": 100,
+    "candidateVersionId": null,
+    "candidateWorkflowRunId": null,
+    "candidateStatus": "pending",
+    "secretValuesAccessed": false
+  },
+  "supabase": {
+    "projectRef": "hbllomlijfznnuudpdvr",
+    "inspectionMode": "read-only identity, migration ledger, and aggregate counts",
+    "latestMigration": "20260805120000 complete_beta_release_foundation",
+    "architectReportedMigration": "20260730195855",
+    "migrationAppliedByThisCycle": false
+  },
+  "productionCountsBeforeRelease": {
+    "authUsers": 7,
+    "profiles": 7,
+    "subjects": 8,
+    "legacyQuestions": 2,
+    "examinationQuestions": 736,
+    "examAttempts": 14,
+    "examinationAttemptsMulti": 6,
+    "forumPosts": 4,
+    "forumComments": 4,
+    "questionCorrections": 0,
+    "releaseContentSyncs": 2
+  },
+  "productionMutationsPerformedBeforeRelease": false,
+  "gradingCreditsConsumed": 0,
+  "syntheticRecordsCreated": 0,
+  "syntheticRecordsRemaining": 0
+}

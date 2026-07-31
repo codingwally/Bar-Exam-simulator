@@ -18,6 +18,7 @@ for (const label of [
   'Quorum',
   'Recent Jurisprudence',
   'Support',
+  'Quid Pro Quo',
   'Partnerships',
   'The Docket',
   'Commence Examination',
@@ -29,7 +30,10 @@ assert.match(
   index,
   /Early Access Beta:<\/strong>\s*<span>Some features are still being refined\.<\/span>/,
 );
-assert.match(index, /<a class="brand" href="\/" aria-label="Due Diligence home">/);
+assert.match(
+  index,
+  /<a class="brand" href="\/" aria-label="Due Diligence home" aria-describedby="brand-subtitle-meaning">/,
+);
 assert.match(index, /id="btn-signin"[^>]*>The Docket · Sign In<\/button>[\s\S]*<\/nav>/);
 assert.match(index, /id="page-community" class="page"/);
 assert.match(index, /assets\/phase2-law-library\.jpg/);

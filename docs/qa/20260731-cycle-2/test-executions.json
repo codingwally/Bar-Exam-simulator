@@ -1,0 +1,123 @@
+{
+  "cycle": "20260731-cycle-2",
+  "executions": [
+    {
+      "command": "all 33 non-staging scripts/test-*.mjs",
+      "status": "passed",
+      "commands": 33,
+      "failures": 0
+    },
+    {
+      "command": "node --test worker/*.test.mjs",
+      "status": "passed",
+      "assertions": 136,
+      "failures": 0
+    },
+    {
+      "command": "node scripts/validate-labor-cms.mjs --mode=template",
+      "status": "passed",
+      "questions": 30,
+      "answers": 30
+    },
+    {
+      "command": "node scripts/build-pages-artifact.mjs and node scripts/test-pages-artifact.mjs",
+      "status": "passed",
+      "artifactFiles": 23,
+      "oldPublicTitleMatches": 0,
+      "oldHeaderSubtitleMatches": 0,
+      "latinBrandMatches": 1
+    },
+    {
+      "command": "node scripts/test-beta-readiness-copy-seo.mjs",
+      "status": "passed",
+      "coverage": [
+        "en-PH document language",
+        "student-centered title and metadata",
+        "canonical, robots, sitemap, Open Graph, Twitter, and JSON-LD",
+        "old public title absence",
+        "Latin subtitle and tooltip semantics",
+        "Quorum permanent heading removal with accessible composer name",
+        "Quid Pro Quo header label with unchanged footer label"
+      ]
+    },
+    {
+      "command": "node --check worker/release-content-core.mjs",
+      "status": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed",
+      "note": "Only line-ending conversion warnings were emitted."
+    },
+    {
+      "command": "changed-scope redacted secret scan",
+      "status": "passed",
+      "probableNewSecrets": 0,
+      "note": "One pre-existing fake service-role fixture remains unchanged; the added diff introduces no secret-shaped values."
+    },
+    {
+      "command": "mobile Lighthouse, untouched main served locally",
+      "status": "passed",
+      "scores": {
+        "performance": 63,
+        "accessibility": 100,
+        "bestPractices": 93,
+        "seo": 90
+      },
+      "labMetrics": {
+        "fcpMs": 3334,
+        "lcpMs": 6197,
+        "cls": 0,
+        "tbtMs": 330
+      }
+    },
+    {
+      "command": "mobile Lighthouse, release candidate served locally",
+      "status": "passed",
+      "scores": {
+        "performance": 64,
+        "accessibility": 100,
+        "bestPractices": 93,
+        "seo": 100
+      },
+      "labMetrics": {
+        "fcpMs": 4605,
+        "lcpMs": 6522,
+        "cls": 0.02,
+        "tbtMs": 161
+      },
+      "note": "Performance score did not regress versus the same local serving method; cold external-font timing remains variable."
+    },
+    {
+      "command": "desktop Lighthouse, release candidate served locally",
+      "status": "passed",
+      "scores": {
+        "performance": 89,
+        "accessibility": 100,
+        "bestPractices": 96,
+        "seo": 100
+      },
+      "labMetrics": {
+        "fcpMs": 1153,
+        "lcpMs": 1849,
+        "cls": 0.001,
+        "tbtMs": 0
+      }
+    },
+    {
+      "command": "node scripts/test-examinations-staging.mjs",
+      "status": "Blocked—AFK",
+      "reason": "Authorized staging environment variables are unavailable."
+    },
+    {
+      "command": "node scripts/test-complete-beta-staging.mjs",
+      "status": "Blocked—AFK",
+      "reason": "Authorized staging environment variables are unavailable."
+    },
+    {
+      "command": "live Gemini benchmark",
+      "status": "Blocked—AFK",
+      "reason": "No authorized non-credit provider harness is available."
+    }
+  ]
+}

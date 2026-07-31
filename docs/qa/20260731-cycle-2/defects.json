@@ -1,0 +1,46 @@
+{
+  "cycle": "20260731-cycle-2",
+  "defects": [
+    {
+      "id": "QA-20260731-008",
+      "severity": "high",
+      "status": "local-fix-verified",
+      "classification": "deterministic publication-boundary regression",
+      "surface": "Subject Matter release-content synchronization",
+      "reproduction": {
+        "sourceRowsObserved": 629,
+        "previouslyReviewedRows": 616,
+        "unexpectedTailRows": 13,
+        "tailEditorialStatus": "For Review",
+        "tailPublicationReady": "No",
+        "failingRegression": "scripts/test-complete-beta-release.mjs rejected the 629-row source"
+      },
+      "rootCause": "The public Sheet URL was unbounded, so later draft rows entered the release-content candidate set after the 616-row corpus had already been reviewed and deployed.",
+      "regressionTest": "worker/release-content-core.test.mjs",
+      "fixFiles": [
+        "worker/release-content-core.mjs",
+        "worker/release-content-core.test.mjs"
+      ],
+      "fix": "Pin the published source request to A1:U617, preserving the header plus the existing reviewed 616 records without altering legal content.",
+      "postFixEvidence": {
+        "completeBetaReleaseTest": "passed",
+        "workerAssertions": "136/136 passed",
+        "reviewedRowsPreserved": 616,
+        "questionTextChanged": false
+      },
+      "productionStatus": "pending deployment"
+    }
+  ],
+  "observationsNotClassifiedAsDefects": [
+    {
+      "observation": "One tooltip visibility read occurred before its 160 ms transition had settled.",
+      "classification": "test timing artifact",
+      "evidence": "Five subsequent trials using a 350 ms settled read passed open and Escape dismissal 5/5."
+    },
+    {
+      "observation": "Local signed-out protected routes correctly made the header inert while the authentication dialog was open.",
+      "classification": "expected modal isolation",
+      "evidence": "Tooltip testing was repeated on the public root route, where open and reload recovery passed 5/5."
+    }
+  ]
+}

@@ -45,7 +45,7 @@ assert.match(phase4, /refreshAccess\(\)\.catch/);
 assert.match(html, /setQuestionControlsDisabled\(true\)/, 'The submitted question must lock while its assessment is under review.');
 
 const inlineScripts = Array.from(html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi))
-  .filter((match) => !/\ssrc=/.test(match[0]))
+  .filter((match) => !/\ssrc=/.test(match[0]) && !/type="application\/ld\+json"/i.test(match[0]))
   .map((match) => match[1]);
 for (const [index, source] of inlineScripts.entries()) {
   assert.doesNotThrow(() => new vm.Script(source, { filename: `index-inline-${index + 1}.js` }));

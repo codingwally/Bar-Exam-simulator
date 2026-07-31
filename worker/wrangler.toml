@@ -16,7 +16,7 @@ PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
 REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
 EXAMINATION_EMAIL_MODE = "enabled"
 EXAMINATION_EMAIL_FROM = "Due Diligence Examinations <examinations@duediligence.ph>"
-PRIVATE_BETA_GATE_ENABLED = "false"
+PRIVATE_BETA_GATE_ENABLED = "true"
 PRIVATE_BETA_DISCLOSURE_VERSION = "beta-disclosure-v1-2026-07-31"
 
 [observability]

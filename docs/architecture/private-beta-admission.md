@@ -1,6 +1,6 @@
 # Private-beta admission architecture
 
-Status: implementation candidate; production gate disabled.
+Status: controlled private beta; production gate enabled after recorded release gates.
 
 ## Security boundary
 
@@ -75,19 +75,20 @@ browser flow identifiers. Counter creation and locking are concurrency-safe.
 
 ## Production feature flag
 
-`PRIVATE_BETA_GATE_ENABLED` is committed as `false`. While false:
+`PRIVATE_BETA_GATE_ENABLED` was kept `false` throughout database, Worker, and
+frontend preparation. It is committed as `true` only after the recorded legal,
+role, security, legal-accuracy, capacity, migration, rollback, and deployment
+gates passed. While enabled:
 
-- existing production Worker routes behave as before;
-- private-beta admission endpoints resolve as not found;
-- no hidden early admission is possible.
+- private-beta admission endpoints are available to the approved landing flow;
+- existing protected Worker routes require a valid, user-bound admission;
+- secure human-examiner capability routes remain independently available; and
+- the emergency close procedure is to redeploy the verified gate-disabled
+  Worker version before any broader rollback.
 
-The browser admission module is intentionally non-visual. The exact public
-landing and disclosure surface remains unimplemented until the approved visual
-reference is available for image-to-code comparison.
-
-The flag must not be enabled until the database migration, required Worker
-secrets, exact landing UI, legal approval, authentication journey, accessibility
-checks, Gemini/legal benchmark, capacity evidence, and rollback checks all pass.
+The implemented landing and disclosure surface remains pinned to the approved
+visual reference and versioned disclosure. Any later substantive admission or
+legal-copy change requires a new review cycle.
 
 ## Migration and rollback
 

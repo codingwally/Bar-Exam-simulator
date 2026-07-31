@@ -107,7 +107,7 @@ assert.match(source.workerCore, /constantTimeHexEqual/);
 assert.match(source.workerCore, /verifyPrivateBetaAccessCode/);
 assert.match(source.workerCore, /crypto\.subtle\.sign/);
 
-assert.match(source.wrangler, /PRIVATE_BETA_GATE_ENABLED = "false"/);
+assert.match(source.wrangler, /PRIVATE_BETA_GATE_ENABLED = "true"/);
 assert.match(
   source.wrangler,
   /PRIVATE_BETA_DISCLOSURE_VERSION = "beta-disclosure-v1-2026-07-31"/,

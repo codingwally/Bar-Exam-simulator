@@ -66,7 +66,10 @@
 
   function authHeaders() {
     const token = global.DueDiligencePhase2?.getSession?.()?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+    };
   }
 
   function landingArea() {

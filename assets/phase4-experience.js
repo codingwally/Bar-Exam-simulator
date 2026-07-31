@@ -28,6 +28,7 @@
     if (!active?.access_token) return null;
     return {
       Authorization: `Bearer ${active.access_token}`,
+      ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
       ...(options.json === false ? {} : { 'Content-Type': 'application/json' }),
       ...(options.requestId === false
         ? {}

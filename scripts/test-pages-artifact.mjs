@@ -30,6 +30,7 @@ for (const required of [
   'robots.txt',
   'sitemap.xml',
   'admin/index.html',
+  'assets/private-beta-session.js',
   'assets/examinations.css',
   'assets/examinations.js',
   'assets/payments/gcash.png',

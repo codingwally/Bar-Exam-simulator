@@ -1,0 +1,62 @@
+{
+  "cycle": "20260731-private-beta-admission",
+  "status": "implementation-in-progress-no-launch",
+  "branch": "agent/private-beta-admission-20260731",
+  "baseCommit": "0ba337066b2982d128e84254b6a8990a9ecf4753",
+  "rollbackReference": "rollback/pre-private-beta-admission-20260731",
+  "productionGateEnabled": false,
+  "productionChanges": {
+    "database": false,
+    "worker": false,
+    "frontend": false
+  },
+  "verified": {
+    "productionPreflightReadOnly": "passed",
+    "stagingProject": "hlzqmreeoghbldnhlybr",
+    "stagingMigrationRepeatability": "passed",
+    "stagingPgTapAssertions": 60,
+    "stagingSyntheticRowsRemaining": 0,
+    "workerAssertionsPassed": 147,
+    "workerAssertionsFailed": 0,
+    "repositoryScriptsPassed": 35,
+    "repositoryScriptsFailed": 0,
+    "privateBetaRouteAssertionsPassed": 11,
+    "privateBetaRouteAssertionsFailed": 0
+  },
+  "securityProperties": [
+    "Private-beta endpoints are unavailable while the production flag is false.",
+    "Access-code verification is server-side, exact after trim, case-sensitive, and constant-time.",
+    "Pending tokens are one-use and expire after 15 minutes.",
+    "Completed access is user-bound and expires absolutely after 12 hours.",
+    "Durable failed-attempt limits are five per browser flow and twenty per network per 15 minutes.",
+    "Only keyed network and flow hashes are stored.",
+    "PUBLIC, anon, and authenticated have no direct access to private-beta tables or functions.",
+    "Founder and longer existing beta entitlements are not shortened.",
+    "Supabase PKCE session persistence uses sessionStorage.",
+    "Private-beta pending/access tokens and browser flow state use sessionStorage only.",
+    "All authenticated browser Worker callers forward the opaque admission token."
+  ],
+  "blockingGates": [
+    {
+      "item": "Owner-approved landing visual reference",
+      "reason": "The mandatory reference-6 image is not present in the accessible workspace, so an exact image-to-code implementation and visual comparison cannot be performed."
+    },
+    {
+      "item": "Private-beta landing and disclosure frontend",
+      "reason": "Visual implementation is intentionally blocked until the approved source image is available."
+    },
+    {
+      "item": "Authorized legal-editor or counsel approval",
+      "reason": "The provisional disclosure, Beta Terms, Privacy Notice, retention, and AI-processing statements have no recorded authorized approval."
+    },
+    {
+      "item": "Live blind Gemini and Philippine legal-authority benchmark",
+      "reason": "No authorized non-credit live harness and frozen human-scored benchmark evidence are available."
+    },
+    {
+      "item": "Evidence-backed external beta capacity",
+      "reason": "Exact provider quota and production-equivalent authenticated concurrency evidence are unavailable; the defensible external invited-user limit remains zero."
+    }
+  ],
+  "decision": "NO-GO — BETA LAUNCH BLOCKED"
+}

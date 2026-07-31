@@ -434,6 +434,7 @@
     state.user = null;
     state.profile = null;
     state.admin = null;
+    global.DueDiligencePrivateBeta?.clearAccess?.();
     syncAuthUi();
   }
 
@@ -626,6 +627,7 @@
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${state.session.access_token}`,
+            ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
           },
           body: '{}',
         });
@@ -1064,6 +1066,7 @@
     const headers = {
       'X-Request-ID': options.requestId || randomId(18),
       ...(form ? {} : { 'Content-Type': 'application/json' }),
+      ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
       ...(state.session?.access_token
         ? { Authorization: `Bearer ${state.session.access_token}` }
         : {}),
@@ -1208,6 +1211,7 @@
     state.user = null;
     state.profile = null;
     state.marketingOptIn = false;
+    global.DueDiligencePrivateBeta?.clear?.();
     syncAuthUi();
     hideNativeView();
     showEntry({ allowDismiss: true });
@@ -1288,6 +1292,7 @@
         auth: {
           flowType: 'pkce',
           persistSession: true,
+          storage: global.sessionStorage,
           autoRefreshToken: true,
           detectSessionInUrl: true,
         },
@@ -1318,6 +1323,7 @@
         safeSessionRemove(authAttemptStorageKey);
         resetGoogleSignIn();
       } else if (event === 'SIGNED_OUT') {
+        global.DueDiligencePrivateBeta?.clear?.();
         resetGoogleSignIn();
       }
       syncAuthUi();
@@ -1380,7 +1386,10 @@
     try {
       const response = await fetch(`${config.workerUrl}/guest-access`, {
         method: 'POST',
-        headers,
+        headers: {
+          ...headers,
+          ...(globalThis.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+        },
         signal: controller.signal,
       });
       const payload = await response.json().catch(() => null);
@@ -1527,9 +1536,15 @@
 
   function gradingHeaders() {
     if (state.session?.access_token) {
-      return { Authorization: `Bearer ${state.session.access_token}` };
+      return {
+        Authorization: `Bearer ${state.session.access_token}`,
+        ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+      };
     }
-    return { 'X-Request-ID': randomId(18) };
+    return {
+      'X-Request-ID': randomId(18),
+      ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+    };
   }
 
   function afterGrade(access) {

@@ -183,6 +183,7 @@
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
         'X-Request-ID': uuidKey(),
+        ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
       },
       body: JSON.stringify(body),
     });
@@ -2058,6 +2059,7 @@
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${state.session.access_token}`,
+            ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
           },
           body: JSON.stringify(reportingWindow()),
         });
@@ -2104,7 +2106,13 @@
       return;
     }
     state.client = global.supabase.createClient(config.supabase.url, config.supabase.publishableKey, {
-      auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      auth: {
+        flowType: 'pkce',
+        persistSession: true,
+        storage: global.sessionStorage,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
     });
     const { data, error } = await state.client.auth.getSession();
     if (error || !data?.session?.access_token) {
@@ -2154,6 +2162,7 @@
   $('#sidebar-scrim')?.addEventListener('click', () => setSidebarOpen(false));
   $('#admin-signout')?.addEventListener('click', async () => {
     await state.client?.auth.signOut();
+    global.DueDiligencePrivateBeta?.clear?.();
     location.replace('../');
   });
   $('#action-form')?.addEventListener('submit', confirmAction);

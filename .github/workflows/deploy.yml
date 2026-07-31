@@ -29,8 +29,20 @@ jobs:
         with:
           node-version: 22
 
+      - name: Verify authentication, admission, and public-shell contracts
+        run: |
+          node scripts/test-private-beta-admission.mjs
+          node scripts/test-private-beta-frontend.mjs
+          node scripts/test-phase2-contract.mjs
+          node scripts/test-auth-route-overlay.mjs
+          node scripts/test-onboarding-flow.mjs
+          node scripts/test-beta-readiness-copy-seo.mjs
+
       - name: Build sanitized Pages artifact
         run: node scripts/build-pages-artifact.mjs
+
+      - name: Verify sanitized Pages artifact
+        run: node scripts/test-pages-artifact.mjs
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

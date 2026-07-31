@@ -3,7 +3,13 @@
   "status": "implementation-in-progress-no-launch",
   "branch": "agent/private-beta-admission-20260731",
   "baseCommit": "0ba337066b2982d128e84254b6a8990a9ecf4753",
+  "implementationCommit": "f1c5eeb30a98795011c2c99f2fa0c82bb44fb0cb",
   "rollbackReference": "rollback/pre-private-beta-admission-20260731",
+  "sourcePrompt": {
+    "sha256": "10F2DC0E9E9BCFB4C7C32CB7093103CC33A70FE2EF37A6CE8A40C6A267F06B9E",
+    "byteIdenticalCopiesVerified": 3,
+    "latestDirectiveSuppressedAsDuplicate": true
+  },
   "productionGateEnabled": false,
   "productionChanges": {
     "database": false,

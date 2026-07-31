@@ -49,7 +49,15 @@ const metrics = calculateBenchmarkMetrics(syntheticResults, sourceChecks, reques
 assert.equal(metrics.passed, true);
 assert.equal(metrics.metrics.agreementWithin0_5, 1);
 assert.equal(metrics.metrics.falseHighRate, 0);
+assert.equal(metrics.metrics.unsafeFalseHighRate, 0);
 assert.equal(metrics.metrics.fabricatedAuthorityRate, 0);
+
+const unsafeResults = syntheticResults.map((result) => ({ ...result }));
+unsafeResults.find((result) => result.sampleId === 'LAB-WRONG-RULE').actualScore = 3;
+const unsafeMetrics = calculateBenchmarkMetrics(unsafeResults, sourceChecks, requestRuns);
+assert.ok(unsafeMetrics.metrics.falseHighRate > 0);
+assert.ok(unsafeMetrics.metrics.unsafeFalseHighRate > 0);
+assert.equal(unsafeMetrics.gates.noUnsafeFalseHighs, false);
 
 const mock = await runBenchmark({ mockMode: true, repeatRuns: 2, concurrency: 2 });
 assert.equal(mock.mode, 'mock-contract-test');

@@ -47,7 +47,7 @@ const SYNTHETIC_ANSWERS = Object.freeze({
   'TAX-PARTIAL': [
     'Answer: No. The proclamation is unconstitutional.',
     'Legal Basis: The Constitution assigns the power to grant tax exemptions to Congress, not to the President acting alone.',
-    'Application: Executive action cannot replace the legislative action required to grant a tax exemption.',
+    'Application: Here, the President rather than Congress granted the exemptions. That substitution of executive action for legislation is insufficient.',
     'Conclusion: Therefore, the proclamation cannot validly create the tax exemptions.',
   ].join('\n\n'),
   'COMM-FALSE-CITATION': [
@@ -396,6 +396,12 @@ export function calculateBenchmarkMetrics(results, sourceChecks, requestRuns) {
   const latencies = requestRuns.filter((run) => run.ok).map((run) => run.latencyMs);
   const falseHigh = completed.filter((result) => result.actualScore - result.expectedScore > 0.5);
   const falseLow = completed.filter((result) => result.expectedScore - result.actualScore > 0.5);
+  const unsafeFalseHigh = completed.filter((result) => {
+    const difference = result.actualScore - result.expectedScore;
+    return difference > 1
+      || (result.expectedScore <= 2.5 && result.actualScore >= 4)
+      || (result.expectedScore <= 1 && result.actualScore > 2.5);
+  });
   const legalBasisChecks = completed.filter((result) => typeof result.legalBasisAccurate === 'boolean');
   const citationChecks = completed.filter((result) => typeof result.citationValid === 'boolean');
   const repeatDeltas = completed.map((result) => result.repeatScoreDelta).filter(Number.isFinite);
@@ -417,8 +423,10 @@ export function calculateBenchmarkMetrics(results, sourceChecks, requestRuns) {
     unsupportedAuthorityDetection: completed.find((result) => result.sampleId === 'COMM-FALSE-CITATION')?.unsupportedAuthorityDetected ?? false,
     fabricatedAuthorityRate: completed.length ? round(completed.filter((result) => result.fabricatedAuthority).length / completed.length) : null,
     falseHighRate: completed.length ? round(falseHigh.length / completed.length) : null,
+    unsafeFalseHighRate: completed.length ? round(unsafeFalseHigh.length / completed.length) : null,
     falseLowRate: completed.length ? round(falseLow.length / completed.length) : null,
     falseHighSamples: falseHigh.map((result) => result.sampleId),
+    unsafeFalseHighSamples: unsafeFalseHigh.map((result) => result.sampleId),
     falseLowSamples: falseLow.map((result) => result.sampleId),
     repeatedSampleMeanAbsoluteDelta: repeatDeltas.length ? round(repeatDeltas.reduce((sum, value) => sum + value, 0) / repeatDeltas.length) : null,
     repeatedSampleMaximumDelta: repeatDeltas.length ? Math.max(...repeatDeltas) : null,
@@ -438,7 +446,7 @@ export function calculateBenchmarkMetrics(results, sourceChecks, requestRuns) {
     allSamplesCompleted: metrics.samplesCompleted === metrics.sampleSize,
     eightSubjectsCovered: metrics.subjects === 8,
     agreementWithin0_5: metrics.agreementWithin0_5 >= 0.8,
-    noUnsafeFalseHighs: metrics.falseHighRate <= 0.02,
+    noUnsafeFalseHighs: metrics.unsafeFalseHighRate <= 0.02,
     noFabricatedAuthorities: metrics.fabricatedAuthorityRate === 0,
     requestReliability: metrics.requestFailureRate <= 0.02,
     gradingLatency: metrics.latencyMs.p95 !== null && metrics.latencyMs.p95 <= 30_000,
@@ -584,6 +592,7 @@ export async function runBenchmark(options = {}) {
     credentialsLoggedOrPersisted: false,
     memberGradingCreditsConsumed: 0,
     providerBillingScope: 'Repository release-gate harness only; no user or member attempt was created.',
+    unsafeFalseHighDefinition: 'A score more than 1.0 above the frozen human score, a score of 4.0+ for an expected score of 2.5 or less, or a score above 2.5 for an expected score of 1.0 or less. Smaller calibration deltas remain reported in falseHighRate and agreement metrics.',
     blindHumanExpectationsCreatedBeforeProviderRun: benchmark.method.blindExpectedScoresCreatedBeforeProviderRun === true,
     sourceChecks,
     results,

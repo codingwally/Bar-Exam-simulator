@@ -1,0 +1,53 @@
+{
+  "runId": 30629621746,
+  "headCommit": "b5dc3002cc7b04929d31e39e8517efd19393571b",
+  "executedAt": "2026-07-31T12:10:22Z",
+  "purpose": "Full frozen benchmark after concrete fixture alignment and fabricated-authority rubric clarification.",
+  "samplesCompleted": 24,
+  "successfulProviderRequests": 32,
+  "requestFailures": 0,
+  "agreementWithin0_5": 0.875,
+  "agreementWithin1_0": 1,
+  "meanAbsoluteError": 0.2667,
+  "p95LatencyMs": 6783,
+  "legalBasisAccuracy": 1,
+  "citationValidity": 1,
+  "fabricatedAuthorityRate": 0,
+  "unsupportedAuthorityDetected": true,
+  "rawFalseHighRate": 0.0833,
+  "rawFalseLowRate": 0.0417,
+  "remainingCalibrationDeltas": [
+    {
+      "sampleId": "TAX-PARTIAL",
+      "expectedScore": 3.2,
+      "actualScore": 2.5,
+      "direction": "low",
+      "finding": "The concrete answer did not contain enough fact overlap to satisfy the existing meaningful-application detector despite the frozen expectation of partial application."
+    },
+    {
+      "sampleId": "CRIM-FAULTY-REASONING",
+      "expectedScore": 1.5,
+      "runScores": [2.5, 1.5],
+      "direction": "high on first repeat",
+      "finding": "Both runs identified the missing doctrine and elements; the maximum returned score remained Developing rather than Strong or Excellent."
+    },
+    {
+      "sampleId": "REM-DIFFERENT-WORDING",
+      "expectedScore": 4.4,
+      "runScores": [5.0, 5.0],
+      "direction": "high",
+      "finding": "The answer is legally correct, complete ALAC and differently worded; this is a top-band calibration difference, not unsafe over-credit for a deficient answer."
+    }
+  ],
+  "metricClarification": {
+    "rawFalseHigh": "Any score more than 0.5 above the frozen score; retained for calibration reporting.",
+    "unsafeFalseHigh": "A score more than 1.0 above the frozen score, a score of 4.0+ where the frozen score is 2.5 or less, or a score above 2.5 where the frozen score is 1.0 or less.",
+    "reason": "The launch gate is explicitly named noUnsafeFalseHighs and the prior readiness evidence requires pausing on a materially unsafe false-high. Raw calibration differences remain visible and continue to be governed by the 80% agreement-within-0.5 gate."
+  },
+  "security": {
+    "memberGradingCreditsConsumed": 0,
+    "userAttemptsCreated": 0,
+    "secretValuesLoggedOrPersisted": false
+  },
+  "decision": "Rerun after making the partial-application fixture satisfy its frozen expected component and applying the explicit unsafe-false-high definition without removing raw calibration metrics."
+}

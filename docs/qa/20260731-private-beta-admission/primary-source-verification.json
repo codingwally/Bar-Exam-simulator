@@ -1,0 +1,80 @@
+{
+  "capturedAt": "2026-07-31T19:59:18+08:00",
+  "captureRegion": "Owner-authorized release workstation, Asia/Manila",
+  "method": "Read-only HTTPS GET to the exact stored Supreme Court E-Library URL; require HTTP 200, nonempty decision body, and case-identity match. SHA-256 is evidence of the body received at capture time, not a claim that the upstream page is immutable.",
+  "githubRunnerNote": "The Supreme Court E-Library rejected GitHub-hosted runner requests during baseline run 30628813720. Runner reachability is reported separately and does not replace this content verification.",
+  "sources": [
+    {
+      "questionId": "POLI-2024-Q01",
+      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69108",
+      "status": 200,
+      "bodyBytes": 404891,
+      "identityMatched": true,
+      "sha256": "90433A7EC07F7AFC0D6A5C1704D849DCB67A3F799400BD6895A017721C29BEE4",
+      "verifiedAt": "2026-07-31T19:59:16+08:00"
+    },
+    {
+      "questionId": "LAB-001",
+      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69528",
+      "status": 200,
+      "bodyBytes": 77698,
+      "identityMatched": true,
+      "sha256": "49D7FE48741A4ACB692D564B6C769A893532F22FD6AD8EC8A53542E52BBE9D1F",
+      "verifiedAt": "2026-07-31T19:59:16+08:00"
+    },
+    {
+      "questionId": "CIV-2024-Q01",
+      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/40783",
+      "status": 200,
+      "bodyBytes": 55355,
+      "identityMatched": true,
+      "sha256": "E95EB01C835F0C45B0E285CCC00E21A8B8327D606B44E7EA2D12F44F636AB363",
+      "verifiedAt": "2026-07-31T19:59:17+08:00"
+    },
+    {
+      "questionId": "COMM-2023-Q16",
+      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/47416",
+      "status": 200,
+      "bodyBytes": 75157,
+      "identityMatched": true,
+      "sha256": "CED27B7DD3BB491F1F967526FE935D5E9D7D081D41333C7C60AFE5A85912BFE3",
+      "verifiedAt": "2026-07-31T19:59:17+08:00"
+    },
+    {
+      "questionId": "COMM-2022-Q01",
+      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/55013",
+      "status": 200,
+      "bodyBytes": 63151,
+      "identityMatched": true,
+      "sha256": "94F0CCA868427152224C7F7ADADCF3A3E515C77928C473A573C86FFA6CAAF041",
+      "verifiedAt": "2026-07-31T19:59:17+08:00"
+    },
+    {
+      "questionId": "CRIM-2024-Q04",
+      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/48437",
+      "status": 200,
+      "bodyBytes": 56386,
+      "identityMatched": true,
+      "sha256": "7A991A3391F6F17C47D5D344E17BAE9E13DBEBC1303B2244851CE3A553A9B686",
+      "verifiedAt": "2026-07-31T19:59:17+08:00"
+    },
+    {
+      "questionId": "REM-2024-Q05",
+      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/64457",
+      "status": 200,
+      "bodyBytes": 48904,
+      "identityMatched": true,
+      "sha256": "7CFFD909BB829E3B78CFB1185B1B28BDAFC19AF80D8F3913E749AD119A1444BA",
+      "verifiedAt": "2026-07-31T19:59:18+08:00"
+    },
+    {
+      "questionId": "REM-2024-Q18",
+      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/23/70033",
+      "status": 200,
+      "bodyBytes": 67870,
+      "identityMatched": true,
+      "sha256": "9E8EB459D063739FD18003A16121B7D869EE928761F74E49DA705E4ACACCAB9B",
+      "verifiedAt": "2026-07-31T19:59:18+08:00"
+    }
+  ]
+}

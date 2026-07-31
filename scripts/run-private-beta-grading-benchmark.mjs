@@ -19,6 +19,7 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const benchmarkPath = path.join(root, 'docs', 'qa', '20260731-cycle-1', 'grading-benchmark-v1.json');
 const questionBankPath = path.join(root, 'content', 'question-bank', 'website-upload.json');
+const sourceEvidencePath = path.join(root, 'docs', 'qa', '20260731-private-beta-admission', 'primary-source-verification.json');
 const DEFAULT_OUTPUT = path.join(root, 'artifacts', 'private-beta-grading-benchmark.json');
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const REQUEST_TIMEOUT_MS = 45_000;
@@ -202,6 +203,27 @@ function baseMockResult(row, score) {
   };
 }
 
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function createRequestPacer(intervalMs) {
+  let nextStart = 0;
+  let tail = Promise.resolve();
+  return () => {
+    let release;
+    const previous = tail;
+    tail = new Promise((resolve) => { release = resolve; });
+    return (async () => {
+      await previous;
+      const waitMs = Math.max(0, nextStart - Date.now());
+      if (waitMs) await sleep(waitMs);
+      nextStart = Date.now() + intervalMs;
+      release();
+    })();
+  };
+}
+
 async function providerRequest({ apiKey, model, prompt }) {
   let lastError;
   for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt += 1) {
@@ -231,7 +253,13 @@ async function providerRequest({ apiKey, model, prompt }) {
       if (!response.ok) {
         const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
         lastError = new Error(`Provider request failed with HTTP ${response.status}.`);
-        if (retryable && attempt < MAX_PROVIDER_ATTEMPTS) continue;
+        if (retryable && attempt < MAX_PROVIDER_ATTEMPTS) {
+          const retryAfterSeconds = Number(response.headers.get('retry-after'));
+          await sleep(Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+            ? Math.min(retryAfterSeconds * 1_000, 60_000)
+            : response.status === 429 ? 15_000 : 1_500);
+          continue;
+        }
         throw lastError;
       }
       const payload = JSON.parse(responseText);
@@ -285,10 +313,25 @@ async function assessWithProvider({ apiKey, model, sample, row, answer }) {
   throw new Error('Provider assessment failed validation.');
 }
 
-async function verifyPrimarySource(row, mockMode) {
+async function verifyPrimarySource(row, mockMode, preverified) {
   const url = primarySourceForRow(row);
   if (!url) return { url: '', passed: false, status: null, reason: 'missing-e-library-url' };
-  if (mockMode) return { url, passed: true, status: 200, reason: 'mock-mode' };
+  const evidenceValid = preverified?.url === url
+    && preverified?.status === 200
+    && preverified?.identityMatched === true
+    && /^[A-F0-9]{64}$/.test(String(preverified?.sha256 || ''));
+  if (mockMode) {
+    return {
+      url,
+      passed: evidenceValid,
+      status: preverified?.status || null,
+      identityMatched: preverified?.identityMatched === true,
+      evidenceSha256: preverified?.sha256 || '',
+      verifiedAt: preverified?.verifiedAt || '',
+      runnerReachable: null,
+      reason: evidenceValid ? 'preverified-official-source-evidence' : 'missing-preverified-evidence',
+    };
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
@@ -302,16 +345,31 @@ async function verifyPrimarySource(row, mockMode) {
     const caseTokens = compactWords(row['Jurisprudence / Case']).slice(0, 2);
     const normalizedBody = body.toLowerCase();
     const identityMatched = caseTokens.length === 0 || caseTokens.every((token) => normalizedBody.includes(token));
+    const liveValid = response.ok && body.length >= 500 && identityMatched;
     return {
       url,
-      passed: response.ok && body.length >= 500 && identityMatched,
+      passed: evidenceValid && liveValid,
       status: response.status,
       bodyBytes: Buffer.byteLength(body),
       identityMatched,
-      reason: response.ok ? (identityMatched ? 'official-source-reached-and-identity-matched' : 'case-identity-not-found') : 'http-error',
+      evidenceSha256: preverified?.sha256 || '',
+      verifiedAt: preverified?.verifiedAt || '',
+      runnerReachable: true,
+      reason: liveValid ? 'official-source-reached-and-identity-matched' : 'live-source-validation-failed',
     };
   } catch (error) {
-    return { url, passed: false, status: null, reason: error?.name === 'AbortError' ? 'timeout' : 'network-error' };
+    return {
+      url,
+      passed: evidenceValid,
+      status: preverified?.status || null,
+      identityMatched: preverified?.identityMatched === true,
+      evidenceSha256: preverified?.sha256 || '',
+      verifiedAt: preverified?.verifiedAt || '',
+      runnerReachable: false,
+      reason: evidenceValid
+        ? `preverified-official-source-evidence; runner-${error?.name === 'AbortError' ? 'timeout' : 'network-error'}`
+        : error?.name === 'AbortError' ? 'timeout' : 'network-error',
+    };
   } finally {
     clearTimeout(timeout);
   }
@@ -394,12 +452,14 @@ export function calculateBenchmarkMetrics(results, sourceChecks, requestRuns) {
 export async function runBenchmark(options = {}) {
   const mockMode = options.mockMode === true;
   const repeatRuns = Number(options.repeatRuns || 2);
-  const concurrency = Number(options.concurrency || 2);
+  const concurrency = Number(options.concurrency || 1);
+  const requestIntervalMs = Number(options.requestIntervalMs ?? 7_000);
   const model = options.model || DEFAULT_MODEL;
   const apiKey = options.apiKey || '';
   if (!mockMode && !apiKey) throw new Error('GEMINI_API_KEY is required for the live non-credit benchmark.');
   if (!Number.isInteger(repeatRuns) || repeatRuns < 2 || repeatRuns > 3) throw new Error('repeatRuns must be 2 or 3.');
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) throw new Error('concurrency must be between 1 and 4.');
+  if (!Number.isFinite(requestIntervalMs) || requestIntervalMs < 0 || requestIntervalMs > 60_000) throw new Error('requestIntervalMs must be between 0 and 60000.');
 
   const benchmarkText = fs.readFileSync(benchmarkPath, 'utf8');
   const benchmark = JSON.parse(benchmarkText);
@@ -408,12 +468,17 @@ export async function runBenchmark(options = {}) {
   const bankRows = Array.isArray(bankPayload) ? bankPayload : bankPayload.records;
   if (!Array.isArray(bankRows)) throw new Error('The website question bank has no records array.');
   const byId = new Map(bankRows.map((row) => [String(row['Question ID'] || '').trim(), row]));
+  const sourceEvidenceText = fs.readFileSync(sourceEvidencePath, 'utf8');
+  const sourceEvidence = JSON.parse(sourceEvidenceText);
+  const preverifiedByQuestionId = new Map(sourceEvidence.sources.map((source) => [source.questionId, source]));
   const questions = benchmark.questions.map((question) => {
     const row = byId.get(question.questionId);
     if (!row) throw new Error(`Benchmark question ${question.questionId} is absent from the website question bank.`);
     return { question, row };
   });
-  const sourceChecks = await mapLimit(questions, 2, ({ row }) => verifyPrimarySource(row, mockMode));
+  const sourceChecks = await mapLimit(questions, 2, ({ question, row }) => (
+    verifyPrimarySource(row, mockMode, preverifiedByQuestionId.get(question.questionId))
+  ));
   const sourceCheckByUrl = new Map(sourceChecks.map((check) => [check.url, check]));
 
   const resolvedSamples = benchmark.samples.map((sample) => {
@@ -428,6 +493,7 @@ export async function runBenchmark(options = {}) {
     .filter(({ answer }) => answer.trim())
     .flatMap((entry) => Array.from({ length: repeatRuns }, (_, runIndex) => ({ ...entry, runIndex: runIndex + 1 })));
 
+  const paceProviderRequest = createRequestPacer(mockMode ? 0 : requestIntervalMs);
   const providerOutputs = await mapLimit(providerJobs, concurrency, async (job) => {
     const started = Date.now();
     try {
@@ -440,6 +506,7 @@ export async function runBenchmark(options = {}) {
         );
         output = { assessment, latencyMs: 5, providerAttempts: 1, repairAttempts: 0 };
       } else {
+        await paceProviderRequest();
         output = await assessWithProvider({ apiKey, model, ...job });
       }
       requestRuns.push({ sampleId: job.sample.sampleId, runIndex: job.runIndex, ok: true, latencyMs: output.latencyMs });
@@ -510,8 +577,10 @@ export async function runBenchmark(options = {}) {
     groundingEnabled: false,
     repeatRuns,
     concurrency,
+    requestIntervalMs,
     benchmarkInputSha256: sha256(benchmarkText),
     questionBankInputSha256: sha256(bankText),
+    primarySourceEvidenceInputSha256: sha256(sourceEvidenceText),
     credentialsLoggedOrPersisted: false,
     memberGradingCreditsConsumed: 0,
     providerBillingScope: 'Repository release-gate harness only; no user or member attempt was created.',
@@ -533,7 +602,8 @@ async function main() {
     apiKey: mockMode ? '' : process.env.GEMINI_API_KEY,
     model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
     repeatRuns: Number(process.env.BENCHMARK_REPEAT_RUNS || 2),
-    concurrency: Number(process.env.BENCHMARK_CONCURRENCY || 2),
+    concurrency: Number(process.env.BENCHMARK_CONCURRENCY || 1),
+    requestIntervalMs: Number(process.env.BENCHMARK_REQUEST_INTERVAL_MS || 7_000),
   });
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, `${JSON.stringify(result, null, 2)}\n`, 'utf8');

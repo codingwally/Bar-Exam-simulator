@@ -147,6 +147,7 @@ assert.match(prompt, /Scores such as 3\.8 and 4\.2 are valid/i);
 assert.match(prompt, /affirmatively incorrect authority/i);
 assert.match(prompt, /materially wrong article, rule, statute, or doctrine/i);
 assert.match(prompt, /limits an otherwise coherent answer to 1\.0 to 2\.0/i);
+assert.match(prompt, /underlying rule and application are otherwise correct[\s\S]*limits the answer to 2\.0 to 3\.0/i);
 assert.doesNotMatch(prompt, /0\.5 increments only|intermediate half-points|weighted formula/i);
 
 const capContext = {

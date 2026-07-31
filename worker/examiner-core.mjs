@@ -701,7 +701,7 @@ GRADE FROM 0.0 TO 5.0 POINTS USING AT MOST ONE DECIMAL PLACE:
 - 5.0 requires a correct conclusion, correct legal basis, meaningful application to facts, and a conclusion substantially aligned with the suggested answer.
 - 4.0 to 4.5 reflects a substantially correct answer with identifiable omissions or imprecision.
 - 3.6 to 3.9 reflects a correct core answer with material but non-fatal gaps in authority, application, or nuance.
-- Distinguish an omitted citation from an affirmatively incorrect authority. A materially wrong article, rule, statute, or doctrine earns no credit as legal basis and ordinarily limits an otherwise coherent answer to 1.0 to 2.0. An expressly fabricated or nonexistent authority is a separate reliability defect and must never improve the score.
+- Distinguish an omitted citation from an affirmatively incorrect authority. A materially wrong article, rule, statute, or doctrine earns no credit as legal basis and ordinarily limits an otherwise coherent answer to 1.0 to 2.0. An expressly fabricated or nonexistent authority is a separate reliability defect: where the underlying rule and application are otherwise correct, it ordinarily limits the answer to 2.0 to 3.0, must be flagged, and must never improve the score.
 - 0.0 is appropriate for a blank, irrelevant, incoherent, or nonsensical response.
 Do not penalize solely for omitting exact article, section, case, or docket numbers when the controlling doctrine and application are correct. This protection does not apply when the student affirmatively cites an incorrect authority.
 

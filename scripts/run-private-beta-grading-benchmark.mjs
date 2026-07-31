@@ -47,7 +47,7 @@ const SYNTHETIC_ANSWERS = Object.freeze({
   'TAX-PARTIAL': [
     'Answer: No. The proclamation is unconstitutional.',
     'Legal Basis: The Constitution assigns the power to grant tax exemptions to Congress, not to the President acting alone.',
-    'Application: The President issued only a proclamation, and the congressional resolution of support was not a law granting the exemptions.',
+    'Application: Executive action cannot replace the legislative action required to grant a tax exemption.',
     'Conclusion: Therefore, the proclamation cannot validly create the tax exemptions.',
   ].join('\n\n'),
   'COMM-FALSE-CITATION': [
@@ -64,8 +64,8 @@ const SYNTHETIC_ANSWERS = Object.freeze({
   ].join('\n\n'),
   'REM-DIFFERENT-WORDING': [
     'Answer: No. Wednesday\'s probate opposition should not be dismissed.',
-    'Legal Basis: Article 151 of the Family Code makes prior earnest efforts necessary only for family disputes that the parties can legally settle. A court\'s determination of whether an instrument is a valid will under Rule 75 is not left to a private compromise.',
-    'Application: Wednesday is challenging the probate of Gomez\'s will. Morticia and Wednesday cannot make an invalid will valid, or a valid will invalid, merely by agreeing between themselves. Because that controversy is non-compromisable, the earnest-efforts condition does not govern the opposition.',
+    'Legal Basis: Article 151 of the Family Code requires earnest efforts only in family disputes capable of compromise. Under Rule 75, probate determines whether an instrument is the decedent\'s valid will.',
+    'Application: This controversy concerns probate, which the relatives cannot resolve through a private compromise. The earnest-efforts condition therefore does not apply.',
     'Conclusion: Therefore, the probate opposition may proceed despite the absence of an allegation of prior earnest efforts.',
   ].join('\n\n'),
 });

@@ -3,6 +3,7 @@ import test from 'node:test';
 import worker from './index.mjs';
 import {
   modelAnswerQualityIssues,
+  parseQuestionBank,
   questionFromBankRow,
 } from './examiner-core.mjs';
 import questionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
@@ -97,6 +98,21 @@ test('stored bank records expose multiple trusted authorities without accepting 
   assert.ok(context.sourceUrls.some((source) => source.reference.includes('G.R. No.')));
   assert.equal(context.sourceUrls.some((source) => source.url.includes('facebook.com')), false);
   assert.equal(context.sourceUrls.some((source) => source.url.includes('studocu.com')), false);
+});
+
+test('CSV parsing and grading context preserve exact question text', () => {
+  const exactPrompt = 'Keep  repeated spaces, a .45-caliber phrase, and this line break:\nSecond line ; unchanged.';
+  const quotedPrompt = `"${exactPrompt.replaceAll('"', '""')}"`;
+  const parsed = parseQuestionBank([
+    'Question ID,Subject,Essay Question,Suggested Answer,Legal Basis / Provision',
+    `EXACT-CSV-001,Criminal Law,${quotedPrompt},Answer: unchanged,Legal Basis: unchanged`,
+  ].join('\n'));
+  const row = parsed.get('EXACT-CSV-001');
+  assert.equal(row['Essay Question'], exactPrompt);
+  const parsedContext = questionFromBankRow(row);
+  assert.equal(parsedContext.question, exactPrompt);
+  assert.equal(parsedContext.suggestedAnswer, 'Answer: unchanged');
+  assert.equal(parsedContext.legalBasis, 'Legal Basis: unchanged');
 });
 
 test('short and generic ALAC model answers trigger the controlled quality repair gate', () => {

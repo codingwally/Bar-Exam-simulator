@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#071a33">
-  <title>Chambers — Due Diligence</title>
+  <title>Admin Dashboard — Due Diligence</title>
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=phase4-20260728-2">
+  <link rel="stylesheet" href="admin.css?v=admin-business-dashboard-20260802-2">
 </head>
 <body>
-  <a class="skip-link" href="#admin-main">Skip to Chambers</a>
+  <a class="skip-link" href="#admin-main">Skip to admin dashboard</a>
   <div class="admin-shell" id="admin-shell" hidden>
     <aside class="sidebar" id="sidebar">
       <a class="brand" href="../" aria-label="Due Diligence home">
@@ -21,27 +21,42 @@
           <path d="M24 7v29M10 15h28M11 15 6.5 24h9L11 15Zm26 0-4.5 9h9L37 15Z"/>
           <path d="M6.5 24c1.8 3.2 7.2 3.2 9 0M32.5 24c1.8 3.2 7.2 3.2 9 0M17 38h14"/>
         </svg>
-        <span><strong>Due Diligence</strong><small>Operations</small></span>
+        <span><strong>Due Diligence</strong><small>Admin dashboard</small></span>
       </a>
       <nav aria-label="Admin sections" id="admin-nav">
-        <button data-section="executive" aria-current="page"><span>01</span> Chambers</button>
-        <button data-section="realtime"><span>02</span> Live Activity</button>
-        <button data-section="acquisition"><span>03</span> Visitors &amp; Sign-ups</button>
-        <button data-section="users"><span>04</span> Students</button>
-        <button data-section="learning"><span>05</span> Performance</button>
-        <button data-section="subjects"><span>06</span> Question Bank</button>
-        <button data-section="reliability"><span>07</span> AI Grading Health</button>
-        <button data-section="subscriptions"><span>08</span> Retainer Management</button>
-        <button data-section="payments"><span>09</span> Payment Review</button>
-        <button data-section="refunds"><span>10</span> Refunds</button>
-        <button data-section="support"><span>11</span> Support Requests</button>
-        <button data-section="corrections"><span>12</span> Answer Corrections</button>
-        <button data-section="partnerships"><span>13</span> Partnerships</button>
-        <button data-section="controls"><span>14</span> Website Settings</button>
-        <button data-section="security"><span>15</span> Access &amp; Activity Log</button>
-        <button data-section="forum"><span>16</span> Quorum Moderation</button>
-        <button data-section="examinations"><span>17</span> Examination Management</button>
-        <button data-section="answer_exports"><span>18</span> Answer Exports</button>
+        <div class="nav-group" role="group" aria-label="At a glance">
+          <p class="nav-group-label">At a glance</p>
+          <button data-section="executive" aria-current="page">Overview</button>
+          <button data-section="realtime">Live Activity</button>
+        </div>
+        <div class="nav-group" role="group" aria-label="People and learning">
+          <p class="nav-group-label">People &amp; learning</p>
+          <button data-section="users">Users</button>
+          <button data-section="acquisition">Sign-ups</button>
+          <button data-section="answer_exports">Answers</button>
+          <button data-section="learning">Learning Performance</button>
+          <button data-section="subjects">Question Bank</button>
+          <button data-section="reliability">Grading Health</button>
+          <button data-section="examinations">Exams</button>
+        </div>
+        <div class="nav-group" role="group" aria-label="Community and support">
+          <p class="nav-group-label">Community &amp; support</p>
+          <button data-section="forum">Quorum</button>
+          <button data-section="support">Support</button>
+          <button data-section="corrections">Answer Corrections</button>
+        </div>
+        <div class="nav-group" role="group" aria-label="Business">
+          <p class="nav-group-label">Business</p>
+          <button data-section="subscriptions">Subscriptions</button>
+          <button data-section="payments">Payments</button>
+          <button data-section="refunds">Refunds</button>
+          <button data-section="partnerships">Partnerships</button>
+        </div>
+        <div class="nav-group" role="group" aria-label="Administration">
+          <p class="nav-group-label">Administration</p>
+          <button data-section="controls">Website Settings</button>
+          <button data-section="security">Security &amp; Activity Log</button>
+        </div>
       </nav>
       <div class="sidebar-foot">
         <a href="../">Return to simulator</a>
@@ -55,28 +70,29 @@
       <header class="topbar">
         <button class="menu-button" id="menu-button" type="button" aria-label="Open navigation" aria-expanded="false">Menu</button>
         <div>
-          <p class="eyebrow">Protected administration</p>
-          <h1 id="section-title">Chambers</h1>
+          <p class="eyebrow">Admin dashboard</p>
+          <h1 id="section-title">Overview</h1>
         </div>
         <div class="topbar-tools">
-          <label>Date range
+          <label id="reporting-range">Date range
             <select id="date-range">
               <option value="7">Last 7 days</option>
               <option value="30" selected>Last 30 days</option>
               <option value="90">Last 90 days</option>
             </select>
           </label>
-          <div class="freshness" id="freshness" title="The latest successful aggregate response">
+          <div class="freshness" id="freshness" title="The latest successful dashboard update">
             <span></span><b>Checking freshness…</b>
           </div>
+          <button class="secondary-button topbar-download" id="download-current-section" type="button">Download page data</button>
           <button class="refresh-button" id="refresh-dashboard" type="button">Refresh</button>
         </div>
       </header>
 
       <div class="system-banner" id="system-banner" role="status" aria-live="polite">
-        Verified production metrics and audited operational records only.
+        Live website data and recent Admin activity for the selected date range.
       </div>
-      <section class="dashboard-view" id="dashboard-view" aria-live="polite"></section>
+      <section class="dashboard-view" id="dashboard-view"></section>
     </main>
   </div>
 
@@ -84,7 +100,7 @@
     <div class="gate-mark" aria-hidden="true">DD</div>
     <p class="eyebrow">Due Diligence administration</p>
     <h1 id="gate-title">Verifying your secure session</h1>
-    <p id="gate-copy">Chambers opens only for a verified administrator account.</p>
+    <p id="gate-copy">This dashboard is available only to approved Admin accounts.</p>
     <div class="gate-spinner" id="gate-spinner"></div>
     <a class="primary-link" id="gate-action" href="../" hidden>Return to Due Diligence</a>
   </section>
@@ -93,13 +109,13 @@
     <form method="dialog" id="action-form">
       <header>
         <div>
-          <p class="eyebrow">Audited administrator action</p>
+          <p class="eyebrow">Confirm change</p>
           <h2 id="action-title">Confirm action</h2>
         </div>
         <button class="icon-button" id="action-dialog-close" type="button" aria-label="Close">×</button>
       </header>
       <dl class="action-context" id="action-context" hidden>
-        <div><dt>Target student</dt><dd id="action-target">Not available</dd></div>
+        <div><dt>User</dt><dd id="action-target">Not available</dd></div>
         <div><dt>Current access</dt><dd id="action-current">Not available</dd></div>
         <div><dt>Proposed change</dt><dd id="action-proposed">Not available</dd></div>
       </dl>
@@ -110,11 +126,11 @@
       <p class="action-warning" id="action-warning"></p>
       <label class="action-confirmation" id="action-confirmation" hidden>
         <input id="action-confirm-risk" type="checkbox">
-        <span id="action-confirmation-copy">I have verified the target, current access, and proposed change. I understand this action is immediate and audited.</span>
+        <span id="action-confirmation-copy">I checked the user, current access, and proposed change. I understand this action takes effect immediately and is recorded.</span>
       </label>
       <div class="dialog-actions">
         <button class="secondary-button" id="action-dialog-cancel" type="button">Cancel</button>
-        <button class="primary-button" id="action-confirm" type="submit" value="default">Confirm audited action</button>
+        <button class="primary-button" id="action-confirm" type="submit" value="default">Confirm action</button>
       </div>
     </form>
   </dialog>
@@ -123,10 +139,10 @@
     <form method="dialog">
       <header>
         <div>
-          <p class="eyebrow">Immutable access record</p>
-          <h2 id="audit-title">Retainer audit history</h2>
+          <p class="eyebrow">Access history</p>
+          <h2 id="audit-title">Subscription activity</h2>
         </div>
-        <button class="icon-button" value="cancel" aria-label="Close audit history">×</button>
+        <button class="icon-button" value="cancel" aria-label="Close activity history">×</button>
       </header>
       <p class="panel-note" id="audit-target"></p>
       <div class="audit-history" id="audit-history"></div>
@@ -140,8 +156,8 @@
     <form method="dialog">
       <header>
         <div>
-          <p class="eyebrow">Verified operational detail</p>
-          <h2 id="insight-title">Metric detail</h2>
+          <p class="eyebrow">How this is counted</p>
+          <h2 id="insight-title">Number details</h2>
         </div>
         <button class="icon-button" id="insight-dialog-close" type="button"
           aria-label="Close metric detail">×</button>
@@ -149,7 +165,7 @@
       <div class="insight-value" id="insight-value">Not available</div>
       <p class="insight-copy" id="insight-copy"></p>
       <dl class="definition-list insight-provenance">
-        <dt>Source</dt><dd id="insight-source">Verified production aggregate</dd>
+        <dt>Source</dt><dd id="insight-source">Website records</dd>
         <dt>Reporting window</dt><dd id="insight-window">Current selected period</dd>
         <dt>Generated</dt><dd id="insight-generated">Not available</dd>
       </dl>
@@ -164,7 +180,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="../assets/phase2-config.js?v=leb-premium-20260804-1"></script>
   <script src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
-  <script src="subscription-actions-core.js?v=leb-premium-20260804-1"></script>
-  <script src="admin.js?v=beta-all-access-admin-20260802-1"></script>
+  <script src="subscription-actions-core.js?v=admin-business-dashboard-20260802-2"></script>
+  <script src="admin.js?v=admin-business-dashboard-20260802-2"></script>
 </body>
 </html>

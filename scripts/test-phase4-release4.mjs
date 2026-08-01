@@ -13,6 +13,7 @@ const paymentCore = text('worker/payment-core.mjs');
 const frontend = text('assets/phase2-experience.js');
 const publicPage = text('index.html');
 const admin = text('admin/admin.js');
+const adminPage = text('admin/index.html');
 const adminStyles = text('admin/admin.css');
 const workflow = text('.github/workflows/deploy.yml');
 const productionBundleBuilder = text('scripts/build-phase4-production-bundle.mjs');
@@ -99,9 +100,9 @@ assert.match(
   /function showEntry\(options = \{\}\) \{\s*const completed = Boolean\(options\.completed\);\s*hideNativeView\(\);/,
   'Authentication must replace, not stack behind, a native commerce view.',
 );
-assert.match(admin, /Payment Review/);
-assert.match(admin, /Refunds/);
-assert.match(admin, /Partnerships/);
+assert.match(adminPage, />Payments<\/button>/);
+assert.match(adminPage, />Refunds<\/button>/);
+assert.match(adminPage, />Partnerships<\/button>/);
 assert.match(
   admin,
   /actionButton\('Review', 'payment_review', row\.id, \{[\s\S]*planCode: row\.plan_code/,
@@ -112,9 +113,9 @@ assert.match(
 );
 assert.match(publicPage, /assets\/phase2-experience\.js\?v=admin-export-20260801-1/);
 assert.match(publicPage, /assets\/phase4-experience\.js\?v=admin-export-20260801-1/);
-assert.match(text('admin/index.html'), /admin\.css\?v=phase4-20260728-2/);
-assert.match(text('admin/index.html'), /subscription-actions-core\.js\?v=leb-premium-20260804-1/);
-assert.match(text('admin/index.html'), /admin\.js\?v=admin-export-20260801-1/);
+assert.match(adminPage, /admin\.css\?v=admin-business-dashboard-20260802-2/);
+assert.match(adminPage, /subscription-actions-core\.js\?v=admin-business-dashboard-20260802-2/);
+assert.match(adminPage, /admin\.js\?v=admin-business-dashboard-20260802-2/);
 assert.match(
   adminStyles,
   /\.gate\[hidden\]\s*\{\s*display:\s*none;\s*\}/,

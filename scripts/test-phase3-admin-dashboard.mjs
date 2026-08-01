@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 
 const [
   html, css, js, analytics, worker, migration, directoryMigration,
-  engagementMigration, globalBetaMigration, answerHistoryMigration, preflight,
+  engagementMigration, globalBetaMigration, answerHistoryMigration,
+  businessDetailsMigration, preflight,
 ] = await Promise.all([
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.css', import.meta.url), 'utf8'),
@@ -15,47 +16,60 @@ const [
   readFile(new URL('../supabase/migrations/20260810002000_admin_overview_engagement_metrics.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260810002100_global_beta_all_access.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260810002200_admin_answer_history_export.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260810002300_admin_business_dashboard_details.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/review/phase3_production_preflight.sql', import.meta.url), 'utf8'),
 ]);
 
 const sectionLabels = [
-  'Chambers',
-  'Live Activity',
-  'Visitors &amp; Sign-ups',
-  'Students',
-  'Performance',
-  'Question Bank',
-  'AI Grading Health',
-  'Retainer Management',
-  'Payment Review',
-  'Refunds',
-  'Support Requests',
-  'Answer Corrections',
-  'Partnerships',
-  'Website Settings',
-  'Access &amp; Activity Log',
-  'Answer Exports',
+  ['executive', 'Overview'],
+  ['realtime', 'Live Activity'],
+  ['users', 'Users'],
+  ['acquisition', 'Sign-ups'],
+  ['answer_exports', 'Answers'],
+  ['learning', 'Learning Performance'],
+  ['subjects', 'Question Bank'],
+  ['reliability', 'Grading Health'],
+  ['examinations', 'Exams'],
+  ['forum', 'Quorum'],
+  ['support', 'Support'],
+  ['corrections', 'Answer Corrections'],
+  ['subscriptions', 'Subscriptions'],
+  ['payments', 'Payments'],
+  ['refunds', 'Refunds'],
+  ['partnerships', 'Partnerships'],
+  ['controls', 'Website Settings'],
+  ['security', 'Security &amp; Activity Log'],
 ];
-for (const label of sectionLabels) assert.match(html, new RegExp(label.replace(/[&]/g, '&')));
-assert.doesNotMatch(html, /Advertiser &amp; Investor/);
+for (const [section, label] of sectionLabels) {
+  assert.match(html, new RegExp(`<button data-section="${section}"[^>]*>${label}<\\/button>`));
+}
+for (const obsolete of [
+  /Chambers/,
+  /Visitors &amp; Sign-ups/,
+  /Students/,
+  /Retainer Management/,
+  /Payment Review/,
+  /Answer Exports/,
+  /Advertiser &amp; Investor/,
+]) assert.doesNotMatch(html, obsolete);
 
 assert.match(html, /aria-label="Admin sections"/);
 assert.match(html, /aria-live="polite"/);
-assert.match(html, /Skip to Chambers/);
+assert.match(html, /Skip to admin dashboard/);
 assert.match(css, /prefers-reduced-motion/);
 assert.match(css, /@media \(max-width: 560px\)/);
 assert.match(css, /@media print/);
 
 assert.match(js, /Paid subscribers: Not connected/);
 assert.match(js, /Scenario only — not actual performance/);
-assert.match(js, /Final identity transfer is disabled/);
+assert.match(js, /Final account transfer is disabled/);
 assert.match(js, /Contact Support\. We respond within 24 hours\./);
-assert.match(js, /No production data was changed/);
+assert.match(js, /Nothing was changed/);
 assert.match(js, /No verified events/);
 assert.match(js, /Administrator request failed/);
 assert.match(js, /Aggregate export|aggregate-report\.csv/i);
 assert.match(js, /Mastery average/);
-assert.match(js, /D1, D7, and D30/);
+assert.match(js, /One-day, seven-day, and 30-day return rates/);
 
 assert.match(analytics, /90_000/);
 assert.match(analytics, /document\.visibilityState/);
@@ -69,7 +83,11 @@ for (const route of [
   '/admin/data',
   '/admin/user-directory',
   '/admin/user-directory/export',
+  '/admin/subscriptions/export',
   '/admin/user-directory/email',
+  '/admin/live-activity',
+  '/admin/answer-history',
+  '/admin/quorum/posts',
   '/admin/global-beta/change',
   '/admin/answer-history/export',
   '/admin/action',
@@ -84,7 +102,8 @@ assert.match(js, /user_response_export/);
 assert.match(js, /founder_admin.*super_admin|super_admin.*founder_admin/s);
 assert.match(js, /private student work/i);
 assert.match(js, /user\.email/);
-assert.match(js, /Download Students CSV/);
+assert.match(js, /Download user list/);
+assert.match(js, /\/admin\/subscriptions\/export/);
 assert.match(js, /Search name, school, or email/);
 assert.doesNotMatch(js, /\['Name', 'Masked email'/);
 assert.doesNotMatch(js, /'Lifetime grades'/);
@@ -92,6 +111,15 @@ assert.match(js, /Download all answer records/);
 assert.match(js, /Suggested answer/);
 assert.match(js, /Model answer/);
 assert.match(js, /all current and future signed-in users/i);
+assert.match(js, /api\('\/admin\/live-activity'/);
+assert.match(js, /api\('\/admin\/answer-history'/);
+assert.match(js, /api\('\/admin\/quorum\/posts'/);
+assert.match(js, /'Measure', 'Value', 'Meaning', 'Generated at'/);
+assert.match(js, /identity|Exact online names are withheld/i);
+assert.match(js, /'Answer type', 'Subject', 'Exam', 'Question',[\s\S]*'Student answer'/);
+assert.match(js, /'Category', 'Plan', 'Status', 'Current access',[\s\S]*'Questions answered'/);
+assert.match(js, /'Posted', 'Name', 'Email', 'Type', 'Topic', 'Post', 'Status', 'Comments', 'Reports'/);
+assert.match(js, /\^\[\\s\\u0000-\\u001f\\u007f-\\u009f\]\*\[=\+\\-@\]/);
 
 assert.match(directoryMigration, /create or replace function public\.admin_user_directory/);
 assert.match(directoryMigration, /from auth\.users u\s+left join public\.profiles p/s);
@@ -112,6 +140,23 @@ assert.match(answerHistoryMigration, /answer_history_export/);
 for (const secureMigration of [engagementMigration, globalBetaMigration, answerHistoryMigration]) {
   assert.doesNotMatch(secureMigration, /grant execute[\s\S]*to authenticated/);
 }
+
+assert.match(businessDetailsMigration, /create or replace function public\.admin_live_activity/);
+assert.match(businessDetailsMigration, /create or replace function public\.admin_quorum_posts/);
+assert.match(businessDetailsMigration, /create or replace function public\.admin_preview_answer_history/);
+assert.match(businessDetailsMigration, /create or replace function public\.admin_export_answer_history_with_context/);
+assert.match(businessDetailsMigration, /create or replace function public\.admin_user_engagement_directory/);
+assert.match(businessDetailsMigration, /display_name[\s\S]*email[\s\S]*subscription_category/);
+assert.match(businessDetailsMigration, /'identityRowsWithheld', true/);
+assert.match(businessDetailsMigration, /'items', '\[\]'::jsonb/);
+assert.match(businessDetailsMigration, /revoke all on function public\.admin_live_activity[\s\S]*from public, anon, authenticated/);
+assert.match(businessDetailsMigration, /revoke all on function public\.admin_quorum_posts[\s\S]*from public, anon, authenticated/);
+assert.match(businessDetailsMigration, /grant execute on function public\.admin_live_activity[\s\S]*to service_role/);
+assert.match(businessDetailsMigration, /grant execute on function public\.admin_quorum_posts[\s\S]*to service_role/);
+assert.match(businessDetailsMigration, /grant execute on function public\.admin_preview_answer_history[\s\S]*to service_role/);
+assert.match(businessDetailsMigration, /external_question_bank_not_persisted/);
+assert.match(businessDetailsMigration, /immutable_exam_snapshot/);
+assert.doesNotMatch(businessDetailsMigration, /grant execute[\s\S]*to authenticated/);
 
 for (const capability of [
   'analytics_viewer',

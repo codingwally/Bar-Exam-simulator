@@ -43,8 +43,8 @@ assert.match(html, /Study Circles/);
 assert.match(html, /Trending in Quorum/);
 assert.match(html, /Questions Needing Answers/);
 assert.match(client, /Practice this issue/);
-assert.match(adminHtml, /Quorum Moderation/);
-assert.match(adminClient, /Quorum Moderation & Analytics/);
+assert.match(adminHtml, /data-section="forum">Quorum<\/button>/);
+assert.match(adminClient, /forum: 'Quorum'/);
 
 for (const obsolete of [
   /Lex Forum/,
@@ -109,11 +109,15 @@ for (const operation of [
   assert.match(client, new RegExp(`['"]${operation}['"]`), `${operation} must be wired in the Quorum client.`);
 }
 
-for (const route of ['/quorum/query', '/quorum/command', '/admin/quorum']) {
+for (const route of ['/quorum/query', '/quorum/command', '/admin/quorum', '/admin/quorum/posts']) {
   assert.match(worker, new RegExp(`pathname === '${route.replaceAll('/', '\\/')}'`), `${route} must be handled by the Worker.`);
 }
 assert.match(client, /api\('\/quorum\/query'/);
 assert.match(client, /api\('\/quorum\/command'/);
+assert.match(adminClient, /api\('\/admin\/quorum\/posts'/);
+assert.match(adminClient, /All Quorum posts/);
+assert.match(adminClient, /Download all matching posts/);
+assert.match(adminClient, /row\.author_email/);
 assert.doesNotMatch(
   client,
   /['"]create_simple_entry['"]/,

@@ -44,12 +44,13 @@ for (const role of ['super_admin', 'founder_admin']) {
   assert.ok(activeLabels.includes('Enable Free Beta'), `${role} can enable Free Beta`);
   assert.ok(activeLabels.includes('Grant Complimentary Access'), `${role} can grant access`);
   assert.ok(activeLabels.includes('Apply Discount'), `${role} can apply discounts`);
-  assert.ok(activeLabels.includes('View Audit History'), `${role} can view audit history`);
+  assert.ok(activeLabels.includes('View Activity History'), `${role} can view activity history`);
 }
 
 assert.ok(labels(pausedRow, 'founder_admin').includes('Resume'));
 assert.ok(labels(pausedRow, 'founder_admin').includes('Disable Free Beta'));
-assert.ok(labels(noSubscriptionRow, 'super_admin').includes('Activate Retainer'));
+assert.ok(labels(noSubscriptionRow, 'super_admin').includes('Activate Subscription'));
+assert.equal(labels(noSubscriptionRow, 'super_admin').includes('Activate Retainer'), false);
 assert.ok(labels(noSubscriptionRow, 'super_admin').includes('Change Plan'));
 assert.equal(labels(activeRow, 'student').length, 0);
 assert.equal(labels(activeRow, '').length, 0);

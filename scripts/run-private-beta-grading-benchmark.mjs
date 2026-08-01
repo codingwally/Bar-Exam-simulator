@@ -26,6 +26,7 @@ const REQUEST_TIMEOUT_MS = 45_000;
 const MAX_PROVIDER_ATTEMPTS = 2;
 
 const SYNTHETIC_ANSWERS = Object.freeze({
+  'ETHICS-BARE-CONCLUSION': 'Yes.',
   'POLI-WRONG': [
     'Answer: Yes. The Senate lawfully cited Winston in contempt.',
     'Legal Basis: Congress has an unrestricted inherent power to punish any unresponsive witness, and due process does not limit that power during an inquiry.',

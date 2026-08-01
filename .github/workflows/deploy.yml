@@ -39,6 +39,7 @@ jobs:
           node scripts/test-auth-route-overlay.mjs
           node scripts/test-onboarding-flow.mjs
           node scripts/test-beta-readiness-copy-seo.mjs
+          node scripts/test-lifetime-grade-ui.mjs
 
       - name: Build sanitized Pages artifact
         run: node scripts/build-pages-artifact.mjs

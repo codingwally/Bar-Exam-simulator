@@ -54,7 +54,8 @@
     const access = state.access;
     const badge = document.getElementById('dd2-guest-badge');
     if (badge) {
-      badge.classList.toggle('is-visible', Boolean(access));
+      const visibleBasis = ['trial', 'free_beta', 'paid_subscription'].includes(access?.basis);
+      badge.classList.toggle('is-visible', visibleBasis);
       if (!access) badge.textContent = '';
       else if (access.basis === 'trial' && access.trial?.expiresAt) {
         const remainingMs = Math.max(0, new Date(access.trial.expiresAt).getTime() - Date.now());
@@ -66,7 +67,7 @@
       } else if (access.basis === 'paid_subscription') {
         badge.textContent = 'Active Retainer';
       } else {
-        badge.textContent = `${access.freeGrades?.remaining ?? 0} lifetime grades remaining`;
+        badge.textContent = '';
       }
     }
     global.dispatchEvent(new CustomEvent('duediligence:access', {

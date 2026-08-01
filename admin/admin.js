@@ -414,6 +414,11 @@
         html: true,
         value: `<div class="row-actions">
           ${actionButton('Reveal email', 'reveal_email', user.id).value}
+          ${['founder_admin', 'super_admin'].includes(state.authorization?.role)
+            ? actionButton('Download Q&A', 'user_response_export', user.id, {
+              displayName: user.display_name || 'Not provided',
+            }).value
+            : ''}
           ${state.authorization?.role === 'super_admin' && user.role !== 'super_admin'
             ? actionButton('Change role', 'role_change', user.id, { role: user.role }).value
             : ''}
@@ -508,7 +513,6 @@
         row.display_name || 'Not provided',
         row.role,
         row.trial_expires_at ? dateTime(row.trial_expires_at) : 'Not started',
-        `${number(row.successful_grades)} used · ${number(row.free_grades_remaining)} remaining`,
         row.free_beta_enabled ? `Enabled${row.free_beta_expires_at ? ` until ${dateTime(row.free_beta_expires_at)}` : ''}` : 'Disabled',
         row.plan_code || 'None',
         row.subscription_source === 'complimentary'
@@ -545,7 +549,7 @@
           </select>
         </label>
       </div>
-      ${table(['Student', 'Role', 'Trial expires', 'Lifetime grades', 'Free Beta', 'Plan', 'Source', 'Retainer status', 'Expires', 'Actions'], rows)}
+      ${table(['Student', 'Role', 'Trial expires', 'Free Beta', 'Plan', 'Source', 'Retainer status', 'Expires', 'Actions'], rows)}
       <section class="panel">
         <h3>Production plan catalog</h3>
         ${table(['Plan', 'Planning price', 'Status'], config.plans.items.map((plan) => [
@@ -1721,6 +1725,13 @@
       title = 'Find Docket by exact email';
       fields = actionField('Exact email', 'action-email', '', 'email');
       warning = 'Exact email search is server-side, capability-restricted, rate-limited, reason-required, and audited.';
+    } else if (action === 'user_response_export') {
+      const today = new Date();
+      const from = new Date(today.getTime() - (365 * 86_400_000));
+      fields = `${actionField('From date', 'action-export-from', from.toISOString().slice(0, 10), 'date')}
+        ${actionField('Through date (inclusive)', 'action-export-to', today.toISOString().slice(0, 10), 'date')}`;
+      title = 'Download private questions and answers';
+      warning = 'This founder-only export contains private student work. Download only for an authorized purpose, store it securely, and do not redistribute it. The reason and export scope are audited.';
     } else if (action.startsWith('quorum_')) {
       const quorumAction = action.slice('quorum_'.length);
       const quorumTitles = {
@@ -1786,18 +1797,23 @@
     $('#action-title').textContent = title;
     const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
     const isHighRiskPayment = action === 'payment_review';
+    const isSensitiveExport = action === 'user_response_export';
     const isForumAction = action.startsWith('forum_') || action.startsWith('quorum_');
     if (isAccessAction) buildAccessActionFields(action, state.action.payload);
     else $('#action-fields').innerHTML = fields;
     $('#action-context').hidden = !isAccessAction;
-    $('#action-confirmation').hidden = !(isAccessAction || isForumAction || isHighRiskPayment);
-    $('#action-confirmation-copy').textContent = isForumAction
-      ? 'I have verified the report or target content and the proposed moderation action. I understand this action is immediate and audited.'
-      : 'I have verified the target, current access, and proposed change. I understand this action is immediate and audited.';
+    $('#action-confirmation').hidden = !(isAccessAction || isForumAction || isHighRiskPayment || isSensitiveExport);
+    $('#action-confirmation-copy').textContent = isSensitiveExport
+      ? 'I am authorized to access this student work and will handle the downloaded file securely. I understand this export is audited.'
+      : isForumAction
+        ? 'I have verified the report or target content and the proposed moderation action. I understand this action is immediate and audited.'
+        : 'I have verified the target, current access, and proposed change. I understand this action is immediate and audited.';
     $('#action-confirm-risk').checked = false;
     $('#action-confirm').textContent = action === 'subscription_audit_view'
       ? 'View audited history'
-      : isForumAction ? 'Confirm moderation action' : 'Confirm audited action';
+      : isSensitiveExport
+        ? 'Download audited export'
+        : isForumAction ? 'Confirm moderation action' : 'Confirm audited action';
     $('#action-warning').textContent = warning;
     $('#action-reason').value = '';
     if (isAccessAction) updateActionContext();
@@ -1818,10 +1834,13 @@
     const forumAction = state.action.action.startsWith('forum_')
       || state.action.action.startsWith('quorum_');
     const highRiskPayment = state.action.action === 'payment_review';
-    if ((accessAction || forumAction || highRiskPayment) && !$('#action-confirm-risk').checked) {
+    const sensitiveExport = state.action.action === 'user_response_export';
+    if ((accessAction || forumAction || highRiskPayment || sensitiveExport) && !$('#action-confirm-risk').checked) {
       toast(forumAction
         ? 'Confirm that you verified the report and moderation action.'
-        : 'Confirm that you verified the target and proposed access change.');
+        : sensitiveExport
+          ? 'Confirm that you are authorized to download this private student work.'
+          : 'Confirm that you verified the target and proposed access change.');
       return;
     }
     const reason = $('#action-reason').value.trim();
@@ -1933,6 +1952,44 @@
         toast(response.data.found
           ? `Match: ${response.data.display_name || 'Unnamed Docket'} (${response.data.masked_email})`
           : 'No Docket matched that exact email.');
+      } else if (action === 'user_response_export') {
+        const fromValue = $('#action-export-from').value;
+        const toValue = $('#action-export-to').value;
+        const from = new Date(`${fromValue}T00:00:00.000Z`);
+        const through = new Date(`${toValue}T00:00:00.000Z`);
+        const to = new Date(through.getTime() + 86_400_000);
+        if (!fromValue || !toValue || !Number.isFinite(from.getTime())
+            || !Number.isFinite(to.getTime()) || from >= to
+            || to - from > 366 * 86_400_000) {
+          toast('Select a valid date range of no more than 365 inclusive days.');
+          return;
+        }
+        const response = await fetch(`${config.workerUrl}/admin/user-responses/export`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${state.session.access_token}`,
+            ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+          },
+          body: JSON.stringify({
+            targetUserId: state.action.targetId,
+            reason,
+            requestKey: state.action.requestKey,
+            from: from.toISOString(),
+            to: to.toISOString(),
+          }),
+        });
+        if (!response.ok) {
+          const problem = await response.json().catch(() => null);
+          throw new Error(problem?.error?.message || 'The private Q&A export could not be created.');
+        }
+        const blob = await response.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `due-diligence-user-${state.action.targetId}-questions-answers.csv`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        toast('Audited private Q&A export downloaded.');
       } else if (action === 'view_payment_proof') {
         const response = await api('/admin/payment-proof', {
           paymentRequestId: state.action.targetId,

@@ -5,6 +5,7 @@ import {
   AccessValidationError,
   normalizeAccessSnapshot,
   normalizeRequestKey,
+  publicQuestionFromRecord,
   protectedQuestionInventory,
   selectProtectedQuestion,
 } from './access-core.mjs';
@@ -59,6 +60,16 @@ test('protected question response never includes answers, legal bases, or raw re
     'barYear', 'difficulty', 'id', 'prompt', 'questionNo', 'subject', 'topic',
   ]);
   assert.doesNotMatch(JSON.stringify(question), /Suggested Answer|Legal Basis|rawRecord/i);
+});
+
+test('protected question response preserves the exact source prompt', () => {
+  const exactPrompt = 'Paragraph one:  repeated spaces before .45-caliber.\n\nParagraph two keeps punctuation ; and “quotation marks.”';
+  const question = publicQuestionFromRecord({
+    Subject: 'Criminal Law',
+    'Question ID': 'EXACT-PROMPT-001',
+    'Essay Question': exactPrompt,
+  });
+  assert.equal(question.prompt, exactPrompt);
 });
 
 test('request IDs and access snapshots are strictly normalized', () => {

@@ -40,6 +40,18 @@ export function cleanText(value, maxLength = 20_000) {
   return String(value ?? '').replace(/\u0000/g, '').trim().slice(0, maxLength);
 }
 
+export function preserveQuestionText(value, { maxLength = 20_000, status = 400 } = {}) {
+  const question = String(value ?? '');
+  if (question.includes('\u0000') || question.length > maxLength) {
+    throw new ExaminerError(
+      'QUESTION_TEXT_INVALID',
+      'The examination question text is invalid.',
+      status,
+    );
+  }
+  return question;
+}
+
 export function normalizeRequest(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new ExaminerError('INVALID_REQUEST', 'The grading request must be a JSON object.');
@@ -56,7 +68,7 @@ export function normalizeRequest(payload) {
   const context = payload.questionContext && typeof payload.questionContext === 'object'
     ? {
         subject: cleanText(payload.questionContext.subject, 100),
-        question: cleanText(payload.questionContext.question, 20_000),
+        question: preserveQuestionText(payload.questionContext.question),
         suggestedAnswer: cleanText(payload.questionContext.suggestedAnswer, 20_000),
         legalBasis: cleanText(payload.questionContext.legalBasis, 10_000),
         caseName: cleanText(payload.questionContext.caseName, 500),
@@ -140,7 +152,12 @@ export function parseQuestionBank(csvText) {
   const records = new Map();
   for (const cells of rows.slice(headerIndex + 1)) {
     if (cells.every((value) => !cleanText(value))) continue;
-    const row = Object.fromEntries(headers.map((header, index) => [header, cleanText(cells[index])]));
+    const row = Object.fromEntries(headers.map((header, index) => [
+      header,
+      header === 'Essay Question'
+        ? preserveQuestionText(cells[index], { status: 502 })
+        : cleanText(cells[index]),
+    ]));
     const id = cleanText(row['Question ID']);
     if (id && !records.has(id)) records.set(id, row);
   }
@@ -185,7 +202,7 @@ export function questionFromBankRow(row) {
   const sourceUrl = primarySource?.url || '';
   return {
     subject: cleanText(row.Subject || row.subject),
-    question: cleanText(row['Essay Question'] || row.question).replace(/\s*\(noun\)/gi, ''),
+    question: preserveQuestionText(row['Essay Question'] ?? row.question, { status: 502 }),
     suggestedAnswer: cleanText(row['Suggested Answer'] || row.suggested_answer).replace(/\s*\(noun\)/gi, ''),
     legalBasis: cleanText(row['Legal Basis / Provision'] || row.legal_basis).replace(/\s*\(noun\)/gi, ''),
     caseName,

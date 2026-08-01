@@ -3239,10 +3239,11 @@ const modalFocusOrigins = new Map();
 const modalResumeStates = new Map();
 
 function syncModalIsolation() {
+  const admissionDialog = document.querySelector('#private-beta-dialog[open]');
   const openOverlays = Array.from(document.querySelectorAll(
     '.modal-overlay.open, .dd2-overlay.is-open',
   )).filter((overlay) => overlay.getAttribute('aria-hidden') !== 'true');
-  const topOverlay = openOverlays[openOverlays.length - 1] || null;
+  const topOverlay = admissionDialog || openOverlays[openOverlays.length - 1] || null;
 
   Array.from(document.body.children).forEach((child) => {
     const containsTopOverlay = topOverlay && (child === topOverlay || child.contains(topOverlay));
@@ -3734,12 +3735,12 @@ window.addEventListener('storage', (event) => {
   crossorigin="anonymous"></script>
 <script src="assets/phase2-config.js?v=leb-premium-20260804-1"></script>
 <script src="assets/private-beta-session.js?v=private-beta-20260731-1"></script>
-<script src="assets/phase2-experience.js?v=qa-cycle-20260731-1"></script>
+<script src="assets/phase2-experience.js?v=auth-admission-20260801-1"></script>
 <script src="assets/phase4-experience.js?v=phase4-20260729-2"></script>
 <script src="assets/lex-forum.js?v=qa-cycle-20260731-2"></script>
 <script src="assets/examinations.js?v=qa-cycle-20260731-1"></script>
 <script src="assets/phase3-analytics.js"></script>
-<script src="assets/private-beta-landing.js?v=private-beta-landing-20260731-1"></script>
+<script src="assets/private-beta-landing.js?v=auth-admission-20260801-1"></script>
 
 </body>
 </html>

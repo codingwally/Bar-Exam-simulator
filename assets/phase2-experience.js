@@ -20,6 +20,7 @@
     authInFlight: false,
     authStartedAt: 0,
     authTimeout: null,
+    privateBetaAllowed: config.features?.privateBetaGate !== true,
   };
 
   const originalContinueAsGuest = global.continueAsGuest;
@@ -597,8 +598,15 @@
     }
   }
 
+  function deferOnboardingForPrivateBeta() {
+    if (config.features?.privateBetaGate !== true || state.privateBetaAllowed) return false;
+    setOverlay(false, 'dd2-onboarding-overlay');
+    return true;
+  }
+
   async function loadUserState() {
     if (!state.client || !state.user) return;
+    if (deferOnboardingForPrivateBeta()) return;
     const [{ data: profile }, { data: terms }, { data: marketing }] = await Promise.all([
       state.client
         .from('profiles')
@@ -649,6 +657,7 @@
   }
 
   function openOnboarding() {
+    if (deferOnboardingForPrivateBeta()) return;
     const displayName = document.getElementById('dd2-display-name');
     const school = document.getElementById('dd2-school');
     const enrollment = document.getElementById('dd2-enrollment-status');
@@ -1323,6 +1332,7 @@
         safeSessionRemove(authAttemptStorageKey);
         resetGoogleSignIn();
       } else if (event === 'SIGNED_OUT') {
+        state.privateBetaAllowed = config.features?.privateBetaGate !== true;
         global.DueDiligencePrivateBeta?.clear?.();
         resetGoogleSignIn();
       }
@@ -1512,6 +1522,19 @@
       else hideNativeView();
     });
     global.addEventListener('pageshow', recoverAuthAfterNavigation);
+    global.addEventListener('duediligence:private-beta-access', (event) => {
+      state.privateBetaAllowed = config.features?.privateBetaGate !== true
+        || event.detail?.allowed === true;
+      if (!state.privateBetaAllowed) {
+        setOverlay(false, 'dd2-onboarding-overlay');
+        return;
+      }
+      if (state.user) {
+        loadUserState().catch(() => {
+          global.toast?.('Your profile could not be loaded. Refresh and try again.', 'warn');
+        });
+      }
+    });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible'
           && state.authInFlight

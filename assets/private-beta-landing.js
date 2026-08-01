@@ -22,6 +22,7 @@
     reducedMotion: global.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true,
     busy: false,
     lastTrigger: null,
+    accessAllowed: null,
   };
 
   function privateBetaApi() {
@@ -44,10 +45,19 @@
     }
   }
 
+  function publishAccessState(allowed) {
+    if (state.accessAllowed === allowed) return;
+    state.accessAllowed = allowed;
+    global.dispatchEvent(new CustomEvent('duediligence:private-beta-access', {
+      detail: { allowed },
+    }));
+  }
+
   function showLanding() {
     document.body.classList.add('private-beta-public');
     setHidden(landing, false);
     setHidden(appShell, true);
+    publishAccessState(false);
   }
 
   function showApplication() {
@@ -55,9 +65,8 @@
     document.body.classList.remove('private-beta-public');
     setHidden(landing, true);
     setHidden(appShell, false);
-    global.dispatchEvent(new CustomEvent('duediligence:private-beta-access', {
-      detail: { allowed: true },
-    }));
+    global.syncModalIsolation?.();
+    publishAccessState(true);
     const returnHash = safeReturnHash();
     if (returnHash && location.hash !== returnHash) history.replaceState({}, '', returnHash);
     requestAnimationFrame(() => document.querySelector('#authenticated-app-shell .topbar')?.focus?.());
@@ -145,8 +154,12 @@
   function openAdmission(stage = 'disclosure', trigger = null) {
     state.lastTrigger = trigger || document.activeElement;
     preserveSafeReturnHash();
+    dialog.inert = false;
+    dialog.removeAttribute('inert');
+    delete dialog.dataset.ddModalInert;
     showStage(stage);
     if (!dialog.open) dialog.showModal();
+    global.syncModalIsolation?.();
     requestAnimationFrame(() => {
       const heading = dialog.querySelector(`[data-pb-stage='${stage}'] h3, [data-pb-stage='${stage}'] h2`);
       heading?.focus?.();
@@ -155,6 +168,7 @@
 
   function closeAdmission() {
     if (dialog.open) dialog.close();
+    global.syncModalIsolation?.();
     state.lastTrigger?.focus?.();
   }
 
@@ -293,6 +307,22 @@
     const api = privateBetaApi();
     if (!authenticated) {
       showLanding();
+      if (api?.getPending?.()) {
+        setStatus(
+          'pb-google-status',
+          'Your access code is still verified. Continue with Google to resume private-beta admission.',
+        );
+        openAdmission('google');
+      } else if (new URLSearchParams(location.search).has('code')
+          || new URLSearchParams(location.search).has('error')
+          || new URLSearchParams(location.search).has('auth')) {
+        setStatus(
+          'pb-disclosure-status',
+          'Google sign-in could not restore this browser’s admission checkpoint. Review the disclosure and verify the access code again.',
+          'error',
+        );
+        openAdmission('disclosure');
+      }
       return;
     }
     if (!api) {
@@ -311,7 +341,16 @@
       }
     }
     showLanding();
-    if (api.getPending?.()) openAdmission('final');
+    if (api.getPending?.()) {
+      openAdmission('final');
+      return;
+    }
+    setStatus(
+      'pb-disclosure-status',
+      'Google sign-in succeeded, but this browser could not restore the private-beta admission checkpoint. Review the disclosure and verify the access code again; you will not need to sign in to Google a second time.',
+      'error',
+    );
+    openAdmission('disclosure');
   }
 
   function openLegalView(view) {

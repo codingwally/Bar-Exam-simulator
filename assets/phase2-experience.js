@@ -783,7 +783,7 @@
         <h3>AI, grading, and authority limitations</h3>
         <p>AI-generated grading and suggested answers may be incomplete or inaccurate. They are not official Supreme Court or Bar Examiner grades. A “Human Verified” label appears only after a genuine editorial review record exists. Provider capacity may temporarily interrupt grading; no grade or authority will be fabricated.</p>
         <h3>Retainer and access</h3>
-        <p>Eligible accounts receive a non-restartable 72-hour trial and three lifetime AI grades. Active trial, Free Beta, or paid access has no product-level daily grading limit. Paid plans are activated for the stated period only after manual Philippine-peso payment verification. There is no automatic renewal.</p>
+        <p>During the current beta, every authenticated account that has accepted the current Beta Terms and Privacy Notice receives Beta All Access while the platform-wide beta setting remains enabled. Beta access is free through at least August 15, 2026 and may continue until the developers determine that beta testing is sufficient. There is no automatic per-user beta expiration while this setting is enabled. Authorized founders may later change the platform-wide setting in the protected Admin dashboard. Security, legal, and acceptable-use restrictions continue to apply.</p>
         <h3>Payments, cancellation, and refunds</h3>
         <p>Commercial terms and payment instructions are not published during beta testing. Any future offer will present its applicable terms before a student is asked to decide.</p>
         <h3>Your submissions</h3>
@@ -806,7 +806,7 @@
         <h3>Essay assessment</h3>
         <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to Gemini for assessment. Do not place client secrets or confidential case information in practice answers.</p>
         <h3>Access records</h3>
-        <p>Protected examinations require authentication. Supabase UUIDs anchor trial activation, lifetime-grade usage, Free Beta access, subscriptions, progress, and history so refreshes or device changes do not reset access.</p>
+        <p>Protected examinations require authentication. Supabase UUIDs anchor Beta All Access eligibility, legal acceptance, subscriptions, progress, and history so refreshes or device changes do not reset access. Legacy trial and per-account access records remain available only as a fallback if the platform-wide beta setting is later disabled.</p>
         <h3>Support and corrections</h3>
         <p>Support stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Support. Correction submissions store only the reviewed correction fields described in that form.</p>
         <h3>Payments and infrastructure</h3>
@@ -885,7 +885,7 @@
         </form>
         <h3>Frequently asked</h3>
         <p><strong>How is an answer scored?</strong><br>Each answer receives an independent 0–5 ALAC assessment. It is not an official Bar grade.</p>
-        <p><strong>How does free access work?</strong><br>Every authenticated student receives three lifetime AI grades. The 72-hour trial unlocks the simulator, and successful trial grades count toward those three. Failed provider calls and blank timer expirations do not count.</p>
+        <p><strong>How does free access work?</strong><br>Every authenticated student who accepts the current Beta Terms and Privacy Notice receives Beta All Access while the platform-wide setting is enabled. It is free through at least August 15, 2026 and may continue until the developers determine that beta testing is sufficient. There is no automatic per-user expiration during that period.</p>
         <p><strong>Where should I report a model-answer issue?</strong><br>Use “Suggest a Correction/Better Answer” beneath the assessment so the editorial context stays attached.</p>
       </div>`;
   }
@@ -1116,14 +1116,19 @@
       const access = accessPayload.access || {};
       const accountAccess = document.getElementById('dd2-account-access');
       if (accountAccess) {
+        const globalBetaActive = access.globalBeta?.active === true;
         const trial = access.trial?.expiresAt
           ? `Trial expires ${new Date(access.trial.expiresAt).toLocaleString()}.`
           : 'Trial begins only when you open your first protected examination.';
         accountAccess.innerHTML = `
           <div class="dd2-access-summary">
-            <strong>${access.premium ? 'Premium beta access' : 'Beta access'}</strong>
-            <span>Pricing will be announced after beta testing.</span>
-            <span>${escapeHtml(trial)}</span>
+            <strong>${globalBetaActive ? 'Beta All Access' : access.premium ? 'Premium beta access' : 'Beta access'}</strong>
+            <span>${globalBetaActive
+              ? 'All current beta features are available at no charge while the platform-wide Admin setting remains enabled.'
+              : 'Pricing will be announced after beta testing.'}</span>
+            <span>${globalBetaActive
+              ? 'Free through at least August 15, 2026 and may continue until developers determine beta testing is sufficient.'
+              : escapeHtml(trial)}</span>
           </div>`;
       }
     } catch (error) {

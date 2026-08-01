@@ -148,12 +148,13 @@ function fakeNode(id, { tagName = 'DIV', open = false, display = 'block' } = {})
   );
 }
 
-async function runAuthenticatedSync({ pending }) {
+async function runAuthenticatedSync({ pending, globalBetaEnabled = false, allowed = false }) {
   const calls = [];
   const statuses = [];
   const api = {
     getAccess() { return null; },
     getPending() { return pending; },
+    async status() { return { allowed }; },
   };
   const context = {
     currentSession() {
@@ -162,6 +163,7 @@ async function runAuthenticatedSync({ pending }) {
     privateBetaApi() {
       return api;
     },
+    state: { globalBetaEnabled },
     showLanding() {
       calls.push(['showLanding']);
     },
@@ -183,6 +185,26 @@ async function runAuthenticatedSync({ pending }) {
   vm.runInNewContext(syncSource, context);
   await context.syncAuthenticatedState({ authenticated: true });
   return { calls, statuses };
+}
+
+// With the protected global policy enabled, an authenticated account no longer
+// depends on a browser-stored admission token and enters immediately after the
+// server confirms eligibility.
+{
+  const result = await runAuthenticatedSync({
+    pending: null,
+    globalBetaEnabled: true,
+    allowed: true,
+  });
+  assert.ok(
+    result.calls.some(([name]) => name === 'showApplication'),
+    'An eligible signed-in account must enter under Beta All Access without a legacy admission token.',
+  );
+  assert.equal(
+    result.calls.some(([name]) => name === 'openAdmission'),
+    false,
+    'A confirmed global-beta account must not be returned to the code or disclosure loop.',
+  );
 }
 
 // Normal OAuth return with an intact pending token still advances to final

@@ -4,6 +4,12 @@
 begin;
 set local search_path = public, extensions, auth, pg_temp;
 
+-- Premium-specific fallback behavior is tested with the new global policy off.
+-- The transaction rollback restores the production-default setting.
+update public.platform_access_settings
+set global_beta_all_access_enabled = false
+where singleton = true;
+
 do $test$
 declare
   v_admin constant uuid := 'a4910000-0000-4000-8000-000000000001';

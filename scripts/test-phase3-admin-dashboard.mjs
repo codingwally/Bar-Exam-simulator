@@ -1,13 +1,20 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [html, css, js, analytics, worker, migration, preflight] = await Promise.all([
+const [
+  html, css, js, analytics, worker, migration, directoryMigration,
+  engagementMigration, globalBetaMigration, answerHistoryMigration, preflight,
+] = await Promise.all([
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.css', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.js', import.meta.url), 'utf8'),
   readFile(new URL('../assets/phase3-analytics.js', import.meta.url), 'utf8'),
   readFile(new URL('../worker/index.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260729_004_phase3_admin_analytics.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260809_019_admin_user_directory_exports.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260810002000_admin_overview_engagement_metrics.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260810002100_global_beta_all_access.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260810002200_admin_answer_history_export.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/review/phase3_production_preflight.sql', import.meta.url), 'utf8'),
 ]);
 
@@ -27,6 +34,7 @@ const sectionLabels = [
   'Partnerships',
   'Website Settings',
   'Access &amp; Activity Log',
+  'Answer Exports',
 ];
 for (const label of sectionLabels) assert.match(html, new RegExp(label.replace(/[&]/g, '&')));
 assert.doesNotMatch(html, /Advertiser &amp; Investor/);
@@ -59,6 +67,11 @@ for (const route of [
   '/admin/session',
   '/admin/dashboard',
   '/admin/data',
+  '/admin/user-directory',
+  '/admin/user-directory/export',
+  '/admin/user-directory/email',
+  '/admin/global-beta/change',
+  '/admin/answer-history/export',
   '/admin/action',
   '/admin/reveal-email',
   '/admin/find-email',
@@ -70,7 +83,35 @@ assert.match(js, /Download Q&amp;A|Download Q&A/);
 assert.match(js, /user_response_export/);
 assert.match(js, /founder_admin.*super_admin|super_admin.*founder_admin/s);
 assert.match(js, /private student work/i);
+assert.match(js, /user\.email/);
+assert.match(js, /Download Students CSV/);
+assert.match(js, /Search name, school, or email/);
+assert.doesNotMatch(js, /\['Name', 'Masked email'/);
 assert.doesNotMatch(js, /'Lifetime grades'/);
+assert.match(js, /Download all answer records/);
+assert.match(js, /Suggested answer/);
+assert.match(js, /Model answer/);
+assert.match(js, /all current and future signed-in users/i);
+
+assert.match(directoryMigration, /create or replace function public\.admin_user_directory/);
+assert.match(directoryMigration, /from auth\.users u\s+left join public\.profiles p/s);
+assert.match(directoryMigration, /learner_analytics_viewer/);
+assert.match(directoryMigration, /admin_export_user_responses_with_identity/);
+assert.match(directoryMigration, /revoke all on function public\.admin_user_directory[\s\S]*from public, anon, authenticated/);
+assert.match(directoryMigration, /grant execute on function public\.admin_user_directory[\s\S]*to service_role/);
+assert.doesNotMatch(directoryMigration, /grant execute[\s\S]*to authenticated/);
+
+assert.match(engagementMigration, /admin_overview_engagement_metrics/);
+assert.match(engagementMigration, /admin_user_engagement_directory/);
+assert.match(globalBetaMigration, /global_beta_all_access_enabled boolean not null default true/);
+assert.match(globalBetaMigration, /phase4_global_beta_effective/);
+assert.match(globalBetaMigration, /phase4_admin_set_global_beta_all_access/);
+assert.match(answerHistoryMigration, /admin_export_answer_history/);
+assert.match(answerHistoryMigration, /phase4_require_founder/);
+assert.match(answerHistoryMigration, /answer_history_export/);
+for (const secureMigration of [engagementMigration, globalBetaMigration, answerHistoryMigration]) {
+  assert.doesNotMatch(secureMigration, /grant execute[\s\S]*to authenticated/);
+}
 
 for (const capability of [
   'analytics_viewer',

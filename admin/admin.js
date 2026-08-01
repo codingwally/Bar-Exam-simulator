@@ -21,9 +21,10 @@
     security: 'Access & Activity Log',
     forum: 'Quorum Moderation & Analytics',
     examinations: 'Examination Management',
+    answer_exports: 'Answer Exports',
   });
   const requirements = Object.freeze({
-    users: 'analytics_viewer',
+    users: 'learner_analytics_viewer',
     learning: 'learner_analytics_viewer',
     subscriptions: 'subscription_admin',
     payments: 'subscription_admin',
@@ -33,6 +34,7 @@
     partnerships: 'advertiser_report_viewer',
     controls: 'role_admin',
     security: 'role_admin',
+    answer_exports: 'learner_analytics_viewer',
   });
   const state = {
     client: null,
@@ -46,6 +48,7 @@
     subscriptionRows: new Map(),
     premiumStatus: 'all',
     examinationData: null,
+    userSearch: '',
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -219,6 +222,20 @@
     return payload.data;
   }
 
+  async function loadUserDirectory(force = false, search = state.userSearch) {
+    const normalizedSearch = String(search || '').trim();
+    const key = `directory:${normalizedSearch}`;
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const payload = await api('/admin/user-directory', {
+      search: normalizedSearch,
+      limit: 100,
+      offset: 0,
+      requestKey: uuidKey(),
+    });
+    state.operational.set(key, payload.data);
+    return payload.data;
+  }
+
   async function loadPhase4Operational(section, force = false, search = null) {
     const premiumStatus = section === 'access' ? state.premiumStatus : 'all';
     const key = `phase4:${section}:${search || ''}:${premiumStatus}`;
@@ -261,6 +278,10 @@
     const funnel = current.funnel || {};
     const learning = current.learning || {};
     const reliability = current.reliability || {};
+    const engagement = report.engagement || report.engagementOverview || {};
+    const betaAllAccess = report.betaAllAccess || {};
+    const betaEnabled = betaAllAccess.enabled === true;
+    const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
     return `
       ${heading('Operating position', 'Verified acquisition, engagement, learning, and service indicators for the selected period.')}
       <div class="metric-strip">
@@ -271,6 +292,51 @@
         ${metric('Successful grades', learning.successful_grades, previous.learning?.successful_grades)}
         ${metric('Grading success rate', reliability.success_rate, previous.reliability?.success_rate, percentage)}
       </div>
+      <div class="metric-strip">
+        ${metric('Accounts signed in', engagement.signedInAccounts, null, number, {
+          copy: 'All-time count of non-anonymous accounts with a recorded successful sign-in.',
+          source: 'Supabase Auth account records',
+        })}
+        ${metric('Users who answered', engagement.usersWithAnswers, null, number, {
+          copy: 'All-time count of users with at least one persisted non-blank answer.',
+          source: 'Persisted practice and formal-examination answers',
+        })}
+        ${metric('Questions answered', engagement.questionsAnswered, null, number, {
+          copy: 'All persisted non-blank practice and formal-examination answers.',
+          source: 'Persisted practice and formal-examination answers',
+        })}
+        ${metric('Practice answers', engagement.practiceQuestionsAnswered)}
+        ${metric('Formal exam answers', engagement.examinationQuestionsAnswered)}
+        <button type="button" class="metric" data-admin-section="users">
+          <small>Student details</small><strong>View</strong><em>Exact emails and per-user counts</em>
+          <span class="metric-cue">Open Students</span>
+        </button>
+      </div>
+      <section class="panel">
+        <h3>Beta All Access</h3>
+        <div class="notice ${betaEnabled ? '' : 'danger'}">
+          <strong>${betaEnabled ? 'Enabled for all current and future signed-in users.' : 'Disabled — legacy per-account access rules are active.'}</strong>
+          ${betaEnabled
+            ? ' Access has no automatic per-user expiration while this protected setting remains enabled.'
+            : ' Re-enable only after reviewing the effect on every learner.'}
+        </div>
+        <dl class="definition-list">
+          <dt>Coverage</dt><dd>${escapeHtml(betaAllAccess.scope || 'Not available')}</dd>
+          <dt>Automatic expiry</dt><dd>${betaEnabled ? 'None' : 'Legacy rules apply'}</dd>
+          <dt>Signed-in accounts covered</dt><dd>${escapeHtml(number(betaAllAccess.signedInAccountCount ?? engagement.signedInAccounts))}</dd>
+          <dt>Legal requirement</dt><dd>Current Beta Terms and Privacy Notice must still be accepted.</dd>
+          <dt>Terms summary</dt><dd>Free through at least August 15, 2026 and may continue until developers determine beta testing is sufficient.</dd>
+          <dt>Last changed</dt><dd>${escapeHtml(dateTime(betaAllAccess.updatedAt))}</dd>
+        </dl>
+        ${founderAuthorized ? `<div class="dialog-actions">
+          ${actionButton(
+            betaEnabled ? 'Disable Beta All Access' : 'Enable Beta All Access',
+            'global_beta_change',
+            'global_beta_all_access',
+            { currentEnabled: betaEnabled, enabled: !betaEnabled },
+          ).value}
+        </div>` : ''}
+      </section>
       <div class="work-grid">
         <section class="panel">
           <h3>Activation funnel</h3>
@@ -401,20 +467,21 @@
   }
 
   async function renderUsers() {
-    const data = await loadOperational('users');
+    const data = await loadUserDirectory();
+    const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
     const rows = (data.items || []).map((user) => [
       user.display_name || 'Not provided',
-      user.masked_email,
+      user.email,
       user.school || 'Not provided',
-      user.enrollment_status || 'Not provided',
-      user.role,
-      dateTime(user.last_active_at),
-      number(user.successful_grade_count),
+      dateTime(user.last_sign_in_at),
+      number(user.practice_answered_count),
+      number(user.examination_answered_count),
+      number(user.answered_question_count),
+      dateTime(user.last_answered_at),
       {
         html: true,
         value: `<div class="row-actions">
-          ${actionButton('Reveal email', 'reveal_email', user.id).value}
-          ${['founder_admin', 'super_admin'].includes(state.authorization?.role)
+          ${founderAuthorized
             ? actionButton('Download Q&A', 'user_response_export', user.id, {
               displayName: user.display_name || 'Not provided',
             }).value
@@ -426,10 +493,63 @@
       },
     ]);
     return `
-      ${heading('Students', 'Normal administrator views use masked identities. Exact email reveal is reason-required, rate-limited, capability-restricted, and audited.')}
-      <div class="table-tools"><input id="user-search" type="search" placeholder="Search display name or school" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="exact-email-search" type="button">Find exact email</button></div>
-      ${table(['Name', 'Masked email', 'School', 'Enrollment', 'Role', 'Last active', 'Grades', 'Action'], rows)}
-      <p class="panel-note">${number(data.total)} registered profile record(s). Cohort retention appears only after maturity and sufficient data.</p>`;
+      ${heading('Students', 'Authorized administrators can view exact Docket emails. Directory access and downloads are capability-restricted, rate-limited, and audited.')}
+      <div class="table-tools"><input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, school, or email" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="user-directory-export" type="button">Download Students CSV</button></div>
+      ${table(['Name', 'Email', 'School', 'Last sign-in', 'Practice answers', 'Formal answers', 'Total answered', 'Last answered', 'Action'], rows)}
+      <p class="panel-note">Showing ${number((data.items || []).length)} of ${number(data.total)} registered user account(s). The CSV opens directly in Google Sheets and includes all matching records, up to the secure export limit.</p>
+      ${founderAuthorized ? `<section class="panel">
+        <h3>Email the Students directory to a founder</h3>
+        <p class="panel-note">Manual only. The recipient is selected from the approved founder list; the exact email address is resolved securely by the Worker and is not stored in the page.</p>
+        <form class="exam-admin-form" id="user-directory-email-form">
+          <label>Founder personal email
+            <select id="user-directory-email-recipient" required>
+              <option value="">Select founder…</option>
+              <option value="wally">Wally</option>
+              <option value="gilmar">Gilmar</option>
+              <option value="ice">Ice</option>
+              <option value="emrico">Emrico</option>
+            </select>
+          </label>
+          <label>Audit reason<textarea id="user-directory-email-reason" minlength="5" maxlength="1000" required></textarea></label>
+          <label class="check-row"><input id="user-directory-email-confirm" type="checkbox" required> I am authorized to send this exact-email directory to the selected founder.</label>
+          <button class="secondary-button" type="submit">Email Students CSV</button>
+        </form>
+      </section>` : ''}`;
+  }
+
+  function renderAnswerExports(report) {
+    const engagement = report.engagement || report.engagementOverview || {};
+    return `
+      ${heading('Answer Exports', 'Founder-only download of persisted student answer history. This reporting tool does not change questions, grading, suggested answers, model answers, or simulator behavior.')}
+      <div class="metric-strip">
+        ${metric('Users who answered', engagement.usersWithAnswers)}
+        ${metric('Questions answered', engagement.questionsAnswered)}
+        ${metric('Practice answers', engagement.practiceQuestionsAnswered)}
+        ${metric('Formal exam answers', engagement.examinationQuestionsAnswered)}
+      </div>
+      <section class="panel">
+        <h3>Download complete answer history</h3>
+        <p class="panel-note">The Google Sheets-compatible CSV includes, where the source record stores them: exact user email, question text, submitted answer, grade or score, grading feedback, suggested answer, model answer, subject and examination context, record type, and timestamps. A missing source field is exported as unavailable; it is never invented.</p>
+        <form class="exam-admin-form" id="answer-history-export-form">
+          <div class="panel-grid">
+            <label>From date (optional)<input id="answer-history-from" type="date"></label>
+            <label>Through date (optional, inclusive)<input id="answer-history-to" type="date"></label>
+          </div>
+          <label>Audit reason<textarea id="answer-history-reason" minlength="5" maxlength="1000" required></textarea></label>
+          <label class="check-row"><input id="answer-history-confirm" type="checkbox" required> I am authorized to download private student work and will store it securely.</label>
+          <button class="primary-button" type="submit">Download all answer records</button>
+        </form>
+      </section>
+      <section class="panel">
+        <h3>Export definitions</h3>
+        ${table(['Field', 'Meaning'], [
+          ['Question', 'The stored question text linked to the answer record.'],
+          ['Student answer', 'The learner’s persisted non-blank submission.'],
+          ['Grade and feedback', 'Stored result only; unavailable when no assessment was completed.'],
+          ['Suggested answer', 'Stored suggested-answer material where that grading path persisted it.'],
+          ['Model answer', 'Stored model answer where the applicable source record contains or links one.'],
+        ])}
+      </section>`;
   }
 
   async function renderLearning(report) {
@@ -506,14 +626,16 @@
   async function renderSubscriptions(report) {
     const data = await loadPhase4Operational('access');
     const premium = data.premiumSummary || {};
+    const betaAllAccess = report.betaAllAccess || {};
+    const globalBetaEnabled = betaAllAccess.enabled === true;
     state.subscriptionRows.clear();
     const rows = (data.items || []).map((row) => {
       state.subscriptionRows.set(row.user_id, Object.freeze({ ...row }));
       return [
         row.display_name || 'Not provided',
         row.role,
-        row.trial_expires_at ? dateTime(row.trial_expires_at) : 'Not started',
-        row.free_beta_enabled ? `Enabled${row.free_beta_expires_at ? ` until ${dateTime(row.free_beta_expires_at)}` : ''}` : 'Disabled',
+        globalBetaEnabled ? 'Not applicable — global access' : row.trial_expires_at ? dateTime(row.trial_expires_at) : 'Not started',
+        globalBetaEnabled ? 'Covered globally — no expiration' : row.free_beta_enabled ? `Enabled${row.free_beta_expires_at ? ` until ${dateTime(row.free_beta_expires_at)}` : ' — no expiration'}` : 'Disabled',
         row.plan_code || 'None',
         row.subscription_source === 'complimentary'
           ? 'Complimentary Beta'
@@ -530,6 +652,9 @@
     });
     return `
       ${heading('Retainer Management', 'Founder actions are immediate, reason-required, transactional, and audited. Manual payments never renew automatically.')}
+      <div class="notice ${globalBetaEnabled ? '' : 'danger'}"><strong>Beta All Access is ${globalBetaEnabled ? 'enabled' : 'disabled'}.</strong> ${globalBetaEnabled
+        ? 'Every current and future signed-in user is covered with no automatic per-user expiration. Legacy rows below are retained only as fallback records.'
+        : 'The legacy per-user trial, Free Beta, and Retainer rules below currently determine access.'}</div>
       <div class="notice danger"><strong>Access-impacting action.</strong> Verify the student, plan, dates, and reason before confirming.</div>
       <div class="metric-strip">
         ${metric('Premium active', premium.active)}
@@ -549,7 +674,7 @@
           </select>
         </label>
       </div>
-      ${table(['Student', 'Role', 'Trial expires', 'Free Beta', 'Plan', 'Source', 'Retainer status', 'Expires', 'Actions'], rows)}
+      ${table(['Student', 'Role', 'Legacy trial', 'Legacy per-user beta', 'Plan', 'Source', 'Retainer status', 'Expires', 'Actions'], rows)}
       <section class="panel">
         <h3>Production plan catalog</h3>
         ${table(['Plan', 'Planning price', 'Status'], config.plans.items.map((plan) => [
@@ -1286,6 +1411,7 @@
       else if (section === 'security') html = await renderSecurity();
       else if (section === 'forum') html = await renderQuorumModeration();
       else if (section === 'examinations') html = await renderExaminations();
+      else if (section === 'answer_exports') html = renderAnswerExports(report);
       $('#dashboard-view').innerHTML = html;
       bindDynamic();
       if (section === 'examinations') bindExaminationAdmin();
@@ -1732,6 +1858,11 @@
         ${actionField('Through date (inclusive)', 'action-export-to', today.toISOString().slice(0, 10), 'date')}`;
       title = 'Download private questions and answers';
       warning = 'This founder-only export contains private student work. Download only for an authorized purpose, store it securely, and do not redistribute it. The reason and export scope are audited.';
+    } else if (action === 'global_beta_change') {
+      title = payload.enabled ? 'Enable Beta All Access' : 'Disable Beta All Access';
+      warning = payload.enabled
+        ? 'This immediately gives all current and future signed-in users access to every current beta feature, subject to current legal acceptance and security restrictions.'
+        : 'This immediately removes the platform-wide entitlement from every user and restores legacy trial, per-user beta, and Retainer rules. Confirm the operational impact before continuing.';
     } else if (action.startsWith('quorum_')) {
       const quorumAction = action.slice('quorum_'.length);
       const quorumTitles = {
@@ -1798,12 +1929,15 @@
     const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
     const isHighRiskPayment = action === 'payment_review';
     const isSensitiveExport = action === 'user_response_export';
+    const isGlobalBetaAction = action === 'global_beta_change';
     const isForumAction = action.startsWith('forum_') || action.startsWith('quorum_');
     if (isAccessAction) buildAccessActionFields(action, state.action.payload);
     else $('#action-fields').innerHTML = fields;
     $('#action-context').hidden = !isAccessAction;
-    $('#action-confirmation').hidden = !(isAccessAction || isForumAction || isHighRiskPayment || isSensitiveExport);
-    $('#action-confirmation-copy').textContent = isSensitiveExport
+    $('#action-confirmation').hidden = !(isAccessAction || isForumAction || isHighRiskPayment || isSensitiveExport || isGlobalBetaAction);
+    $('#action-confirmation-copy').textContent = isGlobalBetaAction
+      ? `I understand this will ${payload.enabled ? 'grant Beta All Access to' : 'remove Beta All Access from'} all current and future signed-in users and that the change is immediate and audited.`
+      : isSensitiveExport
       ? 'I am authorized to access this student work and will handle the downloaded file securely. I understand this export is audited.'
       : isForumAction
         ? 'I have verified the report or target content and the proposed moderation action. I understand this action is immediate and audited.'
@@ -1835,9 +1969,12 @@
       || state.action.action.startsWith('quorum_');
     const highRiskPayment = state.action.action === 'payment_review';
     const sensitiveExport = state.action.action === 'user_response_export';
-    if ((accessAction || forumAction || highRiskPayment || sensitiveExport) && !$('#action-confirm-risk').checked) {
+    const globalBetaAction = state.action.action === 'global_beta_change';
+    if ((accessAction || forumAction || highRiskPayment || sensitiveExport || globalBetaAction) && !$('#action-confirm-risk').checked) {
       toast(forumAction
         ? 'Confirm that you verified the report and moderation action.'
+        : globalBetaAction
+          ? 'Confirm that you understand the platform-wide access impact.'
         : sensitiveExport
           ? 'Confirm that you are authorized to download this private student work.'
           : 'Confirm that you verified the target and proposed access change.');
@@ -1990,6 +2127,15 @@
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
         toast('Audited private Q&A export downloaded.');
+      } else if (action === 'global_beta_change') {
+        await api('/admin/global-beta/change', {
+          enabled: payload.enabled === true,
+          reason,
+          requestKey: state.action.requestKey,
+          confirmed: true,
+        });
+        state.report = null;
+        toast(`Beta All Access ${payload.enabled ? 'enabled' : 'disabled'} for all signed-in users.`);
       } else if (action === 'view_payment_proof') {
         const response = await api('/admin/payment-proof', {
           paymentRequestId: state.action.targetId,
@@ -2102,12 +2248,123 @@
       const search = $('#user-search').value.trim();
       $('#dashboard-view').innerHTML = '<div class="skeleton"></div>';
       try {
-        const data = await loadOperational('users', true, search);
-        state.operational.set('users:', data);
+        state.userSearch = search;
+        await loadUserDirectory(true, search);
         await renderSection('users');
       } catch (error) { toast(error.message); }
     });
-    $('#exact-email-search')?.addEventListener('click', () => openAction('find_email', null, {}));
+    $('#user-directory-export')?.addEventListener('click', async () => {
+      try {
+        const response = await fetch(`${config.workerUrl}/admin/user-directory/export`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${state.session.access_token}`,
+            ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+          },
+          body: JSON.stringify({ search: state.userSearch, requestKey: uuidKey() }),
+        });
+        if (!response.ok) {
+          const problem = await response.json().catch(() => null);
+          throw new Error(problem?.error?.message || 'The Students directory export could not be created.');
+        }
+        const blob = await response.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'due-diligence-students.csv';
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        toast('Audited Students directory downloaded for Google Sheets.');
+      } catch (error) { toast(error.message); }
+    });
+    $('#user-directory-email-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const recipientKey = $('#user-directory-email-recipient')?.value || '';
+      const reason = $('#user-directory-email-reason')?.value?.trim() || '';
+      const confirmed = $('#user-directory-email-confirm')?.checked === true;
+      if (!recipientKey || reason.length < 5 || !confirmed) {
+        toast('Select a founder, provide an audit reason, and confirm authorization.');
+        return;
+      }
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        const result = await api('/admin/user-directory/email', {
+          search: state.userSearch,
+          recipientKey,
+          reason,
+          requestKey: uuidKey(),
+          confirmed: true,
+        });
+        toast(result.delivery?.status === 'sent'
+          ? 'Students CSV sent to the selected founder.'
+          : `Email delivery status: ${result.delivery?.status || 'not confirmed'}.`);
+        form.reset();
+      } catch (error) {
+        toast(error.message || 'The Students directory email could not be sent.');
+      } finally {
+        button.disabled = false;
+      }
+    });
+    $('#answer-history-export-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const reason = $('#answer-history-reason')?.value?.trim() || '';
+      const confirmed = $('#answer-history-confirm')?.checked === true;
+      const fromValue = $('#answer-history-from')?.value || '';
+      const toValue = $('#answer-history-to')?.value || '';
+      if (reason.length < 5 || !confirmed) {
+        toast('Provide an audit reason and confirm authorization for private student work.');
+        return;
+      }
+      if (Boolean(fromValue) !== Boolean(toValue)) {
+        toast('Choose both dates or leave both blank to export the complete history.');
+        return;
+      }
+      const from = fromValue ? new Date(`${fromValue}T00:00:00.000Z`) : null;
+      const through = toValue ? new Date(`${toValue}T00:00:00.000Z`) : null;
+      const to = through ? new Date(through.getTime() + 86_400_000) : null;
+      if ((from && !Number.isFinite(from.getTime())) || (to && !Number.isFinite(to.getTime()))
+          || (from && to && from >= to)) {
+        toast('Select a valid answer-history date range.');
+        return;
+      }
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        const response = await fetch(`${config.workerUrl}/admin/answer-history/export`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${state.session.access_token}`,
+            ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+          },
+          body: JSON.stringify({
+            from: from?.toISOString() || null,
+            to: to?.toISOString() || null,
+            reason,
+            requestKey: uuidKey(),
+            confirmed: true,
+          }),
+        });
+        if (!response.ok) {
+          const problem = await response.json().catch(() => null);
+          throw new Error(problem?.error?.message || 'The complete answer-history export could not be created.');
+        }
+        const blob = await response.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'due-diligence-all-answer-history.csv';
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        toast('Audited answer-history CSV downloaded for Google Sheets.');
+      } catch (error) {
+        toast(error.message || 'The complete answer-history export could not be created.');
+      } finally {
+        button.disabled = false;
+      }
+    });
     $('#print-report')?.addEventListener('click', () => global.print());
     $('#export-report')?.addEventListener('click', async () => {
       try {
@@ -2138,7 +2395,7 @@
   function applyNavigationAuthorization() {
     $$('#admin-nav button').forEach((button) => {
       const needed = requirements[button.dataset.section];
-      const founderOnly = ['forum', 'examinations'].includes(button.dataset.section);
+      const founderOnly = ['forum', 'examinations', 'answer_exports'].includes(button.dataset.section);
       const founderAuthorized = ['founder_admin', 'super_admin'].includes(
         state.authorization?.role,
       );

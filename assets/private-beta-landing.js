@@ -23,6 +23,8 @@
     busy: false,
     lastTrigger: null,
     accessAllowed: null,
+    globalBetaEnabled: null,
+    policyPromise: null,
   };
 
   function privateBetaApi() {
@@ -166,6 +168,26 @@
     });
   }
 
+  async function resolveGlobalBetaPolicy() {
+    if (typeof state.globalBetaEnabled === 'boolean') return state.globalBetaEnabled;
+    if (!state.policyPromise) {
+      state.policyPromise = Promise.resolve(privateBetaApi()?.policy?.())
+        .then((policy) => policy?.enabled === true)
+        .catch(() => false);
+    }
+    state.globalBetaEnabled = await state.policyPromise;
+    return state.globalBetaEnabled;
+  }
+
+  async function openPrimaryAdmission(trigger = null) {
+    await resolveGlobalBetaPolicy();
+    if (state.globalBetaEnabled) {
+      openAdmission(currentSession()?.access_token ? 'google-intro' : 'google', trigger);
+      return;
+    }
+    openAdmission('disclosure', trigger);
+  }
+
   function closeAdmission() {
     if (dialog.open) dialog.close();
     global.syncModalIsolation?.();
@@ -247,8 +269,12 @@
     }
   }
 
-  function continueToGoogle() {
+  async function continueToGoogle() {
     if (currentSession()?.access_token) {
+      if (state.globalBetaEnabled) {
+        await syncAuthenticatedState({ authenticated: true });
+        return;
+      }
       showStage('final');
       return;
     }
@@ -329,28 +355,35 @@
       showLanding();
       return;
     }
-    if (api.getAccess?.()) {
-      try {
-        const access = await api.status(currentSession().access_token);
-        if (access?.allowed === true) {
-          showApplication();
-          return;
-        }
-      } catch {
-        showLanding();
+    try {
+      const access = await api.status(currentSession().access_token);
+      if (access?.allowed === true) {
+        showApplication();
+        return;
       }
+    } catch {
+      showLanding();
     }
     showLanding();
     if (api.getPending?.()) {
       openAdmission('final');
       return;
     }
-    setStatus(
-      'pb-disclosure-status',
-      'Google sign-in succeeded, but this browser could not restore the private-beta admission checkpoint. Review the disclosure and verify the access code again; you will not need to sign in to Google a second time.',
-      'error',
-    );
-    openAdmission('disclosure');
+    if (state.globalBetaEnabled) {
+      setStatus(
+        'pb-google-status',
+        'Your signed-in account could not be verified for Beta All Access. Please try again.',
+        'error',
+      );
+      openAdmission('google');
+    } else {
+      setStatus(
+        'pb-disclosure-status',
+        'Google sign-in succeeded, but this browser could not restore the private-beta admission checkpoint. Review the disclosure and verify the access code again; you will not need to sign in to Google a second time.',
+        'error',
+      );
+      openAdmission('disclosure');
+    }
   }
 
   function openLegalView(view) {
@@ -359,7 +392,7 @@
 
   function bindEvents() {
     document.querySelectorAll('[data-pb-open-admission]').forEach((button) => {
-      button.addEventListener('click', () => openAdmission('disclosure', button));
+      button.addEventListener('click', () => { openPrimaryAdmission(button); });
     });
     document.querySelectorAll('[data-pb-open-disclosure]').forEach((button) => {
       button.addEventListener('click', () => openAdmission('disclosure', button));
@@ -441,7 +474,7 @@
     }
   }
 
-  function initialize() {
+  async function initialize() {
     if (!gateEnabled) {
       showApplication();
       return;
@@ -452,6 +485,7 @@
     updateDisclosureAction();
     updateFinalAction();
     updateMotion();
+    await resolveGlobalBetaPolicy();
     syncAuthenticatedState({ authenticated: Boolean(currentSession()?.access_token) });
   }
 

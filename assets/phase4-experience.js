@@ -47,17 +47,21 @@
     if (access?.termsRequired) {
       return 'Review and accept the current Beta Terms and Privacy Notice before opening an examination.';
     }
-    return 'Your trial and three lifetime free grades are exhausted. Choose an active plan to continue.';
+    return 'Beta All Access is not currently available for this account. Review your access status or contact Support.';
   }
 
   function syncAccessUi() {
     const access = state.access;
     const badge = document.getElementById('dd2-guest-badge');
     if (badge) {
-      const visibleBasis = ['trial', 'free_beta', 'paid_subscription'].includes(access?.basis);
+      const globalBetaActive = access?.globalBeta?.active === true;
+      const visibleBasis = globalBetaActive
+        || ['trial', 'free_beta', 'paid_subscription'].includes(access?.basis);
       badge.classList.toggle('is-visible', visibleBasis);
       if (!access) badge.textContent = '';
-      else if (access.basis === 'trial' && access.trial?.expiresAt) {
+      else if (globalBetaActive) {
+        badge.textContent = 'Beta All Access';
+      } else if (access.basis === 'trial' && access.trial?.expiresAt) {
         const remainingMs = Math.max(0, new Date(access.trial.expiresAt).getTime() - Date.now());
         const hours = Math.floor(remainingMs / 3_600_000);
         const minutes = Math.floor((remainingMs % 3_600_000) / 60_000);

@@ -167,6 +167,12 @@ export function normalizeAccessSnapshot(value) {
     basis: clean(value.basis || 'locked'),
     termsRequired: value.termsRequired === true,
     role: clean(value.role || 'student'),
+    globalBeta: {
+      enabled: value.globalBeta?.enabled === true,
+      eligible: value.globalBeta?.eligible === true,
+      active: value.globalBeta?.active === true,
+      expiresAt: value.globalBeta?.expiresAt || null,
+    },
     trial: {
       startedAt: value.trial?.startedAt || null,
       expiresAt: value.trial?.expiresAt || null,

@@ -118,9 +118,17 @@ test('protected question response preserves the exact source prompt', () => {
 test('request IDs and access snapshots are strictly normalized', () => {
   assert.equal(normalizeRequestKey('request_1234567890'), 'request_1234567890');
   assert.throws(() => normalizeRequestKey('short'), AccessValidationError);
-  const normalized = normalizeAccessSnapshot(accessSnapshot());
+  const normalized = normalizeAccessSnapshot(accessSnapshot({
+    globalBeta: { enabled: true, eligible: true, active: true, expiresAt: null },
+  }));
   assert.equal(normalized.allowed, true);
   assert.equal(normalized.freeGrades.remaining, 3);
+  assert.deepEqual(normalized.globalBeta, {
+    enabled: true,
+    eligible: true,
+    active: true,
+    expiresAt: null,
+  });
 });
 
 test('anonymous visitors cannot read a protected examination question', async () => {

@@ -905,6 +905,50 @@ async function sendExaminationEmail(env, { recipient, subject, text }) {
   return { status: 'sent', providerId: String(result.id).slice(0, 180) };
 }
 
+function reportEmailMode(env) {
+  const mode = String(env.REPORT_EMAIL_MODE || '').trim().toLowerCase();
+  return ['suppressed', 'enabled'].includes(mode) ? mode : 'not_configured';
+}
+
+async function sendReportEmail(env, { subject, text }) {
+  const mode = reportEmailMode(env);
+  if (mode === 'suppressed') return { status: 'suppressed', providerId: null };
+  const recipient = String(env.REPORT_EMAIL_TO || '').trim().toLowerCase();
+  if (
+    mode !== 'enabled'
+    || !env.RESEND_API_KEY
+    || !env.REPORT_EMAIL_FROM
+    || recipient !== 'support@duediligence.ph'
+  ) {
+    console.error('Report email dispatch is not configured for the Support mailbox');
+    return { status: 'not_configured', providerId: null };
+  }
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: env.REPORT_EMAIL_FROM,
+        to: [recipient],
+        subject,
+        text,
+      }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.id) {
+      console.error('Report email dispatch failed', { status: response.status });
+      return { status: 'failed', providerId: null };
+    }
+    return { status: 'sent', providerId: String(result.id).slice(0, 180) };
+  } catch {
+    console.error('Report email dispatch failed before provider response');
+    return { status: 'failed', providerId: null };
+  }
+}
+
 async function sendSecureNotification(env, { mailbox, subject, adminPath }) {
   if (!env.WEB3FORMS_ACCESS_KEY) return { sent: false, queued: true };
   const response = await fetch('https://api.web3forms.com/submit', {
@@ -1996,6 +2040,17 @@ async function handleForumReport(request, env, origin, allowedOrigin) {
     p_category: report.category,
     p_explanation: report.explanation,
   });
+  await sendReportEmail(env, {
+    subject: `Due Diligence Quorum report — ${report.category}`,
+    text: [
+      'A new Quorum moderation report is ready for authorized review.',
+      `Category: ${report.category}`,
+      `Target type: ${report.targetType}`,
+      'Review securely: https://duediligence.ph/admin/',
+      '',
+      'Reporter identity, explanation, and reported content remain inside the protected moderation queue.',
+    ].join('\n'),
+  });
   return jsonResponse({ ok: true, report: result }, 201, origin, allowedOrigin);
 }
 
@@ -2098,6 +2153,20 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
       p_user_id: user.id,
       p_operation: command.operation,
       p_payload: command.payload,
+    });
+  }
+
+  if (command.operation === 'create_report') {
+    await sendReportEmail(env, {
+      subject: `Due Diligence Quorum report — ${command.payload.category}`,
+      text: [
+        'A new Quorum moderation report is ready for authorized review.',
+        `Category: ${command.payload.category}`,
+        `Target type: ${command.payload.targetType}`,
+        'Review securely: https://duediligence.ph/admin/',
+        '',
+        'Reporter identity, explanation, and reported content remain inside the protected moderation queue.',
+      ].join('\n'),
     });
   }
 
@@ -3035,6 +3104,16 @@ async function handleSupport(request, env, origin, allowedOrigin) {
       502,
     );
   }
+  await sendReportEmail(env, {
+    subject: `Due Diligence Support request — ${supportRequest.category}`,
+    text: [
+      'A new Support request is ready for authorized review.',
+      `Category: ${supportRequest.category}`,
+      'Review securely: https://duediligence.ph/admin/',
+      '',
+      'The member’s identity, contact information, and message remain inside the protected Support queue.',
+    ].join('\n'),
+  });
   return jsonResponse({
     ok: true,
     message: 'Your support request was received.',

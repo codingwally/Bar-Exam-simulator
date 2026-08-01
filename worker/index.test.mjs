@@ -196,6 +196,46 @@ test('compact single-line ALAC headings may retain decimal scores above 3.5', ()
   assert.equal(capped(answer, 4.2).score, 4.2);
 });
 
+test('quarantined Tax questions cannot be submitted for grading', async () => {
+  const originalFetch = globalThis.fetch;
+  let externalCalls = 0;
+  globalThis.fetch = async () => {
+    externalCalls += 1;
+    throw new Error('A quarantined question must be rejected before any external call.');
+  };
+
+  try {
+    for (const questionId of ['TAX-2019-Q10A', 'tax-2019-q10b']) {
+      const response = await worker.fetch(new Request('https://worker.example/', {
+        method: 'POST',
+        headers: {
+          Origin: 'https://duediligence.ph',
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': `192.0.2.${questionId.endsWith('A') ? 101 : 102}`,
+          'User-Agent': 'TestBrowser/1.0',
+          'X-Guest-Device-ID': `device_quarantine_${questionId.toLowerCase()}_1234567890`,
+          'X-Request-ID': `request_quarantine_${questionId.toLowerCase()}_1234567890`,
+        },
+        body: JSON.stringify({
+          questionId,
+          studentAnswer: 'Answer: This quarantined question should not be graded.',
+        }),
+      }), {
+        ALLOWED_ORIGIN: 'https://duediligence.ph',
+        GUEST_USAGE_HMAC_KEY: 'test-only-guest-hmac-key',
+        SUPABASE_URL: 'https://test.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+      });
+      const payload = await response.json();
+      assert.equal(response.status, 404);
+      assert.equal(payload.error.code, 'QUESTION_NOT_FOUND');
+    }
+    assert.equal(externalCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Worker applies the cap after Gemini returns a high score', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {

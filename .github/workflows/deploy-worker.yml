@@ -5,6 +5,9 @@ on:
     branches: ["main"]
     paths:
       - "worker/**"
+      - "content/question-bank/website-upload.json"
+      - "scripts/import-website-upload.mjs"
+      - "scripts/test-website-question-bank.mjs"
       - ".github/workflows/deploy-worker.yml"
   workflow_dispatch:
 
@@ -31,6 +34,7 @@ jobs:
         run: |
           node --check worker/index.mjs
           node --test worker/*.test.mjs
+          node scripts/test-website-question-bank.mjs
           node scripts/test-private-beta-admission.mjs
 
       - name: Deploy Worker

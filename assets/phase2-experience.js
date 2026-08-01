@@ -1124,7 +1124,6 @@
             <strong>${access.premium ? 'Premium beta access' : 'Beta access'}</strong>
             <span>Pricing will be announced after beta testing.</span>
             <span>${escapeHtml(trial)}</span>
-            <span>${Number(access.freeGrades?.remaining || 0)} lifetime AI grades remaining.</span>
           </div>`;
       }
     } catch (error) {

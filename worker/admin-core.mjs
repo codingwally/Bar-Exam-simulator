@@ -36,6 +36,28 @@ export function normalizeDashboardRequest(payload) {
   return { from, to, previousFrom, previousTo };
 }
 
+export function normalizeUserResponseExport(payload) {
+  const targetUserId = String(payload?.targetUserId || '').trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetUserId)) {
+    throw new AdminValidationError('Target user identifier is invalid.');
+  }
+  const reason = String(payload?.reason || '').trim();
+  if (reason.length < 5 || reason.length > 1000) {
+    throw new AdminValidationError('A reason of 5–1000 characters is required.');
+  }
+  const requestKey = String(payload?.requestKey || '').trim();
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {
+    throw new AdminValidationError('Request key is invalid.');
+  }
+  const from = isoDate(payload?.from, 'Export start');
+  const to = isoDate(payload?.to, 'Export end');
+  const span = new Date(to) - new Date(from);
+  if (span <= 0 || span > 366 * 86_400_000) {
+    throw new AdminValidationError('Export window must be between 1 minute and 366 days.');
+  }
+  return { targetUserId, reason, requestKey, from, to, limit: 2000 };
+}
+
 export function normalizeOperationalRequest(payload) {
   const section = String(payload?.section || '').trim();
   if (!ADMIN_SECTIONS.includes(section)) throw new AdminValidationError('Unsupported admin section.');
@@ -86,4 +108,30 @@ export function aggregateCsv(snapshot) {
     ['Advertising CTR', '', '', 'Not configured'],
   ];
   return rows.map((row) => row.map(safeCsvCell).join(',')).join('\r\n');
+}
+
+export function userResponsesCsv(items) {
+  const headers = [
+    'Record source', 'User ID', 'Attempt ID', 'Exam title', 'Subject',
+    'Question ID', 'Question text', 'Question provenance', 'Student answer',
+    'Status', 'Score', 'Timer mode', 'Elapsed seconds', 'Submitted at', 'Completed at',
+  ];
+  const rows = (Array.isArray(items) ? items : []).map((item) => [
+    item.recordSource,
+    item.userId,
+    item.attemptId,
+    item.examTitle,
+    item.subject,
+    item.questionId,
+    item.questionText,
+    item.questionProvenance,
+    item.studentAnswer,
+    item.status,
+    item.score,
+    item.timerMode,
+    item.elapsedSeconds,
+    item.submittedAt,
+    item.completedAt,
+  ]);
+  return [headers, ...rows].map((row) => row.map(safeCsvCell).join(',')).join('\r\n');
 }

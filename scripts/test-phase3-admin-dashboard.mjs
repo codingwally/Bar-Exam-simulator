@@ -63,7 +63,14 @@ for (const route of [
   '/admin/reveal-email',
   '/admin/find-email',
   '/admin/export',
+  '/admin/user-responses/export',
 ]) assert.match(worker, new RegExp(route.replace('/', '\\/')));
+
+assert.match(js, /Download Q&amp;A|Download Q&A/);
+assert.match(js, /user_response_export/);
+assert.match(js, /founder_admin.*super_admin|super_admin.*founder_admin/s);
+assert.match(js, /private student work/i);
+assert.doesNotMatch(js, /'Lifetime grades'/);
 
 for (const capability of [
   'analytics_viewer',

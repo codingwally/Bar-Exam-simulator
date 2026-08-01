@@ -48,6 +48,8 @@ import {
   normalizeAdminAction,
   normalizeDashboardRequest,
   normalizeOperationalRequest,
+  normalizeUserResponseExport,
+  userResponsesCsv,
 } from './admin-core.mjs';
 import {
   AccessValidationError,
@@ -3241,6 +3243,67 @@ async function handleAdminExport(request, env, origin, allowedOrigin) {
   });
 }
 
+async function handleAdminUserResponsesExport(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let exportRequest;
+  try {
+    exportRequest = normalizeUserResponseExport(await parseBoundedJson(request, 6_000));
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_EXPORT', error.message, 400);
+    }
+    throw error;
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_export_user_responses', {
+    p_actor_user_id: user.id,
+    p_target_user_id: exportRequest.targetUserId,
+    p_from: exportRequest.from,
+    p_to: exportRequest.to,
+    p_limit: exportRequest.limit,
+    p_reason: exportRequest.reason,
+    p_request_key: exportRequest.requestKey,
+  });
+  if (result?.tooMany) {
+    throw new ExaminerError(
+      'ADMIN_EXPORT_TOO_LARGE',
+      'This user has more than 2,000 responses in the selected period. Choose a shorter date range.',
+      422,
+    );
+  }
+
+  let websiteBank = null;
+  try {
+    websiteBank = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
+  } catch {
+    // Exact formal-exam snapshots remain exportable if the current practice bank
+    // is temporarily unavailable. Practice rows are explicitly marked below.
+  }
+  const items = (Array.isArray(result?.items) ? result.items : []).map((item) => {
+    if (item?.recordSource !== 'practice') return item;
+    const bankContext = questionFromBankRow(websiteBank?.get(String(item.questionId || '')));
+    return {
+      ...item,
+      questionText: bankContext?.question || '',
+      questionProvenance: bankContext?.question
+        ? 'current_published_bank'
+        : 'unavailable',
+    };
+  });
+  const filename = `due-diligence-user-${exportRequest.targetUserId}-questions-answers.csv`;
+  return new Response(userResponsesCsv(items), {
+    status: 200,
+    headers: {
+      ...corsHeaders(origin, allowedOrigin),
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'no-store',
+      Pragma: 'no-cache',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
 async function handlePlans(request, env, origin, allowedOrigin) {
   if (!publicPricingEnabled(env)) {
     return jsonResponse({
@@ -3684,6 +3747,9 @@ export default {
       }
       if (pathname === '/admin/export') {
         return await handleAdminExport(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/user-responses/export') {
+        return await handleAdminUserResponsesExport(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/phase4-data') {
         return await handlePhase4AdminData(request, env, origin, allowedOrigin);

@@ -45,7 +45,7 @@ export function normalizeDashboardRequest(payload) {
 export function normalizeUserResponseExport(payload) {
   const targetUserId = String(payload?.targetUserId || '').trim();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetUserId)) {
-    throw new AdminValidationError('Target user identifier is invalid.');
+    throw new AdminValidationError('Choose a valid user account.');
   }
   const reason = String(payload?.reason || '').trim();
   if (reason.length < 5 || reason.length > 1000) {
@@ -153,7 +153,7 @@ export function normalizeAnswerHistoryRequest(payload, accessPurpose = 'summary'
   const targetUserId = String(payload.targetUserId || '').trim() || null;
   if (targetUserId
       && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetUserId)) {
-    throw new AdminValidationError('Target user identifier is invalid.');
+    throw new AdminValidationError('Choose a valid user account.');
   }
   const reason = String(payload.reason || '').trim();
   if (reason.length < 5 || reason.length > 1000) {
@@ -193,6 +193,119 @@ export function normalizeAnswerHistoryRequest(payload, accessPurpose = 'summary'
   };
 }
 
+export function normalizeAnswerHistoryPreviewRequest(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new AdminValidationError('Answer-history preview request is invalid.');
+  }
+  const allowedFields = new Set([
+    'targetUserId', 'from', 'to', 'search', 'recordSource',
+    'limit', 'offset', 'requestKey',
+  ]);
+  if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
+    throw new AdminValidationError('Answer-history preview contains an unsupported field.');
+  }
+
+  const targetUserId = String(payload.targetUserId || '').trim() || null;
+  if (targetUserId
+      && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetUserId)) {
+    throw new AdminValidationError('Choose a valid user account.');
+  }
+
+  const fromOmitted = payload.from == null;
+  const toOmitted = payload.to == null;
+  if (fromOmitted !== toOmitted) {
+    throw new AdminValidationError('Provide both preview dates or leave both empty for all time.');
+  }
+  let from = null;
+  let to = null;
+  if (!fromOmitted) {
+    from = isoDate(payload.from, 'Preview start');
+    to = isoDate(payload.to, 'Preview end');
+    const span = new Date(to) - new Date(from);
+    if (span <= 0 || span > 366 * 86_400_000) {
+      throw new AdminValidationError('Answer-history preview window must be between 1 minute and 366 days.');
+    }
+  }
+
+  const search = String(payload.search || '').trim();
+  if (search.length > 180) {
+    throw new AdminValidationError('Answer-history search exceeds 180 characters.');
+  }
+  if (/[\u0000-\u001f\u007f-\u009f]/.test(search)) {
+    throw new AdminValidationError('Answer-history search contains unsupported characters.');
+  }
+  const recordSource = String(payload.recordSource || 'all').trim().toLowerCase();
+  if (!['all', 'practice', 'formal_exam'].includes(recordSource)) {
+    throw new AdminValidationError('Choose a valid answer type.');
+  }
+
+  const limit = payload.limit == null ? 100 : payload.limit;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    throw new AdminValidationError('Answer-history preview limit must be an integer from 1 to 100.');
+  }
+  const offset = payload.offset == null ? 0 : payload.offset;
+  if (!Number.isInteger(offset) || offset < 0 || offset > 1_000_000) {
+    throw new AdminValidationError('Answer-history preview offset is invalid.');
+  }
+
+  const requestKey = String(payload.requestKey || '').trim();
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {
+    throw new AdminValidationError('Request key is invalid.');
+  }
+
+  return {
+    targetUserId,
+    from,
+    to,
+    search: search || null,
+    recordSource,
+    limit,
+    offset,
+    requestKey,
+  };
+}
+
+export function normalizeLiveActivityRequest(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new AdminValidationError('Live activity request is invalid.');
+  }
+  const allowedFields = new Set(['limit', 'requestKey']);
+  if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
+    throw new AdminValidationError('Live activity request contains an unsupported field.');
+  }
+  const requestKey = String(payload.requestKey || '').trim();
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {
+    throw new AdminValidationError('Request key is invalid.');
+  }
+  const limit = Math.min(100, Math.max(1, Number(payload.limit) || 100));
+  return { limit, requestKey };
+}
+
+export function normalizeQuorumPostsRequest(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new AdminValidationError('Quorum post request is invalid.');
+  }
+  const allowedFields = new Set(['search', 'status', 'limit', 'offset', 'requestKey']);
+  if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
+    throw new AdminValidationError('Quorum post request contains an unsupported field.');
+  }
+  const search = String(payload.search || '').trim();
+  if (search.length > 180) {
+    throw new AdminValidationError('Quorum search exceeds 180 characters.');
+  }
+  const status = String(payload.status || 'all').trim().toLowerCase();
+  if (!['all', 'visible', 'hidden', 'removed', 'deleted_by_author'].includes(status)) {
+    throw new AdminValidationError('Choose a valid Quorum post status.');
+  }
+  const requestKey = String(payload.requestKey || '').trim();
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {
+    throw new AdminValidationError('Request key is invalid.');
+  }
+  const limit = Math.min(100, Math.max(1, Number(payload.limit) || 100));
+  const offset = Math.max(0, Number(payload.offset) || 0);
+  return { search: search || null, status, limit, offset, requestKey };
+}
+
 export function resolveAdminDirectoryRecipient(rawJson, recipientKey) {
   let configured;
   try {
@@ -229,7 +342,7 @@ export function normalizeAdminAction(payload) {
   const action = String(payload?.action || '').trim();
   if (!ADMIN_ACTIONS.includes(action)) throw new AdminValidationError('Unsupported administrator action.');
   const targetId = payload?.targetId == null || payload.targetId === '' ? null : String(payload.targetId);
-  if (targetId && !/^[0-9a-f-]{36}$/i.test(targetId)) throw new AdminValidationError('Target identifier is invalid.');
+  if (targetId && !/^[0-9a-f-]{36}$/i.test(targetId)) throw new AdminValidationError('Choose a valid record.');
   const reason = String(payload?.reason || '').trim();
   if (reason.length < 5 || reason.length > 1000) throw new AdminValidationError('A reason of 5–1000 characters is required.');
   const requestKey = String(payload?.requestKey || '').trim();
@@ -258,13 +371,13 @@ export function aggregateCsv(snapshot) {
   const rows = [
     ['Metric', 'Current', 'Previous', 'Status'],
     ['Collection start', snapshot?.meta?.data_collection_start, '', snapshot?.meta?.freshness],
-    ['Current viewers', snapshot?.realtime?.current_viewers, '', 'Five-minute validated session window'],
+    ['Recent session activity', snapshot?.realtime?.current_viewers, '', 'Approximate five-minute activity window; not exact people online'],
     ['Page views', snapshot?.current?.traffic?.page_views, snapshot?.previous?.traffic?.page_views, 'Verified analytics'],
     ['Unique visitors', snapshot?.current?.traffic?.unique_visitors, snapshot?.previous?.traffic?.unique_visitors, 'Privacy-safe identities'],
     ['Sessions', snapshot?.current?.traffic?.sessions, snapshot?.previous?.traffic?.sessions, 'Verified analytics'],
     ['Registrations', snapshot?.current?.funnel?.registrations, snapshot?.previous?.funnel?.registrations, 'Verified analytics'],
     ['Successful grades', snapshot?.current?.learning?.successful_grades, snapshot?.previous?.learning?.successful_grades, '0–5 grading events'],
-    ['Grading success rate', snapshot?.current?.reliability?.success_rate, snapshot?.previous?.reliability?.success_rate, 'Service telemetry'],
+    ['Grading success rate', snapshot?.current?.reliability?.success_rate, snapshot?.previous?.reliability?.success_rate, 'Grading service records'],
     ['Paid subscribers', '', '', 'Not connected'],
     ['Revenue', '', '', 'No verified data'],
     ['Advertising CTR', '', '', 'Not configured'],
@@ -274,12 +387,12 @@ export function aggregateCsv(snapshot) {
 
 export function userDirectoryCsv(items) {
   const headers = [
-    'User ID', 'Display name', 'Email', 'School', 'Enrollment status',
-    'Year level', 'Role', 'Retainer plan', 'Retainer status', 'Joined at',
-    'Profile completed at', 'Last signed in', 'Last active', 'Sessions',
-    'Questions answered', 'Practice questions answered',
-    'Examination questions answered', 'Last answered at', 'Successful grades',
-    'Marketing consent',
+    'User record ID', 'Name', 'Email', 'School', 'Enrollment status',
+    'Year level', 'Admin access', 'Subscription category', 'Subscription plan',
+    'Subscription status', 'Beta All Access', 'Effective access', 'Joined at',
+    'Profile completed at', 'Last signed in', 'Questions answered', 'Practice questions answered',
+    'Examination questions answered', 'Last answered at', 'Graded answers',
+    'Average score', 'Latest score', 'Last graded at', 'Marketing consent',
   ];
   const rows = (Array.isArray(items) ? items : []).map((item) => [
     item.id,
@@ -289,27 +402,56 @@ export function userDirectoryCsv(items) {
     item.enrollment_status,
     item.year_level,
     item.role,
-    item.plan_code,
-    item.entitlement_status,
+    item.subscription_category,
+    item.subscription_plan,
+    item.subscription_status,
+    item.beta_all_access_enabled,
+    item.effective_access,
     item.created_at,
     item.profile_completed_at,
     item.last_sign_in_at,
-    item.last_active_at,
-    item.session_count,
     item.answered_question_count,
     item.practice_answered_count,
     item.examination_answered_count,
     item.last_answered_at,
-    item.successful_grade_count,
+    item.graded_answer_count,
+    item.average_score,
+    item.latest_score,
+    item.last_graded_at,
     item.marketing_consent,
+  ]);
+  return [headers, ...rows].map((row) => row.map(safeCsvCell).join(',')).join('\r\n');
+}
+
+export function subscriptionDirectoryCsv(items) {
+  const headers = [
+    'User record ID', 'Name', 'Email', 'Admin access', 'Subscription category',
+    'Subscription plan', 'Subscription status', 'Beta All Access',
+    'Current access', 'Subscription starts at', 'Subscription expires at',
+    'Last signed in', 'Questions answered',
+  ];
+  const rows = (Array.isArray(items) ? items : []).map((item) => [
+    item.id,
+    item.display_name,
+    item.email,
+    item.role,
+    item.subscription_category,
+    item.subscription_plan,
+    item.subscription_status,
+    item.beta_all_access_enabled,
+    item.effective_access,
+    item.subscription_starts_at,
+    item.subscription_expires_at,
+    item.last_sign_in_at,
+    item.answered_question_count,
   ]);
   return [headers, ...rows].map((row) => row.map(safeCsvCell).join(',')).join('\r\n');
 }
 
 export function userResponsesCsv(items, user = {}) {
   const headers = [
-    'User email', 'Display name', 'Record source', 'User ID', 'Attempt ID', 'Exam title', 'Subject',
-    'Question ID', 'Question text', 'Question provenance', 'Student answer',
+    'User email', 'Name', 'Answer type', 'User record ID', 'Attempt ID', 'Exam title', 'Subject',
+    'Question ID', 'Question text', 'Question record source', 'Student answer',
     'Status', 'Score', 'Timer mode', 'Elapsed seconds', 'Submitted at', 'Completed at',
   ];
   const rows = (Array.isArray(items) ? items : []).map((item) => [
@@ -336,19 +478,21 @@ export function userResponsesCsv(items, user = {}) {
 
 export function answerHistoryCsv(items) {
   const columns = [
-    ['Record source', 'recordSource'],
-    ['User ID', 'userId'],
+    ['Answer type', 'recordSource'],
+    ['User record ID', 'userId'],
+    ['Name', 'userDisplayName'],
     ['User email', 'userEmail'],
     ['Email status', 'emailStatus'],
+    ['Subscription category', 'subscriptionCategory'],
     ['Attempt ID', 'attemptId'],
     ['Question ID', 'questionId'],
     ['Question text', 'questionText'],
-    ['Question text source', 'questionTextSource'],
-    ['Question text status', 'questionTextStatus'],
+    ['Question record source', 'questionTextSource'],
+    ['Question availability', 'questionTextStatus'],
     ['Submitted answer', 'submittedAnswer'],
     ['Answer status', 'answerStatus'],
     ['Score', 'score'],
-    ['Grade source', 'gradeSource'],
+    ['How it was graded', 'gradeSource'],
     ['AI score', 'aiScore'],
     ['Human score', 'humanScore'],
     ['Feedback', 'feedbackText'],
@@ -356,15 +500,15 @@ export function answerHistoryCsv(items) {
     ['Human feedback', 'humanFeedback'],
     ['Feedback status', 'feedbackStatus'],
     ['Suggested answer', 'suggestedAnswer'],
-    ['Suggested answer source', 'suggestedAnswerSource'],
-    ['Suggested answer status', 'suggestedAnswerStatus'],
+    ['Suggested answer record source', 'suggestedAnswerSource'],
+    ['Suggested answer availability', 'suggestedAnswerStatus'],
     ['Model answer', 'modelAnswer'],
-    ['Model answer source', 'modelAnswerSource'],
-    ['Model answer status', 'modelAnswerStatus'],
+    ['Model answer record source', 'modelAnswerSource'],
+    ['Model answer availability', 'modelAnswerStatus'],
     ['Subject', 'subject'],
     ['Exam title', 'examTitle'],
     ['Exam track', 'examTrack'],
-    ['Assessment kind', 'assessmentKind'],
+    ['Exam type', 'assessmentKind'],
     ['Exam version label', 'examVersionLabel'],
     ['Exam version number', 'examVersionNumber'],
     ['Question ordinal', 'questionOrdinal'],
@@ -378,8 +522,8 @@ export function answerHistoryCsv(items) {
     ['Flagged', 'flagged'],
     ['Revision', 'revision'],
     ['Human review status', 'humanReviewStatus'],
-    ['Provider or grader model', 'providerOrGraderModel'],
-    ['Safe error code', 'safeErrorCode'],
+    ['Grading system', 'providerOrGraderModel'],
+    ['Grading issue code', 'safeErrorCode'],
     ['Started at', 'startedAt'],
     ['Answer saved at', 'answerSavedAt'],
     ['Submitted at', 'submittedAt'],

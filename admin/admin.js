@@ -4,26 +4,27 @@
   const config = global.DueDiligencePhase2Config;
   const subscriptionActions = global.DueDiligenceSubscriptionActions;
   const titles = Object.freeze({
-    executive: 'Chambers',
+    executive: 'Overview',
     realtime: 'Live Activity',
-    acquisition: 'Visitors & Sign-ups',
-    users: 'Students',
-    learning: 'Performance',
+    acquisition: 'Sign-ups',
+    users: 'Users',
+    learning: 'Learning Performance',
     subjects: 'Question Bank',
-    reliability: 'AI Grading Health',
-    subscriptions: 'Retainer Management',
-    payments: 'Payment Review',
+    reliability: 'Grading Health',
+    subscriptions: 'Subscriptions',
+    payments: 'Payments',
     refunds: 'Refunds',
-    support: 'Support Requests',
+    support: 'Support',
     corrections: 'Answer Corrections',
     partnerships: 'Partnerships',
     controls: 'Website Settings',
-    security: 'Access & Activity Log',
-    forum: 'Quorum Moderation & Analytics',
-    examinations: 'Examination Management',
-    answer_exports: 'Answer Exports',
+    security: 'Security & Activity Log',
+    forum: 'Quorum',
+    examinations: 'Exams',
+    answer_exports: 'Answers',
   });
   const requirements = Object.freeze({
+    realtime: 'learner_analytics_viewer',
     users: 'learner_analytics_viewer',
     learning: 'learner_analytics_viewer',
     subscriptions: 'subscription_admin',
@@ -49,6 +50,19 @@
     premiumStatus: 'all',
     examinationData: null,
     userSearch: '',
+    userOffset: 0,
+    subscriptionSearch: '',
+    subscriptionOffset: 0,
+    liveActivity: null,
+    answerHistory: null,
+    answerSearch: '',
+    answerType: 'all',
+    answerOffset: 0,
+    quorumPosts: null,
+    quorumPostSearch: '',
+    quorumPostStatus: 'all',
+    quorumPostOffset: 0,
+    subscriptionExportRows: [],
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -89,6 +103,21 @@
   function has(capability) {
     return state.authorization?.role === 'super_admin'
       || state.authorization?.capabilities?.includes(capability);
+  }
+
+  function sectionAllowed(section) {
+    if (!titles[section]) return false;
+    const founderOnly = ['forum', 'examinations', 'answer_exports'].includes(section);
+    const founderAuthorized = ['founder_admin', 'super_admin'].includes(
+      state.authorization?.role,
+    );
+    if (founderOnly && !founderAuthorized) return false;
+    if (section === 'subscriptions'
+        && (!has('subscription_admin') || !has('learner_analytics_viewer'))) {
+      return false;
+    }
+    const needed = requirements[section];
+    return !needed || has(needed);
   }
 
   function uuidKey() {
@@ -135,18 +164,32 @@
     return escapeHtml(JSON.stringify({
       label,
       value,
-      copy: options.copy || 'Verified aggregate for the currently selected reporting period.',
-      source: options.source || 'Due Diligence production analytics aggregate',
+      copy: options.copy || 'Verified total for the selected reporting period.',
+      source: options.source || 'Due Diligence website records',
     }));
   }
 
   function metric(label, value, comparison = null, formatter = number, options = {}) {
     const displayValue = formatter(value);
-    return `<button type="button" class="metric" data-insight="${insightData(label, displayValue, options)}"
-      aria-label="View details for ${escapeHtml(label)}: ${escapeHtml(displayValue)}">
+    const destination = options.section && sectionAllowed(options.section)
+      ? `data-admin-section="${escapeHtml(options.section)}"`
+      : `data-insight="${insightData(label, displayValue, options)}"`;
+    const status = comparison == null
+      ? `<em>${escapeHtml(options.subtext || '')}</em>`
+      : trend(value, comparison);
+    return `<button type="button" class="metric" ${destination}
+      aria-label="${escapeHtml(options.section && sectionAllowed(options.section) ? 'Open' : 'Explain')} ${escapeHtml(label)}: ${escapeHtml(displayValue)}">
       <small title="${escapeHtml(label)}">${escapeHtml(label)}</small>
-      <strong>${escapeHtml(displayValue)}</strong>${comparison == null ? '<em>Verified current period</em>' : trend(value, comparison)}
-      <span class="metric-cue">View verified detail</span></button>`;
+      <strong>${escapeHtml(displayValue)}</strong>${status}
+      <span class="metric-cue">${escapeHtml(options.cue || (options.section && sectionAllowed(options.section) ? 'Open details' : 'How this is counted'))}</span></button>`;
+  }
+
+  function summaryMetric(label, value, subtext = '') {
+    return `<div class="metric static-metric">
+      <small title="${escapeHtml(label)}">${escapeHtml(label)}</small>
+      <strong>${escapeHtml(value == null ? 'Not available' : value)}</strong>
+      ${subtext ? `<em>${escapeHtml(subtext)}</em>` : ''}
+    </div>`;
   }
 
   function heading(title, copy, actions = '') {
@@ -222,14 +265,19 @@
     return payload.data;
   }
 
-  async function loadUserDirectory(force = false, search = state.userSearch) {
+  async function loadUserDirectory(
+    force = false,
+    search = state.userSearch,
+    offset = state.userOffset,
+  ) {
     const normalizedSearch = String(search || '').trim();
-    const key = `directory:${normalizedSearch}`;
+    const normalizedOffset = Math.max(0, Number(offset) || 0);
+    const key = `directory:${normalizedSearch}:${normalizedOffset}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await api('/admin/user-directory', {
       search: normalizedSearch,
       limit: 100,
-      offset: 0,
+      offset: normalizedOffset,
       requestKey: uuidKey(),
     });
     state.operational.set(key, payload.data);
@@ -270,6 +318,147 @@
     return data;
   }
 
+  async function loadLiveActivity(force = false) {
+    if (state.liveActivity && !force) return state.liveActivity;
+    const payload = await api('/admin/live-activity', {
+      limit: 100,
+      requestKey: uuidKey(),
+    });
+    state.liveActivity = payload.data;
+    return state.liveActivity;
+  }
+
+  async function loadAnswerHistory(force = false) {
+    const key = `answers:${state.answerSearch}:${state.answerType}:${state.answerOffset}`;
+    if (!force && state.operational.has(key)) {
+      state.answerHistory = state.operational.get(key);
+      return state.answerHistory;
+    }
+    const payload = await api('/admin/answer-history', {
+      targetUserId: null,
+      from: null,
+      to: null,
+      search: state.answerSearch || null,
+      recordSource: state.answerType,
+      limit: 100,
+      offset: state.answerOffset,
+    });
+    state.answerHistory = payload.data;
+    state.operational.set(key, state.answerHistory);
+    return state.answerHistory;
+  }
+
+  function currentAnswerHistoryItems() {
+    return Array.isArray(state.answerHistory?.items) ? state.answerHistory.items : [];
+  }
+
+  async function loadQuorumPosts(force = false) {
+    if (state.quorumPosts && !force) return state.quorumPosts;
+    const payload = await api('/admin/quorum/posts', {
+      search: state.quorumPostSearch,
+      status: state.quorumPostStatus,
+      limit: 100,
+      offset: state.quorumPostOffset,
+      requestKey: uuidKey(),
+    });
+    state.quorumPosts = payload.data;
+    return state.quorumPosts;
+  }
+
+  function compactText(value, emptyCopy = 'Not available') {
+    const text = String(value || '').trim();
+    return text || emptyCopy;
+  }
+
+  function detailCell(value, label = 'View') {
+    const text = compactText(value);
+    return {
+      html: true,
+      value: `<details class="record-detail"><summary>${escapeHtml(label)}</summary><div>${escapeHtml(text)}</div></details>`,
+    };
+  }
+
+  function csvCell(value) {
+    let text = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+    if (/^[\s\u0000-\u001f\u007f-\u009f]*[=+\-@]/u.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
+  function downloadCsv(filename, headers, rows) {
+    const csv = `\uFEFF${[headers, ...rows]
+      .map((row) => row.map(csvCell).join(','))
+      .join('\r\n')}`;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
+  }
+
+  function visibleCellText(cell) {
+    const copy = cell.cloneNode(true);
+    copy.querySelectorAll('button, input, select, textarea').forEach((node) => node.remove());
+    return String(copy.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function downloadCurrentSection() {
+    const view = $('#dashboard-view');
+    if (!view) return;
+    const rangeControl = $('#reporting-range');
+    const rows = [
+      ['Page', titles[state.section] || 'Admin'],
+      ['Downloaded', new Date().toISOString()],
+      [rangeControl?.hidden ? 'Scope' : 'Date range', rangeControl?.hidden
+        ? 'All records shown for the current filters'
+        : ($('#date-range')?.selectedOptions?.[0]?.textContent || 'Current view')],
+      [],
+    ];
+
+    view.querySelectorAll('.metric').forEach((item) => {
+      rows.push([
+        'Summary',
+        item.querySelector('small')?.textContent?.trim() || 'Measure',
+        item.querySelector('strong')?.textContent?.trim() || 'Not available',
+        item.querySelector('em')?.textContent?.trim() || '',
+      ]);
+    });
+
+    view.querySelectorAll('table').forEach((dataTable, index) => {
+      const panel = dataTable.closest('.panel');
+      const name = panel?.querySelector('h3')?.textContent?.trim() || `Table ${index + 1}`;
+      rows.push([], [name]);
+      rows.push([...dataTable.querySelectorAll('thead th')].map(visibleCellText));
+      dataTable.querySelectorAll('tbody tr').forEach((row) => {
+        rows.push([...row.querySelectorAll('td')].map(visibleCellText));
+      });
+    });
+
+    view.querySelectorAll('.bar-row, .queue-link').forEach((item) => {
+      const parts = [...item.children].map(visibleCellText).filter(Boolean);
+      if (parts.length) rows.push(['Page detail', ...parts]);
+    });
+
+    view.querySelectorAll('.definition-list').forEach((list) => {
+      const terms = [...list.querySelectorAll('dt')];
+      terms.forEach((term) => {
+        rows.push(['Page detail', visibleCellText(term), visibleCellText(term.nextElementSibling)]);
+      });
+    });
+
+    view.querySelectorAll('.notice, .panel-note').forEach((note) => {
+      const copy = visibleCellText(note);
+      if (copy) rows.push(['Note', copy]);
+    });
+
+    if (rows.length === 4) {
+      rows.push(['Page summary', String(view.textContent || '').replace(/\s+/g, ' ').trim()]);
+    }
+    const filenameSection = String(titles[state.section] || 'admin')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    downloadCsv(`due-diligence-${filenameSection || 'admin'}-current-page.csv`, rows[0], rows.slice(1));
+    toast('Current page data downloaded for Google Sheets. Use the page-specific download for the complete record set.');
+  }
+
   function renderExecutive(report) {
     const current = report.current || {};
     const previous = report.previous || {};
@@ -280,55 +469,51 @@
     const reliability = current.reliability || {};
     const engagement = report.engagement || report.engagementOverview || {};
     const betaAllAccess = report.betaAllAccess || {};
+    const betaKnown = typeof betaAllAccess.enabled === 'boolean';
     const betaEnabled = betaAllAccess.enabled === true;
     const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
     return `
-      ${heading('Operating position', 'Verified acquisition, engagement, learning, and service indicators for the selected period.')}
-      <div class="metric-strip">
-        ${metric('Current viewers', report.realtime?.current_viewers)}
-        ${metric('Page views', traffic.page_views, priorTraffic.page_views)}
-        ${metric('Unique visitors', traffic.unique_visitors, priorTraffic.unique_visitors)}
-        ${metric('Registrations', funnel.registrations, previous.funnel?.registrations)}
-        ${metric('Successful grades', learning.successful_grades, previous.learning?.successful_grades)}
-        ${metric('Grading success rate', reliability.success_rate, previous.reliability?.success_rate, percentage)}
-      </div>
-      <div class="metric-strip">
-        ${metric('Accounts signed in', engagement.signedInAccounts, null, number, {
-          copy: 'All-time count of non-anonymous accounts with a recorded successful sign-in.',
-          source: 'Supabase Auth account records',
+      ${heading('Overview', 'The people, answers, access, and service facts needed to manage the beta.')}
+      <div class="metric-strip executive-metrics">
+        ${metric('Recent signed-in activity', engagement.activeSignedInLast5Minutes, null, number, {
+          section: 'realtime', subtext: 'Last 5 minutes · approximate', cue: 'Review activity totals',
+        })}
+        ${metric('Signed-in accounts', engagement.signedInAccounts, null, number, {
+          section: 'users', subtext: 'All time', cue: 'Open user list',
         })}
         ${metric('Users who answered', engagement.usersWithAnswers, null, number, {
-          copy: 'All-time count of users with at least one persisted non-blank answer.',
-          source: 'Persisted practice and formal-examination answers',
+          section: 'answer_exports', subtext: 'All time', cue: 'See answer records',
         })}
         ${metric('Questions answered', engagement.questionsAnswered, null, number, {
-          copy: 'All persisted non-blank practice and formal-examination answers.',
-          source: 'Persisted practice and formal-examination answers',
+          section: 'answer_exports', subtext: 'Practice and formal exams', cue: 'See answer records',
         })}
-        ${metric('Practice answers', engagement.practiceQuestionsAnswered)}
-        ${metric('Formal exam answers', engagement.examinationQuestionsAnswered)}
-        <button type="button" class="metric" data-admin-section="users">
-          <small>Student details</small><strong>View</strong><em>Exact emails and per-user counts</em>
-          <span class="metric-cue">Open Students</span>
-        </button>
+        ${metric('Open Quorum reports', engagement.openQuorumReports, null, number, {
+          section: 'forum', subtext: 'Needs review', cue: 'Open Quorum',
+        })}
+        ${metric('Grading success rate', reliability.success_rate, previous.reliability?.success_rate, percentage, {
+          section: 'reliability', cue: 'Open grading health',
+        })}
       </div>
       <section class="panel">
         <h3>Beta All Access</h3>
-        <div class="notice ${betaEnabled ? '' : 'danger'}">
-          <strong>${betaEnabled ? 'Enabled for all current and future signed-in users.' : 'Disabled — legacy per-account access rules are active.'}</strong>
-          ${betaEnabled
+        <div class="notice ${betaKnown && !betaEnabled ? 'danger' : ''}">
+          <strong>${!betaKnown ? 'Status could not be confirmed.' : betaEnabled ? 'Enabled for all current and future signed-in users.' : 'Disabled — older per-account access rules are active.'}</strong>
+          ${!betaKnown
+            ? ' Refresh before making any access decision.'
+            : betaEnabled
             ? ' Access has no automatic per-user expiration while this protected setting remains enabled.'
-            : ' Re-enable only after reviewing the effect on every learner.'}
+            : ' Re-enable only after reviewing the effect on every user.'}
         </div>
         <dl class="definition-list">
-          <dt>Coverage</dt><dd>${escapeHtml(betaAllAccess.scope || 'Not available')}</dd>
-          <dt>Automatic expiry</dt><dd>${betaEnabled ? 'None' : 'Legacy rules apply'}</dd>
-          <dt>Signed-in accounts covered</dt><dd>${escapeHtml(number(betaAllAccess.signedInAccountCount ?? engagement.signedInAccounts))}</dd>
-          <dt>Legal requirement</dt><dd>Current Beta Terms and Privacy Notice must still be accepted.</dd>
-          <dt>Terms summary</dt><dd>Free through at least August 15, 2026 and may continue until developers determine beta testing is sufficient.</dd>
+          <dt>Who has access</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'All current and future signed-in users who accepted the current terms' : 'Older per-account rules apply'}</dd>
+          <dt>Automatic expiry</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'None' : 'Older rules apply'}</dd>
+          <dt>Accounts with Beta All Access</dt><dd>${escapeHtml(!betaKnown ? 'Not confirmed' : betaEnabled ? number(betaAllAccess.signedInAccountCount ?? engagement.signedInAccounts) : '0')}</dd>
+          <dt>Required before access</dt><dd>Users must accept the current Beta Terms and Privacy Notice.</dd>
+          <dt>Access setting</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'Remains active until an authorized founder turns it off.' : 'Currently off.'}</dd>
+          <dt>Public beta terms</dt><dd>Free through at least August 15, 2026 and may continue while the developers determine that beta testing is still needed.</dd>
           <dt>Last changed</dt><dd>${escapeHtml(dateTime(betaAllAccess.updatedAt))}</dd>
         </dl>
-        ${founderAuthorized ? `<div class="dialog-actions">
+        ${founderAuthorized && betaKnown ? `<div class="dialog-actions">
           ${actionButton(
             betaEnabled ? 'Disable Beta All Access' : 'Enable Beta All Access',
             'global_beta_change',
@@ -339,15 +524,12 @@
       </section>
       <div class="work-grid">
         <section class="panel">
-          <h3>Activation funnel</h3>
-          ${barList([
-            ['Eligible guest sessions', funnel.eligible_guest_sessions],
-            ['First successful grade', funnel.guest_first_successful_grade],
-            ['Third successful guest grade', funnel.guest_third_successful_grade],
-            ['Limit reached', funnel.limit_reached],
-            ['Sign-in started', funnel.sign_in_started],
-            ['Sign-in completed', funnel.sign_in_completed],
-            ['Onboarding completed', funnel.onboarding_completed],
+          <h3>Reach and engagement</h3>
+          ${table(['Measure', 'Current period', 'Previous period'], [
+            ['Page views', number(traffic.page_views), number(priorTraffic.page_views)],
+            ['Unique visitors', number(traffic.unique_visitors), number(priorTraffic.unique_visitors)],
+            ['Registrations', number(funnel.registrations), number(previous.funnel?.registrations)],
+            ['Successful grades', number(learning.successful_grades), number(previous.learning?.successful_grades)],
           ])}
         </section>
         <section class="panel">
@@ -355,15 +537,15 @@
           <div class="queue-grid">
             ${queueLink('Support', `${number(report.queues?.pending_support)} open cases`, 'support')}
             ${queueLink('Corrections', `${number(report.queues?.pending_corrections)} pending editorial reviews`, 'corrections')}
-            ${queueLink('Recovery', `${number(report.queues?.open_recovery_cases)} open cases; final transfer disabled`, 'support')}
-            ${queueLink('Manual access', `${number(report.queues?.active_manual_entitlements)} active entitlements`, 'subscriptions')}
+            ${queueLink('Account help', `${number(report.queues?.open_recovery_cases)} open cases; final transfer disabled`, 'support')}
+            ${queueLink('Subscriptions', `${number(report.queues?.active_manual_entitlements)} subscriptions added by Admin`, 'subscriptions')}
           </div>
         </section>
       </div>
       <section class="panel">
-        <h3>Commercial truth</h3>
+        <h3>Business reporting</h3>
         <div class="notice">${escapeHtml(report.financial?.paid_subscribers_status || 'Paid subscribers: Not connected — payment integration pending.')}</div>
-        <p class="panel-note">Revenue, MRR, ARR, ARPU, and paid churn remain “No verified data” until verified financial records exist.</p>
+        <p class="panel-note">Revenue, monthly and annual recurring revenue, average revenue per user, and cancellations remain unavailable until verified financial records are connected.</p>
       </section>`;
   }
 
@@ -373,33 +555,46 @@
     return `<div class="bar-list">${rows.map(([label, value]) => `
       <button type="button" class="bar-row" data-insight="${insightData(label, number(value), {
     copy: 'Verified event count for this step in the selected reporting period.',
-    source: 'Due Diligence production event aggregate',
+    source: 'Due Diligence website records',
   })}"><span>${escapeHtml(label)}</span>
         <span class="bar-track"><span class="bar-fill" style="width:${Math.min(100, (Number(value) || 0) / maximum * 100)}%"></span></span>
         <strong>${number(value)}</strong></button>`).join('')}</div>`;
   }
 
-  function renderRealtime(report) {
+  async function renderRealtime(report) {
+    const activity = await loadLiveActivity();
     const current = report.current?.traffic || {};
     const previous = report.previous?.traffic || {};
     return `
-      ${heading('Live Activity', 'Current viewers use the last five minutes of visible-page session heartbeats. Sessions are not page views.')}
+      ${heading('Live Activity', 'Approximate activity totals for recent signed-in sessions. Exact online names are withheld because the current session records cannot reliably identify a person after sign-out or an account switch.')}
       <div class="metric-strip">
-        ${metric('Current viewers', report.realtime?.current_viewers)}
+        ${metric('Active sessions · 5 minutes', activity.activeSignedInLast5Minutes, null, number, {
+          subtext: 'Approximate · not exact people online',
+        })}
+        ${metric('Active sessions · 30 minutes', activity.activeSignedInLast30Minutes, null, number, {
+          subtext: 'Approximate · may include stale sessions',
+        })}
         ${metric('Sessions', current.sessions, previous.sessions)}
         ${metric('Average daily views', current.average_daily_views, previous.average_daily_views, (v) => number(v, 1))}
         ${metric('Average daily visitors', current.average_daily_unique_visitors, previous.average_daily_unique_visitors, (v) => number(v, 1))}
-        ${metric('DAU / MAU', current.dau_mau_ratio, previous.dau_mau_ratio, percentage)}
-        ${metric('WAU / MAU', current.wau_mau_ratio, previous.wau_mau_ratio, percentage)}
+        ${metric('Daily users as % of monthly users', current.dau_mau_ratio, previous.dau_mau_ratio, percentage)}
+        ${metric('Weekly users as % of monthly users', current.wau_mau_ratio, previous.wau_mau_ratio, percentage)}
       </div>
+      <section class="panel">
+        <div class="panel-title-row"><div><h3>Recent activity summary</h3><p class="panel-note">Use these totals for broad demand monitoring only. The Admin does not label a named user as online until sign-in, sign-out, and account switching can be matched reliably.</p></div><button class="secondary-button" id="download-live-activity" type="button">Download summary</button></div>
+        ${table(['Measure', 'Value', 'Meaning'], [
+          ['Activity in the last 5 minutes', number(activity.activeSignedInLast5Minutes), 'Approximate signed-in-session records'],
+          ['Activity in the last 30 minutes', number(activity.activeSignedInLast30Minutes), 'Approximate signed-in-session records'],
+        ])}
+      </section>
       <div class="work-grid">
-        <section class="panel"><h3>Authenticated versus guest</h3>${barList([
-          ['Authenticated sessions', current.authenticated_sessions],
+        <section class="panel"><h3>Signed-in and guest sessions</h3>${barList([
+          ['Signed-in sessions', current.authenticated_sessions],
           ['Guest sessions', current.guest_sessions],
         ])}</section>
         <section class="panel"><h3>Device category</h3>${barList((report.devices || []).map((row) => [row.category, row.sessions]))}</section>
       </div>
-      <section class="panel"><h3>Methodology</h3><p class="panel-note">Page views are validated page-view events. Unique visitors use privacy-safe first-party visitor IDs, with signed-in sessions deduplicated by user UUID. Median abandoned-session duration is capped at four hours. No raw IP, full user agent, answer, prompt, draft, email, token, or secret is stored.</p></section>`;
+      <section class="panel"><h3>How this is counted</h3><p class="panel-note">Activity is based on periodic visible-page updates. Existing records may continue after sign-out or be reused after an account switch, so this page intentionally shows totals rather than named people. Private answers, tokens, prompts, IP addresses, and full browser identifiers are not shown here.</p></section>`;
   }
 
   function renderAcquisition(report) {
@@ -417,7 +612,7 @@
       ];
     });
     return `
-      ${heading('Visitors & Sign-ups', 'Sanitized sources and activation steps. A zero denominator is reported as unavailable, never as infinity.')}
+      ${heading('Visitors & Sign-ups', 'See where visitors came from and how they moved from sign-in to registration. Rates appear only when enough data exists.')}
       <div class="work-grid">
         <section class="panel"><h3>Source and medium</h3>${table(
           ['Source', 'Medium', 'Sessions'],
@@ -438,9 +633,9 @@
           ${metric('Guest activation', funnel.guest_activation_rate, null, percentage)}
         </div>
       </section>
-      <section class="panel"><h3>Retention maturity</h3>
-        ${table(['Cohort horizon', 'Eligible cohort', 'Retained', 'Verified rate'], retentionRows)}
-        <p class="panel-note">D1, D7, and D30 require a fully elapsed cohort and at least five eligible privacy-safe identities. Immature or undersized cohorts are never labeled failed retention.</p>
+      <section class="panel"><h3>Return visits</h3>
+        ${table(['Time since sign-up', 'Users old enough to measure', 'Returned', 'Return rate'], retentionRows)}
+        <p class="panel-note">One-day, seven-day, and 30-day return rates appear only after the full period has passed and at least five users can be measured.</p>
       </section>`;
   }
 
@@ -472,15 +667,20 @@
     const rows = (data.items || []).map((user) => [
       user.display_name || 'Not provided',
       user.email,
-      user.school || 'Not provided',
+      user.subscription_category || 'Regular',
+      user.effective_access || 'Not available',
       dateTime(user.last_sign_in_at),
-      number(user.practice_answered_count),
-      number(user.examination_answered_count),
       number(user.answered_question_count),
-      dateTime(user.last_answered_at),
+      `${number(user.practice_answered_count)} practice · ${number(user.examination_answered_count)} formal`,
+      user.average_score == null
+        ? 'Not available'
+        : `${number(user.average_score, 1)} average · ${number(user.latest_score, 1)} latest`,
       {
         html: true,
         value: `<div class="row-actions">
+          ${founderAuthorized
+            ? `<button type="button" data-view-user-answers data-user-email="${escapeHtml(user.email || '')}">View answers</button>`
+            : ''}
           ${founderAuthorized
             ? actionButton('Download Q&A', 'user_response_export', user.id, {
               displayName: user.display_name || 'Not provided',
@@ -492,14 +692,24 @@
         </div>`,
       },
     ]);
+    const pageStart = Number(data.offset ?? state.userOffset) + (rows.length ? 1 : 0);
+    const pageEnd = Number(data.offset ?? state.userOffset) + rows.length;
+    const canGoBack = state.userOffset > 0;
+    const canGoForward = pageEnd < Number(data.total || 0);
     return `
-      ${heading('Students', 'Authorized administrators can view exact Docket emails. Directory access and downloads are capability-restricted, rate-limited, and audited.')}
-      <div class="table-tools"><input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, school, or email" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="user-directory-export" type="button">Download Students CSV</button></div>
-      ${table(['Name', 'Email', 'School', 'Last sign-in', 'Practice answers', 'Formal answers', 'Total answered', 'Last answered', 'Action'], rows)}
-      <p class="panel-note">Showing ${number((data.items || []).length)} of ${number(data.total)} registered user account(s). The CSV opens directly in Google Sheets and includes all matching records, up to the secure export limit.</p>
+      ${heading('Users', 'Search exact names and email addresses, review access and answer activity, or download the current user list for Google Sheets.')}
+      <div class="table-tools"><input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, school, or email" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="user-directory-export" type="button">Download user list</button></div>
+      ${table(['Name', 'Email', 'Subscription', 'Access', 'Last sign-in', 'Questions answered', 'Answer types', 'Score', 'Actions'], rows)}
+      <div class="pagination-bar">
+        <p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(data.total)} matching account(s).</p>
+        <div class="row-actions">
+          <button class="secondary-button" id="users-previous" type="button"${canGoBack ? '' : ' disabled'}>Previous</button>
+          <button class="secondary-button" id="users-next" type="button"${canGoForward ? '' : ' disabled'}>Next</button>
+        </div>
+      </div>
       ${founderAuthorized ? `<section class="panel">
-        <h3>Email the Students directory to a founder</h3>
-        <p class="panel-note">Manual only. The recipient is selected from the approved founder list; the exact email address is resolved securely by the Worker and is not stored in the page.</p>
+        <h3>Email the user list to a founder</h3>
+        <p class="panel-note">Choose an approved founder. The file includes exact email addresses and is recorded in the activity log.</p>
         <form class="exam-admin-form" id="user-directory-email-form">
           <label>Founder personal email
             <select id="user-directory-email-recipient" required>
@@ -510,53 +720,84 @@
               <option value="emrico">Emrico</option>
             </select>
           </label>
-          <label>Audit reason<textarea id="user-directory-email-reason" minlength="5" maxlength="1000" required></textarea></label>
-          <label class="check-row"><input id="user-directory-email-confirm" type="checkbox" required> I am authorized to send this exact-email directory to the selected founder.</label>
-          <button class="secondary-button" type="submit">Email Students CSV</button>
+          <label>Reason for sending<textarea id="user-directory-email-reason" minlength="5" maxlength="1000" required></textarea></label>
+          <label class="check-row"><input id="user-directory-email-confirm" type="checkbox" required> I am authorized to send this user list to the selected founder.</label>
+          <button class="secondary-button" type="submit">Email user list</button>
         </form>
       </section>` : ''}`;
   }
 
-  function renderAnswerExports(report) {
+  async function renderAnswerExports(report) {
     const engagement = report.engagement || report.engagementOverview || {};
+    const data = await loadAnswerHistory();
+    const filteredItems = currentAnswerHistoryItems();
+    const pageStart = Number(data.offset ?? state.answerOffset) + (filteredItems.length ? 1 : 0);
+    const pageEnd = Number(data.offset ?? state.answerOffset) + filteredItems.length;
+    const rows = filteredItems.map((item) => [
+      item.userDisplayName || 'Not provided',
+      item.userEmail || 'Not available',
+      item.subscriptionCategory || 'Not available',
+      item.recordSource === 'formal_exam' ? 'Formal exam' : 'Practice',
+      item.subject || item.examTitle || 'Not available',
+      detailCell(item.questionText, 'View question'),
+      detailCell(item.submittedAnswer, 'View answer'),
+      item.score == null ? 'Not graded' : number(item.score, 1),
+      detailCell(item.suggestedAnswer, 'View suggested answer'),
+      detailCell(item.modelAnswer, 'View model answer'),
+      dateTime(item.submittedAt || item.answerSavedAt || item.completedAt),
+    ]);
     return `
-      ${heading('Answer Exports', 'Founder-only download of persisted student answer history. This reporting tool does not change questions, grading, suggested answers, model answers, or simulator behavior.')}
+      ${heading('Answers', 'See exactly who answered, what they answered, and the stored score, suggested answer, and model answer. This page does not change simulator content or grading.')}
       <div class="metric-strip">
-        ${metric('Users who answered', engagement.usersWithAnswers)}
-        ${metric('Questions answered', engagement.questionsAnswered)}
-        ${metric('Practice answers', engagement.practiceQuestionsAnswered)}
-        ${metric('Formal exam answers', engagement.examinationQuestionsAnswered)}
+        ${summaryMetric('Users who answered', number(engagement.usersWithAnswers), 'All time')}
+        ${summaryMetric('Questions answered', number(engagement.questionsAnswered), 'All time')}
+        ${summaryMetric('Practice answers', number(engagement.practiceQuestionsAnswered), 'All time')}
+        ${summaryMetric('Formal exam answers', number(engagement.examinationQuestionsAnswered), 'All time')}
       </div>
       <section class="panel">
+        <div class="panel-title-row"><div><h3>Answer records</h3><p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(data.total)} matching answer record(s). “Not available” means that the source record does not contain that field.</p></div><button class="secondary-button" id="download-answer-view" type="button">Download this page</button></div>
+        <div class="table-tools">
+          <input id="answer-search" type="search" value="${escapeHtml(state.answerSearch)}" placeholder="Search name, email, question, or subject" aria-label="Search answer records">
+          <select id="answer-type" aria-label="Filter answer type">
+            <option value="all"${state.answerType === 'all' ? ' selected' : ''}>All answer types</option>
+            <option value="practice"${state.answerType === 'practice' ? ' selected' : ''}>Practice</option>
+            <option value="formal_exam"${state.answerType === 'formal_exam' ? ' selected' : ''}>Formal exam</option>
+          </select>
+          <button class="secondary-button" id="answer-filter-button" type="button">Apply filter</button>
+        </div>
+        <p class="panel-note">Formal-exam questions and model answers come from the version saved with that exam. Older practice attempts did not save an exact copy of the question or suggested answer, so those fields are shown as unavailable instead of being guessed from today’s Question Bank.</p>
+        ${table(['Name', 'Email', 'Subscription', 'Type', 'Subject or exam', 'Question', 'Student answer', 'Score', 'Suggested answer', 'Model answer', 'Submitted'], rows)}
+        <div class="pagination-bar">
+          <p class="panel-note">Up to 100 records per page.</p>
+          <div class="row-actions">
+            <button class="secondary-button" id="answers-previous" type="button"${state.answerOffset > 0 ? '' : ' disabled'}>Previous</button>
+            <button class="secondary-button" id="answers-next" type="button"${data.hasMore ? '' : ' disabled'}>Next</button>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
         <h3>Download complete answer history</h3>
-        <p class="panel-note">The Google Sheets-compatible CSV includes, where the source record stores them: exact user email, question text, submitted answer, grade or score, grading feedback, suggested answer, model answer, subject and examination context, record type, and timestamps. A missing source field is exported as unavailable; it is never invented.</p>
+        <p class="panel-note">The Google Sheets-compatible file includes exact names and emails plus all stored answer, score, feedback, suggested-answer, and model-answer fields.</p>
         <form class="exam-admin-form" id="answer-history-export-form">
           <div class="panel-grid">
             <label>From date (optional)<input id="answer-history-from" type="date"></label>
             <label>Through date (optional, inclusive)<input id="answer-history-to" type="date"></label>
           </div>
-          <label>Audit reason<textarea id="answer-history-reason" minlength="5" maxlength="1000" required></textarea></label>
+          <label>Reason for downloading<textarea id="answer-history-reason" minlength="5" maxlength="1000" required></textarea></label>
           <label class="check-row"><input id="answer-history-confirm" type="checkbox" required> I am authorized to download private student work and will store it securely.</label>
           <button class="primary-button" type="submit">Download all answer records</button>
         </form>
-      </section>
-      <section class="panel">
-        <h3>Export definitions</h3>
-        ${table(['Field', 'Meaning'], [
-          ['Question', 'The stored question text linked to the answer record.'],
-          ['Student answer', 'The learner’s persisted non-blank submission.'],
-          ['Grade and feedback', 'Stored result only; unavailable when no assessment was completed.'],
-          ['Suggested answer', 'Stored suggested-answer material where that grading path persisted it.'],
-          ['Model answer', 'Stored model answer where the applicable source record contains or links one.'],
-        ])}
       </section>`;
   }
 
   async function renderLearning(report) {
-    const data = await loadOperational('learning');
+    const [learningData, data] = await Promise.all([
+      loadOperational('learning'),
+      loadUserDirectory(false, '', 0),
+    ]);
     const current = report.current?.learning || {};
     return `
-      ${heading('Performance', 'Scores remain on the existing 0–5 scale with one-decimal display. Failed, timed-out, blocked, missing, and ungraded requests are excluded from score averages.')}
+      ${heading('Learning Performance', 'Scores use the simulator’s 0–5 scale and one decimal place. Failed, timed-out, blocked, missing, and ungraded requests are not included in averages.')}
       <div class="metric-strip">
         ${metric('Attempt average', current.attempt_average, null, (v) => v == null ? 'Not available' : `${number(v, 1)} / 5`)}
         ${metric('Mastery average', current.mastery_average, null, (v) => v == null ? 'Not available' : `${number(v, 1)} / 5`)}
@@ -566,22 +807,25 @@
         ${metric('Repeated-question improvement', current.average_improvement, null, (v) => v == null ? 'Not available' : `${Number(v) >= 0 ? '+' : ''}${number(v, 1)}`)}
         ${metric('Questions viewed', current.questions_viewed)}
         ${metric('Successful grades', current.successful_grades)}
-        ${metric('Learners with grades', data.total)}
+        ${metric('Users with grades', learningData.total)}
       </div>
       ${table(
-        ['Learner', 'Masked email', 'School', 'Attempt average', 'Attempts', 'Unique questions', 'Latest'],
+        ['Name', 'Email', 'Subscription', 'Average score', 'Questions answered', 'Latest score', 'Last sign-in'],
         (data.items || []).map((row) => [
-          row.display_name, row.masked_email, row.school || 'Not provided',
-          `${number(row.attempt_average, 1)} / 5`, number(row.successful_attempts),
-          number(row.unique_questions), dateTime(row.last_attempt_at),
+          row.display_name || 'Not provided', row.email || 'Not available',
+          row.subscription_category || 'Regular',
+          row.average_score == null ? 'Not available' : `${number(row.average_score, 1)} / 5`,
+          number(row.answered_question_count),
+          row.latest_score == null ? 'Not available' : `${number(row.latest_score, 1)} / 5`,
+          dateTime(row.last_sign_in_at),
         ]),
       )}
-      <p class="panel-note">Mastery uses the latest successful score per privacy-safe learner and unique question. Improvement compares first and latest successful attempts only for repeated questions; sample sizes remain visible.</p>`;
+      <p class="panel-note">This summary shows up to 100 accounts. Use Users for the complete searchable and downloadable list, or Answers for each stored question, response, score, suggested answer, and model answer. Mastery uses the latest successful score for each user and question.</p>`;
   }
 
   function renderSubjects(report) {
     return `
-      ${heading('Question Bank', 'Content counts come from the published Website Upload bank; database inventory is shown separately for operational transparency.')}
+      ${heading('Question Bank', 'Content counts come from the published Question Bank. The stored count helps Admins confirm that the website is using the expected records.')}
       <div class="metric-strip">
         ${metric('Published subjects', report.inventory?.public_subjects)}
         ${metric('Published questions', report.inventory?.public_question_bank)}
@@ -594,109 +838,147 @@
           row.subject, number(row.question_views), number(row.grading_starts),
           number(row.successful_grades), number(row.failures),
           row.attempt_average == null ? 'Not available' : `${number(row.attempt_average, 1)} / 5`,
-          row.low_sample ? 'Low sample — directional only' : `n=${number(row.sample_size)}`,
+          row.low_sample ? 'Too few grades for a firm result' : `Based on ${number(row.sample_size)} grades`,
         ]),
       )}
-      <p class="panel-note">Question difficulty and correction-rate labels require at least five successful score samples and remain directional until a stricter editorial threshold is approved. Corrections never alter the live bank automatically.</p>`;
+      <p class="panel-note">Early results appear only after five successful grades and should not be treated as final. Corrections never change the live Question Bank automatically.</p>`;
   }
 
   function renderReliability(report) {
     const reliability = report.current?.reliability || {};
     return `
-      ${heading('AI Grading Health', 'Service telemetry, not a guaranteed uptime monitor. Provider bodies, prompts, answers, credentials, and stack traces are excluded.')}
+      ${heading('AI Grading Health', 'Recent grading service records. This is not a guaranteed uptime monitor, and private answers, prompts, passwords, and internal error details are not shown.')}
       <div class="metric-strip">
         ${metric('Grading starts', reliability.grading_started)}
         ${metric('Successes', reliability.grading_success)}
         ${metric('Failures', reliability.grading_failure)}
         ${metric('Timeouts', reliability.grading_timeout)}
-        ${metric('P50 latency', reliability.p50_latency_ms, null, (v) => v == null ? 'Not available' : `${number(v)} ms`)}
-        ${metric('P95 latency', reliability.p95_latency_ms, null, (v) => v == null ? 'Not available' : `${number(v)} ms`)}
+        ${metric('Typical grading time', reliability.p50_latency_ms, null, (v) => v == null ? 'Not available' : `${number(v)} ms`)}
+        ${metric('Grading time for the slowest 5%', reliability.p95_latency_ms, null, (v) => v == null ? 'Not available' : `${number(v)} ms`)}
       </div>
       ${table(
-        ['Model', 'Successful grades', 'Failures', 'P95 latency'],
+        ['Grading system', 'Successful grades', 'Failures', 'Slowest 5% grading time'],
         (report.models || []).map((row) => [
           row.model, number(row.successful_grades), number(row.failures),
           row.p95_latency_ms == null ? 'Not available' : `${number(row.p95_latency_ms)} ms`,
         ]),
       )}
-      <div class="notice">AI monetary cost: Not configured. No estimate is shown until an approved provider-pricing configuration exists.</div>
+      <div class="notice">AI grading cost is not yet connected, so no estimate is shown.</div>
       <p class="panel-note">Last successful grade: ${escapeHtml(dateTime(reliability.last_successful_grade))}</p>`;
   }
 
   async function renderSubscriptions(report) {
-    const data = await loadPhase4Operational('access');
-    const premium = data.premiumSummary || {};
+    const directory = await loadUserDirectory(
+      false,
+      state.subscriptionSearch,
+      state.subscriptionOffset,
+    );
     const betaAllAccess = report.betaAllAccess || {};
+    const globalBetaKnown = typeof betaAllAccess.enabled === 'boolean';
     const globalBetaEnabled = betaAllAccess.enabled === true;
+    const subscriptionCounts = report.engagement?.subscriptionCounts
+      || report.engagementOverview?.subscriptionCounts
+      || {};
     state.subscriptionRows.clear();
-    const rows = (data.items || []).map((row) => {
-      state.subscriptionRows.set(row.user_id, Object.freeze({ ...row }));
+    const accounts = directory.items || [];
+    state.subscriptionExportRows = accounts;
+    const rows = accounts.map((account) => {
+      const actionRow = Object.freeze({
+        user_id: account.id,
+        display_name: account.display_name,
+        subscription_id: account.subscription_id || null,
+        plan_code: account.subscription_plan || null,
+        subscription_status: account.subscription_status || null,
+        subscription_source: account.subscription_source || null,
+        starts_at: account.subscription_starts_at || null,
+        expires_at: account.subscription_expires_at || null,
+        trial_expires_at: account.trial_expires_at || null,
+        free_beta_enabled: Boolean(account.free_beta_enabled),
+        free_beta_expires_at: account.free_beta_expires_at || null,
+      });
+      state.subscriptionRows.set(account.id, actionRow);
       return [
-        row.display_name || 'Not provided',
-        row.role,
-        globalBetaEnabled ? 'Not applicable — global access' : row.trial_expires_at ? dateTime(row.trial_expires_at) : 'Not started',
-        globalBetaEnabled ? 'Covered globally — no expiration' : row.free_beta_enabled ? `Enabled${row.free_beta_expires_at ? ` until ${dateTime(row.free_beta_expires_at)}` : ' — no expiration'}` : 'Disabled',
-        row.plan_code || 'None',
-        row.subscription_source === 'complimentary'
-          ? 'Complimentary Beta'
-          : row.subscription_source === 'manual_payment'
-            ? 'Paid'
-            : row.subscription_source || 'Not available',
-        { html: true, value: `<span class="status ${row.subscription_status === 'active' ? 'ok' : 'warn'}">${escapeHtml(row.subscription_status || 'none')}</span>` },
-        row.expires_at ? dateTime(row.expires_at) : 'Not available',
+        account.display_name || 'Not provided',
+        account.email || 'Not available',
+        account.subscription_category || 'Regular',
+        account.subscription_plan ? humanizeAuditValue(account.subscription_plan) : 'None',
+        account.subscription_status ? humanizeAuditValue(account.subscription_status) : 'None',
+        globalBetaEnabled ? 'Beta All Access' : account.effective_access || 'No active subscription',
+        dateTime(account.last_sign_in_at),
+        number(account.answered_question_count),
+        globalBetaEnabled ? 'No automatic expiry' : dateTime(account.subscription_expires_at),
         {
           html: true,
-          value: `<div class="row-actions" data-subscription-actions-for="${escapeHtml(row.user_id)}" aria-label="Retainer actions for ${escapeHtml(row.display_name || row.user_id)}"></div>`,
+          value: `<div class="row-actions" data-subscription-actions-for="${escapeHtml(account.id)}" aria-label="Subscription actions for ${escapeHtml(account.display_name || account.email || account.id)}"></div>`,
         },
       ];
     });
+    const pageStart = Number(directory.offset ?? state.subscriptionOffset) + (rows.length ? 1 : 0);
+    const pageEnd = Number(directory.offset ?? state.subscriptionOffset) + rows.length;
+    const canGoBack = state.subscriptionOffset > 0;
+    const canGoForward = pageEnd < Number(directory.total || 0);
     return `
-      ${heading('Retainer Management', 'Founder actions are immediate, reason-required, transactional, and audited. Manual payments never renew automatically.')}
-      <div class="notice ${globalBetaEnabled ? '' : 'danger'}"><strong>Beta All Access is ${globalBetaEnabled ? 'enabled' : 'disabled'}.</strong> ${globalBetaEnabled
-        ? 'Every current and future signed-in user is covered with no automatic per-user expiration. Legacy rows below are retained only as fallback records.'
-        : 'The legacy per-user trial, Free Beta, and Retainer rules below currently determine access.'}</div>
-      <div class="notice danger"><strong>Access-impacting action.</strong> Verify the student, plan, dates, and reason before confirming.</div>
+      ${heading('Subscriptions', 'See every account’s access and plan in plain language. Subscription changes require a reason and are recorded.')}
+      <div class="notice ${globalBetaKnown && !globalBetaEnabled ? 'danger' : ''}"><strong>Beta All Access is ${!globalBetaKnown ? 'not confirmed' : globalBetaEnabled ? 'enabled' : 'disabled'}.</strong> ${!globalBetaKnown
+        ? 'Refresh before making any access decision.'
+        : globalBetaEnabled
+        ? 'Every current and future signed-in user can use all beta features with no automatic per-user expiry while this setting remains on.'
+        : 'Per-user subscription and fallback access records currently determine access.'}</div>
       <div class="metric-strip">
-        ${metric('Premium active', premium.active)}
-        ${metric('Premium pending', premium.pending)}
-        ${metric('Premium expired', premium.expired)}
-        ${metric('Premium suspended', premium.suspended)}
-        ${metric('Premium revoked', premium.revoked)}
-        ${metric('Premium beta', premium.beta)}
+        ${summaryMetric('Admin & Staff', number(subscriptionCounts['Admin & Staff'] || 0))}
+        ${summaryMetric('Beta Tester', number(subscriptionCounts['Beta Tester'] || 0))}
+        ${summaryMetric('Regular', number(subscriptionCounts.Regular || 0))}
+        ${summaryMetric('Premium', number(subscriptionCounts.Premium || 0))}
       </div>
       <div class="table-tools">
-        <label>Premium status
-          <select id="premium-status-filter">
-            ${['all','active','pending','expired','suspended','revoked','beta'].map((status) => `
-              <option value="${status}"${state.premiumStatus === status ? ' selected' : ''}>
-                ${status === 'all' ? 'All users' : status}
-              </option>`).join('')}
-          </select>
-        </label>
+        <input id="subscription-search" type="search" value="${escapeHtml(state.subscriptionSearch)}" placeholder="Search name, school, or email" aria-label="Search subscriptions">
+        <button class="secondary-button" id="subscription-search-button" type="button">Search</button>
+        <button class="secondary-button" id="download-subscriptions" type="button">Download subscriptions</button>
       </div>
-      ${table(['Student', 'Role', 'Legacy trial', 'Legacy per-user beta', 'Plan', 'Source', 'Retainer status', 'Expires', 'Actions'], rows)}
+      ${table(['Name', 'Email', 'Category', 'Plan', 'Status', 'Current access', 'Last sign-in', 'Questions answered', 'Expires', 'Actions'], rows)}
+      <div class="pagination-bar">
+        <p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(directory.total)} matching account(s).</p>
+        <div class="row-actions">
+          <button class="secondary-button" id="subscriptions-previous" type="button"${canGoBack ? '' : ' disabled'}>Previous</button>
+          <button class="secondary-button" id="subscriptions-next" type="button"${canGoForward ? '' : ' disabled'}>Next</button>
+        </div>
+      </div>
+      <details class="panel record-detail">
+        <summary>Show older access records</summary>
+        <p class="panel-note">These older trial and per-user beta records are kept so access can be restored safely if Beta All Access is turned off.</p>
+        ${table(
+          ['Name', 'Older trial end date', 'Per-user beta', 'Source', 'Older subscription status'],
+          accounts.map((account) => [
+            account.display_name || 'Not provided',
+            dateTime(account.trial_expires_at),
+            account.free_beta_enabled ? `Enabled${account.free_beta_expires_at ? ` until ${dateTime(account.free_beta_expires_at)}` : ''}` : 'Disabled',
+            account.subscription_source || 'Not available',
+            account.subscription_status ? humanizeAuditValue(account.subscription_status) : 'None',
+          ]),
+        )}
+      </details>
       <section class="panel">
-        <h3>Production plan catalog</h3>
+        <h3>Available plans</h3>
         ${table(['Plan', 'Planning price', 'Status'], config.plans.items.map((plan) => [
           plan.name, `₱${number(plan.pricePhp, 2)}`,
           plan.previewStatus === 'disabled' ? 'Unavailable' : 'Active · manual verification',
         ]))}
       </section>
-      <section class="panel"><h3>Refund policy</h3><p class="panel-note">Five-calendar-day cancellations suggest an 80% refund. Later requests use unused time and documented consumption. A verified 20-day continuous outage supports prorated refund or equivalent extension. All decisions require Founder documentation.</p></section>`;
+      <section class="panel"><h3>Refund policy</h3><p class="panel-note">Five-calendar-day cancellations suggest an 80% refund. Later requests use unused time and documented consumption. A verified 20-day continuous outage supports a prorated refund or equivalent extension. Founder documentation is required.</p></section>`;
   }
 
   async function renderPayments() {
     const data = await loadPhase4Operational('payments');
     return `
-      ${heading('Payment Review', 'Review GCash and MariBank requests. Private proofs open through five-minute signed links and every view is audited.')}
+      ${heading('Payments', 'Review GCash and MariBank requests. Private proofs open for five minutes, and every view is recorded in the activity log.')}
       <div class="notice danger"><strong>Money and access warning.</strong> Approval activates the exact selected plan. Premium requires an explicit expiration. Confirm channel, amount, reference, date, proof, and access end date before proceeding.</div>
       ${table(
         ['Student', 'Plan', 'Amount', 'Channel', 'Date', 'Reference', 'Status', 'Submitted', 'Actions'],
         (data.items || []).map((row) => [
-          row.display_name || 'Not provided', row.plan_code,
+          row.display_name || 'Not provided', humanizeAuditValue(row.plan_code),
           `₱${number(row.trusted_amount_php,2)}`, row.payment_method,
           row.payment_date, row.transaction_reference,
-          { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(row.status)}</span>` },
+          { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(humanizeAuditValue(row.status))}</span>` },
           dateTime(row.submitted_at),
           {
             html: true,
@@ -715,14 +997,14 @@
   async function renderRefunds() {
     const data = await loadPhase4Operational('refunds');
     return `
-      ${heading('Refunds', 'Apply the published Philippine-peso policy, document consumption and outage evidence, and preserve statutory remedies.')}
+      ${heading('Refunds', 'Apply the published Philippine-peso policy and record payment, usage, and outage details before deciding.')}
       ${table(
         ['Student', 'Paid', 'Suggested', 'Approved', 'Status', 'Calculation', 'Submitted', 'Action'],
         (data.items || []).map((row) => [
           row.display_name || row.user_id, `₱${number(row.paid_amount_php,2)}`,
           `₱${number(row.suggested_refund_php,2)}`,
           row.approved_refund_php == null ? 'Pending decision' : `₱${number(row.approved_refund_php,2)}`,
-          row.status, row.calculation_note, dateTime(row.submitted_at),
+          humanizeAuditValue(row.status), row.calculation_note, dateTime(row.submitted_at),
           actionButton('Review', 'refund_review', row.id, {
             status: row.status,
             suggestedRefundPhp: row.suggested_refund_php,
@@ -738,32 +1020,32 @@
       has('account_recovery_admin') ? loadOperational('recovery') : Promise.resolve({ items: [], total: 0 }),
     ]);
     const supportRows = (support.items || []).map((row) => [
-      row.category, row.message, row.priority,
-      { html: true, value: `<span class="status ${row.overdue_24h ? 'danger' : 'warn'}">${escapeHtml(row.status)}</span>` },
+      humanizeAuditValue(row.category), row.message, humanizeAuditValue(row.priority),
+      { html: true, value: `<span class="status ${row.overdue_24h ? 'danger' : 'warn'}">${escapeHtml(humanizeAuditValue(row.status))}</span>` },
       dateTime(row.created_at), row.overdue_24h ? 'Overdue' : 'Within target',
       actionButton('Update', 'support_update', row.id, { status: row.status, priority: row.priority }),
     ]);
     return `
-      ${heading('Support Requests', 'Resolve only what is necessary. Support content may contain personal context and is limited to authorized operators.')}
+      ${heading('Support', 'Resolve only what is necessary. Support messages may contain personal information and are limited to approved administrators.')}
       <div class="notice"><strong>Public recovery copy:</strong> Contact Support. We respond within 24 hours.</div>
       ${table(['Category', 'Message', 'Priority', 'Status', 'Created', '24-hour target', 'Action'], supportRows)}
       <section class="panel">
-        <h3>Recovery cases</h3>
-        <div class="notice danger">Final identity transfer is disabled. Current Supabase same-UUID Google identity handoff has not been proven safe.</div>
+        <h3>Account help cases</h3>
+        <div class="notice danger">Final account transfer is disabled because the current Google sign-in handoff has not been proven safe.</div>
         ${table(
-          ['Case', 'User UUID', 'Status', 'Updated', 'Transfer'],
+          ['Case', 'Account ID', 'Status', 'Updated', 'Transfer'],
           (recovery.items || []).map((row) => [
-            row.id, row.user_id, row.status, dateTime(row.updated_at), 'Disabled',
+            row.id, row.user_id, humanizeAuditValue(row.status), dateTime(row.updated_at), 'Disabled',
           ]),
         )}
-        <p class="panel-note">A Support request alone never authorizes transfer. Case management preserves the immutable user account, but no final transfer action exists.</p>
+        <p class="panel-note">A Support request alone never authorizes an account transfer. The original user account is preserved, and no final transfer action is available.</p>
       </section>`;
   }
 
   async function renderCorrections() {
     const data = await loadOperational('corrections');
     const rows = (data.items || []).map((row) => [
-      row.question_bank_id, row.subject, row.correction_type,
+      row.question_bank_id, row.subject, humanizeAuditValue(row.correction_type),
       row.proposed_correction, row.explanation,
       {
         html: true,
@@ -775,7 +1057,7 @@
           } catch { return ''; }
         }).join(' · ') || 'None supplied',
       },
-      row.status,
+      humanizeAuditValue(row.status),
       actionButton('Review', 'correction_review', row.id, { status: row.status }),
     ]);
     return `
@@ -786,13 +1068,13 @@
   async function renderPartnerships() {
     const data = await loadPhase4Operational('partnerships');
     return `
-      ${heading('Partnerships', 'Native institutional, academic, content, technology, and media inquiries. Contact details are operationally sensitive and access is audited.')}
+      ${heading('Partnerships', 'Review institutional, academic, content, technology, and media inquiries. Contact details are private, and access is recorded in the activity log.')}
       ${table(
         ['Type','Contact','Email','Organization','Message','Verified','Status','Assignee','Created','Action'],
         (data.items || []).map((row) => [
-          row.inquiry_type, row.contact_name, row.contact_email,
+          humanizeAuditValue(row.inquiry_type), row.contact_name, row.contact_email,
           row.organization || 'Not provided', row.message,
-          row.contact_verified ? 'Yes' : 'No', row.status,
+          row.contact_verified ? 'Yes' : 'No', humanizeAuditValue(row.status),
           row.assignee_user_id || 'Unassigned', dateTime(row.created_at),
           actionButton('Update', 'partnership_update', row.id, {
             status: row.status,
@@ -814,7 +1096,7 @@
       ['future_feature_status', 'Future-feature status'],
     ];
     return `
-      ${heading('Website Settings', 'Only allowlisted, non-destructive content is accepted. Raw HTML, scripts, SQL, secrets, grading prompts, security settings, and guest-limit values are forbidden.')}
+      ${heading('Website Settings', 'Only the settings shown below can be changed here. Code, passwords, grading instructions, security settings, and free-use limits cannot be edited here.')}
       ${table(
         ['Control', 'Current value', 'Published', 'Updated', 'Action'],
         allowed.map(([key, label]) => {
@@ -830,14 +1112,14 @@
           ];
         }),
       )}
-      <section class="panel"><h3>Roadmap extension points</h3><p class="panel-note">Prepared, but not active: automated payment providers, renewals, coaching scheduling, organizations and Bar Operations cohorts, institution dashboards, notifications, editorial CMS, experiments, daily rollups, and privacy-aware retention automation.</p></section>`;
+      <details class="panel record-detail"><summary>Future Admin tools</summary><p class="panel-note">Prepared, but not active: automated payments, renewals, coaching schedules, organizations, institution dashboards, notifications, content publishing, experiments, daily summaries, and return-visit reporting.</p></details>`;
   }
 
   async function renderSecurity() {
     const data = await loadOperational('security');
     return `
-      ${heading('Access & Activity Log', 'Only the Super Admin may grant administrator roles or capabilities. Administrators cannot grant privileges to themselves or create another Super Admin.')}
-      <div class="notice">Wally remains the sole Super Admin. Founder Admin assignments use verified account identities; no founder email is hardcoded in authorization logic.</div>
+      ${heading('Security & Activity Log', 'Only the Super Admin may choose who can use each Admin area. Admins cannot give themselves more access or create another Super Admin.')}
+      <div class="notice">Wally remains the sole Super Admin. Founder Admin access is assigned to verified accounts; an email address written into website code does not grant founder access.</div>
       ${table(
         ['Time', 'Action', 'Actor', 'Record type', 'Record', 'Reason'],
         (data.items || []).map((row) => [
@@ -847,7 +1129,7 @@
           row.reason || 'Not provided',
         ]),
       )}
-      <section class="panel"><h3>Capability model</h3><p class="panel-note">Founder and Super Admins receive full operational access. Limited Admin accounts receive only explicitly assigned, revocable capabilities.</p></section>`;
+      <section class="panel"><h3>Admin permissions</h3><p class="panel-note">Founder and Super Admins receive full access to this dashboard. Other Admin accounts receive only the specific permissions assigned to them, and those permissions can be removed.</p></section>`;
   }
 
   function forumActionButtons(row) {
@@ -893,8 +1175,8 @@
       actionButton('Remove restriction', 'forum_remove_restriction', row.id),
     ]);
     return `
-      ${heading('Quorum Moderation', 'Founder and Super Admin review only. Reports never reveal the reporting member, and moderation never changes subscriptions or examination records.')}
-      <div class="notice"><strong>Quorum safeguards:</strong> Plain-text publishing, source-link validation, persistent rate limits, duplicate throttling, private reporting, posting restrictions, and audited moderation are active.</div>
+      ${heading('Quorum', 'Founder and Super Admin review only. Reports never reveal the reporting member, and post management never changes subscriptions or examination records.')}
+      <div class="notice"><strong>Quorum safeguards:</strong> Plain-text publishing, source-link checks, rate limits, duplicate controls, private reporting, posting restrictions, and recorded moderation are active.</div>
       <section class="panel">
         <h3>Reported posts and comments</h3>
         ${table(
@@ -954,8 +1236,29 @@
     return { html: true, value: `<span class="row-actions">${actions.join('')}</span>` };
   }
 
+  function quorumPostActions(row) {
+    if (row.content_status === 'deleted_by_author') {
+      return { html: true, value: '<span class="status">Deleted by author</span>' };
+    }
+    const actions = [];
+    const add = (label, action, payload = {}) => {
+      actions.push(actionButton(label, action, row.entry_id, payload).value);
+    };
+    if (row.content_status === 'visible') add('Hide', 'quorum_hide_entry');
+    if (['hidden', 'removed'].includes(row.content_status)) add('Restore', 'quorum_restore_entry');
+    if (row.content_status !== 'removed') add('Remove', 'quorum_remove_entry');
+    if (!['removed'].includes(row.content_status)) {
+      add(row.comments_locked ? 'Unlock comments' : 'Lock comments',
+        row.comments_locked ? 'quorum_unlock_comments' : 'quorum_lock_comments');
+    }
+    return { html: true, value: `<div class="row-actions">${actions.join('')}</div>` };
+  }
+
   async function renderQuorumModeration() {
-    const data = await loadForumModeration();
+    const [data, posts] = await Promise.all([
+      loadForumModeration(),
+      loadQuorumPosts(),
+    ]);
     const queue = data.queue || {};
     const analytics = data.analytics || {};
     const values = analytics.metrics || {};
@@ -994,22 +1297,51 @@
       dateTime(row.restrictedUntil),
       actionButton('Remove restriction', 'quorum_remove_restriction', row.restrictionId),
     ]);
+    const postRows = (posts.items || []).map((row) => [
+      dateTime(row.created_at),
+      row.author_name || 'Not provided',
+      row.author_email || 'Not available',
+      row.entry_type || 'Post',
+      row.subject || row.category || 'General',
+      detailCell(row.body, 'View post'),
+      row.content_status || 'Not available',
+      number(row.comment_count),
+      number(row.report_count),
+      quorumPostActions(row),
+    ]);
+    const postStart = Number(posts.offset || 0) + (postRows.length ? 1 : 0);
+    const postEnd = Number(posts.offset || 0) + postRows.length;
     return `
-      ${heading('Quorum Moderation & Analytics', 'Founder and Super Admin review only. Reporter identity remains private, and moderation never changes subscriptions or examination records.')}
-      <div class="notice"><strong>Truthful reporting window:</strong> ${escapeHtml(dateTime(analytics.from))} to ${escapeHtml(dateTime(analytics.to))}. Last updated ${escapeHtml(dateTime(analytics.lastUpdatedAt))}. Every metric opens its definition and source.</div>
+      ${heading('Quorum', 'Review every post, see the author’s exact email, and remove content when necessary. A member can still delete their own post.')}
+      <section class="panel">
+        <div class="panel-title-row"><div><h3>All Quorum posts</h3><p class="panel-note">Showing ${number(postStart)}–${number(postEnd)} of ${number(posts.total)} post(s). Admin actions are recorded.</p></div><button class="secondary-button" id="download-quorum-posts" type="button">Download all matching posts</button></div>
+        <div class="table-tools">
+          <input id="quorum-post-search" type="search" value="${escapeHtml(state.quorumPostSearch)}" placeholder="Search post, name, or email" aria-label="Search Quorum posts">
+          <select id="quorum-post-status" aria-label="Filter Quorum posts">
+            ${['all', 'visible', 'hidden', 'removed', 'deleted_by_author'].map((status) => `<option value="${status}"${state.quorumPostStatus === status ? ' selected' : ''}>${status === 'all' ? 'All posts' : humanizeAuditValue(status)}</option>`).join('')}
+          </select>
+          <button class="secondary-button" id="quorum-post-filter" type="button">Apply filter</button>
+        </div>
+        ${table(['Posted', 'Name', 'Email', 'Type', 'Topic', 'Post', 'Status', 'Comments', 'Reports', 'Actions'], postRows)}
+        <div class="pagination-bar"><span></span><div class="row-actions">
+          <button class="secondary-button" id="quorum-post-previous" type="button"${state.quorumPostOffset > 0 ? '' : ' disabled'}>Previous</button>
+          <button class="secondary-button" id="quorum-post-next" type="button"${posts.hasMore ? '' : ' disabled'}>Next</button>
+        </div></div>
+      </section>
+      <div class="notice"><strong>Reporting period:</strong> ${escapeHtml(dateTime(analytics.from))} to ${escapeHtml(dateTime(analytics.to))}. Updated ${escapeHtml(dateTime(analytics.lastUpdatedAt))}.</div>
       <div class="metric-strip">
         ${metric('Active Quorum users', values.activeUsers, null, number, { copy: definitions.activeUsers, source: metricSource })}
-        ${metric('Entries created', values.entries, null, number, { copy: definitions.entries, source: metricSource })}
+        ${metric('Posts created', values.entries, null, number, { copy: definitions.entries, source: metricSource })}
         ${metric('Comments & replies', values.commentsReplies, null, number, { copy: definitions.commentsReplies, source: metricSource })}
-        ${metric('Helpful reactions', values.helpful, null, number, { copy: definitions.helpful, source: metricSource })}
-        ${metric('Internal citations', values.citations, null, number, { copy: definitions.citations, source: metricSource })}
+        ${metric('Affirm reactions', values.helpful, null, number, { copy: definitions.helpful, source: metricSource })}
+        ${metric('Disseminations', values.citations, null, number, { copy: definitions.citations, source: metricSource })}
         ${metric('Saved authorities', values.saves, null, number, { copy: definitions.saves, source: metricSource })}
         ${metric('Study Circles', values.circles, null, number, { copy: definitions.circles, source: metricSource })}
         ${metric('Reports', values.reports, null, number, { copy: definitions.reports, source: metricSource })}
         ${metric('Moderation actions', values.moderationActions, null, number, { copy: definitions.moderationActions, source: metricSource })}
         ${metric('Unanswered questions', values.unansweredQuestions, null, number, { copy: definitions.unansweredQuestions, source: metricSource })}
         ${metric('Practice conversions', values.practiceConversions, null, number, { copy: definitions.practiceConversions, source: metricSource })}
-        ${metric('Failed Quorum API requests', values.failedRequests, null, number, { copy: definitions.failedRequests, source: metricSource })}
+        ${metric('Quorum loading or posting errors', values.failedRequests, null, number, { copy: definitions.failedRequests, source: metricSource })}
       </div>
       <div class="work-grid">
         <section class="panel"><h3>Activity by subject</h3>
@@ -1017,14 +1349,14 @@
             ? barList(analytics.bySubject.map((row) => [row.label, row.count]))
             : empty('No data yet for this reporting window.')}
         </section>
-        <section class="panel"><h3>Activity by entry type</h3>
+        <section class="panel"><h3>Posts by type</h3>
           ${(analytics.byEntryType || []).length
             ? barList(analytics.byEntryType.map((row) => [humanizeAuditValue(row.label), row.count]))
             : empty('No data yet for this reporting window.')}
         </section>
       </div>
       <section class="panel">
-        <h3>Private moderation queue</h3>
+        <h3>Reported posts and comments</h3>
         ${table(
           ['Reported', 'Type', 'Category', 'Explanation', 'Content', 'Author', 'Content state', 'Report state', 'Actions'],
           reportRows,
@@ -1059,7 +1391,7 @@
 
   function examinationReason(form) {
     const reason = String(new FormData(form).get('reason') || '').trim();
-    if (reason.length < 5) throw new Error('Provide an audit reason of at least five characters.');
+    if (reason.length < 5) throw new Error('Provide a reason of at least five characters.');
     return reason;
   }
 
@@ -1097,9 +1429,9 @@
     );
 
     return `${heading(
-      'Examination Management',
-      'Create immutable versions, publish only approved question snapshots, control beta access, and monitor genuine attempts.',
-      '<button class="secondary-button" type="button" data-exam-admin-refresh>Refresh examination data</button>',
+      'Exams',
+      'Create locked exam versions, publish approved questions, control access, and monitor real attempts.',
+      '<button class="secondary-button" type="button" data-exam-admin-refresh>Refresh exam data</button>',
     )}
       <div class="metric-grid">
         ${metric('Examination definitions', definitions.length)}
@@ -1119,21 +1451,21 @@
 
       <div class="panel-grid">
         <section class="panel">
-          <h3>Create examination definition</h3>
+          <h3>Create exam</h3>
           <form class="exam-admin-form" data-exam-admin-form="create_exam">
             <label>Title<input name="title" minlength="3" maxlength="180" required></label>
-            <label>Track<select name="track"><option value="per_subject">Subject Matter</option><option value="bar_feels">Bar Feels</option></select></label>
-            <label>Kind<select name="assessmentKind"><option value="midterm">Midterm</option><option value="final">Final</option><option value="curated">Curated</option><option value="system_test">System test</option></select></label>
+            <label>Area<select name="track"><option value="per_subject">Subject Matter</option><option value="bar_feels">Bar Feels</option></select></label>
+            <label>Exam type<select name="assessmentKind"><option value="midterm">Midterm</option><option value="final">Final</option><option value="curated">Curated</option><option value="system_test">System test</option></select></label>
             <label>Subject<input name="subject" maxlength="120"></label>
             <label>Year level<input name="yearLevel" type="number" min="1" max="4"></label>
             <label class="check-row"><input name="testOnly" type="checkbox" checked> Controlled system test</label>
-            <label>Audit reason<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
-            <button class="primary-button" type="submit">Create draft definition</button>
+            <label>Reason for this change<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+            <button class="primary-button" type="submit">Create draft exam</button>
           </form>
         </section>
 
         <section class="panel">
-          <h3>Create immutable version</h3>
+          <h3>Create locked exam version</h3>
           <form class="exam-admin-form" data-exam-admin-form="create_version">
             <label>Examination<select name="examId" required><option value="">Select…</option>${definitionOptions}</select></label>
             <label>Version label<input name="label" value="Controlled beta v1" required></label>
@@ -1143,7 +1475,7 @@
             <label>Answer release<select name="answerReleaseRule"><option value="after_ai">After AI finalization</option><option value="after_human">After human finalization</option><option value="manual">Manual</option></select></label>
             <label>Instructions<textarea name="instructions" maxlength="8000">Answer every item using ALAC. Review all answers before final submission.</textarea></label>
             <label>Syllabus topics, one per line<textarea name="syllabus" maxlength="4000"></textarea></label>
-            <label>Audit reason<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+            <label>Reason for this change<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
             <button class="primary-button" type="submit" ${definitionOptions ? '' : 'disabled'}>Create version</button>
           </form>
         </section>
@@ -1153,14 +1485,15 @@
         <h3>Attach approved questions and publish</h3>
         <form class="exam-admin-form exam-admin-question-form" data-exam-admin-form="set_questions">
           <label>Draft version<select name="versionId" required><option value="">Select…</option>${draftOptions}</select></label>
-          <label>Approved questions
-            <select name="questionIds" multiple size="10" required>
-              ${questions.map((question) => `<option value="${escapeHtml(question.questionId)}"
-                data-subject="${escapeHtml(question.subject)}">${escapeHtml(`${question.sourceQuestionId} · ${question.subject} · ${question.topic || 'Topic not specified'}`)}</option>`).join('')}
-            </select>
-          </label>
-          <p class="panel-note">Order follows the selected option order. Hold Ctrl or Command to select multiple unique questions.</p>
-          <label>Audit reason<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+          <fieldset class="question-picker">
+            <legend>Approved questions</legend>
+            <div class="question-picker-list">
+              ${questions.map((question) => `<label class="check-row"><input type="checkbox" name="questionIds" value="${escapeHtml(question.questionId)}">
+                <span>${escapeHtml(`${question.sourceQuestionId} · ${question.subject} · ${question.topic || 'Topic not specified'}`)}</span></label>`).join('')}
+            </div>
+          </fieldset>
+          <p class="panel-note">Tap or click each question to include it. The saved order follows the list shown above.</p>
+          <label>Reason for this change<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
           <div class="dialog-actions">
             <button class="secondary-button" type="submit" ${draftOptions ? '' : 'disabled'}>Save question order</button>
             <button class="primary-button" type="button" data-exam-admin-publish ${draftOptions ? '' : 'disabled'}>Publish selected draft</button>
@@ -1170,7 +1503,7 @@
 
       <div class="panel-grid">
         <section class="panel">
-          <h3>Availability and lifecycle</h3>
+          <h3>Availability and status</h3>
           ${definitions.length ? table(
             ['Examination', 'Track', 'Version', 'Attempts', 'Actions'],
             definitions.map((exam) => [
@@ -1188,27 +1521,27 @@
           ) : empty('No examination definitions exist.')}
         </section>
         <section class="panel">
-          <h3>Allowlisted beta access</h3>
+          <h3>Exam access by user</h3>
           <form class="exam-admin-form" data-exam-admin-form="set_beta_access">
-            <label>Authenticated user UUID<input name="userId" pattern="[0-9a-fA-F-]{36}" required></label>
+            <label>Account ID<input name="userId" pattern="[0-9a-fA-F-]{36}" required></label>
             <label class="check-row"><input name="enabled" type="checkbox" checked> Enable examination beta</label>
             <label>Expires at (optional)<input name="expiresAt" type="datetime-local"></label>
-            <label>Audit reason<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+            <label>Reason for this change<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
             <button class="primary-button" type="submit">Update beta access</button>
           </form>
           <hr>
           <form class="exam-admin-form" data-exam-admin-form="set_participant">
             <label>Published version<select name="versionId" required><option value="">Select…</option>${examinationOptions(versions.filter((version) => version.status === 'published'), 'versionId', (version) => version.label)}</select></label>
-            <label>User UUID<input name="userId" pattern="[0-9a-fA-F-]{36}" required></label>
+            <label>Account ID<input name="userId" pattern="[0-9a-fA-F-]{36}" required></label>
             <label class="check-row"><input name="enabled" type="checkbox" checked> Permit this participant</label>
-            <label>Audit reason<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
+            <label>Reason for this change<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
             <button class="secondary-button" type="submit">Update participant</button>
           </form>
         </section>
       </div>
 
       <section class="panel">
-        <h3>Recent genuine attempts and grading state</h3>
+        <h3>Recent exam attempts and grading status</h3>
         ${recentAttempts.length ? table(
           ['Started', 'Examination', 'Student', 'Status', 'Grading', 'Model answer'],
           recentAttempts.map((attempt) => [
@@ -1240,7 +1573,7 @@
       </section>
 
       <section class="panel">
-        <h3>Examination audit history</h3>
+        <h3>Exam activity history</h3>
         ${(data.audit || []).length ? table(
           ['Time', 'Action', 'Resource', 'Reason'],
           data.audit.map((item) => [
@@ -1279,9 +1612,11 @@
         syllabus: String(values.syllabus || '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean),
       });
     } else if (operation === 'set_questions') {
+      const questionIds = new FormData(form).getAll('questionIds').map(String);
+      if (!questionIds.length) throw new Error('Choose at least one approved question.');
       Object.assign(payload, {
         versionId: values.versionId,
-        questionIds: [...form.elements.questionIds.selectedOptions].map((option) => option.value),
+        questionIds,
       });
     } else if (operation === 'set_beta_access') {
       Object.assign(payload, {
@@ -1298,7 +1633,7 @@
     }
     await examinationAdmin(operation, payload);
     state.examinationData = null;
-    toast('Audited examination action completed.');
+    toast('Exam change completed and recorded.');
     await renderSection('examinations');
   }
 
@@ -1323,10 +1658,10 @@
       const versionId = form?.elements.versionId.value;
       const reason = form?.elements.reason.value.trim();
       if (!versionId || reason.length < 5) {
-        toast('Select a draft and provide an audit reason before publishing.');
+        toast('Select a draft and provide a reason before publishing.');
         return;
       }
-      if (!global.confirm('Publish this immutable examination version? Active attempts will use this exact snapshot.')) return;
+      if (!global.confirm('Publish this locked exam version? Active attempts will use this exact saved version.')) return;
       try {
         await examinationAdmin('publish_version', {
           operation: 'publish_version',
@@ -1343,7 +1678,7 @@
       const operation = button.dataset.examLifecycle;
       const label = operation.replaceAll('_', ' ');
       const reason = global.prompt(`Reason for ${label}:`, '');
-      if (!reason || reason.trim().length < 5) return toast('A five-character audit reason is required.');
+      if (!reason || reason.trim().length < 5) return toast('A reason of at least five characters is required.');
       const payload = {
         operation,
         examId: button.dataset.examId,
@@ -1351,11 +1686,11 @@
         requestKey: uuidKey(),
       };
       if (operation === 'set_availability') {
-        const availableFrom = global.prompt('Available from (ISO date/time; blank means immediately):', '') || '';
-        const availableUntil = global.prompt('Available until (ISO date/time; blank means no end):', '') || '';
+        const availableFrom = global.prompt('Start date and time (for example, 2026-08-15 09:00; leave blank to start now):', '') || '';
+        const availableUntil = global.prompt('End date and time (for example, 2026-08-15 12:00; leave blank for no end):', '') || '';
         payload.availableFrom = availableFrom ? new Date(availableFrom).toISOString() : null;
         payload.availableUntil = availableUntil ? new Date(availableUntil).toISOString() : null;
-      } else if (!global.confirm(`Confirm ${label}? This access-impacting change is audited.`)) return;
+      } else if (!global.confirm(`Confirm ${label}? This access change is recorded in the activity log.`)) return;
       try {
         await examinationAdmin(operation, payload);
         state.examinationData = null;
@@ -1365,7 +1700,7 @@
     }));
     $$('[data-exam-release]').forEach((button) => button.addEventListener('click', async () => {
       const reason = global.prompt('Reason for releasing the stored model answers:', '');
-      if (!reason || reason.trim().length < 5) return toast('A five-character audit reason is required.');
+      if (!reason || reason.trim().length < 5) return toast('A reason of at least five characters is required.');
       if (!global.confirm('Release model answers to this attempt now? This cannot be hidden from the examinee afterward.')) return;
       try {
         await examinationAdmin('release_model_answers', {
@@ -1382,8 +1717,16 @@
   }
 
   async function renderSection(section) {
+    if (!sectionAllowed(section)) {
+      toast('Your administrator role does not have access to that section.');
+      return;
+    }
     state.section = section;
     $('#section-title').textContent = titles[section];
+    const rangeControl = $('#reporting-range');
+    if (rangeControl) {
+      rangeControl.hidden = !['executive', 'realtime', 'acquisition', 'learning', 'subjects', 'reliability', 'forum'].includes(section);
+    }
     $$('#admin-nav button').forEach((button) => button.setAttribute(
       'aria-current',
       button.dataset.section === section ? 'page' : 'false',
@@ -1395,7 +1738,7 @@
       const report = await loadReport();
       let html;
       if (section === 'executive') html = renderExecutive(report);
-      else if (section === 'realtime') html = renderRealtime(report);
+      else if (section === 'realtime') html = await renderRealtime(report);
       else if (section === 'acquisition') html = renderAcquisition(report);
       else if (section === 'users') html = await renderUsers();
       else if (section === 'learning') html = await renderLearning(report);
@@ -1411,13 +1754,13 @@
       else if (section === 'security') html = await renderSecurity();
       else if (section === 'forum') html = await renderQuorumModeration();
       else if (section === 'examinations') html = await renderExaminations();
-      else if (section === 'answer_exports') html = renderAnswerExports(report);
+      else if (section === 'answer_exports') html = await renderAnswerExports(report);
       $('#dashboard-view').innerHTML = html;
       bindDynamic();
       if (section === 'examinations') bindExaminationAdmin();
     } catch (error) {
-      $('#dashboard-view').innerHTML = heading('Chambers unavailable', error.message || 'Administrator data could not be loaded.')
-        + empty('No production data was changed. Refresh after connectivity or authorization is restored.');
+      $('#dashboard-view').innerHTML = heading('Admin dashboard unavailable', error.message || 'Admin data could not be loaded.')
+        + empty('Nothing was changed. Refresh after the connection or account permission is restored.');
     } finally {
       $('#dashboard-view').removeAttribute('aria-busy');
     }
@@ -1536,7 +1879,7 @@
       const code = $('#action-discount-code')?.value?.trim().toUpperCase();
       return code ? `Apply verified discount code ${code}` : 'Apply a verified active discount code';
     }
-    if (action === 'subscription_audit_view') return 'View this student’s immutable access history';
+    if (action === 'subscription_audit_view') return 'View this student’s recorded access history';
     if (['activate', 'complimentary', 'replace_plan'].includes(operation)) {
       const plan = selectedPlan() || payload.planCode || 'standard';
       const verb = operation === 'activate' ? 'Activate'
@@ -1547,10 +1890,10 @@
           ? ` · expires ${$('#action-expires')?.value || 'on the required selected date'}`
           : ' · trusted 30-day catalog terms'}`;
     }
-    if (operation === 'pause') return 'Suspend the active Retainer';
-    if (operation === 'resume') return 'Resume the suspended Retainer';
-    if (operation === 'cancel') return 'Revoke the current Retainer';
-    if (operation === 'expire') return 'Expire the current Retainer immediately';
+    if (operation === 'pause') return 'Suspend the active Subscription';
+    if (operation === 'resume') return 'Resume the suspended Subscription';
+    if (operation === 'cancel') return 'Revoke the current Subscription';
+    if (operation === 'expire') return 'Expire the current Subscription immediately';
     if (operation === 'restore') {
       return `Restore access until ${$('#action-expires')?.value || 'the required selected date'}`;
     }
@@ -1570,7 +1913,7 @@
     if (!state.action || !subscriptionActions?.isAccessAction(state.action.action)) return;
     const payload = state.action.payload;
     $('#action-target').textContent = `${payload.displayName || 'Not provided'} · ${payload.userId || state.action.targetId}`;
-    $('#action-current').textContent = `${planDisplayName(payload.planCode)} · ${payload.status || 'no Retainer'}`
+    $('#action-current').textContent = `${planDisplayName(payload.planCode)} · ${payload.status || 'no Subscription'}`
       + `${payload.expiresAt ? ` · expires ${dateTime(payload.expiresAt)}` : ''}`;
     $('#action-proposed').textContent = proposedAccessDescription(state.action.action, payload);
   }
@@ -1635,12 +1978,12 @@
         });
         input.addEventListener('input', updateActionContext);
       } else if (payload.operation === 'set_start_date') {
-        const input = appendInputField(container, 'New Retainer start date and time', 'action-starts', {
+        const input = appendInputField(container, 'New Subscription start date and time', 'action-starts', {
           type: 'datetime-local', value: localDateTimeValue(payload.startsAt), required: true,
         });
         input.addEventListener('input', updateActionContext);
       } else if (['set_expiration_date', 'restore'].includes(payload.operation)) {
-        const input = appendInputField(container, 'New Retainer expiration date and time', 'action-expires', {
+        const input = appendInputField(container, 'New Subscription expiration date and time', 'action-expires', {
           type: 'datetime-local', value: localDateTimeValue(payload.expiresAt), required: true,
         });
         input.addEventListener('input', updateActionContext);
@@ -1665,7 +2008,7 @@
     $('#audit-target').textContent = `${payload.displayName || 'Not provided'} · ${payload.userId}`;
     const entries = [
       ...(result?.subscriptionHistory || []).map((entry) => ({
-        title: `Retainer · ${entry.action}`,
+        title: `Subscription · ${entry.action}`,
         time: entry.occurredAt,
         copy: `${entry.planCode || 'No plan'} · ${entry.status || 'unknown'} · ${entry.reason || 'No reason recorded'}`,
       })),
@@ -1727,10 +2070,21 @@
   function setSidebarOpen(open) {
     const sidebar = $('#sidebar');
     const scrim = $('#sidebar-scrim');
+    const isMobile = global.matchMedia?.('(max-width: 820px)')?.matches === true;
+    const wasOpen = sidebar?.classList.contains('open') === true;
     sidebar?.classList.toggle('open', open);
     $('#menu-button')?.setAttribute('aria-expanded', String(open));
+    if (sidebar) {
+      sidebar.inert = isMobile && !open;
+      sidebar.setAttribute('aria-hidden', String(isMobile && !open));
+    }
     if (scrim) scrim.hidden = !open;
-    document.body.classList.toggle('admin-nav-open', open);
+    document.body.classList.toggle('admin-nav-open', isMobile && open);
+    if (isMobile && open && !wasOpen) {
+      global.setTimeout(() => sidebar?.querySelector('button[aria-current="page"]:not([hidden]), button:not([hidden])')?.focus(), 0);
+    } else if (isMobile && !open && wasOpen) {
+      $('#menu-button')?.focus();
+    }
   }
 
   function cancelActionDialog(options = {}) {
@@ -1754,22 +2108,22 @@
     state.actionInFlight = false;
     let fields = '';
     let title = 'Confirm action';
-    let warning = 'This operation is transactional, reason-required, and recorded in the administrator audit log.';
+    let warning = 'This change requires a reason and will be recorded in Admin activity.';
     if (action === 'support_update') {
       title = 'Update Support request';
-      fields = `<label class="field">Status<select id="action-status">${['pending','in_progress','waiting_for_student','resolved','closed'].map((value) => `<option${payload.status === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
+      fields = `<label class="field">Status<select id="action-status">${['pending','in_progress','waiting_for_student','resolved','closed'].map((value) => `<option value="${value}"${payload.status === value ? ' selected' : ''}>${humanizeAuditValue(value)}</option>`).join('')}</select></label>
         <label class="field">Priority<select id="action-priority">${['low','normal','high','urgent'].map((value) => `<option${payload.priority === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
         <label class="field">Internal note<textarea id="action-note" maxlength="4000"></textarea></label>`;
     } else if (action === 'correction_review') {
       title = 'Record editorial decision';
-      fields = `<label class="field">Status<select id="action-status">${['pending','accepted','rejected'].map((value) => `<option${payload.status === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
+      fields = `<label class="field">Status<select id="action-status">${['pending','accepted','rejected'].map((value) => `<option value="${value}"${payload.status === value ? ' selected' : ''}>${humanizeAuditValue(value)}</option>`).join('')}</select></label>
         <label class="field">Reviewer note<textarea id="action-note" maxlength="4000"></textarea></label>`;
       warning = 'Accept or reject records an editorial decision only. The live question bank will not change.';
     } else if (action === 'entitlement_change') {
-      title = 'Adjust manual entitlement';
+      title = 'Adjust manual access';
       fields = `${actionField('Plan code', 'action-plan', payload.plan_code)}
-        <label class="field">Status<select id="action-status">${['active','paused','canceled','expired'].map((value) => `<option${payload.status === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
-        ${actionField('Effective until (optional ISO date)', 'action-until')}`;
+        <label class="field">Status<select id="action-status">${['active','paused','canceled','expired'].map((value) => `<option value="${value}"${payload.status === value ? ' selected' : ''}>${humanizeAuditValue(value)}</option>`).join('')}</select></label>
+        ${actionField('End date (optional)', 'action-until', '', 'date')}`;
       warning = 'This action changes the student’s access and may affect future billing records. Confirm the requested change and effective dates before continuing.';
     } else if (action === 'payment_review') {
       title = 'Review manual payment';
@@ -1786,7 +2140,7 @@
         : 'Approval is immediate: it activates the exact selected plan for its trusted catalog duration. Verify amount, channel, reference, date, and private proof before confirming.';
     } else if (action === 'view_payment_proof') {
       title = 'Open private payment proof';
-      warning = 'This sensitive read creates an audit record and opens a private proof through a five-minute signed link. Do not download or redistribute it unnecessarily.';
+      warning = 'Opening this private proof is recorded. The secure link lasts five minutes. Do not download or share it unless necessary.';
     } else if (action === 'refund_review') {
       title = 'Review refund request';
       fields = `<label class="field">Decision<select id="action-status">
@@ -1796,24 +2150,24 @@
         ${payload.status === 'approved' ? '<option value="paid">Mark paid</option>' : ''}
       </select></label>
       ${actionField('Approved refund in PHP', 'action-refund-amount', payload.approvedRefundPhp ?? payload.suggestedRefundPhp ?? '', 'number')}`;
-      warning = 'Confirm the verified paid amount, timing, consumption, outage evidence, and statutory rights. Mark paid only after funds were actually returned.';
+      warning = 'Check the paid amount, payment date, usage, and any outage record. Mark paid only after the money was actually returned.';
     } else if (action === 'subscription_change') {
       const titlesByOperation = {
-        activate: 'Activate Retainer',
+        activate: 'Activate Subscription',
         complimentary: 'Grant complimentary access',
-        pause: 'Pause Retainer',
-        resume: 'Resume Retainer',
-        cancel: 'Revoke Retainer',
-        expire: 'Expire Retainer',
-        restore: 'Restore Retainer',
-        extend: 'Extend Retainer',
+        pause: 'Pause Subscription',
+        resume: 'Resume Subscription',
+        cancel: 'Revoke Subscription',
+        expire: 'Expire Subscription',
+        restore: 'Restore Subscription',
+        extend: 'Extend Subscription',
         replace_plan: 'Change plan',
-        set_start_date: 'Change Retainer start date',
-        set_expiration_date: 'Change Retainer expiration date',
+        set_start_date: 'Change Subscription start date',
+        set_expiration_date: 'Change Subscription expiration date',
       };
       title = payload.controlLabel === 'Change Plan'
         ? 'Change plan'
-        : titlesByOperation[payload.operation] || 'Manage Retainer';
+        : titlesByOperation[payload.operation] || 'Manage Subscription';
       warning = payload.operation === 'complimentary'
         ? 'This immediately grants access without recording a payment. Confirm the student, trusted plan, and reason.'
         : 'This immediately changes access. Confirm the student, current status, proposed value, and reason before continuing.';
@@ -1824,45 +2178,45 @@
       title = 'Apply verified discount';
       warning = 'Only an active server-verified code can be assigned. The browser cannot choose a discount value or trusted plan price.';
     } else if (action === 'subscription_audit_view') {
-      title = 'View Retainer audit history';
-      warning = 'This sensitive read is reason-required and creates its own immutable audit record.';
+      title = 'View Subscription activity history';
+      warning = 'Viewing this private history requires a reason and is recorded in Admin activity.';
     } else if (action === 'partnership_update') {
       title = 'Update partnership inquiry';
-      fields = `<label class="field">Status<select id="action-status">${['new','reviewing','awaiting_reply','qualified','closed'].map((value) => `<option value="${value}"${payload.status === value ? ' selected' : ''}>${value}</option>`).join('')}</select></label>
+      fields = `<label class="field">Status<select id="action-status">${['new','reviewing','awaiting_reply','qualified','closed'].map((value) => `<option value="${value}"${payload.status === value ? ' selected' : ''}>${humanizeAuditValue(value)}</option>`).join('')}</select></label>
         <label class="field"><span><input id="action-contact-verified" type="checkbox"${payload.contactVerified ? ' checked' : ''}> Contact ownership verified</span></label>
-        ${actionField('Assignee user UUID (optional)', 'action-assignee', payload.assigneeUserId || '')}`;
+        ${actionField('Assignee account ID (optional)', 'action-assignee', payload.assigneeUserId || '')}`;
       warning = 'Contact verification means ownership was actually checked; do not mark it based only on valid email formatting.';
     } else if (action === 'role_change') {
       title = 'Change administrator role';
       fields = `<label class="field">Role<select id="action-role">
-        ${['student','admin','founder_admin'].map((value) => `<option value="${value}"${payload.role === value ? ' selected' : ''}>${value}</option>`).join('')}
+        ${[['student', 'User'], ['admin', 'Admin & Staff'], ['founder_admin', 'Founder Admin']].map(([value, label]) => `<option value="${value}"${payload.role === value ? ' selected' : ''}>${label}</option>`).join('')}
       </select></label>`;
       warning = 'Only the Super Admin may perform this action. Self-promotion, self-demotion, and creation of another Super Admin are prohibited.';
     } else if (action === 'website_control_update') {
-      title = 'Update allowlisted website control';
-      fields = `${actionField('Control key', 'action-control', payload.control_key)}
-        <label class="field">JSON value<textarea id="action-value" maxlength="8000">${escapeHtml(JSON.stringify(payload.value || {}, null, 2))}</textarea></label>
-        <label class="field"><span><input id="action-published" type="checkbox"${payload.is_published ? ' checked' : ''}> Publish this value</span></label>`;
-      warning = 'Raw HTML, scripts, SQL, secrets, grading controls, and destructive settings are rejected.';
+      title = 'Update website setting';
+      fields = `${actionField('Setting name', 'action-control', payload.control_key)}
+        <label class="field">Setting value<textarea id="action-value" maxlength="8000">${escapeHtml(JSON.stringify(payload.value || {}, null, 2))}</textarea></label>
+        <label class="field"><span><input id="action-published" type="checkbox"${payload.is_published ? ' checked' : ''}> Make this setting active</span></label>`;
+      warning = 'Only approved website settings can be changed here. Code, passwords, grading rules, and unsafe changes are blocked.';
     } else if (action === 'reveal_email') {
       title = 'Reveal exact Docket email';
-      warning = 'Exact email access is capability-restricted, rate-limited, reason-required, and audited.';
+      warning = 'Exact email access is limited to approved administrators, requires a reason, and is recorded.';
     } else if (action === 'find_email') {
       title = 'Find Docket by exact email';
       fields = actionField('Exact email', 'action-email', '', 'email');
-      warning = 'Exact email search is server-side, capability-restricted, rate-limited, reason-required, and audited.';
+      warning = 'Exact email search is limited to approved administrators, requires a reason, and is recorded.';
     } else if (action === 'user_response_export') {
       const today = new Date();
       const from = new Date(today.getTime() - (365 * 86_400_000));
       fields = `${actionField('From date', 'action-export-from', from.toISOString().slice(0, 10), 'date')}
         ${actionField('Through date (inclusive)', 'action-export-to', today.toISOString().slice(0, 10), 'date')}`;
       title = 'Download private questions and answers';
-      warning = 'This founder-only export contains private student work. Download only for an authorized purpose, store it securely, and do not redistribute it. The reason and export scope are audited.';
+      warning = 'This founder-only download contains private student work. Use it only for an approved purpose, store it securely, and do not redistribute it. The reason and file scope are recorded.';
     } else if (action === 'global_beta_change') {
       title = payload.enabled ? 'Enable Beta All Access' : 'Disable Beta All Access';
       warning = payload.enabled
         ? 'This immediately gives all current and future signed-in users access to every current beta feature, subject to current legal acceptance and security restrictions.'
-        : 'This immediately removes the platform-wide entitlement from every user and restores legacy trial, per-user beta, and Retainer rules. Confirm the operational impact before continuing.';
+        : 'This immediately removes Beta All Access from every user and restores the older per-user access rules. Confirm the effect before continuing.';
     } else if (action.startsWith('quorum_')) {
       const quorumAction = action.slice('quorum_'.length);
       const quorumTitles = {
@@ -1899,7 +2253,7 @@
       }
       warning = ['restrict_user', 'remove_restriction'].includes(quorumAction)
         ? 'This changes only the member’s ability to publish in Quorum. Examination, subscription, and payment access remain unchanged.'
-        : 'This consequential Quorum action is reason-required, server-authorized, and recorded in the administrator audit log.';
+        : 'This Quorum action requires a reason and is recorded in Admin activity.';
     } else if (action.startsWith('forum_')) {
       const forumAction = action.slice('forum_'.length);
       const forumTitles = {
@@ -1923,7 +2277,7 @@
       }
       warning = forumAction === 'restrict_user' || forumAction === 'remove_restriction'
         ? 'This changes only the member’s legacy community publishing state. It does not change examination, subscription, or payment access.'
-        : 'This changes the visibility or review state of user-generated forum content and is recorded in the administrator audit log.';
+        : 'This changes a Quorum post’s visibility or review status and is recorded in Admin activity.';
     }
     $('#action-title').textContent = title;
     const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
@@ -1936,18 +2290,18 @@
     $('#action-context').hidden = !isAccessAction;
     $('#action-confirmation').hidden = !(isAccessAction || isForumAction || isHighRiskPayment || isSensitiveExport || isGlobalBetaAction);
     $('#action-confirmation-copy').textContent = isGlobalBetaAction
-      ? `I understand this will ${payload.enabled ? 'grant Beta All Access to' : 'remove Beta All Access from'} all current and future signed-in users and that the change is immediate and audited.`
+      ? `I understand this will ${payload.enabled ? 'grant Beta All Access to' : 'remove Beta All Access from'} all current and future signed-in users and that the immediate change is recorded.`
       : isSensitiveExport
-      ? 'I am authorized to access this student work and will handle the downloaded file securely. I understand this export is audited.'
+      ? 'I am authorized to access this student work and will handle the downloaded file securely. I understand this download is recorded.'
       : isForumAction
-        ? 'I have verified the report or target content and the proposed moderation action. I understand this action is immediate and audited.'
-        : 'I have verified the target, current access, and proposed change. I understand this action is immediate and audited.';
+        ? 'I checked the report or content and the proposed moderation action. I understand this immediate action is recorded.'
+        : 'I checked the user, current access, and proposed change. I understand this immediate action is recorded.';
     $('#action-confirm-risk').checked = false;
     $('#action-confirm').textContent = action === 'subscription_audit_view'
-      ? 'View audited history'
+      ? 'View activity history'
       : isSensitiveExport
-        ? 'Download audited export'
-        : isForumAction ? 'Confirm moderation action' : 'Confirm audited action';
+        ? 'Download answer records'
+        : isForumAction ? 'Confirm moderation action' : 'Confirm action';
     $('#action-warning').textContent = warning;
     $('#action-reason').value = '';
     if (isAccessAction) updateActionContext();
@@ -2035,13 +2389,13 @@
       } else if (payload.operation === 'set_start_date') {
         payload.startsAt = isoFromLocalInput($('#action-starts').value);
         if (!payload.startsAt) {
-          toast('Select a valid Retainer start date.');
+          toast('Select a valid Subscription start date.');
           return;
         }
       } else if (['set_expiration_date', 'restore'].includes(payload.operation)) {
         payload.expiresAt = isoFromLocalInput($('#action-expires').value);
         if (!payload.expiresAt) {
-          toast('Select a valid Retainer expiration date.');
+          toast('Select a valid Subscription expiration date.');
           return;
         }
       }
@@ -2126,7 +2480,7 @@
         link.download = `due-diligence-user-${state.action.targetId}-questions-answers.csv`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-        toast('Audited private Q&A export downloaded.');
+        toast('Private questions-and-answers file downloaded and recorded.');
       } else if (action === 'global_beta_change') {
         await api('/admin/global-beta/change', {
           enabled: payload.enabled === true,
@@ -2174,7 +2528,7 @@
           operation: 'action',
           payload: actionPayload,
         });
-        toast('Audited Quorum moderation action completed.');
+        toast('Quorum moderation action completed and recorded.');
       } else if (action.startsWith('forum_')) {
         await api('/admin/forum/action', {
           action: action.slice('forum_'.length),
@@ -2183,7 +2537,7 @@
           durationHours: payload.durationHours || null,
           requestId: state.action.requestKey,
         });
-        toast('Audited legacy community moderation action completed.');
+        toast('Community moderation action completed and recorded.');
       } else {
         const phase4Actions = new Set([
           'payment_review','refund_review','subscription_change',
@@ -2203,13 +2557,17 @@
         } else response = await api('/admin/action', actionRequest);
         if (action === 'subscription_audit_view') {
           renderAuditHistory(response.data, payload);
-          toast('Audited access history loaded.');
+          toast('Access history loaded and recorded.');
         } else {
-          toast('Audited access action completed and the row was refreshed.');
+          toast('Access change completed, recorded, and refreshed.');
         }
       }
       cancelActionDialog();
       state.operational.clear();
+      if (action.startsWith('quorum_')) state.quorumPosts = null;
+      if (['subscription_change', 'free_beta_change', 'global_beta_change'].includes(action)) {
+        state.report = null;
+      }
       await renderSection(state.section);
     } catch (error) {
       toast(error.message || 'Action failed without changing production data.');
@@ -2229,15 +2587,11 @@
 
   function bindDynamic() {
     mountSubscriptionActions();
-    $('#premium-status-filter')?.addEventListener('change', async (event) => {
-      state.premiumStatus = event.currentTarget.value;
-      state.operational.clear();
-      await renderSection('subscriptions');
-    });
     $$('[data-insight]').forEach((button) => button.addEventListener('click', () => openInsight(button)));
     $$('[data-admin-section]').forEach((button) => button.addEventListener('click', () => {
       const section = button.dataset.adminSection;
-      if (titles[section]) renderSection(section);
+      if (sectionAllowed(section)) renderSection(section);
+      else toast('Your administrator role does not have access to that section.');
     }));
     $$('[data-admin-action]').forEach((button) => button.addEventListener('click', () => {
       let payload = {};
@@ -2249,32 +2603,206 @@
       $('#dashboard-view').innerHTML = '<div class="skeleton"></div>';
       try {
         state.userSearch = search;
+        state.userOffset = 0;
         await loadUserDirectory(true, search);
         await renderSection('users');
       } catch (error) { toast(error.message); }
     });
+    $('#users-previous')?.addEventListener('click', async () => {
+      state.userOffset = Math.max(0, state.userOffset - 100);
+      await renderSection('users');
+    });
+    $('#users-next')?.addEventListener('click', async () => {
+      state.userOffset += 100;
+      await renderSection('users');
+    });
+    $$('[data-view-user-answers]').forEach((button) => button.addEventListener('click', async () => {
+      state.answerSearch = button.dataset.userEmail || '';
+      state.answerType = 'all';
+      state.answerOffset = 0;
+      state.answerHistory = null;
+      await renderSection('answer_exports');
+    }));
+    $('#download-live-activity')?.addEventListener('click', () => {
+      downloadCsv('due-diligence-activity-summary.csv', [
+        'Measure', 'Value', 'Meaning', 'Generated at',
+      ], [
+        ['Activity in the last 5 minutes', state.liveActivity?.activeSignedInLast5Minutes, 'Approximate signed-in-session records; not exact people online', state.liveActivity?.generatedAt],
+        ['Activity in the last 30 minutes', state.liveActivity?.activeSignedInLast30Minutes, 'Approximate signed-in-session records; may include stale sessions', state.liveActivity?.generatedAt],
+      ]);
+      toast('Activity summary downloaded for Google Sheets.');
+    });
+    $('#answer-filter-button')?.addEventListener('click', async () => {
+      state.answerSearch = $('#answer-search')?.value?.trim() || '';
+      state.answerType = $('#answer-type')?.value || 'all';
+      state.answerOffset = 0;
+      state.answerHistory = null;
+      await renderSection('answer_exports');
+    });
+    $('#answers-previous')?.addEventListener('click', async () => {
+      state.answerOffset = Math.max(0, state.answerOffset - 100);
+      state.answerHistory = null;
+      await renderSection('answer_exports');
+    });
+    $('#answers-next')?.addEventListener('click', async () => {
+      state.answerOffset += 100;
+      state.answerHistory = null;
+      await renderSection('answer_exports');
+    });
+    $('#download-answer-view')?.addEventListener('click', () => {
+      const rows = currentAnswerHistoryItems().map((item) => [
+        item.userDisplayName,
+        item.userEmail,
+        item.subscriptionCategory,
+        item.recordSource,
+        item.subject,
+        item.examTitle,
+        item.questionText,
+        item.questionTextSource,
+        item.questionTextStatus,
+        item.submittedAnswer,
+        item.score,
+        item.feedbackText,
+        item.suggestedAnswer,
+        item.suggestedAnswerSource,
+        item.suggestedAnswerStatus,
+        item.modelAnswer,
+        item.modelAnswerSource,
+        item.modelAnswerStatus,
+        item.submittedAt || item.answerSavedAt || item.completedAt,
+      ]);
+      downloadCsv('due-diligence-answer-records-current-view.csv', [
+        'Name', 'Email', 'Subscription', 'Answer type', 'Subject', 'Exam', 'Question',
+        'Question source', 'Question availability', 'Student answer', 'Score', 'Feedback',
+        'Suggested answer', 'Suggested answer source', 'Suggested answer availability',
+        'Model answer', 'Model answer source', 'Model answer availability', 'Submitted',
+      ], rows);
+      toast('Current answer view downloaded for Google Sheets.');
+    });
+    $('#subscription-search-button')?.addEventListener('click', async () => {
+      state.subscriptionSearch = $('#subscription-search')?.value?.trim() || '';
+      state.subscriptionOffset = 0;
+      await renderSection('subscriptions');
+    });
+    $('#subscriptions-previous')?.addEventListener('click', async () => {
+      state.subscriptionOffset = Math.max(0, state.subscriptionOffset - 100);
+      await renderSection('subscriptions');
+    });
+    $('#subscriptions-next')?.addEventListener('click', async () => {
+      state.subscriptionOffset += 100;
+      await renderSection('subscriptions');
+    });
+    $('#download-subscriptions')?.addEventListener('click', async () => {
+      try {
+        const token = state.session?.access_token;
+        if (!token) throw new Error('Administrator sign-in is required.');
+        const response = await fetch(`${config.workerUrl}/admin/subscriptions/export`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+          },
+          body: JSON.stringify({ search: state.subscriptionSearch, requestKey: uuidKey() }),
+        });
+        if (!response.ok) {
+          const problem = await response.json().catch(() => null);
+          throw new Error(problem?.error?.message || 'The subscription list could not be created.');
+        }
+        const blob = await response.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'due-diligence-subscriptions.csv';
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1_000);
+        toast('Subscriptions downloaded for Google Sheets.');
+      } catch (error) { toast(error.message); }
+    });
+    $('#quorum-post-filter')?.addEventListener('click', async () => {
+      state.quorumPostSearch = $('#quorum-post-search')?.value?.trim() || '';
+      state.quorumPostStatus = $('#quorum-post-status')?.value || 'all';
+      state.quorumPostOffset = 0;
+      state.quorumPosts = null;
+      await renderSection('forum');
+    });
+    $('#quorum-post-previous')?.addEventListener('click', async () => {
+      state.quorumPostOffset = Math.max(0, state.quorumPostOffset - 100);
+      state.quorumPosts = null;
+      await renderSection('forum');
+    });
+    $('#quorum-post-next')?.addEventListener('click', async () => {
+      state.quorumPostOffset += 100;
+      state.quorumPosts = null;
+      await renderSection('forum');
+    });
+    $('#download-quorum-posts')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        const items = [];
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const payload = await api('/admin/quorum/posts', {
+            search: state.quorumPostSearch,
+            status: state.quorumPostStatus,
+            limit: 100,
+            offset,
+            requestKey: uuidKey(),
+          });
+          const page = Array.isArray(payload.data?.items) ? payload.data.items : [];
+          items.push(...page);
+          hasMore = payload.data?.hasMore === true;
+          offset += page.length;
+          if (hasMore && (items.length >= 5000 || page.length === 0)) {
+            throw new Error('More than 5,000 Quorum posts match. Narrow the search or status before downloading.');
+          }
+        }
+        const rows = items.map((row) => [
+          row.created_at,
+          row.author_name,
+          row.author_email,
+          row.entry_type,
+          row.subject || row.category,
+          row.body,
+          row.content_status,
+          row.comment_count,
+          row.report_count,
+        ]);
+        downloadCsv('due-diligence-quorum-posts.csv', [
+          'Posted', 'Name', 'Email', 'Type', 'Topic', 'Post', 'Status', 'Comments', 'Reports',
+        ], rows);
+        toast('All matching Quorum posts downloaded for Google Sheets.');
+      } catch (error) {
+        toast(error.message || 'The Quorum post file could not be created.');
+      } finally {
+        button.disabled = false;
+      }
+    });
     $('#user-directory-export')?.addEventListener('click', async () => {
       try {
+        const token = state.session?.access_token;
+        if (!token) throw new Error('Administrator sign-in is required.');
         const response = await fetch(`${config.workerUrl}/admin/user-directory/export`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${state.session.access_token}`,
+            Authorization: `Bearer ${token}`,
             ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
           },
           body: JSON.stringify({ search: state.userSearch, requestKey: uuidKey() }),
         });
         if (!response.ok) {
           const problem = await response.json().catch(() => null);
-          throw new Error(problem?.error?.message || 'The Students directory export could not be created.');
+          throw new Error(problem?.error?.message || 'The user list could not be created.');
         }
         const blob = await response.blob();
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'due-diligence-students.csv';
+        link.download = 'due-diligence-users.csv';
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-        toast('Audited Students directory downloaded for Google Sheets.');
+        toast('User list downloaded for Google Sheets.');
       } catch (error) { toast(error.message); }
     });
     $('#user-directory-email-form')?.addEventListener('submit', async (event) => {
@@ -2284,7 +2812,7 @@
       const reason = $('#user-directory-email-reason')?.value?.trim() || '';
       const confirmed = $('#user-directory-email-confirm')?.checked === true;
       if (!recipientKey || reason.length < 5 || !confirmed) {
-        toast('Select a founder, provide an audit reason, and confirm authorization.');
+        toast('Select a founder, provide a reason, and confirm that you are allowed to send the list.');
         return;
       }
       const button = form.querySelector('button[type="submit"]');
@@ -2298,11 +2826,11 @@
           confirmed: true,
         });
         toast(result.delivery?.status === 'sent'
-          ? 'Students CSV sent to the selected founder.'
+          ? 'User list sent to the selected founder.'
           : `Email delivery status: ${result.delivery?.status || 'not confirmed'}.`);
         form.reset();
       } catch (error) {
-        toast(error.message || 'The Students directory email could not be sent.');
+        toast(error.message || 'The user list could not be sent.');
       } finally {
         button.disabled = false;
       }
@@ -2315,7 +2843,7 @@
       const fromValue = $('#answer-history-from')?.value || '';
       const toValue = $('#answer-history-to')?.value || '';
       if (reason.length < 5 || !confirmed) {
-        toast('Provide an audit reason and confirm authorization for private student work.');
+        toast('Provide a reason and confirm that you are allowed to download private student work.');
         return;
       }
       if (Boolean(fromValue) !== Boolean(toValue)) {
@@ -2333,11 +2861,13 @@
       const button = form.querySelector('button[type="submit"]');
       button.disabled = true;
       try {
+        const token = state.session?.access_token;
+        if (!token) throw new Error('Administrator sign-in is required.');
         const response = await fetch(`${config.workerUrl}/admin/answer-history/export`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${state.session.access_token}`,
+            Authorization: `Bearer ${token}`,
             ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
           },
           body: JSON.stringify({
@@ -2358,7 +2888,7 @@
         link.download = 'due-diligence-all-answer-history.csv';
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-        toast('Audited answer-history CSV downloaded for Google Sheets.');
+        toast('Answer-history file downloaded for Google Sheets and recorded.');
       } catch (error) {
         toast(error.message || 'The complete answer-history export could not be created.');
       } finally {
@@ -2368,16 +2898,18 @@
     $('#print-report')?.addEventListener('click', () => global.print());
     $('#export-report')?.addEventListener('click', async () => {
       try {
+        const token = state.session?.access_token;
+        if (!token) throw new Error('Administrator sign-in is required.');
         const response = await fetch(`${config.workerUrl}/admin/export`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${state.session.access_token}`,
+            Authorization: `Bearer ${token}`,
             ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
           },
           body: JSON.stringify(reportingWindow()),
         });
-        if (!response.ok) throw new Error('Aggregate export could not be created.');
+        if (!response.ok) throw new Error('Dashboard summary could not be created.');
         const blob = await response.blob();
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -2394,18 +2926,13 @@
 
   function applyNavigationAuthorization() {
     $$('#admin-nav button').forEach((button) => {
-      const needed = requirements[button.dataset.section];
-      const founderOnly = ['forum', 'examinations', 'answer_exports'].includes(button.dataset.section);
-      const founderAuthorized = ['founder_admin', 'super_admin'].includes(
-        state.authorization?.role,
-      );
-      button.hidden = founderOnly
-        ? !founderAuthorized
-        : Boolean(needed && !has(needed));
+      button.hidden = !sectionAllowed(button.dataset.section);
     });
   }
 
   function deny(message) {
+    $('#admin-gate').hidden = false;
+    $('#admin-shell').hidden = true;
     $('#gate-title').textContent = 'Administrator access unavailable';
     $('#gate-copy').textContent = message;
     $('#gate-spinner').hidden = true;
@@ -2416,7 +2943,7 @@
     if (!config?.features?.adminDashboard
         || !global.supabase?.createClient
         || !subscriptionActions?.actionsForSubscription) {
-      deny('Protected Chambers is not configured.');
+      deny('The Admin dashboard is not configured.');
       return;
     }
     state.client = global.supabase.createClient(config.supabase.url, config.supabase.publishableKey, {
@@ -2427,6 +2954,12 @@
         autoRefreshToken: true,
         detectSessionInUrl: true,
       },
+    });
+    state.client.auth.onAuthStateChange((event, session) => {
+      state.session = session || null;
+      if (event === 'SIGNED_OUT' && !$('#admin-shell').hidden) {
+        deny('Your administrator session ended. Sign in again through Due Diligence, then return here.');
+      }
     });
     const { data, error } = await state.client.auth.getSession();
     if (error || !data?.session?.access_token) {
@@ -2450,7 +2983,9 @@
 
   $('#admin-nav')?.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-section]');
-    if (button && !button.hidden) renderSection(button.dataset.section);
+    if (button && !button.hidden && sectionAllowed(button.dataset.section)) {
+      renderSection(button.dataset.section);
+    }
   });
   $('#date-range')?.addEventListener('change', async () => {
     state.report = null;
@@ -2463,6 +2998,9 @@
     button.textContent = 'Refreshing…';
     state.report = null;
     state.operational.clear();
+    state.liveActivity = null;
+    state.answerHistory = null;
+    state.quorumPosts = null;
     try {
       await renderSection(state.section);
     } finally {
@@ -2470,10 +3008,12 @@
       button.textContent = 'Refresh';
     }
   });
+  $('#download-current-section')?.addEventListener('click', downloadCurrentSection);
   $('#menu-button')?.addEventListener('click', () => {
     setSidebarOpen(!$('#sidebar').classList.contains('open'));
   });
   $('#sidebar-scrim')?.addEventListener('click', () => setSidebarOpen(false));
+  global.matchMedia?.('(max-width: 820px)')?.addEventListener?.('change', () => setSidebarOpen(false));
   $('#admin-signout')?.addEventListener('click', async () => {
     await state.client?.auth.signOut();
     global.DueDiligencePrivateBeta?.clear?.();
@@ -2503,5 +3043,5 @@
     if ($('#action-dialog')?.open) cancelActionDialog({ consumeHistory: false });
   });
 
-  initialize().catch(() => deny('Chambers could not be initialized. No production data was changed.'));
+  initialize().catch(() => deny('The Admin dashboard could not open. Nothing was changed.'));
 })(window);

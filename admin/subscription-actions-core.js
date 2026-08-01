@@ -23,7 +23,7 @@
     const actions = [];
 
     if (!hasSubscription || FINAL_STATUSES.has(status) || !status) {
-      actions.push(descriptor('Activate Retainer', 'subscription_change', 'activate', 'primary'));
+      actions.push(descriptor('Activate Subscription', 'subscription_change', 'activate', 'primary'));
     }
 
     actions.push(descriptor(
@@ -61,7 +61,7 @@
       ),
       descriptor('Grant Complimentary Access', 'subscription_change', 'complimentary'),
       descriptor('Apply Discount', 'discount_assign', 'assign'),
-      descriptor('View Audit History', 'subscription_audit_view', 'view'),
+      descriptor('View Activity History', 'subscription_audit_view', 'view'),
     );
 
     return actions;

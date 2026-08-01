@@ -47,18 +47,21 @@ import {
   AdminValidationError,
   aggregateCsv,
   answerHistoryCsv,
+  normalizeAnswerHistoryPreviewRequest,
   normalizeAnswerHistoryRequest,
   normalizeAdminAction,
   normalizeDashboardRequest,
   normalizeGlobalBetaChange,
+  normalizeLiveActivityRequest,
   normalizeOperationalRequest,
+  normalizeQuorumPostsRequest,
   normalizeUserDirectoryEmailExport,
   normalizeUserDirectoryRequest,
   normalizeUserResponseExport,
   resolveAdminDirectoryRecipient,
+  subscriptionDirectoryCsv,
   utf8Base64,
   userDirectoryCsv,
-  userResponsesCsv,
   withUtf8Bom,
 } from './admin-core.mjs';
 import {
@@ -3357,12 +3360,78 @@ async function handleAdminUserDirectoryExport(request, env, origin, allowedOrigi
     headers: {
       ...corsHeaders(origin, allowedOrigin),
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="due-diligence-students.csv"',
+      'Content-Disposition': 'attachment; filename="due-diligence-users.csv"',
       'Cache-Control': 'no-store',
       Pragma: 'no-cache',
       'X-Content-Type-Options': 'nosniff',
     },
   });
+}
+
+async function handleAdminSubscriptionsExport(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const result = await adminUserDirectoryResult(request, env, 'csv_export');
+  if (result?.tooMany) {
+    throw new ExaminerError(
+      'ADMIN_EXPORT_TOO_LARGE',
+      'More than 5,000 subscriptions match this request. Narrow the search before downloading.',
+      422,
+    );
+  }
+  return new Response(withUtf8Bom(subscriptionDirectoryCsv(result?.items)), {
+    status: 200,
+    headers: {
+      ...corsHeaders(origin, allowedOrigin),
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="due-diligence-subscriptions.csv"',
+      'Cache-Control': 'no-store',
+      Pragma: 'no-cache',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
+async function handleAdminLiveActivity(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let query;
+  try {
+    query = normalizeLiveActivityRequest(await parseBoundedJson(request, 2_000));
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_live_activity', {
+    p_actor_user_id: user.id,
+    p_limit: query.limit,
+    p_request_key: query.requestKey,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminQuorumPosts(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let query;
+  try {
+    query = normalizeQuorumPostsRequest(await parseBoundedJson(request, 4_000));
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_quorum_posts', {
+    p_actor_user_id: user.id,
+    p_search: query.search,
+    p_status: query.status,
+    p_limit: query.limit,
+    p_offset: query.offset,
+    p_request_key: query.requestKey,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
 }
 
 async function handleAdminUserDirectoryEmail(request, env, origin, allowedOrigin) {
@@ -3402,6 +3471,13 @@ async function handleAdminUserDirectoryEmail(request, env, origin, allowedOrigin
       p_request_key: exportRequest.requestKey,
     },
   );
+  if (result?.alreadyPrepared === true) {
+    throw new ExaminerError(
+      'ADMIN_EXPORT_ALREADY_PROCESSED',
+      'This private email request was already processed. Start a new request to send another copy.',
+      409,
+    );
+  }
   const items = Array.isArray(result?.items) ? result.items : [];
   let delivery;
   if (result?.tooMany) {
@@ -3465,6 +3541,49 @@ async function handleAdminUserDirectoryEmail(request, env, origin, allowedOrigin
   }, 200, origin, allowedOrigin);
 }
 
+async function handleAdminAnswerHistoryPreview(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const payload = await parseBoundedJson(request, 4_000);
+  let previewRequest;
+  try {
+    previewRequest = normalizeAnswerHistoryPreviewRequest({
+      ...payload,
+      requestKey: crypto.randomUUID().replace(/-/g, ''),
+    });
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_preview_answer_history', {
+    p_actor_user_id: user.id,
+    p_target_user_id: previewRequest.targetUserId,
+    p_from: previewRequest.from,
+    p_to: previewRequest.to,
+    p_search: previewRequest.search,
+    p_record_source: previewRequest.recordSource,
+    p_limit: previewRequest.limit,
+    p_offset: previewRequest.offset,
+    p_request_key: previewRequest.requestKey,
+  });
+  const items = Array.isArray(result?.items) ? result.items : [];
+  return jsonResponse({
+    ok: true,
+    data: {
+      items,
+      total: Number(result?.total) || items.length,
+      limit: Number(result?.limit) || previewRequest.limit,
+      offset: Number(result?.offset) || 0,
+      hasMore: result?.hasMore === true,
+      tooMany: false,
+      scope: result?.scope || 'all_users',
+      dateScope: result?.dateScope || 'all_time',
+    },
+  }, 200, origin, allowedOrigin);
+}
+
 async function handleAdminAnswerHistoryExport(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
@@ -3480,7 +3599,7 @@ async function handleAdminAnswerHistoryExport(request, env, origin, allowedOrigi
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history', {
+  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history_with_context', {
     p_actor_user_id: user.id,
     p_target_user_id: exportRequest.targetUserId,
     p_from: exportRequest.from,
@@ -3496,34 +3615,7 @@ async function handleAdminAnswerHistoryExport(request, env, origin, allowedOrigi
       422,
     );
   }
-  let websiteBank = null;
-  try {
-    websiteBank = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
-  } catch {
-    // Formal-exam snapshots and persisted grading records remain exportable.
-    // Practice rows keep explicit unavailable provenance when the current
-    // validated question bank cannot be loaded.
-  }
-  const items = (Array.isArray(result?.items) ? result.items : []).map((item) => {
-    if (item?.recordSource !== 'practice') return item;
-    const bankContext = questionFromBankRow(
-      websiteBank?.get(String(item.questionId || '')),
-    );
-    if (!bankContext?.question) return item;
-    return {
-      ...item,
-      questionText: bankContext.question,
-      questionTextSource: 'current_validated_question_bank',
-      questionTextStatus: 'available_current_bank',
-      suggestedAnswer: bankContext.suggestedAnswer || null,
-      suggestedAnswerSource: bankContext.suggestedAnswer
-        ? 'current_validated_question_bank'
-        : item.suggestedAnswerSource,
-      suggestedAnswerStatus: bankContext.suggestedAnswer
-        ? 'available_current_bank'
-        : item.suggestedAnswerStatus,
-    };
-  });
+  const items = Array.isArray(result?.items) ? result.items : [];
   const scope = result?.scope === 'single_user' && exportRequest.targetUserId
     ? `user-${exportRequest.targetUserId}`
     : 'all-users';
@@ -3649,7 +3741,7 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_export_user_responses_with_identity', {
+  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history_with_context', {
     p_actor_user_id: user.id,
     p_target_user_id: exportRequest.targetUserId,
     p_from: exportRequest.from,
@@ -3666,26 +3758,9 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
     );
   }
 
-  let websiteBank = null;
-  try {
-    websiteBank = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
-  } catch {
-    // Exact formal-exam snapshots remain exportable if the current practice bank
-    // is temporarily unavailable. Practice rows are explicitly marked below.
-  }
-  const items = (Array.isArray(result?.items) ? result.items : []).map((item) => {
-    if (item?.recordSource !== 'practice') return item;
-    const bankContext = questionFromBankRow(websiteBank?.get(String(item.questionId || '')));
-    return {
-      ...item,
-      questionText: bankContext?.question || '',
-      questionProvenance: bankContext?.question
-        ? 'current_published_bank'
-        : 'unavailable',
-    };
-  });
+  const items = Array.isArray(result?.items) ? result.items : [];
   const filename = `due-diligence-user-${exportRequest.targetUserId}-questions-answers.csv`;
-  return new Response(withUtf8Bom(userResponsesCsv(items, result?.user)), {
+  return new Response(withUtf8Bom(answerHistoryCsv(items)), {
     status: 200,
     headers: {
       ...corsHeaders(origin, allowedOrigin),
@@ -4146,8 +4221,20 @@ export default {
       if (pathname === '/admin/user-directory/export') {
         return await handleAdminUserDirectoryExport(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/admin/subscriptions/export') {
+        return await handleAdminSubscriptionsExport(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/admin/user-directory/email') {
         return await handleAdminUserDirectoryEmail(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/live-activity') {
+        return await handleAdminLiveActivity(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/quorum/posts') {
+        return await handleAdminQuorumPosts(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/answer-history') {
+        return await handleAdminAnswerHistoryPreview(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/answer-history/export') {
         return await handleAdminAnswerHistoryExport(request, env, origin, allowedOrigin);

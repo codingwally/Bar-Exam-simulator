@@ -82,7 +82,7 @@ assert.match(core, /typeof payload\.liked !== 'boolean'/);
 assert.match(core, /https?:/);
 assert.match(core, /FORUM_PRIVATE_CONTACT/);
 
-assert.match(adminPage, /Quorum Moderation<\/button>/);
+assert.match(adminPage, />Quorum<\/button>/);
 assert.match(admin, /\/admin\/quorum/);
 assert.match(admin, /founder_admin.*super_admin|super_admin.*founder_admin/s);
 assert.match(admin, /forum_hide_content/);

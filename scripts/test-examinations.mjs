@@ -111,7 +111,7 @@ for (const operation of [
   assert.match(adminJs, new RegExp(operation));
 }
 assert.match(adminJs, /Founder Admin/);
-assert.match(adminJs, /Audit reason/);
+assert.match(adminJs, /Reason for this change/);
 
 for (const route of [
   '/examinations/query',

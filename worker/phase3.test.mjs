@@ -10,16 +10,20 @@ import {
   AdminValidationError,
   aggregateCsv,
   answerHistoryCsv,
+  normalizeAnswerHistoryPreviewRequest,
   normalizeAnswerHistoryRequest,
   normalizeAdminAction,
   normalizeDashboardRequest,
   normalizeGlobalBetaChange,
+  normalizeLiveActivityRequest,
   normalizeOperationalRequest,
+  normalizeQuorumPostsRequest,
   normalizeUserDirectoryEmailExport,
   normalizeUserDirectoryRequest,
   normalizeUserResponseExport,
   resolveAdminDirectoryRecipient,
   safeCsvCell,
+  subscriptionDirectoryCsv,
   userDirectoryCsv,
   userResponsesCsv,
   withUtf8Bom,
@@ -153,24 +157,123 @@ test('user directory requests are bounded and exports use the fixed secure limit
 test('user directory CSV includes full identity and remains spreadsheet-safe', () => {
   const csv = withUtf8Bom(userDirectoryCsv([{
     id: '30000000-0000-4000-8000-000000000001',
-    display_name: 'Student One',
+    display_name: '=HYPERLINK("https://invalid.example")',
     email: 'student.one@example.com',
     school: '\t=IMPORTDATA("https://invalid.example")',
     enrollment_status: 'enrolled',
     year_level: '1L',
     role: 'student',
-    plan_code: 'beta',
-    entitlement_status: 'active',
+    subscription_category: '+Beta Tester',
+    subscription_plan: 'beta',
+    subscription_status: 'active',
+    beta_all_access_enabled: true,
+    effective_access: 'Beta All Access',
     created_at: '2026-08-01T00:00:00Z',
     profile_completed_at: '2026-08-01T00:01:00Z',
+    last_sign_in_at: '2026-08-01T00:01:30Z',
     last_active_at: '2026-08-01T00:02:00Z',
+    active_in_last_5_minutes: true,
+    active_in_last_30_minutes: true,
+    current_page_area: 'mock_bar',
+    current_device_category: 'mobile',
     session_count: 2,
-    successful_grade_count: 3,
+    answered_question_count: 5,
+    practice_answered_count: 3,
+    examination_answered_count: 2,
+    last_answered_at: '2026-08-01T00:02:30Z',
+    graded_answer_count: 3,
+    average_score: 4.1,
+    latest_score: 4.5,
+    last_graded_at: '2026-08-01T00:03:00Z',
     marketing_consent: false,
   }]));
   assert.equal(csv.charCodeAt(0), 0xfeff);
+  assert.equal(csv.slice(1).split('\r\n')[0], [
+    'User record ID', 'Name', 'Email', 'School', 'Enrollment status',
+    'Year level', 'Admin access', 'Subscription category', 'Subscription plan',
+    'Subscription status', 'Beta All Access', 'Effective access', 'Joined at',
+    'Profile completed at', 'Last signed in', 'Questions answered', 'Practice questions answered',
+    'Examination questions answered', 'Last answered at', 'Graded answers',
+    'Average score', 'Latest score', 'Last graded at', 'Marketing consent',
+  ].map((value) => `"${value}"`).join(','));
   assert.match(csv, /"student\.one@example\.com"/);
+  assert.match(csv, /"'=HYPERLINK/);
   assert.match(csv, /"'\t=IMPORTDATA/);
+  assert.match(csv, /"'\+Beta Tester"/);
+});
+
+test('subscription CSV is decision-ready, minimized, and spreadsheet-safe', () => {
+  const csv = subscriptionDirectoryCsv([{
+    id: '30000000-0000-4000-8000-000000000001',
+    display_name: '=HYPERLINK("https://invalid.example")',
+    email: '+student.one@example.com',
+    role: 'student',
+    subscription_category: '@Beta Tester',
+    subscription_plan: '-beta',
+    subscription_status: 'active',
+    beta_all_access_enabled: true,
+    effective_access: 'Beta All Access',
+    subscription_starts_at: '2026-08-01T00:00:00Z',
+    subscription_expires_at: null,
+    last_sign_in_at: '2026-08-01T00:01:30Z',
+    answered_question_count: 5,
+    school: 'Must not be exported',
+    enrollment_status: 'Must not be exported',
+    marketing_consent: true,
+  }]);
+  const header = csv.split('\r\n')[0];
+  assert.equal(header, [
+    'User record ID', 'Name', 'Email', 'Admin access', 'Subscription category',
+    'Subscription plan', 'Subscription status', 'Beta All Access',
+    'Current access', 'Subscription starts at', 'Subscription expires at',
+    'Last signed in', 'Questions answered',
+  ].map((value) => `"${value}"`).join(','));
+  assert.match(csv, /"'=HYPERLINK/);
+  assert.match(csv, /"'\+student\.one@example\.com"/);
+  assert.match(csv, /"'@Beta Tester"/);
+  assert.match(csv, /"'-beta"/);
+  assert.doesNotMatch(csv, /School|Enrollment status|Marketing consent|Must not be exported/);
+});
+
+test('live activity and Quorum post requests are bounded and reject unsupported input', () => {
+  assert.deepEqual(normalizeLiveActivityRequest({
+    limit: 999,
+    requestKey: 'liveactivitykey0001',
+  }), {
+    limit: 100,
+    requestKey: 'liveactivitykey0001',
+  });
+  assert.throws(() => normalizeLiveActivityRequest({
+    limit: 10,
+    requestKey: 'liveactivitykey0002',
+    email: 'not-accepted@example.com',
+  }), AdminValidationError);
+  assert.throws(() => normalizeLiveActivityRequest({
+    requestKey: 'short',
+  }), AdminValidationError);
+
+  assert.deepEqual(normalizeQuorumPostsRequest({
+    search: ' admissions ',
+    status: 'VISIBLE',
+    limit: 999,
+    offset: -4,
+    requestKey: 'quorumpostskey0001',
+  }), {
+    search: 'admissions',
+    status: 'visible',
+    limit: 100,
+    offset: 0,
+    requestKey: 'quorumpostskey0001',
+  });
+  assert.throws(() => normalizeQuorumPostsRequest({
+    status: 'unreviewed',
+    requestKey: 'quorumpostskey0002',
+  }), AdminValidationError);
+  assert.throws(() => normalizeQuorumPostsRequest({
+    status: 'all',
+    requestKey: 'quorumpostskey0003',
+    actorUserId: 'not-client-controlled',
+  }), AdminValidationError);
 });
 
 test('global Beta All Access changes require an exact boolean and confirmation', () => {
@@ -241,17 +344,70 @@ test('answer-history export is bounded and its CSV preserves provenance fields',
   }, 'csv_export'), AdminValidationError);
   const csv = answerHistoryCsv([{
     recordSource: 'formal_examination',
+    userDisplayName: '@Student One',
     userEmail: 'student@example.com',
+    subscriptionCategory: '-Beta Tester',
     questionText: '=FORMULA()',
     submittedAnswer: '+answer',
     suggestedAnswerStatus: 'available',
     modelAnswerStatus: 'available',
   }]);
   assert.match(csv, /"User email"/);
-  assert.match(csv, /"Suggested answer status"/);
-  assert.match(csv, /"Model answer status"/);
+  assert.match(csv, /"Name"/);
+  assert.match(csv, /"Subscription category"/);
+  assert.match(csv, /"Suggested answer availability"/);
+  assert.match(csv, /"Model answer availability"/);
+  assert.match(csv, /"'@Student One"/);
+  assert.match(csv, /"'-Beta Tester"/);
   assert.match(csv, /"'=FORMULA\(\)"/);
   assert.match(csv, /"'\+answer"/);
+});
+
+test('answer-history preview strictly validates filters and pagination', () => {
+  const request = normalizeAnswerHistoryPreviewRequest({
+    targetUserId: '30000000-0000-4000-8000-000000000001',
+    from: '2026-07-01T00:00:00Z',
+    to: '2026-08-01T00:00:00Z',
+    search: 'student@example.com',
+    recordSource: 'formal_exam',
+    limit: 50,
+    offset: 100,
+    requestKey: 'answerpreview000001',
+  });
+  assert.deepEqual(request, {
+    targetUserId: '30000000-0000-4000-8000-000000000001',
+    from: '2026-07-01T00:00:00.000Z',
+    to: '2026-08-01T00:00:00.000Z',
+    search: 'student@example.com',
+    recordSource: 'formal_exam',
+    limit: 50,
+    offset: 100,
+    requestKey: 'answerpreview000001',
+  });
+  assert.throws(() => normalizeAnswerHistoryPreviewRequest({
+    recordSource: 'examination',
+    requestKey: 'answerpreview000002',
+  }), AdminValidationError);
+  assert.throws(() => normalizeAnswerHistoryPreviewRequest({
+    limit: 101,
+    requestKey: 'answerpreview000003',
+  }), AdminValidationError);
+  assert.throws(() => normalizeAnswerHistoryPreviewRequest({
+    limit: '100',
+    requestKey: 'answerpreview000004',
+  }), AdminValidationError);
+  assert.throws(() => normalizeAnswerHistoryPreviewRequest({
+    search: 'x'.repeat(181),
+    requestKey: 'answerpreview000005',
+  }), AdminValidationError);
+  assert.throws(() => normalizeAnswerHistoryPreviewRequest({
+    search: 'student\u0000email',
+    requestKey: 'answerpreview000007',
+  }), AdminValidationError);
+  assert.throws(() => normalizeAnswerHistoryPreviewRequest({
+    offset: -1,
+    requestKey: 'answerpreview000006',
+  }), AdminValidationError);
 });
 
 test('user response export validates target, reason, request key, and bounded dates', () => {
@@ -291,7 +447,7 @@ test('targeted response CSV includes server identity and neutralizes every sprea
     submittedAt: '2026-08-01T00:00:00Z',
     completedAt: '2026-08-01T00:01:00Z',
   }], { email: 'student.one@example.com', displayName: 'Student One' });
-  assert.match(csv, /^"User email","Display name"/);
+  assert.match(csv, /^"User email","Name"/);
   assert.match(csv, /"student\.one@example\.com","Student One"/);
   assert.match(csv, /"'=WEBSERVICE/);
   assert.match(csv, /"'\+SUM/);
@@ -476,6 +632,74 @@ test('authorized Students CSV is complete, private, BOM-prefixed, and spreadshee
   }
 });
 
+test('Subscriptions CSV uses the protected directory and exports only subscription fields', async () => {
+  const originalFetch = globalThis.fetch;
+  let rpcBody;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
+    }
+    if (url.endsWith('/rest/v1/rpc/admin_user_engagement_directory')) {
+      rpcBody = JSON.parse(init.body);
+      return Response.json({
+        total: 1,
+        limit: 5000,
+        offset: 0,
+        hasMore: false,
+        tooMany: false,
+        items: [{
+          id: '30000000-0000-4000-8000-000000000001',
+          display_name: '=Student One',
+          email: '+student.one@example.com',
+          role: 'student',
+          subscription_category: '@Beta Tester',
+          subscription_plan: '-beta',
+          subscription_status: 'active',
+          beta_all_access_enabled: true,
+          effective_access: 'Beta All Access',
+          subscription_starts_at: '2026-08-01T00:00:00Z',
+          subscription_expires_at: null,
+          last_sign_in_at: '2026-08-01T00:01:30Z',
+          answered_question_count: 5,
+          school: 'Must not be exported',
+          marketing_consent: true,
+        }],
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/admin/subscriptions/export', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://duediligence.ph',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer synthetic-user-token',
+      },
+      body: JSON.stringify({ search: 'student', requestKey: 'subscriptionexport001' }),
+    }), workerEnv);
+    assert.equal(response.status, 200);
+    assert.equal(rpcBody.p_access_purpose, 'csv_export');
+    assert.equal(rpcBody.p_search, 'student');
+    assert.equal(rpcBody.p_limit, 5000);
+    assert.equal(response.headers.get('Content-Disposition'), 'attachment; filename="due-diligence-subscriptions.csv"');
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(response.headers.get('Pragma'), 'no-cache');
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    assert.deepEqual([...bytes.slice(0, 3)], [0xef, 0xbb, 0xbf]);
+    const csv = new TextDecoder().decode(bytes);
+    assert.match(csv, /"Subscription category"/);
+    assert.match(csv, /"'=Student One"/);
+    assert.match(csv, /"'\+student\.one@example\.com"/);
+    assert.match(csv, /"'@Beta Tester"/);
+    assert.match(csv, /"'-beta"/);
+    assert.doesNotMatch(csv, /School|Marketing consent|Must not be exported/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Students CSV refuses to silently truncate more than 5,000 matches', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
@@ -514,43 +738,40 @@ test('Students CSV refuses to silently truncate more than 5,000 matches', async 
   }
 });
 
-test('founder user-response export is targeted, private, audited through RPC, and CSV-safe', async () => {
+test('founder user-response export uses persisted answer context without broad directory or question-bank lookups', async () => {
   const originalFetch = globalThis.fetch;
   const targetUserId = '30000000-0000-4000-8000-000000000001';
   let rpcBody;
-  const bankRecords = Array.from({ length: 320 }, (_, index) => ({
-    'Question ID': index === 0 ? 'LAB-001' : `TST-${String(index).padStart(3, '0')}`,
-    Subject: 'Labor Law',
-    'Essay Question': index === 0 ? '=Practice question from the current published bank?' : `Test question ${index}`,
-    'Suggested Answer': index === 0 ? 'Current validated suggested answer' : `Suggested answer ${index}`,
-  }));
+  const calls = [];
   globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
+    calls.push(url);
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_export_user_responses_with_identity')) {
+    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history_with_context')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 2,
         tooMany: false,
-        user: {
-          id: targetUserId,
-          email: 'student.one@example.com',
-          displayName: 'Student One',
-        },
         items: [{
           recordSource: 'practice',
           userId: targetUserId,
+          userDisplayName: 'Student One',
+          userEmail: 'student.one@example.com',
+          subscriptionCategory: 'Beta Tester',
           attemptId: '40000000-0000-4000-8000-000000000001',
           examTitle: 'Mock Bar',
           subject: 'Labor Law',
           questionId: 'LAB-001',
           questionText: null,
-          questionProvenance: 'current_published_bank_lookup_required',
-          studentAnswer: '+SUM(1,1)',
-          status: 'completed',
+          questionTextSource: 'external_question_bank_not_persisted',
+          questionTextStatus: 'unavailable_exact_historic_text',
+          submittedAnswer: '+SUM(1,1)',
+          answerStatus: 'completed',
           score: 4.2,
+          suggestedAnswer: null,
+          suggestedAnswerStatus: 'not_persisted_with_practice_attempt',
           timerMode: 'selfPaced',
           elapsedSeconds: 60,
           submittedAt: '2026-08-01T00:00:00Z',
@@ -558,24 +779,28 @@ test('founder user-response export is targeted, private, audited through RPC, an
         }, {
           recordSource: 'formal_exam',
           userId: targetUserId,
+          userDisplayName: 'Student One',
+          userEmail: 'student.one@example.com',
+          subscriptionCategory: 'Beta Tester',
           attemptId: '50000000-0000-4000-8000-000000000001',
           examTitle: 'Civil Law Midterm',
           subject: 'Civil Law',
           questionId: 'CIV-001',
-          questionText: 'Exact immutable prompt snapshot',
-          questionProvenance: 'immutable_exam_snapshot',
-          studentAnswer: '@answer',
-          status: 'submitted',
+          questionText: '=Exact immutable prompt snapshot',
+          questionTextSource: 'immutable_exam_snapshot',
+          questionTextStatus: 'available',
+          submittedAnswer: '@answer',
+          answerStatus: 'submitted',
           score: null,
+          modelAnswer: '+Exact immutable model answer snapshot',
+          modelAnswerSource: 'immutable_exam_snapshot',
+          modelAnswerStatus: 'available',
           timerMode: 'strict',
           elapsedSeconds: 1200,
           submittedAt: '2026-08-01T00:02:00Z',
           completedAt: '2026-08-01T00:02:00Z',
         }],
       });
-    }
-    if (url === 'https://bank.example/website-bank.json') {
-      return Response.json({ records: bankRecords });
     }
     throw new Error(`Unexpected fetch: ${url}`);
   };
@@ -598,20 +823,26 @@ test('founder user-response export is targeted, private, audited through RPC, an
     assert.equal(response.status, 200);
     assert.equal(rpcBody.p_target_user_id, targetUserId);
     assert.equal(rpcBody.p_actor_user_id, '91000000-0000-4000-8000-000000000001');
+    assert.equal(rpcBody.p_limit, 2000);
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
     assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
     assert.match(response.headers.get('Content-Disposition'), new RegExp(targetUserId));
     const bytes = new Uint8Array(await response.arrayBuffer());
     assert.deepEqual([...bytes.slice(0, 3)], [0xef, 0xbb, 0xbf]);
     const csv = new TextDecoder().decode(bytes);
-    assert.match(csv, /"User email","Display name"/);
-    assert.match(csv, /"student\.one@example\.com","Student One"/);
-    assert.match(csv, /current_published_bank/);
+    assert.match(csv, /"Name","User email"/);
+    assert.match(csv, /"Student One","student\.one@example\.com"/);
+    assert.match(csv, /unavailable_exact_historic_text/);
+    assert.match(csv, /not_persisted_with_practice_attempt/);
     assert.match(csv, /immutable_exam_snapshot/);
-    assert.match(csv, /"'=Practice question/);
     assert.match(csv, /"'\+SUM/);
+    assert.match(csv, /"'=Exact immutable prompt snapshot"/);
     assert.match(csv, /"'@answer/);
-    assert.doesNotMatch(csv, /model_answer|assessment|service.role|token/i);
+    assert.match(csv, /"'\+Exact immutable model answer snapshot"/);
+    assert.doesNotMatch(csv, /current_published_bank|Current validated suggested answer/);
+    assert.equal(calls.some((url) => url === 'https://bank.example/website-bank.json'), false);
+    assert.equal(calls.some((url) => url.includes('admin_user_engagement_directory')), false);
+    assert.equal(calls.some((url) => url.includes('admin_user_directory')), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -843,7 +1074,72 @@ test('manual founder directory email sends one private CSV attachment and record
   }
 });
 
-test('founder answer-history export returns a private spreadsheet-safe CSV', async () => {
+test('replayed founder directory email request returns 409 without sending or recording delivery again', async () => {
+  const originalFetch = globalThis.fetch;
+  let emailSendCount = 0;
+  let deliveryRecordCount = 0;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
+    }
+    if (url.endsWith('/rest/v1/rpc/admin_prepare_user_directory_email_export')) {
+      return Response.json({
+        alreadyPrepared: true,
+        total: 1,
+        tooMany: false,
+        items: [{
+          id: '30000000-0000-4000-8000-000000000001',
+          email: 'student.one@example.com',
+        }],
+      });
+    }
+    if (url === 'https://api.resend.com/emails') {
+      emailSendCount += 1;
+      return Response.json({ id: 'must-not-be-sent' });
+    }
+    if (url.endsWith('/rest/v1/rpc/admin_record_user_directory_email_delivery')) {
+      deliveryRecordCount += 1;
+      return Response.json({ recorded: true, status: 'sent' });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/admin/user-directory/email', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://duediligence.ph',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer synthetic-user-token',
+      },
+      body: JSON.stringify({
+        recipientKey: 'gilmar',
+        search: '',
+        reason: 'Founder requested private user directory',
+        requestKey: 'directoryemail0003',
+        confirmed: true,
+      }),
+    }), {
+      ...workerEnv,
+      ADMIN_DIRECTORY_EMAIL_MODE: 'enabled',
+      ADMIN_DIRECTORY_EMAIL_FROM: 'Due Diligence <reports@duediligence.ph>',
+      ADMIN_DIRECTORY_RECIPIENTS_JSON: JSON.stringify({
+        gilmar: 'founder.personal@example.com',
+      }),
+      RESEND_API_KEY: 'synthetic-resend-key',
+    });
+    assert.equal(response.status, 409);
+    const body = await response.json();
+    assert.equal(body.error.code, 'ADMIN_EXPORT_ALREADY_PROCESSED');
+    assert.match(body.error.message, /already processed/i);
+    assert.equal(emailSendCount, 0);
+    assert.equal(deliveryRecordCount, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('founder answer-history preview uses the bounded snapshot RPC without current-bank enrichment', async () => {
   const originalFetch = globalThis.fetch;
   let rpcBody;
   globalThis.fetch = async (input, init = {}) => {
@@ -851,7 +1147,108 @@ test('founder answer-history export returns a private spreadsheet-safe CSV', asy
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history')) {
+    if (url.endsWith('/rest/v1/rpc/admin_preview_answer_history')) {
+      rpcBody = JSON.parse(init.body);
+      return Response.json({
+        scope: 'all_users',
+        dateScope: 'all_time',
+        total: 102,
+        limit: 2,
+        offset: 100,
+        hasMore: false,
+        items: [{
+          recordSource: 'practice',
+          userDisplayName: 'Student One',
+          userEmail: 'student.one@example.com',
+          subscriptionCategory: 'Beta Tester',
+          questionText: null,
+          questionTextSource: 'external_question_bank_not_persisted',
+          questionTextStatus: 'unavailable_exact_historic_text',
+          submittedAnswer: 'Persisted answer',
+          suggestedAnswer: null,
+          suggestedAnswerStatus: 'not_persisted_with_practice_attempt',
+        }],
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/admin/answer-history', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://duediligence.ph',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer synthetic-user-token',
+      },
+      body: JSON.stringify({
+        targetUserId: null,
+        from: null,
+        to: null,
+        search: 'student',
+        recordSource: 'practice',
+        limit: 2,
+        offset: 100,
+      }),
+    }), workerEnv);
+    assert.equal(response.status, 200);
+    assert.equal(rpcBody.p_search, 'student');
+    assert.equal(rpcBody.p_record_source, 'practice');
+    assert.equal(rpcBody.p_limit, 2);
+    assert.equal(rpcBody.p_offset, 100);
+    assert.match(rpcBody.p_request_key, /^[A-Za-z0-9_-]{16,128}$/);
+    const body = await response.json();
+    assert.equal(body.data.total, 102);
+    assert.equal(body.data.offset, 100);
+    assert.equal(body.data.hasMore, false);
+    assert.equal(body.data.items[0].questionText, null);
+    assert.equal(
+      body.data.items[0].questionTextStatus,
+      'unavailable_exact_historic_text',
+    );
+    assert.equal(body.data.items[0].suggestedAnswer, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('answer-history preview rejects unsupported filters before storage access', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/admin/answer-history', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://duediligence.ph',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer synthetic-user-token',
+      },
+      body: JSON.stringify({ recordSource: 'raw_table' }),
+    }), workerEnv);
+    assert.equal(response.status, 400);
+    const body = await response.json();
+    assert.equal(body.error.code, 'INVALID_ADMIN_REQUEST');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('founder answer-history export uses persisted context and avoids current-bank or broad-directory enrichment', async () => {
+  const originalFetch = globalThis.fetch;
+  let rpcBody;
+  const calls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    calls.push(url);
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
+    }
+    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history_with_context')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         scope: 'all_users',
@@ -859,7 +1256,9 @@ test('founder answer-history export returns a private spreadsheet-safe CSV', asy
         tooMany: false,
         items: [{
           recordSource: 'practice',
+          userDisplayName: '=Student One',
           userEmail: 'student.one@example.com',
+          subscriptionCategory: '@Beta Tester',
           questionId: 'LAB-001',
           questionText: null,
           questionTextSource: 'external_question_bank_not_persisted',
@@ -868,7 +1267,8 @@ test('founder answer-history export returns a private spreadsheet-safe CSV', asy
           score: 4,
           suggestedAnswer: null,
           suggestedAnswerStatus: 'not_persisted_with_practice_attempt',
-          modelAnswer: 'Model answer',
+          modelAnswer: null,
+          modelAnswerStatus: 'not_applicable_to_practice_attempt',
         }],
       });
     }
@@ -900,11 +1300,15 @@ test('founder answer-history export returns a private spreadsheet-safe CSV', asy
     assert.deepEqual([...bytes.slice(0, 3)], [0xef, 0xbb, 0xbf]);
     const csv = new TextDecoder().decode(bytes);
     assert.match(csv, /student\.one@example\.com/);
-    assert.match(csv, /"'=Practice question from the current published bank\?"/);
+    assert.match(csv, /"'=Student One"/);
+    assert.match(csv, /"'@Beta Tester"/);
     assert.match(csv, /"'\+ANSWER"/);
-    assert.match(csv, /Current validated suggested answer/);
-    assert.match(csv, /current_validated_question_bank/);
-    assert.match(csv, /Model answer/);
+    assert.match(csv, /unavailable_exact_historic_text/);
+    assert.match(csv, /not_persisted_with_practice_attempt/);
+    assert.doesNotMatch(csv, /current_validated_question_bank|Current validated suggested answer/);
+    assert.equal(calls.some((url) => url.includes('admin_user_engagement_directory')), false);
+    assert.equal(calls.some((url) => url.includes('admin_user_directory')), false);
+    assert.equal(calls.some((url) => url.includes('question-bank')), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -176,10 +176,10 @@ assert.match(adminActions, /'Suspend'/);
 assert.match(adminActions, /'Expire now'/);
 assert.match(adminActions, /'Revoke'/);
 assert.match(adminActions, /'Restore'/);
-assert.match(admin, /Premium active/);
-assert.match(admin, /Premium pending/);
-assert.match(admin, /Complimentary Beta/);
-assert.match(admin, /premium-status-filter/);
+assert.match(admin, /Beta All Access/);
+assert.match(admin, /Admin & Staff/);
+assert.match(admin, /Beta Tester/);
+assert.match(admin, /subscription-search/);
 assert.match(admin, /Select a future Premium expiration/);
 
 assert.match(worker, /examination_authorize_access/);
@@ -189,7 +189,7 @@ assert.match(worker, /phase4_admin_premium_access/);
 assert.match(paymentCore, /\['early_access_beta', 'standard', 'premium'\]/);
 assert.match(
   publicPage,
-  /hasOverrideAccess = \['super_admin', 'founder_admin'\][\s\S]*examinationBeta\?\.active/,
+  /hasOverrideAccess = access\?\.globalBeta\?\.active === true[\s\S]*examinationBeta\?\.active/,
 );
 assert.match(examinationCore, /EXAM_PREMIUM_REQUIRED/);
 assert.match(examinationCore, /'quiz'/);

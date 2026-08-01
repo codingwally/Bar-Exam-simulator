@@ -58,31 +58,33 @@ assert.match(experience, /account: \['Your chamber', 'The Docket'/);
 assert.match(experience, /partnership: \['Collaborate', 'Partnerships'/);
 
 for (const label of [
-  'Chambers',
+  'Overview',
   'Live Activity',
-  'Visitors &amp; Sign-ups',
-  'Students',
-  'Performance',
+  'Sign-ups',
+  'Users',
+  'Answers',
+  'Learning Performance',
   'Question Bank',
-  'AI Grading Health',
-  'Retainer Management',
-  'Payment Review',
+  'Grading Health',
+  'Subscriptions',
+  'Payments',
   'Refunds',
-  'Support Requests',
+  'Support',
   'Answer Corrections',
   'Partnerships',
   'Website Settings',
-  'Access &amp; Activity Log',
+  'Security &amp; Activity Log',
 ]) {
-  assert.ok(adminHtml.includes(label), `Chambers navigation must include “${label}”.`);
+  assert.ok(adminHtml.includes(label), `Admin navigation must include “${label}”.`);
 }
-assert.match(admin, /executive: 'Chambers'/);
-assert.match(admin, /acquisition: 'Visitors & Sign-ups'/);
-assert.match(admin, /subscriptions: 'Retainer Management'/);
-assert.match(admin, /support: 'Support Requests'/);
+assert.match(admin, /executive: 'Overview'/);
+assert.match(admin, /acquisition: 'Sign-ups'/);
+assert.match(admin, /learning: 'Learning Performance'/);
+assert.match(admin, /subscriptions: 'Subscriptions'/);
+assert.match(admin, /support: 'Support'/);
 assert.match(admin, /partnerships: 'Partnerships'/);
-assert.match(admin, /security: 'Access & Activity Log'/);
-assert.doesNotMatch(admin, /Visitors and Sign-ups|Access and Activity Log/);
+assert.match(admin, /security: 'Security & Activity Log'/);
+assert.doesNotMatch(admin, /Retainer Management|Visitors and Sign-ups|Access and Activity Log/);
 assert.match(admin, /function maskOperationalIdentifier/);
 assert.match(admin, /\['Time', 'Action', 'Actor', 'Record type', 'Record', 'Reason'\]/);
 assert.doesNotMatch(admin, /Actor UUID|Auth UUIDs/);

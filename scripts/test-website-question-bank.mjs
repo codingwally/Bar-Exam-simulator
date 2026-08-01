@@ -51,8 +51,150 @@ const nonQuestionDigest = crypto
   .digest('hex');
 assert.equal(
   nonQuestionDigest,
+  '6e5b4adfed83fa1f85ed6b22e630d0085b40d7fb62bcee2bb3158df615f4adf1',
+  'The source-reviewed model-answer and non-question corpus must remain byte-for-byte locked.',
+);
+
+const promptDigest = (value) => crypto.createHash('sha256').update(value, 'utf8').digest('hex');
+const sourceManifest = JSON.parse(await fs.readFile(
+  new URL('../content/question-bank/verbatim-source-manifest.json', import.meta.url),
+  'utf8',
+));
+assert.equal(sourceManifest.schemaVersion, 2, 'Verbatim source manifest schema must remain supported.');
+assert.equal(sourceManifest.summary.totalRecords, 320, 'Source manifest must cover every bank row.');
+assert.equal(sourceManifest.summary.sourceCertified, 318, 'Exactly 318 official prompts must be deployed.');
+assert.equal(
+  sourceManifest.summary.unresolvedSourceSchemaConflict,
+  2,
+  'The two synthetic 2019 Tax splits must remain explicitly unresolved, never silently rewritten.',
+);
+assert.equal(sourceManifest.summary.changedPrompts, 318, 'Exactly 318 verbatim prompt replacements must be staged.');
+assert.equal(sourceManifest.summary.answerCorrectedRecords, 23, 'Exactly 23 mismatched answers must be corrected.');
+assert.equal(sourceManifest.summary.answerRetainedRecords, 297, 'All other model answers must remain retained.');
+assert.equal(
+  sourceManifest.summary.baselineNonQuestionSha256,
   '531c1b5eafa9f685d77ffd56224fc7a1765d428cb54913d84051336f89c74336',
-  'Model answers and every non-question field must remain byte-for-byte unchanged.',
+  'Manifest must record the reviewed pre-release non-question corpus.',
+);
+assert.equal(
+  sourceManifest.summary.finalNonQuestionSha256,
+  nonQuestionDigest,
+  'Manifest must lock the corrected model-answer and non-question corpus.',
+);
+assert.equal(
+  sourceManifest.summary.baselineSuggestedAnswerSha256,
+  '32b4b531dfb888570debbf0f1bab3cfef1d1562ab619e078922c8eba50cbb15c',
+  'Manifest must identify the reviewed pre-release Suggested Answer corpus.',
+);
+assert.equal(
+  sourceManifest.summary.finalSuggestedAnswerSha256,
+  '28db534676953f2578e975b8377abf32b06e81681e698fbd38f091d61db6da6b',
+  'Manifest must lock the corrected Suggested Answer corpus.',
+);
+
+const recordsById = new Map(payload.records.map((record) => [record['Question ID'], record]));
+assert.equal(sourceManifest.records.length, recordsById.size, 'Manifest IDs must match bank IDs exactly.');
+assert.equal(
+  new Set(sourceManifest.records.map((source) => source.questionId)).size,
+  recordsById.size,
+  'Manifest question IDs must be unique.',
+);
+const unresolvedIds = [];
+const correctedAnswerIds = [];
+const allowedAnswerFields = new Set([
+  'Suggested Answer',
+  'Legal Basis / Provision',
+  'Controlling Doctrine',
+  'Jurisprudence / Case',
+  'Citation / G.R. No.',
+  'Source URL',
+  'Topic',
+  'Notes',
+]);
+for (const source of sourceManifest.records) {
+  const record = recordsById.get(source.questionId);
+  assert.ok(record, `Manifest contains unknown bank ID ${source.questionId}.`);
+  assert.equal(
+    promptDigest(record['Essay Question']),
+    source.deployedPromptSha256,
+    `${source.questionId} prompt must match its reviewed source-manifest digest.`,
+  );
+  if (source.status === 'source-certified') {
+    assert.equal(
+      source.deployedPromptSha256,
+      source.officialPromptSha256,
+      `${source.questionId} deployed prompt must match the official source digest.`,
+    );
+  } else {
+    unresolvedIds.push(source.questionId);
+    assert.equal(
+      source.status,
+      'unresolved-source-schema-conflict',
+      `${source.questionId} must never use an unreviewed source status.`,
+    );
+    assert.ok(source.note, `${source.questionId} must explain why its official prompt is not deployed.`);
+    assert.ok(source.officialWholeItemSha256, `${source.questionId} must retain its official whole-item digest.`);
+  }
+  if (source.answerAlignment) {
+    correctedAnswerIds.push(source.questionId);
+    assert.equal(source.answerAlignment.status, 'source-reviewed-corrected');
+    assert.ok(source.answerAlignment.changedFields.includes('Suggested Answer'));
+    assert.ok(
+      source.answerAlignment.changedFields.every((field) => allowedAnswerFields.has(field)),
+      `${source.questionId} contains a forbidden answer-side change.`,
+    );
+    assert.equal(
+      promptDigest(record['Suggested Answer']),
+      source.answerAlignment.deployedSuggestedAnswerSha256,
+      `${source.questionId} must match its reviewed Suggested Answer digest.`,
+    );
+    assert.ok(source.answerAlignment.sourceUrls.length >= 3, `${source.questionId} must disclose at least three sources.`);
+    if (source.questionId === 'REM-2023-Q20') {
+      for (const heading of ['Answer:', 'Legal Basis:', 'Application:', 'Conclusion:']) {
+        assert.match(record['Suggested Answer'], new RegExp(`(^|\\n)${heading}`), `${source.questionId} must include ${heading}`);
+      }
+      assert.match(record['Suggested Answer'], /DEED OF ABSOLUTE SALE/);
+      assert.match(record['Suggested Answer'], /ACKNOWLEDGMENT/);
+    } else {
+      for (const heading of ['Answer:', 'Legal Basis:', 'Application:', 'Conclusion:']) {
+        assert.match(record['Suggested Answer'], new RegExp(heading), `${source.questionId} must include ${heading}`);
+      }
+    }
+  }
+}
+assert.deepEqual(
+  unresolvedIds.sort(),
+  ['TAX-2019-Q10A', 'TAX-2019-Q10B'],
+  'Only the two synthetic Lawphil A.10 splits may remain unresolved.',
+);
+assert.deepEqual(
+  correctedAnswerIds.sort(),
+  [
+    'ETH-2019-B14',
+    'LAB-037',
+    'LAB-040',
+    'LAB-048',
+    'POLI-2022-Q04B',
+    'REM-2022-I-Q07',
+    'REM-2022-I-Q15',
+    'REM-2022-II-Q01A',
+    'REM-2023-Q09',
+    'REM-2023-Q10',
+    'REM-2023-Q12',
+    'REM-2023-Q13',
+    'REM-2023-Q14',
+    'REM-2023-Q17',
+    'REM-2023-Q20',
+    'REM-2024-Q05',
+    'REM-2024-Q07',
+    'REM-2024-Q10',
+    'REM-2024-Q11',
+    'REM-2024-Q12',
+    'REM-2024-Q14',
+    'REM-2024-Q18',
+    'REM-2024-Q19',
+  ],
+  'The independently reviewed answer-correction set must remain exact.',
 );
 
 const counts = Object.fromEntries(APPROVED_SUBJECTS.map((subject) => [subject, 0]));

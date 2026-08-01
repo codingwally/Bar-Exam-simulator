@@ -3,6 +3,10 @@ import test from 'node:test';
 import worker from './index.mjs';
 import {
   AccessValidationError,
+  PHASE4_SUBJECTS,
+  WITHHELD_MOCK_BAR_QUESTION_IDS,
+  availableProtectedQuestionInventory,
+  isProtectedQuestionWithheld,
   normalizeAccessSnapshot,
   normalizeRequestKey,
   publicQuestionFromRecord,
@@ -10,6 +14,7 @@ import {
   selectProtectedQuestion,
 } from './access-core.mjs';
 import questionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
+import sourceManifest from '../content/question-bank/verbatim-source-manifest.json' with { type: 'json' };
 
 const origin = 'https://duediligence.ph';
 const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -46,6 +51,44 @@ test('embedded protected inventory preserves eight subjects and forty questions 
   const inventory = protectedQuestionInventory(records);
   assert.equal(Object.keys(inventory).length, 8);
   for (const questions of Object.values(inventory)) assert.equal(questions.length, 40);
+});
+
+test('user-visible inventory quarantines only the two unresolved Tax questions', () => {
+  const records = new Map(
+    questionBank.records.map((row) => [String(row['Question ID']).trim(), row]),
+  );
+  const inventory = availableProtectedQuestionInventory(records);
+  assert.equal(Object.values(inventory).flat().length, 318);
+  assert.equal(inventory['Taxation Law'].length, 38);
+  for (const subject of PHASE4_SUBJECTS) {
+    if (subject !== 'Taxation Law') assert.equal(inventory[subject].length, 40);
+  }
+  const availableIds = new Set(Object.values(inventory).flat().map((question) => question.id));
+  const certifiedIds = new Set(
+    sourceManifest.records
+      .filter((record) => record.status === 'source-certified')
+      .map((record) => record.questionId),
+  );
+  assert.deepEqual(availableIds, certifiedIds);
+  assert.deepEqual(
+    [...WITHHELD_MOCK_BAR_QUESTION_IDS].sort(),
+    sourceManifest.records
+      .filter((record) => record.status !== 'source-certified')
+      .map((record) => record.questionId)
+      .sort(),
+  );
+  assert.equal(isProtectedQuestionWithheld('TAX-2019-Q10A'), true);
+  assert.equal(isProtectedQuestionWithheld('TAX-2019-Q10B'), true);
+  assert.equal(isProtectedQuestionWithheld('TAX-2019-Q09B'), false);
+  for (const questionId of WITHHELD_MOCK_BAR_QUESTION_IDS) {
+    assert.throws(
+      () => selectProtectedQuestion(records, {
+        subject: 'Taxation Law',
+        questionId,
+      }),
+      (error) => error instanceof AccessValidationError && error.code === 'QUESTION_NOT_FOUND',
+    );
+  }
 });
 
 test('protected question response never includes answers, legal bases, or raw records', () => {

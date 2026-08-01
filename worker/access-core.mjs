@@ -22,6 +22,13 @@ const SUBJECT_ALIASES = Object.freeze({
 
 export const REQUEST_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 
+export const WITHHELD_MOCK_BAR_QUESTION_IDS = Object.freeze([
+  'TAX-2019-Q10A',
+  'TAX-2019-Q10B',
+]);
+
+const WITHHELD_MOCK_BAR_QUESTION_ID_SET = new Set(WITHHELD_MOCK_BAR_QUESTION_IDS);
+
 export class AccessValidationError extends Error {
   constructor(code, message, status = 400) {
     super(message);
@@ -89,6 +96,10 @@ export function publicQuestionFromRecord(record) {
   });
 }
 
+export function isProtectedQuestionWithheld(questionId) {
+  return WITHHELD_MOCK_BAR_QUESTION_ID_SET.has(clean(questionId).toUpperCase());
+}
+
 export function protectedQuestionInventory(records) {
   const bySubject = Object.fromEntries(PHASE4_SUBJECTS.map((subject) => [subject, []]));
   for (const record of records.values()) {
@@ -107,6 +118,14 @@ export function protectedQuestionInventory(records) {
   return bySubject;
 }
 
+export function availableProtectedQuestionInventory(records) {
+  const inventory = protectedQuestionInventory(records);
+  return Object.fromEntries(PHASE4_SUBJECTS.map((subject) => [
+    subject,
+    inventory[subject].filter((question) => !isProtectedQuestionWithheld(question.id)),
+  ]));
+}
+
 export function selectProtectedQuestion(records, options = {}) {
   const subject = normalizeSubject(options.subject);
   const excluded = new Set(
@@ -114,7 +133,7 @@ export function selectProtectedQuestion(records, options = {}) {
       ? options.excludeQuestionIds.map(clean).filter(Boolean).slice(0, 40)
       : [],
   );
-  const questions = protectedQuestionInventory(records)[subject];
+  const questions = availableProtectedQuestionInventory(records)[subject];
   const requestedQuestionId = clean(options.questionId);
   if (requestedQuestionId) {
     const exact = questions.find((question) => question.id === requestedQuestionId);

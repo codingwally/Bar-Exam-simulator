@@ -39,6 +39,10 @@ function clean(value) {
     .trim();
 }
 
+function preserveQuestionText(value) {
+  return String(value ?? '');
+}
+
 export function normalizeRequestKey(value) {
   const requestKey = clean(value);
   if (!REQUEST_KEY_PATTERN.test(requestKey)) {
@@ -66,8 +70,14 @@ export function publicQuestionFromRecord(record) {
   const sourceSubject = clean(record.Subject);
   const subject = SUBJECT_ALIASES[sourceSubject];
   const id = clean(record['Question ID']);
-  const prompt = clean(record['Essay Question']);
-  if (!subject || !id || !prompt) return null;
+  const prompt = preserveQuestionText(record['Essay Question']);
+  if (
+    !subject
+    || !id
+    || !prompt.trim()
+    || prompt.includes('\u0000')
+    || prompt.length > 20_000
+  ) return null;
   return Object.freeze({
     id,
     subject,

@@ -62,7 +62,17 @@ export function stripNounMarkers(value) {
     .replace(/[ \t]{2,}/g, ' ');
 }
 
-function recordsFromCsv(csv) {
+export function preserveQuestionText(value) {
+  return text(value);
+}
+
+function cleanField(header, value) {
+  return header === 'Essay Question'
+    ? preserveQuestionText(value)
+    : stripNounMarkers(value);
+}
+
+export function recordsFromCsv(csv) {
   const rows = parseCsv(csv);
   const selected = rows.slice(0, 321);
   const headers = selected[0] || [];
@@ -74,7 +84,7 @@ function recordsFromCsv(csv) {
   }
   return selected.slice(1).map((cells, offset) => ({
     __rowNumber: offset + 2,
-    ...Object.fromEntries(HEADERS.map((header, index) => [header, stripNounMarkers(cells[index])])),
+    ...Object.fromEntries(HEADERS.map((header, index) => [header, cleanField(header, cells[index])])),
   }));
 }
 
@@ -97,13 +107,23 @@ export function validateRecords(records) {
   for (const record of records) {
     const reasons = [];
     const id = record['Question ID'].trim();
+    const question = record['Essay Question'];
     const answer = record['Suggested Answer'];
     if (!id) reasons.push('Question ID is blank');
+    if (!question.trim()) reasons.push('Essay Question is blank');
+    if (question.includes('\u0000')) reasons.push('Essay Question contains a NUL character');
+    if (question.length > 20_000) reasons.push('Essay Question exceeds 20,000 characters');
     if (!approved.has(record.Subject.trim())) reasons.push('Subject is not an approved Bar subject');
     if (record['Editorial Status'].trim() !== 'Approved') reasons.push('Editorial Status is not Approved');
     if (record['Publication Ready?'].trim() !== 'Yes') reasons.push('Publication Ready? is not Yes');
     if (!record.Notes.includes(NOTES_PHRASE)) reasons.push('Required Notes phrase is missing');
-    if (/\(noun\)/i.test(JSON.stringify(record))) reasons.push('Internal noun marker is still present');
+    const nonQuestionRecord = Object.fromEntries(
+      HEADERS.filter((header) => header !== 'Essay Question')
+        .map((header) => [header, record[header]]),
+    );
+    if (/\(noun\)/i.test(JSON.stringify(nonQuestionRecord))) {
+      reasons.push('Internal noun marker is still present outside Essay Question');
+    }
     for (const heading of ALAC_HEADINGS) {
       if (!new RegExp(`(^|\\n)\\s*${heading}\\s*:`, 'i').test(answer)) {
         reasons.push(`Suggested Answer lacks ${heading}`);
@@ -128,8 +148,8 @@ export function validateRecords(records) {
   return { valid, failures, duplicateIds };
 }
 
-function cleanRecord(record) {
-  return Object.fromEntries(HEADERS.map((header) => [header, stripNounMarkers(record[header])]));
+export function cleanRecord(record) {
+  return Object.fromEntries(HEADERS.map((header) => [header, cleanField(header, record[header])]));
 }
 
 async function readExisting() {

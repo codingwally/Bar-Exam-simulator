@@ -54,6 +54,7 @@ import {
 import {
   AccessValidationError,
   accessDeniedError,
+  isProtectedQuestionWithheld,
   normalizeAccessSnapshot,
   normalizeRequestKey,
   normalizeSubject,
@@ -1619,6 +1620,13 @@ async function handleGrade(request, env, origin, allowedOrigin) {
     throw new ExaminerError('INVALID_JSON', 'The grading request contains invalid JSON.');
   }
   const gradingRequest = normalizeRequest(payload);
+  if (isProtectedQuestionWithheld(gradingRequest.questionId)) {
+    throw new ExaminerError(
+      'QUESTION_NOT_FOUND',
+      'The protected question is no longer available.',
+      404,
+    );
+  }
   const submissionId = await registerSubmission(gradingRequest, request);
   let gradeAccess = null;
   let attemptId = null;

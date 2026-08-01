@@ -187,13 +187,27 @@
     };
   }
 
+  async function policy() {
+    const response = await global.fetch(`${config.workerUrl}/beta/access/policy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+      cache: 'no-store',
+      credentials: 'omit',
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) throw controlledError(payload, response.status);
+    return {
+      enabled: payload.policy?.enabled === true,
+    };
+  }
+
   async function status(authAccessToken) {
     const access = readExpiringRecord(STORAGE_KEYS.access);
-    if (!access) return { allowed: false };
     try {
       const payload = await request('/beta/access/status', {}, {
         authAccessToken,
-        includeAccess: true,
+        includeAccess: Boolean(access),
       });
       if (payload.access?.allowed !== true) {
         clearAccess();
@@ -222,6 +236,7 @@
     accessHeaders,
     verifyCode,
     completeAdmission,
+    policy,
     status,
     clearAccess,
     clear,

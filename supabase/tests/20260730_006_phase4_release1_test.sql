@@ -4,6 +4,21 @@ begin;
 set local search_path = public, extensions, auth, pg_temp;
 select plan(44);
 
+-- This historical suite verifies the legacy trial/lifetime fallback. The
+-- current product default is global Beta All Access; disable it transactionally
+-- here so the original fallback assertions remain meaningful.
+update public.platform_access_settings
+set global_beta_all_access_enabled = false
+where singleton = true;
+
+-- Later Premium migrations intentionally activated checkout. Restore the
+-- Release 1 catalog fixture inside this rolled-back historical suite so its
+-- original assertions remain deterministic on the current schema.
+update public.plan_catalog
+set status = 'disabled',
+    checkout_enabled = false
+where plan_code = 'premium';
+
 select has_table('public', 'platform_access_settings', 'access settings table exists');
 select has_table('public', 'access_trials', 'trial table exists');
 select has_table('public', 'lifetime_grade_usage', 'lifetime usage table exists');

@@ -174,6 +174,89 @@ test('private-beta flow is server verified, user bound, and gates existing route
   assert.equal(calls.some((target) => target.endsWith('/rest/v1/rpc/private_beta_access_snapshot')), true);
 });
 
+test('global Beta All Access bypasses expiring admission tokens for permanent users', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const privateSnapshots = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const target = String(input);
+    if (target.endsWith('/auth/v1/user')) {
+      return Response.json({ id: userId, email: 'permanent@example.invalid' });
+    }
+    if (target.endsWith('/rest/v1/rpc/phase4_global_beta_public_policy')) {
+      return Response.json({ enabled: true });
+    }
+    if (target.endsWith('/rest/v1/rpc/private_beta_access_snapshot')) {
+      const payload = JSON.parse(String(init.body || '{}'));
+      privateSnapshots.push(payload);
+      return Response.json({
+        allowed: true,
+        admissionKind: 'global_beta_all_access',
+        disclosureVersion,
+        expiresAt: null,
+      });
+    }
+    if (target.endsWith('/rest/v1/rpc/phase4_access_snapshot')) {
+      return Response.json({
+        allowed: true,
+        basis: 'free_beta',
+        termsRequired: false,
+        role: 'student',
+        globalBeta: { enabled: true, eligible: true, active: true, expiresAt: null },
+        trial: { active: false },
+        freeGrades: { limit: 3, used: 3, remaining: 0 },
+        freeBeta: { enabled: true, active: true, expiresAt: null },
+        subscription: null,
+      });
+    }
+    if (target.endsWith('/rest/v1/rpc/phase4_user_subscription_status')) {
+      return Response.json({
+        globalBeta: { enabled: true, active: true, expiresAt: null },
+        subscription: null,
+        pendingPayment: null,
+      });
+    }
+    throw new Error(`Unexpected test fetch: ${target}`);
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const env = {
+    ALLOWED_ORIGIN: origin,
+    PRIVATE_BETA_GATE_ENABLED: 'true',
+    GUEST_USAGE_HMAC_KEY: 'test-private-beta-rate-key-with-at-least-32-bytes',
+    SUPABASE_URL: supabaseUrl,
+    SUPABASE_SERVICE_ROLE_KEY: serviceRolePlaceholder,
+    PUBLIC_PRICING_ENABLED: 'false',
+  };
+
+  const policy = await responseJson(await worker.fetch(request(
+    '/beta/access/policy',
+    {},
+  ), env, {}));
+  assert.equal(policy.status, 200);
+  assert.deepEqual(policy.body.policy, { enabled: true });
+
+  const status = await responseJson(await worker.fetch(request(
+    '/beta/access/status',
+    {},
+    { Authorization: 'Bearer valid-supabase-session' },
+  ), env, {}));
+  assert.equal(status.status, 200);
+  assert.equal(status.body.access.admissionKind, 'global_beta_all_access');
+  assert.equal(status.body.access.expiresAt, null);
+
+  const access = await responseJson(await worker.fetch(request(
+    '/access',
+    {},
+    { Authorization: 'Bearer valid-supabase-session' },
+  ), env, {}));
+  assert.equal(access.status, 200);
+  assert.equal(access.body.access.globalBeta.active, true);
+  assert.equal(access.body.access.subscriptionState.globalBeta.active, true);
+  assert.equal(privateSnapshots.length >= 2, true);
+  assert.equal(privateSnapshots.every((entry) => entry.p_access_jti_hash === null), true);
+});
+
 test('invalid access code returns a generic response without echoing input', async (t) => {
   const originalFetch = globalThis.fetch;
   const rateSubjects = [];

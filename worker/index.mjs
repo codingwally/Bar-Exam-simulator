@@ -43,13 +43,23 @@ import {
   normalizeAnalyticsEvent,
 } from './analytics-core.mjs';
 import {
+  ADMIN_DIRECTORY_EXPORT_MAX_BYTES,
   AdminValidationError,
   aggregateCsv,
+  answerHistoryCsv,
+  normalizeAnswerHistoryRequest,
   normalizeAdminAction,
   normalizeDashboardRequest,
+  normalizeGlobalBetaChange,
   normalizeOperationalRequest,
+  normalizeUserDirectoryEmailExport,
+  normalizeUserDirectoryRequest,
   normalizeUserResponseExport,
+  resolveAdminDirectoryRecipient,
+  utf8Base64,
+  userDirectoryCsv,
   userResponsesCsv,
+  withUtf8Bom,
 } from './admin-core.mjs';
 import {
   AccessValidationError,
@@ -905,6 +915,54 @@ async function sendExaminationEmail(env, { recipient, subject, text }) {
   return { status: 'sent', providerId: String(result.id).slice(0, 180) };
 }
 
+function adminDirectoryEmailMode(env) {
+  const mode = String(env.ADMIN_DIRECTORY_EMAIL_MODE || '').trim().toLowerCase();
+  return ['suppressed', 'enabled'].includes(mode) ? mode : 'not_configured';
+}
+
+async function sendAdminDirectoryEmail(
+  env,
+  { recipient, csv, filename, requestKey, resultCount },
+) {
+  const mode = adminDirectoryEmailMode(env);
+  if (mode === 'suppressed') return { status: 'suppressed', providerId: null };
+  const from = String(
+    env.ADMIN_DIRECTORY_EMAIL_FROM || env.EXAMINATION_EMAIL_FROM || '',
+  ).trim();
+  if (mode !== 'enabled' || !env.RESEND_API_KEY || !from) {
+    return { status: 'not_configured', providerId: null };
+  }
+  const target = String(
+    env.ADMIN_DIRECTORY_EMAIL_TEST_RECIPIENT || recipient || '',
+  ).trim();
+  if (!target) return { status: 'failed', safeErrorCode: 'recipient_missing' };
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': `admin-directory-${requestKey}`,
+    },
+    body: JSON.stringify({
+      from,
+      to: [target],
+      subject: 'Due Diligence private user-directory export',
+      text: [
+        'An authorized Founder requested the attached private user-directory export.',
+        `Rows exported: ${resultCount}.`,
+        'It contains personal information. Store it securely and do not forward it.',
+      ].join('\n'),
+      attachments: [{ filename, content: utf8Base64(csv) }],
+    }),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result?.id) {
+    console.error('Admin directory email dispatch failed', { status: response.status });
+    return { status: 'failed', safeErrorCode: `provider_${response.status}` };
+  }
+  return { status: 'sent', providerId: String(result.id).slice(0, 180) };
+}
+
 async function sendSecureNotification(env, { mailbox, subject, adminPath }) {
   if (!env.WEB3FORMS_ACCESS_KEY) return { sent: false, queued: true };
   const response = await fetch('https://api.web3forms.com/submit', {
@@ -1028,10 +1086,10 @@ async function privateBetaRateSubjectHashes(request, env) {
   return { flowHash, networkHash };
 }
 
-async function privateBetaAccessForUser(env, userId, accessJti) {
+async function privateBetaAccessForUser(env, userId, accessJti = null) {
   const result = await phase4Rpc(env, 'private_beta_access_snapshot', {
     p_user_id: userId,
-    p_access_jti_hash: await privateBetaSha256Hex(accessJti),
+    p_access_jti_hash: accessJti ? await privateBetaSha256Hex(accessJti) : null,
   });
   return {
     allowed: result?.allowed === true,
@@ -1041,9 +1099,19 @@ async function privateBetaAccessForUser(env, userId, accessJti) {
   };
 }
 
+function isGlobalBetaAdmission(access) {
+  return access?.allowed === true
+    && access?.admissionKind === 'global_beta_all_access'
+    && access?.expiresAt == null;
+}
+
 async function requirePrivateBetaAdmission(request, env) {
   if (!privateBetaGateEnabled(env)) return null;
   const user = await requireAuthenticatedUser(request, env);
+  const globalAccess = await privateBetaAccessForUser(env, user.id);
+  if (isGlobalBetaAdmission(globalAccess)) {
+    return { user, access: globalAccess, tokenPayload: null };
+  }
   const disclosureVersion = privateBetaDisclosureVersion(env);
   const token = privateBetaAccessToken(request);
   const payload = await verifyPrivateBetaToken(
@@ -1067,6 +1135,13 @@ async function requirePrivateBetaAdmission(request, env) {
 }
 
 async function privateBetaCapabilityExempt(request, pathname) {
+  // Administrator authorization is enforced again by every /admin handler.
+  // Keep the protected Admin console reachable even when a Founder disables
+  // the learner-wide beta policy; otherwise the console could be unable to
+  // load the very control needed to review or re-enable that policy.
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
+    return true;
+  }
   if (pathname === '/examinations/query') {
     const payload = await parseBoundedJson(request.clone(), 24_000);
     return payload?.operation === 'assignment';
@@ -1102,6 +1177,13 @@ function concealedSubscriptionState(value) {
       }
     : null;
   return {
+    globalBeta: value?.globalBeta && typeof value.globalBeta === 'object'
+      ? {
+          enabled: value.globalBeta.enabled === true,
+          active: value.globalBeta.active === true,
+          expiresAt: value.globalBeta.expiresAt || null,
+        }
+      : null,
     subscription,
     pendingPayment,
     examinationBeta: value?.examinationBeta || null,
@@ -2731,6 +2813,10 @@ async function handlePrivateBetaAdmissionCompletion(
 
 async function handlePrivateBetaStatus(request, env, origin, allowedOrigin) {
   const user = await requireAuthenticatedUser(request, env);
+  const globalAccess = await privateBetaAccessForUser(env, user.id);
+  if (isGlobalBetaAdmission(globalAccess)) {
+    return jsonResponse({ ok: true, access: globalAccess }, 200, origin, allowedOrigin);
+  }
   const disclosureVersion = privateBetaDisclosureVersion(env);
   const token = privateBetaAccessToken(request);
   const payload = await verifyPrivateBetaToken(
@@ -2752,6 +2838,50 @@ async function handlePrivateBetaStatus(request, env, origin, allowedOrigin) {
       expiresAt: access.expiresAt,
     },
   }, 200, origin, allowedOrigin);
+}
+
+async function handleGlobalBetaPublicPolicy(env, origin, allowedOrigin) {
+  const policy = await phase4Rpc(env, 'phase4_global_beta_public_policy', {});
+  return jsonResponse({
+    ok: true,
+    policy: { enabled: policy?.enabled === true },
+  }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminGlobalBetaStatus(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  const policy = await protectedSupabaseRpc(
+    env,
+    'phase4_global_beta_policy_snapshot',
+    { p_actor_user_id: user.id },
+  );
+  return jsonResponse({ ok: true, policy }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminGlobalBetaChange(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let change;
+  try {
+    change = normalizeGlobalBetaChange(await parseBoundedJson(request, 4_000));
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_ACTION', error.message, 400);
+    }
+    throw error;
+  }
+  const policy = await protectedSupabaseRpc(
+    env,
+    'phase4_admin_set_global_beta_all_access',
+    {
+      p_actor_user_id: user.id,
+      p_enabled: change.enabled,
+      p_reason: change.reason,
+      p_request_key: change.requestKey,
+    },
+  );
+  return jsonResponse({ ok: true, policy }, 200, origin, allowedOrigin);
 }
 
 async function handleAccess(request, env, origin, allowedOrigin) {
@@ -3105,13 +3235,41 @@ async function handleAdminDashboard(request, env, origin, allowedOrigin) {
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_dashboard_snapshot', {
+  const dashboardSnapshot = await protectedSupabaseRpc(env, 'admin_dashboard_snapshot', {
     p_actor_user_id: user.id,
     p_from: report.from,
     p_to: report.to,
     p_previous_from: report.previousFrom,
     p_previous_to: report.previousTo,
   });
+  let engagement = null;
+  try {
+    engagement = await protectedSupabaseRpc(env, 'admin_overview_engagement_metrics', {
+      p_actor_user_id: user.id,
+    });
+  } catch {
+    engagement = {
+      available: false,
+      definition: 'All-time signed-in-account and persisted-answer metrics are temporarily unavailable.',
+    };
+  }
+  let betaAllAccess = null;
+  try {
+    betaAllAccess = await protectedSupabaseRpc(env, 'phase4_global_beta_policy_snapshot', {
+      p_actor_user_id: user.id,
+    });
+  } catch {
+    betaAllAccess = {
+      available: false,
+      enabled: null,
+      definition: 'The global Beta All Access policy is temporarily unavailable.',
+    };
+  }
+  const result = {
+    ...(dashboardSnapshot || {}),
+    engagement: engagement || null,
+    betaAllAccess,
+  };
   try {
     const bank = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
     const subjects = new Set(Array.from(bank.values()).map((row) => String(row.Subject || row.subject || '').trim()).filter(Boolean));
@@ -3152,6 +3310,234 @@ async function handleAdminData(request, env, origin, allowedOrigin) {
     p_offset: query.offset,
   });
   return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function adminUserDirectoryResult(request, env, accessPurpose) {
+  const user = await requireAdministrator(request, env);
+  let query;
+  try {
+    query = normalizeUserDirectoryRequest(
+      await parseBoundedJson(request, 4_000),
+      accessPurpose,
+    );
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  return protectedSupabaseRpc(env, 'admin_user_engagement_directory', {
+    p_actor_user_id: user.id,
+    p_search: query.search,
+    p_limit: query.limit,
+    p_offset: query.offset,
+    p_request_key: query.requestKey,
+    p_access_purpose: query.accessPurpose,
+  });
+}
+
+async function handleAdminUserDirectory(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const result = await adminUserDirectoryResult(request, env, 'dashboard');
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminUserDirectoryExport(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const result = await adminUserDirectoryResult(request, env, 'csv_export');
+  if (result?.tooMany) {
+    throw new ExaminerError(
+      'ADMIN_EXPORT_TOO_LARGE',
+      'The directory contains more than 5,000 matching users. Narrow the search before exporting.',
+      422,
+    );
+  }
+  return new Response(withUtf8Bom(userDirectoryCsv(result?.items)), {
+    status: 200,
+    headers: {
+      ...corsHeaders(origin, allowedOrigin),
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="due-diligence-students.csv"',
+      'Cache-Control': 'no-store',
+      Pragma: 'no-cache',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
+async function handleAdminUserDirectoryEmail(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let exportRequest;
+  try {
+    exportRequest = normalizeUserDirectoryEmailExport(
+      await parseBoundedJson(request, 4_000),
+    );
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  const recipient = resolveAdminDirectoryRecipient(
+    env.ADMIN_DIRECTORY_RECIPIENTS_JSON,
+    exportRequest.recipientKey,
+  );
+  if (!recipient) {
+    throw new ExaminerError(
+      'ADMIN_EMAIL_NOT_CONFIGURED',
+      'The approved Founder recipient is not configured for private exports.',
+      503,
+    );
+  }
+  const result = await protectedSupabaseRpc(
+    env,
+    'admin_prepare_user_directory_email_export',
+    {
+      p_actor_user_id: user.id,
+      p_search: exportRequest.search,
+      p_limit: exportRequest.limit,
+      p_recipient_key: exportRequest.recipientKey,
+      p_reason: exportRequest.reason,
+      p_request_key: exportRequest.requestKey,
+    },
+  );
+  const items = Array.isArray(result?.items) ? result.items : [];
+  let delivery;
+  if (result?.tooMany) {
+    delivery = { status: 'failed', safeErrorCode: 'result_limit_exceeded' };
+  } else {
+    const csv = withUtf8Bom(userDirectoryCsv(items));
+    if (new TextEncoder().encode(csv).byteLength > ADMIN_DIRECTORY_EXPORT_MAX_BYTES) {
+      delivery = { status: 'failed', safeErrorCode: 'attachment_too_large' };
+    } else {
+      delivery = await sendAdminDirectoryEmail(env, {
+        recipient,
+        csv,
+        filename: 'due-diligence-private-user-directory.csv',
+        requestKey: exportRequest.requestKey,
+        resultCount: items.length,
+      });
+    }
+  }
+  await protectedSupabaseRpc(env, 'admin_record_user_directory_email_delivery', {
+    p_actor_user_id: user.id,
+    p_recipient_key: exportRequest.recipientKey,
+    p_status: delivery.status,
+    p_provider_id: delivery.providerId || null,
+    p_safe_error_code: delivery.safeErrorCode || null,
+    p_result_count: items.length,
+    p_reason: exportRequest.reason,
+    p_request_key: exportRequest.requestKey,
+  });
+  if (result?.tooMany) {
+    throw new ExaminerError(
+      'ADMIN_EXPORT_TOO_LARGE',
+      'The directory contains more than 5,000 matching users. Narrow the search before emailing it.',
+      422,
+    );
+  }
+  if (delivery.safeErrorCode === 'attachment_too_large') {
+    throw new ExaminerError(
+      'ADMIN_EXPORT_TOO_LARGE',
+      'The private directory attachment is too large. Narrow the search before emailing it.',
+      422,
+    );
+  }
+  if (delivery.status !== 'sent') {
+    throw new ExaminerError(
+      delivery.status === 'not_configured'
+        ? 'ADMIN_EMAIL_NOT_CONFIGURED'
+        : 'ADMIN_EMAIL_DELIVERY_FAILED',
+      delivery.status === 'not_configured'
+        ? 'Private Founder email delivery is not configured.'
+        : 'The private directory email could not be delivered.',
+      delivery.status === 'not_configured' ? 503 : 502,
+    );
+  }
+  return jsonResponse({
+    ok: true,
+    delivery: {
+      status: 'sent',
+      recipientKey: exportRequest.recipientKey,
+      resultCount: items.length,
+    },
+  }, 200, origin, allowedOrigin);
+}
+
+async function handleAdminAnswerHistoryExport(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let exportRequest;
+  try {
+    exportRequest = normalizeAnswerHistoryRequest(
+      await parseBoundedJson(request, 4_000),
+      'csv_export',
+    );
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history', {
+    p_actor_user_id: user.id,
+    p_target_user_id: exportRequest.targetUserId,
+    p_from: exportRequest.from,
+    p_to: exportRequest.to,
+    p_limit: exportRequest.limit,
+    p_reason: exportRequest.reason,
+    p_request_key: exportRequest.requestKey,
+  });
+  if (result?.tooMany) {
+    throw new ExaminerError(
+      'ADMIN_EXPORT_TOO_LARGE',
+      'More than 5,000 persisted answers match this request. Narrow the date range or select one user.',
+      422,
+    );
+  }
+  let websiteBank = null;
+  try {
+    websiteBank = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
+  } catch {
+    // Formal-exam snapshots and persisted grading records remain exportable.
+    // Practice rows keep explicit unavailable provenance when the current
+    // validated question bank cannot be loaded.
+  }
+  const items = (Array.isArray(result?.items) ? result.items : []).map((item) => {
+    if (item?.recordSource !== 'practice') return item;
+    const bankContext = questionFromBankRow(
+      websiteBank?.get(String(item.questionId || '')),
+    );
+    if (!bankContext?.question) return item;
+    return {
+      ...item,
+      questionText: bankContext.question,
+      questionTextSource: 'current_validated_question_bank',
+      questionTextStatus: 'available_current_bank',
+      suggestedAnswer: bankContext.suggestedAnswer || null,
+      suggestedAnswerSource: bankContext.suggestedAnswer
+        ? 'current_validated_question_bank'
+        : item.suggestedAnswerSource,
+      suggestedAnswerStatus: bankContext.suggestedAnswer
+        ? 'available_current_bank'
+        : item.suggestedAnswerStatus,
+    };
+  });
+  const scope = result?.scope === 'single_user' && exportRequest.targetUserId
+    ? `user-${exportRequest.targetUserId}`
+    : 'all-users';
+  return new Response(withUtf8Bom(answerHistoryCsv(items)), {
+    status: 200,
+    headers: {
+      ...corsHeaders(origin, allowedOrigin),
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="due-diligence-answer-history-${scope}.csv"`,
+      'Cache-Control': 'no-store',
+      Pragma: 'no-cache',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
 }
 
 async function handleAdminAction(request, env, origin, allowedOrigin) {
@@ -3263,7 +3649,7 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_export_user_responses', {
+  const result = await protectedSupabaseRpc(env, 'admin_export_user_responses_with_identity', {
     p_actor_user_id: user.id,
     p_target_user_id: exportRequest.targetUserId,
     p_from: exportRequest.from,
@@ -3299,7 +3685,7 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
     };
   });
   const filename = `due-diligence-user-${exportRequest.targetUserId}-questions-answers.csv`;
-  return new Response(userResponsesCsv(items), {
+  return new Response(withUtf8Bom(userResponsesCsv(items, result?.user)), {
     status: 200,
     headers: {
       ...corsHeaders(origin, allowedOrigin),
@@ -3602,6 +3988,9 @@ export default {
         throw new ExaminerError('METHOD_NOT_ALLOWED', 'Only POST requests are accepted.', 405);
       }
       const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+      if (pathname === '/beta/access/policy') {
+        return await handleGlobalBetaPublicPolicy(env, origin, allowedOrigin);
+      }
       if (privateBetaGateEnabled(env) && pathname === '/beta/access/verify') {
         return await handlePrivateBetaCodeVerification(
           request,
@@ -3741,8 +4130,27 @@ export default {
       if (pathname === '/admin/dashboard') {
         return await handleAdminDashboard(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/admin/global-beta'
+          || pathname === '/admin/global-beta/status') {
+        return await handleAdminGlobalBetaStatus(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/global-beta/change') {
+        return await handleAdminGlobalBetaChange(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/admin/data') {
         return await handleAdminData(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/user-directory') {
+        return await handleAdminUserDirectory(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/user-directory/export') {
+        return await handleAdminUserDirectoryExport(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/user-directory/email') {
+        return await handleAdminUserDirectoryEmail(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/answer-history/export') {
+        return await handleAdminAnswerHistoryExport(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/action') {
         return await handleAdminAction(request, env, origin, allowedOrigin);

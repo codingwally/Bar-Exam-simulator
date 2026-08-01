@@ -108,6 +108,9 @@ const window = {
   },
   async fetch(url, options) {
     requests.push({ url, options });
+    if (url.endsWith('/beta/access/policy')) {
+      return Response.json({ ok: true, policy: { enabled: true } });
+    }
     if (url.endsWith('/beta/access/verify')) {
       return Response.json({
         ok: true,
@@ -162,6 +165,7 @@ vm.runInNewContext(files['assets/private-beta-session.js'], {
 
 const admission = window.DueDiligencePrivateBeta;
 assert.ok(admission);
+assert.equal((await admission.policy()).enabled, true);
 const acknowledgements = {
   aiLimitations: true,
   educationalOnly: true,
@@ -178,8 +182,8 @@ assert.equal(
   false,
   'the access code must never be persisted',
 );
-assert.equal(requests[0].options.cache, 'no-store');
-assert.equal(requests[0].options.credentials, 'omit');
+assert.equal(requests[1].options.cache, 'no-store');
+assert.equal(requests[1].options.credentials, 'omit');
 
 await admission.completeAdmission({
   authAccessToken: 'test-auth-session',
@@ -192,14 +196,14 @@ assert.equal(
 );
 assert.equal(admission.getPending(), null);
 assert.equal(
-  requests[1].options.headers.Authorization,
+  requests[2].options.headers.Authorization,
   'Bearer test-auth-session',
 );
 
 const status = await admission.status('test-auth-session');
 assert.equal(status.allowed, true);
 assert.equal(
-  requests[2].options.headers['X-DD-Beta-Access'],
+  requests[3].options.headers['X-DD-Beta-Access'],
   'access-token-for-browser-contract',
 );
 assert.equal(localStorageTouched, false);
@@ -207,5 +211,13 @@ assert.equal(localStorageTouched, false);
 admission.clear();
 assert.equal(storage.size, 0);
 assert.equal(Object.keys(admission.accessHeaders()).length, 0);
+
+const globalStatus = await admission.status('test-auth-session');
+assert.equal(globalStatus.allowed, true);
+assert.equal(
+  requests[4].options.headers['X-DD-Beta-Access'],
+  undefined,
+  'global access status must not require a browser-stored admission token',
+);
 
 console.log('Private-beta frontend session and propagation checks passed.');

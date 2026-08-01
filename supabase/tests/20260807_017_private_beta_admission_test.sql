@@ -5,6 +5,12 @@ begin;
 set local search_path = public, extensions, auth, pg_temp;
 select plan(60);
 
+-- Exercise the preserved 12-hour fallback admission path. Global Beta All
+-- Access has its own coverage and is disabled only inside this rolled-back test.
+update public.platform_access_settings
+set global_beta_all_access_enabled = false
+where singleton = true;
+
 select has_table('public', 'private_beta_settings', 'private-beta settings exist');
 select has_table('public', 'private_beta_acceptances', 'private-beta acceptances exist');
 select has_table('public', 'private_beta_pending_tokens', 'consumed pending tokens exist');

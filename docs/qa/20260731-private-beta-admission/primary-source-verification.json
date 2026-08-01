@@ -1,7 +1,7 @@
 {
-  "capturedAt": "2026-07-31T19:59:18+08:00",
+  "capturedAt": "2026-08-01T17:41:51+08:00",
   "captureRegion": "Owner-authorized release workstation, Asia/Manila",
-  "method": "Read-only HTTPS GET to the exact stored Supreme Court E-Library URL; require HTTP 200, nonempty decision body, and case-identity match. SHA-256 is evidence of the body received at capture time, not a claim that the upstream page is immutable.",
+  "method": "Require the exact stored Supreme Court E-Library URL, a nonempty decision body, and a case-identity match. Six entries were captured by direct read-only HTTPS GET. The two entries refreshed on 2026-08-01 used Jina Reader against the exact HTTPS origin URL because the direct route returned an upstream certificate-verification 502; their status and SHA-256 cover the reader-rendered Markdown response, whose URL Source was required to match the exact origin URL. SHA-256 is capture evidence, not a claim that the upstream page is immutable.",
   "githubRunnerNote": "The Supreme Court E-Library rejected GitHub-hosted runner requests during baseline run 30628813720. Runner reachability is reported separately and does not replace this content verification.",
   "sources": [
     {
@@ -60,21 +60,29 @@
     },
     {
       "questionId": "REM-2024-Q05",
-      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/64457",
+      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/49760",
       "status": 200,
-      "bodyBytes": 48904,
+      "statusScope": "retrieval-gateway-response",
+      "bodyBytes": 17951,
+      "bodyFormat": "reader-rendered-markdown",
       "identityMatched": true,
-      "sha256": "7CFFD909BB829E3B78CFB1185B1B28BDAFC19AF80D8F3913E749AD119A1444BA",
-      "verifiedAt": "2026-07-31T19:59:18+08:00"
+      "urlSourceMatched": true,
+      "retrievalUrl": "https://r.jina.ai/https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/49760",
+      "sha256": "9EF34288EC3110F07AE7A2F75462C7ACDD052C644AE492CD6D28D34BCB3740FC",
+      "verifiedAt": "2026-08-01T17:41:51+08:00"
     },
     {
       "questionId": "REM-2024-Q18",
-      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/23/70033",
+      "url": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/65860",
       "status": 200,
-      "bodyBytes": 67870,
+      "statusScope": "retrieval-gateway-response",
+      "bodyBytes": 22743,
+      "bodyFormat": "reader-rendered-markdown",
       "identityMatched": true,
-      "sha256": "9E8EB459D063739FD18003A16121B7D869EE928761F74E49DA705E4ACACCAB9B",
-      "verifiedAt": "2026-07-31T19:59:18+08:00"
+      "urlSourceMatched": true,
+      "retrievalUrl": "https://r.jina.ai/https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/65860",
+      "sha256": "E2330FF7056B641C9CDD93A839B47C4F9D48222633DC06DD88CB31CE6D953D28",
+      "verifiedAt": "2026-08-01T17:41:51+08:00"
     }
   ]
 }

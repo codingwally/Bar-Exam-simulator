@@ -50,14 +50,14 @@
     {
       "questionId": "REM-2024-Q05",
       "subject": "Remedial Law",
-      "legalBasis": "Family Code, Article 151; Rules of Court, Rule 75; Moreno v. Kahn",
-      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/64457"
+      "legalBasis": "Family Code, Article 151; Rules of Court, Rule 75, Section 1; Vda. de Manalo v. Court of Appeals",
+      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/49760"
     },
     {
       "questionId": "REM-2024-Q18",
       "subject": "Legal and Judicial Ethics",
-      "legalBasis": "Code of Professional Responsibility and Accountability, Canons II and IV; Rebarter v. Villa",
-      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/23/70033"
+      "legalBasis": "Code of Professional Responsibility and Accountability, Canon II, Section 35; Rules of Court, Rule 7, Section 3; Petelo v. Rivera",
+      "primarySourceUrl": "https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/65860"
     }
   ],
   "samples": [
@@ -307,7 +307,7 @@
       "sampleId": "ETHICS-BARE-CONCLUSION",
       "questionId": "REM-2024-Q18",
       "qualityBand": "correct-conclusion-only",
-      "answerTemplate": "No.",
+      "answerTemplate": "Give only the correct one-word conclusion.",
       "expectedScore": 1,
       "expectedAlac": ["Answer"],
       "expectedDefects": ["No legal basis", "No application", "No developed conclusion"],

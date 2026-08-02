@@ -107,6 +107,8 @@ tbody tr:hover { background: #fbfcfe; }
 .row-actions button:disabled { cursor: not-allowed; opacity: .55; }
 .record-detail summary { color: var(--navy); cursor: pointer; font-weight: 700; }
 .table-wrap td .record-detail > div { max-width: 560px; max-height: 260px; margin-top: .5rem; overflow: auto; white-space: pre-wrap; line-height: 1.55; }
+.record-source-links { display: grid; gap: .55rem; margin: .7rem 0 0; padding-left: 1.2rem; }
+.record-source-links a { color: var(--navy); font-weight: 700; overflow-wrap: anywhere; text-decoration-color: var(--gold); text-underline-offset: .18rem; }
 details.panel.record-detail > summary { min-height: 44px; display: flex; align-items: center; }
 details.panel.record-detail > .table-wrap { margin-top: .85rem; }
 .action-menu { position: relative; min-width: 110px; }

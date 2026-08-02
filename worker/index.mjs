@@ -1753,6 +1753,68 @@ async function loadWebsiteBank(url) {
   return records;
 }
 
+function normalizedAdminSourceLinks(value) {
+  return sanitizeSources(Array.isArray(value) ? value : []).map((source) => ({
+    title: source.title,
+    url: source.url,
+    authority: source.authority,
+    reference: source.reference,
+  }));
+}
+
+function mergedAdminSourceLinks(...groups) {
+  return normalizedAdminSourceLinks(groups.flatMap((group) => (
+    Array.isArray(group) ? group : []
+  )));
+}
+
+async function enrichAdminAnswerHistory(items, env) {
+  const records = Array.isArray(items) ? items : [];
+  const needsPracticeBank = records.some((item) => (
+    item?.recordSource === 'practice'
+    && item?.questionId
+    && (!item?.questionText || !item?.suggestedAnswer || !item?.questionSourceLinks?.length)
+  ));
+  let bank = null;
+  if (needsPracticeBank) {
+    bank = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
+  }
+
+  return records.map((original) => {
+    const item = { ...original };
+    const persistedResultSources = normalizedAdminSourceLinks(item.resultSources);
+    let questionSources = normalizedAdminSourceLinks(item.questionSourceLinks);
+
+    if (item.recordSource === 'practice' && bank && item.questionId) {
+      const context = questionFromBankRow(bank.get(String(item.questionId)));
+      if (context) {
+        if (!item.questionText && context.question) {
+          item.questionText = context.question;
+          item.questionTextSource = 'current_published_question_bank';
+          item.questionTextStatus = 'available_current_published_record';
+        }
+        if (!item.suggestedAnswer && context.suggestedAnswer) {
+          item.suggestedAnswer = context.suggestedAnswer;
+          item.suggestedAnswerSource = 'current_published_question_bank';
+          item.suggestedAnswerStatus = 'available_current_published_record';
+        }
+        questionSources = mergedAdminSourceLinks(questionSources, context.sourceUrls);
+      }
+    }
+
+    if (item.recordSource === 'formal_exam' && !item.suggestedAnswer && item.modelAnswer) {
+      item.suggestedAnswer = item.modelAnswer;
+      item.suggestedAnswerSource = item.modelAnswerSource || 'immutable_exam_snapshot';
+      item.suggestedAnswerStatus = item.modelAnswerStatus || 'available_exact_attempt_snapshot';
+    }
+
+    item.resultSources = persistedResultSources;
+    item.questionSourceLinks = questionSources;
+    item.displaySourceLinks = mergedAdminSourceLinks(persistedResultSources, questionSources);
+    return item;
+  });
+}
+
 function orderedModels(configuredModel) {
   return [...new Set([configuredModel || DEFAULT_MODEL, ...MODEL_FALLBACKS])];
 }
@@ -3913,7 +3975,7 @@ async function handleAdminAnswerHistoryPreview(request, env, origin, allowedOrig
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_preview_answer_history', {
+  const result = await protectedSupabaseRpc(env, 'admin_preview_answer_history_with_sources', {
     p_actor_user_id: user.id,
     p_target_user_id: previewRequest.targetUserId,
     p_from: previewRequest.from,
@@ -3924,7 +3986,7 @@ async function handleAdminAnswerHistoryPreview(request, env, origin, allowedOrig
     p_offset: previewRequest.offset,
     p_request_key: previewRequest.requestKey,
   });
-  const items = Array.isArray(result?.items) ? result.items : [];
+  const items = await enrichAdminAnswerHistory(result?.items, env);
   return jsonResponse({
     ok: true,
     data: {
@@ -3955,7 +4017,7 @@ async function handleAdminAnswerHistoryExport(request, env, origin, allowedOrigi
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history_with_context', {
+  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history_with_sources', {
     p_actor_user_id: user.id,
     p_target_user_id: exportRequest.targetUserId,
     p_from: exportRequest.from,
@@ -3971,7 +4033,7 @@ async function handleAdminAnswerHistoryExport(request, env, origin, allowedOrigi
       422,
     );
   }
-  const items = Array.isArray(result?.items) ? result.items : [];
+  const items = await enrichAdminAnswerHistory(result?.items, env);
   const scope = result?.scope === 'single_user' && exportRequest.targetUserId
     ? `user-${exportRequest.targetUserId}`
     : 'all-users';
@@ -4097,7 +4159,7 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history_with_context', {
+  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history_with_sources', {
     p_actor_user_id: user.id,
     p_target_user_id: exportRequest.targetUserId,
     p_from: exportRequest.from,
@@ -4114,7 +4176,7 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
     );
   }
 
-  const items = Array.isArray(result?.items) ? result.items : [];
+  const items = await enrichAdminAnswerHistory(result?.items, env);
   const filename = `due-diligence-user-${exportRequest.targetUserId}-questions-answers.csv`;
   return new Response(withUtf8Bom(answerHistoryCsv(items)), {
     status: 200,

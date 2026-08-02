@@ -505,6 +505,8 @@ export function answerHistoryCsv(items) {
     ['Model answer', 'modelAnswer'],
     ['Model answer record source', 'modelAnswerSource'],
     ['Model answer availability', 'modelAnswerStatus'],
+    ['Sources shown with result', 'resultSourceUrls'],
+    ['Question reference links', 'questionSourceUrls'],
     ['Subject', 'subject'],
     ['Exam title', 'examTitle'],
     ['Exam track', 'examTrack'],
@@ -531,7 +533,21 @@ export function answerHistoryCsv(items) {
     ['Completed at', 'completedAt'],
   ];
   const rows = (Array.isArray(items) ? items : []).map((item) => (
-    columns.map(([, key]) => item?.[key])
+    columns.map(([, key]) => {
+      if (key === 'resultSourceUrls') {
+        return (Array.isArray(item?.resultSources) ? item.resultSources : [])
+          .map((source) => source?.url)
+          .filter(Boolean)
+          .join('\n');
+      }
+      if (key === 'questionSourceUrls') {
+        return (Array.isArray(item?.questionSourceLinks) ? item.questionSourceLinks : [])
+          .map((source) => source?.url)
+          .filter(Boolean)
+          .join('\n');
+      }
+      return item?.[key];
+    })
   ));
   return [columns.map(([label]) => label), ...rows]
     .map((row) => row.map(safeCsvCell).join(','))

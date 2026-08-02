@@ -20,6 +20,7 @@
     authInFlight: false,
     authStartedAt: 0,
     authTimeout: null,
+    signInNotificationAttempted: false,
     privateBetaAllowed: config.features?.privateBetaGate !== true,
   };
 
@@ -560,6 +561,31 @@
           : 'You appear to be offline. Reconnect and try again.',
         'error',
       );
+    }
+  }
+
+  function isAuthenticationReturn() {
+    const query = new URLSearchParams(location.search);
+    return query.get('auth') === 'callback' || query.has('code');
+  }
+
+  async function notifyOwnerOfSuccessfulSignIn(session) {
+    if (state.signInNotificationAttempted || !isAuthenticationReturn()) return;
+    const accessToken = String(session?.access_token || '');
+    if (!accessToken) return;
+    state.signInNotificationAttempted = true;
+    try {
+      await fetch(`${config.workerUrl}/auth/sign-in-notification`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+        keepalive: true,
+      });
+    } catch {
+      // Owner notification is best-effort and must never interrupt user authentication.
     }
   }
 
@@ -1325,6 +1351,7 @@
     if (state.session?.access_token) {
       safeSessionRemove(authAttemptStorageKey);
       resetGoogleSignIn();
+      setTimeout(() => notifyOwnerOfSuccessfulSignIn(state.session), 0);
     } else if (new URLSearchParams(location.search).has('error')) {
       resetGoogleSignIn('Google sign-in was not completed. You can try again now.', 'error');
     }
@@ -1351,6 +1378,7 @@
         closeEntry();
         if (event === 'SIGNED_IN') {
           global.DueDiligenceAnalytics?.track('sign_in_completed');
+          setTimeout(() => notifyOwnerOfSuccessfulSignIn(session), 0);
           const createdAt = new Date(session.user?.created_at || 0).getTime();
           if (createdAt && Date.now() - createdAt < 10 * 60 * 1000) {
             global.DueDiligenceAnalytics?.track('registration_completed');

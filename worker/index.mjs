@@ -156,6 +156,7 @@ const forumWriteRateWindows = new Map();
 const examinationReadRateWindows = new Map();
 const examinationWriteRateWindows = new Map();
 const recentSubmissions = new Map();
+const recentSignInNotificationSessions = new Map();
 const authenticatedUserCache = new WeakMap();
 let laborBankCache = null;
 let websiteBankCache = null;
@@ -967,6 +968,8 @@ async function sendAdminDirectoryEmail(
 }
 
 const SUPPORT_NOTIFICATION_RECIPIENT = 'support@duediligence.ph';
+const SIGN_IN_NOTIFICATION_RECIPIENT_KEY = 'wally';
+const SIGN_IN_NOTIFICATION_DEDUPE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function supportNotificationEmailMode(env) {
   const mode = String(env.SUPPORT_NOTIFICATION_EMAIL_MODE || '').trim().toLowerCase();
@@ -1026,6 +1029,162 @@ async function sendSupportNotification(env, { subject, text, replyTo, adminPath 
   }
 }
 
+function safeSingleLine(value, maximum = 160) {
+  return String(value || '')
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maximum);
+}
+
+function signInNotificationEmailMode(env) {
+  const mode = String(env.SIGN_IN_NOTIFICATION_EMAIL_MODE || '').trim().toLowerCase();
+  return ['suppressed', 'enabled'].includes(mode) ? mode : 'not_configured';
+}
+
+function decodeJwtPayload(authorization) {
+  const token = String(authorization || '').replace(/^Bearer\s+/i, '');
+  const payload = token.split('.')[1] || '';
+  if (!payload) return {};
+  try {
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    return JSON.parse(atob(padded));
+  } catch {
+    return {};
+  }
+}
+
+async function signInSessionDigest(request, user) {
+  const payload = decodeJwtPayload(request.headers.get('Authorization'));
+  const sessionKey = safeSingleLine(
+    payload.session_id || `${user.id}:${payload.iat || 'verified-session'}`,
+    180,
+  );
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(sessionKey),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function summarizeSignInClient(request) {
+  const userAgent = String(request.headers.get('User-Agent') || '');
+  const mobileHint = request.headers.get('Sec-CH-UA-Mobile') === '?1';
+  let device = 'Desktop or laptop';
+  if (/iPad|Tablet|Nexus 7|Nexus 9|SM-T/i.test(userAgent)) device = 'Tablet';
+  else if (mobileHint || /Mobile|iPhone|Android/i.test(userAgent)) device = 'Mobile phone';
+
+  let operatingSystem = 'Unknown or privacy-masked';
+  if (/iPhone|iPad|iPod/i.test(userAgent)) operatingSystem = 'iOS or iPadOS';
+  else if (/Android/i.test(userAgent)) operatingSystem = 'Android';
+  else if (/Windows NT/i.test(userAgent)) operatingSystem = 'Windows';
+  else if (/CrOS/i.test(userAgent)) operatingSystem = 'ChromeOS';
+  else if (/Mac OS X|Macintosh/i.test(userAgent)) operatingSystem = 'macOS';
+  else if (/Linux/i.test(userAgent)) operatingSystem = 'Linux';
+
+  const browserPatterns = [
+    ['Microsoft Edge', /Edg(?:A|iOS)?\/([0-9]+)/i],
+    ['Samsung Internet', /SamsungBrowser\/([0-9]+)/i],
+    ['Opera', /(?:OPR|Opera)\/([0-9]+)/i],
+    ['Firefox', /(?:Firefox|FxiOS)\/([0-9]+)/i],
+    ['Chrome', /(?:Chrome|CriOS)\/([0-9]+)/i],
+    ['Safari', /Version\/([0-9]+)[^\n]*Safari\//i],
+  ];
+  const browserMatch = browserPatterns
+    .map(([name, pattern]) => ({ name, match: userAgent.match(pattern) }))
+    .find((entry) => entry.match);
+  const browser = browserMatch
+    ? `${browserMatch.name} ${browserMatch.match[1]}`
+    : 'Unknown or privacy-masked';
+  const language = safeSingleLine(
+    String(request.headers.get('Accept-Language') || '').split(',')[0],
+    40,
+  ) || 'Not provided';
+  return { device, operatingSystem, browser, language };
+}
+
+function approximateSignInLocation(request) {
+  const parts = [
+    safeSingleLine(request.cf?.region, 80),
+    safeSingleLine(request.cf?.country, 2),
+  ].filter(Boolean);
+  return parts.length ? parts.join(', ') : 'Not available';
+}
+
+async function sendSignInNotification(env, request, user, sessionDigest) {
+  const mode = signInNotificationEmailMode(env);
+  if (mode === 'suppressed') return { status: 'suppressed' };
+  const from = String(
+    env.SIGN_IN_NOTIFICATION_EMAIL_FROM
+    || env.SUPPORT_NOTIFICATION_EMAIL_FROM
+    || '',
+  ).trim();
+  const recipient = resolveAdminDirectoryRecipient(
+    env.ADMIN_DIRECTORY_RECIPIENTS_JSON,
+    SIGN_IN_NOTIFICATION_RECIPIENT_KEY,
+  );
+  if (mode !== 'enabled' || !env.RESEND_API_KEY || !from || !recipient) {
+    console.error('Sign-in notification email is not configured', { mode });
+    return { status: 'not_configured' };
+  }
+
+  const now = new Date();
+  const createdAt = Date.parse(user.createdAt || '');
+  const accountStatus = Number.isFinite(createdAt) && now.getTime() - createdAt < 10 * 60 * 1000
+    ? 'New account'
+    : 'Returning account';
+  const client = summarizeSignInClient(request);
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `sign-in-${sessionDigest}`,
+      },
+      body: JSON.stringify({
+        from,
+        to: [recipient],
+        subject: 'Due Diligence user sign-in',
+        text: [
+          'A user successfully signed in to Due Diligence.',
+          '',
+          `Name: ${user.displayName || 'Not provided'}`,
+          `Email: ${user.email || 'Not provided'}`,
+          `Account ID: ${user.id}`,
+          `Account status: ${accountStatus}`,
+          `Sign-in provider: ${user.provider || 'Not provided'}`,
+          `Time in the Philippines: ${new Intl.DateTimeFormat('en-PH', {
+            dateStyle: 'full',
+            timeStyle: 'long',
+            timeZone: 'Asia/Manila',
+          }).format(now)}`,
+          `UTC time: ${now.toISOString()}`,
+          `Device type: ${client.device}`,
+          `Browser: ${client.browser}`,
+          `Operating system: ${client.operatingSystem}`,
+          `Browser language: ${client.language}`,
+          `Approximate location: ${approximateSignInLocation(request)}`,
+          '',
+          'Privacy and security: This notice intentionally excludes the user’s IP address, password, session token, cookies, answers, and device fingerprint. Browser and location details are approximate and may be masked or spoofed.',
+        ].join('\n'),
+      }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.id) {
+      console.error('Sign-in notification email dispatch failed', { status: response.status });
+      return { status: 'failed' };
+    }
+    return { status: 'sent' };
+  } catch {
+    console.error('Sign-in notification email dispatch failed', { status: 'network_error' });
+    return { status: 'failed' };
+  }
+}
+
 async function sendSecureNotification(env, { mailbox, subject, adminPath }) {
   if (!env.WEB3FORMS_ACCESS_KEY) return { sent: false, queued: true };
   const response = await fetch('https://api.web3forms.com/submit', {
@@ -1072,9 +1231,37 @@ async function verifiedAuthenticatedUser(request, env) {
   const verified = {
     id: String(user.id),
     email: String(user.email || '').trim().toLowerCase() || null,
+    displayName: safeSingleLine(
+      user.user_metadata?.full_name || user.user_metadata?.name,
+      120,
+    ) || null,
+    createdAt: safeSingleLine(user.created_at, 40) || null,
+    provider: safeSingleLine(user.app_metadata?.provider, 40) || null,
   };
   authenticatedUserCache.set(request, verified);
   return verified;
+}
+
+async function handleSignInNotification(request, env, origin, allowedOrigin) {
+  const user = await verifiedAuthenticatedUser(request, env);
+  if (!user) {
+    throw new GuestAccessError('SIGN_IN_REQUIRED', 'Sign-in is required.', 401);
+  }
+  const sessionDigest = await signInSessionDigest(request, user);
+  const now = Date.now();
+  for (const [key, sentAt] of recentSignInNotificationSessions.entries()) {
+    if (now - sentAt >= SIGN_IN_NOTIFICATION_DEDUPE_MS) {
+      recentSignInNotificationSessions.delete(key);
+    }
+  }
+  if (recentSignInNotificationSessions.has(sessionDigest)) {
+    return jsonResponse({ ok: true, notification: 'already_processed' }, 202, origin, allowedOrigin);
+  }
+  const delivery = await sendSignInNotification(env, request, user, sessionDigest);
+  if (['sent', 'suppressed'].includes(delivery.status)) {
+    recentSignInNotificationSessions.set(sessionDigest, now);
+  }
+  return jsonResponse({ ok: true, notification: delivery.status }, 202, origin, allowedOrigin);
 }
 
 function phase4AccessEnforced(env) {
@@ -4234,6 +4421,9 @@ export default {
       const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
       if (pathname === '/beta/access/policy') {
         return await handleGlobalBetaPublicPolicy(env, origin, allowedOrigin);
+      }
+      if (pathname === '/auth/sign-in-notification') {
+        return await handleSignInNotification(request, env, origin, allowedOrigin);
       }
       if (privateBetaGateEnabled(env) && pathname === '/beta/access/verify') {
         return await handlePrivateBetaCodeVerification(

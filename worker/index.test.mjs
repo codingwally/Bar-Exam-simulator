@@ -70,6 +70,11 @@ function modelAssessment(score = 5) {
   };
 }
 
+function providerModelAssessment(score = 5) {
+  const { score: _publicScore, ...assessment } = modelAssessment(score);
+  return { ...assessment, scoreTenths: Math.round(score * 10) };
+}
+
 function capped(answer, score = 5) {
   return applyDeterministicScoreCap(modelAssessment(score), answer, remedialContext);
 }
@@ -236,9 +241,9 @@ test('quarantined Tax questions cannot be submitted for grading', async () => {
   }
 });
 
-test('Worker applies the cap after Gemini returns a high score', async () => {
+test('Worker requests integer-tenths precision and applies the existing cap', async () => {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url) => {
+  globalThis.fetch = async (url, init = {}) => {
     const target = String(url);
     if (target.endsWith('/rest/v1/rpc/reserve_guest_grade')) {
       return Response.json({
@@ -254,9 +259,17 @@ test('Worker applies the cap after Gemini returns a high score', async () => {
     if (!target.includes('generativelanguage.googleapis.com')) {
       throw new Error(`Unexpected request: ${target}`);
     }
+    const providerRequest = JSON.parse(init.body);
+    const providerSchema = providerRequest.generationConfig.responseSchema;
+    assert.equal(providerSchema.properties.score, undefined);
+    assert.equal(providerSchema.properties.scoreTenths.type, 'integer');
+    assert.equal(providerSchema.properties.scoreTenths.minimum, 0);
+    assert.equal(providerSchema.properties.scoreTenths.maximum, 50);
+    assert.match(providerRequest.contents[0].parts[0].text, /38 means 3\.8\/5\.0/i);
+    assert.match(providerRequest.contents[0].parts[0].text, /do not default scoreTenths to multiples of 5/i);
     return new Response(JSON.stringify({
       candidates: [{
-        content: { parts: [{ text: JSON.stringify(modelAssessment(5)) }] },
+        content: { parts: [{ text: JSON.stringify(providerModelAssessment(5)) }] },
       }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
@@ -327,7 +340,7 @@ function reliabilityBankRecord(index) {
 
 function reliabilityModelResult() {
   return {
-    ...modelAssessment(4),
+    ...providerModelAssessment(4),
     tier: '4.0',
     performanceLabel: 'Strong answer',
     rationale: 'The answer states the rule and applies it to the facts.',

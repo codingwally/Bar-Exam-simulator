@@ -34,7 +34,7 @@ function accessSnapshot() {
 
 function examinerResult(overrides = {}) {
   return {
-    score: 4.2,
+    scoreTenths: 42,
     maxScore: 5,
     percentagePointValue: 4.2,
     tier: '4.0',

@@ -966,6 +966,66 @@ async function sendAdminDirectoryEmail(
   return { status: 'sent', providerId: String(result.id).slice(0, 180) };
 }
 
+const SUPPORT_NOTIFICATION_RECIPIENT = 'support@duediligence.ph';
+
+function supportNotificationEmailMode(env) {
+  const mode = String(env.SUPPORT_NOTIFICATION_EMAIL_MODE || '').trim().toLowerCase();
+  return ['suppressed', 'enabled'].includes(mode) ? mode : 'not_configured';
+}
+
+function supportReplyAddress(value) {
+  const candidate = String(value || '').trim().toLowerCase();
+  return candidate.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate)
+    ? candidate
+    : null;
+}
+
+async function sendSupportNotification(env, { subject, text, replyTo, adminPath }) {
+  const mode = supportNotificationEmailMode(env);
+  if (mode === 'suppressed') return { status: 'suppressed', providerId: null };
+  if (mode !== 'enabled') return { status: 'not_configured', providerId: null };
+  const from = String(
+    env.SUPPORT_NOTIFICATION_EMAIL_FROM
+    || env.ADMIN_DIRECTORY_EMAIL_FROM
+    || env.EXAMINATION_EMAIL_FROM
+    || '',
+  ).trim();
+  if (!env.RESEND_API_KEY || !from) {
+    console.error('Support notification email is not configured', { mode });
+    return { status: 'not_configured', providerId: null };
+  }
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [SUPPORT_NOTIFICATION_RECIPIENT],
+        subject,
+        text: [
+          String(text || 'A new report or Support request was submitted.').trim(),
+          '',
+          `Authorized review: https://duediligence.ph${adminPath}`,
+        ].join('\n'),
+        ...(supportReplyAddress(replyTo) ? { reply_to: supportReplyAddress(replyTo) } : {}),
+      }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.id) {
+      console.error('Support notification email dispatch failed', { status: response.status });
+      return { status: 'failed', providerId: null };
+    }
+    return { status: 'sent', providerId: String(result.id).slice(0, 180) };
+  } catch {
+    console.error('Support notification email dispatch failed', { status: 'network_error' });
+    return { status: 'failed', providerId: null };
+  }
+}
+
 async function sendSecureNotification(env, { mailbox, subject, adminPath }) {
   if (!env.WEB3FORMS_ACCESS_KEY) return { sent: false, queued: true };
   const response = await fetch('https://api.web3forms.com/submit', {
@@ -1549,6 +1609,52 @@ function providerCapacityError(category = 'unavailable') {
   return error;
 }
 
+const {
+  score: _legacyProviderScoreSchema,
+  ...preciseScoreSchemaProperties
+} = RESPONSE_SCHEMA.properties;
+
+const PRECISE_SCORE_RESPONSE_SCHEMA = Object.freeze({
+  ...RESPONSE_SCHEMA,
+  required: RESPONSE_SCHEMA.required.map((field) => (
+    field === 'score' ? 'scoreTenths' : field
+  )),
+  properties: Object.freeze({
+    ...preciseScoreSchemaProperties,
+    scoreTenths: Object.freeze({
+      type: 'integer',
+      minimum: 0,
+      maximum: 50,
+      description: 'The 0.0–5.0 score transported as integer tenths. Return 38 for 3.8/5.0.',
+    }),
+    percentagePointValue: Object.freeze({
+      type: 'number',
+      description: 'Must equal scoreTenths divided by 10.',
+    }),
+  }),
+});
+
+function preciseScorePrompt(prompt) {
+  return `${prompt}
+
+SCORE OUTPUT TRANSPORT — THIS DOES NOT CHANGE THE RUBRIC:
+- Return scoreTenths as an integer from 0 to 50. Every integer step is one tenth of a point: 38 means 3.8/5.0 and 42 means 4.2/5.0.
+- Apply the existing rubric first, then encode that score in scoreTenths. Do not return a score field.
+- Use the full one-decimal scale when supported by the answer. Do not default scoreTenths to multiples of 5; whole-number and half-point scores remain valid only when the rubric places the answer there.
+- Return percentagePointValue as scoreTenths divided by 10 and keep maxScore at 5.`;
+}
+
+function examinerResultWithDecimalScore(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const scoreTenths = Number(raw.scoreTenths);
+  const { score: _ignoredProviderScore, ...assessment } = raw;
+  if (!Number.isInteger(scoreTenths) || scoreTenths < 0 || scoreTenths > 50) {
+    return { ...assessment, score: Number.NaN };
+  }
+  const score = scoreTenths / 10;
+  return { ...assessment, score, percentagePointValue: score };
+}
+
 async function callGemini(env, prompt, groundingEnabled) {
   if (!env.GEMINI_API_KEY) {
     throw new ExaminerError('EXAMINER_NOT_CONFIGURED', 'The AI examiner is not configured. Please contact the administrator.', 503);
@@ -1567,10 +1673,10 @@ async function callGemini(env, prompt, groundingEnabled) {
       let groundingRejected = false;
       for (let requestAttempt = 0; requestAttempt < GEMINI_TRANSIENT_ATTEMPTS; requestAttempt += 1) {
         const body = {
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          contents: [{ role: 'user', parts: [{ text: preciseScorePrompt(prompt) }] }],
           generationConfig: {
             responseMimeType: 'application/json',
-            responseSchema: RESPONSE_SCHEMA,
+            responseSchema: PRECISE_SCORE_RESPONSE_SCHEMA,
           },
         };
         if (useGrounding) body.tools = [{ google_search: {} }];
@@ -1773,7 +1879,7 @@ Rewrite the entire JSON response once. Preserve the stored legal substance, retu
       gemini = await callGemini(env, attemptPrompt, groundingEnabled);
       try {
         const validatedAssessment = validateExaminerResult(
-          gemini.result,
+          examinerResultWithDecimalScore(gemini.result),
           policy,
           [...storedSources, ...gemini.groundedSources],
         );
@@ -2081,6 +2187,18 @@ async function handleForumReport(request, env, origin, allowedOrigin) {
     p_category: report.category,
     p_explanation: report.explanation,
   });
+  await sendSupportNotification(env, {
+    subject: 'Due Diligence Quorum report',
+    text: [
+      'A Quorum report was submitted.',
+      `Reporter: ${user.email || 'Signed-in member'}`,
+      `Target: ${report.targetType} ${report.targetId}`,
+      `Category: ${report.category}`,
+      `Explanation: ${report.explanation || 'None provided'}`,
+    ].join('\n'),
+    replyTo: user.email,
+    adminPath: '/admin/',
+  });
   return jsonResponse({ ok: true, report: result }, 201, origin, allowedOrigin);
 }
 
@@ -2229,6 +2347,21 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
     await deleteQuorumImage(env, result.imagePath);
   }
 
+  if (command.operation === 'create_report') {
+    await sendSupportNotification(env, {
+      subject: 'Due Diligence Quorum report',
+      text: [
+        'A Quorum report was submitted.',
+        `Reporter: ${user.email || 'Signed-in member'}`,
+        `Target: ${command.payload.targetType} ${command.payload.targetId}`,
+        `Category: ${command.payload.category}`,
+        `Explanation: ${command.payload.explanation || 'None provided'}`,
+      ].join('\n'),
+      replyTo: user.email,
+      adminPath: '/admin/',
+    });
+  }
+
   return jsonResponse(
     { ok: true, data: await withSignedQuorumImages(result, env) },
     command.operation.startsWith('create_') ? 201 : 200,
@@ -2308,7 +2441,7 @@ Return one complete schema-valid JSON assessment. Preserve the stored legal subs
     gemini = await callGemini(env, attemptPrompt, groundingEnabled);
     try {
       const validated = validateExaminerResult(
-        gemini.result,
+        examinerResultWithDecimalScore(gemini.result),
         policy,
         [...storedSources, ...gemini.groundedSources],
       );
@@ -3109,6 +3242,28 @@ async function handleCorrection(request, env, origin, allowedOrigin) {
     );
   }
 
+  await sendSupportNotification(env, {
+    subject: 'Due Diligence answer correction report',
+    text: [
+      'An answer correction report was submitted.',
+      `Reporter: ${correctionUser?.email || 'Signed-in member'}`,
+      `Question: ${correction.questionId}`,
+      `Subject: ${correction.subject}`,
+      `Report type: ${correction.correctionType}`,
+      '',
+      'Proposed correction:',
+      correction.proposedCorrection,
+      '',
+      'Explanation:',
+      correction.explanation,
+      '',
+      'Supporting sources:',
+      correction.sourceUrls.length ? correction.sourceUrls.join('\n') : 'None provided',
+    ].join('\n'),
+    replyTo: correctionUser?.email,
+    adminPath: '/admin/',
+  });
+
   return jsonResponse({
     ok: true,
     message: 'Suggest a Correction/Better Answer submitted successfully.',
@@ -3168,6 +3323,20 @@ async function handleSupport(request, env, origin, allowedOrigin) {
       502,
     );
   }
+  await sendSupportNotification(env, {
+    subject: 'Due Diligence Support request',
+    text: [
+      'A Support request was submitted.',
+      `Account: ${supportUser?.email || 'Signed-in member'}`,
+      `Category: ${supportRequest.category}`,
+      `Reply email: ${supportRequest.replyEmail || supportUser?.email || 'Not provided'}`,
+      '',
+      'Message:',
+      supportRequest.message,
+    ].join('\n'),
+    replyTo: supportRequest.replyEmail || supportUser?.email,
+    adminPath: '/admin/',
+  });
   return jsonResponse({
     ok: true,
     message: 'Your support request was received.',

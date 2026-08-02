@@ -21,6 +21,8 @@ ADMIN_DIRECTORY_EMAIL_MODE = "suppressed"
 ADMIN_DIRECTORY_EMAIL_FROM = "Due Diligence Administration <support@duediligence.ph>"
 SUPPORT_NOTIFICATION_EMAIL_MODE = "suppressed"
 SUPPORT_NOTIFICATION_EMAIL_FROM = "Due Diligence Support <support@duediligence.ph>"
+SIGN_IN_NOTIFICATION_EMAIL_MODE = "suppressed"
+SIGN_IN_NOTIFICATION_EMAIL_FROM = "Due Diligence Sign-in Notice <support@duediligence.ph>"
 PRIVATE_BETA_GATE_ENABLED = "true"
 PRIVATE_BETA_DISCLOSURE_VERSION = "beta-disclosure-v1-2026-07-31"
 

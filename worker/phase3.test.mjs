@@ -738,7 +738,7 @@ test('Students CSV refuses to silently truncate more than 5,000 matches', async 
   }
 });
 
-test('founder user-response export uses persisted answer context without broad directory or question-bank lookups', async () => {
+test('founder user-response export enriches saved answer evidence without broad directory lookups', async () => {
   const originalFetch = globalThis.fetch;
   const targetUserId = '30000000-0000-4000-8000-000000000001';
   let rpcBody;
@@ -749,7 +749,7 @@ test('founder user-response export uses persisted answer context without broad d
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history_with_context')) {
+    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history_with_sources')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 2,
@@ -776,6 +776,7 @@ test('founder user-response export uses persisted answer context without broad d
           elapsedSeconds: 60,
           submittedAt: '2026-08-01T00:00:00Z',
           completedAt: '2026-08-01T00:01:00Z',
+          resultSources: [{ title: 'Saved result authority', url: 'https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69528' }],
         }, {
           recordSource: 'formal_exam',
           userId: targetUserId,
@@ -832,15 +833,17 @@ test('founder user-response export uses persisted answer context without broad d
     const csv = new TextDecoder().decode(bytes);
     assert.match(csv, /"Name","User email"/);
     assert.match(csv, /"Student One","student\.one@example\.com"/);
-    assert.match(csv, /unavailable_exact_historic_text/);
-    assert.match(csv, /not_persisted_with_practice_attempt/);
+    assert.match(csv, /available_current_published_record/);
+    assert.match(csv, /current_published_question_bank/);
     assert.match(csv, /immutable_exam_snapshot/);
     assert.match(csv, /"'\+SUM/);
     assert.match(csv, /"'=Exact immutable prompt snapshot"/);
     assert.match(csv, /"'@answer/);
     assert.match(csv, /"'\+Exact immutable model answer snapshot"/);
-    assert.doesNotMatch(csv, /current_published_bank|Current validated suggested answer/);
-    assert.equal(calls.some((url) => url === 'https://bank.example/website-bank.json'), false);
+    assert.match(csv, /A, an extremely talented digital artist/);
+    assert.match(csv, /A was constructively dismissed/);
+    assert.match(csv, /elibrary\.judiciary\.gov\.ph/);
+    assert.equal(calls.some((url) => url === 'https://bank.example/website-bank.json'), true);
     assert.equal(calls.some((url) => url.includes('admin_user_engagement_directory')), false);
     assert.equal(calls.some((url) => url.includes('admin_user_directory')), false);
   } finally {
@@ -1139,7 +1142,7 @@ test('replayed founder directory email request returns 409 without sending or re
   }
 });
 
-test('founder answer-history preview uses the bounded snapshot RPC without current-bank enrichment', async () => {
+test('founder answer-history preview shows current approved practice content and saved links', async () => {
   const originalFetch = globalThis.fetch;
   let rpcBody;
   globalThis.fetch = async (input, init = {}) => {
@@ -1147,7 +1150,7 @@ test('founder answer-history preview uses the bounded snapshot RPC without curre
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_preview_answer_history')) {
+    if (url.endsWith('/rest/v1/rpc/admin_preview_answer_history_with_sources')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         scope: 'all_users',
@@ -1161,12 +1164,14 @@ test('founder answer-history preview uses the bounded snapshot RPC without curre
           userDisplayName: 'Student One',
           userEmail: 'student.one@example.com',
           subscriptionCategory: 'Beta Tester',
+          questionId: 'LAB-001',
           questionText: null,
           questionTextSource: 'external_question_bank_not_persisted',
           questionTextStatus: 'unavailable_exact_historic_text',
           submittedAnswer: 'Persisted answer',
           suggestedAnswer: null,
           suggestedAnswerStatus: 'not_persisted_with_practice_attempt',
+          resultSources: [{ title: 'Saved result authority', url: 'https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69528' }],
         }],
       });
     }
@@ -1200,12 +1205,13 @@ test('founder answer-history preview uses the bounded snapshot RPC without curre
     assert.equal(body.data.total, 102);
     assert.equal(body.data.offset, 100);
     assert.equal(body.data.hasMore, false);
-    assert.equal(body.data.items[0].questionText, null);
+    assert.match(body.data.items[0].questionText, /extremely talented digital artist/);
     assert.equal(
       body.data.items[0].questionTextStatus,
-      'unavailable_exact_historic_text',
+      'available_current_published_record',
     );
-    assert.equal(body.data.items[0].suggestedAnswer, null);
+    assert.match(body.data.items[0].suggestedAnswer, /constructively dismissed/);
+    assert.equal(body.data.items[0].displaySourceLinks[0].url, 'https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69528');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1238,7 +1244,7 @@ test('answer-history preview rejects unsupported filters before storage access',
   }
 });
 
-test('founder answer-history export uses persisted context and avoids current-bank or broad-directory enrichment', async () => {
+test('founder answer-history export includes approved practice context and source links', async () => {
   const originalFetch = globalThis.fetch;
   let rpcBody;
   const calls = [];
@@ -1248,7 +1254,7 @@ test('founder answer-history export uses persisted context and avoids current-ba
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history_with_context')) {
+    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history_with_sources')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         scope: 'all_users',
@@ -1269,6 +1275,7 @@ test('founder answer-history export uses persisted context and avoids current-ba
           suggestedAnswerStatus: 'not_persisted_with_practice_attempt',
           modelAnswer: null,
           modelAnswerStatus: 'not_applicable_to_practice_attempt',
+          resultSources: [{ title: 'Saved result authority', url: 'https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/69528' }],
         }],
       });
     }
@@ -1303,9 +1310,10 @@ test('founder answer-history export uses persisted context and avoids current-ba
     assert.match(csv, /"'=Student One"/);
     assert.match(csv, /"'@Beta Tester"/);
     assert.match(csv, /"'\+ANSWER"/);
-    assert.match(csv, /unavailable_exact_historic_text/);
-    assert.match(csv, /not_persisted_with_practice_attempt/);
-    assert.doesNotMatch(csv, /current_validated_question_bank|Current validated suggested answer/);
+    assert.match(csv, /available_current_published_record/);
+    assert.match(csv, /current_published_question_bank/);
+    assert.match(csv, /extremely talented digital artist/);
+    assert.match(csv, /elibrary\.judiciary\.gov\.ph/);
     assert.equal(calls.some((url) => url.includes('admin_user_engagement_directory')), false);
     assert.equal(calls.some((url) => url.includes('admin_user_directory')), false);
     assert.equal(calls.some((url) => url.includes('question-bank')), false);

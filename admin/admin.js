@@ -378,6 +378,21 @@
     };
   }
 
+  function sourceLinksCell(value) {
+    const sources = Array.isArray(value) ? value : [];
+    const links = sources.map((source) => {
+      const url = String(source?.url || '').trim();
+      if (!/^https:\/\//i.test(url)) return '';
+      const title = String(source?.title || source?.authority || 'Open reference').trim();
+      return `<li><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a></li>`;
+    }).filter(Boolean);
+    if (!links.length) return 'Not available';
+    return {
+      html: true,
+      value: `<details class="record-detail"><summary>View reference links</summary><ul class="record-source-links">${links.join('')}</ul></details>`,
+    };
+  }
+
   function csvCell(value) {
     let text = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
     if (/^[\s\u0000-\u001f\u007f-\u009f]*[=+\-@]/u.test(text)) text = `'${text}`;
@@ -744,6 +759,7 @@
       item.score == null ? 'Not graded' : number(item.score, 1),
       detailCell(item.suggestedAnswer, 'View suggested answer'),
       detailCell(item.modelAnswer, 'View model answer'),
+      sourceLinksCell(item.displaySourceLinks),
       dateTime(item.submittedAt || item.answerSavedAt || item.completedAt),
     ]);
     return `
@@ -765,8 +781,8 @@
           </select>
           <button class="secondary-button" id="answer-filter-button" type="button">Apply filter</button>
         </div>
-        <p class="panel-note">Formal-exam questions and model answers come from the version saved with that exam. Older practice attempts did not save an exact copy of the question or suggested answer, so those fields are shown as unavailable instead of being guessed from today’s Question Bank.</p>
-        ${table(['Name', 'Email', 'Subscription', 'Type', 'Subject or exam', 'Question', 'Student answer', 'Score', 'Suggested answer', 'Model answer', 'Submitted'], rows)}
+        <p class="panel-note">Formal-exam content comes from the version saved with that exam. Practice content is matched by question ID to the current published Question Bank. Reference links shown with a saved result are listed first when available.</p>
+        ${table(['Name', 'Email', 'Subscription', 'Type', 'Subject or exam', 'Question', 'Student answer', 'Score', 'Suggested answer', 'Model answer', 'Reference links', 'Submitted'], rows)}
         <div class="pagination-bar">
           <p class="panel-note">Up to 100 records per page.</p>
           <div class="row-actions">
@@ -791,10 +807,11 @@
   }
 
   async function renderLearning(report) {
-    const [learningData, data] = await Promise.all([
-      loadOperational('learning'),
-      loadUserDirectory(false, '', 0),
-    ]);
+    const data = await loadUserDirectory(false, '', 0);
+    const studentRows = (data.items || []).filter((row) => (
+      !['admin', 'founder_admin', 'super_admin'].includes(String(row.role || '').toLowerCase())
+    ));
+    const engagement = report.engagement || report.engagementOverview || {};
     const current = report.current?.learning || {};
     return `
       ${heading('Learning Performance', 'Scores use the simulator’s 0–5 scale and one decimal place. Failed, timed-out, blocked, missing, and ungraded requests are not included in averages.')}
@@ -807,11 +824,11 @@
         ${metric('Repeated-question improvement', current.average_improvement, null, (v) => v == null ? 'Not available' : `${Number(v) >= 0 ? '+' : ''}${number(v, 1)}`)}
         ${metric('Questions viewed', current.questions_viewed)}
         ${metric('Successful grades', current.successful_grades)}
-        ${metric('Users with grades', learningData.total)}
+        ${metric('Users with grades', engagement.usersWithAnswers)}
       </div>
       ${table(
         ['Name', 'Email', 'Subscription', 'Average score', 'Questions answered', 'Latest score', 'Last sign-in'],
-        (data.items || []).map((row) => [
+        studentRows.map((row) => [
           row.display_name || 'Not provided', row.email || 'Not available',
           row.subscription_category || 'Regular',
           row.average_score == null ? 'Not available' : `${number(row.average_score, 1)} / 5`,
@@ -2669,13 +2686,16 @@
         item.modelAnswer,
         item.modelAnswerSource,
         item.modelAnswerStatus,
+        (item.resultSources || []).map((source) => source.url).filter(Boolean).join('\n'),
+        (item.questionSourceLinks || []).map((source) => source.url).filter(Boolean).join('\n'),
         item.submittedAt || item.answerSavedAt || item.completedAt,
       ]);
       downloadCsv('due-diligence-answer-records-current-view.csv', [
         'Name', 'Email', 'Subscription', 'Answer type', 'Subject', 'Exam', 'Question',
         'Question source', 'Question availability', 'Student answer', 'Score', 'Feedback',
         'Suggested answer', 'Suggested answer source', 'Suggested answer availability',
-        'Model answer', 'Model answer source', 'Model answer availability', 'Submitted',
+        'Model answer', 'Model answer source', 'Model answer availability',
+        'Sources shown with result', 'Question reference links', 'Submitted',
       ], rows);
       toast('Current answer view downloaded for Google Sheets.');
     });

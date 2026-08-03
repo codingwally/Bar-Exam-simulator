@@ -448,7 +448,7 @@
   }
   .beta-notice button:hover,.beta-notice button:focus-visible{color:#3e2c09;outline-offset:3px;}
   .topbar{
-    position:sticky;top:0;z-index:1000;
+    position:relative;z-index:1000;
     display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px 22px;
     padding:12px 26px 9px;
     background:linear-gradient(180deg, rgba(8,18,37,.96), rgba(8,18,37,.88));
@@ -480,15 +480,13 @@
   .site-menu-toggle{display:none;font-family:var(--sans);font-weight:700;font-size:12px;color:#F6EFDD;background:rgba(255,255,255,.05);border:1px solid rgba(197,160,89,.45);border-radius:8px;padding:8px 12px;cursor:pointer;}
 
   .spa-nav{
-    position:relative;display:block;grid-column:1/-1;grid-row:2;min-height:58px;
+    position:relative;display:flex;align-items:flex-start;justify-content:flex-end;gap:18px;grid-column:1/-1;grid-row:2;min-height:58px;
     padding:12px 0 8px;border-top:1px solid rgba(197,160,89,.16);
   }
+  .nav-audience-cluster{display:flex;align-items:flex-start;justify-content:flex-end;gap:12px;flex:none;}
   .nav-audience-group{
-    position:absolute;top:12px;z-index:3;
+    position:relative;z-index:3;
   }
-  .nav-group-academy{left:36px;}
-  .nav-group-commons{left:50%;transform:translateX(-50%);}
-  .nav-group-premium{right:380px;}
   .nav-group-disclosure{position:relative;}
   .nav-group-label{
     min-height:36px;padding:9px 20px;box-sizing:border-box;
@@ -540,7 +538,7 @@
   @keyframes sheen{0%{background-position:200% 0;}100%{background-position:-40% 0;}}
   .btn-angel:hover,.btn-angel.active{color:#241803;filter:brightness(1.06);transform:translateY(-1px);box-shadow:0 5px 18px rgba(197,160,89,.56);}
   .nav-utilities{
-    position:absolute;top:12px;right:0;display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:nowrap;
+    position:relative;display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:8px;flex:none;flex-wrap:nowrap;
     width:auto;padding-left:16px;border-left:1px solid rgba(197,160,89,.24);
   }
   .nav-utilities .spa-tab{width:auto;min-height:36px;padding:8px 13px;font-size:10.75px;}
@@ -623,22 +621,26 @@
   a.btn-primary{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;}
 
   /* ---- Responsive additions ---- */
-  @media (max-width:1479px) and (min-width:1120px){
-    .nav-group-academy{left:12px;}
-    .nav-group-premium{right:320px;}
+  @media (max-width:1479px) and (min-width:901px){
+    .nav-audience-cluster{gap:10px;}
     .nav-utilities{gap:6px;padding-left:12px;}
     .nav-utilities .spa-tab{padding-inline:10px;font-size:10.25px;}
   }
   @media (max-width:1119px) and (min-width:701px){
-    .spa-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:12px 14px;min-height:104px;}
-    .nav-audience-group{position:relative;top:auto;left:auto;right:auto;transform:none;justify-self:center;width:100%;text-align:center;}
-    .nav-group-disclosure{display:inline-block;max-width:100%;}
+    .spa-nav{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:flex-end;gap:12px 18px;min-height:58px;}
+    .nav-audience-cluster{display:flex;align-items:flex-start;justify-content:flex-end;gap:10px;}
+    .nav-audience-group{position:relative;transform:none;width:auto;text-align:center;}
+    .nav-group-disclosure{display:block;max-width:100%;}
+    .nav-utilities{position:relative;justify-content:flex-end;}
+  }
+  @media (max-width:900px) and (min-width:701px){
+    .nav-audience-cluster{width:100%;}
     .nav-group-items{
       position:static;min-width:196px;margin-top:9px;transform:none;text-align:left;
     }
     .nav-group-academy .nav-group-items,.nav-group-premium .nav-group-items{left:auto;right:auto;transform:none;}
     .nav-utilities{
-      position:relative;top:auto;right:auto;grid-column:1/-1;justify-self:end;padding-top:10px;padding-left:0;border-top:1px solid rgba(197,160,89,.24);border-left:0;
+      margin-left:auto;padding-top:10px;padding-left:0;border-top:1px solid rgba(197,160,89,.24);border-left:0;
     }
   }
   @media (max-width:980px){
@@ -655,6 +657,7 @@
     .topbar-actions{width:auto;max-width:none;margin:0;justify-content:flex-end;}
     .spa-nav{display:none;grid-column:1/-1;order:initial;width:100%;min-height:0;padding:10px 0 3px;}
     .spa-nav.is-open{display:flex;flex-direction:column;gap:12px;}
+    .nav-audience-cluster{display:flex;flex-direction:column;width:100%;gap:12px;}
     .nav-audience-group{position:static;transform:none;width:100%;text-align:left;}
     .nav-group-disclosure{display:block;width:100%;}
     .nav-group-label{width:100%;min-height:40px;padding:10px 15px;font-size:10.75px;text-align:left;}
@@ -1199,7 +1202,8 @@
   <button class="site-menu-toggle" id="site-menu-toggle" type="button"
     aria-controls="spa-nav" aria-expanded="false">Menu</button>
   <nav class="spa-nav" id="spa-nav" aria-label="Primary navigation">
-    <section class="nav-audience-group nav-group-academy" aria-labelledby="nav-academy-label">
+    <div class="nav-audience-cluster" role="group" aria-label="Audience navigation">
+      <section class="nav-audience-group nav-group-academy" aria-labelledby="nav-academy-label">
       <details class="nav-group-disclosure" name="audience-navigation">
         <summary class="nav-group-label" id="nav-academy-label" aria-controls="nav-academy-menu" aria-expanded="false">The Academy</summary>
         <div class="nav-group-items" id="nav-academy-menu" aria-labelledby="nav-academy-label">
@@ -1211,9 +1215,9 @@
             onclick="openAnalytics()">Verdict</button>
         </div>
       </details>
-    </section>
+      </section>
 
-    <section class="nav-audience-group nav-group-commons" aria-labelledby="nav-commons-label">
+      <section class="nav-audience-group nav-group-commons" aria-labelledby="nav-commons-label">
       <details class="nav-group-disclosure" name="audience-navigation">
         <summary class="nav-group-label" id="nav-commons-label" aria-controls="nav-commons-menu" aria-expanded="false">The Commons</summary>
         <div class="nav-group-items" id="nav-commons-menu" aria-labelledby="nav-commons-label">
@@ -1227,9 +1231,9 @@
             data-dd2-view="pricing">Retainer</button>
         </div>
       </details>
-    </section>
+      </section>
 
-    <section class="nav-audience-group nav-group-premium" aria-labelledby="nav-premium-label">
+      <section class="nav-audience-group nav-group-premium" aria-labelledby="nav-premium-label">
       <details class="nav-group-disclosure" name="audience-navigation">
         <summary class="nav-group-label" id="nav-premium-label" aria-controls="nav-premium-menu" aria-expanded="false">Premium</summary>
         <div class="nav-group-items" id="nav-premium-menu" aria-labelledby="nav-premium-label">
@@ -1243,7 +1247,8 @@
             onclick="openComingSoon()">Case Digest</button>
         </div>
       </details>
-    </section>
+      </section>
+    </div>
 
     <div class="nav-utilities" role="group" aria-label="Website utilities">
       <button class="spa-tab" id="spa-examination-room" type="button"

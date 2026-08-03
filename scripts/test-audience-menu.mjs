@@ -18,6 +18,11 @@ const academy = section('nav-group-academy');
 const commons = section('nav-group-commons');
 const premium = section('nav-group-premium');
 const utilities = navigation.match(/<div class="nav-utilities"[\s\S]*?<\/div>/)?.[0];
+const audienceClusterIndex = navigation.indexOf('<div class="nav-audience-cluster" role="group" aria-label="Audience navigation">');
+const academyIndex = navigation.indexOf('nav-group-academy');
+const commonsIndex = navigation.indexOf('nav-group-commons');
+const premiumIndex = navigation.indexOf('nav-group-premium');
+const utilitiesIndex = navigation.indexOf('nav-utilities');
 
 for (const [name, markup] of [
   ['Academy', academy],
@@ -27,6 +32,14 @@ for (const [name, markup] of [
 ]) {
   assert.ok(markup, `${name} navigation group must be present.`);
 }
+assert.ok(audienceClusterIndex >= 0, 'The three audience categories must share one explicit navigation group.');
+assert.ok(
+  audienceClusterIndex < academyIndex
+    && academyIndex < commonsIndex
+    && commonsIndex < premiumIndex
+    && premiumIndex < utilitiesIndex,
+  'Audience categories must stay grouped on the right before the separate utilities.',
+);
 
 const assertOrder = (markup, labels) => {
   let previous = -1;
@@ -60,10 +73,16 @@ for (const [markup, labelId, menuId] of [
 
 assert.match(html, /\.nav-group-items\{[^}]*position:absolute[^}]*z-index:12[^}]*flex-direction:column/);
 assert.match(html, /\.nav-group-disclosure:not\(\[open\]\) \.nav-group-items\{display:none;\}/);
-assert.match(html, /\.nav-group-commons\{left:50%;transform:translateX\(-50%\);\}/);
+assert.match(html, /\.topbar\{[^}]*position:relative;z-index:1000/);
+assert.doesNotMatch(html, /\.topbar\{[^}]*position:(?:sticky|fixed)/);
+assert.match(html, /\.spa-nav\{[^}]*display:flex[^}]*justify-content:flex-end/);
+assert.match(html, /\.nav-audience-cluster\{[^}]*display:flex[^}]*justify-content:flex-end[^}]*gap:12px[^}]*flex:none/);
+assert.match(html, /\.nav-audience-group\{[^}]*position:relative/);
+assert.doesNotMatch(html, /\.nav-group-commons\{left:50%/);
 assert.match(html, /\.nav-group-commons \.spa-tab\.active\{[^}]*border-color:rgba\(205,214,228,\.72\)/);
 assert.match(html, /\.nav-utilities\{[^}]*display:flex;flex-direction:row[^}]*flex-wrap:nowrap/);
 assert.match(html, /@media \(max-width:700px\)\{[\s\S]*?\.nav-utilities\{[^}]*display:grid;grid-template-columns:/);
+assert.match(html, /@media \(max-width:700px\)\{[\s\S]*?\.nav-audience-cluster\{[^}]*flex-direction:column[^}]*width:100%/);
 assert.match(html, /\.nav-group-academy \.nav-group-label\{[^}]*background:#4A154B/);
 assert.match(html, /function setupAudienceDropdowns\(\)/);
 assert.match(html, /if \(disclosure\.open\) closeAudienceDropdowns\(\{ except: disclosure \}\)/);

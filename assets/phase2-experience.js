@@ -614,7 +614,10 @@
     const signedIn = Boolean(state.session?.access_token && state.user);
     const signInButton = document.getElementById('btn-signin');
     if (signInButton) {
-      signInButton.textContent = signedIn ? 'The Docket' : 'The Docket · Sign In';
+      signInButton.textContent = 'The Docket';
+      signInButton.title = signedIn
+        ? 'Manage your profile, preferences, and activity.'
+        : 'Open The Docket to sign in.';
       signInButton.hidden = false;
     }
     const badge = document.getElementById('dd2-guest-badge');

@@ -70,12 +70,9 @@ assert.match(index, /placeholder="What do you want to ask or share about law sch
 
 assert.match(
   index,
-  /id="spa-partner"[\s\S]*?data-dd2-view="partnership">Quid Pro Quo<\/button>/,
+  /<a href="#partnership" data-dd2-view="partnership"[^>]*>Quid Pro Quo<\/a>/,
 );
-assert.match(
-  index,
-  /<a href="#partnership" data-dd2-view="partnership">Partnerships<\/a>/,
-);
+assert.doesNotMatch(index, /id="spa-partner"/);
 
 assert.match(build, /'robots\.txt'/);
 assert.match(build, /'sitemap\.xml'/);

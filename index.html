@@ -480,26 +480,59 @@
   .site-menu-toggle{display:none;font-family:var(--sans);font-weight:700;font-size:12px;color:#F6EFDD;background:rgba(255,255,255,.05);border:1px solid rgba(197,160,89,.45);border-radius:8px;padding:8px 12px;cursor:pointer;}
 
   .spa-nav{
-    display:flex;grid-column:1/-1;grid-row:2;gap:4px;justify-content:center;flex-wrap:wrap;
-    padding-top:7px;border-top:1px solid rgba(197,160,89,.16);
+    position:relative;display:block;grid-column:1/-1;grid-row:2;min-height:136px;
+    padding:12px 0 8px;border-top:1px solid rgba(197,160,89,.16);
   }
-  .spa-tab{
-    font-family:var(--sans);font-weight:600;font-size:12.5px;letter-spacing:.3px;
-    color:#cdd6e4;background:transparent;border:none;border-radius:9px;
-    padding:9px 15px;cursor:pointer;transition:all .2s ease;white-space:nowrap;
+  .nav-audience-group{
+    position:absolute;top:12px;display:flex;flex-direction:column;align-items:center;gap:10px;
   }
-  .spa-tab:hover{background:rgba(255,255,255,.06);color:#fff;}
-  .spa-tab.active{background:linear-gradient(180deg,rgba(197,160,89,.22),rgba(197,160,89,.08));color:#F6EFDD;box-shadow:inset 0 -2px 0 var(--gold);}
-  .spa-tab.account-tab{border:1px solid rgba(197,160,89,.42);color:#f8edcf;}
-  .btn-angel{
-    position:relative;font-family:var(--sans);font-weight:800;font-size:12px;letter-spacing:.4px;text-transform:uppercase;
-    color:#241803;border:1px solid rgba(255,240,200,.6);border-radius:999px;padding:9px 16px;cursor:pointer;white-space:nowrap;
+  .nav-group-academy{left:36px;}
+  .nav-group-commons{left:50%;transform:translateX(-50%);}
+  .nav-group-premium{right:166px;}
+  .nav-group-label{
+    display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:6px 22px;
+    border:1px solid rgba(205,214,228,.48);border-radius:999px;background:rgba(8,18,37,.62);
+    color:#f6efdd;font-family:var(--sans);font-size:11.5px;font-weight:700;letter-spacing:.7px;
+    line-height:1;text-transform:uppercase;white-space:nowrap;
+  }
+  .nav-group-academy .nav-group-label{
+    background:#4A154B;border-color:rgba(244,213,250,.74);box-shadow:0 4px 14px rgba(74,21,75,.28);
+  }
+  .nav-group-premium .nav-group-label{
+    color:#241803;border-color:rgba(255,240,200,.68);
     background:linear-gradient(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B);
-    background-size:220% 100%;box-shadow:0 4px 16px rgba(197,160,89,.5);animation:sheen 3.2s linear infinite;
+    background-size:220% 100%;box-shadow:0 4px 16px rgba(197,160,89,.42);animation:sheen 3.2s linear infinite;
+  }
+  .nav-group-items{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:nowrap;}
+  .spa-tab{
+    display:inline-flex;align-items:center;justify-content:center;min-height:36px;
+    font-family:var(--sans);font-weight:600;font-size:12px;letter-spacing:.2px;
+    color:#e3e8f0;background:rgba(8,18,37,.52);border:1px solid rgba(205,214,228,.46);border-radius:999px;
+    padding:8px 17px;cursor:pointer;transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease,box-shadow .18s ease;
+    white-space:nowrap;
+  }
+  .spa-tab:hover{background:rgba(255,255,255,.08);border-color:rgba(246,239,221,.7);color:#fff;transform:translateY(-1px);}
+  .spa-tab:focus-visible{outline:2px solid #F5E28C;outline-offset:3px;}
+  .spa-tab.active{background:rgba(197,160,89,.16);border-color:rgba(197,160,89,.72);color:#F6EFDD;box-shadow:0 0 0 1px rgba(197,160,89,.16);}
+  .nav-group-academy .spa-tab{border-color:rgba(185,128,193,.48);}
+  .nav-group-academy .spa-tab:hover,.nav-group-academy .spa-tab.active{background:rgba(74,21,75,.34);border-color:rgba(222,175,228,.72);}
+  .nav-group-commons .spa-tab{min-width:116px;}
+  .nav-group-commons .spa-tab.active{background:rgba(255,255,255,.08);border-color:rgba(205,214,228,.72);color:#fff;box-shadow:0 0 0 1px rgba(205,214,228,.1);}
+  .nav-group-premium .nav-group-items{gap:8px;}
+  .btn-angel{
+    position:relative;font-family:var(--sans);font-weight:700;font-size:11px;letter-spacing:.15px;
+    color:#241803;border:1px solid rgba(255,240,200,.66);border-radius:999px;padding:8px 10px;cursor:pointer;white-space:nowrap;
+    background:linear-gradient(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B);
+    background-size:220% 100%;box-shadow:0 4px 16px rgba(197,160,89,.44);animation:sheen 3.2s linear infinite;
   }
   @keyframes sheen{0%{background-position:200% 0;}100%{background-position:-40% 0;}}
-  .btn-angel:hover{filter:brightness(1.06);transform:translateY(-1px);}
-  .btn-angel .menu-premium-badge{display:inline-block;margin-left:6px;padding:2px 6px;border:1px solid rgba(36,24,3,.38);border-radius:999px;background:rgba(255,255,255,.28);font-size:8px;letter-spacing:.7px;line-height:1;}
+  .btn-angel:hover,.btn-angel.active{color:#241803;filter:brightness(1.06);transform:translateY(-1px);box-shadow:0 5px 18px rgba(197,160,89,.56);}
+  .nav-utilities{
+    position:absolute;top:4px;right:0;display:flex;flex-direction:column;align-items:stretch;gap:10px;
+    width:154px;padding:4px 0 4px 18px;border-left:1px solid rgba(197,160,89,.24);
+  }
+  .nav-utilities .spa-tab{width:136px;min-height:34px;padding:7px 10px;font-size:10.75px;}
+  .spa-tab.account-tab{border-color:rgba(197,160,89,.46);color:#f8edcf;}
 
   .topbar-actions{display:flex;grid-column:3;grid-row:1;align-items:center;justify-content:flex-end;gap:9px;flex:none;}
   .icon-btn{font-family:var(--sans);font-weight:600;font-size:12px;color:#e7ecf4;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);padding:8px 13px;border-radius:9px;cursor:pointer;transition:all .2s;}
@@ -578,9 +611,35 @@
   a.btn-primary{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;}
 
   /* ---- Responsive additions ---- */
+  @media (max-width:1479px) and (min-width:1340px){
+    .nav-group-academy{left:12px;}
+    .nav-group-premium{right:160px;}
+    .nav-group-items{gap:8px;}
+    .nav-group-commons .spa-tab{min-width:104px;}
+    .nav-group-premium .spa-tab{padding-inline:8px;font-size:10.5px;}
+  }
+  @media (max-width:1339px) and (min-width:701px){
+    .spa-nav{min-height:222px;padding-bottom:8px;}
+    .nav-group-academy{left:0;}
+    .nav-group-commons{left:50%;transform:translateX(-50%);}
+    .nav-group-premium{top:106px;left:50%;right:auto;transform:translateX(-50%);}
+    .nav-utilities{top:46px;}
+    .nav-group-items{gap:8px;}
+    .nav-group-commons .spa-tab{min-width:104px;}
+    .nav-group-premium .spa-tab{padding-inline:10px;font-size:11px;}
+  }
+  @media (max-width:1029px) and (min-width:701px){
+    .spa-nav{min-height:414px;}
+    .nav-group-academy{top:12px;left:50%;transform:translateX(-50%);}
+    .nav-group-commons{top:104px;left:50%;transform:translateX(-50%);}
+    .nav-group-premium{top:196px;left:50%;right:auto;transform:translateX(-50%);}
+    .nav-utilities{top:288px;left:50%;right:auto;transform:translateX(-50%);}
+  }
   @media (max-width:980px){
     .topbar{gap:12px;padding:12px 16px 9px;}
-    .spa-nav{width:100%;justify-content:flex-start;flex-wrap:wrap;padding-bottom:2px;}
+    .spa-nav{width:100%;gap:14px 16px;padding-bottom:4px;}
+    .nav-group-items{gap:8px;}
+    .spa-tab{padding-inline:13px;}
     .topbar-actions{margin-left:auto;}
     .exam-subnav{padding:16px 16px 0;}
     .mode-toggle{margin-left:0;}
@@ -589,14 +648,25 @@
     .topbar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;}
     .site-menu-toggle{display:inline-flex;align-items:center;justify-content:center;min-height:40px;}
     .topbar-actions{width:auto;max-width:none;margin:0;justify-content:flex-end;}
-    .spa-nav{display:none;grid-column:1/-1;order:initial;width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:8px 0 2px;}
-    .spa-nav.is-open{display:grid;}
-    .spa-tab{width:100%;min-height:42px;text-align:left;border:1px solid rgba(197,160,89,.18);background:rgba(255,255,255,.035);}
+    .spa-nav{display:none;grid-column:1/-1;order:initial;width:100%;min-height:0;padding:10px 0 3px;}
+    .spa-nav.is-open{display:flex;flex-direction:column;gap:16px;}
+    .nav-audience-group{position:static;transform:none;align-items:flex-start;width:100%;gap:8px;}
+    .nav-group-label{min-height:30px;padding:5px 15px;font-size:10.5px;}
+    .nav-group-items{justify-content:flex-start;width:100%;gap:8px;overflow-x:auto;padding:0 2px 5px;scrollbar-width:none;}
+    .nav-group-items::-webkit-scrollbar{display:none;}
+    .nav-group-commons .spa-tab{min-width:108px;}
+    .nav-group-premium .nav-group-items{gap:6px;}
+    .nav-group-premium .spa-tab{padding-inline:8px;font-size:10px;}
+    .spa-tab{min-height:40px;padding:8px 14px;text-align:center;}
     .spa-tab.btn-angel{
       color:#241803;border:1px solid rgba(255,240,200,.6);text-align:center;
       background:linear-gradient(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B);
       background-size:220% 100%;box-shadow:0 4px 16px rgba(197,160,89,.5);
     }
+    .nav-utilities{
+      position:static;width:100%;padding:13px 0 0;border-left:0;border-top:1px solid rgba(197,160,89,.24);
+    }
+    .nav-utilities .spa-tab{width:100%;min-height:40px;}
     .topbar .brand-meaning{top:calc(100% + 8px);left:0;}
   }
   @media (max-width:560px){
@@ -611,7 +681,7 @@
     .topbar-actions > *{max-width:100%;}
     .topbar-actions .dd2-guest-badge{display:none!important;}
     .icon-btn.hide-sm{display:inline-flex;padding:7px 10px;}
-    .spa-nav{grid-template-columns:1fr;margin:0;padding-bottom:3px;}
+    .spa-nav{margin:0;padding-bottom:3px;}
     .spa-tab{font-size:11.5px;padding:8px 11px;}
   }
   @media (max-width:380px){
@@ -619,6 +689,9 @@
     .site-menu-toggle{grid-column:2;grid-row:1;}
     .topbar-actions{grid-column:1/-1;grid-row:2;justify-content:stretch;}
     .spa-nav{grid-row:3;}
+    .nav-group-items{gap:5px;}
+    .nav-group-commons .spa-tab{min-width:0;flex:1;padding-inline:6px;font-size:10px;}
+    .nav-group-premium .spa-tab{padding-inline:5px;font-size:9px;}
     .topbar-actions .icon-btn{width:100%;justify-content:center;min-height:42px;}
   }
 
@@ -1122,30 +1195,54 @@
   <button class="site-menu-toggle" id="site-menu-toggle" type="button"
     aria-controls="spa-nav" aria-expanded="false">Menu</button>
   <nav class="spa-nav" id="spa-nav" aria-label="Primary navigation">
-    <button class="spa-tab active" id="spa-mock" title="Practice Philippine Bar-style questions."
-      onclick="showPage('mock', this)">Mock Bar</button>
-    <button class="spa-tab" id="spa-subject-matter" title="Open Subject Matter examinations."
-      onclick="openSubjectMatterMenu()">Subject Matter</button>
-    <button class="spa-tab btn-angel" id="spa-bar-feels" title="Bar Feels — Premium only."
-      aria-label="Bar Feels — Premium only." onclick="openPremiumBarFeels()">
-      Bar Feels <span class="menu-premium-badge" aria-hidden="true">Premium</span>
-    </button>
-    <button class="spa-tab" id="spa-progress" title="Review scores, feedback, and performance."
-      onclick="openAnalytics()">The Verdict</button>
-    <button class="spa-tab" id="spa-pricing" title="Manage your plan and platform access."
-      data-dd2-view="pricing">Retainer</button>
-    <button class="spa-tab" id="spa-community"
-      title="Open Quorum, the signed-in Due Diligence academic community."
-      aria-label="Open Quorum"
-      onclick="window.DueDiligenceQuorum?.open(this) || window.DueDiligenceLexForum?.open(this) || showPage('community', this)">Quorum</button>
-    <button class="spa-tab" id="spa-jurisprudence" title="Review important legal developments and cases."
-      onclick="showPage('jurisprudence', this)">Recent Jurisprudence</button>
-    <button class="spa-tab" id="spa-support" title="Get technical and account assistance."
-      data-dd2-view="support">Support</button>
-    <button class="spa-tab" id="spa-partner" title="Explore reciprocal school, sponsor, and institutional collaborations."
-      data-dd2-view="partnership">Quid Pro Quo</button>
-    <button class="spa-tab account-tab" id="btn-signin" type="button"
-      title="Manage your profile, preferences, and activity.">The Docket · Sign In</button>
+    <section class="nav-audience-group nav-group-academy" aria-labelledby="nav-academy-label">
+      <span class="nav-group-label" id="nav-academy-label">The Academy</span>
+      <div class="nav-group-items">
+        <button class="spa-tab active" id="spa-mock" aria-current="page" title="Practice Philippine Bar-style questions."
+          onclick="showPage('mock', this)">Mock Bar</button>
+        <button class="spa-tab" id="spa-subject-matter" title="Open Subject Matter examinations."
+          onclick="openSubjectMatterMenu()">Subject Matter</button>
+        <button class="spa-tab" id="spa-progress" title="Review scores, feedback, and performance."
+          onclick="openAnalytics()">Verdict</button>
+      </div>
+    </section>
+
+    <section class="nav-audience-group nav-group-commons" aria-labelledby="nav-commons-label">
+      <span class="nav-group-label" id="nav-commons-label">The Commons</span>
+      <div class="nav-group-items">
+        <button class="spa-tab" id="spa-bar-easy" type="button"
+          onclick="openComingSoon()">Bar Easy</button>
+        <button class="spa-tab" id="spa-community"
+          title="Open Quorum, the signed-in Due Diligence academic community."
+          aria-label="Open Quorum"
+          onclick="window.DueDiligenceQuorum?.open(this) || window.DueDiligenceLexForum?.open(this) || showPage('community', this)">Quorum</button>
+        <button class="spa-tab" id="spa-pricing" title="Manage your plan and platform access."
+          data-dd2-view="pricing">Retainer</button>
+      </div>
+    </section>
+
+    <section class="nav-audience-group nav-group-premium" aria-labelledby="nav-premium-label">
+      <span class="nav-group-label" id="nav-premium-label">Premium</span>
+      <div class="nav-group-items">
+        <button class="spa-tab btn-angel" id="spa-bar-feels" title="Bar Feels — Premium only."
+          aria-label="Bar Feels — Premium only." onclick="openPremiumBarFeels()">Bar Feels</button>
+        <button class="spa-tab btn-angel" id="spa-chairs-case" type="button"
+          onclick="openComingSoon()">Chair’s Case</button>
+        <button class="spa-tab btn-angel" id="spa-jurisprudence" title="Review important legal developments and cases."
+          onclick="showPage('jurisprudence', this)">Doctrines</button>
+        <button class="spa-tab btn-angel" id="spa-case-digest" type="button"
+          onclick="openComingSoon()">Case Digest</button>
+      </div>
+    </section>
+
+    <div class="nav-utilities" role="group" aria-label="Website utilities">
+      <button class="spa-tab" id="spa-examination-room" type="button"
+        onclick="openComingSoon()">Examination Room</button>
+      <button class="spa-tab" id="spa-support" title="Get technical and account assistance."
+        data-dd2-view="support">Support</button>
+      <button class="spa-tab account-tab" id="btn-signin" type="button"
+        title="Manage your profile, preferences, and activity.">The Docket</button>
+    </div>
   </nav>
 
   <div class="topbar-actions">
@@ -1483,7 +1580,7 @@
       <a href="#beta-disclosure" data-pb-open-disclosure>Beta Disclosure</a>
       <a href="#terms" data-dd2-view="terms">Terms</a>
       <a href="#privacy" data-dd2-view="privacy">Privacy</a>
-      <a href="#partnership" data-dd2-view="partnership">Partnerships</a>
+      <a href="#partnership" data-dd2-view="partnership" aria-label="Quid Pro Quo — Partnerships">Quid Pro Quo</a>
     </div>
   </div>
 </footer>
@@ -1566,6 +1663,18 @@
     <div class="modal-actions" style="margin-top:18px;">
       <p class="mock-note" role="note">Downloadable Verdict reports are not yet available during Beta.</p>
       <button type="button" class="btn-primary" onclick="closeModal('analytics-modal')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Truthful fallback for navigation destinations that are not available yet -->
+<div class="modal-overlay" id="coming-soon-modal" role="dialog" aria-modal="true"
+  aria-labelledby="coming-soon-title" aria-describedby="coming-soon-copy">
+  <div class="modal-card" tabindex="-1">
+    <h3 class="modal-title" id="coming-soon-title">Coming soon</h3>
+    <p class="checking-copy" id="coming-soon-copy">Developers are currently working on this feature. This page is not yet available.</p>
+    <div class="modal-actions" style="margin-top:18px;">
+      <button type="button" class="btn-primary" onclick="closeModal('coming-soon-modal')">Return</button>
     </div>
   </div>
 </div>
@@ -2320,8 +2429,17 @@ function setupBrandMeaningTooltip() {
 }
 
 function activatePrimaryMenuItem(id) {
-  document.querySelectorAll('.spa-tab').forEach((tab) => tab.classList.remove('active'));
-  document.getElementById(id)?.classList.add('active');
+  document.querySelectorAll('.spa-tab').forEach((tab) => {
+    const active = tab.id === id;
+    tab.classList.toggle('active', active);
+    if (active) tab.setAttribute('aria-current', 'page');
+    else tab.removeAttribute('aria-current');
+  });
+}
+
+function openComingSoon() {
+  setSiteMenuOpen(false);
+  openModal('coming-soon-modal');
 }
 
 /* PREMIUM NAVIGATION INTENT START */
@@ -3191,9 +3309,8 @@ function showPage(page, el, options = {}) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const target = document.getElementById('page-' + page);
   if (target) target.classList.add('active');
-  document.querySelectorAll('.spa-tab').forEach(t => t.classList.remove('active'));
   const activeTab = el || document.getElementById(SPA_PAGE_TABS[page]);
-  if (activeTab) activeTab.classList.add('active');
+  activatePrimaryMenuItem(activeTab?.id || '');
   if (page !== 'community') window.DueDiligenceQuorum?.deactivate?.();
   if (page === 'mock' && examPausedForPage && examStage === 'answering') {
     examPausedForPage = false;

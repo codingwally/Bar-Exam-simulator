@@ -46,15 +46,15 @@ for (const id of [
 }
 assert.match(html, /DueDiligenceExaminations\?\.openPerSubject/);
 assert.match(html, /DueDiligenceExaminations\?\.openBarFeels/);
-assert.match(html, /id="spa-mock"[\s\S]*id="spa-subject-matter"[\s\S]*id="spa-bar-feels"[\s\S]*id="spa-progress"/);
+assert.match(html, /id="spa-mock"[\s\S]*id="spa-subject-matter"[\s\S]*id="spa-progress"[\s\S]*id="spa-bar-feels"/);
 assert.match(html, /id="spa-bar-feels"[^>]*aria-label="Bar Feels — Premium only\."/);
-assert.match(html, /class="menu-premium-badge"[^>]*>Premium<\/span>/);
+assert.doesNotMatch(html, /menu-premium-badge/);
 assert.match(html, /function openSubjectMatterMenu\(\)[\s\S]*openPerSubject\(\)/);
 assert.match(html, /function openPremiumBarFeels\(\)[\s\S]*planCode === 'premium'[\s\S]*subscription\.status === 'active'[\s\S]*openView\?\.\('pricing'\)[\s\S]*openBarFeels\(\)/);
-assert.equal((html.match(/class="[^"]*\bbtn-angel\b[^"]*"/g) || []).length, 1);
+assert.equal((html.match(/class="[^"]*\bbtn-angel\b[^"]*"/g) || []).length, 4);
 assert.match(html, /\.btn-angel\{[\s\S]*linear-gradient\(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B\)[\s\S]*animation:sheen 3\.2s linear infinite/);
 assert.match(html, /@keyframes sheen\{0%\{background-position:200% 0;\}100%\{background-position:-40% 0;\}\}/);
-assert.match(html, /\.btn-angel:hover\{filter:brightness\(1\.06\);transform:translateY\(-1px\);\}/);
+assert.match(html, /\.btn-angel:hover,\.btn-angel\.active\{[^}]*filter:brightness\(1\.06\);transform:translateY\(-1px\);/);
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
 assert.match(html, /assets\/examinations\.css/);
 assert.match(html, /assets\/examinations\.js/);

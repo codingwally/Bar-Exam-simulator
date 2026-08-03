@@ -34,7 +34,7 @@ assert.match(
   index,
   /<a class="brand" href="\/" aria-label="Due Diligence home" aria-describedby="brand-subtitle-meaning">/,
 );
-assert.match(index, /id="btn-signin"[^>]*>The Docket · Sign In<\/button>[\s\S]*<\/nav>/);
+assert.match(index, /id="btn-signin"[^>]*>The Docket<\/button>[\s\S]*<\/nav>/);
 assert.match(index, /id="page-community" class="page"/);
 assert.match(index, /assets\/phase2-law-library\.jpg/);
 assert.match(index, /@media\(prefers-reduced-motion:reduce\)/);
@@ -51,7 +51,7 @@ for (const oldNavLabel of [
   assert.ok(!index.includes(oldNavLabel), `Old navigation label remains: ${oldNavLabel}`);
 }
 
-assert.match(experience, /signedIn \? 'The Docket' : 'The Docket · Sign In'/);
+assert.match(experience, /signInButton\.textContent = 'The Docket';/);
 assert.match(experience, /support: \['Member assistance', 'Support'/);
 assert.match(experience, /pricing: \['Access options', 'Retainer'/);
 assert.match(experience, /account: \['Your chamber', 'The Docket'/);

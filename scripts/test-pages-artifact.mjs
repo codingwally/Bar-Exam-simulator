@@ -47,6 +47,7 @@ assert.ok(files.every((file) => !/content|worker|supabase|scripts|docs/i.test(fi
 assert.ok(files.every((file) => !/\.(json|sql|mjs|csv)$/i.test(file)));
 
 const index = await readFile(path.join(output, 'index.html'), 'utf8');
+const examinations = await readFile(path.join(output, 'assets/examinations.js'), 'utf8');
 const robots = await readFile(path.join(output, 'robots.txt'), 'utf8');
 const sitemap = await readFile(path.join(output, 'sitemap.xml'), 'utf8');
 assert.doesNotMatch(index, /content\/question-bank|website-upload\.json|DueDiligenceWebsiteQuestionBank/i);
@@ -63,6 +64,9 @@ assert.match(index, /Practice the reasoning\. Refine the writing\./);
 assert.match(index, /id="authenticated-app-shell" hidden inert/);
 assert.match(index, /loadProtectedQuestion/);
 assert.match(index, /Authentication is required before an examination question is displayed/);
+assert.match(examinations, /data-exam-setup=[\s\S]*Review &amp; Begin/);
+assert.match(examinations, /const isBarFeels = state\.setup\.track === 'bar_feels';[\s\S]*\? 'strict'/);
+assert.doesNotMatch(examinations, /id="dd-upload-timer"/);
 assert.match(robots, /Disallow: \/admin\//);
 assert.match(robots, /Sitemap: https:\/\/duediligence\.ph\/sitemap\.xml/);
 assert.match(sitemap, /<loc>https:\/\/duediligence\.ph\/<\/loc>/);

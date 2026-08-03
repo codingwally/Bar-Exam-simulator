@@ -343,7 +343,7 @@
       </div>
       <div class="dd-exam-actions">
         <button class="dd-exam-button is-primary" data-exam-setup="${escapeHtml(item.versionId)}"
-          type="button">Choose Timer &amp; Begin</button>
+          type="button">Review &amp; Begin</button>
         ${item.resumableAttemptId ? `<button class="dd-exam-button"
           data-exam-resume="${escapeHtml(item.resumableAttemptId)}" type="button">Resume</button>` : ''}
       </div>
@@ -433,18 +433,18 @@
         <h2 id="dd-exam-setup-title">${escapeHtml(compact ? setup.subject : setup.title)}</h2>
         <p class="dd-exam-description">${compact
           ? 'Choose how you want to time this question. The clock starts only after you begin.'
-          : 'Review your timer choice. The examination has not started.'}</p>
+          : `This examination uses its existing ${formatDuration(setup.durationSeconds)} countdown. The clock starts only after you begin.`}</p>
         ${compact ? '' : `<dl>
           <dt>Examination</dt><dd>${escapeHtml(setup.subject || 'Curated mixed block')}</dd>
           <dt>Questions</dt><dd>${Number(setup.questionCount)}</dd>
           <dt>Duration</dt><dd>${escapeHtml(formatDuration(setup.durationSeconds))}</dd>
         </dl>`}
-        <label class="dd-exam-field">Timer mode
+        ${compact ? `<label class="dd-exam-field">Timer mode
           <select id="dd-setup-timer">
             ${modes.map(([mode, title, copy]) => `<option value="${mode}"
               ${mode === state.preferredTimerMode ? 'selected' : ''}>${escapeHtml(title)} — ${escapeHtml(copy)}</option>`).join('')}
           </select>
-        </label>
+        </label>` : ''}
         <div class="dd-exam-dialog-actions">
           <button class="dd-exam-button" type="button" data-dialog-cancel>Cancel</button>
           <button class="dd-exam-button is-primary" type="button" data-exam-begin>Begin Examination</button>
@@ -505,8 +505,11 @@
     const button = document.querySelector('[data-exam-begin]');
     if (button) button.disabled = true;
     try {
-      const timerMode = document.getElementById('dd-setup-timer')?.value || state.setup.timerMode;
-      state.preferredTimerMode = timerMode;
+      const isBarFeels = state.setup.track === 'bar_feels';
+      const timerMode = isBarFeels
+        ? 'strict'
+        : document.getElementById('dd-setup-timer')?.value || state.setup.timerMode;
+      if (!isBarFeels) state.preferredTimerMode = timerMode;
       const active = await api('/examinations/command', {
         operation: 'start_attempt',
         versionId: state.setup.versionId,
@@ -1038,7 +1041,9 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       <p class="dd-exam-kicker">Submission Received</p>
       <h1>Your examination is preserved.</h1>
       <p class="dd-exam-description">${receipt.automatic
-        ? 'Strict Scrutiny expired and the full examination was submitted automatically.'
+        ? state.active?.examination?.track === 'bar_feels'
+          ? 'The examination countdown expired and the full examination was submitted automatically.'
+          : 'Strict Scrutiny expired and the full examination was submitted automatically.'
         : 'Your confirmed examination submission was accepted exactly once.'}</p>
       <code class="dd-receipt-code">${escapeHtml(receipt.receiptCode || 'Receipt recorded')}</code>
       <div class="dd-review-summary">
@@ -1348,10 +1353,6 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       <ol class="dd-syllabus-list">
         ${(preview.questions || []).map((question) => `<li>${escapeHtml(question.prompt)}</li>`).join('')}
       </ol>
-      <label class="dd-exam-field">Timer mode
-        <select id="dd-upload-timer"><option value="strict">Strict Scrutiny</option>
-          <option value="selfPaced">Quantum Meruit</option><option value="none">Summary Judgment</option></select>
-      </label>
       <label class="dd-exam-field">Grading route
         <select id="dd-upload-route"><option value="human">Human Examiner Review</option>
           <option value="provisional">Provisional feedback only</option></select>
@@ -1375,7 +1376,7 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
         operation: 'confirm_upload',
         uploadId: state.uploadPreview.uploadId,
         title: state.uploadPreview.title,
-        timerMode: document.getElementById('dd-upload-timer').value,
+        timerMode: 'strict',
         durationSeconds: 14_400,
         gradingRoute: document.getElementById('dd-upload-route').value,
         requestKey: requestKey('confirm'),

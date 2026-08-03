@@ -60,6 +60,25 @@ assert.match(html, /assets\/examinations\.css/);
 assert.match(html, /assets\/examinations\.js/);
 assert.match(html, /Mock Bar/);
 assert.match(frontend, /Subject Matter Examinations/);
+assert.match(frontend, /data-exam-setup=[\s\S]*Review &amp; Begin/);
+assert.match(
+  frontend,
+  /This examination uses its existing \$\{formatDuration\(setup\.durationSeconds\)\} countdown/,
+);
+assert.match(
+  frontend,
+  /\$\{compact \? `<label class="dd-exam-field">Timer mode[\s\S]*<\/label>` : ''\}/,
+);
+assert.match(
+  frontend,
+  /const isBarFeels = state\.setup\.track === 'bar_feels';[\s\S]*\? 'strict'/,
+);
+assert.match(
+  frontend,
+  /state\.active\?\.examination\?\.track === 'bar_feels'[\s\S]*The examination countdown expired/,
+);
+assert.doesNotMatch(frontend, /id="dd-upload-timer"/);
+assert.match(frontend, /operation: 'confirm_upload',[\s\S]*timerMode: 'strict'/);
 assert.match(adminJs, />Subject Matter<\/option>/);
 const retiredUserFacingTerms = /Moot Court|Per-Subject Examinations|PER-SUBJECT EXAMINATION/i;
 assert.doesNotMatch(html, retiredUserFacingTerms);

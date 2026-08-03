@@ -38,6 +38,7 @@ jobs:
           node scripts/test-phase2-contract.mjs
           node scripts/test-auth-route-overlay.mjs
           node scripts/test-onboarding-flow.mjs
+          node scripts/test-post-grade-controls.mjs
           node scripts/test-beta-readiness-copy-seo.mjs
           node scripts/test-lifetime-grade-ui.mjs
           node scripts/test-audience-menu.mjs

@@ -2289,8 +2289,14 @@ function setWorkspaceLocked(locked) {
 }
 
 function setQuestionControlsDisabled(disabled) {
-  document.querySelectorAll('#main .toolbar button, #answer-box, #submit-btn, #main .mic').forEach((control) => {
-    control.disabled = Boolean(disabled);
+  const workspaceLocked = Boolean(disabled) || examStage !== 'answering';
+  document.querySelectorAll('#answer-box, #submit-btn, #main .mic').forEach((control) => {
+    control.disabled = workspaceLocked;
+  });
+  const navigationLocked = examStage !== 'reviewing'
+    && (Boolean(disabled) || examStage !== 'answering');
+  document.querySelectorAll('#main .toolbar button').forEach((control) => {
+    control.disabled = navigationLocked;
   });
 }
 
@@ -2344,6 +2350,7 @@ function transitionQuestion(index, options = {}) {
 
 async function transitionToProtectedRandomQuestion() {
   if (gradingInProgress || examStage === 'transitioning' || !currentSubj) return;
+  const transitionOriginStage = examStage;
   saveDraftForCurrentQuestion();
   examStage = 'transitioning';
   sessionController.pause();
@@ -2372,11 +2379,18 @@ async function transitionToProtectedRandomQuestion() {
     persistWorkspace();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (error) {
-    examStage = 'answering';
+    const restoreReview = transitionOriginStage === 'reviewing';
+    examStage = restoreReview ? 'reviewing' : 'answering';
     setWorkspaceLocked(false);
     renderMainWrite();
-    sessionController.resume();
-    window.DueDiligencePhase2?.handleGradeError?.(error);
+    if (restoreReview) setQuestionControlsDisabled(true);
+    else sessionController.resume();
+    const handledAccessError = window.DueDiligencePhase2?.handleGradeError?.(error) === true;
+    if (restoreReview && handledAccessError) {
+      examStage = 'reviewing';
+      renderMainWrite();
+      setQuestionControlsDisabled(true);
+    }
     toast(error.message || 'The next question is temporarily unavailable.', 'warn');
   }
 }
@@ -2822,17 +2836,19 @@ function renderMainWrite() {
   const savedKey = questionAnswerKey();
   const currentText = restoreDraftForKey(savedKey);
   const hasSubmitted = submissionResults[savedKey] !== undefined;
+  const reviewing = examStage === 'reviewing';
   const workspaceLocked = examStage !== 'answering';
+  const navigationLocked = !['answering', 'reviewing'].includes(examStage);
   const sourceMeta = questionSourceMetadata(q);
-  const timerMarkup = renderExamControlBar(workspaceLocked);
+  const timerMarkup = reviewing ? '' : renderExamControlBar(workspaceLocked);
 
   main.innerHTML = `
     ${timerMarkup}
     <div class="toolbar">
       <div class="nav-group">
-        <button class="btn-tool" onclick="nextQuestion()" ${workspaceLocked ? 'disabled' : ''}>NEXT</button>
-        <button class="btn-tool" onclick="changeMockBarSubject()">Change Subject</button>
-        <button class="btn-tool" onclick="exitMockBarPractice()">Exit Practice</button>
+        <button class="btn-tool" onclick="nextQuestion()" ${navigationLocked ? 'disabled' : ''}>NEXT</button>
+        <button class="btn-tool" onclick="changeMockBarSubject()" ${navigationLocked ? 'disabled' : ''}>Change Subject</button>
+        <button class="btn-tool" onclick="exitMockBarPractice()" ${navigationLocked ? 'disabled' : ''}>Exit Practice</button>
       </div>
       <div class="question-source-meta">
         <span class="source-year">${escapeHtml(sourceMeta.yearLabel)}</span>
@@ -2897,27 +2913,18 @@ function randomDifferentQuestionIndex(questionList, currentIndex) {
   return nextIndex;
 }
 
-function nextQuestion() {
-  if (gradingInProgress) return;
-  const qList = BAR_QUESTIONS[currentSubj];
-  currentIdx = randomDifferentQuestionIndex(qList, currentIdx);
-  renderMainWrite();
-}
-
-function randomQuestion() {
-  if (gradingInProgress) return;
-  const qList = BAR_QUESTIONS[currentSubj];
-  currentIdx = randomDifferentQuestionIndex(qList, currentIdx);
-  renderMainWrite();
-}
-
 function prevQuestion() {
   if (gradingInProgress || examStage !== 'answering') return;
   transitionQuestion(currentIdx - 1);
 }
 
 function nextQuestion() {
-  if (gradingInProgress || examStage !== 'answering') return;
+  if (gradingInProgress) return;
+  if (examStage === 'reviewing') {
+    proceedAfterReview();
+    return;
+  }
+  if (examStage !== 'answering') return;
   transitionToProtectedRandomQuestion();
 }
 
@@ -3104,10 +3111,10 @@ async function evaluateAnswer(options = {}) {
     closeCheckingModal();
 
     if (currentSubj === subjectAtSubmission && currentIdx === indexAtSubmission) {
+      renderMainWrite();
       const resultArea = document.getElementById('evaluation-result-area');
-      resultArea.innerHTML = renderResultHTML(key);
       setQuestionControlsDisabled(true);
-      resultArea.scrollIntoView({ behavior: 'smooth' });
+      resultArea?.scrollIntoView({ behavior: 'smooth' });
     }
     window.DueDiligencePhase2?.afterGrade(payload.access);
     safeStorageRemove(localStorage, gradeRequestStorageKey);

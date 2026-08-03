@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
-const [html, experience] = await Promise.all([
+const [html, experience, features2026] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/phase2-experience.js', root), 'utf8'),
+  readFile(new URL('assets/duediligence-2026.js', root), 'utf8'),
 ]);
 
 const navigation = html.match(/<nav class="spa-nav" id="spa-nav"[\s\S]*?<\/nav>/)?.[0];
@@ -103,12 +104,14 @@ assert.match(
   /\.btn-angel\{[\s\S]*?linear-gradient\(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B\)[\s\S]*?animation:sheen 3\.2s linear infinite/,
 );
 
-for (const id of ['spa-bar-easy', 'spa-chairs-case', 'spa-case-digest', 'spa-examination-room']) {
-  assert.match(
-    navigation,
-    new RegExp(`id="${id}"[^>]*[\\s\\S]*?onclick="openComingSoon\\(\\)"`),
-    `#${id} must use the truthful unavailable-feature fallback.`,
-  );
+for (const [id, handler] of [
+  ['spa-bar-easy', 'openBarEasy'],
+  ['spa-chairs-case', 'openChairCases'],
+  ['spa-case-digest', 'openAnchorCases'],
+  ['spa-examination-room', 'openExaminationRoom'],
+]) {
+  assert.match(navigation, new RegExp(`id="${id}"[^>]*[\\s\\S]*?onclick="${handler}\\(\\)"`));
+  assert.match(features2026, new RegExp(`global\\.${handler} =`));
 }
 
 assert.match(
@@ -121,7 +124,8 @@ assert.match(html, /id="spa-progress"[^>]*onclick="openAnalytics\(\)"/);
 assert.match(html, /id="spa-community"[\s\S]*?DueDiligenceQuorum/);
 assert.match(html, /id="spa-pricing"[^>]*data-dd2-view="pricing"/);
 assert.match(html, /id="spa-bar-feels"[^>]*onclick="openPremiumBarFeels\(\)"/);
-assert.match(html, /id="spa-jurisprudence"[^>]*onclick="showPage\('jurisprudence', this\)"/);
+assert.match(html, /id="spa-jurisprudence"[^>]*onclick="openDoctrines\(\)"/);
+assert.match(features2026, /global\.openDoctrines =/);
 assert.match(html, /id="spa-support"[^>]*data-dd2-view="support"/);
 assert.match(html, /id="btn-signin"[^>]*>The Docket<\/button>/);
 assert.match(experience, /signInButton\.textContent = 'The Docket';/);
@@ -132,4 +136,4 @@ assert.match(html, /tab\.removeAttribute\('aria-current'\)/);
 assert.doesNotMatch(navigation, /id="spa-partner"/);
 assert.match(html, /<a href="#partnership" data-dd2-view="partnership"[^>]*>Quid Pro Quo<\/a>/);
 
-console.log('Audience-group navigation, live routes, and coming-soon fallbacks passed.');
+console.log('Audience-group navigation and implemented 2026 feature routes passed.');

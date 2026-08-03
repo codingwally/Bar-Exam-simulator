@@ -51,6 +51,8 @@ const publicFiles = Object.freeze([
   'assets/phase4-experience.js',
   'assets/examinations.css',
   'assets/examinations.js',
+  'assets/duediligence-2026.css',
+  'assets/duediligence-2026.js',
   'assets/lex-forum.css',
   'assets/lex-forum.js',
   'assets/payments/gcash.png',

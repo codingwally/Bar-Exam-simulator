@@ -30,12 +30,18 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
       - name: Verify Worker and private-beta contracts
         run: |
           node --check worker/index.mjs
           node --test worker/*.test.mjs
           node scripts/test-website-question-bank.mjs
           node scripts/test-private-beta-admission.mjs
+          node scripts/test-duediligence-2026-migrations.mjs
+          node scripts/test-import-duediligence-2026-content.mjs
+          node scripts/validate-duediligence-2026-content.mjs
 
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3

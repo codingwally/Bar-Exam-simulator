@@ -1,0 +1,72 @@
+{
+  "source": {
+    "spreadsheet_id": "1DgDe_ObIoiTy9NJ3DmdM1ec7h7t0FS7RvFhBTjubZ8A",
+    "spreadsheet_title": "Question and Suggested answer data Bank",
+    "tab": "DD Subjects 2026",
+    "version": "2026.1",
+    "captured_on": "2026-08-04"
+  },
+  "count": 6,
+  "rows": [
+    {
+      "subject_id": "POL",
+      "display_name": "Political and Public International Law",
+      "weight_percent": "15",
+      "doctrine_target": "15",
+      "anchor_case_target": "10",
+      "bar_year": "2026",
+      "syllabus_basis_url": "https://sc.judiciary.gov.ph/bar-2026/",
+      "content_status": "AI_PREPARED_BETA"
+    },
+    {
+      "subject_id": "COMTAX",
+      "display_name": "Commercial and Taxation Laws",
+      "weight_percent": "20",
+      "doctrine_target": "20",
+      "anchor_case_target": "10",
+      "bar_year": "2026",
+      "syllabus_basis_url": "https://sc.judiciary.gov.ph/bar-2026/",
+      "content_status": "AI_PREPARED_BETA"
+    },
+    {
+      "subject_id": "CIV",
+      "display_name": "Civil Law and Land Titles and Deeds",
+      "weight_percent": "20",
+      "doctrine_target": "20",
+      "anchor_case_target": "10",
+      "bar_year": "2026",
+      "syllabus_basis_url": "https://sc.judiciary.gov.ph/bar-2026/",
+      "content_status": "AI_PREPARED_BETA"
+    },
+    {
+      "subject_id": "LAB",
+      "display_name": "Labor Law and Social Legislation",
+      "weight_percent": "10",
+      "doctrine_target": "10",
+      "anchor_case_target": "10",
+      "bar_year": "2026",
+      "syllabus_basis_url": "https://sc.judiciary.gov.ph/bar-2026/",
+      "content_status": "AI_PREPARED_BETA"
+    },
+    {
+      "subject_id": "CRIM",
+      "display_name": "Criminal Law",
+      "weight_percent": "10",
+      "doctrine_target": "10",
+      "anchor_case_target": "10",
+      "bar_year": "2026",
+      "syllabus_basis_url": "https://sc.judiciary.gov.ph/bar-2026/",
+      "content_status": "AI_PREPARED_BETA"
+    },
+    {
+      "subject_id": "REM",
+      "display_name": "Remedial Law, Legal and Judicial Ethics, with Practical Exercises",
+      "weight_percent": "25",
+      "doctrine_target": "25",
+      "anchor_case_target": "10",
+      "bar_year": "2026",
+      "syllabus_basis_url": "https://sc.judiciary.gov.ph/bar-2026/",
+      "content_status": "AI_PREPARED_BETA"
+    }
+  ]
+}

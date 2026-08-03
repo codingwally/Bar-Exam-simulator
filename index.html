@@ -483,7 +483,7 @@
     position:relative;display:flex;align-items:flex-start;justify-content:flex-end;gap:18px;grid-column:1/-1;grid-row:2;min-height:58px;
     padding:12px 0 8px;border-top:1px solid rgba(197,160,89,.16);
   }
-  .nav-audience-cluster{display:flex;align-items:flex-start;justify-content:flex-end;gap:12px;flex:none;}
+  .nav-audience-cluster{display:flex;align-items:flex-start;justify-content:center;gap:24px;flex:1 1 560px;max-width:560px;}
   .nav-audience-group{
     position:relative;z-index:3;
   }
@@ -622,19 +622,19 @@
 
   /* ---- Responsive additions ---- */
   @media (max-width:1479px) and (min-width:901px){
-    .nav-audience-cluster{gap:10px;}
+    .nav-audience-cluster{gap:20px;}
     .nav-utilities{gap:6px;padding-left:12px;}
     .nav-utilities .spa-tab{padding-inline:10px;font-size:10.25px;}
   }
   @media (max-width:1119px) and (min-width:701px){
     .spa-nav{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:flex-end;gap:12px 18px;min-height:58px;}
-    .nav-audience-cluster{display:flex;align-items:flex-start;justify-content:flex-end;gap:10px;}
+    .nav-audience-cluster{display:flex;align-items:flex-start;justify-content:center;gap:18px;flex:1 1 560px;max-width:560px;}
     .nav-audience-group{position:relative;transform:none;width:auto;text-align:center;}
     .nav-group-disclosure{display:block;max-width:100%;}
     .nav-utilities{position:relative;justify-content:flex-end;}
   }
   @media (max-width:900px) and (min-width:701px){
-    .nav-audience-cluster{width:100%;}
+    .nav-audience-cluster{width:100%;max-width:none;flex:1 1 100%;}
     .nav-group-items{
       position:static;min-width:196px;margin-top:9px;transform:none;text-align:left;
     }
@@ -657,7 +657,7 @@
     .topbar-actions{width:auto;max-width:none;margin:0;justify-content:flex-end;}
     .spa-nav{display:none;grid-column:1/-1;order:initial;width:100%;min-height:0;padding:10px 0 3px;}
     .spa-nav.is-open{display:flex;flex-direction:column;gap:12px;}
-    .nav-audience-cluster{display:flex;flex-direction:column;width:100%;gap:12px;}
+    .nav-audience-cluster{display:flex;flex-direction:column;width:100%;max-width:none;gap:12px;flex:none;}
     .nav-audience-group{position:static;transform:none;width:100%;text-align:left;}
     .nav-group-disclosure{display:block;width:100%;}
     .nav-group-label{width:100%;min-height:40px;padding:10px 15px;font-size:10.75px;text-align:left;}

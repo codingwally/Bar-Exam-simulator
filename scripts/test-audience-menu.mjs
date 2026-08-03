@@ -76,7 +76,7 @@ assert.match(html, /\.nav-group-disclosure:not\(\[open\]\) \.nav-group-items\{di
 assert.match(html, /\.topbar\{[^}]*position:relative;z-index:1000/);
 assert.doesNotMatch(html, /\.topbar\{[^}]*position:(?:sticky|fixed)/);
 assert.match(html, /\.spa-nav\{[^}]*display:flex[^}]*justify-content:flex-end/);
-assert.match(html, /\.nav-audience-cluster\{[^}]*display:flex[^}]*justify-content:flex-end[^}]*gap:12px[^}]*flex:none/);
+assert.match(html, /\.nav-audience-cluster\{[^}]*display:flex[^}]*justify-content:center[^}]*gap:24px[^}]*flex:1 1 560px[^}]*max-width:560px/);
 assert.match(html, /\.nav-audience-group\{[^}]*position:relative/);
 assert.doesNotMatch(html, /\.nav-group-commons\{left:50%/);
 assert.match(html, /\.nav-group-commons \.spa-tab\.active\{[^}]*border-color:rgba\(205,214,228,\.72\)/);

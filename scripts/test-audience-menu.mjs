@@ -42,12 +42,37 @@ assertOrder(commons, ['The Commons', 'Bar Easy', 'Quorum', 'Retainer']);
 assertOrder(premium, ['Premium', 'Bar Feels', 'Chair’s Case', 'Doctrines', 'Case Digest']);
 assertOrder(utilities, ['Examination Room', 'Support', 'The Docket']);
 
-assert.match(html, /\.nav-group-items\{[^}]*display:flex[^}]*flex-wrap:nowrap/);
+for (const [markup, labelId, menuId] of [
+  [academy, 'nav-academy-label', 'nav-academy-menu'],
+  [commons, 'nav-commons-label', 'nav-commons-menu'],
+  [premium, 'nav-premium-label', 'nav-premium-menu'],
+]) {
+  assert.match(markup, /<details class="nav-group-disclosure" name="audience-navigation">/);
+  assert.match(
+    markup,
+    new RegExp(`<summary class="nav-group-label" id="${labelId}" aria-controls="${menuId}" aria-expanded="false">`),
+  );
+  assert.match(
+    markup,
+    new RegExp(`<div class="nav-group-items" id="${menuId}" aria-labelledby="${labelId}">`),
+  );
+}
+
+assert.match(html, /\.nav-group-items\{[^}]*position:absolute[^}]*z-index:12[^}]*flex-direction:column/);
+assert.match(html, /\.nav-group-disclosure:not\(\[open\]\) \.nav-group-items\{display:none;\}/);
 assert.match(html, /\.nav-group-commons\{left:50%;transform:translateX\(-50%\);\}/);
-assert.match(html, /\.nav-group-commons \.spa-tab\{min-width:116px;\}/);
 assert.match(html, /\.nav-group-commons \.spa-tab\.active\{[^}]*border-color:rgba\(205,214,228,\.72\)/);
-assert.match(html, /\.nav-utilities\{[^}]*flex-direction:column/);
+assert.match(html, /\.nav-utilities\{[^}]*display:flex;flex-direction:row[^}]*flex-wrap:nowrap/);
+assert.match(html, /@media \(max-width:700px\)\{[\s\S]*?\.nav-utilities\{[^}]*display:grid;grid-template-columns:/);
 assert.match(html, /\.nav-group-academy \.nav-group-label\{[^}]*background:#4A154B/);
+assert.match(html, /function setupAudienceDropdowns\(\)/);
+assert.match(html, /if \(disclosure\.open\) closeAudienceDropdowns\(\{ except: disclosure \}\)/);
+assert.match(html, /event\.key === 'Escape'[\s\S]*?trigger\?\.focus\(\{ preventScroll: true \}\)/);
+assert.match(html, /event\.key === 'ArrowDown' \|\| event\.key === 'ArrowUp'/);
+assert.match(html, /document\.addEventListener\('pointerdown',[\s\S]*?closeAudienceDropdowns\(\)/);
+assert.match(html, /if \(!open\) closeAudienceDropdowns\(\{ restoreFocus: true \}\)/);
+assert.match(html, /focusedInsideMenu[\s\S]*?window\.innerWidth <= 700[\s\S]*?toggle\.focus\(\{ preventScroll: true \}\)/);
+assert.doesNotMatch(navigation, /role="menu(?:item)?"/);
 
 const premiumButtons = premium.match(/class="spa-tab btn-angel"/g) || [];
 assert.equal(premiumButtons.length, 4, 'Every Premium destination must use the live gold pill treatment.');

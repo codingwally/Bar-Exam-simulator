@@ -42,6 +42,9 @@ jobs:
           node scripts/test-beta-readiness-copy-seo.mjs
           node scripts/test-lifetime-grade-ui.mjs
           node scripts/test-audience-menu.mjs
+          node scripts/test-duediligence-2026-frontend.mjs
+          node scripts/test-import-duediligence-2026-content.mjs
+          node scripts/validate-duediligence-2026-content.mjs
 
       - name: Build sanitized Pages artifact
         run: node scripts/build-pages-artifact.mjs

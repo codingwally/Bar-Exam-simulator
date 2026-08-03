@@ -24,12 +24,26 @@ SIGN_IN_NOTIFICATION_EMAIL_MODE = "enabled"
 SIGN_IN_NOTIFICATION_EMAIL_FROM = "Due Diligence Sign-in Notice <support@duediligence.ph>"
 PRIVATE_BETA_GATE_ENABLED = "true"
 PRIVATE_BETA_DISCLOSURE_VERSION = "beta-disclosure-v1-2026-07-31"
+VERDICT_PDF_ENABLED = "true"
+VERDICT_PDF_PREMIUM_REQUIRED = "false"
+BAR_EASY_ENABLED = "true"
+CHAIR_CASES_ENABLED = "true"
+DOCTRINES_ENABLED = "true"
+ANCHOR_CASE_DIGESTS_ENABLED = "true"
+EXAMINATION_ROOM_ENABLED = "true"
+EXAM_GOOGLE_BACKUP_ENABLED = "true"
+AI_PREPARED_BETA_BADGE = "true"
+CONTENT_HUMAN_REVIEW_REQUIRED = "false"
+GOOGLE_BACKUP_TEMPLATE_ID = "1alXFADSsgSduVW07nOCGYa5zz26k387DeeEMF_y_fdg"
 
 [observability]
 enabled = true
 
 [observability.logs]
 enabled = true
+
+[triggers]
+crons = ["*/2 * * * *"]
 
 # GEMINI_API_KEY and SUPABASE_SERVICE_ROLE_KEY must remain Cloudflare secrets.
 # PRIVATE_BETA_ACCESS_CODE_VERIFIER, PRIVATE_BETA_ACCESS_CODE_PEPPER, and
@@ -38,3 +52,5 @@ enabled = true
 # only the approved founder recipient-key to personal-email mapping.
 # SUPABASE_URL must be configured as a Worker environment variable.
 # Never add secret values to this file.
+# Google backup OAuth client ID, client secret, and refresh token must remain
+# encrypted Worker secrets. GOOGLE_BACKUP_FOLDER_ID may be a non-secret var.

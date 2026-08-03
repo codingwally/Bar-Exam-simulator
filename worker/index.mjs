@@ -133,6 +133,12 @@ import {
   parseSubjectMatterSource,
   parseWebsiteUploadSource,
 } from './release-content-core.mjs';
+import {
+  DD2026ValidationError,
+  dd2026DatabaseError,
+} from './duediligence-2026-core.mjs';
+import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
+import { processExamRoomDeliveryQueues } from './exam-room-delivery.mjs';
 import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
 const WINDOW_MS = 10 * 60 * 1000;
@@ -155,6 +161,8 @@ const forumReadRateWindows = new Map();
 const forumWriteRateWindows = new Map();
 const examinationReadRateWindows = new Map();
 const examinationWriteRateWindows = new Map();
+const dd2026ReadRateWindows = new Map();
+const dd2026WriteRateWindows = new Map();
 const recentSubmissions = new Map();
 const recentSignInNotificationSessions = new Map();
 const authenticatedUserCache = new WeakMap();
@@ -284,6 +292,17 @@ async function enforceExaminationRateLimit(request, env, mutation = false) {
     mutation
       ? 'Too many examination actions. Wait briefly and try again.'
       : 'Too many examination requests. Wait briefly and try again.',
+  );
+}
+
+async function enforceDD2026RateLimit(request, env, mutation = false) {
+  enforceWindow(
+    mutation ? dd2026WriteRateWindows : dd2026ReadRateWindows,
+    await transientRateKey(request, env, mutation ? 'dd2026-write' : 'dd2026-read'),
+    mutation ? 90 : 180,
+    mutation
+      ? 'Too many study actions. Wait briefly and try again.'
+      : 'Too many study requests. Wait briefly and try again.',
   );
 }
 
@@ -514,6 +533,121 @@ async function examinationRpc(env, functionName, body) {
     throw new ExaminationValidationError(
       'EXAMINATION_UNAVAILABLE',
       'The examination service is temporarily unavailable. Your saved work is preserved.',
+      503,
+    );
+  }
+  return result;
+}
+
+async function dd2026Rpc(env, functionName, body) {
+  const allowedFunctions = new Set([
+    'dd2026_feature_snapshot',
+    'dd2026_import_content_batch',
+    'dd2026_editorial_transition',
+    'dd2026_content_list',
+    'dd2026_content_get',
+    'dd2026_record_bar_easy_completion',
+    'dd2026_record_doctrine_mastery',
+    'dd2026_verdict_result',
+    'dd2026_record_verdict_export',
+    'dd2026_service_flag_enabled',
+  ]);
+  if (!allowedFunctions.has(functionName)) {
+    throw new DD2026ValidationError('UNSUPPORTED_OPERATION', 'This study operation is not supported.');
+  }
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) {
+    console.error('DueDiligence 2026 storage request failed', {
+      operation: functionName,
+      status: response.status,
+      code: String(result?.code || 'unknown').slice(0, 32),
+    });
+    const mapped = dd2026DatabaseError({
+      message: [result?.message, result?.details, result?.hint].filter(Boolean).join(' '),
+    });
+    if (mapped instanceof DD2026ValidationError) throw mapped;
+    throw new DD2026ValidationError(
+      'STUDY_SERVICE_UNAVAILABLE',
+      'The study service is temporarily unavailable.',
+      503,
+    );
+  }
+  return result;
+}
+
+async function examRoom2026Rpc(env, functionName, body) {
+  const allowedFunctions = new Set([
+    'exam_room_issue_professor_activation',
+    'exam_room_redeem_professor_activation',
+    'exam_room_create_classroom',
+    'exam_room_validate_roster',
+    'exam_room_import_roster',
+    'exam_room_create_exam',
+    'exam_room_confirm_questions',
+    'exam_room_schedule_exam',
+    'exam_room_start_attempt',
+    'exam_room_attempt_view',
+    'exam_room_save_answer',
+    'exam_room_heartbeat',
+    'exam_room_record_integrity_event',
+    'exam_room_submit_attempt',
+    'exam_room_auto_submit_due',
+    'exam_room_live_status',
+    'exam_room_grading_workspace',
+    'exam_room_save_grade',
+    'exam_room_unlock_attempt',
+    'exam_room_release_results',
+    'exam_room_student_result',
+    'exam_room_open_dispute',
+    'exam_room_dispute_view',
+    'exam_room_close_dispute',
+    'exam_room_claim_backup_batch',
+    'exam_room_complete_backup',
+    'exam_room_fail_backup',
+    'exam_room_claim_email_batch',
+    'exam_room_complete_email',
+    'exam_room_fail_email',
+    'exam_room_admin_correct_grade',
+    'exam_room_portal_snapshot',
+    'exam_room_backup_context',
+  ]);
+  if (!allowedFunctions.has(functionName)) {
+    throw new DD2026ValidationError('UNSUPPORTED_OPERATION', 'This Examination Room operation is not supported.');
+  }
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) {
+    console.error('Examination Room storage request failed', {
+      operation: functionName,
+      status: response.status,
+      code: String(result?.code || 'unknown').slice(0, 32),
+    });
+    const mapped = dd2026DatabaseError({
+      message: [result?.message, result?.details, result?.hint].filter(Boolean).join(' '),
+    });
+    if (mapped instanceof DD2026ValidationError) throw mapped;
+    throw new DD2026ValidationError(
+      'EXAM_ROOM_UNAVAILABLE',
+      'The Examination Room is temporarily unavailable. Server-acknowledged work remains preserved.',
       503,
     );
   }
@@ -879,6 +1013,50 @@ async function deletePrivateExamination(env, objectPath) {
   if (response.ok || response.status === 404) return true;
   console.error('Private examination cleanup failed', { status: response.status });
   return false;
+}
+
+function examRoomSourceObjectUrl(env, objectPath) {
+  const baseUrl = configuredSupabaseUrl(env);
+  return new URL(
+    `/storage/v1/object/exam-room-sources/${encodedStoragePath(objectPath)}`,
+    baseUrl,
+  );
+}
+
+async function uploadExamRoomSource(env, objectPath, bytes, mimeType) {
+  const response = await fetch(examRoomSourceObjectUrl(env, objectPath), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': mimeType,
+      'x-upsert': 'false',
+    },
+    body: bytes,
+  });
+  if (response.ok || response.status === 409) return response.status !== 409;
+  console.error('Examination Room source upload failed', { status: response.status });
+  throw new DD2026ValidationError(
+    'UPLOAD_UNAVAILABLE',
+    'The question source could not be stored privately. Try again.',
+    503,
+  );
+}
+
+async function deleteExamRoomSource(env, objectPath) {
+  try {
+    const response = await fetch(examRoomSourceObjectUrl(env, objectPath), {
+      method: 'DELETE',
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    });
+    return response.ok || response.status === 404;
+  } catch {
+    console.error('Examination Room source cleanup requires operator review');
+    return false;
+  }
 }
 
 function examinationEmailMode(env) {
@@ -2042,6 +2220,121 @@ async function callGemini(env, prompt, groundingEnabled) {
   throw new ExaminerError(
     'UNSUPPORTED_MODEL',
     `No supported Gemini examiner model is currently available${lastUnsupported ? '.' : '.'}`,
+    503,
+  );
+}
+
+async function callGeminiStructured(env, prompt, responseSchema, validateResult) {
+  if (!env.GEMINI_API_KEY) {
+    throw new DD2026ValidationError(
+      'COACH_NOT_CONFIGURED',
+      'The study coach is temporarily unavailable.',
+      503,
+    );
+  }
+  let quotaSeen = false;
+  let timeoutSeen = false;
+  let providerFailureSeen = false;
+  for (const model of orderedModels(env.GEMINI_MODEL)) {
+    let unsupported = false;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const repair = attempt === 1
+        ? '\n\nREPAIR: Return only valid JSON matching the supplied schema. Do not add markdown or commentary outside JSON.'
+        : '';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+      let response;
+      let responseText = '';
+      try {
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': env.GEMINI_API_KEY,
+            },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: `${prompt}${repair}` }] }],
+              generationConfig: {
+                responseMimeType: 'application/json',
+                responseSchema,
+              },
+            }),
+            signal: controller.signal,
+          },
+        );
+        responseText = await response.text();
+      } catch (error) {
+        providerFailureSeen = true;
+        timeoutSeen ||= error?.name === 'AbortError';
+        console.warn('Structured study coach request failed', {
+          model,
+          attempt: attempt + 1,
+          reason: error?.name === 'AbortError' ? 'timeout' : 'network',
+        });
+        if (attempt === 0) {
+          await retryDelay(attempt);
+          continue;
+        }
+        break;
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (!response.ok) {
+        console.warn('Structured study coach request rejected', {
+          model,
+          status: response.status,
+          attempt: attempt + 1,
+          provider: safeProviderErrorSummary(responseText, env.GEMINI_API_KEY),
+        });
+        if (isUnsupportedModel(response.status, responseText)) {
+          unsupported = true;
+          break;
+        }
+        if (response.status === 401 || response.status === 403) {
+          throw new DD2026ValidationError(
+            'COACH_NOT_CONFIGURED',
+            'The study coach is temporarily unavailable.',
+            503,
+          );
+        }
+        quotaSeen ||= response.status === 429;
+        providerFailureSeen ||= response.status !== 429;
+        if (attempt === 0 && (response.status === 408 || response.status === 429 || response.status >= 500)) {
+          await retryDelay(attempt);
+          continue;
+        }
+        break;
+      }
+      try {
+        const payload = JSON.parse(responseText);
+        const answerText = payload?.candidates?.[0]?.content?.parts
+          ?.map((part) => part.text || '').join('').trim();
+        const parsed = JSON.parse(answerText);
+        return { model, result: validateResult(parsed) };
+      } catch {
+        providerFailureSeen = true;
+        if (attempt === 0) {
+          await retryDelay(attempt);
+          continue;
+        }
+      }
+    }
+    if (unsupported) continue;
+  }
+  if (quotaSeen) {
+    throw new DD2026ValidationError(
+      'COACH_CAPACITY',
+      'The study coach has reached temporary capacity. Try again shortly.',
+      503,
+    );
+  }
+  throw new DD2026ValidationError(
+    timeoutSeen ? 'COACH_TIMEOUT' : 'COACH_UNAVAILABLE',
+    timeoutSeen
+      ? 'The study coach took too long to respond. Try again.'
+      : 'The study coach is temporarily unavailable.',
     503,
   );
 }
@@ -4468,7 +4761,42 @@ async function handleAdminPaymentProof(request, env, origin, allowedOrigin) {
   }, 200, origin, allowedOrigin);
 }
 
+async function processExamRoomQueues(env) {
+  return processExamRoomDeliveryQueues(env, {
+    rpc: (rpcEnv, functionName, body) => (
+      functionName.startsWith('dd2026_')
+        ? dd2026Rpc(rpcEnv, functionName, body)
+        : examRoom2026Rpc(rpcEnv, functionName, body)
+    ),
+  });
+}
+
+async function resolveVerdictQuestion(questionId, env) {
+  const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
+  return questionFromBankRow(records.get(String(questionId || '')));
+}
+
+const dd2026Handlers = createDD2026Handlers({
+  corsHeaders,
+  dd2026Rpc,
+  deleteExamRoomSource,
+  enforceAdminRateLimit,
+  enforceDD2026RateLimit,
+  examRoomRpc: examRoom2026Rpc,
+  jsonResponse,
+  parseBoundedJson,
+  processExamRoomQueues,
+  requireAdministrator,
+  requireAuthenticatedUser,
+  resolveVerdictQuestion,
+  structuredGemini: callGeminiStructured,
+  uploadExamRoomSource,
+});
+
 export default {
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(processExamRoomQueues(env));
+  },
   async fetch(request, env, ctx) {
     const allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
     const requestOrigin = request.headers.get('Origin') || '';
@@ -4514,6 +4842,42 @@ export default {
       if (privateBetaGateEnabled(env)
           && !(await privateBetaCapabilityExempt(request, pathname))) {
         await requirePrivateBetaAdmission(request, env);
+      }
+      if (pathname === '/dd2026/features') {
+        return await dd2026Handlers.features(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/dd2026/content/query') {
+        return await dd2026Handlers.contentQuery(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/dd2026/content/item') {
+        return await dd2026Handlers.contentItem(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/dd2026/bar-easy/grade') {
+        return await dd2026Handlers.barEasyGrade(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/dd2026/doctrines/grade') {
+        return await dd2026Handlers.doctrineGrade(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/dd2026/verdict/pdf') {
+        return await dd2026Handlers.verdictPdf(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/dd2026/editorial') {
+        return await dd2026Handlers.editorial(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/dd2026/import') {
+        return await dd2026Handlers.importContent(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam-room/query') {
+        return await dd2026Handlers.examQuery(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam-room/command') {
+        return await dd2026Handlers.examCommand(request, env, origin, allowedOrigin, ctx);
+      }
+      if (pathname === '/exam-room/upload/questions') {
+        return await dd2026Handlers.questionUpload(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam-room/upload/roster') {
+        return await dd2026Handlers.rosterUpload(request, env, origin, allowedOrigin);
       }
       if (pathname === '/corrections') {
         return await handleCorrection(request, env, origin, allowedOrigin);
@@ -4696,7 +5060,8 @@ export default {
         || error instanceof PaymentValidationError
         || error instanceof ForumValidationError
         || error instanceof ExaminationValidationError
-        || error instanceof ReleaseContentError;
+        || error instanceof ReleaseContentError
+        || error instanceof DD2026ValidationError;
       return jsonResponse({
         ok: false,
         error: {

@@ -26,7 +26,8 @@ assert.match(phase2, /showEntry\(\{\s*allowDismiss:\s*true\s*\}\)/);
 
 // Published controls must work now or be rendered honestly as non-controls.
 assert.doesNotMatch(html, /exportProgressPDF/);
-assert.match(html, /Downloadable Verdict reports are not yet available/);
+assert.match(html, /Private Verdict PDF export is available/);
+assert.match(html, /openVerdictExport/);
 
 // Browser shortcuts remain available outside the answer editor.
 assert.doesNotMatch(html, /function enableSecurity\(/);

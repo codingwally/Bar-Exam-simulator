@@ -226,7 +226,7 @@ assert.match(workerSource, /env\.GEMINI_API_KEY/);
 const originalFetch = globalThis.fetch;
 const geminiPayload = {
   candidates: [{
-    content: { parts: [{ text: JSON.stringify(baseResult()) }] },
+    content: { parts: [{ text: JSON.stringify(baseResult({ scoreTenths: 45 })) }] },
     groundingMetadata: {
       groundingChunks: [{ web: { title: 'Supreme Court', uri: 'https://sc.judiciary.gov.ph/case.pdf' } }],
     },
@@ -291,12 +291,12 @@ try {
   });
   const response = await worker.fetch(request, env);
   const responseBody = await response.json();
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 200, JSON.stringify(responseBody));
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'https://duediligence.ph');
   assert.equal(
     responseBody.assessment.score,
-    2.5,
-    'generic application must remain capped even when the provider proposes 4.5',
+    3.5,
+    'a legally grounded answer with some application must remain below 4.0 when ALAC is incomplete',
   );
   assert.equal(responseBody.assessment.maxScore, 5);
   assert.equal(responseBody.assessment.modelUsed, 'gemini-3.6-flash');

@@ -532,7 +532,10 @@ export function analyzeStudentAnswer(studentAnswer, context = {}) {
   const meaningfulApplication = structuredApplication
     || (wordCount >= 18 && applicationConnector && questionOverlap >= 2);
   const hasLegalBasis = genericLegalBasis || specificLegalBasis;
-  const incoherent = /(.)\1{5,}/.test(lower)
+  // Repeated punctuation is common in legitimate legal instruments (signature
+  // lines, blanks, and notarial forms), so only repeated letters indicate the
+  // keyboard-mashing pattern this deterministic safeguard targets.
+  const incoherent = /([a-z])\1{5,}/i.test(lower)
     || (wordCount >= 4 && new Set(words.map((word) => word.toLowerCase())).size <= Math.ceil(wordCount / 4));
   const irrelevant = wordCount >= 4
     && !directAnswer

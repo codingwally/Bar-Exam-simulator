@@ -723,6 +723,8 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
   const normalizedStudentAnswer = cleanText(studentAnswer, MAX_ANSWER_LENGTH);
   const explicitlyDisclaimedTestAuthority = /\btest[-\s]?only\b/i.test(normalizedStudentAnswer)
     && /\b(?:case|citation|authority|g\.?\s*r\.?\s*(?:no\.)?)\b/i.test(normalizedStudentAnswer);
+  const studentAffirmativelyReliesOnIntentAlone = /\b(?:bad|criminal|evil|wrongful)\s+intent\s+alone\s+(?:makes?|renders?|establishes?|creates?|suffices?\s+to|is\s+sufficient\s+to)\b/i.test(normalizedStudentAnswer)
+    && !/\b(?:not true that|incorrect that|wrong to say that|does not|doesn't|cannot|can't|is not|isn't|never)\b[\s\S]{0,80}\b(?:bad|criminal|evil|wrongful)\s+intent\s+alone\b/i.test(normalizedStudentAnswer);
   const unverifiedAuthorityFinding = /\b(?:unverified|not verified|could not verify|unable to verify|verification unavailable)\b/i.test(examinerFindings)
     || assessment?.authorityStatus === 'unverified';
   const confirmedFabricationFinding = explicitlyDisclaimedTestAuthority
@@ -739,15 +741,20 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     const negatesWrongRule = /\b(?:not|no|isn't|is not|wasn't|was not|doesn't|does not|didn't|did not)\s+(?!only\b)(?:materially\s+)?(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\b/i.test(finding);
     return statesWrongRule && !negatesWrongRule;
   });
-  const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,140}(?:overly simplistic|oversimplified|legally insufficient|faulty|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(examinerFindings)
-    || /(?:overly simplistic|oversimplified|legally insufficient|faulty|misstat(?:ed|es))[\s\S]{0,100}(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)/i.test(examinerFindings)
+  const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,140}(?:overly simplistic|oversimplified|extremely superficial|superficial|legally insufficient|faulty|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely)|amounts? to mere)/i.test(examinerFindings)
+    || /(?:overly simplistic|oversimplified|extremely superficial|superficial|legally insufficient|faulty|misstat(?:ed|es))[\s\S]{0,100}(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)/i.test(examinerFindings)
     || /rel(?:y|ies|ied|ying)\s+on[\s\S]{0,140}\b(?:alone|only|solely|merely)\b[\s\S]{0,120}\b(?:instead of|rather than|without)\b/i.test(examinerFindings)
+    || /rel(?:y|ies|ied|ying)\s+on[\s\S]{0,80}\b(?:simplistic|superficial|mere)\b[\s\S]{0,80}\b(?:bad|criminal|evil|wrongful)\s+intent\b[\s\S]{0,120}\b(?:instead of|rather than|without)\b/i.test(examinerFindings)
+    || /(?:legal\s+basis|governing\s+rule|legal\s+reasoning)[\s\S]{0,120}\b(?:mere|only|solely)\s+(?:bad|criminal|evil|wrongful)\s+intent\b[\s\S]{0,120}\b(?:instead of|rather than|without)\b/i.test(examinerFindings)
     || /(?:no correct legal basis|faulty intent-only reasoning|bad intent alone)/i.test(examinerFindings);
   const rubricShowsCentralRuleFailure = Number(assessment?.rubricBreakdown?.legalBasis) <= 2.5
     && Number(assessment?.rubricBreakdown?.application) <= 2.5;
   const materiallyWrongRuleFinding = assessment?.authorityStatus === 'materially_incorrect_or_irrelevant'
     || explicitWrongRuleFinding
-    || (rubricShowsCentralRuleFailure && centralRuleInsufficiencyFinding);
+    || (rubricShowsCentralRuleFailure && (
+      centralRuleInsufficiencyFinding
+      || studentAffirmativelyReliesOnIntentAlone
+    ));
   const effectiveAuthorityStatus = confirmedFabricationFinding
     ? 'confirmed_fabricated'
     : assessment?.authorityStatus;

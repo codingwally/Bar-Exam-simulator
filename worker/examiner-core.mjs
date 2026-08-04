@@ -562,9 +562,11 @@ export function inferQuestionType(context = {}) {
   const explicit = cleanText(context?.questionType, 40).toLowerCase();
   if (ALLOWED_QUESTION_TYPES.has(explicit)) return explicit;
   const question = cleanText(context?.question, 20_000).toLowerCase();
-  if (/^\s*(?:enumerate|list|name)\b/.test(question)) return 'enumeration';
+  if (/^\s*(?:what\s+(?:is|are)\s+the\s+differences?\b|how\s+(?:does|do)\b[\s\S]{0,120}\bdiffer\b)/.test(question)) return 'distinction';
   if (/^\s*(?:distinguish|differentiate|compare|contrast)\b/.test(question)) return 'distinction';
-  if (/^\s*(?:define|what is meant by|give the meaning of)\b/.test(question)) return 'definition';
+  if (/^\s*(?:what\s+(?:are|is)\s+the\s+(?:[a-z-]+\s+){0,3}(?:elements?|requisites?|requirements?|grounds?|instances?|exceptions?|kinds?|types?|classes?|modes?|effects?|rights?|duties?)\b)/.test(question)) return 'enumeration';
+  if (/^\s*(?:enumerate|list|name)\b/.test(question)) return 'enumeration';
+  if (/^\s*(?:define|what is meant by|give the meaning of|what is the legal meaning of)\b/.test(question)) return 'definition';
   if (/^\s*(?:explain|discuss|state|describe|identify)\b/.test(question)) return 'explanation';
   if (/^\s*(?:draft|prepare|write|formulate)\b/.test(question)) return 'practical';
   return 'problem';
@@ -710,19 +712,38 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     );
   }
 
+  const examinerErrors = (Array.isArray(assessment?.errors) ? assessment.errors : [])
+    .map((value) => cleanText(value, 2_000))
+    .filter(Boolean);
   const examinerFindings = [
     assessment?.rationale,
     assessment?.legalExplanation,
-    ...(Array.isArray(assessment?.errors) ? assessment.errors : []),
+    ...examinerErrors,
   ].map((value) => cleanText(value, 2_000)).filter(Boolean).join(' ');
+  const normalizedStudentAnswer = cleanText(studentAnswer, MAX_ANSWER_LENGTH);
+  const explicitlyDisclaimedTestAuthority = /\btest[-\s]?only\b/i.test(normalizedStudentAnswer)
+    && /\b(?:case|citation|authority|g\.?\s*r\.?\s*(?:no\.)?)\b/i.test(normalizedStudentAnswer);
   const unverifiedAuthorityFinding = /\b(?:unverified|not verified|could not verify|unable to verify|verification unavailable)\b/i.test(examinerFindings)
     || assessment?.authorityStatus === 'unverified';
-  const confirmedFabricationFinding = assessment?.authorityStatus === 'confirmed_fabricated'
+  const confirmedFabricationFinding = explicitlyDisclaimedTestAuthority
+    || assessment?.authorityStatus === 'confirmed_fabricated'
     || (!unverifiedAuthorityFinding && /(?:false|fabricated|invented|non-?existent)\s+(?:case|citation|authority)|(?:case|citation|authority)\s+(?:is\s+)?(?:false|fabricated|invented|non-?existent)/i.test(examinerFindings));
+  const centralRequirementGapFinding = examinerErrors.some((finding) => (
+    /(?:omit(?:ted|s)?|fail(?:ed|s)? to (?:state|mention|address|analy[sz]e|include|apply))[\s\S]{0,140}\b(?:majority|material (?:element|exception|qualification|requirement)|essential (?:element|exception|qualification|requirement)|controlling requirement|constitutional requirement|statutory requirement|procedural prerequisite|condition precedent|exception|qualification|voting threshold|outcome-determinative (?:element|exception|qualification|requirement|threshold|standard|prerequisite))\b/i.test(finding)
+  ));
+  const explicitWrongRuleFinding = /(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)|(?:legal\s+basis|article|section|rule|statute|doctrine|authority)[\s\S]{0,80}(?:incorrect|wrong|irrelevant|unrelated|inapplicable)/i.test(examinerFindings);
+  const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,120}(?:overly simplistic|legally insufficient|faulty|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(examinerFindings)
+    || /(?:no correct legal basis|faulty intent-only reasoning)/i.test(examinerFindings);
+  const rubricShowsCentralRuleFailure = Number(assessment?.rubricBreakdown?.legalBasis) <= 2
+    && Number(assessment?.rubricBreakdown?.application) <= 2;
   const materiallyWrongRuleFinding = assessment?.authorityStatus === 'materially_incorrect_or_irrelevant'
-    || /(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)|(?:legal\s+basis|article|section|rule|statute|doctrine|authority)[\s\S]{0,80}(?:incorrect|wrong|irrelevant|unrelated|inapplicable)/i.test(examinerFindings);
+    || explicitWrongRuleFinding
+    || (rubricShowsCentralRuleFailure && centralRuleInsufficiencyFinding);
+  const effectiveAuthorityStatus = confirmedFabricationFinding
+    ? 'confirmed_fabricated'
+    : assessment?.authorityStatus;
 
-  if (assessment?.scoreCeilingCode === 'major_central_gap') {
+  if (assessment?.scoreCeilingCode === 'major_central_gap' || centralRequirementGapFinding) {
     lowerCap(
       3.5,
       'major_central_gap',
@@ -759,6 +780,7 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
       percentagePointValue: score,
       tier: tierForScore(score),
       performanceLabel: performanceLabelForScore(score),
+      authorityStatus: effectiveAuthorityStatus,
       appliedScoreCeiling,
     };
   }
@@ -775,6 +797,7 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     percentagePointValue: score,
     tier: tierForScore(score),
     performanceLabel: performanceLabelForScore(score),
+    authorityStatus: effectiveAuthorityStatus,
     errors,
     appliedScoreCeiling,
   };
@@ -911,6 +934,8 @@ BAR-ALIGNED HOLISTIC RUBRIC — ${RUBRIC_VERSION}:
 - For problem and practical questions, application means connecting material facts to the governing rule.
 - For definition, explanation, distinction, and enumeration questions, use the 35% application component for completeness, analysis, and performance of the task; do not demand invented facts.
 - Recognize legally defensible alternative answers when supported by controlling law. Do not require word-for-word alignment with the stored suggested answer.
+- Distinguish citation precision from substantive completeness. Exact references are optional, but essential elements, exceptions, qualifications, voting thresholds, standards, and procedural prerequisites are legal substance.
+- A correct conclusion reached only through a materially wrong or legally insufficient governing rule does not earn substantial credit.
 
 PERFORMANCE BANDS:
 - 4.6–5.0: legally correct, responsive, complete, meaningfully reasoned or applied, with only negligible imperfections.
@@ -927,11 +952,12 @@ CITATIONS AND AUTHORITIES:
 - Treat a minor citation-number mistake as imprecision, not fabrication, unless it materially changes the governing rule.
 - Use authorityStatus="unverified" when an asserted authority cannot be reliably verified. Unverified is not fabricated and must not trigger the fabrication ceiling.
 - Use authorityStatus="confirmed_fabricated" only when reliable evidence establishes that the asserted authority is invented or nonexistent. Then use scoreCeilingCode="confirmed_fabricated_authority".
-- Use authorityStatus="materially_incorrect_or_irrelevant" and scoreCeilingCode="materially_wrong_rule" only when the answer depends on a materially wrong or irrelevant governing rule.
+- If the student expressly invokes an authority while identifying it as test-only, fabricated, invented, or nonexistent, that self-disclaimer is reliable confirmation; do not downgrade it to minor imprecision.
+- Use authorityStatus="materially_incorrect_or_irrelevant" and scoreCeilingCode="materially_wrong_rule" when the answer depends on a materially wrong or irrelevant governing rule, even when the ultimate conclusion happens to be correct.
 
 NARROW SCORE CEILINGS:
 - The Worker independently enforces blank/irrelevant/incoherent, bare-conclusion, conclusion-only, and fact-based rule-without-application ceilings.
-- Use scoreCeilingCode="major_central_gap" only when a central issue or controlling legal point is materially omitted or incorrect but meaningful legal analysis remains; maximum 3.5.
+- Use scoreCeilingCode="major_central_gap" when a central issue or controlling legal point is materially omitted or incorrect but meaningful legal analysis remains; maximum 3.5. This includes omission of an outcome-determinative element, exception, qualification, majority-vote requirement, threshold, standard, or procedural prerequisite.
 - Use scoreCeilingCode="confirmed_fabricated_authority" only for confirmed fabrication; maximum 2.5.
 - Use scoreCeilingCode="materially_wrong_rule" only when the central governing rule is materially wrong and the answer depends on it; maximum 1.5.
 - Otherwise use scoreCeilingCode="none". Never impose a ceiling merely for missing headings, missing exact citations, different wording, a defensible alternative theory, minor grammar, or failure to reproduce every model-answer detail.
@@ -944,9 +970,10 @@ SCORING PROCESS:
 1. Identify the actual legal position, rule or doctrine, reasoning/application, and conclusion without requiring labels.
 2. Classify the question type and whether factual application is genuinely required.
 3. Assess the four components using the indicative weights.
-4. Select the holistic performance band and final score based on legal merit, not literal arithmetic alone.
-5. Classify authority reliability and select a narrow scoreCeilingCode, ordinarily "none".
-6. Return rubricBreakdown scores from 0.0 to 5.0 for responsiveness, legalBasis, application, and conclusion. These explain the holistic judgment; they do not replace it.
+4. Compare the student's stated rule with the stored controlling legal basis. Do not treat a broad principle as complete when the stored key shows that a specific element, exception, qualification, voting threshold, standard, or prerequisite decides the result.
+5. Select the holistic performance band and final score based on legal merit, not literal arithmetic alone.
+6. Classify authority reliability and select a narrow scoreCeilingCode, ordinarily "none".
+7. Return rubricBreakdown scores from 0.0 to 5.0 for responsiveness, legalBasis, application, and conclusion. These explain the holistic judgment; they do not replace it.
 
 REFERENCE RULES:
 - The stored suggested answer and legal basis are authoritative reference materials when present, but they are not a word-matching checklist.

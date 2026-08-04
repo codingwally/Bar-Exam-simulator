@@ -180,7 +180,7 @@ test('legally sound narrative without ALAC headings may retain 4.0–5.0', () =>
   assert.equal(capped(answer, 3.8).score, 3.8);
   assert.equal(capped(answer, 4.6).score, 4.6);
   assert.equal(capped(answer, 5).score, 5);
-} );
+});
 
 test('a complete, substantially aligned ALAC answer may retain 4.0–5.0', () => {
   const answer = [

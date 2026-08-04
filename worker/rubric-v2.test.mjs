@@ -96,6 +96,9 @@ test('prompt locks the approved substance-first and citation-neutral policy', ()
   assert.match(prompt, /Unverified is not fabricated/i);
   assert.match(prompt, /Grammar, spelling, and style are ordinarily coaching feedback only/i);
   assert.match(prompt, /legally defensible alternative answers/i);
+  assert.match(prompt, /essential elements, exceptions, qualifications, voting thresholds/i);
+  assert.match(prompt, /correct conclusion reached only through a materially wrong/i);
+  assert.match(prompt, /self-disclaimer is reliable confirmation/i);
 });
 
 test('a legally sound narrative without headings or exact citations may retain 5.0', () => {
@@ -168,6 +171,70 @@ test('major central gaps use the approved 3.5 ceiling without word-matching the 
   }), answer, context);
   assert.equal(result.score, 3.5);
   assert.equal(result.appliedScoreCeiling.code, 'major_central_gap');
+});
+
+
+test('common distinction and enumeration phrasing does not invent factual application', () => {
+  const distinction = { question: 'What is the difference between mala in se and mala prohibita?' };
+  const enumeration = { question: 'What are the essential elements of a valid contract?' };
+  assert.equal(inferQuestionType(distinction), 'distinction');
+  assert.equal(applicationRequiredForQuestion(distinction), false);
+  assert.equal(inferQuestionType(enumeration), 'enumeration');
+  assert.equal(applicationRequiredForQuestion(enumeration), false);
+});
+
+test('an expressly test-only nonexistent authority is deterministically treated as confirmed fabrication', () => {
+  const answer = 'No. Double insurance requires the same insured person, subject, interest, and risk. The same rule was supposedly announced in the explicitly test-only and nonexistent case of Santos v. Omega Assurance, G.R. No. TEST-ONLY-000. Here, the insured interests differ. Therefore, there is no double insurance.';
+  const result = applyDeterministicScoreCap(assessment(4.5, {
+    authorityStatus: 'minor_imprecision',
+    scoreCeilingCode: 'none',
+    errors: ['The answer includes an unverified or nonexistent test-case citation.'],
+  }), answer, {
+    question: 'Do the two policies constitute double insurance?',
+    suggestedAnswer: 'No. Double insurance requires identity of the insured person, subject matter, interest, and risk. The insured interests differ.',
+    legalBasis: 'Insurance Code, Section 95.',
+    verified: true,
+  });
+  assert.equal(result.score, 2.5);
+  assert.equal(result.authorityStatus, 'confirmed_fabricated');
+  assert.equal(result.appliedScoreCeiling.code, 'confirmed_fabricated_authority');
+});
+
+test('an omitted outcome-determinative majority requirement triggers the 3.5 central-gap ceiling', () => {
+  const answer = 'No. Congress, not the President acting alone, grants tax exemptions. The President issued the exemption by proclamation, so the proclamation is unconstitutional.';
+  const result = applyDeterministicScoreCap(assessment(4.5, {
+    errors: ['Failed to mention the requirement for a majority of all members of Congress for tax exemption laws.'],
+  }), answer, {
+    question: 'May the President grant tax exemptions through a proclamation supported only by a congressional resolution?',
+    suggestedAnswer: 'No. A tax exemption law requires the concurrence of a majority of all members of Congress, and a presidential proclamation cannot substitute for that law.',
+    legalBasis: '1987 Constitution, Article VI, Section 28(4).',
+    verified: true,
+  });
+  assert.equal(result.score, 3.5);
+  assert.equal(result.appliedScoreCeiling.code, 'major_central_gap');
+});
+
+test('a correct conclusion resting solely on a legally insufficient central rule is capped at 1.5', () => {
+  const answer = 'Yes. A person with bad intent is criminally liable even when no property is taken. Harry wanted to steal money and opened the wallet, so bad intent alone makes him liable for an impossible crime.';
+  const result = applyDeterministicScoreCap(assessment(3, {
+    rationale: 'The legal basis is overly simplistic, relying merely on bad intent rather than the controlling elements of an impossible crime.',
+    errors: ['The answer uses faulty intent-only reasoning.'],
+    rubricBreakdown: {
+      responsiveness: 5,
+      legalBasis: 2,
+      application: 2,
+      conclusion: 4,
+      questionType: 'problem',
+      applicationRequired: true,
+    },
+  }), answer, {
+    question: 'Is Harry liable for an impossible crime after opening an empty electronic wallet intending to steal?',
+    suggestedAnswer: 'Yes. The intended offense against property failed because accomplishment was inherently impossible, and the means were inadequate or ineffectual.',
+    legalBasis: 'Revised Penal Code, Article 4(2).',
+    verified: true,
+  });
+  assert.equal(result.score, 1.5);
+  assert.equal(result.appliedScoreCeiling.code, 'materially_wrong_rule');
 });
 
 test('validated results preserve the auditable rubric breakdown and weighted reference', () => {

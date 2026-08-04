@@ -20,7 +20,7 @@ Legal substance controls. ALAC remains the coaching format for the returned mode
 
 ## Citation rule
 
-Exact article, section, case, or docket citations are not required when the controlling doctrine is accurately stated and meaningfully applied. A generic phrase such as “under the law” is insufficient unless the governing rule is actually stated. An unverified authority is not deemed fabricated. Only a confirmed fabricated authority receives the 2.5 ceiling.
+Exact article, section, case, or docket citations are not required when the controlling doctrine is accurately stated and meaningfully applied. Essential elements, exceptions, qualifications, voting thresholds, standards, and procedural prerequisites remain substantive requirements. A generic phrase such as “under the law” is insufficient unless the governing rule is actually stated. An unverified authority is not deemed fabricated. An authority expressly invoked while identified by the student as test-only, fabricated, invented, or nonexistent is treated as confirmed fabrication. Only confirmed fabrication receives the 2.5 ceiling.
 
 ## Grammar
 
@@ -34,7 +34,7 @@ Grammar, spelling, and style are coaching matters unless they materially prevent
 - Rule without meaningful application in a fact-based question: 2.5
 - Major central issue or controlling-point gap despite meaningful analysis: 3.5
 - Confirmed fabricated authority: 2.5
-- Materially wrong central governing rule: 1.5
+- Materially wrong or legally insufficient central governing rule, even when the conclusion happens to be correct: 1.5
 
 No ceiling is imposed merely for missing headings, missing exact citations, different wording, a defensible alternative theory, minor grammar, or failure to reproduce every model-answer detail.
 

@@ -9,6 +9,7 @@ on:
     paths:
       - "worker/**"
       - "scripts/apply_rubric_v2_intent_only_safeguard.py"
+      - "scripts/fix_rubric_v2_intent_negative_control.py"
       - ".github/workflows/validate-rubric-v2-intent-only-safeguard.yml"
 
 permissions:
@@ -38,7 +39,8 @@ jobs:
         run: |
           if grep -q "studentAffirmativelyReliesOnIntentAlone" worker/examiner-core.mjs \
             && grep -q "extremely superficial" worker/rubric-v2.test.mjs \
-            && grep -q "rejecting intent-only liability" worker/rubric-v2.test.mjs; then
+            && grep -q "rejecting intent-only liability" worker/rubric-v2.test.mjs \
+            && grep -q "applicationRequired: false" worker/rubric-v2.test.mjs; then
             echo "committed=true" >> "$GITHUB_OUTPUT"
           else
             echo "committed=false" >> "$GITHUB_OUTPUT"
@@ -46,7 +48,9 @@ jobs:
 
       - name: Apply safeguard in isolated workspace
         if: steps.source.outputs.committed != 'true'
-        run: python3 scripts/apply_rubric_v2_intent_only_safeguard.py
+        run: |
+          python3 scripts/apply_rubric_v2_intent_only_safeguard.py
+          python3 scripts/fix_rubric_v2_intent_negative_control.py
 
       - name: Verify syntax
         run: |
@@ -68,6 +72,7 @@ jobs:
           grep -q "studentAffirmativelyReliesOnIntentAlone" worker/examiner-core.mjs
           grep -q "extremely superficial" worker/rubric-v2.test.mjs
           grep -q "rejecting intent-only liability" worker/rubric-v2.test.mjs
+          grep -q "applicationRequired: false" worker/rubric-v2.test.mjs
           grep -q "rubricBreakdown?.legalBasis) <= 2.5" worker/examiner-core.mjs
           grep -q "rubricBreakdown?.application) <= 2.5" worker/examiner-core.mjs
 

@@ -217,12 +217,15 @@ test('an omitted outcome-determinative majority requirement triggers the 3.5 cen
 test('a correct conclusion resting solely on a legally insufficient central rule is capped at 1.5', () => {
   const answer = 'Yes. A person with bad intent is criminally liable even when no property is taken. Harry wanted to steal money and opened the wallet, so bad intent alone makes him liable for an impossible crime.';
   const result = applyDeterministicScoreCap(assessment(3, {
-    rationale: 'The legal basis is overly simplistic, relying merely on bad intent rather than the controlling elements of an impossible crime.',
-    errors: ['The answer uses faulty intent-only reasoning.'],
+    rationale: "The student correctly answers 'Yes' but provides an oversimplified legal basis ('bad intent alone') without addressing the controlling elements of an impossible crime.",
+    errors: [
+      "Relies on 'bad intent alone' as the legal basis instead of legal impossibility or Article 4(2) of the RPC.",
+      'Omits the core doctrine of factual impossibility where accomplishment is inherently impossible.',
+    ],
     rubricBreakdown: {
       responsiveness: 5,
       legalBasis: 2,
-      application: 2,
+      application: 2.5,
       conclusion: 4,
       questionType: 'problem',
       applicationRequired: true,
@@ -235,6 +238,29 @@ test('a correct conclusion resting solely on a legally insufficient central rule
   });
   assert.equal(result.score, 1.5);
   assert.equal(result.appliedScoreCeiling.code, 'materially_wrong_rule');
+});
+
+test('low component scores alone do not create a central-rule ceiling without an explicit substantive finding', () => {
+  const answer = 'Yes. An impossible crime may arise where the intended offense cannot be accomplished. The wallet was empty, so no money could be taken.';
+  const result = applyDeterministicScoreCap(assessment(2.5, {
+    rationale: 'The answer identifies the doctrine but would benefit from a more complete statement of its elements.',
+    errors: ['The rule is incomplete but not materially wrong.'],
+    rubricBreakdown: {
+      responsiveness: 4,
+      legalBasis: 2.5,
+      application: 2.5,
+      conclusion: 3,
+      questionType: 'problem',
+      applicationRequired: true,
+    },
+  }), answer, {
+    question: 'Is Harry liable for an impossible crime after opening an empty electronic wallet intending to steal?',
+    suggestedAnswer: 'Yes. The intended offense against property failed because accomplishment was inherently impossible, and the means were inadequate or ineffectual.',
+    legalBasis: 'Revised Penal Code, Article 4(2).',
+    verified: true,
+  });
+  assert.equal(result.score, 2.5);
+  assert.equal(result.appliedScoreCeiling, null);
 });
 
 test('validated results preserve the auditable rubric breakdown and weighted reference', () => {

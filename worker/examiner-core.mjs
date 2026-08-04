@@ -731,11 +731,20 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
   const centralRequirementGapFinding = examinerErrors.some((finding) => (
     /(?:omit(?:ted|s)?|fail(?:ed|s)? to (?:state|mention|address|analy[sz]e|include|apply))[\s\S]{0,140}\b(?:majority|material (?:element|exception|qualification|requirement)|essential (?:element|exception|qualification|requirement)|controlling requirement|constitutional requirement|statutory requirement|procedural prerequisite|condition precedent|exception|qualification|voting threshold|outcome-determinative (?:element|exception|qualification|requirement|threshold|standard|prerequisite))\b/i.test(finding)
   ));
-  const explicitWrongRuleFinding = /(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)|(?:legal\s+basis|article|section|rule|statute|doctrine|authority)[\s\S]{0,80}(?:incorrect|wrong|irrelevant|unrelated|inapplicable)/i.test(examinerFindings);
-  const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,120}(?:overly simplistic|legally insufficient|faulty|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(examinerFindings)
-    || /(?:no correct legal basis|faulty intent-only reasoning)/i.test(examinerFindings);
-  const rubricShowsCentralRuleFailure = Number(assessment?.rubricBreakdown?.legalBasis) <= 2
-    && Number(assessment?.rubricBreakdown?.application) <= 2;
+  const explicitWrongRuleFinding = [
+    cleanText(assessment?.rationale, 2_000),
+    ...examinerErrors,
+  ].filter(Boolean).some((finding) => {
+    const statesWrongRule = /(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)|(?:legal\s+basis|article|section|rule|statute|doctrine|authority)[\s\S]{0,80}(?:incorrect|wrong|irrelevant|unrelated|inapplicable)/i.test(finding);
+    const negatesWrongRule = /\b(?:not|no|isn't|is not|wasn't|was not|doesn't|does not|didn't|did not)\s+(?!only\b)(?:materially\s+)?(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\b/i.test(finding);
+    return statesWrongRule && !negatesWrongRule;
+  });
+  const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,140}(?:overly simplistic|oversimplified|legally insufficient|faulty|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(examinerFindings)
+    || /(?:overly simplistic|oversimplified|legally insufficient|faulty|misstat(?:ed|es))[\s\S]{0,100}(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)/i.test(examinerFindings)
+    || /rel(?:y|ies|ied|ying)\s+on[\s\S]{0,140}\b(?:alone|only|solely|merely)\b[\s\S]{0,120}\b(?:instead of|rather than|without)\b/i.test(examinerFindings)
+    || /(?:no correct legal basis|faulty intent-only reasoning|bad intent alone)/i.test(examinerFindings);
+  const rubricShowsCentralRuleFailure = Number(assessment?.rubricBreakdown?.legalBasis) <= 2.5
+    && Number(assessment?.rubricBreakdown?.application) <= 2.5;
   const materiallyWrongRuleFinding = assessment?.authorityStatus === 'materially_incorrect_or_irrelevant'
     || explicitWrongRuleFinding
     || (rubricShowsCentralRuleFailure && centralRuleInsufficiencyFinding);

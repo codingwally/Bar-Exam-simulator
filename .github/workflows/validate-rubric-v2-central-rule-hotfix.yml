@@ -9,6 +9,7 @@ on:
     paths:
       - "worker/**"
       - "scripts/apply_rubric_v2_central_rule_hotfix.py"
+      - "docs/qa/rubric-v2-central-rule-hotfix-validation.txt"
       - ".github/workflows/validate-rubric-v2-central-rule-hotfix.yml"
 
 permissions:
@@ -81,3 +82,26 @@ jobs:
           git diff --cached --check
           git commit -m "Harden rubric v2 against correct-conclusion false highs"
           git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
+
+      - name: Record exact committed validation
+        if: steps.source.outputs.committed == 'true'
+        run: |
+          if test ! -f docs/qa/rubric-v2-central-rule-hotfix-validation.txt; then
+            mkdir -p docs/qa
+            SOURCE_SHA="$(git log -1 --format=%H -- worker/examiner-core.mjs worker/rubric-v2.test.mjs)"
+            {
+              echo "validated_source_sha=${SOURCE_SHA}"
+              echo "validated_run_sha=${GITHUB_SHA}"
+              echo "syntax=passed"
+              echo "worker_regression_suite=passed"
+              echo "question_bank_contract=passed"
+              echo "private_beta_admission_contract=passed"
+              echo "benchmark_harness_contract=passed"
+              echo "diff_integrity=passed"
+            } > docs/qa/rubric-v2-central-rule-hotfix-validation.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add docs/qa/rubric-v2-central-rule-hotfix-validation.txt
+            git commit -m "Record exact rubric hotfix validation"
+            git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
+          fi

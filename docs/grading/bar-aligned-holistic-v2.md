@@ -42,6 +42,10 @@ No ceiling is imposed merely for missing headings, missing exact citations, diff
 
 Every validated AI assessment stores the rubric identifier, authority classification, ceiling code, component breakdown, and any applied deterministic ceiling. These fields support founder review and feedback-led refinement during beta without changing the student-facing examination flow.
 
+## Release validation
+
+Every rubric change must pass the complete Worker regression suite, the website question-bank contract, the private-beta admission contract, syntax checks, and diff-integrity checks before production deployment.
+
 ## Change control
 
 The shared examiner module is the single default source of truth. Amend the rubric version whenever scoring policy changes, update both Gemini instructions and deterministic ceilings together, and preserve Bar Easy's explicit exemption.

@@ -1,0 +1,63 @@
+name: Validate Bar-aligned rubric v2
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "worker/**"
+      - "scripts/apply_bar_aligned_rubric_v2.py"
+      - "docs/grading/**"
+      - ".github/workflows/validate-rubric-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply approved rubric patch in isolated workspace
+        run: python3 scripts/apply_bar_aligned_rubric_v2.py
+
+      - name: Verify Worker syntax
+        run: |
+          node --check worker/index.mjs
+          node --check worker/examiner-core.mjs
+
+      - name: Run complete Worker regression suite
+        run: node --test worker/*.test.mjs
+
+      - name: Verify question-bank and beta contracts
+        run: |
+          node scripts/test-website-question-bank.mjs
+          node scripts/test-private-beta-admission.mjs
+
+      - name: Verify patch cleanliness and rubric scope
+        run: |
+          git diff --check
+          grep -q "BAR-ALIGNED-HOLISTIC-v2" worker/examiner-core.mjs
+          grep -q "usesBarAlignedRubric" worker/examiner-core.mjs
+          grep -q "bar_easy" worker/examiner-core.mjs
+          test -f worker/rubric-v2.test.mjs
+          test -f docs/grading/bar-aligned-holistic-v2.md
+
+      - name: Package validated source for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: rubric-v2-validated-source
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            worker/examiner-core.mjs
+            worker/index.test.mjs
+            worker/rubric-v2.test.mjs
+            docs/grading/bar-aligned-holistic-v2.md

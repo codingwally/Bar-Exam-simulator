@@ -175,12 +175,12 @@ test('a false authority cannot improve a substantively coherent answer', () => {
   assert.match(result.errors.join(' '), /false or nonexistent legal authority/i);
 });
 
-test('legal basis with some application but incomplete ALAC cannot exceed 3.5', () => {
-  const result = capped(
-    'No. Under Canons II and IV of the CPRA, a lawyer must supervise delegated legal work. Here, Sandro prepared the appellate brief, signed Cassandra’s name, and filed it before Cassandra reviewed the filing.',
-  );
-  assert.equal(result.score, 3.5);
-});
+test('legally sound narrative without ALAC headings may retain 4.0–5.0', () => {
+  const answer = 'No. A lawyer must personally supervise delegated legal work and may not allow a nonlawyer to exercise professional judgment or sign counsel’s name. Sandro prepared the appellate brief, signed Cassandra’s name, and filed it before she reviewed it, so Cassandra failed to provide the required prior supervision. The delegation was therefore improper.';
+  assert.equal(capped(answer, 3.8).score, 3.8);
+  assert.equal(capped(answer, 4.6).score, 4.6);
+  assert.equal(capped(answer, 5).score, 5);
+} );
 
 test('a complete, substantially aligned ALAC answer may retain 4.0–5.0', () => {
   const answer = [

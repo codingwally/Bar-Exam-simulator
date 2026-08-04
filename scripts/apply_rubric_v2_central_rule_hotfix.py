@@ -15,6 +15,21 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 core = CORE.read_text(encoding="utf-8")
 core = replace_once(
     core,
+    r'''  const explicitWrongRuleFinding = /(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)|(?:legal\s+basis|article|section|rule|statute|doctrine|authority)[\s\S]{0,80}(?:incorrect|wrong|irrelevant|unrelated|inapplicable)/i.test(examinerFindings);
+''',
+    r'''  const explicitWrongRuleFinding = [
+    cleanText(assessment?.rationale, 2_000),
+    ...examinerErrors,
+  ].filter(Boolean).some((finding) => {
+    const statesWrongRule = /(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)|(?:legal\s+basis|article|section|rule|statute|doctrine|authority)[\s\S]{0,80}(?:incorrect|wrong|irrelevant|unrelated|inapplicable)/i.test(finding);
+    const negatesWrongRule = /\b(?:not|no|isn't|is not|wasn't|was not|doesn't|does not|didn't|did not)\s+(?!only\b)(?:materially\s+)?(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\b/i.test(finding);
+    return statesWrongRule && !negatesWrongRule;
+  });
+''',
+    "negation-aware explicit wrong-rule detector",
+)
+core = replace_once(
+    core,
     r'''  const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,120}(?:overly simplistic|legally insufficient|faulty|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(examinerFindings)
     || /(?:no correct legal basis|faulty intent-only reasoning)/i.test(examinerFindings);
   const rubricShowsCentralRuleFailure = Number(assessment?.rubricBreakdown?.legalBasis) <= 2

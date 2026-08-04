@@ -28,6 +28,24 @@ jobs:
       - name: Apply approved rubric patch in isolated workspace
         run: python3 scripts/apply_bar_aligned_rubric_v2.py
 
+      - name: Apply focused corrections from first safety run
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('worker/examiner-core.mjs')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              "|therefore|thus|hence)\\b/i.test(answer);": "|therefore|thus|hence|so)\\b/i.test(answer);",
+              "Score capped because the student answer states a conclusion without a governing legal rule or meaningful reasoning.": "Score capped because the student answer states a conclusion without legal basis or application.",
+              "Score capped because the student answer relies on a confirmed fabricated or nonexistent legal authority.": "Score capped because the student answer relies on a confirmed false or nonexistent legal authority.",
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one correction anchor: {old!r}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
       - name: Verify Worker syntax
         run: |
           node --check worker/index.mjs

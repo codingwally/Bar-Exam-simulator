@@ -37,6 +37,7 @@ jobs:
         id: source
         run: |
           if grep -q "rubricBreakdown?.legalBasis) <= 2.5" worker/examiner-core.mjs \
+            && grep -q "negatesWrongRule" worker/examiner-core.mjs \
             && grep -q "oversimplified legal basis" worker/rubric-v2.test.mjs \
             && grep -q "low component scores alone" worker/rubric-v2.test.mjs; then
             echo "committed=true" >> "$GITHUB_OUTPUT"
@@ -67,6 +68,7 @@ jobs:
           git diff --check
           grep -q "rubricBreakdown?.legalBasis) <= 2.5" worker/examiner-core.mjs
           grep -q "rubricBreakdown?.application) <= 2.5" worker/examiner-core.mjs
+          grep -q "negatesWrongRule" worker/examiner-core.mjs
           grep -q "oversimplified legal basis" worker/rubric-v2.test.mjs
           grep -q "low component scores alone" worker/rubric-v2.test.mjs
 

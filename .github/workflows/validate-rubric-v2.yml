@@ -11,24 +11,40 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout candidate
+      - name: Checkout candidate branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
+      - name: Detect committed rubric source
+        id: source
+        run: |
+          if test -f worker/rubric-v2.test.mjs \
+            && test -f docs/grading/bar-aligned-holistic-v2.md \
+            && grep -q "BAR-ALIGNED-HOLISTIC-v2" worker/examiner-core.mjs; then
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Apply approved rubric patch in isolated workspace
+        if: steps.source.outputs.committed != 'true'
         run: python3 scripts/apply_bar_aligned_rubric_v2.py
 
       - name: Apply focused corrections from first safety run
+        if: steps.source.outputs.committed != 'true'
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -67,6 +83,16 @@ jobs:
           grep -q "bar_easy" worker/examiner-core.mjs
           test -f worker/rubric-v2.test.mjs
           test -f docs/grading/bar-aligned-holistic-v2.md
+
+      - name: Commit validated source to candidate branch
+        if: steps.source.outputs.committed != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/examiner-core.mjs worker/index.test.mjs worker/rubric-v2.test.mjs docs/grading/bar-aligned-holistic-v2.md
+          git diff --cached --check
+          git commit -m "Adopt Bar-aligned holistic grading rubric v2"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
 
       - name: Package validated source for review
         uses: actions/upload-artifact@v4

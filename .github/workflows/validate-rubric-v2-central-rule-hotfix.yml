@@ -1,0 +1,81 @@
+name: Validate rubric v2 central-rule hotfix
+
+on:
+  push:
+    branches:
+      - "hotfix/rubric-v2-central-rule-threshold-20260804"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "worker/**"
+      - "scripts/apply_rubric_v2_central_rule_hotfix.py"
+      - ".github/workflows/validate-rubric-v2-central-rule-hotfix.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "rubric-v2-central-rule-hotfix-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Detect committed hotfix
+        id: source
+        run: |
+          if grep -q "rubricBreakdown?.legalBasis) <= 2.5" worker/examiner-core.mjs \
+            && grep -q "oversimplified legal basis" worker/rubric-v2.test.mjs \
+            && grep -q "low component scores alone" worker/rubric-v2.test.mjs; then
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply narrow hotfix in isolated workspace
+        if: steps.source.outputs.committed != 'true'
+        run: python3 scripts/apply_rubric_v2_central_rule_hotfix.py
+
+      - name: Verify syntax
+        run: |
+          node --check worker/index.mjs
+          node --check worker/examiner-core.mjs
+
+      - name: Run complete Worker regression suite
+        run: node --test worker/*.test.mjs
+
+      - name: Verify question-bank and private-beta contracts
+        run: |
+          node scripts/test-website-question-bank.mjs
+          node scripts/test-private-beta-admission.mjs
+          node scripts/test-private-beta-grading-benchmark.mjs
+
+      - name: Verify diff integrity and exact scope
+        run: |
+          git diff --check
+          grep -q "rubricBreakdown?.legalBasis) <= 2.5" worker/examiner-core.mjs
+          grep -q "rubricBreakdown?.application) <= 2.5" worker/examiner-core.mjs
+          grep -q "oversimplified legal basis" worker/rubric-v2.test.mjs
+          grep -q "low component scores alone" worker/rubric-v2.test.mjs
+
+      - name: Commit only fully validated permanent source
+        if: steps.source.outputs.committed != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/examiner-core.mjs worker/rubric-v2.test.mjs
+          git diff --cached --check
+          git commit -m "Harden rubric v2 against correct-conclusion false highs"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"

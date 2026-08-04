@@ -62,6 +62,16 @@ jobs:
           path.write_text(text, encoding='utf-8')
           PY
 
+      - name: Normalize generated documentation
+        if: steps.source.outputs.committed != 'true'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('docs/grading/bar-aligned-holistic-v2.md')
+          lines = [line.rstrip() for line in path.read_text(encoding='utf-8').splitlines()]
+          path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+
       - name: Verify Worker syntax
         run: |
           node --check worker/index.mjs

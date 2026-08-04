@@ -1,0 +1,87 @@
+name: Validate rubric v2 intent-only safeguard
+
+on:
+  push:
+    branches:
+      - "hotfix/rubric-v2-central-rule-threshold-20260804"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "worker/**"
+      - "scripts/apply_rubric_v2_intent_only_safeguard.py"
+      - "scripts/fix_rubric_v2_intent_negative_control.py"
+      - ".github/workflows/validate-rubric-v2-intent-only-safeguard.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "rubric-v2-intent-only-safeguard-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Detect committed safeguard
+        id: source
+        run: |
+          if grep -q "studentAffirmativelyReliesOnIntentAlone" worker/examiner-core.mjs \
+            && grep -q "extremely superficial" worker/rubric-v2.test.mjs \
+            && grep -q "rejecting intent-only liability" worker/rubric-v2.test.mjs \
+            && grep -q "applicationRequired: false" worker/rubric-v2.test.mjs; then
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply safeguard in isolated workspace
+        if: steps.source.outputs.committed != 'true'
+        run: |
+          python3 scripts/apply_rubric_v2_intent_only_safeguard.py
+          python3 scripts/fix_rubric_v2_intent_negative_control.py
+
+      - name: Verify syntax
+        run: |
+          node --check worker/index.mjs
+          node --check worker/examiner-core.mjs
+
+      - name: Run complete Worker regression suite
+        run: node --test worker/*.test.mjs
+
+      - name: Verify question-bank and private-beta contracts
+        run: |
+          node scripts/test-website-question-bank.mjs
+          node scripts/test-private-beta-admission.mjs
+          node scripts/test-private-beta-grading-benchmark.mjs
+
+      - name: Verify diff integrity and narrow scope
+        run: |
+          git diff --check
+          grep -q "studentAffirmativelyReliesOnIntentAlone" worker/examiner-core.mjs
+          grep -q "extremely superficial" worker/rubric-v2.test.mjs
+          grep -q "rejecting intent-only liability" worker/rubric-v2.test.mjs
+          grep -q "applicationRequired: false" worker/rubric-v2.test.mjs
+          grep -q "rubricBreakdown?.legalBasis) <= 2.5" worker/examiner-core.mjs
+          grep -q "rubricBreakdown?.application) <= 2.5" worker/examiner-core.mjs
+
+      - name: Commit only fully validated permanent source
+        if: steps.source.outputs.committed != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/examiner-core.mjs worker/rubric-v2.test.mjs
+          git diff --cached --check
+          git commit -m "Harden rubric v2 against intent-only false highs"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"

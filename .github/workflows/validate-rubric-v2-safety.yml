@@ -1,0 +1,100 @@
+name: Validate rubric v2 safety tightening
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "worker/**"
+      - "scripts/apply_rubric_v2_safety_tightening.py"
+      - "scripts/run-private-beta-grading-benchmark.mjs"
+      - "docs/grading/**"
+      - ".github/workflows/validate-rubric-v2-safety.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Detect committed safety tightening
+        id: source
+        run: |
+          if grep -q "explicitlyDisclaimedTestAuthority" worker/examiner-core.mjs \
+            && grep -q "const MAX_PROVIDER_ATTEMPTS = 3;" scripts/run-private-beta-grading-benchmark.mjs \
+            && grep -q "common distinction and enumeration phrasing" worker/rubric-v2.test.mjs; then
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply safety tightening in isolated workspace
+        if: steps.source.outputs.committed != 'true'
+        run: python3 scripts/apply_rubric_v2_safety_tightening.py
+
+      - name: Verify syntax
+        run: |
+          node --check worker/index.mjs
+          node --check worker/examiner-core.mjs
+          node --check scripts/run-private-beta-grading-benchmark.mjs
+
+      - name: Run complete Worker regression suite
+        run: node --test worker/*.test.mjs
+
+      - name: Verify question-bank and private-beta contracts
+        run: |
+          node scripts/test-website-question-bank.mjs
+          node scripts/test-private-beta-admission.mjs
+
+      - name: Verify live-benchmark harness contract without provider calls
+        run: node scripts/test-private-beta-grading-benchmark.mjs
+
+      - name: Verify diff integrity and safety scope
+        run: |
+          git diff --check
+          grep -q "BAR-ALIGNED-HOLISTIC-v2" worker/examiner-core.mjs
+          grep -q "explicitlyDisclaimedTestAuthority" worker/examiner-core.mjs
+          grep -q "centralRequirementGapFinding" worker/examiner-core.mjs
+          grep -q "centralRuleInsufficiencyFinding" worker/examiner-core.mjs
+          grep -q "const MAX_PROVIDER_ATTEMPTS = 3;" scripts/run-private-beta-grading-benchmark.mjs
+          grep -q "Bar Easy is expressly excluded" docs/grading/bar-aligned-holistic-v2.md
+
+      - name: Commit only fully validated permanent source
+        if: steps.source.outputs.committed != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            worker/examiner-core.mjs \
+            worker/index.test.mjs \
+            worker/rubric-v2.test.mjs \
+            docs/grading/bar-aligned-holistic-v2.md \
+            scripts/run-private-beta-grading-benchmark.mjs
+          git diff --cached --check
+          git commit -m "Tighten rubric v2 against unsafe false highs"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+
+      - name: Package validated source
+        uses: actions/upload-artifact@v4
+        with:
+          name: rubric-v2-safety-validated-source
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            worker/examiner-core.mjs
+            worker/index.test.mjs
+            worker/rubric-v2.test.mjs
+            docs/grading/bar-aligned-holistic-v2.md
+            scripts/run-private-beta-grading-benchmark.mjs

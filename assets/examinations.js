@@ -1007,12 +1007,24 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       button.textContent = 'Assessing your A.L.A.C. answer…';
       const maximumBatches = Math.max(2, state.active.questions.length + 1);
       let result = null;
+      let transientRetries = 0;
       for (let batch = 0; batch < maximumBatches; batch += 1) {
-        result = await api('/examinations/command', {
-          operation: 'request_ai_grading',
-          attemptId: state.active.attempt.attemptId,
-          requestKey: requestKey('ai'),
-        });
+        try {
+          result = await api('/examinations/command', {
+            operation: 'request_ai_grading',
+            attemptId: state.active.attempt.attemptId,
+            requestKey: requestKey('ai'),
+          });
+          transientRetries = 0;
+        } catch (error) {
+          if (error?.code === 'MALFORMED_MODEL_RESPONSE' && transientRetries < 1) {
+            transientRetries += 1;
+            batch -= 1;
+            setStatus('The examiner response was incomplete. Retrying once safely…');
+            continue;
+          }
+          throw error;
+        }
         if (result.status === 'completed') break;
       }
       if (result?.status !== 'completed') {
@@ -1068,12 +1080,24 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     try {
       let result = null;
       const maximumBatches = Math.max(1, state.active.questions.length + 1);
+      let transientRetries = 0;
       for (let batch = 0; batch < maximumBatches; batch += 1) {
-        result = await api('/examinations/command', {
-          operation: 'request_ai_grading',
-          attemptId: state.active.attempt.attemptId,
-          requestKey: requestKey('ai'),
-        });
+        try {
+          result = await api('/examinations/command', {
+            operation: 'request_ai_grading',
+            attemptId: state.active.attempt.attemptId,
+            requestKey: requestKey('ai'),
+          });
+          transientRetries = 0;
+        } catch (error) {
+          if (error?.code === 'MALFORMED_MODEL_RESPONSE' && transientRetries < 1) {
+            transientRetries += 1;
+            batch -= 1;
+            setStatus('The examiner response was incomplete. Retrying once safely…');
+            continue;
+          }
+          throw error;
+        }
         const completed = Number(result.completedQuestions) || 0;
         const total = Number(result.questionCount) || state.active.questions.length;
         button.textContent = `Assessed ${completed} of ${total}…`;

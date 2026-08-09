@@ -1086,7 +1086,15 @@
   global.addEventListener('popstate', restoreRoute);
   global.addEventListener('duediligence:session', (event) => {
     state.featureSnapshot = null;
-    if (!event.detail?.authenticated && document.getElementById('page-dd2026')?.classList.contains('active')) global.showPage?.('mock', document.getElementById('spa-mock'));
+    if (event.detail?.authenticated) {
+      const route = routeFromHash();
+      const routePageActive = document.getElementById('page-dd2026')?.classList.contains('active');
+      if (route && !routePageActive) restoreRoute();
+      return;
+    }
+    if (document.getElementById('page-dd2026')?.classList.contains('active')) {
+      global.showPage?.('mock', document.getElementById('spa-mock'));
+    }
   });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', restoreRoute, { once: true });
   else restoreRoute();

@@ -23,7 +23,7 @@ const sourceEvidencePath = path.join(root, 'docs', 'qa', '20260731-private-beta-
 const DEFAULT_OUTPUT = path.join(root, 'artifacts', 'private-beta-grading-benchmark.json');
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 const REQUEST_TIMEOUT_MS = 45_000;
-const MAX_PROVIDER_ATTEMPTS = 2;
+const MAX_PROVIDER_ATTEMPTS = 3;
 
 const SYNTHETIC_ANSWERS = Object.freeze({
   'ETHICS-BARE-CONCLUSION': 'Yes.',

@@ -25,6 +25,17 @@ SIGN_IN_NOTIFICATION_EMAIL_MODE = "suppressed"
 SIGN_IN_NOTIFICATION_EMAIL_FROM = "Due Diligence Sign-in Notice <support@duediligence.ph>"
 PRIVATE_BETA_GATE_ENABLED = "true"
 PRIVATE_BETA_DISCLOSURE_VERSION = "beta-disclosure-v1-2026-07-31"
+VERDICT_PDF_ENABLED = "true"
+VERDICT_PDF_PREMIUM_REQUIRED = "false"
+BAR_EASY_ENABLED = "true"
+CHAIR_CASES_ENABLED = "true"
+DOCTRINES_ENABLED = "true"
+ANCHOR_CASE_DIGESTS_ENABLED = "true"
+EXAMINATION_ROOM_ENABLED = "true"
+EXAM_GOOGLE_BACKUP_ENABLED = "true"
+AI_PREPARED_BETA_BADGE = "true"
+CONTENT_HUMAN_REVIEW_REQUIRED = "false"
+GOOGLE_BACKUP_TEMPLATE_ID = "1alXFADSsgSduVW07nOCGYa5zz26k387DeeEMF_y_fdg"
 
 [assets]
 directory = "../.staging-dist"
@@ -35,6 +46,9 @@ enabled = true
 [observability.logs]
 enabled = true
 
+[triggers]
+crons = ["*/2 * * * *"]
+
 # Staging secrets are configured directly in Cloudflare and never committed:
 # GEMINI_API_KEY
 # GUEST_USAGE_HMAC_KEY
@@ -43,3 +57,7 @@ enabled = true
 # PRIVATE_BETA_ACCESS_CODE_PEPPER
 # PRIVATE_BETA_FLOW_SIGNING_KEY
 # ADMIN_DIRECTORY_RECIPIENTS_JSON
+# GOOGLE_OAUTH_CLIENT_ID
+# GOOGLE_OAUTH_CLIENT_SECRET
+# GOOGLE_OAUTH_REFRESH_TOKEN
+# GOOGLE_BACKUP_FOLDER_ID (optional; non-secret folder identifier)

@@ -903,6 +903,7 @@
 <link rel="stylesheet" href="assets/phase2.css">
 <link rel="stylesheet" href="assets/lex-forum.css?v=qa-cycle-20260731-1">
 <link rel="stylesheet" href="assets/examinations.css?v=leb-premium-20260804-1">
+<link rel="stylesheet" href="assets/duediligence-2026.css?v=dd2026-beta-1">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=private-beta-landing-20260731-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
@@ -1221,7 +1222,7 @@
         <summary class="nav-group-label" id="nav-commons-label" aria-controls="nav-commons-menu" aria-expanded="false">The Commons</summary>
         <div class="nav-group-items" id="nav-commons-menu" aria-labelledby="nav-commons-label">
           <button class="spa-tab" id="spa-bar-easy" type="button"
-            onclick="openComingSoon()">Bar Easy</button>
+            onclick="openBarEasy()">Bar Easy</button>
           <button class="spa-tab" id="spa-community"
             title="Open Quorum, the signed-in Due Diligence academic community."
             aria-label="Open Quorum"
@@ -1239,11 +1240,11 @@
           <button class="spa-tab btn-angel" id="spa-bar-feels" title="Bar Feels — Premium only."
             aria-label="Bar Feels — Premium only." onclick="openPremiumBarFeels()">Bar Feels</button>
           <button class="spa-tab btn-angel" id="spa-chairs-case" type="button"
-            onclick="openComingSoon()">Chair’s Case</button>
+            onclick="openChairCases()">Chair’s Case</button>
           <button class="spa-tab btn-angel" id="spa-jurisprudence" title="Review important legal developments and cases."
-            onclick="showPage('jurisprudence', this)">Doctrines</button>
+            onclick="openDoctrines()">Doctrines</button>
           <button class="spa-tab btn-angel" id="spa-case-digest" type="button"
-            onclick="openComingSoon()">Case Digest</button>
+            onclick="openAnchorCases()">Case Digest</button>
         </div>
       </details>
       </section>
@@ -1251,7 +1252,7 @@
 
     <div class="nav-utilities" role="group" aria-label="Website utilities">
       <button class="spa-tab" id="spa-examination-room" type="button"
-        onclick="openComingSoon()">Examination Room</button>
+        onclick="openExaminationRoom()">Examination Room</button>
       <button class="spa-tab" id="spa-support" title="Get technical and account assistance."
         data-dd2-view="support">Support</button>
       <button class="spa-tab account-tab" id="btn-signin" type="button"
@@ -1675,7 +1676,7 @@
     <div class="modal-sub">Your Bar-prep drill history &amp; ALAC record</div>
     <div id="analytics-body"></div>
     <div class="modal-actions" style="margin-top:18px;">
-      <p class="mock-note" role="note">Downloadable Verdict reports are not yet available during Beta.</p>
+      <p class="mock-note" role="note">Private Verdict PDF export is available for completed, signed-in assessment records.</p>
       <button type="button" class="btn-primary" onclick="closeModal('analytics-modal')">Done</button>
     </div>
   </div>
@@ -3264,7 +3265,10 @@ function renderResultHTML(key) {
           <button class="fb-btn" onclick="rateModel('down')">👎 Needs work</button>
           <button class="fb-btn suggest" onclick="openSuggest()">✎ Suggest a Correction/Better Answer</button>
         </div>
-        <div class="review-actions"><button class="btn-next" onclick="proceedAfterReview()">Next</button></div>
+        <div class="review-actions">
+          ${res.id ? `<button class="btn-tool" onclick="window.DueDiligence2026?.openVerdictExport('${escapeHtml(res.id)}','${escapeHtml(res.qId || '')}')">Export Verdict PDF</button>` : ''}
+          <button class="btn-next" onclick="proceedAfterReview()">Next</button>
+        </div>
       </div>
     </article>
   `;
@@ -3593,6 +3597,7 @@ function openAnalytics() {
       <td>${escapeHtml(a.qId || '')}</td>
       <td>${a.timeSpent != null ? fmtSecs(a.timeSpent) : '—'}</td>
       <td>${escapeHtml(a.timestamp || '')}</td>
+      <td>${a.id ? `<button class="btn-tool" type="button" onclick="window.DueDiligence2026?.openVerdictExport('${escapeHtml(a.id)}','${escapeHtml(a.qId || '')}')">Export PDF</button>` : '—'}</td>
     </tr>`).join('');
   body.innerHTML = `
     <div class="metric-grid">
@@ -3604,7 +3609,7 @@ function openAnalytics() {
     <div class="panel-title">Attempt Log</div>
     <div class="table-scroll">
       <table class="attempt-table">
-        <thead><tr><th>Score</th><th>Subject</th><th>Item</th><th>Time</th><th>When</th></tr></thead>
+        <thead><tr><th>Score</th><th>Subject</th><th>Item</th><th>Time</th><th>When</th><th>Verdict</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -3941,6 +3946,7 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase4-experience.js?v=admin-export-20260801-1"></script>
 <script src="assets/lex-forum.js?v=qa-cycle-20260731-2"></script>
 <script src="assets/examinations.js?v=qa-cycle-20260731-1"></script>
+<script src="assets/duediligence-2026.js?v=dd2026-beta-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-beta-landing.js?v=beta-all-access-20260802-1"></script>
 

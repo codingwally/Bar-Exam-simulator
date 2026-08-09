@@ -15,6 +15,7 @@
     startedAt: Date.now(),
     lastQuestionKey: '',
     heartbeat: null,
+    initialEventsSent: false,
   };
 
   function uuid(storageKey, sessionOnly = false) {
@@ -82,6 +83,8 @@
 
   async function track(eventType, fields = {}, options = {}) {
     if (!state.visitorId || !state.sessionId) return false;
+    const headers = authHeaders();
+    if (!headers.Authorization && !headers['X-DD-Beta-Access']) return false;
     const payload = {
       sessionId: state.sessionId,
       visitorId: state.visitorId,
@@ -97,7 +100,7 @@
     try {
       const response = await fetch(`${config.workerUrl}/analytics/events`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify(payload),
         keepalive: options.keepalive === true,
       });
@@ -143,6 +146,15 @@
     track('session_heartbeat');
   }
 
+  function trackInitialEvents() {
+    if (state.initialEventsSent) return;
+    const headers = authHeaders();
+    if (!headers.Authorization && !headers['X-DD-Beta-Access']) return;
+    state.initialEventsSent = true;
+    track('session_start');
+    track('page_view');
+  }
+
   function initialize() {
     state.visitorId = uuid(KEYS.visitor);
     state.sessionId = uuid(KEYS.session, true);
@@ -151,8 +163,13 @@
     } catch {
       // Landing area remains derivable for this request.
     }
-    track('session_start');
-    track('page_view');
+    trackInitialEvents();
+    global.addEventListener('duediligence:session', (event) => {
+      if (event.detail?.authenticated) trackInitialEvents();
+    });
+    global.addEventListener('duediligence:private-beta-access', (event) => {
+      if (event.detail?.allowed) trackInitialEvents();
+    });
     state.heartbeat = global.setInterval(heartbeat, 90_000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {

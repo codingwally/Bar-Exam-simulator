@@ -105,6 +105,11 @@ for (const contract of [
 ]) {
   assert.match(frontend, contract);
 }
+assert.equal(
+  [...frontend.matchAll(/error\?\.code === 'MALFORMED_MODEL_RESPONSE' && transientRetries < 1/g)].length,
+  2,
+);
+assert.match(frontend, /The examiner response was incomplete\. Retrying once safely/);
 assert.doesNotMatch(frontend, /secure browser|proctored|encrypted examination environment/i);
 assert.match(frontend, /No cumulative percentage, class rank, pass\/fail claim/);
 assert.match(frontend, /PDF is not accepted in this beta/);

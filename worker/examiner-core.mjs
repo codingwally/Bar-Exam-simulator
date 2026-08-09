@@ -628,9 +628,18 @@ export function analyzeStudentAnswer(studentAnswer, context = {}) {
     applicationSection,
     expectedApplicationSection || context?.suggestedAnswer || '',
   );
-  const structuredApplication = meaningfulTokens(applicationSection).length >= 5
+  const applicationOnlyRepeatsBoilerplate = Boolean(
+    applicationSection
+    && meaningfulTokens(applicationSection).length <= 12
+    && /^(?:(?:here|in this case|in the present case),?\s+)?(?:the\s+)?facts?\s+(?:merely\s+)?(?:satisf(?:y|ies)|meet|show|establish|support|fit)\s+(?:the\s+)?(?:rule|law|elements?|requirements?|doctrine)\.?$/i.test(applicationSection.trim()),
+  );
+  const structuredApplication = !applicationOnlyRepeatsBoilerplate
+    && meaningfulTokens(applicationSection).length >= 5
     && (applicationQuestionOverlap >= 2 || applicationReferenceOverlap >= 3);
-  const narrativeApplication = wordCount >= 18 && applicationConnector && questionOverlap >= 1;
+  const narrativeApplication = !applicationOnlyRepeatsBoilerplate
+    && wordCount >= 18
+    && applicationConnector
+    && questionOverlap >= 1;
   const questionType = inferQuestionType(context);
   const applicationRequired = applicationRequiredForQuestion(context);
   const meaningfulApplication = applicationRequired
@@ -732,10 +741,11 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     /(?:omit(?:ted|s)?|fail(?:ed|s)? to (?:state|mention|address|analy[sz]e|include|apply))[\s\S]{0,140}\b(?:majority|material (?:element|exception|qualification|requirement)|essential (?:element|exception|qualification|requirement)|controlling requirement|constitutional requirement|statutory requirement|procedural prerequisite|condition precedent|exception|qualification|voting threshold|outcome-determinative (?:element|exception|qualification|requirement|threshold|standard|prerequisite))\b/i.test(finding)
   ));
   const explicitWrongRuleFinding = /(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)|(?:legal\s+basis|article|section|rule|statute|doctrine|authority)[\s\S]{0,80}(?:incorrect|wrong|irrelevant|unrelated|inapplicable)/i.test(examinerFindings);
-  const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,120}(?:overly simplistic|legally insufficient|faulty|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(examinerFindings)
-    || /(?:no correct legal basis|faulty intent-only reasoning)/i.test(examinerFindings);
+  const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,140}(?:overly simplistic|(?:excessively|overly) broad|legally insufficient|faulty|vague|reduced to|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(examinerFindings)
+    || /(?:rel(?:y|ies|ying)|rests?) on[\s\S]{0,100}(?:alone|only|solely|merely)[\s\S]{0,100}(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)/i.test(examinerFindings)
+    || /(?:rel(?:y|ies|ying) on (?:a )?vague (?:notion|rule|principle)|no correct legal basis|faulty intent-only reasoning)/i.test(examinerFindings);
   const rubricShowsCentralRuleFailure = Number(assessment?.rubricBreakdown?.legalBasis) <= 2
-    && Number(assessment?.rubricBreakdown?.application) <= 2;
+    && Number(assessment?.rubricBreakdown?.application) <= 2.5;
   const materiallyWrongRuleFinding = assessment?.authorityStatus === 'materially_incorrect_or_irrelevant'
     || explicitWrongRuleFinding
     || (rubricShowsCentralRuleFailure && centralRuleInsufficiencyFinding);

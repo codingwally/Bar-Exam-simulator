@@ -556,7 +556,11 @@ export function validateUploadSignature(bytes, mimeType) {
   return true;
 }
 
-export async function extractUploadedQuestions(bytes, mimeType) {
+export async function extractUploadedQuestions(
+  bytes,
+  mimeType,
+  { maximumQuestions = EXAMINATION_LIMITS.maximumExamQuestions } = {},
+) {
   const source = mimeType === 'text/plain'
     ? new TextDecoder('utf-8', { fatal: true }).decode(bytes)
     : await extractDocxText(bytes);
@@ -573,7 +577,7 @@ export async function extractUploadedQuestions(bytes, mimeType) {
   }
 
   const numbered = normalized
-    .split(/(?:^|\n)\s*(?:question\s*)?(\d{1,2})[.)]\s+/i)
+    .split(/(?:^|\n)\s*(?:question\s*)?(\d{1,4})[.)]\s+/i)
     .slice(1);
   const questions = [];
   if (numbered.length >= 2) {
@@ -592,7 +596,10 @@ export async function extractUploadedQuestions(bytes, mimeType) {
     blocks.forEach((prompt, index) => questions.push({ ordinal: index + 1, prompt }));
   }
 
-  const bounded = questions.slice(0, EXAMINATION_LIMITS.maximumExamQuestions);
+  const safeMaximum = Number.isSafeInteger(maximumQuestions) && maximumQuestions > 0
+    ? maximumQuestions
+    : EXAMINATION_LIMITS.maximumExamQuestions;
+  const bounded = questions.slice(0, safeMaximum);
   if (!bounded.length) {
     throw new ExaminationValidationError(
       'NO_QUESTIONS_FOUND',

@@ -45,6 +45,13 @@ const completeAnswers = [
   ].join('\n\n'),
 ];
 
+const subjectMatterAnswer = [
+  'I. ANSWER: Yes. Annulment may prosper if the record establishes invalid service and the requisites of Rule 47.',
+  'II. LEGAL BASIS: Rule 47, Sections 1 and 2 of the Rules of Court allow annulment of an RTC judgment for lack of jurisdiction when ordinary remedies are no longer available through no fault of the petitioner. Under Rule 14, Section 6, substituted service is exceptional and requires the prescribed prior attempts and a qualified recipient at a permitted place.',
+  'III. APPLICATION: The process server made only a first attempt and left summons with a company secretary without recording diligent efforts to locate the individual defendant. That does not satisfy valid substituted service. Without valid service or voluntary appearance, the court did not acquire jurisdiction over the defendant, who learned of the default judgment only after ordinary remedies had expired through no fault of his own.',
+  'IV. CONCLUSION: Therefore, annulment for lack of jurisdiction may prosper, without prejudice to refiling where allowed.',
+].join('\n\n');
+
 async function waitForSaved(page) {
   await page.waitForFunction(() => {
     const node = document.getElementById('dd-save-state');
@@ -106,6 +113,7 @@ async function authenticate(page) {
       {
         auth: {
           persistSession: true,
+          storage: window.sessionStorage,
           autoRefreshToken: true,
           detectSessionInUrl: false,
         },
@@ -192,7 +200,7 @@ async function publishFixture(page, {
     examId: examination.examId,
     label: `Staging browser ${runId}`,
     durationSeconds: 3_600,
-    timerMode: 'selfPaced',
+    timerMode: track === 'bar_feels' ? 'strict' : 'selfPaced',
     gradingRoute: 'ai',
     answerReleaseRule: 'after_ai',
     instructions: 'Synthetic staging browser verification. Answer each item using ALAC.',
@@ -230,6 +238,49 @@ async function openCatalog(page, track) {
     track,
     { timeout: 15_000 },
   );
+}
+
+async function completeSubjectMatter(page) {
+  await completeOnboardingIfShown(page);
+  await openCatalog(page, 'per_subject');
+  const subject = 'Civil Procedure II';
+  await page.locator(`[data-exam-subject="${subject}"]`).click();
+  await page.locator(`[data-subject-start="${subject}"]`).click();
+
+  const dialog = page.locator('#dd-exam-setup-dialog[open]');
+  await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+  assert.match(await dialog.innerText(), /SUBJECT MATTER/i);
+  await dialog.locator('#dd-setup-timer').selectOption('selfPaced');
+  await dialog.locator('[data-exam-begin]').click();
+  await page.waitForFunction(
+    () => (
+      window.DueDiligenceExaminations?.getState?.().screen === 'room'
+      && Boolean(document.getElementById('dd-answer-editor'))
+    ),
+    null,
+    { timeout: 15_000 },
+  );
+  const attemptId = await page.evaluate(
+    () => window.DueDiligenceExaminations.getState().activeAttemptId,
+  );
+  assert.match(attemptId, /^[0-9a-f-]{36}$/i);
+
+  await page.locator('#dd-answer-editor').fill(subjectMatterAnswer);
+  await waitForSaved(page);
+  await page.locator('[data-submit-current]').click();
+  await page.locator('#dd-per-subject-app .dd-verdict-screen h1').filter({
+    hasText: 'Individual ALAC assessments.',
+  }).waitFor({ state: 'visible', timeout: 150_000 });
+
+  const scores = await page.locator('#dd-per-subject-app .dd-score-five').allTextContents();
+  assert.equal(scores.length, 1);
+  scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5\.0$/));
+  const verdictText = await page.locator('#dd-per-subject-app .dd-verdict-screen').innerText();
+  assert.match(verdictText, /Released Model Answer/i);
+  assert.match(verdictText, /AI Assessment/i);
+  assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
+
+  return { track: 'per_subject', attemptId, scores };
 }
 
 async function completeExamination(page, fixture) {
@@ -333,13 +384,7 @@ try {
     expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1_000).toISOString(),
   });
 
-  const subjectFixture = await publishFixture(page, {
-    track: 'per_subject',
-    assessmentKind: 'final',
-    subject: 'Criminal Law I',
-    title: `[SYNTHETIC ${runId}] 00 Subject Matter UI`,
-    questionOffset: 6,
-  });
+  results.examinations.push(await completeSubjectMatter(page));
   const barFeelsFixture = await publishFixture(page, {
     track: 'bar_feels',
     assessmentKind: 'curated',
@@ -348,7 +393,6 @@ try {
     questionOffset: 6,
   });
 
-  results.examinations.push(await completeExamination(page, subjectFixture));
   results.examinations.push(await completeExamination(page, barFeelsFixture));
 
   const viewportChecks = [
@@ -358,7 +402,7 @@ try {
     { width: 1_440, height: 1_100 },
   ];
   const catalogChecks = [
-    { track: 'per_subject', label: 'subjectMatter', heading: 'Subject Matter Examinations' },
+    { track: 'per_subject', label: 'subjectMatter', heading: 'Subject Matter' },
     { track: 'bar_feels', label: 'barFeels', heading: 'Bar Feels' },
   ];
   for (const viewport of viewportChecks) {
@@ -366,14 +410,37 @@ try {
     for (const catalog of catalogChecks) {
       await openCatalog(page, catalog.track);
       const label = `${catalog.label}-${viewport.width}`;
+      const layout = await page.evaluate(() => ({
+        overflow: document.documentElement.scrollWidth > innerWidth,
+        innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        offenders: [...document.querySelectorAll('body *')]
+          .map((element) => {
+            const rect = element.getBoundingClientRect();
+            return {
+              tag: element.tagName,
+              id: element.id,
+              className: String(element.className || '').slice(0, 120),
+              left: Math.round(rect.left),
+              right: Math.round(rect.right),
+              width: Math.round(rect.width),
+            };
+          })
+          .filter((item) => item.right > innerWidth + 1 || item.left < -1)
+          .slice(0, 12),
+      }));
       results.responsive[label] = {
-        overflow: await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+        ...layout,
         headingVisible: await page.getByRole('heading', {
           name: catalog.heading,
           exact: true,
         }).isVisible(),
       };
-      assert.equal(results.responsive[label].overflow, false);
+      assert.equal(
+        results.responsive[label].overflow,
+        false,
+        `${label} overflow: ${JSON.stringify(results.responsive[label])}`,
+      );
       assert.equal(results.responsive[label].headingVisible, true);
       await runAccessibilityAudit(page, label);
     }

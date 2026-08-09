@@ -74,6 +74,9 @@ assert.match(js, /One-day, seven-day, and 30-day return rates/);
 assert.match(analytics, /90_000/);
 assert.match(analytics, /document\.visibilityState/);
 assert.match(analytics, /session_heartbeat/);
+assert.match(analytics, /!headers\.Authorization && !headers\['X-DD-Beta-Access'\]/);
+assert.match(analytics, /duediligence:session/);
+assert.match(analytics, /duediligence:private-beta-access/);
 assert.doesNotMatch(analytics, /CF-Connecting-IP|userAgent|navigator\.userAgent|mousemove|keydown/);
 
 for (const route of [

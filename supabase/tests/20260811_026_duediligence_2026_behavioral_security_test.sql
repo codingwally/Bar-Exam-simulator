@@ -34,6 +34,8 @@ declare
   v_other_professor constant uuid := 'c0260000-0000-4000-8000-000000000001';
   v_student constant uuid := 'd0260000-0000-4000-8000-000000000001';
   v_outsider constant uuid := 'e0260000-0000-4000-8000-000000000001';
+  v_admin_class_public_id uuid;
+  v_admin_exam_public_id uuid;
   v_class_public_id uuid;
   v_exam_public_id uuid;
   v_exam_id uuid;
@@ -55,6 +57,32 @@ declare
     jsonb_build_object('email', 'dd26-student-b@example.invalid', 'studentNumber', '2026-002', 'candidateNumber', 'CAND-002', 'displayName', 'Student B')
   );
 begin
+  v_result := public.exam_room_create_classroom(
+    v_admin, 'DD26 Administrator Class', 'Due Diligence School of Law', '2026'
+  );
+  v_admin_class_public_id := (v_result ->> 'classroomId')::uuid;
+  insert into dd26_test_state values ('admin_class_public_id', v_admin_class_public_id::text);
+
+  v_result := public.exam_room_create_exam(
+    v_admin, v_admin_class_public_id, 'DD26 Administrator Exam',
+    'Administrator-owned examination regression coverage.', 1,
+    'standard', false
+  );
+  v_admin_exam_public_id := (v_result ->> 'examId')::uuid;
+  insert into dd26_test_state values ('admin_exam_public_id', v_admin_exam_public_id::text);
+
+  update public.user_roles set role = 'student' where user_id = v_admin;
+  begin
+    perform public.exam_room_create_classroom(
+      v_admin, 'Unauthorized post-admin class', null, null
+    );
+    raise exception 'DD26_ADMIN_OWNER_ROLE_LEAK';
+  exception
+    when others then
+      if sqlerrm <> 'EXAM_ROOM_PROFESSOR_REQUIRED' then raise; end if;
+  end;
+  update public.user_roles set role = 'super_admin' where user_id = v_admin;
+
   update public.dd2026_feature_flags
   set enabled = true
   where flag_key = 'CONTENT_HUMAN_REVIEW_REQUIRED';
@@ -377,6 +405,28 @@ select is(
   (select (value::jsonb ->> 'ok')::boolean from dd26_test_state where key = 'professor_activation'),
   true,
   'professor activation succeeds once'
+);
+
+select ok(
+  exists (
+    select 1 from public.exam_room_professors
+    where user_id = 'a0260000-0000-4000-8000-000000000001'
+      and activated_by = 'a0260000-0000-4000-8000-000000000001'
+      and status = 'revoked'
+  ),
+  'an administrator gets only a non-active FK owner row and no durable professor entitlement'
+);
+
+select ok(
+  exists (
+    select 1 from public.exam_room_classrooms c
+    join public.exam_room_exams e on e.classroom_id = c.id
+    where c.public_id = (select value::uuid from dd26_test_state where key = 'admin_class_public_id')
+      and e.public_id = (select value::uuid from dd26_test_state where key = 'admin_exam_public_id')
+      and c.owner_professor_id = 'a0260000-0000-4000-8000-000000000001'
+      and e.owner_professor_id = c.owner_professor_id
+  ),
+  'an administrator can create an owned class and examination without weakening owner foreign keys'
 );
 
 select is(

@@ -244,6 +244,37 @@ test('a correct conclusion resting solely on a legally insufficient central rule
   assert.equal(result.appliedScoreCeiling.code, 'materially_wrong_rule');
 });
 
+test('a vague central rule with only weak fact application cannot escape the materially-wrong-rule ceiling', () => {
+  const answer = [
+    'Answer: Yes. Harry is liable for an impossible crime.',
+    'Legal Basis: A person who acts with bad intent is criminally liable even when no property is actually taken.',
+    'Application: Harry wanted to steal Taylor\'s money and secretly opened her electronic wallet, showing bad intent.',
+    'Conclusion: Therefore, his bad intent alone makes him liable for an impossible crime.',
+  ].join('\n\n');
+  const result = applyDeterministicScoreCap(assessment(3, {
+    rationale: 'The legal basis is reduced to a vague statement about bad intent rather than citing Article 4(2) of the Revised Penal Code and the concept of factual impossibility, leading to weak application.',
+    errors: [
+      'Fails to cite or explain Article 4(2) of the Revised Penal Code regarding impossible crimes.',
+      "Relies on a vague notion of 'bad intent' rather than the legal standard of inherent factual impossibility.",
+    ],
+    rubricBreakdown: {
+      responsiveness: 5,
+      legalBasis: 2,
+      application: 2.5,
+      conclusion: 4,
+      questionType: 'problem',
+      applicationRequired: true,
+    },
+  }), answer, {
+    question: 'Is Harry liable for an impossible crime after opening an empty electronic wallet intending to steal?',
+    suggestedAnswer: 'Yes. The intended offense against property failed because accomplishment was inherently impossible, and the means were inadequate or ineffectual.',
+    legalBasis: 'Revised Penal Code, Article 4(2).',
+    verified: true,
+  });
+  assert.equal(result.score, 1.5);
+  assert.equal(result.appliedScoreCeiling.code, 'materially_wrong_rule');
+});
+
 test('validated results preserve the auditable rubric breakdown and weighted reference', () => {
   const result = validateExaminerResult(assessment(4.6, {
     rubricBreakdown: {

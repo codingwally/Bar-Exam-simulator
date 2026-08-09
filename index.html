@@ -855,6 +855,11 @@
   .subject-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:28px;}
   .subject-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 18px;border:1px solid #d8dee8;border-radius:12px;background:#fff;color:#10233e;cursor:pointer;text-align:left;font-family:var(--sans);font-weight:700;font-size:14px;}
   .subject-choice:hover,.subject-choice:focus-visible{border-color:var(--gold);box-shadow:0 8px 24px rgba(2,12,35,.08);outline:none;}
+  .subject-selection-close{position:absolute;z-index:2;top:22px;right:22px;width:42px;height:42px;display:grid;place-items:center;border:1px solid rgba(15,23,42,.2);border-radius:50%;background:rgba(255,255,255,.8);color:var(--navy);cursor:pointer;font-family:var(--sans);font-size:24px;line-height:1;transition:border-color .18s ease,color .18s ease,background .18s ease,box-shadow .18s ease;}
+  .subject-selection-close:hover{border-color:var(--gold);background:#fff;color:#8a681e;box-shadow:0 8px 22px rgba(2,12,35,.1);}
+  .subject-selection-close:focus-visible,.subject-selection-back:focus-visible{outline:3px solid rgba(197,160,89,.45);outline-offset:3px;}
+  .subject-selection-actions{position:absolute;z-index:1;right:56px;bottom:40px;display:flex;justify-content:flex-end;}
+  .subject-selection-back{min-width:104px;border-color:rgba(15,23,42,.28);color:var(--navy);}
   .subject-loading{min-height:24px;margin-top:18px;color:#725715;font-family:var(--sans);font-size:13px;}
   #exam-shell{min-height:70vh;}
   #exam-shell.session-locked .layout{filter:saturate(.75);pointer-events:none;user-select:none;}
@@ -890,6 +895,10 @@
     .welcome-feature{min-height:0;padding:19px 24px;border-right:0;border-bottom:1px solid rgba(197,160,89,.24);}
     .welcome-feature:last-child{border-bottom:0;}
     .subject-choice-grid,.session-mode-grid{grid-template-columns:1fr;}
+    .subject-selection-close{top:14px;right:14px;}
+    .subject-selection-card{padding-top:58px;}
+    .subject-selection-actions{position:relative;right:auto;bottom:auto;margin-top:14px;}
+    .subject-selection-back{width:100%;}
     .session-mode-option{min-height:0;}
     .signin-prompt-actions{grid-template-columns:1fr;}
     .exam-control-bar{grid-template-columns:1fr;gap:12px;}
@@ -1315,11 +1324,17 @@
 
   <div id="subject-selection-state" class="onboarding-state" hidden>
     <article class="subject-selection-card" aria-labelledby="subject-selection-title">
+      <button type="button" class="subject-selection-close" id="subject-selection-close"
+        aria-label="Close subject selection and return to Mock Bar" onclick="exitSubjectSelection()">×</button>
       <div class="selection-kicker">Choose Your Review Subject</div>
       <h1 id="subject-selection-title">Choose your Mock Bar subject.</h1>
       <p>Select a Philippine Bar subject. Its first valid question will load before you choose a session mode; no timer starts during selection.</p>
       <div class="subject-choice-grid" id="subject-choice-grid"></div>
       <div class="subject-loading" id="subject-loading-status" role="status" aria-live="polite"></div>
+      <div class="subject-selection-actions">
+        <button type="button" class="btn-secondary subject-selection-back" id="subject-selection-back"
+          onclick="exitSubjectSelection()">Back</button>
+      </div>
     </article>
   </div>
 
@@ -2177,8 +2192,16 @@ function showSubjectSelection() {
   renderSubjectSelection();
   const status = document.getElementById('subject-loading-status');
   if (status) status.textContent = '';
-  const first = document.querySelector('#subject-choice-grid .subject-choice');
-  if (first) requestAnimationFrame(() => first.focus());
+  const close = document.getElementById('subject-selection-close');
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    close?.focus({ preventScroll: true });
+  });
+}
+
+function exitSubjectSelection() {
+  pendingSubjectSelection = null;
+  showWelcome();
 }
 
 async function selectSubjectForSession(subject) {
@@ -3661,7 +3684,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', e => {
     const openModals = Array.from(document.querySelectorAll('.modal-overlay.open'));
     const modal = openModals[openModals.length - 1];
-    if (!modal) return;
+    if (!modal) {
+      if (e.key === 'Escape' && onboardingStage === 'subjectSelection') {
+        e.preventDefault();
+        exitSubjectSelection();
+      }
+      return;
+    }
     if (e.key === 'Escape' && !BLOCKING_MODAL_IDS.has(modal.id) && modal.id !== 'checking-modal') {
       e.preventDefault();
       closeModal(modal.id);

@@ -88,6 +88,45 @@ test('Google backup creates one least-privilege isolated workbook, writes RAW-sa
     'Backup must not request broad access to copy an unrelated Drive file.');
 });
 
+test('Google backup recovery restores professor access to an orphaned workbook before syncing', async () => {
+  const calls = [];
+  let syncReads = 0;
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes('oauth2.googleapis.com')) return response({ access_token: 'ephemeral-token' });
+    if (String(url).includes('/drive/v3/files?')) return response({
+      files: [{ id: 'orphan-sheet-123', name: 'Recovered staging backup' }],
+    });
+    if (String(url).includes('/permissions') && options.method === 'POST') {
+      return response({ id: 'restored-permission-1' });
+    }
+    if (String(url).includes('/values/%27Sync%20Log%27')) {
+      syncReads += 1;
+      return response({
+        values: syncReads === 1
+          ? []
+          : [[event.id, context.examPublicId, '1', event.event_type, event.content_hash]],
+      });
+    }
+    if (String(url).includes('?fields=sheets.properties')) return response({
+      sheets: ['Exam Registry', 'Questions', 'Submissions', 'Grades', 'Sync Log']
+        .map((title, index) => ({ properties: { title, sheetId: index + 1 } })),
+    });
+    if (String(url).includes(':batchUpdate')) return response({ replies: [] });
+    throw new Error(`Unexpected URL ${url}`);
+  };
+  const result = await syncGoogleBackupEvent({
+    GOOGLE_OAUTH_CLIENT_ID: 'id', GOOGLE_OAUTH_CLIENT_SECRET: 'secret',
+    GOOGLE_OAUTH_REFRESH_TOKEN: 'refresh',
+  }, event, context, fetchImpl);
+  assert.equal(result.spreadsheetId, 'orphan-sheet-123');
+  const permissionCall = calls.find((call) => call.url.includes('/permissions'));
+  assert.ok(permissionCall, 'Recovery must retry the professor permission that may have failed previously.');
+  assert.equal(JSON.parse(permissionCall.options.body).emailAddress, context.professorEmail);
+  assert.equal(calls.some((call) => call.url.includes('/v4/spreadsheets?fields=spreadsheetId')), false,
+    'Recovery must not create a duplicate workbook.');
+});
+
 test('Google outage never throws past the queue and records a bounded retry failure', async () => {
   const calls = [];
   const rpc = async (_env, name) => {

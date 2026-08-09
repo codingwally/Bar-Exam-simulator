@@ -200,7 +200,14 @@ async function createSpreadsheet(fetchImpl, env, token, context) {
 async function ensureSpreadsheet(fetchImpl, env, token, context) {
   if (context.googleSheetId) return String(context.googleSheetId);
   const existing = await findExistingSpreadsheet(fetchImpl, token, context.examPublicId);
-  return existing || createSpreadsheet(fetchImpl, env, token, context);
+  if (existing) {
+    // A prior attempt can create the workbook and then fail while sharing it.
+    // Re-establish the intended professor permission before treating that
+    // orphaned workbook as recovered.
+    await shareWithProfessor(fetchImpl, token, existing, context.professorEmail);
+    return existing;
+  }
+  return createSpreadsheet(fetchImpl, env, token, context);
 }
 
 async function sheetMetadata(fetchImpl, token, spreadsheetId) {

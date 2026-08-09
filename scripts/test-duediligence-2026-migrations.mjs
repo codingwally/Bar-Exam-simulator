@@ -8,11 +8,16 @@ const names = [
   '20260811002700_duediligence_2026_delivery_support.sql',
   '20260811002800_duediligence_2026_verdict_phase4_bridge.sql',
   '20260811002900_examination_room_integrity_unlock_fix.sql',
+  '20260811003000_examination_room_admin_owner_repair.sql',
 ];
 const migrations = await Promise.all(names.map((name) => (
   readFile(new URL(`supabase/migrations/${name}`, root), 'utf8')
 )));
-const [content, exam, delivery, verdict, integrityFix] = migrations;
+const [content, exam, delivery, verdict, integrityFix, adminOwnerRepair] = migrations;
+const adminOwnerPreflight = await readFile(new URL(
+  'supabase/review/examination_room_admin_owner_repair_preflight.sql',
+  root,
+), 'utf8');
 
 for (const [name, sql] of names.map((name, index) => [name, migrations[index]])) {
   assert.match(sql, /^--[^\n]*\n(?:--[^\n]*\n)*\s*begin;/i, `${name} must begin transactionally.`);
@@ -80,6 +85,25 @@ assert.match(integrityFix, /revoke all on function public\.exam_room_live_status
 assert.match(integrityFix, /'exam_confirmed'/);
 assert.match(integrityFix, /tg_table_name = 'exam_room_grades'[\s\S]*tg_op = 'UPDATE'[\s\S]*set_config\('app\.exam_room_admin_correction', 'off', true\)/i);
 assert.match(integrityFix, /set_config\('app\.exam_room_backup_update', 'on', true\)[\s\S]*set_config\('app\.exam_room_backup_update', 'off', true\)/i);
+
+assert.match(adminOwnerRepair, /create or replace function public\.exam_room_create_classroom/i);
+assert.match(adminOwnerRepair, /if public\.exam_room_is_admin\(p_professor_user_id\)[\s\S]*insert into public\.exam_room_professors/i);
+assert.match(adminOwnerRepair, /values \(\s*p_professor_user_id, 'revoked', p_professor_user_id\s*\)[\s\S]*on conflict \(user_id\) do nothing/i);
+assert.match(adminOwnerRepair, /revoke all on function public\.exam_room_create_classroom\(uuid, text, text, text\)[\s\S]*from public, anon, authenticated/i);
+assert.match(adminOwnerRepair, /grant execute on function public\.exam_room_create_classroom\(uuid, text, text, text\)[\s\S]*to service_role/i);
+
+assert.match(adminOwnerPreflight, /begin transaction read only/i);
+assert.match(adminOwnerPreflight, /EXAM_ROOM_REPAIR_PREFLIGHT_PASSED_READ_ONLY/);
+assert.match(adminOwnerPreflight, /20260811002500[\s\S]*20260811002900/);
+assert.match(adminOwnerPreflight, /rollback;\s*$/i);
+const normalizedAdminOwnerPreflight = adminOwnerPreflight
+  .replace(/^\s*--.*$/gm, '')
+  .replace(/'(?:''|[^'])*'/g, "''");
+assert.doesNotMatch(
+  normalizedAdminOwnerPreflight,
+  /\b(?:insert|update|delete|alter|create|drop|grant|revoke|truncate)\b/i,
+  'administrator-owner production preflight must remain read-only',
+);
 
 assert.match(verdict, /foreign key \(grading_result_id\) references public\.grading_results\(id\) on delete restrict/i);
 assert.match(verdict, /foreign key \(exam_attempt_id\) references public\.exam_attempts\(id\) on delete restrict/i);

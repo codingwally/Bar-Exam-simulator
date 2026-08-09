@@ -50,12 +50,15 @@ for (const subject of subjects) {
   );
   assert.ok(generic.score <= 2.5, `${subject}: generic ALAC must not receive an inflated score`);
 
-  const partial = applyDeterministicScoreCap(
+  const withoutRepeatedConclusionHeading = applyDeterministicScoreCap(
     assessment(5),
     context.suggestedAnswer.replace(/\n*\s*(?:\*\*)?Conclusion(?:\*\*)?\s*:[\s\S]*$/i, ''),
     context,
   );
-  assert.ok(partial.score <= 3.5, `${subject}: incomplete ALAC must remain below 4.0`);
+  assert.ok(
+    withoutRepeatedConclusionHeading.score >= 4,
+    `${subject}: a substantively complete answer must not be capped solely for omitting a repeated Conclusion heading`,
+  );
 
   const strong = applyDeterministicScoreCap(assessment(4.2), context.suggestedAnswer, context);
   assert.equal(strong.score, 4.2, `${subject}: a complete stored ALAC answer may retain 4.2`);

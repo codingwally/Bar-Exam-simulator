@@ -121,6 +121,13 @@ test('generic invocation of law without factual application remains capped', () 
   assert.equal(result.appliedScoreCeiling.code, 'rule_without_application');
 });
 
+test('boilerplate ALAC application cannot evade the no-application ceiling', () => {
+  const answer = 'Answer: No. Legal Basis: Under the applicable law, the governing rule applies. Application: Here, the facts satisfy the rule. Conclusion: Therefore, no.';
+  const result = applyDeterministicScoreCap(assessment(5), answer, context);
+  assert.equal(result.score, 2.5);
+  assert.equal(result.appliedScoreCeiling.code, 'rule_without_application');
+});
+
 test('definition and explanation questions do not invent a factual-application requirement', () => {
   const definitionContext = {
     subject: 'Criminal Law',

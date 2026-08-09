@@ -628,9 +628,18 @@ export function analyzeStudentAnswer(studentAnswer, context = {}) {
     applicationSection,
     expectedApplicationSection || context?.suggestedAnswer || '',
   );
-  const structuredApplication = meaningfulTokens(applicationSection).length >= 5
+  const applicationOnlyRepeatsBoilerplate = Boolean(
+    applicationSection
+    && meaningfulTokens(applicationSection).length <= 12
+    && /^(?:(?:here|in this case|in the present case),?\s+)?(?:the\s+)?facts?\s+(?:merely\s+)?(?:satisf(?:y|ies)|meet|show|establish|support|fit)\s+(?:the\s+)?(?:rule|law|elements?|requirements?|doctrine)\.?$/i.test(applicationSection.trim()),
+  );
+  const structuredApplication = !applicationOnlyRepeatsBoilerplate
+    && meaningfulTokens(applicationSection).length >= 5
     && (applicationQuestionOverlap >= 2 || applicationReferenceOverlap >= 3);
-  const narrativeApplication = wordCount >= 18 && applicationConnector && questionOverlap >= 1;
+  const narrativeApplication = !applicationOnlyRepeatsBoilerplate
+    && wordCount >= 18
+    && applicationConnector
+    && questionOverlap >= 1;
   const questionType = inferQuestionType(context);
   const applicationRequired = applicationRequiredForQuestion(context);
   const meaningfulApplication = applicationRequired

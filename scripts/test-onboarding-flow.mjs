@@ -21,6 +21,31 @@ assert.match(
   'An authenticated user must bypass the obsolete guest sign-in prompt.',
 );
 assert.match(html, /id="subject-choice-grid"/);
+assert.match(
+  html,
+  /id="subject-selection-close"[\s\S]*aria-label="Close subject selection and return to Mock Bar"[\s\S]*onclick="exitSubjectSelection\(\)"/,
+  'The subject chooser must expose an accessible close control.',
+);
+assert.match(
+  html,
+  /id="subject-selection-back"[\s\S]*onclick="exitSubjectSelection\(\)"[\s\S]*>Back<\/button>/,
+  'The subject chooser must expose a visible Back action.',
+);
+assert.match(
+  html,
+  /function exitSubjectSelection\(\) \{[\s\S]*pendingSubjectSelection = null;[\s\S]*showWelcome\(\);[\s\S]*\}/,
+  'Both exit controls must return to the existing Mock Bar welcome state.',
+);
+assert.match(
+  html,
+  /function showSubjectSelection\(\) \{[\s\S]*window\.scrollTo\(\{ top: 0, behavior: 'auto' \}\);[\s\S]*close\?\.focus\(\{ preventScroll: true \}\);[\s\S]*\}/,
+  'Opening subject selection must keep the close control visible and place keyboard focus on it without scrolling it away.',
+);
+assert.match(
+  html,
+  /e\.key === 'Escape' && onboardingStage === 'subjectSelection'[\s\S]*exitSubjectSelection\(\)/,
+  'Escape must close the subject chooser for keyboard users.',
+);
 assert.match(html, /id="session-choice-modal"[\s\S]*Would you like to begin your session\?/);
 assert.match(html, /Strict Scrutiny[\s\S]*12 minutes per question/);
 assert.match(html, /Quantum Meruit[\s\S]*Track your writing time/);

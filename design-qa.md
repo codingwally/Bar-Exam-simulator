@@ -103,3 +103,45 @@ approved structural target and intentional product-content differences.
 **PASS — no P0, P1, or P2 visual defects found in the implemented landing experience.**
 
 This design-quality result does not authorize launch. Founder-role verification, legal/editorial approval, a measured blind grading benchmark, and verified production capacity are separate launch gates.
+
+# Mock Bar Subject Chooser Exit Design QA
+
+## Scope
+
+- Source truth: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-4035f08b-6333-49fe-8dcd-2b702bb5104e.png`
+- Implementation screenshot: `C:\Users\wally\AppData\Local\Temp\duediligence-mockbar-chooser-exit-source-matched.jpg`
+- Source pixel dimensions: 1895 × 1036
+- Comparison viewport: 1516 × 829 CSS pixels at device pixel ratio 1.25
+- Implementation capture export: 1369 × 823 pixels (the in-app browser resampled the screenshot export while preserving the inspected CSS viewport and density)
+- State: Mock Bar subject chooser, desktop, equivalent scrolled header state; no subject selected and no timer running
+
+## Full-view comparison evidence
+
+The existing navy background, gold card edge, serif heading, two-column subject grid, header navigation, typography, spacing, and decorative lower-right circle remain unchanged. The only visible additions are an established circular × control in the card's upper-right corner and a restrained Back action in the card's existing lower-right whitespace.
+
+## Focused-region comparison evidence
+
+- Upper-right: the 42 × 42 pixel close control uses the existing navy, alabaster, gold-border, radius, hover, and focus language. Its accessible name is “Close subject selection and return to Mock Bar.”
+- Lower-right: Back is positioned within pre-existing whitespace on desktop and becomes a full-width action below the subject list on mobile.
+- Mobile 390 × 844: the close control is visible when the chooser opens, Back is visible at the card bottom, and no horizontal overflow occurs.
+
+## Interaction evidence
+
+- × returns to the existing Mock Bar welcome screen.
+- Back returns to the existing Mock Bar welcome screen.
+- Escape returns to the existing Mock Bar welcome screen.
+- Opening the chooser scrolls to its top and focuses the close control with `preventScroll`, keeping the exit visible for keyboard and mobile users.
+
+## Findings
+
+- P0: none
+- P1: none
+- P2: none
+
+## Iteration history
+
+1. First pass exposed that a flow-positioned Back row changed the desktop card height. It was moved into the card's existing lower-right whitespace.
+2. Mobile inspection exposed that prior focus behavior could leave the close control above the viewport. Initial focus was moved to the close control and the chooser now opens at the top.
+3. Final desktop, mobile, accessibility, and interaction comparisons passed without actionable findings.
+
+final result: passed

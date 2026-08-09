@@ -4,6 +4,32 @@ const TEMPLATE_SPREADSHEET_ID = '1alXFADSsgSduVW07nOCGYa5zz26k387DeeEMF_y_fdg';
 const BACKUP_TABS = Object.freeze([
   'Exam Registry', 'Questions', 'Submissions', 'Grades', 'Sync Log',
 ]);
+const BACKUP_HEADERS = Object.freeze({
+  'Exam Registry': [
+    'Event ID', 'Exam ID', 'Sequence', 'Event Type', 'Content Hash', 'Exam Title',
+    'School', 'Academic Term', 'Status', 'Opens At', 'Hard Closes At',
+    'Duration Minutes', 'Question Count', 'Event Created At',
+  ],
+  Questions: [
+    'Event ID', 'Exam ID', 'Sequence', 'Event Type', 'Content Hash', 'Question Number',
+    'Question', 'Maximum Points', 'Source Filename', 'Source Hash', 'Snapshot Hash',
+    'Event Created At',
+  ],
+  Submissions: [
+    'Event ID', 'Exam ID', 'Sequence', 'Event Type', 'Content Hash', 'Attempt ID',
+    'Candidate Number', 'Question ID', 'Answer', 'Revision', 'Saved At', 'Started At',
+    'Server Deadline', 'Submitted At', 'Automatic Submission', 'Integrity Incident Count',
+  ],
+  Grades: [
+    'Event ID', 'Exam ID', 'Sequence', 'Event Type', 'Content Hash', 'Attempt ID',
+    'Candidate Number', 'Question ID', 'Score', 'Maximum Points', 'Professor Comment',
+    'Revision', 'Release ID', 'Released At', 'Questionnaire Included',
+  ],
+  'Sync Log': [
+    'Event ID', 'Exam ID', 'Sequence', 'Event Type', 'Content Hash',
+    'Event Created At', 'Synced At', 'Status',
+  ],
+});
 
 function enabled(value, fallback = false) {
   if (value == null || value === '') return fallback;
@@ -109,34 +135,64 @@ async function shareWithProfessor(fetchImpl, token, spreadsheetId, email) {
 }
 
 async function createSpreadsheet(fetchImpl, env, token, context) {
-  const templateId = String(env.GOOGLE_BACKUP_TEMPLATE_ID || TEMPLATE_SPREADSHEET_ID).trim();
+  const schemaTemplateId = String(env.GOOGLE_BACKUP_TEMPLATE_ID || TEMPLATE_SPREADSHEET_ID).trim();
   const folderId = String(env.GOOGLE_BACKUP_FOLDER_ID || '').trim();
-  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(templateId)}/copy`);
-  url.searchParams.set('supportsAllDrives', 'true');
-  url.searchParams.set('fields', 'id,name');
-  const result = await jsonFetch(fetchImpl, url, {
+  const title = `DueDiligence Exam — ${context.title} — ${context.examPublicId}`;
+  const result = await jsonFetch(fetchImpl, 'https://sheets.googleapis.com/v4/spreadsheets?fields=spreadsheetId,sheets.properties(sheetId,title)', {
     method: 'POST',
     headers: googleHeaders(token),
     body: JSON.stringify({
-      name: `DueDiligence Exam — ${context.title} — ${context.examPublicId}`,
-      ...(folderId ? { parents: [folderId] } : {}),
+      properties: { title, locale: 'en_US', timeZone: 'Asia/Manila' },
+      sheets: ['README', ...BACKUP_TABS].map((name) => ({
+        properties: { title: name, gridProperties: { rowCount: 1000, columnCount: 26 } },
+      })),
+    }),
+  }, 'GOOGLE_SHEET_CREATE_FAILED');
+  if (!result?.spreadsheetId) {
+    const error = new Error('Google did not return a spreadsheet identifier.');
+    error.safeCode = 'GOOGLE_CREATE_INVALID';
+    throw error;
+  }
+  const spreadsheetId = String(result.spreadsheetId);
+  const sheetIds = Object.fromEntries((result?.sheets || []).map((entry) => (
+    [entry?.properties?.title, entry?.properties?.sheetId]
+  )));
+  const initialRequests = [
+    appendRequest(sheetIds.README, [
+      ['DueDiligence Examination Room Backup'],
+      ['Purpose', 'Independent per-exam backup and dispute record.'],
+      ['Authority', 'The protected DueDiligence database remains authoritative.'],
+      ['Privacy', 'Contains protected student answers and grades. Professor access is removed after release.'],
+      ['Timezone', 'Asia/Manila'],
+    ]),
+    ...BACKUP_TABS.map((name) => appendRequest(sheetIds[name], [BACKUP_HEADERS[name]])),
+  ];
+  if (initialRequests.some((request) => !Number.isInteger(request.appendCells.sheetId))) {
+    const error = new Error('Google created an invalid backup workbook schema.');
+    error.safeCode = 'GOOGLE_CREATE_SCHEMA_INVALID';
+    throw error;
+  }
+  await jsonFetch(fetchImpl,
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}:batchUpdate`, {
+      method: 'POST', headers: googleHeaders(token), body: JSON.stringify({ requests: initialRequests }),
+    }, 'GOOGLE_SHEET_INITIALIZE_FAILED');
+
+  const metadataUrl = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}`);
+  metadataUrl.searchParams.set('supportsAllDrives', 'true');
+  metadataUrl.searchParams.set('fields', 'id,name,appProperties,parents');
+  if (folderId) metadataUrl.searchParams.set('addParents', folderId);
+  await jsonFetch(fetchImpl, metadataUrl, {
+    method: 'PATCH',
+    headers: googleHeaders(token),
+    body: JSON.stringify({
+      name: title,
       appProperties: {
         duediligenceExamId: context.examPublicId,
         duediligencePurpose: 'examination-room-backup',
+        duediligenceSchemaTemplateId: schemaTemplateId,
       },
     }),
-  }, 'GOOGLE_TEMPLATE_COPY_FAILED');
-  if (!result?.id) {
-    const error = new Error('Google did not return a spreadsheet identifier.');
-    error.safeCode = 'GOOGLE_COPY_INVALID';
-    throw error;
-  }
-  const spreadsheetId = String(result.id);
-  await jsonFetch(fetchImpl,
-    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values:batchClear`, {
-      method: 'POST', headers: googleHeaders(token),
-      body: JSON.stringify({ ranges: BACKUP_TABS.map((name) => `'${name}'!2:100000`) }),
-    }, 'GOOGLE_TEMPLATE_CLEAR_FAILED');
+  }, 'GOOGLE_DRIVE_METADATA_FAILED');
   await shareWithProfessor(fetchImpl, token, spreadsheetId, context.professorEmail);
   return spreadsheetId;
 }

@@ -38,15 +38,21 @@ const context = Object.freeze({
   questionCount: 1,
 });
 
-test('Google backup copies one isolated template, writes RAW-safe cells, and verifies the event', async () => {
+test('Google backup creates one least-privilege isolated workbook, writes RAW-safe cells, and verifies the event', async () => {
   const calls = [];
   let syncReads = 0;
   const fetchImpl = async (url, options = {}) => {
     calls.push({ url: String(url), options });
     if (String(url).includes('oauth2.googleapis.com')) return response({ access_token: 'ephemeral-token' });
     if (String(url).includes('/drive/v3/files?')) return response({ files: [] });
-    if (String(url).includes('/copy')) return response({ id: 'sheet-123', name: 'copy' });
-    if (String(url).includes('values:batchClear')) return response({ clearedRanges: [] });
+    if (String(url).includes('/v4/spreadsheets?fields=spreadsheetId')) return response({
+      spreadsheetId: 'sheet-123',
+      sheets: ['README', 'Exam Registry', 'Questions', 'Submissions', 'Grades', 'Sync Log']
+        .map((title, index) => ({ properties: { title, sheetId: index } })),
+    });
+    if (String(url).includes('/drive/v3/files/sheet-123') && options.method === 'PATCH') {
+      return response({ id: 'sheet-123', name: 'DueDiligence Exam' });
+    }
     if (String(url).includes('/permissions') && options.method === 'POST') return response({ id: 'permission-1' });
     if (String(url).includes('/values/%27Sync%20Log%27')) {
       syncReads += 1;
@@ -65,12 +71,21 @@ test('Google backup copies one isolated template, writes RAW-safe cells, and ver
   }, event, context, fetchImpl);
   assert.equal(result.spreadsheetId, 'sheet-123');
   assert.equal(result.verifiedHash, event.content_hash);
-  const write = calls.find((call) => call.url.includes(':batchUpdate'));
+  const writes = calls.filter((call) => call.url.includes(':batchUpdate'));
+  assert.equal(writes.length, 2, 'Workbook initialization and event append must be separate verified writes.');
+  const write = writes[1];
   const body = JSON.parse(write.options.body);
   const serialized = JSON.stringify(body);
   assert.match(serialized, /'=2\+2/);
   assert.match(serialized, /'=unsafe\.docx/);
   assert.doesNotMatch(serialized, /formulaValue/);
+  const createCall = calls.find((call) => call.url.includes('/v4/spreadsheets?fields=spreadsheetId'));
+  const createBody = JSON.parse(createCall.options.body);
+  assert.deepEqual(createBody.sheets.map((sheet) => sheet.properties.title), [
+    'README', 'Exam Registry', 'Questions', 'Submissions', 'Grades', 'Sync Log',
+  ]);
+  assert.equal(calls.some((call) => call.url.includes('/copy')), false,
+    'Backup must not request broad access to copy an unrelated Drive file.');
 });
 
 test('Google outage never throws past the queue and records a bounded retry failure', async () => {

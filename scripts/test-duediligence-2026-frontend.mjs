@@ -29,6 +29,12 @@ for (const route of ['bar-easy', 'chairs-cases', 'doctrines', 'anchor-case-diges
   assert.match(js, new RegExp(`['"]${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`));
 }
 
+assert.match(
+  js,
+  /global\.addEventListener\('duediligence:session',[\s\S]*event\.detail\?\.authenticated[\s\S]*routeFromHash\(\)[\s\S]*!routePageActive[\s\S]*restoreRoute\(\)/,
+  'protected 2026 routes must retry after the persisted authentication session becomes ready',
+);
+
 assert.match(js, /maxlength="5000"/);
 assert.match(js, /maxlength="3000"/);
 assert.match(js, /maxlength="20000"/);

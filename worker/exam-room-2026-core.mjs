@@ -22,6 +22,7 @@ export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'portal',
   'activation_ledger',
   'exam_intent',
+  'professor_authoring_snapshot',
   'preflight',
   'beadle_portal',
   'incident_summary',
@@ -47,7 +48,10 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'import_exam_roster',
   'upsert_exam_roster_row',
   'create_exam',
+  'update_exam_details',
   'confirm_questions',
+  'revise_draft_questions',
+  'save_rules_draft',
   'confirm_replacement_questions',
   'schedule_exam',
   'publish_exam',
@@ -57,6 +61,7 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'redeem_beadle_invitation',
   'revoke_beadle',
   'issue_student_access',
+  'reopen_exam_roster',
   'record_candidate_verification',
   'set_candidate_admission',
   'set_accommodation',
@@ -421,7 +426,7 @@ export function normalizeExamRoomQuery(input) {
     );
     normalized.limit = integer(payload.limit ?? 200, 'Professor invitation limit', 1, 200);
     normalized.offset = integer(payload.offset ?? 0, 'Professor invitation offset', 0, 100_000);
-  } else if (operation === 'exam_intent') {
+  } else if (operation === 'exam_intent' || operation === 'professor_authoring_snapshot') {
     normalized.examId = uuid(payload.examId, 'Examination');
   } else if (operation === 'preflight') {
     normalized.examId = uuid(payload.examId, 'Examination');
@@ -559,6 +564,33 @@ export function normalizeExamRoomCommand(input) {
       ['open_book', 'standard', 'strict'],
     );
     n.includeQuestionnaire = payload.includeQuestionnaire === true;
+  } else if (operation === 'update_exam_details') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.expectedRevision = integer(payload.expectedRevision, 'Workspace revision', 1);
+    n.title = boundedText(payload.title, 'Exam title', DD2026_LIMITS.examTitleCharacters, { minimum: 1 });
+    n.instructions = boundedText(
+      payload.instructions ?? '',
+      'Exam instructions',
+      DD2026_LIMITS.examInstructionsCharacters,
+      { trim: false },
+    );
+    n.questionCount = integer(
+      payload.questionCount,
+      'Question count',
+      1,
+      EXAM_ROOM_2026_MAX_QUESTIONS,
+    );
+    n.integrityPreset = enumValue(
+      payload.integrityPreset ?? 'standard',
+      'Integrity preset',
+      ['open_book', 'standard', 'strict'],
+    );
+    n.includeQuestionnaire = boolean(
+      payload.includeQuestionnaire,
+      'Student result questionnaire',
+      false,
+    );
+    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'confirm_questions' || operation === 'confirm_replacement_questions') {
     n.examId = uuid(payload.examId, 'Examination');
     n.objectPath = boundedText(payload.objectPath, 'Private source path', 900, { minimum: 3 });
@@ -586,6 +618,27 @@ export function normalizeExamRoomCommand(input) {
       n.expectedPublicationId = uuid(payload.expectedPublicationId, 'Expected publication');
       n.requestKey = requestKey(payload.requestKey);
     }
+  } else if (operation === 'revise_draft_questions') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.expectedRevision = integer(payload.expectedRevision, 'Workspace revision', 1);
+    n.expectedQuestionVersionId = uuid(
+      payload.expectedQuestionVersionId,
+      'Expected question version',
+    );
+    n.questions = questionRows(payload.questions);
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'save_rules_draft') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.expectedRevision = integer(payload.expectedRevision, 'Workspace revision', 1);
+    n.rules = examRules(payload.rules);
+    if (n.rules.studentAccessCodeRequired !== true) {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_CLASS_HANDOFF_INVALID',
+        'The Beadle handoff requires one class-wide student exam code.',
+      );
+    }
+    n.beadleEmail = email(payload.beadleEmail, 'Beadle email');
+    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'schedule_exam') {
     n.examId = uuid(payload.examId, 'Examination');
     n.opensAt = timestamp(payload.opensAt, 'Opening time');
@@ -616,6 +669,7 @@ export function normalizeExamRoomCommand(input) {
     n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'publish_for_beadle') {
     n.examId = uuid(payload.examId, 'Examination');
+    n.expectedRevision = integer(payload.expectedRevision, 'Workspace revision', 1);
     n.rules = examRules(payload.rules);
     if (new Date(n.rules.opensAt).getTime()
         < Date.now() + EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES * 60 * 1_000) {
@@ -678,6 +732,10 @@ export function normalizeExamRoomCommand(input) {
   } else if (operation === 'issue_student_access') {
     n.examId = uuid(payload.examId, 'Examination');
     n.studentKey = credential(payload.studentKey, 'Student exam access code');
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'reopen_exam_roster') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.reason = boundedText(payload.reason, 'Class-list correction reason', 1_000, { minimum: 5 });
     n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'record_candidate_verification') {
     n.examId = uuid(payload.examId, 'Examination');

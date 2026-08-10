@@ -91,6 +91,62 @@ test('Google backup creates one least-privilege isolated workbook, writes RAW-sa
   assert.match(JSON.stringify(JSON.parse(writes[0].options.body)), /not shared with the Professor/);
 });
 
+test('a revised Professor question version is written to the Questions backup before verification', async () => {
+  const revisedEvent = {
+    ...event,
+    id: '44444444-4444-4444-8444-444444444444',
+    sequence_number: 2,
+    event_type: 'exam_questions_revised',
+    content_hash: 'd'.repeat(64),
+    payload: {
+      sourceFileName: 'Professor workspace revision',
+      sourceHash: 'e'.repeat(64),
+      snapshotHash: 'f'.repeat(64),
+      questions: [
+        { ordinal: 1, prompt: 'Revised question text', maximumPoints: 10 },
+        { ordinal: 2, prompt: 'Repeated review is allowed', maximumPoints: 5 },
+      ],
+    },
+  };
+  const calls = [];
+  let syncReads = 0;
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes('oauth2.googleapis.com')) return response({ access_token: 'ephemeral-token' });
+    if (String(url).includes('/values/%27Sync%20Log%27')) {
+      syncReads += 1;
+      return response({ values: syncReads === 1 ? [] : [[
+        revisedEvent.id, context.examPublicId, '2', revisedEvent.event_type,
+        revisedEvent.content_hash,
+      ]] });
+    }
+    if (String(url).includes('?fields=sheets.properties')) return response({
+      sheets: ['Exam Registry', 'Questions', 'Submissions', 'Grades', 'Sync Log']
+        .map((title, index) => ({ properties: { title, sheetId: index + 1 } })),
+    });
+    if (String(url).includes(':batchUpdate')) return response({ replies: [] });
+    throw new Error(`Unexpected URL ${url}`);
+  };
+  const result = await syncGoogleBackupEvent({
+    GOOGLE_OAUTH_CLIENT_ID: 'id', GOOGLE_OAUTH_CLIENT_SECRET: 'secret',
+    GOOGLE_OAUTH_REFRESH_TOKEN: 'refresh',
+  }, revisedEvent, {
+    ...context,
+    googleSheetId: 'existing-sheet-123',
+    professorAccessRemovedAt: '2026-08-10T00:00:00Z',
+  }, fetchImpl);
+  assert.equal(result.verifiedHash, revisedEvent.content_hash);
+  const write = calls.find((call) => call.url.includes(':batchUpdate'));
+  assert.ok(write, 'the revised event must append rows before it can be marked verified');
+  const body = JSON.parse(write.options.body);
+  const questionsWrite = body.requests.find((request) => request.appendCells.sheetId === 2);
+  assert.ok(questionsWrite, 'the revised event must target the Questions sheet');
+  const serialized = JSON.stringify(questionsWrite);
+  assert.match(serialized, /Revised question text/);
+  assert.match(serialized, /Repeated review is allowed/);
+  assert.match(serialized, /exam_questions_revised/);
+});
+
 test('Google backup recovery revokes legacy Professor access before syncing protected data', async () => {
   const calls = [];
   let syncReads = 0;

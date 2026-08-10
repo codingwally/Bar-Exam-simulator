@@ -203,6 +203,7 @@
 .dd26-stepper.compact{margin:16px 0;}
 .dd26-flow-list{display:grid;gap:10px;margin:22px 0;padding:0;list-style:none;}
 .dd26-flow-step{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:14px;align-items:center;min-height:70px;padding:14px 16px;border:1px solid rgba(148,163,184,.22);border-left:4px solid #64748b;border-radius:0 7px 7px 0;background:rgba(15,23,42,.38);color:#cbd5e1;}
+.dd26-flow-step.has-action{grid-template-columns:38px minmax(0,1fr) auto minmax(150px,auto);}
 .dd26-flow-marker{display:grid;width:34px;height:34px;place-items:center;border:1px solid rgba(148,163,184,.36);border-radius:50%;color:#cbd5e1;font:600 11px/1 'IBM Plex Mono',monospace;}
 .dd26-flow-copy{min-width:0;}
 .dd26-flow-copy strong,.dd26-flow-copy small{display:block;}
@@ -215,6 +216,10 @@
 .dd26-flow-step.is-blocked{border-left-color:#fb7185;background:rgba(127,29,29,.14);}
 .dd26-flow-step.is-blocked .dd26-flow-marker{border-color:rgba(251,113,133,.58);color:#fecdd3;}
 .dd26-flow-step[aria-disabled="true"]{opacity:.72;}
+.dd26-flow-action{justify-self:end;width:100%;max-width:230px;margin:0;text-align:center;}
+.dd26-question-editor.is-read-only{background:rgba(15,23,42,.24);}
+.dd26-question-editor.is-read-only .dd26-textarea[readonly],.dd26-question-editor.is-read-only .dd26-input[readonly]{cursor:default;background:rgba(2,18,35,.42);color:#e2e8f0;}
+.dd26-after-exam-note{margin-top:18px;padding-top:15px;border-top:1px solid rgba(148,163,184,.2);}
 .dd26-inline-error,.dd26-step-error,.dd26-field-error{padding:10px 12px;border:1px solid rgba(251,113,133,.4);border-radius:5px;background:rgba(127,29,29,.2);color:#fecdd3;font-size:12px;line-height:1.5;}
 .dd26-field-error{margin-top:1px;}
 .dd26-flow-step>.dd26-inline-error,.dd26-flow-step>.dd26-step-error{grid-column:2/-1;width:100%;margin-top:-2px;}
@@ -295,7 +300,8 @@
   .dd26-attention-list article>.dd26-actions{width:100%;margin-top:5px;}
   .dd26-actions{align-items:stretch;flex-direction:column;}
   .dd26-actions>.dd26-button{width:100%;}
-  .dd26-flow-step{grid-template-columns:34px minmax(0,1fr);}
+  .dd26-flow-step,.dd26-flow-step.has-action{grid-template-columns:34px minmax(0,1fr);}
+  .dd26-flow-step>.dd26-status{grid-column:2;justify-self:start;}
   .dd26-flow-step>.dd26-button{grid-column:2;width:100%;}
   .dd26-flow-step>.dd26-inline-error,.dd26-flow-step>.dd26-step-error{grid-column:1/-1;}
   .dd26-modal{padding:12px;}

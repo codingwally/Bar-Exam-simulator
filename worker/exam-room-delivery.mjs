@@ -227,7 +227,7 @@ function backupRows(event, context) {
   ]];
   requests.push(['Exam Registry', registry]);
 
-  if (event.event_type === 'exam_confirmed') {
+  if (event.event_type === 'exam_confirmed' || event.event_type === 'exam_questions_revised') {
     requests.push(['Questions', (payload.questions || []).map((question) => [
       ...common, question.ordinal, question.prompt, question.maximumPoints ?? 5,
       payload.sourceFileName, payload.sourceHash, payload.snapshotHash, event.created_at,

@@ -122,15 +122,47 @@ const beadleEnd = frontend.indexOf('function professorSection', beadleStart);
 assert.match(frontend.slice(beadleStart, beadleEnd), /After publishing, the Professor gives the named Beadle a one-time key/);
 assert.match(frontend.slice(beadleStart, beadleEnd), /This Beadle key is not the student exam code/);
 assert.match(frontend.slice(beadleStart, beadleEnd), /Do not give it to students/);
-assert.match(frontend, /Professor · Simple steps[\s\S]*Beadle · Simple steps[\s\S]*Student · Simple steps/);
+assert.match(frontend, /Professor · Preparation steps 1 to 3[\s\S]*Beadle · Preparation steps 4 and 5[\s\S]*Student · Simple steps/);
 
 // Existing emailed deep links identify an exam without becoming authorization.
 assert.match(frontend, /raw\.startsWith\('examination-room\?'\)/);
 assert.match(frontend, /parameters\.get\('exam'\)/);
 assert.match(frontend, /The link identifies the examination only\. It does not give anyone access/);
 
-// Professor authoring remains count-configurable and visibly follows the complete classroom journey.
-assert.match(frontend, /Examination details[\s\S]*Questions reviewed[\s\S]*Published for the Beadle[\s\S]*Class list saved[\s\S]*Student handout ready[\s\S]*Grade and deliver results/);
+// Professor authoring remains count-configurable and follows one reversible five-step preparation journey.
+assert.match(frontend, /Examination details[\s\S]*Questions reviewed[\s\S]*Rules and publication[\s\S]*Class list saved[\s\S]*Student handout ready/);
+const professorFlowStart = frontend.indexOf('function professorFlowList');
+const professorFlowEnd = frontend.indexOf('function rosterPreviewHtml', professorFlowStart);
+const professorFlowView = frontend.slice(professorFlowStart, professorFlowEnd);
+for (const step of ['details', 'questions', 'rules', 'roster', 'handout']) {
+  assert.match(professorFlowView, new RegExp(`id: '${step}'[\\s\\S]*data-dd26-professor-step`),
+    `Professor Step ${step} must have a real review action`);
+}
+assert.doesNotMatch(professorFlowView, /Grade and deliver results/,
+  'grading is an after-exam activity, not a sixth preparation step');
+assert.match(frontend, /operation: 'professor_authoring_snapshot', examId/);
+assert.match(frontend, /function authoringCapability[\s\S]*=== true/,
+  'mutation and review capabilities must fail closed unless explicitly true');
+const authoringCapabilityStart = frontend.indexOf('function authoringCapability');
+const authoringCapabilityEnd = frontend.indexOf('function authoringBlockedCopy', authoringCapabilityStart);
+const authoringCapability = Function(
+  `'use strict'; ${frontend.slice(authoringCapabilityStart, authoringCapabilityEnd)}; return authoringCapability;`,
+)();
+assert.equal(authoringCapability({ capabilities: { canEditDetails: true } }, 'canEditDetails'), true);
+assert.equal(authoringCapability({ capabilities: { canEditDetails: false } }, 'canEditDetails'), false);
+assert.equal(authoringCapability({ capabilities: { canEditDetails: 1 } }, 'canEditDetails'), false);
+assert.equal(authoringCapability({}, 'canEditDetails'), false);
+assert.match(frontend, /operation: 'update_exam_details'[\s\S]*expectedRevision:[\s\S]*questionCount:[\s\S]*includeQuestionnaire:/);
+assert.match(frontend, /operation: 'revise_draft_questions'[\s\S]*expectedRevision:[\s\S]*expectedQuestionVersionId:[\s\S]*questions,/);
+assert.match(frontend, /const canUploadInitial = !published && !hasSavedQuestions && !source\?\.questionVersionId[\s\S]*canUploadQuestions === true/,
+  'a brand-new exam may open the existing upload only when the server explicitly authorizes it');
+assert.match(frontend, /operation: 'save_rules_draft'[\s\S]*expectedRevision:[\s\S]*rules: form\.rules,[\s\S]*beadleEmail:/);
+assert.match(frontend, /rulesDraft\?\.rules[\s\S]*saved\.opensAt[\s\S]*storedDraft\?\.beadleEmail/,
+  'Step 3 must hydrate the server-saved rules and Beadle handoff draft');
+assert.match(frontend, /Review and edit the examination details[\s\S]*Save changes/);
+assert.match(frontend, /typeof details\.instructions !== 'string'[\s\S]*typeof details\.includeQuestionnaire !== 'boolean'/,
+  'Step 1 fails closed when the server snapshot omits an editable field');
+assert.match(frontend, /Review and revise every question[\s\S]*Save revised questions/);
 assert.match(frontend, /id="dd26-exam-count" type="number" min="1" max="200" step="1"/);
 assert.match(frontend, /\.pdf,\.txt,\.docx/);
 assert.match(frontend, /Paste questions/);
@@ -172,8 +204,8 @@ const publishBlock = frontend.slice(
   frontend.indexOf('async function scheduleExam'),
   frontend.indexOf('function localDateValue'),
 );
-assert.match(publishBlock, /operation: 'publish_for_beadle'[\s\S]*rules: draft\.rules,[\s\S]*gradingKey,[\s\S]*beadleEmail: draft\.beadleEmail,[\s\S]*beadleInvitationKey: publicationAttempt\.beadleKey/,
-  'initial publication must atomically freeze the exam and issue the exact Beadle handoff');
+assert.match(publishBlock, /operation: 'publish_for_beadle'[\s\S]*expectedRevision: draft\.expectedRevision,[\s\S]*rules: draft\.rules,[\s\S]*gradingKey,[\s\S]*beadleEmail: draft\.beadleEmail,[\s\S]*beadleInvitationKey: publicationAttempt\.beadleKey/,
+  'initial publication must bind the reviewed workspace revision, freeze the exam, and issue the exact Beadle handoff');
 assert.doesNotMatch(publishBlock, /draft\.(?:studentKey|gradingKey|credentialsScheduled)/,
   'raw publication credentials must not be retained in page state');
 assert.match(publishBlock, /draft\.requestKey \|\|= randomKey[\s\S]*withBoundedPublishWait\(publicationOperation\)/,
@@ -235,6 +267,13 @@ assert.match(frontend, /operation: 'validate_exam_roster'/);
 assert.match(frontend, /operation: 'import_exam_roster'/);
 assert.match(frontend, /operation: 'upsert_exam_roster_row'/);
 assert.match(frontend, /id="dd26-beadle-exam-link" readonly/);
+assert.match(frontend, /Step 4 · Upload and check the class list/);
+assert.match(frontend, /Step 5 · Student handout/);
+assert.match(frontend, /const canEditRoster = !professorView && snapshot\.canEditRoster === true/,
+  'Professor Step 4/5 review must not bind Beadle roster mutations');
+assert.match(frontend, /canReopenRoster = !professorView && snapshot\.canReopenRoster === true/);
+assert.match(frontend, /operation: 'reopen_exam_roster'[\s\S]*reason,[\s\S]*requestKey:/);
+assert.match(frontend, /current student exam code will stop working immediately/i);
 assert.match(frontend, /rosterMode === 'beadle'[\s\S]*examId: state\.exam\.activeExamId/);
 assert.match(frontend, /snapshot\.activeStudentExamCode[\s\S]*state\.exam\.studentExamCodes\.get\(snapshot\.examId\)/,
   'the Beadle handout must consume a recoverable active code when the backend provides it');
@@ -538,6 +577,12 @@ assert.match(frontend, /aria-current="step"/);
 assert.match(css, /\.dd26-modal::backdrop/);
 assert.match(css, /@media \(prefers-reduced-motion:reduce\)/);
 assert.match(css, /\.dd26-role-grid/);
+assert.match(css, /\.dd26-flow-step\.has-action\{[^}]*grid-template-columns:38px minmax\(0,1fr\) auto minmax\(150px,auto\)/,
+  'the five-step review aligns status and a dedicated action column');
+assert.match(css, /\.dd26-flow-step,\.dd26-flow-step\.has-action\{grid-template-columns:34px minmax\(0,1fr\)/,
+  'the five-step action column collapses cleanly on small screens');
+assert.match(css, /\.dd26-flow-action\{[^}]*justify-self:end/);
+assert.match(css, /\.dd26-question-editor\.is-read-only/);
 
 assert.match(html, /assets\/examination-room-2-store\.js/);
 assert.match(build, /assets\/examination-room-2-store\.js/);

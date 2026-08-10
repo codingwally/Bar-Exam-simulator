@@ -91,6 +91,7 @@ const EXAMINATION_ROOM_2_FLAG = 'EXAMINATION_ROOM_2_ENABLED';
 const EXAM_ROOM_2_QUERY_OPERATIONS = new Set([
   'activation_ledger',
   'exam_intent',
+  'professor_authoring_snapshot',
   'preflight',
   'beadle_portal',
   'incident_summary',
@@ -107,6 +108,9 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'validate_exam_roster',
   'import_exam_roster',
   'upsert_exam_roster_row',
+  'update_exam_details',
+  'revise_draft_questions',
+  'save_rules_draft',
   'confirm_replacement_questions',
   'publish_exam',
   'publish_for_beadle',
@@ -115,6 +119,7 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'redeem_beadle_invitation',
   'revoke_beadle',
   'issue_student_access',
+  'reopen_exam_roster',
   'record_candidate_verification',
   'set_candidate_admission',
   'set_accommodation',
@@ -255,6 +260,81 @@ function professorActivationLedgerView(value) {
       'lockedUntil', 'revokedAt', 'revokeReason', 'classroomId',
     ], 200),
   };
+}
+
+const AUTHORING_RULE_FIELDS = [
+  'opensAt', 'hardClosesAt', 'durationMinutes', 'lateAdmissionMinutes',
+  'submissionGraceMinutes', 'allowedMaterials', 'navigationMode', 'integrityMode',
+  'fullscreenPolicy', 'admissionMode', 'temporaryLeaveAcknowledgment',
+  'studentAccessCodeRequired', 'suggestedAnswerMode', 'suggestedAnswer',
+  'aiGradingEnabled',
+];
+
+function professorAuthoringSnapshotView(value, examId) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const result = requireProjectedScope(projectScalarFields(source, [
+    'ok', 'examId', 'workspaceRevision', 'status', 'published', 'serverNow',
+  ]), { examId });
+  const details = projectScalarFields(source.details, [
+    'title', 'instructions', 'questionCount', 'integrityPreset',
+    'includeQuestionnaire', 'updatedAt',
+  ]);
+  const questionSource = source.questions && typeof source.questions === 'object'
+    && !Array.isArray(source.questions) ? source.questions : {};
+  const questions = {
+    ...projectScalarFields(questionSource, [
+      'questionVersionId', 'versionNumber', 'questionCount', 'sourceFileName',
+      'confirmedAt',
+    ]),
+    rows: Array.isArray(questionSource.rows)
+      ? questionSource.rows.slice(0, 200).map((row) => projectScalarFields(row, [
+        'questionId', 'ordinal', 'prompt', 'maximumPoints',
+      ]))
+      : [],
+  };
+  const draftSource = source.rulesDraft && typeof source.rulesDraft === 'object'
+    && !Array.isArray(source.rulesDraft) ? source.rulesDraft : null;
+  const rulesDraft = draftSource ? {
+    ...projectScalarFields(draftSource, ['beadleEmail', 'updatedAt']),
+    rules: projectScalarFields(draftSource.rules, AUTHORING_RULE_FIELDS),
+  } : null;
+  const publicationSource = source.publication && typeof source.publication === 'object'
+    && !Array.isArray(source.publication) ? source.publication : null;
+  const publication = publicationSource ? {
+    ...projectScalarFields(publicationSource, [
+      'publicationId', 'publicationNumber', 'title', 'instructions',
+      'questionCount', 'publishedAt', 'opensAt', 'hardClosesAt',
+    ]),
+    rules: projectScalarFields(publicationSource.rules, AUTHORING_RULE_FIELDS),
+  } : null;
+  return {
+    ...result,
+    details,
+    questions,
+    rulesDraft,
+    capabilities: projectScalarFields(source.capabilities, [
+      'canEditDetails', 'canEditQuestions', 'canEditRules',
+      'canReviewRoster', 'canReviewHandout', 'canReopenRoster',
+    ]),
+    blockers: projectScalarFields(source.blockers, [
+      'details', 'questions', 'rules', 'roster', 'handout', 'reopenRoster',
+    ]),
+    publication,
+    handoff: projectScalarFields(source.handoff, [
+      'rosterCount', 'beadleAssigned', 'beadleInvitationIssued',
+      'studentAccessReady', 'studentAccessIssuedAt', 'examPath',
+      'canReopenRoster', 'reopenRosterBlocker',
+    ]),
+  };
+}
+
+function professorAuthoringMutationView(value, input) {
+  return requireProjectedScope(projectScalarFields(value, [
+    'ok', 'examId', 'status', 'workspaceRevision', 'questionsRequireReview',
+    'questionVersionId', 'versionNumber', 'questionCount', 'noChange',
+    'rulesDraftUpdatedAt', 'studentAccessReady', 'rosterLocked', 'codeRevoked',
+    'idempotent',
+  ]), { examId: input.examId });
 }
 
 function requireProjectedScope(result, expected) {
@@ -922,6 +1002,9 @@ export function createDD2026Handlers(deps) {
     } else if (input.operation === 'exam_intent') {
       functionName = 'exam_room_exam_access_v3';
       body = { p_user_id: user.id, p_exam_public_id: input.examId };
+    } else if (input.operation === 'professor_authoring_snapshot') {
+      functionName = 'exam_room_professor_authoring_snapshot_v1';
+      body = { p_professor_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'preflight') {
       functionName = 'exam_room_student_waiting_room_v4';
       body = {
@@ -934,7 +1017,7 @@ export function createDD2026Handlers(deps) {
         p_device_instance_hash: input.deviceInstanceHash,
       };
     } else if (input.operation === 'beadle_portal') {
-      functionName = 'exam_room_beadle_portal_v4';
+      functionName = 'exam_room_beadle_portal_v5';
       body = { p_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'incident_summary') {
       functionName = 'exam_room_incident_summary_v2';
@@ -1005,6 +1088,12 @@ export function createDD2026Handlers(deps) {
     if (input.operation === 'exam_intent') {
       const { storagePrefix: _privateStoragePrefix, ...publicIntent } = result || {};
       return jsonResponse({ ok: true, result: publicIntent }, 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'professor_authoring_snapshot') {
+      return jsonResponse({
+        ok: true,
+        result: professorAuthoringSnapshotView(result, input.examId),
+      }, 200, origin, allowedOrigin);
     }
     if (input.operation === 'beadle_portal') {
       return jsonResponse({
@@ -1231,8 +1320,11 @@ export function createDD2026Handlers(deps) {
       ? professorActivationIssueView(result, input)
       : input.operation === 'redeem_activation'
         ? professorActivationRedeemView(result)
-        : input.operation === 'revoke_activation'
+          : input.operation === 'revoke_activation'
           ? professorActivationRevokeView(result, input)
+          : ['update_exam_details', 'revise_draft_questions', 'save_rules_draft',
+            'reopen_exam_roster'].includes(input.operation)
+            ? professorAuthoringMutationView(result, input)
           : input.operation === 'publish_for_beadle'
             ? {
               ...(result || {}),
@@ -1304,6 +1396,20 @@ export function createDD2026Handlers(deps) {
         p_requested_question_count: input.questionCount, p_integrity_preset: input.integrityPreset,
         p_include_questionnaire: input.includeQuestionnaire,
       } }),
+      update_exam_details: async () => ({
+        functionName: 'exam_room_update_details_v1',
+        body: {
+          p_professor_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_expected_revision: input.expectedRevision,
+          p_title: input.title,
+          p_instructions: input.instructions,
+          p_requested_question_count: input.questionCount,
+          p_integrity_preset: input.integrityPreset,
+          p_include_questionnaire: input.includeQuestionnaire,
+          p_request_key: input.requestKey,
+        },
+      }),
       confirm_questions: async () => ({ functionName: 'exam_room_confirm_questions', body: {
         p_professor_user_id: userId, p_exam_public_id: input.examId,
         p_object_path: input.objectPath, p_safe_file_name: input.fileName,
@@ -1319,6 +1425,28 @@ export function createDD2026Handlers(deps) {
           p_mime_type: input.mimeType, p_size_bytes: input.sizeBytes,
           p_page_count: input.pageCount, p_content_hash: input.contentHash,
           p_questions: input.questions, p_warnings: input.warnings,
+          p_request_key: input.requestKey,
+        },
+      }),
+      revise_draft_questions: async () => ({
+        functionName: 'exam_room_revise_draft_questions_v1',
+        body: {
+          p_professor_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_expected_revision: input.expectedRevision,
+          p_expected_question_version_id: input.expectedQuestionVersionId,
+          p_questions: input.questions,
+          p_request_key: input.requestKey,
+        },
+      }),
+      save_rules_draft: async () => ({
+        functionName: 'exam_room_save_rules_draft_v1',
+        body: {
+          p_professor_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_expected_revision: input.expectedRevision,
+          p_rules: input.rules,
+          p_beadle_email: input.beadleEmail,
           p_request_key: input.requestKey,
         },
       }),
@@ -1341,10 +1469,11 @@ export function createDD2026Handlers(deps) {
         p_request_key: input.requestKey,
       } }),
       publish_for_beadle: async () => ({
-        functionName: 'exam_room_publish_for_beadle_v3',
+        functionName: 'exam_room_publish_for_beadle_v4',
         body: {
           p_professor_user_id: userId,
           p_exam_public_id: input.examId,
+          p_expected_revision: input.expectedRevision,
           p_rules: input.rules,
           p_grading_key_hash: await h(input.gradingKey),
           p_beadle_email: input.beadleEmail,
@@ -1407,6 +1536,15 @@ export function createDD2026Handlers(deps) {
           },
         };
       },
+      reopen_exam_roster: async () => ({
+        functionName: 'exam_room_reopen_roster_v1',
+        body: {
+          p_actor_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_reason: input.reason,
+          p_request_key: input.requestKey,
+        },
+      }),
       record_candidate_verification: async () => ({ functionName: 'exam_room_record_verification_v2', body: {
         p_actor_user_id: userId, p_exam_public_id: input.examId,
         p_candidate_number: input.candidateNumber, p_method: input.method,

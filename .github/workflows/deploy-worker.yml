@@ -68,6 +68,7 @@ jobs:
           node scripts/test-private-beta-admission.mjs
           node scripts/test-duediligence-2026-migrations.mjs
           node scripts/test-examination-room-2-migration.mjs
+          node scripts/test-examination-room-five-step-revision-migration.mjs
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
 

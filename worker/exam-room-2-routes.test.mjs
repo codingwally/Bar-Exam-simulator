@@ -355,7 +355,7 @@ test('v2 exam, preflight, Beadle, and incident queries use scoped database RPCs'
   const cases = [
     ['exam_intent', 'exam_room_exam_access_v3'],
     ['preflight', 'exam_room_student_waiting_room_v4'],
-    ['beadle_portal', 'exam_room_beadle_portal_v4'],
+    ['beadle_portal', 'exam_room_beadle_portal_v5'],
     ['incident_summary', 'exam_room_incident_summary_v2'],
   ];
   for (const [operation, expectedRpc] of cases) {
@@ -378,12 +378,121 @@ test('v2 exam, preflight, Beadle, and incident queries use scoped database RPCs'
   assert.equal(JSON.stringify(calls.at(-1)).includes('student-exam-code-secret'), false);
 });
 
+test('Professor authoring snapshot is owner-scoped and defensively projected', async () => {
+  const snapshot = harness({
+    rpc: async (name) => name === 'exam_room_professor_authoring_snapshot_v1'
+      ? {
+        ok: true,
+        examId,
+        workspaceRevision: 7,
+        status: 'confirmed',
+        published: false,
+        details: {
+          title: 'Civil Law Final',
+          instructions: 'Answer every question.',
+          questionCount: 2,
+          integrityPreset: 'standard',
+          includeQuestionnaire: true,
+          internalExamId: 'must-not-project',
+        },
+        questions: {
+          questionVersionId: versionId,
+          versionNumber: 2,
+          sourceFileName: 'questions.docx',
+          rows: [
+            { questionId, ordinal: 1, prompt: 'Explain due process.', maximumPoints: 5, promptHash: 'must-not-project' },
+          ],
+          objectPath: 'must-not-project',
+        },
+        rulesDraft: {
+          beadleEmail: 'beadle@example.edu',
+          rules: { opensAt: '2026-08-11T01:00:00.000Z', studentAccessCodeRequired: true, secret: 'must-not-project' },
+          rawCredential: 'must-not-project',
+        },
+        capabilities: { canEditDetails: true, canEditQuestions: true, canEditRules: true, admin: true },
+        blockers: {},
+        handoff: { rosterCount: 10, studentAccessReady: false, rawCode: 'must-not-project' },
+        storagePrefix: 'must-not-project',
+      }
+      : { ok: true },
+  });
+  const response = await snapshot.handlers.examQuery(request({
+    operation: 'professor_authoring_snapshot', examId,
+  }), {}, '', '');
+  const payload = await response.json();
+  const call = snapshot.calls.at(-1);
+  assert.equal(call.name, 'exam_room_professor_authoring_snapshot_v1');
+  assert.deepEqual(call.body, { p_professor_user_id: userId, p_exam_public_id: examId });
+  assert.equal(payload.result.examId, examId);
+  assert.equal(payload.result.workspaceRevision, 7);
+  assert.equal(payload.result.details.title, 'Civil Law Final');
+  assert.equal(payload.result.questions.rows[0].prompt, 'Explain due process.');
+  assert.equal(payload.result.rulesDraft.beadleEmail, 'beadle@example.edu');
+  assert.equal(payload.result.capabilities.canEditQuestions, true);
+  assert.equal(JSON.stringify(payload).includes('must-not-project'), false);
+});
+
+test('Professor revision and Beadle roster-reopen commands use exact scoped RPCs', async () => {
+  const base = { examId, expectedRevision: 4, requestKey };
+  const cases = [
+    [{
+      operation: 'update_exam_details',
+      ...base,
+      title: 'Revised Civil Law Final',
+      instructions: 'Answer every question.',
+      questionCount: 2,
+      integrityPreset: 'standard',
+      includeQuestionnaire: true,
+    }, 'exam_room_update_details_v1'],
+    [{
+      operation: 'revise_draft_questions',
+      ...base,
+      expectedQuestionVersionId: versionId,
+      questions: [
+        { ordinal: 1, prompt: 'Question one', maximumPoints: 5 },
+        { ordinal: 2, prompt: 'Question two', maximumPoints: 5 },
+      ],
+    }, 'exam_room_revise_draft_questions_v1'],
+    [{
+      operation: 'save_rules_draft',
+      ...base,
+      beadleEmail: 'beadle@example.edu',
+      rules: {
+        opensAt: new Date(Date.now() + 2 * 60 * 60 * 1_000).toISOString(),
+        hardClosesAt: new Date(Date.now() + 4 * 60 * 60 * 1_000).toISOString(),
+        durationMinutes: 120,
+        studentAccessCodeRequired: true,
+      },
+    }, 'exam_room_save_rules_draft_v1'],
+    [{
+      operation: 'reopen_exam_roster',
+      examId,
+      reason: 'Correct the official class list before opening.',
+      requestKey,
+    }, 'exam_room_reopen_roster_v1'],
+  ];
+  for (const [body, expectedRpc] of cases) {
+    const flow = harness({ result: {
+      ok: true, examId, status: 'confirmed', workspaceRevision: 5,
+      internalExamId: 'must-not-project', tokenHash: 'must-not-project',
+    } });
+    const response = await flow.handlers.examCommand(request(body), {}, '', '', {});
+    const payload = await response.json();
+    const call = flow.calls.at(-1);
+    assert.equal(call.name, expectedRpc);
+    assert.equal(call.body.p_exam_public_id, examId);
+    assert.equal(payload.result.examId, examId);
+    assert.equal(payload.result.workspaceRevision, 5);
+    assert.equal(JSON.stringify(payload).includes('must-not-project'), false);
+  }
+});
+
 test('the scoped Beadle portal decrypts only the active envelope and never projects its internals', async () => {
   const studentKey = 'student-exam-access-code-secret';
   const tokenHash = await sha256Hex(studentKey);
   const envelope = await encryptStudentExamCode(v2Env, { examId, tokenHash, studentKey });
   const flow = harness({
-    rpc: async (name) => name === 'exam_room_beadle_portal_v4'
+    rpc: async (name) => name === 'exam_room_beadle_portal_v5'
       ? {
         ok: true,
         examId,
@@ -397,7 +506,7 @@ test('the scoped Beadle portal decrypts only the active envelope and never proje
     operation: 'beadle_portal', examId,
   }), {}, '', '');
   const payload = await response.json();
-  assert.equal(flow.calls.at(-1).name, 'exam_room_beadle_portal_v4');
+  assert.equal(flow.calls.at(-1).name, 'exam_room_beadle_portal_v5');
   assert.equal(payload.result.activeStudentExamCode, studentKey);
   assert.equal(payload.result.studentCodeRecoverable, true);
   assert.equal(payload.result.activeStudentCodeEnvelope, undefined);
@@ -407,7 +516,7 @@ test('the scoped Beadle portal decrypts only the active envelope and never proje
 
 test('a legacy hash-only active code remains valid but is explicitly non-recoverable', async () => {
   const flow = harness({
-    rpc: async (name) => name === 'exam_room_beadle_portal_v4'
+    rpc: async (name) => name === 'exam_room_beadle_portal_v5'
       ? {
         ok: true,
         examId,
@@ -431,7 +540,7 @@ test('Beadle recovery fails closed without its key while the rest of the portal 
   const tokenHash = await sha256Hex(studentKey);
   const envelope = await encryptStudentExamCode(v2Env, { examId, tokenHash, studentKey });
   const flow = harness({
-    rpc: async (name) => name === 'exam_room_beadle_portal_v4'
+    rpc: async (name) => name === 'exam_room_beadle_portal_v5'
       ? {
         ok: true,
         examId,
@@ -1011,6 +1120,7 @@ test('publication completion returns only the new one-time Beadle key and defers
   const response = await flow.handlers.examCommand(request({
     operation: 'publish_for_beadle',
     examId,
+    expectedRevision: 7,
     gradingKey,
     beadleEmail: 'Beadle@Example.edu',
     beadleInvitationKey,
@@ -1026,7 +1136,8 @@ test('publication completion returns only the new one-time Beadle key and defers
   }), {}, '', '', {});
   const payload = await response.json();
   const call = flow.calls.at(-1);
-  assert.equal(call.name, 'exam_room_publish_for_beadle_v3');
+  assert.equal(call.name, 'exam_room_publish_for_beadle_v4');
+  assert.equal(call.body.p_expected_revision, 7);
   assert.equal(call.body.p_beadle_email, 'beadle@example.edu');
   assert.match(call.body.p_beadle_token_hash, /^[0-9a-f]{64}$/);
   assert.match(call.body.p_grading_key_hash, /^[0-9a-f]{64}$/);

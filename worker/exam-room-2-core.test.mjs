@@ -65,6 +65,87 @@ test('professors choose the exam length within the documented 1 to 200 beta limi
   }));
 });
 
+test('Professor authoring revisions are scoped, versioned, and idempotent', () => {
+  assert.deepEqual(normalizeExamRoomQuery({
+    operation: 'professor_authoring_snapshot', examId,
+  }), { operation: 'professor_authoring_snapshot', examId });
+
+  const details = normalizeExamRoomCommand({
+    operation: 'update_exam_details',
+    examId,
+    expectedRevision: 3,
+    title: 'Revised Civil Law Final',
+    instructions: 'Answer every question.',
+    questionCount: 20,
+    integrityPreset: 'standard',
+    includeQuestionnaire: true,
+    requestKey,
+  });
+  assert.equal(details.expectedRevision, 3);
+  assert.equal(details.questionCount, 20);
+  assert.equal(details.includeQuestionnaire, true);
+
+  const revision = normalizeExamRoomCommand({
+    operation: 'revise_draft_questions',
+    examId,
+    expectedRevision: 4,
+    expectedQuestionVersionId: versionId,
+    questions: [
+      { ordinal: 1, prompt: 'Explain due process.', maximumPoints: 5 },
+      { ordinal: 2, prompt: 'Explain due process.', maximumPoints: 5 },
+    ],
+    requestKey,
+  });
+  assert.equal(revision.expectedQuestionVersionId, versionId);
+  assert.equal(revision.questions.length, 2);
+
+  const opensAt = new Date(Date.now() + 90 * 60 * 1_000).toISOString();
+  const hardClosesAt = new Date(Date.now() + 4 * 60 * 60 * 1_000).toISOString();
+  const rules = normalizeExamRoomCommand({
+    operation: 'save_rules_draft',
+    examId,
+    expectedRevision: 5,
+    beadleEmail: 'Beadle@Example.edu',
+    rules: {
+      opensAt,
+      hardClosesAt,
+      durationMinutes: 120,
+      lateAdmissionMinutes: 15,
+      submissionGraceMinutes: 5,
+      allowedMaterials: 'Codal only',
+      navigationMode: 'free',
+      integrityMode: 'record_only',
+      fullscreenPolicy: 'requested',
+      admissionMode: 'automatic',
+      temporaryLeaveAcknowledgment: true,
+      studentAccessCodeRequired: true,
+      suggestedAnswerMode: 'none',
+      aiGradingEnabled: false,
+    },
+    requestKey,
+  });
+  assert.equal(rules.beadleEmail, 'beadle@example.edu');
+  assert.equal(rules.rules.studentAccessCodeRequired, true);
+
+  assert.deepEqual(normalizeExamRoomCommand({
+    operation: 'reopen_exam_roster',
+    examId,
+    reason: 'Correct a student email before the examination opens.',
+    requestKey,
+  }), {
+    operation: 'reopen_exam_roster',
+    examId,
+    reason: 'Correct a student email before the examination opens.',
+    requestKey,
+  });
+
+  assert.throws(() => normalizeExamRoomCommand({ ...details, expectedRevision: 0 }));
+  assert.throws(() => normalizeExamRoomCommand({
+    ...rules,
+    rules: { ...rules.rules, studentAccessCodeRequired: false },
+  }));
+});
+
 test('Admin room invitations require complete room details and a bounded expiry', () => {
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
   assert.deepEqual(normalizeExamRoomCommand({
@@ -322,6 +403,7 @@ test('class handoff keeps Beadle and student credentials distinct and freezes co
   const publish = normalizeExamRoomCommand({
     operation: 'publish_for_beadle',
     examId,
+    expectedRevision: 7,
     gradingKey: 'professor-grading-key-secret',
     beadleEmail: 'Beadle@Example.edu',
     beadleInvitationKey: 'beadle-invitation-key-secret',
@@ -336,6 +418,7 @@ test('class handoff keeps Beadle and student credentials distinct and freezes co
     },
   });
   assert.equal(publish.beadleEmail, 'beadle@example.edu');
+  assert.equal(publish.expectedRevision, 7);
   assert.equal(publish.rules.studentAccessCodeRequired, true);
   assert.equal(publish.beadleInvitationKey, 'beadle-invitation-key-secret');
   assert.equal(normalizeExamRoomCommand({
@@ -347,6 +430,7 @@ test('class handoff keeps Beadle and student credentials distinct and freezes co
   assert.throws(() => normalizeExamRoomCommand({
     operation: 'publish_for_beadle',
     examId,
+    expectedRevision: 7,
     gradingKey: 'professor-grading-key-secret',
     beadleEmail: 'beadle@example.edu',
     beadleInvitationKey: 'beadle-invitation-key-secret',
@@ -368,6 +452,7 @@ test('class handoff requires a stable 30-minute opening lead in the Worker and d
   assert.throws(() => normalizeExamRoomCommand({
     operation: 'publish_for_beadle',
     examId,
+    expectedRevision: 7,
     gradingKey: 'professor-grading-key-secret',
     beadleEmail: 'beadle@example.edu',
     beadleInvitationKey: 'beadle-invitation-key-secret',

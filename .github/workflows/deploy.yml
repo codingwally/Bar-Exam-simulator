@@ -1,21 +1,54 @@
 name: Deploy static content to Pages
 
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: "I confirm this production Pages release has explicit approval"
+        required: true
+        default: false
+        type: boolean
+      approval_reference:
+        description: "Approval/change reference recorded in the release log"
+        required: true
+        type: string
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  group: "production-pages"
+  cancel-in-progress: false
 
 jobs:
+  authorize:
+    name: Confirm approved production release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce main branch and explicit confirmation
+        env:
+          CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
+          APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Production releases may only be dispatched from main." >&2
+            exit 1
+          fi
+          if [[ "$CONFIRM_PRODUCTION" != "true" ]]; then
+            echo "Explicit production confirmation is required." >&2
+            exit 1
+          fi
+          if [[ -z "${APPROVAL_REFERENCE//[[:space:]]/}" ]]; then
+            echo "A non-empty approval/change reference is required." >&2
+            exit 1
+          fi
+
   deploy:
+    needs: authorize
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -76,6 +76,9 @@ jobs:
           node scripts/test-lifetime-grade-ui.mjs
           node scripts/test-audience-menu.mjs
           node scripts/test-duediligence-2026-frontend.mjs
+          node scripts/test-examination-room-2-frontend.mjs
+          node scripts/test-examination-room-2-grading-results.mjs
+          node scripts/test-examination-room-2-visual-css.mjs
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
 

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Examination Room publish flow comparison</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+    body { margin: 0; background: #061b2d; color: #f7f1e3; }
+    main { padding: 24px; }
+    h1 { margin: 0 0 8px; font: 700 28px Georgia, serif; }
+    p { margin: 0 0 22px; color: #cbd5e1; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    figure { margin: 0; padding: 12px; border: 1px solid #846b30; background: #071f35; }
+    figcaption { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; color: #e4b94f; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+    img { display: block; width: 100%; height: 620px; object-fit: contain; object-position: top; background: #020b14; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Professor publication flow</h1>
+    <p>Same classroom task, reviewed side by side at desktop size.</p>
+    <div class="grid">
+      <figure>
+        <figcaption><span>Reported state</span><span>Publish stopped without guidance</span></figcaption>
+        <img src="02-reported-publish-stuck.png" alt="Reported Professor publishing screen">
+      </figure>
+      <figure>
+        <figcaption><span>Revised state</span><span>Published with a clear Beadle handoff</span></figcaption>
+        <img src="04-professor-published-beadle-key.png" alt="Revised Professor publication screen with Beadle key">
+      </figure>
+    </div>
+  </main>
+</body>
+</html>

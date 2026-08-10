@@ -16,6 +16,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 export const EXAM_ROOM_2026_MAX_QUESTIONS = 200;
+export const EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES = 30;
 
 export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'portal',
@@ -50,10 +51,12 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'confirm_replacement_questions',
   'schedule_exam',
   'publish_exam',
+  'publish_for_beadle',
   'replace_publication',
   'invite_beadle',
   'redeem_beadle_invitation',
   'revoke_beadle',
+  'issue_student_access',
   'record_candidate_verification',
   'set_candidate_admission',
   'set_accommodation',
@@ -471,6 +474,21 @@ export function normalizeExamRoomQuery(input) {
   return normalized;
 }
 
+export function normalizeExamResultPdfRequest(input) {
+  const payload = object(input);
+  return {
+    examId: uuid(payload.examId, 'Examination'),
+    attemptId: uuid(payload.attemptId, 'Attempt'),
+    scope: enumValue(payload.scope, 'Result download', [
+      'questions_answers',
+      'answers_only',
+      'grades_comments',
+    ]),
+    gradingKey: credential(payload.gradingKey, 'Professor grading key'),
+    requestKey: requestKey(payload.requestKey),
+  };
+}
+
 export function normalizeExamRoomCommand(input) {
   const payload = object(input);
   const operation = enumValue(
@@ -592,6 +610,32 @@ export function normalizeExamRoomCommand(input) {
       );
     }
     n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'publish_for_beadle') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.rules = examRules(payload.rules);
+    if (new Date(n.rules.opensAt).getTime()
+        < Date.now() + EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES * 60 * 1_000) {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_HANDOFF_TIME_REQUIRED',
+        'Set the examination opening at least 30 minutes from now so the Beadle can prepare the class list and student handout.',
+        409,
+      );
+    }
+    if (n.rules.studentAccessCodeRequired !== true) {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_STUDENT_ACCESS_POLICY_REQUIRED',
+        'Student access-code protection must be enabled for the Beadle handoff.',
+      );
+    }
+    n.gradingKey = credential(payload.gradingKey, 'Professor grading key');
+    n.beadleEmail = email(payload.beadleEmail, 'Beadle email');
+    n.beadleInvitationKey = credential(
+      payload.beadleInvitationKey,
+      'Beadle invitation key',
+    );
+    n.beadleExpiresAt = timestamp(payload.beadleExpiresAt, 'Beadle invitation expiry');
+    n.reason = boundedText(payload.reason, 'Delegation reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'replace_publication') {
     n.examId = uuid(payload.examId, 'Examination');
     n.expectedPublicationId = uuid(payload.expectedPublicationId, 'Expected publication');
@@ -626,6 +670,10 @@ export function normalizeExamRoomCommand(input) {
     n.examId = uuid(payload.examId, 'Examination');
     n.beadleUserId = uuid(payload.beadleUserId, 'Beadle');
     n.reason = boundedText(payload.reason, 'Revocation reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'issue_student_access') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.studentKey = credential(payload.studentKey, 'Student exam access code');
     n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'record_candidate_verification') {
     n.examId = uuid(payload.examId, 'Examination');

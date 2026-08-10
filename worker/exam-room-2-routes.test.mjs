@@ -44,7 +44,7 @@ function harness(overrides = {}) {
     enforceExamRoomRateLimit: async (_request, _env, _userId, mode) => rateModes.push(mode),
     examRoomRpc: async (_env, name, body) => {
       calls.push({ name, body });
-      if (name === 'exam_room_exam_access_v2') {
+      if (name === 'exam_room_exam_access_v3') {
         return overrides.access ?? {
           canUploadQuestions: true,
           canManageRoster: true,
@@ -324,7 +324,7 @@ test('question upload authorizes ownership before decoding or parsing the source
     mimeType: 'text/plain',
     base64: 'this-is-not-base64',
   }), {}, '', ''), (error) => error.code === 'EXAM_ROOM_PROFESSOR_REQUIRED');
-  assert.equal(calls[0].name, 'exam_room_exam_access_v2');
+  assert.equal(calls[0].name, 'exam_room_exam_access_v3');
   assert.equal(uploads.length, 0);
 });
 
@@ -350,9 +350,9 @@ test('model-answer upload is unavailable before parsing, storage, or registratio
 
 test('v2 exam, preflight, Beadle, and incident queries use scoped database RPCs', async () => {
   const cases = [
-    ['exam_intent', 'exam_room_exam_access_v2'],
-    ['preflight', 'exam_room_student_preflight_v2'],
-    ['beadle_portal', 'exam_room_beadle_portal_v2'],
+    ['exam_intent', 'exam_room_exam_access_v3'],
+    ['preflight', 'exam_room_student_preflight_v3'],
+    ['beadle_portal', 'exam_room_beadle_portal_v3'],
     ['incident_summary', 'exam_room_incident_summary_v2'],
   ];
   for (const [operation, expectedRpc] of cases) {
@@ -501,7 +501,7 @@ test('legacy portal merges safe Beadle assignments for the role landing page', a
       if (name === 'exam_room_portal_snapshot') {
         return { roles: { student: true }, classes: [], studentExams: [] };
       }
-      if (name === 'exam_room_beadle_portal_v2') {
+      if (name === 'exam_room_beadle_portal_v3') {
         return { ok: true, assignments: [assignment], canViewAnswers: false };
       }
       return { ok: true };
@@ -511,7 +511,7 @@ test('legacy portal merges safe Beadle assignments for the role landing page', a
   const payload = await response.json();
   assert.deepEqual(calls.map((entry) => entry.name), [
     'exam_room_portal_snapshot',
-    'exam_room_beadle_portal_v2',
+    'exam_room_beadle_portal_v3',
   ]);
   assert.equal(payload.result.roles.beadle, true);
   assert.deepEqual(payload.result.beadleExams, [assignment]);
@@ -786,7 +786,7 @@ test('exam-scoped roster upload authorizes before parsing and uses the Beadle-sa
     mimeType: 'text/csv',
     base64: 'not-valid-base64',
   }), {}, '', ''), (error) => error.code === 'EXAM_ROOM_OPERATOR_REQUIRED');
-  assert.deepEqual(invalid.calls.map((entry) => entry.name), ['exam_room_exam_access_v2']);
+  assert.deepEqual(invalid.calls.map((entry) => entry.name), ['exam_room_exam_access_v3']);
 
   const csv = 'Email,Student Number,Candidate Number\nana@example.edu,000012,0007\n';
   const valid = harness({
@@ -908,6 +908,131 @@ test('Beadle invitation and revocation credentials are server-hashed and account
   }), {}, '', '', {});
   const revoke = calls.find((entry) => entry.name === 'exam_room_revoke_beadle_assignment_v2');
   assert.equal(revoke.body.p_beadle_user_id, beadleId);
+});
+
+test('publication completion returns only the new one-time Beadle key and defers student access', async () => {
+  const beadleInvitationKey = 'beadle-invitation-key-secret';
+  const gradingKey = 'professor-grading-key-secret';
+  const expiresAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1_000).toISOString();
+  const flow = harness({
+    result: {
+      ok: true,
+      examId,
+      status: 'published_for_class_preparation',
+      studentAccessReady: false,
+    },
+  });
+  const response = await flow.handlers.examCommand(request({
+    operation: 'publish_for_beadle',
+    examId,
+    gradingKey,
+    beadleEmail: 'Beadle@Example.edu',
+    beadleInvitationKey,
+    beadleExpiresAt: expiresAt,
+    reason: 'Prepare and confirm the official class roster.',
+    requestKey,
+    rules: {
+      opensAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1_000).toISOString(),
+      hardClosesAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1_000 + 2 * 60 * 60 * 1_000).toISOString(),
+      durationMinutes: 120,
+      studentAccessCodeRequired: true,
+    },
+  }), {}, '', '', {});
+  const payload = await response.json();
+  const call = flow.calls.at(-1);
+  assert.equal(call.name, 'exam_room_publish_for_beadle_v3');
+  assert.equal(call.body.p_beadle_email, 'beadle@example.edu');
+  assert.match(call.body.p_beadle_token_hash, /^[0-9a-f]{64}$/);
+  assert.match(call.body.p_grading_key_hash, /^[0-9a-f]{64}$/);
+  assert.notEqual(call.body.p_beadle_token_hash, call.body.p_grading_key_hash);
+  assert.equal(JSON.stringify(call.body).includes(beadleInvitationKey), false);
+  assert.equal(JSON.stringify(call.body).includes(gradingKey), false);
+  assert.equal(payload.result.oneTimeBeadleKey, beadleInvitationKey);
+  assert.equal(payload.result.oneTimeOnly, true);
+  assert.equal(payload.result.studentAccessReady, false);
+});
+
+test('assigned Beadle issues or rotates a distinct one-time student code', async () => {
+  const studentKey = 'student-exam-access-code-secret';
+  const flow = harness({
+    result: {
+      ok: true,
+      examId,
+      issued: true,
+      rotated: false,
+      studentAccessReady: true,
+      rosterLocked: true,
+    },
+  });
+  const response = await flow.handlers.examCommand(request({
+    operation: 'issue_student_access',
+    examId,
+    studentKey,
+    requestKey,
+  }), {}, '', '', {});
+  const payload = await response.json();
+  const call = flow.calls.at(-1);
+  assert.equal(call.name, 'exam_room_issue_student_access_v3');
+  assert.equal(call.body.p_beadle_user_id, userId);
+  assert.match(call.body.p_student_key_hash, /^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(call.body).includes(studentKey), false);
+  assert.equal(payload.result.oneTimeStudentAccessCode, studentKey);
+  assert.equal(payload.result.oneTimeOnly, true);
+  assert.equal(payload.result.rosterLocked, true);
+});
+
+test('Professor result PDF is private, candidate-scoped, and has no release side effect', async () => {
+  const gradingKey = 'professor-grading-key-secret';
+  const exportId = '123e4567-e89b-42d3-a456-426614174012';
+  const flow = harness({
+    rpc: async (name, body) => {
+      if (name === 'exam_room_prepare_result_export_v3') {
+        return {
+          ok: true,
+          exportId,
+          examId,
+          examTitle: 'Civil Law Final Examination',
+          candidateNumber: '0012',
+          scope: body.p_export_scope,
+          submittedAt: '2026-08-10T04:00:00Z',
+          generatedAt: '2026-08-10T05:00:00Z',
+          questionCount: 1,
+          questions: [{
+            ordinal: 1,
+            score: 8,
+            maximumPoints: 10,
+            comment: 'Apply the controlling rule before the conclusion.',
+          }],
+          totals: { score: 8, maximumPoints: 10 },
+        };
+      }
+      if (name === 'exam_room_complete_result_export_v3') {
+        return { ok: true, exportId, completed: true, outputBytes: body.p_output_bytes };
+      }
+      return { ok: true };
+    },
+  });
+  const response = await flow.handlers.examResultPdf(request({
+    examId,
+    attemptId,
+    scope: 'grades_comments',
+    gradingKey,
+    requestKey,
+  }), {}, '', '');
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Content-Type'), 'application/pdf');
+  assert.equal(response.headers.get('Cache-Control'), 'private, no-store, max-age=0');
+  assert.match(response.headers.get('Content-Disposition'), /grades-comments\.pdf"$/);
+  assert.equal(new TextDecoder().decode(bytes.slice(0, 4)), '%PDF');
+  assert.deepEqual(flow.calls.map((entry) => entry.name), [
+    'exam_room_prepare_result_export_v3',
+    'exam_room_complete_result_export_v3',
+  ]);
+  assert.match(flow.calls[0].body.p_grading_key_hash, /^[0-9a-f]{64}$/);
+  assert.match(flow.calls[1].body.p_output_sha256, /^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(flow.calls).includes(gradingKey), false);
+  assert.equal(flow.calls.some((entry) => entry.name === 'exam_room_release_results'), false);
 });
 
 test('answer operation verifies content hash at the edge and forwards journal concurrency fields', async () => {

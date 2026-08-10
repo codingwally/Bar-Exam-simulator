@@ -92,33 +92,44 @@ assert.match(frontend, /operation: 'redeem_activation'[\s\S]*activationKey: valu
 const professorClassStart = professorEnd;
 const professorClassEnd = frontend.indexOf('function rosterPreviewHtml', professorClassStart);
 const professorClassView = frontend.slice(professorClassStart, professorClassEnd);
-assert.match(professorClassView, /const authoring = exams\.length \?[\s\S]*This room already has its examination/,
+assert.match(professorClassView, /const authoring = exams\.length \?[\s\S]*Continue the examination below/,
   'once the room has its examination, the Professor must continue that exam instead of making another');
 assert.match(professorClassView, /One Examination Room holds one examination/);
 
 const studentStart = frontend.indexOf('function studentSection');
 const studentEnd = frontend.indexOf('function activationSection', studentStart);
 const studentView = frontend.slice(studentStart, studentEnd);
-assert.match(studentView, /Students sign in with their Due Diligence account/);
-assert.match(studentView, /there is no separate Student invitation key/);
-assert.match(studentView, /The Professor or Beadle gives the class this exam code/);
-assert.match(studentView, /The Professor creates this when publishing/);
+assert.match(studentView, /Students must sign in with their Due Diligence account/);
+assert.match(studentView, /signed-in email must match the class list/);
+assert.match(studentView, /the Beadle creates this code and gives it to the class/);
+assert.match(studentView, /A code never replaces sign-in or the class-list check/);
 const beadleStart = frontend.indexOf('function beadleSection');
 const beadleEnd = frontend.indexOf('function professorSection', beadleStart);
-assert.match(frontend.slice(beadleStart, beadleEnd), /The Professor creates this invitation from the exam card/);
+assert.match(frontend.slice(beadleStart, beadleEnd), /After publishing, the Professor gives the named Beadle a one-time key/);
+assert.match(frontend.slice(beadleStart, beadleEnd), /This is not the student code/);
 
 // Existing emailed deep links identify an exam without becoming authorization.
 assert.match(frontend, /raw\.startsWith\('examination-room\?'\)/);
 assert.match(frontend, /parameters\.get\('exam'\)/);
 assert.match(frontend, /The link identifies the examination only\. It does not give anyone access/);
 
-// Professor authoring remains count-configurable and visibly follows the 4-step classroom journey.
-assert.match(frontend, /1 Make exam[\s\S]*2 Check questions[\s\S]*3 Set exam rules[\s\S]*4 Publish/);
+// Professor authoring remains count-configurable and visibly follows the complete classroom journey.
+assert.match(frontend, /Examination details[\s\S]*Questions reviewed[\s\S]*Published for the Beadle[\s\S]*Class list saved[\s\S]*Student handout ready[\s\S]*Grade and deliver results/);
 assert.match(frontend, /id="dd26-exam-count" type="number" min="1" max="200" step="1"/);
 assert.match(frontend, /\.pdf,\.txt,\.docx/);
 assert.match(frontend, /Paste questions/);
 assert.match(frontend, /Student preview/);
-assert.match(frontend, /operation: 'schedule_exam'[\s\S]*operation: 'publish_exam'/);
+assert.match(frontend, /operation: 'publish_for_beadle'/);
+assert.match(frontend, /Finish question review first/,
+  'the rules step stays unavailable until the question version is confirmed');
+assert.match(frontend, /id="dd26-create-exam-errors" role="alert"/);
+assert.match(frontend, /function examDraftValidation[\s\S]*number of questions must be a whole number from 1 to 200/);
+assert.match(frontend, /id="dd26-question-review-errors" role="alert"/);
+assert.match(frontend, /function questionReviewValidation[\s\S]*needs question text[\s\S]*points must be greater than 0/);
+assert.match(frontend, /id="dd26-publish-rule-errors" role="alert"/);
+assert.match(frontend, /id="dd26-publish-operation-status" role="status" aria-live="polite"/);
+assert.match(frontend, /EXAMINATION_ROOM_PUBLISH_WAIT_MS = 25_000/);
+assert.match(frontend, /The server did not answer within 25 seconds/);
 assert.match(frontend, /option\[value="one_way"\][\s\S]*oneWayOption\.disabled = true/,
   'one-way authoring stays gated until durable reload enforcement exists');
 assert.match(frontend, /option\[value="upload"\][\s\S]*modelAnswerUploadOption\.disabled = true/,
@@ -129,27 +140,37 @@ for (const value of ['off', 'record_only', 'warn_and_record', 'free', 'one_way',
   assert.match(frontend, new RegExp(`value="${value}"`));
 }
 assert.match(frontend, /aiGradingEnabled: false/);
-assert.match(frontend, /id="dd26-student-access-code-required" type="checkbox" checked/);
-assert.match(frontend, /studentAccessCodeRequired: document\.getElementById\('dd26-student-access-code-required'\)\?\.checked === true/);
-assert.match(frontend, /Every student must still sign in, be on the class list, and meet the entry rules/);
-assert.match(frontend, /const studentKey = draft\.rules\.studentAccessCodeRequired \? randomKey\('student_exam'\) : null/,
-  'publishing without the optional access code must send no invented student secret');
+assert.match(frontend, /document\.getElementById\('dd26-student-access-code-required'\)\?\.closest\('label'\)\?\.remove\(\)/,
+  'the Professor publication screen must remove the legacy student-code choice');
+assert.match(frontend, /studentAccessCodeRequired: true/);
+assert.match(frontend, /None of them replaces the student sign-in and class-list check/);
+assert.match(frontend, /publicationAttempt\.studentKey = null/,
+  'Professor publication must not generate the student handout code');
 assert.match(frontend, /function accessCodePreflightPolicy[\s\S]*typeof primary === 'boolean'[\s\S]*ready: known/);
 assert.match(frontend, /The server did not report this publication’s access-code policy; starting is blocked/);
 assert.match(frontend, /studentKey: check\.studentKey/);
-assert.match(frontend, /No student access-code secret was issued/);
-assert.match(frontend, /publicationSecretsMayBeDisplayed\(result, draft\)/,
+assert.match(frontend, /result\.oneTimeBeadleKey === publicationAttempt\.beadleKey/);
+assert.match(frontend, /publicationSecretsMayBeDisplayed\(result, draft, publicationAttempt\)/,
   'secrets must remain hidden until a complete server publication result is verified');
 const publishBlock = frontend.slice(
   frontend.indexOf('async function scheduleExam'),
   frontend.indexOf('function localDateValue'),
 );
-assert.match(publishBlock, /operation: 'publish_exam'[\s\S]*rules: draft\.rules, studentKey, requestKey:/,
-  'initial publication must transiently prove the selected code/no-code policy');
+assert.match(publishBlock, /operation: 'publish_for_beadle'[\s\S]*rules: draft\.rules,[\s\S]*gradingKey,[\s\S]*beadleEmail: draft\.beadleEmail,[\s\S]*beadleInvitationKey: publicationAttempt\.beadleKey/,
+  'initial publication must atomically freeze the exam and issue the exact Beadle handoff');
 assert.doesNotMatch(publishBlock, /draft\.(?:studentKey|gradingKey|credentialsScheduled)/,
   'raw publication credentials must not be retained in page state');
-assert.match(publishBlock, /retryAuthorized = portalRefreshed === true[\s\S]*publicationStateKnown === true/,
-  'a failed or uncertain publication may retry only after the server confirms the publication is unchanged');
+assert.match(publishBlock, /draft\.requestKey \|\|= randomKey[\s\S]*withBoundedPublishWait\(publicationOperation\)/,
+  'publication retries must keep one request identity and use a bounded wait');
+assert.doesNotMatch(publishBlock, /draft\.requestKey = null/,
+  'an uncertain publication must not discard its idempotency key');
+assert.match(publishBlock, /publicationAttempt\.gradingKey \|\|= randomKey[\s\S]*publicationAttempt\.beadleKey \|\|= randomKey/,
+  'an uncertain retry reuses the same closure-scoped grading and Beadle secrets');
+assert.match(publishBlock, /publishRetryIsSafe\(error\)[\s\S]*Retry publication safely/);
+assert.match(publishBlock, /publicationAttempt\.gradingKey = ''[\s\S]*publicationAttempt\.beadleKey = ''/,
+  'confirmed one-time Professor and Beadle keys must be removed from the request closure');
+assert.match(publishBlock, /refreshPortalSilently\(\)[\s\S]*renderExamRoom\(\)/,
+  'a confirmed publication must refresh and re-render the Professor state behind the key dialog');
 
 // A replacement is a distinct corrected question version, never a rules-only mutation.
 assert.match(frontend, /intent\.canReplacePublication !== true[\s\S]*intent\.canUploadReplacementQuestions !== true/);
@@ -158,8 +179,9 @@ assert.match(frontend, /operation: replacement \? 'confirm_replacement_questions
 assert.match(frontend, /expectedPublicationId: uploadIntent\.expectedPublicationId/);
 assert.match(frontend, /result\.staged !== true[\s\S]*replacementQuestionVersionId/);
 assert.match(frontend, /operation: 'replace_publication'[\s\S]*expectedPublicationId:[\s\S]*replacementQuestionVersionId:[\s\S]*rules:[\s\S]*studentKey,[\s\S]*gradingKey,[\s\S]*reason:[\s\S]*requestKey:/);
-assert.match(frontend, /result\.questionVersionChanged === true/);
-assert.match(frontend, /Once a candidate starts, this path is permanently blocked and corrections must use errata/);
+assert.match(frontend, /publication\.questionVersionChanged === true/);
+assert.match(frontend, /allowed only before the exam opens and before any student starts/);
+assert.match(frontend, /After a student starts, send a correction or stop notice instead/);
 assert.match(frontend, /Use a correction notice/);
 assert.match(frontend, /refreshPortalSilently[\s\S]*await enrichProfessorExamIntents\(state\.exam\.portal\)/,
   'silent portal refreshes must not bypass publication eligibility enrichment');
@@ -211,6 +233,15 @@ const preflightStartBlock = frontend.slice(
   frontend.indexOf('async function beginAttemptAfterPreflight'),
   frontend.indexOf('async function loadAttempt'),
 );
+assert.match(preflightRenderBlock, /studentStartReadiness\(server\)[\s\S]*startReadiness\.canStart/,
+  'the Start control requires the server-confirmed opening and entry window');
+assert.match(preflightStartBlock, /studentStartReadiness\(check\.server\)\.canStart/,
+  'the server-confirmed opening and entry window is checked again immediately before start');
+assert.ok(preflightStartBlock.indexOf('requestFullscreen()') < preflightStartBlock.indexOf("operation: 'start_attempt'"),
+  'full screen must be requested synchronously from the Start click before a network wait');
+assert.match(preflightRenderBlock, /Code entered\. Due Diligence checks it when you select Start examination/);
+assert.match(preflightRenderBlock, /accessCodeRequired && !accessCodeValidated \? 'is-warn' : 'is-pass'/,
+  'an entered but unvalidated student code must not receive a green check');
 assert.ok(preflightStartBlock.indexOf('if (!isAuthenticated())') < preflightStartBlock.indexOf("operation: 'start_attempt'"),
   'Student authentication must be rechecked immediately before starting the attempt');
 assert.match(frontend, /if \(state\.view === 'exam_room'\)[\s\S]*state\.exam\.preflight = null;[\s\S]*state\.exam\.attempt = null;[\s\S]*closeDialog\(\)/,
@@ -258,6 +289,8 @@ assert.match(frontend, /synchronizeServerClock\(payload\.result\.serverNow\)/);
 assert.match(frontend, /global\.performance\.now\(\) - state\.exam\.serverClockMonotonicAt/,
   'the displayed countdown advances from a server-synchronized monotonic baseline');
 assert.match(frontend, /currentServerTimeMs\(\)/);
+assert.match(frontend, /data-dd26-student-preview-prompt[\s\S]*synchronizeCurrentPreview/,
+  'the student question preview must stay current while the Professor edits text');
 
 const leaseBlock = frontend.slice(
   frontend.indexOf('state.exam.tabLease.subscribe'),
@@ -327,16 +360,19 @@ for (const terminalCode of [
 assert.match(pendingSubmissionBlock, /quarantineAttemptQueue/,
   'terminal submission failures retain recovery evidence and do not retry forever');
 
-// Exam safeguards block clipboard actions only inside the active surface, respect
-// approved assistive-technology settings, and never turn a signal into a penalty.
-assert.doesNotMatch(frontend, /preventExamAction|context_menu_attempt|addEventListener\('contextmenu'/);
+// Exam safeguards block clipboard and right-click actions only inside the active
+// surface, respect approved assistive-technology settings, and never turn a
+// signal into a penalty.
+assert.doesNotMatch(frontend, /preventExamAction/);
 assert.match(frontend, /function examIntegrityPolicy[\s\S]*integrityMode !== 'off'[\s\S]*integrityExempt !== true[\s\S]*assistiveTechnology !== true/);
 assert.match(frontend, /addEventListener\('copy', clipboardIncident, true\)/);
 assert.match(frontend, /addEventListener\('cut', clipboardIncident, true\)/);
 assert.match(frontend, /addEventListener\('paste', clipboardIncident, true\)/);
+assert.match(frontend, /addEventListener\('contextmenu', contextMenuIncident, true\)/);
 assert.match(frontend, /event\.preventDefault\(\)[\s\S]*event\.type === 'paste' \? 'paste_attempt' : 'copy_attempt'/);
 assert.match(frontend, /action: event\.type, blocked: true, surface: 'examination'/);
 assert.match(frontend, /attempt\.status !== 'in_progress'[\s\S]*clipboardEventTouchesAttempt\(event, surface\)/);
+assert.match(frontend, /function contextMenuIncident[\s\S]*event\.preventDefault\(\)[\s\S]*recordIncident\('context_menu_attempt'/);
 assert.doesNotMatch(frontend, /clipboardData|getData\(['"]text|selectedText/,
   'clipboard and selected content must never enter an incident payload');
 assert.match(frontend, /You returned to the examination[\s\S]*does not automatically fail or lock/);
@@ -349,6 +385,7 @@ assert.match(frontend, /removeEventListener\('visibilitychange', visibilityIncid
 for (const eventName of ['copy', 'cut', 'paste']) {
   assert.match(frontend, new RegExp(`removeEventListener\\('${eventName}', clipboardIncident, true\\)`));
 }
+assert.match(frontend, /removeEventListener\('contextmenu', contextMenuIncident, true\)/);
 
 const visibilityHandler = frontend.slice(
   frontend.indexOf('function visibilityIncident'),
@@ -419,6 +456,12 @@ assert.equal(clipboardEventTouchesAttempt(
 
 // Accessible dialog/status/navigation contracts and reduced motion are present.
 assert.match(frontend, /document\.createElement\('dialog'\)/);
+assert.match(frontend, /function finishDialogLifecycle[\s\S]*input\[type="password"\], \[data-dd26-sensitive\][\s\S]*replaceChildren\(\)/,
+  'closing a one-time-key dialog must remove the key from the live DOM');
+assert.match(frontend, /addEventListener\?\.\('pagehide',[\s\S]*finishDialogLifecycle/,
+  'page exit must scrub one-time-key dialogs and their cleanup closures');
+assert.match(frontend, /refreshBeadleOperations\(examId\)[\s\S]*EXAMINATION_ROOM_REFRESH_WAIT_MS/,
+  'student-code issue must refresh the exact Beadle state after success');
 assert.match(frontend, /aria-live="polite"/);
 assert.match(frontend, /aria-current="step"/);
 assert.match(css, /\.dd26-modal::backdrop/);
@@ -438,12 +481,18 @@ const publicationSecretsMayBeDisplayed = Function(
 )();
 assert.equal(publicationSecretsMayBeDisplayed({}, { intent: { mode: 'initial' } }), false);
 assert.equal(publicationSecretsMayBeDisplayed(
-  { ok: true, publicationId: 'publication-1', accessCodeRequired: false },
-  { rules: { studentAccessCodeRequired: false }, intent: { mode: 'initial' } },
+  { ok: true,
+    publication: { ok: true, publicationId: 'publication-1', accessCodeRequired: true },
+    beadleInvitation: { ok: true }, studentAccessReady: false, oneTimeBeadleKey: 'beadle-key' },
+  { rules: { studentAccessCodeRequired: true }, intent: { mode: 'initial' } },
+  { beadleKey: 'beadle-key' },
 ), true);
 assert.equal(publicationSecretsMayBeDisplayed(
-  { ok: true, publicationId: 'publication-1', accessCodeRequired: true },
-  { rules: { studentAccessCodeRequired: false }, intent: { mode: 'initial' } },
+  { ok: true,
+    publication: { ok: true, publicationId: 'publication-1', accessCodeRequired: true },
+    beadleInvitation: { ok: true }, studentAccessReady: false, oneTimeBeadleKey: 'wrong-key' },
+  { rules: { studentAccessCodeRequired: true }, intent: { mode: 'initial' } },
+  { beadleKey: 'beadle-key' },
 ), false);
 assert.equal(publicationSecretsMayBeDisplayed(
   { ok: true, publicationId: 'publication-2', credentialsRotated: true, questionVersionChanged: true,
@@ -473,5 +522,87 @@ assert.deepEqual(accessCodePreflightPolicy({ accessCodeRequired: true }, null),
   { known: true, required: true, ready: false });
 assert.deepEqual(accessCodePreflightPolicy({ checks: { accessCodeRequired: true } }, 'entered-code'),
   { known: true, required: true, ready: true });
+
+const startReadinessStart = frontend.indexOf('function studentStartReadiness');
+const startReadinessEnd = frontend.indexOf('function examIntegrityPolicy', startReadinessStart);
+const studentStartReadiness = Function(
+  'formatDate',
+  `'use strict'; ${frontend.slice(startReadinessStart, startReadinessEnd)}; return studentStartReadiness;`,
+)((value) => String(value || 'unknown'));
+assert.equal(studentStartReadiness({}).canStart, false,
+  'an omitted server decision must fail closed');
+assert.equal(studentStartReadiness({ canStart: true, entryClosesAt: 'later' }).canStart, true);
+assert.match(studentStartReadiness({ canStart: false, startBlockerCode: 'STUDENT_ACCESS_NOT_READY' }).copy,
+  /Beadle has not finished the class handout/);
+
+// Execute the three Professor step gates. Browser-detectable errors must stop
+// each transition and publication does not wait for the later Beadle roster.
+const draftValidationStart = frontend.indexOf('function examDraftValidation');
+const draftValidationEnd = frontend.indexOf('function showCreateExamErrors', draftValidationStart);
+const examDraftValidation = Function(
+  `'use strict'; const codePointLength = (value) => Array.from(String(value ?? '')).length; ${frontend.slice(draftValidationStart, draftValidationEnd)}; return examDraftValidation;`,
+)();
+assert.equal(examDraftValidation({
+  title: 'Civil Law Midterms', instructions: '', questionCount: '20',
+  integrityPreset: 'standard', classroomId: 'room-1',
+}).errors.length, 0);
+assert.ok(examDraftValidation({
+  title: ' ', instructions: '', questionCount: '1.5',
+  integrityPreset: 'standard', classroomId: 'room-1',
+}).errors.length >= 2);
+
+const questionValidationStart = frontend.indexOf('function questionReviewValidation');
+const questionValidationEnd = frontend.indexOf('function showQuestionReviewErrors', questionValidationStart);
+const questionReviewValidation = Function(
+  `'use strict'; const codePointLength = (value) => Array.from(String(value ?? '')).length; ${frontend.slice(questionValidationStart, questionValidationEnd)}; return questionReviewValidation;`,
+)();
+assert.deepEqual(questionReviewValidation([
+  { prompt: 'Discuss jurisdiction.', maximumPoints: 10 },
+], 1), []);
+assert.ok(questionReviewValidation([
+  { prompt: ' ', maximumPoints: 0 },
+], 2).length >= 3);
+
+const publishValidationStart = frontend.indexOf('function publishStepValidation');
+const publishValidationEnd = frontend.indexOf('function showPublishStepErrors', publishValidationStart);
+const publishStepValidation = Function(
+  `'use strict'; const EXAMINATION_ROOM_MIN_HANDOFF_MS = 30 * 60 * 1000; ${frontend.slice(publishValidationStart, publishValidationEnd)}; return publishStepValidation;`,
+)();
+const validPublishStep = publishStepValidation({
+  opensAt: '2035-08-10T12:00:00.000Z',
+  hardClosesAt: '2035-08-10T14:00:00.000Z',
+  durationMinutes: '120', lateAdmissionMinutes: '0', submissionGraceMinutes: '15',
+  allowedMaterials: 'Codal only', suggestedAnswerMode: 'none', suggestedAnswer: '',
+  beadleEmail: 'beadle@example.edu', nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
+  exam: { publicationStateKnown: true, status: 'confirmed', questionCount: 20, canPublish: true },
+});
+assert.equal(validPublishStep.errors.length, 0,
+  'Professor may finalize before the Beadle uploads the class list');
+assert.match(frontend, /Date\.now\(\) \+ 60 \* 60000/,
+  'the Professor schedule opens one hour out by default');
+assert.match(frontend, /EXAM_ROOM_HANDOFF_TIME_REQUIRED/);
+assert.ok(publishStepValidation({
+  opensAt: '2035-08-10T10:20:00.000Z', hardClosesAt: '2035-08-10T14:00:00.000Z',
+  durationMinutes: '120', lateAdmissionMinutes: '15', submissionGraceMinutes: '15',
+  allowedMaterials: '', suggestedAnswerMode: 'none', beadleEmail: 'beadle@example.edu',
+  nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
+  exam: { publicationStateKnown: true, status: 'confirmed', questionCount: 20, canPublish: true },
+}).errors.some((error) => /at least 30 minutes/.test(error.message)),
+'publication must leave at least 30 minutes for the Beadle handoff');
+assert.ok(publishStepValidation({
+  opensAt: '2035-08-10T12:00:00.000Z', hardClosesAt: '2035-08-10T14:00:00.000Z',
+  durationMinutes: '120', lateAdmissionMinutes: '0', submissionGraceMinutes: '15',
+  suggestedAnswerMode: 'none', beadleEmail: 'beadle@example.edu',
+  nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
+  exam: { publicationStateKnown: true, status: 'confirmed', questionCount: 20, canPublish: false,
+    publishBlockers: ['Confirm all questions.'] },
+}).errors.length > 0, 'the final review fails closed unless the server confirms publication readiness');
+assert.ok(publishStepValidation({
+  opensAt: '', hardClosesAt: '2035-08-10T09:00:00.000Z',
+  durationMinutes: '1.5', lateAdmissionMinutes: '', submissionGraceMinutes: '121',
+  suggestedAnswerMode: 'paste', suggestedAnswer: '', beadleEmail: 'not-an-email',
+  nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
+  exam: { publicationStateKnown: true, status: 'draft', questionCount: 20 },
+}).errors.length >= 7);
 
 console.log('Examination Room 2.0 frontend contracts passed.');

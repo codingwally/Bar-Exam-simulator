@@ -17,6 +17,13 @@ const [html, frontend, css, build, phase2Config, stagingBuild] = await Promise.a
 assert.match(phase2Config, /examinationRoom2:\s*true/);
 assert.match(html, /id="spa-examination-room" type="button"/);
 assert.doesNotMatch(html, /id="spa-examination-room" type="button" hidden/);
+const authenticatedShellStart = html.indexOf('<div id="authenticated-app-shell" hidden inert aria-hidden="true">');
+const authenticatedShellEnd = html.indexOf('</div><!-- /authenticated-app-shell -->');
+const examinationRoomEntry = html.indexOf('id="spa-examination-room"');
+assert.ok(authenticatedShellStart >= 0
+  && examinationRoomEntry > authenticatedShellStart
+  && examinationRoomEntry < authenticatedShellEnd,
+'the beta-wide entry must stay inside the admitted-user application shell');
 assert.match(frontend, /exam_room:\s*'EXAMINATION_ROOM_2_ENABLED'/);
 assert.match(frontend, /const EXAMINATION_ROOM_BASE_FLAG = 'EXAMINATION_ROOM_ENABLED'/);
 const openBlock = frontend.slice(
@@ -30,7 +37,7 @@ assert.match(openBlock, /snapshot\?\.flags\?\.\[EXAMINATION_ROOM_BASE_FLAG\] !==
 assert.doesNotMatch(stagingBuild, /examinationRoom2: false/,
   'staging no longer needs to override the owner-approved beta-wide client gate');
 assert.doesNotMatch(stagingBuild, /spa-examination-room[^\n]*hidden/,
-  'staging no longer needs to unhide an entry that is enabled for the private beta');
+  'staging no longer needs to unhide an entry that is enabled for the beta-wide release');
 
 // Public information architecture is exactly the four classroom roles.
 assert.match(frontend, /\['professor', 'Professor'[\s\S]*\['beadle', 'Beadle'[\s\S]*\['student', 'Student'[\s\S]*\['admin', 'Admin'/);

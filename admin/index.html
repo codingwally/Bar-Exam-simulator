@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=examination-room-2-operations-20260809-1">
+  <link rel="stylesheet" href="admin.css?v=examination-room-room-keys-20260810-1">
 </head>
 <body>
   <a class="skip-link" href="#admin-main">Skip to admin dashboard</a>
@@ -176,12 +176,39 @@
     </form>
   </dialog>
 
+  <dialog class="professor-room-key-dialog" id="professor-room-key-dialog" aria-labelledby="professor-room-key-title" aria-describedby="professor-room-key-copy">
+    <form method="dialog">
+      <header>
+        <div>
+          <p class="eyebrow">One-time Professor key</p>
+          <h2 id="professor-room-key-title">Examination Room invitation created</h2>
+        </div>
+        <button class="icon-button" id="professor-room-key-close" type="button" aria-label="Close and clear Professor key">&times;</button>
+      </header>
+      <p class="panel-note" id="professor-room-key-copy">Copy this key now. Due Diligence cannot show it again after this window closes.</p>
+      <dl class="definition-list professor-room-key-details">
+        <dt>Examination Room</dt><dd id="professor-room-key-room">Not available</dd>
+        <dt>Professor</dt><dd id="professor-room-key-email">Not available</dd>
+      </dl>
+      <label class="field professor-room-key-field">Professor invitation key
+        <span class="professor-room-key-row">
+          <input id="professor-room-key-secret" type="text" readonly autocomplete="off" spellcheck="false">
+          <button class="secondary-button" id="professor-room-key-copy-button" type="button">Copy key</button>
+        </span>
+      </label>
+      <div class="notice professor-room-key-warning"><strong>One key, one room.</strong> Give this key only to the Professor named above. The Professor must sign in with that exact email before using it.</div>
+      <div class="dialog-actions">
+        <button class="primary-button" id="professor-room-key-done" type="button">I copied and stored the key</button>
+      </div>
+    </form>
+  </dialog>
+
   <div class="toast" id="admin-toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
   <script src="../assets/phase2-config.js?v=leb-premium-20260804-1"></script>
   <script src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script src="subscription-actions-core.js?v=admin-business-dashboard-20260802-2"></script>
-  <script src="admin.js?v=examination-room-2-operations-20260809-1"></script>
+  <script src="admin.js?v=examination-room-room-keys-20260810-1"></script>
 </body>
 </html>

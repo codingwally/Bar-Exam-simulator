@@ -139,19 +139,19 @@
       <div class="dd26-role-grid">
         <button class="dd26-role-card" type="button" data-open-view="professor-authoring">
           <span class="dd26-role-number">01</span>
-          <span><strong>Professor</strong><em>Make the examination</em><small>Choose the number of questions, upload them, check them, set the rules, publish, and grade.</small></span>
+          <span><strong>Professor</strong><em>Make the examination</em><small>Use the room key created by Admin, then upload questions, set the rules, publish, and grade.</small></span>
         </button>
         <button class="dd26-role-card" type="button" data-open-view="beadle">
           <span class="dd26-role-number">02</span>
-          <span><strong>Beadle</strong><em>Upload students and prepare exam day</em><small>Upload the class list, check who may enter, and help students during the examination.</small></span>
+          <span><strong>Beadle</strong><em>Upload students and prepare exam day</em><small>Use the invitation from the Professor, upload the class list, and help students during the examination.</small></span>
         </button>
         <button class="dd26-role-card" type="button" data-student-entry>
           <span class="dd26-role-number">03</span>
-          <span><strong>Student</strong><em>Take the examination</em><small>Sign in, check the exam details, answer each question, review, and submit.</small></span>
+          <span><strong>Student</strong><em>Take the examination</em><small>Sign in, enter the exam code given in class if required, answer, review, and submit.</small></span>
         </button>
         <button class="dd26-role-card" type="button" data-open-view="admin">
           <span class="dd26-role-number">04</span>
-          <span><strong>Admin</strong><em>Open the Admin area</em><small>Check Examination Room status and handle authorized school support.</small></span>
+          <span><strong>Admin</strong><em>Open the Admin area</em><small>Create one Professor key for each Examination Room and see who used every key.</small></span>
         </button>
       </div>
       <div class="dd26-notice"><strong>Student sign-in is required.</strong> A student cannot open the Student examination page until signed in. Every student must also be on the class list.</div>
@@ -164,6 +164,7 @@
         <div><div class="dd26-kicker">Professor workspace</div><h1>Evidence — Section A</h1><p>Make the exam, check every question, set the exam rules, then publish. The Professor chooses the number of questions.</p></div>
         <span class="dd26-beta">Draft examination</span>
       </header>
+      <div class="dd26-notice"><strong>This room came from Admin.</strong> Admin created a key for this Professor and this Examination Room. One key opens one room; another room needs another key.</div>
       <div class="qa-screen-switcher">
         <div class="dd26-stepper" role="tablist" aria-label="Professor authoring steps">
           <button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="authoring" data-state="upload">1 Make exam</button>
@@ -290,6 +291,7 @@
     <section class="dd26-shell" data-view-panel="beadle" hidden>
       <button class="dd26-back-link" type="button" data-open-view="roles">Back to Examination Room</button>
       <header class="dd26-header"><div><div class="dd26-kicker">Beadle access for this exam</div><h1>Evidence Midterm Examination</h1><p>Upload the students, check who may enter, and help with exam-day concerns.</p></div><span class="dd26-beta">Available until results are sent</span></header>
+      <div class="dd26-notice"><strong>The Professor gives the Beadle access.</strong> The Beadle uses the invitation created for this examination. It can be used only once and stops working after the results are sent.</div>
       <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="beadle" data-state="roster">Upload students</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="beadle" data-state="attention">Help during exam</button></div></div>
       <div data-state-panel="beadle:roster">
         <section class="dd26-card">
@@ -319,6 +321,7 @@
     <section class="dd26-shell" data-view-panel="student" hidden>
       <button class="dd26-back-link" type="button" data-open-view="roles">← Back to Examination Room</button>
       <header class="dd26-header"><div><div class="dd26-kicker">Student examination</div><h1>Evidence Midterm Examination</h1><p>Sign in, check the exam details, answer each question, review your work, and submit.</p></div><span class="dd26-beta">Signed in · EV-001</span></header>
+      <div class="dd26-notice"><strong>Students do not receive a Professor room key.</strong> Sign in with the account on the class list. If the Professor requires an exam code, the Professor or Beadle gives it to the class.</div>
       <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist" aria-label="Student examination states"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="student" data-state="preflight">Exam check</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="workspace">Answering</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="offline">Connection lost</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="recovery">Choose saved answer</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="review">Review</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="pending">Sending</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="receipt">Received</button></div></div>
 
       <div data-state-panel="student:preflight">
@@ -452,8 +455,38 @@
 
     <section class="dd26-shell" data-view-panel="admin" hidden>
       <button class="dd26-back-link" type="button" data-open-view="roles">← Back to Examination Room</button>
-      <header class="dd26-header"><div><div class="dd26-kicker">Admin area</div><h1>Examination Room status</h1><p>See whether examinations, class lists, answer saving, and backups are working. Student answers and grades are not shown on this regular page.</p></div><span class="dd26-beta">Admin account required</span></header>
-      <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="admin" data-state="health">Exam status</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="admin" data-state="breakglass">Restricted support</button></div></div>
+      <header class="dd26-header"><div><div class="dd26-kicker">Admin area</div><h1>Examination Room administration</h1><p>Create Professor room keys, see who used each key, and check whether examinations and backups are working.</p></div><span class="dd26-beta">Admin account required</span></header>
+      <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist" aria-label="Admin Examination Room pages"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="admin" data-state="room-keys">Professor room keys</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="admin" data-state="health">Exam status</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="admin" data-state="breakglass">Restricted support</button></div></div>
+      <div data-state-panel="admin:room-keys">
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Professor access</div><h2>Create one Examination Room</h2></div><span class="dd26-status">One room per key</span></div>
+          <div class="dd26-notice"><strong>One key opens one Examination Room.</strong> Enter the Professor and class details below. If the Professor needs another room, Admin creates another key.</div>
+          <form id="qa-room-key-form">
+            <div class="dd26-form-grid">
+              <label class="dd26-field"><span>Professor email</span><input class="dd26-input" id="qa-room-professor-email" type="email" value="professor@example.edu.ph" autocomplete="off" required></label>
+              <label class="dd26-field"><span>Examination Room name</span><input class="dd26-input" id="qa-room-title" value="Evidence — Section A" maxlength="160" required></label>
+              <label class="dd26-field"><span>Law school</span><input class="dd26-input" id="qa-room-school" value="Sample Law School" maxlength="160" required></label>
+              <label class="dd26-field"><span>School term</span><input class="dd26-input" id="qa-room-term" value="First Semester, AY 2026–2027" maxlength="120" required></label>
+              <label class="dd26-field"><span>Key expires after</span><select class="dd26-select" id="qa-room-expiry"><option>24 hours</option><option selected>3 days</option><option>7 days</option></select></label>
+              <label class="dd26-field wide"><span>Reason for creating this room</span><textarea class="dd26-textarea compact" id="qa-room-reason" required>Evidence midterm examination for beta testing.</textarea></label>
+            </div>
+            <div class="dd26-actions"><button class="dd26-button primary" type="submit">Create Professor key</button></div>
+          </form>
+          <div class="dd26-privacy"><strong>Copy the key when it appears.</strong> The full key is shown only once. For safety, it is not saved or shown in the key records below.</div>
+        </section>
+
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">All Professor room keys</div><h2>Key records</h2></div><span class="dd26-status" id="qa-room-key-count">0 keys</span></div>
+          <p>Use this list to see which room a key belongs to, who created it, whether the Professor used it, and when it expires.</p>
+          <div class="dd26-table-wrap">
+            <table class="dd26-table">
+              <thead><tr><th>Examination Room</th><th>Professor</th><th>Status</th><th>Created by</th><th>Used by</th><th>Expires</th><th>Action</th></tr></thead>
+              <tbody id="qa-room-key-records"><tr id="qa-room-key-empty"><td colspan="7">No Professor room keys have been created in this preview.</td></tr></tbody>
+            </table>
+          </div>
+          <div class="dd26-privacy">This list keeps the key record, but never the full key. A used key shows the signed-in Professor and the time it was used.</div>
+        </section>
+      </div>
       <div data-state-panel="admin:health"><section class="dd26-card">
         <div class="dd26-question-meta"><div><div class="dd26-label">Examination Room</div><h2>Service and exam overview</h2></div><span class="dd26-status qa-swatch-success">Working</span></div>
         <div class="dd26-stat-grid"><div class="dd26-stat"><strong>12</strong><span>Scheduled exams</span></div><div class="dd26-stat"><strong>3</strong><span>In progress</span></div><div class="dd26-stat"><strong>99.8%</strong><span>Answers saved</span></div><div class="dd26-stat"><strong>0</strong><span>Urgent alerts</span></div></div>
@@ -481,6 +514,17 @@
   <dialog class="qa-dialog" id="qa-dialog">
     <div class="dd26-modal-card"><div class="dd26-label">Synthetic visual QA</div><h2 id="qa-dialog-title">Preview action</h2><p id="qa-dialog-message"></p><div class="dd26-actions"><button class="dd26-button primary" id="qa-dialog-continue" type="button" hidden>Continue</button><button class="dd26-button" id="qa-dialog-close" type="button">Close</button></div></div>
   </dialog>
-  <script src="./preview.js?v=four-role-20260810"></script>
+  <dialog class="qa-dialog" id="qa-professor-key-dialog" aria-labelledby="qa-professor-key-title">
+    <div class="dd26-modal-card">
+      <div class="dd26-label">Professor room key</div>
+      <h2 id="qa-professor-key-title">Copy this key now</h2>
+      <p>Give this key only to <strong id="qa-professor-key-recipient"></strong>. It opens <strong id="qa-professor-key-room"></strong> and cannot open a second room.</p>
+      <p class="dd26-raw-key qa-code"><code id="qa-professor-key-value"></code></p>
+      <div class="dd26-notice"><strong>Shown only once.</strong> Closing this window removes the full key from this preview. The key record keeps only who created it, who used it, its status, and its expiry.</div>
+      <div class="dd26-actions"><button class="dd26-button primary" id="qa-copy-professor-key" type="button">Copy key</button><button class="dd26-button" id="qa-close-professor-key" type="button">I copied the key</button></div>
+      <p class="dd26-sr-status" id="qa-professor-key-status" role="status" aria-live="polite"></p>
+    </div>
+  </dialog>
+  <script src="./preview.js?v=one-room-one-key-20260810"></script>
 </body>
 </html>

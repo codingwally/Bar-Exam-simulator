@@ -83,6 +83,7 @@ const RETIRED_DISPUTE_OPERATIONS = new Set([
 const EXAMINATION_ROOM_BASE_FLAG = 'EXAMINATION_ROOM_ENABLED';
 const EXAMINATION_ROOM_2_FLAG = 'EXAMINATION_ROOM_2_ENABLED';
 const EXAM_ROOM_2_QUERY_OPERATIONS = new Set([
+  'activation_ledger',
   'exam_intent',
   'preflight',
   'beadle_portal',
@@ -93,6 +94,10 @@ const EXAM_ROOM_2_QUERY_OPERATIONS = new Set([
   'break_glass_view',
 ]);
 const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
+  'issue_activation',
+  'redeem_activation',
+  'revoke_activation',
+  'create_classroom',
   'validate_exam_roster',
   'import_exam_roster',
   'upsert_exam_roster_row',
@@ -124,6 +129,14 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
 
 const VERIFIED_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const BREAK_GLASS_STEP_UP_MAX_AGE_SECONDS = 15 * 60;
+const PROFESSOR_ACTIVATION_RESULT_CODES = new Set([
+  'ACTIVATION_INVALID',
+  'ACTIVATION_EXPIRED',
+  'ACTIVATION_REVOKED',
+  'ACTIVATION_ALREADY_REDEEMED',
+  'ACTIVATION_ROOM_SCOPE_REQUIRED',
+  'CREDENTIAL_LOCKED',
+]);
 
 function requireVerifiedAal2(user) {
   if (user?.authenticationLevel !== 'aal2') {
@@ -166,6 +179,74 @@ function projectScalarFields(value, fields) {
     .filter((field) => source[field] == null
       || ['string', 'number', 'boolean'].includes(typeof source[field]))
     .map((field) => [field, source[field]]));
+}
+
+function professorActivationIssueView(value, input) {
+  const projected = projectScalarFields(value, [
+    'ok', 'activationId', 'status', 'createdAt', 'expiresAt',
+  ]);
+  return {
+    ...projected,
+    ok: projected.ok !== false,
+    targetEmail: input.targetEmail,
+    roomTitle: input.roomTitle,
+    schoolName: input.schoolName,
+    academicTerm: input.academicTerm,
+    expiresAt: projected.expiresAt || input.expiresAt,
+  };
+}
+
+function professorActivationRedeemView(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const projected = projectScalarFields(source, [
+    'ok', 'code', 'role', 'activationId', 'classroomId', 'roomTitle',
+    'schoolName', 'academicTerm', 'status', 'redeemedAt', 'lockedUntil',
+  ]);
+  if (projected.ok === false) {
+    return {
+      ok: false,
+      code: PROFESSOR_ACTIVATION_RESULT_CODES.has(projected.code)
+        ? projected.code
+        : 'ACTIVATION_UNAVAILABLE',
+      ...(projected.lockedUntil ? { lockedUntil: projected.lockedUntil } : {}),
+    };
+  }
+  const { code: _failureCode, lockedUntil: _lockedUntil, ...success } = projected;
+  return success;
+}
+
+function professorActivationRevokeView(value, input) {
+  const projected = projectScalarFields(value, [
+    'ok', 'activationId', 'status', 'revokedAt', 'idempotent',
+  ]);
+  if (projected.activationId && projected.activationId !== input.activationId) {
+    throw new DD2026ValidationError(
+      'EXAM_ROOM_SCOPE_MISMATCH',
+      'The invitation result did not match the selected record.',
+      403,
+    );
+  }
+  return { ...projected, activationId: input.activationId };
+}
+
+function professorActivationLedgerView(value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const rows = Array.isArray(source.activations)
+    ? source.activations
+    : Array.isArray(source.records)
+      ? source.records
+      : Array.isArray(value)
+        ? value
+        : [];
+  return {
+    ...projectScalarFields(source, ['ok', 'status', 'total', 'limit', 'offset']),
+    activations: projectEvidenceRows(rows, [
+      'activationId', 'roomTitle', 'schoolName', 'academicTerm', 'targetEmail',
+      'status', 'createdAt', 'expiresAt', 'issuedByUserId', 'issuedByEmail',
+      'redeemedByUserId', 'redeemedByEmail', 'redeemedAt', 'failedAttempts',
+      'lockedUntil', 'revokedAt', 'revokeReason', 'classroomId',
+    ], 200),
+  };
 }
 
 function requireProjectedScope(result, expected) {
@@ -741,7 +822,16 @@ export function createDD2026Handlers(deps) {
     }
     let functionName;
     let body;
-    if (input.operation === 'exam_intent') {
+    if (input.operation === 'activation_ledger') {
+      const admin = await requireAdministrator(request, env);
+      functionName = 'exam_room_admin_professor_activation_ledger';
+      body = {
+        p_actor_user_id: admin.id,
+        p_status: input.status,
+        p_limit: input.limit,
+        p_offset: input.offset,
+      };
+    } else if (input.operation === 'exam_intent') {
       functionName = 'exam_room_exam_access_v2';
       body = { p_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'preflight') {
@@ -814,6 +904,12 @@ export function createDD2026Handlers(deps) {
       );
     }
     const result = await examRoomRpc(env, functionName, body);
+    if (input.operation === 'activation_ledger') {
+      return jsonResponse({
+        ok: true,
+        result: professorActivationLedgerView(result),
+      }, 200, origin, allowedOrigin);
+    }
     if (input.operation === 'exam_intent') {
       const { storagePrefix: _privateStoragePrefix, ...publicIntent } = result || {};
       return jsonResponse({ ok: true, result: publicIntent }, 200, origin, allowedOrigin);
@@ -965,6 +1061,13 @@ export function createDD2026Handlers(deps) {
     if (EXAM_ROOM_2_COMMAND_OPERATIONS.has(String(payload?.operation || ''))) {
       requireExamRoom2Enabled(env);
     }
+    if (payload?.operation === 'create_classroom') {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_ROOM_KEY_REQUIRED',
+        'Ask Due Diligence Admin for a one-time Professor key. Each key opens one Examination Room.',
+        403,
+      );
+    }
     const input = normalizeExamRoomCommand(payload);
     await examRateLimit(
       request,
@@ -990,7 +1093,10 @@ export function createDD2026Handlers(deps) {
       user.id,
       input.examId || input.attemptId || input.disputeId || input.operation,
     );
-    const spec = await commandSpec(input, user.id, rateHash, stepUp);
+    const actor = ['issue_activation', 'revoke_activation'].includes(input.operation)
+      ? await requireAdministrator(request, env)
+      : user;
+    const spec = await commandSpec(input, actor.id, rateHash, stepUp);
     if (input.operation === 'confirm_questions' || input.operation === 'confirm_replacement_questions') {
       const access = await examRoomRpc(env, 'exam_room_exam_access_v2', {
         p_user_id: user.id,
@@ -1023,7 +1129,13 @@ export function createDD2026Handlers(deps) {
         && ctx?.waitUntil) {
       ctx.waitUntil(processExamRoomQueues(env));
     }
-    const publicResult = input.operation === 'confirm_replacement_questions'
+    const publicResult = input.operation === 'issue_activation'
+      ? professorActivationIssueView(result, input)
+      : input.operation === 'redeem_activation'
+        ? professorActivationRedeemView(result)
+        : input.operation === 'revoke_activation'
+          ? professorActivationRevokeView(result, input)
+          : input.operation === 'confirm_replacement_questions'
       ? stagedReplacementQuestionsView(result, input)
       : input.operation === 'replace_publication'
       ? publicationReplacementView(result, input)
@@ -1045,14 +1157,16 @@ export function createDD2026Handlers(deps) {
     const specs = {
       issue_activation: async () => ({ functionName: 'exam_room_issue_professor_activation', body: {
         p_actor_user_id: userId, p_target_email: input.targetEmail,
-        p_token_hash: await h(input.activationKey), p_expires_at: input.expiresAt, p_reason: input.reason,
+        p_token_hash: await h(input.activationKey), p_room_title: input.roomTitle,
+        p_school_name: input.schoolName, p_academic_term: input.academicTerm,
+        p_expires_at: input.expiresAt, p_reason: input.reason,
       } }),
       redeem_activation: async () => ({ functionName: 'exam_room_redeem_professor_activation', body: {
         p_user_id: userId, p_token_hash: await h(input.activationKey), p_rate_key_hash: rateHash,
       } }),
-      create_classroom: async () => ({ functionName: 'exam_room_create_classroom', body: {
-        p_professor_user_id: userId, p_title: input.title,
-        p_school_name: input.schoolName, p_academic_term: input.academicTerm,
+      revoke_activation: async () => ({ functionName: 'exam_room_admin_revoke_professor_activation', body: {
+        p_actor_user_id: userId, p_activation_id: input.activationId,
+        p_reason: input.reason, p_request_key: input.requestKey,
       } }),
       validate_roster: async () => ({ functionName: 'exam_room_validate_roster', body: {
         p_professor_user_id: userId, p_classroom_public_id: input.classroomId, p_rows: input.rows,

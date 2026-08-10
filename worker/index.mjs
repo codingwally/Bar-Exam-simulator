@@ -621,6 +621,14 @@ export function examRoom2026DatabaseError(error) {
   const message = String(error?.message || '');
   const publicErrors = {
     EXAM_ROOM_AUTH_REQUIRED: [403, 'Sign in with the account authorized for this examination.'],
+    EXAM_ROOM_ACTIVATION_INVALID: [400, 'Provide a valid Professor email, room details, reason, and expiry of no more than seven days.'],
+    EXAM_ROOM_CREDENTIAL_INPUT_INVALID: [400, 'The Professor key is invalid. Check the complete key and try again.'],
+    EXAM_ROOM_ROOM_KEY_REQUIRED: [403, 'Ask Due Diligence Admin for a one-time Professor key. Each key opens one Examination Room.'],
+    EXAM_ROOM_ACTIVATION_LEDGER_INVALID: [400, 'Choose a valid Professor invitation status, a list limit from 1 to 200, and a valid starting point.'],
+    EXAM_ROOM_ACTIVATION_REVOKE_INVALID: [400, 'Choose a Professor invitation and give a documented reason for revoking it.'],
+    EXAM_ROOM_ACTIVATION_NOT_REVOCABLE: [409, 'This Professor invitation does not exist or can no longer be revoked.'],
+    EXAM_ROOM_ACTIVATION_ROOM_BINDING_CONFLICT: [409, 'This Professor key cannot be bound to another Examination Room. Ask Admin for a new key.'],
+    EXAM_ROOM_ONE_EXAM_LIMIT: [409, 'This Examination Room already has its examination. Ask Admin for another room key to make another examination.'],
     EXAM_ROOM_OPERATOR_REQUIRED: [403, 'Professor or active Beadle authorization is required.'],
     EXAM_ROOM_ROSTER_REQUIRED: [403, 'This account is not authorized for the examination.'],
     EXAM_ROOM_MODEL_ANSWER_UPLOAD_NOT_ALLOWED: [403, 'The model-answer source cannot be changed in this examination state.'],
@@ -730,7 +738,8 @@ async function examRoom2026Rpc(env, functionName, body) {
   const allowedFunctions = new Set([
     'exam_room_issue_professor_activation',
     'exam_room_redeem_professor_activation',
-    'exam_room_create_classroom',
+    'exam_room_admin_professor_activation_ledger',
+    'exam_room_admin_revoke_professor_activation',
     'exam_room_validate_roster',
     'exam_room_import_roster',
     'exam_room_validate_exam_roster_v2',

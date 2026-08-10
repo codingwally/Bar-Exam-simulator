@@ -36,6 +36,19 @@ For this owner-operated beta, the owner’s explicit conversation approval plus 
 9. Run a rollback rehearsal: restore the prior frontend/Worker while leaving additive schema intact.
 10. Run database + private source-object restore and record measured RPO/RTO.
 
+## Examination Room keys and class flow
+
+1. A Due Diligence Admin opens **Admin Dashboard → Examination Room** and creates a Professor key for one named Professor and one named Examination Room.
+2. The full key is shown only once. The database stores only its cryptographic hash. The Admin ledger keeps the non-secret key record, room, target email, issuer, expiry, status, and redemption details. If the key is lost, revoke its record and create a new one; it cannot be recovered.
+3. The Professor signs in with the exact email named by the Admin and redeems the key. Redemption creates that one Examination Room and assigns it to the Professor in the same transaction. One key cannot create a second room.
+4. A Professor who needs another Examination Room must redeem another Admin-issued room key. Free-form room creation is unavailable.
+5. Each key-created room accepts one examination. The Professor chooses the number of questions, uploads or pastes the examination, reviews it, and publishes it.
+6. The Professor creates the Beadle invitation from that examination. The Beadle redeems it, then uploads and checks the class list.
+7. Students do not receive a Student invitation key. Every Student must sign in with the account on the class list. At publication, the Professor may additionally require a class exam access code and give it to the class through the Professor or Beadle.
+8. The grading key is created at publication and shown once to the Professor. It is not a Student or Beadle credential.
+
+An Admin may list and revoke Professor room-key records, but the dashboard never returns a previously displayed plaintext key. Audit rows answer which Admin issued the record, which Professor redeemed it, which room it created, and when those events occurred.
+
 For an initial publication, the UI deliberately stages the selected credential policy and then publishes the immutable snapshot. A student access code is optional per publication; account authentication, active roster, admission, and immutable-publication checks are mandatory in both modes. A tightened `start_attempt` refuses an unpublished exam, so a failed publish is not candidate-visible. The raw student/grading credentials exist only inside the current schedule/publish operation: `publish_exam` proves the same student code when the policy is on and sends `null` when it is off. A failed or uncertain request discards both raw credentials and its request key; the Professor must refresh publication state before a full retry, which safely rotates pre-publication credentials. The UI never reveals any one-time secret until the server confirms the complete matching publication.
 
 A pre-start replacement is a separate, audited flow: eligibility is re-read from the server; a corrected question source is staged as a distinct confirmed version without changing the live publication; Rules and Publish are reviewed again; and the replacement RPC atomically verifies the expected current publication, pre-open state, zero attempts, and staged corrected version. Only then does it activate the new immutable publication and rotate credentials. Any failed or abandoned staging leaves the current publication and credentials authoritative. After the first attempt or opening time, corrections use errata or an explicit stop notice.

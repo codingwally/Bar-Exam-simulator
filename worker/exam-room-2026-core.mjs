@@ -425,6 +425,10 @@ export function normalizeExamRoomQuery(input) {
     normalized.examId = uuid(payload.examId, 'Examination');
   } else if (operation === 'preflight') {
     normalized.examId = uuid(payload.examId, 'Examination');
+    normalized.studentKey = optionalCredential(
+      payload.studentKey,
+      'Student exam access code',
+    );
     normalized.deviceInstanceHash = payload.deviceInstanceHash
       ? hexSha(payload.deviceInstanceHash, 'Device instance digest')
       : null;

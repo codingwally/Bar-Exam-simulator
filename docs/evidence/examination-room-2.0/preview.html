@@ -117,6 +117,12 @@
     .qa-score-bar { height: 7px; overflow: hidden; border-radius: 999px; background: rgba(148, 163, 184, .16); }
     .qa-score-bar span { display: block; height: 100%; width: 42%; background: linear-gradient(90deg, #c5a059, #e8c86d); }
     .qa-code { user-select: all; }
+    .qa-waiting-clock { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; margin: 18px 0; padding: 20px; border: 1px solid rgba(197, 160, 89, .46); background: rgba(3, 20, 40, .7); }
+    .qa-waiting-clock .dd26-clock { min-width: 8ch; text-align: right; }
+    .qa-numbered-instructions { display: grid; gap: 10px; margin: 14px 0 0; padding-left: 28px; }
+    .qa-numbered-instructions li { padding: 12px 14px; border: 1px solid rgba(148, 163, 184, .2); background: rgba(15, 23, 42, .34); color: #cbd5e1; line-height: 1.55; }
+    .qa-numbered-instructions li::marker { color: #d7b45f; font: 600 12px/1 var(--mono); }
+    .qa-numbered-instructions strong { display: block; margin-bottom: 3px; color: #fff; }
     .qa-footer { padding: 24px; color: #94a3b8; font: 10px/1.6 var(--mono); text-align: center; text-transform: uppercase; letter-spacing: .09em; }
 
     .qa-dialog {
@@ -145,6 +151,8 @@
       .qa-screen .dd26-shell { padding-top: 22px; }
       .qa-review-list { grid-template-columns: 1fr; }
       .qa-score-line { grid-template-columns: 1fr; }
+      .qa-waiting-clock { grid-template-columns: 1fr; }
+      .qa-waiting-clock .dd26-clock { text-align: left; }
       .qa-class-flow-list, .qa-key-grid { grid-template-columns: 1fr; }
       .qa-class-flow-list li { min-height: 0; }
       .qa-class-flow-list li + li { border-top: 1px solid rgba(197, 160, 89, .22); border-left: 0; }
@@ -179,7 +187,7 @@
         <ol class="qa-class-flow-list">
           <li><b>Stage 1</b><strong>Admin opens the room</strong><span>Creates one Professor room key for one Examination Room.</span></li>
           <li><b>Stage 2</b><strong>Professor publishes</strong><span>Uploads questions, checks them, sets the schedule, and publishes the exam.</span></li>
-          <li><b>Stage 3</b><strong>Beadle prepares the class</strong><span>Uses the Beadle key, uploads the class list, and prepares the student exam code.</span></li>
+          <li><b>Stage 3</b><strong>Beadle prepares the class</strong><span>Uses the Beadle key and saves the class list. Due Diligence then creates the student exam code for the Beadle to copy.</span></li>
           <li><b>Stage 4</b><strong>Students take the exam</strong><span>Sign in, enter the student exam code, answer, review, and submit.</span></li>
           <li><b>Stage 5</b><strong>Professor grades</strong><span>Checks submissions, records grades, and adds comments.</span></li>
           <li><b>Stage 6</b><strong>Professor releases results</strong><span>Sends final results to the class or downloads a selected candidate PDF.</span></li>
@@ -192,17 +200,18 @@
         </button>
         <button class="dd26-role-card" type="button" data-open-view="beadle">
           <span class="dd26-role-number">02</span>
-          <span><strong>Beadle</strong><em>Prepare the class</em><small>Use the Beadle key from the Professor, upload the class list, and give the student exam code to the class.</small></span>
+          <span><strong>Beadle</strong><em>Prepare the class</em><small>Use the Beadle key from the Professor, save the class list, then copy and give the active student handout to the class.</small></span>
         </button>
         <button class="dd26-role-card" type="button" data-student-entry>
           <span class="dd26-role-number">03</span>
-          <span><strong>Student</strong><em>Take the examination</em><small>Sign in, enter the student exam code given by the Beadle, answer, review, and submit.</small></span>
+          <span><strong>Student</strong><em>Take the examination</em><small>Get the handout from the Beadle, sign in with the account on the class list, enter the student exam code, answer, and submit.</small></span>
         </button>
         <button class="dd26-role-card" type="button" data-open-view="admin">
           <span class="dd26-role-number">04</span>
           <span><strong>Admin</strong><em>Open the Admin area</em><small>Create one Professor key for each Examination Room and see who used every key.</small></span>
         </button>
       </div>
+      <div class="dd26-notice"><strong>Where does the student exam code come from?</strong> The Professor does not create it. After the Beadle saves the class list, Due Diligence creates the class-wide code. The Beadle page shows the active code beside the examination link and provides one <b>Copy class handout</b> action.</div>
       <div class="dd26-notice"><strong>Student sign-in is required.</strong> A student cannot open the Student examination page until signed in. Every student must also be on the class list.</div>
       <div class="dd26-privacy">During a monitored examination, copy, cut, and paste are blocked. Leaving the exam tab is recorded for the Professor and Beadle to review. It is not an automatic failure.</div>
     </section>
@@ -284,7 +293,7 @@
             <label class="dd26-field"><span>Extra reconnect time after the exam ends</span><select class="dd26-select"><option selected>15 minutes, review the connection record</option><option>10 minutes, review the connection record</option><option>No extra time</option></select></label>
             <label class="dd26-field"><span>If a student leaves the exam tab</span><select class="dd26-select"><option selected>Record for Professor review</option><option>Warn the student and record</option></select></label>
             <label class="dd26-field"><span>Question navigation</span><select class="dd26-select" disabled><option selected>Free navigation</option></select><small class="dd26-help">One-way navigation is unavailable until durable reload enforcement is verified.</small></label>
-            <label class="dd26-field"><span>Who may enter</span><select class="dd26-select" disabled><option selected>Signed-in students on the Beadle's class list with the student exam code</option></select><small class="dd26-help">The Beadle prepares the class list and student exam code after publication.</small></label>
+            <label class="dd26-field"><span>Who may enter</span><select class="dd26-select" disabled><option selected>Signed-in students on the Beadle's class list with the student exam code</option></select><small class="dd26-help">After publication, the Beadle saves the class list. Due Diligence then creates the class-wide student exam code for the Beadle page.</small></label>
             <label class="dd26-field wide"><span>Instructions for students</span><textarea class="dd26-textarea compact">Answer all eight questions. State the controlling rule, apply it to the facts, and give a concise conclusion. The official exam clock remains controlling.</textarea></label>
           </div>
           <div class="dd26-integrity"><strong>Exam safeguards.</strong> Copy, cut, and paste are blocked during the active exam. Leaving the tab or exam window is recorded for the Professor and Beadle to review. It is not proof by itself and never causes an automatic failure.</div>
@@ -300,7 +309,7 @@
             <div><dt>Questions</dt><dd>8, selected by the Professor</dd></div>
             <div><dt>Schedule</dt><dd>15 August 2026, 8:00 AM to 11:00 AM, Asia/Manila</dd></div>
             <div><dt>Next classroom step</dt><dd>Give the new Beadle key to the Beadle so the class list can be uploaded</dd></div>
-            <div><dt>Student entry</dt><dd>The Beadle prepares a separate student exam code after checking the class list</dd></div>
+            <div><dt>Student entry</dt><dd>After the Beadle saves the class list, Due Diligence creates the class-wide student exam code and shows it beside the examination link on the Beadle page.</dd></div>
             <div><dt>Corrections</dt><dd>After a student starts, any correction appears as a visible Professor notice</dd></div>
           </dl>
           <label class="dd26-choice"><input id="qa-publish-confirm" type="checkbox"><span><strong>I reviewed the final questions, points, instructions, and schedule</strong><small>Publishing creates the Beadle key for the next classroom stage and the Professor grading key for later use.</small></span></label>
@@ -337,14 +346,14 @@
 
     <section class="dd26-shell" data-view-panel="beadle" hidden>
       <button class="dd26-back-link" type="button" data-open-view="roles">Back to Examination Room</button>
-      <header class="dd26-header"><div><div class="dd26-kicker">Stage 3 of 6 · Beadle</div><h1>Evidence Midterm Examination</h1><p>Open the published exam, prepare the class list, and give the student exam code to the class.</p></div><span class="dd26-beta">Class preparation</span></header>
-      <div class="dd26-notice"><strong>The Professor sends the Beadle key after publishing.</strong> Use that key to open this class. After the class list is ready, prepare a different student exam code for the class.</div>
-      <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist" aria-label="Beadle class preparation steps"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="beadle" data-state="entry">1 Open exam</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="beadle" data-state="roster">2 Upload class list</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="beadle" data-state="handout">3 Student exam code</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="beadle" data-state="attention">4 Exam-day help</button></div></div>
+      <header class="dd26-header"><div><div class="dd26-kicker">Stage 3 of 6 · Beadle</div><h1>Evidence Midterm Examination</h1><p>Use the Beadle key, save the class list, then copy and give the active student handout to the class.</p></div><span class="dd26-beta">Class preparation</span></header>
+      <div class="dd26-notice"><strong>The Professor sends the Beadle key after publishing.</strong> Use that key to open this class. Do not give it to students. After the class list is saved, Due Diligence creates the separate class-wide student exam code.</div>
+      <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist" aria-label="Beadle class preparation steps"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="beadle" data-state="entry">1 Open exam</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="beadle" data-state="roster">2 Upload class list</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="beadle" data-state="handout">3 Student handout</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="beadle" data-state="attention">4 Exam-day help</button></div></div>
       <div data-state-panel="beadle:entry">
         <section class="dd26-card">
           <div class="dd26-question-meta"><div><div class="dd26-label">Professor handoff</div><h2>Open the published examination</h2></div><span class="dd26-status">Beadle key required</span></div>
           <p>Enter the Beadle key sent by the Professor. This key opens the Beadle page for this examination only.</p>
-          <div class="dd26-form-grid"><label class="dd26-field wide"><span>Beadle key</span><input class="dd26-input qa-code" id="qa-beadle-entry-key" value="BDL-3RY9-AX6M" autocomplete="off" required><small class="dd26-help">Do not give this key to students. The student exam code is prepared after the class list is checked.</small></label></div>
+          <div class="dd26-form-grid"><label class="dd26-field wide"><span>Beadle key</span><input class="dd26-input qa-code" id="qa-beadle-entry-key" value="BDL-3RY9-AX6M" autocomplete="off" required><small class="dd26-help">Do not give this key to students. Due Diligence creates the class-wide student exam code only after you save the class list.</small></label></div>
           <div class="dd26-actions"><button class="dd26-button primary" type="button" data-beadle-next="roster">Open class preparation</button></div>
         </section>
       </div>
@@ -354,22 +363,22 @@
           <div class="dd26-stat-grid"><div class="dd26-stat"><strong>42</strong><span>Students listed</span></div><div class="dd26-stat"><strong>42</strong><span>Accounts matched</span></div><div class="dd26-stat"><strong>42</strong><span>Ready to enter</span></div><div class="dd26-stat"><strong>0</strong><span>Needs attention</span></div></div>
           <div class="dd26-form-grid"><label class="dd26-field"><span>Class list CSV or XLSX</span><input class="dd26-input" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><label class="dd26-field"><span>Or paste the class list</span><textarea class="dd26-textarea compact" placeholder="email, student number, exam number, name"></textarea></label></div>
           <div class="dd26-table-wrap"><table class="dd26-table dd26-editable-roster"><thead><tr><th>Exam number</th><th>Signed-in account</th><th>Student number</th><th>Check</th><th>Entry</th></tr></thead><tbody><tr><td>EV-001</td><td>a.cruz@example.edu.ph</td><td>2026-0041</td><td><span class="dd26-status qa-swatch-success">Matched</span></td><td>May enter</td></tr><tr><td>EV-014</td><td>m.santos@example.edu.ph</td><td>2026-0049</td><td><span class="dd26-status qa-swatch-success">Matched</span></td><td>May enter</td></tr><tr><td>EV-027</td><td>r.reyes@example.edu.ph</td><td>2026-0062</td><td><span class="dd26-status qa-swatch-success">Matched</span></td><td>May enter</td></tr></tbody></table></div>
-          <div class="dd26-success"><strong>The class list is ready.</strong> All 42 students have one signed-in account and one exam number. The student exam code may now be prepared.</div>
-          <div class="dd26-actions"><button class="dd26-button" type="button">Download class-list template</button><button class="dd26-button primary" type="button" data-beadle-next="handout">Save class list and prepare student code</button></div>
+          <div class="dd26-success"><strong>The class list is ready.</strong> All 42 students have one signed-in account and one exam number. Save the list to open the active student handout.</div>
+          <div class="dd26-actions"><button class="dd26-button" type="button">Download class-list template</button><button class="dd26-button primary" type="button" data-beadle-next="handout">Save class list and open handout</button></div>
         </section>
       </div>
       <div data-state-panel="beadle:handout" hidden>
         <section class="dd26-card">
-          <div class="dd26-question-meta"><div><div class="dd26-label">Class handout</div><h2>Give the student exam code to the class</h2></div><span class="dd26-status qa-swatch-success">Ready for class</span></div>
-          <div class="dd26-success"><strong>The class list is saved.</strong> This student exam code is different from the Beadle key and the Professor grading key.</div>
-          <div class="qa-handout">
-            <div class="dd26-label">Student exam code</div>
-            <p class="dd26-raw-key qa-code" id="qa-student-exam-code">EVID-8K3J-7M2Q</p>
-            <small>Give this code only to the 42 students on the class list at the time set by the Professor.</small>
-            <dl class="dd26-publish-summary"><div><dt>Examination</dt><dd>Evidence Midterm Examination</dd></div><div><dt>Class</dt><dd>Evidence — Section A · 42 students</dd></div><div><dt>Opens</dt><dd>15 August 2026, 8:00 AM</dd></div><div><dt>Students must</dt><dd>Sign in with the account on the class list and enter this code</dd></div></dl>
+          <div class="dd26-question-meta"><div><div class="dd26-label">Class handout</div><h2>Student handout</h2></div><span class="dd26-status qa-swatch-success">Active for class</span></div>
+          <div class="dd26-success"><strong>The class list is saved.</strong> Due Diligence created this class-wide student exam code. It is different from the Beadle key and Professor grading key.</div>
+          <div class="dd26-form-grid qa-handout">
+            <label class="dd26-field"><span>Student examination link</span><input class="dd26-input" id="qa-student-exam-link" value="https://duediligence.ph/#examination-room?exam=EVIDENCE-MIDTERM" readonly></label>
+            <label class="dd26-field"><span>Active student exam code</span><input class="dd26-input qa-code" id="qa-student-exam-code" value="EVID-8K3J-7M2Q" readonly></label>
           </div>
-          <div class="dd26-actions"><button class="dd26-button primary" type="button" data-demo-toast="Student exam code copied in this visual preview.">Copy student exam code</button><button class="dd26-button" type="button" data-demo-toast="Complete class handout copied in this visual preview.">Copy complete class handout</button><button class="dd26-button" type="button" data-student-entry>Preview student entry</button></div>
-          <div class="dd26-privacy"><strong>The class handout contains only the student exam code and class instructions.</strong> It never includes the Beadle key, Professor grading key, questions, suggested answers, or grades.</div>
+          <dl class="dd26-publish-summary"><div><dt>Examination</dt><dd>Evidence Midterm Examination</dd></div><div><dt>Class</dt><dd>Evidence — Section A · 42 students</dd></div><div><dt>Opens</dt><dd>15 August 2026, 8:00 AM</dd></div><div><dt>Students must</dt><dd>Sign in with the account on the class list and enter this code</dd></div></dl>
+          <p class="dd26-help">The active code remains beside the examination link on this Beadle page. Give the complete handout only to students on the saved class list.</p>
+          <div class="dd26-actions"><button class="dd26-button primary" id="qa-copy-class-handout" type="button" data-demo-toast="Class handout copied in this visual preview.">Copy class handout</button><button class="dd26-button" type="button" data-student-entry>Preview student entry</button></div>
+          <div class="dd26-privacy"><strong>The class handout contains only the examination link, active student exam code, and class instructions.</strong> It never includes the Beadle key, Professor grading key, questions, suggested answers, or grades.</div>
         </section>
       </div>
       <div data-state-panel="beadle:attention" hidden>
@@ -391,23 +400,49 @@
     <section class="dd26-shell" data-view-panel="student" hidden>
       <button class="dd26-back-link" type="button" data-open-view="roles">← Back to Examination Room</button>
       <header class="dd26-header"><div><div class="dd26-kicker">Stage 4 of 6 · Student</div><h1>Evidence Midterm Examination</h1><p>Sign in, enter the student exam code from the Beadle, answer each question, review your work, and submit.</p></div><span class="dd26-beta">Signed in · EV-001</span></header>
-      <div class="dd26-notice"><strong>Student sign-in is required.</strong> Students receive the student exam code from the Beadle. Students do not receive a Professor room key, Beadle key, Admin room key, or Professor grading key.</div>
-      <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist" aria-label="Student examination states"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="student" data-state="preflight">Exam check</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="workspace">Answering</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="offline">Connection lost</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="recovery">Choose saved answer</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="review">Review</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="pending">Sending</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="receipt">Received</button></div></div>
+      <div class="dd26-notice"><strong>Student sign-in is required.</strong> Students receive the examination link and student exam code from the Beadle. Students do not receive a Professor room key, Beadle key, Admin room key, or Professor grading key.</div>
+      <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist" aria-label="Student examination states"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="student" data-state="preflight">Exam check</button><button class="dd26-chip" id="qa-student-waiting-tab" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="waiting" disabled>Waiting room</button><button class="dd26-chip" id="qa-student-workspace-tab" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="workspace" data-requires-exam-open disabled>Answering</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="offline" data-requires-exam-open disabled>Connection lost</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="recovery" data-requires-exam-open disabled>Choose saved answer</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="review" data-requires-exam-open disabled>Review</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="pending" data-requires-exam-open disabled>Sending</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="receipt" data-requires-exam-open disabled>Received</button></div></div>
 
       <div data-state-panel="student:preflight">
         <section class="dd26-card">
-          <div class="dd26-question-meta"><div><div class="dd26-label">Before the examination</div><h2>Check before starting</h2></div><span class="dd26-status">Not started</span></div>
+          <div class="dd26-question-meta"><div><div class="dd26-label">Before the examination</div><h2>Check in early</h2></div><span class="dd26-status">Questions closed</span></div>
+          <p>You may complete the identity, class-list, code, device, and connection checks before the examination opens. Passing these checks admits you only to the waiting room.</p>
           <div class="dd26-form-grid"><label class="dd26-field wide"><span>Student exam code</span><input class="dd26-input qa-code" id="qa-student-entry-code" value="EVID-8K3J-7M2Q" autocomplete="off" required><small class="dd26-help">Use the code given by the Beadle for this class examination.</small></label></div>
           <ul class="dd26-check-list">
             <li class="is-pass"><strong>Signed-in student</strong><span>Your account and exam number EV-001 are on the class list</span></li>
-            <li class="is-pass"><strong>Student exam code</strong><span>Matches Evidence Midterm Examination</span></li>
+            <li class="is-pass" id="qa-student-code-check"><strong>Student exam code</strong><span>Matches Evidence Midterm Examination</span></li>
             <li class="is-pass"><strong>Answer saving</strong><span>This device is ready to keep a recovery copy if the connection drops</span></li>
-            <li class="is-pass"><strong>Connection and exam time</strong><span>Online; the official exam schedule is loaded</span></li>
+            <li class="is-pass"><strong>Connection and exam time</strong><span>Online; the official server schedule is loaded and the waiting room is available</span></li>
             <li class="is-warn"><strong>Full-screen request</strong><span>Your browser will ask after Start; leaving full screen is recorded for review</span></li>
           </ul>
           <details class="dd26-rules-summary" open><summary>Examination rules</summary><dl><div><dt>Questions</dt><dd>8; you may move between questions</dd></div><div><dt>Exam ends</dt><dd>15 August 2026, 11:00 AM</dd></div><div><dt>If the connection drops near the end</dt><dd>15 minutes to reconnect; the school reviews the connection record</dd></div><div><dt>Exam safeguards</dt><dd>Copy, cut, and paste are blocked. Leaving the exam tab is recorded for review. A record does not automatically mean misconduct.</dd></div></dl></details>
-          <label class="dd26-choice"><input id="qa-student-ack" type="checkbox"><span><strong>I read the examination rules</strong><small>The timer continues if the connection drops or I take an approved temporary leave.</small></span></label>
-          <div class="dd26-actions"><button class="dd26-button primary" id="qa-start-exam" type="button" disabled>Start examination</button><button class="dd26-button" type="button" data-demo-toast="A technical pre-start issue was logged in synthetic QA.">Report technical issue</button></div>
+          <div class="dd26-notice"><strong>Early check-in does not start the attempt.</strong> Questions and answer fields remain closed until Due Diligence server time reaches the published opening time.</div>
+          <label class="dd26-choice"><input id="qa-student-ack" type="checkbox"><span><strong>I reviewed the checks and examination rules</strong><small>Entering the waiting room does not start the examination timer or reveal any question.</small></span></label>
+          <div class="dd26-actions"><button class="dd26-button primary" id="qa-enter-waiting-room" type="button" disabled>Enter waiting room</button><button class="dd26-button" type="button" data-demo-toast="A technical pre-start issue was logged in synthetic QA.">Report technical issue</button></div>
+        </section>
+      </div>
+
+      <div data-state-panel="student:waiting" hidden>
+        <section class="dd26-card" aria-labelledby="qa-waiting-room-title">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Student waiting room</div><h2 id="qa-waiting-room-title">You are checked in</h2></div><span class="dd26-status" id="qa-waiting-status" role="status" aria-live="polite">Waiting for opening time</span></div>
+          <div class="dd26-success"><strong>Entry checks passed.</strong> You are signed in, on the class list, and using the active student exam code.</div>
+          <div class="qa-waiting-clock" role="timer" aria-label="Time until examination questions open">
+            <div><div class="dd26-label">Due Diligence server time</div><strong id="qa-waiting-server-time">15 August 2026, 7:55 AM</strong><p class="dd26-help">The server clock—not the device clock—decides when questions open.</p></div>
+            <div><div class="dd26-clock" id="qa-waiting-countdown">00:05:00</div><span class="dd26-clock-label">Until questions open</span></div>
+          </div>
+          <section class="dd26-section" aria-labelledby="qa-waiting-instructions-title">
+            <div class="dd26-label">Professor's instructions</div>
+            <h3 id="qa-waiting-instructions-title">Read before the examination opens</h3>
+            <ol class="qa-numbered-instructions">
+              <li><strong>Answer all eight questions.</strong> Give a direct answer to every question.</li>
+              <li><strong>Use the requested legal method.</strong> State the controlling rule, apply it to the facts, and give a concise conclusion.</li>
+              <li><strong>Use only the allowed materials.</strong> Follow the Professor's published instructions for permitted references.</li>
+              <li><strong>Keep this page open.</strong> Questions and answer fields remain closed until the server opening time. If the connection drops, reconnect from this same device.</li>
+              <li><strong>Submit only after review.</strong> Due Diligence confirms submission only when it shows a server receipt.</li>
+            </ol>
+          </section>
+          <div class="dd26-notice" id="qa-waiting-gate"><strong>The examination has not opened.</strong> No question, answer field, or attempt session is available in the waiting room.</div>
+          <div class="dd26-actions"><button class="dd26-button primary" id="qa-open-examination" type="button" disabled>Start examination when open</button><button class="dd26-button" id="qa-simulate-opening" type="button">Simulate opening time</button><button class="dd26-button" type="button" data-demo-toast="A waiting-room technical issue was logged in synthetic QA.">Report technical issue</button></div>
         </section>
       </div>
 
@@ -526,8 +561,8 @@
           <div class="dd26-question-meta"><div><div class="dd26-label">Stage 6 of 6 · Professor</div><h2>Send class results or download a candidate PDF</h2></div><span class="dd26-status qa-swatch-success">Ready for Professor review</span></div>
           <p>Sending is a deliberate class-wide action after every grade is final. The student selector below is only for choosing whose private PDF to prepare. Nothing is sent or downloaded automatically.</p>
           <div class="dd26-form-grid">
-            <label class="dd26-field"><span>Student</span><select class="dd26-select" id="qa-result-candidate"><option selected>EV-001 · Ana Cruz</option><option>EV-002 · Ben Dela Rosa</option><option>EV-003 · Carla Santos</option></select></label>
-            <label class="dd26-field"><span>Final grade</span><input class="dd26-input" value="78 / 100" readonly></label>
+            <label class="dd26-field"><span>Student for private PDF</span><select class="dd26-select" id="qa-result-candidate"><option selected>EV-001 · Ana Cruz</option><option>EV-002 · Ben Dela Rosa</option><option>EV-003 · Carla Santos</option></select></label>
+            <label class="dd26-field"><span>Selected student's final grade</span><input class="dd26-input" value="78 / 100" readonly></label>
           </div>
           <ul class="dd26-check-list"><li class="is-pass"><strong>All 8 questions graded</strong><span>Every score is final</span></li><li class="is-pass"><strong>Professor comments complete</strong><span>Comments are ready for the student</span></li><li class="is-pass"><strong>Student answer record complete</strong><span>The submitted answers are available for this candidate PDF</span></li></ul>
 
@@ -551,7 +586,7 @@
             </div>
             <div class="dd26-actions"><button class="dd26-button" id="qa-download-result-button" type="button">Download candidate PDF</button></div>
           </section>
-          <div class="dd26-privacy">Sending a result and downloading a candidate PDF are separate Professor actions. Preparing a PDF does not send anything to the student.</div>
+          <div class="dd26-privacy">Sending class results and downloading one candidate PDF are separate Professor actions. Preparing a PDF does not send anything to any student.</div>
         </section>
       </div>
       <p class="dd26-sr-status" id="qa-professor-status" role="status" aria-live="polite"></p>

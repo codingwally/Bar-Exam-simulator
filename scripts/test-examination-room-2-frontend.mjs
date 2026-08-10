@@ -58,6 +58,20 @@ assert.match(roleSelectionBlock, /new URL\('admin\/', global\.location\.href\)/)
 assert.match(frontend, /Use the room key created by Admin/);
 assert.match(frontend, /Use the invitation from the Professor/);
 assert.match(frontend, /Create Professor room keys, see who used each key/);
+assert.match(frontend, /Return to Examination Room home/);
+assert.match(frontend, /class="dd26-button dd26-exam-home-button"/,
+  'the role and workspace return control must be a prominent design-system button');
+const homeReturnStart = frontend.indexOf('async function returnToExaminationRoomHome');
+const homeReturnEnd = frontend.indexOf('function examEntry', homeReturnStart);
+const homeReturnBlock = frontend.slice(homeReturnStart, homeReturnEnd);
+assert.match(homeReturnBlock, /state\.exam\.attempt\?\.status === 'in_progress'[\s\S]*global\.confirm/,
+  'leaving a live examination requires an explicit warning');
+assert.ok(homeReturnBlock.indexOf('await flushAllLocalSaves()') < homeReturnBlock.indexOf('clearAttemptTimers()'),
+  'the latest answers must be saved before live-exam timers are cleared');
+assert.ok(homeReturnBlock.indexOf("recordIncident('focus_exit'") < homeReturnBlock.indexOf('clearAttemptTimers()'),
+  'returning home during a live exam must be recorded before leaving the attempt surface');
+assert.match(frontend, /global\.openExaminationRoom = \(\) => \{[\s\S]*moduleIsOpen[\s\S]*returnToExaminationRoomHome\(\)/,
+  'the header Examination Room button must use the same safe home-return path');
 assert.doesNotMatch(frontend, /operation: '(?:open_dispute|dispute_view|close_dispute)'/,
   'the retired broad dispute viewer must not remain callable from the public Examination Room');
 
@@ -101,12 +115,14 @@ const studentEnd = frontend.indexOf('function activationSection', studentStart);
 const studentView = frontend.slice(studentStart, studentEnd);
 assert.match(studentView, /Students must sign in with their Due Diligence account/);
 assert.match(studentView, /signed-in email must match the class list/);
-assert.match(studentView, /the Beadle creates this code and gives it to the class/);
+assert.match(studentView, /Get this code from the Beadle\. You must also sign in with the account on the class list/);
 assert.match(studentView, /A code never replaces sign-in or the class-list check/);
 const beadleStart = frontend.indexOf('function beadleSection');
 const beadleEnd = frontend.indexOf('function professorSection', beadleStart);
 assert.match(frontend.slice(beadleStart, beadleEnd), /After publishing, the Professor gives the named Beadle a one-time key/);
-assert.match(frontend.slice(beadleStart, beadleEnd), /This is not the student code/);
+assert.match(frontend.slice(beadleStart, beadleEnd), /This Beadle key is not the student exam code/);
+assert.match(frontend.slice(beadleStart, beadleEnd), /Do not give it to students/);
+assert.match(frontend, /Professor · Simple steps[\s\S]*Beadle · Simple steps[\s\S]*Student · Simple steps/);
 
 // Existing emailed deep links identify an exam without becoming authorization.
 assert.match(frontend, /raw\.startsWith\('examination-room\?'\)/);
@@ -220,6 +236,61 @@ assert.match(frontend, /operation: 'import_exam_roster'/);
 assert.match(frontend, /operation: 'upsert_exam_roster_row'/);
 assert.match(frontend, /id="dd26-beadle-exam-link" readonly/);
 assert.match(frontend, /rosterMode === 'beadle'[\s\S]*examId: state\.exam\.activeExamId/);
+assert.match(frontend, /snapshot\.activeStudentExamCode[\s\S]*state\.exam\.studentExamCodes\.get\(snapshot\.examId\)/,
+  'the Beadle handout must consume a recoverable active code when the backend provides it');
+assert.match(frontend, /id="dd26-active-student-code"[\s\S]*id="dd26-copy-active-class-handout"[\s\S]*Copy class handout/,
+  'the active class-wide code and examination link must have one clear handout action');
+assert.match(frontend, /Create a new student exam code/,
+  'a Beadle who cannot recover the active code gets one plain replacement action');
+assert.match(frontend, /Class list saved\. Next: create the student exam code/);
+assert.match(frontend, /STUDENT_ACCESS_ISSUED: 'The class-wide student exam code is already active\.'/,
+  'the issued state must be translated into classroom language');
+assert.match(frontend, /pagehide[\s\S]*state\.exam\.studentExamCodes\.clear\(\)/,
+  'browser-session student codes must be scrubbed when the page is left');
+
+// A valid signed-in student can wait before opening time without receiving an
+// attempt or any question payload. Start always rechecks authoritative server time.
+assert.match(frontend, /operation: 'preflight', examId, studentKey, deviceInstanceHash/,
+  'initial preflight must validate the class-wide code before the waiting room opens');
+const waitingRoomStart = frontend.indexOf('function waitingRoomChecks');
+const waitingRoomEnd = frontend.indexOf('function examIntegrityPolicy', waitingRoomStart);
+const waitingRoomBlock = frontend.slice(waitingRoomStart, waitingRoomEnd);
+assert.match(waitingRoomBlock, /accessCodeAccepted === true[\s\S]*accessCodeStatus === 'accepted'/);
+assert.match(waitingRoomBlock, /waitingRoomState[\s\S]*EXAM_NOT_OPEN/);
+assert.match(waitingRoomBlock, /Student waiting room[\s\S]*id="dd26-waiting-countdown"/);
+assert.match(waitingRoomBlock, /identity, class-list entry, and student exam code have been checked/i);
+assert.match(waitingRoomBlock, /No attempt is created and no examination question is shown/);
+assert.doesNotMatch(waitingRoomBlock, /operation: 'start_attempt'|question\.prompt|questions\.map/,
+  'the waiting room must not create an attempt or render examination questions');
+const waitingEntryStart = frontend.indexOf('async function enterExamFromWaitingRoom');
+const waitingEntryEnd = frontend.indexOf('function examIntegrityPolicy', waitingEntryStart);
+const waitingEntryBlock = frontend.slice(waitingEntryStart, waitingEntryEnd);
+assert.ok(waitingEntryBlock.indexOf("operation: 'preflight'") < waitingEntryBlock.indexOf('beginAttemptAfterPreflight(fullscreenRequest)'),
+  'Start must recheck server opening time before attempt creation');
+assert.ok(waitingEntryBlock.indexOf('requestFullscreen()') < waitingEntryBlock.indexOf("operation: 'preflight'"),
+  'the waiting-room Start click must preserve the browser gesture before its server recheck');
+assert.match(frontend, /serverDelay[\s\S]*Math\.max\(5000, Math\.min\(30_000, serverDelay\)\)[\s\S]*: 15_000/,
+  'waiting-room polling must default to 15 seconds and use the server’s shorter final-minute cadence');
+assert.match(frontend, /clearInterval\(state\.exam\.waitingRoomTimer\)[\s\S]*clearTimeout\(state\.exam\.waitingRoomPollTimer\)/,
+  'both waiting-room timers must be cleared when the student leaves or starts');
+
+const instructionSourceStart = frontend.indexOf('function studentInstructionsHtml');
+const instructionSourceEnd = frontend.indexOf('function randomKey', instructionSourceStart);
+const instructionSource = frontend.slice(instructionSourceStart, instructionSourceEnd);
+const testEscapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+}[character]));
+const studentInstructionsHtml = Function('escapeHtml', `${instructionSource}; return studentInstructionsHtml;`)(testEscapeHtml);
+const numberedInstructions = studentInstructionsHtml('INSTRUCTIONS 1. Read every question. 2. Submit before time expires.');
+assert.match(numberedInstructions, /<ol>[\s\S]*<li>Read every question\.<\/li>[\s\S]*<li>Submit before time expires\.<\/li>/);
+const paragraphInstructions = studentInstructionsHtml('First paragraph.\n\nSecond <script>alert(1)<\/script> paragraph.');
+assert.match(paragraphInstructions, /<p>First paragraph\.<\/p>[\s\S]*<p>Second &lt;script&gt;alert\(1\)&lt;\/script&gt; paragraph\.<\/p>/,
+  'instruction paragraphs must be safely escaped');
+assert.ok((frontend.match(/studentInstructionsHtml\(/g) || []).length >= 4,
+  'waiting room, normal preflight, and active attempt must share formatted instructions');
+assert.match(css, /\.dd26-waiting-room/);
+assert.match(css, /\.dd26-waiting-clock/);
+assert.match(css, /\.dd26-student-instructions ol/);
 
 // Student checks, local-first states, stable pending intent, receipt, recovery, and leave are explicit.
 assert.match(frontend, /operation: 'preflight'/);

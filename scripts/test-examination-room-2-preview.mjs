@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
-const [html, script] = await Promise.all([
+const [html, script, operations] = await Promise.all([
   readFile(new URL('docs/evidence/examination-room-2.0/preview.html', root), 'utf8'),
   readFile(new URL('docs/evidence/examination-room-2.0/preview.js', root), 'utf8'),
+  readFile(new URL('docs/examination-room-2.0-operations.md', root), 'utf8'),
 ]);
 
 const rolePanel = html.match(/<section class="dd26-shell" data-view-panel="roles">[\s\S]*?<\/section>/)?.[0] || '';
@@ -60,18 +61,48 @@ for (const state of ['entry', 'roster', 'handout', 'attention']) {
   assert.match(beadlePanel, new RegExp(`data-state-panel="beadle:${state}"`));
 }
 assert.match(beadlePanel, /id="qa-beadle-entry-key"/);
-assert.match(beadlePanel, /Save class list and prepare student code/);
+assert.match(beadlePanel, /Save class list and open handout/);
+assert.match(beadlePanel, /id="qa-student-exam-link"[\s\S]*id="qa-student-exam-code"/,
+  'the active student code must remain beside the examination link on the Beadle page');
 assert.match(beadlePanel, /id="qa-student-exam-code"/);
-assert.match(beadlePanel, /student exam code is different from the Beadle key and the Professor grading key/i);
-assert.match(beadlePanel, /Copy complete class handout/);
+assert.match(beadlePanel, /Due Diligence created this class-wide student exam code/);
+assert.equal((beadlePanel.match(/>Copy class handout</g) || []).length, 1,
+  'the Beadle handout must provide one unambiguous copy action');
+assert.doesNotMatch(beadlePanel, /Copy student exam code|Copy complete class handout|shown once/i);
 assert.doesNotMatch(beadlePanel, /data-open-view="student"/,
   'every path to the Student page must pass through the sign-in check');
 
 const studentPanel = html.match(/<section class="dd26-shell" data-view-panel="student"[\s\S]*?<section class="dd26-shell" data-view-panel="professor-after"/)?.[0] || '';
 assert.match(studentPanel, /id="qa-student-entry-code"/);
+assert.match(studentPanel, /receive the examination link and student exam code from the Beadle/);
 assert.match(studentPanel, /Signed-in student/);
-assert.match(studentPanel, /Start examination/);
+assert.match(studentPanel, /data-state-panel="student:waiting"/);
+assert.match(studentPanel, /id="qa-enter-waiting-room"[^>]*disabled>Enter waiting room/);
+assert.match(studentPanel, /id="qa-student-code-check"/);
+assert.match(studentPanel, /id="qa-student-waiting-tab"[^>]*aria-disabled="true"[^>]*disabled/);
+assert.match(studentPanel, /id="qa-student-workspace-tab"[^>]*data-requires-exam-open disabled/);
+assert.match(studentPanel, /id="qa-waiting-server-time"/);
+assert.match(studentPanel, /id="qa-waiting-countdown">00:05:00/);
+assert.match(studentPanel, /role="timer" aria-label="Time until examination questions open"/);
+const waitingPanel = studentPanel.match(/<div data-state-panel="student:waiting"[\s\S]*?<div data-state-panel="student:workspace"/)?.[0] || '';
+assert.equal((waitingPanel.match(/<li>/g) || []).length, 5,
+  'the waiting room must present five readable numbered instructions');
+assert.match(waitingPanel, /No question, answer field, or attempt session is available/);
+assert.match(waitingPanel, /id="qa-open-examination"[^>]*disabled>Start examination when open/);
+assert.doesNotMatch(waitingPanel, /id="qa-student-prompt"|id="qa-student-answer"/,
+  'question and answer content must remain outside the early waiting room');
 assert.match(studentPanel, /Submission receipt/);
+
+assert.match(script, /function updateStudentEarlyEntryState\(\)[\s\S]*enteredCode === 'EVID-8K3J-7M2Q'[\s\S]*acknowledgment\.checked && codeMatches/,
+  'waiting-room entry must require both the Beadle code and the student acknowledgment');
+assert.match(script, /qa-student-ack'\)\.addEventListener\('change', updateStudentEarlyEntryState\)/);
+assert.match(script, /qa-student-entry-code'\)\.addEventListener\('input', updateStudentEarlyEntryState\)/);
+assert.match(script, /qa-enter-waiting-room[\s\S]*showState\('student', 'waiting'[\s\S]*startWaitingRoomCountdown\(\)/);
+assert.match(script, /function setWaitingRoomOpen\(open\)[\s\S]*\[data-requires-exam-open\][\s\S]*button\.disabled = !waitingRoomIsOpen/);
+assert.match(script, /function updateWaitingRoomCountdown\(\)[\s\S]*waitingRoomOpeningMs - serverNow[\s\S]*setWaitingRoomOpen\(true\)/);
+assert.match(script, /qa-open-examination[\s\S]*if \(!waitingRoomIsOpen\)[\s\S]*showState\('student', 'workspace'/,
+  'the preview must not open the attempt before the server-time gate opens');
+assert.doesNotMatch(script, /qa-start-exam/);
 
 const professorAfterPanel = html.match(/<section class="dd26-shell" data-view-panel="professor-after"[\s\S]*?<section class="dd26-shell" data-view-panel="admin"/)?.[0] || '';
 assert.match(professorAfterPanel, /data-state-panel="professor-after:monitor"/);
@@ -108,5 +139,18 @@ assert.match(script, /showState\('beadle', 'entry', false\)/);
 assert.match(script, /data-beadle-next[\s\S]*showState\('beadle'/);
 assert.match(script, /qa-send-result-confirm[\s\S]*qa-send-result-button/);
 assert.match(script, /qa-download-result-button[\s\S]*qa-result-package/);
+
+for (const heading of ['#### Professor', '#### Beadle', '#### Student', '#### Where each key comes from']) {
+  assert.match(operations, new RegExp(heading));
+}
+assert.match(operations, /#### Early student waiting room/);
+assert.match(operations, /successful checks place the student in the waiting room only/);
+assert.match(operations, /Due Diligence server time, a countdown to opening/);
+assert.match(operations, /Questions, answer fields, and the attempt remain closed/);
+assert.match(operations, /Due Diligence, after the Beadle saves the class list/);
+assert.match(operations, /The Beadle page shows the active code beside the examination link/);
+assert.match(operations, /send the class results in one action/i);
+assert.doesNotMatch(`${html}\n${script}\n${operations}`, /STUDENT_ACCESS_ISSUED/,
+  'raw server status codes must not appear in classroom instructions');
 
 console.log('Examination Room 2.0 visual preview contracts passed.');

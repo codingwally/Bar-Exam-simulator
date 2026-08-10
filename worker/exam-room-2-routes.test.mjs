@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
 import { sha256Hex } from './exam-room-2026-core.mjs';
+import { encryptStudentExamCode } from './exam-room-student-code-envelope.mjs';
 
 const userId = '123e4567-e89b-42d3-a456-426614174000';
 const examId = '123e4567-e89b-42d3-a456-426614174001';
@@ -19,6 +20,8 @@ const requestKey = 'request_2026_abcdef123456';
 const v2Env = Object.freeze({
   EXAMINATION_ROOM_ENABLED: 'true',
   EXAMINATION_ROOM_2_ENABLED: 'true',
+  EXAM_ROOM_STUDENT_CODE_ACTIVE_KEY_ID: 'v1',
+  EXAM_ROOM_STUDENT_CODE_KEY_V1: Buffer.alloc(32, 17).toString('base64url'),
 });
 
 function request(body) {
@@ -351,8 +354,8 @@ test('model-answer upload is unavailable before parsing, storage, or registratio
 test('v2 exam, preflight, Beadle, and incident queries use scoped database RPCs', async () => {
   const cases = [
     ['exam_intent', 'exam_room_exam_access_v3'],
-    ['preflight', 'exam_room_student_preflight_v3'],
-    ['beadle_portal', 'exam_room_beadle_portal_v3'],
+    ['preflight', 'exam_room_student_waiting_room_v4'],
+    ['beadle_portal', 'exam_room_beadle_portal_v4'],
     ['incident_summary', 'exam_room_incident_summary_v2'],
   ];
   for (const [operation, expectedRpc] of cases) {
@@ -367,8 +370,91 @@ test('v2 exam, preflight, Beadle, and incident queries use scoped database RPCs'
     operation: 'preflight',
     examId,
     deviceInstanceHash,
+    studentKey: 'student-exam-code-secret',
   }), {}, '', '');
   assert.equal(calls.at(-1).body.p_device_instance_hash, deviceInstanceHash);
+  assert.match(calls.at(-1).body.p_student_key_hash, /^[0-9a-f]{64}$/);
+  assert.match(calls.at(-1).body.p_rate_key_hash, /^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(calls.at(-1)).includes('student-exam-code-secret'), false);
+});
+
+test('the scoped Beadle portal decrypts only the active envelope and never projects its internals', async () => {
+  const studentKey = 'student-exam-access-code-secret';
+  const tokenHash = await sha256Hex(studentKey);
+  const envelope = await encryptStudentExamCode(v2Env, { examId, tokenHash, studentKey });
+  const flow = harness({
+    rpc: async (name) => name === 'exam_room_beadle_portal_v4'
+      ? {
+        ok: true,
+        examId,
+        studentAccessReady: true,
+        studentCodeRecoverable: true,
+        activeStudentCodeEnvelope: { examId, tokenHash, ...envelope },
+      }
+      : { ok: true },
+  });
+  const response = await flow.handlers.examQuery(request({
+    operation: 'beadle_portal', examId,
+  }), {}, '', '');
+  const payload = await response.json();
+  assert.equal(flow.calls.at(-1).name, 'exam_room_beadle_portal_v4');
+  assert.equal(payload.result.activeStudentExamCode, studentKey);
+  assert.equal(payload.result.studentCodeRecoverable, true);
+  assert.equal(payload.result.activeStudentCodeEnvelope, undefined);
+  assert.equal(JSON.stringify(payload).includes(envelope.ciphertext), false);
+  assert.equal(JSON.stringify(payload).includes(tokenHash), false);
+});
+
+test('a legacy hash-only active code remains valid but is explicitly non-recoverable', async () => {
+  const flow = harness({
+    rpc: async (name) => name === 'exam_room_beadle_portal_v4'
+      ? {
+        ok: true,
+        examId,
+        studentAccessReady: true,
+        studentCodeRecoverable: false,
+        activeStudentCodeEnvelope: null,
+      }
+      : { ok: true },
+  });
+  const response = await flow.handlers.examQuery(request({
+    operation: 'beadle_portal', examId,
+  }), {}, '', '');
+  const payload = await response.json();
+  assert.equal(payload.result.activeStudentExamCode, null);
+  assert.equal(payload.result.studentCodeRecoverable, false);
+  assert.equal(payload.result.studentCodeRecoveryCode, 'LEGACY_STUDENT_CODE_NOT_RECOVERABLE');
+});
+
+test('Beadle recovery fails closed without its key while the rest of the portal remains usable', async () => {
+  const studentKey = 'student-exam-access-code-secret';
+  const tokenHash = await sha256Hex(studentKey);
+  const envelope = await encryptStudentExamCode(v2Env, { examId, tokenHash, studentKey });
+  const flow = harness({
+    rpc: async (name) => name === 'exam_room_beadle_portal_v4'
+      ? {
+        ok: true,
+        examId,
+        title: 'Civil Law Final',
+        studentAccessReady: true,
+        studentCodeRecoverable: true,
+        activeStudentCodeEnvelope: { examId, tokenHash, ...envelope },
+      }
+      : { ok: true },
+  });
+  const response = await flow.rawHandlers.examQuery(request({
+    operation: 'beadle_portal', examId,
+  }), {
+    EXAMINATION_ROOM_ENABLED: 'true',
+    EXAMINATION_ROOM_2_ENABLED: 'true',
+    EXAM_ROOM_STUDENT_CODE_ACTIVE_KEY_ID: 'v1',
+  }, '', '');
+  const payload = await response.json();
+  assert.equal(payload.result.title, 'Civil Law Final');
+  assert.equal(payload.result.activeStudentExamCode, null);
+  assert.equal(payload.result.studentCodeRecoverable, false);
+  assert.equal(payload.result.studentCodeRecoveryCode, 'STUDENT_CODE_KEY_UNAVAILABLE');
+  assert.equal(JSON.stringify(payload).includes(envelope.ciphertext), false);
 });
 
 test('grading model-answer query is credentialed and projects only safe owner-grading fields', async () => {
@@ -952,7 +1038,7 @@ test('publication completion returns only the new one-time Beadle key and defers
   assert.equal(payload.result.studentAccessReady, false);
 });
 
-test('assigned Beadle issues or rotates a distinct one-time student code', async () => {
+test('assigned Beadle issues an encrypted-at-rest student code recoverable on refresh', async () => {
   const studentKey = 'student-exam-access-code-secret';
   const flow = harness({
     result: {
@@ -972,13 +1058,37 @@ test('assigned Beadle issues or rotates a distinct one-time student code', async
   }), {}, '', '', {});
   const payload = await response.json();
   const call = flow.calls.at(-1);
-  assert.equal(call.name, 'exam_room_issue_student_access_v3');
+  assert.equal(call.name, 'exam_room_issue_student_access_v4');
   assert.equal(call.body.p_beadle_user_id, userId);
   assert.match(call.body.p_student_key_hash, /^[0-9a-f]{64}$/);
+  assert.equal(call.body.p_code_algorithm, 'A256GCM');
+  assert.equal(call.body.p_code_key_id, 'v1');
+  assert.match(call.body.p_code_nonce, /^[A-Za-z0-9_-]{16}$/);
+  assert.match(call.body.p_code_ciphertext, /^[A-Za-z0-9_-]+$/);
   assert.equal(JSON.stringify(call.body).includes(studentKey), false);
   assert.equal(payload.result.oneTimeStudentAccessCode, studentKey);
-  assert.equal(payload.result.oneTimeOnly, true);
+  assert.equal(payload.result.activeStudentExamCode, studentKey);
+  assert.equal(payload.result.oneTimeOnly, false);
+  assert.equal(payload.result.studentCodeRecoverable, true);
   assert.equal(payload.result.rosterLocked, true);
+});
+
+test('student code issuance fails before its database mutation when the envelope key is absent', async () => {
+  const flow = harness();
+  await assert.rejects(flow.rawHandlers.examCommand(request({
+    operation: 'issue_student_access',
+    examId,
+    studentKey: 'student-exam-access-code-secret',
+    requestKey,
+  }), {
+    EXAMINATION_ROOM_ENABLED: 'true',
+    EXAMINATION_ROOM_2_ENABLED: 'true',
+    EXAM_ROOM_STUDENT_CODE_ACTIVE_KEY_ID: 'v1',
+  }, '', '', {}), (error) => (
+    error.code === 'EXAM_ROOM_STUDENT_CODE_RECOVERY_UNAVAILABLE'
+      && error.status === 503
+  ));
+  assert.equal(flow.calls.length, 0);
 });
 
 test('Professor result PDF is private, candidate-scoped, and has no release side effect', async () => {
@@ -1280,7 +1390,9 @@ test('optional student access uses an unreturnable schedule placeholder and no s
   assert.match(calls[0].body.p_grading_key_hash, /^[0-9a-f]{64}$/);
   assert.equal(calls[1].name, 'exam_room_publish_exam_v2');
   assert.equal(calls[1].body.p_student_key_hash, null);
+  assert.equal(calls[2].name, 'exam_room_start_attempt_v4');
   assert.equal(calls[2].body.p_student_key_hash, null);
+  assert.equal(calls[3].name, 'exam_room_start_attempt_v4');
   assert.match(calls[3].body.p_student_key_hash, /^[0-9a-f]{64}$/);
   assert.equal(JSON.stringify(calls).includes(studentKey), false);
   assert.equal(JSON.stringify(calls).includes(gradingKey), false);

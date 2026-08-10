@@ -64,6 +64,9 @@
 .dd26-button:disabled,.dd26-button[aria-disabled="true"]{border-color:rgba(148,163,184,.25);background:#303847;color:#8f9bad;opacity:1;cursor:not-allowed;box-shadow:none;filter:none;transform:none;}
 .dd26-back-link{appearance:none;margin:0 0 18px;padding:0;border:0;border-bottom:1px solid rgba(197,160,89,.5);background:transparent;color:#e8c36b;font:600 12px/1.6 'Inter',sans-serif;cursor:pointer;}
 .dd26-back-link:hover,.dd26-back-link:focus-visible{color:#fff;border-bottom-color:#fff;outline:2px solid #d4af37;outline-offset:5px;}
+.dd26-exam-home-button{position:sticky;top:12px;z-index:12;margin:0 0 20px;border-color:rgba(237,199,104,.72);background:#082541;color:#f6d889;box-shadow:0 9px 24px rgba(0,0,0,.24);}
+.dd26-exam-home-button:hover,.dd26-exam-home-button:focus-visible{background:#0d3155;color:#fff;}
+.dd26-exam-home-button>span{margin-right:8px;font-size:16px;line-height:1;}
 .dd26-privacy,.dd26-notice{margin-top:17px;padding:14px 16px;border:1px solid rgba(197,160,89,.14);border-left:3px solid #c5a059;border-radius:0 6px 6px 0;background:rgba(197,160,89,.07);color:#cbd5e1;font-size:12.5px;line-height:1.62;}
 .dd26-privacy strong,.dd26-notice strong{color:#f7df9c;}
 .dd26-result{animation:dd26-reveal .3s ease both;}
@@ -87,6 +90,10 @@
 .dd26-success{padding:15px 17px;border:1px solid rgba(74,222,128,.38);border-left:4px solid #4ade80;border-radius:5px;background:rgba(20,83,45,.24);color:#bbf7d0;line-height:1.58;}
 .dd26-error strong,.dd26-success strong{color:#fff;}
 #dd26-exam-main{max-width:1200px;margin-inline:auto;outline:0;}
+.dd26-role-guide{margin:0 0 22px;padding:19px 21px;border:1px solid rgba(197,160,89,.34);border-radius:8px;background:rgba(2,24,48,.72);box-shadow:0 14px 34px rgba(0,0,0,.14);}
+.dd26-role-guide ol{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:15px 0 0;padding:0;list-style:none;counter-reset:dd26-role-step;}
+.dd26-role-guide li{position:relative;min-height:64px;padding:12px 13px 12px 45px;border:1px solid rgba(148,163,184,.2);border-radius:6px;background:rgba(15,35,59,.58);color:#dbe4ee;font-size:12.5px;line-height:1.55;counter-increment:dd26-role-step;}
+.dd26-role-guide li::before{content:counter(dd26-role-step);position:absolute;top:12px;left:12px;display:grid;width:24px;height:24px;place-items:center;border:1px solid rgba(237,199,104,.64);border-radius:50%;color:#f2ca69;font:600 10px/1 'IBM Plex Mono',monospace;}
 .dd26-exam-layout{display:grid;grid-template-columns:260px minmax(0,1fr);gap:28px;}
 .dd26-exam-nav{align-self:start;position:sticky;top:24px;display:grid;gap:6px;padding:16px;border:1px solid rgba(197,160,89,.28);border-radius:8px;background:rgba(2,24,48,.78);box-shadow:0 16px 34px rgba(0,0,0,.14);}
 .dd26-exam-nav button{appearance:none;min-height:44px;border:0;border-left:3px solid transparent;border-radius:0 4px 4px 0;background:transparent;color:#cbd5e1;padding:11px 13px;text-align:left;cursor:pointer;font:600 12px/1.4 'Inter',sans-serif;transition:border-color .16s ease,background-color .16s ease,color .16s ease;}
@@ -98,6 +105,28 @@
 .dd26-card h2{font-size:clamp(25px,2.4vw,34px);}
 .dd26-card p{max-width:84ch;color:#cbd5e1;line-height:1.68;}
 .dd26-card>.dd26-label+h2{margin-top:7px;}
+.dd26-student-code-panel{margin-top:24px;padding:24px;border:1px solid rgba(197,160,89,.45);border-radius:8px;background:rgba(4,28,52,.74);}
+.dd26-student-code-panel.is-actionable{border-color:#e7bd5d;background:linear-gradient(145deg,rgba(76,57,17,.28),rgba(4,28,52,.82));box-shadow:0 0 0 3px rgba(212,175,55,.1),0 16px 36px rgba(0,0,0,.16);}
+.dd26-student-code-panel.is-ready{border-color:rgba(74,222,128,.38);}
+.dd26-student-code-action{min-width:260px;min-height:52px;}
+.dd26-handout-fields{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(260px,.65fr);gap:18px;margin-top:22px;}
+.dd26-handout-fields>.dd26-field{margin:0;}
+.dd26-code-unavailable{display:flex;min-height:52px;align-items:center;padding:11px 13px;border:1px dashed rgba(197,160,89,.45);border-radius:6px;background:rgba(15,23,42,.42);color:#cbd5e1;font-size:12.5px;line-height:1.5;}
+.dd26-waiting-room{max-width:1050px;margin-inline:auto;}
+.dd26-waiting-clock{display:grid;justify-items:center;margin:26px 0;padding:28px 20px;border:1px solid rgba(237,199,104,.48);border-radius:9px;background:linear-gradient(145deg,rgba(76,57,17,.26),rgba(4,28,52,.88));text-align:center;box-shadow:0 18px 38px rgba(0,0,0,.17);}
+.dd26-waiting-clock>span{color:#dfba65;font:600 10.5px/1.4 'IBM Plex Mono',monospace;letter-spacing:.11em;text-transform:uppercase;}
+.dd26-waiting-clock>strong{margin:10px 0 7px;color:#fff;font:600 clamp(38px,7vw,68px)/1 'IBM Plex Mono',monospace;letter-spacing:.045em;font-variant-numeric:tabular-nums;}
+.dd26-waiting-clock>small{color:#aebaca;font-size:12.5px;line-height:1.5;}
+.dd26-waiting-checks{grid-template-columns:repeat(2,minmax(0,1fr));}
+.dd26-waiting-instructions{margin:25px 0;padding:22px;border:1px solid rgba(197,160,89,.3);border-radius:7px;background:rgba(2,18,35,.32);}
+.dd26-waiting-instructions>.dd26-label{margin-bottom:13px;}
+.dd26-waiting-status{min-height:24px;margin:18px 0 0;color:#f2ca69;font-weight:600;line-height:1.5;}
+.dd26-student-instructions{color:#e2e8f0;font-size:14.5px;line-height:1.7;}
+.dd26-student-instructions p{margin:0 0 12px;white-space:normal;}
+.dd26-student-instructions p:last-child{margin-bottom:0;}
+.dd26-student-instructions ol{display:grid;gap:10px;margin:0;padding-left:24px;}
+.dd26-student-instructions li{padding-left:5px;}
+.dd26-student-instructions li::marker{color:#e7bd5d;font-family:'IBM Plex Mono',monospace;font-weight:600;}
 .dd26-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px;row-gap:22px;margin-top:24px;}
 .dd26-form-grid>.dd26-field{margin:0;}
 .dd26-form-grid>.dd26-field>span{display:flex;min-height:31px;align-items:flex-end;}
@@ -238,11 +267,17 @@
 }
 @media (max-width:680px){
   .dd26-shell{padding:24px 15px 48px;}
+  .dd26-exam-home-button,.dd26-student-code-action{width:100%;min-width:0;}
   .dd26-header{display:block;}
   .dd26-beta{margin-top:18px;}
   .dd26-pane,.dd26-card{padding:20px;}
+  .dd26-student-code-panel{padding:18px;}
   .dd26-card{border-radius:6px;}
   .dd26-form-grid{grid-template-columns:1fr;column-gap:0;row-gap:19px;margin-top:20px;}
+  .dd26-handout-fields{grid-template-columns:1fr;}
+  .dd26-waiting-checks{grid-template-columns:1fr;}
+  .dd26-waiting-clock{padding:24px 14px;}
+  .dd26-waiting-instructions{padding:18px;}
   .dd26-form-grid>.dd26-field>span{min-height:0;align-items:flex-start;}
   .dd26-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
   .dd26-choice-grid{grid-template-columns:1fr;}

@@ -29,6 +29,10 @@ import {
   sha256Hex,
 } from './exam-room-2026-core.mjs';
 import { buildExamResultPdf, examResultPdfFileName } from './exam-result-pdf.mjs';
+import {
+  decryptStudentExamCode,
+  encryptStudentExamCode,
+} from './exam-room-student-code-envelope.mjs';
 import { buildVerdictPdf, verdictPdfFileName } from './verdict-pdf.mjs';
 
 function barEasyReveal(content) {
@@ -548,6 +552,41 @@ function gradingModelAnswerView(value, examId) {
   };
 }
 
+async function beadlePortalView(env, value) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const {
+    activeStudentCodeEnvelope,
+    ...publicResult
+  } = source;
+  if (!activeStudentCodeEnvelope || source.studentCodeRecoverable !== true) {
+    return {
+      ...publicResult,
+      activeStudentExamCode: null,
+      studentCodeRecoverable: false,
+      studentCodeRecoveryCode: source.studentAccessReady === true
+        ? 'LEGACY_STUDENT_CODE_NOT_RECOVERABLE'
+        : null,
+    };
+  }
+  try {
+    return {
+      ...publicResult,
+      activeStudentExamCode: await decryptStudentExamCode(env, activeStudentCodeEnvelope),
+      studentCodeRecoverable: true,
+      studentCodeRecoveryCode: null,
+    };
+  } catch (error) {
+    return {
+      ...publicResult,
+      activeStudentExamCode: null,
+      studentCodeRecoverable: false,
+      studentCodeRecoveryCode: error?.code === 'STUDENT_CODE_KEY_UNAVAILABLE'
+        ? 'STUDENT_CODE_KEY_UNAVAILABLE'
+        : 'STUDENT_CODE_RECOVERY_FAILED',
+    };
+  }
+}
+
 export function createDD2026Handlers(deps) {
   const {
     corsHeaders,
@@ -884,14 +923,18 @@ export function createDD2026Handlers(deps) {
       functionName = 'exam_room_exam_access_v3';
       body = { p_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'preflight') {
-      functionName = 'exam_room_student_preflight_v3';
+      functionName = 'exam_room_student_waiting_room_v4';
       body = {
         p_student_user_id: user.id,
         p_exam_public_id: input.examId,
+        p_student_key_hash: input.studentKey
+          ? await hashedCredential(input.studentKey)
+          : null,
+        p_rate_key_hash: await examRoomRateKey(request, user.id, input.examId),
         p_device_instance_hash: input.deviceInstanceHash,
       };
     } else if (input.operation === 'beadle_portal') {
-      functionName = 'exam_room_beadle_portal_v3';
+      functionName = 'exam_room_beadle_portal_v4';
       body = { p_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'incident_summary') {
       functionName = 'exam_room_incident_summary_v2';
@@ -962,6 +1005,12 @@ export function createDD2026Handlers(deps) {
     if (input.operation === 'exam_intent') {
       const { storagePrefix: _privateStoragePrefix, ...publicIntent } = result || {};
       return jsonResponse({ ok: true, result: publicIntent }, 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'beadle_portal') {
+      return jsonResponse({
+        ok: true,
+        result: await beadlePortalView(env, result),
+      }, 200, origin, allowedOrigin);
     }
     if (input.operation === 'attempt') {
       // Session identifiers are bearer-like concurrency credentials. Never
@@ -1145,7 +1194,7 @@ export function createDD2026Handlers(deps) {
     const actor = ['issue_activation', 'revoke_activation'].includes(input.operation)
       ? await requireAdministrator(request, env)
       : user;
-    const spec = await commandSpec(input, actor.id, rateHash, stepUp);
+    const spec = await commandSpec(input, actor.id, rateHash, stepUp, env);
     if (input.operation === 'confirm_questions' || input.operation === 'confirm_replacement_questions') {
       const access = await examRoomRpc(env, 'exam_room_exam_access_v3', {
         p_user_id: user.id,
@@ -1194,7 +1243,9 @@ export function createDD2026Handlers(deps) {
               ? {
                 ...(result || {}),
                 oneTimeStudentAccessCode: input.studentKey,
-                oneTimeOnly: true,
+                activeStudentExamCode: input.studentKey,
+                oneTimeOnly: false,
+                studentCodeRecoverable: true,
               }
           : input.operation === 'confirm_replacement_questions'
       ? stagedReplacementQuestionsView(result, input)
@@ -1208,7 +1259,7 @@ export function createDD2026Handlers(deps) {
     return jsonResponse({ ok: true, result: publicResult }, 200, origin, allowedOrigin);
   }
 
-  async function commandSpec(input, userId, rateHash, stepUp = null) {
+  async function commandSpec(input, userId, rateHash, stepUp = null, env = {}) {
     const h = hashedCredential;
     const noAccessCodePlaceholderHash = async () => {
       const random = new Uint8Array(32);
@@ -1326,15 +1377,36 @@ export function createDD2026Handlers(deps) {
         p_beadle_user_id: input.beadleUserId, p_reason: input.reason,
         p_request_key: input.requestKey,
       } }),
-      issue_student_access: async () => ({
-        functionName: 'exam_room_issue_student_access_v3',
-        body: {
-          p_beadle_user_id: userId,
-          p_exam_public_id: input.examId,
-          p_student_key_hash: await h(input.studentKey),
-          p_request_key: input.requestKey,
-        },
-      }),
+      issue_student_access: async () => {
+        const studentKeyHash = await h(input.studentKey);
+        let envelope;
+        try {
+          envelope = await encryptStudentExamCode(env, {
+            examId: input.examId,
+            tokenHash: studentKeyHash,
+            studentKey: input.studentKey,
+          });
+        } catch {
+          throw new DD2026ValidationError(
+            'EXAM_ROOM_STUDENT_CODE_RECOVERY_UNAVAILABLE',
+            'Student exam-code recovery is temporarily unavailable. No code was issued.',
+            503,
+          );
+        }
+        return {
+          functionName: 'exam_room_issue_student_access_v4',
+          body: {
+            p_beadle_user_id: userId,
+            p_exam_public_id: input.examId,
+            p_student_key_hash: studentKeyHash,
+            p_code_ciphertext: envelope.ciphertext,
+            p_code_nonce: envelope.nonce,
+            p_code_key_id: envelope.keyId,
+            p_code_algorithm: envelope.algorithm,
+            p_request_key: input.requestKey,
+          },
+        };
+      },
       record_candidate_verification: async () => ({ functionName: 'exam_room_record_verification_v2', body: {
         p_actor_user_id: userId, p_exam_public_id: input.examId,
         p_candidate_number: input.candidateNumber, p_method: input.method,
@@ -1350,7 +1422,7 @@ export function createDD2026Handlers(deps) {
         p_candidate_number: input.candidateNumber, p_accommodation: input.accommodation,
         p_reason: input.reason, p_request_key: input.requestKey,
       } }),
-      start_attempt: async () => ({ functionName: 'exam_room_start_attempt_v3', body: {
+      start_attempt: async () => ({ functionName: 'exam_room_start_attempt_v4', body: {
         p_student_user_id: userId, p_exam_public_id: input.examId,
         p_student_key_hash: input.studentKey ? await h(input.studentKey) : null,
         p_rate_key_hash: rateHash,

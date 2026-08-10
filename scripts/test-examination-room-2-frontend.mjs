@@ -70,8 +70,8 @@ assert.ok(homeReturnBlock.indexOf('await flushAllLocalSaves()') < homeReturnBloc
   'the latest answers must be saved before live-exam timers are cleared');
 assert.ok(homeReturnBlock.indexOf("recordIncident('focus_exit'") < homeReturnBlock.indexOf('clearAttemptTimers()'),
   'returning home during a live exam must be recorded before leaving the attempt surface');
-assert.match(frontend, /global\.openExaminationRoom = \(\) => \{[\s\S]*moduleIsOpen[\s\S]*returnToExaminationRoomHome\(\)/,
-  'the header Examination Room button must use the same safe home-return path');
+assert.match(frontend, /global\.openExaminationRoom = async \(\) => \{[\s\S]*moduleIsOpen[\s\S]*await returnToExaminationRoomHome\(\)[\s\S]*state\.exam\.section = 'professor'[\s\S]*state\.exam\.intentRole = 'professor'[\s\S]*return open\('exam_room'/,
+  'the header Examination Room button must safely return from active work, then open the Professor workspace');
 assert.doesNotMatch(frontend, /operation: '(?:open_dispute|dispute_view|close_dispute)'/,
   'the retired broad dispute viewer must not remain callable from the public Examination Room');
 

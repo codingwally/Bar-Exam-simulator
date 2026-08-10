@@ -131,6 +131,32 @@
     });
   }
 
+  function scheduledWindowMinutes(opensAt, hardClosesAt) {
+    const opensAtMs = new Date(opensAt).getTime();
+    const hardClosesAtMs = new Date(hardClosesAt).getTime();
+    if (!Number.isFinite(opensAtMs) || !Number.isFinite(hardClosesAtMs)
+        || hardClosesAtMs <= opensAtMs) return null;
+    return Math.ceil((hardClosesAtMs - opensAtMs) / 60000);
+  }
+
+  function entryClosesAtForSchedule(opensAt, hardClosesAt, lateAdmissionMinutes) {
+    const opensAtMs = new Date(opensAt).getTime();
+    const hardClosesAtMs = new Date(hardClosesAt).getTime();
+    const lateMinutes = Number(lateAdmissionMinutes);
+    if (!Number.isFinite(opensAtMs) || !Number.isFinite(hardClosesAtMs)
+        || hardClosesAtMs <= opensAtMs || !Number.isSafeInteger(lateMinutes)
+        || lateMinutes < 0 || lateMinutes > 480) return null;
+    return new Date(Math.min(hardClosesAtMs, opensAtMs + Math.max(lateMinutes, 1) * 60000));
+  }
+
+  function entryCutoffReviewHtml(opensAt, hardClosesAt, lateAdmissionMinutes) {
+    const entryClosesAt = entryClosesAtForSchedule(opensAt, hardClosesAt, lateAdmissionMinutes);
+    const hardClosesAtMs = new Date(hardClosesAt).getTime();
+    if (!entryClosesAt || !Number.isFinite(hardClosesAtMs)) return '';
+    const closesEarly = entryClosesAt.getTime() < hardClosesAtMs;
+    return `<div class="${closesEarly ? 'dd26-error' : 'dd26-success'} dd26-entry-cutoff-review" role="status"><strong>${closesEarly ? 'Student entry closes before the examination ends.' : 'Students may start until the examination ends.'}</strong> The last time a listed, signed-in student may start is ${escapeHtml(formatDate(entryClosesAt))}. ${closesEarly ? 'A student who has not started by then will be blocked.' : ''}</div>`;
+  }
+
   function synchronizeServerClock(serverNow) {
     const serverNowMs = new Date(serverNow).getTime();
     if (!Number.isFinite(serverNowMs)) return false;
@@ -2113,7 +2139,46 @@
       openAuthoringBlockedDialog('Published schedule unavailable', 'The server did not return a complete published schedule. Refresh the Examination Room before trying again.');
       return;
     }
-    openDialog(`<div class="dd26-label">Step 3 · Change exam time</div><h2>Set the updated examination schedule</h2><div class="dd26-notice"><strong>Only the exam time changes.</strong> Questions, the class list, Beadle access, and the student exam code stay with this examination.</div><div class="dd26-error" id="dd26-reschedule-errors" role="alert" tabindex="-1" hidden></div><div class="dd26-form-grid"><label class="dd26-field"><span>Exam opens</span><input class="dd26-input" id="dd26-reschedule-opens-at" type="datetime-local" value="${escapeHtml(localDateValue(opensAt))}" required><small class="dd26-help">Choose a time at least 30 minutes from now.</small></label><label class="dd26-field"><span>Exam ends</span><input class="dd26-input" id="dd26-reschedule-closes-at" type="datetime-local" value="${escapeHtml(localDateValue(hardClosesAt))}" required></label><label class="dd26-field"><span>Time allowed in minutes</span><input class="dd26-input" id="dd26-reschedule-duration" type="number" min="1" max="480" step="1" value="${escapeHtml(saved.durationMinutes ?? '')}" required></label><label class="dd26-field"><span>Late entry allowed (minutes)</span><input class="dd26-input" id="dd26-reschedule-late-admission" type="number" min="0" max="480" step="1" value="${escapeHtml(saved.lateAdmissionMinutes ?? 0)}" required><small class="dd26-help">Late entry does not extend the published exam end time.</small></label><label class="dd26-field"><span>Extra time to reconnect and submit</span><input class="dd26-input" id="dd26-reschedule-submission-grace" type="number" min="0" max="120" step="1" value="${escapeHtml(saved.submissionGraceMinutes ?? 0)}" required></label><label class="dd26-field wide"><span>Reason for changing the time</span><textarea class="dd26-textarea compact" id="dd26-reschedule-reason" minlength="10" maxlength="1000" required>${escapeHtml(draft?.reason || '')}</textarea><small class="dd26-help">This reason becomes part of the examination record.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-review-reschedule" type="button">Review time change</button><button class="dd26-button" id="dd26-cancel-reschedule" type="button">Return without changing</button></div>`);
+    const existingWindowMinutes = scheduledWindowMinutes(opensAt, hardClosesAt);
+    const existingLateMinutes = Number(saved.lateAdmissionMinutes ?? 0);
+    const entryUntilEnd = Number.isSafeInteger(existingWindowMinutes)
+      && existingWindowMinutes <= 480 && existingLateMinutes >= existingWindowMinutes;
+    openDialog(`<div class="dd26-label">Step 3 · Change exam time</div><h2>Set the updated examination schedule</h2><div class="dd26-notice"><strong>Only the exam time changes.</strong> Questions, the class list, Beadle access, and the student exam code stay with this examination.</div><div class="dd26-error" id="dd26-reschedule-errors" role="alert" tabindex="-1" hidden></div><div class="dd26-form-grid"><label class="dd26-field"><span>Exam opens</span><input class="dd26-input" id="dd26-reschedule-opens-at" type="datetime-local" value="${escapeHtml(localDateValue(opensAt))}" required><small class="dd26-help">Choose a time at least 30 minutes from now.</small></label><label class="dd26-field"><span>Exam ends</span><input class="dd26-input" id="dd26-reschedule-closes-at" type="datetime-local" value="${escapeHtml(localDateValue(hardClosesAt))}" required></label><label class="dd26-field"><span>Time allowed in minutes</span><input class="dd26-input" id="dd26-reschedule-duration" type="number" min="1" max="480" step="1" value="${escapeHtml(saved.durationMinutes ?? '')}" required></label><label class="dd26-field wide"><span>When may a student start?</span><select class="dd26-select" id="dd26-reschedule-entry-window-mode"><option value="until_end" ${entryUntilEnd ? 'selected' : ''}>Allow entry until the exam ends</option><option value="custom" ${entryUntilEnd ? '' : 'selected'}>Close student entry earlier</option></select><small class="dd26-help">Your current Professor setting is kept unless you change this choice.</small></label><label class="dd26-field"><span>Minutes after opening when entry closes</span><input class="dd26-input" id="dd26-reschedule-late-admission" type="number" min="0" max="480" step="1" value="${escapeHtml(saved.lateAdmissionMinutes ?? 0)}" required><small class="dd26-help">Use a shorter time only when students who have not started should be blocked before the exam ends.</small></label><div class="dd26-notice" id="dd26-reschedule-entry-cutoff" role="status"></div><label class="dd26-field"><span>Extra time to reconnect and submit</span><input class="dd26-input" id="dd26-reschedule-submission-grace" type="number" min="0" max="120" step="1" value="${escapeHtml(saved.submissionGraceMinutes ?? 0)}" required></label><label class="dd26-field wide"><span>Reason for changing the time</span><textarea class="dd26-textarea compact" id="dd26-reschedule-reason" minlength="10" maxlength="1000" required>${escapeHtml(draft?.reason || '')}</textarea><small class="dd26-help">This reason becomes part of the examination record.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-review-reschedule" type="button">Review time change</button><button class="dd26-button" id="dd26-cancel-reschedule" type="button">Return without changing</button></div>`);
+    const entryMode = document.getElementById('dd26-reschedule-entry-window-mode');
+    const lateEntry = document.getElementById('dd26-reschedule-late-admission');
+    const preservedEarlierCutoff = entryUntilEnd ? '' : String(saved.lateAdmissionMinutes ?? 0);
+    const updateRescheduleEntryCutoff = ({ restoreEarlier = false } = {}) => {
+      const windowMinutes = scheduledWindowMinutes(
+        value('dd26-reschedule-opens-at'),
+        value('dd26-reschedule-closes-at'),
+      );
+      const untilEnd = entryMode?.value === 'until_end';
+      if (untilEnd && Number.isSafeInteger(windowMinutes) && windowMinutes <= 480) {
+        lateEntry.value = String(windowMinutes);
+        lateEntry.readOnly = true;
+      } else {
+        lateEntry.readOnly = false;
+        if (restoreEarlier) lateEntry.value = preservedEarlierCutoff;
+      }
+      const summary = document.getElementById('dd26-reschedule-entry-cutoff');
+      const cutoff = entryClosesAtForSchedule(
+        value('dd26-reschedule-opens-at'),
+        value('dd26-reschedule-closes-at'),
+        lateEntry.value,
+      );
+      if (summary) {
+        summary.innerHTML = cutoff
+          ? `<strong>Student entry closes ${escapeHtml(formatDate(cutoff))}.</strong> Students who already started keep their own examination deadline.`
+          : '<strong>Choose a valid opening, ending, and entry time.</strong>';
+      }
+    };
+    entryMode?.addEventListener('change', () => updateRescheduleEntryCutoff({
+      restoreEarlier: entryMode.value === 'custom',
+    }));
+    ['dd26-reschedule-opens-at', 'dd26-reschedule-closes-at']
+      .forEach((id) => document.getElementById(id)?.addEventListener('input', updateRescheduleEntryCutoff));
+    lateEntry?.addEventListener('input', updateRescheduleEntryCutoff);
+    updateRescheduleEntryCutoff();
     document.getElementById('dd26-review-reschedule')?.addEventListener('click', () => {
       const validation = publicationRescheduleValidation({
         opensAt: value('dd26-reschedule-opens-at'),
@@ -2139,7 +2204,12 @@
       ['Late entry', `${current.lateAdmissionMinutes ?? 0} minutes`, `${change.lateAdmissionMinutes} minutes`],
       ['Reconnect and submission time', `${current.submissionGraceMinutes ?? 0} minutes`, `${change.submissionGraceMinutes} minutes`],
     ];
-    openDialog(`<div class="dd26-label">Step 3 · Final review</div><h2>Confirm the updated exam time</h2><div class="dd26-reschedule-comparison" role="group" aria-label="Current and updated examination schedule"><div class="dd26-reschedule-comparison-head"><strong>Setting</strong><strong>Current</strong><strong>Updated</strong></div>${rows.map(([label, before, after]) => `<div><strong>${escapeHtml(label)}</strong><span>${escapeHtml(before)}</span><span>${escapeHtml(after)}</span></div>`).join('')}</div><dl class="dd26-publish-summary"><div><dt>Reason</dt><dd>${escapeHtml(change.reason)}</dd></div></dl><div class="dd26-success"><strong>The examination content and class handoff stay in place.</strong> Questions, the class list, Beadle access, and the student exam code are not replaced by this time change.</div><div class="dd26-error" id="dd26-reschedule-save-error" role="alert" tabindex="-1" hidden></div><label class="dd26-choice"><input id="dd26-reschedule-ack" type="checkbox"><span><strong>I reviewed the updated schedule</strong><small>After saving, I will give the updated schedule to the Beadle and the class.</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-confirm-reschedule" type="button" disabled>Save updated exam time</button><button class="dd26-button primary" id="dd26-refresh-reschedule" type="button" hidden style="display:none">Refresh latest examination</button><button class="dd26-button" id="dd26-edit-reschedule" type="button">Back and edit</button><button class="dd26-button" id="dd26-abandon-reschedule" type="button">Return without changing</button></div>`);
+    const entryCutoffReview = entryCutoffReviewHtml(
+      change.opensAt,
+      change.hardClosesAt,
+      change.lateAdmissionMinutes,
+    );
+    openDialog(`<div class="dd26-label">Step 3 · Final review</div><h2>Confirm the updated exam time</h2><div class="dd26-reschedule-comparison" role="group" aria-label="Current and updated examination schedule"><div class="dd26-reschedule-comparison-head"><strong>Setting</strong><strong>Current</strong><strong>Updated</strong></div>${rows.map(([label, before, after]) => `<div><strong>${escapeHtml(label)}</strong><span>${escapeHtml(before)}</span><span>${escapeHtml(after)}</span></div>`).join('')}</div>${entryCutoffReview}<dl class="dd26-publish-summary"><div><dt>Reason</dt><dd>${escapeHtml(change.reason)}</dd></div></dl><div class="dd26-success"><strong>The examination content and class handoff stay in place.</strong> Questions, the class list, Beadle access, and the student exam code are not replaced by this time change.</div><div class="dd26-error" id="dd26-reschedule-save-error" role="alert" tabindex="-1" hidden></div><label class="dd26-choice"><input id="dd26-reschedule-ack" type="checkbox"><span><strong>I reviewed the updated schedule and student entry cutoff</strong><small>After saving, I will give both times to the Beadle and the class.</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-confirm-reschedule" type="button" disabled>Save updated exam time</button><button class="dd26-button primary" id="dd26-refresh-reschedule" type="button" hidden style="display:none">Refresh latest examination</button><button class="dd26-button" id="dd26-edit-reschedule" type="button">Back and edit</button><button class="dd26-button" id="dd26-abandon-reschedule" type="button">Return without changing</button></div>`);
     const acknowledgement = document.getElementById('dd26-reschedule-ack');
     const confirm = document.getElementById('dd26-confirm-reschedule');
     acknowledgement?.addEventListener('change', () => { confirm.disabled = !acknowledgement.checked; });
@@ -2665,6 +2735,12 @@
     const savedClose = new Date(saved.hardClosesAt || '');
     const close = Number.isFinite(savedClose.getTime())
       ? savedClose : new Date(now.getTime() + 2 * 3600000);
+    const durationValue = Number.isSafeInteger(Number(saved.durationMinutes))
+      ? Number(saved.durationMinutes) : 120;
+    const lateAdmissionWasChosen = saved.lateAdmissionMinutes != null
+      && String(saved.lateAdmissionMinutes).trim() !== '';
+    const lateAdmissionValue = lateAdmissionWasChosen
+      ? Number(saved.lateAdmissionMinutes) : durationValue;
     const selected = (value, expected, fallback = false) => (
       String(value ?? (fallback ? expected : '')) === expected ? 'selected' : ''
     );
@@ -2672,6 +2748,39 @@
       ? `<div class="dd26-error" role="alert"><strong>Replacement exam in progress.</strong> You are preparing a corrected version to replace version ${escapeHtml(state.exam.publishIntent.publicationNumber || 'currently published')}. Due Diligence will confirm that no student has started before accepting it.</div>`
       : '';
     openDialog(`<div class="dd26-label">Step 3 · Set exam rules${replacement ? ' / replacement' : ''}</div><h2>Set the schedule and exam rules</h2>${replacementNotice}${storedDraft ? `<div class="dd26-success">Your saved rules draft from ${escapeHtml(formatDate(storedDraft.updatedAt))} is open for further review.</div>` : '<div class="dd26-notice"><strong>Allow time for class preparation.</strong> The examination must open at least 30 minutes after publication so the Beadle can save the class list and prepare the student handout. One hour from now is selected by default.</div>'}<div class="dd26-form-grid"><label class="dd26-field"><span>Exam opens</span><input class="dd26-input" id="dd26-opens-at" type="datetime-local" value="${localDateValue(now)}"><small class="dd26-help">Choose a time at least 30 minutes from now.</small></label><label class="dd26-field"><span>Exam ends</span><input class="dd26-input" id="dd26-closes-at" type="datetime-local" value="${localDateValue(close)}"></label><label class="dd26-field"><span>Time allowed in minutes</span><input class="dd26-input" id="dd26-duration" type="number" min="1" max="480" value="${escapeHtml(saved.durationMinutes ?? 120)}"></label><label class="dd26-field"><span>Late entry allowed (minutes)</span><input class="dd26-input" id="dd26-late-admission" type="number" min="0" max="480" value="${escapeHtml(saved.lateAdmissionMinutes ?? 15)}"><small class="dd26-help">Late entry does not extend the published exam end time.</small></label><label class="dd26-field"><span>Extra time to reconnect and submit</span><input class="dd26-input" id="dd26-submission-grace" type="number" min="0" max="120" value="${escapeHtml(saved.submissionGraceMinutes ?? 15)}"><small class="dd26-help">Answers written after the exam ends are kept separately for review and are not silently added to the submitted answers.</small></label><label class="dd26-field"><span>Allowed materials</span><input class="dd26-input" id="dd26-allowed-materials" maxlength="2000" value="${escapeHtml(saved.allowedMaterials ?? 'Professor-published materials only')}"></label><label class="dd26-field"><span>Moving between questions</span><select class="dd26-select" id="dd26-navigation-mode"><option value="free" ${selected(saved.navigationMode, 'free', true)}>Students may move between questions</option><option value="one_way" ${selected(saved.navigationMode, 'one_way')}>Move forward only</option></select></label><label class="dd26-field"><span>If a student leaves the exam tab</span><select class="dd26-select" id="dd26-monitoring-mode"><option value="record_only" ${selected(saved.integrityMode, 'record_only', true)}>Record for Professor review</option><option value="warn_and_record" ${selected(saved.integrityMode, 'warn_and_record')}>Warn the student and record</option></select><small class="dd26-help">Copy, cut, paste, and right-click are blocked during the monitored exam. A recorded event is never an automatic failure.</small></label><label class="dd26-field"><span>Full screen</span><select class="dd26-select" id="dd26-fullscreen-policy"><option value="requested" ${selected(saved.fullscreenPolicy, 'requested', true)}>Ask students to use full screen</option><option value="off" ${selected(saved.fullscreenPolicy, 'off')}>Do not ask for full screen</option><option value="required_with_exemptions" ${selected(saved.fullscreenPolicy, 'required_with_exemptions')}>Require full screen, with approved exemptions</option></select></label><label class="dd26-field"><span>Student entry</span><select class="dd26-select" id="dd26-admission-mode"><option value="automatic" ${selected(saved.admissionMode, 'automatic', true)}>Allow after sign-in and class-list checks</option><option value="beadle_approval" ${selected(saved.admissionMode, 'beadle_approval')}>Beadle must allow entry</option></select></label><label class="dd26-field"><span>Temporary leave</span><select class="dd26-select" id="dd26-leave-policy"><option value="false" ${saved.temporaryLeaveAcknowledgment === true ? '' : 'selected'}>Student records leaving and returning</option><option value="true" ${saved.temporaryLeaveAcknowledgment === true ? 'selected' : ''}>Beadle must acknowledge the leave</option></select></label><label class="dd26-field"><span>Suggested answer for grading</span><select class="dd26-select" id="dd26-model-answer-mode"><option value="none" ${selected(saved.suggestedAnswerMode, 'none', true)}>None</option><option value="paste" ${selected(saved.suggestedAnswerMode, 'paste')}>Paste before publishing</option><option value="upload">Upload a private source</option></select></label></div><label class="dd26-choice"><input id="dd26-student-access-code-required" type="checkbox" checked><span><strong>Require a separate student exam access code</strong><small>This is an extra check. Every student must still sign in, be on the class list, and meet the entry rules.</small></span></label><label class="dd26-field" id="dd26-model-answer-field" ${saved.suggestedAnswerMode === 'paste' ? '' : 'hidden'}><span>Suggested answer for grading</span><textarea class="dd26-textarea" id="dd26-model-answer" maxlength="100000">${escapeHtml(saved.suggestedAnswer || '')}</textarea></label><label class="dd26-field" id="dd26-model-answer-upload-field" hidden><span>Private suggested-answer source</span><input class="dd26-input" id="dd26-model-answer-file" type="file" accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><small class="dd26-help">TXT, DOCX, or an inactive unencrypted PDF, maximum 10 MB. Students never receive this file.</small></label><details class="dd26-advanced"><summary>More about exam safeguards</summary><p>Leaving the tab or exam window is recorded for the Professor to review. Copy, cut, paste, and right-click are blocked during the exam unless an approved accommodation requires otherwise. These records are not proof by themselves and never automatically fail, submit, close, or erase an examination. Camera collection and AI grading are off.</p></details><div class="dd26-actions"><button class="dd26-button primary" id="dd26-review-publish" type="button">Review before publishing</button>${replacement ? '' : '<button class="dd26-button" id="dd26-save-rules-draft" type="button">Save draft and return</button>'}<button class="dd26-button" data-dd26-close-dialog type="button">Return without saving</button></div>`);
+    const durationField = document.getElementById('dd26-duration');
+    const lateAdmissionField = document.getElementById('dd26-late-admission');
+    if (durationField) durationField.value = String(durationValue);
+    if (lateAdmissionField) {
+      lateAdmissionField.value = String(lateAdmissionValue);
+      const lateAdmissionLabel = lateAdmissionField.closest('label');
+      const labelText = lateAdmissionLabel?.querySelector('span');
+      const helpText = lateAdmissionLabel?.querySelector('small');
+      if (labelText) labelText.textContent = 'Minutes after opening when student entry closes';
+      if (helpText) helpText.textContent = 'This starts at the full exam duration. Enter a shorter time only if students who have not started should be blocked before the exam ends.';
+      lateAdmissionLabel?.insertAdjacentHTML('afterend', '<div class="dd26-notice" id="dd26-entry-cutoff-preview" role="status"></div>');
+    }
+    let lateAdmissionUntouched = !lateAdmissionWasChosen;
+    const updateDraftEntryCutoff = () => {
+      const cutoff = entryClosesAtForSchedule(
+        value('dd26-opens-at'), value('dd26-closes-at'), lateAdmissionField?.value,
+      );
+      const preview = document.getElementById('dd26-entry-cutoff-preview');
+      if (preview) preview.innerHTML = cutoff
+        ? `<strong>Student entry closes ${escapeHtml(formatDate(cutoff))}.</strong> Students who already started keep their own examination deadline.`
+        : '<strong>Choose a valid opening, ending, and entry time.</strong>';
+    };
+    durationField?.addEventListener('input', () => {
+      if (lateAdmissionUntouched && lateAdmissionField) lateAdmissionField.value = durationField.value;
+      updateDraftEntryCutoff();
+    });
+    lateAdmissionField?.addEventListener('input', () => {
+      lateAdmissionUntouched = false;
+      updateDraftEntryCutoff();
+    });
+    ['dd26-opens-at', 'dd26-closes-at']
+      .forEach((id) => document.getElementById(id)?.addEventListener('input', updateDraftEntryCutoff));
+    updateDraftEntryCutoff();
     document.querySelector('#dd26-dialog-card .dd26-actions')?.insertAdjacentHTML(
       'beforebegin',
       '<div class="dd26-error" id="dd26-publish-rule-errors" role="alert" tabindex="-1" hidden></div>',
@@ -2900,6 +3009,10 @@
       ? 'Professor-only suggested answer saved for grading'
       : 'No suggested answer';
     openDialog(`<div class="dd26-label">Step 3 · ${replacement ? 'Replace publication' : 'Publish for class preparation'}</div><h2>${replacement ? 'Final replacement review' : 'Review before publishing'}</h2><div class="dd26-stat-grid"><div class="dd26-stat"><strong>${escapeHtml(exam.questionCount || '—')}</strong><span>Questions</span></div><div class="dd26-stat"><strong>${escapeHtml(exam.totalPoints ?? '—')}</strong><span>Total points</span></div><div class="dd26-stat"><strong>${escapeHtml(durationMinutes)}</strong><span>Minutes</span></div><div class="dd26-stat"><strong>${escapeHtml(state.exam.portal?.classes?.find((entry) => entry.classroomId === state.exam.activeClassroomId)?.rosterCount || 0)}</strong><span>Students currently listed</span></div></div><dl class="dd26-publish-summary">${replacementQuestionSummary}<div><dt>Schedule</dt><dd>${escapeHtml(formatDate(opensAt))} to ${escapeHtml(formatDate(hardClosesAt))}</dd></div><div><dt>Class preparation</dt><dd>Publish first; the Beadle then uploads the class list and creates the separate student exam code</dd></div><div><dt>Student entry</dt><dd>${escapeHtml(admissionCopy)}</dd></div><div><dt>Question movement</dt><dd>Students may move between questions</dd></div><div><dt>Leaving the exam tab</dt><dd>${escapeHtml(monitoringCopy)}</dd></div><div><dt>Full screen</dt><dd>${escapeHtml(fullscreenCopy)}</dd></div><div><dt>Suggested answer</dt><dd>${escapeHtml(suggestedAnswerCopy)}</dd></div><div><dt>Individual arrangements</dt><dd>Approved extra time and exemptions are applied to the named student</dd></div><div><dt>AI grading and camera</dt><dd>Not used</dd></div></dl>${warnings.length ? `<div class="dd26-notice">${warnings.map(escapeHtml).join('<br>')}</div>` : '<div class="dd26-success">Questions, schedule, and exam rules are ready.</div>'}<div class="dd26-notice">${escapeHtml(immutableNotice)}</div><label class="dd26-choice"><input id="dd26-publish-ack" type="checkbox"><span><strong>${replacement ? 'I intend to replace the current publication' : 'I reviewed the questions, schedule, and class flow'}</strong><small>${replacement ? 'The previous version remains preserved and issued exam codes will rotate.' : 'Publication freezes this examination and creates the one-time Beadle key.'}</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-publish-confirm" type="button" disabled>${replacement ? 'Replace published version' : 'Publish and create Beadle key'}</button><button class="dd26-button" data-dd26-close-dialog type="button">Return without publishing</button></div>`);
+    document.querySelector('#dd26-dialog-card .dd26-publish-summary')?.insertAdjacentHTML(
+      'afterend',
+      entryCutoffReviewHtml(opensAt, hardClosesAt, lateAdmissionMinutes),
+    );
     document.querySelector('#dd26-dialog-card .dd26-publish-summary')?.insertAdjacentHTML(
       'beforeend',
       `<div><dt>Beadle</dt><dd>${escapeHtml(beadleEmail)}</dd></div>`,
@@ -3160,12 +3273,56 @@
     };
   }
 
+  function studentAccessCodeState(server = {}, studentKey = null) {
+    const policy = accessCodePreflightPolicy(server, studentKey);
+    const blocker = String(server.startBlockerCode || server.code || '');
+    const status = String(server.accessCodeStatus || '').toLowerCase();
+    const accepted = !policy.required || server.accessCodeAccepted === true
+      || status === 'accepted' || server.accessCodeValid === true
+      || server.checks?.accessCodeValid === true;
+    if (!policy.known) return { accepted: false, className: 'is-fail', copy: 'Due Diligence could not confirm this examination’s student-code requirement. Return and refresh before trying again.' };
+    if (!policy.required) return { accepted: true, className: 'is-pass', copy: 'This examination does not require a separate student exam code.' };
+    if (accepted) return { accepted: true, className: 'is-pass', copy: 'The student exam code is correct for this examination.' };
+    if (!policy.ready || blocker === 'STUDENT_ACCESS_CODE_REQUIRED') return { accepted: false, className: 'is-fail', copy: 'Enter the active student exam code provided by the Beadle.' };
+    if (blocker === 'CREDENTIAL_LOCKED' || status === 'locked') return { accepted: false, className: 'is-fail', copy: 'Too many incorrect code attempts. Student-code entry is locked for 15 minutes.' };
+    if (blocker === 'CREDENTIAL_NOT_ACTIVE' || blocker === 'STUDENT_ACCESS_NOT_READY' || status === 'not_issued') return { accepted: false, className: 'is-fail', copy: 'No active student exam code matches this examination. Ask the Beadle for the current handout.' };
+    if (blocker === 'CREDENTIAL_INVALID' || status === 'invalid') return { accepted: false, className: 'is-fail', copy: 'This student exam code is incorrect for this examination. Copy the active code from the Beadle’s current handout.' };
+    return { accepted: false, className: 'is-fail', copy: 'Due Diligence could not validate this student exam code. Return and enter the active code from the Beadle.' };
+  }
+
+  function studentEntryTiming(server = {}, officialNowMs = currentServerTimeMs()) {
+    const nowMs = Number(officialNowMs);
+    const opensAtMs = new Date(server.opensAt).getTime();
+    const entryClosesAt = server.entryClosesAt || server.hardClosesAt;
+    const entryClosesAtMs = new Date(entryClosesAt).getTime();
+    const hardClosesAtMs = new Date(server.hardClosesAt).getTime();
+    const blocker = String(server.startBlockerCode || server.code || '');
+    if (blocker === 'EXAM_CLOSED' || (Number.isFinite(hardClosesAtMs) && nowMs >= hardClosesAtMs)) {
+      return { state: 'exam_closed', className: 'is-fail', copy: `The examination closed ${formatDate(server.hardClosesAt)}.` };
+    }
+    if (Number.isFinite(opensAtMs) && nowMs < opensAtMs) {
+      return { state: 'before_open', className: 'is-warn', copy: `The examination opens ${formatDate(server.opensAt)}. A student with a valid code may wait in the waiting room.` };
+    }
+    if (blocker === 'LATE_ADMISSION_CLOSED'
+        || (Number.isFinite(entryClosesAtMs) && nowMs >= entryClosesAtMs)) {
+      return { state: 'entry_closed', className: 'is-fail', copy: `Student entry closed ${formatDate(entryClosesAt)}. Students who already started may resume until their own deadline.` };
+    }
+    if (Number.isFinite(opensAtMs) && nowMs >= opensAtMs) {
+      return { state: 'open', className: 'is-pass', copy: `Student entry is open until ${formatDate(entryClosesAt)}.` };
+    }
+    return { state: 'unknown', className: 'is-fail', copy: 'Due Diligence did not return a complete opening and entry schedule. Starting is blocked.' };
+  }
+
   function studentStartReadiness(server = {}) {
     const reported = typeof server.canStart === 'boolean';
     const canStart = reported && server.canStart === true;
     const code = String(server.startBlockerCode || server.code || '');
     const blockers = {
       STUDENT_ACCESS_NOT_READY: 'The Beadle has not finished the class handout yet.',
+      STUDENT_ACCESS_CODE_REQUIRED: 'Enter the active student exam code provided by the Beadle.',
+      CREDENTIAL_INVALID: 'This student exam code is incorrect for this examination.',
+      CREDENTIAL_LOCKED: 'Too many incorrect code attempts. Student-code entry is locked for 15 minutes.',
+      CREDENTIAL_NOT_ACTIVE: 'No active student exam code matches this examination. Ask the Beadle for the current handout.',
       EXAM_NOT_OPEN: `The examination opens ${formatDate(server.opensAt)}.`,
       LATE_ADMISSION_CLOSED: `Student entry closed ${formatDate(server.entryClosesAt || server.hardClosesAt)}.`,
       EXAM_CLOSED: 'This examination is closed.',
@@ -3415,26 +3572,22 @@
     const accessCodePolicy = accessCodePreflightPolicy(server, check.studentKey);
     const accessCodeRequired = accessCodePolicy.required;
     const accessCodeReady = accessCodePolicy.ready;
-    const accessCodeValidated = server.accessCodeAccepted === true
-      || server.accessCodeStatus === 'accepted'
-      || server.accessCodeValid === true
-      || server.checks?.accessCodeValid === true;
+    const accessCodeState = studentAccessCodeState(server, check.studentKey);
+    const accessCodeValidated = accessCodeState.accepted;
     const startReadiness = studentStartReadiness(server);
+    const entryTiming = studentEntryTiming(server);
     const passing = check.storage.available && check.deviceSupported && eligible
-      && !sessionConflict && accessCodeReady && startReadiness.canStart;
-    const accessCodePolicyCopy = !accessCodePolicy.known
-      ? 'The server did not report this publication’s access-code policy; starting is blocked until it does'
-      : accessCodeRequired
-        ? (accessCodeValidated
-          ? 'The student exam code was checked by Due Diligence'
-          : accessCodeReady
-            ? 'Code entered. Due Diligence checks it when you select Start examination'
-            : 'This examination requires the separate student code; return and enter it')
-        : 'This publication uses signed-in roster and admission checks without a separate access code';
-    const accessCodeClass = !accessCodeReady
-      ? 'is-fail'
-      : accessCodeRequired && !accessCodeValidated ? 'is-warn' : 'is-pass';
+      && !sessionConflict && accessCodeReady && accessCodeValidated && startReadiness.canStart;
+    const accessCodePolicyCopy = accessCodeState.copy;
+    const accessCodeClass = accessCodeState.className;
     openDialog(`<div class="dd26-label">Student exam check</div><h2>Check before starting</h2><p>This check confirms that you are signed in, on the class list, and opening the correct exam. The official exam clock comes from Due Diligence.</p><ul class="dd26-check-list"><li class="${check.deviceSupported ? 'is-pass' : 'is-fail'}"><strong>Device</strong><span>${check.deviceSupported ? 'Desktop or tablet is ready' : 'This phone-size screen is not supported for a formal beta exam'}</span></li><li class="${check.storage.available ? 'is-pass' : 'is-fail'}"><strong>Answer saving</strong><span>${escapeHtml(check.storage.message || check.storage.code)}</span></li><li class="${check.persistent ? 'is-pass' : 'is-warn'}"><strong>Keep answers on this device</strong><span>${check.persistent ? 'Allowed by this browser' : 'The browser may remove local data; keep the exam page open'}</span></li><li class="is-pass"><strong>Connection</strong><span>Due Diligence responded in ${escapeHtml(check.reachabilityMs)} ms · official time ${escapeHtml(formatDate(server.serverNow || server.checks?.serverNow))}</span></li><li class="${eligible ? 'is-pass' : 'is-fail'}"><strong>Class list and entry</strong><span>${eligible ? 'This signed-in student is on the class list' : escapeHtml(server.message || 'This signed-in account cannot start this examination')}</span></li><li class="${accessCodeClass}"><strong>Student exam code</strong><span>${escapeHtml(accessCodePolicyCopy)}</span></li><li class="${startReadiness.canStart ? 'is-pass' : 'is-fail'}"><strong>Opening and entry time</strong><span>${escapeHtml(startReadiness.copy)}</span></li><li class="${sessionConflict ? 'is-fail' : 'is-pass'}"><strong>Open exam session</strong><span>${sessionConflict ? 'Another open session must be resolved with the Beadle' : 'No other open session was found'}</span></li><li class="${integrity.recordingEnabled ? 'is-pass' : 'is-warn'}"><strong>Exam integrity</strong><span>${integrity.recordingEnabled ? `${integrity.clipboardBlocked ? 'Copy, cut, paste, and right-click are blocked. ' : 'Exam-menu restrictions are off for an approved arrangement. '}Leaving the exam tab or window is recorded for the Professor to review. It is not automatic proof and does not automatically fail or lock the exam.` : 'Tab recording and exam-menu restrictions are off for this exam or an approved accommodation.'}</span></li></ul><details open class="dd26-rules-summary"><summary>Instructions and exam rules</summary>${studentInstructionsHtml(server.instructions)}<dl><div><dt>Exam time</dt><dd>${escapeHtml(formatDate(server.opensAt))} to ${escapeHtml(formatDate(server.serverDeadline || server.hardClosesAt))}</dd></div><div><dt>Allowed materials</dt><dd>${escapeHtml(rules.allowedMaterials || 'See the Professor’s instructions')}</dd></div><div><dt>Questions</dt><dd>${escapeHtml(rules.navigationMode === 'one_way' ? 'Move forward only' : 'You may move between questions')}</dd></div><div><dt>Leaving the exam tab</dt><dd>${escapeHtml(integrity.recordingEnabled ? 'Recorded for Professor review' : 'Not recorded for this exam or accommodation')}</dd></div><div><dt>Full screen</dt><dd>${escapeHtml(rules.fullscreenPolicy === 'off' ? 'Not requested' : 'Requested when the exam starts')}</dd></div><div><dt>Entry</dt><dd>${escapeHtml(rules.admissionMode === 'beadle_approval' ? 'Beadle confirms entry' : 'Automatic after all checks pass')}</dd></div></dl></details><label class="dd26-choice"><input id="dd26-preflight-ack" type="checkbox" ${passing ? '' : 'disabled'}><span><strong>I reviewed the instructions and exam rules</strong><small>I understand that the exam is submitted only after Due Diligence shows a receipt.</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-preflight-start" type="button" disabled>Start examination</button><button class="dd26-button" data-dd26-close-dialog type="button">Return</button></div><div class="dd26-privacy">No camera permission is requested.</div>`);
+    const openingRow = [...document.querySelectorAll('.dd26-check-list li')]
+      .find((row) => row.querySelector('strong')?.textContent === 'Opening and entry time');
+    if (openingRow) {
+      openingRow.className = entryTiming.className;
+      const copy = openingRow.querySelector('span');
+      if (copy) copy.textContent = entryTiming.copy;
+    }
     if (sessionConflict && check.deviceInstanceHash) {
       document.querySelector('.dd26-rules-summary')?.insertAdjacentHTML('beforebegin', `<div class="dd26-notice"><strong>Device recovery reference</strong><div class="dd26-secret-row"><code id="dd26-recovery-device-reference">${escapeHtml(check.deviceInstanceHash)}</code><button class="dd26-button" data-dd26-copy-secret="dd26-recovery-device-reference" type="button">Copy</button></div><small>Give this reference and the current exam-session number ${escapeHtml(server.activeEpoch || 'shown by Due Diligence')} to the Beadle only after an in-person identity check. It is not an access key.</small></div>`);
       bindSecretCopyButtons();

@@ -480,6 +480,26 @@
     const body = $('#lex-dialog-body');
     body.replaceChildren();
     build(body, dialog);
+    let actions = body.querySelector('.lex-dialog-actions');
+    if (!actions) {
+      actions = document.createElement('div');
+      actions.className = 'lex-dialog-actions';
+      body.append(actions);
+    }
+    let back = Array.from(actions.querySelectorAll('button')).find((control) => (
+      /^(cancel|close|close preview)$/i.test(control.textContent.trim())
+    ));
+    if (back) {
+      back.textContent = 'Back';
+      back.dataset.lexDialogBack = 'true';
+      back.setAttribute('aria-label', 'Back');
+    } else {
+      back = button('Back', 'lex-button', closeDialog);
+      back.dataset.lexDialogBack = 'true';
+      back.setAttribute('aria-label', 'Back');
+      const primary = actions.querySelector('.lex-button-primary');
+      actions.insertBefore(back, primary || null);
+    }
     dialog.showModal();
     requestAnimationFrame(() => body.querySelector('textarea,select,input,button')?.focus());
   }
@@ -509,7 +529,7 @@
           error.textContent = failure?.message || 'The action could not be completed.';
         }
       });
-      actions.append(button('Cancel', 'lex-button', closeDialog), confirm);
+      actions.append(button('Back', 'lex-button', closeDialog), confirm);
       body.append(error, actions);
     });
   }
@@ -916,7 +936,7 @@
         });
         const actions = document.createElement('div');
         actions.className = 'lex-dialog-actions';
-        actions.append(button('Close', 'lex-button', closeDialog));
+        actions.append(button('Back', 'lex-button', closeDialog));
         body.append(actions);
       });
     } catch (error) {
@@ -1110,7 +1130,7 @@
           error.textContent = failure?.message || 'The reply could not be published.';
         }
       });
-      actions.append(button('Cancel', 'lex-button', closeDialog), submit);
+      actions.append(button('Back', 'lex-button', closeDialog), submit);
       body.append(field, error, actions);
     });
   }
@@ -1138,7 +1158,7 @@
           error.textContent = failure?.message || 'The comment could not be updated.';
         }
       });
-      actions.append(button('Cancel', 'lex-button', closeDialog), save);
+      actions.append(button('Back', 'lex-button', closeDialog), save);
       body.append(field, error, actions);
     });
   }
@@ -1202,7 +1222,7 @@
       actions.append(
         button('Copy link', 'lex-button', () => copyStableLink(item.entryId)),
         nativeShare,
-        button('Cancel', 'lex-button', closeDialog),
+        button('Back', 'lex-button', closeDialog),
         disseminate,
       );
       body.append(field, counter, error, actions);
@@ -1255,7 +1275,7 @@
           error.textContent = failure?.message || 'The report could not be submitted.';
         }
       });
-      actions.append(button('Cancel', 'lex-button', closeDialog), submit);
+      actions.append(button('Back', 'lex-button', closeDialog), submit);
       body.append(categoryLabel, explanationLabel, error, actions);
     });
   }
@@ -1323,7 +1343,7 @@
           error.textContent = failure?.message || 'The post could not be updated.';
         }
       });
-      actions.append(button('Cancel', 'lex-button', closeDialog), save);
+      actions.append(button('Back', 'lex-button', closeDialog), save);
       body.append(bodyLabel, sourceLabel, opinionLabel, error, actions);
     });
   }
@@ -1590,7 +1610,7 @@
           error.textContent = failure?.message || 'The Study Circle could not be created.';
         }
       });
-      actions.append(button('Cancel', 'lex-button', closeDialog), create);
+      actions.append(button('Back', 'lex-button', closeDialog), create);
       body.append(form, error, actions);
     });
   }
@@ -1849,7 +1869,7 @@
         }
         const actions = document.createElement('div');
         actions.className = 'lex-dialog-actions';
-        actions.append(button('Close', 'lex-button', closeDialog));
+        actions.append(button('Back', 'lex-button', closeDialog));
         body.append(actions);
       });
     } catch (error) {
@@ -2058,7 +2078,7 @@
       }
       const actions = document.createElement('div');
       actions.className = 'lex-dialog-actions';
-      actions.append(button('Close preview', 'lex-button', closeDialog));
+      actions.append(button('Back', 'lex-button', closeDialog));
       body.append(preview, actions);
     });
   }

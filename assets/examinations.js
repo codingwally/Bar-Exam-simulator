@@ -416,6 +416,57 @@
     return dialog;
   }
 
+  function decisionDialog() {
+    let dialog = document.getElementById('dd-exam-decision-dialog');
+    if (dialog) return dialog;
+    dialog = document.createElement('dialog');
+    dialog.id = 'dd-exam-decision-dialog';
+    dialog.className = 'dd-exam-dialog';
+    dialog.setAttribute('aria-labelledby', 'dd-exam-decision-title');
+    document.body.append(dialog);
+    return dialog;
+  }
+
+  function confirmDecision(options = {}) {
+    const dialog = decisionDialog();
+    const opener = document.activeElement;
+    dialog.innerHTML = `<div class="dd-exam-dialog-inner">
+      <button class="dd-exam-dialog-close" type="button" data-decision-back
+        aria-label="Close confirmation and go back">&times;</button>
+      <p class="dd-exam-kicker">Confirm your choice</p>
+      <h2 id="dd-exam-decision-title">${escapeHtml(options.title || 'Please confirm')}</h2>
+      <p class="dd-exam-description">${escapeHtml(options.copy || '')}</p>
+      <div class="dd-exam-dialog-actions">
+        <button class="dd-exam-button" type="button" data-decision-back>Back</button>
+        <button class="dd-exam-button is-primary" type="button" data-decision-confirm>
+          ${escapeHtml(options.confirmLabel || 'Continue')}
+        </button>
+      </div>
+    </div>`;
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (confirmed) => {
+        if (settled) return;
+        settled = true;
+        dialog.removeEventListener('cancel', cancel);
+        if (dialog.open) dialog.close(confirmed ? 'confirm' : 'cancel');
+        if (opener?.isConnected) requestAnimationFrame(() => opener.focus());
+        resolve(confirmed);
+      };
+      const cancel = (event) => {
+        event.preventDefault();
+        finish(false);
+      };
+      dialog.querySelectorAll('[data-decision-back]').forEach((button) => (
+        button.addEventListener('click', () => finish(false))
+      ));
+      dialog.querySelector('[data-decision-confirm]').addEventListener('click', () => finish(true));
+      dialog.addEventListener('cancel', cancel);
+      dialog.showModal();
+      requestAnimationFrame(() => dialog.querySelector('[data-decision-confirm]')?.focus());
+    });
+  }
+
   async function openSetup(versionId) {
     setStatus('Preparing your examination…');
     try {
@@ -429,6 +480,8 @@
       ].filter(([mode]) => (setup.allowedTimerModes || []).includes(mode));
       const compact = setup.track === 'per_subject';
       dialog.innerHTML = `<div class="dd-exam-dialog-inner">
+        <button class="dd-exam-dialog-close" type="button" data-dialog-close
+          aria-label="Close time-mode selection">&times;</button>
         <p class="dd-exam-kicker">${escapeHtml(compact ? 'Subject Matter' : 'Bar Feels')}</p>
         <h2 id="dd-exam-setup-title">${escapeHtml(compact ? setup.subject : setup.title)}</h2>
         <p class="dd-exam-description">${compact
@@ -446,10 +499,11 @@
           </select>
         </label>` : ''}
         <div class="dd-exam-dialog-actions">
-          <button class="dd-exam-button" type="button" data-dialog-cancel>Cancel</button>
+          <button class="dd-exam-button" type="button" data-dialog-cancel>Back</button>
           <button class="dd-exam-button is-primary" type="button" data-exam-begin>Begin Examination</button>
         </div>
       </div>`;
+      dialog.querySelector('[data-dialog-close]').addEventListener('click', () => dialog.close('cancel'));
       dialog.querySelector('[data-dialog-cancel]').addEventListener('click', () => dialog.close('cancel'));
       dialog.querySelector('[data-exam-begin]').addEventListener('click', beginExamination);
       dialog.showModal();
@@ -472,9 +526,11 @@
         resetCycle: options.resetCycle === true,
       });
       if (selection.exhausted) {
-        const restart = global.confirm(
-          `You completed every available ${selected.subject} question in this cycle. Start a new randomized cycle?`,
-        );
+        const restart = await confirmDecision({
+          title: 'Start a new randomized cycle?',
+          copy: `You completed every available ${selected.subject} question in this cycle. Your performance history will remain available.`,
+          confirmLabel: 'Start New Cycle',
+        });
         if (restart) {
           await requestSubjectQuestion({ subject: selected.subject, resetCycle: true });
         } else {
@@ -1124,6 +1180,8 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     dialog.className = 'dd-exam-dialog';
     dialog.setAttribute('aria-labelledby', 'dd-human-review-title');
     dialog.innerHTML = `<form class="dd-exam-dialog-inner" id="dd-human-form">
+      <button class="dd-exam-dialog-close" type="button" data-dialog-close
+        aria-label="Close Human Examiner invitation">&times;</button>
       <p class="dd-exam-kicker">Structured Review</p>
       <h2 id="dd-human-review-title">Invite a Human Examiner</h2>
       <p class="dd-exam-description">The invitation contains only an expiring secure link.
@@ -1132,11 +1190,12 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
         <input type="email" id="dd-examiner-email" maxlength="254" required>
       </label>
       <div class="dd-exam-dialog-actions">
-        <button class="dd-exam-button" type="button" data-dialog-cancel>Cancel</button>
+        <button class="dd-exam-button" type="button" data-dialog-cancel>Back</button>
         <button class="dd-exam-button is-primary" type="submit">Create Assignment</button>
       </div>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
     </form>`;
+    dialog.querySelector('[data-dialog-close]').addEventListener('click', () => dialog.close());
     dialog.querySelector('[data-dialog-cancel]').addEventListener('click', () => dialog.close());
     dialog.querySelector('form').addEventListener('submit', createHumanAssignment);
     document.body.append(dialog);
@@ -1370,6 +1429,8 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     const preview = state.uploadPreview;
     const dialog = uploadDialog();
     dialog.innerHTML = `<div class="dd-exam-dialog-inner">
+      <button class="dd-exam-dialog-close" type="button" data-upload-cancel
+        aria-label="Close extracted question preview">&times;</button>
       <p class="dd-exam-kicker">Extracted Question Preview</p>
       <h2 id="dd-upload-preview-title">${escapeHtml(preview.title)}</h2>
       <p class="dd-exam-description">${Number(preview.questionCount)} questions parsed from
@@ -1382,12 +1443,14 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
           <option value="provisional">Provisional feedback only</option></select>
       </label>
       <div class="dd-exam-dialog-actions">
-        <button class="dd-exam-button" type="button" data-upload-cancel>Cancel</button>
+        <button class="dd-exam-button" type="button" data-upload-cancel>Back</button>
         <button class="dd-exam-button is-primary" type="button" data-upload-confirm>Confirm Private Examination</button>
       </div>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
     </div>`;
-    dialog.querySelector('[data-upload-cancel]').addEventListener('click', () => dialog.close());
+    dialog.querySelectorAll('[data-upload-cancel]').forEach((button) => (
+      button.addEventListener('click', () => dialog.close())
+    ));
     dialog.querySelector('[data-upload-confirm]').addEventListener('click', confirmUpload);
     dialog.showModal();
   }
@@ -1521,9 +1584,11 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       );
     if (attemptOpen) {
       saveRecovery();
-      const confirmed = global.confirm(
-        'Leave this examination? Your latest answer will be saved and you can resume it later.',
-      );
+      const confirmed = await confirmDecision({
+        title: 'Leave this examination?',
+        copy: 'Your latest answer will be saved and you can resume it later.',
+        confirmLabel: 'Leave Examination',
+      });
       if (!confirmed) return;
       const saved = await flushCurrentSave();
       if (!saved) return;

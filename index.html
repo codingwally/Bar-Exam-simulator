@@ -370,7 +370,12 @@
   /* ---------------- Modal ---------------- */
   .modal-overlay{position:fixed;inset:0;background:rgba(2,12,35,.55);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:9999;padding:20px;}
   .modal-overlay.open{display:flex;animation:fadeIn .2s ease;}
-  .modal-card{background:var(--card);border:1px solid var(--border-gold);box-shadow:var(--shadow-lg);width:100%;max-width:540px;padding:32px;border-radius:18px;animation:pop .25s cubic-bezier(.22,.61,.36,1);}
+  .modal-card{position:relative;background:var(--card);border:1px solid var(--border-gold);box-shadow:var(--shadow-lg);width:100%;max-width:540px;max-height:min(92vh,900px);overflow:auto;padding:32px;border-radius:18px;animation:pop .25s cubic-bezier(.22,.61,.36,1);}
+  .modal-close{position:sticky;z-index:5;top:0;float:right;width:44px;height:44px;display:grid;place-items:center;margin:-18px -18px 8px 14px;border:1px solid rgba(15,23,42,.2);border-radius:50%;background:rgba(255,255,255,.96);color:var(--navy);box-shadow:0 7px 20px rgba(2,12,35,.09);cursor:pointer;font-family:var(--sans);font-size:25px;line-height:1;transition:border-color .18s ease,color .18s ease,background .18s ease,box-shadow .18s ease,transform .18s ease;}
+  .modal-close:hover{border-color:var(--gold);color:#795a18;background:#fff;box-shadow:0 10px 24px rgba(2,12,35,.14);transform:translateY(-1px);}
+  .modal-close:active{transform:translateY(0);}
+  .modal-close:focus-visible,.modal-back:focus-visible{outline:3px solid rgba(197,160,89,.46);outline-offset:3px;}
+  .modal-back{min-width:104px;}
   .modal-title{font-family:var(--serif);font-weight:700;font-size:25px;color:var(--ink);margin:0 0 6px;}
   .modal-sub{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:1.5px;color:var(--gold);margin-bottom:20px;}
   .modal-input,.modal-textarea,.modal-select{width:100%;background:var(--card-2);border:1px solid var(--border);border-radius:10px;font-family:var(--sans);font-size:14.5px;padding:12px 14px;margin-bottom:16px;color:var(--charcoal);transition:border-color .2s,box-shadow .2s;}
@@ -405,6 +410,10 @@
     .stamp-row{gap:14px;}
     .btn-primary{width:100%;}
     .row{flex-direction:column;align-items:stretch;}
+    .modal-overlay{padding:10px;align-items:flex-end;}
+    .modal-card{max-height:94vh;padding:26px 20px calc(22px + env(safe-area-inset-bottom));border-radius:16px 16px 8px 8px;}
+    .modal-close{margin:-14px -8px 6px 12px;}
+    .modal-actions{flex-wrap:wrap;}
   }
 
 
@@ -1108,7 +1117,7 @@
         </div>
         <p class="pb-dialog-status" id="pb-disclosure-status" role="status" aria-live="polite"></p>
         <div class="pb-dialog-actions">
-          <button class="pb-dialog-secondary" type="button" data-pb-cancel>Decline &amp; Return</button>
+          <button class="pb-dialog-secondary" type="button" data-pb-cancel>Back</button>
           <button class="pb-dialog-primary" id="pb-disclosure-continue" type="button" disabled>I Agree — Continue to Access Code</button>
         </div>
       </section>
@@ -1619,6 +1628,7 @@
 <!-- Versioned, blocking onboarding terms -->
 <div class="modal-overlay blocking" id="terms-modal" role="dialog" aria-modal="true" aria-labelledby="terms-title" aria-describedby="terms-copy">
   <div class="modal-card lg" tabindex="-1">
+    <button type="button" class="modal-close" aria-label="Close terms and return" onclick="returnFromModal('terms-modal')">&times;</button>
     <h3 class="modal-title" id="terms-title">Before You Begin</h3>
     <div class="modal-sub">Educational use and source-verification notice</div>
     <div class="terms-copy" id="terms-copy">
@@ -1627,6 +1637,7 @@
       Due Diligence is intended solely for legal education and Bar examination preparation. It does not provide legal advice and should not replace independent verification using official sources.
     </div>
     <div class="modal-actions" style="margin-top:20px;">
+      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('terms-modal')">Back</button>
       <button type="button" class="btn-primary" id="accept-terms" onclick="acceptTerms()">I Understand and Accept</button>
     </div>
   </div>
@@ -1635,10 +1646,12 @@
 <!-- Sign-in choice shown once per onboarding session -->
 <div class="modal-overlay blocking" id="signin-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="signin-prompt-title" aria-describedby="signin-prompt-copy">
   <div class="modal-card" tabindex="-1">
+    <button type="button" class="modal-close" aria-label="Close sign-in choice and return" onclick="returnFromModal('signin-prompt-modal')">&times;</button>
     <h3 class="modal-title" id="signin-prompt-title">Enter the Mock Bar</h3>
     <p class="checking-copy" id="signin-prompt-copy">Sign in to open protected questions, save progress, and continue study sessions across devices.</p>
     <span class="tier-badge">Authentication is required before an examination question is displayed.</span>
     <div class="signin-prompt-actions">
+      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('signin-prompt-modal')">Back</button>
       <button type="button" class="btn-primary" id="onboarding-signin" onclick="beginOnboardingSignIn()">Sign In</button>
       <button type="button" class="btn-secondary" id="guest-continue" onclick="continueAsGuest()" hidden>Maybe Later</button>
     </div>
@@ -1648,6 +1661,7 @@
 <!-- Session mode is chosen only after a valid question is ready -->
 <div class="modal-overlay blocking" id="session-choice-modal" role="dialog" aria-modal="true" aria-labelledby="session-choice-title" aria-describedby="session-choice-copy">
   <div class="modal-card xl" tabindex="-1">
+    <button type="button" class="modal-close" aria-label="Close time-mode selection and return to subjects" onclick="returnFromModal('session-choice-modal')">&times;</button>
     <h3 class="modal-title" id="session-choice-title">Would you like to begin your session?</h3>
     <p class="checking-copy" id="session-choice-copy">Choose how you want to practice. Your timer will begin only after you select a mode.</p>
     <div class="session-mode-grid">
@@ -1668,17 +1682,21 @@
       </button>
     </div>
     <div class="pacing-guide">Bar pacing guide: A four-hour subject examination provides 240 minutes. With an average of 20 questions, allow approximately 12 minutes per question.</div>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('session-choice-modal')">Back</button>
+    </div>
   </div>
 </div>
 
 <div class="modal-overlay" id="feedback-modal" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
   <div class="modal-card">
+    <button type="button" class="modal-close" aria-label="Close Support" onclick="returnFromModal('feedback-modal')">&times;</button>
     <h3 class="modal-title" id="feedback-title">Due Diligence Support</h3>
     <div class="modal-sub">Email support@duediligence.ph</div>
     <form id="feedback-form">
       <p class="checking-copy">Open your email application to request technical help, report a problem, or send platform feedback.</p>
       <div class="modal-actions">
-        <button type="button" class="btn-secondary" id="btn-close-feedback">Cancel</button>
+        <button type="button" class="btn-secondary modal-back" id="btn-close-feedback">Back</button>
         <a class="btn-primary" href="#support">Open Support</a>
       </div>
     </form>
@@ -1688,12 +1706,13 @@
 <!-- Analytics dashboard modal -->
 <div class="modal-overlay" id="analytics-modal" role="dialog" aria-modal="true" aria-labelledby="analytics-title">
   <div class="modal-card xl">
+    <button type="button" class="modal-close" aria-label="Close The Verdict" onclick="returnFromModal('analytics-modal')">&times;</button>
     <h3 class="modal-title" id="analytics-title">The Verdict</h3>
     <div class="modal-sub">Your Bar-prep drill history &amp; ALAC record</div>
     <div id="analytics-body"></div>
     <div class="modal-actions" style="margin-top:18px;">
       <p class="mock-note" role="note">Private Verdict PDF export is available for completed, signed-in assessment records.</p>
-      <button type="button" class="btn-primary" onclick="closeModal('analytics-modal')">Done</button>
+      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('analytics-modal')">Back</button>
     </div>
   </div>
 </div>
@@ -1702,10 +1721,11 @@
 <div class="modal-overlay" id="coming-soon-modal" role="dialog" aria-modal="true"
   aria-labelledby="coming-soon-title" aria-describedby="coming-soon-copy">
   <div class="modal-card" tabindex="-1">
+    <button type="button" class="modal-close" aria-label="Close this notice" onclick="returnFromModal('coming-soon-modal')">&times;</button>
     <h3 class="modal-title" id="coming-soon-title">Coming soon</h3>
     <p class="checking-copy" id="coming-soon-copy">Developers are currently working on this feature. This page is not yet available.</p>
     <div class="modal-actions" style="margin-top:18px;">
-      <button type="button" class="btn-primary" onclick="closeModal('coming-soon-modal')">Return</button>
+      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('coming-soon-modal')">Back</button>
     </div>
   </div>
 </div>
@@ -1714,6 +1734,7 @@
 <!-- Suggest a Correction/Better Answer modal -->
 <div class="modal-overlay" id="suggest-modal" role="dialog" aria-modal="true" aria-labelledby="suggest-title">
   <div class="modal-card">
+    <button type="button" class="modal-close" aria-label="Close correction suggestion" onclick="returnFromModal('suggest-modal')">&times;</button>
     <h3 class="modal-title" id="suggest-title">Suggest a Correction/Better Answer</h3>
     <div class="modal-sub" id="suggest-qid">Editorial review for the selected question</div>
     <label class="field-label" for="suggest-type">Correction type</label>
@@ -1732,7 +1753,7 @@
     <textarea class="modal-textarea" id="suggest-sources" placeholder="One http:// or https:// URL per line (maximum 5)." style="min-height:86px;"></textarea>
     <div class="suggest-status" id="suggest-status" role="status" aria-live="polite"></div>
     <div class="modal-actions">
-      <button type="button" class="btn-secondary" onclick="closeModal('suggest-modal')">Cancel</button>
+      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('suggest-modal')">Back</button>
       <button class="btn-primary" id="suggest-submit" type="button" onclick="submitSuggestion()">Suggest a Correction/Better Answer</button>
     </div>
     <div class="mock-note" style="margin-top:12px;">Question ID and subject are attached automatically. Do not include your exam answer or personal information.</div>
@@ -1743,6 +1764,7 @@
 <!-- Gemini examiner progress / controlled error modal -->
 <div class="modal-overlay" id="checking-modal" role="dialog" aria-modal="true" aria-labelledby="checking-title">
   <div class="modal-card checking-card" id="checking-card" tabindex="-1">
+    <button type="button" class="modal-close" aria-label="Close assessment progress" onclick="returnFromModal('checking-modal')">&times;</button>
     <div class="checking-orbit" aria-hidden="true"></div>
     <h3 class="modal-title" id="checking-title">Checking your answer...</h3>
     <p class="checking-copy" id="checking-copy">We are comparing your answer with the question bank and available Philippine legal authorities.</p>
@@ -1753,7 +1775,22 @@
     </ul>
     <div class="checking-error" id="checking-error" role="alert"></div>
     <div class="modal-actions" id="checking-actions" style="display:none;margin-top:18px;">
-      <button type="button" class="btn-secondary" onclick="closeCheckingModal()">Close</button>
+      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('checking-modal')">Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reusable confirmation surface; replaces browser-native confirm popups. -->
+<div class="modal-overlay blocking" id="decision-modal" role="dialog" aria-modal="true"
+  aria-labelledby="decision-title" aria-describedby="decision-copy">
+  <div class="modal-card" tabindex="-1">
+    <button type="button" class="modal-close" aria-label="Close confirmation and go back" onclick="settleDecision(false)">&times;</button>
+    <div class="modal-sub">Confirm your choice</div>
+    <h3 class="modal-title" id="decision-title">Please confirm</h3>
+    <p class="checking-copy" id="decision-copy"></p>
+    <div class="modal-actions" style="margin-top:20px;">
+      <button type="button" class="btn-secondary modal-back" onclick="settleDecision(false)">Back</button>
+      <button type="button" class="btn-primary" id="decision-confirm" onclick="settleDecision(true)">Continue</button>
     </div>
   </div>
 </div>
@@ -2655,13 +2692,13 @@ function renderSubjectTabs() {
   `).join('');
 }
 
-function switchSubject(subj) {
+async function switchSubject(subj) {
   if (gradingInProgress || subj === currentSubj) return;
-  if (!confirmMockWorkspaceExit(`change from ${currentSubj} to ${subj}`)) return;
+  if (!await confirmMockWorkspaceExit(`change from ${currentSubj} to ${subj}`)) return;
   selectSubjectForSession(subj);
 }
 
-function confirmMockWorkspaceExit(destination) {
+async function confirmMockWorkspaceExit(destination) {
   if (gradingInProgress) return false;
   if (examStage !== 'answering') return true;
   const answer = document.getElementById('answer-box')?.value
@@ -2670,18 +2707,20 @@ function confirmMockWorkspaceExit(destination) {
   saveDraftForCurrentQuestion();
   persistWorkspace();
   if (!String(answer).trim()) return true;
-  return window.confirm(
-    `Leave this question to ${destination}?\n\nYour current answer is saved on this device and can be recovered when you return.`,
-  );
+  return confirmWithDueDiligence({
+    title: 'Leave this question?',
+    copy: `Continue to ${destination}? Your current answer is saved on this device and can be recovered when you return.`,
+    confirmLabel: 'Leave Question',
+  });
 }
 
-function changeMockBarSubject() {
-  if (!confirmMockWorkspaceExit('choose another subject')) return;
+async function changeMockBarSubject() {
+  if (!await confirmMockWorkspaceExit('choose another subject')) return;
   showSubjectSelection();
 }
 
-function exitMockBarPractice() {
-  if (!confirmMockWorkspaceExit('exit Mock Bar practice')) return;
+async function exitMockBarPractice() {
+  if (!await confirmMockWorkspaceExit('exit Mock Bar practice')) return;
   showWelcome();
 }
 
@@ -2816,7 +2855,7 @@ function renderExamControlBar(workspaceLocked) {
     </div>`;
 }
 
-function switchSessionMode(mode) {
+async function switchSessionMode(mode) {
   if (
     !['strict', 'selfPaced', 'none'].includes(mode)
     || examStage !== 'answering'
@@ -2837,7 +2876,11 @@ function switchSessionMode(mode) {
     : selectedSessionMode === 'strict'
       ? 'Your elapsed time and draft will be preserved.'
       : 'Your draft and total active time will be preserved.';
-  if (!window.confirm(`Switch from ${fromLabel} to ${toLabel}?\n\n${detail}`)) return;
+  if (!await confirmWithDueDiligence({
+    title: `Switch to ${toLabel}?`,
+    copy: `You are switching from ${fromLabel}. ${detail}`,
+    confirmLabel: 'Switch Mode',
+  })) return;
   saveDraftForCurrentQuestion();
   selectedSessionMode = mode;
   examMode = mode;
@@ -3457,9 +3500,10 @@ window.addEventListener('popstate', () => {
 });
 
 /* ---------- Modals ---------- */
-const BLOCKING_MODAL_IDS = new Set(['terms-modal', 'signin-prompt-modal', 'session-choice-modal']);
+const BLOCKING_MODAL_IDS = new Set(['terms-modal', 'signin-prompt-modal', 'session-choice-modal', 'decision-modal']);
 const modalFocusOrigins = new Map();
 const modalResumeStates = new Map();
+let decisionResolve = null;
 
 function syncModalIsolation() {
   const admissionDialog = document.querySelector('#private-beta-dialog[open]');
@@ -3532,7 +3576,51 @@ function closeAllBlockingModals() {
     modal.setAttribute('aria-hidden', 'true');
   });
   modalResumeStates.clear();
+  if (decisionResolve) {
+    const resolve = decisionResolve;
+    decisionResolve = null;
+    resolve(false);
+  }
   syncModalIsolation();
+}
+
+function settleDecision(confirmed) {
+  const resolve = decisionResolve;
+  decisionResolve = null;
+  closeModal('decision-modal');
+  resolve?.(confirmed === true);
+}
+
+function confirmWithDueDiligence(options = {}) {
+  if (decisionResolve) settleDecision(false);
+  document.getElementById('decision-title').textContent = options.title || 'Please confirm';
+  document.getElementById('decision-copy').textContent = options.copy || '';
+  document.getElementById('decision-confirm').textContent = options.confirmLabel || 'Continue';
+  openModal('decision-modal', { blocking: true });
+  return new Promise((resolve) => { decisionResolve = resolve; });
+}
+
+function returnFromModal(id) {
+  if (id === 'decision-modal') {
+    settleDecision(false);
+    return;
+  }
+  if (id === 'terms-modal' || id === 'signin-prompt-modal') {
+    closeModal(id, { restoreFocus: false });
+    showWelcome({ preserveSession: true });
+    return;
+  }
+  if (id === 'session-choice-modal') {
+    pendingSubjectSelection = null;
+    closeModal(id, { restoreFocus: false });
+    showSubjectSelection();
+    return;
+  }
+  if (id === 'checking-modal') {
+    closeCheckingModal();
+    return;
+  }
+  closeModal(id);
 }
 
 /* ---------- Exam mode + per-question clock ---------- */
@@ -3679,7 +3767,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.modal-overlay').forEach(ov => {
     ov.setAttribute('aria-hidden', 'true');
     ov.addEventListener('click', e => {
-      if (e.target === ov && !BLOCKING_MODAL_IDS.has(ov.id)) closeModal(ov.id);
+      if (e.target === ov && !BLOCKING_MODAL_IDS.has(ov.id)) returnFromModal(ov.id);
     });
   });
   document.addEventListener('keydown', e => {
@@ -3692,9 +3780,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       return;
     }
-    if (e.key === 'Escape' && !BLOCKING_MODAL_IDS.has(modal.id) && modal.id !== 'checking-modal') {
+    if (e.key === 'Escape') {
       e.preventDefault();
-      closeModal(modal.id);
+      returnFromModal(modal.id);
       return;
     }
     if (e.key !== 'Tab') return;

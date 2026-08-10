@@ -64,8 +64,10 @@ assert.match(js, /operation: 'live_status_v2'/);
 assert.match(js, /data-dd26-monitor-exam/);
 assert.match(js, /visibility_exit/);
 assert.match(js, /focus_exit/);
-assert.doesNotMatch(js, /context_menu_attempt/);
-assert.doesNotMatch(js, /preventExamAction|addEventListener\('contextmenu'/);
+assert.match(js, /context_menu_attempt/);
+assert.match(js, /addEventListener\('contextmenu', contextMenuIncident, true\)/);
+assert.match(js, /surface\.contains\(event\.target\)/,
+  'right-click deterrence must remain scoped to the active examination surface');
 assert.match(js, /addEventListener\('copy', clipboardIncident, true\)/);
 assert.match(js, /addEventListener\('cut', clipboardIncident, true\)/);
 assert.match(js, /addEventListener\('paste', clipboardIncident, true\)/);

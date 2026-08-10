@@ -19,6 +19,7 @@ import {
 import {
   examRoomRateKey,
   hashedCredential,
+  normalizeExamResultPdfRequest,
   normalizeExamRoomCommand,
   normalizeExamRoomQuery,
   normalizeQuestionUpload,
@@ -27,6 +28,7 @@ import {
   normalizeRosterUploadIntent,
   sha256Hex,
 } from './exam-room-2026-core.mjs';
+import { buildExamResultPdf, examResultPdfFileName } from './exam-result-pdf.mjs';
 import { buildVerdictPdf, verdictPdfFileName } from './verdict-pdf.mjs';
 
 function barEasyReveal(content) {
@@ -103,10 +105,12 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'upsert_exam_roster_row',
   'confirm_replacement_questions',
   'publish_exam',
+  'publish_for_beadle',
   'replace_publication',
   'invite_beadle',
   'redeem_beadle_invitation',
   'revoke_beadle',
+  'issue_student_access',
   'record_candidate_verification',
   'set_candidate_admission',
   'set_accommodation',
@@ -757,6 +761,51 @@ export function createDD2026Handlers(deps) {
     });
   }
 
+  async function examResultPdf(request, env, origin, allowedOrigin) {
+    requireExamRoom2Enabled(env);
+    const user = await requireAuthenticatedUser(request, env);
+    const input = normalizeExamResultPdfRequest(
+      await parseBoundedJson(request, 20_000),
+    );
+    await examRateLimit(request, env, user.id, 'write', input.attemptId);
+    const rateHash = await examRoomRateKey(request, user.id, input.examId);
+    const result = await examRoomRpc(env, 'exam_room_prepare_result_export_v3', {
+      p_professor_user_id: user.id,
+      p_exam_public_id: input.examId,
+      p_attempt_public_id: input.attemptId,
+      p_export_scope: input.scope,
+      p_request_key: input.requestKey,
+      p_grading_key_hash: await hashedCredential(input.gradingKey),
+      p_rate_key_hash: rateHash,
+    });
+    if (result?.ok !== true || !result?.exportId) {
+      throw new DD2026ValidationError(
+        String(result?.code || 'EXAM_ROOM_RESULT_EXPORT_DENIED'),
+        'The Professor result download could not be authorized.',
+        403,
+      );
+    }
+    const bytes = await buildExamResultPdf(result);
+    await examRoomRpc(env, 'exam_room_complete_result_export_v3', {
+      p_professor_user_id: user.id,
+      p_export_id: result.exportId,
+      p_request_key: input.requestKey,
+      p_output_bytes: bytes.length,
+      p_output_sha256: await sha256Hex(bytes),
+    });
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        ...corsHeaders(origin, allowedOrigin),
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${examResultPdfFileName(result)}"`,
+        'Cache-Control': 'private, no-store, max-age=0',
+        Pragma: 'no-cache',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  }
+
   async function importContent(request, env, origin, allowedOrigin) {
     await enforceAdminRateLimit(request, env);
     const admin = await requireAdministrator(request, env);
@@ -804,7 +853,7 @@ export function createDD2026Handlers(deps) {
       if (!examRoom2Enabled(env)) {
         return jsonResponse({ ok: true, result: portal }, 200, origin, allowedOrigin);
       }
-      const delegated = await examRoomRpc(env, 'exam_room_beadle_portal_v2', {
+      const delegated = await examRoomRpc(env, 'exam_room_beadle_portal_v3', {
           p_user_id: user.id,
           p_exam_public_id: null,
       });
@@ -832,17 +881,17 @@ export function createDD2026Handlers(deps) {
         p_offset: input.offset,
       };
     } else if (input.operation === 'exam_intent') {
-      functionName = 'exam_room_exam_access_v2';
+      functionName = 'exam_room_exam_access_v3';
       body = { p_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'preflight') {
-      functionName = 'exam_room_student_preflight_v2';
+      functionName = 'exam_room_student_preflight_v3';
       body = {
         p_student_user_id: user.id,
         p_exam_public_id: input.examId,
         p_device_instance_hash: input.deviceInstanceHash,
       };
     } else if (input.operation === 'beadle_portal') {
-      functionName = 'exam_room_beadle_portal_v2';
+      functionName = 'exam_room_beadle_portal_v3';
       body = { p_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'incident_summary') {
       functionName = 'exam_room_incident_summary_v2';
@@ -957,7 +1006,7 @@ export function createDD2026Handlers(deps) {
     if (intent.examId) requireExamRoom2Enabled(env);
     await examRateLimit(request, env, user.id, 'upload', intent.examId || intent.classroomId);
     if (intent.examId) {
-      const access = await examRoomRpc(env, 'exam_room_exam_access_v2', {
+      const access = await examRoomRpc(env, 'exam_room_exam_access_v3', {
         p_user_id: user.id,
         p_exam_public_id: intent.examId,
       });
@@ -1009,7 +1058,7 @@ export function createDD2026Handlers(deps) {
     const payload = await parseBoundedJson(request, 14_500_000);
     const intent = normalizeQuestionUploadIntent(payload);
     await examRateLimit(request, env, user.id, 'upload', intent.examId);
-    const access = await examRoomRpc(env, 'exam_room_exam_access_v2', {
+    const access = await examRoomRpc(env, 'exam_room_exam_access_v3', {
       p_user_id: user.id,
       p_exam_public_id: intent.examId,
     });
@@ -1098,7 +1147,7 @@ export function createDD2026Handlers(deps) {
       : user;
     const spec = await commandSpec(input, actor.id, rateHash, stepUp);
     if (input.operation === 'confirm_questions' || input.operation === 'confirm_replacement_questions') {
-      const access = await examRoomRpc(env, 'exam_room_exam_access_v2', {
+      const access = await examRoomRpc(env, 'exam_room_exam_access_v3', {
         p_user_id: user.id,
         p_exam_public_id: input.examId,
       });
@@ -1135,6 +1184,18 @@ export function createDD2026Handlers(deps) {
         ? professorActivationRedeemView(result)
         : input.operation === 'revoke_activation'
           ? professorActivationRevokeView(result, input)
+          : input.operation === 'publish_for_beadle'
+            ? {
+              ...(result || {}),
+              oneTimeBeadleKey: input.beadleInvitationKey,
+              oneTimeOnly: true,
+            }
+            : input.operation === 'issue_student_access'
+              ? {
+                ...(result || {}),
+                oneTimeStudentAccessCode: input.studentKey,
+                oneTimeOnly: true,
+              }
           : input.operation === 'confirm_replacement_questions'
       ? stagedReplacementQuestionsView(result, input)
       : input.operation === 'replace_publication'
@@ -1228,6 +1289,20 @@ export function createDD2026Handlers(deps) {
         p_student_key_hash: input.studentKey ? await h(input.studentKey) : null,
         p_request_key: input.requestKey,
       } }),
+      publish_for_beadle: async () => ({
+        functionName: 'exam_room_publish_for_beadle_v3',
+        body: {
+          p_professor_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_rules: input.rules,
+          p_grading_key_hash: await h(input.gradingKey),
+          p_beadle_email: input.beadleEmail,
+          p_beadle_token_hash: await h(input.beadleInvitationKey),
+          p_beadle_expires_at: input.beadleExpiresAt,
+          p_beadle_reason: input.reason,
+          p_request_key: input.requestKey,
+        },
+      }),
       replace_publication: async () => ({ functionName: 'exam_room_replace_publication_v2', body: {
         p_professor_user_id: userId, p_exam_public_id: input.examId,
         p_expected_publication_id: input.expectedPublicationId,
@@ -1251,6 +1326,15 @@ export function createDD2026Handlers(deps) {
         p_beadle_user_id: input.beadleUserId, p_reason: input.reason,
         p_request_key: input.requestKey,
       } }),
+      issue_student_access: async () => ({
+        functionName: 'exam_room_issue_student_access_v3',
+        body: {
+          p_beadle_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_student_key_hash: await h(input.studentKey),
+          p_request_key: input.requestKey,
+        },
+      }),
       record_candidate_verification: async () => ({ functionName: 'exam_room_record_verification_v2', body: {
         p_actor_user_id: userId, p_exam_public_id: input.examId,
         p_candidate_number: input.candidateNumber, p_method: input.method,
@@ -1266,7 +1350,7 @@ export function createDD2026Handlers(deps) {
         p_candidate_number: input.candidateNumber, p_accommodation: input.accommodation,
         p_reason: input.reason, p_request_key: input.requestKey,
       } }),
-      start_attempt: async () => ({ functionName: 'exam_room_start_attempt', body: {
+      start_attempt: async () => ({ functionName: 'exam_room_start_attempt_v3', body: {
         p_student_user_id: userId, p_exam_public_id: input.examId,
         p_student_key_hash: input.studentKey ? await h(input.studentKey) : null,
         p_rate_key_hash: rateHash,
@@ -1417,6 +1501,7 @@ export function createDD2026Handlers(deps) {
     editorial,
     examCommand,
     examQuery,
+    examResultPdf,
     features,
     importContent,
     modelAnswerUpload,

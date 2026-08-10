@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES,
+  normalizeExamResultPdfRequest,
   normalizeExamRoomCommand,
   normalizeExamRoomQuery,
   normalizeModelAnswerUpload,
@@ -311,6 +313,111 @@ test('publication rules use safe defaults and institutional AI grading remains f
   }), (error) => error.code === 'EXAM_ROOM_MODEL_ANSWER_UPLOAD_UNAVAILABLE'
     && error.status === 400
     && error.message === 'Uploaded model answers are unavailable until audited owner-only retrieval is enabled. Use pasted text or no model answer.');
+});
+
+test('class handoff keeps Beadle and student credentials distinct and freezes code protection', () => {
+  const opensAt = new Date(Date.now() + 60 * 60 * 1_000).toISOString();
+  const hardClosesAt = new Date(Date.now() + 3 * 60 * 60 * 1_000).toISOString();
+  const beadleExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
+  const publish = normalizeExamRoomCommand({
+    operation: 'publish_for_beadle',
+    examId,
+    gradingKey: 'professor-grading-key-secret',
+    beadleEmail: 'Beadle@Example.edu',
+    beadleInvitationKey: 'beadle-invitation-key-secret',
+    beadleExpiresAt,
+    reason: 'Prepare and confirm the official class roster.',
+    requestKey,
+    rules: {
+      opensAt,
+      hardClosesAt,
+      durationMinutes: 120,
+      studentAccessCodeRequired: true,
+    },
+  });
+  assert.equal(publish.beadleEmail, 'beadle@example.edu');
+  assert.equal(publish.rules.studentAccessCodeRequired, true);
+  assert.equal(publish.beadleInvitationKey, 'beadle-invitation-key-secret');
+  assert.equal(normalizeExamRoomCommand({
+    operation: 'issue_student_access',
+    examId,
+    studentKey: 'student-exam-code-secret',
+    requestKey,
+  }).studentKey, 'student-exam-code-secret');
+  assert.throws(() => normalizeExamRoomCommand({
+    operation: 'publish_for_beadle',
+    examId,
+    gradingKey: 'professor-grading-key-secret',
+    beadleEmail: 'beadle@example.edu',
+    beadleInvitationKey: 'beadle-invitation-key-secret',
+    beadleExpiresAt,
+    reason: 'Prepare and confirm the official class roster.',
+    requestKey,
+    rules: {
+      opensAt,
+      hardClosesAt,
+      studentAccessCodeRequired: false,
+    },
+  }), (error) => error.code === 'EXAM_ROOM_STUDENT_ACCESS_POLICY_REQUIRED');
+});
+
+test('class handoff requires a stable 30-minute opening lead in the Worker and database contract', () => {
+  assert.equal(EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES, 30);
+  const opensAt = new Date(Date.now() + 29 * 60 * 1_000).toISOString();
+  const hardClosesAt = new Date(Date.now() + 2 * 60 * 60 * 1_000).toISOString();
+  assert.throws(() => normalizeExamRoomCommand({
+    operation: 'publish_for_beadle',
+    examId,
+    gradingKey: 'professor-grading-key-secret',
+    beadleEmail: 'beadle@example.edu',
+    beadleInvitationKey: 'beadle-invitation-key-secret',
+    beadleExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString(),
+    reason: 'Prepare and confirm the official class roster.',
+    requestKey,
+    rules: {
+      opensAt,
+      hardClosesAt,
+      durationMinutes: 120,
+      studentAccessCodeRequired: true,
+    },
+  }), (error) => error.code === 'EXAM_ROOM_HANDOFF_TIME_REQUIRED'
+    && error.status === 409
+    && error.message === 'Set the examination opening at least 30 minutes from now so the Beadle can prepare the class list and student handout.');
+
+  const databaseError = examRoom2026DatabaseError({
+    message: 'EXAM_ROOM_HANDOFF_TIME_REQUIRED private database timing detail',
+  });
+  assert.equal(databaseError.code, 'EXAM_ROOM_HANDOFF_TIME_REQUIRED');
+  assert.equal(databaseError.status, 409);
+  assert.equal(
+    databaseError.message,
+    'Set the examination opening at least 30 minutes from now so the Beadle can prepare the class list and student handout.',
+  );
+  assert.equal(databaseError.message.includes('private database timing detail'), false);
+});
+
+test('Professor result PDF request is candidate-scoped and allows only three packages', () => {
+  const result = normalizeExamResultPdfRequest({
+    examId,
+    attemptId,
+    scope: 'grades_comments',
+    gradingKey: 'professor-grading-key-secret',
+    requestKey,
+  });
+  assert.deepEqual(result, {
+    examId,
+    attemptId,
+    scope: 'grades_comments',
+    gradingKey: 'professor-grading-key-secret',
+    requestKey,
+  });
+  assert.throws(() => normalizeExamResultPdfRequest({
+    examId,
+    attemptId,
+    scope: 'all_database_evidence',
+    gradingKey: 'professor-grading-key-secret',
+    requestKey,
+  }), (error) => error.code === 'INVALID_REQUEST');
 });
 
 test('student access code is optional but its publication requirement is explicit and frozen', () => {

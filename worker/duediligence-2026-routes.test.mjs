@@ -125,7 +125,7 @@ test('question upload preserves all 35 questions and stores only in the owning p
   h.handlers = createDD2026Handlers({
     corsHeaders: () => ({}), dd2026Rpc: async () => ({}), deleteExamRoomSource: async () => true,
     enforceAdminRateLimit: async () => {}, enforceDD2026RateLimit: async () => {},
-    examRoomRpc: async (_env, name) => name === 'exam_room_exam_access_v2'
+    examRoomRpc: async (_env, name) => name === 'exam_room_exam_access_v3'
       ? { canUploadQuestions: true, storagePrefix: examId }
       : {},
     jsonResponse: (body, status) => new Response(JSON.stringify(body), { status }),

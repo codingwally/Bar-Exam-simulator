@@ -647,6 +647,13 @@ export function examRoom2026DatabaseError(error) {
     EXAM_ROOM_LOCAL_SEQUENCE_REUSED: [409, 'A newer local save sequence already exists. Reconcile before retrying.'],
     EXAM_ROOM_REQUEST_KEY_REUSED: [409, 'This request identifier was already used for different content.'],
     EXAM_ROOM_ALREADY_PUBLISHED: [409, 'This examination version is already published.'],
+    EXAM_ROOM_EXAM_NOT_PUBLISHABLE: [409, 'Complete and confirm the examination questions before publishing for class preparation.'],
+    EXAM_ROOM_HANDOFF_TIME_REQUIRED: [409, 'Set the examination opening at least 30 minutes from now so the Beadle can prepare the class list and student handout.'],
+    EXAM_ROOM_BEADLE_REQUIRED: [403, 'Redeem the Beadle invitation with the invited account before preparing student access.'],
+    EXAM_ROOM_STUDENT_ACCESS_NOT_ISSUABLE: [409, 'Student access can be prepared only after publication and roster upload, before the examination opens and before any attempt starts.'],
+    EXAM_ROOM_STUDENT_ACCESS_ROSTER_REQUIRED: [409, 'Upload and save at least one eligible student before preparing student access.'],
+    EXAM_ROOM_STUDENT_ACCESS_POLICY_MISMATCH: [409, 'This publication is not configured for the required Beadle-issued student access code.'],
+    EXAM_ROOM_CREDENTIAL_REUSE_FORBIDDEN: [409, 'Use a new student access code that has never been used as another Examination Room key.'],
     EXAM_ROOM_ATTEMPT_CLOSED: [409, 'This examination attempt is closed.'],
     EXAM_ROOM_EXAM_NOT_SCHEDULED: [409, 'Schedule the examination before publishing it.'],
     EXAM_ROOM_PUBLICATION_PRECONDITION_FAILED: [409, 'The examination is not ready to publish. Review its questions, schedule, and access credentials.'],
@@ -654,6 +661,11 @@ export function examRoom2026DatabaseError(error) {
     EXAM_ROOM_STUDENT_ACCESS_CODE_UNEXPECTED: [400, 'Remove the student access code when publishing a roster-only examination.'],
     EXAM_ROOM_ONE_WAY_NAVIGATION_UNAVAILABLE: [400, 'One-way navigation is unavailable until durable server-side progress enforcement is enabled. Choose free navigation.'],
     EXAM_ROOM_QUESTION_COUNT_MISMATCH: [409, 'The reviewed question count does not match the examination configuration.'],
+    EXAM_ROOM_FINAL_GRADES_REQUIRED: [409, 'Finalize every question grade for this candidate before downloading or sending results.'],
+    EXAM_ROOM_SUBMISSION_REQUIRED: [409, 'A committed candidate submission is required before preparing this result.'],
+    EXAM_ROOM_RESULT_EXPORT_NOT_READY: [409, 'This candidate result is not ready to download.'],
+    EXAM_ROOM_RESULT_EXPORT_NOT_FOUND: [404, 'The requested candidate result download could not be found.'],
+    EXAM_ROOM_RESULT_EXPORT_CHANGED: [409, 'This result changed while the download was being prepared. Start a new download.'],
     EXAM_ROOM_BEADLE_INVITATION_NOT_ACTIVE: [409, 'This Beadle invitation is expired, revoked, used, or belongs to another account.'],
     EXAM_ROOM_BEADLE_DELEGATION_CLOSED: [409, 'Beadle delegation is closed for this examination state.'],
     EXAM_ROOM_MODEL_ANSWER_SOURCE_NOT_REGISTERED: [409, 'Register the private model-answer source before publication.'],
@@ -718,6 +730,8 @@ export function examRoom2026DatabaseError(error) {
     'EXAM_ROOM_RULE_UNKNOWN', 'EXAM_ROOM_RULES_INVALID',
     'EXAM_ROOM_SESSION_TRANSFER_INVALID', 'EXAM_ROOM_TECHNICAL_INCIDENT_INVALID',
     'EXAM_ROOM_VERIFICATION_INVALID',
+    'EXAM_ROOM_CLASS_HANDOFF_INVALID', 'EXAM_ROOM_STUDENT_ACCESS_INVALID',
+    'EXAM_ROOM_RESULT_EXPORT_INVALID',
   ];
   for (const code of knownInvalid) {
     if (message.includes(code)) {
@@ -750,17 +764,23 @@ async function examRoom2026Rpc(env, functionName, body) {
     'exam_room_confirm_replacement_questions_v2',
     'exam_room_schedule_exam',
     'exam_room_exam_access_v2',
+    'exam_room_exam_access_v3',
     'exam_room_beadle_portal_v2',
+    'exam_room_beadle_portal_v3',
     'exam_room_student_preflight_v2',
+    'exam_room_student_preflight_v3',
     'exam_room_incident_summary_v2',
     'exam_room_issue_beadle_invitation_v2',
     'exam_room_redeem_beadle_invitation_v2',
     'exam_room_revoke_beadle_assignment_v2',
     'exam_room_publish_exam_v2',
+    'exam_room_publish_for_beadle_v3',
+    'exam_room_issue_student_access_v3',
     'exam_room_replace_publication_v2',
     'exam_room_admit_candidate_v2',
     'exam_room_set_accommodation_v2',
     'exam_room_start_attempt',
+    'exam_room_start_attempt_v3',
     'exam_room_open_session_v2',
     'exam_room_attempt_view',
     'exam_room_attempt_view_v2',
@@ -793,6 +813,8 @@ async function examRoom2026Rpc(env, functionName, body) {
     'exam_room_save_grade',
     'exam_room_unlock_attempt',
     'exam_room_release_results',
+    'exam_room_prepare_result_export_v3',
+    'exam_room_complete_result_export_v3',
     'exam_room_student_result',
     'exam_room_claim_backup_batch',
     'exam_room_complete_backup',
@@ -5124,6 +5146,9 @@ export default {
       }
       if (pathname === '/exam-room/upload/roster') {
         return await dd2026Handlers.rosterUpload(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam-room/results/pdf') {
+        return await dd2026Handlers.examResultPdf(request, env, origin, allowedOrigin);
       }
       if (pathname === '/corrections') {
         return await handleCorrection(request, env, origin, allowedOrigin);

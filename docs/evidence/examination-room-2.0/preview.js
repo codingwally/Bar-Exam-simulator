@@ -102,7 +102,7 @@
       'professor-authoring': 'Professor',
       beadle: 'Beadle',
       student: 'Student',
-      'professor-after': 'Professor — Monitor and grade',
+      'professor-after': 'Professor — Monitor, grade, and release',
       admin: 'Admin'
     };
     document.title = 'Examination Room 2.0 — ' + (viewTitles[viewName] || 'Local visual QA');
@@ -328,31 +328,17 @@
     one('#qa-grade-question').value = String(ordinal);
   }
 
-  function syncAccessCodePreview() {
-    var required = Boolean(one('#qa-access-code-required')?.checked);
-    var summary = one('#qa-access-summary');
-    var result = one('#qa-student-code-result');
-    if (summary) {
-      summary.textContent = required
-        ? 'Signed-in student on the class list, plus a separate Professor-issued exam access code'
-        : 'Signed-in students on the class list; no separate exam access code will be issued';
-    }
-    if (result) {
-      result.innerHTML = required
-        ? '<div class="dd26-label">Required student access code</div><p class="dd26-raw-key qa-code">EVID-8K3J-7M2Q</p><small>Shown once in this synthetic publication result.</small>'
-        : '<div class="dd26-label">Student entry</div><p><strong>No separate exam code issued.</strong></p><small>Each student must still sign in and be on the class list.</small>';
-    }
-  }
-
   all('[data-open-view]').forEach(function (button) {
     button.addEventListener('click', function () { showView(button.dataset.openView, true); });
   });
 
-  one('[data-student-entry]').addEventListener('click', function () {
-    openDemoDialog(
-      'Student sign-in is required before the examination page opens. This local preview can continue only as a signed-in demo student.',
-      { label: 'Sign in and continue (demo)', run: function () { showView('student', true); } }
-    );
+  all('[data-student-entry]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      openDemoDialog(
+        'Student sign-in is required before the examination page opens. This local preview can continue only as a signed-in demo student.',
+        { label: 'Sign in and continue (demo)', run: function () { showView('student', true); } }
+      );
+    });
   });
 
   all('[data-state-group]').forEach(function (button) {
@@ -366,8 +352,26 @@
     button.addEventListener('click', function () { showState('authoring', button.dataset.authoringNext, true); });
   });
 
+  all('[data-beadle-next]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      if (button.dataset.beadleNext === 'roster') {
+        var beadleKey = one('#qa-beadle-entry-key');
+        if (!beadleKey.value.trim()) {
+          beadleKey.focus();
+          announce('Enter the Beadle key sent by the Professor.');
+          return;
+        }
+      }
+      showState('beadle', button.dataset.beadleNext, true);
+    });
+  });
+
   all('[data-student-next]').forEach(function (button) {
     button.addEventListener('click', function () { showState('student', button.dataset.studentNext, true); });
+  });
+
+  all('[data-professor-after-next]').forEach(function (button) {
+    button.addEventListener('click', function () { showState('professor-after', button.dataset.professorAfterNext, true); });
   });
 
   all('[data-demo-toast]').forEach(function (button) {
@@ -412,13 +416,6 @@
     one('#qa-publish-button').disabled = !event.target.checked;
   });
 
-  one('#qa-access-code-required').addEventListener('change', function () {
-    syncAccessCodePreview();
-    announce(one('#qa-access-code-required').checked
-      ? 'Separate student access code enabled in synthetic QA.'
-      : 'Class-list sign-in selected in synthetic QA.');
-  });
-
   one('#qa-room-key-form').addEventListener('submit', function (event) {
     event.preventDefault();
     var details = {
@@ -457,8 +454,8 @@
   one('#qa-publish-button').addEventListener('click', function (event) {
     one('#qa-published-result').hidden = false;
     event.currentTarget.disabled = true;
-    event.currentTarget.textContent = 'Published in synthetic QA';
-    announce('Synthetic version 1 published. One-time keys are visible.');
+    event.currentTarget.textContent = 'Examination published';
+    announce('Examination published in this visual preview. Copy the Beadle key for the next classroom stage.');
     one('#qa-published-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 
@@ -562,14 +559,36 @@
     announce('Moved to the next synthetic grading item.');
   });
 
+  one('#qa-send-result-confirm').addEventListener('change', function (event) {
+    one('#qa-send-result-button').disabled = !event.target.checked;
+  });
+
+  one('#qa-result-candidate').addEventListener('change', function (event) {
+    announce('Candidate PDF selection changed to ' + event.target.value + '.');
+  });
+
+  one('#qa-send-result-button').addEventListener('click', function (event) {
+    one('#qa-result-sent').hidden = false;
+    event.currentTarget.disabled = true;
+    event.currentTarget.textContent = 'Results sent';
+    announce('Class results sent in this visual preview.');
+  });
+
+  one('#qa-download-result-button').addEventListener('click', function () {
+    var selectedPackage = one('input[name="qa-result-package"]:checked');
+    var packageName = selectedPackage ? selectedPackage.value : 'Questions and answers';
+    var candidate = one('#qa-result-candidate').value;
+    openDemoDialog(packageName + ' selected for ' + candidate + '. This visual preview does not create a real PDF.');
+    announce(packageName + ' candidate PDF selected in this visual preview.');
+  });
+
   showView('roles', false);
   showState('authoring', 'upload', false);
-  showState('beadle', 'roster', false);
+  showState('beadle', 'entry', false);
   showState('student', 'preflight', false);
   showState('professor-after', 'monitor', false);
   showState('admin', 'room-keys', false);
   updateProfessorRoomKeyCount();
-  syncAccessCodePreview();
   renderStudentQuestion(1);
   renderGradeQuestion(1);
 }());

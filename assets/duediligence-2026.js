@@ -4441,12 +4441,15 @@
   global.openChairCases = () => open('chair_case', document.getElementById('spa-chairs-case'));
   global.openDoctrines = () => open('doctrine', document.getElementById('spa-jurisprudence'));
   global.openAnchorCases = () => open('anchor_case', document.getElementById('spa-case-digest'));
-  global.openExaminationRoom = () => {
+  global.openExaminationRoom = async () => {
     const moduleIsOpen = state.view === 'exam_room'
       && document.getElementById('page-dd2026')?.classList.contains('active');
-    if (moduleIsOpen) return returnToExaminationRoomHome();
-    state.exam.section = 'entry';
-    state.exam.intentRole = null;
+    if (moduleIsOpen) {
+      const returnedHome = await returnToExaminationRoomHome();
+      if (!returnedHome) return false;
+    }
+    state.exam.section = 'professor';
+    state.exam.intentRole = 'professor';
     state.exam.entryExamId = '';
     return open('exam_room', document.getElementById('spa-examination-room'));
   };

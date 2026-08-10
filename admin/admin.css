@@ -253,6 +253,65 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
   cursor: not-allowed;
   opacity: .45;
 }
+.exam-room-admin-tabs {
+  display: flex;
+  gap: .45rem;
+  margin: 0 0 1rem;
+  padding: .35rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #edf2f7;
+  width: fit-content;
+  max-width: 100%;
+}
+.exam-room-admin-tabs button {
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  padding: .6rem .8rem;
+  cursor: pointer;
+  font-size: .74rem;
+  font-weight: 750;
+}
+.exam-room-admin-tabs button[aria-pressed="true"] {
+  border-color: #b6c2d0;
+  background: white;
+  color: var(--navy);
+  box-shadow: 0 3px 10px rgba(7,26,51,.08);
+}
+.exam-room-health-list dd { line-height: 1.55; overflow-wrap: anywhere; }
+.exam-room-audit-notice,
+.exam-room-export-warning { margin: .9rem 0 0; }
+.exam-room-audit-notice strong,
+.exam-room-export-warning strong { color: var(--navy); }
+.exam-room-break-glass-form {
+  display: grid;
+  gap: .75rem;
+}
+.exam-room-break-glass-form > label {
+  display: grid;
+  gap: .35rem;
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 700;
+}
+.exam-room-break-glass-form textarea {
+  min-height: 105px;
+  resize: vertical;
+}
+.exam-room-break-glass-form .check-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  line-height: 1.5;
+}
+.exam-room-break-glass-form button:disabled {
+  border-color: #b5c0ce;
+  background: #e7ebf0;
+  color: #5f6f82;
+  cursor: not-allowed;
+}
 @keyframes pulse { 50% { opacity: .55; } }
 @media print {
   .sidebar, .topbar-tools, .menu-button, .system-banner, .row-actions { display: none !important; }
@@ -295,6 +354,8 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
   .table-wrap td:last-child { border-bottom: 0; }
   .panel-title-row, .pagination-bar { align-items: stretch; flex-direction: column; }
   .panel-title-row > button { min-height: 44px; }
+  .exam-room-admin-tabs { width: 100%; }
+  .exam-room-admin-tabs button { flex: 1; }
   .row-actions { min-width: 0; align-items: stretch; }
   .row-actions button { min-height: 44px; }
   .action-menu { width: min(100%, 280px); }
@@ -313,6 +374,11 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
   .exam-admin-form select,
   .exam-admin-form textarea,
   .exam-admin-form > button { width: 100%; min-width: 0; max-width: 100%; }
+  .exam-room-admin-tabs { display: grid; grid-template-columns: 1fr; }
+  .exam-room-break-glass-form input,
+  .exam-room-break-glass-form select,
+  .exam-room-break-glass-form textarea,
+  .exam-room-break-glass-form button { width: 100%; min-width: 0; max-width: 100%; }
   .freshness { grid-column: 1 / -1; grid-row: 2; margin: .25rem 0 0; max-width: none; }
   .topbar-download { grid-column: 1; grid-row: 3; width: 100%; min-height: 44px; }
   .refresh-button { grid-column: 2; grid-row: 3; min-height: 44px; }

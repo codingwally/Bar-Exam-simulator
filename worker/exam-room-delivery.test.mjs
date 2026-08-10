@@ -53,7 +53,6 @@ test('Google backup creates one least-privilege isolated workbook, writes RAW-sa
     if (String(url).includes('/drive/v3/files/sheet-123') && options.method === 'PATCH') {
       return response({ id: 'sheet-123', name: 'DueDiligence Exam' });
     }
-    if (String(url).includes('/permissions') && options.method === 'POST') return response({ id: 'permission-1' });
     if (String(url).includes('/values/%27Sync%20Log%27')) {
       syncReads += 1;
       return response({ values: syncReads === 1 ? [] : [[event.id, context.examPublicId, '1', event.event_type, event.content_hash]] });
@@ -86,9 +85,13 @@ test('Google backup creates one least-privilege isolated workbook, writes RAW-sa
   ]);
   assert.equal(calls.some((call) => call.url.includes('/copy')), false,
     'Backup must not request broad access to copy an unrelated Drive file.');
+  assert.equal(calls.some((call) => call.url.includes('/permissions')), false,
+    'A new protected backup must never be shared directly with the Professor.');
+  assert.equal(result.professorAccessRemoved, true);
+  assert.match(JSON.stringify(JSON.parse(writes[0].options.body)), /not shared with the Professor/);
 });
 
-test('Google backup recovery restores professor access to an orphaned workbook before syncing', async () => {
+test('Google backup recovery revokes legacy Professor access before syncing protected data', async () => {
   const calls = [];
   let syncReads = 0;
   const fetchImpl = async (url, options = {}) => {
@@ -97,8 +100,15 @@ test('Google backup recovery restores professor access to an orphaned workbook b
     if (String(url).includes('/drive/v3/files?')) return response({
       files: [{ id: 'orphan-sheet-123', name: 'Recovered staging backup' }],
     });
-    if (String(url).includes('/permissions') && options.method === 'POST') {
-      return response({ id: 'restored-permission-1' });
+    if (String(url).includes('/permissions?') && !options.method) {
+      return response({ permissions: [
+        { id: 'owner-1', emailAddress: 'backup-admin@example.test', role: 'owner', type: 'user' },
+        { id: 'professor-writer-1', emailAddress: context.professorEmail, role: 'writer', type: 'user' },
+        { id: 'review-admin-1', emailAddress: 'review@example.test', role: 'reader', type: 'user' },
+      ] });
+    }
+    if (String(url).includes('/permissions/professor-writer-1') && options.method === 'DELETE') {
+      return response(null, 204);
     }
     if (String(url).includes('/values/%27Sync%20Log%27')) {
       syncReads += 1;
@@ -120,9 +130,12 @@ test('Google backup recovery restores professor access to an orphaned workbook b
     GOOGLE_OAUTH_REFRESH_TOKEN: 'refresh',
   }, event, context, fetchImpl);
   assert.equal(result.spreadsheetId, 'orphan-sheet-123');
-  const permissionCall = calls.find((call) => call.url.includes('/permissions'));
-  assert.ok(permissionCall, 'Recovery must retry the professor permission that may have failed previously.');
-  assert.equal(JSON.parse(permissionCall.options.body).emailAddress, context.professorEmail);
+  assert.equal(result.professorAccessRemoved, true);
+  assert.equal(calls.some((call) => call.url.includes('/permissions') && call.options.method === 'POST'), false);
+  assert.equal(calls.some((call) => call.url.includes('/permissions/professor-writer-1')
+    && call.options.method === 'DELETE'), true);
+  assert.equal(calls.some((call) => call.url.includes('/permissions/review-admin-1')), false,
+    'The cleanup must preserve unrelated sealed-dispute/admin access.');
   assert.equal(calls.some((call) => call.url.includes('/v4/spreadsheets?fields=spreadsheetId')), false,
     'Recovery must not create a duplicate workbook.');
 });
@@ -187,4 +200,56 @@ test('enabled email uses one idempotent Resend request and returns only provider
   assert.deepEqual(result, { providerId: 'resend-123' });
   assert.equal(captured.options.headers['Idempotency-Key'], 'exam-room-job-2');
   assert.equal(JSON.parse(captured.options.body).to[0], 'professor@example.test');
+});
+
+test('replacement and reopening notices are bounded, idempotent, and contain no questions, answers, or credentials', async () => {
+  const cases = [
+    {
+      id: 'replacement-job',
+      email_type: 'exam_publication_replaced',
+      payload: {
+        examId: context.examPublicId,
+        title: context.title,
+        publicationNumber: 2,
+        studentKey: 'must-not-send',
+        questions: ['must-not-send'],
+      },
+      expected: /official class channel/i,
+      forbidden: /current questions|must-not-send/i,
+    },
+    {
+      id: 'reopen-job',
+      email_type: 'submission_reopened',
+      payload: {
+        examId: context.examPublicId,
+        title: context.title,
+        generation: 2,
+        newDeadline: '2026-08-10T05:00:00Z',
+        answerSnapshot: 'must-not-send',
+        gradingKey: 'must-not-send',
+      },
+      expected: /new server deadline/i,
+      forbidden: /must-not-send/i,
+    },
+  ];
+  for (const entry of cases) {
+    let captured;
+    await deliverExamRoomEmail({
+      EXAMINATION_EMAIL_MODE: 'enabled',
+      RESEND_API_KEY: 'server-secret',
+      EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
+    }, {
+      id: entry.id,
+      email_type: entry.email_type,
+      recipient_email: 'student@example.test',
+      payload: entry.payload,
+    }, async (_url, options) => {
+      captured = JSON.parse(options.body);
+      assert.equal(options.headers['Idempotency-Key'], `exam-room-${entry.id}`);
+      return response({ id: `resend-${entry.id}` });
+    });
+    assert.match(captured.text, entry.expected);
+    assert.doesNotMatch(captured.text, entry.forbidden);
+    assert.equal(captured.to[0], 'student@example.test');
+  }
 });

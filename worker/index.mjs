@@ -163,6 +163,10 @@ const examinationReadRateWindows = new Map();
 const examinationWriteRateWindows = new Map();
 const dd2026ReadRateWindows = new Map();
 const dd2026WriteRateWindows = new Map();
+const examRoomReadRateWindows = new Map();
+const examRoomWriteRateWindows = new Map();
+const examRoomSyncRateWindows = new Map();
+const examRoomUploadRateWindows = new Map();
 const recentSubmissions = new Map();
 const recentSignInNotificationSessions = new Map();
 const authenticatedUserCache = new WeakMap();
@@ -304,6 +308,34 @@ async function enforceDD2026RateLimit(request, env, mutation = false) {
       ? 'Too many study actions. Wait briefly and try again.'
       : 'Too many study requests. Wait briefly and try again.',
   );
+}
+
+async function enforceExamRoomRateLimit(request, env, userId, mode = 'read', resource = '') {
+  const policies = {
+    read: [examRoomReadRateWindows, 600, 480],
+    write: [examRoomWriteRateWindows, 300, 240],
+    sync: [examRoomSyncRateWindows, 1_200, 1_000],
+    upload: [examRoomUploadRateWindows, 30, 20],
+  };
+  const [windows, maximum, resourceMaximum] = policies[mode] || policies.write;
+  const actor = String(userId || 'anonymous');
+  const message = mode === 'sync'
+    ? 'Answer synchronization is temporarily busy. Your device copy is preserved; retry shortly.'
+    : 'Too many Examination Room requests. Wait briefly and try again.';
+  enforceWindow(
+    windows,
+    await transientRateKey(request, env, `exam-room-${mode}-${actor}`),
+    maximum,
+    message,
+  );
+  if (resource) {
+    enforceWindow(
+      windows,
+      await transientRateKey(request, env, `exam-room-${mode}-${actor}-${String(resource)}`),
+      resourceMaximum,
+      message,
+    );
+  }
 }
 
 async function submissionFingerprint(requestData, request) {
@@ -585,6 +617,115 @@ async function dd2026Rpc(env, functionName, body) {
   return result;
 }
 
+export function examRoom2026DatabaseError(error) {
+  const message = String(error?.message || '');
+  const publicErrors = {
+    EXAM_ROOM_AUTH_REQUIRED: [403, 'Sign in with the account authorized for this examination.'],
+    EXAM_ROOM_OPERATOR_REQUIRED: [403, 'Professor or active Beadle authorization is required.'],
+    EXAM_ROOM_ROSTER_REQUIRED: [403, 'This account is not authorized for the examination.'],
+    EXAM_ROOM_MODEL_ANSWER_UPLOAD_NOT_ALLOWED: [403, 'The model-answer source cannot be changed in this examination state.'],
+    EXAM_ROOM_MODEL_ANSWER_UPLOAD_UNAVAILABLE: [400, 'Uploaded model answers are unavailable until audited owner-only retrieval is enabled. Use pasted text or no model answer.'],
+    EXAM_ROOM_EXAM_NOT_FOUND: [404, 'The examination could not be found.'],
+    EXAM_ROOM_ATTEMPT_NOT_FOUND: [404, 'The examination attempt could not be found.'],
+    EXAM_ROOM_QUESTION_NOT_FOUND: [404, 'The examination question could not be found.'],
+    EXAM_ROOM_SESSION_NOT_FOUND: [409, 'This examination session is no longer available. Request a controlled session recovery.'],
+    EXAM_ROOM_ACTIVE_SESSION_NOT_FOUND: [409, 'No active examination session is available to transfer.'],
+    EXAM_ROOM_BEADLE_ASSIGNMENT_NOT_FOUND: [404, 'The active Beadle assignment could not be found.'],
+    EXAM_ROOM_MODEL_ANSWER_OBJECT_NOT_FOUND: [404, 'The private model-answer source could not be found.'],
+    EXAM_ROOM_MODEL_ANSWER_SOURCE_NOT_FOUND: [409, 'The published model-answer source is unavailable. Review the examination publication record.'],
+    EXAM_ROOM_SESSION_STALE: [409, 'This session has been replaced. Continue only in the active examination session.'],
+    EXAM_ROOM_SESSION_EPOCH_CONFLICT: [409, 'The examination session changed. Refresh the session state before continuing.'],
+    EXAM_ROOM_OPERATION_ID_REUSED: [409, 'This save identifier was already used for different content.'],
+    EXAM_ROOM_LOCAL_SEQUENCE_REUSED: [409, 'A newer local save sequence already exists. Reconcile before retrying.'],
+    EXAM_ROOM_REQUEST_KEY_REUSED: [409, 'This request identifier was already used for different content.'],
+    EXAM_ROOM_ALREADY_PUBLISHED: [409, 'This examination version is already published.'],
+    EXAM_ROOM_ATTEMPT_CLOSED: [409, 'This examination attempt is closed.'],
+    EXAM_ROOM_EXAM_NOT_SCHEDULED: [409, 'Schedule the examination before publishing it.'],
+    EXAM_ROOM_PUBLICATION_PRECONDITION_FAILED: [409, 'The examination is not ready to publish. Review its questions, schedule, and access credentials.'],
+    EXAM_ROOM_STUDENT_ACCESS_CODE_MISMATCH: [409, 'The student access code does not match the scheduled examination credential. Re-enter the current code.'],
+    EXAM_ROOM_STUDENT_ACCESS_CODE_UNEXPECTED: [400, 'Remove the student access code when publishing a roster-only examination.'],
+    EXAM_ROOM_ONE_WAY_NAVIGATION_UNAVAILABLE: [400, 'One-way navigation is unavailable until durable server-side progress enforcement is enabled. Choose free navigation.'],
+    EXAM_ROOM_QUESTION_COUNT_MISMATCH: [409, 'The reviewed question count does not match the examination configuration.'],
+    EXAM_ROOM_BEADLE_INVITATION_NOT_ACTIVE: [409, 'This Beadle invitation is expired, revoked, used, or belongs to another account.'],
+    EXAM_ROOM_BEADLE_DELEGATION_CLOSED: [409, 'Beadle delegation is closed for this examination state.'],
+    EXAM_ROOM_MODEL_ANSWER_SOURCE_NOT_REGISTERED: [409, 'Register the private model-answer source before publication.'],
+    EXAM_ROOM_SESSION_TRANSFER_SAME_DEVICE: [409, 'Session transfer requires a different verified device.'],
+    EXAM_ROOM_RECENT_VERIFICATION_REQUIRED: [409, 'Record a fresh physical or institutional identity verification before transferring this examination session.'],
+    EXAM_ROOM_ACTIVE_LEAVE_NOT_FOUND: [409, 'No active temporary leave is available to close.'],
+    EXAM_ROOM_LEAVE_NOT_FOUND: [404, 'The temporary-leave record could not be found.'],
+    EXAM_ROOM_ROSTER_LOCKED: [409, 'This roster is locked because the examination, an attempt, or another class examination is already live.'],
+    EXAM_ROOM_ERRATUM_NOT_ALLOWED: [409, 'An erratum cannot be issued in this examination state.'],
+    EXAM_ROOM_EXAM_NOT_SCHEDULABLE: [409, 'This examination cannot be scheduled or rotated in its current state.'],
+    EXAM_ROOM_IMMUTABLE_EVIDENCE: [409, 'Immutable examination evidence cannot be changed.'],
+    EXAM_ROOM_SUBMISSION_REQUEST_CONFLICT: [409, 'This submission request identifier was already used for a different answer set.'],
+    EXAM_ROOM_V2_SESSION_REQUIRED: [409, 'This examination requires the active device-bound session. Refresh and reopen the examination session.'],
+    EXAM_ROOM_PUBLICATION_REQUIRED: [409, 'Publish an immutable examination version before using this operation.'],
+    EXAM_ROOM_REPLACEMENT_NOT_ALLOWED: [409, 'A replacement publication is allowed only before the examination opens.'],
+    EXAM_ROOM_REPLACEMENT_ATTEMPTS_EXIST: [409, 'This publication cannot be replaced because a candidate attempt already exists.'],
+    EXAM_ROOM_PUBLICATION_VERSION_CONFLICT: [409, 'The published examination changed. Refresh before replacing it.'],
+    EXAM_ROOM_REPLACEMENT_CREDENTIAL_INVALID: [400, 'Provide new replacement credentials that match the access-code policy.'],
+    EXAM_ROOM_REPLACEMENT_QUESTION_SOURCE_INVALID: [400, 'The replacement question source is invalid or no longer matches the reviewed upload.'],
+    EXAM_ROOM_REPLACEMENT_QUESTION_VERSION_INVALID: [409, 'Stage and confirm a new question version against the current publication before replacing it.'],
+    EXAM_ROOM_REPLACEMENT_LINEAGE_INVALID: [409, 'The replacement publication lineage could not be verified. Refresh and try again.'],
+    EXAM_ROOM_REPLACEMENT_CONTEXT_REQUIRED: [409, 'The replacement publication context could not be verified. Refresh and try again.'],
+    EXAM_ROOM_REOPEN_NOT_ALLOWED: [409, 'This submission cannot be reopened in its current examination or grading state.'],
+    EXAM_ROOM_REOPEN_REQUEST_INVALID: [400, 'Choose a reopening deadline in the next four hours and provide a documented reason.'],
+    EXAM_ROOM_REOPEN_AUTHORITY_INVALID: [403, 'Use either the Professor grading key or an active candidate-scoped Admin review grant.'],
+    EXAM_ROOM_REOPEN_AUTHORIZATION_REQUIRED: [403, 'This submission generation has not been authorized for reopening.'],
+    EXAM_ROOM_REOPEN_GRADING_ALREADY_STARTED: [409, 'This submission cannot be reopened after grading has started.'],
+    EXAM_ROOM_REOPEN_ACTIVE_SESSION_INVALID: [409, 'Close the active candidate session before reopening this submission.'],
+    EXAM_ROOM_REOPEN_PRIOR_SUBMISSION_REQUIRED: [409, 'The original immutable submission is unavailable, so reopening is blocked.'],
+    EXAM_ROOM_REOPEN_PRIOR_RECEIPT_REQUIRED: [409, 'The original submission receipt is unavailable, so reopening is blocked.'],
+    EXAM_ROOM_REOPENING_ALREADY_ACTIVE: [409, 'A bounded reopening is already active for this candidate.'],
+    EXAM_ROOM_REOPENING_ATTEMPT_STATE_INVALID: [409, 'The candidate attempt is not in the authorized reopened-generation state.'],
+    EXAM_ROOM_ADMIN_REQUIRED: [403, 'Global Administrator authorization is required for candidate-scoped review.'],
+    EXAM_ROOM_FRESH_AAL2_REQUIRED: [403, 'Complete a fresh multi-factor challenge before using candidate-scoped Admin review.'],
+    EXAM_ROOM_BREAK_GLASS_NOT_FOUND: [404, 'The candidate-scoped Admin review grant could not be found.'],
+    EXAM_ROOM_BREAK_GLASS_REQUEST_INVALID: [400, 'Provide an exact candidate scope, case reference, reason, and expiry of no more than four hours.'],
+    EXAM_ROOM_BREAK_GLASS_SCOPE_INVALID: [403, 'The requested examination, attempt, or candidate does not match this review grant.'],
+    EXAM_ROOM_BREAK_GLASS_SCOPE_OR_EXPIRY_INVALID: [409, 'This candidate-scoped review grant is expired, closed, or no longer valid for the attempt state.'],
+    EXAM_ROOM_BREAK_GLASS_TERMINAL_EVIDENCE_REQUIRED: [409, 'Candidate evidence is available only after the submission is terminal and its grace period has passed.'],
+    EXAM_ROOM_BREAK_GLASS_ALREADY_ACTIVE: [409, 'An active candidate-scoped review grant already exists for this case.'],
+    EXAM_ROOM_BREAK_GLASS_ALREADY_CLOSED: [409, 'This candidate-scoped Admin review grant is already closed.'],
+    EXAM_ROOM_BREAK_GLASS_CLOSE_INVALID: [400, 'Provide a documented reason for closing this candidate-scoped review grant.'],
+    EXAM_ROOM_BREAK_GLASS_CLOSE_REQUIRED: [409, 'Close the candidate-scoped grant before recording the required post-review outcome.'],
+    EXAM_ROOM_BREAK_GLASS_REVIEW_INVALID: [400, 'Provide a valid post-review outcome and review notes.'],
+    EXAM_ROOM_BREAK_GLASS_REVIEW_ALREADY_RECORDED: [409, 'The required post-review outcome was already recorded.'],
+    EXAM_ROOM_CONFIRM_QUESTIONS_DEFINITION_DRIFT: [503, 'Question confirmation is temporarily unavailable because the database contract is out of date.'],
+  };
+  const knownInvalid = [
+    'EXAM_ROOM_ACCOMMODATION_INVALID', 'EXAM_ROOM_ACCOMMODATION_UNKNOWN',
+    'EXAM_ROOM_ACCOMMODATION_WINDOW_INVALID', 'EXAM_ROOM_ADMISSION_INVALID',
+    'EXAM_ROOM_ANSWER_HASH_MISMATCH', 'EXAM_ROOM_ANSWER_OPERATION_INVALID',
+    'EXAM_ROOM_ANSWER_TOO_LONG', 'EXAM_ROOM_REVISION_INVALID',
+    'EXAM_ROOM_AUDIT_EVENT_INVALID', 'EXAM_ROOM_BEADLE_INVITATION_INVALID',
+    'EXAM_ROOM_CLIENT_TIMESTAMP_INVALID', 'EXAM_ROOM_DEVICE_HASH_INVALID',
+    'EXAM_ROOM_INTEGRITY_EVENT_INVALID', 'EXAM_ROOM_MODEL_ANSWER_INVALID',
+    'EXAM_ROOM_MODEL_ANSWER_SOURCE_INVALID', 'EXAM_ROOM_REASON_REQUIRED',
+    'EXAM_ROOM_REQUEST_INVALID', 'EXAM_ROOM_REQUEST_KEY_INVALID', 'EXAM_ROOM_RESPONSE_INVALID',
+    'EXAM_ROOM_ROSTER_REQUEST_INVALID', 'EXAM_ROOM_SCHEDULE_INVALID',
+    'EXAM_ROOM_SUBMISSION_REQUEST_INVALID', 'EXAM_ROOM_ERRATUM_INVALID',
+    'EXAM_ROOM_ERRATUM_QUESTION_INVALID', 'EXAM_ROOM_LEAVE_ACTION_INVALID',
+    'EXAM_ROOM_LEAVE_REASON_INVALID',
+    'EXAM_ROOM_RULE_UNKNOWN', 'EXAM_ROOM_RULES_INVALID',
+    'EXAM_ROOM_SESSION_TRANSFER_INVALID', 'EXAM_ROOM_TECHNICAL_INCIDENT_INVALID',
+    'EXAM_ROOM_VERIFICATION_INVALID',
+  ];
+  for (const code of knownInvalid) {
+    if (message.includes(code)) {
+      return new DD2026ValidationError(
+        code,
+        'The Examination Room request is invalid. Review the highlighted fields and try again.',
+        400,
+      );
+    }
+  }
+  for (const [code, [status, publicMessage]] of Object.entries(publicErrors)) {
+    if (message.includes(code)) return new DD2026ValidationError(code, publicMessage, status);
+  }
+  return dd2026DatabaseError(error);
+}
+
 async function examRoom2026Rpc(env, functionName, body) {
   const allowedFunctions = new Set([
     'exam_room_issue_professor_activation',
@@ -592,32 +733,64 @@ async function examRoom2026Rpc(env, functionName, body) {
     'exam_room_create_classroom',
     'exam_room_validate_roster',
     'exam_room_import_roster',
+    'exam_room_validate_exam_roster_v2',
+    'exam_room_import_exam_roster_v2',
+    'exam_room_upsert_roster_row_v2',
     'exam_room_create_exam',
     'exam_room_confirm_questions',
+    'exam_room_confirm_replacement_questions_v2',
     'exam_room_schedule_exam',
+    'exam_room_exam_access_v2',
+    'exam_room_beadle_portal_v2',
+    'exam_room_student_preflight_v2',
+    'exam_room_incident_summary_v2',
+    'exam_room_issue_beadle_invitation_v2',
+    'exam_room_redeem_beadle_invitation_v2',
+    'exam_room_revoke_beadle_assignment_v2',
+    'exam_room_publish_exam_v2',
+    'exam_room_replace_publication_v2',
+    'exam_room_admit_candidate_v2',
+    'exam_room_set_accommodation_v2',
     'exam_room_start_attempt',
+    'exam_room_open_session_v2',
     'exam_room_attempt_view',
+    'exam_room_attempt_view_v2',
+    'exam_room_submission_status_v2',
+    'exam_room_grading_model_answer_v2',
     'exam_room_save_answer',
+    'exam_room_save_answer_operation_v2',
     'exam_room_heartbeat',
+    'exam_room_heartbeat_v2',
     'exam_room_record_integrity_event',
+    'exam_room_record_integrity_event_v2',
     'exam_room_submit_attempt',
+    'exam_room_submit_attempt_generation_v2',
+    'exam_room_reopen_submission_generation_v2',
+    'exam_room_transfer_session_v2',
+    'exam_room_issue_erratum_v2',
+    'exam_room_start_temporary_leave_v2',
+    'exam_room_end_temporary_leave_v2',
+    'exam_room_acknowledge_temporary_leave_v2',
+    'exam_room_record_verification_v2',
+    'exam_room_record_technical_incident_v2',
+    'exam_room_issue_admin_break_glass_v2',
+    'exam_room_admin_break_glass_evidence_v2',
+    'exam_room_close_admin_break_glass_v2',
+    'exam_room_record_admin_break_glass_review_v2',
     'exam_room_auto_submit_due',
     'exam_room_live_status',
+    'exam_room_live_status_v2',
     'exam_room_grading_workspace',
     'exam_room_save_grade',
     'exam_room_unlock_attempt',
     'exam_room_release_results',
     'exam_room_student_result',
-    'exam_room_open_dispute',
-    'exam_room_dispute_view',
-    'exam_room_close_dispute',
     'exam_room_claim_backup_batch',
     'exam_room_complete_backup',
     'exam_room_fail_backup',
     'exam_room_claim_email_batch',
     'exam_room_complete_email',
     'exam_room_fail_email',
-    'exam_room_admin_correct_grade',
     'exam_room_portal_snapshot',
     'exam_room_backup_context',
   ]);
@@ -641,7 +814,7 @@ async function examRoom2026Rpc(env, functionName, body) {
       status: response.status,
       code: String(result?.code || 'unknown').slice(0, 32),
     });
-    const mapped = dd2026DatabaseError({
+    const mapped = examRoom2026DatabaseError({
       message: [result?.message, result?.details, result?.hint].filter(Boolean).join(' '),
     });
     if (mapped instanceof DD2026ValidationError) throw mapped;
@@ -1233,6 +1406,32 @@ function decodeJwtPayload(authorization) {
   }
 }
 
+export function verifiedAccessTokenContext(authorization) {
+  const payload = decodeJwtPayload(authorization);
+  const sessionId = String(payload.session_id || '').trim().toLowerCase();
+  // Supabase Auth's AMR contract distinguishes MFA factors with `mfa/*`.
+  // `totp` is retained for the stable/legacy TOTP claim. Plain `otp`, phone,
+  // WebAuthn, password, and OAuth entries are not sufficient step-up proof.
+  const supportedMfaMethods = new Set([
+    'totp', 'mfa/totp', 'mfa/phone', 'mfa/webauthn',
+  ]);
+  const stepUpAuthenticatedAt = payload.aal === 'aal2' && Array.isArray(payload.amr)
+    ? payload.amr
+        .filter((entry) => entry && typeof entry === 'object')
+        .filter((entry) => supportedMfaMethods.has(String(entry.method || '').trim().toLowerCase()))
+        .map((entry) => entry.timestamp)
+        .filter((value) => Number.isSafeInteger(value) && value > 0)
+        .reduce((latest, value) => Math.max(latest, value), 0) || null
+    : null;
+  return {
+    authenticationLevel: payload.aal === 'aal2' ? 'aal2' : 'aal1',
+    authenticationSessionId: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(sessionId)
+      ? sessionId
+      : null,
+    stepUpAuthenticatedAt,
+  };
+}
+
 async function signInSessionDigest(request, user) {
   const payload = decodeJwtPayload(request.headers.get('Authorization'));
   const sessionKey = safeSingleLine(
@@ -1406,6 +1605,10 @@ async function verifiedAuthenticatedUser(request, env) {
   if (!user?.id) {
     throw new GuestAccessError('INVALID_SESSION', 'Your session expired. Please sign in again.', 401);
   }
+  // `/auth/v1/user` has just authenticated this exact bearer token. Only
+  // after that verification do we decode its AAL and session claims for
+  // server-side step-up authorization; client JSON fields are never used.
+  const accessTokenContext = verifiedAccessTokenContext(authorization);
   const verified = {
     id: String(user.id),
     email: String(user.email || '').trim().toLowerCase() || null,
@@ -1415,6 +1618,7 @@ async function verifiedAuthenticatedUser(request, env) {
     ) || null,
     createdAt: safeSingleLine(user.created_at, 40) || null,
     provider: safeSingleLine(user.app_metadata?.provider, 40) || null,
+    ...accessTokenContext,
   };
   authenticatedUserCache.set(request, verified);
   return verified;
@@ -3934,7 +4138,36 @@ async function handleAdminSession(request, env, origin, allowedOrigin) {
   const result = await protectedSupabaseRpc(env, 'admin_authorization_context', {
     p_actor_user_id: user.id,
   });
-  return jsonResponse({ ok: true, ...result }, 200, origin, allowedOrigin);
+  const nowSeconds = Math.floor(Date.now() / 1_000);
+  const authenticatedAt = Number(user.stepUpAuthenticatedAt);
+  const freshAal2 = user.authenticationLevel === 'aal2'
+    && Boolean(user.authenticationSessionId)
+    && Number.isSafeInteger(authenticatedAt)
+    && authenticatedAt > 0
+    && authenticatedAt <= nowSeconds + 60
+    && nowSeconds - authenticatedAt <= 15 * 60;
+  const featureEnabled = String(env.EXAMINATION_ROOM_ENABLED || '').toLowerCase() === 'true'
+    && String(env.EXAMINATION_ROOM_2_ENABLED || '').toLowerCase() === 'true';
+  return jsonResponse({
+    ok: true,
+    ...result,
+    examinationRoomBreakGlass: {
+      contractVersion: 'exam-room-break-glass-v2',
+      featureEnabled,
+      adminAuthorized: true,
+      authenticationLevel: user.authenticationLevel,
+      freshAal2,
+      requiresFreshAal2: true,
+      maximumStepUpAgeSeconds: 15 * 60,
+      stepUpExpiresAt: Number.isSafeInteger(authenticatedAt) && authenticatedAt > 0
+        ? new Date((authenticatedAt + 15 * 60) * 1_000).toISOString()
+        : null,
+      canIssue: featureEnabled && freshAal2,
+      canView: featureEnabled && freshAal2,
+      canClose: featureEnabled && freshAal2,
+      canRecordReview: featureEnabled && freshAal2,
+    },
+  }, 200, origin, allowedOrigin);
 }
 
 async function handleAdminDashboard(request, env, origin, allowedOrigin) {
@@ -4782,6 +5015,7 @@ const dd2026Handlers = createDD2026Handlers({
   deleteExamRoomSource,
   enforceAdminRateLimit,
   enforceDD2026RateLimit,
+  enforceExamRoomRateLimit,
   examRoomRpc: examRoom2026Rpc,
   jsonResponse,
   parseBoundedJson,
@@ -4875,6 +5109,9 @@ export default {
       }
       if (pathname === '/exam-room/upload/questions') {
         return await dd2026Handlers.questionUpload(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam-room/upload/model-answer') {
+        return await dd2026Handlers.modelAnswerUpload(request, env, origin, allowedOrigin);
       }
       if (pathname === '/exam-room/upload/roster') {
         return await dd2026Handlers.rosterUpload(request, env, origin, allowedOrigin);

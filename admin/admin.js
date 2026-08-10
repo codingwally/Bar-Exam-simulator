@@ -21,6 +21,7 @@
     security: 'Security & Activity Log',
     forum: 'Quorum',
     examinations: 'Exams',
+    examination_room: 'Examination Room',
     answer_exports: 'Answers',
   });
   const requirements = Object.freeze({
@@ -49,6 +50,9 @@
     subscriptionRows: new Map(),
     premiumStatus: 'all',
     examinationData: null,
+    examinationRoomAdminData: null,
+    examinationRoomAdminView: 'operations',
+    examinationRoomBreakGlass: null,
     userSearch: '',
     userOffset: 0,
     subscriptionSearch: '',
@@ -107,7 +111,7 @@
 
   function sectionAllowed(section) {
     if (!titles[section]) return false;
-    const founderOnly = ['forum', 'examinations', 'answer_exports'].includes(section);
+    const founderOnly = ['forum', 'examinations', 'examination_room', 'answer_exports'].includes(section);
     const founderAuthorized = ['founder_admin', 'super_admin'].includes(
       state.authorization?.role,
     );
@@ -419,6 +423,11 @@
   function downloadCurrentSection() {
     const view = $('#dashboard-view');
     if (!view) return;
+    if (state.section === 'examination_room'
+        && state.examinationRoomAdminView === 'restricted') {
+      toast('Restricted candidate evidence cannot be exported from the Admin Dashboard.');
+      return;
+    }
     const rangeControl = $('#reporting-range');
     const rows = [
       ['Page', titles[state.section] || 'Admin'],
@@ -1733,6 +1742,626 @@
     }));
   }
 
+  function examinationRoomBreakGlassGate() {
+    const authorization = state.authorization || {};
+    const contract = authorization.examinationRoomBreakGlass
+      && typeof authorization.examinationRoomBreakGlass === 'object'
+      ? authorization.examinationRoomBreakGlass : {};
+    const contractReported = contract.contractVersion === 'exam-room-break-glass-v2'
+      && contract.featureEnabled === true
+      && contract.adminAuthorized === true;
+    const aal2 = contract.authenticationLevel === 'aal2';
+    const freshAal2 = aal2 && contract.freshAal2 === true
+      && contract.requiresFreshAal2 === true
+      && Number(contract.maximumStepUpAgeSeconds) > 0
+      && Number(contract.maximumStepUpAgeSeconds) <= 900
+      && Number.isFinite(new Date(contract.stepUpExpiresAt).getTime())
+      && new Date(contract.stepUpExpiresAt).getTime() > Date.now();
+    // Release blocker: this Admin bundle does not yet perform the Supabase MFA
+    // challenge + verify ceremony. A safe server snapshot alone must never turn
+    // a status-refresh button into a step-up authentication flow.
+    const stepUpUiAvailable = false;
+    const serverCanIssue = contract.canIssue === true;
+    const serverCanView = contract.canView === true;
+    const serverCanClose = contract.canClose === true;
+    const serverCanRecordReview = contract.canRecordReview === true;
+    const canIssue = stepUpUiAvailable && serverCanIssue;
+    const canView = stepUpUiAvailable && serverCanView;
+    const canClose = stepUpUiAvailable && serverCanClose;
+    const canRecordReview = stepUpUiAvailable && serverCanRecordReview;
+    return {
+      aal2,
+      freshAal2,
+      stepUpUiAvailable,
+      serverCanIssue,
+      serverCanView,
+      serverCanClose,
+      serverCanRecordReview,
+      capability: canIssue && canView && canClose && canRecordReview,
+      canIssue,
+      canView,
+      canClose,
+      canRecordReview,
+      contractReported,
+      stepUpExpiresAt: contract.stepUpExpiresAt || null,
+      enabled: stepUpUiAvailable && contractReported && freshAal2
+        && canIssue && canView && canClose && canRecordReview,
+    };
+  }
+
+  async function loadExaminationRoomAdmin(force = false) {
+    if (state.examinationRoomAdminData && !force) return state.examinationRoomAdminData;
+    const observedAt = new Date().toISOString();
+    try {
+      const payload = await api('/exam-room/query', { operation: 'portal' });
+      const result = payload.result || {};
+      if (result.roles?.admin !== true) {
+        throw new Error('This account was not confirmed for Examination Room administration.');
+      }
+      state.examinationRoomAdminData = {
+        available: true,
+        observedAt,
+        classes: Array.isArray(result.classes) ? result.classes : [],
+        limits: result.limits && typeof result.limits === 'object' ? result.limits : {},
+      };
+    } catch (error) {
+      state.examinationRoomAdminData = {
+        available: false,
+        observedAt,
+        classes: [],
+        limits: {},
+        errorCode: error.code || 'METADATA_CONTRACT_UNAVAILABLE',
+        message: error.message || 'Examination Room status is unavailable.',
+      };
+    }
+    return state.examinationRoomAdminData;
+  }
+
+  function examinationRoomRecords(data) {
+    return (data.classes || []).flatMap((classroom) => (
+      (Array.isArray(classroom.exams) ? classroom.exams : []).map((exam) => ({
+        ...exam,
+        classroomId: classroom.classroomId,
+        classroomTitle: classroom.title,
+        schoolName: classroom.schoolName,
+        academicTerm: classroom.academicTerm,
+        rosterCount: Math.max(0, Number(classroom.rosterCount) || 0),
+      }))
+    ));
+  }
+
+  function examinationRoomStatus(value, tone = '') {
+    return {
+      html: true,
+      value: `<span class="status${tone ? ` ${escapeHtml(tone)}` : ''}">${escapeHtml(value)}</span>`,
+    };
+  }
+
+  function examinationRoomAdminTabs() {
+    const operations = state.examinationRoomAdminView === 'operations';
+    return `<div class="exam-room-admin-tabs" role="group" aria-label="Examination Room administration views">
+      <button type="button" data-exam-room-admin-view="operations"
+        aria-pressed="${operations}">Exam status</button>
+      <button type="button" data-exam-room-admin-view="restricted"
+        aria-pressed="${!operations}">Restricted support</button>
+    </div>`;
+  }
+
+  function renderExaminationRoomOperations(data) {
+    const records = examinationRoomRecords(data);
+    const rosterCount = (data.classes || []).reduce(
+      (total, classroom) => total + Math.max(0, Number(classroom.rosterCount) || 0),
+      0,
+    );
+    const activeCount = records.filter((exam) => ['scheduled', 'open', 'grading'].includes(exam.status)).length;
+    const backupReadyCount = records.filter((exam) => exam.backupSheetReady === true).length;
+    const safeMetadataRows = records.map((exam) => [
+      exam.classroomTitle || 'Untitled class',
+      exam.schoolName || 'Not provided',
+      exam.academicTerm || 'Not provided',
+      number(exam.rosterCount),
+      exam.title || 'Untitled examination',
+      examinationRoomStatus(
+        exam.status || 'unknown',
+        ['open', 'sealed'].includes(exam.status) ? 'ok'
+          : ['scheduled', 'grading'].includes(exam.status) ? 'warn' : '',
+      ),
+      `${dateTime(exam.opensAt)} to ${dateTime(exam.hardClosesAt)}`,
+      number(exam.questionCount),
+      exam.backupSheetReady === true
+        ? examinationRoomStatus('Configured', 'ok')
+        : examinationRoomStatus('Not confirmed', 'warn'),
+    ]);
+
+    return `<section aria-label="Examination Room status">
+      ${!data.available ? `<div class="notice danger" role="alert">
+        <strong>Examination Room status could not be loaded.</strong>
+        ${escapeHtml(data.message || 'The regular status view is unavailable.')} No student answers or grades were requested as a fallback.
+      </div>` : ''}
+      <div class="metric-grid">
+        ${metric('Classes', data.classes.length, null, number, { subtext: 'Basic details only' })}
+        ${metric('Examinations', records.length, null, number, { subtext: 'All exam stages' })}
+        ${metric('Scheduled or active', activeCount, null, number, { subtext: 'Current exam status' })}
+        ${metric('Students listed', rosterCount, null, number, { subtext: 'Total only' })}
+      </div>
+      <div class="work-grid exam-room-operations-grid">
+        <section class="panel">
+          <h3>Operational and system health</h3>
+          <dl class="definition-list exam-room-health-list">
+            <dt>Examination Room service</dt><dd>${data.available
+              ? 'Available - exam and class status loaded.'
+              : 'Unavailable - see the notice above.'}</dd>
+            <dt>Observed by this browser</dt><dd>${escapeHtml(dateTime(data.observedAt))}</dd>
+            <dt>Google Sheets configured</dt><dd>${number(backupReadyCount)} of ${number(records.length)} examinations. This confirms configuration only, not the latest backup write.</dd>
+            <dt>Answer saving</dt><dd>Not shown on this regular Admin page.</dd>
+            <dt>Email and backup queues</dt><dd>Not shown on this regular Admin page.</dd>
+            <dt>Camera collection</dt><dd>Off. This administration view does not request or receive camera data.</dd>
+          </dl>
+        </section>
+        <section class="panel">
+          <h3>Privacy boundary</h3>
+          <p class="panel-note">This regular view shows only exam and class details. Student answers, grades, suggested answers, grading comments, access keys, and dispute records are not requested or shown.</p>
+          <div class="notice exam-room-audit-notice">
+            <strong>Restricted-access notice.</strong> Any approved record review must name the Admin, exact exam and student, case reference, reason, end time, and outcome before a record is shown. This regular status page is not a student-record viewer.
+          </div>
+        </section>
+      </div>
+      <section class="panel">
+        <div class="panel-title-row"><div><h3>Exam and class details</h3>
+          <p class="panel-note">No student answers or grades are included.</p></div>
+          <button class="secondary-button" type="button" data-exam-room-metadata-refresh>Refresh status</button>
+        </div>
+        ${safeMetadataRows.length ? table(
+          ['Class', 'School', 'Term', 'Students', 'Examination', 'Status', 'Exam time', 'Questions', 'Backup sheet'],
+          safeMetadataRows,
+        ) : empty(data.available
+          ? 'No Examination Room class or exam details are available.'
+          : 'Status remains unavailable; no records are guessed.')}
+      </section>
+      <div class="notice exam-room-export-warning">
+        <strong>Download warning.</strong> “Download page data” contains only the basic details visible here. Spreadsheet formulas are disabled for safety. Do not add student answers, grades, access keys, or dispute records to this download.
+      </div>
+    </section>`;
+  }
+
+  function renderExaminationRoomBreakGlassEvidence(session) {
+    const evidence = session.evidence || {};
+    const scopedEvidence = evidence.evidence && typeof evidence.evidence === 'object'
+      ? evidence.evidence : {};
+    const scope = session.scope || {};
+    const expired = !scope.expiresAt || new Date(scope.expiresAt).getTime() <= Date.now();
+    const submissions = !expired && Array.isArray(scopedEvidence.submissionHistory) ? scopedEvidence.submissionHistory : [];
+    const answerOperations = !expired && Array.isArray(scopedEvidence.answerOperations) ? scopedEvidence.answerOperations : [];
+    const conflictBranches = !expired && Array.isArray(scopedEvidence.conflictBranches) ? scopedEvidence.conflictBranches : [];
+    const incidents = !expired && Array.isArray(scopedEvidence.incidentGroups) ? scopedEvidence.incidentGroups : [];
+    const questions = !expired && Array.isArray(scopedEvidence.exam?.questions) ? scopedEvidence.exam.questions : [];
+    const submittedAnswers = submissions.flatMap((submission) => (
+      (Array.isArray(submission.answerSnapshot) ? submission.answerSnapshot : []).map((answer) => ({
+        ...answer,
+        generation: submission.generation,
+        receiptId: submission.receiptId,
+      }))
+    ));
+    const gate = examinationRoomBreakGlassGate();
+    const canReviewAndClose = gate.freshAal2 === true
+      && gate.canRecordReview === true && gate.canClose === true;
+    return `<section aria-label="Candidate-scoped restricted evidence">
+      <div class="notice danger" role="alert"><strong>Restricted candidate evidence is open.</strong>
+        Scope is exact: one examination, one attempt, one candidate, and case ${escapeHtml(scope.caseReference)}.
+        Do not copy this content into tickets, spreadsheets, chat, or page exports.</div>
+      <section class="panel">
+        <div class="panel-title-row"><div><h3>Active break-glass scope</h3>
+          <p class="panel-note">Grant ${escapeHtml(scope.grantId)} · expires ${escapeHtml(dateTime(scope.expiresAt))}</p></div>
+          <span class="status ${expired ? 'warn' : 'ok'}">${expired ? 'Expired' : 'Active'}</span></div>
+        <dl class="definition-list exam-room-health-list">
+          <dt>Examination</dt><dd>${escapeHtml(scope.examId)}</dd>
+          <dt>Attempt</dt><dd>${escapeHtml(scope.attemptId)}</dd>
+          <dt>Candidate</dt><dd>${escapeHtml(scope.candidateNumber)}</dd>
+          <dt>Case reference</dt><dd>${escapeHtml(scope.caseReference)}</dd>
+          <dt>Purpose</dt><dd>${escapeHtml(scope.reason)}</dd>
+        </dl>
+        <div class="panel-actions"><button class="secondary-button" type="button" data-exam-room-break-glass-reload ${expired ? 'disabled' : ''}>Reload this scoped evidence</button></div>
+      </section>
+      <section class="panel"><h3>Immutable submission lineage</h3>${submissions.length ? table(
+        ['Generation', 'Receipt', 'State', 'Received', 'Snapshot hash', 'Prior receipt'],
+        submissions.map((entry) => [entry.generation, entry.receiptId, entry.status,
+          dateTime(entry.receivedAt || entry.submittedAt), entry.snapshotHash, entry.priorReceiptId || 'Original']),
+      ) : empty('No submission lineage was returned for this exact attempt.')}</section>
+      <section class="panel"><h3>Candidate submitted answer snapshots</h3>
+        <p class="panel-note">Only immutable answer snapshots for the exact granted attempt are shown. No whole-exam or other-candidate request is made.</p>
+        ${expired ? empty('The scoped grant expired. Candidate evidence is no longer rendered; complete the post-access review and closure under a fresh authorized session.') : submittedAnswers.length ? table(
+          ['Generation', 'Receipt', 'Question', 'Prompt', 'Submitted answer', 'Revision', 'Saved'],
+          submittedAnswers.map((entry) => {
+            const question = questions.find((item) => item.questionId === entry.questionId) || {};
+            return [entry.generation, entry.receiptId, entry.ordinal || question.ordinal || entry.questionId,
+              question.prompt || 'Prompt withheld', entry.answerText || 'No submitted answer',
+              entry.revision, dateTime(entry.savedAt)];
+          }),
+        ) : empty('No submitted answer snapshots were returned for this exact attempt.')}
+      </section>
+      <section class="panel"><h3>Answer-operation and conflict history</h3>
+        ${answerOperations.length ? table(
+          ['Question', 'Operation', 'Epoch', 'Base → server revision', 'Outcome', 'Received'],
+          answerOperations.map((entry) => [entry.questionId, entry.operationId, entry.sessionEpoch,
+            `${entry.baseRevision} → ${entry.serverRevision}`, entry.outcome, dateTime(entry.receivedAt)]),
+        ) : empty('No answer operations were returned for this exact attempt.')}
+        ${conflictBranches.length ? table(
+          ['Question', 'Conflict branch', 'Base → server revision', 'Resolution', 'Created'],
+          conflictBranches.map((entry) => [entry.questionId, entry.branchId,
+            `${entry.baseRevision} → ${entry.serverRevision}`, entry.resolution || 'Unresolved', dateTime(entry.createdAt)]),
+        ) : ''}
+      </section>
+      <section class="panel"><h3>Scoped incidents</h3>${incidents.length ? table(
+        ['Category', 'Severity', 'State', 'Events', 'First', 'Last', 'Summary'],
+        incidents.map((entry) => [entry.category, entry.severity, entry.status,
+          entry.eventCount, dateTime(entry.firstOccurredAt), dateTime(entry.lastOccurredAt), entry.summary]),
+      ) : empty('No incident rows were returned for this exact attempt.')}</section>
+      <section class="panel"><h3>Mandatory post-access review and closure</h3>
+        <form class="exam-room-break-glass-form" data-exam-room-break-glass-review-form>
+          <label>Review outcome<select name="outcome" required>
+            <option value="no_issue">No issue found</option>
+            <option value="procedure_change">Procedure change required</option>
+            <option value="escalation_required">Escalation required</option>
+          </select></label>
+          <label>Review notes<textarea name="notes" minlength="10" maxlength="2000" required></textarea></label>
+          <label>Reason for closing access<textarea name="closeReason" minlength="10" maxlength="1000" required></textarea></label>
+          <label class="check-row"><input name="confirmClose" type="checkbox" required>
+            I confirm that review is complete and this candidate-scoped grant must be closed.</label>
+          <button class="primary-button" type="submit" data-exam-room-break-glass-review-close ${canReviewAndClose ? '' : 'disabled'}>Record review and close access</button>
+        </form>
+      </section>
+    </section>`;
+  }
+
+  function renderExaminationRoomPostCloseReview(session) {
+    const scope = session.scope || {};
+    const pending = session.pendingReview || {};
+    const gate = examinationRoomBreakGlassGate();
+    const canRecord = gate.freshAal2 === true && gate.canRecordReview === true;
+    const option = (value, label) => `<option value="${value}" ${pending.outcome === value ? 'selected' : ''}>${label}</option>`;
+    return `<section aria-label="Closed break-glass grant awaiting review">
+      <div class="notice danger" role="alert"><strong>The candidate-scoped grant is closed, but its mandatory post-access review is outstanding.</strong>
+        Candidate evidence has been removed from this page and cannot be reloaded under the closed grant. Do not issue another grant to bypass this review.</div>
+      <section class="panel"><h3>Closed exact scope</h3>
+        <dl class="definition-list exam-room-health-list">
+          <dt>Grant</dt><dd>${escapeHtml(scope.grantId)}</dd>
+          <dt>Closed</dt><dd>${escapeHtml(dateTime(session.closedAt))}</dd>
+          <dt>Examination</dt><dd>${escapeHtml(scope.examId)}</dd>
+          <dt>Attempt</dt><dd>${escapeHtml(scope.attemptId)}</dd>
+          <dt>Candidate</dt><dd>${escapeHtml(scope.candidateNumber)}</dd>
+          <dt>Case reference</dt><dd>${escapeHtml(scope.caseReference)}</dd>
+        </dl>
+      </section>
+      <section class="panel"><h3>Complete mandatory post-access review</h3>
+        <form class="exam-room-break-glass-form" data-exam-room-break-glass-review-form>
+          <label>Review outcome<select name="outcome" required>
+            ${option('no_issue', 'No issue found')}
+            ${option('procedure_change', 'Procedure change required')}
+            ${option('escalation_required', 'Escalation required')}
+          </select></label>
+          <label>Review notes<textarea name="notes" minlength="10" maxlength="2000" required>${escapeHtml(pending.notes || '')}</textarea></label>
+          <label class="check-row"><input name="confirmClose" type="checkbox" required>
+            I confirm this closes the outstanding post-access review; no candidate evidence will be reopened.</label>
+          <button class="primary-button" type="submit" data-exam-room-break-glass-review-close ${canRecord ? '' : 'disabled'}>Record outstanding review</button>
+        </form>
+      </section>
+    </section>`;
+  }
+
+  function renderExaminationRoomRestricted(data) {
+    const gate = examinationRoomBreakGlassGate();
+    const active = state.examinationRoomBreakGlass;
+    if (active?.closedAt && active?.reviewRequired === true) {
+      return renderExaminationRoomPostCloseReview(active);
+    }
+    if (active?.evidence) return renderExaminationRoomBreakGlassEvidence(active);
+    const exams = examinationRoomRecords(data);
+    const examOptions = examinationOptions(
+      exams,
+      'examId',
+      (exam) => `${exam.title || 'Untitled examination'} - ${exam.classroomTitle || 'Untitled class'} (${exam.status || 'unknown'})`,
+    );
+    return `<section aria-label="Restricted access">
+      <div class="notice danger" role="alert"><strong>Break-glass is exceptional, candidate-scoped access.</strong>
+        The broad legacy dispute workflow remains retired. A global Admin role, grading key, or client-decoded token is insufficient.
+        The server must report a currently fresh AAL2 challenge and every narrow capability before this form can send anything. This dashboard does not yet perform Supabase MFA challenge/verify, so the restricted action remains hard-disabled for release.</div>
+      <div class="panel-grid">
+        <section class="panel"><h3>Break-glass authorization gate</h3>
+          <dl class="definition-list exam-room-health-list">
+            <dt>Fresh AAL2 challenge</dt><dd>${gate.freshAal2 ? `Server-confirmed; expires ${escapeHtml(dateTime(gate.stepUpExpiresAt))}.` : 'Not server-confirmed or expired - action blocked.'}</dd>
+            <dt>MFA step-up UI</dt><dd>${gate.stepUpUiAvailable ? 'Challenge and verification are available.' : 'Not implemented - institutional release blocker; action remains disabled.'}</dd>
+            <dt>Candidate-scoped contract</dt><dd>${gate.contractReported ? 'exam-room-break-glass-v2 reported.' : 'Not reported - action blocked.'}</dd>
+            <dt>Issue capability</dt><dd>${gate.serverCanIssue ? 'Server reported; held closed by the MFA UI gate.' : 'Not reported - action blocked.'}</dd>
+            <dt>View / close / review capabilities</dt><dd>${gate.serverCanView && gate.serverCanClose && gate.serverCanRecordReview ? 'Server reported; held closed by the MFA UI gate.' : 'Incomplete - action blocked.'}</dd>
+            <dt>Current result</dt><dd><strong>${gate.enabled ? 'Eligible for one exact candidate-scoped request.' : 'Blocked. No evidence request can be sent.'}</strong></dd>
+          </dl>
+          <p class="panel-note">The Worker derives this status from the validated authentication session and exposes only safe booleans. The browser never supplies or decodes the AAL assertion used for authorization.</p>
+          <div class="panel-actions"><button class="secondary-button" type="button" data-exam-room-break-glass-auth-refresh>Refresh status (does not step up)</button></div>
+        </section>
+        <section class="panel"><h3>Required narrow request</h3>
+          <form class="exam-room-break-glass-form" data-exam-room-break-glass-form>
+            <label>Examination<select name="examId" required><option value="">Select an examination...</option>${examOptions}</select></label>
+            <label>Exact attempt ID<input name="attemptId" maxlength="80" autocomplete="off" required></label>
+            <label>Exact candidate number<input name="candidateNumber" maxlength="120" autocomplete="off" required></label>
+            <label>Case reference<input name="caseReference" minlength="2" maxlength="200" pattern="[A-Za-z0-9][A-Za-z0-9 _./:#-]{1,199}" autocomplete="off" required></label>
+            <label>Purpose and reason<textarea name="reason" minlength="20" maxlength="2000" required></textarea></label>
+            <label>Access expires (maximum four hours)<input name="expiresAt" type="datetime-local" required></label>
+            <label class="check-row"><input name="acknowledgeAudit" type="checkbox" required>
+              I authorize access only to this examination, attempt, candidate, case, purpose, and expiry; every evidence read is audited.</label>
+            <button class="primary-button" type="submit" data-exam-room-break-glass ${gate.enabled ? '' : 'disabled'} aria-disabled="${gate.enabled ? 'false' : 'true'}">${gate.enabled ? 'Authorize and open exact evidence' : 'Break-glass unavailable'}</button>
+          </form>
+        </section>
+      </div>
+      <div class="notice exam-room-audit-notice"><strong>No export.</strong> Restricted evidence is excluded from “Download page data.” Complete the post-access review and close the grant immediately after the purpose is satisfied.</div>
+    </section>`;
+  }
+
+  async function renderExaminationRoomAdmin(force = false) {
+    const data = await loadExaminationRoomAdmin(force);
+    return `${heading(
+      'Examination Room',
+      'Check exam and class status. Student answers and grades stay hidden from the regular Admin view.',
+    )}
+      ${examinationRoomAdminTabs()}
+      ${state.examinationRoomAdminView === 'restricted'
+        ? renderExaminationRoomRestricted(data)
+        : renderExaminationRoomOperations(data)}`;
+  }
+
+  async function loadExaminationRoomBreakGlassEvidence() {
+    const session = state.examinationRoomBreakGlass;
+    const scope = session?.scope;
+    const gate = examinationRoomBreakGlassGate();
+    if (!scope?.grantId || gate.canView !== true || gate.freshAal2 !== true) {
+      throw new Error('A fresh server-confirmed AAL2 session and scoped view capability are required.');
+    }
+    const payload = await api('/exam-room/query', {
+      operation: 'break_glass_view',
+      grantId: scope.grantId,
+      examId: scope.examId,
+      attemptId: scope.attemptId,
+      candidateNumber: scope.candidateNumber,
+      requestKey: uuidKey(),
+    });
+    const evidence = payload.result || {};
+    const evidenceExpiryMs = new Date(evidence.expiresAt).getTime();
+    const authorizedExpiryMs = new Date(scope.expiresAt).getTime();
+    if (evidence.ok !== true
+        || evidence.grantId !== scope.grantId
+        || evidence.examId !== scope.examId
+        || evidence.attemptId !== scope.attemptId
+        || evidence.candidateNumber !== scope.candidateNumber
+        || evidence.caseReference !== scope.caseReference
+        || !Number.isFinite(evidenceExpiryMs)
+        || evidenceExpiryMs <= Date.now()
+        || evidenceExpiryMs > authorizedExpiryMs) {
+      throw new Error('The server response did not match the exact authorized candidate scope.');
+    }
+    state.examinationRoomBreakGlass = { ...session, evidence };
+    if (session.expiryTimer) global.clearTimeout(session.expiryTimer);
+    const expiryDelay = Math.max(0, new Date(scope.expiresAt).getTime() - Date.now() + 50);
+    state.examinationRoomBreakGlass.expiryTimer = global.setTimeout(() => {
+      if (state.examinationRoomBreakGlass?.scope?.grantId === scope.grantId
+          && state.section === 'examination_room') {
+        renderSection('examination_room').catch(() => {});
+      }
+    }, expiryDelay);
+    return evidence;
+  }
+
+  async function issueExaminationRoomBreakGlass(form) {
+    const gate = examinationRoomBreakGlassGate();
+    if (!gate.enabled) {
+      throw new Error('Break-glass is blocked until the server reports a fresh AAL2 session and every narrow capability.');
+    }
+    const scope = {
+      examId: String(form.elements.examId.value || '').trim(),
+      attemptId: String(form.elements.attemptId.value || '').trim(),
+      candidateNumber: String(form.elements.candidateNumber.value || '').trim(),
+      caseReference: String(form.elements.caseReference.value || '').trim(),
+      reason: String(form.elements.reason.value || '').trim(),
+      expiresAt: new Date(form.elements.expiresAt.value).toISOString(),
+    };
+    if (!form.reportValidity() || form.elements.acknowledgeAudit.checked !== true) {
+      throw new Error('Complete and confirm every exact scope field.');
+    }
+    const expiryMs = new Date(scope.expiresAt).getTime();
+    if (!Number.isFinite(expiryMs) || expiryMs <= Date.now()
+        || expiryMs > Date.now() + (4 * 60 * 60 * 1000)) {
+      throw new Error('Choose an expiry after now and no more than four hours away.');
+    }
+    if (!global.confirm(`Authorize restricted evidence for candidate ${scope.candidateNumber}, attempt ${scope.attemptId}, case ${scope.caseReference}, until ${dateTime(scope.expiresAt)}?`)) return false;
+    const payload = await api('/exam-room/command', {
+      operation: 'issue_break_glass',
+      ...scope,
+      requestKey: uuidKey(),
+    });
+    const grant = payload.result || {};
+    const grantExpiryMs = new Date(grant.expiresAt).getTime();
+    if (grant.ok !== true || !grant.grantId
+        || grant.examId !== scope.examId
+        || grant.attemptId !== scope.attemptId
+        || grant.candidateNumber !== scope.candidateNumber
+        || grant.caseReference !== scope.caseReference
+        || grant.scope !== 'candidate_evidence'
+        || grant.requiresPostReview !== true
+        || !Number.isFinite(grantExpiryMs)
+        || grantExpiryMs <= Date.now()
+        || grantExpiryMs > expiryMs) {
+      throw new Error('The server did not confirm the complete candidate-scoped grant.');
+    }
+    state.examinationRoomBreakGlass = {
+      grant,
+      scope: { ...scope, grantId: grant.grantId, expiresAt: grant.expiresAt || scope.expiresAt },
+      evidence: null,
+    };
+    await loadExaminationRoomBreakGlassEvidence();
+    return true;
+  }
+
+  async function reviewAndCloseExaminationRoomBreakGlass(form) {
+    const session = state.examinationRoomBreakGlass;
+    const scope = session?.scope;
+    const gate = examinationRoomBreakGlassGate();
+    const alreadyClosed = Boolean(session?.closedAt);
+    if (!scope?.grantId || gate.freshAal2 !== true
+        || gate.canRecordReview !== true || (!alreadyClosed && gate.canClose !== true)) {
+      throw new Error('A fresh server-confirmed AAL2 session with review and close capabilities is required.');
+    }
+    if (!form.reportValidity() || form.elements.confirmClose.checked !== true) {
+      throw new Error('Complete the post-access review and confirm closure.');
+    }
+    const outcome = String(form.elements.outcome.value || '');
+    const notes = String(form.elements.notes.value || '').trim();
+    const closeReason = alreadyClosed ? null : String(form.elements.closeReason?.value || '').trim();
+    const confirmation = alreadyClosed
+      ? `Record the outstanding ${outcome.replace(/_/g, ' ')} post-access review for closed grant ${scope.grantId}?`
+      : `Permanently close grant ${scope.grantId}, remove its evidence, then record the ${outcome.replace(/_/g, ' ')} post-access review?`;
+    if (!global.confirm(confirmation)) return false;
+    session.reviewRequestKey ||= uuidKey();
+    session.closeRequestKey ||= uuidKey();
+    session.pendingReview = { outcome, notes };
+    if (!alreadyClosed) {
+      const closePayload = await api('/exam-room/command', {
+        operation: 'close_break_glass',
+        grantId: scope.grantId,
+        examId: scope.examId,
+        attemptId: scope.attemptId,
+        candidateNumber: scope.candidateNumber,
+        reason: closeReason,
+        requestKey: session.closeRequestKey,
+      });
+      if (closePayload.result?.ok !== true
+          || closePayload.result.grantId !== scope.grantId
+          || closePayload.result.examId !== scope.examId
+          || closePayload.result.attemptId !== scope.attemptId
+          || closePayload.result.candidateNumber !== scope.candidateNumber
+          || closePayload.result.caseReference !== scope.caseReference
+          || !closePayload.result.closedAt) {
+        throw new Error('The server did not confirm that the scoped grant is closed.');
+      }
+      if (session.expiryTimer) global.clearTimeout(session.expiryTimer);
+      session.closedAt = closePayload.result.closedAt;
+      session.reviewRequired = true;
+      session.evidence = null;
+    }
+    const reviewPayload = await api('/exam-room/command', {
+      operation: 'record_break_glass_review',
+      grantId: scope.grantId,
+      examId: scope.examId,
+      attemptId: scope.attemptId,
+      candidateNumber: scope.candidateNumber,
+      outcome,
+      notes,
+      requestKey: session.reviewRequestKey,
+    });
+    if (reviewPayload.result?.ok !== true
+        || reviewPayload.result.grantId !== scope.grantId
+        || reviewPayload.result.examId !== scope.examId
+        || reviewPayload.result.attemptId !== scope.attemptId
+        || reviewPayload.result.candidateNumber !== scope.candidateNumber
+        || reviewPayload.result.caseReference !== scope.caseReference
+        || !reviewPayload.result.reviewedAt) {
+      throw new Error('The grant is closed, but the server did not confirm its mandatory post-access review. Retry the review without reopening evidence.');
+    }
+    state.examinationRoomBreakGlass = null;
+    return true;
+  }
+
+  function bindExaminationRoomAdmin() {
+    $$('[data-exam-room-admin-view]').forEach((button) => button.addEventListener('click', async () => {
+      const view = button.dataset.examRoomAdminView;
+      if (!['operations', 'restricted'].includes(view) || view === state.examinationRoomAdminView) return;
+      state.examinationRoomAdminView = view;
+      await renderSection('examination_room');
+    }));
+    $('[data-exam-room-metadata-refresh]')?.addEventListener('click', async () => {
+      state.examinationRoomAdminData = null;
+      await renderSection('examination_room');
+    });
+    $('[data-exam-room-break-glass-auth-refresh]')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        state.authorization = await api('/admin/session');
+        await renderSection('examination_room');
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message || 'Authorization status could not be refreshed.');
+      }
+    });
+    const form = $('[data-exam-room-break-glass-form]');
+    if (form) {
+      const expiry = form.elements.expiresAt;
+      const current = new Date();
+      const maximum = new Date(current.getTime() + (4 * 60 * 60 * 1000));
+      expiry.min = localDateTimeValue(current);
+      expiry.max = localDateTimeValue(maximum);
+      expiry.value = localDateTimeValue(new Date(current.getTime() + (60 * 60 * 1000)));
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const button = form.querySelector('[data-exam-room-break-glass]');
+        if (!button || button.disabled) {
+          toast('Break-glass remains blocked by the server authorization gate.');
+          return;
+        }
+        button.disabled = true;
+        button.textContent = 'Authorizing exact scope…';
+        try {
+          if (await issueExaminationRoomBreakGlass(form)) {
+            toast('Candidate-scoped evidence opened. Complete the review and close the grant.');
+            await renderSection('examination_room');
+          } else {
+            button.disabled = false;
+            button.textContent = 'Authorize and open exact evidence';
+          }
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Authorize and open exact evidence';
+          toast(error.message || 'Candidate-scoped access was not opened.');
+        }
+      });
+    }
+    $('[data-exam-room-break-glass-reload]')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await loadExaminationRoomBreakGlassEvidence();
+        toast('Exact candidate evidence reloaded under the same grant.');
+        await renderSection('examination_room');
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message || 'Scoped evidence could not be reloaded.');
+      }
+    });
+    const reviewForm = $('[data-exam-room-break-glass-review-form]');
+    reviewForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = reviewForm.querySelector('[data-exam-room-break-glass-review-close]');
+      button.disabled = true;
+      button.textContent = state.examinationRoomBreakGlass?.closedAt
+        ? 'Recording outstanding review…' : 'Closing access, then recording review…';
+      try {
+        if (await reviewAndCloseExaminationRoomBreakGlass(reviewForm)) {
+          toast('Post-access review recorded and the scoped grant is closed.');
+          await renderSection('examination_room');
+        } else {
+          button.disabled = false;
+          button.textContent = state.examinationRoomBreakGlass?.closedAt
+            ? 'Record outstanding review' : 'Record review and close access';
+        }
+      } catch (error) {
+        if (state.examinationRoomBreakGlass?.closedAt) {
+          await renderSection('examination_room');
+        } else {
+          button.disabled = false;
+          button.textContent = 'Record review and close access';
+        }
+        toast(error.message || 'The review or grant closure was not confirmed.');
+      }
+    });
+  }
+
   async function renderSection(section) {
     if (!sectionAllowed(section)) {
       toast('Your administrator role does not have access to that section.');
@@ -1771,10 +2400,12 @@
       else if (section === 'security') html = await renderSecurity();
       else if (section === 'forum') html = await renderQuorumModeration();
       else if (section === 'examinations') html = await renderExaminations();
+      else if (section === 'examination_room') html = await renderExaminationRoomAdmin();
       else if (section === 'answer_exports') html = await renderAnswerExports(report);
       $('#dashboard-view').innerHTML = html;
       bindDynamic();
       if (section === 'examinations') bindExaminationAdmin();
+      if (section === 'examination_room') bindExaminationRoomAdmin();
     } catch (error) {
       $('#dashboard-view').innerHTML = heading('Admin dashboard unavailable', error.message || 'Admin data could not be loaded.')
         + empty('Nothing was changed. Refresh after the connection or account permission is restored.');
@@ -3004,6 +3635,9 @@
   $('#admin-nav')?.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-section]');
     if (button && !button.hidden && sectionAllowed(button.dataset.section)) {
+      if (button.dataset.section === 'examination_room' && state.section !== 'examination_room') {
+        state.examinationRoomAdminView = 'operations';
+      }
       renderSection(button.dataset.section);
     }
   });
@@ -3021,6 +3655,7 @@
     state.liveActivity = null;
     state.answerHistory = null;
     state.quorumPosts = null;
+    state.examinationRoomAdminData = null;
     try {
       await renderSection(state.section);
     } finally {

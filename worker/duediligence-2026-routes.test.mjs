@@ -7,6 +7,10 @@ const examId = '123e4567-e89b-42d3-a456-426614174001';
 const attemptId = '123e4567-e89b-42d3-a456-426614174002';
 const questionId = '123e4567-e89b-42d3-a456-426614174003';
 const requestKey = 'request_2026_abcdef123456';
+const examRoom2Env = Object.freeze({
+  EXAMINATION_ROOM_ENABLED: 'true',
+  EXAMINATION_ROOM_2_ENABLED: 'true',
+});
 
 function request(body) {
   return new Request('https://worker.test/dd2026', {
@@ -121,8 +125,8 @@ test('question upload preserves all 35 questions and stores only in the owning p
   h.handlers = createDD2026Handlers({
     corsHeaders: () => ({}), dd2026Rpc: async () => ({}), deleteExamRoomSource: async () => true,
     enforceAdminRateLimit: async () => {}, enforceDD2026RateLimit: async () => {},
-    examRoomRpc: async (_env, name) => name === 'exam_room_portal_snapshot'
-      ? { roles: { professor: true }, classes: [{ exams: [{ examId }] }] }
+    examRoomRpc: async (_env, name) => name === 'exam_room_exam_access_v2'
+      ? { canUploadQuestions: true, storagePrefix: examId }
       : {},
     jsonResponse: (body, status) => new Response(JSON.stringify(body), { status }),
     parseBoundedJson: async (req) => req.json(), processExamRoomQueues: async () => {},
@@ -134,10 +138,10 @@ test('question upload preserves all 35 questions and stores only in the owning p
   const response = await h.handlers.questionUpload(request({
     examId, questionCount: 35, fileName: 'final.txt', mimeType: 'text/plain',
     base64: Buffer.from(source).toString('base64'),
-  }), {}, '', '');
+  }), examRoom2Env, '', '');
   const body = await response.json();
   assert.equal(body.preview.questions.length, 35);
-  assert.match(uploaded[0].path, new RegExp(`^${userId}/${examId}/`));
+  assert.match(uploaded[0].path, new RegExp(`^${examId}/[0-9a-f]{64}/`));
 });
 
 test('scheduled exam credentials are irreversibly hashed before database RPC', async () => {

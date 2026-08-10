@@ -122,18 +122,6 @@ async function findExistingSpreadsheet(fetchImpl, token, examPublicId) {
   return Array.isArray(result?.files) && result.files[0]?.id ? String(result.files[0].id) : null;
 }
 
-async function shareWithProfessor(fetchImpl, token, spreadsheetId, email) {
-  if (!email) return;
-  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}/permissions`);
-  url.searchParams.set('sendNotificationEmail', 'false');
-  url.searchParams.set('supportsAllDrives', 'true');
-  await jsonFetch(fetchImpl, url, {
-    method: 'POST',
-    headers: googleHeaders(token),
-    body: JSON.stringify({ type: 'user', role: 'writer', emailAddress: email }),
-  }, 'GOOGLE_SHARE_FAILED');
-}
-
 async function createSpreadsheet(fetchImpl, env, token, context) {
   const schemaTemplateId = String(env.GOOGLE_BACKUP_TEMPLATE_ID || TEMPLATE_SPREADSHEET_ID).trim();
   const folderId = String(env.GOOGLE_BACKUP_FOLDER_ID || '').trim();
@@ -162,7 +150,8 @@ async function createSpreadsheet(fetchImpl, env, token, context) {
       ['DueDiligence Examination Room Backup'],
       ['Purpose', 'Independent per-exam backup and dispute record.'],
       ['Authority', 'The protected DueDiligence database remains authoritative.'],
-      ['Privacy', 'Contains protected student answers and grades. Professor access is removed after release.'],
+      ['Privacy', 'Contains protected student answers and grades. It is service/admin controlled and is not shared with the Professor.'],
+      ['Grading', 'The Professor grades only through the protected DueDiligence website.'],
       ['Timezone', 'Asia/Manila'],
     ]),
     ...BACKUP_TABS.map((name) => appendRequest(sheetIds[name], [BACKUP_HEADERS[name]])),
@@ -193,21 +182,21 @@ async function createSpreadsheet(fetchImpl, env, token, context) {
       },
     }),
   }, 'GOOGLE_DRIVE_METADATA_FAILED');
-  await shareWithProfessor(fetchImpl, token, spreadsheetId, context.professorEmail);
   return spreadsheetId;
 }
 
 async function ensureSpreadsheet(fetchImpl, env, token, context) {
-  if (context.googleSheetId) return String(context.googleSheetId);
+  if (context.googleSheetId) {
+    return { spreadsheetId: String(context.googleSheetId), created: false };
+  }
   const existing = await findExistingSpreadsheet(fetchImpl, token, context.examPublicId);
   if (existing) {
-    // A prior attempt can create the workbook and then fail while sharing it.
-    // Re-establish the intended professor permission before treating that
-    // orphaned workbook as recovered.
-    await shareWithProfessor(fetchImpl, token, existing, context.professorEmail);
-    return existing;
+    return { spreadsheetId: existing, created: false };
   }
-  return createSpreadsheet(fetchImpl, env, token, context);
+  return {
+    spreadsheetId: await createSpreadsheet(fetchImpl, env, token, context),
+    created: true,
+  };
 }
 
 async function sheetMetadata(fetchImpl, token, spreadsheetId) {
@@ -291,12 +280,18 @@ async function writeEvent(fetchImpl, token, spreadsheetId, event, context) {
 }
 
 async function removeProfessorAccess(fetchImpl, token, spreadsheetId, professorEmail) {
+  const normalizedEmail = String(professorEmail || '').trim().toLowerCase();
+  if (!normalizedEmail) {
+    const error = new Error('The owning professor identity is unavailable for backup permission verification.');
+    error.safeCode = 'GOOGLE_PROFESSOR_IDENTITY_MISSING';
+    throw error;
+  }
   const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}/permissions`);
   url.searchParams.set('supportsAllDrives', 'true');
   url.searchParams.set('fields', 'permissions(id,emailAddress,role,type)');
   const result = await jsonFetch(fetchImpl, url, { headers: googleHeaders(token) }, 'GOOGLE_PERMISSION_LIST_FAILED');
   const matches = (result?.permissions || []).filter((permission) => (
-    String(permission.emailAddress || '').toLowerCase() === String(professorEmail || '').toLowerCase()
+    String(permission.emailAddress || '').trim().toLowerCase() === normalizedEmail
       && permission.role !== 'owner'
   ));
   for (const permission of matches) {
@@ -309,13 +304,19 @@ async function removeProfessorAccess(fetchImpl, token, spreadsheetId, professorE
 
 export async function syncGoogleBackupEvent(env, event, context, fetchImpl = fetch) {
   const token = await googleAccessToken(env, fetchImpl);
-  const spreadsheetId = await ensureSpreadsheet(fetchImpl, env, token, context);
-  await writeEvent(fetchImpl, token, spreadsheetId, event, context);
+  const ensured = await ensureSpreadsheet(fetchImpl, env, token, context);
+  const spreadsheetId = ensured.spreadsheetId;
   let professorAccessRemoved = Boolean(context.professorAccessRemovedAt);
-  if (event.event_type === 'grades_released' && !professorAccessRemoved) {
-    await removeProfessorAccess(fetchImpl, token, spreadsheetId, context.professorEmail);
+  if (!professorAccessRemoved) {
+    // New workbooks have never been shared. Existing workbooks may have been
+    // created by the earlier beta flow, so revoke only the known Professor
+    // permission before appending any further protected answers or grades.
+    if (!ensured.created) {
+      await removeProfessorAccess(fetchImpl, token, spreadsheetId, context.professorEmail);
+    }
     professorAccessRemoved = true;
   }
+  await writeEvent(fetchImpl, token, spreadsheetId, event, context);
   return {
     spreadsheetId,
     providerReference: `${spreadsheetId}:${event.id}`,
@@ -326,6 +327,28 @@ export async function syncGoogleBackupEvent(env, event, context, fetchImpl = fet
 
 function emailMessage(job) {
   const payload = job.payload || {};
+  if (job.email_type === 'exam_publication_replaced') {
+    return {
+      subject: `Due Diligence — updated ${payload.title || 'examination'} publication`,
+      text: [
+        `Your professor published replacement version ${payload.publicationNumber || ''} of ${payload.title || 'your examination'} before it opened.`.trim(),
+        'Sign in and review the current examination notice, instructions, and schedule before starting.',
+        'If an access code is required, obtain the current code only through your official class channel. This email never contains examination credentials.',
+        resultLink(payload.examId || ''),
+      ].join('\n'),
+    };
+  }
+  if (job.email_type === 'submission_reopened') {
+    return {
+      subject: `Due Diligence — submission reopened for ${payload.title || 'your examination'}`,
+      text: [
+        `An authorized reopening created submission generation ${payload.generation || ''} for ${payload.title || 'your examination'}.`.trim(),
+        `New server deadline: ${payload.serverDeadline || payload.newDeadline || 'Sign in to view the authoritative deadline.'}`,
+        'Sign in using the rostered account and open a new examination session. This email contains no examination answers or credentials.',
+        resultLink(payload.examId || ''),
+      ].join('\n'),
+    };
+  }
   if (job.email_type === 'professor_release_summary') {
     return {
       subject: `Due Diligence — ${payload.title || 'Examination'} release summary`,

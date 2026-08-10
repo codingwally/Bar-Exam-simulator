@@ -71,6 +71,26 @@ jobs:
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
 
+      - name: Ensure the student-code encryption key exists
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npx --yes wrangler@4.114.0 secret list --format json \
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const secrets = JSON.parse(value); process.exit(secrets.some(item => item.name === 'EXAM_ROOM_STUDENT_CODE_KEY_V1') ? 0 : 1); });"
+          then
+            echo "Student-code encryption key is already configured."
+          else
+            student_code_key="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))")"
+            printf '%s' "$student_code_key" \
+              | npx --yes wrangler@4.114.0 secret put EXAM_ROOM_STUDENT_CODE_KEY_V1
+            unset student_code_key
+            echo "Student-code encryption key was created without printing its value."
+          fi
+
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:

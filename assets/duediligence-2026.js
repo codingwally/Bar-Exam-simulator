@@ -39,6 +39,7 @@
       activeClassroomId: null,
       activeExamId: null,
       activeBeadleSnapshot: null,
+      studentExamCodes: new Map(),
       rosterMode: 'professor',
       rosterPreview: null,
       questionPreview: null,
@@ -47,6 +48,9 @@
       saveTimers: new Map(),
       heartbeatTimer: null,
       countdownTimer: null,
+      waitingRoomTimer: null,
+      waitingRoomPollTimer: null,
+      waitingRoomPolling: false,
       submissionStatusTimer: null,
       serverOffsetMs: 0,
       serverClockBaseMs: 0,
@@ -79,6 +83,33 @@
   }
 
   function codePointLength(value) { return Array.from(String(value ?? '')).length; }
+
+  function studentInstructionsHtml(value) {
+    const normalized = String(value || 'Follow the Professor’s examination instructions.')
+      .replace(/\r\n?/g, '\n')
+      .trim();
+    const body = normalized.replace(/^instructions\b\s*[:\-–—]?\s*/i, '').trim()
+      || 'Follow the Professor’s examination instructions.';
+    const markerPattern = /(?:^|\s)(\d{1,2})[.)]\s+(?=\S)/g;
+    const markers = [];
+    let match;
+    while ((match = markerPattern.exec(body)) !== null) {
+      markers.push({ number: Number(match[1]), markerStart: match.index, contentStart: markerPattern.lastIndex });
+    }
+    const sequential = markers.length >= 2
+      && markers[0].number === 1
+      && markers.every((marker, index) => marker.number === index + 1);
+    if (sequential) {
+      const introduction = body.slice(0, markers[0].markerStart).trim();
+      const items = markers.map((marker, index) => body
+        .slice(marker.contentStart, markers[index + 1]?.markerStart ?? body.length)
+        .trim())
+        .filter(Boolean);
+      return `<div class="dd26-student-instructions">${introduction ? `<p>${escapeHtml(introduction).replace(/\n/g, '<br>')}</p>` : ''}<ol>${items.map((item) => `<li>${escapeHtml(item).replace(/\n/g, '<br>')}</li>`).join('')}</ol></div>`;
+    }
+    const paragraphs = body.split(/\n\s*\n+/).map((paragraph) => paragraph.trim()).filter(Boolean);
+    return `<div class="dd26-student-instructions">${paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`).join('')}</div>`;
+  }
 
   function randomKey(prefix = 'request') {
     const bytes = new Uint8Array(18);
@@ -519,13 +550,43 @@
       bindExamEntry();
       return;
     }
-    app().innerHTML = `<div class="dd26-shell"><button class="dd26-back-link" id="dd26-exam-role-home" type="button">Back to Examination Room</button><header class="dd26-header"><div><div class="dd26-kicker">Law school examination</div><h1>Examination Room</h1><p>One clear place to make, prepare, take, and grade a class examination.</p></div></header><main id="dd26-exam-main" tabindex="-1">${examSection(portal)}</main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
+    app().innerHTML = `<div class="dd26-shell"><button class="dd26-button dd26-exam-home-button" id="dd26-exam-role-home" type="button"><span aria-hidden="true">←</span> Return to Examination Room home</button><header class="dd26-header"><div><div class="dd26-kicker">Law school examination</div><h1>Examination Room</h1><p>One clear place to make, prepare, take, and grade a class examination.</p></div></header><main id="dd26-exam-main" tabindex="-1">${examSection(portal)}</main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
     bindExamSection();
-    document.getElementById('dd26-exam-role-home')?.addEventListener('click', () => {
-      state.exam.section = 'entry';
-      state.exam.intentRole = null;
-      renderExamRoom();
-    });
+    document.getElementById('dd26-exam-role-home')?.addEventListener('click', returnToExaminationRoomHome);
+  }
+
+  async function returnToExaminationRoomHome(event) {
+    if (event) event.preventDefault();
+    if (state.exam.grading && !mayLeaveCurrentGrade()) return false;
+    const activeAttempt = state.exam.attempt?.status === 'in_progress';
+    if (activeAttempt) {
+      const confirmed = global.confirm('Your examination is still running and the official clock will continue. Your latest answers must be saved before returning to the Examination Room home. Continue?');
+      if (!confirmed) return false;
+      try {
+        await flushAllLocalSaves();
+      } catch {
+        global.toast?.('The latest answers could not be confirmed as saved. Stay on this page and try again.', 'warn');
+        return false;
+      }
+      await recordIncident('focus_exit', { active: false, reason: 'returned_to_examination_room_home' });
+    }
+    clearGradingWorkspace();
+    state.exam.section = 'entry';
+    closeDialog();
+    clearAttemptTimers();
+    state.exam.intentRole = null;
+    state.exam.entryExamId = '';
+    state.exam.activeBeadleSnapshot = null;
+    state.exam.rosterPreview = null;
+    state.exam.questionPreview = null;
+    state.exam.monitoring = null;
+    state.exam.preflight = null;
+    activatePage('exam_room', document.getElementById('spa-examination-room'), { replace: true });
+    renderExamRoom();
+    global.scrollTo?.({ top: 0, behavior: 'smooth' });
+    document.querySelector('[data-dd26-exam-role]')?.focus();
+    if (activeAttempt) global.toast?.('The examination clock is still running. Choose Student to resume.', 'warn');
+    return true;
   }
 
   function examEntry() {
@@ -533,7 +594,7 @@
     const cards = [
       ['professor', 'Professor', 'Make the examination', 'Use the room key created by Admin, then upload questions, set the rules, publish, and grade.'],
       ['beadle', 'Beadle', 'Upload students and prepare exam day', 'Use the invitation from the Professor, upload the class list, and help students during the examination.'],
-      ['student', 'Student', 'Take the examination', 'Sign in, enter the class exam code if required, answer, review, and submit.'],
+      ['student', 'Student', 'Take the examination', 'Sign in, use the examination link and student exam code from the Beadle, answer, review, and submit.'],
       ['admin', 'Admin', 'Manage Examination Rooms', 'Create Professor room keys, see who used each key, and check exam status.'],
     ];
     return `<div class="dd26-shell"><header class="dd26-header"><div><div class="dd26-kicker">Due Diligence / Law school examinations</div><h1>Examination Room</h1><p>Choose your role. Each choice opens one simple class flow.</p></div><span class="dd26-beta">2.0 beta</span></header><main aria-labelledby="dd26-entry-title"><h2 class="dd26-visually-hidden" id="dd26-entry-title">Choose an Examination Room role</h2><div class="dd26-role-grid">${cards.map(([id, title, subtitle, description], index) => `<button class="dd26-role-card" type="button" data-dd26-exam-role="${id}"><span class="dd26-role-number" aria-hidden="true">0${index + 1}</span><span><strong>${title}</strong><em>${subtitle}</em><small>${description}</small></span><span class="dd26-role-arrow" aria-hidden="true">→</span></button>`).join('')}</div><div class="dd26-notice"><strong>${authenticated ? 'You are signed in.' : 'Student sign-in is required.'}</strong> ${authenticated ? 'Choose a role to continue. Your school and exam access will still be checked.' : 'A student cannot open the Student examination page until signed in. Professors, Beadles, and Admins also use their own authorized accounts.'}</div>${state.exam.entryExamId ? `<div class="dd26-deep-link"><span>Examination link detected</span><code>${escapeHtml(state.exam.entryExamId)}</code><p>The link identifies the examination only. It does not give anyone access.</p></div>` : ''}<p class="dd26-privacy">During a monitored examination, copy, cut, paste, and right-click are blocked. Leaving the exam tab is recorded and shown to the Professor and Beadle. It is reviewed by a person and is not an automatic failure. Camera collection is off.</p></main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
@@ -576,15 +637,50 @@
   }
 
   function examSection(portal) {
-    if (state.exam.section === 'student') return studentSection(portal);
-    if (state.exam.section === 'professor') return portal.roles?.professor ? professorSection(portal) : activationSection(portal);
-    if (state.exam.section === 'beadle') return beadleSection(portal);
+    if (state.exam.section === 'student') return `${examRoleGuide('student')}${studentSection(portal)}`;
+    if (state.exam.section === 'professor') return `${examRoleGuide('professor')}${portal.roles?.professor ? professorSection(portal) : activationSection(portal)}`;
+    if (state.exam.section === 'beadle') return `${examRoleGuide('beadle')}${beadleSection(portal)}`;
     return '<section class="dd26-card"><div class="dd26-empty">Choose Professor, Beadle, Student, or Admin.</div></section>';
+  }
+
+  function examRoleGuide(role) {
+    const guides = {
+      professor: {
+        label: 'Professor · Simple steps',
+        steps: [
+          'Open the room with the Professor key from Admin.',
+          'Make the exam, upload the questions, and review every question.',
+          'Publish the examination and send the one-time Beadle key to the named Beadle.',
+          'After the Beadle saves the class list, Due Diligence creates the class-wide student exam code for the Beadle to give with the link.',
+          'After the exam, grade the answers and choose whether to send the results.',
+        ],
+      },
+      beadle: {
+        label: 'Beadle · Simple steps',
+        steps: [
+          'Open the workspace with the one-time Beadle key from the Professor.',
+          'Upload, check, and save the official class list.',
+          'After the class list is saved, select Create student exam code.',
+          'Copy the complete class handout and give it to the listed students.',
+        ],
+      },
+      student: {
+        label: 'Student · Simple steps',
+        steps: [
+          'Sign in using the same email placed on the class list.',
+          'Get the examination link and class-wide student exam code from the Beadle.',
+          'Enter the code, check the exam details, answer, review, and submit.',
+        ],
+      },
+    };
+    const guide = guides[role];
+    if (!guide) return '';
+    return `<aside class="dd26-role-guide" aria-label="${escapeHtml(guide.label)}"><div class="dd26-label">${escapeHtml(guide.label)}</div><ol>${guide.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join('')}</ol></aside>`;
   }
 
   function studentSection(portal) {
     const exams = portal.studentExams || [];
-    return `<section class="dd26-card"><div class="dd26-label">Student examination</div><h2>Check your exam details</h2><p>Students must sign in with their Due Diligence account. The signed-in email must match the class list prepared by the Beadle.</p><div class="dd26-form-grid"><label class="dd26-field"><span>Examination</span><input class="dd26-input" id="dd26-student-exam" autocomplete="off" value="${escapeHtml(state.exam.entryExamId)}"><small class="dd26-help">Use the examination link or reference in the class handout.</small></label><label class="dd26-field"><span>Student exam code</span><input class="dd26-input" id="dd26-student-key" type="password" autocomplete="one-time-code" required><small class="dd26-help">After saving the class list, the Beadle creates this code and gives it to the class.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-start-attempt" type="button">Check exam details</button></div><div class="dd26-privacy">A code never replaces sign-in or the class-list check. During the exam, copy, cut, paste, and right-click are blocked. Be online to sign in and start. If the connection drops after the exam opens, answers can remain saved on this device until it reconnects. Do not clear browser data.</div></section><section class="dd26-card"><div class="dd26-label">Your examinations</div><h2>Available and completed exams</h2>${exams.length ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Examination</th><th>Schedule</th><th>Status</th><th>Action</th></tr></thead><tbody>${exams.map((exam) => { const attemptStatus = exam.attemptStatus || exam.status; return `<tr><td><strong>${escapeHtml(exam.title)}</strong><br><small>${escapeHtml(exam.examId)}</small></td><td>${escapeHtml(formatDate(exam.opensAt))}<br>to ${escapeHtml(formatDate(exam.hardClosesAt))}</td><td><span class="dd26-status">${escapeHtml(attemptStatus)}</span></td><td>${exam.resultReleased ? `<button class="dd26-button" data-dd26-student-result="${escapeHtml(exam.examId)}" type="button">View result</button>` : exam.attemptId && isClosedAttemptStatus(attemptStatus) ? `<button class="dd26-button" data-dd26-submission-status="${escapeHtml(exam.attemptId)}" type="button">View receipt</button>` : exam.attemptId ? `<button class="dd26-button" data-dd26-resume-attempt="${escapeHtml(exam.attemptId)}" type="button">Resume</button>` : `<button class="dd26-button" data-dd26-use-exam="${escapeHtml(exam.examId)}" type="button">Use this exam</button>`}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="dd26-empty">No active examination is available for this signed-in account.</div>'}</section>`;
+    return `<section class="dd26-card"><div class="dd26-label">Student examination</div><h2>Check your exam details</h2><p>Students must sign in with their Due Diligence account. The signed-in email must match the class list prepared by the Beadle.</p><div class="dd26-notice"><strong>Where do I get the student exam code?</strong> Get this code from the Beadle. You must also sign in with the account on the class list.</div><div class="dd26-form-grid"><label class="dd26-field"><span>Examination</span><input class="dd26-input" id="dd26-student-exam" autocomplete="off" value="${escapeHtml(state.exam.entryExamId)}"><small class="dd26-help">Use the examination link or reference in the class handout.</small></label><label class="dd26-field"><span>Student exam code</span><input class="dd26-input" id="dd26-student-key" type="password" autocomplete="one-time-code" required><small class="dd26-help">Get this code from the Beadle. You must also sign in with the account on the class list.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-start-attempt" type="button">Check exam details</button></div><div class="dd26-privacy">A code never replaces sign-in or the class-list check. During the exam, copy, cut, paste, and right-click are blocked. Be online to sign in and start. If the connection drops after the exam opens, answers can remain saved on this device until it reconnects. Do not clear browser data.</div></section><section class="dd26-card"><div class="dd26-label">Your examinations</div><h2>Available and completed exams</h2>${exams.length ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Examination</th><th>Schedule</th><th>Status</th><th>Action</th></tr></thead><tbody>${exams.map((exam) => { const attemptStatus = exam.attemptStatus || exam.status; return `<tr><td><strong>${escapeHtml(exam.title)}</strong><br><small>${escapeHtml(exam.examId)}</small></td><td>${escapeHtml(formatDate(exam.opensAt))}<br>to ${escapeHtml(formatDate(exam.hardClosesAt))}</td><td><span class="dd26-status">${escapeHtml(attemptStatus)}</span></td><td>${exam.resultReleased ? `<button class="dd26-button" data-dd26-student-result="${escapeHtml(exam.examId)}" type="button">View result</button>` : exam.attemptId && isClosedAttemptStatus(attemptStatus) ? `<button class="dd26-button" data-dd26-submission-status="${escapeHtml(exam.attemptId)}" type="button">View receipt</button>` : exam.attemptId ? `<button class="dd26-button" data-dd26-resume-attempt="${escapeHtml(exam.attemptId)}" type="button">Resume</button>` : `<button class="dd26-button" data-dd26-use-exam="${escapeHtml(exam.examId)}" type="button">Use this exam</button>`}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="dd26-empty">No active examination is available for this signed-in account.</div>'}</section>`;
   }
 
   function activationSection(portal) {
@@ -596,7 +692,7 @@
 
   function beadleSection(portal) {
     const exams = portal.beadleExams || portal.beadleAssignments || [];
-    return `<section class="dd26-card"><div class="dd26-label">Beadle access for this exam</div><h2>Open the examination from your Professor</h2><p>After publishing, the Professor gives the named Beadle a one-time key. It opens only the class-preparation and exam-day workspace for that examination.</p><label class="dd26-field"><span>Beadle key from the Professor</span><input class="dd26-input" id="dd26-beadle-key" type="password" autocomplete="one-time-code"></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-redeem-beadle" type="button">Open Beadle workspace</button></div><div class="dd26-notice"><strong>This is not the student code.</strong> After the class list is saved, Due Diligence creates a separate exam code for the Beadle to give the class.</div></section><section class="dd26-card"><div class="dd26-question-meta"><div><div class="dd26-label">Your assigned examinations</div><h2>Prepare the class and exam-day handout</h2></div><span class="dd26-status">${exams.length} assigned</span></div>${exams.length ? `<div class="dd26-attention-list">${exams.map((exam) => `<article><div><strong>${escapeHtml(exam.title || 'Examination')}</strong><small>${escapeHtml(exam.studentAccessReady ? 'Student handout ready' : 'Class preparation required')} · Beadle access until ${escapeHtml(formatDate(exam.expiresAt))}</small></div><div class="dd26-actions"><button class="dd26-button${exam.studentAccessReady ? '' : ' primary'}" data-dd26-beadle-exam="${escapeHtml(exam.examId)}" type="button">${exam.studentAccessReady ? 'Open exam-day desk' : 'Prepare class list'}</button></div></article>`).join('')}</div>` : '<div class="dd26-empty">No published examination is assigned to this Beadle account.</div>'}<div class="dd26-privacy">The Beadle can prepare the class list and student handout, confirm entry, and help during the exam. Questions, answers, grades, and result release remain with the Professor.</div></section>`;
+    return `<section class="dd26-card"><div class="dd26-label">Beadle access for this exam</div><h2>Open the examination from your Professor</h2><p>After publishing, the Professor gives the named Beadle a one-time key. It opens only the class-preparation and exam-day workspace for that examination.</p><label class="dd26-field"><span>Beadle key from the Professor</span><input class="dd26-input" id="dd26-beadle-key" type="password" autocomplete="one-time-code"></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-redeem-beadle" type="button">Open Beadle workspace</button></div><div class="dd26-notice"><strong>This Beadle key is not the student exam code.</strong> Do not give it to students. After you save the class list, Due Diligence creates the class-wide student exam code.</div></section><section class="dd26-card"><div class="dd26-question-meta"><div><div class="dd26-label">Your assigned examinations</div><h2>Prepare the class and exam-day handout</h2></div><span class="dd26-status">${exams.length} assigned</span></div>${exams.length ? `<div class="dd26-attention-list">${exams.map((exam) => `<article><div><strong>${escapeHtml(exam.title || 'Examination')}</strong><small>${escapeHtml(exam.studentAccessReady ? 'Student handout ready' : 'Class preparation required')} · Beadle access until ${escapeHtml(formatDate(exam.expiresAt))}</small></div><div class="dd26-actions"><button class="dd26-button${exam.studentAccessReady ? '' : ' primary'}" data-dd26-beadle-exam="${escapeHtml(exam.examId)}" type="button">${exam.studentAccessReady ? 'Open exam-day desk' : 'Prepare class list'}</button></div></article>`).join('')}</div>` : '<div class="dd26-empty">No published examination is assigned to this Beadle account.</div>'}<div class="dd26-privacy">The Beadle can prepare the class list and student handout, confirm entry, and help during the exam. Questions, answers, grades, and result release remain with the Professor.</div></section>`;
   }
 
   function professorSection(portal) {
@@ -610,7 +706,7 @@
     const exams = classroom.exams || [];
     const authoring = exams.length ? '<section class="dd26-section"><div class="dd26-notice"><strong>Continue the examination below.</strong> One Examination Room holds one examination. Each completed step unlocks the next classroom handoff.</div></section>'
       : `<section class="dd26-section">${professorFlowList(null, classroom)}<h3>Make the examination</h3><p>Enter the official details first. The examination stays private until you review every question and publish it for the Beadle.</p><div class="dd26-form-grid"><label class="dd26-field"><span>Exam title</span><input class="dd26-input" id="dd26-exam-title" maxlength="200"></label><label class="dd26-field"><span>Number of questions</span><input class="dd26-input" id="dd26-exam-count" type="number" min="1" max="200" step="1"><small class="dd26-help">Choose 1–200 questions. The Professor decides the number.</small></label><label class="dd26-field wide"><span>Instructions for students</span><textarea class="dd26-textarea" id="dd26-exam-instructions" maxlength="10000"></textarea></label><label class="dd26-field"><span>If a student leaves the exam tab</span><select class="dd26-select" id="dd26-exam-integrity"><option value="standard" selected>Record for Professor review</option><option value="strict">Warn the student and record</option></select><small class="dd26-help">Copy, cut, paste, and right-click are blocked during the monitored exam. Leaving the tab never causes an automatic failure.</small></label><label class="dd26-field"><span>Student result when grades are sent</span><select class="dd26-select" id="dd26-exam-questionnaire"><option value="false" selected>Grades and comments only</option><option value="true">Questions, grades, and comments</option></select><small class="dd26-help">Student answers are not sent in the class result. The Professor confirms this choice again before sending.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-create-exam" type="button">Create examination</button></div></section>`;
-    return `<div class="dd26-question-meta"><span>${escapeHtml(classroom.title)}</span><span class="dd26-status">${classroom.rosterCount || 0} students on the class list</span></div><div class="dd26-notice"><strong>Classroom sequence:</strong> build and publish the examination, copy the Beadle key, then wait for the Beadle to save the class list and prepare the student code.</div>${authoring}<section class="dd26-section"><h3>Your examination</h3>${examCards(exams, classroom)}</section>`;
+    return `<div class="dd26-question-meta"><span>${escapeHtml(classroom.title)}</span><span class="dd26-status">${classroom.rosterCount || 0} students on the class list</span></div><div class="dd26-notice"><strong>Who creates the student exam code?</strong> The Professor publishes and sends the Beadle key. The Beadle then saves the official class list and selects <em>Create student exam code</em>. One class-wide code is given to all listed students.</div>${authoring}<section class="dd26-section"><h3>Your examination</h3>${examCards(exams, classroom)}</section>`;
   }
 
   function professorFlowList(exam, classroom = {}) {
@@ -853,6 +949,7 @@
       EXAM_CLOSED: 'This examination is closed.',
       LATE_ADMISSION_CLOSED: 'Student entry is closed for this examination.',
       STUDENT_ACCESS_NOT_READY: 'The Beadle must finish the class list and create the student exam code first.',
+      STUDENT_ACCESS_ISSUED: 'The class-wide student exam code is already active.',
       EXAM_ROOM_STUDENT_ACCESS_NOT_ISSUABLE: 'The student handout cannot be created yet. Check the class list and opening time.',
       EXAM_ROOM_ROSTER_LOCKED: 'The class list is locked because the student handout is already active or the examination has begun.',
       EXAM_ROOM_BEADLE_REQUIRED: 'Publish the examination to the named Beadle before continuing.',
@@ -1041,10 +1138,17 @@
     const examLink = `${location.origin}${location.pathname}#examination-room?exam=${encodeURIComponent(snapshot.examId)}`;
     const rosterCount = Number(counts.roster || snapshot.rosterCount || candidates.length || 0);
     const studentAccessReady = snapshot.studentAccessReady === true;
+    const activeStudentCode = String(
+      snapshot.activeStudentExamCode
+        || snapshot.studentAccessCode
+        || state.exam.studentExamCodes.get(snapshot.examId)
+        || '',
+    ).trim();
+    if (activeStudentCode) state.exam.studentExamCodes.set(snapshot.examId, activeStudentCode);
     const canEditRoster = snapshot.canEditRoster !== false && snapshot.rosterLocked !== true;
     const canIssueStudentAccess = snapshot.canIssueStudentAccess === true;
     const candidateAccessCopy = snapshot.accessCodeRequired === true
-      ? 'The Professor also requires a separate exam access code. Give it only through the approved class channel. Every student must still sign in and be on the class list.'
+      ? 'Students use the class-wide student exam code shown above. Give the complete handout only through the approved class channel. Every student must still sign in and be on the class list.'
       : snapshot.accessCodeRequired === false
         ? 'No separate student access code is required. Every student must still sign in and be on the class list.'
         : 'The exam access-code rule is not available. Refresh this page or ask the Professor before giving instructions to students.';
@@ -1056,7 +1160,15 @@
         ${rosterPreviewHtml()}
         <details class="dd26-advanced"><summary>Add or correct one student</summary><div class="dd26-form-grid"><label class="dd26-field"><span>Primary email</span><input class="dd26-input" id="dd26-beadle-row-email" type="email"></label><label class="dd26-field"><span>Student ID</span><input class="dd26-input" id="dd26-beadle-row-student"></label><label class="dd26-field"><span>Exam number</span><input class="dd26-input" id="dd26-beadle-row-candidate"></label><label class="dd26-field"><span>Name (optional)</span><input class="dd26-input" id="dd26-beadle-row-name"></label><label class="dd26-field wide"><span>Reason for the change</span><input class="dd26-input" id="dd26-beadle-row-reason" value="Correct the class list"></label></div><div class="dd26-actions"><button class="dd26-button" id="dd26-upsert-beadle-row" type="button">Check and save student</button></div></details>
       </details>` : `<div class="dd26-notice"><strong>The class list is locked.</strong> ${escapeHtml(snapshot.rosterLockedReason || 'Student access was issued, the exam opened, or a student already started. Ask the Professor before making any correction.')}</div>`;
-    const studentHandout = `<section class="dd26-section"><div class="dd26-label">Step 2 · Student handout</div><h3>${studentAccessReady ? 'Student exam code issued' : 'Create the student exam code'}</h3><p>${studentAccessReady ? 'The code was shown once when it was issued. Use the approved copy already sent to the class. A replacement immediately cancels the old code.' : 'After the class list is saved, create the separate code and link that students will use. Students must still sign in and match the class list.'}</p><div class="dd26-actions">${canIssueStudentAccess ? `<button class="dd26-button ${studentAccessReady ? 'danger' : 'primary'}" id="dd26-issue-student-access" type="button">${studentAccessReady ? 'Replace lost student code' : 'Create student handout'}</button>` : `<button class="dd26-button" type="button" disabled>${rosterCount < 1 ? 'Save the class list first' : 'Student handout unavailable'}</button>`}</div><label class="dd26-field"><span>Student examination link</span><div class="dd26-secret-row"><input class="dd26-input" id="dd26-beadle-exam-link" readonly value="${escapeHtml(examLink)}"><button class="dd26-button" id="dd26-copy-exam-link" type="button">Copy link</button></div></label><p class="dd26-help">The link identifies the examination only. It never lets a signed-out or unlisted student enter. ${escapeHtml(candidateAccessCopy)}</p></section>`;
+    const codeValue = activeStudentCode
+      ? `<div class="dd26-raw-key" id="dd26-active-student-code" data-dd26-sensitive>${escapeHtml(activeStudentCode)}</div>`
+      : `<div class="dd26-code-unavailable">${studentAccessReady ? 'The active code is not available on this page. Create a new code to display and copy it.' : 'Save the class list, then create the student exam code.'}</div>`;
+    const codeAction = activeStudentCode
+      ? '<button class="dd26-button primary dd26-student-code-action" id="dd26-copy-active-class-handout" type="button">Copy class handout</button>'
+      : canIssueStudentAccess
+        ? `<button class="dd26-button ${studentAccessReady ? 'danger' : 'primary'} dd26-student-code-action" id="dd26-issue-student-access" type="button">${studentAccessReady ? 'Create a new student exam code' : 'Create student exam code'}</button>`
+        : `<button class="dd26-button dd26-student-code-action" type="button" disabled>${rosterCount < 1 ? 'Save the class list first' : 'Student exam code unavailable'}</button>`;
+    const studentHandout = `<section class="dd26-section dd26-student-code-panel${activeStudentCode ? ' is-ready' : rosterCount > 0 ? ' is-actionable' : ''}" id="dd26-student-code-panel"><div class="dd26-label">Step 2 · Student handout</div><h3>Student handout</h3><p>${activeStudentCode ? 'The active student exam code appears beside the examination link. Give the complete handout only to students on the saved class list.' : studentAccessReady ? 'A student exam code is active, but it is not available on this page. Create a new student exam code to replace it and display the new handout.' : 'After you save the class list, Due Diligence creates the class-wide student exam code.'}</p><div class="dd26-handout-fields"><label class="dd26-field"><span>Student examination link</span><input class="dd26-input" id="dd26-beadle-exam-link" readonly value="${escapeHtml(examLink)}"></label><div class="dd26-field"><span>Active student exam code</span>${codeValue}</div></div><div class="dd26-actions">${codeAction}</div><p class="dd26-help">The link identifies the examination only. It never lets a signed-out or unlisted student enter. ${escapeHtml(candidateAccessCopy)}</p></section>`;
     host.innerHTML = `<section class="dd26-card"><div class="dd26-question-meta"><div><div class="dd26-label">Beadle · Class preparation and exam day</div><h2>${escapeHtml(snapshot.title || 'Exam-day class')}</h2></div><span class="dd26-status">${escapeHtml(studentAccessReady ? 'Student access ready' : snapshot.status || 'assigned')}</span></div><div class="dd26-stat-grid"><div class="dd26-stat"><strong>${escapeHtml(rosterCount)}</strong><span>Students listed</span></div><div class="dd26-stat"><strong>${escapeHtml(accountLinked)}</strong><span>Accounts matched</span></div><div class="dd26-stat"><strong>${escapeHtml(counts.submitted || 0)}</strong><span>Submitted</span></div><div class="dd26-stat"><strong>${escapeHtml(counts.needsAttention ?? attention.length)}</strong><span>Needs attention</span></div></div>
       ${rosterEditor}
       ${studentHandout}
@@ -1073,7 +1185,7 @@
     });
     bindRosterControls();
     document.getElementById('dd26-upsert-beadle-row')?.addEventListener('click', upsertBeadleRosterRow);
-    document.getElementById('dd26-copy-exam-link')?.addEventListener('click', copyBeadleExamLink);
+    document.getElementById('dd26-copy-active-class-handout')?.addEventListener('click', () => copyActiveClassHandout(snapshot, examLink, activeStudentCode));
     const studentAccessAttempt = {};
     document.getElementById('dd26-issue-student-access')?.addEventListener('click', () => issueStudentAccess(studentAccessAttempt));
     document.getElementById('dd26-refresh-beadle')?.addEventListener('click', () => openBeadleOperations(snapshot.examId));
@@ -1273,9 +1385,18 @@
         await command({ operation: 'import_roster', classroomId: state.exam.activeClassroomId, rows: preview.rows, sourceHash: preview.sourceHash, requestKey: randomKey('roster') });
       }
       state.exam.rosterPreview = null;
-      global.toast?.('Roster imported without duplicates.', 'ok');
-      if (state.exam.rosterMode === 'beadle') await openBeadleOperations(state.exam.activeExamId);
-      else await refreshExamPortal('professor');
+      if (state.exam.rosterMode === 'beadle') {
+        global.toast?.('Class list saved. Next: create the student exam code.', 'ok');
+        await openBeadleOperations(state.exam.activeExamId);
+        const codePanel = document.getElementById('dd26-student-code-panel');
+        const codeButton = document.getElementById('dd26-issue-student-access');
+        codePanel?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        codeButton?.focus?.({ preventScroll: true });
+        announceExamStatus('Class list saved. Create the student exam code next.');
+      } else {
+        global.toast?.('Roster imported without duplicates.', 'ok');
+        await refreshExamPortal('professor');
+      }
     } catch (error) { global.toast?.(error.message, 'warn'); }
   }
 
@@ -1320,6 +1441,26 @@
     }
   }
 
+  async function copyActiveClassHandout(snapshot, examLink, studentCode, buttonId = 'dd26-copy-active-class-handout') {
+    if (!studentCode) return;
+    const handout = [
+      snapshot.title || 'Class examination',
+      `Exam link: ${examLink}`,
+      `Student exam code: ${studentCode}`,
+      `Opens: ${formatDate(snapshot.opensAt)}`,
+      `Entry closes: ${formatDate(snapshot.entryClosesAt)}`,
+      'Students must sign in with the account listed on the class list.',
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(handout);
+      const button = document.getElementById(buttonId);
+      if (button) button.textContent = 'Class handout copied';
+      global.toast?.('Class handout copied. Give it only to students on the saved class list.', 'ok');
+    } catch {
+      global.toast?.('Copy was unavailable. Select and copy the examination link and student exam code.', 'warn');
+    }
+  }
+
   async function issueStudentAccess(attempt = {}) {
     const snapshot = state.exam.activeBeadleSnapshot || {};
     const replacing = snapshot.studentAccessReady === true;
@@ -1328,7 +1469,7 @@
     attempt.requestKey ||= randomKey('student_access');
     const button = document.getElementById('dd26-issue-student-access');
     if (button?.disabled) return;
-    if (button) { button.disabled = true; button.textContent = replacing ? 'Replacing code…' : 'Creating handout…'; }
+    if (button) { button.disabled = true; button.textContent = replacing ? 'Replacing code…' : 'Creating student exam code…'; }
     try {
       const result = await withBoundedPublishWait(command({
         operation: 'issue_student_access',
@@ -1337,25 +1478,28 @@
         requestKey: attempt.requestKey,
       }));
       if (result?.ok !== true || result.studentAccessReady !== true
-          || result.oneTimeStudentAccessCode !== attempt.studentKey) {
+          || result.oneTimeStudentAccessCode !== attempt.studentKey
+          || (result.activeStudentExamCode && result.activeStudentExamCode !== attempt.studentKey)) {
         const error = new Error('The server did not confirm the complete student handout. No code can be displayed.');
         error.code = 'EXAM_ROOM_STUDENT_ACCESS_CONFIRMATION_INCOMPLETE';
         throw error;
       }
       const examId = state.exam.activeExamId;
       const examLink = `${location.origin}${location.pathname}#examination-room?exam=${encodeURIComponent(examId)}`;
-      let studentCode = attempt.studentKey;
+      let studentCode = String(result.activeStudentExamCode || attempt.studentKey || '');
+      state.exam.studentExamCodes.set(examId, studentCode);
       const handoutTitle = snapshot.title || 'Class examination';
       const handoutOpens = formatDate(result.opensAt);
       const handoutEntryCloses = formatDate(result.entryClosesAt);
-      openDialog(`<div class="dd26-label">Student handout · One-time display</div><h2>${result.rotated ? 'Replacement student code ready' : 'Student handout ready'}</h2><p>Copy this handout now and give it through the approved class channel. Due Diligence protects the saved code and cannot show this exact code again.</p><label class="dd26-field"><span>Student examination link</span><div class="dd26-secret-row"><div class="dd26-raw-key" id="dd26-student-handout-link">${escapeHtml(examLink)}</div><button class="dd26-button" data-dd26-copy-secret="dd26-student-handout-link" type="button">Copy link</button></div></label><label class="dd26-field"><span>Student exam code</span><div class="dd26-secret-row"><div class="dd26-raw-key" id="dd26-student-handout-code" data-dd26-sensitive>${escapeHtml(studentCode)}</div><button class="dd26-button" data-dd26-copy-secret="dd26-student-handout-code" type="button">Copy code</button></div></label><div class="dd26-notice"><strong>Student entry still requires sign-in.</strong> The signed-in email must match the saved class list. The link and code are not enough by themselves.</div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-copy-class-handout" type="button">Copy complete class handout</button><button class="dd26-button" data-dd26-close-dialog type="button">I saved the handout</button></div>`, {
+      openDialog(`<div class="dd26-label">Student handout</div><h2>${result.rotated ? 'New student exam code created' : 'Student exam code created'}</h2><div class="dd26-success" role="status"><strong>The class handout is ready.</strong> The active student exam code appears beside the examination link. Give the complete handout only to students on the saved class list.</div><label class="dd26-field"><span>Student examination link</span><div class="dd26-raw-key" id="dd26-student-handout-link">${escapeHtml(examLink)}</div></label><label class="dd26-field"><span>Active student exam code</span><div class="dd26-raw-key" id="dd26-student-handout-code" data-dd26-sensitive>${escapeHtml(studentCode)}</div></label><div class="dd26-notice"><strong>Student entry still requires sign-in.</strong> The signed-in email must match the saved class list. The link and code are not enough by themselves.</div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-copy-class-handout" type="button">Copy class handout</button><button class="dd26-button" data-dd26-close-dialog type="button">Done</button></div>`, {
         persistent: true,
         sensitive: true,
         onClose: () => {
           studentCode = '';
           attempt.studentKey = '';
           attempt.requestKey = '';
-          if (state.exam.activeBeadleSnapshot?.studentAccessReady !== true) {
+          if (state.exam.section === 'beadle'
+              && state.exam.activeBeadleSnapshot?.studentAccessReady !== true) {
             void refreshBeadleOperations(examId).catch(() => {
               global.toast?.('Refresh the Beadle workspace to see the student handout status.', 'warn');
             });
@@ -1364,22 +1508,11 @@
       });
       bindSecretCopyButtons();
       document.getElementById('dd26-copy-class-handout')?.addEventListener('click', async (event) => {
-        try {
-          const displayedLink = document.getElementById('dd26-student-handout-link')?.textContent || '';
-          const displayedCode = document.getElementById('dd26-student-handout-code')?.textContent || '';
-          const handout = [
-            handoutTitle,
-            `Exam link: ${displayedLink}`,
-            `Exam code: ${displayedCode}`,
-            `Opens: ${handoutOpens}`,
-            `Entry closes: ${handoutEntryCloses}`,
-            'Students must sign in with the account listed on the class list.',
-          ].join('\n');
-          await navigator.clipboard.writeText(handout);
-          event.currentTarget.textContent = 'Class handout copied';
-        } catch {
-          global.toast?.('Copy was unavailable. Copy the link and exam code separately.', 'warn');
-        }
+        await copyActiveClassHandout({
+          title: handoutTitle,
+          opensAt: result.opensAt || handoutOpens,
+          entryClosesAt: result.entryClosesAt || handoutEntryCloses,
+        }, examLink, state.exam.studentExamCodes.get(examId) || '', event.currentTarget.id);
       });
       attempt.studentKey = '';
       attempt.requestKey = '';
@@ -1387,7 +1520,7 @@
       result.oneTimeStudentAccessCode = '';
       await withBoundedPublishWait(refreshBeadleOperations(examId), EXAMINATION_ROOM_REFRESH_WAIT_MS).catch(() => false);
     } catch (error) {
-      if (button) { button.disabled = false; button.textContent = replacing ? 'Replace lost student code' : 'Create student handout'; }
+      if (button) { button.disabled = false; button.textContent = replacing ? 'Create a new student exam code' : 'Create student exam code'; }
       global.toast?.(error.message || 'The student handout could not be created.', 'warn');
     }
   }
@@ -2151,10 +2284,14 @@
       const deviceSupported = Math.min(global.screen?.width || global.innerWidth, global.screen?.height || global.innerHeight) >= 600;
       const startedAt = performance.now();
       const deviceInstanceHash = storage.available ? await state.exam.store.getDeviceInstanceHash() : null;
-      const payload = await api('/exam-room/query', { operation: 'preflight', examId, deviceInstanceHash });
+      const payload = await api('/exam-room/query', {
+        operation: 'preflight', examId, studentKey, deviceInstanceHash,
+      });
       const reachabilityMs = Math.max(0, Math.round(performance.now() - startedAt));
       state.exam.preflight = { examId, studentKey, storage, persistent, deviceSupported, deviceInstanceHash, reachabilityMs, server: payload.result || {} };
-      renderPreflight();
+      synchronizeServerClock(state.exam.preflight.server.serverNow || state.exam.preflight.server.checks?.serverNow);
+      if (shouldRenderStudentWaitingRoom(state.exam.preflight)) renderStudentWaitingRoom();
+      else renderPreflight();
     } catch (error) { global.toast?.(error.message, 'warn'); }
   }
 
@@ -2190,6 +2327,191 @@
           ? 'The examination cannot be started at this time.'
           : 'Due Diligence did not confirm that entry is open. Starting is blocked.'),
     };
+  }
+
+  function waitingRoomChecks(check = {}) {
+    const server = check.server || {};
+    const access = accessCodePreflightPolicy(server, check.studentKey);
+    const accessCodeValidated = !access.required
+      || server.accessCodeAccepted === true
+      || server.accessCodeStatus === 'accepted'
+      || server.accessCodeValid === true
+      || server.checks?.accessCodeValid === true;
+    const sessionConflict = server.sessionConflict === true || server.checks?.sessionConflict === true;
+    return {
+      access,
+      accessCodeValidated,
+      sessionConflict,
+      ready: check.storage?.available === true
+        && check.deviceSupported === true
+        && server.eligible === true
+        && access.known
+        && access.ready
+        && accessCodeValidated
+        && !sessionConflict,
+    };
+  }
+
+  function shouldRenderStudentWaitingRoom(check = {}) {
+    const server = check.server || {};
+    const blocker = String(server.startBlockerCode || server.code || '');
+    const checks = waitingRoomChecks(check);
+    const waitingState = String(server.waitingRoomState || '');
+    return (server.waitingRoom === true || blocker === 'EXAM_NOT_OPEN')
+      && (!waitingState || waitingState === 'waiting')
+      && blocker === 'EXAM_NOT_OPEN'
+      && server.eligible === true
+      && checks.access.known
+      && checks.access.ready
+      && checks.accessCodeValidated
+      && !checks.sessionConflict
+      && Number.isFinite(new Date(server.opensAt).getTime());
+  }
+
+  function waitingRoomCountdownText(milliseconds) {
+    const seconds = Math.max(0, Math.ceil(Number(milliseconds || 0) / 1000));
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainder = seconds % 60;
+    return [hours, minutes, remainder].map((value) => String(value).padStart(2, '0')).join(':');
+  }
+
+  function updateStudentWaitingRoomClock() {
+    const check = state.exam.preflight;
+    const countdown = document.getElementById('dd26-waiting-countdown');
+    const status = document.getElementById('dd26-waiting-status');
+    const start = document.getElementById('dd26-preflight-start');
+    const acknowledgement = document.getElementById('dd26-preflight-ack');
+    if (!check || !countdown || !status || !start) {
+      clearInterval(state.exam.waitingRoomTimer);
+      state.exam.waitingRoomTimer = null;
+      return;
+    }
+    const opensAtMs = new Date(check.server?.opensAt).getTime();
+    const entryClosesAtMs = new Date(check.server?.entryClosesAt || check.server?.hardClosesAt).getTime();
+    const officialNow = currentServerTimeMs();
+    const remaining = opensAtMs - officialNow;
+    countdown.textContent = waitingRoomCountdownText(remaining);
+    const openingReached = remaining <= 0;
+    const entryClosed = Number.isFinite(entryClosesAtMs) && officialNow >= entryClosesAtMs;
+    const checks = waitingRoomChecks(check);
+    start.disabled = !checks.ready || !openingReached || entryClosed || acknowledgement?.checked !== true;
+    if (entryClosed) status.textContent = 'Student entry has closed. Ask the Professor or Beadle for instructions.';
+    else if (!openingReached) status.textContent = `Start unlocks when the official countdown reaches zero at ${formatDate(check.server.opensAt)}.`;
+    else status.textContent = 'Opening time reached. Review the acknowledgement, then select Start examination.';
+  }
+
+  async function pollStudentWaitingRoom() {
+    const check = state.exam.preflight;
+    if (!check || state.exam.waitingRoomPolling || !document.getElementById('dd26-waiting-countdown')) return;
+    state.exam.waitingRoomPolling = true;
+    try {
+      const payload = await api('/exam-room/query', {
+        operation: 'preflight',
+        examId: check.examId,
+        studentKey: check.studentKey,
+        deviceInstanceHash: check.deviceInstanceHash,
+      });
+      check.server = payload.result || {};
+      synchronizeServerClock(check.server.serverNow || check.server.checks?.serverNow);
+      updateStudentWaitingRoomClock();
+      if (String(check.server.waitingRoomState || '') === 'blocked') {
+        clearInterval(state.exam.waitingRoomTimer);
+        clearTimeout(state.exam.waitingRoomPollTimer);
+        state.exam.waitingRoomTimer = null;
+        state.exam.waitingRoomPollTimer = null;
+        renderPreflight();
+      }
+    } catch {
+      const status = document.getElementById('dd26-waiting-status');
+      if (status) status.textContent = 'The official time check will retry automatically. Keep this page open.';
+    } finally {
+      state.exam.waitingRoomPolling = false;
+      if (document.getElementById('dd26-waiting-countdown')
+          && state.exam.preflight?.server?.pollAfterMs != null) {
+        scheduleStudentWaitingRoomPoll();
+      }
+    }
+  }
+
+  function scheduleStudentWaitingRoomPoll() {
+    clearTimeout(state.exam.waitingRoomPollTimer);
+    const serverDelay = Number(state.exam.preflight?.server?.pollAfterMs);
+    const delay = Number.isFinite(serverDelay)
+      ? Math.max(5000, Math.min(30_000, serverDelay))
+      : 15_000;
+    state.exam.waitingRoomPollTimer = setTimeout(() => {
+      state.exam.waitingRoomPollTimer = null;
+      void pollStudentWaitingRoom();
+    }, delay);
+  }
+
+  function renderStudentWaitingRoom() {
+    if (!isAuthenticated()) {
+      state.exam.preflight = null;
+      state.exam.section = 'entry';
+      renderExamRoom();
+      requireAuthentication();
+      return;
+    }
+    const check = state.exam.preflight;
+    const server = check?.server || {};
+    const host = document.getElementById('dd26-exam-main');
+    if (!check || !host) return;
+    closeDialog();
+    clearInterval(state.exam.waitingRoomTimer);
+    clearTimeout(state.exam.waitingRoomPollTimer);
+    const rules = server.rules || {};
+    const checks = waitingRoomChecks(check);
+    const accountLabel = server.studentEmail || server.signedInEmail || server.candidateEmail || 'Signed-in account confirmed';
+    host.innerHTML = `<section class="dd26-card dd26-waiting-room" aria-labelledby="dd26-waiting-title"><div class="dd26-label">Student waiting room</div><div class="dd26-question-meta"><div><h2 id="dd26-waiting-title">${escapeHtml(server.title || server.examTitle || 'Your examination')}</h2><p>Your identity, class-list entry, and student exam code have been checked. Examination questions are not shown before opening time.</p></div><span class="dd26-status">Ready for opening time</span></div><div class="dd26-waiting-clock" role="timer" aria-live="off"><span>Examination opens in</span><strong id="dd26-waiting-countdown">--:--:--</strong><small>Official Due Diligence countdown · opens ${escapeHtml(formatDate(server.opensAt))}</small></div><ul class="dd26-check-list dd26-waiting-checks"><li class="is-pass"><strong>Signed-in student</strong><span>${escapeHtml(accountLabel)}</span></li><li class="${server.eligible === true ? 'is-pass' : 'is-fail'}"><strong>Official class list</strong><span>${server.eligible === true ? 'Your signed-in account matches the saved class list' : 'Your account could not be matched to the class list'}</span></li><li class="${checks.accessCodeValidated ? 'is-pass' : 'is-fail'}"><strong>Student exam code</strong><span>${checks.accessCodeValidated ? 'The code from the Beadle is valid for this examination' : 'The student exam code could not be validated'}</span></li><li class="${check.storage?.available && check.deviceSupported ? 'is-pass' : 'is-fail'}"><strong>Device and answer saving</strong><span>${check.storage?.available && check.deviceSupported ? 'This device is ready to save examination answers' : 'This device is not ready to open the examination'}</span></li></ul><section class="dd26-waiting-instructions"><div class="dd26-label">Professor’s instructions</div>${studentInstructionsHtml(server.instructions)}</section><dl class="dd26-publish-summary"><div><dt>Exam time</dt><dd>${escapeHtml(formatDate(server.opensAt))} to ${escapeHtml(formatDate(server.serverDeadline || server.hardClosesAt))}</dd></div><div><dt>Allowed materials</dt><dd>${escapeHtml(rules.allowedMaterials || 'See the Professor’s instructions')}</dd></div><div><dt>Moving between questions</dt><dd>${escapeHtml(rules.navigationMode === 'one_way' ? 'Move forward only' : 'You may move between questions')}</dd></div><div><dt>Leaving the exam tab</dt><dd>${escapeHtml(rules.integrityMode === 'off' ? 'Not recorded under this exam setting' : 'Recorded for Professor review; it is not an automatic failure')}</dd></div></dl><label class="dd26-choice"><input id="dd26-preflight-ack" type="checkbox" ${checks.ready ? '' : 'disabled'}><span><strong>I reviewed the Professor’s instructions and exam rules</strong><small>The official examination clock continues even if I leave this page after the exam starts.</small></span></label><p class="dd26-waiting-status" id="dd26-waiting-status" role="status" aria-live="polite"></p><div class="dd26-actions"><button class="dd26-button primary" id="dd26-preflight-start" type="button" disabled>Start examination</button><button class="dd26-button" id="dd26-waiting-room-return" type="button">Return to Student page</button></div><div class="dd26-privacy">No attempt is created and no examination question is shown before the server confirms that opening time has arrived.</div></section>`;
+    document.getElementById('dd26-preflight-ack')?.addEventListener('change', updateStudentWaitingRoomClock);
+    document.getElementById('dd26-preflight-start')?.addEventListener('click', enterExamFromWaitingRoom);
+    document.getElementById('dd26-waiting-room-return')?.addEventListener('click', () => {
+      state.exam.preflight = null;
+      renderExamRoom();
+      document.getElementById('dd26-exam-main')?.focus();
+    });
+    updateStudentWaitingRoomClock();
+    state.exam.waitingRoomTimer = setInterval(updateStudentWaitingRoomClock, 1000);
+    scheduleStudentWaitingRoomPoll();
+  }
+
+  async function enterExamFromWaitingRoom() {
+    const check = state.exam.preflight;
+    const button = document.getElementById('dd26-preflight-start');
+    if (!check || !button || !document.getElementById('dd26-preflight-ack')?.checked) return;
+    const shouldRequestFullscreen = check.server?.rules?.fullscreenPolicy !== 'off'
+      && !check.server?.accommodation?.fullscreenExempt;
+    const fullscreenRequest = shouldRequestFullscreen
+      ? requestFullscreen()
+      : Promise.resolve(false);
+    button.disabled = true;
+    button.textContent = 'Checking opening time…';
+    try {
+      const payload = await api('/exam-room/query', {
+        operation: 'preflight',
+        examId: check.examId,
+        studentKey: check.studentKey,
+        deviceInstanceHash: check.deviceInstanceHash,
+      });
+      check.server = payload.result || {};
+      synchronizeServerClock(check.server.serverNow || check.server.checks?.serverNow);
+      if (!studentStartReadiness(check.server).canStart) {
+        const enteredFullscreen = await fullscreenRequest;
+        if (enteredFullscreen && document.fullscreenElement) await document.exitFullscreen?.().catch(() => null);
+        renderStudentWaitingRoom();
+        global.toast?.(studentStartReadiness(check.server).copy, 'warn');
+        return;
+      }
+      await beginAttemptAfterPreflight(fullscreenRequest);
+    } catch (error) {
+      const enteredFullscreen = await fullscreenRequest;
+      if (enteredFullscreen && document.fullscreenElement) await document.exitFullscreen?.().catch(() => null);
+      button.disabled = false;
+      button.textContent = 'Start examination';
+      global.toast?.(error.message || 'Opening time could not be confirmed.', 'warn');
+    }
   }
 
   function examIntegrityPolicy(rules = {}, accommodation = {}) {
@@ -2240,7 +2562,9 @@
     const accessCodePolicy = accessCodePreflightPolicy(server, check.studentKey);
     const accessCodeRequired = accessCodePolicy.required;
     const accessCodeReady = accessCodePolicy.ready;
-    const accessCodeValidated = server.accessCodeValid === true
+    const accessCodeValidated = server.accessCodeAccepted === true
+      || server.accessCodeStatus === 'accepted'
+      || server.accessCodeValid === true
       || server.checks?.accessCodeValid === true;
     const startReadiness = studentStartReadiness(server);
     const passing = check.storage.available && check.deviceSupported && eligible
@@ -2257,7 +2581,7 @@
     const accessCodeClass = !accessCodeReady
       ? 'is-fail'
       : accessCodeRequired && !accessCodeValidated ? 'is-warn' : 'is-pass';
-    openDialog(`<div class="dd26-label">Student exam check</div><h2>Check before starting</h2><p>This check confirms that you are signed in, on the class list, and opening the correct exam. The official exam clock comes from Due Diligence.</p><ul class="dd26-check-list"><li class="${check.deviceSupported ? 'is-pass' : 'is-fail'}"><strong>Device</strong><span>${check.deviceSupported ? 'Desktop or tablet is ready' : 'This phone-size screen is not supported for a formal beta exam'}</span></li><li class="${check.storage.available ? 'is-pass' : 'is-fail'}"><strong>Answer saving</strong><span>${escapeHtml(check.storage.message || check.storage.code)}</span></li><li class="${check.persistent ? 'is-pass' : 'is-warn'}"><strong>Keep answers on this device</strong><span>${check.persistent ? 'Allowed by this browser' : 'The browser may remove local data; keep the exam page open'}</span></li><li class="is-pass"><strong>Connection</strong><span>Due Diligence responded in ${escapeHtml(check.reachabilityMs)} ms · official time ${escapeHtml(formatDate(server.serverNow || server.checks?.serverNow))}</span></li><li class="${eligible ? 'is-pass' : 'is-fail'}"><strong>Class list and entry</strong><span>${eligible ? 'This signed-in student is on the class list' : escapeHtml(server.message || 'This signed-in account cannot start this examination')}</span></li><li class="${accessCodeClass}"><strong>Student exam code</strong><span>${escapeHtml(accessCodePolicyCopy)}</span></li><li class="${startReadiness.canStart ? 'is-pass' : 'is-fail'}"><strong>Opening and entry time</strong><span>${escapeHtml(startReadiness.copy)}</span></li><li class="${sessionConflict ? 'is-fail' : 'is-pass'}"><strong>Open exam session</strong><span>${sessionConflict ? 'Another open session must be resolved with the Beadle' : 'No other open session was found'}</span></li><li class="${integrity.recordingEnabled ? 'is-pass' : 'is-warn'}"><strong>Exam integrity</strong><span>${integrity.recordingEnabled ? `${integrity.clipboardBlocked ? 'Copy, cut, paste, and right-click are blocked. ' : 'Exam-menu restrictions are off for an approved arrangement. '}Leaving the exam tab or window is recorded for the Professor to review. It is not automatic proof and does not automatically fail or lock the exam.` : 'Tab recording and exam-menu restrictions are off for this exam or an approved accommodation.'}</span></li></ul><details open class="dd26-rules-summary"><summary>Instructions and exam rules</summary><p>${escapeHtml(server.instructions || 'Follow the Professor’s examination instructions.')}</p><dl><div><dt>Exam time</dt><dd>${escapeHtml(formatDate(server.opensAt))} to ${escapeHtml(formatDate(server.serverDeadline || server.hardClosesAt))}</dd></div><div><dt>Allowed materials</dt><dd>${escapeHtml(rules.allowedMaterials || 'See the Professor’s instructions')}</dd></div><div><dt>Questions</dt><dd>${escapeHtml(rules.navigationMode === 'one_way' ? 'Move forward only' : 'You may move between questions')}</dd></div><div><dt>Leaving the exam tab</dt><dd>${escapeHtml(integrity.recordingEnabled ? 'Recorded for Professor review' : 'Not recorded for this exam or accommodation')}</dd></div><div><dt>Full screen</dt><dd>${escapeHtml(rules.fullscreenPolicy === 'off' ? 'Not requested' : 'Requested when the exam starts')}</dd></div><div><dt>Entry</dt><dd>${escapeHtml(rules.admissionMode === 'beadle_approval' ? 'Beadle confirms entry' : 'Automatic after all checks pass')}</dd></div></dl></details><label class="dd26-choice"><input id="dd26-preflight-ack" type="checkbox" ${passing ? '' : 'disabled'}><span><strong>I reviewed the instructions and exam rules</strong><small>I understand that the exam is submitted only after Due Diligence shows a receipt.</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-preflight-start" type="button" disabled>Start examination</button><button class="dd26-button" data-dd26-close-dialog type="button">Return</button></div><div class="dd26-privacy">No camera permission is requested.</div>`);
+    openDialog(`<div class="dd26-label">Student exam check</div><h2>Check before starting</h2><p>This check confirms that you are signed in, on the class list, and opening the correct exam. The official exam clock comes from Due Diligence.</p><ul class="dd26-check-list"><li class="${check.deviceSupported ? 'is-pass' : 'is-fail'}"><strong>Device</strong><span>${check.deviceSupported ? 'Desktop or tablet is ready' : 'This phone-size screen is not supported for a formal beta exam'}</span></li><li class="${check.storage.available ? 'is-pass' : 'is-fail'}"><strong>Answer saving</strong><span>${escapeHtml(check.storage.message || check.storage.code)}</span></li><li class="${check.persistent ? 'is-pass' : 'is-warn'}"><strong>Keep answers on this device</strong><span>${check.persistent ? 'Allowed by this browser' : 'The browser may remove local data; keep the exam page open'}</span></li><li class="is-pass"><strong>Connection</strong><span>Due Diligence responded in ${escapeHtml(check.reachabilityMs)} ms · official time ${escapeHtml(formatDate(server.serverNow || server.checks?.serverNow))}</span></li><li class="${eligible ? 'is-pass' : 'is-fail'}"><strong>Class list and entry</strong><span>${eligible ? 'This signed-in student is on the class list' : escapeHtml(server.message || 'This signed-in account cannot start this examination')}</span></li><li class="${accessCodeClass}"><strong>Student exam code</strong><span>${escapeHtml(accessCodePolicyCopy)}</span></li><li class="${startReadiness.canStart ? 'is-pass' : 'is-fail'}"><strong>Opening and entry time</strong><span>${escapeHtml(startReadiness.copy)}</span></li><li class="${sessionConflict ? 'is-fail' : 'is-pass'}"><strong>Open exam session</strong><span>${sessionConflict ? 'Another open session must be resolved with the Beadle' : 'No other open session was found'}</span></li><li class="${integrity.recordingEnabled ? 'is-pass' : 'is-warn'}"><strong>Exam integrity</strong><span>${integrity.recordingEnabled ? `${integrity.clipboardBlocked ? 'Copy, cut, paste, and right-click are blocked. ' : 'Exam-menu restrictions are off for an approved arrangement. '}Leaving the exam tab or window is recorded for the Professor to review. It is not automatic proof and does not automatically fail or lock the exam.` : 'Tab recording and exam-menu restrictions are off for this exam or an approved accommodation.'}</span></li></ul><details open class="dd26-rules-summary"><summary>Instructions and exam rules</summary>${studentInstructionsHtml(server.instructions)}<dl><div><dt>Exam time</dt><dd>${escapeHtml(formatDate(server.opensAt))} to ${escapeHtml(formatDate(server.serverDeadline || server.hardClosesAt))}</dd></div><div><dt>Allowed materials</dt><dd>${escapeHtml(rules.allowedMaterials || 'See the Professor’s instructions')}</dd></div><div><dt>Questions</dt><dd>${escapeHtml(rules.navigationMode === 'one_way' ? 'Move forward only' : 'You may move between questions')}</dd></div><div><dt>Leaving the exam tab</dt><dd>${escapeHtml(integrity.recordingEnabled ? 'Recorded for Professor review' : 'Not recorded for this exam or accommodation')}</dd></div><div><dt>Full screen</dt><dd>${escapeHtml(rules.fullscreenPolicy === 'off' ? 'Not requested' : 'Requested when the exam starts')}</dd></div><div><dt>Entry</dt><dd>${escapeHtml(rules.admissionMode === 'beadle_approval' ? 'Beadle confirms entry' : 'Automatic after all checks pass')}</dd></div></dl></details><label class="dd26-choice"><input id="dd26-preflight-ack" type="checkbox" ${passing ? '' : 'disabled'}><span><strong>I reviewed the instructions and exam rules</strong><small>I understand that the exam is submitted only after Due Diligence shows a receipt.</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-preflight-start" type="button" disabled>Start examination</button><button class="dd26-button" data-dd26-close-dialog type="button">Return</button></div><div class="dd26-privacy">No camera permission is requested.</div>`);
     if (sessionConflict && check.deviceInstanceHash) {
       document.querySelector('.dd26-rules-summary')?.insertAdjacentHTML('beforebegin', `<div class="dd26-notice"><strong>Device recovery reference</strong><div class="dd26-secret-row"><code id="dd26-recovery-device-reference">${escapeHtml(check.deviceInstanceHash)}</code><button class="dd26-button" data-dd26-copy-secret="dd26-recovery-device-reference" type="button">Copy</button></div><small>Give this reference and the current exam-session number ${escapeHtml(server.activeEpoch || 'shown by Due Diligence')} to the Beadle only after an in-person identity check. It is not an access key.</small></div>`);
       bindSecretCopyButtons();
@@ -2268,7 +2592,7 @@
     start?.addEventListener('click', beginAttemptAfterPreflight);
   }
 
-  async function beginAttemptAfterPreflight() {
+  async function beginAttemptAfterPreflight(preparedFullscreenRequest = null) {
     if (!isAuthenticated()) {
       state.exam.preflight = null;
       closeDialog();
@@ -2292,9 +2616,9 @@
       && !check.server?.accommodation?.fullscreenExempt;
     // The browser permits full screen only while handling the student's click.
     // Start the request now, before the first network wait.
-    const fullscreenRequest = shouldRequestFullscreen
+    const fullscreenRequest = preparedFullscreenRequest || (shouldRequestFullscreen
       ? requestFullscreen()
-      : Promise.resolve(false);
+      : Promise.resolve(false));
     const button = document.getElementById('dd26-preflight-start');
     button.disabled = true; button.textContent = 'Starting…';
     try {
@@ -2544,7 +2868,7 @@
       const blockedByOneWay = oneWay && index !== state.exam.attemptIndex && index !== state.exam.attemptIndex + 1;
       return `<button type="button" data-dd26-attempt-question="${index}" class="${index === state.exam.attemptIndex ? 'is-active' : ''}${String(entry.answer || '').trim() ? ' is-saved' : ''}${entry.flagged ? ' is-flagged' : ''}" ${index === state.exam.attemptIndex ? 'aria-current="step"' : ''} ${blockedByOneWay ? 'disabled' : ''} aria-label="Question ${entry.ordinal}${String(entry.answer || '').trim() ? ', answered' : ', unanswered'}${entry.flagged ? ', flagged for review' : ''}${blockedByOneWay ? ', unavailable under one-way navigation' : ''}">${entry.ordinal}</button>`;
     }).join('');
-    document.getElementById('dd26-exam-main').innerHTML = `<section class="dd26-card dd26-attempt-workspace" id="dd26-attempt-surface" aria-labelledby="dd26-attempt-title"><div class="dd26-attempt-top"><div><div class="dd26-label" id="dd26-attempt-title">${escapeHtml(attempt.title)}</div><span class="dd26-save-state${mutable ? '' : ' is-error'}" id="dd26-save-state" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(mutable ? initialSaveState : 'Answer editing is unavailable; preserved work remains visible')}</span></div><div><div class="dd26-clock" id="dd26-attempt-clock" role="timer" aria-label="Time remaining">--:--:--</div><small class="dd26-clock-label">Official exam clock</small></div></div>${attentionReturnHtml}${offlineBundleNotice}${recoveryHtml}${attempt.readonlyTab ? '<div class="dd26-error" role="alert">Another tab holds the active writing lease. This tab is read-only to prevent conflicting edits.</div>' : ''}${mutable ? '' : '<div class="dd26-error" role="status">This attempt is not editable. You may review preserved answers, but no answer can change until an authorized recovery or reopen action.</div>'}${errataHtml}<details class="dd26-instructions"><summary>Examination instructions</summary><p>${escapeHtml(attempt.instructions || 'Follow the published instructions and permitted-materials policy.')}</p></details>${oneWay ? '<div class="dd26-notice"><strong>One-way navigation is enabled.</strong> After moving forward, earlier questions cannot be reopened in this workspace.</div>' : ''}<div class="dd26-integrity">${escapeHtml(monitoringDisclosure)}</div><div class="dd26-progress-summary"><span>${answered} of ${attempt.questions.length} answered</span><span>${flagged} flagged for review</span></div><div class="dd26-question-nav" aria-label="Question navigator">${navigatorHtml}</div><div class="dd26-question-meta"><span>Question ${question.ordinal} of ${attempt.questions.length}</span><span>${escapeHtml(question.maximumPoints)} points</span></div><h2 class="dd26-prompt">${escapeHtml(question.prompt)}</h2><label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea dd26-essay-editor" id="dd26-attempt-answer" maxlength="20000" ${mutable ? '' : 'readonly aria-readonly="true"'}>${escapeHtml(question.answer)}</textarea><small class="dd26-counter"><span id="dd26-attempt-words">${String(question.answer || '').trim() ? String(question.answer).trim().split(/\s+/u).length : 0} words</span><span id="dd26-attempt-count">${codePointLength(question.answer).toLocaleString()} / 20,000 characters</span></small></label><div class="dd26-actions"><button class="dd26-button" id="dd26-attempt-prev" type="button" ${oneWay || state.exam.attemptIndex === 0 ? 'disabled' : ''}>Previous</button><button class="dd26-button" id="dd26-attempt-next" type="button" ${state.exam.attemptIndex === attempt.questions.length - 1 ? 'disabled' : ''}>Next</button><button class="dd26-button ${question.flagged ? 'is-active' : ''}" id="dd26-attempt-flag" type="button" ${mutable ? '' : 'disabled'}>${question.flagged ? 'Remove review flag' : 'Flag for review'}</button><button class="dd26-button" id="dd26-attempt-leave" type="button" ${mutable ? '' : 'disabled'}>${attempt.activeLeave ? 'Return from temporary leave' : 'Temporary leave'}</button><button class="dd26-button" id="dd26-report-technical" type="button">Report technical issue</button><button class="dd26-button primary" id="dd26-attempt-submit" type="button" ${mutable ? '' : 'disabled'}>Review and submit</button></div>${attempt.activeLeave ? `<div class="dd26-notice">Temporary leave began ${escapeHtml(formatDate(attempt.activeLeave.departedAt))}. The examination timer continues. Return when ready; no automatic grading penalty is applied.</div>` : ''}</section>`;
+    document.getElementById('dd26-exam-main').innerHTML = `<section class="dd26-card dd26-attempt-workspace" id="dd26-attempt-surface" aria-labelledby="dd26-attempt-title"><div class="dd26-attempt-top"><div><div class="dd26-label" id="dd26-attempt-title">${escapeHtml(attempt.title)}</div><span class="dd26-save-state${mutable ? '' : ' is-error'}" id="dd26-save-state" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(mutable ? initialSaveState : 'Answer editing is unavailable; preserved work remains visible')}</span></div><div><div class="dd26-clock" id="dd26-attempt-clock" role="timer" aria-label="Time remaining">--:--:--</div><small class="dd26-clock-label">Official exam clock</small></div></div>${attentionReturnHtml}${offlineBundleNotice}${recoveryHtml}${attempt.readonlyTab ? '<div class="dd26-error" role="alert">Another tab holds the active writing lease. This tab is read-only to prevent conflicting edits.</div>' : ''}${mutable ? '' : '<div class="dd26-error" role="status">This attempt is not editable. You may review preserved answers, but no answer can change until an authorized recovery or reopen action.</div>'}${errataHtml}<details class="dd26-instructions"><summary>Examination instructions</summary>${studentInstructionsHtml(attempt.instructions || 'Follow the published instructions and permitted-materials policy.')}</details>${oneWay ? '<div class="dd26-notice"><strong>One-way navigation is enabled.</strong> After moving forward, earlier questions cannot be reopened in this workspace.</div>' : ''}<div class="dd26-integrity">${escapeHtml(monitoringDisclosure)}</div><div class="dd26-progress-summary"><span>${answered} of ${attempt.questions.length} answered</span><span>${flagged} flagged for review</span></div><div class="dd26-question-nav" aria-label="Question navigator">${navigatorHtml}</div><div class="dd26-question-meta"><span>Question ${question.ordinal} of ${attempt.questions.length}</span><span>${escapeHtml(question.maximumPoints)} points</span></div><h2 class="dd26-prompt">${escapeHtml(question.prompt)}</h2><label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea dd26-essay-editor" id="dd26-attempt-answer" maxlength="20000" ${mutable ? '' : 'readonly aria-readonly="true"'}>${escapeHtml(question.answer)}</textarea><small class="dd26-counter"><span id="dd26-attempt-words">${String(question.answer || '').trim() ? String(question.answer).trim().split(/\s+/u).length : 0} words</span><span id="dd26-attempt-count">${codePointLength(question.answer).toLocaleString()} / 20,000 characters</span></small></label><div class="dd26-actions"><button class="dd26-button" id="dd26-attempt-prev" type="button" ${oneWay || state.exam.attemptIndex === 0 ? 'disabled' : ''}>Previous</button><button class="dd26-button" id="dd26-attempt-next" type="button" ${state.exam.attemptIndex === attempt.questions.length - 1 ? 'disabled' : ''}>Next</button><button class="dd26-button ${question.flagged ? 'is-active' : ''}" id="dd26-attempt-flag" type="button" ${mutable ? '' : 'disabled'}>${question.flagged ? 'Remove review flag' : 'Flag for review'}</button><button class="dd26-button" id="dd26-attempt-leave" type="button" ${mutable ? '' : 'disabled'}>${attempt.activeLeave ? 'Return from temporary leave' : 'Temporary leave'}</button><button class="dd26-button" id="dd26-report-technical" type="button">Report technical issue</button><button class="dd26-button primary" id="dd26-attempt-submit" type="button" ${mutable ? '' : 'disabled'}>Review and submit</button></div>${attempt.activeLeave ? `<div class="dd26-notice">Temporary leave began ${escapeHtml(formatDate(attempt.activeLeave.departedAt))}. The examination timer continues. Return when ready; no automatic grading penalty is applied.</div>` : ''}</section>`;
     bindAttempt();
     startAttemptTimers();
   }
@@ -2999,9 +3323,14 @@
   function clearAttemptTimers() {
     clearInterval(state.exam.countdownTimer);
     clearInterval(state.exam.heartbeatTimer);
+    clearInterval(state.exam.waitingRoomTimer);
+    clearTimeout(state.exam.waitingRoomPollTimer);
     clearTimeout(state.exam.submissionStatusTimer);
     state.exam.countdownTimer = null;
     state.exam.heartbeatTimer = null;
+    state.exam.waitingRoomTimer = null;
+    state.exam.waitingRoomPollTimer = null;
+    state.exam.waitingRoomPolling = false;
     state.exam.submissionStatusTimer = null;
     document.removeEventListener('visibilitychange', visibilityIncident);
     global.removeEventListener('blur', blurIncident);
@@ -4081,7 +4410,10 @@
     } catch { return false; }
   }
 
-  global.addEventListener?.('pagehide', () => finishDialogLifecycle(), { capture: true });
+  global.addEventListener?.('pagehide', () => {
+    finishDialogLifecycle();
+    state.exam.studentExamCodes.clear();
+  }, { capture: true });
 
   function routeFromHash() {
     const raw = decodeURIComponent(location.hash.replace(/^#/, ''));
@@ -4109,7 +4441,15 @@
   global.openChairCases = () => open('chair_case', document.getElementById('spa-chairs-case'));
   global.openDoctrines = () => open('doctrine', document.getElementById('spa-jurisprudence'));
   global.openAnchorCases = () => open('anchor_case', document.getElementById('spa-case-digest'));
-  global.openExaminationRoom = () => open('exam_room', document.getElementById('spa-examination-room'));
+  global.openExaminationRoom = () => {
+    const moduleIsOpen = state.view === 'exam_room'
+      && document.getElementById('page-dd2026')?.classList.contains('active');
+    if (moduleIsOpen) return returnToExaminationRoomHome();
+    state.exam.section = 'entry';
+    state.exam.intentRole = null;
+    state.exam.entryExamId = '';
+    return open('exam_room', document.getElementById('spa-examination-room'));
+  };
   global.addEventListener('popstate', restoreRoute);
   global.addEventListener('duediligence:session', (event) => {
     state.featureSnapshot = null;
@@ -4124,6 +4464,7 @@
     }
     if (state.view === 'exam_room') {
       clearAttemptTimers();
+      state.exam.studentExamCodes.clear();
       state.exam.preflight = null;
       state.exam.attempt = null;
       state.exam.grading = null;

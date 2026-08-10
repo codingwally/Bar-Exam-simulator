@@ -690,12 +690,20 @@ test('exam-scoped roster operations preserve legacy classroom operations', async
 
 test('v2 portal query contracts require their examination scope', () => {
   assert.equal(normalizeExamRoomQuery({ operation: 'exam_intent', examId }).examId, examId);
-  assert.equal(normalizeExamRoomQuery({ operation: 'preflight', examId }).examId, examId);
-  assert.equal(normalizeExamRoomQuery({
+  assert.deepEqual(normalizeExamRoomQuery({ operation: 'preflight', examId }), {
+    operation: 'preflight', examId, studentKey: null, deviceInstanceHash: null,
+  });
+  assert.deepEqual(normalizeExamRoomQuery({
     operation: 'preflight',
     examId,
     deviceInstanceHash: 'e'.repeat(64),
-  }).deviceInstanceHash, 'e'.repeat(64));
+    studentKey: 'student-exam-code-secret',
+  }), {
+    operation: 'preflight',
+    examId,
+    studentKey: 'student-exam-code-secret',
+    deviceInstanceHash: 'e'.repeat(64),
+  });
   assert.equal(normalizeExamRoomQuery({ operation: 'beadle_portal' }).examId, null);
   const attempt = normalizeExamRoomQuery({
     operation: 'attempt', attemptId, sessionId, sessionEpoch: 2,

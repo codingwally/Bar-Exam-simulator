@@ -2,6 +2,11 @@
   'use strict';
 
   var activeView = 'roles';
+  var waitingRoomCountdownTimer = 0;
+  var waitingRoomServerBaseMs = Date.parse('2026-08-14T23:55:00.000Z');
+  var waitingRoomMonotonicBase = window.performance.now();
+  var waitingRoomOpeningMs = waitingRoomServerBaseMs + (5 * 60 * 1000);
+  var waitingRoomIsOpen = false;
   var reviewQuestions = {
     1: { points: 10, prompt: 'State the best evidence rule and explain two recognized exceptions. Apply the rule to a photocopy offered to prove the contents of a signed agreement.' },
     2: { points: 15, prompt: 'Discuss whether the out-of-court statement is admissible when it is offered to prove notice rather than the truth of the matter asserted.' },
@@ -88,6 +93,80 @@
       status.textContent = '';
       window.requestAnimationFrame(function () { status.textContent = message; });
     }
+  }
+
+  function waitingRoomServerNowMs() {
+    return waitingRoomServerBaseMs + Math.max(0, window.performance.now() - waitingRoomMonotonicBase);
+  }
+
+  function waitingRoomClockText(milliseconds) {
+    var totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+    var hours = Math.floor(totalSeconds / 3600);
+    var minutes = Math.floor((totalSeconds % 3600) / 60);
+    var seconds = totalSeconds % 60;
+    return [hours, minutes, seconds].map(function (part) { return String(part).padStart(2, '0'); }).join(':');
+  }
+
+  function setWaitingRoomOpen(open) {
+    waitingRoomIsOpen = open === true;
+    all('[data-requires-exam-open]').forEach(function (button) {
+      button.disabled = !waitingRoomIsOpen;
+      button.setAttribute('aria-disabled', waitingRoomIsOpen ? 'false' : 'true');
+    });
+    var start = one('#qa-open-examination');
+    var status = one('#qa-waiting-status');
+    var gate = one('#qa-waiting-gate');
+    if (start) {
+      start.disabled = !waitingRoomIsOpen;
+      start.textContent = waitingRoomIsOpen ? 'Start examination' : 'Start examination when open';
+    }
+    if (status) status.textContent = waitingRoomIsOpen ? 'Examination open' : 'Waiting for opening time';
+    if (gate) {
+      gate.className = waitingRoomIsOpen ? 'dd26-success' : 'dd26-notice';
+      gate.innerHTML = waitingRoomIsOpen
+        ? '<strong>The examination is open.</strong> You may now start the attempt and view Question 1.'
+        : '<strong>The examination has not opened.</strong> No question, answer field, or attempt session is available in the waiting room.';
+    }
+  }
+
+  function updateWaitingRoomCountdown() {
+    var serverNow = waitingRoomServerNowMs();
+    var remaining = Math.max(0, waitingRoomOpeningMs - serverNow);
+    var serverTime = one('#qa-waiting-server-time');
+    var countdown = one('#qa-waiting-countdown');
+    if (serverTime) {
+      serverTime.textContent = new Date(serverNow).toLocaleString('en-PH', {
+        dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila'
+      });
+    }
+    if (countdown) countdown.textContent = waitingRoomClockText(remaining);
+    if (remaining > 0) return;
+    setWaitingRoomOpen(true);
+    window.clearInterval(waitingRoomCountdownTimer);
+    waitingRoomCountdownTimer = 0;
+  }
+
+  function startWaitingRoomCountdown() {
+    window.clearInterval(waitingRoomCountdownTimer);
+    updateWaitingRoomCountdown();
+    if (!waitingRoomIsOpen) waitingRoomCountdownTimer = window.setInterval(updateWaitingRoomCountdown, 1000);
+  }
+
+  function updateStudentEarlyEntryState() {
+    var codeInput = one('#qa-student-entry-code');
+    var acknowledgment = one('#qa-student-ack');
+    var codeCheck = one('#qa-student-code-check');
+    var enteredCode = codeInput.value.trim();
+    var codeMatches = enteredCode === 'EVID-8K3J-7M2Q';
+    var enterButton = one('#qa-enter-waiting-room');
+
+    enterButton.disabled = !(acknowledgment.checked && codeMatches);
+    codeCheck.classList.toggle('is-pass', codeMatches);
+    codeCheck.classList.toggle('is-fail', Boolean(enteredCode) && !codeMatches);
+    one('span', codeCheck).textContent = codeMatches
+      ? 'Matches Evidence Midterm Examination'
+      : enteredCode ? 'This code does not match the examination' : 'Enter the code from the Beadle';
+    codeInput.toggleAttribute('aria-invalid', Boolean(enteredCode) && !codeMatches);
   }
 
   function showView(viewName, shouldFocus) {
@@ -472,13 +551,36 @@
     });
   });
 
-  one('#qa-student-ack').addEventListener('change', function (event) {
-    one('#qa-start-exam').disabled = !event.target.checked;
+  one('#qa-student-ack').addEventListener('change', updateStudentEarlyEntryState);
+  one('#qa-student-entry-code').addEventListener('input', updateStudentEarlyEntryState);
+
+  one('#qa-enter-waiting-room').addEventListener('click', function () {
+    updateStudentEarlyEntryState();
+    if (one('#qa-enter-waiting-room').disabled) {
+      announce('Enter the student exam code from the Beadle and review the examination rules first.');
+      return;
+    }
+    var waitingTab = one('#qa-student-waiting-tab');
+    waitingTab.disabled = false;
+    waitingTab.setAttribute('aria-disabled', 'false');
+    showState('student', 'waiting', true);
+    startWaitingRoomCountdown();
+    announce('Entry checks passed. The student is in the waiting room; questions remain closed.');
   });
 
-  one('#qa-start-exam').addEventListener('click', function () {
+  one('#qa-simulate-opening').addEventListener('click', function () {
+    waitingRoomOpeningMs = waitingRoomServerNowMs();
+    updateWaitingRoomCountdown();
+    announce('Synthetic server opening time reached. The Start examination button is now available.');
+  });
+
+  one('#qa-open-examination').addEventListener('click', function () {
+    if (!waitingRoomIsOpen) {
+      announce('Questions remain closed until the Due Diligence server opening time.');
+      return;
+    }
     showState('student', 'workspace', true);
-    announce('Synthetic attempt started.');
+    announce('Synthetic attempt started after the server opening time.');
   });
 
   all('[data-student-question]').forEach(function (button) {
@@ -589,6 +691,7 @@
   showState('professor-after', 'monitor', false);
   showState('admin', 'room-keys', false);
   updateProfessorRoomKeyCount();
+  updateStudentEarlyEntryState();
   renderStudentQuestion(1);
   renderGradeQuestion(1);
 }());

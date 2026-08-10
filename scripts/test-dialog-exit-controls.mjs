@@ -85,12 +85,18 @@ for (const id of ['action-dialog', 'audit-dialog', 'insight-dialog']) {
   assert.match(markup, /class="icon-button"[^>]*aria-label="Close/i, `${id} needs an upper-right close control.`);
   assert.match(markup, /class="secondary-button"[^>]*>Back<\/button>/, `${id} needs a lower-right Back action.`);
 }
+const professorKeyStart = admin.indexOf('<dialog class="professor-room-key-dialog"');
+const professorKeyEnd = admin.indexOf('</dialog>', professorKeyStart);
+const professorKey = admin.slice(professorKeyStart, professorKeyEnd + 9);
+assert.match(professorKey, /id="professor-room-key-close"[^>]*aria-label="Close/i);
+assert.match(professorKey, /class="secondary-button" id="professor-room-key-back"[^>]*>Back<\/button>/);
 
 const verdictStart = room.indexOf('function openVerdictExport');
 const verdictEnd = room.indexOf('\n  function ', verdictStart + 30);
 const verdict = room.slice(verdictStart, verdictEnd);
 assert.match(verdict, /class="dd26-verdict-close"[^>]*aria-label="Close private Verdict export"/);
 assert.match(verdict, /data-dd26-close-dialog type="button">Back<\/button>/);
+assert.match(room, /function openDialog\(content, options = \{\}\)[\s\S]*?class="dd26-dialog-close"[\s\S]*?back\.textContent = 'Back'/);
 
 for (const css of [html, privateBetaCss, phase2Css, forumCss, examinationsCss, adminCss, roomCss]) {
   assert.match(css, /44px/, 'Every dialog design surface must retain a 44px touch-target rule.');
@@ -108,4 +114,4 @@ assert.match(examinations, /function confirmDecision\([\s\S]*?new Promise/);
 assert.match(examinations, /selection\.exhausted[\s\S]*?await confirmDecision/);
 assert.match(examinations, /async function returnCatalog\([\s\S]*?await confirmDecision/);
 
-console.log('All applicable non-Examination-Room dialogs expose professional upper-right close and lower-right Back controls.');
+console.log('All Due Diligence custom dialogs expose professional upper-right close and lower-right Back controls.');

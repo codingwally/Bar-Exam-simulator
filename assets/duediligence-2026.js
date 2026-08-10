@@ -5380,7 +5380,28 @@
     dialog.dataset.persistent = options.persistent ? 'true' : 'false';
     dialog.dataset.sensitive = options.sensitive ? 'true' : 'false';
     dialogCleanup = typeof options.onClose === 'function' ? options.onClose : null;
-    document.getElementById('dd26-dialog-card').innerHTML = content.replace(/<h2(\s|>)/, '<h2 id="dd26-dialog-heading"$1');
+    const card = document.getElementById('dd26-dialog-card');
+    card.innerHTML = content.replace(/<h2(\s|>)/, '<h2 id="dd26-dialog-heading"$1');
+    if (!card.querySelector('.dd26-dialog-close, .dd26-verdict-close')) {
+      card.insertAdjacentHTML('afterbegin', '<button class="dd26-dialog-close" data-dd26-close-dialog type="button" aria-label="Close dialog and go back">&times;</button>');
+    }
+    let actions = card.querySelector('.dd26-actions');
+    if (!actions) {
+      actions = document.createElement('div');
+      actions.className = 'dd26-actions';
+      card.append(actions);
+    }
+    let back = actions.querySelector('[data-dd26-close-dialog]');
+    if (!back) {
+      back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'dd26-button';
+      back.dataset.dd26CloseDialog = 'true';
+      actions.append(back);
+    }
+    back.textContent = 'Back';
+    back.setAttribute('aria-label', 'Back');
+    back.classList.remove('primary', 'danger');
     document.querySelectorAll('[data-dd26-close-dialog]').forEach((button) => button.addEventListener('click', closeDialog));
     if (!dialog.open) dialog.showModal();
     document.getElementById('dd26-dialog-card')?.focus();

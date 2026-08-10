@@ -3986,6 +3986,7 @@
   });
   $('#professor-room-key-copy-button')?.addEventListener('click', copyProfessorRoomKey);
   $('#professor-room-key-close')?.addEventListener('click', closeProfessorRoomKeyDialog);
+  $('#professor-room-key-back')?.addEventListener('click', closeProfessorRoomKeyDialog);
   $('#professor-room-key-done')?.addEventListener('click', closeProfessorRoomKeyDialog);
   $('#professor-room-key-dialog')?.addEventListener('close', closeProfessorRoomKeyDialog);
   $('#professor-room-key-dialog')?.addEventListener('click', (event) => {

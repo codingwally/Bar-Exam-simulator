@@ -284,11 +284,21 @@ assert.match(frontend, /aiGradingEnabled: false/);
 assert.match(frontend, /document\.getElementById\('dd26-student-access-code-required'\)\?\.closest\('label'\)\?\.remove\(\)/,
   'the Professor publication screen must remove the legacy student-code choice');
 assert.match(frontend, /studentAccessCodeRequired: true/);
+assert.match(frontend, /lateAdmissionValue = lateAdmissionWasChosen[\s\S]*: durationValue/,
+  'a new examination must default student entry to the full exam duration');
+assert.match(frontend, /lateAdmissionUntouched[\s\S]*lateAdmissionField\.value = durationField\.value/,
+  'the default student-entry duration must follow the exam duration until the Professor edits it');
+assert.match(frontend, /Allow entry until the exam ends[\s\S]*Your current Professor setting is kept unless you change this choice/,
+  'rescheduling must expose an explicit until-end choice without overwriting an earlier cutoff');
+assert.match(frontend, /entryCutoffReviewHtml\(opensAt, hardClosesAt, lateAdmissionMinutes\)/,
+  'final publication review must prominently state the exact student-entry cutoff');
+assert.match(html, /duediligence-2026\.js\?v=student-entry-preflight-20260810-1/,
+  'the corrected student preflight must use a fresh production cache key');
 assert.match(frontend, /None of them replaces the student sign-in and class-list check/);
 assert.match(frontend, /publicationAttempt\.studentKey = null/,
   'Professor publication must not generate the student handout code');
 assert.match(frontend, /function accessCodePreflightPolicy[\s\S]*typeof primary === 'boolean'[\s\S]*ready: known/);
-assert.match(frontend, /The server did not report this publication’s access-code policy; starting is blocked/);
+assert.match(frontend, /could not confirm this examination’s student-code requirement/);
 assert.match(frontend, /studentKey: check\.studentKey/);
 assert.match(frontend, /result\.oneTimeBeadleKey === publicationAttempt\.beadleKey/);
 assert.match(frontend, /publicationSecretsMayBeDisplayed\(result, draft, publicationAttempt\)/,
@@ -474,9 +484,12 @@ assert.match(preflightStartBlock, /studentStartReadiness\(check\.server\)\.canSt
   'the server-confirmed opening and entry window is checked again immediately before start');
 assert.ok(preflightStartBlock.indexOf('requestFullscreen()') < preflightStartBlock.indexOf("operation: 'start_attempt'"),
   'full screen must be requested synchronously from the Start click before a network wait');
-assert.match(preflightRenderBlock, /Code entered\. Due Diligence checks it when you select Start examination/);
-assert.match(preflightRenderBlock, /accessCodeRequired && !accessCodeValidated \? 'is-warn' : 'is-pass'/,
-  'an entered but unvalidated student code must not receive a green check');
+assert.doesNotMatch(preflightRenderBlock, /checks it when you select Start examination/,
+  'preflight must never describe an already rejected code as awaiting validation');
+assert.match(preflightRenderBlock, /studentAccessCodeState\(server, check\.studentKey\)[\s\S]*accessCodeState\.className/,
+  'invalid, locked, inactive, and missing student codes must render as explicit failures');
+assert.match(preflightRenderBlock, /studentEntryTiming\(server\)[\s\S]*openingRow\.className = entryTiming\.className/,
+  'opening and entry timing must render independently from any other blocker');
 assert.ok(preflightStartBlock.indexOf('if (!isAuthenticated())') < preflightStartBlock.indexOf("operation: 'start_attempt'"),
   'Student authentication must be rechecked immediately before starting the attempt');
 assert.match(frontend, /if \(state\.view === 'exam_room'\)[\s\S]*state\.exam\.preflight = null;[\s\S]*state\.exam\.attempt = null;[\s\S]*closeDialog\(\)/,
@@ -722,7 +735,7 @@ assert.match(css, /\.dd26-reschedule-comparison>div\{grid-template-columns:1fr;g
 assert.match(html, /assets\/examination-room-2-store\.js/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
 assert.match(html, /duediligence-2026\.css\?v=exam-room-beadle-roster-template-20260810-1/);
-assert.match(html, /duediligence-2026\.js\?v=exam-room-beadle-roster-template-20260810-1/);
+assert.match(html, /duediligence-2026\.js\?v=student-entry-preflight-20260810-1/);
 
 // Execute the pure disclosure gate: malformed, partial, and stale replacement
 // results must never unlock one-time secret rendering.
@@ -787,6 +800,14 @@ assert.equal(studentStartReadiness({}).canStart, false,
 assert.equal(studentStartReadiness({ canStart: true, entryClosesAt: 'later' }).canStart, true);
 assert.match(studentStartReadiness({ canStart: false, startBlockerCode: 'STUDENT_ACCESS_NOT_READY' }).copy,
   /Beadle has not finished the class handout/);
+assert.match(studentStartReadiness({ canStart: false, startBlockerCode: 'CREDENTIAL_INVALID' }).copy,
+  /incorrect for this examination/);
+assert.match(studentStartReadiness({ canStart: false, startBlockerCode: 'CREDENTIAL_LOCKED' }).copy,
+  /locked for 15 minutes/);
+assert.match(studentStartReadiness({ canStart: false, startBlockerCode: 'CREDENTIAL_NOT_ACTIVE' }).copy,
+  /No active student exam code/);
+assert.match(studentStartReadiness({ canStart: false, startBlockerCode: 'STUDENT_ACCESS_CODE_REQUIRED' }).copy,
+  /Enter the active student exam code/);
 
 // Execute the three Professor step gates. Browser-detectable errors must stop
 // each transition and publication does not wait for the later Beadle roster.

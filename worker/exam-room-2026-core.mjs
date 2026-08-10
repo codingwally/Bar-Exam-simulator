@@ -15,12 +15,21 @@ import {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+export const EXAM_ROOM_2026_MAX_QUESTIONS = 200;
 
 export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'portal',
+  'exam_intent',
+  'preflight',
+  'beadle_portal',
+  'incident_summary',
   'attempt',
+  'submission_status',
   'live_status',
+  'live_status_v2',
   'grading_workspace',
+  'grading_model_answer',
+  'break_glass_view',
   'student_result',
   'dispute_view',
 ]);
@@ -31,14 +40,41 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'create_classroom',
   'validate_roster',
   'import_roster',
+  'validate_exam_roster',
+  'import_exam_roster',
+  'upsert_exam_roster_row',
   'create_exam',
   'confirm_questions',
+  'confirm_replacement_questions',
   'schedule_exam',
+  'publish_exam',
+  'replace_publication',
+  'invite_beadle',
+  'redeem_beadle_invitation',
+  'revoke_beadle',
+  'record_candidate_verification',
+  'set_candidate_admission',
+  'set_accommodation',
   'start_attempt',
+  'open_session',
   'save_answer',
+  'save_answer_operation',
   'heartbeat',
+  'heartbeat_v2',
   'integrity_event',
+  'record_integrity_event',
   'submit_attempt',
+  'submit_attempt_generation',
+  'reopen_submission',
+  'transfer_session',
+  'issue_erratum',
+  'start_leave',
+  'end_leave',
+  'acknowledge_leave',
+  'record_technical_incident',
+  'issue_break_glass',
+  'close_break_glass',
+  'record_break_glass_review',
   'save_grade',
   'unlock_attempt',
   'release_results',
@@ -67,6 +103,19 @@ function optionalInteger(value, label, minimum, maximum) {
   return integer(value, label, minimum, maximum);
 }
 
+function optionalTimestamp(value, label) {
+  if (value == null || value === '') return null;
+  return timestamp(value, label);
+}
+
+function boolean(value, label, fallback = false) {
+  if (value == null) return fallback;
+  if (typeof value !== 'boolean') {
+    throw new DD2026ValidationError('INVALID_REQUEST', `${label} is invalid.`);
+  }
+  return value;
+}
+
 function timestamp(value, label) {
   const normalized = boundedText(value, label, 80, { minimum: 1 });
   const date = new Date(normalized);
@@ -86,6 +135,11 @@ function email(value, label = 'Email') {
 
 function credential(value, label) {
   return boundedText(value, label, 512, { minimum: 12, trim: false });
+}
+
+function optionalCredential(value, label) {
+  if (value == null || value === '') return null;
+  return credential(value, label);
 }
 
 function hexSha(value, label = 'SHA-256 digest') {
@@ -135,8 +189,11 @@ function rosterRows(value) {
 }
 
 function questionRows(value) {
-  if (!Array.isArray(value) || value.length < 1) {
-    throw new DD2026ValidationError('QUESTIONS_REQUIRED', 'At least one examination question is required.');
+  if (!Array.isArray(value) || value.length < 1 || value.length > EXAM_ROOM_2026_MAX_QUESTIONS) {
+    throw new DD2026ValidationError(
+      'QUESTIONS_REQUIRED',
+      `Provide between 1 and ${EXAM_ROOM_2026_MAX_QUESTIONS} examination questions.`,
+    );
   }
   const rows = value.map((entry, index) => {
     const row = object(entry);
@@ -161,6 +218,175 @@ function questionRows(value) {
   return rows;
 }
 
+function optionalUuid(value, label) {
+  if (value == null || value === '') return null;
+  return uuid(value, label);
+}
+
+function uuidRows(value, label, maximum = 500) {
+  if (!Array.isArray(value) || value.length > maximum) {
+    throw new DD2026ValidationError('INVALID_REQUEST', `${label} is invalid.`);
+  }
+  const rows = value.map((entry) => uuid(entry, label));
+  if (new Set(rows).size !== rows.length) {
+    throw new DD2026ValidationError('INVALID_REQUEST', `${label} cannot contain duplicates.`);
+  }
+  return rows;
+}
+
+function examRules(value) {
+  const rules = object(value);
+  const opensAt = timestamp(rules.opensAt, 'Opening time');
+  const hardClosesAt = timestamp(rules.hardClosesAt, 'Hard close');
+  if (new Date(hardClosesAt) <= new Date(opensAt)) {
+    throw new DD2026ValidationError('INVALID_SCHEDULE', 'Hard close must follow the opening time.');
+  }
+  const suggestedAnswerMode = enumValue(
+    rules.suggestedAnswerMode ?? 'none',
+    'Suggested-answer mode',
+    ['none', 'paste', 'upload'],
+  );
+  if (suggestedAnswerMode === 'upload') {
+    throw new DD2026ValidationError(
+      'EXAM_ROOM_MODEL_ANSWER_UPLOAD_UNAVAILABLE',
+      'Uploaded model answers are unavailable until audited owner-only retrieval is enabled. Use pasted text or no model answer.',
+    );
+  }
+  const suggestedAnswer = rules.suggestedAnswer == null
+    ? null
+    : boundedText(rules.suggestedAnswer, 'Suggested answer', 100_000, { trim: false });
+  if (suggestedAnswerMode === 'paste' && !suggestedAnswer?.trim()) {
+    throw new DD2026ValidationError(
+      'SUGGESTED_ANSWER_REQUIRED',
+      'Paste a suggested answer or select no suggested answer.',
+    );
+  }
+  if (suggestedAnswerMode !== 'paste' && suggestedAnswer) {
+    throw new DD2026ValidationError(
+      'SUGGESTED_ANSWER_MODE_MISMATCH',
+      'Suggested-answer text is accepted only when paste mode is selected.',
+    );
+  }
+  const suggestedAnswerObjectPath = rules.suggestedAnswerObjectPath == null
+    ? null
+    : boundedText(rules.suggestedAnswerObjectPath, 'Suggested-answer source', 900, { minimum: 3 });
+  if (suggestedAnswerMode === 'upload' && !suggestedAnswerObjectPath) {
+    throw new DD2026ValidationError(
+      'SUGGESTED_ANSWER_SOURCE_REQUIRED',
+      'Upload a suggested-answer source or select no suggested answer.',
+    );
+  }
+  if (suggestedAnswerMode !== 'upload' && suggestedAnswerObjectPath) {
+    throw new DD2026ValidationError(
+      'SUGGESTED_ANSWER_MODE_MISMATCH',
+      'A suggested-answer source is accepted only when upload mode is selected.',
+    );
+  }
+  if (rules.aiGradingEnabled === true) {
+    throw new DD2026ValidationError(
+      'AI_GRADING_UNAVAILABLE',
+      'AI-assisted institutional grading is not enabled for this beta.',
+    );
+  }
+  const navigationMode = enumValue(
+    rules.navigationMode ?? 'free',
+    'Navigation mode',
+    ['free', 'one_way'],
+  );
+  if (navigationMode === 'one_way') {
+    throw new DD2026ValidationError(
+      'EXAM_ROOM_ONE_WAY_NAVIGATION_UNAVAILABLE',
+      'One-way navigation is unavailable until durable server-side progress enforcement is enabled. Choose free navigation.',
+    );
+  }
+  return {
+    opensAt,
+    hardClosesAt,
+    durationMinutes: optionalInteger(
+      rules.durationMinutes,
+      'Duration',
+      DD2026_LIMITS.examDurationMinutesMinimum,
+      DD2026_LIMITS.examDurationMinutesMaximum,
+    ),
+    lateAdmissionMinutes: integer(rules.lateAdmissionMinutes ?? 0, 'Late-admission allowance', 0, 480),
+    submissionGraceMinutes: integer(rules.submissionGraceMinutes ?? 0, 'Submission grace', 0, 120),
+    allowedMaterials: boundedText(rules.allowedMaterials ?? '', 'Allowed materials', 2_000, { trim: false }),
+    navigationMode,
+    integrityMode: enumValue(
+      rules.integrityMode ?? 'record_only',
+      'Integrity-monitoring mode',
+      ['off', 'record_only', 'warn_and_record'],
+    ),
+    fullscreenPolicy: enumValue(
+      rules.fullscreenPolicy ?? 'off',
+      'Fullscreen policy',
+      ['off', 'requested', 'required_with_exemptions'],
+    ),
+    admissionMode: enumValue(
+      rules.admissionMode ?? 'automatic',
+      'Admission mode',
+      ['automatic', 'beadle_approval'],
+    ),
+    temporaryLeaveAcknowledgment: boolean(
+      rules.temporaryLeaveAcknowledgment,
+      'Temporary-leave acknowledgment',
+      false,
+    ),
+    studentAccessCodeRequired: boolean(
+      rules.studentAccessCodeRequired,
+      'Student access-code requirement',
+      true,
+    ),
+    suggestedAnswerMode,
+    suggestedAnswer,
+    suggestedAnswerObjectPath,
+    aiGradingEnabled: false,
+  };
+}
+
+function boundedFutureTimestamp(value, label, maximumFutureMilliseconds) {
+  const normalized = timestamp(value, label);
+  const now = Date.now();
+  const target = new Date(normalized).getTime();
+  if (target <= now || target > now + maximumFutureMilliseconds) {
+    throw new DD2026ValidationError(
+      'INVALID_REQUEST',
+      `${label} must be in the future and no more than four hours from now.`,
+    );
+  }
+  return normalized;
+}
+
+function accommodation(value) {
+  const entry = object(value);
+  return {
+    extraMinutes: integer(entry.extraMinutes ?? 0, 'Additional time', 0, 480),
+    individualOpensAt: optionalTimestamp(entry.individualOpensAt, 'Individual opening time'),
+    individualHardClosesAt: optionalTimestamp(entry.individualHardClosesAt, 'Individual hard close'),
+    breakMinutes: integer(entry.breakMinutes ?? 0, 'Permitted breaks', 0, 240),
+    cameraExempt: boolean(entry.cameraExempt, 'Camera exemption', false),
+    fullscreenExempt: boolean(entry.fullscreenExempt, 'Fullscreen exemption', false),
+    integrityExempt: boolean(
+      entry.integrityExempt,
+      'Integrity-monitoring exemption',
+      false,
+    ),
+    assistiveTechnology: boolean(
+      entry.assistiveTechnology,
+      'Assistive-technology allowance',
+      false,
+    ),
+    permittedAids: boundedText(
+      entry.permittedAids ?? '',
+      'Approved writing aids',
+      1_000,
+      { trim: false },
+    ),
+    incidentExtensionMinutes: integer(entry.incidentExtensionMinutes ?? 0, 'Incident extension', 0, 480),
+    operationalNote: boundedText(entry.operationalNote ?? '', 'Operational note', 1_000, { trim: false }),
+  };
+}
+
 export function normalizeExamRoomQuery(input) {
   const payload = object(input);
   const operation = enumValue(
@@ -169,11 +395,50 @@ export function normalizeExamRoomQuery(input) {
     [...EXAM_ROOM_2026_QUERY_OPERATIONS],
   );
   const normalized = { operation };
-  if (operation === 'attempt') {
-    normalized.attemptId = uuid(payload.attemptId, 'Attempt');
-  } else if (operation === 'live_status' || operation === 'grading_workspace' || operation === 'student_result') {
+  if (operation === 'exam_intent') {
     normalized.examId = uuid(payload.examId, 'Examination');
-    if (operation === 'live_status' || operation === 'grading_workspace') {
+  } else if (operation === 'preflight') {
+    normalized.examId = uuid(payload.examId, 'Examination');
+    normalized.deviceInstanceHash = payload.deviceInstanceHash
+      ? hexSha(payload.deviceInstanceHash, 'Device instance digest')
+      : null;
+  } else if (operation === 'beadle_portal') {
+    normalized.examId = optionalUuid(payload.examId, 'Examination');
+  } else if (operation === 'incident_summary') {
+    normalized.examId = uuid(payload.examId, 'Examination');
+  } else if (operation === 'attempt') {
+    normalized.attemptId = uuid(payload.attemptId, 'Attempt');
+    normalized.sessionId = optionalUuid(payload.sessionId, 'Examination session');
+    normalized.sessionEpoch = optionalInteger(payload.sessionEpoch, 'Session epoch', 1);
+    if (Boolean(normalized.sessionId) !== Boolean(normalized.sessionEpoch)) {
+      throw new DD2026ValidationError(
+        'SESSION_SCOPE_REQUIRED',
+        'Provide both the examination session and its epoch.',
+      );
+    }
+  } else if (operation === 'submission_status') {
+    normalized.attemptId = uuid(payload.attemptId, 'Attempt');
+  } else if (operation === 'break_glass_view') {
+    normalized.grantId = uuid(payload.grantId, 'Break-glass grant');
+    normalized.examId = uuid(payload.examId, 'Examination');
+    normalized.attemptId = uuid(payload.attemptId, 'Attempt');
+    normalized.candidateNumber = boundedText(
+      payload.candidateNumber,
+      'Candidate number',
+      120,
+      { minimum: 1 },
+    );
+    normalized.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'live_status'
+      || operation === 'live_status_v2'
+      || operation === 'grading_workspace'
+      || operation === 'grading_model_answer'
+      || operation === 'student_result') {
+    normalized.examId = uuid(payload.examId, 'Examination');
+    if (operation === 'live_status'
+        || operation === 'live_status_v2'
+        || operation === 'grading_workspace'
+        || operation === 'grading_model_answer') {
       normalized.gradingKey = credential(payload.gradingKey, 'Professor grading key');
     }
   } else if (operation === 'dispute_view') {
@@ -209,6 +474,18 @@ export function normalizeExamRoomCommand(input) {
       n.requestKey = requestKey(payload.requestKey);
       n.sourceHash = hexSha(payload.sourceHash, 'Roster source digest');
     }
+  } else if (operation === 'validate_exam_roster' || operation === 'import_exam_roster') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.rows = rosterRows(payload.rows);
+    if (operation === 'import_exam_roster') {
+      n.requestKey = requestKey(payload.requestKey);
+      n.sourceHash = hexSha(payload.sourceHash, 'Roster source digest');
+    }
+  } else if (operation === 'upsert_exam_roster_row') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.row = rosterRows([payload.row])[0];
+    n.reason = boundedText(payload.reason, 'Roster change reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'create_exam') {
     n.classroomId = uuid(payload.classroomId, 'Classroom');
     n.title = boundedText(payload.title, 'Exam title', DD2026_LIMITS.examTitleCharacters, { minimum: 1 });
@@ -218,14 +495,19 @@ export function normalizeExamRoomCommand(input) {
       DD2026_LIMITS.examInstructionsCharacters,
       { trim: false },
     );
-    n.questionCount = integer(payload.questionCount, 'Question count', 1);
+    n.questionCount = integer(
+      payload.questionCount,
+      'Question count',
+      1,
+      EXAM_ROOM_2026_MAX_QUESTIONS,
+    );
     n.integrityPreset = enumValue(
       payload.integrityPreset ?? 'standard',
       'Integrity preset',
       ['open_book', 'standard', 'strict'],
     );
     n.includeQuestionnaire = payload.includeQuestionnaire === true;
-  } else if (operation === 'confirm_questions') {
+  } else if (operation === 'confirm_questions' || operation === 'confirm_replacement_questions') {
     n.examId = uuid(payload.examId, 'Examination');
     n.objectPath = boundedText(payload.objectPath, 'Private source path', 900, { minimum: 3 });
     n.fileName = safeExamRoomFileName(payload.fileName);
@@ -234,7 +516,12 @@ export function normalizeExamRoomCommand(input) {
     n.pageCount = optionalInteger(payload.pageCount, 'Page count', 1, DD2026_LIMITS.sourceUploadPages);
     n.contentHash = hexSha(payload.contentHash, 'Question source digest');
     n.questions = questionRows(payload.questions);
-    if (n.questions.length !== integer(payload.questionCount, 'Confirmed question count', 1)) {
+    if (n.questions.length !== integer(
+      payload.questionCount,
+      'Confirmed question count',
+      1,
+      EXAM_ROOM_2026_MAX_QUESTIONS,
+    )) {
       throw new DD2026ValidationError(
         'QUESTION_COUNT_MISMATCH',
         'The confirmed question count does not match the preview.',
@@ -243,6 +530,10 @@ export function normalizeExamRoomCommand(input) {
     n.warnings = Array.isArray(payload.warnings)
       ? payload.warnings.slice(0, 100).map((warning) => boundedText(warning, 'Warning', 500))
       : [];
+    if (operation === 'confirm_replacement_questions') {
+      n.expectedPublicationId = uuid(payload.expectedPublicationId, 'Expected publication');
+      n.requestKey = requestKey(payload.requestKey);
+    }
   } else if (operation === 'schedule_exam') {
     n.examId = uuid(payload.examId, 'Examination');
     n.opensAt = timestamp(payload.opensAt, 'Opening time');
@@ -256,11 +547,105 @@ export function normalizeExamRoomCommand(input) {
     if (new Date(n.hardClosesAt) <= new Date(n.opensAt)) {
       throw new DD2026ValidationError('INVALID_SCHEDULE', 'Hard close must follow the opening time.');
     }
-    n.studentKey = credential(payload.studentKey, 'Student exam key');
+    n.studentKey = optionalCredential(payload.studentKey, 'Student exam access code');
     n.gradingKey = credential(payload.gradingKey, 'Professor grading key');
+  } else if (operation === 'publish_exam') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.rules = examRules(payload.rules);
+    n.studentKey = optionalCredential(payload.studentKey, 'Student exam access code');
+    if (n.rules.studentAccessCodeRequired !== Boolean(n.studentKey)) {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_PUBLICATION_CREDENTIAL_INVALID',
+        n.rules.studentAccessCodeRequired
+          ? 'Re-enter the student access code before publishing this immutable examination version.'
+          : 'Remove the student access code when access-code protection is disabled.',
+      );
+    }
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'replace_publication') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.expectedPublicationId = uuid(payload.expectedPublicationId, 'Expected publication');
+    n.replacementQuestionVersionId = uuid(
+      payload.replacementQuestionVersionId,
+      'Replacement question version',
+    );
+    n.rules = examRules(payload.rules);
+    n.studentKey = optionalCredential(payload.studentKey, 'Student exam access code');
+    n.gradingKey = credential(payload.gradingKey, 'Professor grading key');
+    if (n.rules.studentAccessCodeRequired !== Boolean(n.studentKey)) {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_REPLACEMENT_CREDENTIAL_INVALID',
+        n.rules.studentAccessCodeRequired
+          ? 'Provide a new student access code for this replacement publication.'
+          : 'Remove the student access code when access-code protection is disabled.',
+      );
+    }
+    n.reason = boundedText(payload.reason, 'Replacement reason', 1_000, { minimum: 10 });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'invite_beadle') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.targetEmail = email(payload.targetEmail, 'Beadle email');
+    n.invitationKey = credential(payload.invitationKey, 'Beadle invitation key');
+    n.expiresAt = timestamp(payload.expiresAt, 'Invitation expiry');
+    n.reason = boundedText(payload.reason, 'Delegation reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'redeem_beadle_invitation') {
+    n.invitationKey = credential(payload.invitationKey, 'Beadle invitation key');
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'revoke_beadle') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.beadleUserId = uuid(payload.beadleUserId, 'Beadle');
+    n.reason = boundedText(payload.reason, 'Revocation reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'record_candidate_verification') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.candidateNumber = boundedText(payload.candidateNumber, 'Candidate number', 120, { minimum: 1 });
+    n.method = enumValue(payload.method, 'Verification method', [
+      'physical', 'institutional', 'manual_exception', 'camera_exception',
+    ]);
+    n.outcome = enumValue(payload.outcome, 'Verification outcome', [
+      'verified', 'blocked', 'exception_approved',
+    ]);
+    n.note = boundedText(payload.note ?? '', 'Verification note', 1_000, { trim: false });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'set_candidate_admission') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.candidateNumber = boundedText(payload.candidateNumber, 'Candidate number', 120, { minimum: 1 });
+    n.decision = enumValue(payload.decision, 'Admission decision', ['admit', 'deny', 'reset']);
+    n.reason = boundedText(payload.reason, 'Admission reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'set_accommodation') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.candidateNumber = boundedText(payload.candidateNumber, 'Candidate number', 120, { minimum: 1 });
+    n.accommodation = accommodation(payload.accommodation);
+    if (Boolean(n.accommodation.individualOpensAt) !== Boolean(n.accommodation.individualHardClosesAt)) {
+      throw new DD2026ValidationError(
+        'INVALID_ACCOMMODATION_WINDOW',
+        'Provide both the individual opening time and individual hard close.',
+      );
+    }
+    if (n.accommodation.individualOpensAt && n.accommodation.individualHardClosesAt
+        && new Date(n.accommodation.individualHardClosesAt) <= new Date(n.accommodation.individualOpensAt)) {
+      throw new DD2026ValidationError(
+        'INVALID_ACCOMMODATION_WINDOW',
+        'The individual hard close must follow the individual opening time.',
+      );
+    }
+    if (n.accommodation.extraMinutes + n.accommodation.incidentExtensionMinutes > 480) {
+      throw new DD2026ValidationError(
+        'INVALID_ACCOMMODATION_TIME',
+        'Combined additional time and incident extension cannot exceed 480 minutes.',
+      );
+    }
+    n.reason = boundedText(payload.reason, 'Accommodation reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'start_attempt') {
     n.examId = uuid(payload.examId, 'Examination');
-    n.studentKey = credential(payload.studentKey, 'Student exam key');
+    n.studentKey = optionalCredential(payload.studentKey, 'Student exam access code');
+  } else if (operation === 'open_session') {
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.deviceInstanceHash = hexSha(payload.deviceInstanceHash, 'Device instance digest');
+    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'save_answer') {
     n.attemptId = uuid(payload.attemptId, 'Attempt');
     n.questionId = uuid(payload.questionId, 'Question');
@@ -271,17 +656,175 @@ export function normalizeExamRoomCommand(input) {
       { trim: false },
     );
     n.expectedRevision = integer(payload.expectedRevision ?? 0, 'Answer revision', 0);
-  } else if (operation === 'heartbeat') {
+  } else if (operation === 'save_answer_operation') {
+    n.operationId = uuid(payload.operationId, 'Answer operation');
+    n.examId = uuid(payload.examId, 'Examination');
+    n.examVersionId = uuid(payload.examVersionId, 'Examination version');
     n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.sessionId = uuid(payload.sessionId, 'Examination session');
+    n.sessionEpoch = integer(payload.sessionEpoch, 'Session epoch', 1);
+    n.questionId = uuid(payload.questionId, 'Question');
+    n.localSequence = integer(payload.localSequence, 'Local answer sequence', 1);
+    n.answerText = boundedText(
+      payload.answerText ?? '',
+      'Examination answer',
+      DD2026_LIMITS.examAnswerCharacters,
+      { trim: false },
+    );
+    n.expectedRevision = integer(payload.expectedRevision ?? 0, 'Answer revision', 0);
+    n.contentHash = hexSha(payload.contentHash, 'Answer content digest');
+    n.clientSavedAt = timestamp(payload.clientSavedAt, 'Client save time');
+    n.outageEvidence = integrityMetadataObject(payload.outageEvidence);
+  } else if (operation === 'heartbeat' || operation === 'heartbeat_v2') {
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    if (operation === 'heartbeat_v2') {
+      n.sessionId = uuid(payload.sessionId, 'Examination session');
+      n.sessionEpoch = integer(payload.sessionEpoch, 'Session epoch', 1);
+    }
   } else if (operation === 'integrity_event') {
     n.attemptId = uuid(payload.attemptId, 'Attempt');
     n.eventType = enumValue(payload.eventType, 'Integrity event', [
-      'visibility_exit', 'focus_exit', 'fullscreen_exit', 'copy_attempt',
-      'paste_attempt', 'context_menu_attempt', 'network_gap', 'heartbeat_gap',
+      'visibility_exit', 'visibility_resume', 'focus_exit', 'focus_return',
+      'fullscreen_enter', 'fullscreen_exit', 'reload_resume',
+      'copy_attempt', 'paste_attempt', 'context_menu_attempt',
+      'network_gap', 'network_restored', 'heartbeat_gap',
+      'sync_failed', 'sync_restored', 'second_session_attempt', 'session_transfer',
     ]);
-    n.details = sanitizeIntegrityMetadata(payload.details);
+    n.details = integrityMetadataObject(payload.details);
+  } else if (operation === 'record_integrity_event') {
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.sessionId = uuid(payload.sessionId, 'Examination session');
+    n.sessionEpoch = integer(payload.sessionEpoch, 'Session epoch', 1);
+    n.clientEventId = uuid(payload.clientEventId, 'Integrity event');
+    n.eventType = enumValue(payload.eventType, 'Integrity event', [
+      'visibility_exit', 'visibility_resume', 'focus_exit', 'focus_return',
+      'fullscreen_enter', 'fullscreen_exit', 'reload_resume',
+      'copy_attempt', 'paste_attempt', 'context_menu_attempt',
+      'network_gap', 'network_restored', 'heartbeat_gap',
+      'sync_failed', 'sync_restored', 'second_session_attempt', 'session_transfer',
+    ]);
+    n.details = integrityMetadataObject(payload.details);
+    n.clientOccurredAt = timestamp(payload.clientOccurredAt, 'Integrity event time');
   } else if (operation === 'submit_attempt') {
     n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'submit_attempt_generation') {
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.sessionId = uuid(payload.sessionId, 'Examination session');
+    n.sessionEpoch = integer(payload.sessionEpoch, 'Session epoch', 1);
+    n.requestKey = requestKey(payload.requestKey);
+    n.answerSetHash = hexSha(payload.answerSetHash, 'Answer-set digest');
+    n.clientPendingAt = optionalTimestamp(
+      payload.clientPendingAt ?? payload.clientRecordedAt,
+      'Pending-submission time',
+    );
+    n.offlineSince = optionalTimestamp(payload.offlineSince, 'Offline start');
+    n.outageEvidence = integrityMetadataObject(payload.outageEvidence);
+  } else if (operation === 'reopen_submission') {
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.newDeadline = boundedFutureTimestamp(
+      payload.newDeadline,
+      'Reopening deadline',
+      4 * 60 * 60 * 1_000,
+    );
+    n.reason = boundedText(payload.reason, 'Reopening reason', 1_000, { minimum: 10 });
+    n.requestKey = requestKey(payload.requestKey);
+    n.breakGlassGrantId = optionalUuid(payload.breakGlassGrantId, 'Break-glass grant');
+    n.gradingKey = optionalCredential(payload.gradingKey, 'Professor grading key');
+    if (Boolean(n.breakGlassGrantId) === Boolean(n.gradingKey)) {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_REOPEN_AUTHORITY_INVALID',
+        'Provide either the Professor grading key or an active candidate-scoped Admin review grant.',
+      );
+    }
+  } else if (operation === 'transfer_session') {
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.expectedEpoch = integer(payload.expectedEpoch, 'Expected session epoch', 1);
+    n.deviceInstanceHash = hexSha(payload.deviceInstanceHash, 'Device instance digest');
+    n.reason = boundedText(payload.reason, 'Session-transfer reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'issue_erratum') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.erratumType = enumValue(payload.erratumType, 'Erratum type', [
+      'clarification', 'correction', 'stop_notice', 'replacement_notice',
+    ]);
+    n.body = boundedText(payload.body, 'Erratum', 5_000, { minimum: 5, trim: false });
+    n.effectiveAt = timestamp(payload.effectiveAt, 'Erratum effective time');
+    n.affectedQuestionIds = uuidRows(payload.affectedQuestionIds ?? [], 'Affected question');
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'start_leave') {
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.sessionId = uuid(payload.sessionId, 'Examination session');
+    n.sessionEpoch = integer(payload.sessionEpoch, 'Session epoch', 1);
+    n.reasonCode = enumValue(payload.reasonCode ?? 'comfort_room', 'Leave reason', [
+      'comfort_room', 'medical', 'technical', 'other',
+    ]);
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'end_leave') {
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.sessionId = uuid(payload.sessionId, 'Examination session');
+    n.sessionEpoch = integer(payload.sessionEpoch, 'Session epoch', 1);
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'acknowledge_leave') {
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.leaveId = uuid(payload.leaveId, 'Temporary leave');
+    n.action = enumValue(payload.action, 'Leave action', ['acknowledge', 'record_return']);
+    n.note = boundedText(payload.note ?? '', 'Leave note', 1_000, { trim: false });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'record_technical_incident') {
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.sessionId = uuid(payload.sessionId, 'Examination session');
+    n.sessionEpoch = integer(payload.sessionEpoch, 'Session epoch', 1);
+    n.clientEventId = uuid(payload.clientEventId, 'Technical incident');
+    n.eventType = enumValue(payload.eventType, 'Technical incident type', [
+      'connectivity_lost', 'connectivity_restored', 'sync_problem', 'device_problem',
+      'browser_problem', 'session_conflict', 'support_requested', 'other',
+    ]);
+    n.details = integrityMetadataObject(payload.details);
+    n.clientOccurredAt = timestamp(payload.clientOccurredAt, 'Incident time');
+  } else if (operation === 'issue_break_glass') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.candidateNumber = boundedText(
+      payload.candidateNumber,
+      'Candidate number',
+      120,
+      { minimum: 1 },
+    );
+    n.caseReference = boundedText(payload.caseReference, 'Case reference', 200, { minimum: 2 });
+    n.reason = boundedText(payload.reason, 'Break-glass reason', 2_000, { minimum: 20 });
+    n.expiresAt = boundedFutureTimestamp(
+      payload.expiresAt,
+      'Break-glass expiry',
+      4 * 60 * 60 * 1_000,
+    );
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'close_break_glass') {
+    n.grantId = uuid(payload.grantId, 'Break-glass grant');
+    n.examId = uuid(payload.examId, 'Examination');
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.candidateNumber = boundedText(
+      payload.candidateNumber,
+      'Candidate number',
+      120,
+      { minimum: 1 },
+    );
+    n.reason = boundedText(payload.reason, 'Break-glass closing reason', 1_000, { minimum: 10 });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'record_break_glass_review') {
+    n.grantId = uuid(payload.grantId, 'Break-glass grant');
+    n.examId = uuid(payload.examId, 'Examination');
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.candidateNumber = boundedText(
+      payload.candidateNumber,
+      'Candidate number',
+      120,
+      { minimum: 1 },
+    );
+    n.outcome = enumValue(payload.outcome, 'Break-glass review outcome', [
+      'no_issue', 'procedure_change', 'escalation_required',
+    ]);
+    n.notes = boundedText(payload.notes, 'Break-glass review notes', 2_000, { minimum: 10 });
     n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'save_grade') {
     n.examId = uuid(payload.examId, 'Examination');
@@ -343,7 +886,27 @@ export function normalizeExamRoomCommand(input) {
 const FORBIDDEN_METADATA_KEYS = new Set([
   'answer', 'answer_text', 'student_answer', 'email', 'ip', 'ip_address',
   'raw_ip', 'token', 'key', 'password', 'api_key', 'service_role_key',
+  'answertext', 'studentanswer', 'rawanswer', 'emailaddress', 'primaryemail',
+  'recoveryemail', 'ipaddress', 'rawip', 'accesstoken', 'accesscode',
+  'credential', 'secret', 'apikey', 'servicerolekey',
 ]);
+
+function integrityMetadataObject(value) {
+  const sanitized = sanitizeIntegrityMetadata(value);
+  if (!sanitized || typeof sanitized !== 'object' || Array.isArray(sanitized)) {
+    throw new DD2026ValidationError(
+      'INTEGRITY_DETAILS_INVALID',
+      'Integrity and outage details must be a JSON object.',
+    );
+  }
+  if (new TextEncoder().encode(JSON.stringify(sanitized)).byteLength > 8_000) {
+    throw new DD2026ValidationError(
+      'INTEGRITY_DETAILS_INVALID',
+      'Integrity and outage details exceed the safe size limit.',
+    );
+  }
+  return sanitized;
+}
 
 export function sanitizeIntegrityMetadata(value, depth = 0) {
   if (depth > 5) {
@@ -357,9 +920,17 @@ export function sanitizeIntegrityMetadata(value, depth = 0) {
     return value.map((entry) => sanitizeIntegrityMetadata(entry, depth + 1));
   }
   if (typeof value === 'object') {
+    if (Object.keys(value).length > 50) {
+      throw new DD2026ValidationError('INTEGRITY_DETAILS_INVALID', 'Integrity details contain too many fields.');
+    }
     const output = {};
     for (const [key, entry] of Object.entries(value)) {
-      if (FORBIDDEN_METADATA_KEYS.has(key.toLowerCase())) {
+      const lowerKey = key.toLowerCase();
+      const compactKey = lowerKey.replace(/[^a-z0-9]/g, '');
+      if (FORBIDDEN_METADATA_KEYS.has(lowerKey)
+          || FORBIDDEN_METADATA_KEYS.has(compactKey)
+          || ['answer', 'email', 'password', 'credential', 'secret', 'accesstoken', 'accesscode']
+            .some((forbidden) => compactKey.includes(forbidden))) {
         throw new DD2026ValidationError(
           'INTEGRITY_DETAILS_SENSITIVE',
           'Integrity details cannot contain answers, contact data, credentials, or network identifiers.',
@@ -386,10 +957,11 @@ export function supportedQuestionMime(value) {
   if (![
     'text/plain',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/pdf',
   ].includes(normalized)) {
     throw new DD2026ValidationError(
       'UNSUPPORTED_FILE_TYPE',
-      'Upload a UTF-8 text (.txt) or Word (.docx) examination file.',
+      'Upload a UTF-8 text (.txt), Word (.docx), or PDF (.pdf) examination file.',
     );
   }
   return normalized;
@@ -398,9 +970,11 @@ export function supportedQuestionMime(value) {
 export function safeExamRoomFileName(value) {
   const input = boundedText(value, 'File name', 200, { minimum: 1 });
   const lower = input.toLowerCase();
-  const extension = lower.endsWith('.docx') ? '.docx' : lower.endsWith('.txt') ? '.txt' : '';
+  const extension = lower.endsWith('.docx') ? '.docx'
+    : lower.endsWith('.txt') ? '.txt'
+      : lower.endsWith('.pdf') ? '.pdf' : '';
   if (!extension) {
-    throw new DD2026ValidationError('UNSUPPORTED_FILE_TYPE', 'Use a .txt or .docx question file.');
+    throw new DD2026ValidationError('UNSUPPORTED_FILE_TYPE', 'Use a .txt, .docx, or .pdf question file.');
   }
   const stem = input
     .replace(/\.[^.]+$/, '')
@@ -411,17 +985,141 @@ export function safeExamRoomFileName(value) {
   return `${stem}${extension}`;
 }
 
-export async function normalizeQuestionUpload(input) {
+function questionMimeForFile(fileName) {
+  if (fileName.endsWith('.txt')) return 'text/plain';
+  if (fileName.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+  if (fileName.endsWith('.pdf')) return 'application/pdf';
+  return null;
+}
+
+export function normalizeQuestionUploadIntent(input) {
   const payload = object(input);
   const examId = uuid(payload.examId, 'Examination');
-  const questionCount = integer(payload.questionCount, 'Question count', 1);
-  const fileName = safeExamRoomFileName(payload.fileName);
-  const mimeType = supportedQuestionMime(payload.mimeType);
-  const encoded = String(payload.base64 ?? '').trim();
-  if (!encoded || encoded.length % 4 !== 0 || !BASE64_PATTERN.test(encoded)) {
-    throw new DD2026ValidationError('INVALID_UPLOAD', 'The question file is invalid.');
+  const questionCount = integer(
+    payload.questionCount,
+    'Question count',
+    1,
+    EXAM_ROOM_2026_MAX_QUESTIONS,
+  );
+  const sourceKind = enumValue(
+    payload.sourceKind ?? (payload.pastedText != null ? 'paste' : 'file'),
+    'Question source',
+    ['file', 'paste'],
+  );
+  const fileName = safeExamRoomFileName(
+    sourceKind === 'paste' ? payload.fileName || 'pasted-questions.txt' : payload.fileName,
+  );
+  const mimeType = supportedQuestionMime(sourceKind === 'paste' ? payload.mimeType || 'text/plain' : payload.mimeType);
+  if (questionMimeForFile(fileName) !== mimeType) {
+    throw new DD2026ValidationError(
+      'FILE_TYPE_MISMATCH',
+      'The file extension and declared content type do not match.',
+    );
   }
-  const bytes = base64Bytes(encoded);
+  if (sourceKind === 'paste' && mimeType !== 'text/plain') {
+    throw new DD2026ValidationError(
+      'PASTED_SOURCE_INVALID',
+      'Pasted questions are accepted as plain text and reviewed before publication.',
+    );
+  }
+  return { examId, questionCount, sourceKind, fileName, mimeType };
+}
+
+function pdfInspection(bytes) {
+  if (bytes.length < 8 || String.fromCharCode(...bytes.slice(0, 5)) !== '%PDF-') {
+    throw new DD2026ValidationError('INVALID_PDF_SIGNATURE', 'The PDF file signature is invalid.');
+  }
+  const source = new TextDecoder('latin1').decode(bytes);
+  if (!/%%EOF(?:\s|\0)*$/i.test(source.slice(-2048))) {
+    throw new DD2026ValidationError('INVALID_PDF', 'The PDF file is incomplete or corrupt.');
+  }
+  const inspectableNames = source.replace(/#([0-9a-f]{2})/gi, (_match, encoded) => (
+    String.fromCharCode(Number.parseInt(encoded, 16))
+  ));
+  if (/\/Encrypt\b/i.test(inspectableNames) || /\/Filter\s*\/Standard\b/i.test(inspectableNames)) {
+    throw new DD2026ValidationError(
+      'ENCRYPTED_PDF_REJECTED',
+      'Password-protected or encrypted PDFs cannot be processed. Upload an unencrypted copy.',
+    );
+  }
+  if (/\/Type\s*\/ObjStm\b/i.test(inspectableNames)
+      || /\/(?:JavaScript|JS|OpenAction|AA|Launch|RichMedia|EmbeddedFile|SubmitForm|ImportData)\b/i.test(inspectableNames)) {
+    throw new DD2026ValidationError(
+      'ACTIVE_PDF_REJECTED',
+      'The PDF contains active, embedded, or uninspectable object content. Export a flattened, inactive PDF and try again.',
+    );
+  }
+  const pageMarkers = inspectableNames.match(/\/Type\s*\/Page(?!s)\b/g) || [];
+  const pageCount = pageMarkers.length || null;
+  if (pageCount && pageCount > DD2026_LIMITS.sourceUploadPages) {
+    throw new DD2026ValidationError(
+      'PDF_PAGE_LIMIT_EXCEEDED',
+      `PDF question files are limited to ${DD2026_LIMITS.sourceUploadPages} pages.`,
+    );
+  }
+  return { pageCount };
+}
+
+async function validateDocxSafety(bytes) {
+  const entries = zipEntries(bytes);
+  if (!entries.has('[Content_Types].xml') || !entries.has('word/document.xml')) {
+    throw new DD2026ValidationError('INVALID_DOCX', 'The Word file has no readable document body.');
+  }
+  let totalUncompressed = 0;
+  for (const [name, entry] of entries) {
+    if (name.startsWith('/') || name.includes('..') || name.includes('\\')) {
+      throw new DD2026ValidationError('INVALID_DOCX', 'The Word file contains an unsafe archive path.');
+    }
+    totalUncompressed += entry.uncompressedSize;
+    if (entry.uncompressedSize > 5_000_000
+        || (entry.compressedSize > 0 && entry.uncompressedSize / entry.compressedSize > 200)) {
+      throw new DD2026ValidationError('UNSAFE_DOCX', 'The Word file expands beyond safe processing limits.');
+    }
+    if (/(?:vbaProject\.bin|\/activeX\/|\/embeddings\/)/i.test(name)) {
+      throw new DD2026ValidationError(
+        'ACTIVE_DOCX_REJECTED',
+        'The Word file contains macros, embedded objects, or active content.',
+      );
+    }
+  }
+  if (totalUncompressed > 25_000_000) {
+    throw new DD2026ValidationError('UNSAFE_DOCX', 'The Word file expands beyond safe processing limits.');
+  }
+  await zipText(bytes, entries.get('word/document.xml'));
+  for (const [name, entry] of entries) {
+    if (!name.endsWith('.rels')) continue;
+    const relationships = await zipText(bytes, entry);
+    if (/TargetMode\s*=\s*["']External["']/i.test(relationships)) {
+      throw new DD2026ValidationError(
+        'EXTERNAL_DOCX_RESOURCE_REJECTED',
+        'The Word file references an external resource. Remove external links and try again.',
+      );
+    }
+  }
+}
+
+export async function normalizeQuestionUpload(input, prevalidatedIntent = null) {
+  const payload = object(input);
+  const intent = prevalidatedIntent || normalizeQuestionUploadIntent(payload);
+  const {
+    examId, questionCount, sourceKind, fileName, mimeType,
+  } = intent;
+  const encoded = String(payload.base64 ?? '').trim();
+  let bytes;
+  if (sourceKind === 'paste') {
+    const pastedText = boundedText(payload.pastedText, 'Pasted questions', 2_500_000, {
+      minimum: 1,
+      trim: false,
+    });
+    bytes = new TextEncoder().encode(pastedText);
+  } else {
+    if (!encoded || encoded.length % 4 !== 0 || !BASE64_PATTERN.test(encoded)) {
+      throw new DD2026ValidationError('INVALID_UPLOAD', 'The question file is invalid.');
+    }
+    bytes = base64Bytes(encoded);
+  }
   if (!bytes.length || bytes.length > DD2026_LIMITS.sourceUploadBytes) {
     throw new DD2026ValidationError(
       'UPLOAD_SIZE_INVALID',
@@ -431,11 +1129,28 @@ export async function normalizeQuestionUpload(input) {
   if (mimeType === 'text/plain' && bytes.some((byte) => byte === 0)) {
     throw new DD2026ValidationError('INVALID_TEXT_FILE', 'The text file contains binary data.');
   }
-  if (mimeType.endsWith('document') && (bytes[0] !== 0x50 || bytes[1] !== 0x4b)) {
+  if (mimeType.includes('wordprocessingml') && (bytes[0] !== 0x50 || bytes[1] !== 0x4b)) {
     throw new DD2026ValidationError('INVALID_DOCX_SIGNATURE', 'The Word file signature is invalid.');
   }
-  const questions = await extractUploadedQuestions(bytes, mimeType, { maximumQuestions: questionCount + 1 });
   const warnings = [];
+  let pageCount = null;
+  let extractionMode = 'parsed';
+  let questions = [];
+  if (mimeType === 'application/pdf') {
+    ({ pageCount } = pdfInspection(bytes));
+    extractionMode = 'manual_required';
+    warnings.push(
+      'PDF text extraction is not enabled in this beta. Construct and verify every question manually before publication.',
+    );
+    if (pageCount == null) {
+      warnings.push(
+        `The PDF page count could not be verified automatically. Confirm that it does not exceed ${DD2026_LIMITS.sourceUploadPages} pages.`,
+      );
+    }
+  } else {
+    if (mimeType.includes('wordprocessingml')) await validateDocxSafety(bytes);
+    questions = await extractUploadedQuestions(bytes, mimeType, { maximumQuestions: questionCount + 1 });
+  }
   if (questions.length !== questionCount) {
     warnings.push(`Detected ${questions.length} questions; the professor selected ${questionCount}. Correct the preview before confirming.`);
   }
@@ -447,8 +1162,71 @@ export async function normalizeQuestionUpload(input) {
     bytes,
     questions,
     warnings,
+    extractionMode,
     contentHash: await sha256Hex(bytes),
-    pageCount: null,
+    pageCount,
+  };
+}
+
+export function normalizeModelAnswerUploadIntent(input) {
+  const payload = object(input);
+  const examId = uuid(payload.examId, 'Examination');
+  const fileName = safeExamRoomFileName(payload.fileName);
+  const mimeType = supportedQuestionMime(payload.mimeType);
+  const normalizedRequestKey = requestKey(payload.requestKey);
+  if (questionMimeForFile(fileName) !== mimeType) {
+    throw new DD2026ValidationError(
+      'FILE_TYPE_MISMATCH',
+      'The file extension and declared content type do not match.',
+    );
+  }
+  return { examId, fileName, mimeType, requestKey: normalizedRequestKey };
+}
+
+export async function normalizeModelAnswerUpload(input, prevalidatedIntent = null) {
+  const payload = object(input);
+  const intent = prevalidatedIntent || normalizeModelAnswerUploadIntent(payload);
+  const encoded = String(payload.base64 ?? '').trim();
+  if (!encoded || encoded.length % 4 !== 0 || !BASE64_PATTERN.test(encoded)) {
+    throw new DD2026ValidationError('INVALID_UPLOAD', 'The suggested-answer file is invalid.');
+  }
+  const bytes = base64Bytes(encoded);
+  if (!bytes.length || bytes.length > DD2026_LIMITS.sourceUploadBytes) {
+    throw new DD2026ValidationError(
+      'UPLOAD_SIZE_INVALID',
+      'Suggested-answer files must be no larger than 10 MB.',
+    );
+  }
+  let pageCount = null;
+  const warnings = [];
+  if (intent.mimeType === 'text/plain') {
+    if (bytes.some((byte) => byte === 0)) {
+      throw new DD2026ValidationError('INVALID_TEXT_FILE', 'The text file contains binary data.');
+    }
+    try {
+      new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      throw new DD2026ValidationError('INVALID_TEXT_FILE', 'Upload a valid UTF-8 text file.');
+    }
+  } else if (intent.mimeType.includes('wordprocessingml')) {
+    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+      throw new DD2026ValidationError('INVALID_DOCX_SIGNATURE', 'The Word file signature is invalid.');
+    }
+    await validateDocxSafety(bytes);
+  } else {
+    ({ pageCount } = pdfInspection(bytes));
+    if (pageCount == null) {
+      warnings.push(
+        `The PDF page count could not be verified automatically. Confirm that it does not exceed ${DD2026_LIMITS.sourceUploadPages} pages.`,
+      );
+    }
+  }
+  return {
+    ...intent,
+    bytes,
+    pageCount,
+    warnings,
+    contentHash: await sha256Hex(bytes),
   };
 }
 
@@ -503,14 +1281,27 @@ function normalizedRosterTable(rows) {
   )));
 }
 
-export async function normalizeRosterUpload(input) {
+export function normalizeRosterUploadIntent(input) {
   const payload = object(input);
-  const classroomId = uuid(payload.classroomId, 'Classroom');
+  const examId = optionalUuid(payload.examId, 'Examination');
+  const classroomId = optionalUuid(payload.classroomId, 'Classroom');
+  if (Boolean(examId) === Boolean(classroomId)) {
+    throw new DD2026ValidationError(
+      'INVALID_ROSTER_SCOPE',
+      'Provide exactly one examination or classroom for the roster upload.',
+    );
+  }
   const fileName = boundedText(payload.fileName, 'Roster file name', 200, { minimum: 1 });
   const mimeType = String(payload.mimeType ?? '').trim().toLowerCase();
   if (!['text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(mimeType)) {
     throw new DD2026ValidationError('UNSUPPORTED_ROSTER_TYPE', 'Upload a CSV or XLSX roster.');
   }
+  return { examId, classroomId, fileName, mimeType };
+}
+
+export async function normalizeRosterUpload(input, prevalidatedIntent = null) {
+  const payload = object(input);
+  const intent = prevalidatedIntent || normalizeRosterUploadIntent(payload);
   const encoded = String(payload.base64 ?? '').trim();
   if (!encoded || encoded.length % 4 !== 0 || !BASE64_PATTERN.test(encoded)) {
     throw new DD2026ValidationError('INVALID_ROSTER_UPLOAD', 'The roster file is invalid.');
@@ -520,7 +1311,7 @@ export async function normalizeRosterUpload(input) {
     throw new DD2026ValidationError('ROSTER_SIZE_INVALID', 'Roster files must be no larger than 2 MB.');
   }
   let rows;
-  if (mimeType === 'text/csv') {
+  if (intent.mimeType === 'text/csv') {
     rows = parseCsvRows(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   } else {
     if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
@@ -529,9 +1320,7 @@ export async function normalizeRosterUpload(input) {
     rows = await extractFirstXlsxSheet(bytes);
   }
   return {
-    classroomId,
-    fileName,
-    mimeType,
+    ...intent,
     rows: normalizedRosterTable(rows),
     sourceHash: await sha256Hex(bytes),
   };
@@ -547,19 +1336,26 @@ function little32(bytes, offset) {
 }
 
 function zipEntries(bytes) {
+  if (bytes.length < 22) {
+    throw new DD2026ValidationError('INVALID_ARCHIVE', 'The uploaded archive is corrupt.');
+  }
   let end = -1;
   for (let index = bytes.length - 22; index >= Math.max(0, bytes.length - 65_557); index -= 1) {
     if (little32(bytes, index) === 0x06054b50) { end = index; break; }
   }
-  if (end < 0) throw new DD2026ValidationError('INVALID_XLSX', 'The Excel file is corrupt.');
+  if (end < 0) throw new DD2026ValidationError('INVALID_ARCHIVE', 'The uploaded archive is corrupt.');
   const count = little16(bytes, end + 10);
+  if (count < 1 || count > 2_000) {
+    throw new DD2026ValidationError('UNSAFE_ARCHIVE', 'The uploaded archive has too many entries.');
+  }
   let offset = little32(bytes, end + 16);
   const entries = new Map();
   for (let index = 0; index < count; index += 1) {
-    if (little32(bytes, offset) !== 0x02014b50) {
-      throw new DD2026ValidationError('INVALID_XLSX', 'The Excel file is corrupt.');
+    if (offset < 0 || offset + 46 > bytes.length || little32(bytes, offset) !== 0x02014b50) {
+      throw new DD2026ValidationError('INVALID_ARCHIVE', 'The uploaded archive is corrupt.');
     }
     const entry = {
+      flags: little16(bytes, offset + 8),
       compression: little16(bytes, offset + 10),
       compressedSize: little32(bytes, offset + 20),
       uncompressedSize: little32(bytes, offset + 24),
@@ -568,31 +1364,68 @@ function zipEntries(bytes) {
     const nameLength = little16(bytes, offset + 28);
     const extraLength = little16(bytes, offset + 30);
     const commentLength = little16(bytes, offset + 32);
+    const nextOffset = offset + 46 + nameLength + extraLength + commentLength;
+    if (nextOffset > bytes.length || entry.localOffset + 30 > bytes.length) {
+      throw new DD2026ValidationError('INVALID_ARCHIVE', 'The uploaded archive is corrupt.');
+    }
     const name = new TextDecoder().decode(bytes.slice(offset + 46, offset + 46 + nameLength));
+    if (!name || entries.has(name) || (entry.flags & 0x1) !== 0) {
+      throw new DD2026ValidationError(
+        (entry.flags & 0x1) !== 0 ? 'ENCRYPTED_ARCHIVE_REJECTED' : 'INVALID_ARCHIVE',
+        (entry.flags & 0x1) !== 0
+          ? 'Encrypted document archives cannot be processed.'
+          : 'The uploaded archive is corrupt.',
+      );
+    }
     entries.set(name, entry);
-    offset += 46 + nameLength + extraLength + commentLength;
+    offset = nextOffset;
   }
   return entries;
 }
 
 async function zipText(bytes, entry) {
+  if (!entry || entry.uncompressedSize > 5_000_000
+      || (entry.compressedSize > 0 && entry.uncompressedSize / entry.compressedSize > 200)) {
+    throw new DD2026ValidationError('UNSAFE_ARCHIVE', 'The uploaded archive expands beyond safe limits.');
+  }
   const offset = entry.localOffset;
   if (little32(bytes, offset) !== 0x04034b50) {
-    throw new DD2026ValidationError('INVALID_XLSX', 'The Excel file is corrupt.');
+    throw new DD2026ValidationError('INVALID_ARCHIVE', 'The uploaded archive is corrupt.');
   }
   const nameLength = little16(bytes, offset + 26);
   const extraLength = little16(bytes, offset + 28);
   const start = offset + 30 + nameLength + extraLength;
+  if (start < 0 || start + entry.compressedSize > bytes.length) {
+    throw new DD2026ValidationError('INVALID_ARCHIVE', 'The uploaded archive is corrupt.');
+  }
   const compressed = bytes.slice(start, start + entry.compressedSize);
   let result;
   if (entry.compression === 0) result = compressed;
   else if (entry.compression === 8) {
-    result = new Uint8Array(await new Response(
-      new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw')),
-    ).arrayBuffer());
-  } else throw new DD2026ValidationError('INVALID_XLSX', 'The Excel file uses unsupported compression.');
+    const reader = new Blob([compressed]).stream()
+      .pipeThrough(new DecompressionStream('deflate-raw'))
+      .getReader();
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > 5_000_000) {
+        await reader.cancel();
+        throw new DD2026ValidationError('UNSAFE_ARCHIVE', 'The uploaded archive expands beyond safe limits.');
+      }
+      chunks.push(value);
+    }
+    result = new Uint8Array(total);
+    let position = 0;
+    for (const chunk of chunks) {
+      result.set(chunk, position);
+      position += chunk.byteLength;
+    }
+  } else throw new DD2026ValidationError('INVALID_ARCHIVE', 'The archive uses unsupported compression.');
   if (result.length > 5_000_000 || (entry.uncompressedSize && result.length !== entry.uncompressedSize)) {
-    throw new DD2026ValidationError('INVALID_XLSX', 'The Excel file is unsafe or corrupt.');
+    throw new DD2026ValidationError('INVALID_ARCHIVE', 'The uploaded archive is unsafe or corrupt.');
   }
   return new TextDecoder('utf-8', { fatal: true }).decode(result);
 }

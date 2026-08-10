@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en-PH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Examination Room 2.0 — Local visual QA</title>
+  <link rel="icon" href="../../../favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&amp;family=Playfair+Display:wght@500;600;700&amp;family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../../assets/duediligence-2026.css?v=exam-room-2-four-role-20260810">
+  <style>
+    :root {
+      --paper: #faf9f6;
+      --ink: #0f172a;
+      --ink-soft: #475569;
+      --gold: #c5a059;
+      --gold-2: #d4af37;
+      --navy: #002147;
+      --navy-2: #0f172a;
+      --navy-grad: linear-gradient(135deg, #002147 0%, #0b1b33 55%, #0f172a 100%);
+      --serif-display: 'Cinzel', Georgia, serif;
+      --serif: 'Playfair Display', Georgia, serif;
+      --sans: 'Inter', system-ui, sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { color-scheme: dark; scroll-behavior: smooth; }
+    body { margin: 0; min-width: 320px; background: #031426; font-family: var(--sans); }
+    button, input, select, textarea { font: inherit; }
+    code { font-family: var(--mono); }
+    [hidden] { display: none !important; }
+
+    .qa-masthead {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 13px clamp(16px, 3vw, 42px);
+      border-bottom: 1px solid rgba(197, 160, 89, .38);
+      background: rgba(3, 20, 38, .96);
+      box-shadow: 0 10px 34px rgba(0, 0, 0, .28);
+      backdrop-filter: blur(14px);
+    }
+
+    .qa-brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+    .qa-brand img { width: 39px; height: 39px; flex: none; }
+    .qa-brand strong { display: block; color: #fff; font: 600 17px/1.15 var(--serif-display); letter-spacing: .04em; }
+    .qa-brand span { display: block; margin-top: 3px; color: #d7b45f; font: 600 9px/1.3 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+    .qa-marker { max-width: 520px; margin: 0; color: #cbd5e1; font-size: 11px; line-height: 1.45; text-align: right; }
+    .qa-marker strong { color: #f6d377; }
+
+    .qa-screen { min-height: calc(100vh - 66px); }
+    .qa-screen .dd26-shell { padding-top: 32px; }
+    .qa-screen-switcher { margin-bottom: 18px; }
+    .qa-screen-switcher .dd26-toolbar { margin: 0; }
+    .qa-screen-note { margin: -10px 0 22px; color: #94a3b8; font-size: 12px; }
+
+    .qa-mini-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .qa-review-layout { display: grid; grid-template-columns: minmax(180px, .34fr) minmax(0, 1fr); gap: 18px; }
+    .qa-review-list { display: grid; align-content: start; gap: 7px; }
+    .qa-review-list button {
+      min-height: 45px;
+      padding: 9px 12px;
+      border: 1px solid rgba(148, 163, 184, .2);
+      background: rgba(15, 23, 42, .35);
+      color: #cbd5e1;
+      text-align: left;
+      cursor: pointer;
+    }
+    .qa-review-list button:hover, .qa-review-list button:focus-visible, .qa-review-list button.is-active { border-color: #d4af37; background: rgba(197, 160, 89, .1); color: #fff; outline: none; }
+    .qa-inline-status { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+    .qa-swatch-success { border-color: rgba(74, 222, 128, .42); color: #bbf7d0; }
+    .qa-swatch-danger { border-color: rgba(248, 113, 113, .52); color: #fecaca; }
+    .qa-swatch-info { border-color: rgba(96, 165, 250, .44); color: #bfdbfe; }
+    .qa-live-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 4px rgba(74, 222, 128, .12); }
+    .qa-offline-dot { background: #f59e0b; box-shadow: 0 0 0 4px rgba(245, 158, 11, .13); }
+    .qa-question-summary { padding: 14px; border: 1px solid rgba(148, 163, 184, .2); background: rgba(15, 23, 42, .36); }
+    .qa-question-summary strong { color: #fff; }
+    .qa-question-summary p { margin: 5px 0 0; font-size: 12px; }
+    .qa-file { padding: 20px; border: 1px dashed rgba(197, 160, 89, .58); background: rgba(3, 20, 40, .55); text-align: center; }
+    .qa-file strong { display: block; color: #fff; font: 600 20px/1.3 var(--serif); }
+    .qa-file p { margin: 8px auto 0; max-width: 570px; font-size: 13px; }
+    .qa-score-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+    .qa-score-bar { height: 7px; overflow: hidden; border-radius: 999px; background: rgba(148, 163, 184, .16); }
+    .qa-score-bar span { display: block; height: 100%; width: 42%; background: linear-gradient(90deg, #c5a059, #e8c86d); }
+    .qa-code { user-select: all; }
+    .qa-footer { padding: 24px; color: #94a3b8; font: 10px/1.6 var(--mono); text-align: center; text-transform: uppercase; letter-spacing: .09em; }
+
+    .qa-dialog {
+      width: min(720px, calc(100% - 28px));
+      max-height: calc(100vh - 28px);
+      overflow: auto;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+    }
+    .qa-dialog::backdrop { background: rgba(2, 10, 22, .82); backdrop-filter: blur(7px); }
+
+    @media (max-width: 980px) {
+      .qa-mini-grid { grid-template-columns: 1fr; }
+      .qa-review-layout { grid-template-columns: 1fr; }
+      .qa-review-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 680px) {
+      .qa-masthead { position: static; align-items: flex-start; }
+      .qa-marker { display: none; }
+      .qa-screen .dd26-shell { padding-top: 22px; }
+      .qa-review-list { grid-template-columns: 1fr; }
+      .qa-score-line { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="qa-masthead">
+    <div class="qa-brand">
+      <img src="../../../favicon.svg" alt="Due Diligence scales of justice crest">
+      <div><strong>Due Diligence</strong><span>Examination Room 2.0 beta</span></div>
+    </div>
+    <p class="qa-marker"><strong>Local visual QA</strong> — synthetic data; no backend. Controls change mock views only.</p>
+  </header>
+
+  <main class="dd26-page qa-screen">
+    <section class="dd26-shell" data-view-panel="roles">
+      <header class="dd26-header">
+        <div>
+          <div class="dd26-kicker">Law school examination</div>
+          <h1>Examination Room</h1>
+          <p>Choose your role. Each choice opens one simple class flow.</p>
+        </div>
+        <span class="dd26-beta">Private beta</span>
+      </header>
+      <div class="dd26-role-grid">
+        <button class="dd26-role-card" type="button" data-open-view="professor-authoring">
+          <span class="dd26-role-number">01</span>
+          <span><strong>Professor</strong><em>Make the examination</em><small>Choose the number of questions, upload them, check them, set the rules, publish, and grade.</small></span>
+        </button>
+        <button class="dd26-role-card" type="button" data-open-view="beadle">
+          <span class="dd26-role-number">02</span>
+          <span><strong>Beadle</strong><em>Upload students and prepare exam day</em><small>Upload the class list, check who may enter, and help students during the examination.</small></span>
+        </button>
+        <button class="dd26-role-card" type="button" data-student-entry>
+          <span class="dd26-role-number">03</span>
+          <span><strong>Student</strong><em>Take the examination</em><small>Sign in, check the exam details, answer each question, review, and submit.</small></span>
+        </button>
+        <button class="dd26-role-card" type="button" data-open-view="admin">
+          <span class="dd26-role-number">04</span>
+          <span><strong>Admin</strong><em>Open the Admin area</em><small>Check Examination Room status and handle authorized school support.</small></span>
+        </button>
+      </div>
+      <div class="dd26-notice"><strong>Student sign-in is required.</strong> A student cannot open the Student examination page until signed in. Every student must also be on the class list.</div>
+      <div class="dd26-privacy">During a monitored examination, copy, cut, and paste are blocked. Leaving the exam tab is recorded for the Professor and Beadle to review. It is not an automatic failure.</div>
+    </section>
+
+    <section class="dd26-shell" data-view-panel="professor-authoring" hidden>
+      <button class="dd26-back-link" type="button" data-open-view="roles">Back to Examination Room</button>
+      <header class="dd26-header">
+        <div><div class="dd26-kicker">Professor workspace</div><h1>Evidence — Section A</h1><p>Make the exam, check every question, set the exam rules, then publish. The Professor chooses the number of questions.</p></div>
+        <span class="dd26-beta">Draft examination</span>
+      </header>
+      <div class="qa-screen-switcher">
+        <div class="dd26-stepper" role="tablist" aria-label="Professor authoring steps">
+          <button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="authoring" data-state="upload">1 Make exam</button>
+          <button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="authoring" data-state="review">2 Check questions</button>
+          <button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="authoring" data-state="rules">3 Set exam rules</button>
+          <button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="authoring" data-state="publish">4 Publish</button>
+          <button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="authoring" data-state="replacement">Guarded replacement</button>
+        </div>
+      </div>
+
+      <div data-state-panel="authoring:upload">
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Step 1 of 4</div><h2>Make the examination</h2></div><span class="dd26-status">Draft</span></div>
+          <div class="dd26-form-grid">
+            <label class="dd26-field"><span>Exam title</span><input class="dd26-input" value="Evidence Midterm Examination"></label>
+            <label class="dd26-field"><span>Number of questions</span><input class="dd26-input" id="qa-question-count" type="number" min="1" max="200" value="8"><small class="dd26-help">Choose 1–200 questions for this beta. The Professor decides the number.</small></label>
+            <label class="dd26-field wide"><span>Question source</span><input class="dd26-input" id="qa-question-file" type="file" accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
+            <label class="dd26-field wide"><span>Or paste questions</span><textarea class="dd26-textarea compact" placeholder="1. State the best evidence rule and explain two exceptions.">1. State the best evidence rule and explain two exceptions.
+
+2. Discuss whether the out-of-court statement is admissible.</textarea></label>
+            <label class="dd26-field wide"><span>Professor-only suggested answer</span><select class="dd26-select"><option>None</option><option selected>Paste text</option></select><small class="dd26-help">A pasted suggested answer stays Professor-only and cannot finalize a grade.</small></label>
+            <label class="dd26-field wide"><span>Suggested answer text</span><textarea class="dd26-textarea compact">The original document rule generally requires the original when the contents of a document are the subject of inquiry, subject to the Rules on Evidence and applicable exceptions.</textarea></label>
+          </div>
+          <div class="qa-file"><strong>PDF, DOCX, TXT, or pasted text</strong><p>The questions stay in draft until the Professor checks the count, wording, order, points, and instructions.</p></div>
+          <div class="dd26-actions"><button class="dd26-button primary" type="button" data-authoring-next="review">Check the questions</button><button class="dd26-button" type="button" data-demo-toast="Draft saved locally for visual QA.">Save draft</button></div>
+        </section>
+      </div>
+
+      <div data-state-panel="authoring:review" hidden>
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Step 2 of 4</div><h2>Check every question</h2></div><span class="dd26-status"><span id="qa-review-count">8</span> questions</span></div>
+          <ul class="dd26-check-list">
+            <li class="is-pass"><strong>Question count</strong><span>8 parsed and 8 expected</span></li>
+            <li class="is-pass"><strong>Order</strong><span>All question numbers are unique and sequential</span></li>
+            <li class="is-warn"><strong>Professor check</strong><span>Confirm the exact wording and points before continuing</span></li>
+          </ul>
+          <div class="qa-review-layout">
+            <div class="qa-review-list" aria-label="Parsed questions">
+              <button class="is-active" type="button" data-review-question="1">Question 1 <small>10 points</small></button>
+              <button type="button" data-review-question="2">Question 2 <small>15 points</small></button>
+              <button type="button" data-review-question="3">Question 3 <small>10 points</small></button>
+              <button type="button" data-review-question="4">Question 4 <small>10 points</small></button>
+              <button type="button" data-review-question="5">Question 5 <small>15 points</small></button>
+              <button type="button" data-review-question="6">Question 6 <small>15 points</small></button>
+              <button type="button" data-review-question="7">Question 7 <small>15 points</small></button>
+              <button type="button" data-review-question="8">Question 8 <small>10 points</small></button>
+            </div>
+            <div>
+              <div class="dd26-form-grid">
+                <label class="dd26-field wide"><span>Question <b id="qa-review-ordinal">1</b></span><textarea class="dd26-textarea" id="qa-review-prompt">State the best evidence rule and explain two recognized exceptions. Apply the rule to a photocopy offered to prove the contents of a signed agreement.</textarea></label>
+                <label class="dd26-field"><span>Maximum points</span><input class="dd26-input" id="qa-review-points" type="number" min="1" value="10"></label>
+                <label class="dd26-field"><span>Section label</span><input class="dd26-input" value="Essay"></label>
+              </div>
+              <div class="dd26-actions"><button class="dd26-button" type="button" data-demo-toast="Question draft updated.">Save question</button><button class="dd26-button" type="button" data-demo-toast="Question moved in the synthetic list.">Move down</button><button class="dd26-button danger" type="button" data-demo-toast="Delete is only simulated in visual QA.">Delete</button></div>
+            </div>
+          </div>
+          <label class="dd26-choice"><input id="qa-review-confirm" type="checkbox"><span><strong>I confirmed count, wording, order, and points</strong><small>The Rules step stays disabled until this explicit review is recorded.</small></span></label>
+          <div class="dd26-actions"><button class="dd26-button primary" id="qa-rules-button" type="button" data-authoring-next="rules" disabled>Continue to rules</button><button class="dd26-button" type="button" data-authoring-next="upload">Back to upload</button></div>
+        </section>
+      </div>
+
+      <div data-state-panel="authoring:rules" hidden>
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Step 3 of 4</div><h2>Set the schedule and exam rules</h2></div><span class="dd26-status">Official exam time</span></div>
+          <div class="dd26-form-grid">
+            <label class="dd26-field"><span>Opens at</span><input class="dd26-input" type="datetime-local" value="2026-08-15T08:00"></label>
+            <label class="dd26-field"><span>Exam ends</span><input class="dd26-input" type="datetime-local" value="2026-08-15T11:00"></label>
+            <label class="dd26-field"><span>Extra reconnect time after the exam ends</span><select class="dd26-select"><option selected>15 minutes, review the connection record</option><option>10 minutes, review the connection record</option><option>No extra time</option></select></label>
+            <label class="dd26-field"><span>If a student leaves the exam tab</span><select class="dd26-select"><option selected>Record for Professor review</option><option>Warn the student and record</option></select></label>
+            <label class="dd26-field"><span>Question navigation</span><select class="dd26-select" disabled><option selected>Free navigation</option></select><small class="dd26-help">One-way navigation is unavailable until durable reload enforcement is verified.</small></label>
+            <label class="dd26-field"><span>Result package</span><select class="dd26-select"><option selected>Grades and comments only</option><option>Include questionnaire</option></select></label>
+            <label class="dd26-field wide"><span>Instructions for students</span><textarea class="dd26-textarea compact">Answer all eight questions. State the controlling rule, apply it to the facts, and give a concise conclusion. The official exam clock remains controlling.</textarea></label>
+          </div>
+          <label class="dd26-choice"><input id="qa-access-code-required" type="checkbox"><span><strong>Require a separate student exam access code</strong><small>Off in this preview. Every student must still sign in, be on the class list, and meet the entry rules.</small></span></label>
+          <div class="dd26-integrity"><strong>Exam safeguards.</strong> Copy, cut, and paste are blocked during the active exam. Leaving the tab or exam window is recorded for the Professor and Beadle to review. It is not proof by itself and never causes an automatic failure.</div>
+          <div class="dd26-actions"><button class="dd26-button primary" type="button" data-authoring-next="publish">Review before publishing</button><button class="dd26-button" type="button" data-authoring-next="review">Back to questions</button></div>
+        </section>
+      </div>
+
+      <div data-state-panel="authoring:publish" hidden>
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Step 4 of 4</div><h2>Publish the examination</h2></div><span class="dd26-status">Ready for confirmation</span></div>
+          <dl class="dd26-publish-summary">
+            <div><dt>Examination</dt><dd>Evidence Midterm Examination</dd></div>
+            <div><dt>Questions</dt><dd>8, selected by the Professor</dd></div>
+            <div><dt>Schedule</dt><dd>15 August 2026, 8:00 AM to 11:00 AM, Asia/Manila</dd></div>
+            <div><dt>Class list</dt><dd>42 students, no unresolved duplicates</dd></div>
+            <div><dt>Student entry</dt><dd id="qa-access-summary">Class-list sign-in; no separate student exam code will be issued</dd></div>
+            <div><dt>Corrections</dt><dd>After a student starts, any correction appears as a visible Professor notice</dd></div>
+          </dl>
+          <label class="dd26-choice"><input id="qa-publish-confirm" type="checkbox"><span><strong>I reviewed the final questions and schedule</strong><small>Publishing fixes this exam version for students and creates the Professor grading key. This preview does not contact a backend.</small></span></label>
+          <div class="dd26-actions"><button class="dd26-button primary" id="qa-publish-button" type="button" disabled>Publish examination</button><button class="dd26-button" type="button" data-authoring-next="rules">Back to rules</button></div>
+          <div id="qa-published-result" hidden>
+            <div class="dd26-success"><strong>Version 1 published in synthetic QA.</strong> Copy the keys now; they are shown once in the production flow.</div>
+            <div class="qa-mini-grid">
+              <div class="dd26-card" id="qa-student-code-result"><div class="dd26-label">Student entry</div><p><strong>No separate exam code issued.</strong></p><small>Each student must still sign in and be on the class list.</small></div>
+              <div class="dd26-card"><div class="dd26-label">Professor grading key</div><p class="dd26-raw-key qa-code">GRD-6QNT-4V8P-2FCA</p></div>
+              <div class="dd26-card"><div class="dd26-label">Beadle invitation key</div><p class="dd26-raw-key qa-code">BDL-3RY9-AX6M</p></div>
+            </div>
+            <div class="dd26-actions"><button class="dd26-button" type="button" data-open-view="professor-after">Monitor or grade this exam</button></div>
+          </div>
+        </section>
+      </div>
+
+      <div data-state-panel="authoring:replacement" hidden>
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Before opening · zero attempts</div><h2>Stage corrected questions for version 2</h2></div><span class="dd26-status qa-swatch-info">Current version stays live</span></div>
+          <div class="dd26-error" role="alert"><strong>The published exam is not edited in place.</strong> Corrected questions may replace it only before the opening time and before any student starts. The current exam and access codes stay active until the final confirmation succeeds.</div>
+          <div class="dd26-form-grid">
+            <label class="dd26-field wide"><span>Corrected question source</span><input class="dd26-input" type="file" accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
+            <label class="dd26-field wide"><span>Replacement reason</span><textarea class="dd26-textarea compact">Corrected the factual date in Question 4 and clarified the points allocation after Professor review.</textarea></label>
+          </div>
+          <div class="qa-review-layout">
+            <div class="qa-review-list"><button class="is-active" type="button">Question 4 · corrected</button><button type="button">Question 1 · unchanged</button><button type="button">Question 2 · unchanged</button></div>
+            <div><div class="dd26-label">Corrected exam · not yet active</div><h3 class="dd26-prompt">Apply the hearsay rule to the statement made on 12 August 2026 and identify any independently relevant purpose.</h3><dl class="dd26-publish-summary"><div><dt>Questions</dt><dd>8 reviewed</dd></div><div><dt>Current published exam</dt><dd>Version 1</dd></div><div><dt>Students who started</dt><dd>0</dd></div><div><dt>Access codes</dt><dd>Change only after success</dd></div></dl></div>
+          </div>
+          <label class="dd26-choice"><input type="checkbox"><span><strong>I reviewed every corrected question and intend to replace version 1</strong><small>Version 1 remains preserved. Students on the class list receive a notice without questions or access codes.</small></span></label>
+          <div class="dd26-actions"><button class="dd26-button danger" type="button" data-demo-toast="Synthetic replacement version 2 published; version 1 preserved and credentials rotated.">Replace with corrected version 2</button><button class="dd26-button" type="button" data-authoring-next="publish">Return to current publication</button></div>
+        </section>
+      </div>
+      <p class="dd26-sr-status" id="qa-authoring-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="dd26-shell" data-view-panel="beadle" hidden>
+      <button class="dd26-back-link" type="button" data-open-view="roles">Back to Examination Room</button>
+      <header class="dd26-header"><div><div class="dd26-kicker">Beadle access for this exam</div><h1>Evidence Midterm Examination</h1><p>Upload the students, check who may enter, and help with exam-day concerns.</p></div><span class="dd26-beta">Available until results are sent</span></header>
+      <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="beadle" data-state="roster">Upload students</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="beadle" data-state="attention">Help during exam</button></div></div>
+      <div data-state-panel="beadle:roster">
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Class list</div><h2>Upload and check the students</h2></div><span class="dd26-status">42 students</span></div>
+          <div class="dd26-stat-grid"><div class="dd26-stat"><strong>42</strong><span>Students listed</span></div><div class="dd26-stat"><strong>40</strong><span>Accounts matched</span></div><div class="dd26-stat"><strong>39</strong><span>Ready to enter</span></div><div class="dd26-stat"><strong>3</strong><span>Needs attention</span></div></div>
+          <div class="dd26-form-grid"><label class="dd26-field"><span>Class list CSV or XLSX</span><input class="dd26-input" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><label class="dd26-field"><span>Or paste the class list</span><textarea class="dd26-textarea compact" placeholder="email, student number, exam number, name"></textarea></label></div>
+          <div class="dd26-table-wrap"><table class="dd26-table dd26-editable-roster"><thead><tr><th>Exam number</th><th>Signed-in account</th><th>Student number</th><th>Check</th><th>Action</th></tr></thead><tbody><tr><td>EV-001</td><td>Matched</td><td>2026-0041</td><td><span class="dd26-status qa-swatch-success">Ready</span></td><td>May enter</td></tr><tr><td>EV-014</td><td>m.santos@example.edu.ph</td><td><input class="dd26-input" value="2026-0049"></td><td><span class="dd26-status qa-swatch-danger">Possible duplicate</span></td><td><button class="dd26-button" type="button" data-resolve-roster>Check student</button></td></tr><tr><td>EV-027</td><td>Needs checking</td><td>2026-0062</td><td><span class="dd26-status qa-swatch-info">Needs account</span></td><td><button class="dd26-button" type="button" data-demo-toast="Account-link reminder simulated.">Send reminder</button></td></tr></tbody></table></div>
+          <div class="dd26-actions"><button class="dd26-button" type="button" data-demo-toast="Synthetic class list checked.">Check class list</button><button class="dd26-button primary" type="button" data-demo-toast="Only corrected students would be saved.">Save corrected students</button><button class="dd26-button" type="button">Download class-list template</button></div>
+        </section>
+      </div>
+      <div data-state-panel="beadle:attention" hidden>
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Beadle / Needs attention</div><h2>Evidence Midterm Examination</h2></div><span class="dd26-status">In progress</span></div>
+          <div class="dd26-stat-grid"><div class="dd26-stat"><strong>42</strong><span>Students listed</span></div><div class="dd26-stat"><strong>40</strong><span>Allowed to enter</span></div><div class="dd26-stat"><strong>7</strong><span>Submitted</span></div><div class="dd26-stat"><strong>3</strong><span>Needs attention</span></div></div>
+          <div class="dd26-attention-list">
+            <article><div><strong>EV-014</strong><small>Possible duplicate on the class list; entry is on hold</small></div><span class="dd26-status qa-swatch-danger">Check identity</span></article>
+            <article><div><strong>EV-022</strong><small>Temporary leave active for 6 minutes; timer continues</small></div><button class="dd26-button" type="button" data-demo-toast="Return recorded in synthetic QA.">Record return</button></article>
+            <article><div><strong>EV-031</strong><small>Student needs to move to another device after an in-person check</small></div><button class="dd26-button" type="button" data-demo-toast="Transfer check opened for synthetic QA.">Check device change</button></article>
+          </div>
+          <div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Exam number</th><th>Identity check</th><th>Exam status</th><th>Last connection</th><th>What the Beadle can do</th></tr></thead><tbody><tr><td>EV-001</td><td>In-person check passed</td><td>Answering</td><td>11 seconds ago</td><td>None required</td></tr><tr><td>EV-014</td><td>Pending</td><td>Entry on hold</td><td>—</td><td><button class="dd26-button primary" type="button" data-demo-toast="Identity check simulated.">Record identity check</button></td></tr><tr><td>EV-031</td><td>Passed 2 minutes ago</td><td>Device help</td><td>4 minutes ago</td><td><button class="dd26-button" type="button" data-demo-toast="Controlled device change simulated.">Move to new device</button></td></tr></tbody></table></div>
+          <div class="dd26-privacy">This page never shows exam questions, student answers, grades, or the Professor’s suggested answer.</div>
+        </section>
+      </div>
+      <p class="dd26-sr-status" id="qa-beadle-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="dd26-shell" data-view-panel="student" hidden>
+      <button class="dd26-back-link" type="button" data-open-view="roles">← Back to Examination Room</button>
+      <header class="dd26-header"><div><div class="dd26-kicker">Student examination</div><h1>Evidence Midterm Examination</h1><p>Sign in, check the exam details, answer each question, review your work, and submit.</p></div><span class="dd26-beta">Signed in · EV-001</span></header>
+      <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist" aria-label="Student examination states"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="student" data-state="preflight">Exam check</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="workspace">Answering</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="offline">Connection lost</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="recovery">Choose saved answer</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="review">Review</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="pending">Sending</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="student" data-state="receipt">Received</button></div></div>
+
+      <div data-state-panel="student:preflight">
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Before the examination</div><h2>Check before starting</h2></div><span class="dd26-status">Not started</span></div>
+          <ul class="dd26-check-list">
+            <li class="is-pass"><strong>Signed-in student</strong><span>Your account and exam number EV-001 are on the class list</span></li>
+            <li class="is-pass"><strong>Required access code</strong><span>Verified for Evidence Midterm Examination</span></li>
+            <li class="is-pass"><strong>Answer saving</strong><span>This device is ready to keep a recovery copy if the connection drops</span></li>
+            <li class="is-pass"><strong>Connection and exam time</strong><span>Online; the official exam schedule is loaded</span></li>
+            <li class="is-warn"><strong>Full-screen request</strong><span>Your browser will ask after Start; leaving full screen is recorded for review</span></li>
+          </ul>
+          <details class="dd26-rules-summary" open><summary>Examination rules</summary><dl><div><dt>Questions</dt><dd>8; you may move between questions</dd></div><div><dt>Exam ends</dt><dd>15 August 2026, 11:00 AM</dd></div><div><dt>If the connection drops near the end</dt><dd>15 minutes to reconnect; the school reviews the connection record</dd></div><div><dt>Exam safeguards</dt><dd>Copy, cut, and paste are blocked. Leaving the exam tab is recorded for review. A record does not automatically mean misconduct.</dd></div></dl></details>
+          <label class="dd26-choice"><input id="qa-student-ack" type="checkbox"><span><strong>I read the examination rules</strong><small>The timer continues if the connection drops or I take an approved temporary leave.</small></span></label>
+          <div class="dd26-actions"><button class="dd26-button primary" id="qa-start-exam" type="button" disabled>Start examination</button><button class="dd26-button" type="button" data-demo-toast="A technical pre-start issue was logged in synthetic QA.">Report technical issue</button></div>
+        </section>
+      </div>
+
+      <div data-state-panel="student:workspace" hidden>
+        <section class="dd26-card">
+          <div class="dd26-attempt-top"><div><div class="dd26-label"><span class="qa-live-dot"></span>Online and synchronized</div><span class="dd26-save-state is-saved" id="qa-save-state">Saved locally and on server</span></div><div><div class="dd26-clock">02:17:43</div><span class="dd26-clock-label">Server time remaining</span></div></div>
+          <details class="dd26-instructions"><summary>Instructions and corrections</summary><p>Answer all eight questions. State the rule, apply it to the facts, and give a concise conclusion. There is no correction at this time.</p></details>
+          <div class="dd26-integrity"><strong>Exam safeguards are on.</strong> Copy, cut, and paste are blocked. Leaving this tab or full screen is recorded for Professor review. It does not automatically fail or lock the student.</div>
+          <div class="dd26-progress-summary"><span id="qa-answered-count">3 of 8 answered</span><span id="qa-flagged-count">1 flagged for review</span></div>
+          <div class="dd26-question-nav" aria-label="Question navigator">
+            <button class="is-active is-saved" type="button" data-student-question="1">1</button><button class="is-saved" type="button" data-student-question="2">2</button><button class="is-saved is-flagged" type="button" data-student-question="3">3</button><button type="button" data-student-question="4">4</button><button type="button" data-student-question="5">5</button><button type="button" data-student-question="6">6</button><button type="button" data-student-question="7">7</button><button type="button" data-student-question="8">8</button>
+          </div>
+          <div class="dd26-question-meta"><span>Question <b id="qa-student-ordinal">1</b> of 8</span><span><b id="qa-student-points">10</b> points</span></div>
+          <h2 class="dd26-prompt" id="qa-student-prompt">State the best evidence rule and explain two recognized exceptions. Apply the rule to a photocopy offered to prove the contents of a signed agreement.</h2>
+          <label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea dd26-essay-editor" id="qa-student-answer">Under the original document rule, an original writing is generally required when its contents are the subject of inquiry. A duplicate or secondary evidence may be admitted when the original has been lost or destroyed without bad faith, or when the original is in the custody of the adverse party who fails to produce it after reasonable notice.</textarea><small class="dd26-counter"><span id="qa-word-count">55 words</span><span id="qa-character-count">381 / 20,000 characters</span></small></label>
+          <div class="dd26-actions"><button class="dd26-button" id="qa-prev-question" type="button" disabled>Previous</button><button class="dd26-button" id="qa-next-question" type="button">Next</button><button class="dd26-button" id="qa-flag-question" type="button">Flag for review</button><button class="dd26-button" type="button" data-demo-toast="Temporary leave would be recorded; the timer continues.">Temporary leave</button><button class="dd26-button" type="button" data-demo-toast="Technical incident form opened in synthetic QA.">Report technical issue</button><button class="dd26-button primary" type="button" data-student-next="review">Review and submit</button></div>
+        </section>
+      </div>
+
+      <div data-state-panel="student:offline" hidden>
+        <section class="dd26-card">
+          <div class="dd26-attempt-top"><div><div class="dd26-label"><span class="qa-live-dot qa-offline-dot"></span>Offline — local preservation active</div><span class="dd26-save-state" id="qa-offline-save">Saved on this device; 3 operations queued</span></div><div><div class="dd26-clock">02:09:18</div><span class="dd26-clock-label">Estimated; server deadline controls</span></div></div>
+          <div class="dd26-notice"><strong>Keep this page open.</strong> Continue answering. Changes are saved on this device and sent in order after reconnection. The device copy helps recovery, but only a Due Diligence receipt confirms submission.</div>
+          <div class="dd26-question-nav"><button class="is-saved" type="button">1</button><button class="is-saved" type="button">2</button><button class="is-active is-flagged" type="button">3</button><button type="button">4</button><button type="button">5</button><button type="button">6</button><button type="button">7</button><button type="button">8</button></div>
+          <div class="dd26-question-meta"><span>Question 3 of 8</span><span>10 points</span></div>
+          <h2 class="dd26-prompt">May a witness refresh recollection using a writing not admitted in evidence? Explain the safeguards available to the adverse party.</h2>
+          <label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea dd26-essay-editor">Yes. A witness may use a writing to refresh present recollection, subject to the court's control. The adverse party may inspect the writing, cross-examine the witness about it, and introduce relevant portions when allowed by the Rules.</textarea></label>
+          <div class="dd26-actions"><button class="dd26-button" type="button">Previous</button><button class="dd26-button" type="button">Next</button><button class="dd26-button" type="button">Remove review flag</button><button class="dd26-button primary" type="button" data-simulate-reconnect>Simulate reconnection</button></div>
+        </section>
+      </div>
+
+      <div data-state-panel="student:recovery" hidden>
+        <section class="dd26-card">
+          <div class="dd26-label">Answer conflict recovery</div><h2>Choose which revision to keep</h2>
+          <div class="dd26-error" role="alert"><strong>Question 4 has two revisions.</strong> Submission is blocked until the student explicitly resolves the difference.</div>
+          <div class="qa-mini-grid">
+            <article class="qa-question-summary"><div class="dd26-label">Server-synchronized revision</div><strong>Revision 6, received 10:12:08 AM</strong><p>The statement may fall within an independently relevant statement analysis...</p><div class="dd26-actions"><button class="dd26-button" type="button" data-resolve-conflict="server">Accept server revision</button></div></article>
+            <article class="qa-question-summary"><div class="dd26-label">This device</div><strong>Revision 7, saved locally 10:13:22 AM</strong><p>The statement is not offered for its truth but to prove notice, so it may be independently relevant...</p><div class="dd26-actions"><button class="dd26-button primary" type="button" data-resolve-conflict="local">Retry this local revision</button></div></article>
+            <article class="qa-question-summary"><div class="dd26-label">Recovery record</div><strong>Both saved copies remain available for review</strong><p>The unused copy is kept for a limited recovery period and does not silently replace the answer you choose.</p></article>
+          </div>
+          <div class="dd26-privacy">Do not clear browser data while recovery is pending. A new device can restore only server-synchronized work.</div>
+        </section>
+      </div>
+
+      <div data-state-panel="student:review" hidden>
+        <section class="dd26-card">
+          <div class="dd26-label">Final review</div><h2>Review before submission</h2>
+          <div class="dd26-stat-grid"><div class="dd26-stat"><strong>7</strong><span>Answered</span></div><div class="dd26-stat"><strong>1</strong><span>Unanswered</span></div><div class="dd26-stat"><strong>1</strong><span>Flagged</span></div><div class="dd26-stat"><strong>8</strong><span>Total</span></div></div>
+          <div class="dd26-error">Unanswered: Question 8</div><div class="dd26-notice">Flagged for review: Question 3</div>
+          <p>Due Diligence first synchronizes queued answer operations, then requests one server receipt using the same stable submission key on every retry.</p>
+          <label class="dd26-choice"><input id="qa-submit-ack" type="checkbox"><span><strong>I intend to submit this examination</strong><small>Only a server receipt confirms submission. If offline, the intent remains pending and local work stays on this device.</small></span></label>
+          <div class="dd26-actions"><button class="dd26-button primary" id="qa-submit-button" type="button" disabled>Submit and request receipt</button><button class="dd26-button" type="button" data-student-next="workspace">Return to answers</button></div>
+        </section>
+      </div>
+
+      <div data-state-panel="student:pending" hidden>
+        <section class="dd26-card">
+          <div class="dd26-label">Final submission</div><h2>Submission pending — not yet received by Due Diligence</h2>
+          <div class="dd26-notice" role="status"><strong>This is not a receipt.</strong> The stable submission intent and latest local answer journal remain on this device. Keep this page open and reconnect.</div>
+          <dl class="dd26-publish-summary"><div><dt>Submission key</dt><dd><code>sub_01J5EV001EVIDENCE</code></dd></div><div><dt>Queued operations</dt><dd>2 answer revisions and 1 submission intent</dd></div><div><dt>Last server contact</dt><dd>10:56:42 AM</dd></div><div><dt>Deadline decision</dt><dd>Server time and outage evidence control</dd></div></dl>
+          <div class="dd26-actions"><button class="dd26-button primary" type="button" data-student-next="receipt">Simulate server receipt</button><button class="dd26-button" type="button" data-demo-toast="Synchronization retry queued in synthetic QA.">Retry synchronization</button></div>
+        </section>
+      </div>
+
+      <div data-state-panel="student:receipt" hidden>
+        <section class="dd26-card">
+          <div class="dd26-success" role="status"><strong>Submission received by Due Diligence.</strong> This server receipt—not the earlier pending screen—confirms delivery.</div>
+          <div class="dd26-receipt"><div class="dd26-label">Submission receipt</div><h2>RCP-EVID-20260815-EV001</h2><dl><div><dt>Examination</dt><dd>Evidence Midterm Examination, version 1</dd></div><div><dt>Student exam number</dt><dd>EV-001</dd></div><div><dt>Received by Due Diligence</dt><dd>15 August 2026, 10:58:14 AM, Asia/Manila</dd></div><div><dt>Status</dt><dd>Received</dd></div><div><dt>Confirmation number</dt><dd><code>9e4fa3c8b1d2…6a70</code></dd></div><div><dt>Connection review</dt><dd>Connection record retained; it does not automatically determine misconduct</dd></div></dl></div>
+          <p class="dd26-privacy">Local work is retained for up to seven days after this confirmed receipt and removed on a later Examination Room visit. Browser-local storage is not permanent.</p>
+          <div class="dd26-actions"><button class="dd26-button" type="button" data-open-view="roles">Return to Examination Room</button></div>
+        </section>
+      </div>
+      <p class="dd26-sr-status" id="qa-student-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="dd26-shell" data-view-panel="professor-after" hidden>
+      <button class="dd26-back-link" type="button" data-open-view="roles">← Back to Examination Room</button>
+      <header class="dd26-header"><div><div class="dd26-kicker">Professor workspace</div><h1>Monitor and grade</h1><p>See who has started, who needs help, and who has submitted. Student answers open only after the examination has ended for everyone.</p></div><span class="dd26-beta">Grading key required</span></header>
+      <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="professor-after" data-state="monitor">Exam status</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="professor-after" data-state="reopen">Allow another submission</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="professor-after" data-state="grading">Grade students</button></div></div>
+      <div data-state-panel="professor-after:monitor">
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Live examination monitor</div><h2>Evidence Midterm Examination</h2></div><span class="dd26-status"><span class="qa-live-dot"></span>In progress</span></div>
+          <p>This page shows exam progress, connection status, and events that may need review. Answers remain private until grading opens.</p>
+          <div class="dd26-stat-grid"><div class="dd26-stat"><strong>40</strong><span>Started</span></div><div class="dd26-stat"><strong>7</strong><span>Submitted</span></div><div class="dd26-stat"><strong>2</strong><span>Connection lost</span></div><div class="dd26-stat"><strong>3</strong><span>For review</span></div></div>
+          <div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Student</th><th>Exam status</th><th>For review</th><th>Exam ends</th><th>Last connection</th><th>Action</th></tr></thead><tbody><tr><td>EV-001</td><td>Answering</td><td>None</td><td>11:00 AM</td><td>11 seconds ago</td><td>—</td></tr><tr><td>EV-022</td><td>Temporary leave</td><td>1 tab exit</td><td>11:00 AM</td><td>2 minutes ago</td><td>Review status</td></tr><tr><td>EV-031</td><td>Device help</td><td>2 technical reports</td><td>11:00 AM</td><td>4 minutes ago</td><td><button class="dd26-button danger" type="button" data-demo-toast="A reason is required before access can be restored.">Review access</button></td></tr></tbody></table></div>
+          <div class="dd26-actions"><button class="dd26-button" type="button" data-demo-toast="Exam status refreshed in synthetic QA.">Refresh status</button></div>
+        </section>
+      </div>
+      <div data-state-panel="professor-after:reopen" hidden>
+        <section class="dd26-card">
+          <div class="dd26-question-meta"><div><div class="dd26-label">Special action for one student</div><h2>Allow another submission</h2></div><span class="dd26-status qa-swatch-danger">Professor grading key required</span></div>
+          <div class="dd26-error" role="alert"><strong>The first submission is never opened or replaced.</strong> Its receipt and submitted answers remain saved. This gives student EV-014 one new answer session and a new deadline.</div>
+          <dl class="dd26-publish-summary"><div><dt>Student</dt><dd>EV-014</dd></div><div><dt>Current status</dt><dd>First submission received</dd></div><div><dt>First receipt</dt><dd><code>rcpt_01HZZ8QY6AB4</code></dd></div><div><dt>Existing grades</dt><dd>None</dd></div></dl>
+          <div class="dd26-form-grid"><label class="dd26-field"><span>Professor grading key</span><input class="dd26-input" type="password" value="GRD-DEMO-NOT-SENT" autocomplete="off"></label><label class="dd26-field"><span>New deadline</span><input class="dd26-input" type="datetime-local" value="2026-08-15T15:00"></label><label class="dd26-field wide"><span>Required reason</span><textarea class="dd26-textarea compact">Verified school-wide network interruption affected this student before the original deadline.</textarea></label></div>
+          <label class="dd26-choice"><input type="checkbox" checked><span><strong>Allow one new answer session for this student</strong><small>The first receipt remains saved. The student receives only the new deadline notice.</small></span></label>
+          <div class="dd26-actions"><button class="dd26-button danger" type="button" data-demo-toast="A second answer session was allowed; the first receipt remains saved.">Allow another submission</button><button class="dd26-button" type="button" data-reopen-cancel>Cancel</button></div>
+        </section>
+      </div>
+      <div data-state-panel="professor-after:grading" hidden>
+        <section class="dd26-card">
+          <div class="dd26-label">Professor grading / Evidence Midterm Examination</div>
+          <div class="dd26-stat-grid"><div class="dd26-stat"><strong>42</strong><span>Students</span></div><div class="dd26-stat"><strong>194</strong><span>Final grades</span></div><div class="dd26-stat"><strong>142</strong><span>Needs grading</span></div><div class="dd26-stat"><strong>Professor</strong><span>Official decision</span></div></div>
+          <div class="dd26-notice"><strong>Professor judgment is required.</strong> AI grading is off and no suggested answer can finalize or release a grade.</div>
+          <div class="dd26-form-grid"><label class="dd26-field"><span>Student</span><select class="dd26-select" id="qa-grade-candidate"><option>EV-001</option><option>EV-002</option><option>EV-003</option></select></label><label class="dd26-field"><span>Question</span><select class="dd26-select" id="qa-grade-question"><option value="1">Question 1 — draft</option><option value="2">Question 2 — final</option><option value="3">Question 3 — draft</option></select></label></div>
+          <div class="dd26-question-meta"><span>Student <b id="qa-grade-candidate-label">EV-001</b></span><span>Question <b id="qa-grade-ordinal">1</b> of 8</span></div>
+          <h2 class="dd26-prompt" id="qa-grade-prompt">State the best evidence rule and explain two recognized exceptions.</h2>
+          <section class="dd26-section"><h3>Student answer</h3><p id="qa-grade-answer">Under the original document rule, an original writing is generally required when its contents are the subject of inquiry. Secondary evidence may be admitted after the proponent establishes a recognized basis and the absence of bad faith.</p></section>
+          <details class="dd26-section"><summary>Professor-only suggested answer</summary><p>The suggested answer is pasted Professor-only content frozen with the examination. It is a reference, not a grade or legal authority.</p><small>Frozen content hash: 83f6c71d…a0b9</small></details>
+          <div class="dd26-form-grid"><label class="dd26-field"><span>Score / 10</span><input class="dd26-input" id="qa-grade-score" type="number" min="0" max="10" step="0.1" value="7.5"></label><label class="dd26-field"><span>State</span><select class="dd26-select" id="qa-grade-state"><option>Draft</option><option>Final</option></select></label><label class="dd26-field wide"><span>Professor comment</span><textarea class="dd26-textarea" id="qa-grade-comment">The governing rule is correctly identified. Tighten the foundation for secondary evidence and connect each exception to the facts.</textarea></label><label class="dd26-field wide"><span>Reason for this grade version</span><input class="dd26-input" value="Initial professor assessment"></label></div>
+          <div class="qa-score-line"><div class="qa-score-bar" aria-label="Grading progress"><span></span></div><strong>194 of 336 final</strong></div>
+          <div class="dd26-actions"><button class="dd26-button primary" type="button" data-demo-toast="Draft grade saved in synthetic QA.">Save grade</button><button class="dd26-button" type="button" data-next-grade>Next ungraded question</button><button class="dd26-button" type="button" data-demo-toast="Release remains blocked until every question is final.">Review release readiness</button></div>
+        </section>
+      </div>
+      <p class="dd26-sr-status" id="qa-professor-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="dd26-shell" data-view-panel="admin" hidden>
+      <button class="dd26-back-link" type="button" data-open-view="roles">← Back to Examination Room</button>
+      <header class="dd26-header"><div><div class="dd26-kicker">Admin area</div><h1>Examination Room status</h1><p>See whether examinations, class lists, answer saving, and backups are working. Student answers and grades are not shown on this regular page.</p></div><span class="dd26-beta">Admin account required</span></header>
+      <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="admin" data-state="health">Exam status</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" data-state-group="admin" data-state="breakglass">Restricted support</button></div></div>
+      <div data-state-panel="admin:health"><section class="dd26-card">
+        <div class="dd26-question-meta"><div><div class="dd26-label">Examination Room</div><h2>Service and exam overview</h2></div><span class="dd26-status qa-swatch-success">Working</span></div>
+        <div class="dd26-stat-grid"><div class="dd26-stat"><strong>12</strong><span>Scheduled exams</span></div><div class="dd26-stat"><strong>3</strong><span>In progress</span></div><div class="dd26-stat"><strong>99.8%</strong><span>Answers saved</span></div><div class="dd26-stat"><strong>0</strong><span>Urgent alerts</span></div></div>
+        <ul class="dd26-check-list"><li class="is-pass"><strong>Exam records</strong><span>Available</span></li><li class="is-pass"><strong>Answer saving</strong><span>Working</span></li><li class="is-pass"><strong>Google Sheet backup</strong><span>Last backup completed 2 minutes ago</span></li><li class="is-warn"><strong>Before release</strong><span>Staging checks, security review, browser testing, and recovery practice are still required</span></li></ul>
+        <div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Exam</th><th>Status</th><th>Students</th><th>For review</th><th>Last backup</th></tr></thead><tbody><tr><td>Evidence Midterm</td><td>In progress</td><td>42</td><td>3 events</td><td>2 minutes ago</td></tr><tr><td>Criminal Law Final</td><td>Scheduled</td><td>76</td><td>None</td><td>18 minutes ago</td></tr><tr><td>Constitutional Law Midterm</td><td>Grading</td><td>54</td><td>1 recovery check</td><td>6 minutes ago</td></tr></tbody></table></div>
+        <div class="dd26-actions"><button class="dd26-button" type="button" data-demo-toast="Exam status refreshed in synthetic QA.">Refresh status</button><button class="dd26-button" type="button" data-demo-toast="Status report simulated; no answers or grades included.">Download status report</button></div>
+        <div class="dd26-privacy">Student answers and grades are not shown on this regular Admin page. Restricted support is a separate, logged process.</div>
+      </section></div>
+      <div data-state-panel="admin:breakglass" hidden><section class="dd26-card">
+        <div class="dd26-question-meta"><div><div class="dd26-label">Restricted record for one student</div><h2>Case ER-2026-0041</h2></div><span class="dd26-status qa-swatch-danger">Recent security check · 11 minutes left</span></div>
+        <div class="dd26-notice"><strong>Design target only.</strong> Production keeps this control disabled until the Admin can complete a separate, verified security check. This synthetic panel shows only what the approved support page would look like afterward.</div>
+        <div class="dd26-error" role="alert"><strong>Only this student.</strong> Evidence Midterm Examination, exam number EV-014. The submission is finished, extra reconnect time has ended, and no exam is open. This synthetic screen has no backend or real answers.</div>
+        <dl class="dd26-publish-summary"><div><dt>Purpose</dt><dd>Review a documented submission-receipt dispute</dd></div><div><dt>Grant expiry</dt><dd>15 August 2026, 4:00 PM</dd></div><div><dt>Evidence opened</dt><dd>15 August 2026, 3:37 PM</dd></div><div><dt>Export</dt><dd>Disabled</dd></div></dl>
+        <details class="dd26-section" open><summary>Records allowed for this support case</summary><ul class="dd26-check-list"><li class="is-pass"><strong>Submission receipt history</strong><span>First receipt and confirmation number remain saved</span></li><li class="is-pass"><strong>Answer saving history</strong><span>18 saved-answer records for this student only</span></li><li class="is-warn"><strong>Connection record</strong><span>1 offline period and 2 grouped connection events; these records are not proof</span></li><li class="is-pass"><strong>Grades</strong><span>No grade existed when this support case was approved</span></li></ul></details>
+        <div class="dd26-form-grid"><label class="dd26-field"><span>Review result</span><select class="dd26-select"><option selected>No correction required</option><option>Send to Professor</option><option>Correction required</option></select></label><label class="dd26-field wide"><span>Required review note</span><textarea class="dd26-textarea compact">The receipt and exam times were reviewed against the case reference. No other student record was opened.</textarea></label></div>
+        <div class="dd26-actions"><button class="dd26-button primary" type="button" data-demo-toast="Synthetic review recorded; the support case is closed and cannot be opened again.">Record review and close case</button></div>
+        <div class="dd26-privacy">Every time this record is opened, Due Diligence checks the same Admin, case, exam, student, and end time. Closing the support case prevents later access.</div>
+      </section></div>
+      <p class="dd26-sr-status" id="qa-admin-status" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <footer class="qa-footer">Local visual QA — synthetic data; no backend — not included in the production application bundle</footer>
+
+  <dialog class="qa-dialog" id="qa-dialog">
+    <div class="dd26-modal-card"><div class="dd26-label">Synthetic visual QA</div><h2 id="qa-dialog-title">Preview action</h2><p id="qa-dialog-message"></p><div class="dd26-actions"><button class="dd26-button primary" id="qa-dialog-continue" type="button" hidden>Continue</button><button class="dd26-button" id="qa-dialog-close" type="button">Close</button></div></div>
+  </dialog>
+  <script src="./preview.js?v=four-role-20260810"></script>
+</body>
+</html>

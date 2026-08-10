@@ -11,10 +11,12 @@ const [html, frontend, css, build, phase2Config, stagingBuild] = await Promise.a
   readFile(new URL('scripts/build-staging-artifact.mjs', root), 'utf8'),
 ]);
 
-// Examination Room 2.0 has an independent dark-launch boundary. Production
-// source stays hidden/off; only the approved staging artifact opts the client in.
-assert.match(phase2Config, /examinationRoom2:\s*false/);
-assert.match(html, /id="spa-examination-room" type="button" hidden/);
+// The owner explicitly approved a live beta-wide activation. The entry is
+// available to every admitted beta user, while the independent client and two
+// server gates remain fail-closed and role actions remain server-authorized.
+assert.match(phase2Config, /examinationRoom2:\s*true/);
+assert.match(html, /id="spa-examination-room" type="button"/);
+assert.doesNotMatch(html, /id="spa-examination-room" type="button" hidden/);
 assert.match(frontend, /exam_room:\s*'EXAMINATION_ROOM_2_ENABLED'/);
 assert.match(frontend, /const EXAMINATION_ROOM_BASE_FLAG = 'EXAMINATION_ROOM_ENABLED'/);
 const openBlock = frontend.slice(
@@ -25,10 +27,10 @@ assert.match(openBlock, /config\?\.features\?\.examinationRoom2 !== true/,
   'the environment-local client gate must fail closed before Examination Room 2.0 opens');
 assert.match(openBlock, /snapshot\?\.flags\?\.\[EXAMINATION_ROOM_BASE_FLAG\] !== true[\s\S]*snapshot\?\.flags\?\.\[FLAG_NAMES\.exam_room\] !== true/,
   'authenticated entry requires both the base and V2 server-side feature flags');
-assert.match(stagingBuild, /\['examinationRoom2: false', 'examinationRoom2: true'\]/,
-  'the approved staging builder explicitly opts its static client into V2');
-assert.match(stagingBuild, /\['id="spa-examination-room" type="button" hidden', 'id="spa-examination-room" type="button"'\]/,
-  'the approved staging builder alone unhides the Examination Room entry');
+assert.doesNotMatch(stagingBuild, /examinationRoom2: false/,
+  'staging no longer needs to override the owner-approved beta-wide client gate');
+assert.doesNotMatch(stagingBuild, /spa-examination-room[^\n]*hidden/,
+  'staging no longer needs to unhide an entry that is enabled for the private beta');
 
 // Public information architecture is exactly the four classroom roles.
 assert.match(frontend, /\['professor', 'Professor'[\s\S]*\['beadle', 'Beadle'[\s\S]*\['student', 'Student'[\s\S]*\['admin', 'Admin'/);

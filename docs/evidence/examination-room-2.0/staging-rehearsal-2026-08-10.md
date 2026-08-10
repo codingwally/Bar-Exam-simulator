@@ -43,10 +43,11 @@ reviewed canonical ledger path.
 - Signed-out feature and Examination Room requests returned HTTP 401, preserving
   the Student sign-in wall.
 
-## Remaining production gates
+## Beta-wide promotion decision
 
-This rehearsal does not authorize production activation. Authenticated
-Professor, Beadle, Student, grading/release, two-device recovery, Google backup,
-real email delivery, screen-reader, and rollback/restore journeys still require
-recorded staging evidence. GitHub production environments and branch protection
-also require owner verification before a production dispatch.
+After this rehearsal, the owner explicitly authorized a live beta-wide
+activation for every admitted Due Diligence beta user. Beta sign-in and
+admission remain on, and role-specific server authorization remains enforced.
+Authenticated Professor, Beadle, Student, grading/release, two-device recovery,
+Google backup, real email delivery, screen-reader, and rollback/restore journeys
+remain beta test work and are required before any market release.

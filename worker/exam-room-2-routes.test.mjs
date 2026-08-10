@@ -458,10 +458,10 @@ test('legacy portal and classroom operations remain available when only the base
   assert.equal(legacy.calls.at(-1).name, 'exam_room_create_classroom');
 });
 
-test('production and staging declare opposite explicit V2 rollout defaults', () => {
+test('production and staging explicitly enable the owner-approved beta-wide release', () => {
   const production = readFileSync(new URL('./wrangler.toml', import.meta.url), 'utf8');
   const staging = readFileSync(new URL('./wrangler.staging.toml', import.meta.url), 'utf8');
-  assert.match(production, /^EXAMINATION_ROOM_2_ENABLED = "false"$/m);
+  assert.match(production, /^EXAMINATION_ROOM_2_ENABLED = "true"$/m);
   assert.match(staging, /^EXAMINATION_ROOM_2_ENABLED = "true"$/m);
 });
 

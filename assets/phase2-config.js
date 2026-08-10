@@ -28,7 +28,7 @@
       coachingBooking: false,
       emailSignIn: false,
       adminDashboard: true,
-      examinationRoom2: false,
+      examinationRoom2: true,
     }),
     plans: Object.freeze({
       catalogVersion: 'beta-pricing-concealed-2026-07-30',

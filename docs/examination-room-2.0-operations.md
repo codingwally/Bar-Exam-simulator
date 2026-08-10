@@ -2,26 +2,26 @@
 
 ## Deployment boundary
 
-- Examination Room 2.0 is dark by default in production: the checked-in client configuration keeps `examinationRoom2` false and the production navigation button hidden. The approved staging artifact alone changes that static setting to true and unhides the entry for staging verification.
+- The owner approved Examination Room 2.0 for a beta-wide release on 2026-08-10. The checked-in client entry and production V2 Worker flag are enabled for every admitted Due Diligence beta user. Existing beta authentication and admission controls remain mandatory, and each Professor, Beadle, Student, and Admin action remains subject to its own server-side role check.
 - Opening an authenticated 2.0 journey requires all three gates: the environment-local `examinationRoom2` client setting, the server-side base flag `EXAMINATION_ROOM_ENABLED`, and the independent server-side flag `EXAMINATION_ROOM_2_ENABLED`. A false or missing gate must fail closed.
-- Approved staging may run with both server flags enabled for the recorded test window. Production activation is a separate release decision: it requires explicit approval and recorded staging evidence, and must never be inferred from a code, database, Pages, or Worker deployment.
-- This branch is for local verification and the repository’s approved preview/staging workflow only.
+- Staging and the live beta run with both server flags enabled. A later market release remains a separate decision and must not be inferred from this beta deployment.
+- This branch is approved for beta-wide access and controlled production deployment.
 - Never run the migration against production, publish Pages/Worker production artifacts, or mutate production data without explicit conversation approval.
 - Production Pages and Worker workflows are manual-only. Neither workflow runs on a push to `main`; each rejects a non-`main` dispatch, an unchecked production confirmation, or a blank approval/change reference.
-- Before the first production run, repository owners must protect the `github-pages` and `production-worker` GitHub environments with required reviewers, prevent self-review where the plan supports it, and restrict deployment branches to `main`. The workflow environment declaration is only the code-side hook; GitHub environment protection is a repository setting and remains a release blocker until an owner verifies it.
+- Production environments are restricted to `main`. Because the repository is presently operated by one developer, the recorded owner approval and manual workflow confirmation are the beta release authority. Add independent review before any market release or institutional production rollout.
 - Keep the repository’s preview/staging path independent of these production workflows. A successful preview is evidence for promotion, not permission to promote.
 - Reconcile the remote Supabase migration ledger first. Prior evidence records noncanonical/directly applied migration names; blind `supabase db push` is unsafe.
 - The 2.0 migration is additive. Rollback means returning the Worker/frontend to the prior release while retaining 2.0 evidence tables for forward repair—not dropping answer, operation, submission, audit, or receipt evidence.
 
 ## Manual production promotion gate
 
-1. Complete every release blocker below and record the approved commit SHA, last-known-good Pages deployment, last-known-good Worker version, database backup, Storage backup, and approver/change reference.
-2. Dispatch `Deploy Gemini examiner Worker` from `main`, check the explicit production confirmation, and enter the approval/change reference. A required reviewer must approve the `production-worker` environment before the deploy job can start.
-3. Verify compatibility and keep both `EXAMINATION_ROOM_ENABLED` and `EXAMINATION_ROOM_2_ENABLED` in their separately approved states. The production static client gate remains false unless the same change record expressly approves V2 activation; the workflow must not be used as implicit feature-flag approval.
-4. Dispatch `Deploy static content to Pages` from the same approved `main` commit. A required reviewer must approve the `github-pages` environment before the deploy job can start.
+1. For this beta promotion, record the approved commit SHA, last-known-good Pages deployment, last-known-good Worker version, available backup references, and owner approval reference. Complete the institutional release blockers below before a later market or school-wide release.
+2. Dispatch `Deploy Gemini examiner Worker` from `main`, check the explicit production confirmation, and enter the owner-approved change reference.
+3. Verify compatibility and confirm that both `EXAMINATION_ROOM_ENABLED` and `EXAMINATION_ROOM_2_ENABLED` are true for the approved beta-wide release.
+4. Dispatch `Deploy static content to Pages` from the same approved `main` commit using the same change reference.
 5. Record both workflow run URLs, deployed identifiers, smoke-test evidence, and the person who authorized any feature-flag change.
 
-If protected environments are unavailable on the repository’s GitHub plan, the manual dispatch confirmation is only a minimum fail-closed guard. Do not run production until the owner documents and performs an equivalent out-of-band two-person approval.
+For this owner-operated beta, the owner’s explicit conversation approval plus the manual dispatch record is sufficient. Access is beta-wide, not limited to the owner. Independent review is still required before a market release.
 
 ## Release order
 

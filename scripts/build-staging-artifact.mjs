@@ -52,12 +52,10 @@ await replaceIn('assets/phase2-config.js', [
   ['sb_publishable_lQRSlxJPTDkKQIiT0hTfdg_ANVRUzym', stagingPublishableKey],
   ['https://duediligence.ph/?auth=callback', `${stagingPublicUrl}/?auth=callback`],
   ['https://duediligence-gemini-examiner.wallyesteban1993.workers.dev', stagingWorkerUrl],
-  ['examinationRoom2: false', 'examinationRoom2: true'],
 ]);
 
 await replaceIn('index.html', [
   ['https://duediligence-gemini-examiner.wallyesteban1993.workers.dev', stagingWorkerUrl],
-  ['id="spa-examination-room" type="button" hidden', 'id="spa-examination-room" type="button"'],
 ]);
 
 const stagedConfig = await readFile(

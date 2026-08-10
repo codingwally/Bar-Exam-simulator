@@ -84,13 +84,7 @@
   }
 
   function crestMarkup() {
-    return `
-      <svg viewBox="0 0 48 48" width="32" height="32" fill="none" aria-hidden="true">
-        <path d="M24 8v27M11 15h26M12 15 7.5 24h9L12 15Zm24 0-4.5 9h9L36 15Z"
-          stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M7.5 24c1.8 3.2 7.2 3.2 9 0M31.5 24c1.8 3.2 7.2 3.2 9 0M18 37h12"
-          stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-      </svg>`;
+    return '<img src="assets/brand/logo1-master.png?v=6d284c91" width="32" height="32" alt="" aria-hidden="true">';
   }
 
   function injectShell() {
@@ -106,7 +100,7 @@
           </div>
           <div class="dd2-entry-panel">
             <button type="button" class="dd2-close dd2-entry-close" id="dd2-entry-close"
-              aria-label="Close sign-in" hidden>×</button>
+              aria-label="Close sign-in and return">×</button>
             <div class="dd2-mark">${crestMarkup()}</div>
             <h3 id="dd2-entry-title">Welcome to Due Diligence</h3>
             <p id="dd2-entry-copy">Your chamber for serious Bar preparation.</p>
@@ -121,6 +115,7 @@
             </div>
             <div class="dd2-status" id="dd2-auth-status" role="status" aria-live="polite"></div>
             <p class="dd2-entry-note">Google opens its secure consent screen. Authentication is required before any examination question is displayed.</p>
+            <div class="dd2-dialog-footer"><button type="button" class="dd2-button dd2-button-secondary dd2-dialog-back" id="dd2-entry-back">Back</button></div>
           </div>
         </section>
       </div>
@@ -136,12 +131,14 @@
             <button type="button" class="dd2-close" id="dd2-native-close" aria-label="Close">×</button>
           </header>
           <div id="dd2-native-body"></div>
+          <div class="dd2-dialog-footer"><button type="button" class="dd2-button dd2-button-secondary dd2-dialog-back" id="dd2-native-back">Back</button></div>
         </article>
       </div>
 
       <div class="dd2-overlay" id="dd2-onboarding-overlay" role="dialog" aria-modal="true"
         aria-labelledby="dd2-onboarding-title" aria-hidden="true">
         <section class="dd2-onboarding-card" tabindex="-1">
+          <button type="button" class="dd2-close dd2-card-close" id="dd2-onboarding-close" aria-label="Close setup and return to sign-in">×</button>
           <div class="dd2-view-kicker">First-time setup</div>
           <h2 id="dd2-onboarding-title">Make this chamber yours.</h2>
           <p>Tell us where you are in your legal studies. Your school and year level are optional if you are not yet enrolled.</p>
@@ -185,6 +182,7 @@
             </label>
             <div class="dd2-status" id="dd2-onboarding-status" role="status" aria-live="polite"></div>
             <button class="dd2-button dd2-button-primary" id="dd2-onboarding-submit" type="submit">Enter Due Diligence</button>
+            <div class="dd2-dialog-footer"><button type="button" class="dd2-button dd2-button-secondary dd2-dialog-back" id="dd2-onboarding-back">Back</button></div>
           </form>
         </section>
       </div>
@@ -192,10 +190,12 @@
       <div class="dd2-overlay" id="dd2-guest-reminder" role="dialog" aria-modal="true"
         aria-labelledby="dd2-reminder-title" aria-hidden="true">
         <section class="dd2-reminder-card" tabindex="-1">
+          <button type="button" class="dd2-close dd2-card-close" id="dd2-reminder-close" aria-label="Close guest reminder">×</button>
           <div class="dd2-view-kicker">Guest preview</div>
           <h3 id="dd2-reminder-title">Three assessments, fully graded.</h3>
           <p>Guest access includes 3 graded questions across all subjects. Sign in to continue practicing after your preview.</p>
           <div class="dd2-reminder-actions">
+            <button type="button" class="dd2-button dd2-button-secondary dd2-dialog-back" id="dd2-reminder-back">Back</button>
             <button type="button" class="dd2-button dd2-button-secondary" id="dd2-reminder-signin">Sign in</button>
             <button type="button" class="dd2-button dd2-button-primary" id="dd2-reminder-continue">Continue as Guest</button>
           </div>
@@ -482,7 +482,6 @@
     const title = document.getElementById('dd2-entry-title');
     const copy = document.getElementById('dd2-entry-copy');
     const guestButton = document.getElementById('dd2-guest-continue');
-    const closeButton = document.getElementById('dd2-entry-close');
     if (title) title.textContent = options.title || (completed
       ? 'You have completed your 3 guest questions.'
       : 'Welcome to Due Diligence');
@@ -490,7 +489,6 @@
       ? 'Sign in to continue.'
       : 'Your chamber for serious Bar preparation.');
     if (guestButton) guestButton.hidden = !allowGuest;
-    if (closeButton) closeButton.hidden = !allowDismiss;
     if (overlay) {
       overlay.dataset.dismissible = allowDismiss ? 'true' : 'false';
       overlay.dataset.routeBound = routeBound ? 'true' : 'false';
@@ -501,13 +499,49 @@
 
   function closeEntry() {
     const overlay = document.getElementById('dd2-entry-overlay');
-    const closeButton = document.getElementById('dd2-entry-close');
     if (overlay) {
       overlay.dataset.dismissible = 'false';
       overlay.dataset.routeBound = 'false';
     }
-    if (closeButton) closeButton.hidden = true;
     setOverlay(false, 'dd2-entry-overlay');
+  }
+
+  function returnFromEntry() {
+    const protectedRoute = ['subject-matter', 'bar-feels']
+      .includes(location.hash.replace(/^#/, ''));
+    closeEntry();
+    if (protectedRoute) {
+      history.replaceState(null, '', `${location.pathname}${location.search}`);
+    }
+    global.showPage?.('mock', document.getElementById('spa-mock'));
+    global.showWelcome?.({ preserveSession: true });
+  }
+
+  async function returnFromOnboarding() {
+    if (state.onboardingBusy) return;
+    setOverlay(false, 'dd2-onboarding-overlay');
+    try {
+      await state.client?.auth?.signOut?.({ scope: 'local' });
+    } catch {
+      // Local state is cleared below; the provider session is not altered.
+    }
+    state.session = null;
+    state.user = null;
+    state.profile = null;
+    state.admin = null;
+    syncAuthUi();
+    showEntry({ allowDismiss: true });
+  }
+
+  function continueFromGuestReminder() {
+    try {
+      localStorage.setItem(config.guest.reminderStorageKey, 'shown');
+    } catch {
+      // The reminder may repeat when persistent storage is unavailable.
+    }
+    setOverlay(false, 'dd2-guest-reminder');
+    state.reminderResolve?.(true);
+    state.reminderResolve = null;
   }
 
   function syncEntryWithHistoryRoute() {
@@ -1503,7 +1537,8 @@
     bindNavigation();
     document.getElementById('dd2-google-signin')?.addEventListener('click', signInWithGoogle);
     document.getElementById('dd2-guest-continue')?.addEventListener('click', continueGuestFromEntry);
-    document.getElementById('dd2-entry-close')?.addEventListener('click', closeEntry);
+    document.getElementById('dd2-entry-close')?.addEventListener('click', returnFromEntry);
+    document.getElementById('dd2-entry-back')?.addEventListener('click', returnFromEntry);
     document.getElementById('dd2-entry-overlay')?.addEventListener('click', (event) => {
       if (event.target === event.currentTarget && event.currentTarget.dataset.dismissible === 'true') {
         closeEntry();
@@ -1511,20 +1546,16 @@
     });
     document.getElementById('dd2-onboarding-form')?.addEventListener('submit', submitOnboarding);
     document.getElementById('dd2-enrollment-status')?.addEventListener('change', updateEnrollmentFields);
+    document.getElementById('dd2-onboarding-close')?.addEventListener('click', returnFromOnboarding);
+    document.getElementById('dd2-onboarding-back')?.addEventListener('click', returnFromOnboarding);
     document.getElementById('dd2-native-close')?.addEventListener('click', closeNativeView);
+    document.getElementById('dd2-native-back')?.addEventListener('click', closeNativeView);
     document.getElementById('dd2-native-view')?.addEventListener('click', (event) => {
       if (event.target === event.currentTarget && state.nativeView) closeNativeView();
     });
-    document.getElementById('dd2-reminder-continue')?.addEventListener('click', () => {
-      try {
-        localStorage.setItem(config.guest.reminderStorageKey, 'shown');
-      } catch {
-        // The reminder may repeat when persistent storage is unavailable.
-      }
-      setOverlay(false, 'dd2-guest-reminder');
-      state.reminderResolve?.(true);
-      state.reminderResolve = null;
-    });
+    document.getElementById('dd2-reminder-continue')?.addEventListener('click', continueFromGuestReminder);
+    document.getElementById('dd2-reminder-close')?.addEventListener('click', continueFromGuestReminder);
+    document.getElementById('dd2-reminder-back')?.addEventListener('click', continueFromGuestReminder);
     document.getElementById('dd2-reminder-signin')?.addEventListener('click', () => {
       setOverlay(false, 'dd2-guest-reminder');
       state.reminderResolve?.(false);
@@ -1539,15 +1570,26 @@
       trapOverlayFocus(event);
       const entryOverlay = document.getElementById('dd2-entry-overlay');
       if (event.key === 'Escape'
-          && entryOverlay?.getAttribute('aria-hidden') === 'false'
-          && entryOverlay.dataset.dismissible === 'true') {
+          && entryOverlay?.getAttribute('aria-hidden') === 'false') {
         event.preventDefault();
-        closeEntry();
+        returnFromEntry();
         return;
       }
       if (event.key === 'Escape' && state.nativeView) {
         event.preventDefault();
         closeNativeView();
+        return;
+      }
+      if (event.key === 'Escape'
+          && document.getElementById('dd2-onboarding-overlay')?.getAttribute('aria-hidden') === 'false') {
+        event.preventDefault();
+        returnFromOnboarding();
+        return;
+      }
+      if (event.key === 'Escape'
+          && document.getElementById('dd2-guest-reminder')?.getAttribute('aria-hidden') === 'false') {
+        event.preventDefault();
+        continueFromGuestReminder();
       }
     });
     global.addEventListener('popstate', () => {

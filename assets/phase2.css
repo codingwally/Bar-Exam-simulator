@@ -254,6 +254,12 @@
   background: #fffdf8;
 }
 
+.dd2-mark img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+}
+
 .dd2-entry-panel h3,
 .dd2-native-card h2,
 .dd2-onboarding-card h2 {
@@ -389,14 +395,38 @@
 }
 
 .dd2-close {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
   flex: none;
   color: var(--dd2-navy);
-  background: transparent;
+  background: rgba(255, 253, 248, .96);
   border: 1px solid var(--dd2-line);
   border-radius: 50%;
   cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+  transition: border-color .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.dd2-close:hover {
+  color: #785916;
+  border-color: var(--dd2-gold);
+  box-shadow: 0 8px 20px rgba(7, 24, 47, .12);
+  transform: translateY(-1px);
+}
+
+.dd2-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--dd2-line);
+}
+
+.dd2-dialog-back {
+  min-width: 104px;
 }
 
 .dd2-copy {
@@ -566,6 +596,7 @@ textarea.dd2-field {
 
 .dd2-reminder-card,
 .dd2-onboarding-card {
+  position: relative;
   width: min(560px, 100%);
   padding: 32px;
   color: var(--dd2-charcoal);
@@ -574,6 +605,14 @@ textarea.dd2-field {
   border-top: 3px solid var(--dd2-gold);
   border-radius: 5px;
   box-shadow: var(--dd2-shadow);
+}
+
+.dd2-card-close {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  float: right;
+  margin: -16px -16px 8px 14px;
 }
 
 .dd2-reminder-card h3 {

@@ -97,6 +97,7 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view) {
   width: 50px;
   height: 50px;
   flex: 0 0 auto;
+  object-fit: contain;
   filter: drop-shadow(0 5px 12px rgba(0, 0, 0, .28));
 }
 

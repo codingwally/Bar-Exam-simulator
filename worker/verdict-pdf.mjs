@@ -1,6 +1,4 @@
-import fontkit from '@pdf-lib/fontkit';
-import { PDFDocument, degrees, rgb } from 'pdf-lib';
-import notoSansBase64 from './noto-sans-latin-ext.mjs';
+import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
 import { DD2026_LIMITS, DD2026ValidationError } from './duediligence-2026-core.mjs';
 
 const PAGE = Object.freeze({ width: 595.28, height: 841.89, margin: 54 });
@@ -10,11 +8,6 @@ const SLATE = rgb(51 / 255, 65 / 255, 85 / 255);
 const MUTED = rgb(100 / 255, 116 / 255, 139 / 255);
 const RULE = rgb(226 / 255, 232 / 255, 240 / 255);
 const WATERMARK = rgb(235 / 255, 228 / 255, 210 / 255);
-
-function fontBytes() {
-  const binary = atob(notoSansBase64);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
 
 function text(value) {
   if (value == null) return '';
@@ -29,6 +22,36 @@ function text(value) {
   return String(value);
 }
 
+function printableText(font, value) {
+  const replacements = new Map([
+    ['\u00a0', ' '],
+    ['\u2010', '-'],
+    ['\u2011', '-'],
+    ['\u2012', '-'],
+    ['\u2013', '-'],
+    ['\u2014', '-'],
+    ['\u2018', "'"],
+    ['\u2019', "'"],
+    ['\u201c', '"'],
+    ['\u201d', '"'],
+    ['\u2022', '-'],
+    ['\u2026', '...'],
+    ['\u20b1', 'PHP '],
+  ]);
+  return Array.from(text(value)).map((character) => {
+    if (character === '\n') return '\n';
+    if (character === '\t') return ' ';
+    const replacement = replacements.get(character);
+    if (replacement != null) return replacement;
+    try {
+      font.encodeText(character);
+      return character;
+    } catch {
+      return '?';
+    }
+  }).join('');
+}
+
 function humanLabel(value) {
   return String(value || '')
     .replace(/[_-]+/g, ' ')
@@ -39,25 +62,57 @@ function humanLabel(value) {
 function feedbackText(feedback) {
   if (!feedback || typeof feedback !== 'object') return text(feedback);
   const preferred = [
+    feedback.rationale,
+    feedback.summary,
+    feedback.overallFeedback,
+    feedback.overall_feedback,
     feedback.coachingTips,
     feedback.coaching_tips,
-    feedback.improvements,
-    feedback.errors,
-    feedback.rationale,
+    feedback.legalExplanation,
+    feedback.legal_explanation,
     feedback.examinerRemarks,
     feedback.examiner_remarks,
   ].filter(Boolean);
-  return preferred.length ? preferred.map(text).filter(Boolean).join('\n\n') : text(feedback);
+  return preferred.map(text).filter(Boolean).join('\n\n');
+}
+
+function modelAnswerText(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return text(value);
+  const parts = [
+    ['Answer', value.answer],
+    ['Legal Basis', value.legalBasis || value.legal_basis],
+    ['Application', value.application],
+    ['Conclusion', value.conclusion],
+  ].filter(([, entry]) => text(entry));
+  return parts.length ? parts.map(([label, entry]) => `${label}:\n${text(entry)}`).join('\n\n') : text(value);
+}
+
+function listText(value) {
+  if (!Array.isArray(value)) return text(value);
+  return value.map((entry) => text(entry)).filter(Boolean).map((entry) => `- ${entry}`).join('\n');
+}
+
+function sourceText(sources) {
+  if (!Array.isArray(sources)) return text(sources);
+  return sources.map((source) => {
+    if (typeof source === 'string') return source;
+    return [source?.title, source?.reference, source?.url].map(text).filter(Boolean).join(' - ');
+  }).filter(Boolean).join('\n');
 }
 
 function standaloneQuestion(result) {
   return {
     id: result?.questionId || `${result?.barYear || 'bar'}-${result?.questionNumber || 'question'}`,
-    label: [result?.subject, result?.barYear, result?.questionNumber].filter(Boolean).join(' · '),
+    label: [result?.subject, result?.barYear, result?.questionNumber].filter(Boolean).join(' - '),
     question: result?.question,
     suggestedAnswer: result?.suggestedAnswer,
     userAnswer: result?.userAnswer,
     feedback: result?.feedback,
+    score: result?.score,
+    strengths: result?.strengths,
+    omissions: result?.omissions,
+    improvedAnswer: result?.improvedAnswer,
+    sources: result?.sources,
   };
 }
 
@@ -75,6 +130,24 @@ function resultSections(result) {
   return [{ id: 'all', label: '', questions: [standaloneQuestion(result)] }];
 }
 
+function normalizedQuestion(question, result) {
+  const feedback = question?.feedback || question?.assessment || result?.feedback || result?.assessment || {};
+  return {
+    ...question,
+    subject: question?.subject || result?.subject,
+    question: question?.question || question?.prompt || result?.question,
+    suggestedAnswer: question?.suggestedAnswer || question?.modelAnswer || result?.suggestedAnswer,
+    userAnswer: question?.userAnswer || question?.answerText || result?.userAnswer,
+    score: question?.score ?? question?.aiScore ?? result?.score,
+    feedback,
+    strengths: question?.strengths || feedback?.strengths || result?.strengths,
+    omissions: question?.omissions || question?.errors || feedback?.errors || result?.omissions,
+    improvements: question?.improvements || feedback?.improvements || result?.improvements,
+    improvedAnswer: question?.improvedAnswer || feedback?.modelAnswerALAC || feedback?.improvedAnswer || result?.improvedAnswer,
+    sources: question?.sources || feedback?.sources || result?.sources,
+  };
+}
+
 function selectedQuestions(result, selectionKind, selectedIds) {
   const sections = resultSections(result);
   const selected = new Set(selectedIds.map(String));
@@ -83,10 +156,37 @@ function selectedQuestions(result, selectionKind, selectedIds) {
     : sections;
   const questions = includedSections.flatMap((section) => section.questions.map((question) => ({
     ...question,
-    label: [section.label, question?.label].filter(Boolean).join(' · '),
+    label: [section.label, question?.label].filter(Boolean).join(' - '),
   })));
-  if (selectionKind !== 'questions') return questions;
-  return questions.filter((question, index) => selected.has(String(question.id ?? index + 1)));
+  const included = selectionKind !== 'questions'
+    ? questions
+    : questions.filter((question, index) => selected.has(String(question.id ?? index + 1)));
+  return included.map((question) => normalizedQuestion(question, result));
+}
+
+export function verdictPdfDocument({ result, selectionKind = 'entire_result', selectedIds = [] }) {
+  const questions = selectedQuestions(result, selectionKind, selectedIds);
+  return {
+    title: 'THE VERDICT',
+    subject: text(result?.subject),
+    gradedAt: text(result?.gradedAt),
+    score: result?.score,
+    questions: questions.map((question, index) => ({
+      id: String(question?.id ?? index + 1),
+      label: text(question?.label),
+      subject: text(question?.subject),
+      prompt: text(question?.question),
+      userAnswer: text(question?.userAnswer),
+      score: question?.score,
+      coaching: feedbackText(question?.feedback),
+      strengths: listText(question?.strengths),
+      omissions: listText(question?.omissions),
+      improvements: listText(question?.improvements),
+      improvedAnswer: modelAnswerText(question?.improvedAnswer),
+      suggestedAnswer: text(question?.suggestedAnswer),
+      legalSources: sourceText(question?.sources),
+    })),
+  };
 }
 
 function wrapLine(font, value, size, maximumWidth) {
@@ -124,13 +224,16 @@ function wrappedParagraphs(font, value, size, width) {
 }
 
 export async function buildVerdictPdf({ result, selectionKind = 'entire_result', selectedIds = [] }) {
-  const questions = selectedQuestions(result, selectionKind, selectedIds);
+  const document = verdictPdfDocument({ result, selectionKind, selectedIds });
+  const questions = document.questions;
   if (!questions.length) {
     throw new DD2026ValidationError('EMPTY_PDF_SELECTION', 'Select at least one completed question to export.');
   }
   const pdf = await PDFDocument.create();
-  pdf.registerFontkit(fontkit);
-  const font = await pdf.embedFont(fontBytes(), { subset: true });
+  // Use pdf-lib's native font so the generated text stream renders reliably in
+  // browser PDF viewers and Poppler. The former WOFF2 embedding produced a
+  // syntactically valid file whose text was invisible in affected viewers.
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
   const pages = [];
   let page;
   let cursor;
@@ -177,13 +280,13 @@ export async function buildVerdictPdf({ result, selectionKind = 'entire_result',
 
   function drawHeading(value, { size = 11, color = NAVY, gap = 8 } = {}) {
     ensureHeight(size + gap + 4);
-    page.drawText(text(value), { x: PAGE.margin, y: cursor, size, font, color });
+    page.drawText(printableText(font, value), { x: PAGE.margin, y: cursor, size, font, color });
     cursor -= size + gap;
   }
 
   function drawBody(value, { size = 9.5, lineHeight = 14, color = SLATE } = {}) {
     const width = PAGE.width - PAGE.margin * 2;
-    const paragraphs = wrappedParagraphs(font, value || '—', size, width);
+    const paragraphs = wrappedParagraphs(font, printableText(font, value || '-'), size, width);
     for (const line of paragraphs) {
       ensureHeight(lineHeight);
       if (line) page.drawText(line, { x: PAGE.margin, y: cursor, size, font, color });
@@ -198,19 +301,33 @@ export async function buildVerdictPdf({ result, selectionKind = 'entire_result',
     result?.subject,
     result?.gradedAt ? `Graded ${new Date(result.gradedAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}` : '',
     result?.score != null ? `Score: ${result.score}/5` : '',
-  ].filter(Boolean).join(' · '), { size: 9, lineHeight: 13, color: MUTED });
+  ].filter(Boolean).join(' - '), { size: 9, lineHeight: 13, color: MUTED });
 
   questions.forEach((question, index) => {
     ensureHeight(80);
-    drawHeading(`QUESTION ${index + 1}${question.label ? ` · ${question.label}` : ''}`, { size: 12 });
+    drawHeading(`QUESTION ${index + 1}${question.label ? ` - ${question.label}` : ''}`, { size: 12 });
+    drawHeading('Subject', { size: 9, color: GOLD, gap: 6 });
+    drawBody(question.subject || result?.subject || '-');
     drawHeading('Complete question', { size: 9, color: GOLD, gap: 6 });
-    drawBody(question.question);
-    drawHeading('Suggested answer', { size: 9, color: GOLD, gap: 6 });
-    drawBody(question.suggestedAnswer);
+    drawBody(question.prompt);
     drawHeading('Your answer', { size: 9, color: GOLD, gap: 6 });
     drawBody(question.userAnswer);
+    drawHeading('Score', { size: 9, color: GOLD, gap: 6 });
+    drawBody(question.score != null ? `${question.score} / 5` : 'No score was recorded.');
     drawHeading('Coaching tips and feedback', { size: 9, color: GOLD, gap: 6 });
-    drawBody(feedbackText(question.feedback) || 'No additional coaching note was recorded.');
+    drawBody(question.coaching || 'No additional coaching note was recorded.');
+    drawHeading('Strengths', { size: 9, color: GOLD, gap: 6 });
+    drawBody(question.strengths || 'No specific strength was recorded.');
+    drawHeading('Omissions and errors', { size: 9, color: GOLD, gap: 6 });
+    drawBody(question.omissions || 'No omission was recorded.');
+    drawHeading('Prioritized improvements', { size: 9, color: GOLD, gap: 6 });
+    drawBody(question.improvements || 'No separate improvement priority was recorded.');
+    drawHeading('Improved answer', { size: 9, color: GOLD, gap: 6 });
+    drawBody(question.improvedAnswer || 'No separate improved answer was recorded.');
+    drawHeading('Released suggested answer', { size: 9, color: GOLD, gap: 6 });
+    drawBody(question.suggestedAnswer);
+    drawHeading('Legal sources', { size: 9, color: GOLD, gap: 6 });
+    drawBody(question.legalSources || 'No source link was recorded.');
     if (index + 1 < questions.length) {
       ensureHeight(18);
       page.drawLine({

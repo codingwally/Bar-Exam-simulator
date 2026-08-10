@@ -503,11 +503,25 @@
   function openVerdictExport(resultId, questionId = '') {
     if (!requireAuthentication()) return false;
     const canSelectQuestion = Boolean(String(questionId || '').trim());
-    openDialog(`<div class="dd26-label">The Verdict / Private PDF</div><h2>Choose what to export</h2><p>Every included question contains the complete prompt, suggested answer, your answer, and coaching feedback.</p><label class="dd26-choice"><input type="radio" name="dd26-verdict-scope" value="entire_result" checked><span><strong>Entire result</strong><small>Export every available question and section.</small></span></label><label class="dd26-choice"><input type="radio" name="dd26-verdict-scope" value="questions" ${canSelectQuestion ? '' : 'disabled'}><span><strong>This question only</strong><small>${canSelectQuestion ? escapeHtml(questionId) : 'No individual question identifier is available for this legacy result.'}</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-confirm-verdict-export" type="button">Generate private PDF</button><button class="dd26-button" data-dd26-close-dialog type="button">Cancel</button></div>`);
+    openDialog(`<button class="dd26-verdict-close" data-dd26-close-dialog type="button" aria-label="Close private Verdict export">&times;</button><div class="dd26-label">The Verdict / Private PDF</div><h2>Choose what to export</h2><p>Every included question contains the complete prompt, suggested answer, your answer, score, coaching feedback, strengths, omissions, improved answer, released suggested answer, and legal sources when available.</p><label class="dd26-choice"><input type="radio" name="dd26-verdict-scope" value="entire_result" checked><span><strong>Entire result</strong><small>Export every available question and section.</small></span></label><label class="dd26-choice"><input type="radio" name="dd26-verdict-scope" value="questions" ${canSelectQuestion ? '' : 'disabled'}><span><strong>This question only</strong><small>${canSelectQuestion ? escapeHtml(questionId) : 'No individual question identifier is available for this legacy result.'}</small></span></label><div class="dd26-actions"><button class="dd26-button" data-dd26-close-dialog type="button">Back</button><button class="dd26-button primary" id="dd26-confirm-verdict-export" type="button">Generate private PDF</button></div>`);
     document.getElementById('dd26-confirm-verdict-export')?.addEventListener('click', async () => {
+      const button = document.getElementById('dd26-confirm-verdict-export');
+      if (!button || button.disabled) return;
       const scope = document.querySelector('input[name="dd26-verdict-scope"]:checked')?.value || 'entire_result';
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.textContent = 'Generating private PDF…';
+      document.querySelectorAll('input[name="dd26-verdict-scope"]').forEach((control) => { control.disabled = true; });
       const ok = await exportVerdict(resultId, scope, scope === 'questions' ? [questionId] : []);
-      if (ok) closeDialog();
+      if (ok) {
+        closeDialog();
+        return;
+      }
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.textContent = 'Generate private PDF';
+      document.querySelector('input[name="dd26-verdict-scope"][value="entire_result"]')?.removeAttribute('disabled');
+      if (canSelectQuestion) document.querySelector('input[name="dd26-verdict-scope"][value="questions"]')?.removeAttribute('disabled');
     });
     return true;
   }

@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow">
   <meta name="theme-color" content="#071a33">
   <title>Admin Dashboard — Due Diligence</title>
-  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="../assets/brand/logo1-master.png?v=6d284c91" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
@@ -17,10 +17,8 @@
   <div class="admin-shell" id="admin-shell" hidden>
     <aside class="sidebar" id="sidebar">
       <a class="brand" href="../" aria-label="Due Diligence home">
-        <svg viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M24 7v29M10 15h28M11 15 6.5 24h9L11 15Zm26 0-4.5 9h9L37 15Z"/>
-          <path d="M6.5 24c1.8 3.2 7.2 3.2 9 0M32.5 24c1.8 3.2 7.2 3.2 9 0M17 38h14"/>
-        </svg>
+        <img src="../assets/brand/logo1-master.png?v=6d284c91" width="48" height="48"
+          alt="Due Diligence Lady Justice emblem" decoding="async">
         <span><strong>Due Diligence</strong><small>Admin dashboard</small></span>
       </a>
       <nav aria-label="Admin sections" id="admin-nav">
@@ -98,7 +96,8 @@
   </div>
 
   <section class="gate" id="admin-gate" aria-live="polite">
-    <div class="gate-mark" aria-hidden="true">DD</div>
+    <div class="gate-mark"><img src="../assets/brand/logo1-master.png?v=6d284c91" width="64" height="64"
+      alt="Due Diligence Lady Justice emblem" decoding="async"></div>
     <p class="eyebrow">Due Diligence administration</p>
     <h1 id="gate-title">Verifying your secure session</h1>
     <p id="gate-copy">This dashboard is available only to approved Admin accounts.</p>
@@ -130,7 +129,7 @@
         <span id="action-confirmation-copy">I checked the user, current access, and proposed change. I understand this action takes effect immediately and is recorded.</span>
       </label>
       <div class="dialog-actions">
-        <button class="secondary-button" id="action-dialog-cancel" type="button">Cancel</button>
+        <button class="secondary-button" id="action-dialog-cancel" type="button">Back</button>
         <button class="primary-button" id="action-confirm" type="submit" value="default">Confirm action</button>
       </div>
     </form>
@@ -148,7 +147,7 @@
       <p class="panel-note" id="audit-target"></p>
       <div class="audit-history" id="audit-history"></div>
       <div class="dialog-actions">
-        <button class="primary-button" value="cancel">Close</button>
+        <button class="secondary-button" value="cancel">Back</button>
       </div>
     </form>
   </dialog>
@@ -171,7 +170,7 @@
         <dt>Generated</dt><dd id="insight-generated">Not available</dd>
       </dl>
       <div class="dialog-actions">
-        <button class="primary-button" id="insight-dialog-dismiss" type="button">Close</button>
+        <button class="secondary-button" id="insight-dialog-dismiss" type="button">Back</button>
       </div>
     </form>
   </dialog>

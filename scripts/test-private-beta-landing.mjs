@@ -85,6 +85,16 @@ for (const stem of imageStems) {
   }
 }
 
+const officialLogoPath = 'assets/brand/logo1-master.png';
+const officialLogo = await readFile(path.join(root, officialLogoPath));
+assert.ok((await stat(path.join(root, officialLogoPath))).isFile(), 'official logo must be a file');
+assert.equal(
+  createHash('sha256').update(officialLogo).digest('hex').toUpperCase(),
+  '6D284C91CE34D208252F5311A4CD3397FC00251E6968BFA620182138A1206CF5',
+  'official logo checksum changed',
+);
+assert.ok(build.includes(`'${officialLogoPath}'`), 'the Pages allowlist must ship the official logo');
+
 const approvedReference = await readFile(path.join(
   root,
   'docs/visual-references/private-beta/Due_Diligence_Private_Beta_Landing_Approved_Reference.png',

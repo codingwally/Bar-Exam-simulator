@@ -145,3 +145,31 @@ The existing navy background, gold card edge, serif heading, two-column subject 
 3. Final desktop, mobile, accessibility, and interaction comparisons passed without actionable findings.
 
 final result: passed
+
+# Master Mandate Modal, Logo, and Verdict PDF Design QA
+
+## Scope
+
+- Popup defect reference: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-05b1c855-7518-48d2-ace6-c5ca61bb9685.png`
+- Exact brand asset: `C:\Users\wally\OneDrive\Desktop\DUEDILLEGENCE PROGRAM\Official Logo\LOGO1.png`
+- Repository brand asset: `assets/brand/logo1-master.png`
+- Brand SHA-256: `6D284C91CE34D208252F5311A4CD3397FC00251E6968BFA620182138A1206CF5`
+- Applicable surfaces: user-facing dialogs outside the protected Examination Room, Mock Bar subject selection, Subject Matter time-mode and review dialogs, Quorum dialogs, account/onboarding overlays, and non-protected Admin dialogs.
+- PDF evidence: synthetic entire-result and single-question Verdict exports rendered through Poppler and inspected page by page.
+
+## Verified implementation evidence
+
+- Every inventoried applicable non-Examination-Room dialog has a labelled upper-right close control and a lower-right Back action.
+- Close controls retain a minimum 44 by 44 pixel target, visible focus treatment, hover/active states, and existing navy/gold styling.
+- Mock Bar subject-selection close, Back, and Escape return to the welcome state without selecting a subject, starting a timer, or creating an attempt.
+- Subject Matter, Human Examiner, and private-upload dialogs use the same safe close/back behavior.
+- The exact supplied logo is copied byte-for-byte and rendered with `object-fit: contain`.
+- Verdict entire-result export: 3 nonblank pages, complete selected content, selectable text, no clipping or overlap.
+- Verdict single-question export: 2 nonblank pages, only the selected question, selectable text, no clipping or overlap.
+- Decimal scores 4.2 and 3.8, coaching, strengths, omissions, prioritized improvements, improved ALAC, released answer, and sources are visibly present.
+
+## Blocking visual gate
+
+The current task does not expose a callable in-app browser control, and the product-design browser rule prohibits substituting direct Playwright or another browser without explicit permission. A same-state, same-viewport source/prototype screenshot comparison for every changed website surface therefore cannot be recorded in this run. Static contract tests and PDF visual inspection passed, but they do not replace the required website screenshot comparison.
+
+final result: blocked

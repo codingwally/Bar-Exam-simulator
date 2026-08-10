@@ -974,6 +974,40 @@
   white-space: pre-wrap;
 }
 
+.dd-subject-assessment {
+  margin-top: 14px;
+  text-align: left;
+}
+
+.dd-assessment-breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 9px;
+}
+
+.dd-assessment-breakdown > div {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #dbe2ea;
+  border-radius: 7px;
+  background: #fbfcfd;
+}
+
+.dd-assessment-breakdown span {
+  color: #556277;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dd-assessment-breakdown strong {
+  color: var(--dd-exam-navy);
+  font: 700 15px "IBM Plex Mono", monospace;
+}
+
 .dd-exam-dialog {
   width: min(680px, calc(100vw - 28px));
   max-height: min(88vh, 900px);
@@ -991,9 +1025,43 @@
 }
 
 .dd-exam-dialog-inner {
+  position: relative;
   overflow: auto;
   max-height: inherit;
   padding: 28px;
+}
+
+.dd-exam-dialog-close {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  float: right;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin: -10px -10px 8px 14px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #172033;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(7, 26, 51, .10);
+  cursor: pointer;
+  font: 600 22px/1 Inter, sans-serif;
+  transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+}
+
+.dd-exam-dialog-close:hover {
+  border-color: var(--dd-exam-gold);
+  background: #fff8e8;
+}
+
+.dd-exam-dialog-close:active { transform: translateY(1px); }
+
+.dd-exam-dialog-close:focus-visible {
+  outline: 3px solid rgba(197, 160, 89, .42);
+  outline-offset: 2px;
 }
 
 .dd-exam-dialog h2 {

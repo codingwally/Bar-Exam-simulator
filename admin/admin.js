@@ -56,6 +56,7 @@
     examinationRoomBreakGlass: null,
     userSearch: '',
     userOffset: 0,
+    userSearchRequestToken: 0,
     subscriptionSearch: '',
     subscriptionOffset: 0,
     liveActivity: null,
@@ -287,6 +288,25 @@
     });
     state.operational.set(key, payload.data);
     return payload.data;
+  }
+
+  async function runUserSearch(search) {
+    const normalizedSearch = String(search || '').trim();
+    const requestToken = state.userSearchRequestToken + 1;
+    state.userSearchRequestToken = requestToken;
+    state.userSearch = normalizedSearch;
+    state.userOffset = 0;
+    $('#dashboard-view').innerHTML = '<div class="skeleton"></div>';
+    try {
+      await loadUserDirectory(true, normalizedSearch, 0);
+      if (requestToken !== state.userSearchRequestToken) return;
+      await renderSection('users');
+    } catch (error) {
+      if (requestToken === state.userSearchRequestToken) {
+        toast(error.message);
+        await renderSection('users');
+      }
+    }
   }
 
   async function loadPhase4Operational(section, force = false, search = null) {
@@ -692,6 +712,10 @@
     const rows = (data.items || []).map((user) => [
       user.display_name || 'Not provided',
       user.email,
+      {
+        html: true,
+        value: `<code class="stable-user-id">${escapeHtml(user.id || 'Not available')}</code>`,
+      },
       user.subscription_category || 'Regular',
       user.effective_access || 'Not available',
       dateTime(user.last_sign_in_at),
@@ -722,9 +746,14 @@
     const canGoBack = state.userOffset > 0;
     const canGoForward = pageEnd < Number(data.total || 0);
     return `
-      ${heading('Users', 'Search exact names and email addresses, review access and answer activity, or download the current user list for Google Sheets.')}
-      <div class="table-tools"><input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, school, or email" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="user-directory-export" type="button">Download user list</button></div>
-      ${table(['Name', 'Email', 'Subscription', 'Access', 'Last sign-in', 'Questions answered', 'Answer types', 'Score', 'Actions'], rows)}
+      ${heading('Users', 'Search by name, email, school, or exact stable user ID; review access and answer activity, or download the current user list for Google Sheets.')}
+      <form class="table-tools" id="user-search-form" role="search">
+        <input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, email, school, or user ID" aria-label="Search users by name, email, school, or exact user ID" maxlength="180">
+        <button class="secondary-button" id="user-search-button" type="submit">Search</button>
+        <button class="secondary-button" id="user-search-clear" type="button"${state.userSearch ? '' : ' disabled'}>Clear</button>
+        <button class="secondary-button" id="user-directory-export" type="button">Download user list</button>
+      </form>
+      ${table(['Name', 'Email', 'User ID', 'Subscription', 'Access', 'Last sign-in', 'Questions answered', 'Answer types', 'Score', 'Actions'], rows)}
       <div class="pagination-bar">
         <p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(data.total)} matching account(s).</p>
         <div class="row-actions">
@@ -3539,15 +3568,12 @@
       try { payload = JSON.parse(button.dataset.payload || '{}'); } catch { payload = {}; }
       openAction(button.dataset.adminAction, button.dataset.target, payload);
     }));
-    $('#user-search-button')?.addEventListener('click', async () => {
-      const search = $('#user-search').value.trim();
-      $('#dashboard-view').innerHTML = '<div class="skeleton"></div>';
-      try {
-        state.userSearch = search;
-        state.userOffset = 0;
-        await loadUserDirectory(true, search);
-        await renderSection('users');
-      } catch (error) { toast(error.message); }
+    $('#user-search-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await runUserSearch($('#user-search').value);
+    });
+    $('#user-search-clear')?.addEventListener('click', async () => {
+      await runUserSearch('');
     });
     $('#users-previous')?.addEventListener('click', async () => {
       state.userOffset = Math.max(0, state.userOffset - 100);

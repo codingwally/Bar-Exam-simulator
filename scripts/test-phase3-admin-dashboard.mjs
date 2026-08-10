@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 const [
   html, css, js, analytics, worker, migration, directoryMigration,
   engagementMigration, globalBetaMigration, answerHistoryMigration,
-  businessDetailsMigration, preflight,
+  businessDetailsMigration, directoryUuidMigration, preflight,
 ] = await Promise.all([
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.css', import.meta.url), 'utf8'),
@@ -17,6 +17,7 @@ const [
   readFile(new URL('../supabase/migrations/20260810002100_global_beta_all_access.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260810002200_admin_answer_history_export.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260810002300_admin_business_dashboard_details.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260810122758_admin_user_directory_uuid_search.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/review/phase3_production_preflight.sql', import.meta.url), 'utf8'),
 ]);
 
@@ -107,7 +108,10 @@ assert.match(js, /private student work/i);
 assert.match(js, /user\.email/);
 assert.match(js, /Download user list/);
 assert.match(js, /\/admin\/subscriptions\/export/);
-assert.match(js, /Search name, school, or email/);
+assert.match(js, /Search name, email, school, or user ID/);
+assert.match(js, /id="user-search-form"/);
+assert.match(js, /id="user-search-clear"/);
+assert.match(js, /stable-user-id/);
 assert.doesNotMatch(js, /\['Name', 'Masked email'/);
 assert.doesNotMatch(js, /'Lifetime grades'/);
 assert.match(js, /Download all answer records/);
@@ -131,6 +135,11 @@ assert.match(directoryMigration, /admin_export_user_responses_with_identity/);
 assert.match(directoryMigration, /revoke all on function public\.admin_user_directory[\s\S]*from public, anon, authenticated/);
 assert.match(directoryMigration, /grant execute on function public\.admin_user_directory[\s\S]*to service_role/);
 assert.doesNotMatch(directoryMigration, /grant execute[\s\S]*to authenticated/);
+assert.match(directoryUuidMigration, /v_search_uuid uuid/);
+assert.match(directoryUuidMigration, /or v_search_uuid = u\.id/g);
+assert.match(directoryUuidMigration, /revoke all on function public\.admin_user_directory[\s\S]*from public, anon, authenticated/);
+assert.match(directoryUuidMigration, /grant execute on function public\.admin_user_directory[\s\S]*to service_role/);
+assert.doesNotMatch(directoryUuidMigration, /grant execute[\s\S]*to authenticated/);
 
 assert.match(engagementMigration, /admin_overview_engagement_metrics/);
 assert.match(engagementMigration, /admin_user_engagement_directory/);

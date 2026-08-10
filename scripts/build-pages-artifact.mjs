@@ -38,6 +38,7 @@ const publicFiles = Object.freeze([
   'admin/admin.css',
   'admin/admin.js',
   'admin/subscription-actions-core.js',
+  'assets/brand/logo1-master.png',
   'assets/exam-session-controller.js',
   'assets/examination-room-2-store.js',
   'assets/examination-room-beadle-class-list-template.xlsx',
@@ -61,7 +62,9 @@ const publicFiles = Object.freeze([
   'assets/payments/maribank.png',
 ]);
 
-const qrHashes = Object.freeze({
+const approvedAssetHashes = Object.freeze({
+  'assets/brand/logo1-master.png':
+    '6D284C91CE34D208252F5311A4CD3397FC00251E6968BFA620182138A1206CF5',
   'assets/payments/gcash.png':
     'E750530C71EB0445FD8F801B70DE25B338504C63CEB55881B311B3AA48FA2D7F',
   'assets/payments/maribank.png':
@@ -103,10 +106,10 @@ await mkdir(outputRoot, { recursive: true });
 await Promise.all(publicFiles.map(copyPublicFile));
 await writeFile(path.join(outputRoot, '.nojekyll'), '', 'utf8');
 
-for (const [relativePath, expectedHash] of Object.entries(qrHashes)) {
+for (const [relativePath, expectedHash] of Object.entries(approvedAssetHashes)) {
   const actualHash = sha256(await readFile(path.join(outputRoot, relativePath)));
   if (actualHash !== expectedHash) {
-    throw new Error(`${relativePath} does not match the approved payment QR pixels.`);
+    throw new Error(`${relativePath} does not match the approved asset pixels.`);
   }
 }
 

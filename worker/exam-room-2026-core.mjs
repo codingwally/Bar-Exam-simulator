@@ -17,6 +17,14 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 export const EXAM_ROOM_2026_MAX_QUESTIONS = 200;
 export const EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES = 30;
+export const EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION = 'beadle-roster-v1';
+export const EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS = Object.freeze([
+  'Email Address',
+  'Student Number',
+  'Student Name (Last Name, First Name, Middle Initial)',
+]);
+export const EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_MESSAGE =
+  'Use the official Beadle class-list template. Do not add, remove, or rename columns.';
 
 export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'portal',
@@ -46,7 +54,6 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'import_roster',
   'validate_exam_roster',
   'import_exam_roster',
-  'upsert_exam_roster_row',
   'create_exam',
   'update_exam_details',
   'confirm_questions',
@@ -240,6 +247,23 @@ function questionRows(value) {
     );
   }
   return rows;
+}
+
+function requiredRosterTemplateReceipt(value, version) {
+  if (String(version ?? '').trim() !== EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION) {
+    throw new DD2026ValidationError(
+      'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED',
+      EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_MESSAGE,
+    );
+  }
+  try {
+    return uuid(value, 'Beadle class-list template receipt');
+  } catch {
+    throw new DD2026ValidationError(
+      'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED',
+      EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_MESSAGE,
+    );
+  }
 }
 
 function optionalUuid(value, label) {
@@ -538,12 +562,12 @@ export function normalizeExamRoomCommand(input) {
     if (operation === 'import_exam_roster') {
       n.requestKey = requestKey(payload.requestKey);
       n.sourceHash = hexSha(payload.sourceHash, 'Roster source digest');
+      n.templateReceiptId = requiredRosterTemplateReceipt(
+        payload.templateReceiptId,
+        payload.templateVersion,
+      );
+      n.templateVersion = EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION;
     }
-  } else if (operation === 'upsert_exam_roster_row') {
-    n.examId = uuid(payload.examId, 'Examination');
-    n.row = rosterRows([payload.row])[0];
-    n.reason = boundedText(payload.reason, 'Roster change reason', 1_000, { minimum: 5 });
-    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'create_exam') {
     n.classroomId = uuid(payload.classroomId, 'Classroom');
     n.title = boundedText(payload.title, 'Exam title', DD2026_LIMITS.examTitleCharacters, { minimum: 1 });
@@ -1492,9 +1516,62 @@ export function normalizeRosterUploadIntent(input) {
   return { examId, classroomId, fileName, mimeType };
 }
 
+function officialBeadleRosterTable(rows) {
+  const headers = Array.isArray(rows?.[0]) ? rows[0] : [];
+  const exactHeaders = headers.length === EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS.length
+    && EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS.every(
+      (expected, index) => String(headers[index] ?? '') === expected,
+    );
+  if (!exactHeaders) {
+    throw new DD2026ValidationError(
+      'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED',
+      EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_MESSAGE,
+    );
+  }
+  const studentRows = rows.slice(1).filter(
+    (values) => Array.isArray(values)
+      && values.some((value) => String(value ?? '').trim() !== ''),
+  );
+  if (!studentRows.length) {
+    throw new DD2026ValidationError('ROSTER_EMPTY', 'The class list contains no student rows.');
+  }
+  const mapped = rosterRows(studentRows.map((values, index) => {
+    if (values.slice(EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS.length)
+      .some((value) => String(value ?? '').trim() !== '')) {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED',
+        EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_MESSAGE,
+      );
+    }
+    const displayName = String(values?.[2] ?? '').trim();
+    if (!displayName) {
+      throw new DD2026ValidationError(
+        'ROSTER_NAME_REQUIRED',
+        `Class-list row ${index + 1} must include the student name.`,
+      );
+    }
+    const studentNumber = values?.[1] ?? '';
+    return {
+      email: values?.[0] ?? '',
+      studentNumber,
+      candidateNumber: studentNumber,
+      displayName,
+    };
+  }));
+  return mapped;
+}
+
 export async function normalizeRosterUpload(input, prevalidatedIntent = null) {
   const payload = object(input);
   const intent = prevalidatedIntent || normalizeRosterUploadIntent(payload);
+  if (intent.examId && (intent.mimeType
+      !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      || !intent.fileName.toLowerCase().endsWith('.xlsx'))) {
+    throw new DD2026ValidationError(
+      'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED',
+      EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_MESSAGE,
+    );
+  }
   const encoded = String(payload.base64 ?? '').trim();
   if (!encoded || encoded.length % 4 !== 0 || !BASE64_PATTERN.test(encoded)) {
     throw new DD2026ValidationError('INVALID_ROSTER_UPLOAD', 'The roster file is invalid.');
@@ -1514,8 +1591,9 @@ export async function normalizeRosterUpload(input, prevalidatedIntent = null) {
   }
   return {
     ...intent,
-    rows: normalizedRosterTable(rows),
+    rows: intent.examId ? officialBeadleRosterTable(rows) : normalizedRosterTable(rows),
     sourceHash: await sha256Hex(bytes),
+    ...(intent.examId ? { templateVersion: EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION } : {}),
   };
 }
 
@@ -1643,22 +1721,32 @@ async function extractFirstXlsxSheet(bytes) {
   if (!sheetEntry) throw new DD2026ValidationError('INVALID_XLSX', 'The Excel file has no first worksheet.');
   const sharedEntry = entries.get('xl/sharedStrings.xml');
   const shared = sharedEntry
-    ? [...(await zipText(bytes, sharedEntry)).matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)].map((match) => xmlText(match[1]))
+    ? [...(await zipText(bytes, sharedEntry)).matchAll(
+      /<(?:[A-Za-z_][\w.-]*:)?si\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?si>/g,
+    )].map((match) => xmlText(match[1]))
     : [];
   const xml = await zipText(bytes, sheetEntry);
-  if (/<f\b/i.test(xml)) {
+  if (/<(?:[A-Za-z_][\w.-]*:)?f\b/i.test(xml)) {
     throw new DD2026ValidationError('ROSTER_FORMULA_REJECTED', 'Roster spreadsheets cannot contain formulas.');
   }
   const rows = [];
-  for (const rowMatch of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+  for (const rowMatch of xml.matchAll(
+    /<(?:[A-Za-z_][\w.-]*:)?row\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?row>/g,
+  )) {
     const row = [];
-    for (const cellMatch of rowMatch[1].matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/g)) {
+    for (const cellMatch of rowMatch[1].matchAll(
+      /<(?:[A-Za-z_][\w.-]*:)?c\b([^>]*)>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?c>/g,
+    )) {
       const attributes = cellMatch[1];
       const body = cellMatch[2];
       const reference = attributes.match(/\br="([A-Z]+\d+)"/i)?.[1] || 'A1';
       const type = attributes.match(/\bt="([^"]+)"/i)?.[1] || '';
-      const raw = body.match(/<v>([\s\S]*?)<\/v>/)?.[1]
-        ?? body.match(/<is>([\s\S]*?)<\/is>/)?.[1]
+      const raw = body.match(
+        /<(?:[A-Za-z_][\w.-]*:)?v>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?v>/,
+      )?.[1]
+        ?? body.match(
+          /<(?:[A-Za-z_][\w.-]*:)?is>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?is>/,
+        )?.[1]
         ?? '';
       const value = type === 's' ? shared[Number(raw)] ?? '' : xmlText(raw);
       row[columnIndex(reference)] = value;

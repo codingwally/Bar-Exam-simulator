@@ -31,6 +31,7 @@ for (const required of [
   'sitemap.xml',
   'admin/index.html',
   'assets/private-beta-session.js',
+  'assets/examination-room-beadle-class-list-template.xlsx',
   'assets/private-beta-landing.css',
   'assets/private-beta-landing.js',
   'assets/private-beta/library-student-1440.avif',

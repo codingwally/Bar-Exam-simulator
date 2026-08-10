@@ -20,6 +20,8 @@
   const EXAMINATION_ROOM_PUBLISH_WAIT_MS = 25_000;
   const EXAMINATION_ROOM_REFRESH_WAIT_MS = 8_000;
   const EXAMINATION_ROOM_MIN_HANDOFF_MS = 30 * 60 * 1000;
+  const BEADLE_ROSTER_TEMPLATE_URL = '/assets/examination-room-beadle-class-list-template.xlsx';
+  const BEADLE_ROSTER_TEMPLATE_VERSION = 'beadle-roster-v1';
   const state = {
     featureSnapshot: null,
     featurePromise: null,
@@ -764,7 +766,22 @@
     if (!preview) return '';
     const errors = preview.validation?.errors || [];
     const rows = Array.isArray(preview.rows) ? preview.rows : [];
-    return `<div class="${preview.validation?.ok ? 'dd26-success' : 'dd26-error'}" id="dd26-roster-preview-status" role="status">${preview.validation?.ok ? `${rows.length} students are ready to add to the class list.` : `${errors.length || 1} item(s) must be corrected.`}${errors.length ? `<ul>${errors.map((error) => `<li>${escapeHtml(error.row ? `Row ${error.row}: ` : '')}${escapeHtml(error.code || error.message || error)}</li>`).join('')}</ul>` : ''}</div><div class="dd26-table-wrap"><table class="dd26-table dd26-editable-roster"><thead><tr><th>Primary email</th><th>Student ID</th><th>Exam number</th><th>Name (optional)</th><th></th></tr></thead><tbody>${rows.map((row, index) => `<tr data-dd26-roster-row="${index}"><td><input class="dd26-input" data-dd26-roster-field="email" type="email" value="${escapeHtml(row.email)}" aria-label="Row ${index + 1} email"></td><td><input class="dd26-input" data-dd26-roster-field="studentNumber" value="${escapeHtml(row.studentNumber)}" aria-label="Row ${index + 1} student ID"></td><td><input class="dd26-input" data-dd26-roster-field="candidateNumber" value="${escapeHtml(row.candidateNumber)}" aria-label="Row ${index + 1} exam number"></td><td><input class="dd26-input" data-dd26-roster-field="displayName" value="${escapeHtml(row.displayName || '')}" aria-label="Row ${index + 1} name"></td><td><button class="dd26-button danger" data-dd26-remove-roster-row="${index}" type="button" aria-label="Remove class-list row ${index + 1}">Remove</button></td></tr>`).join('')}</tbody></table></div><div class="dd26-actions"><button class="dd26-button" id="dd26-add-roster-row" type="button">Add student</button><button class="dd26-button" id="dd26-revalidate-roster" type="button">Check corrections</button></div>`;
+    const beadleMode = state.exam.rosterMode === 'beadle';
+    const receiptReady = Boolean(preview.templateReceiptId)
+      && preview.templateVersion === BEADLE_ROSTER_TEMPLATE_VERSION;
+    const ready = preview.validation?.ok === true && (!beadleMode || receiptReady);
+    const statusCopy = ready
+      ? `${rows.length} students are ready to save.`
+      : beadleMode && preview.validation?.ok === true
+        ? 'The template check expired or is incomplete. Upload the official template again.'
+        : `${errors.length || 1} item(s) must be corrected.`;
+    const errorList = errors.length
+      ? `<ul>${errors.map((error) => `<li>${escapeHtml(error.row ? `Row ${error.row}: ` : '')}${escapeHtml(error.message || error.code || error)}</li>`).join('')}</ul>`
+      : '';
+    if (beadleMode) {
+      return `<section class="dd26-roster-preview" id="dd26-roster-preview" aria-labelledby="dd26-roster-preview-heading"><div class="dd26-roster-preview-head"><div><div class="dd26-label">Template check</div><h4 id="dd26-roster-preview-heading">Review the three class-list fields</h4></div><span class="dd26-status">${rows.length} student${rows.length === 1 ? '' : 's'}</span></div><div class="${ready ? 'dd26-success' : 'dd26-error'}" id="dd26-roster-preview-status" role="status">${escapeHtml(statusCopy)}${errorList}</div><p class="dd26-help dd26-roster-edit-help">If anything needs correction, update the Excel template and upload it again. This preview is for checking only.</p><div class="dd26-table-wrap"><table class="dd26-table dd26-beadle-roster-preview"><thead><tr><th>Email Address</th><th>Student Number</th><th>Student Name <small>Last Name, First Name, Middle Initial</small></th></tr></thead><tbody>${rows.map((row) => `<tr><td>${escapeHtml(row.email)}</td><td>${escapeHtml(row.studentNumber)}</td><td>${escapeHtml(row.displayName || '')}</td></tr>`).join('')}</tbody></table></div></section>`;
+    }
+    return `<div class="${ready ? 'dd26-success' : 'dd26-error'}" id="dd26-roster-preview-status" role="status">${escapeHtml(statusCopy)}${errorList}</div><div class="dd26-table-wrap"><table class="dd26-table dd26-editable-roster"><thead><tr><th>Primary email</th><th>Student ID</th><th>Exam number</th><th>Name (optional)</th><th></th></tr></thead><tbody>${rows.map((row, index) => `<tr data-dd26-roster-row="${index}"><td><input class="dd26-input" data-dd26-roster-field="email" type="email" value="${escapeHtml(row.email)}" aria-label="Row ${index + 1} email"></td><td><input class="dd26-input" data-dd26-roster-field="studentNumber" value="${escapeHtml(row.studentNumber)}" aria-label="Row ${index + 1} student ID"></td><td><input class="dd26-input" data-dd26-roster-field="candidateNumber" value="${escapeHtml(row.candidateNumber)}" aria-label="Row ${index + 1} exam number"></td><td><input class="dd26-input" data-dd26-roster-field="displayName" value="${escapeHtml(row.displayName || '')}" aria-label="Row ${index + 1} name"></td><td><button class="dd26-button danger" data-dd26-remove-roster-row="${index}" type="button" aria-label="Remove class-list row ${index + 1}">Remove</button></td></tr>`).join('')}</tbody></table></div><div class="dd26-actions"><button class="dd26-button" id="dd26-add-roster-row" type="button">Add student</button><button class="dd26-button" id="dd26-revalidate-roster" type="button">Check corrections</button></div>`;
   }
 
   function examCards(exams, classroom = {}) {
@@ -867,6 +884,13 @@
 
   function bindRosterControls() {
     document.getElementById('dd26-validate-roster')?.addEventListener('click', validateRoster);
+    document.getElementById('dd26-roster-file')?.addEventListener('change', () => {
+      if (state.exam.rosterMode !== 'beadle' || !state.exam.rosterPreview) return;
+      state.exam.rosterPreview = null;
+      document.getElementById('dd26-roster-preview')?.remove();
+      const save = document.getElementById('dd26-import-roster');
+      if (save) save.disabled = true;
+    });
     document.getElementById('dd26-validate-roster-paste')?.addEventListener('click', validatePastedRoster);
     document.getElementById('dd26-revalidate-roster')?.addEventListener('click', revalidateRosterPreview);
     document.getElementById('dd26-add-roster-row')?.addEventListener('click', addRosterPreviewRow);
@@ -880,16 +904,25 @@
     if (!state.exam.rosterPreview) return;
     state.exam.rosterPreview.rows = collectRosterPreviewRows();
     state.exam.rosterPreview.sourceHash = '';
+    if (state.exam.rosterMode === 'beadle') {
+      state.exam.rosterPreview.templateReceiptId = '';
+      state.exam.rosterPreview.templateVersion = '';
+      state.exam.rosterPreview.templateReceiptExpiresAt = '';
+    }
     state.exam.rosterPreview.validation = {
       ok: false,
-      errors: [{ message: 'Check the edited class list again before saving.' }],
+      errors: [{ message: state.exam.rosterMode === 'beadle'
+        ? 'Update the official template with this correction and upload it again.'
+        : 'Check the edited class list again before saving.' }],
     };
     const save = document.getElementById('dd26-import-roster');
     if (save) save.disabled = true;
     const status = document.getElementById('dd26-roster-preview-status');
     if (status) {
       status.className = 'dd26-error';
-      status.textContent = 'The class list changed. Select Check corrections before saving.';
+      status.textContent = state.exam.rosterMode === 'beadle'
+        ? 'This preview changed. Update the official template and upload it again before saving.'
+        : 'The class list changed. Select Check corrections before saving.';
     }
   }
 
@@ -1040,6 +1073,11 @@
       STUDENT_ACCESS_ISSUED: 'The class-wide student exam code is already active.',
       EXAM_ROOM_STUDENT_ACCESS_NOT_ISSUABLE: 'The student handout cannot be created yet. Check the class list and opening time.',
       EXAM_ROOM_ROSTER_LOCKED: 'The class list is locked because the student handout is already active or the examination has begun.',
+      EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED: 'Use the official Beadle class-list template. Keep its three column names unchanged and upload the completed .xlsx file.',
+      EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_INVALID: 'This template check is not valid for this examination. Upload the completed official template again.',
+      EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_EXPIRED: 'This template check expired. Upload the completed official template again, then save the class list.',
+      EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_USED: 'This checked template was already saved. Refresh the class list before continuing.',
+      EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_MISMATCH: 'The class list changed after the template was checked. Update the official template and upload it again.',
       EXAM_ROOM_BEADLE_REQUIRED: 'Publish the examination to the named Beadle before continuing.',
       EXAM_ROOM_BEADLE_INVITATION_INVALID: 'The Beadle handoff was not created. Review the Beadle email and publish again safely.',
       CREDENTIAL_INVALID: 'The examination key is invalid.',
@@ -1065,6 +1103,15 @@
       EXAM_ROOM_PUBLICATION_VERSION_CONFLICT: 'The published copy changed while this form was open. Refresh the Examination Room before trying again.',
     };
     return messages[code] || String(code || 'The examination request was denied.').replace(/_/g, ' ').toLowerCase();
+  }
+
+  function rosterTemplateErrorMessage(error) {
+    const code = String(error?.code || error?.details?.code || '').trim();
+    if (code === 'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED'
+      || code.startsWith('EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_')) {
+      return examCodeMessage(code);
+    }
+    return error?.message || 'The official class-list template could not be checked.';
   }
 
   async function redeemActivation() {
@@ -1093,15 +1140,38 @@
 
   async function validateRoster() {
     const file = document.getElementById('dd26-roster-file')?.files?.[0];
-    if (!file) { global.toast?.('Choose a CSV or XLSX roster first.', 'warn'); return; }
+    const beadleMode = state.exam.rosterMode === 'beadle';
+    if (!file) {
+      global.toast?.(beadleMode
+        ? 'Choose the completed official .xlsx class-list template first.'
+        : 'Choose a CSV or XLSX roster first.', 'warn');
+      return;
+    }
+    if (beadleMode && !String(file.name || '').toLowerCase().endsWith('.xlsx')) {
+      document.getElementById('dd26-roster-file')?.setAttribute('aria-invalid', 'true');
+      global.toast?.(examCodeMessage('EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED'), 'warn');
+      return;
+    }
+    const button = document.getElementById('dd26-validate-roster');
+    if (button) { button.disabled = true; button.textContent = 'Checking template...'; }
     try {
-      const scope = state.exam.rosterMode === 'beadle'
+      const scope = beadleMode
         ? { examId: state.exam.activeExamId }
         : { classroomId: state.exam.activeClassroomId };
       const payload = await api('/exam-room/upload/roster', { ...scope, ...await filePayload(file) });
+      if (beadleMode && payload?.validation?.ok === true
+        && (!payload.templateReceiptId || payload.templateVersion !== BEADLE_ROSTER_TEMPLATE_VERSION)) {
+        const error = new Error('The official template check did not finish. Upload the file again.');
+        error.code = 'EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_INVALID';
+        throw error;
+      }
+      document.getElementById('dd26-roster-file')?.removeAttribute('aria-invalid');
       state.exam.rosterPreview = payload;
       rerenderRosterSurface();
-    } catch (error) { global.toast?.(error.message, 'warn'); }
+    } catch (error) {
+      global.toast?.(beadleMode ? rosterTemplateErrorMessage(error) : error.message, 'warn');
+      if (button?.isConnected) { button.disabled = false; button.textContent = 'Check template'; }
+    }
   }
 
   async function redeemBeadleInvitation() {
@@ -1253,13 +1323,18 @@
       : snapshot.accessCodeRequired === false
         ? 'No separate student access code is required. Every student must still sign in and be on the class list.'
         : 'The exam access-code rule is not available. Refresh this page or ask the Professor before giving instructions to students.';
+    const rosterReadyToSave = state.exam.rosterPreview?.validation?.ok === true
+      && Boolean(state.exam.rosterPreview?.templateReceiptId)
+      && state.exam.rosterPreview?.templateVersion === BEADLE_ROSTER_TEMPLATE_VERSION;
     const rosterEditor = canEditRoster ? `<details class="dd26-section" id="dd26-class-list-panel" open>
-        <summary>Step 4 · Upload and check the class list</summary>
-        <p>Upload a CSV or XLSX file, paste a table, or add one student at a time. Correct every flagged row before saving.</p>
-        <div class="dd26-form-grid"><label class="dd26-field"><span>Class list CSV or XLSX</span><input class="dd26-input" id="dd26-roster-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><label class="dd26-field"><span>Or paste the class list</span><textarea class="dd26-textarea compact" id="dd26-roster-paste" placeholder="email,student number,exam number,name"></textarea></label></div>
-        <div class="dd26-actions"><button class="dd26-button" id="dd26-validate-roster" type="button">Check file</button><button class="dd26-button" id="dd26-validate-roster-paste" type="button">Check pasted list</button><button class="dd26-button primary" id="dd26-import-roster" type="button" ${state.exam.rosterPreview?.validation?.ok ? '' : 'disabled'}>Save class list</button><button class="dd26-button" id="dd26-download-roster-template" type="button">Download template</button></div>
+        <summary>Step 4 · Prepare and save the class list</summary>
+        <div class="dd26-roster-intro"><h3>One official template, three simple fields</h3><p>Use the Due Diligence template for every class list. Files with renamed, missing, or added columns cannot be saved.</p></div>
+        <ol class="dd26-roster-template-flow" aria-label="Required class-list steps">
+          <li><span class="dd26-roster-step-number" aria-hidden="true">1</span><div class="dd26-roster-step-copy"><h4>Download the official template</h4><p>This exact Excel file is required. You can use a fresh copy each time you prepare a class.</p><a class="dd26-button primary dd26-roster-download" id="dd26-beadle-download-roster-template" href="${BEADLE_ROSTER_TEMPLATE_URL}" download="examination-room-beadle-class-list-template.xlsx">Download official template</a></div></li>
+          <li><span class="dd26-roster-step-number" aria-hidden="true">2</span><div class="dd26-roster-step-copy"><h4>Fill in only these three columns</h4><ul class="dd26-roster-field-list"><li><strong>Email Address</strong><span>The email the student uses to sign in.</span></li><li><strong>Student Number</strong><span>The school-issued student number.</span></li><li><strong>Student Name</strong><span>Enter as Last Name, First Name, Middle Initial.</span></li></ul><p class="dd26-help">Use one row per student. Do not rename, remove, reorder, or add columns.</p></div></li>
+          <li><span class="dd26-roster-step-number" aria-hidden="true">3</span><div class="dd26-roster-step-copy"><h4>Upload, check, and save</h4><p>Choose the completed official .xlsx file. Due Diligence checks every row before the class list can be saved.</p><label class="dd26-field dd26-roster-file-field"><span>Completed official template</span><input class="dd26-input" id="dd26-roster-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required><small class="dd26-help">Only the official .xlsx class-list template is accepted.</small></label><div class="dd26-actions dd26-roster-actions"><button class="dd26-button" id="dd26-validate-roster" type="button">Check template</button><button class="dd26-button primary" id="dd26-import-roster" type="button" ${rosterReadyToSave ? '' : 'disabled'}>Save class list</button></div></div></li>
+        </ol>
         ${rosterPreviewHtml()}
-        <details class="dd26-advanced"><summary>Add or correct one student</summary><div class="dd26-form-grid"><label class="dd26-field"><span>Primary email</span><input class="dd26-input" id="dd26-beadle-row-email" type="email"></label><label class="dd26-field"><span>Student ID</span><input class="dd26-input" id="dd26-beadle-row-student"></label><label class="dd26-field"><span>Exam number</span><input class="dd26-input" id="dd26-beadle-row-candidate"></label><label class="dd26-field"><span>Name (optional)</span><input class="dd26-input" id="dd26-beadle-row-name"></label><label class="dd26-field wide"><span>Reason for the change</span><input class="dd26-input" id="dd26-beadle-row-reason" value="Correct the class list"></label></div><div class="dd26-actions"><button class="dd26-button" id="dd26-upsert-beadle-row" type="button">Check and save student</button></div></details>
       </details>` : `<section class="dd26-section" id="dd26-class-list-panel" tabindex="-1"><div class="dd26-label">Step 4 · Class list</div><h3>${professorView ? 'Review the class list' : 'Class list saved'}</h3><div class="dd26-notice"><strong>${professorView ? 'Professor review only.' : 'The class list is locked.'}</strong> ${escapeHtml(professorView ? 'The Beadle prepares and corrects this list. You can review its current status here without changing the handoff.' : snapshot.rosterLockedReason || 'Student access was issued, the exam opened, or a student already started.')}</div>${canReopenRoster ? '<div class="dd26-actions"><button class="dd26-button danger" id="dd26-reopen-roster" type="button">Correct class list</button></div>' : ''}</section>`;
     const codeValue = activeStudentCode
       ? `<div class="dd26-raw-key" id="dd26-active-student-code" data-dd26-sensitive>${escapeHtml(activeStudentCode)}</div>`
@@ -1469,12 +1544,24 @@
   }
 
   function collectRosterPreviewRows() {
-    return [...document.querySelectorAll('[data-dd26-roster-row]')].map((row) => Object.fromEntries(
-      [...row.querySelectorAll('[data-dd26-roster-field]')].map((input) => [input.dataset.dd26RosterField, input.value]),
-    ));
+    const previous = Array.isArray(state.exam.rosterPreview?.rows) ? state.exam.rosterPreview.rows : [];
+    return [...document.querySelectorAll('[data-dd26-roster-row]')].map((row, index) => {
+      const fields = Object.fromEntries(
+        [...row.querySelectorAll('[data-dd26-roster-field]')].map((input) => [input.dataset.dd26RosterField, input.value]),
+      );
+      const collected = { ...(previous[index] || {}), ...fields };
+      if (state.exam.rosterMode === 'beadle') collected.candidateNumber = String(collected.studentNumber || '').trim();
+      return collected;
+    });
   }
 
   async function validateRosterRows(rows) {
+    if (state.exam.rosterMode === 'beadle') {
+      markRosterPreviewDirty();
+      document.getElementById('dd26-roster-file')?.focus();
+      global.toast?.('Update the official template and upload it again before saving.', 'warn');
+      return;
+    }
     try {
       const normalizedRows = rows.map((row) => ({
         email: String(row.email || '').trim(),
@@ -1482,9 +1569,9 @@
         candidateNumber: String(row.candidateNumber || '').trim(),
         displayName: String(row.displayName || '').trim(),
       }));
-      const validation = state.exam.rosterMode === 'beadle'
-        ? await command({ operation: 'validate_exam_roster', examId: state.exam.activeExamId, rows: normalizedRows })
-        : await command({ operation: 'validate_roster', classroomId: state.exam.activeClassroomId, rows: normalizedRows });
+      const validation = await command({
+        operation: 'validate_roster', classroomId: state.exam.activeClassroomId, rows: normalizedRows,
+      });
       state.exam.rosterPreview = {
         rows: normalizedRows,
         sourceHash: await sha256Text(JSON.stringify(normalizedRows)),
@@ -1527,7 +1614,17 @@
     if (!preview?.validation?.ok) return;
     try {
       if (state.exam.rosterMode === 'beadle') {
-        await command({ operation: 'import_exam_roster', examId: state.exam.activeExamId, rows: preview.rows, sourceHash: preview.sourceHash, requestKey: randomKey('roster') });
+        if (!preview.templateReceiptId || preview.templateVersion !== BEADLE_ROSTER_TEMPLATE_VERSION) {
+          const error = new Error(examCodeMessage('EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_INVALID'));
+          error.code = 'EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_INVALID';
+          throw error;
+        }
+        await command({
+          operation: 'import_exam_roster', examId: state.exam.activeExamId,
+          rows: preview.rows, sourceHash: preview.sourceHash,
+          templateReceiptId: preview.templateReceiptId, templateVersion: preview.templateVersion,
+          requestKey: randomKey('roster'),
+        });
       } else {
         await command({ operation: 'import_roster', classroomId: state.exam.activeClassroomId, rows: preview.rows, sourceHash: preview.sourceHash, requestKey: randomKey('roster') });
       }
@@ -1544,7 +1641,11 @@
         global.toast?.('Roster imported without duplicates.', 'ok');
         await refreshExamPortal('professor');
       }
-    } catch (error) { global.toast?.(error.message, 'warn'); }
+    } catch (error) {
+      global.toast?.(state.exam.rosterMode === 'beadle'
+        ? rosterTemplateErrorMessage(error)
+        : error.message, 'warn');
+    }
   }
 
   function rerenderRosterSurface() {

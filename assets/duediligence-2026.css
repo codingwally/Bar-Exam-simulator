@@ -105,6 +105,32 @@
 .dd26-card h2{font-size:clamp(25px,2.4vw,34px);}
 .dd26-card p{max-width:84ch;color:#cbd5e1;line-height:1.68;}
 .dd26-card>.dd26-label+h2{margin-top:7px;}
+.dd26-roster-intro{margin:18px 0 20px;}
+.dd26-roster-intro h3{margin-bottom:7px;}
+.dd26-roster-template-flow{display:grid;gap:14px;margin:0;padding:0;list-style:none;}
+.dd26-roster-template-flow>li{display:grid;grid-template-columns:42px minmax(0,1fr);gap:17px;padding:22px;border:1px solid rgba(148,163,184,.22);border-left:4px solid #d4af37;border-radius:0 8px 8px 0;background:linear-gradient(145deg,rgba(15,35,59,.66),rgba(5,24,45,.5));box-shadow:0 11px 28px rgba(0,0,0,.1);}
+.dd26-roster-step-number{display:grid;width:38px;height:38px;place-items:center;border:1px solid rgba(237,199,104,.72);border-radius:50%;background:rgba(197,160,89,.1);color:#f6d47f;font:600 12px/1 'IBM Plex Mono',monospace;}
+.dd26-roster-step-copy{min-width:0;}
+.dd26-roster-step-copy h4{margin:1px 0 7px;color:#fff;font-family:'Playfair Display',serif;font-size:20px;line-height:1.25;}
+.dd26-roster-step-copy>p{margin:0;}
+.dd26-roster-download{width:max-content;max-width:100%;margin-top:17px;text-decoration:none;}
+.dd26-roster-field-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:17px 0 13px;padding:0;list-style:none;}
+.dd26-roster-field-list li{min-width:0;padding:13px 14px;border:1px solid rgba(197,160,89,.24);border-radius:6px;background:rgba(2,18,35,.48);}
+.dd26-roster-field-list strong,.dd26-roster-field-list span{display:block;}
+.dd26-roster-field-list strong{color:#f4ce75;font-size:13px;line-height:1.4;}
+.dd26-roster-field-list span{margin-top:5px;color:#aebaca;font-size:11.5px;line-height:1.5;}
+.dd26-roster-file-field{max-width:720px;margin:18px 0 0;}
+.dd26-roster-actions{margin-top:13px;}
+.dd26-roster-preview{margin-top:24px;padding-top:23px;border-top:1px solid rgba(197,160,89,.32);}
+.dd26-roster-preview-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:14px;}
+.dd26-roster-preview-head h4{margin:6px 0 0;color:#fff;font-family:'Playfair Display',serif;font-size:21px;line-height:1.25;}
+.dd26-roster-edit-help{margin:12px 0!important;}
+.dd26-beadle-roster-preview{min-width:760px;}
+.dd26-beadle-roster-preview th small{display:block;margin-top:4px;color:#aebaca;font:500 9px/1.45 'Inter',sans-serif;letter-spacing:0;text-transform:none;}
+.dd26-beadle-roster-preview th:first-child{width:38%;}
+.dd26-beadle-roster-preview th:nth-child(2){width:22%;}
+.dd26-beadle-roster-preview th:nth-child(3){width:40%;}
+.dd26-beadle-roster-preview input{min-width:0;}
 .dd26-student-code-panel{margin-top:24px;padding:24px;border:1px solid rgba(197,160,89,.45);border-radius:8px;background:rgba(4,28,52,.74);}
 .dd26-student-code-panel.is-actionable{border-color:#e7bd5d;background:linear-gradient(145deg,rgba(76,57,17,.28),rgba(4,28,52,.82));box-shadow:0 0 0 3px rgba(212,175,55,.1),0 16px 36px rgba(0,0,0,.16);}
 .dd26-student-code-panel.is-ready{border-color:rgba(74,222,128,.38);}
@@ -288,6 +314,11 @@
   .dd26-pane,.dd26-card{padding:20px;}
   .dd26-student-code-panel{padding:18px;}
   .dd26-card{border-radius:6px;}
+  .dd26-roster-template-flow>li{grid-template-columns:35px minmax(0,1fr);gap:13px;padding:18px 16px;}
+  .dd26-roster-step-number{width:33px;height:33px;}
+  .dd26-roster-field-list{grid-template-columns:1fr;}
+  .dd26-roster-download{width:100%;}
+  .dd26-roster-preview-head{align-items:flex-start;flex-direction:column;gap:9px;}
   .dd26-form-grid{grid-template-columns:1fr;column-gap:0;row-gap:19px;margin-top:20px;}
   .dd26-handout-fields{grid-template-columns:1fr;}
   .dd26-waiting-checks{grid-template-columns:1fr;}

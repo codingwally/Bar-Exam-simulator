@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
+  EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS,
+  EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION,
   EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES,
   normalizeExamResultPdfRequest,
   normalizeExamRoomCommand,
@@ -12,6 +15,7 @@ import {
   normalizeRosterUploadIntent,
   sha256Hex,
 } from './exam-room-2026-core.mjs';
+import { rosterXlsxBase64 } from './exam-room-roster-template-test-helpers.mjs';
 import { examRoom2026DatabaseError, verifiedAccessTokenContext } from './index.mjs';
 
 const examId = '123e4567-e89b-42d3-a456-426614174001';
@@ -758,6 +762,100 @@ test('roster display name is optional and leading-zero identifiers are preserved
   assert.equal(parsed.rows[0].candidateNumber, '0007');
 });
 
+test('exam-scoped roster upload requires the official three-column XLSX template', async () => {
+  const parsed = await normalizeRosterUpload({
+    examId,
+    fileName: 'official-class-list.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    base64: rosterXlsxBase64([
+      EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS,
+      ['ana@example.edu', '000012', 'Cruz, Ana, M.'],
+    ]),
+  });
+  assert.deepEqual(parsed.rows[0], {
+    email: 'ana@example.edu',
+    studentNumber: '000012',
+    candidateNumber: '000012',
+    displayName: 'Cruz, Ana, M.',
+  });
+  assert.equal(parsed.templateVersion, EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION);
+  assert.match(parsed.sourceHash, /^[0-9a-f]{64}$/);
+
+  const csv = 'Email Address,Student Number,Student Name (Last Name, First Name, Middle Initial)\nana@example.edu,000012,"Cruz, Ana, M."\n';
+  await assert.rejects(normalizeRosterUpload({
+    examId,
+    fileName: 'class-list.csv',
+    mimeType: 'text/csv',
+    base64: Buffer.from(csv).toString('base64'),
+  }), (error) => error.code === 'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED'
+    && error.status === 400
+    && error.message === 'Use the official Beadle class-list template. Do not add, remove, or rename columns.');
+
+  for (const headers of [
+    EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS.slice(0, 2),
+    [...EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS, 'Section'],
+    ['Student Number', EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS[0], EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS[2]],
+    ['Email', EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS[1], EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS[2]],
+  ]) {
+    await assert.rejects(normalizeRosterUpload({
+      examId,
+      fileName: 'class-list.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      base64: rosterXlsxBase64([headers, ['ana@example.edu', '000012', 'Cruz, Ana, M.']]),
+    }), (error) => error.code === 'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED'
+      && error.status === 400);
+  }
+});
+
+test('the published t=str template parses its exact headers and ignores blank formatted rows', async () => {
+  const template = readFileSync(new URL(
+    '../assets/examination-room-beadle-class-list-template.xlsx',
+    import.meta.url,
+  ));
+  await assert.rejects(normalizeRosterUpload({
+    examId,
+    fileName: 'examination-room-beadle-class-list-template.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    base64: template.toString('base64'),
+  }), (error) => error.code === 'ROSTER_EMPTY'
+    && error.message === 'The class list contains no student rows.');
+});
+
+test('official exam roster requires a student name and import receipt', async () => {
+  await assert.rejects(normalizeRosterUpload({
+    examId,
+    fileName: 'class-list.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    base64: rosterXlsxBase64([
+      EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS,
+      ['ana@example.edu', '000012', ''],
+    ]),
+  }), (error) => error.code === 'ROSTER_NAME_REQUIRED');
+
+  const row = {
+    email: 'ana@example.edu',
+    studentNumber: '000012',
+    candidateNumber: '000012',
+    displayName: 'Cruz, Ana, M.',
+  };
+  assert.throws(() => normalizeExamRoomCommand({
+    operation: 'import_exam_roster',
+    examId,
+    rows: [row],
+    sourceHash: 'd'.repeat(64),
+    requestKey,
+  }), (error) => error.code === 'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED');
+  assert.throws(() => normalizeExamRoomCommand({
+    operation: 'import_exam_roster',
+    examId,
+    rows: [row],
+    sourceHash: 'd'.repeat(64),
+    requestKey,
+    templateReceiptId: versionId,
+    templateVersion: 'legacy-template',
+  }), (error) => error.code === 'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED');
+});
+
 test('exam-scoped roster operations preserve legacy classroom operations', async () => {
   const csv = 'Email,Student Number,Candidate Number\nana@example.edu,000012,0007\n';
   const intent = normalizeRosterUploadIntent({
@@ -778,7 +876,8 @@ test('exam-scoped roster operations preserve legacy classroom operations', async
   const row = {
     email: 'ana@example.edu',
     studentNumber: '000012',
-    candidateNumber: '0007',
+    candidateNumber: '000012',
+    displayName: 'Cruz, Ana, M.',
   };
   assert.equal(normalizeExamRoomCommand({
     operation: 'validate_exam_roster',
@@ -791,14 +890,16 @@ test('exam-scoped roster operations preserve legacy classroom operations', async
     rows: [row],
     sourceHash: 'd'.repeat(64),
     requestKey,
+    templateReceiptId: versionId,
+    templateVersion: EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION,
   }).sourceHash, 'd'.repeat(64));
-  assert.equal(normalizeExamRoomCommand({
+  assert.throws(() => normalizeExamRoomCommand({
     operation: 'upsert_exam_roster_row',
     examId,
     row,
     reason: 'Corrected candidate assignment.',
     requestKey,
-  }).row.displayName, null);
+  }), (error) => error.code === 'INVALID_REQUEST');
 });
 
 test('v2 portal query contracts require their examination scope', () => {
@@ -923,6 +1024,23 @@ test('room-key database denials map to stable, plain-language contracts', () => 
     assert.equal(error.status, status);
     assert.match(error.message, message);
     assert.equal(error.message.includes('private database detail'), false);
+  }
+});
+
+test('official roster-template receipt failures map to safe actionable contracts', () => {
+  const expected = [
+    ['EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED', 400],
+    ['EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_INVALID', 403],
+    ['EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_EXPIRED', 409],
+    ['EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_USED', 409],
+    ['EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_MISMATCH', 409],
+  ];
+  for (const [code, status] of expected) {
+    const error = examRoom2026DatabaseError({ message: `${code}: private database detail` });
+    assert.equal(error.code, code);
+    assert.equal(error.status, status);
+    assert.equal(error.message.includes('private database detail'), false);
+    assert.match(error.message, /template|class list/i);
   }
 });
 

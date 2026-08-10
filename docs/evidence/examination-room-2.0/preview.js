@@ -36,6 +36,7 @@
   var activeStudentQuestion = 1;
   var saveTimer = 0;
   var dialogAction = null;
+  var activeProfessorRoomKey = '';
   var gradingQuestions = {
     1: {
       prompt: reviewQuestions[1].prompt,
@@ -159,6 +160,104 @@
     continueButton.textContent = action?.label || 'Continue';
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');
+  }
+
+  function generateProfessorRoomKey() {
+    var alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    var values = new Uint32Array(12);
+    if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+      window.crypto.getRandomValues(values);
+    } else {
+      values.forEach(function (_, index) { values[index] = Math.floor(Math.random() * alphabet.length); });
+    }
+    var characters = Array.prototype.map.call(values, function (value) {
+      return alphabet[value % alphabet.length];
+    }).join('');
+    return 'ROOM-' + characters.slice(0, 4) + '-' + characters.slice(4, 8) + '-' + characters.slice(8, 12);
+  }
+
+  function createTextCell(text) {
+    var cell = document.createElement('td');
+    cell.textContent = text;
+    return cell;
+  }
+
+  function updateProfessorRoomKeyCount() {
+    var count = all('[data-room-key-record]').length;
+    one('#qa-room-key-count').textContent = count + (count === 1 ? ' key' : ' keys');
+  }
+
+  function appendProfessorRoomKeyRecord(details) {
+    var records = one('#qa-room-key-records');
+    var empty = one('#qa-room-key-empty');
+    if (empty) empty.remove();
+
+    var row = document.createElement('tr');
+    row.setAttribute('data-room-key-record', '');
+
+    var roomCell = document.createElement('td');
+    var roomName = document.createElement('strong');
+    var roomDetails = document.createElement('small');
+    roomName.textContent = details.roomTitle;
+    roomDetails.textContent = details.school + ' · ' + details.term;
+    roomCell.append(roomName, document.createElement('br'), roomDetails);
+    row.appendChild(roomCell);
+    row.appendChild(createTextCell(details.professorEmail));
+
+    var statusCell = document.createElement('td');
+    var status = document.createElement('span');
+    status.className = 'dd26-status qa-swatch-info';
+    status.textContent = 'Waiting for Professor';
+    statusCell.appendChild(status);
+    row.appendChild(statusCell);
+    row.appendChild(createTextCell('Admin · Just now'));
+    row.appendChild(createTextCell('Not used yet'));
+    row.appendChild(createTextCell(details.expiry + ' from now'));
+
+    var actionCell = document.createElement('td');
+    var revokeButton = document.createElement('button');
+    revokeButton.className = 'dd26-button';
+    revokeButton.type = 'button';
+    revokeButton.textContent = 'Revoke';
+    revokeButton.addEventListener('click', function () {
+      status.textContent = 'Revoked';
+      status.classList.remove('qa-swatch-info');
+      status.classList.add('qa-swatch-danger');
+      revokeButton.disabled = true;
+      revokeButton.textContent = 'Revoked';
+      announce('The unused Professor key was revoked in this preview.');
+    });
+    actionCell.appendChild(revokeButton);
+    row.appendChild(actionCell);
+    records.prepend(row);
+    updateProfessorRoomKeyCount();
+  }
+
+  function clearProfessorRoomKeyDialog() {
+    activeProfessorRoomKey = '';
+    one('#qa-professor-key-value').textContent = '';
+    one('#qa-professor-key-recipient').textContent = '';
+    one('#qa-professor-key-room').textContent = '';
+    one('#qa-professor-key-status').textContent = '';
+    one('#qa-copy-professor-key').textContent = 'Copy key';
+  }
+
+  function closeProfessorRoomKeyDialog() {
+    var dialog = one('#qa-professor-key-dialog');
+    if (dialog.open && typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+    clearProfessorRoomKeyDialog();
+  }
+
+  function openProfessorRoomKeyDialog(details) {
+    var dialog = one('#qa-professor-key-dialog');
+    activeProfessorRoomKey = generateProfessorRoomKey();
+    one('#qa-professor-key-value').textContent = activeProfessorRoomKey;
+    one('#qa-professor-key-recipient').textContent = details.professorEmail;
+    one('#qa-professor-key-room').textContent = details.roomTitle;
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+    one('#qa-copy-professor-key').focus();
   }
 
   function updateReviewQuestion(ordinal) {
@@ -317,7 +416,42 @@
     syncAccessCodePreview();
     announce(one('#qa-access-code-required').checked
       ? 'Separate student access code enabled in synthetic QA.'
-      : 'Roster-only student entry selected in synthetic QA.');
+      : 'Class-list sign-in selected in synthetic QA.');
+  });
+
+  one('#qa-room-key-form').addEventListener('submit', function (event) {
+    event.preventDefault();
+    var details = {
+      professorEmail: one('#qa-room-professor-email').value.trim(),
+      roomTitle: one('#qa-room-title').value.trim(),
+      school: one('#qa-room-school').value.trim(),
+      term: one('#qa-room-term').value.trim(),
+      expiry: one('#qa-room-expiry').value
+    };
+    appendProfessorRoomKeyRecord(details);
+    openProfessorRoomKeyDialog(details);
+    announce('Professor key created for one Examination Room. Copy it now.');
+  });
+
+  one('#qa-copy-professor-key').addEventListener('click', function () {
+    var button = this;
+    if (!activeProfessorRoomKey) return;
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(activeProfessorRoomKey).then(function () {
+        button.textContent = 'Key copied';
+        one('#qa-professor-key-status').textContent = 'Professor key copied.';
+      }).catch(function () {
+        one('#qa-professor-key-status').textContent = 'Select the key above and copy it before closing.';
+      });
+    } else {
+      one('#qa-professor-key-status').textContent = 'Select the key above and copy it before closing.';
+    }
+  });
+
+  one('#qa-close-professor-key').addEventListener('click', closeProfessorRoomKeyDialog);
+  one('#qa-professor-key-dialog').addEventListener('close', clearProfessorRoomKeyDialog);
+  one('#qa-professor-key-dialog').addEventListener('click', function (event) {
+    if (event.target === event.currentTarget) closeProfessorRoomKeyDialog();
   });
 
   one('#qa-publish-button').addEventListener('click', function (event) {
@@ -433,7 +567,8 @@
   showState('beadle', 'roster', false);
   showState('student', 'preflight', false);
   showState('professor-after', 'monitor', false);
-  showState('admin', 'health', false);
+  showState('admin', 'room-keys', false);
+  updateProfessorRoomKeyCount();
   syncAccessCodePreview();
   renderStudentQuestion(1);
   renderGradeQuestion(1);

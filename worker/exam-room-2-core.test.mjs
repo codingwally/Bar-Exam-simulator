@@ -63,6 +63,87 @@ test('professors choose the exam length within the documented 1 to 200 beta limi
   }));
 });
 
+test('Admin room invitations require complete room details and a bounded expiry', () => {
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
+  assert.deepEqual(normalizeExamRoomCommand({
+    operation: 'issue_activation',
+    targetEmail: 'Professor@Example.edu',
+    activationKey: 'professor-room-key-secret',
+    roomTitle: 'Civil Law Final Examination Room',
+    schoolName: 'Due Diligence College of Law',
+    academicTerm: 'First Semester 2026-2027',
+    expiresAt,
+    reason: 'Initial beta room invitation for this Professor.',
+  }), {
+    operation: 'issue_activation',
+    targetEmail: 'professor@example.edu',
+    activationKey: 'professor-room-key-secret',
+    roomTitle: 'Civil Law Final Examination Room',
+    schoolName: 'Due Diligence College of Law',
+    academicTerm: 'First Semester 2026-2027',
+    expiresAt,
+    reason: 'Initial beta room invitation for this Professor.',
+  });
+  for (const field of ['roomTitle', 'schoolName', 'academicTerm']) {
+    const payload = {
+      operation: 'issue_activation',
+      targetEmail: 'professor@example.edu',
+      activationKey: 'professor-room-key-secret',
+      roomTitle: 'Civil Law Final Examination Room',
+      schoolName: 'Due Diligence College of Law',
+      academicTerm: 'First Semester 2026-2027',
+      expiresAt,
+      reason: 'Initial beta room invitation for this Professor.',
+    };
+    delete payload[field];
+    assert.throws(() => normalizeExamRoomCommand(payload));
+  }
+  assert.throws(() => normalizeExamRoomCommand({
+    operation: 'issue_activation',
+    targetEmail: 'professor@example.edu',
+    activationKey: 'professor-room-key-secret',
+    roomTitle: 'Civil Law Final Examination Room',
+    schoolName: 'Due Diligence College of Law',
+    academicTerm: 'First Semester 2026-2027',
+    expiresAt: new Date(Date.now() + 8 * 24 * 60 * 60 * 1_000).toISOString(),
+    reason: 'Initial beta room invitation for this Professor.',
+  }), /no more than seven days/i);
+});
+
+test('Professor invitation ledger and revocation inputs are tightly bounded', () => {
+  assert.deepEqual(normalizeExamRoomQuery({ operation: 'activation_ledger' }), {
+    operation: 'activation_ledger', status: 'all', limit: 200, offset: 0,
+  });
+  assert.deepEqual(normalizeExamRoomQuery({
+    operation: 'activation_ledger', status: 'redeemed', limit: 25, offset: 50,
+  }), {
+    operation: 'activation_ledger', status: 'redeemed', limit: 25, offset: 50,
+  });
+  assert.throws(() => normalizeExamRoomQuery({
+    operation: 'activation_ledger', status: 'unknown', limit: 25,
+  }));
+  assert.throws(() => normalizeExamRoomQuery({
+    operation: 'activation_ledger', status: 'all', limit: 201,
+  }));
+  assert.throws(() => normalizeExamRoomQuery({
+    operation: 'activation_ledger', status: 'all', limit: 200, offset: -1,
+  }));
+  assert.throws(() => normalizeExamRoomQuery({
+    operation: 'activation_ledger', status: 'all', limit: 200, offset: 100_001,
+  }));
+  assert.deepEqual(normalizeExamRoomCommand({
+    operation: 'revoke_activation',
+    activationId: operationId,
+    reason: 'The Professor invitation was replaced.',
+    requestKey,
+  }), {
+    operation: 'revoke_activation',
+    activationId: operationId,
+    reason: 'The Professor invitation was replaced.',
+    requestKey,
+  });
+});
+
 test('upload intent validates extension and MIME before decoding content', () => {
   assert.throws(() => normalizeQuestionUploadIntent({
     examId,
@@ -584,6 +665,25 @@ test('replacement, reopening, and break-glass database denials map without leaki
     ['EXAM_ROOM_REOPEN_GRADING_ALREADY_STARTED', 409, /grading has started/i],
     ['EXAM_ROOM_FRESH_AAL2_REQUIRED', 403, /fresh multi-factor/i],
     ['EXAM_ROOM_BREAK_GLASS_SCOPE_INVALID', 403, /does not match/i],
+  ];
+  for (const [code, status, message] of cases) {
+    const error = examRoom2026DatabaseError({ message: `${code} private database detail` });
+    assert.equal(error.code, code);
+    assert.equal(error.status, status);
+    assert.match(error.message, message);
+    assert.equal(error.message.includes('private database detail'), false);
+  }
+});
+
+test('room-key database denials map to stable, plain-language contracts', () => {
+  const cases = [
+    ['EXAM_ROOM_ACTIVATION_INVALID', 400, /room details/i],
+    ['EXAM_ROOM_ROOM_KEY_REQUIRED', 403, /one-time Professor key/i],
+    ['EXAM_ROOM_ACTIVATION_LEDGER_INVALID', 400, /list limit/i],
+    ['EXAM_ROOM_ACTIVATION_REVOKE_INVALID', 400, /documented reason/i],
+    ['EXAM_ROOM_ACTIVATION_NOT_REVOCABLE', 409, /no longer be revoked/i],
+    ['EXAM_ROOM_ACTIVATION_ROOM_BINDING_CONFLICT', 409, /cannot be bound/i],
+    ['EXAM_ROOM_ONE_EXAM_LIMIT', 409, /already has its examination/i],
   ];
   for (const [code, status, message] of cases) {
     const error = examRoom2026DatabaseError({ message: `${code} private database detail` });

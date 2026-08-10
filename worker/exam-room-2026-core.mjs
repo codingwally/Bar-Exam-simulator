@@ -19,6 +19,7 @@ export const EXAM_ROOM_2026_MAX_QUESTIONS = 200;
 
 export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'portal',
+  'activation_ledger',
   'exam_intent',
   'preflight',
   'beadle_portal',
@@ -37,6 +38,7 @@ export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
 export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'issue_activation',
   'redeem_activation',
+  'revoke_activation',
   'create_classroom',
   'validate_roster',
   'import_roster',
@@ -135,6 +137,19 @@ function email(value, label = 'Email') {
 
 function credential(value, label) {
   return boundedText(value, label, 512, { minimum: 12, trim: false });
+}
+
+function activationExpiry(value) {
+  const normalized = timestamp(value, 'Activation expiry');
+  const target = new Date(normalized).getTime();
+  const now = Date.now();
+  if (target <= now || target > now + 7 * 24 * 60 * 60 * 1_000) {
+    throw new DD2026ValidationError(
+      'INVALID_REQUEST',
+      'Activation expiry must be in the future and no more than seven days from now.',
+    );
+  }
+  return normalized;
 }
 
 function optionalCredential(value, label) {
@@ -395,7 +410,15 @@ export function normalizeExamRoomQuery(input) {
     [...EXAM_ROOM_2026_QUERY_OPERATIONS],
   );
   const normalized = { operation };
-  if (operation === 'exam_intent') {
+  if (operation === 'activation_ledger') {
+    normalized.status = enumValue(
+      payload.status ?? 'all',
+      'Professor invitation status',
+      ['all', 'issued', 'redeemed', 'expired', 'revoked', 'locked'],
+    );
+    normalized.limit = integer(payload.limit ?? 200, 'Professor invitation limit', 1, 200);
+    normalized.offset = integer(payload.offset ?? 0, 'Professor invitation offset', 0, 100_000);
+  } else if (operation === 'exam_intent') {
     normalized.examId = uuid(payload.examId, 'Examination');
   } else if (operation === 'preflight') {
     normalized.examId = uuid(payload.examId, 'Examination');
@@ -459,10 +482,17 @@ export function normalizeExamRoomCommand(input) {
   if (operation === 'issue_activation') {
     n.targetEmail = email(payload.targetEmail, 'Professor email');
     n.activationKey = credential(payload.activationKey, 'Professor activation key');
-    n.expiresAt = timestamp(payload.expiresAt, 'Activation expiry');
+    n.roomTitle = boundedText(payload.roomTitle, 'Examination Room title', 200, { minimum: 2 });
+    n.schoolName = boundedText(payload.schoolName, 'School name', 300, { minimum: 2 });
+    n.academicTerm = boundedText(payload.academicTerm, 'Academic term', 160, { minimum: 1 });
+    n.expiresAt = activationExpiry(payload.expiresAt);
     n.reason = boundedText(payload.reason, 'Reason', 1_000, { minimum: 5 });
   } else if (operation === 'redeem_activation') {
     n.activationKey = credential(payload.activationKey, 'Professor activation key');
+  } else if (operation === 'revoke_activation') {
+    n.activationId = uuid(payload.activationId, 'Professor invitation');
+    n.reason = boundedText(payload.reason, 'Revocation reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'create_classroom') {
     n.title = boundedText(payload.title, 'Class title', 200, { minimum: 2 });
     n.schoolName = payload.schoolName ? boundedText(payload.schoolName, 'School name', 300) : null;

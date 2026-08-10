@@ -446,7 +446,7 @@ try {
     schoolName: 'Due Diligence School of Law',
     academicTerm: '2026',
   }, student.token, [403]);
-  assert.equal(professorDenied.body.error.code, 'EXAM_ROOM_PROFESSOR_REQUIRED');
+  assert.equal(professorDenied.body.error.code, 'EXAM_ROOM_ROOM_KEY_REQUIRED');
 
   outcome = {
     ok: true,

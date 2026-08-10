@@ -55,8 +55,57 @@ assert.ok(roleSelectionBlock.indexOf('if (!isAuthenticated())') < roleSelectionB
 assert.ok(roleSelectionBlock.indexOf('if (!isAuthenticated())') < roleSelectionBlock.indexOf('state.exam.section = role'),
   'authentication must happen before the Student or classroom workspace opens');
 assert.match(roleSelectionBlock, /new URL\('admin\/', global\.location\.href\)/);
+assert.match(frontend, /Use the room key created by Admin/);
+assert.match(frontend, /Use the invitation from the Professor/);
+assert.match(frontend, /Create Professor room keys, see who used each key/);
 assert.doesNotMatch(frontend, /operation: '(?:open_dispute|dispute_view|close_dispute)'/,
   'the retired broad dispute viewer must not remain callable from the public Examination Room');
+
+// Professor entry explains the full key chain without exposing an Admin issuer
+// on the public page. A redeemed key creates exactly one room; another room
+// requires another Admin key for the same exact signed-in email.
+const activationStart = frontend.indexOf('function activationSection');
+const activationEnd = frontend.indexOf('function beadleSection', activationStart);
+const activationView = frontend.slice(activationStart, activationEnd);
+assert.match(activationView, /one invitation key for one Examination Room/i);
+assert.match(activationView, /exact signed-in email/);
+assert.match(activationView, /Admins create and monitor Professor keys under Admin Dashboard/);
+assert.match(activationView, /portal\.roles\?\.admin === true[\s\S]*href="admin\/"/,
+  'an authenticated Admin gets a direct route to the authorized key issuer');
+assert.doesNotMatch(activationView, /dd26-professor-email|dd26-activation-expiry|issue_activation/,
+  'the public Professor entry must not issue Admin keys inline');
+
+const professorStart = frontend.indexOf('function professorSection');
+const professorEnd = frontend.indexOf('function professorClass', professorStart);
+const professorView = frontend.slice(professorStart, professorEnd);
+assert.match(professorView, /Each Admin invitation key opens one Examination Room/);
+assert.match(professorView, /Open another Examination Room/);
+assert.match(professorView, /No Examination Room is assigned yet/);
+assert.doesNotMatch(professorView, /dd26-class-title|dd26-class-school|dd26-class-term|dd26-create-class/,
+  'a Professor cannot bypass Admin room-key issuance with a free-form class creator');
+assert.doesNotMatch(frontend, /operation: 'create_classroom'/,
+  'the public bundle must not retain a callable free-form classroom command');
+assert.doesNotMatch(frontend, /function issueActivation|dd26-issue-activation/,
+  'Professor key generation belongs only to Admin Dashboard → Examination Room');
+assert.match(frontend, /operation: 'redeem_activation'[\s\S]*activationKey: value\('dd26-activation-key', false\)/);
+
+const professorClassStart = professorEnd;
+const professorClassEnd = frontend.indexOf('function rosterPreviewHtml', professorClassStart);
+const professorClassView = frontend.slice(professorClassStart, professorClassEnd);
+assert.match(professorClassView, /const authoring = exams\.length \?[\s\S]*This room already has its examination/,
+  'once the room has its examination, the Professor must continue that exam instead of making another');
+assert.match(professorClassView, /One Examination Room holds one examination/);
+
+const studentStart = frontend.indexOf('function studentSection');
+const studentEnd = frontend.indexOf('function activationSection', studentStart);
+const studentView = frontend.slice(studentStart, studentEnd);
+assert.match(studentView, /Students sign in with their Due Diligence account/);
+assert.match(studentView, /there is no separate Student invitation key/);
+assert.match(studentView, /The Professor or Beadle gives the class this exam code/);
+assert.match(studentView, /The Professor creates this when publishing/);
+const beadleStart = frontend.indexOf('function beadleSection');
+const beadleEnd = frontend.indexOf('function professorSection', beadleStart);
+assert.match(frontend.slice(beadleStart, beadleEnd), /The Professor creates this invitation from the exam card/);
 
 // Existing emailed deep links identify an exam without becoming authorization.
 assert.match(frontend, /raw\.startsWith\('examination-room\?'\)/);

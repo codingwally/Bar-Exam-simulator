@@ -52,6 +52,7 @@
     examinationData: null,
     examinationRoomAdminData: null,
     examinationRoomAdminView: 'operations',
+    examinationRoomActivationOffset: 0,
     examinationRoomBreakGlass: null,
     userSearch: '',
     userOffset: 0,
@@ -1792,16 +1793,29 @@
   async function loadExaminationRoomAdmin(force = false) {
     if (state.examinationRoomAdminData && !force) return state.examinationRoomAdminData;
     const observedAt = new Date().toISOString();
+    const activationOffset = Math.max(0, Number(state.examinationRoomActivationOffset) || 0);
     try {
-      const payload = await api('/exam-room/query', { operation: 'portal' });
-      const result = payload.result || {};
-      if (result.roles?.admin !== true) {
+      const [portalPayload, activationPayload] = await Promise.all([
+        api('/exam-room/query', { operation: 'portal' }),
+        api('/exam-room/query', {
+          operation: 'activation_ledger', status: 'all', limit: 200, offset: activationOffset,
+        }),
+      ]);
+      const result = portalPayload.result || {};
+      const activationResult = activationPayload.result || {};
+      if (result.roles?.admin !== true || activationResult.ok !== true
+          || Number(activationResult.offset) !== activationOffset) {
         throw new Error('This account was not confirmed for Examination Room administration.');
       }
+      const activations = Array.isArray(activationResult.activations) ? activationResult.activations : [];
       state.examinationRoomAdminData = {
         available: true,
         observedAt,
         classes: Array.isArray(result.classes) ? result.classes : [],
+        activations,
+        activationTotal: Math.max(activations.length, Number(activationResult.total) || 0),
+        activationLimit: Math.max(1, Number(activationResult.limit) || 200),
+        activationOffset,
         limits: result.limits && typeof result.limits === 'object' ? result.limits : {},
       };
     } catch (error) {
@@ -1809,6 +1823,10 @@
         available: false,
         observedAt,
         classes: [],
+        activations: [],
+        activationTotal: 0,
+        activationLimit: 200,
+        activationOffset,
         limits: {},
         errorCode: error.code || 'METADATA_CONTRACT_UNAVAILABLE',
         message: error.message || 'Examination Room status is unavailable.',
@@ -1841,10 +1859,122 @@
     const operations = state.examinationRoomAdminView === 'operations';
     return `<div class="exam-room-admin-tabs" role="group" aria-label="Examination Room administration views">
       <button type="button" data-exam-room-admin-view="operations"
-        aria-pressed="${operations}">Exam status</button>
+        aria-pressed="${operations}">Professor keys and exam status</button>
       <button type="button" data-exam-room-admin-view="restricted"
         aria-pressed="${!operations}">Restricted support</button>
     </div>`;
+  }
+
+  function professorRoomInvitationStatus(record) {
+    const stored = String(record.status || 'unknown').toLowerCase();
+    const expiresAt = new Date(record.expiresAt).getTime();
+    if (['issued', 'locked'].includes(stored)
+        && Number.isFinite(expiresAt) && expiresAt <= Date.now()) return 'expired';
+    return stored;
+  }
+
+  function professorRoomInvitationStatusCell(record) {
+    const status = professorRoomInvitationStatus(record);
+    const labels = {
+      issued: 'Ready to use',
+      redeemed: 'Used',
+      expired: 'Expired',
+      revoked: 'Cancelled',
+      locked: 'Temporarily locked',
+    };
+    const tone = status === 'redeemed' ? 'ok'
+      : status === 'issued' ? 'warn'
+        : status === 'locked' ? 'warn' : 'danger';
+    const detail = status === 'locked' && record.lockedUntil
+      ? `<small>Try again after ${escapeHtml(dateTime(record.lockedUntil))}</small>`
+      : status === 'revoked' && record.revokeReason
+        ? `<small>${escapeHtml(record.revokeReason)}</small>` : '';
+    return {
+      html: true,
+      value: `${examinationRoomStatus(labels[status] || status, tone).value}${detail ? `<br>${detail}` : ''}`,
+    };
+  }
+
+  function professorRoomInvitationRows(data) {
+    return (data.activations || []).map((record) => {
+      const status = professorRoomInvitationStatus(record);
+      const roomDetails = [record.schoolName, record.academicTerm].filter(Boolean).join(' · ');
+      const issuedBy = record.issuedByEmail || record.issuedByUserId || 'Not available';
+      const usedBy = record.redeemedByEmail || record.redeemedByUserId;
+      const action = ['issued', 'locked'].includes(status) ? {
+        html: true,
+        value: `<span class="row-actions"><button type="button" data-tone="danger" data-exam-room-revoke-activation="${escapeHtml(record.activationId)}" data-exam-room-name="${escapeHtml(record.roomTitle || 'Examination Room')}">Cancel key</button></span>`,
+      } : 'No action';
+      return [
+        {
+          html: true,
+          value: `<strong>${escapeHtml(record.roomTitle || 'Untitled Examination Room')}</strong>${roomDetails ? `<br><small>${escapeHtml(roomDetails)}</small>` : ''}`,
+        },
+        record.targetEmail || 'Not available',
+        professorRoomInvitationStatusCell(record),
+        {
+          html: true,
+          value: `<strong>${escapeHtml(dateTime(record.createdAt))}</strong><br><small>Expires ${escapeHtml(dateTime(record.expiresAt))}</small>`,
+        },
+        issuedBy,
+        usedBy ? {
+          html: true,
+          value: `<strong>${escapeHtml(usedBy)}</strong><br><small>${escapeHtml(dateTime(record.redeemedAt))}</small>`,
+        } : 'Not used',
+        record.activationId || 'Not available',
+        action,
+      ];
+    });
+  }
+
+  function renderProfessorRoomInvitations(data) {
+    const rows = professorRoomInvitationRows(data);
+    const total = Math.max(rows.length, Number(data.activationTotal) || 0);
+    const limit = Math.max(1, Number(data.activationLimit) || 200);
+    const offset = Math.max(0, Number(data.activationOffset) || 0);
+    const first = rows.length ? offset + 1 : 0;
+    const last = rows.length ? offset + rows.length : 0;
+    const previousOffset = Math.max(0, offset - limit);
+    const nextOffset = offset + limit;
+    const hasPrevious = offset > 0;
+    const hasNext = last < total;
+    return `<section class="panel" aria-labelledby="professor-room-invitations-title">
+      <div class="panel-title-row"><div>
+        <h3 id="professor-room-invitations-title">Create a Professor Examination Room</h3>
+        <p class="panel-note">One key creates one Examination Room for one Professor. The key works only with the exact signed-in email entered here.</p>
+      </div><span class="status warn">Beta</span></div>
+      <form class="exam-room-professor-key-form" data-exam-room-professor-key-form>
+        <label>Professor email<input name="targetEmail" type="email" maxlength="254" autocomplete="email" placeholder="professor@school.edu.ph" required></label>
+        <label>Examination Room title<input name="roomTitle" minlength="2" maxlength="200" placeholder="Evidence Midterm · Section A" required></label>
+        <label>School<input name="schoolName" minlength="2" maxlength="300" autocomplete="organization" required></label>
+        <label>Academic term<input name="academicTerm" minlength="1" maxlength="160" placeholder="First Semester, A.Y. 2026–2027" required></label>
+        <label>Key expires<input name="expiresAt" type="datetime-local" required><small>The key may remain open for up to seven days.</small></label>
+        <label class="wide">Reason<input name="reason" minlength="5" maxlength="1000" value="Professor Examination Room for beta testing" required></label>
+        <div class="exam-room-professor-key-actions wide">
+          <button class="primary-button" type="submit" data-exam-room-issue-activation ${data.available ? '' : 'disabled aria-disabled="true"'}>${data.available ? 'Create one-room key' : 'Key creation unavailable'}</button>
+          <p>The full key is shown once after creation. If it is lost, cancel it and create a new key. This page keeps the record and who used it, but never keeps a readable copy of the key. The same Professor may receive separate keys for separate rooms.</p>
+        </div>
+      </form>
+    </section>
+    <section class="panel" aria-labelledby="professor-room-key-records-title">
+      <div class="panel-title-row"><div><h3 id="professor-room-key-records-title">Professor key records</h3>
+        <p class="panel-note">See which Admin created each key, the Professor it was made for, whether it was used, and which Professor used it. Full keys are never shown here.</p></div>
+        <button class="secondary-button" type="button" data-exam-room-activation-refresh>Refresh key records</button>
+      </div>
+      ${rows.length ? table(
+        ['Examination Room', 'Professor email', 'Status', 'Created and expiry', 'Created by', 'Used by', 'Key record', 'Action'],
+        rows,
+      ) : empty(data.available
+        ? 'No Professor Examination Room key has been created yet.'
+        : 'Professor key records are unavailable; no records are guessed.')}
+      <div class="pagination-bar exam-room-key-pagination" aria-label="Professor key record pages">
+        <p class="panel-note">Showing ${number(first)}–${number(last)} of ${number(total)} key records.</p>
+        <div class="row-actions">
+          <button type="button" data-exam-room-activation-page="${previousOffset}" ${hasPrevious ? '' : 'disabled'}>Previous</button>
+          <button type="button" data-exam-room-activation-page="${nextOffset}" ${hasNext ? '' : 'disabled'}>Next</button>
+        </div>
+      </div>
+    </section>`;
   }
 
   function renderExaminationRoomOperations(data) {
@@ -1878,6 +2008,7 @@
         <strong>Examination Room status could not be loaded.</strong>
         ${escapeHtml(data.message || 'The regular status view is unavailable.')} No student answers or grades were requested as a fallback.
       </div>` : ''}
+      ${renderProfessorRoomInvitations(data)}
       <div class="metric-grid">
         ${metric('Classes', data.classes.length, null, number, { subtext: 'Basic details only' })}
         ${metric('Examinations', records.length, null, number, { subtext: 'All exam stages' })}
@@ -1886,21 +2017,21 @@
       </div>
       <div class="work-grid exam-room-operations-grid">
         <section class="panel">
-          <h3>Operational and system health</h3>
+          <h3>Examination Room check</h3>
           <dl class="definition-list exam-room-health-list">
             <dt>Examination Room service</dt><dd>${data.available
               ? 'Available - exam and class status loaded.'
               : 'Unavailable - see the notice above.'}</dd>
-            <dt>Observed by this browser</dt><dd>${escapeHtml(dateTime(data.observedAt))}</dd>
-            <dt>Google Sheets configured</dt><dd>${number(backupReadyCount)} of ${number(records.length)} examinations. This confirms configuration only, not the latest backup write.</dd>
+            <dt>Last checked</dt><dd>${escapeHtml(dateTime(data.observedAt))}</dd>
+            <dt>Google Sheets backup</dt><dd>Ready for ${number(backupReadyCount)} of ${number(records.length)} examinations. This shows that the backup sheet is connected; it does not confirm the latest save.</dd>
             <dt>Answer saving</dt><dd>Not shown on this regular Admin page.</dd>
             <dt>Email and backup queues</dt><dd>Not shown on this regular Admin page.</dd>
             <dt>Camera collection</dt><dd>Off. This administration view does not request or receive camera data.</dd>
           </dl>
         </section>
         <section class="panel">
-          <h3>Privacy boundary</h3>
-          <p class="panel-note">This regular view shows only exam and class details. Student answers, grades, suggested answers, grading comments, access keys, and dispute records are not requested or shown.</p>
+          <h3>What stays private</h3>
+          <p class="panel-note">This regular view shows only exam and class details. Student answers, grades, suggested answers, grading comments, readable copies of previously issued keys, and dispute records are not requested or shown.</p>
           <div class="notice exam-room-audit-notice">
             <strong>Restricted-access notice.</strong> Any approved record review must name the Admin, exact exam and student, case reference, reason, end time, and outcome before a record is shown. This regular status page is not a student-record viewer.
           </div>
@@ -2100,7 +2231,7 @@
     const data = await loadExaminationRoomAdmin(force);
     return `${heading(
       'Examination Room',
-      'Check exam and class status. Student answers and grades stay hidden from the regular Admin view.',
+      'Create one-room Professor keys, monitor every key record, and check exam status. Student answers and grades stay hidden from the regular Admin view.',
     )}
       ${examinationRoomAdminTabs()}
       ${state.examinationRoomAdminView === 'restricted'
@@ -2268,6 +2399,115 @@
     return true;
   }
 
+  function closeProfessorRoomKeyDialog() {
+    const dialog = $('#professor-room-key-dialog');
+    const secret = $('#professor-room-key-secret');
+    if (secret) secret.value = '';
+    if ($('#professor-room-key-copy-button')) $('#professor-room-key-copy-button').textContent = 'Copy key';
+    if ($('#professor-room-key-room')) $('#professor-room-key-room').textContent = 'Not available';
+    if ($('#professor-room-key-email')) $('#professor-room-key-email').textContent = 'Not available';
+    if (dialog?.open) {
+      dialog.close();
+      return;
+    }
+    $('[data-exam-room-professor-key-form] input[name="targetEmail"]')?.focus();
+  }
+
+  function showProfessorRoomKeyDialog({ roomTitle, targetEmail, secret }) {
+    const dialog = $('#professor-room-key-dialog');
+    if (!dialog || !secret) throw new Error('The one-time key window is unavailable.');
+    $('#professor-room-key-room').textContent = roomTitle;
+    $('#professor-room-key-email').textContent = targetEmail;
+    $('#professor-room-key-secret').value = secret;
+    $('#professor-room-key-copy-button').textContent = 'Copy key';
+    dialog.showModal();
+    $('#professor-room-key-copy-button')?.focus();
+  }
+
+  async function copyProfessorRoomKey() {
+    const input = $('#professor-room-key-secret');
+    if (!input?.value) return;
+    try {
+      await navigator.clipboard.writeText(input.value);
+      toast('Professor invitation key copied.');
+      $('#professor-room-key-copy-button').textContent = 'Copied';
+    } catch {
+      input.focus();
+      input.select();
+      toast('Copy was unavailable. The full key is selected for manual copying.');
+    }
+  }
+
+  async function issueProfessorRoomInvitation(form) {
+    if (!form.reportValidity()) return false;
+    const expiresAt = isoFromLocalInput(form.elements.expiresAt.value);
+    const expiryTime = new Date(expiresAt).getTime();
+    if (!expiresAt || expiryTime <= Date.now()
+        || expiryTime > Date.now() + (7 * 24 * 60 * 60 * 1000)) {
+      throw new Error('Choose a key expiry after now and no more than seven days away.');
+    }
+    const targetEmail = String(form.elements.targetEmail.value || '').trim().toLowerCase();
+    const roomTitle = String(form.elements.roomTitle.value || '').trim();
+    const schoolName = String(form.elements.schoolName.value || '').trim();
+    const academicTerm = String(form.elements.academicTerm.value || '').trim();
+    const secret = `professor_room_${uuidKey()}${uuidKey()}`;
+    const payload = await api('/exam-room/command', {
+      operation: 'issue_activation',
+      targetEmail,
+      activationKey: secret,
+      roomTitle,
+      schoolName,
+      academicTerm,
+      expiresAt,
+      reason: String(form.elements.reason.value || '').trim(),
+    });
+    const result = payload.result || {};
+    const confirmedExpiryTime = new Date(result.expiresAt).getTime();
+    if (result.ok !== true || !UUID_PATTERN.test(String(result.activationId || ''))
+        || result.status !== 'issued'
+        || result.targetEmail !== targetEmail
+        || result.roomTitle !== roomTitle
+        || result.schoolName !== schoolName
+        || result.academicTerm !== academicTerm
+        || !Number.isFinite(confirmedExpiryTime)
+        || confirmedExpiryTime <= Date.now()
+        || confirmedExpiryTime > expiryTime) {
+      throw new Error('The server did not confirm the new Professor Examination Room key.');
+    }
+    showProfessorRoomKeyDialog({ roomTitle, targetEmail, secret });
+    state.examinationRoomActivationOffset = 0;
+    state.examinationRoomAdminData = null;
+    await renderSection('examination_room');
+    return true;
+  }
+
+  async function revokeProfessorRoomInvitation(button) {
+    const activationId = String(button.dataset.examRoomRevokeActivation || '');
+    if (!UUID_PATTERN.test(activationId)) throw new Error('This Professor key record is invalid.');
+    const roomTitle = String(button.dataset.examRoomName || 'this Examination Room');
+    const reason = global.prompt(`Why are you cancelling the unused key for ${roomTitle}?`);
+    if (reason == null) return false;
+    const normalizedReason = reason.trim();
+    if (normalizedReason.length < 5 || normalizedReason.length > 1000) {
+      throw new Error('Enter a cancellation reason between 5 and 1,000 characters.');
+    }
+    if (!global.confirm(`Cancel the unused Professor key for ${roomTitle}? It cannot be used after this.`)) return false;
+    const payload = await api('/exam-room/command', {
+      operation: 'revoke_activation',
+      activationId,
+      reason: normalizedReason,
+      requestKey: uuidKey(),
+    });
+    if (payload.result?.ok !== true || payload.result.activationId !== activationId
+        || !payload.result.revokedAt) {
+      throw new Error('The server did not confirm that the Professor key was cancelled.');
+    }
+    state.examinationRoomActivationOffset = 0;
+    state.examinationRoomAdminData = null;
+    await renderSection('examination_room');
+    return true;
+  }
+
   function bindExaminationRoomAdmin() {
     $$('[data-exam-room-admin-view]').forEach((button) => button.addEventListener('click', async () => {
       const view = button.dataset.examRoomAdminView;
@@ -2276,9 +2516,62 @@
       await renderSection('examination_room');
     }));
     $('[data-exam-room-metadata-refresh]')?.addEventListener('click', async () => {
+      state.examinationRoomActivationOffset = 0;
       state.examinationRoomAdminData = null;
       await renderSection('examination_room');
     });
+    $('[data-exam-room-activation-refresh]')?.addEventListener('click', async () => {
+      state.examinationRoomActivationOffset = 0;
+      state.examinationRoomAdminData = null;
+      await renderSection('examination_room');
+    });
+    $$('[data-exam-room-activation-page]').forEach((button) => button.addEventListener('click', async () => {
+      if (button.disabled) return;
+      state.examinationRoomActivationOffset = Math.max(
+        0,
+        Number(button.dataset.examRoomActivationPage) || 0,
+      );
+      state.examinationRoomAdminData = null;
+      await renderSection('examination_room');
+    }));
+    const professorKeyForm = $('[data-exam-room-professor-key-form]');
+    if (professorKeyForm) {
+      const expiry = professorKeyForm.elements.expiresAt;
+      const current = new Date();
+      const maximum = new Date(current.getTime() + (7 * 24 * 60 * 60 * 1000) - 60_000);
+      expiry.min = localDateTimeValue(new Date(current.getTime() + 60_000));
+      expiry.max = localDateTimeValue(maximum);
+      expiry.value = localDateTimeValue(maximum);
+      professorKeyForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const button = professorKeyForm.querySelector('[data-exam-room-issue-activation]');
+        if (!button || button.disabled) return;
+        button.disabled = true;
+        button.textContent = 'Creating key…';
+        try {
+          if (await issueProfessorRoomInvitation(professorKeyForm)) {
+            toast('One-room Professor invitation created. Copy the key now.');
+          } else {
+            button.disabled = false;
+            button.textContent = 'Create one-room key';
+          }
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Create one-room key';
+          toast(error.message || 'The Professor Examination Room key was not created.');
+        }
+      });
+    }
+    $$('[data-exam-room-revoke-activation]').forEach((button) => button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        if (await revokeProfessorRoomInvitation(button)) toast('Professor key cancelled.');
+        else button.disabled = false;
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message || 'The Professor key was not cancelled.');
+      }
+    }));
     $('[data-exam-room-break-glass-auth-refresh]')?.addEventListener('click', async (event) => {
       const button = event.currentTarget;
       button.disabled = true;
@@ -3582,6 +3875,7 @@
   }
 
   function deny(message) {
+    closeProfessorRoomKeyDialog();
     $('#admin-gate').hidden = false;
     $('#admin-shell').hidden = true;
     $('#gate-title').textContent = 'Administrator access unavailable';
@@ -3655,6 +3949,7 @@
     state.liveActivity = null;
     state.answerHistory = null;
     state.quorumPosts = null;
+    state.examinationRoomActivationOffset = 0;
     state.examinationRoomAdminData = null;
     try {
       await renderSection(state.section);
@@ -3689,6 +3984,14 @@
   $('#insight-dialog')?.addEventListener('click', (event) => {
     if (event.target === event.currentTarget) closeInsight();
   });
+  $('#professor-room-key-copy-button')?.addEventListener('click', copyProfessorRoomKey);
+  $('#professor-room-key-close')?.addEventListener('click', closeProfessorRoomKeyDialog);
+  $('#professor-room-key-done')?.addEventListener('click', closeProfessorRoomKeyDialog);
+  $('#professor-room-key-dialog')?.addEventListener('close', closeProfessorRoomKeyDialog);
+  $('#professor-room-key-dialog')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) closeProfessorRoomKeyDialog();
+  });
+  global.addEventListener('pagehide', closeProfessorRoomKeyDialog);
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && $('#sidebar')?.classList.contains('open')) {
       setSidebarOpen(false);

@@ -31,6 +31,7 @@ function request(body) {
 
 function harness(overrides = {}) {
   const calls = [];
+  const adminCalls = [];
   const uploads = [];
   const deletions = [];
   const rateModes = [];
@@ -59,7 +60,11 @@ function harness(overrides = {}) {
     }),
     parseBoundedJson: async (input) => input.json(),
     processExamRoomQueues: async () => ({}),
-    requireAdministrator: async () => ({ id: userId }),
+    requireAdministrator: async () => {
+      adminCalls.push(true);
+      if (overrides.adminError) throw overrides.adminError;
+      return overrides.admin ?? { id: userId };
+    },
     requireAuthenticatedUser: async () => overrides.user ?? ({ id: userId }),
     resolveVerdictQuestion: async () => null,
     structuredGemini: async () => ({}),
@@ -79,8 +84,236 @@ function harness(overrides = {}) {
       );
     },
   });
-  return { handlers, rawHandlers, calls, uploads, deletions, rateModes };
+  return { handlers, rawHandlers, calls, uploads, deletions, rateModes, adminCalls };
 }
+
+test('Admin issues one scoped room key through a hashed, projected contract', async () => {
+  const activationKey = 'professor-room-key-plain-secret';
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
+  const activationId = '123e4567-e89b-42d3-a456-426614174011';
+  const issued = harness({
+    rpc: async (name) => name === 'exam_room_issue_professor_activation'
+      ? {
+        ok: true,
+        activationId,
+        status: 'issued',
+        createdAt: '2026-08-10T02:00:00Z',
+        expiresAt,
+        tokenHash: 'must-not-project',
+        activationKey: 'must-not-project',
+      }
+      : { ok: true },
+  });
+  const response = await issued.handlers.examCommand(request({
+    operation: 'issue_activation',
+    targetEmail: 'Professor@Example.edu',
+    activationKey,
+    roomTitle: 'Civil Law Final Examination Room',
+    schoolName: 'Due Diligence College of Law',
+    academicTerm: 'First Semester 2026-2027',
+    expiresAt,
+    reason: 'Initial beta room invitation for the assigned Professor.',
+  }), {}, '', '', {});
+  const call = issued.calls.at(-1);
+  const payload = await response.json();
+
+  assert.equal(issued.adminCalls.length, 1);
+  assert.equal(call.name, 'exam_room_issue_professor_activation');
+  assert.equal(call.body.p_actor_user_id, userId);
+  assert.equal(call.body.p_target_email, 'professor@example.edu');
+  assert.equal(call.body.p_room_title, 'Civil Law Final Examination Room');
+  assert.equal(call.body.p_school_name, 'Due Diligence College of Law');
+  assert.equal(call.body.p_academic_term, 'First Semester 2026-2027');
+  assert.equal(call.body.p_expires_at, expiresAt);
+  assert.match(call.body.p_token_hash, /^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(call.body).includes(activationKey), false);
+  assert.deepEqual(payload.result, {
+    ok: true,
+    activationId,
+    status: 'issued',
+    createdAt: '2026-08-10T02:00:00Z',
+    expiresAt,
+    targetEmail: 'professor@example.edu',
+    roomTitle: 'Civil Law Final Examination Room',
+    schoolName: 'Due Diligence College of Law',
+    academicTerm: 'First Semester 2026-2027',
+  });
+  assert.equal(JSON.stringify(payload).includes('must-not-project'), false);
+  assert.equal(JSON.stringify(payload).includes(activationKey), false);
+
+  const denied = harness({ adminError: new Error('ADMIN_REQUIRED') });
+  await assert.rejects(
+    denied.handlers.examCommand(request({
+      operation: 'issue_activation',
+      targetEmail: 'professor@example.edu',
+      activationKey,
+      roomTitle: 'Civil Law Final Examination Room',
+      schoolName: 'Due Diligence College of Law',
+      academicTerm: 'First Semester 2026-2027',
+      expiresAt,
+      reason: 'Initial beta room invitation for the assigned Professor.',
+    }), {}, '', '', {}),
+    /ADMIN_REQUIRED/,
+  );
+  assert.equal(denied.calls.length, 0);
+});
+
+test('Professor invitation ledger is Admin-only and never returns credentials', async () => {
+  const activationId = '123e4567-e89b-42d3-a456-426614174011';
+  const ledger = harness({
+    rpc: async (name) => name === 'exam_room_admin_professor_activation_ledger'
+      ? {
+        ok: true,
+        status: 'all',
+        total: 1,
+        limit: 200,
+        offset: 0,
+        activations: [{
+          activationId,
+          roomTitle: 'Civil Law Final Examination Room',
+          schoolName: 'Due Diligence College of Law',
+          academicTerm: 'First Semester 2026-2027',
+          targetEmail: 'professor@example.edu',
+          status: 'redeemed',
+          createdAt: '2026-08-10T02:00:00Z',
+          expiresAt: '2026-08-11T02:00:00Z',
+          issuedByUserId: userId,
+          issuedByEmail: 'admin@example.edu',
+          redeemedByUserId: beadleId,
+          redeemedByEmail: 'professor@example.edu',
+          redeemedAt: '2026-08-10T02:10:00Z',
+          failedAttempts: 0,
+          classroomId: examId,
+          tokenHash: 'must-not-project',
+          activationKey: 'must-not-project',
+          internalMetadata: { token: 'must-not-project' },
+        }],
+      }
+      : { ok: true },
+  });
+  const response = await ledger.handlers.examQuery(request({
+    operation: 'activation_ledger', status: 'all', limit: 200, offset: 0,
+  }), {}, '', '');
+  const payload = await response.json();
+  const call = ledger.calls.at(-1);
+
+  assert.equal(ledger.adminCalls.length, 1);
+  assert.equal(call.name, 'exam_room_admin_professor_activation_ledger');
+  assert.deepEqual(call.body, {
+    p_actor_user_id: userId,
+    p_status: 'all',
+    p_limit: 200,
+    p_offset: 0,
+  });
+  assert.equal(payload.result.offset, 0);
+  assert.equal(payload.result.activations.length, 1);
+  assert.equal(payload.result.activations[0].activationId, activationId);
+  assert.equal(payload.result.activations[0].redeemedByEmail, 'professor@example.edu');
+  assert.equal(JSON.stringify(payload).includes('must-not-project'), false);
+
+  const denied = harness({
+    adminError: new Error('ADMIN_REQUIRED'),
+  });
+  await assert.rejects(
+    denied.handlers.examQuery(request({
+      operation: 'activation_ledger', status: 'all', limit: 200, offset: 0,
+    }), {}, '', ''),
+    /ADMIN_REQUIRED/,
+  );
+  assert.equal(denied.calls.length, 0);
+});
+
+test('Admin revokes a room key idempotently without exposing invitation secrets', async () => {
+  const activationId = '123e4567-e89b-42d3-a456-426614174011';
+  const revoked = harness({
+    rpc: async (name) => name === 'exam_room_admin_revoke_professor_activation'
+      ? {
+        ok: true,
+        activationId,
+        status: 'revoked',
+        revokedAt: '2026-08-10T03:00:00Z',
+        idempotent: false,
+        tokenHash: 'must-not-project',
+      }
+      : { ok: true },
+  });
+  const response = await revoked.handlers.examCommand(request({
+    operation: 'revoke_activation',
+    activationId,
+    reason: 'The room invitation was replaced before the Professor used it.',
+    requestKey,
+  }), {}, '', '', {});
+  const payload = await response.json();
+  const call = revoked.calls.at(-1);
+
+  assert.equal(revoked.adminCalls.length, 1);
+  assert.equal(call.name, 'exam_room_admin_revoke_professor_activation');
+  assert.deepEqual(call.body, {
+    p_actor_user_id: userId,
+    p_activation_id: activationId,
+    p_reason: 'The room invitation was replaced before the Professor used it.',
+    p_request_key: requestKey,
+  });
+  assert.deepEqual(payload.result, {
+    ok: true,
+    activationId,
+    status: 'revoked',
+    revokedAt: '2026-08-10T03:00:00Z',
+    idempotent: false,
+  });
+  assert.equal(JSON.stringify(payload).includes('must-not-project'), false);
+});
+
+test('Professor redemption returns only the one room opened by the key', async () => {
+  const activationKey = 'professor-room-key-plain-secret';
+  const redeemed = harness({
+    rpc: async (name) => name === 'exam_room_redeem_professor_activation'
+      ? {
+        ok: true,
+        role: 'professor',
+        activationId: operationId,
+        classroomId: examId,
+        roomTitle: 'Civil Law Final Examination Room',
+        schoolName: 'Due Diligence College of Law',
+        academicTerm: 'First Semester 2026-2027',
+        status: 'redeemed',
+        redeemedAt: '2026-08-10T02:10:00Z',
+        tokenHash: 'must-not-project',
+      }
+      : { ok: true },
+  });
+  const response = await redeemed.handlers.examCommand(request({
+    operation: 'redeem_activation', activationKey,
+  }), {}, '', '', {});
+  const call = redeemed.calls.at(-1);
+  const payload = await response.json();
+
+  assert.equal(redeemed.adminCalls.length, 0);
+  assert.equal(call.name, 'exam_room_redeem_professor_activation');
+  assert.match(call.body.p_token_hash, /^[0-9a-f]{64}$/);
+  assert.match(call.body.p_rate_key_hash, /^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(call.body).includes(activationKey), false);
+  assert.equal(payload.result.classroomId, examId);
+  assert.equal(payload.result.roomTitle, 'Civil Law Final Examination Room');
+  assert.equal(JSON.stringify(payload).includes('must-not-project'), false);
+
+  const failed = harness({
+    rpc: async () => ({
+      ok: false,
+      code: 'PRIVATE_DATABASE_REASON',
+      lockedUntil: '2026-08-10T02:15:00Z',
+      tokenHash: 'must-not-project',
+    }),
+  });
+  const failedResponse = await failed.handlers.examCommand(request({
+    operation: 'redeem_activation', activationKey,
+  }), {}, '', '', {});
+  assert.deepEqual((await failedResponse.json()).result, {
+    ok: false,
+    code: 'ACTIVATION_UNAVAILABLE',
+    lockedUntil: '2026-08-10T02:15:00Z',
+  });
+});
 
 test('question upload authorizes ownership before decoding or parsing the source', async () => {
   const { handlers, calls, uploads } = harness({ access: { canUploadQuestions: false } });
@@ -432,7 +665,7 @@ test('v2 operations and exam-scoped uploads require both rollout flags', async (
   assert.equal(blocked.rateModes.length, 0);
 });
 
-test('legacy portal and classroom operations remain available when only the base flag is enabled', async () => {
+test('legacy portal remains available while free classroom creation fails closed', async () => {
   const legacyOnlyEnv = { EXAMINATION_ROOM_ENABLED: 'true' };
   const legacy = harness({
     rpc: async (name) => name === 'exam_room_portal_snapshot'
@@ -449,13 +682,25 @@ test('legacy portal and classroom operations remain available when only the base
   assert.equal(payload.result.roles.professor, true);
   assert.deepEqual(legacy.calls.map((entry) => entry.name), ['exam_room_portal_snapshot']);
 
-  await legacy.rawHandlers.examCommand(request({
-    operation: 'create_classroom',
-    title: 'Legacy Evidence Class',
-    schoolName: '',
-    academicTerm: '',
-  }), legacyOnlyEnv, '', '', {});
-  assert.equal(legacy.calls.at(-1).name, 'exam_room_create_classroom');
+  await assert.rejects(
+    legacy.rawHandlers.examCommand(request({
+      operation: 'create_classroom',
+      title: 'Legacy Evidence Class',
+      schoolName: 'Legacy School',
+      academicTerm: 'First Semester',
+    }), legacyOnlyEnv, '', '', {}),
+    (error) => error.code === 'EXAMINATION_ROOM_2_DISABLED' && error.status === 404,
+  );
+  await assert.rejects(
+    legacy.rawHandlers.examCommand(request({
+      operation: 'create_classroom',
+      title: 'Legacy Evidence Class',
+      schoolName: 'Legacy School',
+      academicTerm: 'First Semester',
+    }), v2Env, '', '', {}),
+    (error) => error.code === 'EXAM_ROOM_ROOM_KEY_REQUIRED' && error.status === 403,
+  );
+  assert.equal(legacy.calls.length, 1);
 });
 
 test('production and staging explicitly enable the owner-approved beta-wide release', () => {

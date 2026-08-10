@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
-import { sha256Hex } from './exam-room-2026-core.mjs';
+import {
+  EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS,
+  EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION,
+  sha256Hex,
+} from './exam-room-2026-core.mjs';
+import { rosterXlsxBase64 } from './exam-room-roster-template-test-helpers.mjs';
 import { encryptStudentExamCode } from './exam-room-student-code-envelope.mjs';
 
 const userId = '123e4567-e89b-42d3-a456-426614174000';
@@ -1049,24 +1054,61 @@ test('exam-scoped roster upload authorizes before parsing and uses the Beadle-sa
   }), {}, '', ''), (error) => error.code === 'EXAM_ROOM_OPERATOR_REQUIRED');
   assert.deepEqual(invalid.calls.map((entry) => entry.name), ['exam_room_exam_access_v3']);
 
-  const csv = 'Email,Student Number,Candidate Number\nana@example.edu,000012,0007\n';
+  const wrongType = harness({ access: { canManageRoster: true } });
+  await assert.rejects(wrongType.handlers.rosterUpload(request({
+    examId,
+    fileName: 'class-list.csv',
+    mimeType: 'text/csv',
+    base64: 'not-valid-base64',
+  }), {}, '', ''), (error) => error.code === 'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED'
+    && error.status === 400
+    && error.message === 'Use the official Beadle class-list template. Do not add, remove, or rename columns.');
+  assert.deepEqual(wrongType.calls.map((entry) => entry.name), ['exam_room_exam_access_v3']);
+
+  const xlsx = rosterXlsxBase64([
+    EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS,
+    ['ana@example.edu', '000012', 'Cruz, Ana, M.'],
+  ]);
   const valid = harness({
     access: { canManageRoster: true },
-    rpc: async () => ({ ok: true, errors: [], warnings: [] }),
+    rpc: async (name) => name === 'exam_room_register_roster_template_validation_v1'
+      ? {
+        ok: true,
+        examId,
+        templateReceiptId: versionId,
+        templateVersion: EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION,
+        templateReceiptExpiresAt: '2026-08-10T18:00:00.000Z',
+        privateReceiptHash: 'must-not-project',
+      }
+      : { ok: true, errors: [], warnings: [] },
   });
   const response = await valid.handlers.rosterUpload(request({
     examId,
-    fileName: 'exam.csv',
-    mimeType: 'text/csv',
-    base64: Buffer.from(csv).toString('base64'),
+    fileName: 'official-class-list.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    base64: xlsx,
   }), {}, '', '');
   assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.templateReceiptId, versionId);
+  assert.equal(payload.templateVersion, EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION);
+  assert.equal(payload.templateReceiptExpiresAt, '2026-08-10T18:00:00.000Z');
+  assert.equal(JSON.stringify(payload).includes('must-not-project'), false);
   const validation = valid.calls.find(
     (entry) => entry.name === 'exam_room_validate_exam_roster_v2',
   );
   assert.equal(validation.body.p_actor_user_id, userId);
   assert.equal(validation.body.p_exam_public_id, examId);
-  assert.equal(validation.body.p_rows[0].candidateNumber, '0007');
+  assert.equal(validation.body.p_rows[0].candidateNumber, '000012');
+  assert.equal(validation.body.p_rows[0].displayName, 'Cruz, Ana, M.');
+  const receipt = valid.calls.find(
+    (entry) => entry.name === 'exam_room_register_roster_template_validation_v1',
+  );
+  assert.equal(receipt.body.p_actor_user_id, userId);
+  assert.equal(receipt.body.p_exam_public_id, examId);
+  assert.equal(receipt.body.p_template_version, EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION);
+  assert.match(receipt.body.p_source_hash, /^[0-9a-f]{64}$/);
+  assert.deepEqual(receipt.body.p_rows, validation.body.p_rows);
 
   const rowError = harness({
     access: { canManageRoster: true },
@@ -1078,15 +1120,20 @@ test('exam-scoped roster upload authorizes before parsing and uses the Beadle-sa
   });
   const editableResponse = await rowError.handlers.rosterUpload(request({
     examId,
-    fileName: 'exam.csv',
-    mimeType: 'text/csv',
-    base64: Buffer.from(csv).toString('base64'),
+    fileName: 'official-class-list.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    base64: xlsx,
   }), {}, '', '');
   const editablePayload = await editableResponse.json();
   assert.equal(editableResponse.status, 200);
   assert.equal(editablePayload.ok, true);
   assert.equal(editablePayload.validation.ok, false);
   assert.equal(editablePayload.validation.errors[0].field, 'email');
+  assert.equal(Object.hasOwn(editablePayload, 'templateReceiptId'), false);
+  assert.deepEqual(rowError.calls.map((entry) => entry.name), [
+    'exam_room_exam_access_v3',
+    'exam_room_validate_exam_roster_v2',
+  ]);
 });
 
 test('legacy classroom roster upload also proves professor ownership before XLSX or CSV parsing', async () => {
@@ -1118,11 +1165,12 @@ test('legacy classroom roster upload also proves professor ownership before XLSX
   ]);
 });
 
-test('exam-scoped roster commands map validation, import, and single-row correction RPCs', async () => {
+test('exam-scoped roster commands require receipt-backed import and reject single-row mutation before RPC', async () => {
   const row = {
     email: 'ana@example.edu',
     studentNumber: '000012',
-    candidateNumber: '0007',
+    candidateNumber: '000012',
+    displayName: 'Cruz, Ana, M.',
   };
   const { handlers, calls } = harness();
   await handlers.examCommand(request({
@@ -1131,17 +1179,24 @@ test('exam-scoped roster commands map validation, import, and single-row correct
   await handlers.examCommand(request({
     operation: 'import_exam_roster', examId, rows: [row],
     requestKey, sourceHash: 'd'.repeat(64),
-  }), {}, '', '', {});
-  await handlers.examCommand(request({
-    operation: 'upsert_exam_roster_row', examId, row,
-    reason: 'Corrected candidate assignment.', requestKey,
+    templateReceiptId: versionId,
+    templateVersion: EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION,
   }), {}, '', '', {});
   assert.deepEqual(calls.map((entry) => entry.name), [
     'exam_room_validate_exam_roster_v2',
-    'exam_room_import_exam_roster_v2',
-    'exam_room_upsert_roster_row_v2',
+    'exam_room_import_exam_roster_v3',
   ]);
-  assert.equal(calls[2].body.p_row.displayName, null);
+  assert.equal(calls[1].body.p_template_receipt_id, versionId);
+  assert.equal(calls[1].body.p_template_version, EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION);
+
+  const blocked = harness();
+  await assert.rejects(blocked.handlers.examCommand(request({
+    operation: 'upsert_exam_roster_row', examId, row,
+    reason: 'Corrected candidate assignment.', requestKey,
+  }), {}, '', '', {}), (error) => error.code === 'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED'
+    && error.status === 400
+    && /official Beadle class-list template/.test(error.message));
+  assert.equal(blocked.calls.length, 0);
 });
 
 test('Beadle invitation and revocation credentials are server-hashed and account scoped', async () => {

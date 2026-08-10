@@ -356,12 +356,44 @@ assert.match(frontend, /operation: 'transfer_session'/);
 assert.match(frontend, /never shows the exam questions, student answers, grades, or the Professor’s suggested answer/);
 assert.match(frontend, /record_candidate_verification/);
 assert.match(frontend, /set_candidate_admission/);
-assert.match(frontend, /operation: 'validate_exam_roster'/);
 assert.match(frontend, /operation: 'import_exam_roster'/);
-assert.match(frontend, /operation: 'upsert_exam_roster_row'/);
 assert.match(frontend, /id="dd26-beadle-exam-link" readonly/);
-assert.match(frontend, /Step 4 · Upload and check the class list/);
+assert.match(frontend, /Step 4 · Prepare and save the class list/);
 assert.match(frontend, /Step 5 · Student handout/);
+assert.doesNotMatch(frontend, /operation: 'validate_exam_roster'/,
+  'Beadle preview edits must not bypass the official-template upload check');
+const rosterSurfaceStart = frontend.indexOf('const rosterEditor = canEditRoster');
+const rosterSurfaceEnd = frontend.indexOf('const codeValue = activeStudentCode', rosterSurfaceStart);
+const rosterSurface = frontend.slice(rosterSurfaceStart, rosterSurfaceEnd);
+assert.match(rosterSurface, /Required class-list steps/);
+assert.match(rosterSurface, /Download the official template/);
+assert.match(frontend, /BEADLE_ROSTER_TEMPLATE_URL = '\/assets\/examination-room-beadle-class-list-template\.xlsx'/);
+assert.match(rosterSurface, /accept="\.xlsx,application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet"/);
+for (const field of ['Email Address', 'Student Number', 'Student Name']) {
+  assert.match(rosterSurface, new RegExp(field));
+}
+assert.match(rosterSurface, /Last Name, First Name, Middle Initial/);
+assert.doesNotMatch(rosterSurface, /CSV|dd26-roster-paste|Check pasted list|Add or correct one student|dd26-upsert-beadle-row/,
+  'the Beadle initial class-list surface has one official XLSX path');
+const rosterPreviewStart = frontend.indexOf('if (beadleMode) {', frontend.indexOf('function rosterPreviewHtml'));
+const rosterPreviewEnd = frontend.indexOf('return `<div class=', rosterPreviewStart);
+const beadleRosterPreview = frontend.slice(rosterPreviewStart, rosterPreviewEnd);
+assert.match(beadleRosterPreview, /<th>Email Address<\/th><th>Student Number<\/th><th>Student Name[\s\S]*escapeHtml\(row\.email\)[\s\S]*escapeHtml\(row\.studentNumber\)[\s\S]*escapeHtml\(row\.displayName/);
+assert.match(beadleRosterPreview, /This preview is for checking only/);
+assert.doesNotMatch(beadleRosterPreview, /data-dd26-roster-field|candidateNumber|Exam number/,
+  'the Beadle preview shows exactly the three template fields');
+const importRosterBlock = frontend.slice(
+  frontend.indexOf('async function importRoster'),
+  frontend.indexOf('function rerenderRosterSurface'),
+);
+assert.match(importRosterBlock, /templateReceiptId: preview\.templateReceiptId, templateVersion: preview\.templateVersion/,
+  'saving the Beadle class list requires the receipt from the checked official template');
+const dirtyRosterBlock = frontend.slice(
+  frontend.indexOf('function markRosterPreviewDirty'),
+  frontend.indexOf('async function refreshExamPortal'),
+);
+assert.match(dirtyRosterBlock, /templateReceiptId = ''[\s\S]*templateVersion = ''[\s\S]*upload it again before saving/,
+  'editing the preview invalidates the official-template receipt');
 assert.match(frontend, /const canEditRoster = !professorView && snapshot\.canEditRoster === true/,
   'Professor Step 4/5 review must not bind Beadle roster mutations');
 assert.match(frontend, /canReopenRoster = !professorView && snapshot\.canReopenRoster === true/);
@@ -670,6 +702,12 @@ assert.match(frontend, /aria-current="step"/);
 assert.match(css, /\.dd26-modal::backdrop/);
 assert.match(css, /@media \(prefers-reduced-motion:reduce\)/);
 assert.match(css, /\.dd26-role-grid/);
+assert.match(css, /\.dd26-roster-template-flow>li\{[^}]*grid-template-columns:42px minmax\(0,1fr\)[^}]*border-left:4px solid #d4af37/,
+  'the required Beadle template flow has a clear numbered rail and aligned copy');
+assert.match(css, /\.dd26-roster-field-list\{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/,
+  'the three required roster fields align in one readable row on wide screens');
+assert.match(css, /\.dd26-roster-field-list\{grid-template-columns:1fr;\}/,
+  'the three roster fields stack cleanly on small screens');
 assert.match(css, /\.dd26-flow-step\.has-action\{[^}]*grid-template-columns:38px minmax\(0,1fr\) auto minmax\(150px,auto\)/,
   'the five-step review aligns status and a dedicated action column');
 assert.match(css, /\.dd26-flow-step,\.dd26-flow-step\.has-action\{grid-template-columns:34px minmax\(0,1fr\)/,
@@ -683,8 +721,8 @@ assert.match(css, /\.dd26-reschedule-comparison>div\{grid-template-columns:1fr;g
 
 assert.match(html, /assets\/examination-room-2-store\.js/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
-assert.match(html, /duediligence-2026\.css\?v=exam-room-professor-reschedule-20260810-2/);
-assert.match(html, /duediligence-2026\.js\?v=exam-room-professor-reschedule-20260810-2/);
+assert.match(html, /duediligence-2026\.css\?v=exam-room-beadle-roster-template-20260810-1/);
+assert.match(html, /duediligence-2026\.js\?v=exam-room-beadle-roster-template-20260810-1/);
 
 // Execute the pure disclosure gate: malformed, partial, and stale replacement
 // results must never unlock one-time secret rendering.

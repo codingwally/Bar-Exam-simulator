@@ -17,6 +17,7 @@ import {
   validateDoctrineResult,
 } from './duediligence-2026-core.mjs';
 import {
+  EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION,
   examRoomRateKey,
   hashedCredential,
   normalizeExamResultPdfRequest,
@@ -107,7 +108,6 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'create_classroom',
   'validate_exam_roster',
   'import_exam_roster',
-  'upsert_exam_roster_row',
   'update_exam_details',
   'revise_draft_questions',
   'save_rules_draft',
@@ -193,6 +193,36 @@ function projectScalarFields(value, fields) {
     .filter((field) => source[field] == null
       || ['string', 'number', 'boolean'].includes(typeof source[field]))
     .map((field) => [field, source[field]]));
+}
+
+function rosterTemplateReceiptView(value, examId) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const templateReceiptId = String(
+    source.templateReceiptId ?? source.receiptId ?? '',
+  ).trim().toLowerCase();
+  const templateVersion = String(source.templateVersion ?? '').trim();
+  const templateReceiptExpiresAt = String(
+    source.templateReceiptExpiresAt ?? source.expiresAt ?? '',
+  ).trim();
+  const returnedExamId = String(source.examId ?? '').trim().toLowerCase();
+  if (!VERIFIED_SESSION_ID.test(templateReceiptId)
+      || templateVersion !== EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION
+      || !templateReceiptExpiresAt
+      || Number.isNaN(Date.parse(templateReceiptExpiresAt))) {
+    throw new DD2026ValidationError(
+      'EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_INVALID',
+      'The class-list template could not be confirmed. Upload the completed official template again.',
+      502,
+    );
+  }
+  if (returnedExamId && returnedExamId !== examId) {
+    throw new DD2026ValidationError(
+      'EXAM_ROOM_SCOPE_MISMATCH',
+      'The class-list template receipt did not match the selected examination.',
+      403,
+    );
+  }
+  return { templateReceiptId, templateVersion, templateReceiptExpiresAt };
 }
 
 function professorActivationIssueView(value, input) {
@@ -1198,6 +1228,18 @@ export function createDD2026Handlers(deps) {
         p_classroom_public_id: input.classroomId,
         p_rows: input.rows,
       });
+    const receipt = input.examId && validation?.ok === true
+      ? rosterTemplateReceiptView(
+        await examRoomRpc(env, 'exam_room_register_roster_template_validation_v1', {
+          p_actor_user_id: user.id,
+          p_exam_public_id: input.examId,
+          p_template_version: input.templateVersion,
+          p_source_hash: input.sourceHash,
+          p_rows: input.rows,
+        }),
+        input.examId,
+      )
+      : null;
     return jsonResponse({
       ok: true,
       examId: input.examId,
@@ -1205,6 +1247,7 @@ export function createDD2026Handlers(deps) {
       rows: input.rows,
       sourceHash: input.sourceHash,
       validation,
+      ...(receipt || {}),
     }, 200, origin, allowedOrigin);
   }
 
@@ -1263,6 +1306,12 @@ export function createDD2026Handlers(deps) {
     requireExamRoomEnabled(env);
     const user = await requireAuthenticatedUser(request, env);
     const payload = await parseBoundedJson(request, 2_500_000);
+    if (payload?.operation === 'upsert_exam_roster_row') {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED',
+        'Use the official Beadle class-list template. Upload and check the completed .xlsx file before saving roster changes.',
+      );
+    }
     if (EXAM_ROOM_2_COMMAND_OPERATIONS.has(String(payload?.operation || ''))) {
       requireExamRoom2Enabled(env);
     }
@@ -1402,13 +1451,11 @@ export function createDD2026Handlers(deps) {
       validate_exam_roster: async () => ({ functionName: 'exam_room_validate_exam_roster_v2', body: {
         p_actor_user_id: userId, p_exam_public_id: input.examId, p_rows: input.rows,
       } }),
-      import_exam_roster: async () => ({ functionName: 'exam_room_import_exam_roster_v2', body: {
+      import_exam_roster: async () => ({ functionName: 'exam_room_import_exam_roster_v3', body: {
         p_actor_user_id: userId, p_exam_public_id: input.examId, p_rows: input.rows,
         p_request_key: input.requestKey, p_source_hash: input.sourceHash,
-      } }),
-      upsert_exam_roster_row: async () => ({ functionName: 'exam_room_upsert_roster_row_v2', body: {
-        p_actor_user_id: userId, p_exam_public_id: input.examId, p_row: input.row,
-        p_reason: input.reason, p_request_key: input.requestKey,
+        p_template_receipt_id: input.templateReceiptId,
+        p_template_version: input.templateVersion,
       } }),
       create_exam: async () => ({ functionName: 'exam_room_create_exam', body: {
         p_professor_user_id: userId, p_classroom_public_id: input.classroomId,

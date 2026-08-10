@@ -185,6 +185,42 @@ async function createSpreadsheet(fetchImpl, env, token, context) {
   return spreadsheetId;
 }
 
+const SCHEDULE_CHANGE_STATUS_MAX_LENGTH = 4096;
+
+function boundedEventText(value, maximumLength) {
+  return String(value ?? '').slice(0, maximumLength);
+}
+
+function scheduleChangeRecord(payload) {
+  const publicationNumber = Number(payload?.publicationNumber);
+  return {
+    previousPublicationId: boundedEventText(payload?.previousPublicationId, 128),
+    publicationId: boundedEventText(payload?.publicationId, 128),
+    publicationNumber: Number.isSafeInteger(publicationNumber) && publicationNumber >= 1
+      ? publicationNumber
+      : boundedEventText(payload?.publicationNumber, 32),
+    previousOpensAt: boundedEventText(payload?.previousOpensAt, 64),
+    previousHardClosesAt: boundedEventText(payload?.previousHardClosesAt, 64),
+    opensAt: boundedEventText(payload?.opensAt, 64),
+    hardClosesAt: boundedEventText(payload?.hardClosesAt, 64),
+    durationMinutes: boundedEventText(payload?.durationMinutes, 16),
+    lateAdmissionMinutes: boundedEventText(payload?.lateAdmissionMinutes, 16),
+    submissionGraceMinutes: boundedEventText(payload?.submissionGraceMinutes, 16),
+    reason: boundedEventText(payload?.reason, 1000),
+  };
+}
+
+function scheduleChangeSyncStatus(payload) {
+  const status = JSON.stringify({
+    status: 'SYNCED',
+    event: 'exam_schedule_changed',
+    scheduleChange: scheduleChangeRecord(payload),
+  });
+  // Every field above has a strict bound, keeping this valid structured record
+  // well below the existing Sync Log cell limit without changing its schema.
+  return status.slice(0, SCHEDULE_CHANGE_STATUS_MAX_LENGTH);
+}
+
 async function ensureSpreadsheet(fetchImpl, env, token, context) {
   if (context.googleSheetId) {
     return { spreadsheetId: String(context.googleSheetId), created: false };
@@ -218,11 +254,28 @@ async function sheetMetadata(fetchImpl, token, spreadsheetId) {
 
 function backupRows(event, context) {
   const payload = event.payload || {};
-  const common = [event.id, context.examPublicId, event.sequence_number, event.event_type, event.content_hash];
+  const scheduleChange = event.event_type === 'exam_schedule_changed'
+    ? scheduleChangeRecord(payload)
+    : null;
+  const eventExamPublicId = scheduleChange
+    ? boundedEventText(payload.examId || context.examPublicId, 128)
+    : context.examPublicId;
+  const common = [event.id, eventExamPublicId, event.sequence_number, event.event_type, event.content_hash];
   const requests = [];
   const registry = [[
-    ...common, context.title, context.schoolName, context.academicTerm,
-    context.status, context.opensAt, context.hardClosesAt, context.durationMinutes,
+    ...common, scheduleChange ? boundedEventText(payload.title || context.title, 500) : context.title,
+    context.schoolName, context.academicTerm,
+    scheduleChange
+      ? JSON.stringify({
+        status: 'scheduled',
+        previousPublicationId: scheduleChange.previousPublicationId,
+        publicationId: scheduleChange.publicationId,
+        publicationNumber: scheduleChange.publicationNumber,
+      })
+      : context.status,
+    scheduleChange ? scheduleChange.opensAt : context.opensAt,
+    scheduleChange ? scheduleChange.hardClosesAt : context.hardClosesAt,
+    scheduleChange ? scheduleChange.durationMinutes : context.durationMinutes,
     context.questionCount, event.created_at,
   ]];
   requests.push(['Exam Registry', registry]);
@@ -249,7 +302,8 @@ function backupRows(event, context) {
     ])]);
   }
   requests.push(['Sync Log', [[
-    ...common, event.created_at, new Date().toISOString(), 'SYNCED',
+    ...common, event.created_at, new Date().toISOString(),
+    scheduleChange ? scheduleChangeSyncStatus(payload) : 'SYNCED',
   ]]]);
   return requests.filter(([, rows]) => rows.length > 0);
 }

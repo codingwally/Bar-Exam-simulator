@@ -16,6 +16,7 @@ const beadleId = '123e4567-e89b-42d3-a456-426614174007';
 const leaveId = '123e4567-e89b-42d3-a456-426614174008';
 const grantId = '123e4567-e89b-42d3-a456-426614174009';
 const authSessionId = '123e4567-e89b-42d3-a456-426614174010';
+const publicationId = '123e4567-e89b-42d3-a456-426614174011';
 const requestKey = 'request_2026_abcdef123456';
 const v2Env = Object.freeze({
   EXAMINATION_ROOM_ENABLED: 'true',
@@ -380,7 +381,7 @@ test('v2 exam, preflight, Beadle, and incident queries use scoped database RPCs'
 
 test('Professor authoring snapshot is owner-scoped and defensively projected', async () => {
   const snapshot = harness({
-    rpc: async (name) => name === 'exam_room_professor_authoring_snapshot_v1'
+    rpc: async (name) => name === 'exam_room_professor_authoring_snapshot_v2'
       ? {
         ok: true,
         examId,
@@ -409,8 +410,14 @@ test('Professor authoring snapshot is owner-scoped and defensively projected', a
           rules: { opensAt: '2026-08-11T01:00:00.000Z', studentAccessCodeRequired: true, secret: 'must-not-project' },
           rawCredential: 'must-not-project',
         },
-        capabilities: { canEditDetails: true, canEditQuestions: true, canEditRules: true, admin: true },
-        blockers: {},
+        capabilities: {
+          canEditDetails: true,
+          canEditQuestions: true,
+          canEditRules: true,
+          canReschedulePublication: true,
+          admin: true,
+        },
+        blockers: { rescheduleBlocker: null },
         handoff: { rosterCount: 10, studentAccessReady: false, rawCode: 'must-not-project' },
         storagePrefix: 'must-not-project',
       }
@@ -421,7 +428,7 @@ test('Professor authoring snapshot is owner-scoped and defensively projected', a
   }), {}, '', '');
   const payload = await response.json();
   const call = snapshot.calls.at(-1);
-  assert.equal(call.name, 'exam_room_professor_authoring_snapshot_v1');
+  assert.equal(call.name, 'exam_room_professor_authoring_snapshot_v2');
   assert.deepEqual(call.body, { p_professor_user_id: userId, p_exam_public_id: examId });
   assert.equal(payload.result.examId, examId);
   assert.equal(payload.result.workspaceRevision, 7);
@@ -429,6 +436,65 @@ test('Professor authoring snapshot is owner-scoped and defensively projected', a
   assert.equal(payload.result.questions.rows[0].prompt, 'Explain due process.');
   assert.equal(payload.result.rulesDraft.beadleEmail, 'beadle@example.edu');
   assert.equal(payload.result.capabilities.canEditQuestions, true);
+  assert.equal(payload.result.capabilities.canReschedulePublication, true);
+  assert.equal(JSON.stringify(payload).includes('must-not-project'), false);
+});
+
+test('Professor schedule correction binds the current publication and preserves only safe result fields', async () => {
+  const opensAt = new Date(Date.now() + 90 * 60 * 1_000).toISOString();
+  const hardClosesAt = new Date(Date.now() + 4 * 60 * 60 * 1_000).toISOString();
+  const flow = harness({ result: {
+    ok: true,
+    examId,
+    publicationId: versionId,
+    publicationNumber: 2,
+    workspaceRevision: 9,
+    opensAt,
+    hardClosesAt,
+    durationMinutes: 120,
+    lateAdmissionMinutes: 15,
+    submissionGraceMinutes: 5,
+    preserved: {
+      questions: true,
+      classList: true,
+      beadleAccess: true,
+      studentExamCode: true,
+      gradingAccess: true,
+      tokenHash: 'must-not-project',
+    },
+    backupOutboxId: 'must-not-project',
+  } });
+  const response = await flow.handlers.examCommand(request({
+    operation: 'reschedule_publication',
+    examId,
+    expectedPublicationId: publicationId,
+    expectedWorkspaceRevision: 8,
+    opensAt,
+    hardClosesAt,
+    durationMinutes: 120,
+    lateAdmissionMinutes: 15,
+    submissionGraceMinutes: 5,
+    reason: 'The class needs a corrected examination schedule.',
+    requestKey,
+  }), {}, '', '', {});
+  const payload = await response.json();
+  const call = flow.calls.at(-1);
+  assert.equal(call.name, 'exam_room_reschedule_publication_v1');
+  assert.deepEqual(call.body, {
+    p_professor_user_id: userId,
+    p_exam_public_id: examId,
+    p_expected_publication_id: publicationId,
+    p_expected_workspace_revision: 8,
+    p_opens_at: opensAt,
+    p_hard_closes_at: hardClosesAt,
+    p_duration_minutes: 120,
+    p_late_admission_minutes: 15,
+    p_submission_grace_minutes: 5,
+    p_reason: 'The class needs a corrected examination schedule.',
+    p_request_key: requestKey,
+  });
+  assert.equal(payload.result.publicationId, versionId);
+  assert.equal(payload.result.preserved.studentExamCode, true);
   assert.equal(JSON.stringify(payload).includes('must-not-project'), false);
 });
 

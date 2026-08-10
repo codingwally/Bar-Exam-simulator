@@ -56,6 +56,7 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'schedule_exam',
   'publish_exam',
   'publish_for_beadle',
+  'reschedule_publication',
   'replace_publication',
   'invite_beadle',
   'redeem_beadle_invitation',
@@ -693,6 +694,58 @@ export function normalizeExamRoomCommand(input) {
     );
     n.beadleExpiresAt = timestamp(payload.beadleExpiresAt, 'Beadle invitation expiry');
     n.reason = boundedText(payload.reason, 'Delegation reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'reschedule_publication') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.expectedPublicationId = uuid(
+      payload.expectedPublicationId,
+      'Expected publication',
+    );
+    n.expectedWorkspaceRevision = integer(
+      payload.expectedWorkspaceRevision,
+      'Workspace revision',
+      1,
+    );
+    n.opensAt = timestamp(payload.opensAt, 'Opening time');
+    n.hardClosesAt = timestamp(payload.hardClosesAt, 'Hard close');
+    n.durationMinutes = integer(
+      payload.durationMinutes,
+      'Duration',
+      DD2026_LIMITS.examDurationMinutesMinimum,
+      DD2026_LIMITS.examDurationMinutesMaximum,
+    );
+    n.lateAdmissionMinutes = integer(
+      payload.lateAdmissionMinutes,
+      'Late entry',
+      0,
+      480,
+    );
+    n.submissionGraceMinutes = integer(
+      payload.submissionGraceMinutes,
+      'Reconnect and submission time',
+      0,
+      120,
+    );
+    if (new Date(n.opensAt).getTime()
+        < Date.now() + EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES * 60 * 1_000) {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_HANDOFF_TIME_REQUIRED',
+        'Set the examination opening at least 30 minutes from now so the Beadle and class can receive the updated schedule.',
+        409,
+      );
+    }
+    if (new Date(n.hardClosesAt) <= new Date(n.opensAt)) {
+      throw new DD2026ValidationError(
+        'INVALID_SCHEDULE',
+        'The examination must end after it opens.',
+      );
+    }
+    n.reason = boundedText(
+      payload.reason,
+      'Schedule change reason',
+      1_000,
+      { minimum: 10 },
+    );
     n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'replace_publication') {
     n.examId = uuid(payload.examId, 'Examination');

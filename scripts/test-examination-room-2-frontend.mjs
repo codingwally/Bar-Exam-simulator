@@ -152,6 +152,99 @@ assert.equal(authoringCapability({ capabilities: { canEditDetails: true } }, 'ca
 assert.equal(authoringCapability({ capabilities: { canEditDetails: false } }, 'canEditDetails'), false);
 assert.equal(authoringCapability({ capabilities: { canEditDetails: 1 } }, 'canEditDetails'), false);
 assert.equal(authoringCapability({}, 'canEditDetails'), false);
+
+// A published examination with no attempts may receive a schedule-only
+// correction when the server explicitly authorizes it. Local status labels,
+// including a deadline-closed label, must never hide that recovery action.
+const publishedReviewStart = frontend.indexOf('function openPublishedPreparationReview');
+const publishedReviewEnd = frontend.indexOf('function rescheduleBlockerCopy', publishedReviewStart);
+const publishedReviewView = frontend.slice(publishedReviewStart, publishedReviewEnd);
+assert.match(publishedReviewView, /authoringCapability\(snapshot, 'canReschedulePublication'\)/);
+assert.match(publishedReviewView, /Change exam time/);
+assert.doesNotMatch(publishedReviewView, /exam\?\.status|status\s*===|status\s*!==|\['scheduled'\]|\['closed'\]/,
+  'schedule adjustment availability must come only from the server capability');
+assert.match(frontend, /snapshot\?\.blockers\?\.rescheduleBlocker/);
+for (const blocker of ['NOT_PUBLISHED', 'RESULTS_SEALED', 'RESULTS_RELEASED', 'CANDIDATE_ATTEMPTS_EXIST', 'EXAM_STATE_BLOCKED']) {
+  assert.match(frontend, new RegExp(`${blocker}:`), `plain classroom copy is required for ${blocker}`);
+}
+assert.match(frontend, /Set the updated examination schedule[\s\S]*id="dd26-reschedule-opens-at"[\s\S]*id="dd26-reschedule-closes-at"[\s\S]*id="dd26-reschedule-duration"[\s\S]*id="dd26-reschedule-late-admission"[\s\S]*id="dd26-reschedule-submission-grace"[\s\S]*id="dd26-reschedule-reason"/);
+assert.match(frontend, /Confirm the updated exam time[\s\S]*id="dd26-reschedule-ack"[\s\S]*id="dd26-confirm-reschedule" type="button" disabled/,
+  'the Professor must complete a final review before saving the new time');
+assert.match(frontend, /operation: 'reschedule_publication',[\s\S]*examId: snapshot\.examId,[\s\S]*expectedPublicationId: snapshot\.publication\.publicationId,[\s\S]*expectedWorkspaceRevision: Number\(snapshot\.workspaceRevision\),[\s\S]*opensAt: change\.opensAt,[\s\S]*hardClosesAt: change\.hardClosesAt,[\s\S]*durationMinutes: change\.durationMinutes,[\s\S]*lateAdmissionMinutes: change\.lateAdmissionMinutes,[\s\S]*submissionGraceMinutes: change\.submissionGraceMinutes,[\s\S]*reason: change\.reason,[\s\S]*requestKey: change\.requestKey/,
+  'the schedule-only command must bind the current publication and Professor workspace revision');
+assert.match(frontend, /change\.requestKey \|\|= randomKey\('reschedule_publication'\)/,
+  'a retry must keep one schedule-change request identity');
+assert.match(frontend, /withBoundedPublishWait\(command\(\{[\s\S]*operation: 'reschedule_publication'/,
+  'a stalled schedule request must stop waiting while keeping its idempotent retry identity');
+assert.match(frontend, /loadProfessorAuthoringSnapshot\(snapshot\.examId\)[\s\S]*refreshPortalSilently\(\)/,
+  'a confirmed schedule change must refresh both the authoring snapshot and Professor portal');
+assert.match(frontend, /Questions, the class list, Beadle access, and the student exam code are unchanged/);
+for (const code of ['EXAM_ROOM_RESCHEDULE_PUBLICATION_INVALID', 'EXAM_ROOM_RESCHEDULE_BEADLE_HORIZON']) {
+  assert.match(frontend, new RegExp(`${code}:`), `plain recovery copy is required for ${code}`);
+}
+const rescheduleRetryStart = frontend.indexOf('const RESCHEDULE_TERMINAL_FAILURE_CODES');
+const rescheduleRetryEnd = frontend.indexOf('function publicationRescheduleValidation', rescheduleRetryStart);
+assert.ok(rescheduleRetryStart > 0 && rescheduleRetryEnd > rescheduleRetryStart);
+const rescheduleRetryView = frontend.slice(rescheduleRetryStart, rescheduleRetryEnd);
+const rescheduleRetryIsSafe = Function(
+  `'use strict'; const isTransientTransportFailure = (error) => error instanceof TypeError || (!error?.code && !error?.status) || (error?.code === 'REQUEST_FAILED' && (!error?.status || Number(error.status) >= 500)); ${rescheduleRetryView}; return rescheduleRetryIsSafe;`,
+)();
+for (const code of [
+  'EXAM_ROOM_WORKSPACE_CONFLICT',
+  'EXAM_ROOM_PUBLICATION_VERSION_CONFLICT',
+  'EXAM_ROOM_RESCHEDULE_ATTEMPTS_EXIST',
+  'EXAM_ROOM_RESCHEDULE_NOT_ALLOWED',
+  'EXAM_ROOM_RESCHEDULE_PUBLICATION_INVALID',
+]) {
+  assert.equal(rescheduleRetryIsSafe({ code, status: 503 }), false,
+    `${code} must never reuse the stale schedule-change request`);
+}
+assert.equal(rescheduleRetryIsSafe(new TypeError('network disconnected')), true);
+assert.equal(rescheduleRetryIsSafe({ code: 'REQUEST_FAILED', status: 503 }), true);
+assert.equal(rescheduleRetryIsSafe({ code: 'UPSTREAM_FAILURE', status: 503 }), true);
+assert.equal(rescheduleRetryIsSafe({ code: 'EXAM_ROOM_PUBLISH_WAIT_TIMEOUT' }), true);
+assert.equal(rescheduleRetryIsSafe({ code: 'EXAM_ROOM_RESCHEDULE_INVALID', status: 409 }), false);
+assert.equal(rescheduleRetryIsSafe({ code: 'EXAM_ROOM_RESCHEDULE_BEADLE_HORIZON', status: 409 }), false,
+  'a Beadle assignment-period error must return to editable schedule fields, not retry unchanged');
+const rescheduleSaveStart = frontend.indexOf('async function savePublicationReschedule');
+const rescheduleSaveEnd = frontend.indexOf('function openQuestionUpload', rescheduleSaveStart);
+const rescheduleSaveView = frontend.slice(rescheduleSaveStart, rescheduleSaveEnd);
+assert.match(rescheduleSaveView, /if \(rescheduleRetryIsSafe\(error\)\)[\s\S]*Retry saving updated time[\s\S]*return;/,
+  'only an ambiguous transport or server result may expose the same-key retry');
+assert.match(rescheduleSaveView, /if \(rescheduleFailureNeedsRefresh\(error\)\)[\s\S]*discardPublicationRescheduleDraft\(change\)[\s\S]*refreshButton\.hidden = false[\s\S]*refreshButton\.style\.display = ''/,
+  'terminal failures must discard the stale change and expose the refresh action');
+assert.match(frontend, /id="dd26-refresh-reschedule" type="button" hidden style="display:none">Refresh latest examination/);
+const rescheduleRefreshStart = frontend.indexOf('async function refreshLatestPublicationAfterReschedule');
+const rescheduleRefreshEnd = frontend.indexOf('async function savePublicationReschedule', rescheduleRefreshStart);
+const rescheduleRefreshView = frontend.slice(rescheduleRefreshStart, rescheduleRefreshEnd);
+assert.match(rescheduleRefreshView, /withBoundedPublishWait\([\s\S]*loadProfessorAuthoringSnapshot\(examId\),[\s\S]*EXAMINATION_ROOM_REFRESH_WAIT_MS/);
+assert.match(rescheduleRefreshView, /withBoundedPublishWait\([\s\S]*refreshPortalSilently\(\),[\s\S]*EXAMINATION_ROOM_REFRESH_WAIT_MS/);
+assert.match(rescheduleRefreshView, /closeDialog\(\);[\s\S]*renderExamRoom\(\);[\s\S]*openPublishedPreparationReview\(latestSnapshot\)/,
+  'refresh recovery must close the stale flow, rerender, and open the latest published review');
+const normalizeRescheduleStart = frontend.indexOf('function normalizeReschedulePublicationSuccess');
+const normalizeRescheduleEnd = frontend.indexOf('async function savePublicationReschedule', normalizeRescheduleStart);
+const normalizeRescheduleView = frontend.slice(normalizeRescheduleStart, normalizeRescheduleEnd);
+assert.doesNotMatch(normalizeRescheduleView, /result\.(?:credentialsPreserved|rosterPreserved|beadleAssignmentPreserved|studentAccessPreserved|rescheduled|supersedesPublicationId)/,
+  'frontend confirmation consumes only the approved schedule-change result fields');
+assert.doesNotMatch(normalizeRescheduleView, /if\s*\([^)]*preserved/,
+  'informational preservation text must not become an authorization gate');
+const normalizeReschedulePublicationSuccess = Function(
+  `'use strict'; ${normalizeRescheduleView}; return normalizeReschedulePublicationSuccess;`,
+)();
+const normalizedReschedule = normalizeReschedulePublicationSuccess({
+  ok: true, examId: 'exam-1', publicationId: 'publication-2', publicationNumber: 2,
+  workspaceRevision: 7, opensAt: '2035-08-10T12:00:00.000Z',
+  hardClosesAt: '2035-08-10T14:00:00.000Z', durationMinutes: 120,
+  lateAdmissionMinutes: 15, submissionGraceMinutes: 15, preserved: { questions: true },
+  credentialsPreserved: true, studentAccessPreserved: true, unexpectedSecret: 'never-consume',
+}, 'exam-1');
+assert.deepEqual(Object.keys(normalizedReschedule).sort(), [
+  'durationMinutes', 'examId', 'hardClosesAt', 'lateAdmissionMinutes', 'ok', 'opensAt',
+  'preserved', 'publicationId', 'publicationNumber', 'submissionGraceMinutes', 'workspaceRevision',
+].sort());
+assert.throws(() => normalizeReschedulePublicationSuccess({
+  ok: true, examId: 'exam-1', publicationId: 'publication-2', workspaceRevision: 7,
+}, 'exam-1'), /not confirmed completely/);
 assert.match(frontend, /operation: 'update_exam_details'[\s\S]*expectedRevision:[\s\S]*questionCount:[\s\S]*includeQuestionnaire:/);
 assert.match(frontend, /operation: 'revise_draft_questions'[\s\S]*expectedRevision:[\s\S]*expectedQuestionVersionId:[\s\S]*questions,/);
 assert.match(frontend, /const canUploadInitial = !published && !hasSavedQuestions && !source\?\.questionVersionId[\s\S]*canUploadQuestions === true/,
@@ -583,9 +676,15 @@ assert.match(css, /\.dd26-flow-step,\.dd26-flow-step\.has-action\{grid-template-
   'the five-step action column collapses cleanly on small screens');
 assert.match(css, /\.dd26-flow-action\{[^}]*justify-self:end/);
 assert.match(css, /\.dd26-question-editor\.is-read-only/);
+assert.match(css, /\.dd26-reschedule-comparison>div\{[^}]*grid-template-columns:minmax\(145px,.7fr\) repeat\(2,minmax\(0,1fr\)\)/,
+  'current and updated schedules align in the review dialog');
+assert.match(css, /\.dd26-reschedule-comparison>div\{grid-template-columns:1fr;gap:5px/,
+  'the schedule comparison becomes a readable vertical list on small screens');
 
 assert.match(html, /assets\/examination-room-2-store\.js/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
+assert.match(html, /duediligence-2026\.css\?v=exam-room-professor-reschedule-20260810-2/);
+assert.match(html, /duediligence-2026\.js\?v=exam-room-professor-reschedule-20260810-2/);
 
 // Execute the pure disclosure gate: malformed, partial, and stale replacement
 // results must never unlock one-time secret rendering.
@@ -678,6 +777,24 @@ assert.deepEqual(questionReviewValidation([
 assert.ok(questionReviewValidation([
   { prompt: ' ', maximumPoints: 0 },
 ], 2).length >= 3);
+
+const rescheduleValidationStart = frontend.indexOf('function publicationRescheduleValidation');
+const rescheduleValidationEnd = frontend.indexOf('function showPublicationRescheduleErrors', rescheduleValidationStart);
+const publicationRescheduleValidation = Function(
+  `'use strict'; const EXAMINATION_ROOM_MIN_HANDOFF_MS = 30 * 60 * 1000; ${frontend.slice(rescheduleValidationStart, rescheduleValidationEnd)}; return publicationRescheduleValidation;`,
+)();
+assert.equal(publicationRescheduleValidation({
+  opensAt: '2035-08-10T12:00:00.000Z', hardClosesAt: '2035-08-10T14:00:00.000Z',
+  durationMinutes: '120', lateAdmissionMinutes: '15', submissionGraceMinutes: '15',
+  reason: 'The law school moved the examination schedule.',
+  nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
+}).errors.length, 0);
+assert.ok(publicationRescheduleValidation({
+  opensAt: '2035-08-10T10:20:00.000Z', hardClosesAt: '2035-08-10T10:10:00.000Z',
+  durationMinutes: '0', lateAdmissionMinutes: '481', submissionGraceMinutes: '121',
+  reason: 'short', nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
+}).errors.length >= 6,
+'schedule changes enforce the 30-minute class notice, end order, minute limits, and a recorded reason');
 
 const publishValidationStart = frontend.indexOf('function publishStepValidation');
 const publishValidationEnd = frontend.indexOf('function showPublishStepErrors', publishValidationStart);

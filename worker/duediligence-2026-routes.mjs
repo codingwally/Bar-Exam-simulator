@@ -114,6 +114,7 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'confirm_replacement_questions',
   'publish_exam',
   'publish_for_beadle',
+  'reschedule_publication',
   'replace_publication',
   'invite_beadle',
   'redeem_beadle_invitation',
@@ -315,9 +316,11 @@ function professorAuthoringSnapshotView(value, examId) {
     capabilities: projectScalarFields(source.capabilities, [
       'canEditDetails', 'canEditQuestions', 'canEditRules',
       'canReviewRoster', 'canReviewHandout', 'canReopenRoster',
+      'canReschedulePublication',
     ]),
     blockers: projectScalarFields(source.blockers, [
       'details', 'questions', 'rules', 'roster', 'handout', 'reopenRoster',
+      'rescheduleBlocker',
     ]),
     publication,
     handoff: projectScalarFields(source.handoff, [
@@ -357,6 +360,21 @@ function publicationReplacementView(value, input) {
     'credentialsRotated', 'notificationQueued', 'notificationStatus', 'notificationCount',
     'replacementQuestionVersionId', 'questionVersionChanged', 'idempotent',
   ]), { examId: input.examId, supersedesPublicationId: input.expectedPublicationId });
+}
+
+function publicationRescheduleView(value, input) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const projected = requireProjectedScope(projectScalarFields(source, [
+    'ok', 'examId', 'publicationId', 'publicationNumber', 'workspaceRevision',
+    'opensAt', 'hardClosesAt', 'durationMinutes', 'lateAdmissionMinutes',
+    'submissionGraceMinutes', 'idempotent',
+  ]), { examId: input.examId });
+  return {
+    ...projected,
+    preserved: projectScalarFields(source.preserved, [
+      'questions', 'classList', 'beadleAccess', 'studentExamCode', 'gradingAccess',
+    ]),
+  };
 }
 
 function stagedReplacementQuestionsView(value, input) {
@@ -1003,7 +1021,7 @@ export function createDD2026Handlers(deps) {
       functionName = 'exam_room_exam_access_v3';
       body = { p_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'professor_authoring_snapshot') {
-      functionName = 'exam_room_professor_authoring_snapshot_v1';
+      functionName = 'exam_room_professor_authoring_snapshot_v2';
       body = { p_professor_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'preflight') {
       functionName = 'exam_room_student_waiting_room_v4';
@@ -1311,7 +1329,7 @@ export function createDD2026Handlers(deps) {
     const result = await examRoomRpc(env, spec.functionName, spec.body);
     if ([
       'submit_attempt', 'submit_attempt_generation', 'replace_publication',
-      'reopen_submission', 'release_results',
+      'reschedule_publication', 'reopen_submission', 'release_results',
     ].includes(input.operation)
         && ctx?.waitUntil) {
       ctx.waitUntil(processExamRoomQueues(env));
@@ -1343,6 +1361,8 @@ export function createDD2026Handlers(deps) {
       ? stagedReplacementQuestionsView(result, input)
       : input.operation === 'replace_publication'
       ? publicationReplacementView(result, input)
+      : input.operation === 'reschedule_publication'
+        ? publicationRescheduleView(result, input)
       : input.operation === 'reopen_submission'
         ? reopenedSubmissionView(result, input)
         : ['issue_break_glass', 'close_break_glass', 'record_break_glass_review'].includes(input.operation)
@@ -1480,6 +1500,22 @@ export function createDD2026Handlers(deps) {
           p_beadle_token_hash: await h(input.beadleInvitationKey),
           p_beadle_expires_at: input.beadleExpiresAt,
           p_beadle_reason: input.reason,
+          p_request_key: input.requestKey,
+        },
+      }),
+      reschedule_publication: async () => ({
+        functionName: 'exam_room_reschedule_publication_v1',
+        body: {
+          p_professor_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_expected_publication_id: input.expectedPublicationId,
+          p_expected_workspace_revision: input.expectedWorkspaceRevision,
+          p_opens_at: input.opensAt,
+          p_hard_closes_at: input.hardClosesAt,
+          p_duration_minutes: input.durationMinutes,
+          p_late_admission_minutes: input.lateAdmissionMinutes,
+          p_submission_grace_minutes: input.submissionGraceMinutes,
+          p_reason: input.reason,
           p_request_key: input.requestKey,
         },
       }),

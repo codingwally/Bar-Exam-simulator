@@ -146,6 +146,34 @@ test('Professor authoring revisions are scoped, versioned, and idempotent', () =
   }));
 });
 
+test('Professor schedule corrections require a future bounded schedule and current publication scope', () => {
+  const opensAt = new Date(Date.now() + 90 * 60 * 1_000).toISOString();
+  const hardClosesAt = new Date(Date.now() + 4 * 60 * 60 * 1_000).toISOString();
+  const normalized = normalizeExamRoomCommand({
+    operation: 'reschedule_publication',
+    examId,
+    expectedPublicationId: versionId,
+    expectedWorkspaceRevision: 8,
+    opensAt,
+    hardClosesAt,
+    durationMinutes: 120,
+    lateAdmissionMinutes: 15,
+    submissionGraceMinutes: 5,
+    reason: 'The class needs a corrected examination schedule.',
+    requestKey,
+  });
+  assert.equal(normalized.expectedPublicationId, versionId);
+  assert.equal(normalized.expectedWorkspaceRevision, 8);
+  assert.equal(normalized.durationMinutes, 120);
+  assert.equal(normalized.lateAdmissionMinutes, 15);
+  assert.equal(normalized.submissionGraceMinutes, 5);
+
+  assert.throws(() => normalizeExamRoomCommand({
+    ...normalized,
+    opensAt: new Date(Date.now() + 10 * 60 * 1_000).toISOString(),
+  }), (error) => error?.code === 'EXAM_ROOM_HANDOFF_TIME_REQUIRED');
+});
+
 test('Admin room invitations require complete room details and a bounded expiry', () => {
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
   assert.deepEqual(normalizeExamRoomCommand({
@@ -862,6 +890,10 @@ test('replacement, reopening, and break-glass database denials map without leaki
   const cases = [
     ['EXAM_ROOM_STUDENT_ACCESS_CODE_MISMATCH', 409, /does not match/i],
     ['EXAM_ROOM_REPLACEMENT_QUESTION_VERSION_INVALID', 409, /stage and confirm/i],
+    ['EXAM_ROOM_RESCHEDULE_INVALID', 400, /30 minutes/i],
+    ['EXAM_ROOM_RESCHEDULE_NOT_ALLOWED', 409, /before any student starts/i],
+    ['EXAM_ROOM_RESCHEDULE_ATTEMPTS_EXIST', 409, /student has already started/i],
+    ['EXAM_ROOM_RESCHEDULE_BEADLE_HORIZON', 409, /current Beadle assignment period/i],
     ['EXAM_ROOM_REOPEN_GRADING_ALREADY_STARTED', 409, /grading has started/i],
     ['EXAM_ROOM_FRESH_AAL2_REQUIRED', 403, /fresh multi-factor/i],
     ['EXAM_ROOM_BREAK_GLASS_SCOPE_INVALID', 403, /does not match/i],

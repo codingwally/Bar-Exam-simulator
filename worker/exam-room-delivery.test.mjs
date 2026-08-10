@@ -147,6 +147,133 @@ test('a revised Professor question version is written to the Questions backup be
   assert.match(serialized, /exam_questions_revised/);
 });
 
+test('rapid A to B to A schedule changes retain immutable event schedules and reasons', async () => {
+  const scheduleEvents = [
+    {
+      ...event,
+      id: '55555555-5555-4555-8555-555555555555',
+      sequence_number: 3,
+      event_type: 'exam_schedule_changed',
+      content_hash: '1'.repeat(64),
+      payload: {
+        examId: context.examPublicId,
+        title: 'Immutable Schedule Examination',
+        previousPublicationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        publicationId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        publicationNumber: 2,
+        previousOpensAt: '2026-08-10T01:00:00Z',
+        previousHardClosesAt: '2026-08-10T03:00:00Z',
+        opensAt: '2026-08-11T02:00:00Z',
+        hardClosesAt: '2026-08-11T05:00:00Z',
+        durationMinutes: 180,
+        lateAdmissionMinutes: 15,
+        submissionGraceMinutes: 5,
+        reason: '=Move to the approved make-up schedule',
+      },
+    },
+    {
+      ...event,
+      id: '66666666-6666-4666-8666-666666666666',
+      sequence_number: 4,
+      event_type: 'exam_schedule_changed',
+      content_hash: '2'.repeat(64),
+      payload: {
+        examId: context.examPublicId,
+        title: 'Immutable Schedule Examination',
+        previousPublicationId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        publicationId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        publicationNumber: 3,
+        previousOpensAt: '2026-08-11T02:00:00Z',
+        previousHardClosesAt: '2026-08-11T05:00:00Z',
+        opensAt: '2026-08-10T01:00:00Z',
+        hardClosesAt: '2026-08-10T03:00:00Z',
+        durationMinutes: 120,
+        lateAdmissionMinutes: 10,
+        submissionGraceMinutes: 3,
+        reason: 'Return to the original approved schedule',
+      },
+    },
+  ];
+  const mutableFinalContext = {
+    ...context,
+    googleSheetId: 'existing-sheet-123',
+    professorAccessRemovedAt: '2026-08-10T00:00:00Z',
+    title: 'MUTABLE CURRENT TITLE MUST NOT REPLACE EVENT TITLE',
+    status: 'closed',
+    opensAt: '2099-01-01T00:00:00Z',
+    hardClosesAt: '2099-01-01T23:59:00Z',
+    durationMinutes: 999,
+  };
+  const writes = [];
+  let syncReads = 0;
+  const fetchImpl = async (url, options = {}) => {
+    if (String(url).includes('oauth2.googleapis.com')) return response({ access_token: 'ephemeral-token' });
+    if (String(url).includes('/values/%27Sync%20Log%27')) {
+      const scheduleEvent = scheduleEvents[Math.floor(syncReads / 2)];
+      const isVerification = syncReads % 2 === 1;
+      syncReads += 1;
+      return response({
+        values: isVerification
+          ? [[scheduleEvent.id, context.examPublicId, String(scheduleEvent.sequence_number),
+            scheduleEvent.event_type, scheduleEvent.content_hash]]
+          : [],
+      });
+    }
+    if (String(url).includes('?fields=sheets.properties')) return response({
+      sheets: ['Exam Registry', 'Questions', 'Submissions', 'Grades', 'Sync Log']
+        .map((title, index) => ({ properties: { title, sheetId: index + 1 } })),
+    });
+    if (String(url).includes(':batchUpdate')) {
+      writes.push(JSON.parse(options.body));
+      return response({ replies: [] });
+    }
+    throw new Error(`Unexpected URL ${url}`);
+  };
+
+  for (const scheduleEvent of scheduleEvents) {
+    await syncGoogleBackupEvent({
+      GOOGLE_OAUTH_CLIENT_ID: 'id', GOOGLE_OAUTH_CLIENT_SECRET: 'secret',
+      GOOGLE_OAUTH_REFRESH_TOKEN: 'refresh',
+    }, scheduleEvent, mutableFinalContext, fetchImpl);
+  }
+
+  assert.equal(writes.length, 2);
+  const stringValues = (appendCells) => appendCells.rows[0].values
+    .map((cell) => cell.userEnteredValue.stringValue);
+  const registryRows = writes.map((write) => stringValues(
+    write.requests.find((request) => request.appendCells.sheetId === 1).appendCells,
+  ));
+  assert.deepEqual(registryRows.map((values) => values.slice(9, 12)), [
+    ['2026-08-11T02:00:00Z', '2026-08-11T05:00:00Z', '180'],
+    ['2026-08-10T01:00:00Z', '2026-08-10T03:00:00Z', '120'],
+  ]);
+  assert.equal(registryRows.every((values) => values[5] === 'Immutable Schedule Examination'), true);
+  assert.equal(JSON.stringify(registryRows).includes('2099-01-01'), false,
+    'Registry schedule fields must not be copied from mutable current context.');
+
+  const syncStatuses = writes.map((write) => {
+    const values = stringValues(
+      write.requests.find((request) => request.appendCells.sheetId === 5).appendCells,
+    );
+    return JSON.parse(values[7]);
+  });
+  assert.deepEqual(syncStatuses.map((status) => status.scheduleChange), scheduleEvents.map((entry) => ({
+    previousPublicationId: entry.payload.previousPublicationId,
+    publicationId: entry.payload.publicationId,
+    publicationNumber: entry.payload.publicationNumber,
+    previousOpensAt: entry.payload.previousOpensAt,
+    previousHardClosesAt: entry.payload.previousHardClosesAt,
+    opensAt: entry.payload.opensAt,
+    hardClosesAt: entry.payload.hardClosesAt,
+    durationMinutes: String(entry.payload.durationMinutes),
+    lateAdmissionMinutes: String(entry.payload.lateAdmissionMinutes),
+    submissionGraceMinutes: String(entry.payload.submissionGraceMinutes),
+    reason: entry.payload.reason,
+  })));
+  assert.equal(syncStatuses.every((status) => status.status === 'SYNCED'), true);
+  assert.equal(syncStatuses.every((status) => status.event === 'exam_schedule_changed'), true);
+});
+
 test('Google backup recovery revokes legacy Professor access before syncing protected data', async () => {
   const calls = [];
   let syncReads = 0;

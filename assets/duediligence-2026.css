@@ -244,6 +244,16 @@
 .dd26-rules-summary dl div:nth-child(even),.dd26-publish-summary div:nth-child(even),.dd26-receipt dl div:nth-child(even){background:rgba(148,163,184,.035);}
 .dd26-rules-summary dt,.dd26-publish-summary dt,.dd26-receipt dt{display:flex;align-items:flex-start;color:#dfba65;font:600 10px/1.55 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.075em;}
 .dd26-rules-summary dd,.dd26-publish-summary dd,.dd26-receipt dd{margin:0;color:#e8edf3;font-size:14px;line-height:1.58;overflow-wrap:anywhere;}
+.dd26-reschedule-action{min-width:210px;}
+.dd26-reschedule-blocker{margin-top:20px;}
+.dd26-reschedule-comparison{display:grid;margin:20px 0;border:1px solid rgba(148,163,184,.2);border-radius:6px;overflow:hidden;background:rgba(2,18,35,.24);}
+.dd26-reschedule-comparison>div{display:grid;grid-template-columns:minmax(145px,.7fr) repeat(2,minmax(0,1fr));gap:18px;padding:14px 16px;border-top:1px solid rgba(148,163,184,.17);}
+.dd26-reschedule-comparison>div:first-child{border-top:0;}
+.dd26-reschedule-comparison>div:nth-child(odd){background:rgba(148,163,184,.035);}
+.dd26-reschedule-comparison strong{color:#dfba65;font:600 10px/1.55 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.075em;}
+.dd26-reschedule-comparison span{color:#e8edf3;font-size:13.5px;line-height:1.55;overflow-wrap:anywhere;}
+.dd26-reschedule-comparison-head{background:rgba(197,160,89,.08)!important;}
+.dd26-reschedule-comparison-head strong{color:#f0ca70;}
 .dd26-secret-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:stretch;}
 .dd26-secret-row .dd26-button{min-width:90px;}
 .dd26-progress-summary{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0;color:#cbd5e1;font:600 10.5px/1.4 'IBM Plex Mono',monospace;text-transform:uppercase;}
@@ -294,6 +304,11 @@
   .dd26-stepper{grid-template-columns:1fr 1fr;}
   .dd26-stepper:has(>button){grid-template-columns:1fr 1fr;}
   .dd26-check-list li,.dd26-rules-summary dl div,.dd26-publish-summary div,.dd26-receipt dl div{grid-template-columns:1fr;gap:4px;}
+  .dd26-reschedule-action{min-width:0;}
+  .dd26-reschedule-comparison>div{grid-template-columns:1fr;gap:5px;}
+  .dd26-reschedule-comparison-head{display:none;}
+  .dd26-reschedule-comparison span:first-of-type::before{content:'Current: ';color:#94a3b8;font:600 9px/1.45 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.06em;}
+  .dd26-reschedule-comparison span:last-of-type::before{content:'Updated: ';color:#94a3b8;font:600 9px/1.45 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.06em;}
   .dd26-secret-row{grid-template-columns:1fr;}
   .dd26-question-meta{align-items:flex-start;flex-direction:column;gap:9px;}
   .dd26-attention-list article{align-items:flex-start;flex-direction:column;}

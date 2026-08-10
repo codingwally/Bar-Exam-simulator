@@ -1055,6 +1055,14 @@
       SESSION_ACTIVE_ELSEWHERE: 'Another device has the active examination session. Ask the Beadle to approve a controlled transfer.',
       ANSWER_SET_MISMATCH: 'The saved answer record changed while submission was pending. Due Diligence will check the latest synchronized answers before retrying.',
       GRADING_NOT_OPEN: 'Grading opens only after the examination has ended for every student.',
+      EXAM_ROOM_RESCHEDULE_TIME_REQUIRED: 'Choose a new opening and ending time before saving.',
+      EXAM_ROOM_RESCHEDULE_INVALID: 'The updated schedule is not allowed. Check each time and minute setting, then review it again.',
+      EXAM_ROOM_RESCHEDULE_ATTEMPTS_EXIST: 'A student has already started, so the published exam time can no longer be changed.',
+      EXAM_ROOM_RESCHEDULE_NOT_ALLOWED: 'This examination is no longer in a stage where its schedule can be changed.',
+      EXAM_ROOM_RESCHEDULE_PUBLICATION_INVALID: 'The published examination record changed or is incomplete. Refresh the Examination Room before making another change.',
+      EXAM_ROOM_RESCHEDULE_BEADLE_HORIZON: 'The selected ending is beyond the current Beadle assignment period. Choose an earlier ending, or assign a new Beadle first.',
+      EXAM_ROOM_WORKSPACE_CONFLICT: 'The Professor workspace changed while this form was open. Refresh the Examination Room before trying again.',
+      EXAM_ROOM_PUBLICATION_VERSION_CONFLICT: 'The published copy changed while this form was open. Refresh the Examination Room before trying again.',
     };
     return messages[code] || String(code || 'The examination request was denied.').replace(/_/g, ' ').toLowerCase();
   }
@@ -1880,9 +1888,308 @@
       ['Leaving the exam tab', rules.integrityMode === 'warn_and_record' ? 'Warn and record' : 'Record for Professor review'],
       ['Student entry', rules.admissionMode === 'beadle_approval' ? 'Beadle approval' : 'Automatic after all checks'],
     ];
-    openDialog(`<div class="dd26-label">Step 3 · Rules and publication</div><h2>Review the published examination rules</h2><div class="dd26-notice"><strong>This is the fixed class copy.</strong> Review remains available at any time. Before opening and before any student starts, use a corrected version. Afterward, use a correction notice.</div><dl class="dd26-publish-summary">${rows.map(([label, copy]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(copy)}</dd></div>`).join('')}</dl><div class="dd26-actions">${exam?.canReplacePublication === true ? '<button class="dd26-button danger" id="dd26-review-replace-publication" type="button">Prepare corrected version</button>' : ''}<button class="dd26-button" id="dd26-review-erratum" type="button">Send correction notice</button><button class="dd26-button" data-dd26-close-dialog type="button">Return to five-step review</button></div>`);
+    const canReschedule = authoringCapability(snapshot, 'canReschedulePublication');
+    const rescheduleControl = canReschedule
+      ? '<button class="dd26-button primary dd26-reschedule-action" id="dd26-change-exam-time" type="button">Change exam time</button>'
+      : `<div class="dd26-notice dd26-reschedule-blocker"><strong>Exam time cannot be changed here.</strong> ${escapeHtml(rescheduleBlockerCopy(snapshot))}</div>`;
+    openDialog(`<div class="dd26-label">Step 3 · Rules and publication</div><h2>Review the published examination rules</h2><div class="dd26-notice"><strong>This is the fixed class copy.</strong> Review remains available at any time. Before opening and before any student starts, use a corrected version. Afterward, use a correction notice.</div><dl class="dd26-publish-summary">${rows.map(([label, copy]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(copy)}</dd></div>`).join('')}</dl>${canReschedule ? '' : rescheduleControl}<div class="dd26-actions">${canReschedule ? rescheduleControl : ''}${exam?.canReplacePublication === true ? '<button class="dd26-button danger" id="dd26-review-replace-publication" type="button">Prepare corrected version</button>' : ''}<button class="dd26-button" id="dd26-review-erratum" type="button">Send correction notice</button><button class="dd26-button" data-dd26-close-dialog type="button">Return to five-step review</button></div>`);
+    document.getElementById('dd26-change-exam-time')?.addEventListener('click', () => openPublicationReschedule(snapshot));
     document.getElementById('dd26-review-replace-publication')?.addEventListener('click', () => beginReplacementPublication(snapshot.examId));
     document.getElementById('dd26-review-erratum')?.addEventListener('click', () => openErratum(snapshot.examId));
+  }
+
+  function rescheduleBlockerCopy(snapshot) {
+    const code = String(snapshot?.blockers?.rescheduleBlocker || '').trim();
+    const messages = {
+      CANDIDATE_ATTEMPTS_EXIST: 'A student has already started, so the published exam time can no longer be changed here. Use a correction notice if the class needs an update.',
+      RESULTS_SEALED: 'The grades have been finalized, so this examination record is closed.',
+      RESULTS_RELEASED: 'Results have already been sent, so this examination record is closed.',
+      NOT_PUBLISHED: 'Publish the examination before changing a published schedule.',
+      EXAM_STATE_BLOCKED: 'This examination is not in a stage where its schedule can be changed.',
+    };
+    return messages[code]
+      || 'The server has not authorized an exam-time change. Refresh the Examination Room, or use a correction notice if a student has already started.';
+  }
+
+  const RESCHEDULE_TERMINAL_FAILURE_CODES = new Set([
+    'EXAM_ROOM_WORKSPACE_CONFLICT',
+    'EXAM_ROOM_PUBLICATION_VERSION_CONFLICT',
+    'EXAM_ROOM_RESCHEDULE_ATTEMPTS_EXIST',
+    'EXAM_ROOM_RESCHEDULE_NOT_ALLOWED',
+    'EXAM_ROOM_RESCHEDULE_PUBLICATION_INVALID',
+  ]);
+
+  function rescheduleFailureNeedsRefresh(error) {
+    const code = String(error?.code || '').trim().toUpperCase();
+    return RESCHEDULE_TERMINAL_FAILURE_CODES.has(code)
+      || RESCHEDULE_TERMINAL_FAILURE_CODES.has(`EXAM_ROOM_${code}`);
+  }
+
+  function rescheduleRetryIsSafe(error) {
+    if (rescheduleFailureNeedsRefresh(error)) return false;
+    return error?.code === 'EXAM_ROOM_PUBLISH_WAIT_TIMEOUT'
+      || error?.code === 'EXAM_ROOM_RESCHEDULE_CONFIRMATION_INCOMPLETE'
+      || Number(error?.status) >= 500
+      || isTransientTransportFailure(error);
+  }
+
+  function discardPublicationRescheduleDraft(change) {
+    if (!change || typeof change !== 'object') return;
+    Object.keys(change).forEach((key) => { delete change[key]; });
+  }
+
+  function publicationRescheduleValidation(input = {}) {
+    const errors = [];
+    const add = (field, message) => errors.push({ field, message });
+    const nowMs = Number(input.nowMs || Date.now());
+    const opensAt = new Date(String(input.opensAt || ''));
+    const hardClosesAt = new Date(String(input.hardClosesAt || ''));
+    if (!Number.isFinite(opensAt.getTime())) add('dd26-reschedule-opens-at', 'Choose the new opening date and time.');
+    if (!Number.isFinite(hardClosesAt.getTime())) add('dd26-reschedule-closes-at', 'Choose the new ending date and time.');
+    if (Number.isFinite(opensAt.getTime()) && opensAt.getTime() < nowMs + EXAMINATION_ROOM_MIN_HANDOFF_MS) {
+      add('dd26-reschedule-opens-at', 'Set the new opening at least 30 minutes from now so the class has time to receive the updated schedule.');
+    }
+    if (Number.isFinite(opensAt.getTime()) && Number.isFinite(hardClosesAt.getTime())
+        && hardClosesAt <= opensAt) {
+      add('dd26-reschedule-closes-at', 'The examination must end after it opens.');
+    }
+    const integer = (raw, field, label, minimum, maximum) => {
+      const parsed = Number(raw);
+      if (String(raw ?? '').trim() === '' || !Number.isSafeInteger(parsed)
+          || parsed < minimum || parsed > maximum) {
+        add(field, `${label} must be a whole number from ${minimum} to ${maximum}.`);
+      }
+      return parsed;
+    };
+    const durationMinutes = integer(input.durationMinutes, 'dd26-reschedule-duration', 'Time allowed', 1, 480);
+    const lateAdmissionMinutes = integer(input.lateAdmissionMinutes, 'dd26-reschedule-late-admission', 'Late entry', 0, 480);
+    const submissionGraceMinutes = integer(input.submissionGraceMinutes, 'dd26-reschedule-submission-grace', 'Reconnect and submission time', 0, 120);
+    const reason = String(input.reason || '').trim();
+    if (reason.length < 10 || reason.length > 1_000) {
+      add('dd26-reschedule-reason', 'Give a short reason between 10 and 1,000 characters.');
+    }
+    return {
+      errors,
+      opensAt: Number.isFinite(opensAt.getTime()) ? opensAt.toISOString() : '',
+      hardClosesAt: Number.isFinite(hardClosesAt.getTime()) ? hardClosesAt.toISOString() : '',
+      durationMinutes,
+      lateAdmissionMinutes,
+      submissionGraceMinutes,
+      reason,
+    };
+  }
+
+  function showPublicationRescheduleErrors(errors) {
+    const host = document.getElementById('dd26-reschedule-errors');
+    document.querySelectorAll('#dd26-dialog-card [aria-invalid="true"]').forEach((field) => {
+      field.removeAttribute('aria-invalid');
+    });
+    if (!host) return;
+    host.hidden = errors.length === 0;
+    host.innerHTML = errors.length
+      ? `<strong>Correct these items before continuing:</strong><ul>${errors.map((error) => `<li>${escapeHtml(error.message)}</li>`).join('')}</ul>`
+      : '';
+    if (!errors.length) return;
+    const firstField = errors.find((error) => error.field)?.field;
+    const target = firstField ? document.getElementById(firstField) : host;
+    target?.setAttribute?.('aria-invalid', 'true');
+    target?.focus?.();
+  }
+
+  function openPublicationReschedule(snapshot, draft = null) {
+    const publication = snapshot?.publication;
+    const rules = publication?.rules;
+    if (!authoringCapability(snapshot, 'canReschedulePublication') || !publication?.publicationId
+        || !rules || typeof rules !== 'object'
+        || !Number.isSafeInteger(Number(snapshot.workspaceRevision))) {
+      openAuthoringBlockedDialog('Exam time cannot be changed', rescheduleBlockerCopy(snapshot));
+      return;
+    }
+    const saved = draft || rules;
+    const opensAt = new Date(saved.opensAt);
+    const hardClosesAt = new Date(saved.hardClosesAt);
+    if (!Number.isFinite(opensAt.getTime()) || !Number.isFinite(hardClosesAt.getTime())) {
+      openAuthoringBlockedDialog('Published schedule unavailable', 'The server did not return a complete published schedule. Refresh the Examination Room before trying again.');
+      return;
+    }
+    openDialog(`<div class="dd26-label">Step 3 · Change exam time</div><h2>Set the updated examination schedule</h2><div class="dd26-notice"><strong>Only the exam time changes.</strong> Questions, the class list, Beadle access, and the student exam code stay with this examination.</div><div class="dd26-error" id="dd26-reschedule-errors" role="alert" tabindex="-1" hidden></div><div class="dd26-form-grid"><label class="dd26-field"><span>Exam opens</span><input class="dd26-input" id="dd26-reschedule-opens-at" type="datetime-local" value="${escapeHtml(localDateValue(opensAt))}" required><small class="dd26-help">Choose a time at least 30 minutes from now.</small></label><label class="dd26-field"><span>Exam ends</span><input class="dd26-input" id="dd26-reschedule-closes-at" type="datetime-local" value="${escapeHtml(localDateValue(hardClosesAt))}" required></label><label class="dd26-field"><span>Time allowed in minutes</span><input class="dd26-input" id="dd26-reschedule-duration" type="number" min="1" max="480" step="1" value="${escapeHtml(saved.durationMinutes ?? '')}" required></label><label class="dd26-field"><span>Late entry allowed (minutes)</span><input class="dd26-input" id="dd26-reschedule-late-admission" type="number" min="0" max="480" step="1" value="${escapeHtml(saved.lateAdmissionMinutes ?? 0)}" required><small class="dd26-help">Late entry does not extend the published exam end time.</small></label><label class="dd26-field"><span>Extra time to reconnect and submit</span><input class="dd26-input" id="dd26-reschedule-submission-grace" type="number" min="0" max="120" step="1" value="${escapeHtml(saved.submissionGraceMinutes ?? 0)}" required></label><label class="dd26-field wide"><span>Reason for changing the time</span><textarea class="dd26-textarea compact" id="dd26-reschedule-reason" minlength="10" maxlength="1000" required>${escapeHtml(draft?.reason || '')}</textarea><small class="dd26-help">This reason becomes part of the examination record.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-review-reschedule" type="button">Review time change</button><button class="dd26-button" id="dd26-cancel-reschedule" type="button">Return without changing</button></div>`);
+    document.getElementById('dd26-review-reschedule')?.addEventListener('click', () => {
+      const validation = publicationRescheduleValidation({
+        opensAt: value('dd26-reschedule-opens-at'),
+        hardClosesAt: value('dd26-reschedule-closes-at'),
+        durationMinutes: value('dd26-reschedule-duration'),
+        lateAdmissionMinutes: value('dd26-reschedule-late-admission'),
+        submissionGraceMinutes: value('dd26-reschedule-submission-grace'),
+        reason: value('dd26-reschedule-reason'),
+      });
+      showPublicationRescheduleErrors(validation.errors);
+      if (!validation.errors.length) openPublicationRescheduleReview(snapshot, validation);
+    });
+    document.getElementById('dd26-cancel-reschedule')?.addEventListener('click', () => openPublishedPreparationReview(snapshot));
+  }
+
+  function openPublicationRescheduleReview(snapshot, change) {
+    const current = snapshot.publication.rules;
+    change.requestKey ||= randomKey('reschedule_publication');
+    const rows = [
+      ['Exam opens', formatDate(current.opensAt), formatDate(change.opensAt)],
+      ['Exam ends', formatDate(current.hardClosesAt), formatDate(change.hardClosesAt)],
+      ['Time allowed', `${current.durationMinutes ?? '—'} minutes`, `${change.durationMinutes} minutes`],
+      ['Late entry', `${current.lateAdmissionMinutes ?? 0} minutes`, `${change.lateAdmissionMinutes} minutes`],
+      ['Reconnect and submission time', `${current.submissionGraceMinutes ?? 0} minutes`, `${change.submissionGraceMinutes} minutes`],
+    ];
+    openDialog(`<div class="dd26-label">Step 3 · Final review</div><h2>Confirm the updated exam time</h2><div class="dd26-reschedule-comparison" role="group" aria-label="Current and updated examination schedule"><div class="dd26-reschedule-comparison-head"><strong>Setting</strong><strong>Current</strong><strong>Updated</strong></div>${rows.map(([label, before, after]) => `<div><strong>${escapeHtml(label)}</strong><span>${escapeHtml(before)}</span><span>${escapeHtml(after)}</span></div>`).join('')}</div><dl class="dd26-publish-summary"><div><dt>Reason</dt><dd>${escapeHtml(change.reason)}</dd></div></dl><div class="dd26-success"><strong>The examination content and class handoff stay in place.</strong> Questions, the class list, Beadle access, and the student exam code are not replaced by this time change.</div><div class="dd26-error" id="dd26-reschedule-save-error" role="alert" tabindex="-1" hidden></div><label class="dd26-choice"><input id="dd26-reschedule-ack" type="checkbox"><span><strong>I reviewed the updated schedule</strong><small>After saving, I will give the updated schedule to the Beadle and the class.</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-confirm-reschedule" type="button" disabled>Save updated exam time</button><button class="dd26-button primary" id="dd26-refresh-reschedule" type="button" hidden style="display:none">Refresh latest examination</button><button class="dd26-button" id="dd26-edit-reschedule" type="button">Back and edit</button><button class="dd26-button" id="dd26-abandon-reschedule" type="button">Return without changing</button></div>`);
+    const acknowledgement = document.getElementById('dd26-reschedule-ack');
+    const confirm = document.getElementById('dd26-confirm-reschedule');
+    acknowledgement?.addEventListener('change', () => { confirm.disabled = !acknowledgement.checked; });
+    confirm?.addEventListener('click', () => savePublicationReschedule(snapshot, change));
+    document.getElementById('dd26-refresh-reschedule')?.addEventListener('click', () => refreshLatestPublicationAfterReschedule(snapshot.examId));
+    document.getElementById('dd26-edit-reschedule')?.addEventListener('click', () => openPublicationReschedule(snapshot, change));
+    document.getElementById('dd26-abandon-reschedule')?.addEventListener('click', () => openPublishedPreparationReview(snapshot));
+  }
+
+  function normalizeReschedulePublicationSuccess(result, expectedExamId) {
+    const {
+      ok, examId, publicationId, publicationNumber, workspaceRevision,
+      opensAt, hardClosesAt, durationMinutes, lateAdmissionMinutes,
+      submissionGraceMinutes, preserved,
+    } = result || {};
+    const normalized = {
+      ok, examId, publicationId, publicationNumber, workspaceRevision,
+      opensAt, hardClosesAt, durationMinutes, lateAdmissionMinutes,
+      submissionGraceMinutes, preserved,
+    };
+    const opensAtMs = new Date(opensAt).getTime();
+    const hardClosesAtMs = new Date(hardClosesAt).getTime();
+    const validInteger = (entry, minimum, maximum) => Number.isSafeInteger(Number(entry))
+      && Number(entry) >= minimum && Number(entry) <= maximum;
+    if (ok !== true || examId !== expectedExamId || !String(publicationId || '').trim()
+        || !Number.isSafeInteger(Number(publicationNumber)) || Number(publicationNumber) < 2
+        || !Number.isSafeInteger(Number(workspaceRevision))
+        || !Number.isFinite(opensAtMs) || !Number.isFinite(hardClosesAtMs) || hardClosesAtMs <= opensAtMs
+        || !validInteger(durationMinutes, 1, 480)
+        || !validInteger(lateAdmissionMinutes, 0, 480)
+        || !validInteger(submissionGraceMinutes, 0, 120)) {
+      throw new Error('The time change was not confirmed completely. Refresh the Examination Room before trying again.');
+    }
+    return normalized;
+  }
+
+  async function refreshLatestPublicationAfterReschedule(examId) {
+    const refreshButton = document.getElementById('dd26-refresh-reschedule');
+    const errorHost = document.getElementById('dd26-reschedule-save-error');
+    if (!String(examId || '').trim() || refreshButton?.disabled) return;
+    if (refreshButton) {
+      refreshButton.disabled = true;
+      refreshButton.textContent = 'Refreshing latest examination...';
+    }
+    state.exam.authoringSnapshots.delete(examId);
+    try {
+      const [latestSnapshot, portalRefreshed] = await Promise.all([
+        withBoundedPublishWait(
+          loadProfessorAuthoringSnapshot(examId),
+          EXAMINATION_ROOM_REFRESH_WAIT_MS,
+        ),
+        withBoundedPublishWait(
+          refreshPortalSilently(),
+          EXAMINATION_ROOM_REFRESH_WAIT_MS,
+        ).catch(() => false),
+      ]);
+      closeDialog();
+      state.exam.section = 'professor';
+      renderExamRoom();
+      openPublishedPreparationReview(latestSnapshot);
+      if (!portalRefreshed) {
+        global.toast?.('The latest examination is open. The class summary may need another refresh.', 'warn');
+      }
+    } catch (error) {
+      if (errorHost) {
+        errorHost.hidden = false;
+        errorHost.textContent = error.message || 'The latest examination could not be loaded. Try refreshing again.';
+        errorHost.focus();
+      }
+      if (refreshButton) {
+        refreshButton.disabled = false;
+        refreshButton.textContent = 'Refresh latest examination';
+      }
+    }
+  }
+
+  async function savePublicationReschedule(snapshot, change) {
+    if (!authoringCapability(snapshot, 'canReschedulePublication')) return;
+    const button = document.getElementById('dd26-confirm-reschedule');
+    const errorHost = document.getElementById('dd26-reschedule-save-error');
+    if (button?.disabled) return;
+    if (button) { button.disabled = true; button.textContent = 'Saving updated time...'; }
+    if (errorHost) { errorHost.hidden = true; errorHost.textContent = ''; }
+    try {
+      const result = await withBoundedPublishWait(command({
+        operation: 'reschedule_publication',
+        examId: snapshot.examId,
+        expectedPublicationId: snapshot.publication.publicationId,
+        expectedWorkspaceRevision: Number(snapshot.workspaceRevision),
+        opensAt: change.opensAt,
+        hardClosesAt: change.hardClosesAt,
+        durationMinutes: change.durationMinutes,
+        lateAdmissionMinutes: change.lateAdmissionMinutes,
+        submissionGraceMinutes: change.submissionGraceMinutes,
+        reason: change.reason,
+        requestKey: change.requestKey,
+      }));
+      const confirmed = normalizeReschedulePublicationSuccess(result, snapshot.examId);
+      state.exam.authoringSnapshots.delete(snapshot.examId);
+      const [refreshedSnapshot, portalRefreshed] = await Promise.all([
+        withBoundedPublishWait(
+          loadProfessorAuthoringSnapshot(snapshot.examId),
+          EXAMINATION_ROOM_REFRESH_WAIT_MS,
+        ).catch(() => null),
+        withBoundedPublishWait(
+          refreshPortalSilently(),
+          EXAMINATION_ROOM_REFRESH_WAIT_MS,
+        ).catch(() => false),
+      ]);
+      if (refreshedSnapshot) state.exam.authoringSnapshots.set(snapshot.examId, refreshedSnapshot);
+      renderExamRoom();
+      openDialog(`<div class="dd26-label">Exam time updated</div><h2>The updated schedule is saved</h2><dl class="dd26-publish-summary"><div><dt>Exam opens</dt><dd>${escapeHtml(formatDate(confirmed.opensAt))}</dd></div><div><dt>Exam ends</dt><dd>${escapeHtml(formatDate(confirmed.hardClosesAt))}</dd></div><div><dt>Time allowed</dt><dd>${escapeHtml(confirmed.durationMinutes)} minutes</dd></div><div><dt>Late entry</dt><dd>${escapeHtml(confirmed.lateAdmissionMinutes)} minutes</dd></div><div><dt>Reconnect and submission time</dt><dd>${escapeHtml(confirmed.submissionGraceMinutes)} minutes</dd></div></dl><div class="dd26-success"><strong>Questions, the class list, Beadle access, and the student exam code are unchanged.</strong> Give the updated schedule to the Beadle and the class.</div>${refreshedSnapshot && portalRefreshed ? '' : '<div class="dd26-notice">The new schedule was saved, but this page could not refresh every detail. Return to the Examination Room and refresh before making another change.</div>'}<div class="dd26-actions"><button class="dd26-button primary" id="dd26-return-after-reschedule" type="button">Return to Professor workspace</button></div>`);
+      document.getElementById('dd26-return-after-reschedule')?.addEventListener('click', () => {
+        closeDialog();
+        state.exam.section = 'professor';
+        renderExamRoom();
+      });
+      global.toast?.('Exam time updated. Give the new schedule to the class.', 'ok');
+    } catch (error) {
+      if (errorHost) {
+        errorHost.hidden = false;
+        errorHost.textContent = error.message || 'The exam time could not be changed.';
+        errorHost.focus();
+      }
+      if (rescheduleRetryIsSafe(error)) {
+        if (button) { button.disabled = false; button.textContent = 'Retry saving updated time'; }
+        return;
+      }
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Review required';
+      }
+      if (rescheduleFailureNeedsRefresh(error)) {
+        discardPublicationRescheduleDraft(change);
+        if (button) button.hidden = true;
+        const acknowledgement = document.getElementById('dd26-reschedule-ack');
+        const editButton = document.getElementById('dd26-edit-reschedule');
+        const abandonButton = document.getElementById('dd26-abandon-reschedule');
+        const refreshButton = document.getElementById('dd26-refresh-reschedule');
+        if (acknowledgement) acknowledgement.disabled = true;
+        if (editButton) editButton.hidden = true;
+        if (abandonButton) abandonButton.hidden = true;
+        if (refreshButton) {
+          refreshButton.hidden = false;
+          refreshButton.style.display = '';
+        }
+        if (errorHost) {
+          errorHost.textContent = `${error.message || 'The examination changed while this form was open.'} Load the latest examination before making another change.`;
+        }
+      }
+    }
   }
 
   function openQuestionUpload(examId, questionCount, uploadIntent = null) {

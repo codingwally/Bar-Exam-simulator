@@ -659,14 +659,32 @@
 }
 
 .lex-dialog-close {
-  width: 38px;
-  height: 38px;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  place-items: center;
   border: 1px solid #cbd5e1;
   border-radius: 50%;
   color: #1e293b;
   background: #ffffff;
   cursor: pointer;
   font-size: 20px;
+  line-height: 1;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+
+.lex-dialog-close:hover {
+  border-color: #c5a059;
+  color: #071a33;
+  background: #fff8e8;
+}
+
+.lex-dialog-close:active { transform: translateY(1px); }
+
+.lex-dialog-close:focus-visible {
+  outline: 3px solid rgba(197, 160, 89, 0.42);
+  outline-offset: 2px;
 }
 
 .lex-dialog-body {

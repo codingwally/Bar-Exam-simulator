@@ -149,7 +149,10 @@ dialog::backdrop { background: rgba(7, 26, 51, .68); }
 dialog form { padding: 1.2rem; }
 dialog header { display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); margin-bottom: 1rem; }
 dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
-.icon-button { border: 0; background: none; font-size: 1.8rem; cursor: pointer; }
+.icon-button { display: grid; width: 44px; height: 44px; min-width: 44px; place-items: center; border: 1px solid var(--line); border-radius: 999px; color: var(--navy); background: #fff; font-size: 1.6rem; line-height: 1; cursor: pointer; transition: border-color .15s ease, background-color .15s ease, transform .15s ease; }
+.icon-button:hover { border-color: var(--gold); background: #fff8e8; }
+.icon-button:active { transform: translateY(1px); }
+.icon-button:focus-visible { outline: 3px solid rgba(197, 160, 89, .42); outline-offset: 2px; }
 #action-fields { display: grid; gap: .8rem; margin-bottom: .8rem; }
 #action-reason { min-height: 90px; resize: vertical; }
 .action-warning { color: var(--warning); background: #fff9ec; padding: .7rem; font-size: .72rem; line-height: 1.5; }

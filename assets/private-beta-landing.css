@@ -639,8 +639,8 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view) {
 }
 
 .pb-dialog-close {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   border: 1px solid rgba(196, 164, 95, .42);
   border-radius: 50%;

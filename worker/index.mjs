@@ -128,18 +128,22 @@ import {
 import {
   ReleaseContentError,
   SUBJECT_MATTER_CSV_URL,
+  SUBJECT_MATTER_SHEET_RANGE,
+  SUBJECT_MATTER_SPREADSHEET_ID,
   WEBSITE_UPLOAD_CSV_URL,
   buildBarFeelsManifest,
   buildSubjectMatterPlacements,
   parseSubjectMatterSource,
   parseWebsiteUploadSource,
+  sheetValuesToCsv,
+  subjectMatterReleaseSnapshotCsv,
 } from './release-content-core.mjs';
 import {
   DD2026ValidationError,
   dd2026DatabaseError,
 } from './duediligence-2026-core.mjs';
 import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
-import { processExamRoomDeliveryQueues } from './exam-room-delivery.mjs';
+import { googleAccessToken, processExamRoomDeliveryQueues } from './exam-room-delivery.mjs';
 import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
 const WINDOW_MS = 10 * 60 * 1000;
@@ -3613,17 +3617,48 @@ async function fetchPublishedCsv(url, label) {
   return text;
 }
 
+async function fetchAuthenticatedSubjectMatterCsv(env) {
+  const token = await googleAccessToken(env, fetch);
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SUBJECT_MATTER_SPREADSHEET_ID)}/values/${encodeURIComponent(SUBJECT_MATTER_SHEET_RANGE)}`,
+  );
+  url.searchParams.set('majorDimension', 'ROWS');
+  url.searchParams.set('valueRenderOption', 'FORMATTED_VALUE');
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    throw new ReleaseContentError(
+      'AUTHENTICATED_SOURCE_UNAVAILABLE',
+      'Subject Matter could not be loaded from the reviewed spreadsheet.',
+      503,
+    );
+  }
+  const body = await response.json().catch(() => null);
+  return sheetValuesToCsv(body?.values);
+}
+
+async function loadSubjectMatterSource(env) {
+  try {
+    return await parseSubjectMatterSource(await fetchAuthenticatedSubjectMatterCsv(env));
+  } catch {
+    // The reviewed, versioned snapshot is the deterministic release fallback
+    // when the editorial Google account is unavailable to the Worker identity.
+    return parseSubjectMatterSource(subjectMatterReleaseSnapshotCsv());
+  }
+}
+
 async function handleReleaseContentSync(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
-  const [subjectCsv, websiteCsv] = await Promise.all([
-    fetchPublishedCsv(SUBJECT_MATTER_CSV_URL, 'Subject Matter source'),
+  const [subjectSource, websiteCsv] = await Promise.all([
+    loadSubjectMatterSource(env),
     fetchPublishedCsv(WEBSITE_UPLOAD_CSV_URL, 'Mock Bar source'),
   ]);
-  const [subjectSource, websiteSource] = await Promise.all([
-    parseSubjectMatterSource(subjectCsv),
-    parseWebsiteUploadSource(websiteCsv),
-  ]);
+  const websiteSource = await parseWebsiteUploadSource(websiteCsv);
   const subjectPlacementManifest = buildSubjectMatterPlacements(subjectSource.rows);
   const barGroups = buildBarFeelsManifest(websiteSource.rows);
   const syncId = crypto.randomUUID();

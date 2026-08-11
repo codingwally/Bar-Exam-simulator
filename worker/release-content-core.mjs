@@ -5,12 +5,48 @@ import {
   SUBJECT_MATTER_PLACEMENTS,
   SUBJECT_MATTER_PLACEMENT_MANIFEST_SHA256,
 } from './subject-matter-placement-manifest.mjs';
+import {
+  SUBJECT_MATTER_RELEASE_SNAPSHOT,
+  SUBJECT_MATTER_RELEASE_VALUES,
+} from './subject-matter-release-snapshot.mjs';
 
 export const WEBSITE_UPLOAD_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=141335489&single=true&output=csv';
 
 export const SUBJECT_MATTER_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=1729202601&single=true&output=csv&range=A1%3AU1623';
+
+export const SUBJECT_MATTER_SPREADSHEET_ID =
+  '1DgDe_ObIoiTy9NJ3DmdM1ec7h7t0FS7RvFhBTjubZ8A';
+export const SUBJECT_MATTER_SHEET_RANGE = "'LEB Y1-Y2 Exam Bank'!A1:U1623";
+
+export function sheetValuesToCsv(values) {
+  if (!Array.isArray(values) || !Array.isArray(values[0])) {
+    throw new ReleaseContentError(
+      'SUBJECT_MATTER_SHEET_INVALID',
+      'The authenticated Subject Matter source did not return tabular values.',
+      503,
+    );
+  }
+  const csvCell = (value) => {
+    const text = String(value ?? '');
+    return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  };
+  return values.map((row) => row.map(csvCell).join(',')).join('\r\n');
+}
+
+export function subjectMatterReleaseSnapshotCsv() {
+  if (SUBJECT_MATTER_RELEASE_VALUES.length !== SUBJECT_MATTER_EXPECTED.destinationRows + 1
+      || SUBJECT_MATTER_RELEASE_SNAPSHOT.rowsIncludingHeader
+        !== SUBJECT_MATTER_EXPECTED.destinationRows + 1) {
+    throw new ReleaseContentError(
+      'SUBJECT_MATTER_SNAPSHOT_INVALID',
+      'The versioned Subject Matter release snapshot is incomplete.',
+      503,
+    );
+  }
+  return sheetValuesToCsv(SUBJECT_MATTER_RELEASE_VALUES);
+}
 
 export const MOCK_BAR_SUBJECTS = Object.freeze([
   'Political and Public International Law',

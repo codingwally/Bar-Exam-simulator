@@ -79,7 +79,7 @@ async function jsonFetch(fetchImpl, url, options, safeFailure) {
   return body;
 }
 
-async function googleAccessToken(env, fetchImpl) {
+export async function googleAccessToken(env, fetchImpl) {
   const clientId = String(env.GOOGLE_OAUTH_CLIENT_ID || '').trim();
   const clientSecret = String(env.GOOGLE_OAUTH_CLIENT_SECRET || '').trim();
   const refreshToken = String(env.GOOGLE_OAUTH_REFRESH_TOKEN || '').trim();

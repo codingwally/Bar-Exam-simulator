@@ -27,6 +27,8 @@ Date: 2026-08-11 (Asia/Manila)
 
 The source bank contributed 993 approved owner-override records. The destination `LEB Y1-Y2 Exam Bank` now contains 1,622 unique records. Existing destination rows were preserved byte-for-byte. Owner override was recorded in Notes without changing `Human Verified?` or falsifying source-review status.
 
+The legacy Google "published to web" alias exposes only its older 320-row publication. Production therefore uses a versioned release snapshot captured directly from the authorized destination tab. The Worker first attempts the protected Google Sheets API and falls back to this strict snapshot when that Worker identity cannot access the editorial account. The snapshot contains exactly A1:U1623, is parser-validated before every sync, and has CSV SHA-256 `7565DA182003B2AD5E202FEAE7D424C245ECA93E7D362C566D241A6E4C6A30E7`. No spreadsheet permission was broadened.
+
 ## Source verification
 
 - Automated HTTPS checks passed for 157 of 159 distinct legal-source URLs.
@@ -38,6 +40,7 @@ The source bank contributed 993 approved owner-override records. The destination
 
 - Staging migrations applied: `20260811004000` and `20260811004100`
 - Staging Worker version: `bb6f8cfd-15a7-4f87-bcf8-9c1e86bc79e9`
+- Final snapshot-enabled staging Worker version: `dea92561-a620-4864-b485-f004d9a895f3`
 - Previous staging Worker rollback version: `c99820f3-ebb6-497e-b11d-c196dc9cce99`
 - Final staged counts: 42 courses, 1,890 placements, 1,490 canonical questions, 1,490 direct placements, 400 integration placements
 - Existing Bar Feels manifest: 120 rows, unchanged

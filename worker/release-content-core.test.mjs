@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import worker from './index.mjs';
+import { parseCsv } from './examiner-core.mjs';
 import {
   BAR_FEELS_DESTINATIONS,
   MOCK_BAR_SUBJECTS,
@@ -10,6 +11,8 @@ import {
   buildSubjectMatterPlacements,
   parseSubjectMatterSource,
   parseWebsiteUploadSource,
+  sheetValuesToCsv,
+  subjectMatterReleaseSnapshotCsv,
 } from './release-content-core.mjs';
 import {
   SUBJECT_MATTER_COURSES,
@@ -17,6 +20,7 @@ import {
   SUBJECT_MATTER_PLACEMENTS,
   SUBJECT_MATTER_PLACEMENT_MANIFEST_SHA256,
 } from './subject-matter-placement-manifest.mjs';
+import { SUBJECT_MATTER_RELEASE_SNAPSHOT } from './subject-matter-release-snapshot.mjs';
 
 const headers = [
   'Question ID',
@@ -116,6 +120,24 @@ function subjectRows() {
   return rows;
 }
 
+test('authenticated Sheet values preserve commas, quotation marks, and paragraph breaks', () => {
+  const values = [
+    ['Question ID', 'Essay Question', 'Suggested Answer'],
+    ['LAW-001', 'First paragraph.\n\nSecond paragraph, with a comma.', 'The court said "Yes."'],
+  ];
+  const encoded = sheetValuesToCsv(values);
+  assert.deepEqual(parseCsv(encoded), values);
+});
+
+test('versioned Subject Matter release snapshot is complete and parser-valid', async () => {
+  const source = await parseSubjectMatterSource(subjectMatterReleaseSnapshotCsv());
+  assert.equal(source.rows.length, 1622);
+  assert.equal(source.rows[0].sheetRow, 2);
+  assert.equal(source.rows.at(-1).sheetRow, 1623);
+  assert.equal(new Set(source.rows.map((row) => row.questionId)).size, 1622);
+  assert.equal(source.digest.toUpperCase(), SUBJECT_MATTER_RELEASE_SNAPSHOT.csvSha256);
+});
+
 function websiteRows() {
   return MOCK_BAR_SUBJECTS.flatMap((subject, subjectIndex) => (
     Array.from({ length: 40 }, (_, index) => sourceRow({
@@ -179,9 +201,8 @@ test('Mock Bar import and Bar Feels manifest are exact, unique, and deterministi
   }
 });
 
-test('release sync route validates both published sources and sends only bounded reviewed records', async () => {
+test('release sync uses the versioned snapshot when the Google source is unavailable', async () => {
   const originalFetch = globalThis.fetch;
-  const subjectCsv = csv(subjectRows());
   const websiteCsv = csv(websiteRows());
   let syncBody;
   const stagedBodies = [];
@@ -193,8 +214,11 @@ test('release sync route validates both published sources and sends only bounded
         email: 'reviewer@example.test',
       });
     }
-    if (target === SUBJECT_MATTER_CSV_URL) {
-      return new Response(subjectCsv, { headers: { 'Content-Type': 'text/csv' } });
+    if (target === 'https://oauth2.googleapis.com/token') {
+      return Response.json({ access_token: 'ephemeral-test-token' });
+    }
+    if (target.startsWith('https://sheets.googleapis.com/v4/spreadsheets/')) {
+      return Response.json({ error: { status: 'NOT_FOUND' } }, { status: 404 });
     }
     if (target === WEBSITE_UPLOAD_CSV_URL) {
       return new Response(websiteCsv, { headers: { 'Content-Type': 'text/csv' } });
@@ -229,6 +253,9 @@ test('release sync route validates both published sources and sends only bounded
         GUEST_USAGE_HMAC_KEY: 'test-only-rate-key',
         SUPABASE_URL: 'https://test.supabase.co',
         SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+        GOOGLE_OAUTH_CLIENT_ID: 'test-client-id',
+        GOOGLE_OAUTH_CLIENT_SECRET: 'test-client-secret',
+        GOOGLE_OAUTH_REFRESH_TOKEN: 'test-refresh-token',
       },
     );
     const raw = await response.text();
@@ -259,7 +286,7 @@ test('release sync route validates both published sources and sends only bounded
     assert.equal(
       stagedBodies.filter((body) => body.p_payload_kind === 'rows').at(-1).p_payload.at(-1)
         .editorialStatus,
-      'For Review',
+      'Source Review',
     );
     assert.doesNotMatch(raw, /First paragraph|Legal Basis|studentAnswer/i);
   } finally {

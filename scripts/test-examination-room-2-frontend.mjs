@@ -864,7 +864,7 @@ assert.ok(questionReviewValidation([
 const rescheduleValidationStart = frontend.indexOf('function publicationRescheduleValidation');
 const rescheduleValidationEnd = frontend.indexOf('function showPublicationRescheduleErrors', rescheduleValidationStart);
 const publicationRescheduleValidation = Function(
-  `'use strict'; const EXAMINATION_ROOM_MIN_HANDOFF_MS = 30 * 60 * 1000; ${frontend.slice(rescheduleValidationStart, rescheduleValidationEnd)}; return publicationRescheduleValidation;`,
+  `'use strict'; ${frontend.slice(rescheduleValidationStart, rescheduleValidationEnd)}; return publicationRescheduleValidation;`,
 )();
 assert.equal(publicationRescheduleValidation({
   opensAt: '2035-08-10T12:00:00.000Z', hardClosesAt: '2035-08-10T14:00:00.000Z',
@@ -872,17 +872,23 @@ assert.equal(publicationRescheduleValidation({
   reason: 'The law school moved the examination schedule.',
   nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
 }).errors.length, 0);
+assert.equal(publicationRescheduleValidation({
+  opensAt: '2035-08-10T10:00:00.000Z', hardClosesAt: '2035-08-10T12:00:00.000Z',
+  durationMinutes: '120', lateAdmissionMinutes: '15', submissionGraceMinutes: '15',
+  reason: 'The Professor is opening the examination immediately.',
+  nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
+}).errors.length, 0, 'a Professor may move an exam to an immediate opening');
 assert.ok(publicationRescheduleValidation({
   opensAt: '2035-08-10T10:20:00.000Z', hardClosesAt: '2035-08-10T10:10:00.000Z',
   durationMinutes: '0', lateAdmissionMinutes: '481', submissionGraceMinutes: '121',
   reason: 'short', nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
-}).errors.length >= 6,
-'schedule changes enforce the 30-minute class notice, end order, minute limits, and a recorded reason');
+}).errors.length >= 5,
+'schedule changes still enforce end order, minute limits, and a recorded reason');
 
 const publishValidationStart = frontend.indexOf('function publishStepValidation');
 const publishValidationEnd = frontend.indexOf('function showPublishStepErrors', publishValidationStart);
 const publishStepValidation = Function(
-  `'use strict'; const EXAMINATION_ROOM_MIN_HANDOFF_MS = 30 * 60 * 1000; ${frontend.slice(publishValidationStart, publishValidationEnd)}; return publishStepValidation;`,
+  `'use strict'; ${frontend.slice(publishValidationStart, publishValidationEnd)}; return publishStepValidation;`,
 )();
 const validPublishStep = publishStepValidation({
   opensAt: '2035-08-10T12:00:00.000Z',
@@ -894,17 +900,18 @@ const validPublishStep = publishStepValidation({
 });
 assert.equal(validPublishStep.errors.length, 0,
   'Professor may finalize before the Beadle uploads the class list');
-assert.match(frontend, /Date\.now\(\) \+ 60 \* 60000/,
-  'the Professor schedule opens one hour out by default');
+assert.match(frontend, /const defaultOpen = new Date\(\);/,
+  'the Professor schedule opens immediately by default');
 assert.match(frontend, /EXAM_ROOM_HANDOFF_TIME_REQUIRED/);
-assert.ok(publishStepValidation({
-  opensAt: '2035-08-10T10:20:00.000Z', hardClosesAt: '2035-08-10T14:00:00.000Z',
+assert.equal(publishStepValidation({
+  opensAt: '2035-08-10T10:00:00.000Z', hardClosesAt: '2035-08-10T14:00:00.000Z',
   durationMinutes: '120', lateAdmissionMinutes: '15', submissionGraceMinutes: '15',
   allowedMaterials: '', suggestedAnswerMode: 'none', beadleEmail: 'beadle@example.edu',
   nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
   exam: { publicationStateKnown: true, status: 'confirmed', questionCount: 20, canPublish: true },
-}).errors.some((error) => /at least 30 minutes/.test(error.message)),
-'publication must leave at least 30 minutes for the Beadle handoff');
+}).errors.length, 0, 'publication may open immediately');
+assert.doesNotMatch(frontend, /at least 30 minutes|30 minutes after publication/,
+  'the Professor workflow must not retain the removed lead-time restriction');
 assert.ok(publishStepValidation({
   opensAt: '2035-08-10T12:00:00.000Z', hardClosesAt: '2035-08-10T14:00:00.000Z',
   durationMinutes: '120', lateAdmissionMinutes: '0', submissionGraceMinutes: '15',

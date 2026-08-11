@@ -8,6 +8,7 @@ const index = await readFile(path.join(root, 'index.html'), 'utf8');
 const admin = await readFile(path.join(root, 'admin/index.html'), 'utf8');
 const build = await readFile(path.join(root, 'scripts/build-pages-artifact.mjs'), 'utf8');
 const favicon = await readFile(path.join(root, 'favicon.svg'), 'utf8');
+const manifest = JSON.parse(await readFile(path.join(root, 'manifest.webmanifest'), 'utf8'));
 const robots = await readFile(path.join(root, 'robots.txt'), 'utf8');
 const sitemap = await readFile(path.join(root, 'sitemap.xml'), 'utf8');
 
@@ -25,8 +26,10 @@ assert.match(index, /<meta name="robots" content="index,follow,max-image-preview
 assert.match(index, /<meta property="og:title" content="Due Diligence — A Friend on Your Journey Through the Study of Law">/);
 assert.match(index, /<meta property="og:url" content="https:\/\/duediligence\.ph\/">/);
 assert.match(index, /<meta property="og:locale" content="en_PH">/);
-assert.match(index, /<meta property="og:image" content="https:\/\/duediligence\.ph\/favicon\.svg">/);
-assert.match(index, /<meta name="twitter:card" content="summary">/);
+assert.match(index, /<meta property="og:image" content="https:\/\/duediligence\.ph\/assets\/brand\/social-card-1200x630\.png">/);
+assert.match(index, /<meta name="twitter:card" content="summary_large_image">/);
+assert.match(index, /<link rel="manifest" href="manifest\.webmanifest">/);
+assert.match(index, /assets\/brand\/favicon-32\.png/);
 assert.match(index, /<script type="application\/ld\+json">[\s\S]*"@type": "EducationalApplication"/);
 assert.match(index, /"audienceType": "Philippine law students and Bar candidates"/);
 const schemaSource = index.match(
@@ -78,6 +81,10 @@ assert.match(build, /'robots\.txt'/);
 assert.match(build, /'sitemap\.xml'/);
 assert.match(admin, /<meta name="robots" content="noindex,nofollow">/);
 assert.match(favicon, /<svg\b/);
+assert.deepEqual(manifest.icons.map(({ src, sizes }) => [src, sizes]), [
+  ['assets/brand/icon-192.png', '192x192'],
+  ['assets/brand/icon-512.png', '512x512'],
+]);
 assert.match(robots, /^User-agent: \*\r?\nAllow: \/\r?\nDisallow: \/admin\//);
 assert.match(robots, /Sitemap: https:\/\/duediligence\.ph\/sitemap\.xml/);
 assert.match(sitemap, /<loc>https:\/\/duediligence\.ph\/<\/loc>/);

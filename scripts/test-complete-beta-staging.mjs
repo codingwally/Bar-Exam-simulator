@@ -202,13 +202,13 @@ try {
   await grantBetaAccess(actorUserId, student.id);
   await grantBetaAccess(actorUserId, peer.id);
 
-  console.log('STAGING_GATE: validating the 616-question Subject Matter catalog');
+  console.log('STAGING_GATE: validating the 1,890-placement Subject Matter catalog');
   const catalog = await examinationQuery(student, 'subject_catalog');
   assert.equal(catalog.body.ok, true);
-  assert.equal(catalog.body.data.items.length, 24);
+  assert.equal(catalog.body.data.items.length, 42);
   assert.equal(
     catalog.body.data.items.reduce((total, item) => total + item.questionCount, 0),
-    616,
+    1890,
   );
 
   const criminalLaw = catalog.body.data.items.find(
@@ -216,7 +216,7 @@ try {
       && item.yearLevel === 1
       && item.term === 1,
   );
-  assert.equal(criminalLaw.questionCount, 60);
+  assert.equal(criminalLaw.questionCount, 50);
 
   const first = await examinationQuery(student, 'subject_next', {
     subject: criminalLaw.subject,
@@ -357,8 +357,9 @@ try {
   outcome = {
     ok: true,
     subjectMatter: {
-      questions: 616,
-      subjects: 24,
+      canonicalQuestions: 1490,
+      placements: 1890,
+      subjects: 42,
       repeatedQuestionStable: true,
       noRepeatAfterSubmission: true,
       timerModes: 3,

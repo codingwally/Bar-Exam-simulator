@@ -1227,6 +1227,110 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     }
   }
 
+  function assessmentList(items, emptyText) {
+    const values = Array.isArray(items) ? items.filter(Boolean) : [];
+    return `<ul>${(values.length ? values : [emptyText])
+      .map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`;
+  }
+
+  function assessmentSources(sources) {
+    const safe = (Array.isArray(sources) ? sources : []).map((source) => {
+      const rawUrl = typeof source === 'string' ? source : source?.url;
+      try {
+        const url = new URL(rawUrl);
+        if (url.protocol !== 'https:' || url.username || url.password) return null;
+        return {
+          url: url.href,
+          title: typeof source === 'string'
+            ? url.hostname
+            : source.title || source.reference || url.hostname,
+          reference: typeof source === 'string' ? '' : source.reference || source.relevance || '',
+          authority: typeof source === 'string'
+            ? 'Official or editorial source'
+            : source.authority || source.type || 'Legal source',
+        };
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+    if (!safe.length) {
+      return '<div class="legal-explanation">No verified online source is currently available.</div>';
+    }
+    return `<div class="source-list">${safe.map((source) => `<a class="source-link"
+      href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">
+      <span>${escapeHtml(source.title)}${source.reference ? `<small>${escapeHtml(source.reference)}</small>` : ''}</span>
+      <small>${escapeHtml(source.authority)} · External source</small></a>`).join('')}</div>`;
+  }
+
+  function assessmentBreakdown(breakdown) {
+    const entries = breakdown && typeof breakdown === 'object' && !Array.isArray(breakdown)
+      ? Object.entries(breakdown).filter(([, value]) => Number.isFinite(Number(value)))
+      : [];
+    if (!entries.length) return '';
+    return `<section class="assessment-section"><h4>Point-by-point comparison</h4>
+      <div class="dd-assessment-breakdown">${entries.map(([label, value]) => `<div>
+        <span>${escapeHtml(label.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()))}</span>
+        <strong>${Number(value).toFixed(1)}</strong></div>`).join('')}</div></section>`;
+  }
+
+  function assessmentCard(result, options = {}) {
+    const assessment = result.aiAssessment || result.assessment || {};
+    const alac = assessment.modelAnswerALAC || {};
+    const score = result.aiScore ?? result.score;
+    const prompt = result.prompt || options.prompt || '';
+    const suggestedAnswer = result.modelAnswer || result.suggestedAnswer || '';
+    const sources = result.sources || assessment.sources || [];
+    const questionId = result.questionId || result.id || '';
+    const hasAlac = ['answer', 'legalBasis', 'application', 'conclusion'].some((key) => alac[key]);
+    const sourceWarning = assessment.reviewRequired === true || assessment.sourceStatus === 'conflict'
+      ? '<div class="assessment-warning"><strong>Review required.</strong> Verify the cited primary authorities before relying on this assessment.</div>'
+      : '';
+    return `<article class="assessment-card dd-subject-assessment" aria-label="Individual Philippine Bar essay assessment">
+      <div class="assessment-hero">
+        ${score != null ? `<div class="score-medallion"><div><strong>${Number(score).toFixed(1)} / 5</strong><span>Points earned</span></div></div>` : ''}
+        <div><div class="assessment-kicker">Individual Question Assessment</div>
+          <h3 class="assessment-title">${escapeHtml(assessment.performanceLabel || 'Philippine Bar essay assessment')}</h3>
+          <div class="assessment-equivalent">Scored on the 0.0–5.0 Philippine Bar essay practice scale</div>
+          <div class="assessment-badges"><span class="assessment-badge">${escapeHtml(assessment.label || 'Question-bank assessment')}</span>
+            ${assessment.tier ? `<span class="assessment-badge">Official tier ${escapeHtml(assessment.tier)}</span>` : ''}
+            ${assessment.sourceStatus ? `<span class="assessment-badge">Source: ${escapeHtml(assessment.sourceStatus)}</span>` : ''}</div>
+        </div>
+      </div>
+      <div class="assessment-body">
+        ${prompt ? `<section class="assessment-section"><h4>Question</h4><div class="dd-question-prompt">${escapeHtml(prompt)}</div></section>` : ''}
+        ${options.answerText ? `<section class="assessment-section"><h4>Your answer</h4><div class="dd-model-answer">${escapeHtml(options.answerText)}</div></section>` : ''}
+        <h4 class="panel-title">Why this score</h4>
+        <p class="assessment-rationale">${escapeHtml(assessment.rationale || 'The assessment record does not include a written rationale.')}</p>
+        <section class="assessment-section"><h4>Governing rule and authority</h4>
+          <div class="legal-explanation">${escapeHtml(assessment.legalExplanation || result.legalBasis || 'Review the controlling provision and doctrine identified in the released answer and legal sources.')}</div></section>
+        ${assessmentBreakdown(assessment.rubricBreakdown)}
+        <div class="assessment-grid">
+          <section class="assessment-panel strengths"><h4>Strengths</h4>${assessmentList(assessment.strengths, 'No specific strength was identified.')}</section>
+          <section class="assessment-panel errors"><h4>Errors or missing points</h4>${assessmentList(assessment.errors, 'No material error was identified.')}</section>
+          <section class="assessment-panel coaching"><h4>Prioritized improvements</h4>${assessmentList(assessment.improvements, 'Keep the answer direct, legally grounded, and fact-specific.')}</section>
+        </div>
+        ${hasAlac ? `<section class="assessment-section"><h4>Improved Answer — ALAC Method</h4>
+          <div class="alac-model"><div class="alac-part"><b>ANSWER</b><p>${escapeHtml(alac.answer || '')}</p></div>
+            <div class="alac-part"><b>LEGAL BASIS</b><p>${escapeHtml(alac.legalBasis || '')}</p></div>
+            <div class="alac-part"><b>APPLICATION</b><p>${escapeHtml(alac.application || '')}</p></div>
+            <div class="alac-part"><b>CONCLUSION</b><p>${escapeHtml(alac.conclusion || '')}</p></div></div></section>` : ''}
+        ${suggestedAnswer ? `<section class="assessment-section"><h4>Approved Model Answer</h4>
+          <div class="dd-model-answer">${escapeHtml(suggestedAnswer)}</div></section>`
+        : '<p class="dd-exam-description">Model answer not yet released under this examination’s rule.</p>'}
+        <section class="assessment-section"><h4>Supporting legal sources</h4>${assessmentSources(sources)}</section>
+        ${sourceWarning}
+        ${result.humanComments ? `<section class="assessment-section"><h4>Human examiner</h4><div class="legal-explanation">${escapeHtml(result.humanComments)}</div></section>` : ''}
+        <div class="assessment-meta">This AI-generated assessment is for Bar review and coaching only. It is not an official Supreme Court grade and does not guarantee or predict an examinee’s actual result.</div>
+        <div class="fb-bar"><span class="fb-label">Was this coaching helpful?</span>
+          <button class="fb-btn" type="button" data-assessment-rating="up">Helpful</button>
+          <button class="fb-btn" type="button" data-assessment-rating="down">Needs work</button>
+          ${questionId ? `<button class="fb-btn suggest" type="button" data-suggest-exam-correction
+            data-question-id="${escapeHtml(questionId)}" data-question-subject="${escapeHtml(result.subject || state.selectedSubject || '')}">Suggest a Correction/Better Answer</button>` : ''}
+        </div>
+      </div>
+    </article>`;
+  }
+
   async function openVerdict(attemptId) {
     state.screen = 'verdict';
     showTrackPage(state.active?.examination?.track || state.track);
@@ -1246,21 +1350,11 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
         <h1>Individual ALAC assessments.</h1>
         <p class="dd-exam-description">No cumulative percentage, class rank, pass/fail claim,
           or unsupported average is calculated.</p>
-        ${verdict.results.map((result) => `<article class="dd-verdict-question">
+        ${verdict.results.map((result) => `<div class="dd-verdict-question">
           <p class="dd-question-label">Question ${Number(result.ordinal)}</p>
-          <div class="dd-question-prompt">${escapeHtml(result.prompt)}</div>
-          ${result.aiScore != null ? `<div class="dd-score-five">${Number(result.aiScore).toFixed(1)} / 5.0</div>` : ''}
           ${result.humanScore != null ? `<div class="dd-score-five">Human ${Number(result.humanScore).toFixed(1)} / 5.0</div>` : ''}
-          ${result.aiAssessment ? `<h3>AI Assessment</h3>
-            <p class="dd-exam-description">${escapeHtml(result.aiAssessment.rationale || '')}</p>
-            ${Array.isArray(result.aiAssessment.strengths) ? `<p><strong>Strengths:</strong> ${escapeHtml(result.aiAssessment.strengths.join(' · '))}</p>` : ''}
-            ${Array.isArray(result.aiAssessment.improvements) ? `<p><strong>Coaching:</strong> ${escapeHtml(result.aiAssessment.improvements.join(' · '))}</p>` : ''}` : ''}
-          ${result.humanComments ? `<p><strong>Human examiner:</strong> ${escapeHtml(result.humanComments)}</p>` : ''}
-          ${result.modelAnswer ? `<h3>Released Model Answer</h3>
-            <div class="dd-model-answer">${escapeHtml(result.modelAnswer)}</div>
-            ${(result.sources || []).length ? `<ul class="dd-syllabus-list">${result.sources.map((source) =>
-              `<li><a href="${escapeHtml(source.url || source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title || source.url || source)}</a></li>`).join('')}</ul>` : ''}` : `<p class="dd-exam-description">Model answer not yet released under this examination&rsquo;s rule.</p>`}
-        </article>`).join('')}
+          ${assessmentCard(result)}
+        </div>`).join('')}
         <div class="dd-exam-actions" style="margin-top:24px">
           ${state.active?.examination?.track === 'per_subject' ? `
             <button class="dd-exam-button is-primary" type="button" data-subject-next>Next Random Question</button>
@@ -1303,19 +1397,8 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
         </div>
         ${attempts.length ? attempts.map((item) => `<article class="dd-verdict-question">
           <p class="dd-question-label">${escapeHtml(item.topic || subject)} · ${escapeHtml(formatDate(item.submittedAt))}</p>
-          ${item.score != null ? `<div class="dd-score-five">${Number(item.score).toFixed(1)} / 5.0</div>` : '<p>Assessment pending.</p>'}
-          <h3>Your answer</h3>
-          <div class="dd-model-answer">${escapeHtml(item.answerText || '')}</div>
-          ${item.assessment ? `<h3>Assessment</h3>
-            <p class="dd-exam-description">${escapeHtml(item.assessment.rationale || '')}</p>
-            ${(item.assessment.improvements || []).length
-              ? `<p><strong>Next focus:</strong> ${escapeHtml(item.assessment.improvements.join(' · '))}</p>` : ''}` : ''}
-          ${item.suggestedAnswer ? `<h3>Suggested answer</h3>
-            <div class="dd-model-answer">${escapeHtml(item.suggestedAnswer)}</div>` : ''}
-          ${item.legalBasis ? `<h3>Controlling legal basis</h3>
-            <div class="dd-model-answer">${escapeHtml(item.legalBasis)}</div>` : ''}
-          ${(item.sources || []).length ? `<ul class="dd-syllabus-list">${item.sources.map((source) =>
-            `<li><a href="${escapeHtml(source.url || source)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title || source.url || source)}</a></li>`).join('')}</ul>` : ''}
+          ${item.assessment ? assessmentCard(item, { answerText: item.answerText })
+            : `<p>Assessment pending.</p><h3>Your answer</h3><div class="dd-model-answer">${escapeHtml(item.answerText || '')}</div>`}
         </article>`).join('') : '<p class="dd-exam-description">Submit your first answer to begin this private performance record.</p>'}
         <div class="dd-exam-actions" style="margin-top:24px">
           <button class="dd-exam-button is-primary" type="button" data-return-catalog>Return to Subjects</button>
@@ -1671,6 +1754,19 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     if (event.target.closest('[data-subject-change-timer]')) {
       requestSubjectQuestion({
         subject: state.active?.examination?.subject || state.selectedSubject,
+      });
+      return;
+    }
+    const rating = event.target.closest('[data-assessment-rating]');
+    if (rating) {
+      global.rateModel?.(rating.dataset.assessmentRating);
+      return;
+    }
+    const correction = event.target.closest('[data-suggest-exam-correction]');
+    if (correction) {
+      global.openSuggest?.({
+        id: correction.dataset.questionId,
+        subject: correction.dataset.questionSubject,
       });
       return;
     }

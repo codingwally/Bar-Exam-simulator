@@ -1,10 +1,52 @@
 import { parseCsv } from './examiner-core.mjs';
+import {
+  SUBJECT_MATTER_COURSES,
+  SUBJECT_MATTER_EXPECTED,
+  SUBJECT_MATTER_PLACEMENTS,
+  SUBJECT_MATTER_PLACEMENT_MANIFEST_SHA256,
+} from './subject-matter-placement-manifest.mjs';
+import {
+  SUBJECT_MATTER_RELEASE_SNAPSHOT,
+  SUBJECT_MATTER_RELEASE_VALUES,
+} from './subject-matter-release-snapshot.mjs';
 
 export const WEBSITE_UPLOAD_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=141335489&single=true&output=csv';
 
 export const SUBJECT_MATTER_CSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=1729202601&single=true&output=csv&range=A1%3AU617';
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=1729202601&single=true&output=csv&range=A1%3AU1623';
+
+export const SUBJECT_MATTER_SPREADSHEET_ID =
+  '1DgDe_ObIoiTy9NJ3DmdM1ec7h7t0FS7RvFhBTjubZ8A';
+export const SUBJECT_MATTER_SHEET_RANGE = "'LEB Y1-Y2 Exam Bank'!A1:U1623";
+
+export function sheetValuesToCsv(values) {
+  if (!Array.isArray(values) || !Array.isArray(values[0])) {
+    throw new ReleaseContentError(
+      'SUBJECT_MATTER_SHEET_INVALID',
+      'The authenticated Subject Matter source did not return tabular values.',
+      503,
+    );
+  }
+  const csvCell = (value) => {
+    const text = String(value ?? '');
+    return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  };
+  return values.map((row) => row.map(csvCell).join(',')).join('\r\n');
+}
+
+export function subjectMatterReleaseSnapshotCsv() {
+  if (SUBJECT_MATTER_RELEASE_VALUES.length !== SUBJECT_MATTER_EXPECTED.destinationRows + 1
+      || SUBJECT_MATTER_RELEASE_SNAPSHOT.rowsIncludingHeader
+        !== SUBJECT_MATTER_EXPECTED.destinationRows + 1) {
+    throw new ReleaseContentError(
+      'SUBJECT_MATTER_SNAPSHOT_INVALID',
+      'The versioned Subject Matter release snapshot is incomplete.',
+      503,
+    );
+  }
+  return sheetValuesToCsv(SUBJECT_MATTER_RELEASE_VALUES);
+}
 
 export const MOCK_BAR_SUBJECTS = Object.freeze([
   'Political and Public International Law',
@@ -282,16 +324,120 @@ export async function parseSubjectMatterSource(csvText) {
     seen.add(normalized.questionId);
     rows.push(normalized);
   }
-  if (rows.length !== 616) {
+  if (rows.length !== SUBJECT_MATTER_EXPECTED.destinationRows) {
     throw new ReleaseContentError(
       'SUBJECT_MATTER_COUNT_MISMATCH',
-      `The Subject Matter source contains ${rows.length} rows; 616 are required.`,
+      `The Subject Matter source contains ${rows.length} rows; ${SUBJECT_MATTER_EXPECTED.destinationRows} are required.`,
     );
   }
   return {
     rows,
     digest: await sha256(csvText),
     subjectCount: new Set(rows.map((row) => row.subject)).size,
+  };
+}
+
+export function buildSubjectMatterPlacements(rows) {
+  if (!Array.isArray(rows) || rows.length !== SUBJECT_MATTER_EXPECTED.destinationRows) {
+    throw new ReleaseContentError(
+      'SUBJECT_MATTER_PLACEMENT_SOURCE_INVALID',
+      'The Subject Matter placement manifest requires the complete canonical destination bank.',
+    );
+  }
+
+  const sourceById = new Map(rows.map((row) => [row.questionId, row]));
+  const courseByCode = new Map(SUBJECT_MATTER_COURSES.map((course) => [course.code, course]));
+  const slotKeys = new Set();
+  const courseQuestionKeys = new Set();
+  const canonicalCounts = new Map();
+  const courseCounts = new Map();
+  const courseDifficultyCounts = new Map();
+  const placements = SUBJECT_MATTER_PLACEMENTS.map((entry) => {
+    const [courseCode, slot, questionId, feederSubject, difficulty, placementType] = entry;
+    const course = courseByCode.get(courseCode);
+    const source = sourceById.get(questionId);
+    if (!course || !source) {
+      throw new ReleaseContentError(
+        'SUBJECT_MATTER_PLACEMENT_REFERENCE_INVALID',
+        `The Subject Matter placement manifest references an unknown course or canonical question (${courseCode}/${questionId}).`,
+      );
+    }
+    if (!Number.isInteger(slot) || slot < 1 || slot > course.target) {
+      throw new ReleaseContentError(
+        'SUBJECT_MATTER_PLACEMENT_SLOT_INVALID',
+        `The Subject Matter placement slot is invalid (${courseCode}/${slot}).`,
+      );
+    }
+    if (!['direct', 'integration'].includes(placementType)
+        || !['Easy', 'Medium', 'Hard'].includes(difficulty)) {
+      throw new ReleaseContentError(
+        'SUBJECT_MATTER_PLACEMENT_CLASSIFICATION_INVALID',
+        `The Subject Matter placement classification is invalid (${courseCode}/${slot}).`,
+      );
+    }
+    const slotKey = `${courseCode}:${slot}`;
+    const courseQuestionKey = `${courseCode}:${questionId}`;
+    if (slotKeys.has(slotKey) || courseQuestionKeys.has(courseQuestionKey)) {
+      throw new ReleaseContentError(
+        'SUBJECT_MATTER_PLACEMENT_DUPLICATE',
+        `The Subject Matter placement manifest repeats a slot or course question (${courseCode}/${slot}).`,
+      );
+    }
+    slotKeys.add(slotKey);
+    courseQuestionKeys.add(courseQuestionKey);
+    canonicalCounts.set(questionId, (canonicalCounts.get(questionId) || 0) + 1);
+    courseCounts.set(courseCode, (courseCounts.get(courseCode) || 0) + 1);
+    const difficultyKey = `${courseCode}:${difficulty}`;
+    courseDifficultyCounts.set(
+      difficultyKey,
+      (courseDifficultyCounts.get(difficultyKey) || 0) + 1,
+    );
+    return {
+      courseCode,
+      courseName: course.name,
+      yearLevel: course.year,
+      term: course.term,
+      classification: course.classification,
+      slot,
+      questionId,
+      feederSubject,
+      difficulty,
+      placementType,
+      sourceContentHash: source.contentHash,
+    };
+  });
+
+  const directCount = placements.filter((placement) => placement.placementType === 'direct').length;
+  const integrationCount = placements.length - directCount;
+  const reused = [...canonicalCounts.values()].filter((count) => count === 2).length;
+  if (placements.length !== SUBJECT_MATTER_EXPECTED.placements
+      || directCount !== SUBJECT_MATTER_EXPECTED.directPlacements
+      || integrationCount !== SUBJECT_MATTER_EXPECTED.integrationPlacements
+      || canonicalCounts.size !== SUBJECT_MATTER_EXPECTED.canonicalQuestions
+      || reused !== SUBJECT_MATTER_EXPECTED.integrationPlacements
+      || Math.max(...canonicalCounts.values()) !== 2) {
+    throw new ReleaseContentError(
+      'SUBJECT_MATTER_PLACEMENT_TOTAL_INVALID',
+      'The Subject Matter placement manifest does not satisfy the reviewed direct/integration totals.',
+    );
+  }
+
+  for (const course of SUBJECT_MATTER_COURSES) {
+    if (courseCounts.get(course.code) !== course.target
+        || Object.entries(course.difficulty).some(([difficulty, count]) => (
+          courseDifficultyCounts.get(`${course.code}:${difficulty}`) !== count
+        ))) {
+      throw new ReleaseContentError(
+        'SUBJECT_MATTER_COURSE_ALLOCATION_INVALID',
+        `The Subject Matter placement allocation is invalid for ${course.code}.`,
+      );
+    }
+  }
+
+  return {
+    placements,
+    courses: SUBJECT_MATTER_COURSES,
+    digest: SUBJECT_MATTER_PLACEMENT_MANIFEST_SHA256,
   };
 }
 

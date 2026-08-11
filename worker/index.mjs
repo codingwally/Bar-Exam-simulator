@@ -128,17 +128,22 @@ import {
 import {
   ReleaseContentError,
   SUBJECT_MATTER_CSV_URL,
+  SUBJECT_MATTER_SHEET_RANGE,
+  SUBJECT_MATTER_SPREADSHEET_ID,
   WEBSITE_UPLOAD_CSV_URL,
   buildBarFeelsManifest,
+  buildSubjectMatterPlacements,
   parseSubjectMatterSource,
   parseWebsiteUploadSource,
+  sheetValuesToCsv,
+  subjectMatterReleaseSnapshotCsv,
 } from './release-content-core.mjs';
 import {
   DD2026ValidationError,
   dd2026DatabaseError,
 } from './duediligence-2026-core.mjs';
 import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
-import { processExamRoomDeliveryQueues } from './exam-room-delivery.mjs';
+import { googleAccessToken, processExamRoomDeliveryQueues } from './exam-room-delivery.mjs';
 import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
 const WINDOW_MS = 10 * 60 * 1000;
@@ -534,6 +539,10 @@ async function examinationRpc(env, functionName, body) {
     'release_sync_subject_matter',
     'release_sync_bar_feels',
     'release_sync_all_content',
+    'release_sync_subject_matter_v2',
+    'release_sync_all_content_v2',
+    'release_stage_subject_matter_v2',
+    'release_finalize_all_content_v2',
   ]);
   if (!allowedFunctions.has(functionName)) {
     throw new ExaminationValidationError(
@@ -3608,23 +3617,74 @@ async function fetchPublishedCsv(url, label) {
   return text;
 }
 
+async function fetchAuthenticatedSubjectMatterCsv(env) {
+  const token = await googleAccessToken(env, fetch);
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SUBJECT_MATTER_SPREADSHEET_ID)}/values/${encodeURIComponent(SUBJECT_MATTER_SHEET_RANGE)}`,
+  );
+  url.searchParams.set('majorDimension', 'ROWS');
+  url.searchParams.set('valueRenderOption', 'FORMATTED_VALUE');
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    throw new ReleaseContentError(
+      'AUTHENTICATED_SOURCE_UNAVAILABLE',
+      'Subject Matter could not be loaded from the reviewed spreadsheet.',
+      503,
+    );
+  }
+  const body = await response.json().catch(() => null);
+  return sheetValuesToCsv(body?.values);
+}
+
+async function loadSubjectMatterSource(env) {
+  try {
+    return await parseSubjectMatterSource(await fetchAuthenticatedSubjectMatterCsv(env));
+  } catch {
+    // The reviewed, versioned snapshot is the deterministic release fallback
+    // when the editorial Google account is unavailable to the Worker identity.
+    return parseSubjectMatterSource(subjectMatterReleaseSnapshotCsv());
+  }
+}
+
 async function handleReleaseContentSync(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
-  const [subjectCsv, websiteCsv] = await Promise.all([
-    fetchPublishedCsv(SUBJECT_MATTER_CSV_URL, 'Subject Matter source'),
+  const [subjectSource, websiteCsv] = await Promise.all([
+    loadSubjectMatterSource(env),
     fetchPublishedCsv(WEBSITE_UPLOAD_CSV_URL, 'Mock Bar source'),
   ]);
-  const [subjectSource, websiteSource] = await Promise.all([
-    parseSubjectMatterSource(subjectCsv),
-    parseWebsiteUploadSource(websiteCsv),
-  ]);
+  const websiteSource = await parseWebsiteUploadSource(websiteCsv);
+  const subjectPlacementManifest = buildSubjectMatterPlacements(subjectSource.rows);
   const barGroups = buildBarFeelsManifest(websiteSource.rows);
-  const result = await examinationRpc(env, 'release_sync_all_content', {
+  const syncId = crypto.randomUUID();
+  const stageParts = async (kind, records, partSize) => {
+    const totalParts = Math.ceil(records.length / partSize);
+    for (let offset = 0; offset < records.length; offset += partSize) {
+      await examinationRpc(env, 'release_stage_subject_matter_v2', {
+        p_actor_user_id: user.id,
+        p_sync_id: syncId,
+        p_payload_kind: kind,
+        p_part_number: Math.floor(offset / partSize) + 1,
+        p_total_parts: totalParts,
+        p_payload: records.slice(offset, offset + partSize),
+        p_source_digest: subjectSource.digest,
+        p_source_endpoint: SUBJECT_MATTER_CSV_URL,
+        p_placement_digest: subjectPlacementManifest.digest,
+      });
+    }
+  };
+  // Bounded chunks stay backend-only. The final RPC performs the only catalog-
+  // visible transaction after every source and placement part is present.
+  await stageParts('rows', subjectSource.rows, 100);
+  await stageParts('placements', subjectPlacementManifest.placements, 200);
+  const result = await examinationRpc(env, 'release_finalize_all_content_v2', {
     p_actor_user_id: user.id,
-    p_subject_rows: subjectSource.rows,
-    p_subject_digest: subjectSource.digest,
-    p_subject_endpoint: SUBJECT_MATTER_CSV_URL,
+    p_sync_id: syncId,
     p_bar_groups: barGroups,
     p_bar_digest: websiteSource.digest,
     p_bar_endpoint: WEBSITE_UPLOAD_CSV_URL,

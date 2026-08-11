@@ -1,0 +1,21 @@
+{
+  "name": "Due Diligence",
+  "short_name": "Due Diligence",
+  "description": "Philippine law-school and Bar examination practice with source-based educational feedback.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#081225",
+  "theme_color": "#081225",
+  "icons": [
+    {
+      "src": "assets/brand/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/brand/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

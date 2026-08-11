@@ -974,6 +974,40 @@
   white-space: pre-wrap;
 }
 
+.dd-subject-assessment {
+  margin-top: 14px;
+  text-align: left;
+}
+
+.dd-assessment-breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 9px;
+}
+
+.dd-assessment-breakdown > div {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #dbe2ea;
+  border-radius: 7px;
+  background: #fbfcfd;
+}
+
+.dd-assessment-breakdown span {
+  color: #556277;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dd-assessment-breakdown strong {
+  color: var(--dd-exam-navy);
+  font: 700 15px "IBM Plex Mono", monospace;
+}
+
 .dd-exam-dialog {
   width: min(680px, calc(100vw - 28px));
   max-height: min(88vh, 900px);

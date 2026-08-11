@@ -7,9 +7,16 @@ import {
   SUBJECT_MATTER_CSV_URL,
   WEBSITE_UPLOAD_CSV_URL,
   buildBarFeelsManifest,
+  buildSubjectMatterPlacements,
   parseSubjectMatterSource,
   parseWebsiteUploadSource,
 } from './release-content-core.mjs';
+import {
+  SUBJECT_MATTER_COURSES,
+  SUBJECT_MATTER_EXPECTED,
+  SUBJECT_MATTER_PLACEMENTS,
+  SUBJECT_MATTER_PLACEMENT_MANIFEST_SHA256,
+} from './subject-matter-placement-manifest.mjs';
 
 const headers = [
   'Question ID',
@@ -86,20 +93,26 @@ function sourceRow({
 }
 
 function subjectRows() {
-  const rows = [];
-  for (let subjectIndex = 0; subjectIndex < 24; subjectIndex += 1) {
-    const count = subjectIndex < 16 ? 26 : 25;
-    for (let index = 0; index < count; index += 1) {
-      const sequence = String(rows.length + 1).padStart(3, '0');
-      rows.push(sourceRow({
-        id: `LEB-Y1T1-S${String(subjectIndex + 1).padStart(2, '0')}-${sequence}`,
-        subject: `Subject ${String(subjectIndex + 1).padStart(2, '0')}`,
-        status: rows.length === 615 ? 'For Review' : 'Approved',
-        ready: rows.length === 615 ? 'No' : 'Yes',
-        number: String(index + 1),
-      }));
-    }
+  const courseByCode = new Map(SUBJECT_MATTER_COURSES.map((course) => [course.code, course]));
+  const directById = new Map(
+    SUBJECT_MATTER_PLACEMENTS
+      .filter((placement) => placement[5] === 'direct')
+      .map((placement) => [placement[2], placement]),
+  );
+  const rows = [...directById.entries()].map(([id, placement], index) => sourceRow({
+    id,
+    subject: courseByCode.get(placement[0]).name,
+    number: String(index + 1),
+  }));
+  while (rows.length < SUBJECT_MATTER_EXPECTED.destinationRows) {
+    rows.push(sourceRow({
+      id: `LEB-PRESERVED-UNMAPPED-${String(rows.length + 1).padStart(4, '0')}`,
+      subject: 'Preserved Canonical Content',
+      number: String(rows.length + 1),
+    }));
   }
+  rows.at(-1)['Editorial Status'] = 'For Review';
+  rows.at(-1)['Publication Ready?'] = 'No';
   return rows;
 }
 
@@ -113,20 +126,32 @@ function websiteRows() {
   ));
 }
 
-test('Subject Matter publication source is pinned to the reviewed 616-row boundary', () => {
-  assert.equal(new URL(SUBJECT_MATTER_CSV_URL).searchParams.get('range'), 'A1:U617');
+test('Subject Matter publication source is pinned to the reviewed 1,622-row boundary', () => {
+  assert.equal(new URL(SUBJECT_MATTER_CSV_URL).searchParams.get('range'), 'A1:U1623');
 });
 
-test('Subject Matter import preserves all 616 complete rows including owner overrides', async () => {
+test('Subject Matter import preserves all 1,622 canonical rows including owner overrides', async () => {
   const parsed = await parseSubjectMatterSource(csv(subjectRows()));
-  assert.equal(parsed.rows.length, 616);
-  assert.equal(parsed.subjectCount, 24);
+  assert.equal(parsed.rows.length, 1622);
+  assert.equal(parsed.subjectCount, 35);
   assert.equal(parsed.rows.at(-1).editorialStatus, 'For Review');
   assert.equal(parsed.rows.at(-1).publicationReady, 'No');
   assert.match(parsed.rows[0].prompt, /\n\nSecond paragraph/);
   assert.equal(parsed.rows[0].alac.answer, 'Yes.');
   assert.equal(parsed.rows[0].sourceUrls[0].url,
     'https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/68904');
+});
+
+test('Subject Matter placement manifest is exact, deterministic, and source-complete', async () => {
+  const parsed = await parseSubjectMatterSource(csv(subjectRows()));
+  const manifest = buildSubjectMatterPlacements(parsed.rows);
+  assert.equal(manifest.digest, SUBJECT_MATTER_PLACEMENT_MANIFEST_SHA256);
+  assert.equal(manifest.courses.length, 42);
+  assert.equal(manifest.placements.length, 1890);
+  assert.equal(manifest.placements.filter((row) => row.placementType === 'direct').length, 1490);
+  assert.equal(manifest.placements.filter((row) => row.placementType === 'integration').length, 400);
+  assert.equal(new Set(manifest.placements.map((row) => row.questionId)).size, 1490);
+  assert.equal(new Set(manifest.placements.map((row) => `${row.courseCode}:${row.slot}`)).size, 1890);
 });
 
 test('Mock Bar import and Bar Feels manifest are exact, unique, and deterministic', async () => {
@@ -159,6 +184,7 @@ test('release sync route validates both published sources and sends only bounded
   const subjectCsv = csv(subjectRows());
   const websiteCsv = csv(websiteRows());
   let syncBody;
+  const stagedBodies = [];
   globalThis.fetch = async (url, options = {}) => {
     const target = String(url);
     if (target.endsWith('/auth/v1/user')) {
@@ -173,10 +199,14 @@ test('release sync route validates both published sources and sends only bounded
     if (target === WEBSITE_UPLOAD_CSV_URL) {
       return new Response(websiteCsv, { headers: { 'Content-Type': 'text/csv' } });
     }
-    if (target.endsWith('/rest/v1/rpc/release_sync_all_content')) {
+    if (target.endsWith('/rest/v1/rpc/release_stage_subject_matter_v2')) {
+      stagedBodies.push(JSON.parse(options.body));
+      return Response.json({ accepted: JSON.parse(options.body).p_payload.length });
+    }
+    if (target.endsWith('/rest/v1/rpc/release_finalize_all_content_v2')) {
       syncBody = JSON.parse(options.body);
       return Response.json({
-        subjectMatter: { rows: 616, subjects: 24 },
+        subjectMatter: { rows: 1622, courses: 42, placements: 1890 },
         barFeels: { rows: 120, destinations: 6 },
       });
     }
@@ -204,15 +234,33 @@ test('release sync route validates both published sources and sends only bounded
     const raw = await response.text();
     const payload = JSON.parse(raw);
     assert.equal(response.status, 200);
-    assert.equal(payload.data.subjectMatter.rows, 616);
+    assert.equal(payload.data.subjectMatter.rows, 1622);
     assert.equal(payload.data.barFeels.rows, 120);
-    assert.equal(syncBody.p_subject_rows.length, 616);
+    assert.equal(stagedBodies.length, 27);
+    assert.equal(
+      stagedBodies.filter((body) => body.p_payload_kind === 'rows')
+        .reduce((count, body) => count + body.p_payload.length, 0),
+      1622,
+    );
+    assert.equal(
+      stagedBodies.filter((body) => body.p_payload_kind === 'placements')
+        .reduce((count, body) => count + body.p_payload.length, 0),
+      1890,
+    );
+    assert.ok(stagedBodies.every((body) => body.p_sync_id === syncBody.p_sync_id));
+    assert.ok(stagedBodies.every((body) => (
+      body.p_placement_digest === SUBJECT_MATTER_PLACEMENT_MANIFEST_SHA256
+    )));
     assert.equal(syncBody.p_bar_groups.length, 6);
     assert.equal(
       syncBody.p_bar_groups.reduce((count, group) => count + group.rows.length, 0),
       120,
     );
-    assert.equal(syncBody.p_subject_rows.at(-1).editorialStatus, 'For Review');
+    assert.equal(
+      stagedBodies.filter((body) => body.p_payload_kind === 'rows').at(-1).p_payload.at(-1)
+        .editorialStatus,
+      'For Review',
+    );
     assert.doesNotMatch(raw, /First paragraph|Legal Basis|studentAnswer/i);
   } finally {
     globalThis.fetch = originalFetch;

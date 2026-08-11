@@ -6,6 +6,7 @@ import {
   SUBJECT_MATTER_CSV_URL,
   WEBSITE_UPLOAD_CSV_URL,
   buildBarFeelsManifest,
+  buildSubjectMatterPlacements,
   parseSubjectMatterSource,
   parseWebsiteUploadSource,
 } from '../worker/release-content-core.mjs';
@@ -27,6 +28,8 @@ const [
   experience,
   worker,
   migration,
+  consolidationMigration,
+  transportMigration,
   preflight,
 ] =
   await Promise.all([
@@ -45,17 +48,37 @@ const [
       'utf8',
     ),
     readFile(
+      new URL(
+        '../supabase/migrations/20260811004000_subject_matter_two_bank_consolidation.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+    readFile(
+      new URL(
+        '../supabase/migrations/20260811004100_subject_matter_chunked_release_transport.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+    readFile(
       new URL('../supabase/review/complete_beta_production_preflight.sql', import.meta.url),
       'utf8',
     ),
   ]);
 
 const subjectMatter = await parseSubjectMatterSource(subjectCsv);
-assert.equal(subjectMatter.rows.length, 616);
-assert.equal(subjectMatter.subjectCount, 24);
-assert.equal(new Set(subjectMatter.rows.map((row) => row.questionId)).size, 616);
+assert.equal(subjectMatter.rows.length, 1622);
+assert.equal(subjectMatter.subjectCount, 34);
+assert.equal(new Set(subjectMatter.rows.map((row) => row.questionId)).size, 1622);
 assert.ok(subjectMatter.rows.every((row) =>
   row.subject && row.prompt && row.suggestedAnswer && row.legalBasis));
+const subjectPlacements = buildSubjectMatterPlacements(subjectMatter.rows);
+assert.equal(subjectPlacements.courses.length, 42);
+assert.equal(subjectPlacements.placements.length, 1890);
+assert.equal(new Set(subjectPlacements.placements.map((row) => row.questionId)).size, 1490);
+assert.equal(subjectPlacements.placements.filter((row) => row.placementType === 'direct').length, 1490);
+assert.equal(subjectPlacements.placements.filter((row) => row.placementType === 'integration').length, 400);
 
 const mockBar = await parseWebsiteUploadSource(mockBarCsv);
 assert.equal(mockBar.rows.length, 320);
@@ -108,12 +131,25 @@ assert.doesNotMatch(forum, /create_simple_entry/);
 assert.match(forum, /set_affirm/);
 assert.match(forum, /affirm_roster/);
 assert.match(worker, /\/admin\/content\/sync/);
+assert.match(worker, /release_stage_subject_matter_v2/);
+assert.match(worker, /release_finalize_all_content_v2/);
 assert.match(worker, /PUBLIC_PRICING_ENABLED/);
 assert.match(migration, /alter table public\.forum_posts force row level security;/);
 assert.match(
   migration,
   /revoke all on table[\s\S]*public\.forum_posts[\s\S]*from public, anon, authenticated;/,
 );
+assert.match(consolidationMigration, /create table if not exists public\.subject_matter_placements/);
+assert.match(consolidationMigration, /release_sync_subject_matter_v2/);
+assert.match(consolidationMigration, /jsonb_array_length\(p_placements\) <> 1890/);
+assert.match(consolidationMigration, /v_direct <> 1490/);
+assert.match(consolidationMigration, /v_integration <> 400/);
+assert.match(consolidationMigration, /alter table public\.subject_matter_placements force row level security/);
+assert.match(transportMigration, /create table if not exists public\.release_subject_matter_payload_parts/);
+assert.match(transportMigration, /jsonb_array_length\(payload\) between 1 and 200/);
+assert.match(transportMigration, /release_finalize_all_content_v2/);
+assert.match(transportMigration, /jsonb_array_length\(v_rows\) <> 1622/);
+assert.match(transportMigration, /jsonb_array_length\(v_placements\) <> 1890/);
 assert.match(preflight, /set transaction read only;/);
 assert.match(preflight, /COMPLETE_BETA_PREFLIGHT_PASSED/);
 assert.match(preflight, /browser grant exists on public\.%/);
@@ -126,6 +162,7 @@ assert.doesNotMatch(
 console.log(JSON.stringify({
   subjectMatterRows: subjectMatter.rows.length,
   subjectMatterSubjects: subjectMatter.subjectCount,
+  subjectMatterPlacements: subjectPlacements.placements.length,
   mockBarRows: mockBar.rows.length,
   mockBarSubjects: mockBar.counts,
   barFeelsDestinations: manifest.length,

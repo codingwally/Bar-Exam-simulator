@@ -389,6 +389,32 @@ test('an excessively broad legal basis stated as the sole rule receives the mate
   assert.equal(result.appliedScoreCeiling.code, 'materially_wrong_rule');
 });
 
+test('provider wording for extremely broad bad-intent reasoning receives the same stable ceiling', () => {
+  const answer = 'Yes. A person with bad intent is criminally liable even when no property is taken. Harry wanted to steal money and opened the wallet, so bad intent alone makes him liable for an impossible crime.';
+  const result = applyDeterministicScoreCap(assessment(3, {
+    rationale: 'The student correctly concluded that Harry is liable, but the legal basis is extremely broad and misses Article 4(2) of the Revised Penal Code.',
+    errors: [
+      "Based liability solely on 'bad intent' rather than factual impossibility of accomplishment.",
+      'Failed to cite or explain Article 4(2) of the Revised Penal Code governing impossible crimes.',
+    ],
+    rubricBreakdown: {
+      responsiveness: 5,
+      legalBasis: 2,
+      application: 2.5,
+      conclusion: 4,
+      questionType: 'problem',
+      applicationRequired: true,
+    },
+  }), answer, {
+    question: 'Is Harry liable for an impossible crime after opening an empty electronic wallet intending to steal?',
+    suggestedAnswer: 'Yes. The intended offense against property failed because accomplishment was inherently impossible, and the means were inadequate or ineffectual.',
+    legalBasis: 'Revised Penal Code, Article 4(2).',
+    verified: true,
+  });
+  assert.equal(result.score, 1.5);
+  assert.equal(result.appliedScoreCeiling.code, 'materially_wrong_rule');
+});
+
 test('validated results preserve the auditable rubric breakdown and weighted reference', () => {
   const result = validateExaminerResult(assessment(4.6, {
     rubricBreakdown: {

@@ -44,7 +44,7 @@ No production mutation was made while recording this baseline.
 
 - Staging Worker: `duediligence-examinations-staging`
 - Verified Worker version: `4a12c483-8415-4239-bd93-2cf6abcc5d16`
-- Full Worker suite: 370 tests passed, 0 failed.
+- Full Worker suite: 371 tests passed, 0 failed.
 - Local repository regression suite: 61 scripts passed, 0 failed; the four credentialed staging harnesses were run separately or superseded by the full acceptance cycle.
 - Human-only synthetic API cycle: passed.
 - AI-inclusive synthetic API cycle `msp5a67r-cfa9d5f2`: passed for strict human, self-paced AI, curated Bar Feels human, private-upload human, and strict server-expiration paths.
@@ -58,3 +58,5 @@ No production mutation was made while recording this baseline.
 ## Examiner resilience delta
 
 Gemini still performs scoring, rationale, issue/error identification, improvements, and source reporting under the unchanged 0-5 rubric and score caps. When both permitted Gemini attempts return incomplete coaching sections, the Worker now derives only the four ALAC model-answer sections from the already-approved stored suggested answer. This prevents a provider-format failure from discarding an otherwise valid assessment without changing question content, legal substance, scoring weights, prompts, or the rubric.
+
+The first PR benchmark run exposed a provider-wording variant for a legally insufficient, bad-intent-only impossible-crime answer. The existing materially-wrong-rule ceiling now recognizes that semantically equivalent finding (`extremely broad` / `based liability solely on bad intent`) and deterministically limits it to 1.5. The frozen benchmark input, model prompt, 0-5 scale, rubric weights, and question content remain unchanged.

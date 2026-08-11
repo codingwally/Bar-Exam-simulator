@@ -5,12 +5,12 @@ import test from 'node:test';
 const correction = readFileSync(new URL(
   '../supabase/migrations/20260811003900_examination_room_student_start_correctness.sql',
   import.meta.url,
-), 'utf8');
+), 'utf8').replace(/\r\n/g, '\n');
 
 const waitingRoomMigration = readFileSync(new URL(
   '../supabase/migrations/20260811003400_examination_room_waiting_room_and_code_recovery.sql',
   import.meta.url,
-), 'utf8');
+), 'utf8').replace(/\r\n/g, '\n');
 
 function correctedPreflightBody() {
   const start = correction.indexOf(

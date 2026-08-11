@@ -56,13 +56,36 @@
     expiryInFlight: false,
     assignment: null,
     uploadPreview: null,
-    preferredTimerMode: 'strict',
+    preferredTimerMode: 'selfPaced',
+    practiceTimerMode: 'selfPaced',
     initialized: false,
   };
 
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
   }[character]));
+
+  const PRACTICE_TIMER_MODES = Object.freeze([
+    Object.freeze({
+      value: 'strict',
+      label: '12-minute practice',
+      description: 'Practice answering within a focused 12-minute target.',
+    }),
+    Object.freeze({
+      value: 'selfPaced',
+      label: 'Stopwatch',
+      description: 'See how much time you spend on the question.',
+    }),
+    Object.freeze({
+      value: 'none',
+      label: 'Untimed practice',
+      description: 'Write without a clock or time limit.',
+    }),
+  ]);
+
+  function practiceTimerLabel(mode = state.preferredTimerMode) {
+    return PRACTICE_TIMER_MODES.find((item) => item.value === mode)?.label || 'Stopwatch';
+  }
 
   function randomToken(byteLength = 32) {
     const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
@@ -97,6 +120,7 @@
       attemptId: state.active.attempt.attemptId,
       versionId: state.active.attempt.versionId,
       currentIndex: state.currentIndex,
+      practiceTimerMode: state.practiceTimerMode,
       savedAt: Date.now(),
       questions: state.active.questions.map((question) => ({
         questionId: question.questionId,
@@ -259,7 +283,7 @@
           <p>Choose a law-school subject, answer one randomly selected essay, and learn from
             a focused A.L.A.C. assessment before moving to the next question.</p>
         </div>
-        <span class="dd-exam-beta">Beta access active</span>
+        <span class="dd-exam-beta">A.L.A.C. guided practice</span>
       </header>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
       <div class="dd-subject-layout">
@@ -279,8 +303,8 @@
           <header class="dd-selected-heading">
             <p class="dd-exam-kicker">Year ${Number(selected.yearLevel)} · Term ${Number(selected.term)}</p>
             <h2>${escapeHtml(selected.subject)}</h2>
-            <p>Questions appear in a random, no-repeat cycle. Choose one of the three
-              existing timer modes before your first question; the timer starts only after confirmation.</p>
+            <p>Questions appear in a random, no-repeat cycle. Start immediately with your
+              current setting, or adjust timing before you begin.</p>
           </header>
           <article class="dd-exam-card">
             <div class="dd-exam-card-head">
@@ -294,13 +318,16 @@
             <div class="dd-exam-meta">
               <div><small>Completed</small><strong>${Number(selected.completedCount) || 0}</strong></div>
               <div><small>Available</small><strong>${Number(selected.questionCount) || 0}</strong></div>
-              <div><small>Writing method</small><strong>A.L.A.C.</strong></div>
+              <div><small>Timer</small><strong>${escapeHtml(practiceTimerLabel())}</strong></div>
             </div>
             <div class="dd-exam-actions">
               <button class="dd-exam-button is-primary" type="button"
                 data-subject-start="${escapeHtml(selected.subject)}"
                 data-year="${Number(selected.yearLevel)}" data-term="${Number(selected.term)}">
-                Start a Random Question
+                Start
+              </button>
+              <button class="dd-exam-button" type="button" data-subject-timer-settings>
+                Timer settings
               </button>
               <button class="dd-exam-button" type="button"
                 data-subject-performance="${escapeHtml(selected.subject)}">Review My Performance</button>
@@ -312,7 +339,7 @@
             <p class="dd-exam-panel-title">How it works</p>
             <h3>Practice without repeats.</h3>
             <ol class="dd-syllabus-list">
-              <li>Choose a timer mode.</li>
+              <li>Start with the Stopwatch, or adjust Timer settings.</li>
               <li>Write and submit one answer.</li>
               <li>Study the assessment and suggested answer.</li>
               <li>Continue to a different random question.</li>
@@ -467,6 +494,47 @@
     });
   }
 
+  function openSubjectTimerSettings() {
+    const dialog = setupDialog();
+    const opener = document.activeElement;
+    dialog.innerHTML = `<div class="dd-exam-dialog-inner">
+      <button class="dd-exam-dialog-close" type="button" data-dialog-close
+        aria-label="Close timer settings">&times;</button>
+      <p class="dd-exam-kicker">Subject Matter</p>
+      <h2 id="dd-exam-setup-title">Timer settings</h2>
+      <p class="dd-exam-description">Choose how you want to practice. Stopwatch is the default, and no clock starts until you select Start.</p>
+      <fieldset class="dd-timer-options">
+        <legend class="sr-only">Practice timer</legend>
+        ${PRACTICE_TIMER_MODES.map((item) => `<label class="dd-timer-option">
+          <input type="radio" name="dd-practice-timer" value="${item.value}"
+            ${item.value === state.preferredTimerMode ? 'checked' : ''}>
+          <span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.description)}</small></span>
+        </label>`).join('')}
+      </fieldset>
+      <div class="dd-exam-dialog-actions">
+        <button class="dd-exam-button" type="button" data-dialog-cancel>Back</button>
+        <button class="dd-exam-button is-primary" type="button" data-timer-apply>Apply setting</button>
+      </div>
+    </div>`;
+    const finish = (apply = false) => {
+      if (apply) {
+        const selected = dialog.querySelector('input[name="dd-practice-timer"]:checked')?.value;
+        if (PRACTICE_TIMER_MODES.some((item) => item.value === selected)) {
+          state.preferredTimerMode = selected;
+          try { localStorage.setItem('duediligence.subject-matter.timer-mode.v1', selected); } catch {}
+          renderPerSubject();
+        }
+      }
+      if (dialog.open) dialog.close(apply ? 'apply' : 'cancel');
+      if (opener?.isConnected) requestAnimationFrame(() => opener.focus());
+    };
+    dialog.querySelector('[data-dialog-close]').addEventListener('click', () => finish(false));
+    dialog.querySelector('[data-dialog-cancel]').addEventListener('click', () => finish(false));
+    dialog.querySelector('[data-timer-apply]').addEventListener('click', () => finish(true));
+    dialog.showModal();
+    requestAnimationFrame(() => dialog.querySelector('input:checked')?.focus());
+  }
+
   async function openSetup(versionId) {
     setStatus('Preparing your examination…');
     try {
@@ -474,9 +542,9 @@
       state.setup = setup;
       const dialog = setupDialog();
       const modes = [
-        ['strict', 'Strict Scrutiny', 'One authoritative overall countdown; automatic full submission at zero.'],
-        ['selfPaced', 'Quantum Meruit', 'Counts upward from 0:00 with no automatic deadline.'],
-        ['none', 'Summary Judgment', 'No visible timer; server timestamps remain recorded.'],
+        ['strict', '12-minute practice', 'Practice answering within a focused 12-minute target.'],
+        ['selfPaced', 'Stopwatch', 'See how much time you spend on the question.'],
+        ['none', 'Untimed practice', 'Write without a clock or time limit.'],
       ].filter(([mode]) => (setup.allowedTimerModes || []).includes(mode));
       const compact = setup.track === 'per_subject';
       dialog.innerHTML = `<div class="dd-exam-dialog-inner">
@@ -540,13 +608,17 @@
       }
       state.setup = selection.setup;
       if (options.autoStart === true) {
+        const clientTimerMode = state.preferredTimerMode;
         const active = await api('/examinations/command', {
           operation: 'start_attempt',
           versionId: selection.setup.versionId,
-          timerMode: state.preferredTimerMode,
+          // A practice countdown warns at zero without triggering the formal
+          // examination engine's automatic-expiry submission behavior.
+          timerMode: clientTimerMode === 'strict' ? 'selfPaced' : clientTimerMode,
           requestKey: requestKey('start'),
           tabToken: tabToken(),
         });
+        active.practiceTimerMode = clientTimerMode;
         activateAttempt(active);
         return;
       }
@@ -600,14 +672,21 @@
 
   function activateAttempt(active) {
     stopActiveTimers();
+    const recovery = readRecovery();
     state.active = reconcileRecovery(active);
+    state.practiceTimerMode = state.active.examination.track === 'per_subject'
+      ? active.practiceTimerMode || recovery?.practiceTimerMode || state.preferredTimerMode
+      : state.active.attempt.timerMode;
     state.currentIndex = Math.min(
       Number(readRecovery()?.currentIndex) || 0,
       Math.max(0, state.active.questions.length - 1),
     );
     state.screen = 'room';
-    state.clientRemaining = state.active.attempt.remainingSeconds;
     state.clientElapsed = Number(state.active.attempt.elapsedSeconds) || 0;
+    state.clientRemaining = state.active.examination.track === 'per_subject'
+      && state.practiceTimerMode === 'strict'
+      ? Math.max(0, 720 - state.clientElapsed)
+      : state.active.attempt.remainingSeconds;
     state.serverSyncAt = Date.now();
     state.expiryInFlight = false;
     showTrackPage(state.active.examination.track);
@@ -654,7 +733,9 @@
     if (!root || !state.active) return;
     const question = currentQuestion();
     const summary = counts();
-    const timerMode = state.active.attempt.timerMode;
+    const timerMode = state.active.examination.track === 'per_subject'
+      ? state.practiceTimerMode
+      : state.active.attempt.timerMode;
     const singleSubject = state.active.examination.track === 'per_subject'
       && state.active.questions.length === 1;
     root.innerHTML = `<div class="dd-exam-room">
@@ -872,8 +953,11 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
         return true;
       }
       state.active.attempt = { ...state.active.attempt, ...result };
-      state.clientRemaining = result.remainingSeconds;
       state.clientElapsed = Number(result.elapsedSeconds) || state.clientElapsed;
+      state.clientRemaining = state.active.examination.track === 'per_subject'
+        && state.practiceTimerMode === 'strict'
+        ? Math.max(0, 720 - state.clientElapsed)
+        : result.remainingSeconds;
       state.serverSyncAt = Date.now();
       updateClockNode();
       return true;
@@ -891,10 +975,17 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
 
   function tickClock() {
     if (!state.active) return;
-    const mode = state.active.attempt.timerMode;
+    const practiceAttempt = state.active.examination.track === 'per_subject';
+    const mode = practiceAttempt ? state.practiceTimerMode : state.active.attempt.timerMode;
     if (mode === 'strict' && Number.isFinite(Number(state.clientRemaining))) {
       state.clientRemaining = Math.max(0, Number(state.clientRemaining) - 1);
-      if (state.clientRemaining === 0 && !state.expiryInFlight) {
+      if (state.clientRemaining === 0 && practiceAttempt && !state.expiryInFlight) {
+        state.expiryInFlight = true;
+        flushCurrentSave().finally(() => {
+          setStatus('The 12-minute target has ended. Your answer is safe; submit when ready.', 'error');
+        });
+      }
+      if (state.clientRemaining === 0 && !practiceAttempt && !state.expiryInFlight) {
         state.expiryInFlight = true;
         flushCurrentSave()
           .then((saved) => {
@@ -918,7 +1009,9 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     const clock = document.getElementById('dd-room-clock');
     const value = document.getElementById('dd-room-clock-value');
     if (!clock || !value || !state.active) return;
-    const strict = state.active.attempt.timerMode === 'strict';
+    const strict = (state.active.examination.track === 'per_subject'
+      ? state.practiceTimerMode
+      : state.active.attempt.timerMode) === 'strict';
     const seconds = strict ? state.clientRemaining : state.clientElapsed;
     value.textContent = formatClock(seconds);
     clock.classList.toggle('is-warning', strict && Number(seconds) <= 300);
@@ -1111,7 +1204,7 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       <p class="dd-exam-description">${receipt.automatic
         ? state.active?.examination?.track === 'bar_feels'
           ? 'The examination countdown expired and the full examination was submitted automatically.'
-          : 'Strict Scrutiny expired and the full examination was submitted automatically.'
+          : 'The timed examination ended and the full examination was submitted automatically.'
         : 'Your confirmed examination submission was accepted exactly once.'}</p>
       <code class="dd-receipt-code">${escapeHtml(receipt.receiptCode || 'Receipt recorded')}</code>
       <div class="dd-review-summary">
@@ -1693,7 +1786,11 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     const subjectStart = event.target.closest('[data-subject-start]');
     if (subjectStart) {
       state.selectedSubject = subjectStart.dataset.subjectStart;
-      requestSubjectQuestion({ subject: state.selectedSubject });
+      requestSubjectQuestion({ subject: state.selectedSubject, autoStart: true });
+      return;
+    }
+    if (event.target.closest('[data-subject-timer-settings]')) {
+      openSubjectTimerSettings();
       return;
     }
     const subjectPerformance = event.target.closest('[data-subject-performance]');
@@ -1804,6 +1901,12 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
   function initialize() {
     if (state.initialized) return;
     state.initialized = true;
+    try {
+      const savedMode = localStorage.getItem('duediligence.subject-matter.timer-mode.v1');
+      if (PRACTICE_TIMER_MODES.some((item) => item.value === savedMode)) {
+        state.preferredTimerMode = savedMode;
+      }
+    } catch {}
     document.addEventListener('click', handleClick);
     document.addEventListener('change', handleChange);
     document.addEventListener('input', handleInput);

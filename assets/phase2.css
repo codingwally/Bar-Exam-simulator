@@ -349,6 +349,29 @@
   gap: 10px;
 }
 
+.dd2-entry-consent {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(184, 147, 79, .28);
+  background: rgba(184, 147, 79, .06);
+}
+
+.dd2-entry-consent[hidden] {
+  display: none;
+}
+
+.dd2-entry-consent .link-button {
+  border: 0;
+  padding: 0;
+  color: #71521c;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .dd2-entry-note,
 .dd2-form-note {
   margin: 16px 0 0;

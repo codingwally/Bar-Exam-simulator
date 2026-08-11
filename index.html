@@ -9,7 +9,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Due Diligence — A Friend on Your Journey Through the Study of Law</title>
-<meta name="description" content="A private-beta learning companion for Philippine law students to practice legal reasoning, refine essay writing, and prepare with source-based educational feedback.">
+<meta name="description" content="A Philippine legal-education platform for Bar-style essay practice, course-based study, academic community, and controlled examinations.">
 <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
 <meta name="application-name" content="Due Diligence">
 <meta name="theme-color" content="#081225">
@@ -18,7 +18,7 @@
 <meta property="og:site_name" content="Due Diligence">
 <meta property="og:locale" content="en_PH">
 <meta property="og:title" content="Due Diligence — A Friend on Your Journey Through the Study of Law">
-<meta property="og:description" content="A private-beta learning companion for Philippine law students to practice legal reasoning and refine essay writing.">
+<meta property="og:description" content="Bar-style essay practice, course-based study, community learning, and controlled examinations for Philippine law students.">
 <meta property="og:url" content="https://duediligence.ph/">
 <meta property="og:image" content="https://duediligence.ph/assets/brand/social-card-1200x630.png">
 <meta property="og:image:width" content="1200">
@@ -26,7 +26,7 @@
 <meta property="og:image:alt" content="Official Due Diligence Lady Justice mark in judicial navy and gold">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Due Diligence — A Friend on Your Journey Through the Study of Law">
-<meta name="twitter:description" content="A private-beta learning companion for Philippine law students to practice legal reasoning and refine essay writing.">
+<meta name="twitter:description" content="Bar-style essay practice, course-based study, community learning, and controlled examinations for Philippine law students.">
 <meta name="twitter:image" content="https://duediligence.ph/assets/brand/social-card-1200x630.png">
 <script type="application/ld+json">
 {
@@ -34,7 +34,7 @@
   "@type": "EducationalApplication",
   "name": "Due Diligence",
   "url": "https://duediligence.ph/",
-  "description": "A private-beta learning companion for Philippine law students to practice legal reasoning, refine essay writing, and prepare with source-based educational feedback.",
+  "description": "A Philippine legal-education platform for Bar-style essay practice, course-based study, academic community, and controlled examinations.",
   "applicationCategory": "EducationalApplication",
   "operatingSystem": "Web",
   "inLanguage": "en-PH",
@@ -945,16 +945,19 @@
           <span class="pb-brand-sub">Amicus in Itinere Iuris</span>
         </span>
       </a>
-      <span class="pb-beta-indicator">Private Beta</span>
+      <nav class="pb-header-utilities" aria-label="Public utilities">
+        <a href="#support" data-pb-legal="support">Support</a>
+        <button type="button" data-public-action="docket">The Docket</button>
+      </nav>
     </header>
 
     <div class="pb-hero-grid">
       <div class="pb-hero-copy">
-        <p class="pb-eyebrow">Early Access Beta</p>
+        <p class="pb-eyebrow">Philippine Legal Education</p>
         <h1 id="private-beta-hero-title">A platform to express<br> your perspective, sharpen<br> your legal reasoning, and<br> strengthen your performance<br> throughout law school.</h1>
         <p class="pb-supporting-line">Practice the reasoning. Refine the writing.</p>
         <div class="pb-actions">
-          <button class="pb-primary-action" type="button" data-pb-open-admission>Enter the Beta</button>
+          <button class="pb-primary-action" id="pb-explore-platform" type="button">Explore Due Diligence</button>
           <button class="pb-secondary-action" id="pb-learn-more" type="button">Learn How It Works</button>
         </div>
       </div>
@@ -1053,17 +1056,89 @@
       <article class="pb-summary-item">
         <span>Purpose</span>
         <p>Help students strengthen legal reasoning and writing—not replace independent study or authoritative sources.</p>
-        <button class="pb-text-button pb-summary-action" id="pb-summary-disclosure" type="button" data-pb-open-disclosure>Read the Beta Disclosure</button>
+        <a class="pb-text-button pb-summary-action" id="pb-summary-disclosure" href="#terms" data-pb-legal="terms">Read the Terms of Use</a>
       </article>
     </div>
+  </section>
+
+  <section class="pb-pillars" id="public-platform" aria-labelledby="pb-pillars-title">
+    <div class="pb-pillars-heading">
+      <p class="pb-eyebrow">One platform, four focused chambers</p>
+      <h2 id="pb-pillars-title">Choose how you want to prepare.</h2>
+      <p>Explore every part of Due Diligence before signing in. Authentication is requested only when you begin a protected activity.</p>
+    </div>
+    <div class="pb-pillar-grid">
+      <a class="pb-pillar-card" href="#explore-academy">
+        <span class="pb-pillar-number">01</span>
+        <h3>The Academy</h3>
+        <p>Structured Philippine law essay practice through Mock Bar, Subject Matter, and The Verdict.</p>
+        <strong>Explore The Academy</strong>
+      </a>
+      <a class="pb-pillar-card" href="#explore-commons">
+        <span class="pb-pillar-number">02</span>
+        <h3>The Commons</h3>
+        <p>Study resources and member discussion through Bar Easy, Quorum, and Retainer.</p>
+        <strong>Explore The Commons</strong>
+      </a>
+      <a class="pb-pillar-card" href="#explore-barbound">
+        <span class="pb-pillar-number">03</span>
+        <h3>BarBound</h3>
+        <p>Premium review experiences: Bar Feels, Chair&rsquo;s Cases, Doctrines, and Anchor Case Digests.</p>
+        <strong>Explore BarBound</strong>
+      </a>
+      <a class="pb-pillar-card" href="#explore-examination-room">
+        <span class="pb-pillar-number">04</span>
+        <h3>Examination Room</h3>
+        <p>Role-scoped rooms for Professors, Beadles, students, and Exam Administrators.</p>
+        <strong>Explore Examination Room</strong>
+      </a>
+    </div>
+  </section>
+
+  <section class="pb-category-pages" aria-label="Due Diligence categories">
+    <article class="pb-category-page" id="explore-academy">
+      <div>
+        <span class="pb-pillar-number">The Academy</span>
+        <h2>Practice, review, and understand your progress.</h2>
+        <p>Mock Bar delivers Philippine Bar essay drills with source-based A.L.A.C. feedback. Subject Matter organizes reviewed law-school questions by year and term. The Verdict keeps your personal attempt history and study exports in one place.</p>
+        <p class="pb-access-note">A Google account is required when you begin an examination or open personal results.</p>
+      </div>
+      <button class="pb-primary-action" type="button" data-protected-feature="mock">Try The Academy</button>
+    </article>
+    <article class="pb-category-page" id="explore-commons">
+      <div>
+        <span class="pb-pillar-number">The Commons</span>
+        <h2>Learn from materials and from one another.</h2>
+        <p>Bar Easy presents concise study material. Quorum is the signed-in academic community for questions, case notes, resources, and study circles. Retainer explains current access options without promising an official result.</p>
+        <p class="pb-access-note">Public information is open to visitors; community participation requires Google sign-in.</p>
+      </div>
+      <button class="pb-primary-action" type="button" data-protected-feature="quorum">Enter The Commons</button>
+    </article>
+    <article class="pb-category-page" id="explore-barbound">
+      <div>
+        <span class="pb-pillar-number">BarBound</span>
+        <h2>Move from review to deliberate Bar preparation.</h2>
+        <p>Bar Feels offers curated multi-question writing blocks. Chair&rsquo;s Cases, Doctrines, and Anchor Case Digests provide structured review material grounded in the platform&rsquo;s published content.</p>
+        <p class="pb-access-note">BarBound features require the applicable Premium entitlement. Pricing and access are shown before any commitment.</p>
+      </div>
+      <button class="pb-primary-action" type="button" data-protected-feature="bar-feels">Explore BarBound</button>
+    </article>
+    <article class="pb-category-page" id="explore-examination-room">
+      <div>
+        <span class="pb-pillar-number">Examination Room</span>
+        <h2>Run and sit controlled academic examinations.</h2>
+        <p>Professors prepare rooms and questions, Beadles assist with assigned operations, students take authorized examinations, and Exam Administrators manage only the rooms assigned to them.</p>
+        <p class="pb-access-note">Room access is role-scoped and may require an issued credential, published schedule, and verified payment state.</p>
+      </div>
+      <button class="pb-primary-action" type="button" data-protected-feature="examination-room">Open the Role Hub</button>
+    </article>
   </section>
 
   <footer class="pb-public-footer">
     <div class="pb-public-footer-inner">
       <p>Educational practice only. Verify legal authorities using current official primary sources.</p>
-      <nav aria-label="Private beta information">
-        <button type="button" data-pb-open-disclosure>Beta Disclosure</button>
-        <a href="#terms" data-pb-legal="terms">Beta Terms</a>
+      <nav aria-label="Public information">
+        <a href="#terms" data-pb-legal="terms">Terms of Use</a>
         <a href="#privacy" data-pb-legal="privacy">Privacy Notice</a>
         <a href="#support" data-pb-legal="support">Support &amp; Accessibility</a>
       </nav>
@@ -1178,12 +1253,6 @@
   <div class="glass"></div>
 </div>
 
-<div class="beta-notice" role="status">
-  <strong>Early Access Beta:</strong>
-  <span>Some features are still being refined.</span>
-  <button type="button" data-dd2-view="support">Report to Support</button>
-</div>
-
 <header class="topbar">
   <a class="brand" href="/" aria-label="Due Diligence home" aria-describedby="brand-subtitle-meaning">
     <img class="crest" src="assets/brand/icon-192.png" width="42" height="42"
@@ -1231,7 +1300,7 @@
 
       <section class="nav-audience-group nav-group-premium" aria-labelledby="nav-premium-label">
       <details class="nav-group-disclosure" name="audience-navigation">
-        <summary class="nav-group-label" id="nav-premium-label" aria-controls="nav-premium-menu" aria-expanded="false">Premium</summary>
+        <summary class="nav-group-label" id="nav-premium-label" aria-controls="nav-premium-menu" aria-expanded="false">BarBound</summary>
         <div class="nav-group-items" id="nav-premium-menu" aria-labelledby="nav-premium-label">
           <button class="spa-tab btn-angel" id="spa-bar-feels" title="Bar Feels — Premium only."
             aria-label="Bar Feels — Premium only." onclick="openPremiumBarFeels()">Bar Feels</button>
@@ -1319,6 +1388,8 @@
       <div class="subject-choice-grid" id="subject-choice-grid"></div>
       <div class="subject-loading" id="subject-loading-status" role="status" aria-live="polite"></div>
       <div class="subject-selection-actions">
+        <button type="button" class="btn-secondary" id="mock-timer-settings"
+          onclick="openMockTimerSettings()">Timer settings: <span id="mock-timer-setting-label">Stopwatch</span></button>
         <button type="button" class="btn-secondary subject-selection-back" id="subject-selection-back"
           onclick="exitSubjectSelection()">Back</button>
       </div>
@@ -1635,27 +1706,27 @@
   </div>
 </div>
 
-<!-- Session mode is chosen only after a valid question is ready -->
+<!-- Optional practice timer settings -->
 <div class="modal-overlay blocking" id="session-choice-modal" role="dialog" aria-modal="true" aria-labelledby="session-choice-title" aria-describedby="session-choice-copy">
   <div class="modal-card xl" tabindex="-1">
-    <button type="button" class="modal-close" aria-label="Close time-mode selection and return to subjects" onclick="returnFromModal('session-choice-modal')">&times;</button>
-    <h3 class="modal-title" id="session-choice-title">Would you like to begin your session?</h3>
-    <p class="checking-copy" id="session-choice-copy">Choose how you want to practice. Your timer will begin only after you select a mode.</p>
+    <button type="button" class="modal-close" aria-label="Close timer settings" onclick="returnFromModal('session-choice-modal')">&times;</button>
+    <h3 class="modal-title" id="session-choice-title">Timer settings</h3>
+    <p class="checking-copy" id="session-choice-copy">Choose how you want to practice. Stopwatch is the default, and no clock starts until a question begins.</p>
     <div class="session-mode-grid">
       <button type="button" class="session-mode-option" id="mode-timed" onclick="chooseSessionMode('strict')">
-        <strong>Strict Scrutiny</strong>
-        <span>Bar Simulation</span>
-        <p>12 minutes per question. At zero, the current answer is submitted and the result remains on screen.</p>
+        <strong>12-minute practice</strong>
+        <span>Focused countdown</span>
+        <p>Practice answering within a focused 12-minute target. Your answer stays safe when time ends.</p>
       </button>
       <button type="button" class="session-mode-option" id="mode-self-paced" onclick="chooseSessionMode('selfPaced')">
-        <strong>Quantum Meruit</strong>
-        <span>Self-Paced Review</span>
-        <p>Track your writing time without a deadline or automatic advance.</p>
+        <strong>Stopwatch</strong>
+        <span>Default</span>
+        <p>See how much time you spend on the question.</p>
       </button>
       <button type="button" class="session-mode-option" id="mode-untimed" onclick="chooseSessionMode('none')">
-        <strong>Summary Judgment</strong>
-        <span>Untimed Review</span>
-        <p>Study and answer without a visible timer.</p>
+        <strong>Untimed practice</strong>
+        <span>No visible clock</span>
+        <p>Write without a clock or time limit.</p>
       </button>
     </div>
     <div class="pacing-guide">Bar pacing guide: A four-hour subject examination provides 240 minutes. With an average of 20 questions, allow approximately 12 minutes per question.</div>
@@ -1810,6 +1881,7 @@ let workspaceRestoreInProgress = false;
 let workspaceRestoreCompletedForUser = null;
 let remoteHistoryLoadedForUser = null;
 let examPausedForPage = false;
+let sessionChoicePurpose = 'start';
 const PER_Q_SECONDS = 720;
 const TERMS_ACCEPTANCE_KEY = "duediligence.terms.accepted.v1";
 const GUEST_PROMPT_SESSION_KEY = "duediligence.guest.prompt.dismissed.v1";
@@ -1876,69 +1948,11 @@ async function onTimeUp() {
   if (selectedSessionMode !== 'strict' || examStage !== 'answering') return;
   if (!sessionController.markAutomaticAdvanceHandled()) return;
   saveDraftForCurrentQuestion();
-  const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
-  if (!question) return;
-  const key = questionAnswerKey();
-  const studentAnswer = (userAnswers[key] || '').trim();
-  const timerState = sessionController.snapshot();
-
-  if (studentAnswer) {
-    await evaluateAnswer({
-      submissionReason: 'strict_expiry',
-      expired: true,
-    });
-    return;
-  }
-
-  gradingInProgress = true;
-  examStage = 'evaluating';
-  showCheckingModal();
-  try {
-    const requestStorageKey = `duediligence.strict-expiry.${currentAttemptKey || question.id}`;
-    let requestId = safeStorageGet(localStorage, requestStorageKey);
-    if (!requestId) {
-      requestId = `strict_expiry_${crypto.randomUUID().replace(/-/g, '')}`;
-      safeStorageSet(localStorage, requestStorageKey, requestId);
-    }
-    const payload = await window.DueDiligencePhase4.recordUnanswered(
-      question,
-      Math.max(PER_Q_SECONDS, timerState.questionElapsedSeconds),
-      requestId,
-    );
-    const resultObj = {
-      id: payload.attempt?.id,
-      unanswered: true,
-      status: 'unanswered',
-      score: null,
-      maxScore: 5,
-      timestamp: new Date().toLocaleString(),
-      gradedAt: null,
-      subject: currentSubj,
-      qId: question.id,
-      questionText: question.text,
-      studentAnswer: '',
-      timerMode: 'strict',
-      timeSpent: Math.max(PER_Q_SECONDS, timerState.questionElapsedSeconds),
-      submissionReason: 'strict_expiry',
-      expired: true,
-      historyVersion: 3,
-    };
-    submissionResults[key] = resultObj;
-    historyLog.unshift(resultObj);
-    resultObj.historySaved = logAttempt(resultObj);
-    examStage = 'reviewing';
-    sessionController.stop({ reset: false });
-    clearPersistedWorkspace();
-    closeCheckingModal();
-    renderMainWrite();
-    setQuestionControlsDisabled(true);
-    document.getElementById('evaluation-result-area')?.scrollIntoView({ behavior: 'smooth' });
-  } catch (error) {
-    examStage = 'answering';
-    showCheckingError(error.message || 'The unanswered expiration could not be recorded.');
-  } finally {
-    gradingInProgress = false;
-  }
+  persistWorkspace();
+  const note = document.querySelector('#timer-bar .exam-clock-note');
+  if (note) note.textContent = 'The 12-minute target has ended. Your answer is safe; submit when ready.';
+  document.getElementById('timer-bar')?.classList.add('warning-strong');
+  toast('Time is up. Your answer is safe and was not submitted.', 'warn');
 }
 
 function safeStorageGet(storage, key) {
@@ -2199,12 +2213,36 @@ function renderSubjectSelection() {
     </button>`).join('');
 }
 
+function preferredMockTimerMode() {
+  const saved = safeStorageGet(localStorage, 'duediligence.timer.mode.v1');
+  return ['strict', 'selfPaced', 'none'].includes(saved) ? saved : 'selfPaced';
+}
+
+function mockTimerLabel(mode = preferredMockTimerMode()) {
+  if (mode === 'strict') return '12-minute practice';
+  if (mode === 'none') return 'Untimed practice';
+  return 'Stopwatch';
+}
+
+function syncMockTimerSettingLabel() {
+  const label = document.getElementById('mock-timer-setting-label');
+  if (label) label.textContent = mockTimerLabel();
+}
+
+function openMockTimerSettings() {
+  sessionChoicePurpose = 'settings';
+  document.getElementById('session-choice-title').textContent = 'Timer settings';
+  document.getElementById('session-choice-copy').textContent = 'Choose how you want to practice. Stopwatch is the default, and no clock starts until a question begins.';
+  openModal('session-choice-modal', { blocking: true });
+}
+
 function showSubjectSelection() {
   stopExamSession({ reset: true });
   examStage = 'idle';
   selectedSessionMode = null;
   setOnboardingView('subjectSelection');
   renderSubjectSelection();
+  syncMockTimerSettingLabel();
   const status = document.getElementById('subject-loading-status');
   if (status) status.textContent = '';
   const close = document.getElementById('subject-selection-close');
@@ -2258,12 +2296,12 @@ function completeSubjectSelection(subject) {
   currentSubj = subject;
   currentIdx = 0;
   examStage = 'modeSelection';
-  selectedSessionMode = null;
+  selectedSessionMode = preferredMockTimerMode();
   setOnboardingView('complete');
   renderSubjectTabs();
   renderMainWrite();
-  setWorkspaceLocked(true);
-  requestAnimationFrame(() => openModal('session-choice-modal', { blocking: true }));
+  sessionChoicePurpose = 'start';
+  chooseSessionMode(selectedSessionMode);
 }
 
 async function openQuorumMappedQuestion(subject, questionId) {
@@ -2301,7 +2339,16 @@ async function openQuorumMappedQuestion(subject, questionId) {
 }
 
 function chooseSessionMode(mode) {
-  if (!['strict', 'selfPaced', 'none'].includes(mode) || examStage !== 'modeSelection') return;
+  if (!['strict', 'selfPaced', 'none'].includes(mode)) return;
+  if (sessionChoicePurpose === 'settings' && examStage !== 'modeSelection') {
+    safeStorageSet(localStorage, 'duediligence.timer.mode.v1', mode);
+    sessionChoicePurpose = 'start';
+    closeModal('session-choice-modal');
+    syncMockTimerSettingLabel();
+    toast(`${mockTimerLabel(mode)} selected.`, 'ok');
+    return;
+  }
+  if (examStage !== 'modeSelection') return;
   selectedSessionMode = mode;
   examMode = mode;
   safeStorageSet(localStorage, 'duediligence.timer.mode.v1', mode);
@@ -2741,9 +2788,9 @@ function legacyRenderMainWrite() {
 
   main.innerHTML = `
     <div class="timer-bar" id="timer-bar">
-      <span class="timer-label">${examMode === 'strict' ? 'Strict Scrutiny — 12:00 per item' : 'Quantum Meruit — Writing time'}</span>
+      <span class="timer-label">${examMode === 'strict' ? '12-minute practice' : 'Stopwatch'}</span>
       <span id="timer-display">--:--</span>
-      <span class="timer-limit">${examMode === 'strict' ? 'Advances once at 0:00' : 'No deadline or automatic advance'}</span>
+      <span class="timer-limit">${examMode === 'strict' ? 'Your answer stays safe at 0:00' : 'No deadline or automatic advance'}</span>
     </div>
 
     <div class="toolbar">
@@ -2797,8 +2844,8 @@ function renderExamControlBar(workspaceLocked) {
     clock = `
       <div class="exam-clock">
         <div class="exam-clock-copy">
-          <span class="exam-clock-title">Strict Scrutiny</span>
-          <span class="exam-clock-note">At zero, your answer submits; the result stays here.</span>
+          <span class="exam-clock-title">12-minute practice</span>
+          <span class="exam-clock-note">Your answer stays safe when the target ends.</span>
         </div>
         <span id="timer-display" aria-live="polite">12:00</span>
       </div>`;
@@ -2806,7 +2853,7 @@ function renderExamControlBar(workspaceLocked) {
     clock = `
       <div class="exam-clock">
         <div class="exam-clock-copy">
-          <span class="exam-clock-title">Quantum Meruit</span>
+          <span class="exam-clock-title">Stopwatch</span>
           <span class="exam-clock-note">Elapsed writing time</span>
         </div>
         <span id="timer-display" aria-live="polite">00:00</span>
@@ -2815,8 +2862,8 @@ function renderExamControlBar(workspaceLocked) {
     clock = `
       <div class="exam-clock no-digits">
         <div class="exam-clock-copy">
-          <span class="exam-clock-title">Summary Judgment</span>
-          <span class="exam-clock-note">No visible clock. Active writing time is still recorded.</span>
+          <span class="exam-clock-title">Untimed practice</span>
+          <span class="exam-clock-note">Write without a visible clock or time limit.</span>
         </div>
       </div>`;
   }
@@ -2824,9 +2871,9 @@ function renderExamControlBar(workspaceLocked) {
     <div class="exam-control-bar timer-bar" id="timer-bar">
       <div class="exam-mode-switcher" aria-label="Exam timing mode">
         <span class="exam-mode-label">Session mode</span>
-        ${modeButton('strict', 'Strict Scrutiny')}
-        ${modeButton('selfPaced', 'Quantum Meruit')}
-        ${modeButton('none', 'Summary Judgment')}
+        ${modeButton('strict', '12-minute practice')}
+        ${modeButton('selfPaced', 'Stopwatch')}
+        ${modeButton('none', 'Untimed practice')}
       </div>
       ${clock}
     </div>`;
@@ -2838,16 +2885,8 @@ async function switchSessionMode(mode) {
     || examStage !== 'answering'
     || mode === selectedSessionMode
   ) return;
-  const fromLabel = selectedSessionMode === 'strict'
-    ? 'Strict Scrutiny'
-    : selectedSessionMode === 'selfPaced'
-      ? 'Quantum Meruit'
-      : 'Summary Judgment';
-  const toLabel = mode === 'strict'
-    ? 'Strict Scrutiny'
-    : mode === 'selfPaced'
-      ? 'Quantum Meruit'
-      : 'Summary Judgment';
+  const fromLabel = mockTimerLabel(selectedSessionMode);
+  const toLabel = mockTimerLabel(mode);
   const detail = mode === 'strict'
     ? 'Time already spent will be deducted from the twelve-minute limit; switching will not restart the clock.'
     : selectedSessionMode === 'strict'
@@ -3218,11 +3257,11 @@ function renderResultHTML(key) {
   if (!res) return '';
   if (res.unanswered) {
     return `
-      <article class="assessment-card" aria-label="Unanswered Strict Scrutiny attempt">
+      <article class="assessment-card" aria-label="Unanswered timed practice attempt">
         <div class="assessment-hero">
           <div class="score-medallion"><div><strong>— / 5</strong><span>No grade</span></div></div>
           <div>
-            <div class="assessment-kicker">Strict Scrutiny Expiration</div>
+            <div class="assessment-kicker">12-minute Practice Ended</div>
             <h3 class="assessment-title">Unanswered attempt recorded</h3>
             <p class="assessment-rationale">The twelve-minute period expired with a blank answer. Gemini was not called, and no lifetime AI grade was consumed.</p>
             <div class="assessment-badges">
@@ -3366,7 +3405,7 @@ function renderMainHistory() {
             ? `${fivePointScore.toFixed(1)}/5`
             : escapeHtml(item.score);
         const recordLabel = item.unanswered
-          ? 'Unanswered Strict Scrutiny expiration'
+          ? 'Unanswered timed practice'
           : item.maxScore === 5 && fivePointScore === null
             ? 'Assessment score unavailable'
             : item.maxScore === 5
@@ -3588,6 +3627,12 @@ function returnFromModal(id) {
     return;
   }
   if (id === 'session-choice-modal') {
+    if (sessionChoicePurpose === 'settings') {
+      sessionChoicePurpose = 'start';
+      closeModal(id);
+      syncMockTimerSettingLabel();
+      return;
+    }
     pendingSubjectSelection = null;
     closeModal(id, { restoreFocus: false });
     showSubjectSelection();

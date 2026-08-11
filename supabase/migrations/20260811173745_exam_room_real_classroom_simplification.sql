@@ -1508,5 +1508,9 @@ revoke all on function public.exam_room_submit_attempt_generation_v3(
 grant execute on function public.exam_room_submit_attempt_generation_v3(
   uuid, uuid, uuid, integer, text, text, timestamptz, timestamptz, jsonb
 ) to service_role;
+revoke all on function public.exam_room_guard_submitted_grade_write_v3()
+  from public, anon, authenticated;
+grant execute on function public.exam_room_guard_submitted_grade_write_v3()
+  to service_role;
 
 commit;

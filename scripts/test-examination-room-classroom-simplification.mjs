@@ -38,6 +38,7 @@ assert.doesNotMatch(
 );
 assert.match(migration, /drop trigger if exists exam_room_grade_write_guard_v2/);
 assert.match(migration, /exam_room_guard_submitted_grade_write_v3/);
+assert.match(migration, /revoke all on function public\.exam_room_guard_submitted_grade_write_v3\(\)[\s\S]*from public, anon, authenticated/);
 assert.match(migration, /for update/i);
 assert.match(migration, /on conflict \(exam_id, email_type, recipient_email, event_key\) do nothing/);
 assert.match(migration, /'questionText', question\.prompt_text/);

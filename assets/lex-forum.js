@@ -2728,6 +2728,7 @@
     $('#quorum-entry-cancel')?.addEventListener('click', cancelComposer);
     $('#quorum-menu-open')?.addEventListener('click', (event) => openQuorumDrawer(event.currentTarget));
     $('#quorum-menu-close')?.addEventListener('click', () => closeQuorumDrawer());
+    $('#quorum-menu-back')?.addEventListener('click', () => closeQuorumDrawer());
     $('#quorum-menu-scrim')?.addEventListener('click', () => closeQuorumDrawer());
     document.addEventListener('keydown', trapQuorumDrawerFocus);
     $('#lex-load-more')?.addEventListener('click', () => {

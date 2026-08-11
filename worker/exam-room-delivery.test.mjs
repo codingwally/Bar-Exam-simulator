@@ -385,6 +385,40 @@ test('enabled email uses one idempotent Resend request and returns only provider
   assert.equal(JSON.parse(captured.options.body).to[0], 'professor@example.test');
 });
 
+test('student submission receipt contains the final questions and only that student submitted answers', async () => {
+  let captured;
+  await deliverExamRoomEmail({
+    EXAMINATION_EMAIL_MODE: 'enabled',
+    RESEND_API_KEY: 'server-secret',
+    EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
+  }, {
+    id: 'student-receipt-job',
+    email_type: 'student_submission_receipt',
+    recipient_email: 'student@example.test',
+    payload: {
+      title: 'Labor Law Midterm',
+      receiptId: 'receipt-safe-123',
+      submittedAt: '2026-08-12T03:00:00Z',
+      answers: [
+        { ordinal: 1, questionText: 'Is the dismissal valid? Explain.', answerText: 'No. The employer failed to observe due process.' },
+        { ordinal: 2, questionText: 'Discuss reinstatement.', answerText: '' },
+      ],
+      modelAnswer: 'must-not-send',
+      gradingKey: 'must-not-send',
+      anotherStudentAnswer: 'must-not-send',
+    },
+  }, async (_url, options) => {
+    captured = JSON.parse(options.body);
+    return response({ id: 'resend-student-receipt' });
+  });
+  assert.equal(captured.to[0], 'student@example.test');
+  assert.match(captured.text, /Is the dismissal valid\? Explain\./);
+  assert.match(captured.text, /The employer failed to observe due process\./);
+  assert.match(captured.text, /Discuss reinstatement\./);
+  assert.match(captured.text, /\[Intentionally left blank\]/);
+  assert.doesNotMatch(captured.text, /must-not-send/);
+});
+
 test('replacement and reopening notices are bounded, idempotent, and contain no questions, answers, or credentials', async () => {
   const cases = [
     {

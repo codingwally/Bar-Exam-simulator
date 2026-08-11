@@ -124,9 +124,9 @@ assert.match(professorClassView, /One Examination Room holds one examination/);
 const studentStart = frontend.indexOf('function studentSection');
 const studentEnd = frontend.indexOf('function activationSection', studentStart);
 const studentView = frontend.slice(studentStart, studentEnd);
-assert.match(studentView, /Students must sign in with their Due Diligence account/);
-assert.match(studentView, /signed-in email must match the class list/);
-assert.match(studentView, /Get this code from the Beadle\. You must also sign in with the account on the class list/);
+assert.match(studentView, /Sign in with the Google account listed in the Beadle's confirmed class list/);
+assert.match(studentView, /No examination link or reference is needed/);
+assert.match(studentView, /Use the current code emailed to your rostered account/);
 assert.match(studentView, /A code never replaces sign-in or the class-list check/);
 const beadleStart = frontend.indexOf('function beadleSection');
 const beadleEnd = frontend.indexOf('function professorSection', beadleStart);
@@ -288,9 +288,11 @@ assert.match(frontend, /option\[value="upload"\][\s\S]*modelAnswerUploadOption\.
   'model-answer file upload stays gated until an owner-only retrieval path is verified');
 
 // Rules use honest browser controls and conservative beta defaults.
-for (const value of ['off', 'record_only', 'warn_and_record', 'free', 'one_way', 'automatic', 'beadle_approval']) {
+for (const value of ['off', 'record_only', 'warn_and_record', 'free', 'one_way', 'automatic']) {
   assert.match(frontend, new RegExp(`value="${value}"`));
 }
+assert.doesNotMatch(frontend, /value="beadle_approval"/,
+  'the simplified classroom flow must not require Beadle admission approval');
 assert.match(frontend, /aiGradingEnabled: false/);
 assert.match(frontend, /document\.getElementById\('dd26-student-access-code-required'\)\?\.closest\('label'\)\?\.remove\(\)/,
   'the Professor publication screen must remove the legacy student-code choice');
@@ -305,7 +307,7 @@ assert.match(frontend, /entryCutoffReviewHtml\(opensAt, hardClosesAt, lateAdmiss
   'final publication review must prominently state the exact student-entry cutoff');
 assert.match(html, /duediligence-2026\.js\?v=live-experience-20260811-1/,
   'the corrected student preflight must use a fresh production cache key');
-assert.match(frontend, /None of them replaces the student sign-in and class-list check/);
+assert.match(frontend, /None of them replaces student sign-in and the class-list check/);
 assert.match(frontend, /publicationAttempt\.studentKey = null/,
   'Professor publication must not generate the student handout code');
 assert.match(frontend, /function accessCodePreflightPolicy[\s\S]*typeof primary === 'boolean'[\s\S]*ready: known/);
@@ -374,41 +376,45 @@ assert.match(frontend, /operation: 'revoke_beadle'/);
 assert.match(frontend, /operation: 'set_accommodation'/);
 assert.match(frontend, /operation: 'issue_erratum'/);
 assert.match(frontend, /operation: 'transfer_session'/);
-assert.match(frontend, /never shows the exam questions, student answers, grades, or the Professor’s suggested answer/);
-assert.match(frontend, /record_candidate_verification/);
-assert.match(frontend, /set_candidate_admission/);
-assert.match(frontend, /operation: 'import_exam_roster'/);
-assert.match(frontend, /id="dd26-beadle-exam-link" readonly/);
+assert.match(frontend, /never shows questions, answers, grades, or the Professor’s suggested answer/);
+assert.doesNotMatch(frontend, /operation: 'record_candidate_verification'/,
+  'the simplified Beadle flow has no per-student verification action');
+assert.doesNotMatch(frontend, /operation: 'set_candidate_admission'/,
+  'the simplified Beadle flow has no per-student admission action');
+assert.doesNotMatch(frontend, /operation: 'import_exam_roster'/,
+  'the simplified Beadle flow confirms the reviewed roster in one finalization request');
+assert.doesNotMatch(frontend.slice(frontend.indexOf('function renderBeadleOperations'), frontend.indexOf('function openRosterCorrection')), /id="dd26-beadle-exam-link"|Student examination link/);
 assert.match(frontend, /Step 4 · Prepare and save the class list/);
-assert.match(frontend, /Step 5 · Student handout/);
+assert.match(frontend, /Step 5 · Finished/);
 assert.doesNotMatch(frontend, /operation: 'validate_exam_roster'/,
   'Beadle preview edits must not bypass the official-template upload check');
 const rosterSurfaceStart = frontend.indexOf('const rosterEditor = canEditRoster');
 const rosterSurfaceEnd = frontend.indexOf('const codeValue = activeStudentCode', rosterSurfaceStart);
 const rosterSurface = frontend.slice(rosterSurfaceStart, rosterSurfaceEnd);
-assert.match(rosterSurface, /Required class-list steps/);
-assert.match(rosterSurface, /Download the official template/);
+assert.match(rosterSurface, /Class-list steps/);
+assert.match(rosterSurface, /Download optional template/);
 assert.match(frontend, /BEADLE_ROSTER_TEMPLATE_URL = '\/assets\/examination-room-beadle-class-list-template\.xlsx'/);
-assert.match(rosterSurface, /accept="\.xlsx,application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet"/);
+assert.match(rosterSurface, /accept="\.xlsx,\.csv/);
 for (const field of ['Email Address', 'Student Number', 'Student Name']) {
   assert.match(rosterSurface, new RegExp(field));
 }
-assert.match(rosterSurface, /Last Name, First Name, Middle Initial/);
-assert.doesNotMatch(rosterSurface, /CSV|dd26-roster-paste|Check pasted list|Add or correct one student|dd26-upsert-beadle-row/,
-  'the Beadle initial class-list surface has one official XLSX path');
+assert.match(rosterSurface, /existing XLSX or CSV is accepted/);
+assert.match(rosterSurface, /dd26-roster-paste[\s\S]*Check pasted list[\s\S]*dd26-roster-add-row/,
+  'the Beadle can use file upload, paste, or manual entry');
 const rosterPreviewStart = frontend.indexOf('if (beadleMode) {', frontend.indexOf('function rosterPreviewHtml'));
 const rosterPreviewEnd = frontend.indexOf('return `<div class=', rosterPreviewStart);
 const beadleRosterPreview = frontend.slice(rosterPreviewStart, rosterPreviewEnd);
-assert.match(beadleRosterPreview, /<th>Email Address<\/th><th>Student Number<\/th><th>Student Name[\s\S]*escapeHtml\(row\.email\)[\s\S]*escapeHtml\(row\.studentNumber\)[\s\S]*escapeHtml\(row\.displayName/);
-assert.match(beadleRosterPreview, /This preview is for checking only/);
-assert.doesNotMatch(beadleRosterPreview, /data-dd26-roster-field|candidateNumber|Exam number/,
-  'the Beadle preview shows exactly the three template fields');
+assert.match(beadleRosterPreview, /<th>Email Address<\/th><th>Student Number \(optional\)<\/th><th>Student Name[\s\S]*escapeHtml\(row\.email[\s\S]*escapeHtml\(row\.studentNumber[\s\S]*escapeHtml\(row\.displayName/);
+assert.match(beadleRosterPreview, /data-dd26-roster-field="email"[\s\S]*data-dd26-roster-field="studentNumber"[\s\S]*data-dd26-roster-field="displayName"/,
+  'the Beadle preview keeps the three student fields editable before confirmation');
+assert.doesNotMatch(beadleRosterPreview, /candidateNumber|Exam number/,
+  'candidate numbers remain server-derived for the simplified Beadle flow');
 const importRosterBlock = frontend.slice(
   frontend.indexOf('async function importRoster'),
   frontend.indexOf('function rerenderRosterSurface'),
 );
-assert.match(importRosterBlock, /templateReceiptId: preview\.templateReceiptId, templateVersion: preview\.templateVersion/,
-  'saving the Beadle class list requires the receipt from the checked official template');
+assert.match(importRosterBlock, /operation: 'finalize_roster_access'[\s\S]*rows: preview\.rows[\s\S]*sourceKind:[\s\S]*sourceHash:[\s\S]*studentKey/,
+  'one idempotent roster confirmation versions the list and activates student access');
 const dirtyRosterBlock = frontend.slice(
   frontend.indexOf('function markRosterPreviewDirty'),
   frontend.indexOf('async function refreshExamPortal'),
@@ -423,20 +429,22 @@ assert.match(frontend, /current student exam code will stop working immediately/
 assert.match(frontend, /rosterMode === 'beadle'[\s\S]*examId: state\.exam\.activeExamId/);
 assert.match(frontend, /snapshot\.activeStudentExamCode[\s\S]*state\.exam\.studentExamCodes\.get\(snapshot\.examId\)/,
   'the Beadle handout must consume a recoverable active code when the backend provides it');
-assert.match(frontend, /id="dd26-active-student-code"[\s\S]*id="dd26-copy-active-class-handout"[\s\S]*Copy class handout/,
-  'the active class-wide code and examination link must have one clear handout action');
+assert.match(frontend, /id="dd26-active-student-code"[\s\S]*id="dd26-copy-active-class-handout"[\s\S]*Copy class code/,
+  'the active class-wide code has one optional class-channel copy action');
 assert.match(frontend, /Create a new student exam code/,
   'a Beadle who cannot recover the active code gets one plain replacement action');
-assert.match(frontend, /Class list saved\. Next: create the student exam code/);
+assert.match(importRosterBlock, /Access-code emails were queued|access-code emails were queued|student access-code emails queued/i);
 assert.match(frontend, /STUDENT_ACCESS_ISSUED: 'The class-wide student exam code is already active\.'/,
   'the issued state must be translated into classroom language');
-assert.match(frontend, /pagehide[\s\S]*state\.exam\.studentExamCodes\.clear\(\)/,
-  'browser-session student codes must be scrubbed when the page is left');
+const pagehideBlock = frontend.slice(frontend.indexOf("addEventListener?.('pagehide'"), frontend.indexOf("document.addEventListener?.('visibilitychange'"));
+assert.match(pagehideBlock, /persistCurrentGradingDraft\(\)/);
+assert.doesNotMatch(pagehideBlock, /studentExamCodes\.clear|clearGradingWorkspace|finishDialogLifecycle/,
+  'pagehide must preserve active classroom and grading state');
 
 // A valid signed-in student can wait before opening time without receiving an
 // attempt or any question payload. Start always rechecks authoritative server time.
-assert.match(frontend, /operation: 'preflight', examId, studentKey, deviceInstanceHash/,
-  'initial preflight must validate the class-wide code before the waiting room opens');
+assert.match(frontend, /operation: 'student_entry', studentKey, deviceInstanceHash/,
+  'initial entry must resolve and validate the class-wide code before the waiting room opens');
 const waitingRoomStart = frontend.indexOf('function waitingRoomChecks');
 const waitingRoomEnd = frontend.indexOf('function examIntegrityPolicy', waitingRoomStart);
 const waitingRoomBlock = frontend.slice(waitingRoomStart, waitingRoomEnd);
@@ -493,7 +501,7 @@ assert.match(preflightRenderBlock, /studentStartReadiness\(server\)[\s\S]*startR
   'the Start control requires the server-confirmed opening and entry window');
 assert.match(preflightStartBlock, /studentStartReadiness\(check\.server\)\.canStart/,
   'the server-confirmed opening and entry window is checked again immediately before start');
-assert.ok(preflightStartBlock.indexOf('requestFullscreen()') < preflightStartBlock.indexOf("operation: 'start_attempt'"),
+assert.ok(preflightStartBlock.indexOf('requestFullscreen()') < preflightStartBlock.indexOf("operation: 'start_attempt_by_code'"),
   'full screen must be requested synchronously from the Start click before a network wait');
 assert.doesNotMatch(preflightRenderBlock, /checks it when you select Start examination/,
   'preflight must never describe an already rejected code as awaiting validation');
@@ -501,7 +509,7 @@ assert.match(preflightRenderBlock, /studentAccessCodeState\(server, check\.stude
   'invalid, locked, inactive, and missing student codes must render as explicit failures');
 assert.match(preflightRenderBlock, /studentEntryTiming\(server\)[\s\S]*openingRow\.className = entryTiming\.className/,
   'opening and entry timing must render independently from any other blocker');
-assert.ok(preflightStartBlock.indexOf('if (!isAuthenticated())') < preflightStartBlock.indexOf("operation: 'start_attempt'"),
+assert.ok(preflightStartBlock.indexOf('if (!isAuthenticated())') < preflightStartBlock.indexOf("operation: 'start_attempt_by_code'"),
   'Student authentication must be rechecked immediately before starting the attempt');
 assert.match(frontend, /if \(state\.view === 'exam_room'\)[\s\S]*state\.exam\.preflight = null;[\s\S]*state\.exam\.attempt = null;[\s\S]*closeDialog\(\)/,
   'sign-out must close the exam dialog and remove any Student preflight or attempt state');
@@ -552,7 +560,7 @@ assert.match(frontend, /visibilitychange[\s\S]*persistCurrentGradingDraft\(\)/,
   'backgrounding the browser must preserve the current Professor grading draft');
 assert.match(frontend, /pagehide[\s\S]*persistCurrentGradingDraft\(\)/,
   'Alt-Tab or page exit must preserve the current Professor grading draft');
-assert.match(frontend, /\['ungraded', 'graded', 'late', 'flagged', 'all'\]/);
+assert.match(frontend, /\['ungraded', 'draft', 'graded', 'active', 'absent', 'late', 'accommodated', 'flagged', 'all'\]/);
 assert.match(frontend, /class="dd26-grading-split"/);
 assert.match(frontend, /id="dd26-save-next-grade"/);
 assert.match(frontend, /event\.altKey[\s\S]*ArrowRight[\s\S]*ArrowLeft/,
@@ -730,8 +738,8 @@ assert.equal(clipboardEventTouchesAttempt(
 assert.match(frontend, /document\.createElement\('dialog'\)/);
 assert.match(frontend, /function finishDialogLifecycle[\s\S]*input\[type="password"\], \[data-dd26-sensitive\][\s\S]*replaceChildren\(\)/,
   'closing a one-time-key dialog must remove the key from the live DOM');
-assert.match(frontend, /addEventListener\?\.\('pagehide',[\s\S]*finishDialogLifecycle/,
-  'page exit must scrub one-time-key dialogs and their cleanup closures');
+assert.doesNotMatch(pagehideBlock, /finishDialogLifecycle/,
+  'pagehide must not destroy resumable classroom or grading dialog state');
 assert.match(frontend, /refreshBeadleOperations\(examId\)[\s\S]*EXAMINATION_ROOM_REFRESH_WAIT_MS/,
   'student-code issue must refresh the exact Beadle state after success');
 assert.match(frontend, /aria-live="polite"/);

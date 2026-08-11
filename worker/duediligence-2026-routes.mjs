@@ -109,6 +109,7 @@ const EXAM_ROOM_2_QUERY_OPERATIONS = new Set([
   'exam_intent',
   'professor_authoring_snapshot',
   'preflight',
+  'student_entry',
   'beadle_portal',
   'incident_summary',
   'submission_status',
@@ -141,10 +142,13 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'redeem_beadle_invitation',
   'revoke_beadle',
   'issue_student_access',
+  'finalize_roster_access',
   'reopen_exam_roster',
   'record_candidate_verification',
   'set_candidate_admission',
   'set_accommodation',
+  'start_attempt_by_code',
+  'open_exam_now',
   'open_session',
   'save_answer_operation',
   'heartbeat_v2',
@@ -1174,6 +1178,16 @@ export function createDD2026Handlers(deps) {
         p_rate_key_hash: await examRoomRateKey(request, user.id, input.examId),
         p_device_instance_hash: input.deviceInstanceHash,
       };
+    } else if (input.operation === 'student_entry') {
+      const studentKeyHash = await hashedCredential(input.studentKey);
+      functionName = 'exam_room_student_waiting_room_by_code_v1';
+      body = {
+        p_student_user_id: user.id,
+        p_student_key_hash: studentKeyHash,
+        p_rate_key_hash: await examRoomRateKey(request, user.id, 'student_entry'),
+        p_code_fingerprint: studentKeyHash,
+        p_device_instance_hash: input.deviceInstanceHash,
+      };
     } else if (input.operation === 'beadle_portal') {
       functionName = 'exam_room_beadle_portal_v5';
       body = { p_user_id: user.id, p_exam_public_id: input.examId };
@@ -1204,15 +1218,19 @@ export function createDD2026Handlers(deps) {
         ? 'exam_room_live_status_v2'
         : input.operation === 'live_status'
           ? 'exam_room_live_status'
-          : 'exam_room_grading_workspace';
+          : 'exam_room_grading_workspace_v3';
       body = { p_professor_user_id: user.id, p_exam_public_id: input.examId,
-        p_grading_key_hash: await hashedCredential(input.gradingKey),
-        p_rate_key_hash: await examRoomRateKey(request, user.id, input.examId) };
+        p_grading_key_hash: input.gradingKey ? await hashedCredential(input.gradingKey) : null,
+        p_rate_key_hash: input.gradingKey
+          ? await examRoomRateKey(request, user.id, input.examId)
+          : null };
     } else if (input.operation === 'grading_model_answer') {
-      functionName = 'exam_room_grading_model_answer_v2';
+      functionName = 'exam_room_grading_model_answer_v3';
       body = { p_professor_user_id: user.id, p_exam_public_id: input.examId,
-        p_grading_key_hash: await hashedCredential(input.gradingKey),
-        p_rate_key_hash: await examRoomRateKey(request, user.id, input.examId) };
+        p_grading_key_hash: input.gradingKey ? await hashedCredential(input.gradingKey) : null,
+        p_rate_key_hash: input.gradingKey
+          ? await examRoomRateKey(request, user.id, input.examId)
+          : null };
     } else if (input.operation === 'break_glass_view') {
       const stepUp = requireVerifiedAal2(user);
       functionName = 'exam_room_admin_break_glass_evidence_v2';
@@ -1576,6 +1594,8 @@ export function createDD2026Handlers(deps) {
     if ([
       'submit_attempt', 'submit_attempt_generation', 'replace_publication',
       'reschedule_publication', 'reopen_submission', 'release_results',
+      'generate_provisional_room_key', 'publish_for_beadle',
+      'finalize_roster_access',
     ].includes(input.operation)
         && ctx?.waitUntil) {
       ctx.waitUntil(processExamRoomQueues(env));
@@ -1662,13 +1682,25 @@ export function createDD2026Handlers(deps) {
         p_notes: input.notes,
         p_request_key: input.requestKey,
       } }),
-      generate_provisional_room_key: async () => ({ functionName: 'exam_room_generate_provisional_key', body: {
-        p_actor_user_id: userId,
-        p_request_public_id: input.requestId,
-        p_token_hash: await h(input.activationKey),
-        p_expires_at: input.expiresAt,
-        p_request_key: input.requestKey,
-      } }),
+      generate_provisional_room_key: async () => {
+        const tokenHash = await h(input.activationKey);
+        const envelope = await encryptStudentExamCode(env, {
+          examId: input.requestId,
+          tokenHash,
+          studentKey: input.activationKey,
+        });
+        return { functionName: 'exam_room_generate_provisional_key_and_email_v1', body: {
+          p_actor_user_id: userId,
+          p_request_public_id: input.requestId,
+          p_token_hash: tokenHash,
+          p_expires_at: input.expiresAt,
+          p_code_ciphertext: envelope.ciphertext,
+          p_code_nonce: envelope.nonce,
+          p_code_key_id: envelope.keyId,
+          p_code_algorithm: envelope.algorithm,
+          p_request_key: input.requestKey,
+        } };
+      },
       review_room_payment: async () => ({ functionName: 'exam_room_review_payment_proof', body: {
         p_actor_user_id: userId,
         p_request_public_id: input.requestId,
@@ -1784,21 +1816,45 @@ export function createDD2026Handlers(deps) {
         p_student_key_hash: input.studentKey ? await h(input.studentKey) : null,
         p_request_key: input.requestKey,
       } }),
-      publish_for_beadle: async () => ({
-        functionName: 'exam_room_publish_for_beadle_v4',
-        body: {
+      publish_for_beadle: async () => {
+        const gradingKeyHash = await h(input.gradingKey);
+        const beadleKeyHash = await h(input.beadleInvitationKey);
+        const [gradingEnvelope, beadleEnvelope] = await Promise.all([
+          encryptStudentExamCode(env, {
+            examId: input.examId,
+            tokenHash: gradingKeyHash,
+            studentKey: input.gradingKey,
+          }),
+          encryptStudentExamCode(env, {
+            examId: input.examId,
+            tokenHash: beadleKeyHash,
+            studentKey: input.beadleInvitationKey,
+          }),
+        ]);
+        return {
+          functionName: 'exam_room_publish_for_beadle_and_email_v1',
+          body: {
           p_professor_user_id: userId,
           p_exam_public_id: input.examId,
           p_expected_revision: input.expectedRevision,
           p_rules: input.rules,
-          p_grading_key_hash: await h(input.gradingKey),
+          p_grading_key_hash: gradingKeyHash,
+          p_grading_code_ciphertext: gradingEnvelope.ciphertext,
+          p_grading_code_nonce: gradingEnvelope.nonce,
+          p_grading_code_key_id: gradingEnvelope.keyId,
+          p_grading_code_algorithm: gradingEnvelope.algorithm,
           p_beadle_email: input.beadleEmail,
-          p_beadle_token_hash: await h(input.beadleInvitationKey),
+          p_beadle_token_hash: beadleKeyHash,
+          p_beadle_code_ciphertext: beadleEnvelope.ciphertext,
+          p_beadle_code_nonce: beadleEnvelope.nonce,
+          p_beadle_code_key_id: beadleEnvelope.keyId,
+          p_beadle_code_algorithm: beadleEnvelope.algorithm,
           p_beadle_expires_at: input.beadleExpiresAt,
           p_beadle_reason: input.reason,
           p_request_key: input.requestKey,
-        },
-      }),
+          },
+        };
+      },
       reschedule_publication: async () => ({
         functionName: 'exam_room_reschedule_publication_v1',
         body: {
@@ -1868,6 +1924,30 @@ export function createDD2026Handlers(deps) {
           },
         };
       },
+      finalize_roster_access: async () => {
+        const studentKeyHash = await h(input.studentKey);
+        const envelope = await encryptStudentExamCode(env, {
+          examId: input.examId,
+          tokenHash: studentKeyHash,
+          studentKey: input.studentKey,
+        });
+        return {
+          functionName: 'exam_room_finalize_roster_access_v1',
+          body: {
+            p_actor_user_id: userId,
+            p_exam_public_id: input.examId,
+            p_rows: input.rows,
+            p_source_kind: input.sourceKind,
+            p_source_hash: input.sourceHash,
+            p_student_key_hash: studentKeyHash,
+            p_code_ciphertext: envelope.ciphertext,
+            p_code_nonce: envelope.nonce,
+            p_code_key_id: envelope.keyId,
+            p_code_algorithm: envelope.algorithm,
+            p_request_key: input.requestKey,
+          },
+        };
+      },
       reopen_exam_roster: async () => ({
         functionName: 'exam_room_reopen_roster_v1',
         body: {
@@ -1896,6 +1976,21 @@ export function createDD2026Handlers(deps) {
         p_student_user_id: userId, p_exam_public_id: input.examId,
         p_student_key_hash: input.studentKey ? await h(input.studentKey) : null,
         p_rate_key_hash: rateHash,
+      } }),
+      start_attempt_by_code: async () => {
+        const studentKeyHash = await h(input.studentKey);
+        return { functionName: 'exam_room_start_attempt_by_code_v1', body: {
+          p_student_user_id: userId,
+          p_student_key_hash: studentKeyHash,
+          p_rate_key_hash: rateHash,
+          p_code_fingerprint: studentKeyHash,
+        } };
+      },
+      open_exam_now: async () => ({ functionName: 'exam_room_open_exam_now_v1', body: {
+        p_professor_user_id: userId,
+        p_exam_public_id: input.examId,
+        p_reason: input.reason,
+        p_request_key: input.requestKey,
       } }),
       open_session: async () => ({ functionName: 'exam_room_open_session_v2', body: {
         p_student_user_id: userId, p_attempt_public_id: input.attemptId,
@@ -1934,7 +2029,7 @@ export function createDD2026Handlers(deps) {
       submit_attempt: async () => ({ functionName: 'exam_room_submit_attempt', body: {
         p_student_user_id: userId, p_attempt_public_id: input.attemptId, p_request_key: input.requestKey,
       } }),
-      submit_attempt_generation: async () => ({ functionName: 'exam_room_submit_attempt_generation_v2', body: {
+      submit_attempt_generation: async () => ({ functionName: 'exam_room_submit_attempt_generation_v3', body: {
         p_student_user_id: userId, p_attempt_public_id: input.attemptId,
         p_session_public_id: input.sessionId, p_session_epoch: input.sessionEpoch,
         p_client_answer_set_hash: input.answerSetHash, p_request_key: input.requestKey,
@@ -2011,12 +2106,13 @@ export function createDD2026Handlers(deps) {
         p_verified_authentication_at: stepUp?.authenticatedAt,
         p_request_key: input.requestKey,
       } }),
-      save_grade: async () => ({ functionName: 'exam_room_save_grade', body: {
+      save_grade: async () => ({ functionName: 'exam_room_save_grade_v3', body: {
         p_professor_user_id: userId, p_exam_public_id: input.examId,
         p_attempt_public_id: input.attemptId, p_question_id: input.questionId,
         p_score: input.score, p_comment: input.comment, p_grade_state: input.gradeState,
         p_expected_revision: input.expectedRevision, p_change_reason: input.changeReason,
-        p_grading_key_hash: await h(input.gradingKey), p_rate_key_hash: rateHash,
+        p_grading_key_hash: input.gradingKey ? await h(input.gradingKey) : null,
+        p_rate_key_hash: input.gradingKey ? rateHash : null,
       } }),
       unlock_attempt: async () => ({ functionName: 'exam_room_unlock_attempt', body: {
         p_actor_user_id: userId, p_attempt_public_id: input.attemptId, p_reason: input.reason,

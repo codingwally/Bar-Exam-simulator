@@ -998,7 +998,7 @@ test('v2 portal query contracts require their examination scope', () => {
   assert.throws(() => normalizeExamRoomQuery({ operation: 'incident_summary' }));
 });
 
-test('grading model-answer retrieval requires the professor grading credential', () => {
+test('grading model-answer retrieval accepts a remembered exam-scoped grading membership', () => {
   const gradingKey = 'professor-grading-key-secret';
   assert.deepEqual(normalizeExamRoomQuery({
     operation: 'live_status_v2', examId, gradingKey,
@@ -1010,9 +1010,11 @@ test('grading model-answer retrieval requires the professor grading credential',
   }), {
     operation: 'grading_model_answer', examId, gradingKey,
   });
-  assert.throws(() => normalizeExamRoomQuery({
+  assert.deepEqual(normalizeExamRoomQuery({
     operation: 'grading_model_answer', examId,
-  }));
+  }), {
+    operation: 'grading_model_answer', examId, gradingKey: null,
+  });
   assert.throws(() => normalizeExamRoomQuery({ operation: 'live_status_v2', examId }));
 });
 

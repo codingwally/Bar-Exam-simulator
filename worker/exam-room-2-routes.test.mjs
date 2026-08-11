@@ -211,7 +211,7 @@ test('quotation delivery and provisional Professor keys keep secrets out of stor
       if (name === 'exam_room_record_quotation_delivery') {
         return { ok: true, status: 'quotation_sent', deliveryStatus: body.p_delivery_status };
       }
-      if (name === 'exam_room_generate_provisional_key') {
+      if (name === 'exam_room_generate_provisional_key_and_email_v1') {
         return { ok: true, requestId: examId, activationId: versionId, oneTimeOnly: true };
       }
       return { ok: true, body };
@@ -219,7 +219,7 @@ test('quotation delivery and provisional Professor keys keep secrets out of stor
   });
   const sent = await room.handlers.examCommand(request({
     operation: 'send_room_quotation', requestId: examId, requestKey,
-  }), {}, '', '', {});
+  }), v2Env, '', '', {});
   assert.equal(sent.status, 200);
   assert.equal(quotationCalls.length, 1);
   assert.equal(quotationCalls[0].recipient, 'professor@example.edu');
@@ -230,7 +230,7 @@ test('quotation delivery and provisional Professor keys keep secrets out of stor
     operation: 'generate_provisional_room_key', requestId: examId, expiresAt, requestKey,
   }), {}, '', '', {});
   const generatedPayload = await generated.json();
-  const keyCall = room.calls.find((call) => call.name === 'exam_room_generate_provisional_key');
+  const keyCall = room.calls.find((call) => call.name === 'exam_room_generate_provisional_key_and_email_v1');
   assert.match(keyCall.body.p_token_hash, /^[0-9a-f]{64}$/);
   assert.equal('p_activation_key' in keyCall.body, false);
   assert.match(generatedPayload.result.oneTimeProfessorKey, /^[A-Za-z0-9_-]{20,}$/);
@@ -782,7 +782,7 @@ test('grading model-answer query is credentialed and projects only safe owner-gr
   const gradingKey = 'professor-grading-key-secret';
   const privatePath = `${examId}/model-answers/${'a'.repeat(64)}/answer.txt`;
   const pasted = harness({
-    rpc: async (name) => name === 'exam_room_grading_model_answer_v2'
+    rpc: async (name) => name === 'exam_room_grading_model_answer_v3'
       ? {
         ok: true,
         examId,
@@ -800,7 +800,7 @@ test('grading model-answer query is credentialed and projects only safe owner-gr
   }), {}, '', '');
   const pastePayload = await pasteResponse.json();
   const call = pasted.calls.at(-1);
-  assert.equal(call.name, 'exam_room_grading_model_answer_v2');
+  assert.equal(call.name, 'exam_room_grading_model_answer_v3');
   assert.match(call.body.p_grading_key_hash, /^[0-9a-f]{64}$/);
   assert.equal(JSON.stringify(call.body).includes(gradingKey), false);
   assert.deepEqual(pastePayload.result, {
@@ -814,7 +814,7 @@ test('grading model-answer query is credentialed and projects only safe owner-gr
   assert.equal(JSON.stringify(pastePayload).includes(privatePath), false);
 
   const uploaded = harness({
-    rpc: async (name) => name === 'exam_room_grading_model_answer_v2'
+    rpc: async (name) => name === 'exam_room_grading_model_answer_v3'
       ? {
         ok: true,
         available: false,
@@ -844,6 +844,16 @@ test('grading model-answer query is credentialed and projects only safe owner-gr
     contentHash: 'c'.repeat(64),
   });
   assert.equal(JSON.stringify(uploadPayload).includes(privatePath), false);
+
+  const remembered = harness({
+    rpc: async () => ({ ok: true, available: false, mode: 'none', code: 'MODEL_ANSWER_NOT_CONFIGURED' }),
+  });
+  const rememberedResponse = await remembered.handlers.examQuery(request({
+    operation: 'grading_model_answer', examId,
+  }), {}, '', '');
+  assert.equal(rememberedResponse.status, 200);
+  assert.equal(remembered.calls.at(-1).body.p_grading_key_hash, null);
+  assert.equal(remembered.calls.at(-1).body.p_rate_key_hash, null);
 });
 
 test('v2 owner monitor is grading-key authenticated and projects bounded reopen eligibility only', async () => {
@@ -1316,7 +1326,7 @@ test('exam-scoped roster commands require receipt-backed import and reject singl
   const { handlers, calls } = harness();
   await handlers.examCommand(request({
     operation: 'validate_exam_roster', examId, rows: [row],
-  }), {}, '', '', {});
+  }), v2Env, '', '', {});
   await handlers.examCommand(request({
     operation: 'import_exam_roster', examId, rows: [row],
     requestKey, sourceHash: 'd'.repeat(64),
@@ -1398,7 +1408,7 @@ test('publication completion returns only the new one-time Beadle key and defers
   }), {}, '', '', {});
   const payload = await response.json();
   const call = flow.calls.at(-1);
-  assert.equal(call.name, 'exam_room_publish_for_beadle_v4');
+  assert.equal(call.name, 'exam_room_publish_for_beadle_and_email_v1');
   assert.equal(call.body.p_expected_revision, 7);
   assert.equal(call.body.p_beadle_email, 'beadle@example.edu');
   assert.match(call.body.p_beadle_token_hash, /^[0-9a-f]{64}$/);
@@ -1715,7 +1725,7 @@ test('submission generation, operator transfer, erratum, leave, and incidents us
     clientOccurredAt: '2026-08-09T03:30:00Z',
   }), {}, '', '', {});
   assert.deepEqual(calls.map((entry) => entry.name), [
-    'exam_room_submit_attempt_generation_v2',
+    'exam_room_submit_attempt_generation_v3',
     'exam_room_transfer_session_v2',
     'exam_room_issue_erratum_v2',
     'exam_room_start_temporary_leave_v2',

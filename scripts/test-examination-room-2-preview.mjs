@@ -46,7 +46,7 @@ assert.match(script, /\['copy', 'cut', 'paste'\][\s\S]*event\.preventDefault\(\)
 assert.match(html, /One Admin room key opened this Examination Room for this Professor/);
 assert.match(html, /The Professor sends the Beadle key after publishing/);
 assert.match(html, /Students do not receive a Professor room key/);
-assert.match(html, /student exam code from the Beadle/i);
+assert.match(html, /class examination code/i);
 
 const professorPanel = html.match(/<section class="dd26-shell" data-view-panel="professor-authoring"[\s\S]*?<section class="dd26-shell" data-view-panel="beadle"/)?.[0] || '';
 assert.match(professorPanel, /Publish and get Beadle key/);
@@ -61,20 +61,21 @@ for (const state of ['entry', 'roster', 'handout', 'attention']) {
   assert.match(beadlePanel, new RegExp(`data-state-panel="beadle:${state}"`));
 }
 assert.match(beadlePanel, /id="qa-beadle-entry-key"/);
-assert.match(beadlePanel, /Save class list and open handout/);
-assert.match(beadlePanel, /id="qa-student-exam-link"[\s\S]*id="qa-student-exam-code"/,
-  'the active student code must remain beside the examination link on the Beadle page');
+assert.match(beadlePanel, /Confirm class list and finish/);
+assert.doesNotMatch(beadlePanel, /id="qa-student-exam-link"|Student examination link/,
+  'the Beadle flow must not require or distribute an examination link');
 assert.match(beadlePanel, /id="qa-student-exam-code"/);
-assert.match(beadlePanel, /Due Diligence created this class-wide student exam code/);
-assert.equal((beadlePanel.match(/>Copy class handout</g) || []).length, 1,
-  'the Beadle handout must provide one unambiguous copy action');
+assert.match(beadlePanel, /queued one private email for every listed student/);
+assert.equal((beadlePanel.match(/>Copy class code</g) || []).length, 1,
+  'the Beadle completion screen may provide one optional class-code copy action');
+assert.doesNotMatch(beadlePanel, /Record identity check|Allow entry|Move to new device/);
 assert.doesNotMatch(beadlePanel, /Copy student exam code|Copy complete class handout|shown once/i);
 assert.doesNotMatch(beadlePanel, /data-open-view="student"/,
   'every path to the Student page must pass through the sign-in check');
 
 const studentPanel = html.match(/<section class="dd26-shell" data-view-panel="student"[\s\S]*?<section class="dd26-shell" data-view-panel="professor-after"/)?.[0] || '';
 assert.match(studentPanel, /id="qa-student-entry-code"/);
-assert.match(studentPanel, /receive the examination link and student exam code from the Beadle/);
+assert.match(studentPanel, /No examination link or separate reference is required/);
 assert.match(studentPanel, /Signed-in student/);
 assert.match(studentPanel, /data-state-panel="student:waiting"/);
 assert.match(studentPanel, /id="qa-enter-waiting-room"[^>]*disabled>Enter waiting room/);
@@ -147,9 +148,9 @@ assert.match(operations, /#### Early student waiting room/);
 assert.match(operations, /successful checks place the student in the waiting room only/);
 assert.match(operations, /Due Diligence server time, a countdown to opening/);
 assert.match(operations, /Questions, answer fields, and the attempt remain closed/);
-assert.match(operations, /Due Diligence, after the Beadle saves the class list/);
-assert.match(operations, /The Beadle page shows the active code beside the examination link/);
-assert.match(operations, /send the class results in one action/i);
+assert.match(operations, /Due Diligence, when the Beadle confirms a valid class list/);
+assert.match(operations, /queues one private email per validated student/);
+assert.match(operations, /separate class-results release action/i);
 assert.doesNotMatch(`${html}\n${script}\n${operations}`, /STUDENT_ACCESS_ISSUED/,
   'raw server status codes must not appear in classroom instructions');
 

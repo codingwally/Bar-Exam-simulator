@@ -180,6 +180,23 @@ test('Professor schedule corrections allow immediate opening with bounded rules 
   assert.equal(immediate.expectedPublicationId, versionId);
 });
 
+test('past-exam removal accepts only a validated exam and idempotency key', () => {
+  assert.deepEqual(normalizeExamRoomCommand({
+    operation: 'dismiss_past_exam',
+    examId,
+    requestKey,
+  }), {
+    operation: 'dismiss_past_exam',
+    examId,
+    requestKey,
+  });
+  assert.throws(() => normalizeExamRoomCommand({
+    operation: 'dismiss_past_exam',
+    examId,
+    requestKey: 'short',
+  }));
+});
+
 test('Admin room invitations require complete room details and a bounded expiry', () => {
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
   assert.deepEqual(normalizeExamRoomCommand({

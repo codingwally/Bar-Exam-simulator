@@ -928,11 +928,64 @@ test('legacy portal merges safe Beadle assignments for the role landing page', a
   const payload = await response.json();
   assert.deepEqual(calls.map((entry) => entry.name), [
     'exam_room_portal_snapshot',
+    'exam_room_dismissed_past_exam_ids_v1',
     'exam_room_beadle_portal_v3',
   ]);
   assert.equal(payload.result.roles.beadle, true);
   assert.deepEqual(payload.result.beadleExams, [assignment]);
   assert.deepEqual(payload.result.beadleAssignments, [assignment]);
+});
+
+test('portal removes only this user\'s dismissed past examinations across all role lists', async () => {
+  const visibleExamId = versionId;
+  const portal = harness({
+    rpc: async (name) => {
+      if (name === 'exam_room_portal_snapshot') {
+        return {
+          roles: { professor: true, student: true },
+          classes: [
+            { classroomId: 'genuine-empty', title: 'New room', exams: [] },
+            { classroomId: 'dismissed-room', title: 'Old room', exams: [{ examId, title: 'Past exam' }] },
+            { classroomId: 'visible-room', title: 'Current room', exams: [{ examId: visibleExamId, title: 'Visible exam' }] },
+          ],
+          studentExams: [{ examId, title: 'Past exam' }, { examId: visibleExamId, title: 'Visible exam' }],
+        };
+      }
+      if (name === 'exam_room_dismissed_past_exam_ids_v1') {
+        return { ok: true, examIds: [examId] };
+      }
+      if (name === 'exam_room_beadle_portal_v3') {
+        return { ok: true, assignments: [
+          { examId, title: 'Past exam', role: 'beadle' },
+          { examId: visibleExamId, title: 'Visible exam', role: 'beadle' },
+        ] };
+      }
+      return { ok: true };
+    },
+  });
+  const response = await portal.handlers.examQuery(request({ operation: 'portal' }), {}, '', '');
+  const payload = await response.json();
+  assert.deepEqual(payload.result.studentExams.map((exam) => exam.examId), [visibleExamId]);
+  assert.deepEqual(payload.result.beadleExams.map((exam) => exam.examId), [visibleExamId]);
+  assert.deepEqual(payload.result.classes.map((classroom) => classroom.classroomId), [
+    'genuine-empty', 'visible-room',
+  ]);
+});
+
+test('authenticated past-exam removal is routed only through the user-scoped RPC', async () => {
+  const removal = harness();
+  const response = await removal.handlers.examCommand(request({
+    operation: 'dismiss_past_exam', examId, requestKey,
+  }), {}, '', '', {});
+  assert.equal(response.status, 200);
+  assert.deepEqual(removal.calls.at(-1), {
+    name: 'exam_room_dismiss_past_exam_v1',
+    body: {
+      p_user_id: userId,
+      p_exam_public_id: examId,
+      p_request_key: requestKey,
+    },
+  });
 });
 
 test('attempt query never exposes an already-active device session credential', async () => {
@@ -1097,7 +1150,10 @@ test('legacy portal remains available while free classroom creation fails closed
   );
   const payload = await response.json();
   assert.equal(payload.result.roles.professor, true);
-  assert.deepEqual(legacy.calls.map((entry) => entry.name), ['exam_room_portal_snapshot']);
+  assert.deepEqual(legacy.calls.map((entry) => entry.name), [
+    'exam_room_portal_snapshot',
+    'exam_room_dismissed_past_exam_ids_v1',
+  ]);
 
   await assert.rejects(
     legacy.rawHandlers.examCommand(request({
@@ -1117,7 +1173,7 @@ test('legacy portal remains available while free classroom creation fails closed
     }), v2Env, '', '', {}),
     (error) => error.code === 'EXAM_ROOM_ROOM_KEY_REQUIRED' && error.status === 403,
   );
-  assert.equal(legacy.calls.length, 1);
+  assert.equal(legacy.calls.length, 2);
 });
 
 test('production and staging explicitly enable the owner-approved beta-wide release', () => {

@@ -2127,6 +2127,29 @@
   font: 400 28px/1 var(--sans);
 }
 
+.quorum-drawer-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding: 16px 4px 4px;
+  background: linear-gradient(180deg, rgba(250, 249, 246, 0), rgba(250, 249, 246, .985) 28%);
+}
+
+.quorum-drawer-back {
+  min-width: 104px;
+  border-color: rgba(0, 33, 71, .35);
+  color: #071a33;
+  background: #fff;
+}
+
+.quorum-drawer-back:hover,
+.quorum-drawer-back:focus-visible {
+  border-color: rgba(197, 160, 89, .78);
+  box-shadow: 0 8px 20px rgba(0, 33, 71, .12);
+}
+
 .quorum-drawer-scrim {
   position: fixed;
   z-index: 10010;

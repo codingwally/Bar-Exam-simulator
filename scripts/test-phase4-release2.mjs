@@ -37,7 +37,8 @@ assert.ok(migration.includes('provider_unavailable'));
 assert.ok(migration.includes('jsonb_has_forbidden_keys'));
 assert.ok(migration.includes('student_answer'));
 assert.ok(examiner.includes('modelAnswerQualityIssues'));
-assert.ok(examiner.includes('Application must be the most developed ALAC section.'));
+assert.ok(examiner.includes('Application must be the most developed ALAC section for this fact-based question.'));
+assert.ok(examiner.includes('without inventing facts'));
 assert.match(examiner, /Do not claim [“"]Human Verified[”"]/);
 assert.match(
   wrangler,

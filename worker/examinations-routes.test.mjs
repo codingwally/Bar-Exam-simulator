@@ -78,6 +78,39 @@ test('authenticated examination catalog reaches only the allowlisted RPC', async
   });
 });
 
+test('Subject Matter catalog preserves course metadata but withholds bank inventory', async () => {
+  await withFetchMock(async (url, options) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_catalog`);
+    assert.deepEqual(JSON.parse(options.body), { p_user_id: userId });
+    return Response.json({
+      items: [{
+        subject: 'Criminal Law I',
+        courseCode: 'CRIMLAW1',
+        yearLevel: 1,
+        term: 1,
+        classification: 'Major',
+        completedCount: 2,
+        questionCount: 50,
+        inventory: { totalQuestions: 50 },
+      }],
+      placementCount: 50,
+    });
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'subject_catalog',
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.data.items[0].courseCode, 'CRIMLAW1');
+    assert.equal(body.data.items[0].completedCount, 2);
+    assert.equal('questionCount' in body.data.items[0], false);
+    assert.equal('totalQuestions' in body.data.items[0].inventory, false);
+    assert.equal('placementCount' in body.data, false);
+  });
+});
+
 test('Subject Matter random selection uses the dedicated no-repeat RPC', async () => {
   await withFetchMock(async (url, options) => {
     const auth = authResponse(url);
@@ -93,7 +126,9 @@ test('Subject Matter random selection uses the dedicated no-repeat RPC', async (
     });
     return Response.json({
       exhausted: false,
-      setup: { versionId, questionCount: 1 },
+      questionCount: 50,
+      remainingQuestions: 49,
+      setup: { versionId, questionCount: 1, bankSize: 50 },
     });
   }, async () => {
     const response = await worker.fetch(request('/examinations/query', {
@@ -107,6 +142,10 @@ test('Subject Matter random selection uses the dedicated no-repeat RPC', async (
     assert.equal(response.status, 200);
     assert.equal(body.data.exhausted, false);
     assert.equal(body.data.setup.versionId, versionId);
+    assert.equal('questionCount' in body.data, false);
+    assert.equal('remainingQuestions' in body.data, false);
+    assert.equal('questionCount' in body.data.setup, false);
+    assert.equal('bankSize' in body.data.setup, false);
   });
 });
 

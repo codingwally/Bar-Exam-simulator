@@ -33,6 +33,7 @@
   ]);
   const LOCAL_KEY = 'duediligence.examinations.recovery.v1';
   const TAB_KEY = 'duediligence.examinations.tab-token.v1';
+  const SUBJECT_CATALOG_STATE_KEY = 'duediligence.subject-matter.catalog-state.v2';
   const HEARTBEAT_MS = 30_000;
   const AUTOSAVE_MS = 1_100;
 
@@ -58,6 +59,12 @@
     uploadPreview: null,
     preferredTimerMode: 'selfPaced',
     practiceTimerMode: 'selfPaced',
+    subjectQuery: '',
+    subjectOpenYears: new Set(),
+    subjectOpenTerms: new Set(),
+    subjectSelectorScroll: 0,
+    subjectPageScroll: 0,
+    subjectSelectorReturnFocus: null,
     resumeAttemptId: null,
     initialized: false,
   };
@@ -332,28 +339,232 @@
     return state.catalog.find((item) => item.subject === subjectName) || state.catalog[0] || null;
   }
 
-  function groupedSubjectButtons(selected) {
-    const groups = new Map();
+  function subjectTermKey(item) {
+    return `${Number(item?.yearLevel) || 0}-${Number(item?.term) || 0}`;
+  }
+
+  function subjectSearchText(item) {
+    return [
+      item.subject,
+      item.courseCode,
+      item.code,
+      item.classification,
+      item.category,
+      item.keywords,
+      `year ${Number(item.yearLevel) || ''}`,
+      `term ${Number(item.term) || ''}`,
+      `semester ${Number(item.term) || ''}`,
+    ].flat().filter(Boolean).join(' ').toLowerCase();
+  }
+
+  function readSubjectCatalogState() {
+    let saved = null;
+    try { saved = safeJson(localStorage.getItem(SUBJECT_CATALOG_STATE_KEY)); } catch {}
+    if (saved?.version !== 2) return;
+    state.selectedSubject = String(saved.selectedSubject || state.selectedSubject);
+    state.subjectQuery = String(saved.query || '').slice(0, 160);
+    state.subjectOpenYears = new Set(
+      Array.isArray(saved.openYears) ? saved.openYears.map(String).slice(0, 8) : [],
+    );
+    state.subjectOpenTerms = new Set(
+      Array.isArray(saved.openTerms) ? saved.openTerms.map(String).slice(0, 24) : [],
+    );
+    state.subjectSelectorScroll = Math.max(0, Number(saved.selectorScroll) || 0);
+    state.subjectPageScroll = Math.max(0, Number(saved.pageScroll) || 0);
+    if (PRACTICE_TIMER_MODES.some((item) => item.value === saved.timerMode)) {
+      state.preferredTimerMode = saved.timerMode;
+    }
+  }
+
+  function persistSubjectCatalogState() {
+    if (state.track === 'per_subject' && state.screen === 'catalog') {
+      const activeTree = document.querySelector('#dd-subject-selector-dialog[open] [data-subject-tree]')
+        || document.querySelector('.dd-subject-panel [data-subject-tree]');
+      if (activeTree) state.subjectSelectorScroll = activeTree.scrollTop;
+      state.subjectPageScroll = Math.max(0, global.scrollY || 0);
+    }
+    try {
+      localStorage.setItem(SUBJECT_CATALOG_STATE_KEY, JSON.stringify({
+        version: 2,
+        selectedSubject: state.selectedSubject,
+        query: state.subjectQuery,
+        openYears: [...state.subjectOpenYears],
+        openTerms: [...state.subjectOpenTerms],
+        selectorScroll: state.subjectSelectorScroll,
+        pageScroll: state.subjectPageScroll,
+        timerMode: state.preferredTimerMode,
+        savedAt: Date.now(),
+      }));
+    } catch {}
+  }
+
+  function ensureSubjectPathOpen(item) {
+    if (!item) return;
+    state.subjectOpenYears.add(String(Number(item.yearLevel)));
+    state.subjectOpenTerms.add(subjectTermKey(item));
+  }
+
+  function subjectHierarchyMarkup(selected, prefix) {
+    const years = new Map();
     state.catalog.forEach((item) => {
-      const key = `${item.yearLevel}-${item.term}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(item);
+      const year = String(Number(item.yearLevel));
+      const term = String(Number(item.term));
+      if (!years.has(year)) years.set(year, new Map());
+      if (!years.get(year).has(term)) years.get(year).set(term, []);
+      years.get(year).get(term).push(item);
     });
-    return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, items]) => {
-        const [year, term] = key.split('-');
-        return `<section class="dd-subject-group">
-          <h3>Year ${escapeHtml(year)} · Term ${escapeHtml(term)}</h3>
-          ${items.sort((a, b) => a.subject.localeCompare(b.subject)).map((item) => `
-            <button class="dd-subject-button ${item.subject === selected?.subject ? 'is-selected' : ''}"
-              type="button" data-exam-subject="${escapeHtml(item.subject)}">
-              <span>${escapeHtml(item.subject)}</span>
-              <small class="dd-subject-state is-ready">
-                ${Number(item.completedCount) || 0} of ${Number(item.questionCount) || 0} completed
-              </small>
-            </button>`).join('')}
-        </section>`;
+    return [...years.entries()]
+      .sort(([left], [right]) => Number(left) - Number(right))
+      .map(([year, terms]) => {
+        const yearOpen = state.subjectOpenYears.has(year) || String(selected?.yearLevel) === year;
+        const yearPanelId = `dd-subject-${prefix}-year-${year}`;
+        return `<details class="dd-subject-year" data-subject-year="${escapeAttribute(year)}"
+          ${yearOpen ? 'open' : ''}>
+          <summary aria-expanded="${yearOpen ? 'true' : 'false'}"
+            aria-controls="${escapeAttribute(yearPanelId)}"><span>Year ${escapeHtml(year)}</span>
+            <span class="dd-subject-chevron" aria-hidden="true"></span></summary>
+          <div class="dd-subject-year-body" id="${escapeAttribute(yearPanelId)}">
+            ${[...terms.entries()].sort(([left], [right]) => Number(left) - Number(right))
+              .map(([term, items]) => {
+                const termKey = `${year}-${term}`;
+                const termOpen = state.subjectOpenTerms.has(termKey)
+                  || subjectTermKey(selected) === termKey;
+                const termPanelId = `dd-subject-${prefix}-term-${year}-${term}`;
+                return `<details class="dd-subject-term" data-subject-term="${escapeAttribute(termKey)}"
+                  ${termOpen ? 'open' : ''}>
+                  <summary aria-expanded="${termOpen ? 'true' : 'false'}"
+                    aria-controls="${escapeAttribute(termPanelId)}"><span>Term ${escapeHtml(term)}</span>
+                    <span class="dd-subject-chevron" aria-hidden="true"></span></summary>
+                  <div class="dd-subject-group" id="${escapeAttribute(termPanelId)}">
+                    ${items.map((item) => `
+                      <button class="dd-subject-button ${item.subject === selected?.subject ? 'is-selected' : ''}"
+                        type="button" data-exam-subject="${escapeAttribute(item.subject)}"
+                        data-subject-search="${escapeAttribute(subjectSearchText(item))}"
+                        ${item.subject === selected?.subject ? 'aria-current="true"' : ''}>
+                        <span class="dd-subject-name">
+                          ${item.courseCode ? `<small>${escapeHtml(item.courseCode)}</small>` : ''}
+                          <strong>${escapeHtml(item.subject)}</strong>
+                        </span>
+                        <small class="dd-subject-state is-ready">${Number(item.completedCount) || 0}
+                          ${Number(item.completedCount) === 1 ? 'answer' : 'answers'} submitted</small>
+                      </button>`).join('')}
+                  </div>
+                </details>`;
+              }).join('')}
+          </div>
+        </details>`;
       }).join('');
+  }
+
+  function applySubjectFilter(value = state.subjectQuery) {
+    const query = String(value || '').trim().toLowerCase().slice(0, 160);
+    state.subjectQuery = query;
+    document.querySelectorAll('[data-subject-search-input]').forEach((input) => {
+      if (input.value !== value) input.value = value;
+    });
+    document.querySelectorAll('[data-subject-tree]').forEach((tree) => {
+      let visibleCount = 0;
+      tree.querySelectorAll('.dd-subject-button').forEach((button) => {
+        const matches = !query || String(button.dataset.subjectSearch || '').includes(query);
+        button.hidden = !matches;
+        if (matches) visibleCount += 1;
+      });
+      tree.querySelectorAll('.dd-subject-term').forEach((details) => {
+        const hasMatch = [...details.querySelectorAll('.dd-subject-button')]
+          .some((button) => !button.hidden);
+        details.hidden = !hasMatch;
+        if (query && hasMatch) details.open = true;
+      });
+      tree.querySelectorAll('.dd-subject-year').forEach((details) => {
+        const hasMatch = [...details.querySelectorAll('.dd-subject-button')]
+          .some((button) => !button.hidden);
+        details.hidden = !hasMatch;
+        if (query && hasMatch) details.open = true;
+      });
+      const result = tree.closest('[data-subject-selector]')?.querySelector('[data-subject-result-count]');
+      if (result) {
+        result.textContent = `${visibleCount} ${visibleCount === 1 ? 'course' : 'courses'} found`;
+      }
+      const empty = tree.closest('[data-subject-selector]')?.querySelector('[data-subject-empty]');
+      if (empty) empty.hidden = visibleCount > 0;
+    });
+    persistSubjectCatalogState();
+  }
+
+  function closeSubjectSelector() {
+    const dialog = document.getElementById('dd-subject-selector-dialog');
+    const tree = dialog?.querySelector('[data-subject-tree]');
+    if (tree) state.subjectSelectorScroll = tree.scrollTop;
+    if (dialog?.open) dialog.close();
+    persistSubjectCatalogState();
+    const target = state.subjectSelectorReturnFocus;
+    state.subjectSelectorReturnFocus = null;
+    requestAnimationFrame(() => target?.focus?.());
+  }
+
+  function openSubjectSelector(trigger) {
+    const dialog = document.getElementById('dd-subject-selector-dialog');
+    if (!dialog) return;
+    state.subjectSelectorReturnFocus = trigger || document.activeElement;
+    if (!dialog.open) dialog.showModal();
+    const tree = dialog.querySelector('[data-subject-tree]');
+    if (tree) tree.scrollTop = state.subjectSelectorScroll;
+    requestAnimationFrame(() => dialog.querySelector('[data-subject-search-input]')?.focus?.());
+  }
+
+  function bindSubjectCatalogControls() {
+    const dialog = document.getElementById('dd-subject-selector-dialog');
+    dialog?.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      closeSubjectSelector();
+    });
+    document.querySelectorAll('[data-subject-tree]').forEach((tree) => {
+      tree.scrollTop = state.subjectSelectorScroll;
+      tree.addEventListener('scroll', () => {
+        state.subjectSelectorScroll = tree.scrollTop;
+        persistSubjectCatalogState();
+      }, { passive: true });
+      tree.querySelectorAll('details[data-subject-year], details[data-subject-term]')
+        .forEach((details) => details.addEventListener('toggle', () => {
+          details.querySelector(':scope > summary')
+            ?.setAttribute('aria-expanded', details.open ? 'true' : 'false');
+          const year = details.dataset.subjectYear;
+          const term = details.dataset.subjectTerm;
+          const collection = year ? state.subjectOpenYears : state.subjectOpenTerms;
+          const key = year || term;
+          if (details.open) collection.add(key);
+          else collection.delete(key);
+          persistSubjectCatalogState();
+        }));
+    });
+    applySubjectFilter(state.subjectQuery);
+    requestAnimationFrame(() => {
+      if (state.screen !== 'catalog' || state.track !== 'per_subject') return;
+      const tree = document.querySelector('.dd-subject-panel [data-subject-tree]');
+      if (tree) tree.scrollTop = state.subjectSelectorScroll;
+      if (state.subjectPageScroll > 0) global.scrollTo({ top: state.subjectPageScroll, behavior: 'auto' });
+    });
+  }
+
+  function chooseSubject(subjectName) {
+    const selected = subjectCatalogItem(subjectName);
+    if (!selected) return;
+    state.selectedSubject = selected.subject;
+    ensureSubjectPathOpen(selected);
+    persistSubjectCatalogState();
+    const dialog = document.getElementById('dd-subject-selector-dialog');
+    if (dialog?.open) {
+      const tree = dialog.querySelector('[data-subject-tree]');
+      if (tree) state.subjectSelectorScroll = tree.scrollTop;
+      dialog.close();
+    }
+    renderPerSubject();
+    requestAnimationFrame(() => {
+      const heading = document.getElementById('dd-selected-course-heading');
+      const reducedMotion = global.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+      heading?.scrollIntoView?.({ block: 'start', behavior: reducedMotion ? 'auto' : 'smooth' });
+      heading?.focus?.({ preventScroll: true });
+    });
   }
 
   function renderPerSubject() {
@@ -362,61 +573,66 @@
     const selected = subjectCatalogItem();
     if (!selected) {
       root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
-        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">Guided essay practice</p>
+        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">Guided legal writing practice</p>
           <h1>Subject Matter</h1></div></header>
-        <div class="dd-exam-status is-error">No Subject Matter questions are available right now.</div>
+        <div class="dd-exam-status is-error">No Subject Matter courses are available right now.</div>
       </div></div>`;
       return;
     }
     state.selectedSubject = selected.subject;
+    ensureSubjectPathOpen(selected);
+    const hierarchy = subjectHierarchyMarkup(selected, 'desktop');
+    const mobileHierarchy = subjectHierarchyMarkup(selected, 'mobile');
     root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
       <header class="dd-exam-hero">
         <div>
-          <p class="dd-exam-kicker">Guided essay practice</p>
+          <p class="dd-exam-kicker">Guided legal writing practice</p>
           <h1>Subject Matter</h1>
-          <p>Choose a law-school subject, answer one randomly selected essay, and learn from
-            a focused A.L.A.C. assessment before moving to the next question.</p>
+          <p>Choose a law-school course, answer one randomly selected question, and receive
+            coaching that follows the task actually asked.</p>
         </div>
-        <span class="dd-exam-beta">A.L.A.C. guided practice</span>
+        <span class="dd-exam-beta">Question-aware coaching</span>
       </header>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
       <div class="dd-subject-layout">
-        <aside class="dd-exam-panel">
-          <p class="dd-exam-panel-title">Choose a subject</p>
-          <label class="sr-only" for="dd-subject-search">Filter subjects</label>
-          <input class="dd-subject-search" id="dd-subject-search" type="search"
-            placeholder="Filter subjects">
-          <label class="sr-only" for="dd-subject-mobile">Select subject</label>
-          <select class="dd-subject-mobile" id="dd-subject-mobile">
-            ${state.catalog.map((item) => `<option value="${escapeHtml(item.subject)}"
-              ${item.subject === selected.subject ? 'selected' : ''}>${escapeHtml(item.subject)}</option>`).join('')}
-          </select>
-          <div class="dd-subject-list">${groupedSubjectButtons(selected)}</div>
+        <aside class="dd-exam-panel dd-subject-panel" data-subject-selector>
+          <p class="dd-exam-panel-title">Choose a course</p>
+          <label class="sr-only" for="dd-subject-search">Search courses</label>
+          <input class="dd-subject-search" id="dd-subject-search" data-subject-search-input
+            type="search" value="${escapeAttribute(state.subjectQuery)}"
+            placeholder="Search course, code, year, or term" autocomplete="off">
+          <p class="dd-subject-result-count" data-subject-result-count role="status"></p>
+          <div class="dd-subject-list" data-subject-tree>${hierarchy}</div>
+          <p class="dd-subject-empty" data-subject-empty hidden>No matching course was found.</p>
         </aside>
-        <main>
-          <header class="dd-selected-heading">
+        <main class="dd-subject-workspace">
+          <button class="dd-exam-button dd-subject-mobile-open" type="button"
+            data-subject-selector-open aria-haspopup="dialog" aria-controls="dd-subject-selector-dialog">
+            Browse Year, Term, and Course
+          </button>
+          <header class="dd-selected-heading" id="dd-selected-course-heading" tabindex="-1">
             <p class="dd-exam-kicker">Year ${Number(selected.yearLevel)} · Term ${Number(selected.term)}</p>
             <h2>${escapeHtml(selected.subject)}</h2>
-            <p>Questions appear in a random, no-repeat cycle. Start immediately with your
-              current setting, or adjust timing before you begin.</p>
+            <p>Questions appear in a random, no-repeat cycle. Start with your current timer,
+              or adjust it before you begin.</p>
           </header>
           <article class="dd-exam-card">
             <div class="dd-exam-card-head">
               <div>
-                <h3>One-question A.L.A.C. practice</h3>
-                <p class="dd-exam-description">Each submission receives its own assessment,
-                  complete suggested answer, controlling legal basis, and available sources.</p>
+                <h3>One-question course practice</h3>
+                <p class="dd-exam-description">Each submission receives a task-aware assessment,
+                  an improved model response, the controlling legal basis, and available sources.</p>
               </div>
-              <span class="dd-exam-pill">${Number(selected.questionCount)} questions</span>
+              <span class="dd-exam-pill">Private practice</span>
             </div>
             <div class="dd-exam-meta">
-              <div><small>Completed</small><strong>${Number(selected.completedCount) || 0}</strong></div>
-              <div><small>Available</small><strong>${Number(selected.questionCount) || 0}</strong></div>
+              <div><small>Your work</small><strong>${Number(selected.completedCount) || 0} submitted</strong></div>
+              <div><small>Selection</small><strong>No-repeat cycle</strong></div>
               <div><small>Timer</small><strong>${escapeHtml(practiceTimerLabel())}</strong></div>
             </div>
             <div class="dd-exam-actions">
               <button class="dd-exam-button is-primary" type="button"
-                data-subject-start="${escapeHtml(selected.subject)}"
+                data-subject-start="${escapeAttribute(selected.subject)}"
                 data-year="${Number(selected.yearLevel)}" data-term="${Number(selected.term)}">
                 Start
               </button>
@@ -424,24 +640,41 @@
                 Timer settings
               </button>
               <button class="dd-exam-button" type="button"
-                data-subject-performance="${escapeHtml(selected.subject)}">Review My Performance</button>
+                data-subject-performance="${escapeAttribute(selected.subject)}">Review My Performance</button>
             </div>
+            <details class="dd-practice-note">
+              <summary>How this practice works</summary>
+              <ol class="dd-syllabus-list">
+                <li>Review the exact task and write in the structure it calls for.</li>
+                <li>Submit one answer for question-aware legal coaching.</li>
+                <li>Study the model response, legal basis, and official sources.</li>
+                <li>Continue to a different random question.</li>
+              </ol>
+            </details>
           </article>
         </main>
-        <aside>
-          <section class="dd-exam-panel">
-            <p class="dd-exam-panel-title">How it works</p>
-            <h3>Practice without repeats.</h3>
-            <ol class="dd-syllabus-list">
-              <li>Start with the Stopwatch, or adjust Timer settings.</li>
-              <li>Write and submit one answer.</li>
-              <li>Study the assessment and suggested answer.</li>
-              <li>Continue to a different random question.</li>
-            </ol>
-          </section>
-        </aside>
       </div>
+      <dialog class="dd-subject-drawer" id="dd-subject-selector-dialog"
+        aria-labelledby="dd-subject-selector-title">
+        <div class="dd-subject-drawer-shell" data-subject-selector>
+          <button class="dd-exam-dialog-close dd-subject-drawer-close" type="button"
+            data-subject-selector-close aria-label="Close course chooser and go back">&times;</button>
+          <header>
+            <p class="dd-exam-kicker">Subject Matter</p>
+            <h2 id="dd-subject-selector-title">Choose a course</h2>
+            <label class="sr-only" for="dd-subject-search-mobile">Search courses</label>
+            <input class="dd-subject-search" id="dd-subject-search-mobile" data-subject-search-input
+              type="search" value="${escapeAttribute(state.subjectQuery)}"
+              placeholder="Search course, code, year, or term" autocomplete="off">
+            <p class="dd-subject-result-count" data-subject-result-count role="status"></p>
+          </header>
+          <div class="dd-subject-list" data-subject-tree>${mobileHierarchy}</div>
+          <p class="dd-subject-empty" data-subject-empty hidden>No matching course was found.</p>
+          <footer><button class="dd-exam-button" type="button" data-subject-selector-close>Back</button></footer>
+        </div>
+      </dialog>
     </div></div>`;
+    bindSubjectCatalogControls();
   }
 
   function curatedBarCards() {
@@ -833,6 +1066,103 @@
     };
   }
 
+  const SUBJECT_QUESTION_TYPES = new Set([
+    'problem', 'definition', 'explanation', 'enumeration', 'distinction',
+    'procedure', 'practical', 'doctrine', 'mixed', 'other',
+  ]);
+
+  function inferSubjectQuestionType(question = {}) {
+    const explicit = String(
+      question.questionType
+      || question.rubricBreakdown?.questionType
+      || question.assessment?.rubricBreakdown?.questionType
+      || '',
+    ).trim().toLowerCase();
+    if (SUBJECT_QUESTION_TYPES.has(explicit)) return explicit;
+    const prompt = String(question.prompt || question.question || '').trim();
+    const lower = prompt.toLowerCase();
+    const subparts = prompt.match(/(?:^|\n)\s*\(?[a-d]\)?[.)]\s+/gim) || [];
+    if (subparts.length >= 2) return 'mixed';
+    if (/^\s*(?:distinguish|differentiate|compare|contrast)\b/i.test(prompt)
+      || /what (?:is|are) the differences?\b|how\s+\w+[\s\S]{0,100}\bdiffer\b/i.test(prompt)) {
+      return 'distinction';
+    }
+    if (/^\s*(?:enumerate|list|name)\b/i.test(prompt)
+      || /what (?:are|is) the (?:[a-z-]+\s+){0,3}(?:elements?|requisites?|requirements?|grounds?|instances?|exceptions?|kinds?|types?|classes?|modes?|effects?|rights?|duties?)\b/i.test(prompt)) {
+      return 'enumeration';
+    }
+    if (/^\s*(?:define|what is meant by|give the meaning of|what is the legal meaning of)\b/i.test(prompt)) {
+      return 'definition';
+    }
+    if (/\b(?:proper procedure|procedural steps?|remedy|motion|petition|appeal|filed?|filing|period to|how should|what should .* do)\b/i.test(lower)) {
+      return 'procedure';
+    }
+    if (/^\s*(?:state|explain|discuss|identify)\s+(?:the\s+)?(?:controlling\s+)?doctrine\b/i.test(prompt)
+      || /\bwhat doctrine\b|\bdoctrinal rule\b/i.test(lower)) {
+      return 'doctrine';
+    }
+    if (/^\s*(?:draft|prepare|write|formulate)\b/i.test(prompt)) return 'practical';
+    if (/^\s*(?:explain|discuss|state|describe|identify)\b/i.test(prompt)) return 'explanation';
+    return 'problem';
+  }
+
+  function subjectWritingGuide(question = {}) {
+    const type = inferSubjectQuestionType(question);
+    const guides = {
+      problem: {
+        label: 'Fact-based legal problem',
+        focus: ['Direct position', 'Governing rule', 'Material facts', 'Clear result'],
+        placeholder: 'Answer the precise legal issue. State the governing rule, apply the material facts, and give a clear result. Use the structure that best fits your analysis.',
+      },
+      definition: {
+        label: 'Definition',
+        focus: ['Precise meaning', 'Governing authority', 'Elements or scope', 'Qualifications'],
+        placeholder: 'Give the precise legal definition requested. Explain its essential elements, scope, and material qualifications without inventing facts.',
+      },
+      explanation: {
+        label: 'Legal explanation',
+        focus: ['Core proposition', 'Governing authority', 'Complete explanation', 'Limits or exceptions'],
+        placeholder: 'Explain the requested concept completely. State the controlling rule or doctrine, develop the reasoning, and address material limits or exceptions.',
+      },
+      enumeration: {
+        label: 'Enumeration',
+        focus: ['Complete list', 'Governing source', 'Brief explanation', 'Qualifications'],
+        placeholder: 'Provide the complete enumeration requested. Identify the governing source and briefly explain each material item or qualification.',
+      },
+      distinction: {
+        label: 'Distinction',
+        focus: ['Point of comparison', 'First concept', 'Second concept', 'Legal effect'],
+        placeholder: 'Distinguish the concepts using the legally relevant points of comparison, their governing rules, and the practical legal effect of each difference.',
+      },
+      procedure: {
+        label: 'Procedure or remedy',
+        focus: ['Proper remedy', 'Governing rule', 'Required steps', 'Timing and effect'],
+        placeholder: 'Identify the proper procedure or remedy. Explain the controlling rule, required steps, timing, and legal effect.',
+      },
+      practical: {
+        label: 'Practical legal task',
+        focus: ['Requested action', 'Legal requirements', 'Tailored execution', 'Safeguards'],
+        placeholder: 'Perform the requested practical task. Follow the governing legal requirements and tailor the response to the circumstances stated.',
+      },
+      doctrine: {
+        label: 'Doctrine',
+        focus: ['Doctrine', 'Authority', 'Scope and operation', 'Limits or exceptions'],
+        placeholder: 'State the doctrine accurately, identify its authority, and explain its scope, operation, and material limits or exceptions.',
+      },
+      mixed: {
+        label: 'Multi-part question',
+        focus: ['Every subpart', 'Governing rules', 'Complete analysis', 'Clear dispositions'],
+        placeholder: 'Answer every subpart separately and completely. Use the appropriate rule and analysis for each task, then give a clear disposition where required.',
+      },
+      other: {
+        label: 'Legal response',
+        focus: ['Precise task', 'Governing law', 'Complete reasoning', 'Clear response'],
+        placeholder: 'Respond directly to the task asked. State the governing law and develop a complete, clear legal explanation.',
+      },
+    };
+    return { type, ...(guides[type] || guides.other) };
+  }
+
   function renderRoom() {
     const root = pageRoot(state.active?.examination?.track || state.track);
     if (!root || !state.active) return;
@@ -843,7 +1173,9 @@
       : state.active.attempt.timerMode;
     const singleSubject = state.active.examination.track === 'per_subject'
       && state.active.questions.length === 1;
+    const subjectPractice = state.active.examination.track === 'per_subject';
     const richWriting = state.active.examination.track === 'bar_feels';
+    const writingGuide = subjectPractice ? subjectWritingGuide(question) : null;
     const safeAnswerHtml = richWriting
       ? sanitizeRichHtml(question.answerHtml || richHtmlFromText(question.answerText || ''))
       : '';
@@ -887,24 +1219,22 @@
             <button class="dd-exam-button" type="button" data-use-local-draft>Use local draft</button>
           </div>` : ''}
           <section class="dd-answer-card">
-            <div class="dd-alac-guide">
+            ${subjectPractice ? `<div class="dd-writing-guide" aria-label="Suggested focus for this ${escapeAttribute(writingGuide.label.toLowerCase())}">
+              <strong>${escapeHtml(writingGuide.label)}</strong>
+              <span>Suggested focus — adapt it to the question:</span>
+              ${writingGuide.focus.map((item) => `<span>${escapeHtml(item)}</span>`).join('')}
+            </div>` : `<div class="dd-alac-guide">
               <span>I. Answer</span><span>II. Legal Basis</span>
               <span>III. Application</span><span>IV. Conclusion</span>
-            </div>
-            <label class="sr-only" for="dd-answer-editor">Your ALAC answer</label>
+            </div>`}
+            <label class="sr-only" for="dd-answer-editor">${subjectPractice ? 'Your response' : 'Your ALAC answer'}</label>
             ${richWriting ? `${richToolbar()}
             <div class="dd-answer-editor dd-answer-rich-editor" id="dd-answer-rich-editor"
               contenteditable="true" role="textbox" aria-multiline="true"
               aria-label="Your ALAC answer" data-placeholder="I. ANSWER — State your direct answer.&#10;&#10;II. LEGAL BASIS — Cite the governing provision or doctrine.&#10;&#10;III. APPLICATION — Apply the exact facts to the law.&#10;&#10;IV. CONCLUSION — Reaffirm your position.">${safeAnswerHtml}</div>
             <textarea id="dd-answer-editor" class="dd-answer-editor-backup" maxlength="20000"
               aria-hidden="true" tabindex="-1">${escapeHtml(question.answerText || '')}</textarea>` : `<textarea class="dd-answer-editor" id="dd-answer-editor" maxlength="20000"
-              placeholder="I. ANSWER — State your direct answer.
-
-II. LEGAL BASIS — Cite the governing provision or doctrine.
-
-III. APPLICATION — Apply the exact facts to the law.
-
-IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || '')}</textarea>`}
+              placeholder="${escapeAttribute(writingGuide.placeholder)}">${escapeHtml(question.answerText || '')}</textarea>`}
             <footer class="dd-answer-footer">
               <span id="dd-word-count">${wordCount(question.answerText)} words</span>
               <span class="dd-save-state is-saved" id="dd-save-state">Server revision ${Number(question.revision) || 0}</span>
@@ -1307,7 +1637,7 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       clearRecovery();
       state.active.attempt.status = receipt.status;
       state.active.attempt.submittedAt = receipt.submittedAt;
-      button.textContent = 'Assessing your A.L.A.C. answer…';
+      button.textContent = 'Assessing your response…';
       const maximumBatches = Math.max(2, state.active.questions.length + 1);
       let result = null;
       let transientRetries = 0;
@@ -1509,26 +1839,74 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       <small>${escapeHtml(source.authority)} · External source</small></a>`).join('')}</div>`;
   }
 
-  function assessmentBreakdown(breakdown) {
+  function assessmentBreakdown(breakdown, options = {}) {
+    const rubricFields = new Set(['responsiveness', 'legalBasis', 'application', 'conclusion']);
     const entries = breakdown && typeof breakdown === 'object' && !Array.isArray(breakdown)
-      ? Object.entries(breakdown).filter(([, value]) => Number.isFinite(Number(value)))
+      ? Object.entries(breakdown).filter(([key, value]) => (
+        rubricFields.has(key) && Number.isFinite(Number(value))
+      ))
       : [];
     if (!entries.length) return '';
     return `<section class="assessment-section"><h4>Point-by-point comparison</h4>
       <div class="dd-assessment-breakdown">${entries.map(([label, value]) => `<div>
-        <span>${escapeHtml(label.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()))}</span>
+        <span>${escapeHtml(
+    options.track === 'per_subject'
+      && label === 'application'
+      && breakdown.applicationRequired === false
+      ? 'Task performance'
+      : label.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+  )}</span>
         <strong>${Number(value).toFixed(1)}</strong></div>`).join('')}</div></section>`;
+  }
+
+  function adaptiveModelAnswerSections(assessment, result = {}) {
+    const presentation = assessment?.modelAnswerSections;
+    const suppliedSections = Array.isArray(presentation)
+      ? presentation
+      : Array.isArray(presentation?.sections)
+        ? presentation.sections
+        : [];
+    const cleanSupplied = suppliedSections.map((section) => ({
+      label: String(section?.label || '').trim(),
+      text: String(section?.text || '').trim(),
+    })).filter((section) => section.label && section.text).slice(0, 6);
+    if (cleanSupplied.length) return cleanSupplied;
+
+    const alac = assessment?.modelAnswerALAC || {};
+    const questionType = presentation?.questionType
+      || assessment?.rubricBreakdown?.questionType
+      || inferSubjectQuestionType({ prompt: result.prompt || '', questionType: result.questionType });
+    const labels = {
+      problem: ['Direct answer', 'Governing law', 'Application to the facts', 'Result'],
+      definition: ['Definition', 'Governing authority', 'Elements and scope', 'Material qualification'],
+      explanation: ['Core response', 'Governing authority', 'Complete explanation', 'Closing synthesis'],
+      enumeration: ['Direct response', 'Governing source', 'Required items', 'Qualification or effect'],
+      distinction: ['Direct distinction', 'Governing bases', 'Comparative analysis', 'Legal effect'],
+      procedure: ['Proper procedure or remedy', 'Governing rule', 'Required sequence', 'Result'],
+      practical: ['Requested action', 'Governing requirements', 'Tailored execution', 'Safeguard or result'],
+      doctrine: ['Doctrine', 'Source and rule', 'Scope and operation', 'Qualification'],
+      mixed: ['Responses to each task', 'Governing rules', 'Integrated analysis', 'Clear dispositions'],
+      other: ['Direct response', 'Governing law', 'Complete reasoning', 'Result'],
+    }[questionType] || ['Direct response', 'Governing law', 'Complete reasoning', 'Result'];
+    return [alac.answer, alac.legalBasis, alac.application, alac.conclusion]
+      .map((text, index) => ({ label: labels[index], text: String(text || '').trim() }))
+      .filter((section) => section.text);
   }
 
   function assessmentCard(result, options = {}) {
     const assessment = result.aiAssessment || result.assessment || {};
     const alac = assessment.modelAnswerALAC || {};
+    const track = options.track || result.track || state.active?.examination?.track || state.track;
+    const isSubjectMatter = track === 'per_subject';
     const score = result.aiScore ?? result.score;
     const prompt = result.prompt || options.prompt || '';
     const suggestedAnswer = result.modelAnswer || result.suggestedAnswer || '';
     const sources = result.sources || assessment.sources || [];
     const questionId = result.questionId || result.id || '';
     const hasAlac = ['answer', 'legalBasis', 'application', 'conclusion'].some((key) => alac[key]);
+    const adaptiveSections = isSubjectMatter
+      ? adaptiveModelAnswerSections(assessment, { ...result, prompt })
+      : [];
     const sourceWarning = assessment.reviewRequired === true || assessment.sourceStatus === 'conflict'
       ? '<div class="assessment-warning"><strong>Review required.</strong> Verify the cited primary authorities before relying on this assessment.</div>'
       : '';
@@ -1550,13 +1928,16 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
         <p class="assessment-rationale">${escapeHtml(assessment.rationale || 'The assessment record does not include a written rationale.')}</p>
         <section class="assessment-section"><h4>Governing rule and authority</h4>
           <div class="legal-explanation">${escapeHtml(assessment.legalExplanation || result.legalBasis || 'Review the controlling provision and doctrine identified in the released answer and legal sources.')}</div></section>
-        ${assessmentBreakdown(assessment.rubricBreakdown)}
+        ${assessmentBreakdown(assessment.rubricBreakdown, { track })}
         <div class="assessment-grid">
           <section class="assessment-panel strengths"><h4>Strengths</h4>${assessmentList(assessment.strengths, 'No specific strength was identified.')}</section>
           <section class="assessment-panel errors"><h4>Errors or missing points</h4>${assessmentList(assessment.errors, 'No material error was identified.')}</section>
           <section class="assessment-panel coaching"><h4>Prioritized improvements</h4>${assessmentList(assessment.improvements, 'Keep the answer direct, legally grounded, and fact-specific.')}</section>
         </div>
-        ${hasAlac ? `<section class="assessment-section"><h4>Improved Answer — ALAC Method</h4>
+        ${isSubjectMatter && adaptiveSections.length ? `<section class="assessment-section"><h4>Improved model response</h4>
+          <div class="alac-model dd-adaptive-model">${adaptiveSections.map((section) => `<div class="alac-part">
+            <b>${escapeHtml(section.label)}</b><p>${escapeHtml(section.text)}</p></div>`).join('')}</div></section>`
+        : hasAlac ? `<section class="assessment-section"><h4>Improved Answer — ALAC Method</h4>
           <div class="alac-model"><div class="alac-part"><b>ANSWER</b><p>${escapeHtml(alac.answer || '')}</p></div>
             <div class="alac-part"><b>LEGAL BASIS</b><p>${escapeHtml(alac.legalBasis || '')}</p></div>
             <div class="alac-part"><b>APPLICATION</b><p>${escapeHtml(alac.application || '')}</p></div>
@@ -1579,9 +1960,10 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
   }
 
   async function openVerdict(attemptId) {
+    const track = state.active?.examination?.track || state.track;
     state.screen = 'verdict';
-    showTrackPage(state.active?.examination?.track || state.track);
-    const root = pageRoot(state.active?.examination?.track || state.track);
+    showTrackPage(track);
+    const root = pageRoot(track);
     root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
       <p class="dd-exam-kicker">The Verdict</p><h1>Loading individual assessments…</h1>
     </section></div>`;
@@ -1594,13 +1976,13 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       });
       root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
         <p class="dd-exam-kicker">The Verdict / Multi-Question Examination</p>
-        <h1>Individual ALAC assessments.</h1>
+        <h1>${track === 'per_subject' ? 'Individual question assessments.' : 'Individual ALAC assessments.'}</h1>
         <p class="dd-exam-description">No cumulative percentage, class rank, pass/fail claim,
           or unsupported average is calculated.</p>
         ${verdict.results.map((result) => `<div class="dd-verdict-question">
           <p class="dd-question-label">Question ${Number(result.ordinal)}</p>
           ${result.humanScore != null ? `<div class="dd-score-five">Human ${Number(result.humanScore).toFixed(1)} / 5.0</div>` : ''}
-          ${assessmentCard(result)}
+          ${assessmentCard(result, { track })}
         </div>`).join('')}
         <div class="dd-exam-actions" style="margin-top:24px">
           ${state.active?.examination?.track === 'per_subject' ? `
@@ -1644,7 +2026,7 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
         </div>
         ${attempts.length ? attempts.map((item) => `<article class="dd-verdict-question">
           <p class="dd-question-label">${escapeHtml(item.topic || subject)} · ${escapeHtml(formatDate(item.submittedAt))}</p>
-          ${item.assessment ? assessmentCard(item, { answerText: item.answerText })
+          ${item.assessment ? assessmentCard(item, { answerText: item.answerText, track: 'per_subject' })
             : `<p>Assessment pending.</p><h3>Your answer</h3><div class="dd-model-answer">${escapeHtml(item.answerText || '')}</div>`}
         </article>`).join('') : '<p class="dd-exam-description">Submit your first answer to begin this private performance record.</p>'}
         <div class="dd-exam-actions" style="margin-top:24px">
@@ -1931,10 +2313,18 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
   }
 
   function handleClick(event) {
+    const subjectSelectorOpen = event.target.closest('[data-subject-selector-open]');
+    if (subjectSelectorOpen) {
+      openSubjectSelector(subjectSelectorOpen);
+      return;
+    }
+    if (event.target.closest('[data-subject-selector-close]')) {
+      closeSubjectSelector();
+      return;
+    }
     const subject = event.target.closest('[data-exam-subject]');
     if (subject) {
-      state.selectedSubject = subject.dataset.examSubject;
-      renderPerSubject();
+      chooseSubject(subject.dataset.examSubject);
       return;
     }
     const subjectStart = event.target.closest('[data-subject-start]');
@@ -2032,19 +2422,11 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     }
   }
 
-  function handleChange(event) {
-    if (event.target.id === 'dd-subject-mobile') {
-      state.selectedSubject = event.target.value;
-      renderPerSubject();
-    }
-  }
+  function handleChange() {}
 
   function handleInput(event) {
-    if (event.target.id !== 'dd-subject-search') return;
-    const query = event.target.value.trim().toLowerCase();
-    document.querySelectorAll('.dd-subject-button').forEach((button) => {
-      button.hidden = !button.textContent.toLowerCase().includes(query);
-    });
+    if (!event.target.matches('[data-subject-search-input]')) return;
+    applySubjectFilter(event.target.value);
   }
 
   function handleSubmit(event) {
@@ -2057,6 +2439,7 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
   function initialize() {
     if (state.initialized) return;
     state.initialized = true;
+    readSubjectCatalogState();
     try {
       const savedMode = localStorage.getItem('duediligence.subject-matter.timer-mode.v1');
       if (PRACTICE_TIMER_MODES.some((item) => item.value === savedMode)) {
@@ -2067,6 +2450,12 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     document.addEventListener('change', handleChange);
     document.addEventListener('input', handleInput);
     document.addEventListener('submit', handleSubmit);
+    global.addEventListener('pagehide', persistSubjectCatalogState, { capture: true });
+    global.addEventListener('scroll', () => {
+      if (state.track === 'per_subject' && state.screen === 'catalog') {
+        state.subjectPageScroll = Math.max(0, global.scrollY || 0);
+      }
+    }, { passive: true });
     global.addEventListener('beforeunload', (event) => {
       if (!state.active || !['room', 'review'].includes(state.screen)) return;
       saveRecovery();

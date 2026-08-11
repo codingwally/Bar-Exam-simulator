@@ -67,16 +67,17 @@ assert.doesNotMatch(index, /PH Bar Essay Trainer|Advanced Pro Repository|PH Bar 
 assert.match(index, /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/);
 assert.match(index, /<html lang="en-PH">/);
 assert.match(index, /id="private-beta-landing"/);
-assert.match(
-  index,
-  /A platform to express<br>\s*your perspective, sharpen<br>\s*your legal reasoning, and<br>\s*strengthen your performance<br>\s*throughout law school\./,
-);
-assert.match(index, /Practice the reasoning\. Refine the writing\./);
+assert.match(index, /<h2 id="pb-pillars-title">Choose how you want to prepare\.<\/h2>/);
+assert.match(index, /class="pb-pillar-grid"[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room/);
+assert.doesNotMatch(index, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
+assert.doesNotMatch(index, /A platform to express|Practice the reasoning\. Refine the writing\.|Explore Due Diligence|Learn How It Works|Pause Motion/i);
 assert.match(index, /id="authenticated-app-shell" hidden inert/);
 assert.match(index, /loadProtectedQuestion/);
 assert.match(index, /Authentication is required before an examination question is displayed/);
 assert.match(examinations, /data-exam-setup=[\s\S]*Review &amp; Begin/);
 assert.match(examinations, /const isBarFeels = state\.setup\.track === 'bar_feels';[\s\S]*\? 'strict'/);
+assert.match(examinations, /function subjectWritingGuide\(/);
+assert.match(examinations, /Improved model response/);
 assert.doesNotMatch(examinations, /id="dd-upload-timer"/);
 assert.match(robots, /Disallow: \/admin\//);
 assert.match(robots, /Sitemap: https:\/\/duediligence\.ph\/sitemap\.xml/);

@@ -32,8 +32,9 @@ for (const label of [
 
 assert.match(
   publicLanding,
-  /One platform, four focused chambers[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room/,
+  /Choose how you want to prepare\.[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room/,
 );
+assert.doesNotMatch(publicLanding, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
 assert.doesNotMatch(publicLanding, /Early Access Beta|Enter the Beta|Beta Access Active/i);
 assert.match(
   index,

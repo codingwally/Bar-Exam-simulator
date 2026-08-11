@@ -7,7 +7,10 @@ import {
   applyDeterministicScoreCap,
   assessmentPolicy,
   buildExaminerPrompt,
+  curatedModelAnswerALAC,
   inferQuestionType,
+  modelAnswerQualityIssues,
+  modelAnswerSectionsForQuestion,
   usesBarAlignedRubric,
   validateExaminerResult,
 } from './examiner-core.mjs';
@@ -190,6 +193,91 @@ test('common distinction and enumeration phrasing does not invent factual applic
   assert.equal(applicationRequiredForQuestion(enumeration), false);
 });
 
+test('procedure, doctrine, and mixed tasks are classified without forcing invented facts', () => {
+  const procedure = { question: 'What is the proper procedure for perfecting an appeal from a final judgment?' };
+  const doctrine = { question: 'Explain the doctrine of operative fact and state its limits.' };
+  const mixed = {
+    question: 'Juan filed a petition after the statutory period and the court dismissed it.\n(A) Was the dismissal proper?\n(B) What remedy, if any, remains available?',
+  };
+  assert.equal(inferQuestionType(procedure), 'procedure');
+  assert.equal(applicationRequiredForQuestion(procedure), false);
+  assert.equal(inferQuestionType(doctrine), 'doctrine');
+  assert.equal(applicationRequiredForQuestion(doctrine), false);
+  assert.equal(inferQuestionType(mixed), 'mixed');
+  assert.equal(applicationRequiredForQuestion(mixed), true);
+});
+
+test('non-fact model-answer quality evaluates the requested task instead of fictional facts', () => {
+  const enumerationContext = {
+    question: 'Enumerate and briefly explain the essential requisites of a valid contract.',
+    suggestedAnswer: 'The essential requisites are consent of the contracting parties, an object certain which is the subject matter, and the cause of the obligation established.',
+    legalBasis: 'Article 1318 of the Civil Code requires consent, object certain, and cause as the essential requisites of a contract.',
+    verified: true,
+  };
+  const enumerationAssessment = assessment(4.6, {
+    modelAnswerALAC: {
+      answer: 'The essential requisites of a valid contract are consent, object certain, and cause.',
+      legalBasis: 'Article 1318 of the Civil Code provides that no contract exists unless consent, a certain object, and the cause of the obligation concur.',
+      application: 'Consent is the parties’ meeting of minds; the object must be determinate or determinable; and cause is the essential reason each party assumes the obligation.',
+      conclusion: 'Therefore, all three requisites must concur for a valid contract.',
+    },
+    rubricBreakdown: {
+      responsiveness: 5,
+      legalBasis: 4.5,
+      application: 4.5,
+      conclusion: 4.5,
+      questionType: 'enumeration',
+      applicationRequired: false,
+    },
+  });
+  assert.deepEqual(modelAnswerQualityIssues(enumerationAssessment, enumerationContext), []);
+  const presentation = modelAnswerSectionsForQuestion(enumerationAssessment, enumerationContext);
+  assert.equal(presentation.questionType, 'enumeration');
+  assert.equal(presentation.applicationRequired, false);
+  assert.deepEqual(
+    presentation.sections.map((section) => section.label),
+    ['Direct response', 'Governing source', 'Required items', 'Qualification or effect'],
+  );
+});
+
+test('approved stored ALAC can safely restore coaching sections after provider repair fails', () => {
+  const storedContext = {
+    question: 'Mia is 17 years old. Her parents consent to her marriage. Is it valid?',
+    suggestedAnswer: [
+      'Answer: No. The marriage is void from the beginning.',
+      'Legal Basis: Articles 5 and 35(1) of the Family Code require both contracting parties to be at least 18 years old and declare a marriage involving a party below 18 void from the beginning, even with parental consent.',
+      'Application: Mia was only 17 years old when the marriage was celebrated, while legal capacity requires each contracting party to be at least 18. Her parents’ consent cannot cure that absence of legal capacity or make the underage marriage valid.',
+      'Conclusion: The marriage is void ab initio.',
+    ].join('\n\n'),
+    legalBasis: 'Family Code, Articles 5 and 35(1), require both contracting parties to be at least 18 years old and make an underage marriage void from the beginning.',
+    verified: true,
+  };
+  const restored = curatedModelAnswerALAC(storedContext);
+  assert.ok(restored);
+  assert.equal(restored.answer, 'No. The marriage is void from the beginning.');
+  assert.match(restored.legalBasis, /Articles 5 and 35\(1\)/);
+  assert.match(restored.application, /Mia was only 17/);
+  assert.equal(restored.conclusion, 'Therefore, the marriage is void ab initio.');
+  assert.deepEqual(modelAnswerQualityIssues({ modelAnswerALAC: restored }, storedContext), []);
+});
+
+test('approved concise stored ALAC remains available as a fail-safe coaching answer', () => {
+  const restored = curatedModelAnswerALAC({
+    suggestedAnswer: [
+      'Answer: No.',
+      'Legal Basis: Article 213 of the Family Code applies.',
+      'Application: No compelling reason was proved.',
+      'Conclusion: Custody remains with the mother.',
+    ].join('\n\n'),
+  });
+  assert.deepEqual(restored, {
+    answer: 'No.',
+    legalBasis: 'Article 213 of the Family Code applies.',
+    application: 'No compelling reason was proved.',
+    conclusion: 'Therefore, custody remains with the mother.',
+  });
+});
+
 test('an expressly test-only nonexistent authority is deterministically treated as confirmed fabrication', () => {
   const answer = 'No. Double insurance requires the same insured person, subject, interest, and risk. The same rule was supposedly announced in the explicitly test-only and nonexistent case of Santos v. Omega Assurance, G.R. No. TEST-ONLY-000. Here, the insured interests differ. Therefore, there is no double insurance.';
   const result = applyDeterministicScoreCap(assessment(4.5, {
@@ -219,6 +307,51 @@ test('an omitted outcome-determinative majority requirement triggers the 3.5 cen
   });
   assert.equal(result.score, 3.5);
   assert.equal(result.appliedScoreCeiling.code, 'major_central_gap');
+});
+
+test('a curated majority-of-all-members requirement cannot be over-scored when provider wording mentions only citation omissions', () => {
+  const answer = [
+    'Answer: No. The proclamation is unconstitutional.',
+    'Legal Basis: The Constitution assigns the power to grant tax exemptions to Congress, not to the President acting alone.',
+    'Application: Here, the President rather than Congress granted the exemptions. That substitution of executive action for legislation is insufficient.',
+    'Conclusion: Therefore, the proclamation cannot validly create the tax exemptions.',
+  ].join('\n\n');
+  const result = applyDeterministicScoreCap(assessment(4.5, {
+    rationale: 'The core legal reasoning is sound, but the specific constitutional standard is omitted.',
+    errors: [
+      'Omits specific reference to Article VI, Section 28(4) of the 1987 Constitution.',
+      'Omits citation to controlling jurisprudence.',
+    ],
+    rubricBreakdown: {
+      responsiveness: 5,
+      legalBasis: 4,
+      application: 4.5,
+      conclusion: 5,
+      questionType: 'problem',
+      applicationRequired: true,
+    },
+  }), answer, {
+    question: 'May the President grant tax exemptions through a proclamation supported only by a congressional resolution?',
+    suggestedAnswer: 'No. Article VI, Section 28(4) requires the concurrence of a majority of all members of Congress for a law granting a tax exemption. A resolution of support is not such a law.',
+    legalBasis: '1987 Constitution, Article VI, Section 28(4).',
+    verified: true,
+  });
+  assert.equal(result.score, 3.5);
+  assert.equal(result.appliedScoreCeiling.code, 'major_central_gap');
+});
+
+test('stating the material voting threshold preserves citation-neutral scoring', () => {
+  const answer = 'No. A tax exemption requires the concurrence of a majority of all members of Congress. A presidential proclamation supported only by a resolution is not such a law, so the exemptions are unconstitutional.';
+  const result = applyDeterministicScoreCap(assessment(4.5, {
+    errors: ['Omits specific reference to Article VI, Section 28(4) of the 1987 Constitution.'],
+  }), answer, {
+    question: 'May the President grant tax exemptions through a proclamation supported only by a congressional resolution?',
+    suggestedAnswer: 'No. Article VI, Section 28(4) requires the concurrence of a majority of all members of Congress for a law granting a tax exemption. A resolution of support is not such a law.',
+    legalBasis: '1987 Constitution, Article VI, Section 28(4).',
+    verified: true,
+  });
+  assert.equal(result.score, 4.5);
+  assert.equal(result.appliedScoreCeiling, null);
 });
 
 test('a correct conclusion resting solely on a legally insufficient central rule is capped at 1.5', () => {
@@ -282,6 +415,32 @@ test('an excessively broad legal basis stated as the sole rule receives the mate
     errors: [
       "Relies on 'bad intent' alone as the legal basis without mentioning Article 4(2) of the Revised Penal Code or inherent impossibility.",
       'Fails to analyze the factual impossibility arising from the zero balance in the electronic wallet.',
+    ],
+    rubricBreakdown: {
+      responsiveness: 5,
+      legalBasis: 2,
+      application: 2.5,
+      conclusion: 4,
+      questionType: 'problem',
+      applicationRequired: true,
+    },
+  }), answer, {
+    question: 'Is Harry liable for an impossible crime after opening an empty electronic wallet intending to steal?',
+    suggestedAnswer: 'Yes. The intended offense against property failed because accomplishment was inherently impossible, and the means were inadequate or ineffectual.',
+    legalBasis: 'Revised Penal Code, Article 4(2).',
+    verified: true,
+  });
+  assert.equal(result.score, 1.5);
+  assert.equal(result.appliedScoreCeiling.code, 'materially_wrong_rule');
+});
+
+test('provider wording for extremely broad bad-intent reasoning receives the same stable ceiling', () => {
+  const answer = 'Yes. A person with bad intent is criminally liable even when no property is taken. Harry wanted to steal money and opened the wallet, so bad intent alone makes him liable for an impossible crime.';
+  const result = applyDeterministicScoreCap(assessment(3, {
+    rationale: 'The student correctly concluded that Harry is liable, but the legal basis is extremely broad and misses Article 4(2) of the Revised Penal Code.',
+    errors: [
+      "Based liability solely on 'bad intent' rather than factual impossibility of accomplishment.",
+      'Failed to cite or explain Article 4(2) of the Revised Penal Code governing impossible crimes.',
     ],
     rubricBreakdown: {
       responsiveness: 5,

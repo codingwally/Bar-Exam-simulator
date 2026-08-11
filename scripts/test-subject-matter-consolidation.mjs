@@ -6,7 +6,10 @@ import {
   SUBJECT_MATTER_PLACEMENTS,
 } from '../worker/subject-matter-placement-manifest.mjs';
 
-const [migration, transportMigration, preflight, worker, releaseCore, examinationsUi] = await Promise.all([
+const [
+  migration, transportMigration, preflight, worker, releaseCore, examinationsUi,
+  examinerCore, examinationsCore,
+] = await Promise.all([
   readFile(new URL(
     '../supabase/migrations/20260811004000_subject_matter_two_bank_consolidation.sql',
     import.meta.url,
@@ -22,6 +25,8 @@ const [migration, transportMigration, preflight, worker, releaseCore, examinatio
   readFile(new URL('../worker/index.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../worker/release-content-core.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../assets/examinations.js', import.meta.url), 'utf8'),
+  readFile(new URL('../worker/examiner-core.mjs', import.meta.url), 'utf8'),
+  readFile(new URL('../worker/examinations-core.mjs', import.meta.url), 'utf8'),
 ]);
 
 assert.equal(SUBJECT_MATTER_COURSES.length, 42);
@@ -58,11 +63,37 @@ assert.match(worker, /await stageParts\('placements', subjectPlacementManifest\.
 assert.match(releaseCore, /range=A1%3AU1623/);
 assert.match(releaseCore, /buildSubjectMatterPlacements/);
 assert.match(examinationsUi, /function assessmentCard\(result, options = \{\}\)/);
+assert.match(examinationsUi, /function subjectHierarchyMarkup\(/);
+assert.match(examinationsUi, /<details class="dd-subject-year"/);
+assert.match(examinationsUi, /<details class="dd-subject-term"/);
+assert.match(examinationsUi, /aria-expanded=/);
+assert.match(examinationsUi, /aria-controls=/);
+assert.match(examinationsUi, /data-subject-search-input/);
+assert.match(examinationsUi, /SUBJECT_CATALOG_STATE_KEY/);
+assert.match(examinationsUi, /id="dd-subject-selector-dialog"/);
+assert.match(examinationsUi, /data-subject-selector-close aria-label="Close course chooser and go back"/);
+assert.match(examinationsUi, /function subjectWritingGuide\(/);
+assert.match(examinationsUi, /Improved model response/);
 assert.match(examinationsUi, /Improved Answer — ALAC Method/);
 assert.match(examinationsUi, /data-assessment-rating="up"/);
 assert.match(examinationsUi, /data-suggest-exam-correction/);
-assert.match(examinationsUi, /assessmentCard\(result\)/);
-assert.match(examinationsUi, /assessmentCard\(item, \{ answerText: item\.answerText \}\)/);
+assert.match(examinationsUi, /assessmentCard\(result, \{ track \}\)/);
+assert.match(examinationsUi, /assessmentCard\(item, \{ answerText: item\.answerText, track: 'per_subject' \}\)/);
+assert.match(examinationsUi, /Individual question assessments\./);
+assert.match(examinationsUi, /Individual ALAC assessments\./);
+assert.match(examinerCore, /modelAnswerSectionsForQuestion/);
+assert.match(examinerCore, /'procedure'[\s\S]*'doctrine'[\s\S]*'mixed'/);
+assert.match(worker, /sanitizeSubjectMatterCatalog\(result\)/);
+assert.match(worker, /sanitizeSubjectMatterSelection\(result\)/);
+assert.match(examinationsCore, /SUBJECT_MATTER_INVENTORY_KEYS/);
+const subjectSurface = examinationsUi.slice(
+  examinationsUi.indexOf('function renderPerSubject'),
+  examinationsUi.indexOf('function curatedBarCards'),
+);
+assert.doesNotMatch(subjectSurface, /questionCount|availableCount|totalQuestions|remainingQuestions|bankSize/);
+assert.doesNotMatch(subjectSurface, /<select/);
+assert.doesNotMatch(subjectSurface, /items\.sort\(/,
+  'Subject Matter must preserve the server-approved course-code ordering.');
 assert.doesNotMatch(examinationsUi, /0\.5 increments only|Use intermediate half-points/);
 
 assert.match(preflight, /begin transaction read only/);

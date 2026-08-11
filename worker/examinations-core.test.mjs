@@ -11,6 +11,8 @@ import {
   normalizeUploadRequest,
   normalizedScore,
   safeUploadFileName,
+  sanitizeSubjectMatterCatalog,
+  sanitizeSubjectMatterSelection,
   validateUploadSignature,
 } from './examinations-core.mjs';
 
@@ -70,6 +72,38 @@ test('query operations normalize catalog and private assignment tokens', () => {
     operation: 'subject_performance',
     subject: 'Criminal Law I',
     limit: 25,
+  });
+});
+
+test('Subject Matter responses remove confidential inventory counts recursively', () => {
+  const catalog = {
+    items: [{
+      subject: 'Criminal Law I',
+      courseCode: 'CRIMLAW1',
+      completedCount: 3,
+      questionCount: 55,
+      nested: { bankSize: 55, totalQuestions: 55 },
+    }],
+    placementCount: 99,
+  };
+  const sanitizedCatalog = sanitizeSubjectMatterCatalog(catalog);
+  assert.equal(sanitizedCatalog.items[0].subject, 'Criminal Law I');
+  assert.equal(sanitizedCatalog.items[0].completedCount, 3);
+  assert.equal('questionCount' in sanitizedCatalog.items[0], false);
+  assert.deepEqual(sanitizedCatalog.items[0].nested, {});
+  assert.equal('placementCount' in sanitizedCatalog, false);
+  assert.equal(catalog.items[0].questionCount, 55, 'sanitizing must not mutate the RPC result');
+
+  const selection = sanitizeSubjectMatterSelection({
+    exhausted: false,
+    completedCount: 3,
+    remainingQuestions: 52,
+    setup: { versionId: VERSION_ID, questionCount: 1, inventoryCount: 55 },
+  });
+  assert.deepEqual(selection, {
+    exhausted: false,
+    completedCount: 3,
+    setup: { versionId: VERSION_ID },
   });
 });
 

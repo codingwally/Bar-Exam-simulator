@@ -1070,7 +1070,7 @@ test('correction endpoint stores an approved payload without calling Gemini', as
       ALLOWED_ORIGIN: reliabilityOrigin,
       WEBSITE_BANK_URL: reliabilityBankUrl,
       SUPABASE_URL: 'https://staging-project.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-placeholder',
+      SUPABASE_SERVICE_ROLE_KEY: '  test-service-role-placeholder\r\n',
     });
     const payload = await response.json();
 

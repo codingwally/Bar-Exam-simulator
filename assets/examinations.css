@@ -152,8 +152,8 @@
 
 .dd-subject-layout {
   display: grid;
-  grid-template-columns: minmax(220px, .78fr) minmax(470px, 1.7fr) minmax(255px, .92fr);
-  gap: 22px;
+  grid-template-columns: minmax(250px, .78fr) minmax(0, 2.2fr);
+  gap: 24px;
   align-items: start;
   margin-top: 28px;
 }
@@ -169,6 +169,11 @@
 
 .dd-exam-panel {
   padding: 20px;
+}
+
+.dd-subject-panel {
+  position: sticky;
+  top: 18px;
 }
 
 .dd-exam-panel h2,
@@ -190,8 +195,8 @@
 
 .dd-subject-search {
   width: 100%;
-  min-height: 42px;
-  margin-bottom: 14px;
+  min-height: 44px;
+  margin-bottom: 8px;
   padding: 9px 12px;
   border: 1px solid #ccd4df;
   border-radius: 8px;
@@ -200,32 +205,112 @@
   font: inherit;
 }
 
+.dd-subject-search:focus {
+  border-color: var(--dd-exam-gold);
+  outline: 3px solid rgba(197, 160, 89, .2);
+}
+
+.dd-subject-result-count {
+  min-height: 18px;
+  margin: 0 0 10px;
+  color: var(--dd-exam-muted);
+  font: 650 10px/1.5 Inter, sans-serif;
+}
+
 .dd-subject-list {
   display: grid;
-  gap: 14px;
+  gap: 8px;
+  max-height: min(64vh, 680px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 2px 4px 8px 0;
+  scrollbar-gutter: stable;
+}
+
+.dd-subject-year,
+.dd-subject-term {
+  border: 1px solid #e0e4ea;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.dd-subject-year[hidden],
+.dd-subject-term[hidden],
+.dd-subject-button[hidden] {
+  display: none;
+}
+
+.dd-subject-year > summary,
+.dd-subject-term > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 9px 12px;
+  color: #72571e;
+  cursor: pointer;
+  font: 800 10px/1.3 Inter, sans-serif;
+  letter-spacing: .1em;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.dd-subject-year > summary::-webkit-details-marker,
+.dd-subject-term > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dd-subject-year > summary:focus-visible,
+.dd-subject-term > summary:focus-visible {
+  border-radius: 8px;
+  outline: 3px solid rgba(197, 160, 89, .35);
+  outline-offset: 2px;
+}
+
+.dd-subject-term {
+  margin: 0 8px 8px;
+  border-color: #e8eaf0;
+  background: #fbfcfd;
+}
+
+.dd-subject-term > summary {
+  min-height: 38px;
+  color: #485a72;
+  font-size: 9px;
+}
+
+.dd-subject-chevron {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform .16s ease;
+}
+
+details[open] > summary .dd-subject-chevron {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.dd-subject-year-body {
+  padding-bottom: 1px;
 }
 
 .dd-subject-group {
   display: grid;
-  gap: 7px;
-}
-
-.dd-subject-group h3 {
-  margin: 0 0 2px;
-  color: #80611f;
-  font: 800 10px/1.3 Inter, sans-serif;
-  letter-spacing: .12em;
-  text-transform: uppercase;
+  gap: 5px;
+  padding: 0 7px 7px;
 }
 
 .dd-subject-button {
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
   width: 100%;
-  min-height: 48px;
-  padding: 10px 12px;
+  min-height: 50px;
+  padding: 10px 11px;
   border: 1px solid transparent;
   border-radius: 8px;
   color: #33445c;
@@ -235,11 +320,37 @@
   cursor: pointer;
 }
 
+.dd-subject-button span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dd-subject-name {
+  display: grid;
+  gap: 2px;
+}
+
+.dd-subject-name small {
+  color: #8a6724;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.dd-subject-name strong {
+  font: inherit;
+}
+
 .dd-subject-button:hover,
 .dd-subject-button:focus-visible {
   border-color: #d9c89e;
   background: #fffaf0;
   outline: none;
+}
+
+.dd-subject-button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(197, 160, 89, .22);
 }
 
 .dd-subject-button.is-selected {
@@ -248,16 +359,21 @@
   background: var(--dd-exam-navy);
 }
 
+.dd-subject-button.is-selected .dd-subject-name small {
+  color: #f2d58d;
+}
+
 .dd-subject-button[disabled] {
   color: #7d8795;
   cursor: not-allowed;
 }
 
 .dd-subject-state {
+  color: #5c6a7c;
   font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .05em;
-  text-transform: uppercase;
+  font-weight: 750;
+  line-height: 1.35;
+  letter-spacing: .02em;
 }
 
 .dd-subject-state.is-ready {
@@ -268,21 +384,26 @@
   color: #f2d58d;
 }
 
-.dd-subject-mobile {
+.dd-subject-mobile-open {
   display: none;
-  width: 100%;
-  min-height: 48px;
-  padding: 10px 12px;
-  border: 1px solid #c9d1dc;
-  border-radius: 9px;
-  background: #fff;
-  font: 650 14px Inter, sans-serif;
+  margin-bottom: 14px;
+}
+
+.dd-subject-workspace {
+  min-width: 0;
 }
 
 .dd-selected-heading {
+  scroll-margin-top: 18px;
   margin-bottom: 16px;
   padding: 4px 2px 13px;
   border-bottom: 1px solid #ded7c8;
+  outline: none;
+}
+
+.dd-selected-heading:focus-visible {
+  border-radius: 6px;
+  box-shadow: 0 0 0 3px rgba(197, 160, 89, .24);
 }
 
 .dd-selected-heading h2 {
@@ -295,6 +416,85 @@
   line-height: 1.55;
 }
 
+.dd-practice-note {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid #e4e0d6;
+}
+
+.dd-practice-note summary {
+  color: #654d1d;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.dd-subject-empty {
+  margin: 16px 0 0;
+  padding: 14px;
+  border: 1px dashed #c9d1dc;
+  border-radius: 8px;
+  color: var(--dd-exam-muted);
+  text-align: center;
+}
+
+.dd-subject-drawer {
+  width: min(100vw, 680px);
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0 0 0 auto;
+  border: 0;
+  padding: 0;
+  color: var(--dd-exam-ink);
+  background: transparent;
+}
+
+.dd-subject-drawer::backdrop {
+  background: rgba(5, 18, 37, .72);
+  backdrop-filter: blur(4px);
+}
+
+.dd-subject-drawer-shell {
+  position: relative;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 12px;
+  padding: 26px 20px 18px;
+  border-top: 4px solid var(--dd-exam-gold);
+  background: var(--dd-exam-paper);
+  box-shadow: -18px 0 54px rgba(5, 18, 37, .28);
+}
+
+.dd-subject-drawer-shell > header {
+  padding-right: 48px;
+}
+
+.dd-subject-drawer-shell h2 {
+  margin: 0 0 18px;
+  color: var(--dd-exam-navy);
+  font: 600 30px/1.08 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-drawer-close {
+  position: absolute;
+  top: 17px;
+  right: 17px;
+  z-index: 2;
+}
+
+.dd-subject-drawer .dd-subject-list {
+  max-height: none;
+  min-height: 0;
+}
+
+.dd-subject-drawer footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid #ded7c8;
+}
 .dd-exam-card-list {
   display: grid;
   gap: 16px;
@@ -753,6 +953,38 @@
 
 .dd-alac-guide span:last-child {
   border-right: 0;
+}
+
+.dd-writing-guide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 14px;
+  border-bottom: 1px solid #e0e4e9;
+  background: #f8f9fb;
+}
+
+.dd-writing-guide strong {
+  color: var(--dd-exam-navy);
+  font: 800 10px/1.35 Inter, sans-serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dd-writing-guide > span:first-of-type {
+  color: #647185;
+  font-size: 10px;
+}
+
+.dd-writing-guide > span:not(:first-of-type) {
+  padding: 4px 8px;
+  border: 1px solid #d9c89e;
+  border-radius: 999px;
+  color: #574315;
+  background: #fffaf0;
+  font-size: 9px;
+  font-weight: 750;
 }
 
 .dd-answer-editor {
@@ -1234,14 +1466,7 @@
 
 @media (max-width: 1120px) {
   .dd-subject-layout {
-    grid-template-columns: 220px minmax(0, 1fr);
-  }
-
-  .dd-subject-layout > aside:last-child {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 18px;
+    grid-template-columns: 230px minmax(0, 1fr);
   }
 
   .dd-exam-room-layout {
@@ -1287,19 +1512,12 @@
     grid-template-columns: 1fr;
   }
 
-  .dd-subject-layout > aside:first-child .dd-subject-search,
-  .dd-subject-layout > aside:first-child .dd-subject-list,
-  .dd-subject-layout > aside:first-child .dd-exam-panel-title {
+  .dd-subject-panel {
     display: none;
   }
 
-  .dd-subject-mobile {
-    display: block;
-  }
-
-  .dd-subject-layout > aside:last-child {
-    grid-column: auto;
-    grid-template-columns: 1fr;
+  .dd-subject-mobile-open {
+    display: inline-flex;
   }
 
   .dd-bar-entry-grid {

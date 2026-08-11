@@ -21,20 +21,33 @@ const publicLanding = html.slice(
 assert.match(html, /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/);
 assert.match(html, /id="private-beta-landing"/);
 assert.match(html, /id="authenticated-app-shell" hidden inert aria-hidden="true"/);
-assert.match(
-  publicLanding,
-  /A platform to express<br>\s*your perspective, sharpen<br>\s*your legal reasoning, and<br>\s*strengthen your performance<br>\s*throughout law school\./,
-);
-assert.match(publicLanding, /Practice the reasoning\. Refine the writing\./);
-assert.match(publicLanding, /Explore Due Diligence/i);
-assert.match(publicLanding, /Learn How It Works/i);
+assert.ok(publicLanding.indexOf('class="pb-header"') < publicLanding.indexOf('class="pb-pillars"'),
+  'The preparation chooser must follow the public header directly.');
+assert.match(publicLanding, /<h2 id="pb-pillars-title">Choose how you want to prepare\.<\/h2>/);
 assert.match(publicLanding, /One platform, four focused chambers/i);
-for (const pillar of ['The Academy', 'The Commons', 'BarBound', 'Examination Room']) {
-  assert.match(publicLanding, new RegExp(pillar), `missing public platform pillar: ${pillar}`);
+assert.doesNotMatch(publicLanding, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
+assert.doesNotMatch(publicLanding, /A platform to express|Practice the reasoning\. Refine the writing\.|Explore Due Diligence|Learn How It Works|Pause Motion/i);
+for (const [pillar, route, image] of [
+  ['The Academy', 'explore-academy', 'library-student'],
+  ['The Commons', 'explore-commons', 'library-community'],
+  ['BarBound', 'explore-barbound', 'writing-notes'],
+  ['Examination Room', 'explore-examination-room', 'writing-exam'],
+]) {
+  assert.match(
+    publicLanding,
+    new RegExp(`<a class="pb-pillar-card" href="#${route}">[\\s\\S]*?${image}-720\\.avif[\\s\\S]*?<h3>${pillar}<\\/h3>`),
+    `missing image-led public platform pillar: ${pillar}`,
+  );
 }
 for (const route of ['explore-academy', 'explore-commons', 'explore-barbound', 'explore-examination-room']) {
   assert.match(publicLanding, new RegExp(`id="${route}"`), `missing public category page: ${route}`);
 }
+for (const taxonomy of [
+  'Mock Bar · Subject Matter · The Verdict',
+  'Bar Easy · Quorum · Retainer',
+  'Bar Feels · 2026 Bar Chair’s Cases · Doctrines · Anchor Case Digests',
+  'Professor · Beadle · Student · Exam Administrator',
+]) assert.ok(publicLanding.includes(taxonomy), `missing homepage taxonomy: ${taxonomy}`);
 assert.doesNotMatch(publicLanding, /EARLY ACCESS BETA|Enter the Beta|Private beta access code/i,
   'The public homepage must not expose the retired admission gate.');
 
@@ -44,7 +57,6 @@ assert.match(config, /privateBetaGate: false/);
 assert.match(script, /if \(!gateEnabled\)[\s\S]*showLanding\(\)/,
   'The disabled admission gate must render the public landing directly.');
 assert.match(script, /IntersectionObserver/);
-assert.match(script, /document\.hidden/);
 assert.match(script, /prefers-reduced-motion: reduce/);
 assert.match(script, /completeAdmission/);
 assert.match(script, /api\.status/);
@@ -52,9 +64,11 @@ assert.match(script, /globalBetaEnabled/);
 assert.match(script, /privateBetaApi\(\)\?\.policy/);
 assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /#private-beta-dialog\[open\]/);
-assert.match(html, /assets\/private-beta-landing\.js\?v=beta-all-access-20260802-1/);
-assert.match(css, /animation: pb-slide-left/);
-assert.match(css, /animation: pb-slide-right/);
+assert.match(html, /assets\/private-beta-landing\.js\?v=corrective-20260812-1/);
+assert.match(css, /\.pb-pillar-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
+assert.match(css, /@media \(max-width: 1120px\)[\s\S]*?\.pb-pillar-grid\s*\{[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
+assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.pb-pillar-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
+assert.doesNotMatch(css, /pb-slide-left|pb-slide-right|\.pb-rail/);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 
 const imageStems = [

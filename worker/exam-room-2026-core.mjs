@@ -16,7 +16,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 export const EXAM_ROOM_2026_MAX_QUESTIONS = 200;
-export const EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES = 30;
+export const EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES = 0;
 export const EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION = 'beadle-roster-v1';
 export const EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS = Object.freeze([
   'Email Address',
@@ -781,14 +781,6 @@ export function normalizeExamRoomCommand(input) {
     n.examId = uuid(payload.examId, 'Examination');
     n.expectedRevision = integer(payload.expectedRevision, 'Workspace revision', 1);
     n.rules = examRules(payload.rules);
-    if (new Date(n.rules.opensAt).getTime()
-        < Date.now() + EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES * 60 * 1_000) {
-      throw new DD2026ValidationError(
-        'EXAM_ROOM_HANDOFF_TIME_REQUIRED',
-        'Set the examination opening at least 30 minutes from now so the Beadle can prepare the class list and student handout.',
-        409,
-      );
-    }
     if (n.rules.studentAccessCodeRequired !== true) {
       throw new DD2026ValidationError(
         'EXAM_ROOM_STUDENT_ACCESS_POLICY_REQUIRED',
@@ -835,14 +827,6 @@ export function normalizeExamRoomCommand(input) {
       0,
       120,
     );
-    if (new Date(n.opensAt).getTime()
-        < Date.now() + EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES * 60 * 1_000) {
-      throw new DD2026ValidationError(
-        'EXAM_ROOM_HANDOFF_TIME_REQUIRED',
-        'Set the examination opening at least 30 minutes from now so the Beadle and class can receive the updated schedule.',
-        409,
-      );
-    }
     if (new Date(n.hardClosesAt) <= new Date(n.opensAt)) {
       throw new DD2026ValidationError(
         'INVALID_SCHEDULE',

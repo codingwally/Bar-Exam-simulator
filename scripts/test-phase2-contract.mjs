@@ -60,6 +60,10 @@ assert.ok(index.includes('assets/phase2-law-library.jpg') || read('assets/phase2
 assert.ok(index.includes('supabase-js@2.49.8'));
 assert.ok(index.includes('data-dd2-view="terms"'));
 assert.ok(index.includes('data-dd2-view="privacy"'));
+assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
+assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
+assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
+assert.ok(index.includes('assets/phase2-experience.js?v=live-experience-a11y-20260811-1'));
 
 for (const table of [
   'guest_grading_usage',

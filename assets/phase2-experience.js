@@ -128,7 +128,7 @@
               <button type="submit" class="dd2-button dd2-button-primary" id="dd2-entry-consent-submit">Accept &amp; Continue</button>
             </form>
             <div class="dd2-status" id="dd2-auth-status" role="status" aria-live="polite"></div>
-            <p class="dd2-entry-note" id="dd2-entry-note">Google opens its secure consent screen. Only basic identity scopes are requested.</p>
+            <p class="dd2-entry-note" id="dd2-entry-note">Google opens its secure consent screen. Only basic identity scopes are requested. Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button> and <button class="link-button" type="button" data-dd2-view="privacy">Privacy Policy</button> before continuing.</p>
             <div class="dd2-dialog-footer"><button type="button" class="dd2-button dd2-button-secondary dd2-dialog-back" id="dd2-entry-back">Back</button></div>
           </div>
         </section>
@@ -510,9 +510,11 @@
     if (consent) consent.hidden = !consentMode;
     if (actions) actions.hidden = consentMode;
     if (note) {
-      note.textContent = consentMode
-        ? 'Acceptance is recorded with the current document versions and timestamp.'
-        : 'Google opens its secure consent screen. Only basic identity scopes are requested.';
+      if (consentMode) {
+        note.textContent = 'Acceptance is recorded with the current document versions and timestamp.';
+      } else {
+        note.innerHTML = 'Google opens its secure consent screen. Only basic identity scopes are requested. Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button> and <button class="link-button" type="button" data-dd2-view="privacy">Privacy Policy</button> before continuing.';
+      }
     }
     if (!consentMode) {
       const checkbox = document.getElementById('dd2-entry-legal-acceptance');

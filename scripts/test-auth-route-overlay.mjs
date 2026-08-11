@@ -235,7 +235,7 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/phase2-experience\.js\?v=admin-export-20260801-1/,
+  /assets\/phase2-experience\.js\?v=live-experience-a11y-20260811-1/,
   'The route-overlay fix must ship behind a fresh browser cache key.',
 );
 assert.match(

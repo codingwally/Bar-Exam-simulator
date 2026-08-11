@@ -212,6 +212,20 @@
     return ['submitted', 'auto_submitted', 'sealed', 'final', 'released'].includes(String(status || '').toLowerCase());
   }
 
+  function isPastExamForRole(exam, role) {
+    const status = String(exam?.status || '').toLowerCase();
+    if (['closed', 'grading', 'sealed'].includes(status)) return true;
+    const hardClose = new Date(exam?.hardClosesAt).getTime();
+    if (Number.isFinite(hardClose) && hardClose <= currentServerTimeMs()) return true;
+    return role === 'student' && isClosedAttemptStatus(exam?.attemptStatus || status);
+  }
+
+  function pastExamRemovalButton(exam, role) {
+    if (!exam?.examId || !isPastExamForRole(exam, role)) return '';
+    const title = exam.title || 'Past examination';
+    return `<button class="dd26-button danger" data-dd26-delete-past-exam="${escapeHtml(exam.examId)}" data-dd26-delete-past-role="${escapeHtml(role)}" data-dd26-delete-past-title="${escapeHtml(title)}" type="button" aria-label="Delete ${escapeHtml(title)} from your Past Exams view">Delete past exam</button>`;
+  }
+
   function isTransientTransportFailure(error) {
     return error instanceof TypeError
       || (!error?.code && !error?.status)
@@ -1074,7 +1088,18 @@
 
   function studentSection(portal) {
     const exams = portal.studentExams || [];
-    return `<section class="dd26-card"><div class="dd26-label">Student examination</div><h2>Enter your class access code</h2><p>Sign in with the Google account listed in the Beadle's confirmed class list, then enter the code sent for your class.</p><div class="dd26-notice"><strong>No examination link or reference is needed.</strong> The secure code resolves the correct examination without revealing questions before opening.</div><div class="dd26-form-grid"><label class="dd26-field wide"><span>Student exam code</span><input class="dd26-input" id="dd26-student-key" type="password" autocomplete="one-time-code" required><small class="dd26-help">Use the current code emailed to your rostered account.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-start-attempt" type="button">Check exam details</button></div><div class="dd26-privacy">A code never replaces sign-in or the class-list check. During the exam, copy, cut, paste, and right-click are blocked. Be online to sign in and start. If the connection drops after the exam opens, answers can remain saved on this device until it reconnects. Do not clear browser data.</div></section><section class="dd26-card"><div class="dd26-label">Your examinations</div><h2>Available and completed exams</h2>${exams.length ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Examination</th><th>Schedule</th><th>Status</th><th>Action</th></tr></thead><tbody>${exams.map((exam) => { const attemptStatus = exam.attemptStatus || exam.status; return `<tr><td><strong>${escapeHtml(exam.title)}</strong></td><td>${escapeHtml(formatDate(exam.opensAt))}<br>to ${escapeHtml(formatDate(exam.hardClosesAt))}</td><td><span class="dd26-status">${escapeHtml(attemptStatus)}</span></td><td>${exam.resultReleased ? `<button class="dd26-button" data-dd26-student-result="${escapeHtml(exam.examId)}" type="button">View result</button>` : exam.attemptId && isClosedAttemptStatus(attemptStatus) ? `<button class="dd26-button" data-dd26-submission-status="${escapeHtml(exam.attemptId)}" type="button">View receipt</button>` : exam.attemptId ? `<button class="dd26-button" data-dd26-resume-attempt="${escapeHtml(exam.attemptId)}" type="button">Resume</button>` : '<span class="dd26-help">Enter your current class code above</span>'}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="dd26-empty">No active examination is available for this signed-in account.</div>'}</section>`;
+    const rows = exams.map((exam) => {
+      const attemptStatus = exam.attemptStatus || exam.status;
+      const primaryAction = exam.resultReleased
+        ? `<button class="dd26-button" data-dd26-student-result="${escapeHtml(exam.examId)}" type="button">View result</button>`
+        : exam.attemptId && isClosedAttemptStatus(attemptStatus)
+          ? `<button class="dd26-button" data-dd26-submission-status="${escapeHtml(exam.attemptId)}" type="button">View receipt</button>`
+          : exam.attemptId
+            ? `<button class="dd26-button" data-dd26-resume-attempt="${escapeHtml(exam.attemptId)}" type="button">Resume</button>`
+            : '<span class="dd26-help">Enter your current class code above</span>';
+      return `<tr><td><strong>${escapeHtml(exam.title)}</strong></td><td>${escapeHtml(formatDate(exam.opensAt))}<br>to ${escapeHtml(formatDate(exam.hardClosesAt))}</td><td><span class="dd26-status">${escapeHtml(attemptStatus)}</span></td><td><div class="dd26-actions dd26-table-actions">${primaryAction}${pastExamRemovalButton(exam, 'student')}</div></td></tr>`;
+    }).join('');
+    return `<section class="dd26-card"><div class="dd26-label">Student examination</div><h2>Enter your class access code</h2><p>Sign in with the Google account listed in the Beadle's confirmed class list, then enter the code sent for your class.</p><div class="dd26-notice"><strong>No examination link or reference is needed.</strong> The secure code resolves the correct examination without revealing questions before opening.</div><div class="dd26-form-grid"><label class="dd26-field wide"><span>Student exam code</span><input class="dd26-input" id="dd26-student-key" type="password" autocomplete="one-time-code" required><small class="dd26-help">Use the current code emailed to your rostered account.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-start-attempt" type="button">Check exam details</button></div><div class="dd26-privacy">A code never replaces sign-in or the class-list check. During the exam, copy, cut, paste, and right-click are blocked. Be online to sign in and start. If the connection drops after the exam opens, answers can remain saved on this device until it reconnects. Do not clear browser data.</div></section><section class="dd26-card"><div class="dd26-label">Your examinations</div><h2>Available and completed exams</h2>${exams.length ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Examination</th><th>Schedule</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="dd26-empty">No active examination is available for this signed-in account.</div>'}</section>`;
   }
 
   function activationSection(portal) {
@@ -1085,7 +1110,7 @@
   function beadleSection(portal) {
     const exams = portal.beadleExams || portal.beadleAssignments || [];
     const requests = state.exam.roomRequests?.beadleRequests || [];
-    return `${roomRequestList(requests, 'beadle', 'Quotation and payment requests sent to you')}<section class="dd26-card"><details class="dd26-room-setup" ${exams.length ? '' : 'open'}><summary>Open a Beadle assignment</summary><p>After publishing, the Professor gives the named Beadle a one-time key. It opens only the class-preparation and exam-day workspace for that examination.</p><label class="dd26-field"><span>Beadle key from the Professor</span><input class="dd26-input" id="dd26-beadle-key" type="password" autocomplete="one-time-code"></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-redeem-beadle" type="button">Open Beadle workspace</button></div><div class="dd26-notice"><strong>This Beadle key is not the student exam code.</strong> Do not give it to students.</div></details></section><section class="dd26-card"><div class="dd26-question-meta"><div><div class="dd26-label">Your assigned examinations</div><h2>Prepare the class and exam-day handout</h2></div><span class="dd26-status">${exams.length} assigned</span></div>${exams.length ? `<div class="dd26-attention-list">${exams.map((exam) => `<article><div><strong>${escapeHtml(exam.title || 'Examination')}</strong><small>${escapeHtml(exam.studentAccessReady ? 'Student handout ready' : 'Class preparation required')} · Beadle access until ${escapeHtml(formatDate(exam.expiresAt))}</small></div><div class="dd26-actions"><button class="dd26-button${exam.studentAccessReady ? '' : ' primary'}" data-dd26-beadle-exam="${escapeHtml(exam.examId)}" type="button">${exam.studentAccessReady ? 'Open exam-day desk' : 'Prepare class list'}</button></div></article>`).join('')}</div>` : '<div class="dd26-empty">No published examination is assigned to this Beadle account.</div>'}<div class="dd26-privacy">The Beadle can prepare the class list and student handout, confirm entry, and help during the exam. Questions, answers, grades, and result release remain with the Professor.</div></section>`;
+    return `${roomRequestList(requests, 'beadle', 'Quotation and payment requests sent to you')}<section class="dd26-card"><details class="dd26-room-setup" ${exams.length ? '' : 'open'}><summary>Open a Beadle assignment</summary><p>After publishing, the Professor gives the named Beadle a one-time key. It opens only the class-preparation and exam-day workspace for that examination.</p><label class="dd26-field"><span>Beadle key from the Professor</span><input class="dd26-input" id="dd26-beadle-key" type="password" autocomplete="one-time-code"></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-redeem-beadle" type="button">Open Beadle workspace</button></div><div class="dd26-notice"><strong>This Beadle key is not the student exam code.</strong> Do not give it to students.</div></details></section><section class="dd26-card"><div class="dd26-question-meta"><div><div class="dd26-label">Your assigned examinations</div><h2>Prepare the class and exam-day handout</h2></div><span class="dd26-status">${exams.length} assigned</span></div>${exams.length ? `<div class="dd26-attention-list">${exams.map((exam) => `<article><div><strong>${escapeHtml(exam.title || 'Examination')}</strong><small>${escapeHtml(exam.studentAccessReady ? 'Student handout ready' : 'Class preparation required')} · Beadle access until ${escapeHtml(formatDate(exam.expiresAt))}</small></div><div class="dd26-actions"><button class="dd26-button${exam.studentAccessReady ? '' : ' primary'}" data-dd26-beadle-exam="${escapeHtml(exam.examId)}" type="button">${exam.studentAccessReady ? 'Open exam-day desk' : 'Prepare class list'}</button>${pastExamRemovalButton(exam, 'beadle')}</div></article>`).join('')}</div>` : '<div class="dd26-empty">No published examination is assigned to this Beadle account.</div>'}<div class="dd26-privacy">The Beadle can prepare the class list and student handout, confirm entry, and help during the exam. Questions, answers, grades, and result release remain with the Professor.</div></section>`;
   }
 
   function professorSection(portal) {
@@ -1211,7 +1236,8 @@
       const publishedActions = published
         ? `<button class="dd26-button" data-dd26-manage-beadles="${escapeHtml(exam.examId)}" type="button">Manage Beadle access</button><button class="dd26-button" data-dd26-refresh-professor type="button">Refresh class status</button>${canOpenNow ? `<button class="dd26-button primary" data-dd26-open-exam-now="${escapeHtml(exam.examId)}" type="button">Open exam now</button>` : ''}${studentAccessReady ? `<button class="dd26-button" data-dd26-monitor-exam="${escapeHtml(exam.examId)}" type="button">Check live exam</button>` : ''}<button class="dd26-button primary" data-dd26-grade-exam="${escapeHtml(exam.examId)}" type="button">Grade submitted exams</button>${rosterCount > 0 ? `<button class="dd26-button" data-dd26-accommodation-exam="${escapeHtml(exam.examId)}" type="button">Student accommodations</button>` : ''}<button class="dd26-button" data-dd26-erratum-exam="${escapeHtml(exam.examId)}" type="button">Send correction notice</button>`
         : '';
-      return `<article class="dd26-card"><div class="dd26-question-meta"><span>${escapeHtml(exam.title)}</span><span class="dd26-status">${escapeHtml(preparationStatus)}</span></div><div class="dd26-stat-grid"><div class="dd26-stat"><strong>${exam.questionCount || 0}</strong><span>Questions</span></div><div class="dd26-stat"><strong>${escapeHtml(exam.totalPoints ?? '—')}</strong><span>Total points</span></div><div class="dd26-stat"><strong>${escapeHtml(rosterCount)}</strong><span>Students listed</span></div><div class="dd26-stat"><strong>${versionLabel}</strong><span>Published version</span></div></div>${professorFlowList(exam, classroom)}<div class="dd26-help">Opens ${escapeHtml(formatDate(exam.opensAt))} · Ends ${escapeHtml(formatDate(exam.hardClosesAt))}</div><div class="dd26-actions">${replacementAction}${publishedActions}</div>${published ? '<div class="dd26-help dd26-after-exam-note">Submitted examinations are available for immediate grading while this room remains open. Final result delivery remains a separate action.</div>' : ''}</article>`;
+      const removalAction = pastExamRemovalButton(exam, 'professor');
+      return `<article class="dd26-card"><div class="dd26-question-meta"><span>${escapeHtml(exam.title)}</span><span class="dd26-status">${escapeHtml(preparationStatus)}</span></div><div class="dd26-stat-grid"><div class="dd26-stat"><strong>${exam.questionCount || 0}</strong><span>Questions</span></div><div class="dd26-stat"><strong>${escapeHtml(exam.totalPoints ?? '—')}</strong><span>Total points</span></div><div class="dd26-stat"><strong>${escapeHtml(rosterCount)}</strong><span>Students listed</span></div><div class="dd26-stat"><strong>${versionLabel}</strong><span>Published version</span></div></div>${professorFlowList(exam, classroom)}<div class="dd26-help">Opens ${escapeHtml(formatDate(exam.opensAt))} · Ends ${escapeHtml(formatDate(exam.hardClosesAt))}</div><div class="dd26-actions">${replacementAction}${publishedActions}${removalAction}</div>${published ? '<div class="dd26-help dd26-after-exam-note">Submitted examinations are available for immediate grading while this room remains open. Final result delivery remains a separate action.</div>' : ''}</article>`;
     }).join('');
   }
 
@@ -1242,6 +1268,46 @@
       button.textContent = 'Open exam now';
       global.toast?.(error.message, 'warn');
     }
+  }
+
+  function openPastExamRemoval(button) {
+    const examId = String(button?.dataset?.dd26DeletePastExam || '');
+    const role = ['professor', 'beadle', 'student'].includes(button?.dataset?.dd26DeletePastRole)
+      ? button.dataset.dd26DeletePastRole
+      : state.exam.section;
+    const title = String(button?.dataset?.dd26DeletePastTitle || 'this past examination');
+    if (!examId) return;
+    openDialog(`<div class="dd26-label">Past Exams</div><h2>Delete this past exam?</h2><p><strong>Are you sure?</strong> “${escapeHtml(title)}” will disappear from your Past Exams view.</p><div class="dd26-notice"><strong>Your official records stay preserved.</strong> This does not delete the examination, submissions, answers, grades, receipts, or audit history, and it does not affect any other user.</div><div class="dd26-error" id="dd26-delete-past-exam-error" role="alert" hidden></div><div class="dd26-actions"><button class="dd26-button danger" id="dd26-confirm-delete-past-exam" type="button">Delete from Past Exams</button></div>`);
+    document.getElementById('dd26-confirm-delete-past-exam')?.addEventListener('click', async (confirmButton) => {
+      const action = confirmButton.currentTarget;
+      const errorHost = document.getElementById('dd26-delete-past-exam-error');
+      action.disabled = true;
+      action.textContent = 'Deleting…';
+      if (errorHost) errorHost.hidden = true;
+      try {
+        await command({
+          operation: 'dismiss_past_exam',
+          examId,
+          requestKey: randomKey('dismiss_past_exam'),
+        });
+      } catch (error) {
+        action.disabled = false;
+        action.textContent = 'Delete from Past Exams';
+        if (errorHost) {
+          errorHost.hidden = false;
+          errorHost.textContent = error.message;
+          errorHost.focus?.();
+        }
+        return;
+      }
+      closeDialog();
+      try {
+        await refreshExamPortal(role);
+        global.toast?.('The examination was removed from your Past Exams view. Official records remain preserved.', 'ok');
+      } catch {
+        global.toast?.('The examination was removed. Refresh Examination Room to update this list.', 'warn');
+      }
+    });
   }
 
   function bindExamSection() {
@@ -1286,6 +1352,7 @@
     document.querySelectorAll('[data-dd26-resume-attempt]').forEach((button) => button.addEventListener('click', () => loadAttempt(button.dataset.dd26ResumeAttempt)));
     document.querySelectorAll('[data-dd26-submission-status]').forEach((button) => button.addEventListener('click', () => loadSubmissionStatus(button.dataset.dd26SubmissionStatus)));
     document.querySelectorAll('[data-dd26-student-result]').forEach((button) => button.addEventListener('click', () => loadStudentResult(button.dataset.dd26StudentResult)));
+    document.querySelectorAll('[data-dd26-delete-past-exam]').forEach((button) => button.addEventListener('click', () => openPastExamRemoval(button)));
     document.querySelectorAll('[data-dd26-use-exam]').forEach((button) => button.addEventListener('click', () => {
       const input = document.getElementById('dd26-student-exam');
       if (input) { input.value = button.dataset.dd26UseExam; input.focus(); }

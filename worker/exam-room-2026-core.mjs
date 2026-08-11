@@ -86,6 +86,7 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'start_attempt',
   'start_attempt_by_code',
   'open_exam_now',
+  'dismiss_past_exam',
   'open_session',
   'save_answer',
   'save_answer_operation',
@@ -982,6 +983,9 @@ export function normalizeExamRoomCommand(input) {
       1_000,
       { minimum: 5 },
     );
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'dismiss_past_exam') {
+    n.examId = uuid(payload.examId, 'Examination');
     n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'open_session') {
     n.attemptId = uuid(payload.attemptId, 'Attempt');

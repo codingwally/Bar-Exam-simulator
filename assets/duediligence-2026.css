@@ -55,6 +55,7 @@
 .dd26-help{color:#9aa9bc;font-size:12px;line-height:1.55;}
 .dd26-counter{display:flex;justify-content:flex-end;margin-top:6px;color:#94a3b8;font:11px/1.4 'IBM Plex Mono',monospace;}
 .dd26-actions{display:flex;gap:11px;align-items:center;flex-wrap:wrap;margin-top:22px;}
+.dd26-table-actions{margin-top:0;gap:8px;}
 .dd26-button{appearance:none;display:inline-flex;min-height:46px;align-items:center;justify-content:center;border:1px solid rgba(197,160,89,.52);border-radius:6px;background:rgba(2,18,35,.32);color:#f8fafc;padding:12px 19px;font:600 11px/1.35 'IBM Plex Mono',monospace;letter-spacing:.085em;text-align:center;text-transform:uppercase;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease;}
 .dd26-button:hover{border-color:#e7bd5d;background:rgba(197,160,89,.08);color:#f8cf70;transform:translateY(-1px);}
 .dd26-button:focus-visible{border-color:#f1c65d;color:#f8cf70;outline:0;box-shadow:0 0 0 3px rgba(212,175,55,.26);}

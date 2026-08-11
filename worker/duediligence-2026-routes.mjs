@@ -149,6 +149,7 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'set_accommodation',
   'start_attempt_by_code',
   'open_exam_now',
+  'dismiss_past_exam',
   'open_session',
   'save_answer_operation',
   'heartbeat_v2',
@@ -176,6 +177,28 @@ const PROFESSOR_ACTIVATION_RESULT_CODES = new Set([
   'ACTIVATION_ROOM_SCOPE_REQUIRED',
   'CREDENTIAL_LOCKED',
 ]);
+
+function filteredExamRoomPortal(portal, dismissalResult) {
+  const dismissed = new Set(
+    (Array.isArray(dismissalResult?.examIds) ? dismissalResult.examIds : [])
+      .map((value) => String(value || '').toLowerCase()),
+  );
+  const isVisible = (exam) => !dismissed.has(String(exam?.examId || '').toLowerCase());
+  const classes = (Array.isArray(portal?.classes) ? portal.classes : [])
+    .map((classroom) => {
+      const originalExams = Array.isArray(classroom?.exams) ? classroom.exams : [];
+      return { ...classroom, exams: originalExams.filter(isVisible), originalExamCount: originalExams.length };
+    })
+    // A room whose sole canonical exam was dismissed must not look like a new,
+    // empty room where another examination can be created.
+    .filter((classroom) => classroom.originalExamCount === 0 || classroom.exams.length > 0)
+    .map(({ originalExamCount: _ignored, ...classroom }) => classroom);
+  return {
+    ...(portal || {}),
+    classes,
+    studentExams: (Array.isArray(portal?.studentExams) ? portal.studentExams : []).filter(isVisible),
+  };
+}
 
 function requireVerifiedAal2(user) {
   if (user?.authenticationLevel !== 'aal2') {
@@ -1104,22 +1127,33 @@ export function createDD2026Handlers(deps) {
     rejectRetiredDisputeOperation(input.operation);
     if (input.operation === 'portal') {
       const portal = await examRoomRpc(env, 'exam_room_portal_snapshot', { p_user_id: user.id });
+      const dismissals = await examRoomRpc(env, 'exam_room_dismissed_past_exam_ids_v1', {
+        p_user_id: user.id,
+      });
+      const visiblePortal = filteredExamRoomPortal(portal, dismissals);
       if (!examRoom2Enabled(env)) {
-        return jsonResponse({ ok: true, result: portal }, 200, origin, allowedOrigin);
+        return jsonResponse({ ok: true, result: visiblePortal }, 200, origin, allowedOrigin);
       }
       const delegated = await examRoomRpc(env, 'exam_room_beadle_portal_v3', {
           p_user_id: user.id,
           p_exam_public_id: null,
       });
       const assignments = Array.isArray(delegated?.assignments) ? delegated.assignments : [];
+      const dismissedIds = new Set(
+        (Array.isArray(dismissals?.examIds) ? dismissals.examIds : [])
+          .map((value) => String(value || '').toLowerCase()),
+      );
+      const visibleAssignments = assignments.filter(
+        (assignment) => !dismissedIds.has(String(assignment?.examId || '').toLowerCase()),
+      );
       const result = {
-        ...(portal || {}),
+        ...visiblePortal,
         roles: {
-          ...(portal?.roles || {}),
+          ...(visiblePortal?.roles || {}),
           beadle: assignments.some((assignment) => assignment?.role === 'beadle'),
         },
-        beadleExams: assignments,
-        beadleAssignments: assignments,
+        beadleExams: visibleAssignments,
+        beadleAssignments: visibleAssignments,
       };
       return jsonResponse({ ok: true, result }, 200, origin, allowedOrigin);
     }
@@ -1990,6 +2024,11 @@ export function createDD2026Handlers(deps) {
         p_professor_user_id: userId,
         p_exam_public_id: input.examId,
         p_reason: input.reason,
+        p_request_key: input.requestKey,
+      } }),
+      dismiss_past_exam: async () => ({ functionName: 'exam_room_dismiss_past_exam_v1', body: {
+        p_user_id: userId,
+        p_exam_public_id: input.examId,
         p_request_key: input.requestKey,
       } }),
       open_session: async () => ({ functionName: 'exam_room_open_session_v2', body: {

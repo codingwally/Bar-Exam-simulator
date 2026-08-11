@@ -662,6 +662,8 @@ export function examRoom2026DatabaseError(error) {
     EXAM_ROOM_MODEL_ANSWER_UPLOAD_NOT_ALLOWED: [403, 'The model-answer source cannot be changed in this examination state.'],
     EXAM_ROOM_MODEL_ANSWER_UPLOAD_UNAVAILABLE: [400, 'Uploaded model answers are unavailable until audited owner-only retrieval is enabled. Use pasted text or no model answer.'],
     EXAM_ROOM_EXAM_NOT_FOUND: [404, 'The examination could not be found.'],
+    EXAM_ROOM_PAST_EXAM_ACCESS_REQUIRED: [403, 'Only the owning Professor, assigned Beadle, or participating student may remove this examination from their own Past Exams view.'],
+    EXAM_ROOM_PAST_EXAM_REQUIRED: [409, 'Only a completed examination can be removed from Past Exams. Active and upcoming examinations must remain visible.'],
     EXAM_ROOM_ATTEMPT_NOT_FOUND: [404, 'The examination attempt could not be found.'],
     EXAM_ROOM_QUESTION_NOT_FOUND: [404, 'The examination question could not be found.'],
     EXAM_ROOM_SESSION_NOT_FOUND: [409, 'This examination session is no longer available. Request a controlled session recovery.'],
@@ -897,6 +899,8 @@ async function examRoom2026Rpc(env, functionName, body) {
     'exam_room_complete_email',
     'exam_room_fail_email',
     'exam_room_portal_snapshot',
+    'exam_room_dismissed_past_exam_ids_v1',
+    'exam_room_dismiss_past_exam_v1',
     'exam_room_backup_context',
   ]);
   if (!allowedFunctions.has(functionName)) {

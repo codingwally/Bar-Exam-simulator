@@ -400,6 +400,14 @@ function configuredSupabaseUrl(env) {
   return url;
 }
 
+function normalizedRuntimeSecrets(env) {
+  const serviceRoleKey = typeof env?.SUPABASE_SERVICE_ROLE_KEY === 'string'
+    ? env.SUPABASE_SERVICE_ROLE_KEY.trim()
+    : env?.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceRoleKey === env?.SUPABASE_SERVICE_ROLE_KEY) return env;
+  return { ...env, SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey };
+}
+
 async function supabaseRpc(env, functionName, body) {
   const baseUrl = configuredSupabaseUrl(env);
   const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
@@ -5285,9 +5293,11 @@ const dd2026Handlers = createDD2026Handlers({
 
 export default {
   async scheduled(_controller, env, ctx) {
+    env = normalizedRuntimeSecrets(env);
     ctx.waitUntil(processExamRoomQueues(env));
   },
   async fetch(request, env, ctx) {
+    env = normalizedRuntimeSecrets(env);
     const allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
     const requestOrigin = request.headers.get('Origin') || '';
     try {

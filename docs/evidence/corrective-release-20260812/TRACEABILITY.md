@@ -43,12 +43,15 @@ No production mutation was made while recording this baseline.
 ## Staging verification
 
 - Staging Worker: `duediligence-examinations-staging`
-- Verified Worker version: `4a12c483-8415-4239-bd93-2cf6abcc5d16`
+- Verified Worker version: `bbaed5b3-0470-45d8-8cf4-6c4a64f3cfa4`
 - Latest local Worker suite: 373 tests passed, 0 failed.
 - Local repository regression suite: 61 scripts passed, 0 failed; the four credentialed staging harnesses were run separately or superseded by the full acceptance cycle.
 - Human-only synthetic API cycle: passed.
 - AI-inclusive synthetic API cycle `msp5a67r-cfa9d5f2`: passed for strict human, self-paced AI, curated Bar Feels human, private-upload human, and strict server-expiration paths.
+- Post-rotation AI-inclusive synthetic API cycle `msp7mv7t-75816710`: passed the same five paths against the new staging secret-key binding.
 - Synthetic API fixtures: removed by the acceptance harness in its mandatory `finally` cleanup.
+- Exact post-run cleanup check: 0 matching examination definitions, 0 matching attempts, and 0 matching synthetic profiles remained.
+- Staging credential containment: the staging Worker moved to a dedicated Supabase secret key, the superseded staging secret key was removed, and staging legacy API keys were disabled. Production credentials and production traffic were not touched.
 - Synthetic browser user: deleted through the staging Auth admin API; the issued staging session was revoked.
 - In-app browser homepage check: exact first heading and four-card taxonomy rendered; retired hero absent; no horizontal overflow; expected cache-busted assets loaded; no relevant console, runtime, or network errors.
 - In-app browser modal check at 340 x 838: the top-right close control and Back action were both reachable and each independently closed the sign-in dialog without leaving body scroll locked.

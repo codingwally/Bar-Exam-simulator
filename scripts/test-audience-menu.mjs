@@ -28,7 +28,7 @@ const utilitiesIndex = navigation.indexOf('nav-utilities');
 for (const [name, markup] of [
   ['Academy', academy],
   ['Commons', commons],
-  ['Premium', premium],
+  ['BarBound', premium],
   ['utilities', utilities],
 ]) {
   assert.ok(markup, `${name} navigation group must be present.`);
@@ -53,7 +53,7 @@ const assertOrder = (markup, labels) => {
 
 assertOrder(academy, ['The Academy', 'Mock Bar', 'Subject Matter', 'Verdict']);
 assertOrder(commons, ['The Commons', 'Bar Easy', 'Quorum', 'Retainer']);
-assertOrder(premium, ['Premium', 'Bar Feels', 'Chair’s Case', 'Doctrines', 'Case Digest']);
+assertOrder(premium, ['BarBound', 'Bar Feels', 'Chair’s Case', 'Doctrines', 'Case Digest']);
 assertOrder(utilities, ['Examination Room', 'Support', 'The Docket']);
 
 for (const [markup, labelId, menuId] of [
@@ -98,7 +98,7 @@ assert.match(html, /focusedInsideMenu[\s\S]*?window\.innerWidth <= 700[\s\S]*?to
 assert.doesNotMatch(navigation, /role="menu(?:item)?"/);
 
 const premiumButtons = premium.match(/class="spa-tab btn-angel"/g) || [];
-assert.equal(premiumButtons.length, 4, 'Every Premium destination must use the live gold pill treatment.');
+assert.equal(premiumButtons.length, 4, 'Every BarBound destination must use the live gold pill treatment.');
 assert.match(
   html,
   /\.btn-angel\{[\s\S]*?linear-gradient\(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B\)[\s\S]*?animation:sheen 3\.2s linear infinite/,

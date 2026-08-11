@@ -31,21 +31,26 @@ assert.ok(controller.includes('const STRICT_SECONDS = 12 * 60'));
 assert.ok(controller.includes('switchMode'));
 assert.ok(controller.includes('syncFromStorage'));
 assert.ok(controller.includes('automaticAdvanceHandled'));
-assert.ok(frontend.includes('At zero, your answer submits; the result stays here.'));
-assert.ok(frontend.includes('No visible clock. Active writing time is still recorded.'));
+assert.ok(frontend.includes('The 12-minute target has ended. Your answer is safe; submit when ready.'));
+assert.ok(frontend.includes('Write without a visible clock or time limit.'));
 assert.ok(frontend.includes('clearPersistedWorkspace'));
 assert.ok(frontend.includes('restorePersistedWorkspace'));
 assert.ok(frontend.includes('switchSessionMode'));
 assert.ok(frontend.includes('function questionAnswerKey('));
 assert.ok(frontend.includes('userAnswers[questionAnswerKey()]'));
 assert.doesNotMatch(frontend, /userAnswers\[`?\$\{currentSubj\}-\$\{currentIdx\}`?\]/);
-assert.ok(frontend.includes("submissionReason: 'strict_expiry'"));
-assert.ok(frontend.includes('Unanswered attempt recorded'));
+assert.ok(frontend.includes('saveDraftForCurrentQuestion();'));
+assert.ok(frontend.includes('Your answer is safe and was not submitted.'));
 assert.ok(experience.includes("request('/exam/unanswered'"));
 assert.ok(experience.includes("request('/exam/history'"));
 assert.ok(experience.includes("global.addEventListener('duediligence:session'"));
 assert.doesNotMatch(frontend, /Advances once when time expires/i);
 assert.doesNotMatch(frontend, /Automatically proceeds when time expires/i);
+assert.doesNotMatch(
+  frontend.match(/async function onTimeUp\(\)[\s\S]*?\n\}/)?.[0] || '',
+  /evaluateAnswer|recordUnansweredAttempt|examStage = 'reviewing'/,
+  'The optional 12-minute practice target must preserve the answer instead of submitting it.',
+);
 
 for (const source of [migration, worker, controller, experience, frontend]) {
   assert.doesNotMatch(source, /AIza[0-9A-Za-z_-]{20,}/);

@@ -130,8 +130,8 @@ assert.match(client, /\$\('#quorum-notification-count'\)\.textContent = unreadCo
 assert.match(client, /allowDismiss:\s*true/);
 assert.match(phase2, /id="dd2-entry-close"/);
 assert.match(phase2, /options\.allowDismiss === true/);
-assert.match(phase2, /entryOverlay\.dataset\.dismissible === 'true'/);
-assert.match(phase2, /event\.key === 'Escape'[\s\S]*closeEntry\(\)/);
+assert.match(phase2, /event\.currentTarget\.dataset\.dismissible === 'true'/);
+assert.match(phase2, /event\.key === 'Escape'[\s\S]*returnFromEntry\(\)/);
 assert.doesNotMatch(client, /from\(['"]forum_/i, 'The browser must not query Quorum tables directly.');
 assert.doesNotMatch(client, /service[_-]?role/i, 'The browser must not contain service-role access.');
 

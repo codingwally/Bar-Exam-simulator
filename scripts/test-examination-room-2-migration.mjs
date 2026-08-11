@@ -178,7 +178,7 @@ assert.match(autoSubmit, /for update of a skip locked/);
 assert.match(autoSubmit, /set search_path = ''/);
 
 const gradingReadiness = functionBlock('exam_room_grading_readiness_v2');
-assert.match(gradingReadiness, /\nlanguage plpgsql\nstable\n/i);
+assert.match(gradingReadiness, /\r?\nlanguage plpgsql\r?\nstable\r?\n/i);
 assert.match(gradingReadiness, /individualHardClosesAt/);
 assert.match(gradingReadiness, /extraMinutes/);
 assert.match(gradingReadiness, /incidentExtensionMinutes/);

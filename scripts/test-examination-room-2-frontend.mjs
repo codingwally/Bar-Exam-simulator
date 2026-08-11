@@ -39,25 +39,25 @@ assert.doesNotMatch(stagingBuild, /examinationRoom2: false/,
 assert.doesNotMatch(stagingBuild, /spa-examination-room[^\n]*hidden/,
   'staging no longer needs to unhide an entry that is enabled for the beta-wide release');
 
-// Public information architecture is exactly the four classroom roles.
-assert.match(frontend, /\['professor', 'Professor'[\s\S]*\['beadle', 'Beadle'[\s\S]*\['student', 'Student'[\s\S]*\['admin', 'Admin'/);
+// Public information architecture is exactly the four room-scoped roles.
+assert.match(frontend, /\['professor', 'Professor'[\s\S]*\['beadle', 'Beadle'[\s\S]*\['student', 'Student'[\s\S]*\['exam_administrator', 'Exam Administrator'/);
 assert.match(frontend, /data-dd26-exam-role="\$\{id\}"/);
 assert.doesNotMatch(frontend, /\['workplace'/i);
-assert.match(frontend, /A student cannot open the Student examination page until signed in/);
+assert.match(frontend, /Sign-in is required to continue/);
 assert.doesNotMatch(frontend, /\$\{examNavigation\(\)\}/,
   'role buttons must not be repeated inside the selected workspace');
 const roleSelectionBlock = frontend.slice(
   frontend.indexOf('async function selectExamRole'),
   frontend.indexOf('function announceExamStatus'),
 );
-assert.ok(roleSelectionBlock.indexOf('if (!isAuthenticated())') < roleSelectionBlock.indexOf("if (role === 'admin')"),
-  'authentication must happen before the Admin redirect');
 assert.ok(roleSelectionBlock.indexOf('if (!isAuthenticated())') < roleSelectionBlock.indexOf('state.exam.section = role'),
   'authentication must happen before the Student or classroom workspace opens');
-assert.match(roleSelectionBlock, /new URL\('admin\/', global\.location\.href\)/);
-assert.match(frontend, /Use the room key created by Admin/);
+assert.doesNotMatch(roleSelectionBlock, /new URL\('admin\//,
+  'Exam Administrator must stay room-scoped instead of redirecting into platform administration');
+assert.match(roleSelectionBlock, /if \(role !== 'student'\) await loadRoomRequests\(\)/);
+assert.match(frontend, /Request an Examination Room/);
 assert.match(frontend, /Use the invitation from the Professor/);
-assert.match(frontend, /Create Professor room keys, see who used each key/);
+assert.match(frontend, /Prepare quotations, issue provisional room keys, and review payment only for assigned requests/);
 assert.match(frontend, /Return to Examination Room home/);
 assert.match(frontend, /class="dd26-button dd26-exam-home-button"/,
   'the role and workspace return control must be a prominent design-system button');
@@ -70,37 +70,48 @@ assert.ok(homeReturnBlock.indexOf('await flushAllLocalSaves()') < homeReturnBloc
   'the latest answers must be saved before live-exam timers are cleared');
 assert.ok(homeReturnBlock.indexOf("recordIncident('focus_exit'") < homeReturnBlock.indexOf('clearAttemptTimers()'),
   'returning home during a live exam must be recorded before leaving the attempt surface');
-assert.match(frontend, /global\.openExaminationRoom = async \(\) => \{[\s\S]*moduleIsOpen[\s\S]*await returnToExaminationRoomHome\(\)[\s\S]*state\.exam\.section = 'professor'[\s\S]*state\.exam\.intentRole = 'professor'[\s\S]*return open\('exam_room'/,
-  'the header Examination Room button must safely return from active work, then open the Professor workspace');
+assert.match(frontend, /global\.openExaminationRoom = async \(\) => \{[\s\S]*moduleIsOpen[\s\S]*await returnToExaminationRoomHome\(\)[\s\S]*state\.exam\.section = 'entry'[\s\S]*state\.exam\.intentRole = null[\s\S]*return open\('exam_room'/,
+  'the header Examination Room button must safely return from active work, then open the role hub');
 assert.doesNotMatch(frontend, /operation: '(?:open_dispute|dispute_view|close_dispute)'/,
   'the retired broad dispute viewer must not remain callable from the public Examination Room');
+assert.match(frontend, /operation: 'submit_room_request'/);
+assert.match(frontend, /operation: 'prepare_room_quotation'/);
+assert.match(frontend, /operation: 'send_room_quotation'/);
+assert.match(frontend, /operation: 'generate_provisional_room_key'/);
+assert.match(frontend, /operation: 'review_room_payment'/);
+assert.match(frontend, /\/exam-room\/upload\/payment-proof/);
+assert.match(frontend, /accept="image\/png,image\/jpeg,application\/pdf/);
+assert.match(frontend, /Exam Administrator[\s\S]*assigned to this account/,
+  'the Exam Administrator workspace must explain its assigned-room boundary');
+assert.match(frontend, /does not provide access to users, subscriptions, secrets, or unrelated rooms/,
+  'room administration must explicitly deny platform-wide access');
 
-// Professor entry explains the full key chain without exposing an Admin issuer
-// on the public page. A redeemed key creates exactly one room; another room
-// requires another Admin key for the same exact signed-in email.
+// Professor entry supports the request, quotation, provisional-key, and
+// payment-proof flow without exposing platform administration.
 const activationStart = frontend.indexOf('function activationSection');
 const activationEnd = frontend.indexOf('function beadleSection', activationStart);
 const activationView = frontend.slice(activationStart, activationEnd);
-assert.match(activationView, /one invitation key for one Examination Room/i);
-assert.match(activationView, /exact signed-in email/);
-assert.match(activationView, /Admins create and monitor Professor keys under Admin Dashboard/);
-assert.match(activationView, /portal\.roles\?\.admin === true[\s\S]*href="admin\/"/,
-  'an authenticated Admin gets a direct route to the authorized key issuer');
+assert.match(activationView, /Request or open an Examination Room/i);
+assert.match(activationView, /provisional one-time key/i);
+assert.match(activationView, /exact signed-in Professor email/);
+assert.match(activationView, /Student access remains protected/);
+assert.doesNotMatch(activationView, /href="admin\/"|Admin Dashboard/,
+  'Professor room requests never expose platform-administration navigation');
 assert.doesNotMatch(activationView, /dd26-professor-email|dd26-activation-expiry|issue_activation/,
   'the public Professor entry must not issue Admin keys inline');
 
 const professorStart = frontend.indexOf('function professorSection');
 const professorEnd = frontend.indexOf('function professorClass', professorStart);
 const professorView = frontend.slice(professorStart, professorEnd);
-assert.match(professorView, /Each Admin invitation key opens one Examination Room/);
-assert.match(professorView, /Open another Examination Room/);
-assert.match(professorView, /No Examination Room is assigned yet/);
+assert.match(professorView, /Request another Examination Room/);
+assert.match(professorView, /Open another room/);
+assert.match(professorView, /No Examination Room is open yet/);
 assert.doesNotMatch(professorView, /dd26-class-title|dd26-class-school|dd26-class-term|dd26-create-class/,
   'a Professor cannot bypass Admin room-key issuance with a free-form class creator');
 assert.doesNotMatch(frontend, /operation: 'create_classroom'/,
   'the public bundle must not retain a callable free-form classroom command');
 assert.doesNotMatch(frontend, /function issueActivation|dd26-issue-activation/,
-  'Professor key generation belongs only to Admin Dashboard → Examination Room');
+  'Professor key generation remains an assigned Exam Administrator action');
 assert.match(frontend, /operation: 'redeem_activation'[\s\S]*activationKey: value\('dd26-activation-key', false\)/);
 
 const professorClassStart = professorEnd;
@@ -122,7 +133,7 @@ const beadleEnd = frontend.indexOf('function professorSection', beadleStart);
 assert.match(frontend.slice(beadleStart, beadleEnd), /After publishing, the Professor gives the named Beadle a one-time key/);
 assert.match(frontend.slice(beadleStart, beadleEnd), /This Beadle key is not the student exam code/);
 assert.match(frontend.slice(beadleStart, beadleEnd), /Do not give it to students/);
-assert.match(frontend, /Professor · Preparation steps 1 to 3[\s\S]*Beadle · Preparation steps 4 and 5[\s\S]*Student · Simple steps/);
+assert.match(frontend, /Professor . Preparation steps 1 to 3[\s\S]*Beadle . Preparation steps 4 and 5[\s\S]*Student . Simple steps[\s\S]*Exam Administrator . Assigned-room controls/);
 
 // Existing emailed deep links identify an exam without becoming authorization.
 assert.match(frontend, /raw\.startsWith\('examination-room\?'\)/);
@@ -292,7 +303,7 @@ assert.match(frontend, /Allow entry until the exam ends[\s\S]*Your current Profe
   'rescheduling must expose an explicit until-end choice without overwriting an earlier cutoff');
 assert.match(frontend, /entryCutoffReviewHtml\(opensAt, hardClosesAt, lateAdmissionMinutes\)/,
   'final publication review must prominently state the exact student-entry cutoff');
-assert.match(html, /duediligence-2026\.js\?v=student-entry-preflight-20260810-1/,
+assert.match(html, /duediligence-2026\.js\?v=live-experience-20260811-1/,
   'the corrected student preflight must use a fresh production cache key');
 assert.match(frontend, /None of them replaces the student sign-in and class-list check/);
 assert.match(frontend, /publicationAttempt\.studentKey = null/,
@@ -533,6 +544,19 @@ assert.match(frontend, /up to seven days/);
 assert.match(frontend, /operation: 'heartbeat_v2'[\s\S]*sessionId:[\s\S]*sessionEpoch:/,
   'heartbeats must be bound to the active device session');
 assert.match(frontend, /operation: 'grading_model_answer'/);
+assert.match(frontend, /function gradingDraftKey[\s\S]*dd:exam-room:grading:/,
+  'Professor grading drafts must be isolated by account, exam, attempt, and question');
+assert.match(frontend, /function persistCurrentGradingDraft[\s\S]*localStorage\?\.setItem/,
+  'Professor grading work must persist locally before navigation or tab exit');
+assert.match(frontend, /visibilitychange[\s\S]*persistCurrentGradingDraft\(\)/,
+  'backgrounding the browser must preserve the current Professor grading draft');
+assert.match(frontend, /pagehide[\s\S]*persistCurrentGradingDraft\(\)/,
+  'Alt-Tab or page exit must preserve the current Professor grading draft');
+assert.match(frontend, /\['ungraded', 'graded', 'late', 'flagged', 'all'\]/);
+assert.match(frontend, /class="dd26-grading-split"/);
+assert.match(frontend, /id="dd26-save-next-grade"/);
+assert.match(frontend, /event\.altKey[\s\S]*ArrowRight[\s\S]*ArrowLeft/,
+  'keyboard grading navigation must support Alt+Left and Alt+Right');
 assert.match(frontend, /synchronizeServerClock\(payload\.result\.serverNow\)/);
 assert.match(frontend, /global\.performance\.now\(\) - state\.exam\.serverClockMonotonicAt/,
   'the displayed countdown advances from a server-synchronized monotonic baseline');
@@ -734,8 +758,8 @@ assert.match(css, /\.dd26-reschedule-comparison>div\{grid-template-columns:1fr;g
 
 assert.match(html, /assets\/examination-room-2-store\.js/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
-assert.match(html, /duediligence-2026\.css\?v=exam-room-beadle-roster-template-20260810-1/);
-assert.match(html, /duediligence-2026\.js\?v=student-entry-preflight-20260810-1/);
+assert.match(html, /duediligence-2026\.css\?v=live-experience-20260811-1/);
+assert.match(html, /duediligence-2026\.js\?v=live-experience-20260811-1/);
 
 // Execute the pure disclosure gate: malformed, partial, and stale replacement
 // results must never unlock one-time secret rendering.

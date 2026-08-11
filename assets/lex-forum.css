@@ -2062,6 +2062,203 @@
   }
 }
 
+/* User-opened Quorum navigation, multi-image composer, and private identity UI. */
+#page-community .lex-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 345px);
+  max-width: 1110px;
+  margin: 0 auto;
+}
+
+#page-community .quorum-menu-open {
+  display: inline-flex;
+  align-items: center;
+  margin: 16px max(18px, calc((100% - 1110px) / 2)) 12px;
+  border-color: rgba(197, 160, 89, .62);
+  color: #f8e8b6;
+  background: rgba(6, 27, 53, .84);
+}
+
+#page-community .quorum-navigation {
+  position: fixed;
+  z-index: 10020;
+  inset: 0 auto 0 0;
+  width: min(360px, 90vw);
+  min-height: 100vh;
+  padding: 20px 18px 42px;
+  overflow-y: auto;
+  border: 0;
+  border-right: 1px solid rgba(197, 160, 89, .45);
+  background: rgba(250, 249, 246, .985);
+  box-shadow: 22px 0 58px rgba(2, 12, 35, .32);
+  transform: translateX(-104%);
+  visibility: hidden;
+  transition: transform .22s ease, visibility 0s linear .22s;
+}
+
+#page-community .quorum-navigation.is-open {
+  transform: translateX(0);
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.quorum-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 14px;
+  padding: 0 4px 14px;
+  border-bottom: 1px solid #d9dee7;
+  color: #071a33;
+  font-family: var(--serif-display);
+  font-size: 20px;
+}
+
+.quorum-drawer-close {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid #b9c4d3;
+  border-radius: 50%;
+  color: #071a33;
+  background: #fff;
+  cursor: pointer;
+  font: 400 28px/1 var(--sans);
+}
+
+.quorum-drawer-scrim {
+  position: fixed;
+  z-index: 10010;
+  inset: 0;
+  display: none;
+  border: 0;
+  background: rgba(0, 20, 45, .58);
+  backdrop-filter: blur(3px);
+}
+
+.quorum-drawer-scrim.is-open { display: block; }
+body.quorum-drawer-open { overflow: hidden; }
+
+.quorum-image-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.quorum-image-draft {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid #d6dde7;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.quorum-image-draft img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 7px;
+}
+
+.quorum-image-draft input {
+  min-height: 38px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  font: 500 11px var(--sans);
+}
+
+.quorum-entry-images {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.quorum-entry-images .quorum-entry-image {
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+  max-height: 430px;
+  object-fit: cover;
+}
+
+.quorum-entry-images .quorum-entry-image:only-child { grid-column: 1 / -1; }
+
+.quorum-identity-choice {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #d7dee8;
+  border-radius: 9px;
+  color: #17263d;
+  font-family: var(--sans);
+}
+
+.quorum-identity-choice legend { padding: 0 5px; font-weight: 800; }
+.quorum-identity-choice label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+.quorum-identity-choice small { color: #66758a; line-height: 1.45; }
+
+.lex-author-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.quorum-profile-photo-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid #d9e0e9;
+  border-radius: 10px;
+  background: #f8f7f3;
+}
+
+.quorum-profile-photo-preview {
+  display: grid;
+  width: 84px;
+  height: 84px;
+  place-items: center;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #c5a059;
+  overflow: hidden;
+  color: #fff;
+  background: #071a33;
+  font: 800 20px/1 var(--sans);
+}
+
+@media (max-width: 1120px) {
+  #page-community .lex-layout { grid-template-columns: minmax(0, 1fr) 300px; }
+  #page-community .lex-secondary { grid-column: 2; }
+}
+
+@media (max-width: 760px) {
+  #page-community .lex-layout { display: block; }
+  #page-community .quorum-navigation {
+    position: fixed;
+    min-height: 100vh;
+    padding: 18px 14px 36px;
+    overflow-y: auto;
+    border-right: 1px solid rgba(197, 160, 89, .45);
+    border-bottom: 0;
+  }
+  #page-community .quorum-side-nav { display: grid; width: 100%; min-width: 0; }
+  #page-community .quorum-side-link { width: 100%; min-width: 0; justify-content: flex-start; text-align: left; }
+  #page-community .lex-secondary { display: grid; grid-template-columns: 1fr; }
+  .quorum-entry-images { grid-template-columns: 1fr; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lex-button,
   .lex-action,

@@ -248,7 +248,7 @@ const publicRoleBlock = publicExamJs.slice(publicRoleBlockStart, publicRoleBlock
 assert.match(publicRoleBlock, /\['professor', 'Professor'/);
 assert.match(publicRoleBlock, /\['beadle', 'Beadle'/);
 assert.match(publicRoleBlock, /\['student', 'Student'/);
-assert.match(publicRoleBlock, /\['admin', 'Admin'/);
+assert.match(publicRoleBlock, /\['exam_administrator', 'Exam Administrator'/);
 assert.doesNotMatch(publicRoleBlock, /\['workplace'/i);
 assert.doesNotMatch(publicExamJs, /operation: '(?:open_dispute|dispute_view|close_dispute)'/,
   'the public bundle must not carry the retired broad dispute operations');

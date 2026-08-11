@@ -11,7 +11,9 @@ import {
   normalizeContentItemRequest,
   normalizeContentQuery,
   normalizeDoctrineRequest,
+  normalizeVerdictArchiveRequest,
   normalizeVerdictPdfRequest,
+  normalizeVerdictRecordsRequest,
   publicContentItem,
   validateBarEasyResult,
   validateDoctrineResult,
@@ -22,6 +24,7 @@ import {
   hashedCredential,
   normalizeExamResultPdfRequest,
   normalizeExamRoomCommand,
+  normalizeExamRoomPaymentProofUpload,
   normalizeExamRoomQuery,
   normalizeQuestionUpload,
   normalizeQuestionUploadIntent,
@@ -89,7 +92,19 @@ const RETIRED_DISPUTE_OPERATIONS = new Set([
 ]);
 const EXAMINATION_ROOM_BASE_FLAG = 'EXAMINATION_ROOM_ENABLED';
 const EXAMINATION_ROOM_2_FLAG = 'EXAMINATION_ROOM_2_ENABLED';
+
+function oneTimeRoomKey() {
+  const bytes = new Uint8Array(30);
+  crypto.getRandomValues(bytes);
+  const body = btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+  return `DD-ROOM-${body}`;
+}
 const EXAM_ROOM_2_QUERY_OPERATIONS = new Set([
+  'room_requests',
+  'payment_proof_review',
   'activation_ledger',
   'exam_intent',
   'professor_authoring_snapshot',
@@ -102,6 +117,12 @@ const EXAM_ROOM_2_QUERY_OPERATIONS = new Set([
   'break_glass_view',
 ]);
 const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
+  'submit_room_request',
+  'claim_room_request',
+  'prepare_room_quotation',
+  'send_room_quotation',
+  'generate_provisional_room_key',
+  'review_room_payment',
   'issue_activation',
   'redeem_activation',
   'revoke_activation',
@@ -729,8 +750,12 @@ export function createDD2026Handlers(deps) {
     requireAdministrator,
     requireAuthenticatedUser,
     resolveVerdictQuestion,
+    sendExamRoomEmail,
+    signExamRoomPaymentProof,
     structuredGemini,
+    uploadExamRoomPaymentProof,
     uploadExamRoomSource,
+    deleteExamRoomPaymentProof,
   } = deps;
   const examRateLimit = enforceExamRoomRateLimit
     || ((request, env, _userId, mode = 'read') => (
@@ -881,40 +906,73 @@ export function createDD2026Handlers(deps) {
     await enforceDD2026RateLimit(request, env, true);
     const user = await requireAuthenticatedUser(request, env);
     const input = normalizeVerdictPdfRequest(await parseBoundedJson(request, 25_000));
-    let result = await dd2026Rpc(env, 'dd2026_verdict_result', {
-      p_user_id: user.id,
-      p_grading_result_id: input.gradingResultId,
-    });
-    if (result?.sourceType === 'phase4_exam_attempt') {
-      const source = await resolveVerdictQuestion(result.questionBankId, env);
-      if (!source?.question || !source?.suggestedAnswer) {
-        throw new DD2026ValidationError(
-          'VERDICT_SOURCE_UNAVAILABLE',
-          'The complete source record for this result is temporarily unavailable. Try again later.',
-          503,
-        );
+    const results = [];
+    for (const resultId of input.gradingResultIds) {
+      let result = await dd2026Rpc(env, 'dd2026_verdict_result', {
+        p_user_id: user.id,
+        p_grading_result_id: resultId,
+      });
+      if (result?.sourceType === 'phase4_exam_attempt') {
+        const source = await resolveVerdictQuestion(result.questionBankId, env);
+        if (!source?.question || !source?.suggestedAnswer) {
+          throw new DD2026ValidationError(
+            'VERDICT_SOURCE_UNAVAILABLE',
+            'The complete source record for one selected result is temporarily unavailable. Try again later.',
+            503,
+          );
+        }
+        result = {
+          ...result,
+          questionId: result.questionBankId,
+          question: source.question,
+          suggestedAnswer: source.suggestedAnswer,
+          legalBasis: source.legalBasis || '',
+          questionNumber: result.questionBankId,
+        };
       }
-      result = {
-        ...result,
-        questionId: result.questionBankId,
-        question: source.question,
-        suggestedAnswer: source.suggestedAnswer,
-        questionNumber: result.questionBankId,
-      };
+      results.push(result);
     }
+    const result = results.length === 1 ? results[0] : {
+      subject: 'Selected personal attempts',
+      gradedAt: new Date().toISOString(),
+      questions: results.flatMap((entry, resultIndex) => {
+        const label = [entry.feature, entry.subject, entry.gradedAt
+          ? new Date(entry.gradedAt).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' })
+          : ''].filter(Boolean).join(' · ');
+        if (Array.isArray(entry.questions)) {
+          return entry.questions.map((question, questionIndex) => ({
+            ...question,
+            id: `${entry.resultId}:${question.questionId || questionIndex + 1}`,
+            label: [label, question.questionNumber].filter(Boolean).join(' · '),
+          }));
+        }
+        return [{
+          id: `${entry.resultId}:${entry.questionId || resultIndex + 1}`,
+          label,
+          question: entry.question,
+          suggestedAnswer: entry.suggestedAnswer,
+          legalBasis: entry.legalBasis,
+          userAnswer: entry.userAnswer,
+          feedback: entry.feedback,
+          score: entry.score,
+        }];
+      }),
+    };
     const bytes = await buildVerdictPdf({
       result,
       selectionKind: input.selectionKind,
       selectedIds: input.selectedIds,
     });
-    await dd2026Rpc(env, 'dd2026_record_verdict_export', {
-      p_user_id: user.id,
-      p_grading_result_id: input.gradingResultId,
-      p_request_key: input.requestKey,
-      p_selection_kind: input.selectionKind,
-      p_selected_ids: input.selectedIds,
-      p_output_bytes: bytes.length,
-    });
+    for (let index = 0; index < input.gradingResultIds.length; index += 1) {
+      await dd2026Rpc(env, 'dd2026_record_verdict_export', {
+        p_user_id: user.id,
+        p_grading_result_id: input.gradingResultIds[index],
+        p_request_key: `${input.requestKey.slice(0, 116)}_${String(index + 1).padStart(3, '0')}`,
+        p_selection_kind: input.selectionKind,
+        p_selected_ids: input.selectedIds,
+        p_output_bytes: bytes.length,
+      });
+    }
     return new Response(bytes, {
       status: 200,
       headers: {
@@ -926,6 +984,31 @@ export function createDD2026Handlers(deps) {
         'X-Content-Type-Options': 'nosniff',
       },
     });
+  }
+
+  async function verdictRecords(request, env, origin, allowedOrigin) {
+    await enforceDD2026RateLimit(request, env);
+    const user = await requireAuthenticatedUser(request, env);
+    const input = normalizeVerdictRecordsRequest(await parseBoundedJson(request, 5_000));
+    const result = await dd2026Rpc(env, 'dd2026_verdict_records', {
+      p_user_id: user.id,
+      p_include_deleted: input.includeDeleted,
+      p_limit: input.limit,
+      p_offset: input.offset,
+    });
+    return jsonResponse({ ok: true, result }, 200, origin, allowedOrigin);
+  }
+
+  async function verdictArchive(request, env, origin, allowedOrigin) {
+    await enforceDD2026RateLimit(request, env, true);
+    const user = await requireAuthenticatedUser(request, env);
+    const input = normalizeVerdictArchiveRequest(await parseBoundedJson(request, 40_000));
+    const result = await dd2026Rpc(env, 'dd2026_verdict_archive', {
+      p_user_id: user.id,
+      p_action: input.action,
+      p_records: input.records,
+    });
+    return jsonResponse({ ok: true, result }, 200, origin, allowedOrigin);
   }
 
   async function examResultPdf(request, env, origin, allowedOrigin) {
@@ -1035,6 +1118,33 @@ export function createDD2026Handlers(deps) {
         beadleAssignments: assignments,
       };
       return jsonResponse({ ok: true, result }, 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'room_requests') {
+      const result = await examRoomRpc(env, 'exam_room_request_snapshot', {
+        p_user_id: user.id,
+      });
+      return jsonResponse({ ok: true, result }, 200, origin, allowedOrigin);
+    }
+    if (input.operation === 'payment_proof_review') {
+      const result = await examRoomRpc(env, 'exam_room_payment_proof_review_context', {
+        p_actor_user_id: user.id,
+        p_request_public_id: input.requestId,
+        p_proof_public_id: input.proofId,
+      });
+      const objectPath = String(result?.objectPath || '');
+      if (!objectPath.startsWith(`exam-room/${input.requestId}/`)) {
+        throw new DD2026ValidationError(
+          'EXAM_ROOM_PAYMENT_PROOF_UNAVAILABLE',
+          'The payment proof could not be opened securely.',
+          503,
+        );
+      }
+      const proofUrl = await signExamRoomPaymentProof(env, objectPath);
+      const { objectPath: _privatePath, ...safeResult } = result || {};
+      return jsonResponse({
+        ok: true,
+        result: { ...safeResult, downloadUrl: proofUrl, expiresInSeconds: 300 },
+      }, 200, origin, allowedOrigin);
     }
     let functionName;
     let body;
@@ -1302,6 +1412,45 @@ export function createDD2026Handlers(deps) {
     );
   }
 
+  async function paymentProofUpload(request, env, origin, allowedOrigin) {
+    requireExamRoom2Enabled(env);
+    const user = await requireAuthenticatedUser(request, env);
+    const payload = await parseBoundedJson(request, 11_500_000);
+    const input = normalizeExamRoomPaymentProofUpload(payload);
+    await examRateLimit(request, env, user.id, 'upload', input.requestId);
+    const context = await examRoomRpc(env, 'exam_room_payment_proof_upload_context', {
+      p_user_id: user.id,
+      p_request_public_id: input.requestId,
+    });
+    const prefix = String(context?.objectPrefix || '');
+    if (!prefix.startsWith(`exam-room/${input.requestId}/${user.id}/`)) {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_PAYMENT_PROOF_UNAVAILABLE',
+        'The secure payment-proof location is unavailable.',
+        503,
+      );
+    }
+    const contentHash = await sha256Hex(input.bytes);
+    const objectPath = `${prefix}${contentHash}-${input.fileName}`;
+    await uploadExamRoomPaymentProof(env, objectPath, input.bytes, input.mimeType);
+    try {
+      const result = await examRoomRpc(env, 'exam_room_register_payment_proof', {
+        p_user_id: user.id,
+        p_request_public_id: input.requestId,
+        p_object_path: objectPath,
+        p_safe_file_name: input.fileName,
+        p_mime_type: input.mimeType,
+        p_size_bytes: input.bytes.length,
+        p_content_hash: contentHash,
+        p_request_key: input.requestKey,
+      });
+      return jsonResponse({ ok: true, result }, 201, origin, allowedOrigin);
+    } catch (error) {
+      await deleteExamRoomPaymentProof(env, objectPath);
+      throw error;
+    }
+  }
+
   async function examCommand(request, env, origin, allowedOrigin, ctx) {
     requireExamRoomEnabled(env);
     const user = await requireAuthenticatedUser(request, env);
@@ -1350,6 +1499,54 @@ export function createDD2026Handlers(deps) {
     const actor = ['issue_activation', 'revoke_activation'].includes(input.operation)
       ? await requireAdministrator(request, env)
       : user;
+    if (input.operation === 'send_room_quotation') {
+      const quotation = await examRoomRpc(env, 'exam_room_quotation_delivery_context', {
+        p_actor_user_id: actor.id,
+        p_request_public_id: input.requestId,
+      });
+      const amount = `PHP ${(Number(quotation?.amountCentavos || 0) / 100).toFixed(2)}`;
+      const delivery = await sendExamRoomEmail(env, {
+        recipient: quotation?.recipientEmail,
+        subject: `Due Diligence Examination Room quotation \u2014 ${quotation?.examinationTitle || 'Examination'}`,
+        text: [
+          `Hello ${quotation?.recipientName || 'Professor'},`,
+          '',
+          'Your Due Diligence Examination Room quotation is ready.',
+          `Examination: ${quotation?.examinationTitle || ''}`,
+          `School: ${quotation?.schoolName || ''}`,
+          `Course or subject: ${quotation?.courseSubject || ''}`,
+          `Schedule: ${quotation?.examinationDate || ''} ${quotation?.startTime || ''} (${quotation?.timeZone || 'Asia/Manila'})`,
+          `Quotation: ${amount}`,
+          quotation?.quotationNotes ? `Notes: ${quotation.quotationNotes}` : '',
+          '',
+          'Sign in at https://duediligence.ph and open Examination Room to view the request status and submit proof of payment.',
+        ].filter(Boolean).join('\n'),
+      });
+      const result = await examRoomRpc(env, 'exam_room_record_quotation_delivery', {
+        p_actor_user_id: actor.id,
+        p_request_public_id: input.requestId,
+        p_delivery_status: delivery.status,
+        p_provider_id: delivery.providerId || null,
+      });
+      return jsonResponse({
+        ok: true,
+        result: {
+          ...result,
+          deliveryStatus: delivery.status,
+          queued: delivery.status !== 'sent',
+          quotation: {
+            amountCentavos: quotation.amountCentavos,
+            currency: quotation.currency,
+            notes: quotation.quotationNotes || null,
+          },
+        },
+      }, 200, origin, allowedOrigin);
+    }
+    let provisionalRoomKey = null;
+    if (input.operation === 'generate_provisional_room_key') {
+      provisionalRoomKey = oneTimeRoomKey();
+      input.activationKey = provisionalRoomKey;
+    }
     const spec = await commandSpec(input, actor.id, rateHash, stepUp, env);
     if (input.operation === 'confirm_questions' || input.operation === 'confirm_replacement_questions') {
       const access = await examRoomRpc(env, 'exam_room_exam_access_v3', {
@@ -1416,7 +1613,14 @@ export function createDD2026Handlers(deps) {
         ? reopenedSubmissionView(result, input)
         : ['issue_break_glass', 'close_break_glass', 'record_break_glass_review'].includes(input.operation)
           ? breakGlassActionView(result, input)
+          : input.operation === 'generate_provisional_room_key'
+            ? {
+              ...(result || {}),
+              oneTimeProfessorKey: provisionalRoomKey,
+              oneTimeOnly: true,
+            }
           : result;
+    provisionalRoomKey = null;
     return jsonResponse({ ok: true, result: publicResult }, 200, origin, allowedOrigin);
   }
 
@@ -1428,6 +1632,51 @@ export function createDD2026Handlers(deps) {
       return sha256Hex(random);
     };
     const specs = {
+      submit_room_request: async () => ({ functionName: 'exam_room_submit_request', body: {
+        p_user_id: userId,
+        p_professor_name: input.professorName,
+        p_school_name: input.schoolName,
+        p_course_subject: input.courseSubject,
+        p_examination_title: input.examinationTitle,
+        p_examination_date: input.examinationDate,
+        p_start_time: input.startTime,
+        p_time_zone: input.timeZone,
+        p_expected_duration_minutes: input.expectedDurationMinutes,
+        p_estimated_student_count: input.estimatedStudentCount,
+        p_examination_type: input.examinationType,
+        p_beadle_name: input.beadleName,
+        p_beadle_email: input.beadleEmail,
+        p_quotation_recipient: input.quotationRecipient,
+        p_notes: input.notes,
+        p_request_key: input.requestKey,
+      } }),
+      claim_room_request: async () => ({ functionName: 'exam_room_claim_request', body: {
+        p_actor_user_id: userId,
+        p_request_public_id: input.requestId,
+        p_request_key: input.requestKey,
+      } }),
+      prepare_room_quotation: async () => ({ functionName: 'exam_room_prepare_quotation', body: {
+        p_actor_user_id: userId,
+        p_request_public_id: input.requestId,
+        p_amount_centavos: input.amountCentavos,
+        p_notes: input.notes,
+        p_request_key: input.requestKey,
+      } }),
+      generate_provisional_room_key: async () => ({ functionName: 'exam_room_generate_provisional_key', body: {
+        p_actor_user_id: userId,
+        p_request_public_id: input.requestId,
+        p_token_hash: await h(input.activationKey),
+        p_expires_at: input.expiresAt,
+        p_request_key: input.requestKey,
+      } }),
+      review_room_payment: async () => ({ functionName: 'exam_room_review_payment_proof', body: {
+        p_actor_user_id: userId,
+        p_request_public_id: input.requestId,
+        p_proof_public_id: input.proofId,
+        p_decision: input.decision,
+        p_reason: input.reason,
+        p_request_key: input.requestKey,
+      } }),
       issue_activation: async () => ({ functionName: 'exam_room_issue_professor_activation', body: {
         p_actor_user_id: userId, p_target_email: input.targetEmail,
         p_token_hash: await h(input.activationKey), p_room_title: input.roomTitle,
@@ -1798,8 +2047,11 @@ export function createDD2026Handlers(deps) {
     features,
     importContent,
     modelAnswerUpload,
+    paymentProofUpload,
     questionUpload,
     rosterUpload,
     verdictPdf,
+    verdictRecords,
+    verdictArchive,
   };
 }

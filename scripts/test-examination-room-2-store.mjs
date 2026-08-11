@@ -1,14 +1,12 @@
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
+await import('../assets/examination-room-2-store.js');
 const {
   STORE_NAMES,
   createLeaseCoordinator,
   createStore,
   retryDelay,
   sha256Hex,
-} = require('../assets/examination-room-2-store.js');
+} = globalThis.DueDiligenceExaminationRoomStore;
 
 function clone(value) {
   return value == null ? value : structuredClone(value);

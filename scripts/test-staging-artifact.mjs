@@ -7,6 +7,14 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const stagingUrl =
   'https://duediligence-examinations-staging.wallyesteban1993.workers.dev';
+const stagingPublishableKey = String(
+  process.env.STAGING_SUPABASE_PUBLISHABLE_KEY || '',
+);
+assert.match(
+  stagingPublishableKey,
+  /^sb_publishable_[A-Za-z0-9_-]{20,}$/,
+  'The authorized staging publishable key must be supplied through the environment.',
+);
 
 execFileSync(process.execPath, ['scripts/build-staging-artifact.mjs'], {
   cwd: root,
@@ -15,8 +23,7 @@ execFileSync(process.execPath, ['scripts/build-staging-artifact.mjs'], {
     STAGING_PUBLIC_URL: stagingUrl,
     STAGING_WORKER_URL: stagingUrl,
     STAGING_SUPABASE_URL: 'https://hlzqmreeoghbldnhlybr.supabase.co',
-    STAGING_SUPABASE_PUBLISHABLE_KEY:
-      'sb_publishable_staging_contract_test_only_1234567890',
+    STAGING_SUPABASE_PUBLISHABLE_KEY: stagingPublishableKey,
   },
   stdio: 'pipe',
 });
@@ -28,7 +35,7 @@ assert.equal(rootFiles.includes('CNAME'), false);
 const config = await readFile(path.join(output, 'assets/phase2-config.js'), 'utf8');
 const index = await readFile(path.join(output, 'index.html'), 'utf8');
 assert.match(config, /hlzqmreeoghbldnhlybr/);
-assert.match(config, /sb_publishable_staging_contract_test_only_1234567890/);
+assert.equal(config.includes(stagingPublishableKey), true);
 assert.match(config, /duediligence-examinations-staging\.wallyesteban1993\.workers\.dev/);
 assert.match(index, /duediligence-examinations-staging\.wallyesteban1993\.workers\.dev/);
 assert.doesNotMatch(config, /hbllomlijfznnuudpdvr/);

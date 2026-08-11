@@ -514,7 +514,7 @@ test('signed-out users cannot query any Quorum data', async () => {
 test('Quorum reads use the verified session identity and controlled RPC', async () => {
   let rpcBody;
   const restore = installForumFetch(async (url, options) => {
-    assert.match(url, /\/rest\/v1\/rpc\/forum_quorum_query$/);
+    assert.match(url, /\/rest\/v1\/rpc\/forum_quorum_query_v2$/);
     rpcBody = JSON.parse(options.body);
     return Response.json({ items: [], hasMore: false, nextCursor: null });
   });
@@ -541,7 +541,7 @@ test('Quorum image signing preserves the Supabase storage API prefix', async () 
   const imagePath = `entries/${entryA}/evidence.png`;
   const absoluteImagePath = `entries/${entryA}/absolute-evidence.jpg`;
   const restore = installForumFetch(async (url) => {
-    if (url.endsWith('/rest/v1/rpc/forum_quorum_query')) {
+    if (url.endsWith('/rest/v1/rpc/forum_quorum_query_v2')) {
       return Response.json({
         items: [{
           entryId: entryA,
@@ -636,7 +636,7 @@ test('Quorum insights and Affirm rosters use dedicated least-privilege RPCs', as
 test('Quorum commands cannot spoof author identity', async () => {
   let rpcBody;
   const restore = installForumFetch(async (url, options) => {
-    assert.match(url, /\/rest\/v1\/rpc\/forum_quorum_command$/);
+    assert.match(url, /\/rest\/v1\/rpc\/forum_quorum_command_v2$/);
     rpcBody = JSON.parse(options.body);
     return Response.json({
       entryId: entryA,

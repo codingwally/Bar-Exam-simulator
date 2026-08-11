@@ -10,6 +10,10 @@ const index = read('index.html');
 const experience = read('assets/phase2-experience.js');
 const adminHtml = read('admin/index.html');
 const admin = read('admin/admin.js');
+const publicLanding = index.slice(
+  index.indexOf('<div class="pb-landing" id="private-beta-landing">'),
+  index.indexOf('<dialog class="pb-dialog" id="private-beta-dialog"'),
+);
 
 for (const label of [
   'Mock Bar',
@@ -27,9 +31,10 @@ for (const label of [
 }
 
 assert.match(
-  index,
-  /Early Access Beta:<\/strong>\s*<span>Some features are still being refined\.<\/span>/,
+  publicLanding,
+  /One platform, four focused chambers[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room/,
 );
+assert.doesNotMatch(publicLanding, /Early Access Beta|Enter the Beta|Beta Access Active/i);
 assert.match(
   index,
   /<a class="brand" href="\/" aria-label="Due Diligence home" aria-describedby="brand-subtitle-meaning">/,

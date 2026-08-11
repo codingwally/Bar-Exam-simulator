@@ -13,14 +13,20 @@ assert.match(siteUrl, /^https:\/\/[a-z0-9.-]+\.workers\.dev$/);
 assert.match(email, /^dd-ui-[a-z0-9-]+@example\.com$/);
 assert.ok(password.length >= 16, 'A disposable staging-user password is required.');
 
-const runId = `ui-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+const requestedRunId = String(process.env.STAGING_UI_RUN_ID || '').trim();
+const runId = requestedRunId || `ui-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+assert.match(runId, /^ui-[a-z0-9-]{8,80}$/);
 const createdExamIds = [];
 const results = {
   runId,
   examinations: [],
+  draftPersistence: {},
   responsive: {},
   accessibility: {},
+  reducedMotion: {},
+  highZoom: {},
   consoleErrors: [],
+  networkErrors: [],
   pageErrors: [],
 };
 
@@ -96,8 +102,118 @@ async function completeOnboardingIfShown(page) {
   await onboarding.waitFor({ state: 'hidden', timeout: 20_000 });
 }
 
+function normalizeEditorText(value) {
+  return String(value || '')
+    .replace(/\r/g, '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+async function readEditorText(page, selector) {
+  return page.locator(selector).evaluate((editor) => (
+    editor.isContentEditable ? editor.innerText : editor.value
+  ));
+}
+
+async function verifyTwentyTabSwitches(page, selector, label, initialAnswer) {
+  await page.evaluate(() => {
+    window.__ddQaVisibilityChanges = 0;
+    window.__ddQaVisibilityState = document.visibilityState;
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => window.__ddQaVisibilityState,
+    });
+    document.addEventListener('visibilitychange', () => {
+      window.__ddQaVisibilityChanges += 1;
+    });
+  });
+
+  const alternatePage = await page.context().newPage();
+  await alternatePage.goto('about:blank');
+  let expected = initialAnswer;
+  try {
+    for (let index = 1; index <= 20; index += 1) {
+      expected += `\n\nDraft continuity check ${index}.`;
+      await page.bringToFront();
+      await page.locator(selector).fill(expected);
+      await alternatePage.bringToFront();
+      await page.evaluate(() => {
+        window.__ddQaVisibilityState = 'hidden';
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await page.waitForTimeout(35);
+      await page.bringToFront();
+      await page.evaluate(() => {
+        window.__ddQaVisibilityState = 'visible';
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+      await page.waitForTimeout(35);
+      assert.equal(
+        normalizeEditorText(await readEditorText(page, selector)),
+        normalizeEditorText(expected),
+        `${label} lost text during tab switch ${index}.`,
+      );
+    }
+    await waitForSaved(page);
+    const visibilityChanges = await page.evaluate(() => window.__ddQaVisibilityChanges || 0);
+    assert.ok(
+      visibilityChanges >= 40,
+      `${label} did not observe the required hidden/visible lifecycle transitions (${visibilityChanges}).`,
+    );
+    results.draftPersistence[label] = {
+      switches: 20,
+      visibilityChanges,
+      automationVisibilityOverride: true,
+      liveTextPreserved: true,
+    };
+  } finally {
+    await alternatePage.close();
+  }
+
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 45_000 });
+  await page.waitForFunction(
+    () => Boolean(
+      window.DueDiligencePhase4?.getSession?.()?.access_token
+      && window.DueDiligencePhase2?.getSession?.()?.access_token
+    ),
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForFunction(
+    (editorSelector) => (
+      window.DueDiligenceExaminations?.getState?.().screen === 'room'
+      && Boolean(document.querySelector(editorSelector))
+    ),
+    selector,
+    { timeout: 30_000 },
+  );
+  assert.equal(
+    normalizeEditorText(await readEditorText(page, selector)),
+    normalizeEditorText(expected),
+    `${label} did not restore the newest draft after reload.`,
+  );
+  results.draftPersistence[label].reloadRestored = true;
+  return expected;
+}
+
+async function completeTermsAcceptanceIfShown(page) {
+  await page.waitForTimeout(500);
+  const overlay = page.locator('#dd2-entry-overlay.is-open');
+  if (!await overlay.isVisible().catch(() => false)) return;
+  const consent = overlay.locator('#dd2-entry-consent');
+  assert.equal(
+    await consent.isVisible().catch(() => false),
+    true,
+    `Unexpected authentication overlay: ${await overlay.innerText()}`,
+  );
+  await consent.locator('#dd2-entry-legal-acceptance').check();
+  await consent.locator('#dd2-entry-consent-submit').click();
+  await overlay.waitFor({ state: 'hidden', timeout: 20_000 });
+}
+
 async function authenticate(page) {
-  await page.goto(`${siteUrl}/?qa=examinations`, {
+  await page.goto(`${siteUrl}/?qa=examinations&release=${Date.now()}`, {
     waitUntil: 'domcontentloaded',
     timeout: 45_000,
   });
@@ -106,6 +222,26 @@ async function authenticate(page) {
     null,
     { timeout: 15_000 },
   );
+  const configuredBackend = await page.evaluate(async () => {
+    const configuration = window.DueDiligencePhase2Config.supabase;
+    const response = await fetch(`${configuration.url}/auth/v1/health`, {
+      headers: { apikey: configuration.publishableKey },
+    });
+    return {
+      currentHost: location.host,
+      supabaseUrl: configuration.url,
+      publishableKeyLength: configuration.publishableKey.length,
+      publishablePrefixValid: configuration.publishableKey.startsWith('sb_publishable_'),
+      authHealthStatus: response.status,
+    };
+  });
+  assert.deepEqual(configuredBackend, {
+    currentHost: new URL(siteUrl).host,
+    supabaseUrl: 'https://hlzqmreeoghbldnhlybr.supabase.co',
+    publishableKeyLength: 46,
+    publishablePrefixValid: true,
+    authHealthStatus: 200,
+  });
   const authentication = await page.evaluate(async (credentials) => {
     const client = window.supabase.createClient(
       window.DueDiligencePhase2Config.supabase.url,
@@ -129,11 +265,15 @@ async function authenticate(page) {
   assert.equal(authentication.authenticated, true);
   await page.reload({ waitUntil: 'domcontentloaded', timeout: 45_000 });
   await page.waitForFunction(
-    () => Boolean(window.DueDiligencePhase4?.getSession?.()?.access_token),
+    () => Boolean(
+      window.DueDiligencePhase4?.getSession?.()?.access_token
+      && window.DueDiligencePhase2?.getSession?.()?.access_token
+    ),
     null,
-    { timeout: 15_000 },
+    { timeout: 30_000 },
   );
   await completeOnboardingIfShown(page);
+  await completeTermsAcceptanceIfShown(page);
   await page.evaluate(() => localStorage.removeItem('duediligence.examinations.recovery.v1'));
 }
 
@@ -246,12 +386,6 @@ async function completeSubjectMatter(page) {
   const subject = 'Civil Procedure II';
   await page.locator(`[data-exam-subject="${subject}"]`).click();
   await page.locator(`[data-subject-start="${subject}"]`).click();
-
-  const dialog = page.locator('#dd-exam-setup-dialog[open]');
-  await dialog.waitFor({ state: 'visible', timeout: 15_000 });
-  assert.match(await dialog.innerText(), /SUBJECT MATTER/i);
-  await dialog.locator('#dd-setup-timer').selectOption('selfPaced');
-  await dialog.locator('[data-exam-begin]').click();
   await page.waitForFunction(
     () => (
       window.DueDiligenceExaminations?.getState?.().screen === 'room'
@@ -260,6 +394,14 @@ async function completeSubjectMatter(page) {
     null,
     { timeout: 15_000 },
   );
+  assert.equal(
+    await page.locator('#dd-exam-setup-dialog[open]').isVisible().catch(() => false),
+    false,
+    'Subject Matter must start directly without a mandatory timer dialog.',
+  );
+  const practiceRoomText = await page.locator('#dd-per-subject-app').innerText();
+  assert.match(practiceRoomText, /TOTAL WRITING TIME/i);
+  assert.match(practiceRoomText, /00:0\d/);
   const attemptId = await page.evaluate(
     () => window.DueDiligenceExaminations.getState().activeAttemptId,
   );
@@ -267,17 +409,23 @@ async function completeSubjectMatter(page) {
 
   await page.locator('#dd-answer-editor').fill(subjectMatterAnswer);
   await waitForSaved(page);
+  await verifyTwentyTabSwitches(
+    page,
+    '#dd-answer-editor',
+    'subjectMatter',
+    subjectMatterAnswer,
+  );
   await page.locator('[data-submit-current]').click();
   await page.locator('#dd-per-subject-app .dd-verdict-screen h1').filter({
     hasText: 'Individual ALAC assessments.',
   }).waitFor({ state: 'visible', timeout: 150_000 });
 
-  const scores = await page.locator('#dd-per-subject-app .dd-score-five').allTextContents();
+  const scores = await page.locator('#dd-per-subject-app .score-medallion strong').allTextContents();
   assert.equal(scores.length, 1);
-  scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5\.0$/));
+  scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5$/));
   const verdictText = await page.locator('#dd-per-subject-app .dd-verdict-screen').innerText();
-  assert.match(verdictText, /Released Model Answer/i);
-  assert.match(verdictText, /AI Assessment/i);
+  assert.match(verdictText, /Approved Model Answer/i);
+  assert.match(verdictText, /Individual Question Assessment/i);
   assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
 
   return { track: 'per_subject', attemptId, scores };
@@ -319,8 +467,19 @@ async function completeExamination(page, fixture) {
   assert.match(attemptId, /^[0-9a-f-]{36}$/i);
 
   for (let index = 0; index < completeAnswers.length; index += 1) {
-    await page.locator('#dd-answer-editor').fill(completeAnswers[index]);
+    const editorSelector = fixture.track === 'bar_feels'
+      ? '#dd-answer-rich-editor'
+      : '#dd-answer-editor';
+    await page.locator(editorSelector).fill(completeAnswers[index]);
     await waitForSaved(page);
+    if (index === 0 && fixture.track === 'bar_feels') {
+      await verifyTwentyTabSwitches(
+        page,
+        editorSelector,
+        'barFeels',
+        completeAnswers[index],
+      );
+    }
     if (index < completeAnswers.length - 1) {
       await page.locator('[data-question-next]').click();
       await page.waitForFunction(
@@ -353,16 +512,38 @@ async function completeExamination(page, fixture) {
   assert.match(receiptText, /Your examination is preserved/i);
   assert.match(receiptText, /3\s+ANSWERED/i);
 
-  await page.locator('[data-request-ai]').click();
-  await page.locator(`${rootSelector} .dd-verdict-screen h1`).filter({
+  const verdictHeading = page.locator(`${rootSelector} .dd-verdict-screen h1`).filter({
     hasText: 'Individual ALAC assessments.',
-  }).waitFor({ state: 'visible', timeout: 150_000 });
-  const scores = await page.locator(`${rootSelector} .dd-score-five`).allTextContents();
+  });
+  const incompleteAssessment = page.getByText(
+    'The examiner returned an incomplete ALAC assessment.',
+    { exact: true },
+  );
+  let assessmentComplete = false;
+  for (let assessmentAttempt = 1; assessmentAttempt <= 2; assessmentAttempt += 1) {
+    await page.locator('[data-request-ai]').click();
+    const outcome = await Promise.race([
+      verdictHeading.waitFor({ state: 'visible', timeout: 300_000 }).then(() => 'complete'),
+      incompleteAssessment.waitFor({ state: 'visible', timeout: 300_000 }).then(() => 'incomplete'),
+    ]);
+    if (outcome === 'complete') {
+      assessmentComplete = true;
+      break;
+    }
+  }
+  if (!assessmentComplete) {
+    const currentText = await page.locator(rootSelector).innerText().catch(() => 'Unavailable');
+    throw new Error(
+      `AI assessment remained incomplete after one controlled retry. Current UI: ${currentText.slice(0, 2_000)}; `
+      + `network errors: ${JSON.stringify(results.networkErrors)}; console errors: ${JSON.stringify(results.consoleErrors)}`,
+    );
+  }
+  const scores = await page.locator(`${rootSelector} .score-medallion strong`).allTextContents();
   assert.equal(scores.length, 3);
-  scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5\.0$/));
+  scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5$/));
   const verdictText = await page.locator(`${rootSelector} .dd-verdict-screen`).innerText();
-  assert.match(verdictText, /Released Model Answer/i);
-  assert.match(verdictText, /AI Assessment/i);
+  assert.match(verdictText, /Approved Model Answer/i);
+  assert.match(verdictText, /Individual Question Assessment/i);
   assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
 
   return { track: fixture.track, attemptId, scores };
@@ -373,7 +554,17 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1_100 } });
   const page = await context.newPage();
   page.on('console', (message) => {
-    if (message.type() === 'error') results.consoleErrors.push(message.text());
+    if (message.type() === 'error') {
+      results.consoleErrors.push({
+        text: message.text(),
+        url: message.location().url || null,
+      });
+    }
+  });
+  page.on('response', (response) => {
+    if (response.status() >= 500) {
+      results.networkErrors.push({ status: response.status(), url: response.url() });
+    }
   });
   page.on('pageerror', (error) => results.pageErrors.push(String(error)));
 
@@ -396,9 +587,10 @@ try {
   results.examinations.push(await completeExamination(page, barFeelsFixture));
 
   const viewportChecks = [
-    { width: 390, height: 844 },
+    { width: 320, height: 568 },
+    { width: 375, height: 812 },
     { width: 768, height: 1_024 },
-    { width: 1_280, height: 900 },
+    { width: 1_024, height: 768 },
     { width: 1_440, height: 1_100 },
   ];
   const catalogChecks = [
@@ -445,7 +637,61 @@ try {
       await runAccessibilityAudit(page, label);
     }
   }
+
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1_024, height: 768 });
+  for (const catalog of catalogChecks) {
+    await openCatalog(page, catalog.track);
+    const motion = await page.evaluate(() => {
+      const animated = [...document.querySelectorAll('body *')]
+        .filter((element) => {
+          const style = getComputedStyle(element);
+          const duration = Math.max(...style.animationDuration.split(',').map((value) => (
+            value.endsWith('ms') ? Number.parseFloat(value) : Number.parseFloat(value) * 1_000
+          )));
+          return style.animationName !== 'none' && Number.isFinite(duration) && duration > 1;
+        })
+        .map((element) => ({
+          tag: element.tagName,
+          id: element.id,
+          className: String(element.className || '').slice(0, 100),
+        }));
+      return {
+        mediaMatches: matchMedia('(prefers-reduced-motion: reduce)').matches,
+        longAnimations: animated,
+      };
+    });
+    results.reducedMotion[catalog.label] = motion;
+    assert.equal(motion.mediaMatches, true);
+    assert.deepEqual(motion.longAnimations, []);
+  }
+
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2 });
+  for (const catalog of catalogChecks) {
+    await openCatalog(page, catalog.track);
+    const zoom = await page.evaluate(() => ({
+      scale: visualViewport?.scale || 1,
+      visualWidth: visualViewport?.width || innerWidth,
+      layoutWidth: innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      activeControls: [...document.querySelectorAll('button:not([hidden]), a[href]:not([hidden])')]
+        .filter((element) => {
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+        }).length,
+    }));
+    results.highZoom[catalog.label] = zoom;
+    assert.equal(zoom.scale, 2);
+    assert.equal(zoom.documentWidth <= zoom.layoutWidth + 1, true);
+    assert.ok(zoom.activeControls > 0);
+    assert.equal(await page.getByRole('heading', { name: catalog.heading, exact: true }).isVisible(), true);
+  }
+  await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   assert.deepEqual(results.consoleErrors, []);
+  assert.deepEqual(results.networkErrors, []);
   assert.deepEqual(results.pageErrors, []);
   results.ok = true;
   results.createdExamIds = createdExamIds;

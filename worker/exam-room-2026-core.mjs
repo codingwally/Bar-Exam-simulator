@@ -28,6 +28,8 @@ export const EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_MESSAGE =
 
 export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'portal',
+  'room_requests',
+  'payment_proof_review',
   'activation_ledger',
   'exam_intent',
   'professor_authoring_snapshot',
@@ -46,6 +48,12 @@ export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
 ]);
 
 export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
+  'submit_room_request',
+  'claim_room_request',
+  'prepare_room_quotation',
+  'send_room_quotation',
+  'generate_provisional_room_key',
+  'review_room_payment',
   'issue_activation',
   'redeem_activation',
   'revoke_activation',
@@ -141,6 +149,23 @@ function timestamp(value, label) {
     throw new DD2026ValidationError('INVALID_REQUEST', `${label} is invalid.`);
   }
   return date.toISOString();
+}
+
+function calendarDate(value, label) {
+  const normalized = boundedText(value, label, 10, { minimum: 10 });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)
+      || Number.isNaN(new Date(`${normalized}T00:00:00Z`).getTime())) {
+    throw new DD2026ValidationError('INVALID_REQUEST', `${label} is invalid.`);
+  }
+  return normalized;
+}
+
+function clockTime(value, label) {
+  const normalized = boundedText(value, label, 8, { minimum: 5 });
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(normalized)) {
+    throw new DD2026ValidationError('INVALID_REQUEST', `${label} is invalid.`);
+  }
+  return normalized;
 }
 
 function email(value, label = 'Email') {
@@ -451,6 +476,11 @@ export function normalizeExamRoomQuery(input) {
     );
     normalized.limit = integer(payload.limit ?? 200, 'Professor invitation limit', 1, 200);
     normalized.offset = integer(payload.offset ?? 0, 'Professor invitation offset', 0, 100_000);
+  } else if (operation === 'room_requests') {
+    // The authenticated user is the complete authorization scope.
+  } else if (operation === 'payment_proof_review') {
+    normalized.requestId = uuid(payload.requestId, 'Examination Room request');
+    normalized.proofId = optionalUuid(payload.proofId, 'Payment proof');
   } else if (operation === 'exam_intent' || operation === 'professor_authoring_snapshot') {
     normalized.examId = uuid(payload.examId, 'Examination');
   } else if (operation === 'preflight') {
@@ -531,7 +561,62 @@ export function normalizeExamRoomCommand(input) {
     [...EXAM_ROOM_2026_COMMAND_OPERATIONS],
   );
   const n = { operation };
-  if (operation === 'issue_activation') {
+  if (operation === 'submit_room_request') {
+    n.professorName = boundedText(payload.professorName, 'Professor name', 200, { minimum: 2 });
+    n.schoolName = boundedText(payload.schoolName, 'School name', 300, { minimum: 2 });
+    n.courseSubject = boundedText(payload.courseSubject, 'Course or subject', 200, { minimum: 2 });
+    n.examinationTitle = boundedText(payload.examinationTitle, 'Examination title', 200, { minimum: 2 });
+    n.examinationDate = calendarDate(payload.examinationDate, 'Examination date');
+    n.startTime = clockTime(payload.startTime, 'Start time');
+    n.timeZone = boundedText(payload.timeZone ?? 'Asia/Manila', 'Time zone', 80, { minimum: 3 });
+    n.expectedDurationMinutes = integer(payload.expectedDurationMinutes, 'Expected duration', 15, 480);
+    n.estimatedStudentCount = integer(payload.estimatedStudentCount, 'Estimated student count', 1, 500);
+    n.examinationType = enumValue(payload.examinationType ?? 'essay', 'Examination type', ['essay']);
+    n.quotationRecipient = enumValue(
+      payload.quotationRecipient ?? 'professor',
+      'Quotation recipient',
+      ['professor', 'beadle'],
+    );
+    n.beadleName = payload.beadleName
+      ? boundedText(payload.beadleName, 'Beadle name', 200, { minimum: 2 })
+      : null;
+    n.beadleEmail = payload.beadleEmail ? email(payload.beadleEmail, 'Beadle email') : null;
+    if (n.quotationRecipient === 'beadle' && (!n.beadleName || !n.beadleEmail)) {
+      throw new DD2026ValidationError(
+        'INVALID_REQUEST',
+        'Enter the Beadle name and email before sending the quotation to the Beadle.',
+      );
+    }
+    n.notes = boundedText(payload.notes ?? '', 'Request notes', 3_000, { trim: false });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'claim_room_request') {
+    n.requestId = uuid(payload.requestId, 'Examination Room request');
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'prepare_room_quotation') {
+    n.requestId = uuid(payload.requestId, 'Examination Room request');
+    n.amountCentavos = integer(payload.amountCentavos, 'Quotation amount', 1, 1_000_000_000);
+    n.notes = boundedText(payload.notes ?? '', 'Quotation notes', 3_000, { trim: false });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'send_room_quotation') {
+    n.requestId = uuid(payload.requestId, 'Examination Room request');
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'generate_provisional_room_key') {
+    n.requestId = uuid(payload.requestId, 'Examination Room request');
+    n.expiresAt = activationExpiry(payload.expiresAt);
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'review_room_payment') {
+    n.requestId = uuid(payload.requestId, 'Examination Room request');
+    n.proofId = uuid(payload.proofId, 'Payment proof');
+    n.decision = enumValue(payload.decision, 'Payment review', ['verified', 'rejected']);
+    n.reason = boundedText(payload.reason ?? '', 'Payment review reason', 1_000, { trim: true });
+    if (n.decision === 'rejected' && n.reason.length < 5) {
+      throw new DD2026ValidationError(
+        'INVALID_REQUEST',
+        'Explain why the payment proof was rejected.',
+      );
+    }
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'issue_activation') {
     n.targetEmail = email(payload.targetEmail, 'Professor email');
     n.activationKey = credential(payload.activationKey, 'Professor activation key');
     n.roomTitle = boundedText(payload.roomTitle, 'Examination Room title', 200, { minimum: 2 });
@@ -1098,6 +1183,77 @@ export function normalizeExamRoomCommand(input) {
     n.disputeKey = credential(payload.disputeKey, 'Dispute review key');
   }
   return n;
+}
+
+export function normalizeExamRoomPaymentProofUpload(input) {
+  const payload = object(input);
+  const requestId = uuid(payload.requestId, 'Examination Room request');
+  const fileName = boundedText(payload.fileName, 'Payment proof file name', 180, { minimum: 1 })
+    .replace(/[\\/<>:"|?*\u0000-\u001f]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const mimeType = enumValue(payload.mimeType, 'Payment proof file type', [
+    'image/png', 'image/jpeg', 'application/pdf',
+  ]);
+  const raw = String(payload.dataBase64 || '').trim();
+  if (!raw || raw.length > 11_200_000 || !BASE64_PATTERN.test(raw)) {
+    throw new DD2026ValidationError(
+      'INVALID_PAYMENT_PROOF',
+      'Upload a PNG, JPEG, or PDF payment proof no larger than 8 MB.',
+    );
+  }
+  let bytes;
+  try {
+    bytes = base64Bytes(raw);
+  } catch {
+    throw new DD2026ValidationError('INVALID_PAYMENT_PROOF', 'The payment proof could not be read.');
+  }
+  if (bytes.length < 1 || bytes.length > 8 * 1024 * 1024) {
+    throw new DD2026ValidationError(
+      'INVALID_PAYMENT_PROOF',
+      'Upload a PNG, JPEG, or PDF payment proof no larger than 8 MB.',
+    );
+  }
+  const extension = fileName.toLowerCase().split('.').pop();
+  const extensionMatches = mimeType === 'image/png'
+    ? extension === 'png'
+    : mimeType === 'image/jpeg'
+      ? extension === 'jpg' || extension === 'jpeg'
+      : extension === 'pdf';
+  const signatureMatches = mimeType === 'image/png'
+    ? bytes.length >= 8
+      && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+        .every((value, index) => bytes[index] === value)
+    : mimeType === 'image/jpeg'
+      ? bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+      : bytes.length >= 5 && String.fromCharCode(...bytes.slice(0, 5)) === '%PDF-';
+  if (!extensionMatches || !signatureMatches) {
+    throw new DD2026ValidationError(
+      'INVALID_PAYMENT_PROOF',
+      'The payment proof filename and content must match the selected PNG, JPEG, or PDF file type.',
+    );
+  }
+  if (mimeType === 'application/pdf') {
+    const inspectableNames = new TextDecoder('latin1')
+      .decode(bytes)
+      .replace(/#([0-9a-f]{2})/gi, (_match, encoded) => (
+        String.fromCharCode(Number.parseInt(encoded, 16))
+      ));
+    if (/\/(?:Encrypt|JavaScript|JS|OpenAction|AA|Launch|RichMedia|EmbeddedFile|SubmitForm|ImportData)\b/i
+      .test(inspectableNames)) {
+      throw new DD2026ValidationError(
+        'INVALID_PAYMENT_PROOF',
+        'Upload an unencrypted, inactive PDF payment proof.',
+      );
+    }
+  }
+  return {
+    requestId,
+    fileName,
+    mimeType,
+    bytes,
+    requestKey: requestKey(payload.requestKey),
+  };
 }
 
 const FORBIDDEN_METADATA_KEYS = new Set([

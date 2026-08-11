@@ -7,6 +7,7 @@ import {
   EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES,
   normalizeExamResultPdfRequest,
   normalizeExamRoomCommand,
+  normalizeExamRoomPaymentProofUpload,
   normalizeExamRoomQuery,
   normalizeModelAnswerUpload,
   normalizeQuestionUpload,
@@ -223,6 +224,70 @@ test('Admin room invitations require complete room details and a bounded expiry'
     expiresAt: new Date(Date.now() + 8 * 24 * 60 * 60 * 1_000).toISOString(),
     reason: 'Initial beta room invitation for this Professor.',
   }), /no more than seven days/i);
+});
+
+test('room requests are bounded to the supported essay workflow and exact recipients', () => {
+  const examinationDate = new Date(Date.now() + 24 * 60 * 60 * 1_000)
+    .toISOString().slice(0, 10);
+  const normalized = normalizeExamRoomCommand({
+    operation: 'submit_room_request',
+    professorName: 'Professor Maria Santos',
+    schoolName: 'Due Diligence College of Law',
+    courseSubject: 'Labor Law',
+    examinationTitle: 'Labor Law Midterm Examination',
+    examinationDate,
+    startTime: '09:30',
+    timeZone: 'Asia/Manila',
+    expectedDurationMinutes: 120,
+    estimatedStudentCount: 45,
+    examinationType: 'essay',
+    quotationRecipient: 'beadle',
+    beadleName: 'Juan Dela Cruz',
+    beadleEmail: 'BEADLE@example.edu',
+    notes: 'Please prepare one secure Examination Room.',
+    requestKey,
+  });
+  assert.equal(normalized.examinationType, 'essay');
+  assert.equal(normalized.quotationRecipient, 'beadle');
+  assert.equal(normalized.beadleEmail, 'beadle@example.edu');
+  assert.throws(() => normalizeExamRoomCommand({
+    ...normalized,
+    operation: 'submit_room_request',
+    examinationType: 'multiple_choice',
+  }));
+  assert.throws(() => normalizeExamRoomCommand({
+    ...normalized,
+    operation: 'submit_room_request',
+    quotationRecipient: 'beadle',
+    beadleEmail: null,
+  }));
+});
+
+test('payment proof uploads verify extension, signature, size, and active PDF safety', () => {
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  const normalized = normalizeExamRoomPaymentProofUpload({
+    requestId: examId,
+    fileName: 'official-receipt.png',
+    mimeType: 'image/png',
+    dataBase64: png.toString('base64'),
+    requestKey,
+  });
+  assert.equal(normalized.fileName, 'official-receipt.png');
+  assert.equal(normalized.bytes.length, png.length);
+  assert.throws(() => normalizeExamRoomPaymentProofUpload({
+    requestId: examId,
+    fileName: 'renamed.jpg',
+    mimeType: 'image/jpeg',
+    dataBase64: png.toString('base64'),
+    requestKey,
+  }), (error) => error?.code === 'INVALID_PAYMENT_PROOF');
+  assert.throws(() => normalizeExamRoomPaymentProofUpload({
+    requestId: examId,
+    fileName: 'active.pdf',
+    mimeType: 'application/pdf',
+    dataBase64: Buffer.from('%PDF-1.7\n/JavaScript /OpenAction\n%%EOF', 'latin1').toString('base64'),
+    requestKey,
+  }), (error) => error?.code === 'INVALID_PAYMENT_PROOF');
 });
 
 test('Professor invitation ledger and revocation inputs are tightly bounded', () => {

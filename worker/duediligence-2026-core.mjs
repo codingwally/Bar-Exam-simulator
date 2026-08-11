@@ -187,12 +187,54 @@ export function normalizeVerdictPdfRequest(input) {
   if (selectedIds.length > 200 || new Set(selectedIds).size !== selectedIds.length) {
     throw new DD2026ValidationError('INVALID_PDF_SELECTION', 'The Verdict selection is invalid.');
   }
+  const rawIds = Array.isArray(payload.gradingResultIds)
+    ? payload.gradingResultIds
+    : [payload.gradingResultId];
+  const gradingResultIds = rawIds.map((id) => uuid(id, 'Grading result'));
+  if (!gradingResultIds.length || gradingResultIds.length > 100
+      || new Set(gradingResultIds).size !== gradingResultIds.length) {
+    throw new DD2026ValidationError('INVALID_PDF_SELECTION', 'Choose between 1 and 100 unique personal attempts.');
+  }
   return {
-    gradingResultId: uuid(payload.gradingResultId, 'Grading result'),
+    gradingResultId: gradingResultIds[0],
+    gradingResultIds,
     selectionKind,
     selectedIds,
     requestKey: requestKey(payload.requestKey),
   };
+}
+
+export function normalizeVerdictRecordsRequest(input) {
+  const payload = object(input || {});
+  return {
+    includeDeleted: payload.includeDeleted === true,
+    limit: Math.min(500, Math.max(1, Number.parseInt(payload.limit, 10) || 200)),
+    offset: Math.min(10_000, Math.max(0, Number.parseInt(payload.offset, 10) || 0)),
+  };
+}
+
+export function normalizeVerdictArchiveRequest(input) {
+  const payload = object(input);
+  const action = String(payload.action || '').trim().toLowerCase();
+  if (!['archive', 'restore'].includes(action) || !Array.isArray(payload.records)
+      || !payload.records.length || payload.records.length > 200) {
+    throw new DD2026ValidationError('INVALID_VERDICT_ARCHIVE', 'Choose between 1 and 200 personal attempts.');
+  }
+  const allowed = new Set([
+    'legacy_grading_result', 'phase4_exam_attempt', 'examination_attempt',
+  ]);
+  const records = payload.records.map((record) => {
+    const sourceType = String(record?.sourceType || '').trim();
+    if (!allowed.has(sourceType)) {
+      throw new DD2026ValidationError('INVALID_VERDICT_ARCHIVE', 'One selected attempt has an invalid record type.');
+    }
+    return { id: uuid(record?.id, 'Verdict record'), sourceType };
+  });
+  const keys = records.map((record) => `${record.sourceType}:${record.id}`);
+  if (new Set(keys).size !== keys.length) {
+    throw new DD2026ValidationError('INVALID_VERDICT_ARCHIVE', 'The selected attempts contain duplicates.');
+  }
+  return { action, records };
 }
 
 export function publicContentItem(item) {

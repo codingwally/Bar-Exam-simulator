@@ -119,8 +119,16 @@
               <button type="button" class="dd2-button dd2-button-primary" id="dd2-google-signin">Continue with Google</button>
               <button type="button" class="dd2-button dd2-button-secondary" id="dd2-guest-continue" hidden>Continue as Guest</button>
             </div>
+            <form class="dd2-entry-consent" id="dd2-entry-consent" hidden>
+              <label class="dd2-check">
+                <input type="checkbox" id="dd2-entry-legal-acceptance" required>
+                <span>I accept the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>
+                  and acknowledge the <button class="link-button" type="button" data-dd2-view="privacy">Privacy Policy</button>.</span>
+              </label>
+              <button type="submit" class="dd2-button dd2-button-primary" id="dd2-entry-consent-submit">Accept &amp; Continue</button>
+            </form>
             <div class="dd2-status" id="dd2-auth-status" role="status" aria-live="polite"></div>
-            <p class="dd2-entry-note">Google opens its secure consent screen. Authentication is required before any examination question is displayed.</p>
+            <p class="dd2-entry-note" id="dd2-entry-note">Google opens its secure consent screen. Only basic identity scopes are requested.</p>
             <div class="dd2-dialog-footer"><button type="button" class="dd2-button dd2-button-secondary dd2-dialog-back" id="dd2-entry-back">Back</button></div>
           </div>
         </section>
@@ -403,7 +411,7 @@
   }
 
   function resumePendingSubmission() {
-    if (!state.session?.access_token || !state.profile?.profile_completed_at) return;
+    if (!state.session?.access_token) return;
     const pending = readPendingSubmission();
     if (!pending) return;
     safeSessionRemove(pendingSubmissionStorageKey);
@@ -478,12 +486,48 @@
     }
   }
 
+  function safeReturnHash(value) {
+    try {
+      const url = new URL(String(value || ''), location.origin);
+      if (url.origin !== location.origin || url.pathname !== location.pathname) return '';
+      return /^#[a-z0-9][a-z0-9-]{0,64}$/i.test(url.hash) ? url.hash : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function rememberAuthReturn(returnHash) {
+    const hash = safeReturnHash(returnHash);
+    if (!hash) return;
+    safeSessionWrite(authReturnStorageKey, `${location.origin}${location.pathname}${hash}`);
+  }
+
+  function setEntryMode(mode = 'signin') {
+    const consent = document.getElementById('dd2-entry-consent');
+    const actions = document.querySelector('#dd2-entry-overlay .dd2-entry-actions');
+    const note = document.getElementById('dd2-entry-note');
+    const consentMode = mode === 'consent';
+    if (consent) consent.hidden = !consentMode;
+    if (actions) actions.hidden = consentMode;
+    if (note) {
+      note.textContent = consentMode
+        ? 'Acceptance is recorded with the current document versions and timestamp.'
+        : 'Google opens its secure consent screen. Only basic identity scopes are requested.';
+    }
+    if (!consentMode) {
+      const checkbox = document.getElementById('dd2-entry-legal-acceptance');
+      if (checkbox) checkbox.checked = false;
+    }
+  }
+
   function showEntry(options = {}) {
     const completed = Boolean(options.completed);
     hideNativeView();
     const allowGuest = options.allowGuest === true && !completed;
     const allowDismiss = options.allowDismiss === true;
     const routeBound = options.routeBound === true;
+    rememberAuthReturn(options.returnHash);
+    setEntryMode(options.mode || 'signin');
     const overlay = document.getElementById('dd2-entry-overlay');
     const title = document.getElementById('dd2-entry-title');
     const copy = document.getElementById('dd2-entry-copy');
@@ -513,9 +557,13 @@
   }
 
   function returnFromEntry() {
-    const protectedRoute = ['subject-matter', 'bar-feels']
+    const protectedRoute = ['subject-matter', 'bar-feels', 'quorum', 'examination-room']
       .includes(location.hash.replace(/^#/, ''));
     closeEntry();
+    if (!state.session?.access_token) {
+      safeSessionRemove(authReturnStorageKey);
+      return;
+    }
     if (protectedRoute) {
       history.replaceState(null, '', `${location.pathname}${location.search}`);
     }
@@ -551,10 +599,10 @@
   }
 
   function syncEntryWithHistoryRoute() {
-    const protectedRoute = ['subject-matter', 'bar-feels']
+    const protectedRoute = ['subject-matter', 'bar-feels', 'quorum', 'examination-room']
       .includes(location.hash.replace(/^#/, ''));
     if (protectedRoute && !state.session?.access_token) {
-      showEntry({ routeBound: true });
+      showEntry({ routeBound: true, returnHash: location.hash });
       return;
     }
     const overlay = document.getElementById('dd2-entry-overlay');
@@ -584,7 +632,9 @@
     setStatus('dd2-auth-status', 'Opening Google securely…');
     armAuthTimeout();
     try {
-      safeSessionWrite(authReturnStorageKey, location.href);
+      if (!safeSessionRead(authReturnStorageKey)) {
+        safeSessionWrite(authReturnStorageKey, location.href);
+      }
       safeSessionWrite(authAttemptStorageKey, String(Date.now()));
       const { error } = await state.client.auth.signInWithOAuth({
         provider: 'google',
@@ -673,6 +723,78 @@
     return true;
   }
 
+  function restoreAuthDestination() {
+    const stored = safeSessionRead(authReturnStorageKey);
+    const hash = safeReturnHash(stored);
+    safeSessionRemove(authReturnStorageKey);
+    if (!hash) {
+      resumePendingSubmission();
+      return;
+    }
+    history.replaceState({}, '', `${location.pathname}${hash}`);
+    requestAnimationFrame(() => {
+      if (hash === '#mock') {
+        global.showPage?.('mock', document.getElementById('spa-mock'));
+        global.showWelcome?.({ preserveSession: true });
+      } else if (hash === '#subject-matter') {
+        global.DueDiligenceExaminations?.openPerSubject?.();
+      } else if (hash === '#bar-feels') {
+        global.openPremiumBarFeels?.();
+      } else if (hash === '#quorum') {
+        global.DueDiligenceQuorum?.open?.(document.getElementById('spa-community'));
+      } else if (hash === '#examination-room') {
+        global.openExaminationRoom?.();
+      } else if (hash === '#account') {
+        renderNativeView('account');
+      }
+      resumePendingSubmission();
+    });
+  }
+
+  function openTermsAcceptance() {
+    showEntry({
+      mode: 'consent',
+      allowDismiss: true,
+      routeBound: true,
+      title: 'Review the current Terms and Privacy Policy',
+      copy: 'One acknowledgment is required before your first protected activity.',
+    });
+    requestAnimationFrame(() => document.getElementById('dd2-entry-legal-acceptance')?.focus());
+  }
+
+  async function submitEntryConsent(event) {
+    event.preventDefault();
+    if (!state.client || !state.user || !state.session?.access_token) {
+      setEntryMode('signin');
+      setStatus('dd2-auth-status', 'Sign in with Google before accepting the documents.', 'error');
+      return;
+    }
+    const accepted = document.getElementById('dd2-entry-legal-acceptance')?.checked === true;
+    if (!accepted) {
+      setStatus('dd2-auth-status', 'Accept the Terms of Use and acknowledge the Privacy Policy to continue.', 'error');
+      return;
+    }
+    const button = document.getElementById('dd2-entry-consent-submit');
+    if (button) button.disabled = true;
+    setStatus('dd2-auth-status', 'Recording your acceptance securely…');
+    try {
+      const { error } = await state.client.rpc('accept_terms', {
+        p_terms_version: config.legal.termsVersion,
+        p_privacy_version: config.legal.privacyVersion,
+        p_acceptance_source: 'protected_feature_sign_in',
+      });
+      if (error) throw error;
+      closeEntry();
+      setStatus('dd2-auth-status', '');
+      global.toast?.('Terms and Privacy acceptance recorded.', 'ok');
+      restoreAuthDestination();
+    } catch {
+      setStatus('dd2-auth-status', 'Acceptance could not be recorded. Check your connection and try again.', 'error');
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   async function loadUserState() {
     if (!state.client || !state.user) return;
     if (deferOnboardingForPrivateBeta()) return;
@@ -715,13 +837,13 @@
       }
     }
     syncAuthUi();
-    if (!profile?.profile_completed_at || !terms?.length) {
-      openOnboarding();
+    if (!terms?.length) {
+      openTermsAcceptance();
     } else {
       closeEntry();
       setOverlay(false, 'dd2-onboarding-overlay');
-      global.toast?.(`Welcome back, ${profile.display_name || 'future counsel'}.`, 'ok');
-      resumePendingSubmission();
+      global.toast?.(`Welcome back, ${profile?.display_name || state.user?.user_metadata?.full_name || 'future counsel'}.`, 'ok');
+      restoreAuthDestination();
     }
   }
 
@@ -1296,7 +1418,7 @@
     global.DueDiligencePrivateBeta?.clear?.();
     syncAuthUi();
     hideNativeView();
-    showEntry({ allowDismiss: true });
+    closeEntry();
   }
 
   function bindNativeViewHandlers(view) {
@@ -1542,6 +1664,7 @@
     injectShell();
     bindNavigation();
     document.getElementById('dd2-google-signin')?.addEventListener('click', signInWithGoogle);
+    document.getElementById('dd2-entry-consent')?.addEventListener('submit', submitEntryConsent);
     document.getElementById('dd2-guest-continue')?.addEventListener('click', continueGuestFromEntry);
     document.getElementById('dd2-entry-close')?.addEventListener('click', returnFromEntry);
     document.getElementById('dd2-entry-back')?.addEventListener('click', returnFromEntry);

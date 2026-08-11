@@ -8,6 +8,9 @@
   const commentLimit = 2000;
   const citationLimit = 1000;
   const imageLimit = 3 * 1024 * 1024;
+  const imageTotalLimit = 12 * 1024 * 1024;
+  const imageCountLimit = 12;
+  const avatarSourceLimit = 20 * 1024 * 1024;
   const subjects = [
     'Political Law',
     'Labor Law',
@@ -84,6 +87,7 @@
     circleJoinedOnly: false,
     searchResults: null,
     selectedImage: null,
+    selectedImages: [],
     directEntryId: null,
     legacyPostId: null,
     trigger: null,
@@ -91,6 +95,8 @@
     searchController: null,
     pending: new Set(),
     draftOwnerId: null,
+    drawerOpen: false,
+    drawerReturnFocus: null,
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -282,8 +288,40 @@
     return api('/quorum/command', {
       operation,
       payload,
-      ...(image ? { image } : {}),
+      ...(Array.isArray(image) ? { images: image } : image ? { image } : {}),
     });
+  }
+
+  function profilePhotoCommand(profileImage) {
+    return api('/quorum/command', {
+      operation: 'set_profile_avatar',
+      payload: {},
+      profileImage,
+    });
+  }
+
+  function commentDraftKey(entryId, parentCommentId = 'root') {
+    const userId = currentUserId();
+    return userId
+      ? `duediligence.quorum.comment.v1.${userId}.${entryId}.${parentCommentId || 'root'}`
+      : null;
+  }
+
+  function readCommentDraft(entryId, parentCommentId = 'root') {
+    const key = commentDraftKey(entryId, parentCommentId);
+    if (!key) return { body: '', isAnonymous: false };
+    try {
+      const value = JSON.parse(safeStorage(localStorage, 'get', key) || 'null');
+      if (!value || Date.now() - Number(value.savedAt || 0) > 7 * 86400000) return { body: '', isAnonymous: false };
+      return { body: String(value.body || ''), isAnonymous: value.isAnonymous === true };
+    } catch { return { body: '', isAnonymous: false }; }
+  }
+
+  function writeCommentDraft(entryId, parentCommentId, body, isAnonymous) {
+    const key = commentDraftKey(entryId, parentCommentId);
+    if (!key) return;
+    if (!body) safeStorage(localStorage, 'remove', key);
+    else safeStorage(localStorage, 'set', key, JSON.stringify({ body, isAnonymous, savedAt: Date.now() }));
   }
 
   function telemetry(eventType, details = {}) {
@@ -539,7 +577,16 @@
     wrapper.type = 'button';
     wrapper.className = 'lex-author';
     wrapper.setAttribute('aria-label', `Open ${author.displayName || 'member'} profile`);
-    wrapper.append(textElement('span', 'lex-author-avatar', initials(author.displayName)));
+    const avatar = textElement('span', 'lex-author-avatar', initials(author.displayName));
+    if (author.avatarUrl && !author.anonymous) {
+      const image = document.createElement('img');
+      image.src = author.avatarUrl;
+      image.alt = '';
+      image.loading = 'lazy';
+      image.decoding = 'async';
+      avatar.replaceChildren(image);
+    }
+    wrapper.append(avatar);
     const copy = document.createElement('span');
     copy.className = 'lex-author-copy';
     const name = author.verifiedAcademicIdentity
@@ -617,15 +664,24 @@
 
     const source = sourceLink(item.sourceUrl);
     if (source) inner.append(source);
-    if (item.imageUrl) {
-      const image = document.createElement('img');
-      image.className = 'quorum-entry-image';
-      image.src = item.imageUrl;
-      image.alt = item.imageAlt
-        || `Image attached to the Quorum post by ${item.author?.displayName || 'a member'}`;
-      image.loading = 'lazy';
-      image.decoding = 'async';
-      inner.append(image);
+    const entryImages = Array.isArray(item.images) && item.images.length
+      ? item.images
+      : item.imageUrl ? [{ imageUrl: item.imageUrl, imageAlt: item.imageAlt }] : [];
+    if (entryImages.length) {
+      const gallery = document.createElement('div');
+      gallery.className = 'quorum-entry-images';
+      entryImages.forEach((entryImage) => {
+        if (!entryImage?.imageUrl) return;
+        const image = document.createElement('img');
+        image.className = 'quorum-entry-image';
+        image.src = entryImage.imageUrl;
+        image.alt = entryImage.imageAlt
+          || `Image attached to the Quorum post by ${item.author?.displayName || 'a member'}`;
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        gallery.append(image);
+      });
+      if (gallery.childElementCount) inner.append(gallery);
     }
 
     if (item.practiceQuestionId && item.subject) {
@@ -1070,18 +1126,31 @@
     field.rows = 3;
     field.placeholder = 'Add a focused comment. Keep personal information out of Quorum.';
     field.setAttribute('aria-label', 'Comment');
+    const draft = readCommentDraft(item.entryId);
+    field.value = draft.body;
+    const anonymous = checkbox('Comment anonymously', draft.isAnonymous);
+    anonymous.label.className = 'quorum-comment-anonymous';
     const actions = document.createElement('div');
     actions.className = 'lex-form-actions';
-    const counter = textElement('span', 'lex-edit-counter', `0 / ${commentLimit.toLocaleString()}`);
+    const counter = textElement('span', 'lex-edit-counter', `${field.value.length.toLocaleString()} / ${commentLimit.toLocaleString()}`);
     field.addEventListener('input', () => {
       counter.textContent = `${field.value.length.toLocaleString()} / ${commentLimit.toLocaleString()}`;
+      writeCommentDraft(item.entryId, 'root', field.value, anonymous.input.checked);
+    });
+    anonymous.input.addEventListener('change', () => {
+      writeCommentDraft(item.entryId, 'root', field.value, anonymous.input.checked);
     });
     const submit = button('Post comment', 'lex-button lex-button-primary', async () => {
       if (submit.disabled || !field.value.trim()) return;
       submit.disabled = true;
       try {
-        await command('create_comment', { entryId: item.entryId, body: field.value });
+        await command('create_comment', {
+          entryId: item.entryId,
+          body: field.value,
+          isAnonymous: anonymous.input.checked,
+        });
         field.value = '';
+        writeCommentDraft(item.entryId, 'root', '', false);
         const comments = await query('comments', { entryId: item.entryId, limit: 200 });
         state.comments.set(item.entryId, comments);
         item.counts.comments = comments.length;
@@ -1094,7 +1163,7 @@
         submit.disabled = false;
       }
     });
-    actions.append(counter, submit);
+    actions.append(anonymous.label, counter, submit);
     form.append(field, actions);
     form.addEventListener('submit', (event) => event.preventDefault());
     return form;
@@ -1107,6 +1176,16 @@
       field.maxLength = commentLimit;
       field.rows = 5;
       field.placeholder = 'Write a focused reply.';
+      const draft = readCommentDraft(item.entryId, parent.commentId);
+      field.value = draft.body;
+      const anonymous = checkbox('Reply anonymously', draft.isAnonymous);
+      anonymous.label.className = 'quorum-comment-anonymous';
+      field.addEventListener('input', () => writeCommentDraft(
+        item.entryId, parent.commentId, field.value, anonymous.input.checked,
+      ));
+      anonymous.input.addEventListener('change', () => writeCommentDraft(
+        item.entryId, parent.commentId, field.value, anonymous.input.checked,
+      ));
       const error = inlineError();
       const actions = document.createElement('div');
       actions.className = 'lex-dialog-actions';
@@ -1118,7 +1197,9 @@
             entryId: item.entryId,
             parentCommentId: parent.commentId,
             body: field.value,
+            isAnonymous: anonymous.input.checked,
           });
+          writeCommentDraft(item.entryId, parent.commentId, '', false);
           const comments = await query('comments', { entryId: item.entryId, limit: 200 });
           state.comments.set(item.entryId, comments);
           item.counts.comments = comments.length;
@@ -1131,7 +1212,7 @@
         }
       });
       actions.append(button('Back', 'lex-button', closeDialog), submit);
-      body.append(field, error, actions);
+      body.append(field, anonymous.label, error, actions);
     });
   }
 
@@ -1334,6 +1415,9 @@
             caseTitle: item.caseTitle,
             opinionOnly: opinion.checked,
             circleId: item.circle?.circleId || null,
+            // Preserve the author's original privacy choice when an anonymous
+            // post is edited. The server still verifies ownership.
+            isAnonymous: item.anonymous === true,
           });
           closeDialog();
           state.view === 'entry' ? openEntry(item.entryId) : refreshFeed();
@@ -1777,6 +1861,43 @@
     const actions = document.createElement('div');
     actions.className = 'quorum-profile-actions';
     if (profile.viewerOwns) {
+      const photoControl = document.createElement('div');
+      photoControl.className = 'quorum-profile-photo-control';
+      const preview = document.createElement(profile.avatarUrl ? 'img' : 'span');
+      preview.className = 'quorum-profile-photo-preview';
+      if (profile.avatarUrl) {
+        preview.src = profile.avatarUrl;
+        preview.alt = 'Your current Quorum profile photo';
+      } else {
+        preview.textContent = initials(profile.displayName);
+        preview.setAttribute('aria-label', 'No profile photo selected');
+      }
+      const photoInput = document.createElement('input');
+      photoInput.type = 'file';
+      photoInput.accept = 'image/jpeg,image/png,image/webp';
+      photoInput.hidden = true;
+      const choosePhoto = button('Update profile photo', 'lex-button', () => photoInput.click());
+      const photoHelp = textElement('small', '', 'JPEG, PNG, or WebP up to 20 MB. Due Diligence removes embedded metadata and creates an optimized private version.');
+      const photoCopy = document.createElement('div');
+      photoCopy.append(choosePhoto, photoHelp);
+      photoInput.addEventListener('change', async () => {
+        const file = photoInput.files?.[0];
+        if (!file) return;
+        choosePhoto.disabled = true;
+        choosePhoto.textContent = 'Preparing photo…';
+        try {
+          const image = await optimizedProfilePhoto(file);
+          await profilePhotoCommand(image);
+          toast('Your Quorum profile photo was updated.', 'ok');
+          await renderProfileView();
+        } catch (error) {
+          choosePhoto.disabled = false;
+          choosePhoto.textContent = 'Update profile photo';
+          handleError(error, null);
+        }
+      });
+      photoControl.append(preview, photoCopy, photoInput);
+      panel.append(photoControl);
       const settings = profile.settings || {
         profilePublic: true,
         showSchool: true,
@@ -1975,7 +2096,7 @@
     return {
       body: $('#lex-post-body')?.value || '',
       kind: $('#quorum-entry-type')?.value === 'ask_community' ? 'question' : 'discussion',
-      imageAlt: $('#quorum-image-alt')?.value || '',
+      imageAlts: $$('[data-quorum-image-alt]').map((field) => field.value || ''),
       sourceUrl: $('#lex-post-source')?.value || '',
       entryType: $('#quorum-entry-type')?.value || '',
       subject: $('#quorum-entry-subject')?.value || null,
@@ -1984,6 +2105,7 @@
       caseTitle: $('#quorum-case-title')?.value || '',
       opinionOnly: Boolean($('#quorum-opinion-only')?.checked),
       circleId: $('#quorum-entry-circle')?.value || null,
+      isAnonymous: $('input[name="quorum-post-identity"]:checked')?.value === 'anonymous',
     };
   }
 
@@ -1991,13 +2113,13 @@
     const key = draftKey();
     if (!key) return;
     const payload = composerPayload();
-    if (!payload.body && !payload.sourceUrl && !state.selectedImage) {
+    if (!payload.body && !payload.sourceUrl && !state.selectedImages.length) {
       safeStorage(localStorage, 'remove', key);
       return;
     }
     safeStorage(localStorage, 'set', key, JSON.stringify({
       ...payload,
-      hasImage: Boolean(state.selectedImage),
+      imageCount: state.selectedImages.length,
       savedAt: Date.now(),
     }));
   }
@@ -2020,7 +2142,11 @@
       $('#quorum-entry-year').value = draft.lawSchoolYear || '';
       $('#quorum-case-title').value = draft.caseTitle || '';
       $('#quorum-opinion-only').checked = Boolean(draft.opinionOnly);
-      if (draft.hasImage) $('#quorum-image-status').textContent = 'For privacy, select the image again before publishing.';
+      const identity = $(`input[name="quorum-post-identity"][value="${draft.isAnonymous ? 'anonymous' : 'profile'}"]`);
+      if (identity) identity.checked = true;
+      if (Number(draft.imageCount || (draft.hasImage ? 1 : 0))) {
+        $('#quorum-image-status').textContent = 'For privacy, select the images again before publishing.';
+      }
       syncCaseTitle();
       updateComposerCounter();
     } catch {
@@ -2031,11 +2157,12 @@
   function resetComposerForSession() {
     $('#lex-composer')?.reset();
     state.selectedImage = null;
+    state.selectedImages = [];
     if ($('#quorum-entry-type')) $('#quorum-entry-type').value = 'student_support';
     if ($('#quorum-entry-category')) $('#quorum-entry-category').value = 'law_school_life';
-    if ($('#quorum-image-alt')) $('#quorum-image-alt').value = '';
+    $('#quorum-image-list')?.replaceChildren();
     if ($('#quorum-image-status')) {
-      $('#quorum-image-status').textContent = 'JPEG, PNG, or WebP · 3 MB maximum';
+      $('#quorum-image-status').textContent = 'Up to 12 JPEG, PNG, or WebP images · 3 MB each';
     }
     if ($('#quorum-image-remove')) $('#quorum-image-remove').hidden = true;
     syncCaseTitle();
@@ -2067,14 +2194,21 @@
       if (payload.caseTitle) preview.prepend(textElement('h3', 'quorum-entry-heading', payload.caseTitle));
       const source = sourceLink(payload.sourceUrl);
       if (source) preview.append(source);
-      if (state.selectedImage) {
-        const objectUrl = URL.createObjectURL(state.selectedImage);
-        const image = document.createElement('img');
-        image.className = 'quorum-entry-image';
-        image.src = objectUrl;
-        image.alt = 'Selected image preview';
-        preview.append(image);
-        dialog.addEventListener('close', () => URL.revokeObjectURL(objectUrl), { once: true });
+      const objectUrls = [];
+      if (state.selectedImages.length) {
+        const gallery = document.createElement('div');
+        gallery.className = 'quorum-entry-images';
+        state.selectedImages.forEach((file, index) => {
+          const objectUrl = URL.createObjectURL(file);
+          objectUrls.push(objectUrl);
+          const image = document.createElement('img');
+          image.className = 'quorum-entry-image';
+          image.src = objectUrl;
+          image.alt = payload.imageAlts[index] || `Selected image ${index + 1}`;
+          gallery.append(image);
+        });
+        preview.append(gallery);
+        dialog.addEventListener('close', () => objectUrls.forEach((url) => URL.revokeObjectURL(url)), { once: true });
       }
       const actions = document.createElement('div');
       actions.className = 'lex-dialog-actions';
@@ -2085,7 +2219,7 @@
 
   function cancelComposer() {
     const payload = composerPayload();
-    if (!payload.body.trim() && !payload.sourceUrl && !state.selectedImage) {
+    if (!payload.body.trim() && !payload.sourceUrl && !state.selectedImages.length) {
       clearComposer();
       return;
     }
@@ -2111,6 +2245,51 @@
     return { mimeType: file.type, dataBase64: btoa(binary) };
   }
 
+  async function optimizedProfilePhoto(file) {
+    if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+        || file.size < 1 || file.size > avatarSourceLimit) {
+      throw new Error('Choose a JPEG, PNG, or WebP profile photo smaller than 20 MB.');
+    }
+    const bitmap = typeof createImageBitmap === 'function'
+      ? await createImageBitmap(file)
+      : await new Promise((resolve, reject) => {
+        const image = new Image();
+        const url = URL.createObjectURL(file);
+        image.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(image);
+        };
+        image.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('This photo could not be opened. Choose another JPG, PNG, or WebP image.'));
+        };
+        image.src = url;
+      });
+    try {
+      if (bitmap.width < 256 || bitmap.height < 256) {
+        throw new Error('Choose a profile photo at least 256 pixels wide and tall.');
+      }
+      const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+      const width = Math.max(256, Math.round(bitmap.width * scale));
+      const height = Math.max(256, Math.round(bitmap.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d', { alpha: false });
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, width, height);
+      context.drawImage(bitmap, 0, 0, width, height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+      if (!blob || blob.size > imageLimit) {
+        throw new Error('This photo is too large after optimization. Choose a smaller photo.');
+      }
+      const payload = await imageToPayload(new File([blob], 'profile.jpg', { type: 'image/jpeg' }));
+      return { ...payload, width, height, cropX: 0.5, cropY: 0.5 };
+    } finally {
+      bitmap.close?.();
+    }
+  }
+
   async function publishEntry(event) {
     event.preventDefault();
     const submit = $('#lex-post-submit');
@@ -2119,10 +2298,10 @@
     setFeedStatus('Publishing post…');
     try {
       const payload = composerPayload();
-      if (state.selectedImage && !payload.imageAlt.trim()) {
-        throw new Error('Add a short photo description so everyone can understand the image.');
+      if (state.selectedImages.length && payload.imageAlts.some((description) => !description.trim())) {
+        throw new Error('Add a short description for every selected image.');
       }
-      const image = await imageToPayload(state.selectedImage);
+      const images = await Promise.all(state.selectedImages.map(imageToPayload));
       const result = await command('create_entry', {
         body: payload.body,
         entryType: payload.entryType,
@@ -2133,8 +2312,9 @@
         opinionOnly: payload.opinionOnly,
         sourceUrl: payload.sourceUrl,
         circleId: payload.circleId,
-        imageAlt: payload.imageAlt,
-      }, image);
+        imageAlts: payload.imageAlts,
+        isAnonymous: payload.isAnonymous,
+      }, images);
       clearComposer();
       if (result.publicationStatus === 'pending') {
         toast('Announcement submitted for moderator approval.');
@@ -2195,6 +2375,65 @@
       $('#quorum-image-alt').required = false;
       $('#quorum-image-alt').value = '';
     }
+    saveDraft();
+  }
+
+  function renderSelectedImages() {
+    const list = $('#quorum-image-list');
+    if (!list) return;
+    list.replaceChildren();
+    state.selectedImages.forEach((file, index) => {
+      const card = document.createElement('label');
+      card.className = 'quorum-image-draft';
+      const objectUrl = URL.createObjectURL(file);
+      const image = document.createElement('img');
+      image.src = objectUrl;
+      image.alt = '';
+      image.addEventListener('load', () => URL.revokeObjectURL(objectUrl), { once: true });
+      const description = document.createElement('input');
+      description.maxLength = 500;
+      description.required = true;
+      description.dataset.quorumImageAlt = String(index);
+      description.placeholder = `Describe image ${index + 1}`;
+      description.setAttribute('aria-label', `Description for image ${index + 1}`);
+      description.addEventListener('input', saveDraft);
+      card.append(image, description);
+      list.append(card);
+    });
+  }
+
+  function handleImagesSelection() {
+    const field = $('#quorum-entry-image');
+    const files = Array.from(field?.files || []);
+    if (!files.length) return;
+    const invalid = files.find((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+      || file.size < 1 || file.size > imageLimit);
+    const total = files.reduce((sum, file) => sum + file.size, 0);
+    if (files.length > imageCountLimit || invalid || total > imageTotalLimit) {
+      field.value = '';
+      state.selectedImage = null;
+      state.selectedImages = [];
+      renderSelectedImages();
+      toast('Choose up to 12 JPEG, PNG, or WebP images, 3 MB each and 12 MB total.');
+      return;
+    }
+    state.selectedImages = files;
+    state.selectedImage = files[0] || null;
+    $('#quorum-image-status').textContent = `${files.length} image${files.length === 1 ? '' : 's'} selected · ${(total / 1024 / 1024).toFixed(1)} MB total`;
+    $('#quorum-image-remove').hidden = false;
+    renderSelectedImages();
+    $('.quorum-add-details')?.setAttribute('open', '');
+    saveDraft();
+  }
+
+  function removeSelectedImages() {
+    state.selectedImage = null;
+    state.selectedImages = [];
+    const field = $('#quorum-entry-image');
+    if (field) field.value = '';
+    if ($('#quorum-image-status')) $('#quorum-image-status').textContent = 'Up to 12 JPEG, PNG, or WebP images · 3 MB each';
+    if ($('#quorum-image-remove')) $('#quorum-image-remove').hidden = true;
+    $('#quorum-image-list')?.replaceChildren();
     saveDraft();
   }
 
@@ -2400,6 +2639,7 @@
 
   function deactivate() {
     state.active = false;
+    closeQuorumDrawer({ restoreFocus: false });
     state.searchController?.abort();
     $$('.quorum-affirm-menu').forEach((menu) => {
       menu.hidden = true;
@@ -2427,6 +2667,50 @@
     return true;
   }
 
+  function closeQuorumDrawer({ restoreFocus = true } = {}) {
+    if (!state.drawerOpen) return;
+    state.drawerOpen = false;
+    const drawer = $('#quorum-navigation');
+    drawer?.classList.remove('is-open');
+    drawer?.setAttribute('aria-hidden', 'true');
+    $('#quorum-menu-scrim')?.classList.remove('is-open');
+    $('#quorum-menu-open')?.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('quorum-drawer-open');
+    if (restoreFocus) (state.drawerReturnFocus || $('#quorum-menu-open'))?.focus?.();
+  }
+
+  function openQuorumDrawer(trigger = $('#quorum-menu-open')) {
+    const drawer = $('#quorum-navigation');
+    if (!drawer) return;
+    state.drawerOpen = true;
+    state.drawerReturnFocus = trigger;
+    drawer.classList.add('is-open');
+    drawer.setAttribute('aria-hidden', 'false');
+    $('#quorum-menu-scrim')?.classList.add('is-open');
+    $('#quorum-menu-open')?.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('quorum-drawer-open');
+    $('#quorum-menu-close')?.focus();
+  }
+
+  function trapQuorumDrawerFocus(event) {
+    if (!state.drawerOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeQuorumDrawer();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const controls = $$('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])', $('#quorum-navigation'));
+    if (!controls.length) return;
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  }
+
   function bind() {
     $('#lex-composer')?.addEventListener('submit', publishEntry);
     $('#lex-post-body')?.addEventListener('input', updateComposerCounter);
@@ -2435,12 +2719,17 @@
       syncCaseTitle();
       saveDraft();
     });
-    ['quorum-entry-category', 'quorum-entry-subject', 'quorum-entry-year', 'quorum-case-title', 'quorum-entry-circle', 'quorum-opinion-only', 'quorum-image-alt']
+    ['quorum-entry-category', 'quorum-entry-subject', 'quorum-entry-year', 'quorum-case-title', 'quorum-entry-circle', 'quorum-opinion-only']
       .forEach((id) => $(`#${id}`)?.addEventListener('change', saveDraft));
-    $('#quorum-entry-image')?.addEventListener('change', handleImageSelection);
-    $('#quorum-image-remove')?.addEventListener('click', removeSelectedImage);
+    $$('input[name="quorum-post-identity"]').forEach((control) => control.addEventListener('change', saveDraft));
+    $('#quorum-entry-image')?.addEventListener('change', handleImagesSelection);
+    $('#quorum-image-remove')?.addEventListener('click', removeSelectedImages);
     $('#quorum-entry-preview')?.addEventListener('click', previewEntry);
     $('#quorum-entry-cancel')?.addEventListener('click', cancelComposer);
+    $('#quorum-menu-open')?.addEventListener('click', (event) => openQuorumDrawer(event.currentTarget));
+    $('#quorum-menu-close')?.addEventListener('click', () => closeQuorumDrawer());
+    $('#quorum-menu-scrim')?.addEventListener('click', () => closeQuorumDrawer());
+    document.addEventListener('keydown', trapQuorumDrawerFocus);
     $('#lex-load-more')?.addEventListener('click', () => {
       if (state.view === 'search') searchQuorum(state.filters.query, { append: true });
       else refreshFeed({ append: true });
@@ -2465,8 +2754,15 @@
     });
     $('#quorum-search-clear')?.addEventListener('click', clearSearch);
     $$('[data-quorum-view]').forEach((control) => {
-      control.addEventListener('click', () => setView(control.dataset.quorumView, { push: true }));
+      control.addEventListener('click', () => {
+        closeQuorumDrawer({ restoreFocus: false });
+        setView(control.dataset.quorumView, { push: true });
+      });
     });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') saveDraft();
+    });
+    global.addEventListener('pagehide', saveDraft, { capture: true });
     global.addEventListener('online', () => {
       if (state.active && state.authenticated) {
         state.view === 'search' ? searchQuorum(state.filters.query) : setView(state.view);

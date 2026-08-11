@@ -12,6 +12,10 @@ const examinationsSource = await readFile(
   new URL('../assets/examinations.js', import.meta.url),
   'utf8',
 );
+const privateBetaCss = await readFile(
+  new URL('../assets/private-beta-landing.css', import.meta.url),
+  'utf8',
+);
 
 class FakeClassList {
   constructor() {
@@ -236,8 +240,18 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/examinations\.js\?v=qa-cycle-20260731-1/,
+  /assets\/examinations\.js\?v=live-experience-20260811-1/,
   'The protected examination-route fix must ship behind a fresh browser cache key.',
+);
+assert.match(
+  privateBetaCss,
+  /body\.private-beta-public \.dd2-overlay:not\(#dd2-native-view\):not\(\.is-open\)/,
+  'An open protected-route sign-in overlay must remain visible over the public landing page.',
+);
+assert.match(
+  html,
+  /assets\/private-beta-landing\.css\?v=live-experience-20260811-2/,
+  'The public sign-in visibility fix must ship behind a fresh browser cache key.',
 );
 
 console.log('Authentication route-overlay behavioral regression passed.');

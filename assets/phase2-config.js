@@ -22,7 +22,7 @@
       aiImprovementConsentVersion: 'ai-improvement-beta-v1-2026-07-28',
     }),
     features: Object.freeze({
-      privateBetaGate: true,
+      privateBetaGate: false,
       payments: false,
       subscriptionEnforcement: true,
       coachingBooking: false,

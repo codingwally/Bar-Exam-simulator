@@ -180,6 +180,14 @@
   }
 
   async function openPrimaryAdmission(trigger = null) {
+    if (!gateEnabled) {
+      global.DueDiligencePhase2?.openSignIn?.({
+        allowDismiss: true,
+        title: 'Welcome to Due Diligence',
+        copy: 'Sign in with Google when you are ready to begin a protected activity.',
+      });
+      return;
+    }
     await resolveGlobalBetaPolicy();
     if (state.globalBetaEnabled) {
       openAdmission(currentSession()?.access_token ? 'google-intro' : 'google', trigger);
@@ -330,6 +338,11 @@
 
   async function syncAuthenticatedState(detail = {}) {
     const authenticated = detail.authenticated === true || Boolean(currentSession()?.access_token);
+    if (!gateEnabled) {
+      if (authenticated) showApplication();
+      else showLanding();
+      return;
+    }
     const api = privateBetaApi();
     if (!authenticated) {
       showLanding();
@@ -390,6 +403,40 @@
     global.DueDiligencePhase2?.openView?.(view);
   }
 
+  function openProtectedFeature(feature, trigger = null) {
+    const routes = {
+      mock: '#mock',
+      quorum: '#quorum',
+      'bar-feels': '#bar-feels',
+      'examination-room': '#examination-room',
+    };
+    const returnHash = routes[feature] || '#mock';
+    if (!currentSession()?.access_token) {
+      global.DueDiligencePhase2?.openSignIn?.({
+        allowDismiss: true,
+        routeBound: true,
+        returnHash,
+        title: feature === 'examination-room' ? 'Enter the Examination Room' : 'Continue to Due Diligence',
+        copy: 'Use Google to continue. You will return to the exact feature you selected.',
+      });
+      return;
+    }
+    showApplication();
+    requestAnimationFrame(() => {
+      if (feature === 'mock') {
+        global.showPage?.('mock', document.getElementById('spa-mock'));
+        global.showWelcome?.({ preserveSession: true });
+      } else if (feature === 'quorum') {
+        global.showPage?.('community', document.getElementById('spa-community'));
+      } else if (feature === 'bar-feels') {
+        global.openPremiumBarFeels?.();
+      } else if (feature === 'examination-room') {
+        global.openExaminationRoom?.();
+      }
+      trigger?.blur?.();
+    });
+  }
+
   function bindEvents() {
     document.querySelectorAll('[data-pb-open-admission]').forEach((button) => {
       button.addEventListener('click', () => { openPrimaryAdmission(button); });
@@ -407,6 +454,21 @@
       const summary = document.getElementById('private-beta-summary');
       summary?.scrollIntoView({ behavior: state.reducedMotion ? 'auto' : 'smooth', block: 'start' });
       requestAnimationFrame(() => document.getElementById('pb-summary-disclosure')?.focus?.());
+    });
+    document.getElementById('pb-explore-platform')?.addEventListener('click', () => {
+      document.getElementById('public-platform')?.scrollIntoView({
+        behavior: state.reducedMotion ? 'auto' : 'smooth',
+        block: 'start',
+      });
+    });
+    document.querySelectorAll('[data-public-action="docket"]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (currentSession()?.access_token) openLegalView('account');
+        else global.DueDiligencePhase2?.openSignIn?.({ allowDismiss: true, returnHash: '#account' });
+      });
+    });
+    document.querySelectorAll('[data-protected-feature]').forEach((button) => {
+      button.addEventListener('click', () => openProtectedFeature(button.dataset.protectedFeature, button));
     });
     document.getElementById('pb-motion-toggle')?.addEventListener('click', () => {
       state.userPaused = !state.userPaused;
@@ -476,7 +538,11 @@
 
   async function initialize() {
     if (!gateEnabled) {
-      showApplication();
+      prepareRails();
+      bindEvents();
+      updateMotion();
+      if (currentSession()?.access_token) showApplication();
+      else showLanding();
       return;
     }
     showLanding();

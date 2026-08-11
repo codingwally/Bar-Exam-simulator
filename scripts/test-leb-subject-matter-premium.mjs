@@ -199,9 +199,12 @@ assert.match(
   /Year \$\{escapeHtml\(year\)\} · Term \$\{escapeHtml\(term\)\}/,
 );
 assert.match(examinations, /Subject Matter/);
-for (const timerLabel of ['Strict Scrutiny', 'Quantum Meruit', 'Summary Judgment']) {
+for (const timerLabel of ['12-minute practice', 'Stopwatch', 'Untimed practice']) {
   assert.match(examinations, new RegExp(timerLabel));
 }
+assert.match(examinations, /preferredTimerMode: 'selfPaced'/,
+  'Subject Matter must default to Stopwatch without a mandatory timing interruption.');
+assert.match(examinations, /Questions appear in a random, no-repeat cycle/);
 assert.match(examinations, /async function openVerdict\(attemptId\) \{\s*state\.screen = 'verdict';/);
 assert.match(phase2Css, /\.dd2-native-card \.dd2-view-kicker \{\s*color: #87651f;/);
 

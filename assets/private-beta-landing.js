@@ -17,8 +17,6 @@
   const state = {
     stage: 'disclosure',
     disclosureEndReached: false,
-    railVisible: true,
-    userPaused: false,
     reducedMotion: global.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true,
     busy: false,
     lastTrigger: null,
@@ -200,42 +198,6 @@
     if (dialog.open) dialog.close();
     global.syncModalIsolation?.();
     state.lastTrigger?.focus?.();
-  }
-
-  function updateMotion() {
-    const shouldMove = !state.reducedMotion
-      && !state.userPaused
-      && state.railVisible
-      && !document.hidden;
-    landing.classList.toggle('motion-active', shouldMove);
-    const button = document.getElementById('pb-motion-toggle');
-    if (button) {
-      button.textContent = shouldMove ? 'Pause motion' : 'Resume motion';
-      button.setAttribute('aria-pressed', String(!shouldMove));
-      button.setAttribute('aria-label', shouldMove
-        ? 'Pause photographic rail motion'
-        : 'Resume photographic rail motion');
-      if (state.reducedMotion) {
-        button.textContent = 'Motion reduced';
-        button.disabled = true;
-        button.setAttribute('aria-label', 'Photographic rail motion is disabled by your reduced-motion preference');
-      }
-    }
-  }
-
-  function prepareRails() {
-    document.querySelectorAll('[data-pb-track]').forEach((track) => {
-      if (track.children.length !== 1) return;
-      const source = track.querySelector('[data-pb-sequence]');
-      if (!source) return;
-      const duplicate = source.cloneNode(true);
-      duplicate.setAttribute('aria-hidden', 'true');
-      duplicate.querySelectorAll('img').forEach((image) => {
-        image.loading = 'lazy';
-        image.removeAttribute('fetchpriority');
-      });
-      track.append(duplicate);
-    });
   }
 
   async function verifyCode(event) {
@@ -450,17 +412,6 @@
         openLegalView(button.dataset.pbLegal);
       });
     });
-    document.getElementById('pb-learn-more')?.addEventListener('click', () => {
-      const summary = document.getElementById('private-beta-summary');
-      summary?.scrollIntoView({ behavior: state.reducedMotion ? 'auto' : 'smooth', block: 'start' });
-      requestAnimationFrame(() => document.getElementById('pb-summary-disclosure')?.focus?.());
-    });
-    document.getElementById('pb-explore-platform')?.addEventListener('click', () => {
-      document.getElementById('public-platform')?.scrollIntoView({
-        behavior: state.reducedMotion ? 'auto' : 'smooth',
-        block: 'start',
-      });
-    });
     document.querySelectorAll('[data-public-action="docket"]').forEach((button) => {
       button.addEventListener('click', () => {
         if (currentSession()?.access_token) openLegalView('account');
@@ -469,10 +420,6 @@
     });
     document.querySelectorAll('[data-protected-feature]').forEach((button) => {
       button.addEventListener('click', () => openProtectedFeature(button.dataset.protectedFeature, button));
-    });
-    document.getElementById('pb-motion-toggle')?.addEventListener('click', () => {
-      state.userPaused = !state.userPaused;
-      updateMotion();
     });
     document.getElementById('pb-dialog-close')?.addEventListener('click', closeAdmission);
     document.querySelectorAll('[data-pb-cancel]').forEach((button) => button.addEventListener('click', closeAdmission));
@@ -517,16 +464,6 @@
     global.addEventListener('duediligence:session', (event) => {
       syncAuthenticatedState(event.detail || {});
     });
-    document.addEventListener('visibilitychange', updateMotion);
-
-    const rail = document.querySelector('.pb-rail-region');
-    if ('IntersectionObserver' in global && rail) {
-      const observer = new IntersectionObserver(([entry]) => {
-        state.railVisible = entry?.isIntersecting === true && entry.intersectionRatio >= .15;
-        updateMotion();
-      }, { threshold: [0, .15, .5] });
-      observer.observe(rail);
-    }
     const end = document.getElementById('pb-disclosure-end');
     if ('IntersectionObserver' in global && end && disclosureScroll) {
       const disclosureObserver = new IntersectionObserver(([entry]) => {
@@ -538,19 +475,15 @@
 
   async function initialize() {
     if (!gateEnabled) {
-      prepareRails();
       bindEvents();
-      updateMotion();
       if (currentSession()?.access_token) showApplication();
       else showLanding();
       return;
     }
     showLanding();
-    prepareRails();
     bindEvents();
     updateDisclosureAction();
     updateFinalAction();
-    updateMotion();
     await resolveGlobalBetaPolicy();
     syncAuthenticatedState({ authenticated: Boolean(currentSession()?.access_token) });
   }

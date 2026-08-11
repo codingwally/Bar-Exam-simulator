@@ -244,6 +244,71 @@ test('an incomplete model answer receives exactly one controlled repair call', a
   }
 });
 
+test('two incomplete provider model answers fall back to the approved stored coaching answer', async () => {
+  const originalFetch = globalThis.fetch;
+  let geminiCalls = 0;
+  let finalized = 0;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.endsWith('/auth/v1/user')) return Response.json({ id: userId });
+    if (target.endsWith('/rest/v1/rpc/phase4_reserve_grade_v2')) {
+      return Response.json({
+        ...accessSnapshot(),
+        reservationId,
+        status: 'reserved',
+        replayed: false,
+      });
+    }
+    if (target.endsWith('/rest/v1/rpc/phase4_prepare_exam_attempt_v2')) {
+      return Response.json({ attemptId, status: 'grading' });
+    }
+    if (target.endsWith('/rest/v1/rpc/phase4_finalize_exam_grade')) {
+      finalized += 1;
+      return Response.json({ completed: true, used: 1, remaining: 2 });
+    }
+    if (target.includes('generativelanguage.googleapis.com')) {
+      geminiCalls += 1;
+      return Response.json({
+        candidates: [{
+          content: {
+            parts: [{
+              text: JSON.stringify(examinerResult({
+                modelAnswerALAC: {
+                  answer: 'Yes.',
+                  legalBasis: 'The law applies.',
+                  application: 'Here, the facts satisfy the rule.',
+                  conclusion: 'Therefore, yes.',
+                },
+              })),
+            }],
+          },
+        }],
+      });
+    }
+    throw new Error(`Unexpected fetch: ${target}`);
+  };
+
+  try {
+    const response = await worker.fetch(
+      gradingRequest(
+        'phase4_quality_curated_fallback_0004',
+        `${laborRow['Suggested Answer']}\nThe objective reasonable-person test independently confirms the compelled resignation.`,
+      ),
+      phase4Env(),
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.assessment.score, 4.2);
+    assert.equal(geminiCalls, 2);
+    assert.equal(finalized, 1);
+    assert.match(payload.assessment.modelAnswerALAC.legalBasis, /security of tenure/i);
+    assert.match(payload.assessment.modelAnswerALAC.application, /humiliat/i);
+    assert.match(payload.assessment.modelAnswerALAC.conclusion, /^Therefore,/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('provider capacity preserves the answer, releases the grade, and returns controlled JSON', async () => {
   const originalFetch = globalThis.fetch;
   const operations = [];

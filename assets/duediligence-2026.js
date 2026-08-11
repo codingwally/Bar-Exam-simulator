@@ -54,6 +54,7 @@
       saveTimers: new Map(),
       heartbeatTimer: null,
       countdownTimer: null,
+      safetySaveTimer: null,
       waitingRoomTimer: null,
       waitingRoomPollTimer: null,
       waitingRoomPolling: false,
@@ -4739,20 +4740,29 @@
   function startAttemptTimers() {
     clearInterval(state.exam.countdownTimer);
     clearInterval(state.exam.heartbeatTimer);
+    clearInterval(state.exam.safetySaveTimer);
     clearTimeout(state.exam.submissionStatusTimer);
     updateAttemptClock();
     state.exam.countdownTimer = setInterval(updateAttemptClock, 1000);
     state.exam.heartbeatTimer = setInterval(sendHeartbeat, 60000);
+    state.exam.safetySaveTimer = setInterval(() => {
+      if (!state.exam.attempt || state.exam.attempt.status !== 'in_progress') return;
+      void flushAllLocalSaves()
+        .then(() => flushSyncQueue())
+        .catch(() => setSaveStatus('Draft held on this device — keep this page open', 'error'));
+    }, 30000);
   }
 
   function clearAttemptTimers() {
     clearInterval(state.exam.countdownTimer);
     clearInterval(state.exam.heartbeatTimer);
+    clearInterval(state.exam.safetySaveTimer);
     clearInterval(state.exam.waitingRoomTimer);
     clearTimeout(state.exam.waitingRoomPollTimer);
     clearTimeout(state.exam.submissionStatusTimer);
     state.exam.countdownTimer = null;
     state.exam.heartbeatTimer = null;
+    state.exam.safetySaveTimer = null;
     state.exam.waitingRoomTimer = null;
     state.exam.waitingRoomPollTimer = null;
     state.exam.waitingRoomPolling = false;
@@ -4797,8 +4807,10 @@
     if (seconds === 0) {
       clearInterval(state.exam.countdownTimer);
       clearInterval(state.exam.heartbeatTimer);
+      clearInterval(state.exam.safetySaveTimer);
       state.exam.countdownTimer = null;
       state.exam.heartbeatTimer = null;
+      state.exam.safetySaveTimer = null;
       if (state.exam.attempt.status === 'in_progress') submitAttempt(true);
       else loadSubmissionStatus(state.exam.attempt.attemptId);
     }

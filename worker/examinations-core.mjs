@@ -197,6 +197,37 @@ export function normalizeExaminationQuery(value) {
   return normalized;
 }
 
+const SUBJECT_MATTER_INVENTORY_KEYS = new Set([
+  'questioncount',
+  'availablecount',
+  'totalquestions',
+  'remainingquestions',
+  'cyclequestioncount',
+  'banksize',
+  'inventorycount',
+  'placementcount',
+  'canonicalcount',
+  'totalcount',
+]);
+
+function sanitizedSubjectMatterPayload(value) {
+  if (Array.isArray(value)) return value.map(sanitizedSubjectMatterPayload);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !SUBJECT_MATTER_INVENTORY_KEYS.has(
+      String(key).toLowerCase().replace(/[^a-z0-9]/g, ''),
+    ))
+    .map(([key, nested]) => [key, sanitizedSubjectMatterPayload(nested)]));
+}
+
+export function sanitizeSubjectMatterCatalog(value) {
+  return sanitizedSubjectMatterPayload(value);
+}
+
+export function sanitizeSubjectMatterSelection(value) {
+  return sanitizedSubjectMatterPayload(value);
+}
+
 export function normalizeExaminationCommand(value) {
   const payload = objectPayload(value);
   const operation = operationFrom(payload, EXAMINATION_COMMAND_OPERATIONS);

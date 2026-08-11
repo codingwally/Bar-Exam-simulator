@@ -8,6 +8,8 @@ import {
   assessmentPolicy,
   buildExaminerPrompt,
   chooseQuestionContext,
+  curatedModelAnswerALAC,
+  modelAnswerSectionsForQuestion,
   modelAnswerQualityIssues,
   normalizeRequest,
   parseQuestionBank,
@@ -126,6 +128,8 @@ import {
   normalizeExaminationCommand,
   normalizeExaminationQuery,
   normalizeUploadRequest,
+  sanitizeSubjectMatterCatalog,
+  sanitizeSubjectMatterSelection,
 } from './examinations-core.mjs';
 import {
   ReleaseContentError,
@@ -2744,7 +2748,7 @@ ${repairIssues.map((issue) => `- ${issue}`).join('\n') || '- Schema or ALAC comp
 Rewrite the entire JSON response once. Preserve the stored legal substance, return complete schema-valid JSON, make Application fact-specific and the most developed section, and start Conclusion with "Therefore,".`;
       gemini = await callGemini(env, attemptPrompt, groundingEnabled);
       try {
-        const validatedAssessment = validateExaminerResult(
+        let validatedAssessment = validateExaminerResult(
           examinerResultWithDecimalScore(gemini.result),
           policy,
           [...storedSources, ...gemini.groundedSources],
@@ -2752,6 +2756,18 @@ Rewrite the entire JSON response once. Preserve the stored legal substance, retu
         repairIssues = phase4ModelQualityEnforced(env)
           ? modelAnswerQualityIssues(validatedAssessment, context)
           : [];
+        if (repairIssues.length && attempt === 1) {
+          const curatedModelAnswer = curatedModelAnswerALAC(context);
+          if (curatedModelAnswer) {
+            validatedAssessment = {
+              ...validatedAssessment,
+              modelAnswerALAC: curatedModelAnswer,
+            };
+            // The reviewed stored answer is the authoritative legal corpus. Its
+            // four required sections are preserved without imposing AI verbosity.
+            repairIssues = [];
+          }
+        }
         if (repairIssues.length) {
           throw new ExaminerError(
             'MALFORMED_MODEL_RESPONSE',
@@ -2762,6 +2778,7 @@ Rewrite the entire JSON response once. Preserve the stored legal substance, retu
         assessment = applyDeterministicScoreCap(
           {
             ...validatedAssessment,
+            modelAnswerSections: modelAnswerSectionsForQuestion(validatedAssessment, context),
             humanVerified: context.verified === true,
             educationalNotice: 'AI-generated educational material. Not independently verified. Consult the linked official authorities.',
           },
@@ -3357,7 +3374,7 @@ ${repairIssues.map((issue) => `- ${issue}`).join('\n') || '- Schema or ALAC comp
 Return one complete schema-valid JSON assessment. Preserve the stored legal substance.`;
     gemini = await callGemini(env, attemptPrompt, groundingEnabled);
     try {
-      const validated = validateExaminerResult(
+      let validated = validateExaminerResult(
         examinerResultWithDecimalScore(gemini.result),
         policy,
         [...storedSources, ...gemini.groundedSources],
@@ -3365,6 +3382,18 @@ Return one complete schema-valid JSON assessment. Preserve the stored legal subs
       repairIssues = phase4ModelQualityEnforced(env)
         ? modelAnswerQualityIssues(validated, context)
         : [];
+      if (repairIssues.length && attempt === 1) {
+        const curatedModelAnswer = curatedModelAnswerALAC(context);
+        if (curatedModelAnswer) {
+          validated = {
+            ...validated,
+            modelAnswerALAC: curatedModelAnswer,
+          };
+          // The reviewed stored answer is the authoritative legal corpus. Its
+          // four required sections are preserved without imposing AI verbosity.
+          repairIssues = [];
+        }
+      }
       if (repairIssues.length) {
         throw new ExaminerError(
           'MALFORMED_MODEL_RESPONSE',
@@ -3375,6 +3404,7 @@ Return one complete schema-valid JSON assessment. Preserve the stored legal subs
       assessment = applyDeterministicScoreCap(
         {
           ...validated,
+          modelAnswerSections: modelAnswerSectionsForQuestion(validated, context),
           humanVerified: true,
           educationalNotice: 'AI-generated educational assessment based on the stored approved answer and linked authorities. Not legal advice.',
         },
@@ -3493,7 +3523,7 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
     const result = await examinationRpc(env, 'subject_matter_catalog', {
       p_user_id: user.id,
     });
-    return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+    return jsonResponse({ ok: true, data: sanitizeSubjectMatterCatalog(result) }, 200, origin, allowedOrigin);
   }
   if (user && query.operation === 'subject_next') {
     const result = await examinationRpc(env, 'subject_matter_next_question', {
@@ -3503,7 +3533,7 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
       p_term: query.term,
       p_reset_cycle: query.resetCycle,
     });
-    return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+    return jsonResponse({ ok: true, data: sanitizeSubjectMatterSelection(result) }, 200, origin, allowedOrigin);
   }
   if (user && query.operation === 'subject_performance') {
     const result = await examinationRpc(env, 'subject_matter_performance', {

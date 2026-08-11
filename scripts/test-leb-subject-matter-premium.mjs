@@ -194,10 +194,16 @@ assert.match(
 assert.match(examinationCore, /EXAM_PREMIUM_REQUIRED/);
 assert.match(examinationCore, /'quiz'/);
 assert.match(examinationsCss, /\.dd-subject-group/);
-assert.match(
-  examinations,
-  /Year \$\{escapeHtml\(year\)\} · Term \$\{escapeHtml\(term\)\}/,
-);
+assert.match(examinations, /function subjectHierarchyMarkup\(selected, prefix\)/);
+assert.match(examinations, /<span>Year \$\{escapeHtml\(year\)\}<\/span>/);
+assert.match(examinations, /<span>Term \$\{escapeHtml\(term\)\}<\/span>/);
+assert.match(examinations, /aria-expanded="\$\{yearOpen \? 'true' : 'false'\}"/);
+assert.match(examinations, /aria-controls="\$\{escapeAttribute\(yearPanelId\)\}"/);
+assert.match(examinations, /data-subject-search-input/);
+assert.match(examinations, /id="dd-subject-selector-dialog"/);
+assert.match(examinations, /function subjectWritingGuide\(question = \{\}\)/);
+assert.match(examinations, /Improved model response/);
+assert.match(examinations, /Individual question assessments\./);
 assert.match(examinations, /Subject Matter/);
 for (const timerLabel of ['12-minute practice', 'Stopwatch', 'Untimed practice']) {
   assert.match(examinations, new RegExp(timerLabel));
@@ -205,7 +211,10 @@ for (const timerLabel of ['12-minute practice', 'Stopwatch', 'Untimed practice']
 assert.match(examinations, /preferredTimerMode: 'selfPaced'/,
   'Subject Matter must default to Stopwatch without a mandatory timing interruption.');
 assert.match(examinations, /Questions appear in a random, no-repeat cycle/);
-assert.match(examinations, /async function openVerdict\(attemptId\) \{\s*state\.screen = 'verdict';/);
+assert.match(
+  examinations,
+  /async function openVerdict\(attemptId\) \{\s*const track = state\.active\?\.examination\?\.track \|\| state\.track;\s*state\.screen = 'verdict';/,
+);
 assert.match(phase2Css, /\.dd2-native-card \.dd2-view-kicker \{\s*color: #87651f;/);
 
 const publicArtifact = JSON.stringify({

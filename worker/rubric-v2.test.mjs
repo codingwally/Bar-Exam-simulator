@@ -7,7 +7,10 @@ import {
   applyDeterministicScoreCap,
   assessmentPolicy,
   buildExaminerPrompt,
+  curatedModelAnswerALAC,
   inferQuestionType,
+  modelAnswerQualityIssues,
+  modelAnswerSectionsForQuestion,
   usesBarAlignedRubric,
   validateExaminerResult,
 } from './examiner-core.mjs';
@@ -188,6 +191,91 @@ test('common distinction and enumeration phrasing does not invent factual applic
   assert.equal(applicationRequiredForQuestion(distinction), false);
   assert.equal(inferQuestionType(enumeration), 'enumeration');
   assert.equal(applicationRequiredForQuestion(enumeration), false);
+});
+
+test('procedure, doctrine, and mixed tasks are classified without forcing invented facts', () => {
+  const procedure = { question: 'What is the proper procedure for perfecting an appeal from a final judgment?' };
+  const doctrine = { question: 'Explain the doctrine of operative fact and state its limits.' };
+  const mixed = {
+    question: 'Juan filed a petition after the statutory period and the court dismissed it.\n(A) Was the dismissal proper?\n(B) What remedy, if any, remains available?',
+  };
+  assert.equal(inferQuestionType(procedure), 'procedure');
+  assert.equal(applicationRequiredForQuestion(procedure), false);
+  assert.equal(inferQuestionType(doctrine), 'doctrine');
+  assert.equal(applicationRequiredForQuestion(doctrine), false);
+  assert.equal(inferQuestionType(mixed), 'mixed');
+  assert.equal(applicationRequiredForQuestion(mixed), true);
+});
+
+test('non-fact model-answer quality evaluates the requested task instead of fictional facts', () => {
+  const enumerationContext = {
+    question: 'Enumerate and briefly explain the essential requisites of a valid contract.',
+    suggestedAnswer: 'The essential requisites are consent of the contracting parties, an object certain which is the subject matter, and the cause of the obligation established.',
+    legalBasis: 'Article 1318 of the Civil Code requires consent, object certain, and cause as the essential requisites of a contract.',
+    verified: true,
+  };
+  const enumerationAssessment = assessment(4.6, {
+    modelAnswerALAC: {
+      answer: 'The essential requisites of a valid contract are consent, object certain, and cause.',
+      legalBasis: 'Article 1318 of the Civil Code provides that no contract exists unless consent, a certain object, and the cause of the obligation concur.',
+      application: 'Consent is the parties’ meeting of minds; the object must be determinate or determinable; and cause is the essential reason each party assumes the obligation.',
+      conclusion: 'Therefore, all three requisites must concur for a valid contract.',
+    },
+    rubricBreakdown: {
+      responsiveness: 5,
+      legalBasis: 4.5,
+      application: 4.5,
+      conclusion: 4.5,
+      questionType: 'enumeration',
+      applicationRequired: false,
+    },
+  });
+  assert.deepEqual(modelAnswerQualityIssues(enumerationAssessment, enumerationContext), []);
+  const presentation = modelAnswerSectionsForQuestion(enumerationAssessment, enumerationContext);
+  assert.equal(presentation.questionType, 'enumeration');
+  assert.equal(presentation.applicationRequired, false);
+  assert.deepEqual(
+    presentation.sections.map((section) => section.label),
+    ['Direct response', 'Governing source', 'Required items', 'Qualification or effect'],
+  );
+});
+
+test('approved stored ALAC can safely restore coaching sections after provider repair fails', () => {
+  const storedContext = {
+    question: 'Mia is 17 years old. Her parents consent to her marriage. Is it valid?',
+    suggestedAnswer: [
+      'Answer: No. The marriage is void from the beginning.',
+      'Legal Basis: Articles 5 and 35(1) of the Family Code require both contracting parties to be at least 18 years old and declare a marriage involving a party below 18 void from the beginning, even with parental consent.',
+      'Application: Mia was only 17 years old when the marriage was celebrated, while legal capacity requires each contracting party to be at least 18. Her parents’ consent cannot cure that absence of legal capacity or make the underage marriage valid.',
+      'Conclusion: The marriage is void ab initio.',
+    ].join('\n\n'),
+    legalBasis: 'Family Code, Articles 5 and 35(1), require both contracting parties to be at least 18 years old and make an underage marriage void from the beginning.',
+    verified: true,
+  };
+  const restored = curatedModelAnswerALAC(storedContext);
+  assert.ok(restored);
+  assert.equal(restored.answer, 'No. The marriage is void from the beginning.');
+  assert.match(restored.legalBasis, /Articles 5 and 35\(1\)/);
+  assert.match(restored.application, /Mia was only 17/);
+  assert.equal(restored.conclusion, 'Therefore, the marriage is void ab initio.');
+  assert.deepEqual(modelAnswerQualityIssues({ modelAnswerALAC: restored }, storedContext), []);
+});
+
+test('approved concise stored ALAC remains available as a fail-safe coaching answer', () => {
+  const restored = curatedModelAnswerALAC({
+    suggestedAnswer: [
+      'Answer: No.',
+      'Legal Basis: Article 213 of the Family Code applies.',
+      'Application: No compelling reason was proved.',
+      'Conclusion: Custody remains with the mother.',
+    ].join('\n\n'),
+  });
+  assert.deepEqual(restored, {
+    answer: 'No.',
+    legalBasis: 'Article 213 of the Family Code applies.',
+    application: 'No compelling reason was proved.',
+    conclusion: 'Therefore, custody remains with the mother.',
+  });
 });
 
 test('an expressly test-only nonexistent authority is deterministically treated as confirmed fabrication', () => {

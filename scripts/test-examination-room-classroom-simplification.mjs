@@ -93,6 +93,17 @@ const pagehide = frontend.slice(frontend.indexOf("addEventListener?.('pagehide'"
 assert.match(pagehide, /persistCurrentGradingDraft\(\)/);
 assert.doesNotMatch(pagehide, /clearGradingWorkspace|studentExamCodes\.clear|finishDialogLifecycle/);
 assert.match(frontend, /pageshow/);
+assert.match(frontend, /safetySaveTimer: null/);
+assert.match(
+  frontend,
+  /state\.exam\.safetySaveTimer = setInterval\(\(\) => \{[\s\S]{0,500}flushAllLocalSaves\(\)[\s\S]{0,300}flushSyncQueue\(\)[\s\S]{0,300}\}, 30000\)/,
+  'An active student attempt must receive an independent 30-second IndexedDB and server-sync safety flush.',
+);
+assert.match(
+  frontend,
+  /clearAttemptTimers\(\)[\s\S]{0,300}clearInterval\(state\.exam\.safetySaveTimer\)/,
+  'The safety-save interval must be cleared with the other attempt timers.',
+);
 
 // Only the authorized transactional classes are added to the existing queue.
 for (const emailType of [

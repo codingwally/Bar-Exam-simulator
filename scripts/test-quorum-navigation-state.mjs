@@ -32,12 +32,12 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/lex-forum\.css\?v=live-experience-20260811-1/,
+  /assets\/lex-forum\.css\?v=live-experience-quorum-back-20260811-1/,
   'The Quorum accessibility fix must ship behind a fresh stylesheet cache key.',
 );
 assert.match(
   html,
-  /assets\/lex-forum\.js\?v=live-experience-20260811-1/,
+  /assets\/lex-forum\.js\?v=live-experience-quorum-back-20260811-1/,
   'The Quorum navigation fix must ship behind a fresh script cache key.',
 );
 assert.match(

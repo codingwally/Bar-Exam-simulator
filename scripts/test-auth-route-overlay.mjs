@@ -240,7 +240,7 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/examinations\.js\?v=live-experience-20260811-1/,
+  /assets\/examinations\.js\?v=corrective-20260812-1/,
   'The protected examination-route fix must ship behind a fresh browser cache key.',
 );
 assert.match(
@@ -250,7 +250,7 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/private-beta-landing\.css\?v=live-experience-20260811-2/,
+  /assets\/private-beta-landing\.css\?v=corrective-20260812-1/,
   'The public sign-in visibility fix must ship behind a fresh browser cache key.',
 );
 

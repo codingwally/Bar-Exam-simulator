@@ -44,7 +44,7 @@ No production mutation was made while recording this baseline.
 
 - Staging Worker: `duediligence-examinations-staging`
 - Verified Worker version: `4a12c483-8415-4239-bd93-2cf6abcc5d16`
-- Full Worker suite: 371 tests passed, 0 failed.
+- Latest local Worker suite: 373 tests passed, 0 failed.
 - Local repository regression suite: 61 scripts passed, 0 failed; the four credentialed staging harnesses were run separately or superseded by the full acceptance cycle.
 - Human-only synthetic API cycle: passed.
 - AI-inclusive synthetic API cycle `msp5a67r-cfa9d5f2`: passed for strict human, self-paced AI, curated Bar Feels human, private-upload human, and strict server-expiration paths.
@@ -60,3 +60,5 @@ No production mutation was made while recording this baseline.
 Gemini still performs scoring, rationale, issue/error identification, improvements, and source reporting under the unchanged 0-5 rubric and score caps. When both permitted Gemini attempts return incomplete coaching sections, the Worker now derives only the four ALAC model-answer sections from the already-approved stored suggested answer. This prevents a provider-format failure from discarding an otherwise valid assessment without changing question content, legal substance, scoring weights, prompts, or the rubric.
 
 The first PR benchmark run exposed a provider-wording variant for a legally insufficient, bad-intent-only impossible-crime answer. The existing materially-wrong-rule ceiling now recognizes that semantically equivalent finding (`extremely broad` / `based liability solely on bad intent`) and deterministically limits it to 1.5. The frozen benchmark input, model prompt, 0-5 scale, rubric weights, and question content remain unchanged.
+
+The second PR benchmark run exposed a partially correct tax answer that omitted the curated, outcome-determinative majority-of-all-members voting threshold but received 4.5 when the provider described only citation omissions. The existing major-central-gap ceiling now cross-checks that narrow voting threshold against the approved suggested answer and legal basis, caps the incomplete answer at 3.5, and expressly preserves citation-neutral scoring when the student states the substantive threshold without an exact article citation. No benchmark threshold, model prompt, rubric weight, or question content changed.

@@ -309,6 +309,51 @@ test('an omitted outcome-determinative majority requirement triggers the 3.5 cen
   assert.equal(result.appliedScoreCeiling.code, 'major_central_gap');
 });
 
+test('a curated majority-of-all-members requirement cannot be over-scored when provider wording mentions only citation omissions', () => {
+  const answer = [
+    'Answer: No. The proclamation is unconstitutional.',
+    'Legal Basis: The Constitution assigns the power to grant tax exemptions to Congress, not to the President acting alone.',
+    'Application: Here, the President rather than Congress granted the exemptions. That substitution of executive action for legislation is insufficient.',
+    'Conclusion: Therefore, the proclamation cannot validly create the tax exemptions.',
+  ].join('\n\n');
+  const result = applyDeterministicScoreCap(assessment(4.5, {
+    rationale: 'The core legal reasoning is sound, but the specific constitutional standard is omitted.',
+    errors: [
+      'Omits specific reference to Article VI, Section 28(4) of the 1987 Constitution.',
+      'Omits citation to controlling jurisprudence.',
+    ],
+    rubricBreakdown: {
+      responsiveness: 5,
+      legalBasis: 4,
+      application: 4.5,
+      conclusion: 5,
+      questionType: 'problem',
+      applicationRequired: true,
+    },
+  }), answer, {
+    question: 'May the President grant tax exemptions through a proclamation supported only by a congressional resolution?',
+    suggestedAnswer: 'No. Article VI, Section 28(4) requires the concurrence of a majority of all members of Congress for a law granting a tax exemption. A resolution of support is not such a law.',
+    legalBasis: '1987 Constitution, Article VI, Section 28(4).',
+    verified: true,
+  });
+  assert.equal(result.score, 3.5);
+  assert.equal(result.appliedScoreCeiling.code, 'major_central_gap');
+});
+
+test('stating the material voting threshold preserves citation-neutral scoring', () => {
+  const answer = 'No. A tax exemption requires the concurrence of a majority of all members of Congress. A presidential proclamation supported only by a resolution is not such a law, so the exemptions are unconstitutional.';
+  const result = applyDeterministicScoreCap(assessment(4.5, {
+    errors: ['Omits specific reference to Article VI, Section 28(4) of the 1987 Constitution.'],
+  }), answer, {
+    question: 'May the President grant tax exemptions through a proclamation supported only by a congressional resolution?',
+    suggestedAnswer: 'No. Article VI, Section 28(4) requires the concurrence of a majority of all members of Congress for a law granting a tax exemption. A resolution of support is not such a law.',
+    legalBasis: '1987 Constitution, Article VI, Section 28(4).',
+    verified: true,
+  });
+  assert.equal(result.score, 4.5);
+  assert.equal(result.appliedScoreCeiling, null);
+});
+
 test('a correct conclusion resting solely on a legally insufficient central rule is capped at 1.5', () => {
   const answer = 'Yes. A person with bad intent is criminally liable even when no property is taken. Harry wanted to steal money and opened the wallet, so bad intent alone makes him liable for an impossible crime.';
   const result = applyDeterministicScoreCap(assessment(3, {

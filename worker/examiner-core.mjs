@@ -829,6 +829,10 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
   const centralRequirementGapFinding = examinerErrors.some((finding) => (
     /(?:omit(?:ted|s)?|fail(?:ed|s)? to (?:state|mention|address|analy[sz]e|include|apply))[\s\S]{0,140}\b(?:majority|material (?:element|exception|qualification|requirement)|essential (?:element|exception|qualification|requirement)|controlling requirement|constitutional requirement|statutory requirement|procedural prerequisite|condition precedent|exception|qualification|voting threshold|outcome-determinative (?:element|exception|qualification|requirement|threshold|standard|prerequisite))\b/i.test(finding)
   ));
+  const referenceAnswer = `${cleanText(context?.suggestedAnswer, MAX_ANSWER_LENGTH)} ${cleanText(context?.legalBasis, MAX_ANSWER_LENGTH)}`;
+  const majorityOfAllMembers = /\b(?:absolute\s+majority|majority[\s\S]{0,48}\ball(?:\s+the)?\s+members)\b/i;
+  const outcomeDeterminativeVotingThresholdGap = majorityOfAllMembers.test(referenceAnswer)
+    && !majorityOfAllMembers.test(normalizedStudentAnswer);
   const explicitWrongRuleFinding = /(?:incorrect|wrong|irrelevant|unrelated|inapplicable)\s+(?:legal\s+basis|article|section|rule|statute|doctrine|authority)|(?:legal\s+basis|article|section|rule|statute|doctrine|authority)[\s\S]{0,80}(?:incorrect|wrong|irrelevant|unrelated|inapplicable)/i.test(examinerFindings);
   const centralRuleInsufficiencyFinding = /(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)[\s\S]{0,140}(?:overly simplistic|(?:excessively|extremely|overly) broad|legally insufficient|faulty|vague|reduced to|misstat(?:ed|es)|rests? (?:only|solely)|rel(?:y|ies|ying) (?:only|solely|merely)|based (?:only|solely|purely))/i.test(examinerFindings)
     || /(?:rel(?:y|ies|ying)|rests?) on[\s\S]{0,100}(?:alone|only|solely|merely)[\s\S]{0,100}(?:legal\s+basis|governing\s+rule|doctrine|legal\s+reasoning)/i.test(examinerFindings)
@@ -842,7 +846,11 @@ export function applyDeterministicScoreCap(assessment, studentAnswer, context = 
     ? 'confirmed_fabricated'
     : assessment?.authorityStatus;
 
-  if (assessment?.scoreCeilingCode === 'major_central_gap' || centralRequirementGapFinding) {
+  if (
+    assessment?.scoreCeilingCode === 'major_central_gap'
+    || centralRequirementGapFinding
+    || outcomeDeterminativeVotingThresholdGap
+  ) {
     lowerCap(
       3.5,
       'major_central_gap',

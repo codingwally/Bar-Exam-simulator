@@ -555,7 +555,7 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 .pb-summary-item span {
   display: block;
   margin-bottom: 18px;
-  color: #856d36;
+  color: #80672f;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 9px;
   font-weight: 600;

@@ -111,7 +111,7 @@ assert.match(
   admin,
   /actionButton\('View private proof', 'view_payment_proof', row\.id, \{\}\)\.value/,
 );
-assert.match(publicPage, /assets\/phase2-experience\.js\?v=admin-export-20260801-1/);
+assert.match(publicPage, /assets\/phase2-experience\.js\?v=live-experience-a11y-20260811-1/);
 assert.match(publicPage, /assets\/phase4-experience\.js\?v=admin-export-20260801-1/);
 assert.match(adminPage, /admin\.css\?v=[a-z0-9-]+/i);
 assert.match(adminPage, /subscription-actions-core\.js\?v=[a-z0-9-]+/i);

@@ -46,10 +46,14 @@ assert.match(
   /e\.key === 'Escape' && onboardingStage === 'subjectSelection'[\s\S]*exitSubjectSelection\(\)/,
   'Escape must close the subject chooser for keyboard users.',
 );
-assert.match(html, /id="session-choice-modal"[\s\S]*Would you like to begin your session\?/);
-assert.match(html, /Strict Scrutiny[\s\S]*12 minutes per question/);
-assert.match(html, /Quantum Meruit[\s\S]*Track your writing time/);
-assert.match(html, /Summary Judgment[\s\S]*without a visible timer/);
+assert.match(html, /id="session-choice-modal"[\s\S]*Timer settings/);
+assert.match(html, /12-minute practice[\s\S]*focused 12-minute target/);
+assert.match(html, /Stopwatch[\s\S]*See how much time you spend/);
+assert.match(html, /Untimed practice[\s\S]*without a clock or time limit/);
+assert.match(html, /function preferredMockTimerMode\(\)[\s\S]*\? saved : 'selfPaced'/,
+  'Mock Bar must default to Stopwatch.');
+assert.match(html, /function selectSubjectForSession\(subject\)[\s\S]*chooseSessionMode\(selectedSessionMode\)/,
+  'Selecting a subject must start with the saved/default timing mode without forcing the settings dialog.');
 assert.match(html, /const PER_Q_SECONDS = 720;/);
 assert.doesNotMatch(html, /Recommended:\s*35[–-]45 mins per essay/);
 assert.doesNotMatch(html, /setInterval\(tickSession/);

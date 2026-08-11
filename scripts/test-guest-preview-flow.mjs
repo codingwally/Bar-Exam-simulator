@@ -47,6 +47,7 @@ for (const mode of ['strict', 'selfPaced', 'none']) {
   const answerBox = { focus() { calls.push(['focus']); } };
   const context = {
     selectedSessionMode: null,
+    sessionChoicePurpose: 'start',
     examMode: 'none',
     examStage: 'modeSelection',
     currentSubj: 'Political Law',

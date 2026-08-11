@@ -105,6 +105,17 @@ for (const contract of [
 ]) {
   assert.match(frontend, contract);
 }
+assert.match(frontend, /resumeAttemptId:\s*null/);
+assert.match(
+  frontend,
+  /global\.addEventListener\('duediligence:session',[\s\S]*event\.detail\?\.authenticated[\s\S]*readRecovery\(\)[\s\S]*resumeAttempt\(recovery\.attemptId\)/,
+  'an authenticated session becoming ready must resume the newest local examination recovery record',
+);
+assert.match(
+  frontend,
+  /async function resumeAttempt\(attemptId\)[\s\S]*state\.resumeAttemptId === attemptId[\s\S]*finally[\s\S]*state\.resumeAttemptId = null/,
+  'recovery retries must be deduplicated while a resume request is active',
+);
 assert.equal(
   [...frontend.matchAll(/error\?\.code === 'MALFORMED_MODEL_RESPONSE' && transientRetries < 1/g)].length,
   2,

@@ -13,45 +13,36 @@ const [html, css, script, config, build] = await Promise.all([
   read('assets/phase2-config.js'),
   read('scripts/build-pages-artifact.mjs'),
 ]);
+const publicLanding = html.slice(
+  html.indexOf('<div class="pb-landing" id="private-beta-landing">'),
+  html.indexOf('<dialog class="pb-dialog" id="private-beta-dialog"'),
+);
 
 assert.match(html, /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/);
 assert.match(html, /id="private-beta-landing"/);
 assert.match(html, /id="authenticated-app-shell" hidden inert aria-hidden="true"/);
-assert.match(html, /EARLY ACCESS BETA/i);
 assert.match(
-  html,
+  publicLanding,
   /A platform to express<br>\s*your perspective, sharpen<br>\s*your legal reasoning, and<br>\s*strengthen your performance<br>\s*throughout law school\./,
 );
-assert.match(html, /Practice the reasoning\. Refine the writing\./);
-assert.match(html, /Enter the Beta/i);
-assert.match(html, /Learn How It Works/i);
-assert.match(html, /A trusted companion throughout the study of law\./);
-assert.match(html, /Make disciplined essay practice accessible, repeatable, and measurable\./);
-assert.match(html, /Help students strengthen legal reasoning and writing—not replace independent study or authoritative sources\./);
-
-for (const label of [
-  'Private beta access code',
-  'I Agree — Continue to Access Code',
-  'Continue to Google Sign-In',
-  'Sign In with Google',
-  'I Agree — Enter Private Beta',
-  'Pause motion',
-]) {
-  assert.match(html, new RegExp(label, 'i'), `missing admission label: ${label}`);
+assert.match(publicLanding, /Practice the reasoning\. Refine the writing\./);
+assert.match(publicLanding, /Explore Due Diligence/i);
+assert.match(publicLanding, /Learn How It Works/i);
+assert.match(publicLanding, /One platform, four focused chambers/i);
+for (const pillar of ['The Academy', 'The Commons', 'BarBound', 'Examination Room']) {
+  assert.match(publicLanding, new RegExp(pillar), `missing public platform pillar: ${pillar}`);
 }
-
-for (const statement of [
-  'I have read the entire Beta Disclosure and understand the limitations of AI-generated feedback, scores, citations, and suggested answers.',
-  'I understand that Due Diligence is an educational practice platform, does not provide legal advice, and does not guarantee academic, Bar examination, or professional outcomes.',
-  'I agree to the Beta Terms and Privacy Notice, including the uses of my submissions, account activity, feedback, and reports described in those documents.',
-]) {
-  assert.equal(html.split(statement).length - 1, 2, 'each required acknowledgment must appear provisionally and after authentication');
+for (const route of ['explore-academy', 'explore-commons', 'explore-barbound', 'explore-examination-room']) {
+  assert.match(publicLanding, new RegExp(`id="${route}"`), `missing public category page: ${route}`);
 }
+assert.doesNotMatch(publicLanding, /EARLY ACCESS BETA|Enter the Beta|Private beta access code/i,
+  'The public homepage must not expose the retired admission gate.');
 
 assert.doesNotMatch(`${html}\n${css}\n${script}\n${config}\n${build}`, /ARTICLE[0-9]+NCC/i);
-assert.match(script, /That access code isn’t recognized\. Review the hint and try again\./);
 assert.match(script, /privateBetaGate === true/);
-assert.match(config, /privateBetaGate: true/);
+assert.match(config, /privateBetaGate: false/);
+assert.match(script, /if \(!gateEnabled\)[\s\S]*showLanding\(\)/,
+  'The disabled admission gate must render the public landing directly.');
 assert.match(script, /IntersectionObserver/);
 assert.match(script, /document\.hidden/);
 assert.match(script, /prefers-reduced-motion: reduce/);
@@ -59,7 +50,6 @@ assert.match(script, /completeAdmission/);
 assert.match(script, /api\.status/);
 assert.match(script, /globalBetaEnabled/);
 assert.match(script, /privateBetaApi\(\)\?\.policy/);
-assert.match(script, /Google sign-in succeeded, but this browser could not restore the private-beta admission checkpoint/);
 assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /#private-beta-dialog\[open\]/);
 assert.match(html, /assets\/private-beta-landing\.js\?v=beta-all-access-20260802-1/);

@@ -214,8 +214,13 @@ assert.doesNotMatch(
 
 assert.match(
   extractFunction('onTimeUp'),
-  /examStage = 'reviewing';[\s\S]*?renderMainWrite\(\);[\s\S]*?setQuestionControlsDisabled\(true\);/,
-  'Blank Strict Scrutiny expiration must use the same locked review state.',
+  /saveDraftForCurrentQuestion\(\);[\s\S]*?persistWorkspace\(\);[\s\S]*?Your answer is safe and was not submitted/,
+  'The optional 12-minute target must preserve the draft and leave submission to the student.',
+);
+assert.doesNotMatch(
+  extractFunction('onTimeUp'),
+  /evaluateAnswer|recordUnansweredAttempt|examStage = 'reviewing'/,
+  'A practice timer ending must not submit or lock the answer.',
 );
 
 assert.match(

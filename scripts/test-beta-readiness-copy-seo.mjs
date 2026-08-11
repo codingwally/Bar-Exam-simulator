@@ -19,7 +19,7 @@ assert.match(
 );
 assert.match(
   index,
-  /<meta name="description" content="A private-beta learning companion for Philippine law students to practice legal reasoning, refine essay writing, and prepare with source-based educational feedback\.">/,
+  /<meta name="description" content="A Philippine legal-education platform for Bar-style essay practice, course-based study, academic community, and controlled examinations\.">/,
 );
 assert.match(index, /<link rel="canonical" href="https:\/\/duediligence\.ph\/">/);
 assert.match(index, /<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">/);

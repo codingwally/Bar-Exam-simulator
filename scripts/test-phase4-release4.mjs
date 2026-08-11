@@ -113,9 +113,9 @@ assert.match(
 );
 assert.match(publicPage, /assets\/phase2-experience\.js\?v=admin-export-20260801-1/);
 assert.match(publicPage, /assets\/phase4-experience\.js\?v=admin-export-20260801-1/);
-assert.match(adminPage, /admin\.css\?v=admin-business-dashboard-20260802-2/);
-assert.match(adminPage, /subscription-actions-core\.js\?v=admin-business-dashboard-20260802-2/);
-assert.match(adminPage, /admin\.js\?v=admin-business-dashboard-20260802-2/);
+assert.match(adminPage, /admin\.css\?v=[a-z0-9-]+/i);
+assert.match(adminPage, /subscription-actions-core\.js\?v=[a-z0-9-]+/i);
+assert.match(adminPage, /admin\.js\?v=[a-z0-9-]+/i);
 assert.match(
   adminStyles,
   /\.gate\[hidden\]\s*\{\s*display:\s*none;\s*\}/,

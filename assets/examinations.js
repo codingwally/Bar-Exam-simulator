@@ -58,6 +58,7 @@
     uploadPreview: null,
     preferredTimerMode: 'selfPaced',
     practiceTimerMode: 'selfPaced',
+    resumeAttemptId: null,
     initialized: false,
   };
 
@@ -125,6 +126,7 @@
       questions: state.active.questions.map((question) => ({
         questionId: question.questionId,
         answerText: question.answerText || '',
+        answerHtml: question.answerHtml ? sanitizeRichHtml(question.answerHtml) : '',
         flagged: question.flagged === true,
         revision: Number(question.revision) || 0,
       })),
@@ -232,6 +234,98 @@
 
   function wordCount(value) {
     return String(value || '').trim().match(/\S+/g)?.length || 0;
+  }
+
+  const RICH_TAGS = new Set([
+    'P', 'DIV', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'MARK',
+    'UL', 'OL', 'LI', 'FONT', 'SPAN',
+  ]);
+  const RICH_FONTS = new Set(['Arial', 'Georgia', 'Inter', 'Times New Roman']);
+
+  function escapeAttribute(value) {
+    return escapeHtml(value).replace(/`/g, '&#96;');
+  }
+
+  function sanitizeRichHtml(value) {
+    const parser = new DOMParser();
+    const documentValue = parser.parseFromString(`<div>${String(value || '')}</div>`, 'text/html');
+    const root = documentValue.body.firstElementChild;
+    const clean = (node) => {
+      for (const child of Array.from(node.childNodes)) {
+        if (child.nodeType === Node.COMMENT_NODE) {
+          child.remove();
+          continue;
+        }
+        if (child.nodeType !== Node.ELEMENT_NODE) continue;
+        if (!RICH_TAGS.has(child.tagName)) {
+          child.replaceWith(...Array.from(child.childNodes));
+          continue;
+        }
+        const textAlign = /^(left|center|right|justify)$/.test(child.style?.textAlign || '')
+          ? child.style.textAlign : '';
+        const fontFamily = RICH_FONTS.has(child.getAttribute('face') || '')
+          ? child.getAttribute('face') : '';
+        const fontSize = /^[1-7]$/.test(child.getAttribute('size') || '')
+          ? child.getAttribute('size') : '';
+        const backgroundColor = /^(?:rgb\(255,\s*243,\s*163\)|#fff3a3|yellow)$/i.test(
+          child.style?.backgroundColor || child.getAttribute('color') || '',
+        ) ? '#fff3a3' : '';
+        Array.from(child.attributes).forEach((attribute) => child.removeAttribute(attribute.name));
+        if (textAlign) child.style.textAlign = textAlign;
+        if (fontFamily && child.tagName === 'FONT') child.setAttribute('face', fontFamily);
+        if (fontSize && child.tagName === 'FONT') child.setAttribute('size', fontSize);
+        if (backgroundColor && ['SPAN', 'MARK'].includes(child.tagName)) {
+          child.style.backgroundColor = backgroundColor;
+        }
+        clean(child);
+      }
+    };
+    clean(root);
+    return root.innerHTML;
+  }
+
+  function plainTextFromRich(editor) {
+    if (!editor) return '';
+    const clone = editor.cloneNode(true);
+    clone.querySelectorAll('br').forEach((node) => node.replaceWith('\n'));
+    clone.querySelectorAll('p,div,li').forEach((node) => node.append('\n'));
+    return String(clone.textContent || '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trimEnd();
+  }
+
+  function richHtmlFromText(value) {
+    const paragraphs = String(value || '').replace(/\r\n?/g, '\n').split(/\n{2,}/);
+    return paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`).join('');
+  }
+
+  function richToolbar() {
+    const control = (command, label, glyph) => `<button class="dd-rich-button" type="button"
+      data-rich-command="${command}" aria-label="${escapeAttribute(label)}" title="${escapeAttribute(label)}">${glyph}</button>`;
+    return `<div class="dd-rich-toolbar" role="toolbar" aria-label="Legal writing formatting tools">
+      <label class="dd-rich-select"><span class="sr-only">Font family</span><select data-rich-font aria-label="Font family">
+        <option value="Inter">Inter</option><option value="Georgia">Georgia</option>
+        <option value="Times New Roman">Times New Roman</option><option value="Arial">Arial</option>
+      </select></label>
+      <label class="dd-rich-select"><span class="sr-only">Font size</span><select data-rich-size aria-label="Font size">
+        <option value="2">Small</option><option value="3" selected>Normal</option><option value="4">Large</option><option value="5">Extra large</option>
+      </select></label>
+      ${control('formatBlock', 'Paragraph', '¶')}
+      ${control('bold', 'Bold', '<strong>B</strong>')}
+      ${control('italic', 'Italic', '<em>I</em>')}
+      ${control('underline', 'Underline', '<u>U</u>')}
+      ${control('hiliteColor', 'Highlight', '<mark>H</mark>')}
+      ${control('insertUnorderedList', 'Bulleted list', '• List')}
+      ${control('insertOrderedList', 'Numbered list', '1. List')}
+      ${control('justifyLeft', 'Align left', '≡')}
+      ${control('justifyCenter', 'Align center', '≣')}
+      ${control('justifyRight', 'Align right', '≡')}
+      ${control('undo', 'Undo', '↶')}
+      ${control('redo', 'Redo', '↷')}
+      ${control('removeFormat', 'Clear formatting', 'Clear')}
+    </div>`;
   }
 
   function subjectCatalogItem(subjectName = state.selectedSubject) {
@@ -661,11 +755,17 @@
     active.questions = active.questions.map((question) => {
       const local = saved.get(question.questionId);
       if (!local || Number(local.revision) < Number(question.revision)) return question;
-      if (Number(local.revision) === Number(question.revision)
-        && local.answerText !== question.answerText) {
-        return { ...question, localRecoveryText: local.answerText };
+      if (local.answerText !== question.answerText) {
+        return {
+          ...question,
+          localRecoveryText: local.answerText,
+          localRecoveryHtml: local.answerHtml ? sanitizeRichHtml(local.answerHtml) : '',
+        };
       }
-      return question;
+      return {
+        ...question,
+        answerHtml: local.answerHtml ? sanitizeRichHtml(local.answerHtml) : question.answerHtml,
+      };
     });
     return active;
   }
@@ -697,6 +797,9 @@
   }
 
   async function resumeAttempt(attemptId) {
+    if (!attemptId || state.active?.attempt?.attemptId === attemptId) return;
+    if (state.resumeAttemptId === attemptId) return;
+    state.resumeAttemptId = attemptId;
     setStatus('Recovering your server-saved examination…');
     try {
       const active = await api('/examinations/query', {
@@ -707,6 +810,8 @@
       await heartbeat(false);
     } catch (error) {
       setStatus(error.message, 'error');
+    } finally {
+      state.resumeAttemptId = null;
     }
   }
 
@@ -738,6 +843,10 @@
       : state.active.attempt.timerMode;
     const singleSubject = state.active.examination.track === 'per_subject'
       && state.active.questions.length === 1;
+    const richWriting = state.active.examination.track === 'bar_feels';
+    const safeAnswerHtml = richWriting
+      ? sanitizeRichHtml(question.answerHtml || richHtmlFromText(question.answerText || ''))
+      : '';
     root.innerHTML = `<div class="dd-exam-room">
       <header class="dd-exam-room-bar">
         <div class="dd-room-brand"><strong>Due Diligence</strong><span>PH BAR EXAM SIMULATOR</span></div>
@@ -783,14 +892,19 @@
               <span>III. Application</span><span>IV. Conclusion</span>
             </div>
             <label class="sr-only" for="dd-answer-editor">Your ALAC answer</label>
-            <textarea class="dd-answer-editor" id="dd-answer-editor" maxlength="20000"
+            ${richWriting ? `${richToolbar()}
+            <div class="dd-answer-editor dd-answer-rich-editor" id="dd-answer-rich-editor"
+              contenteditable="true" role="textbox" aria-multiline="true"
+              aria-label="Your ALAC answer" data-placeholder="I. ANSWER — State your direct answer.&#10;&#10;II. LEGAL BASIS — Cite the governing provision or doctrine.&#10;&#10;III. APPLICATION — Apply the exact facts to the law.&#10;&#10;IV. CONCLUSION — Reaffirm your position.">${safeAnswerHtml}</div>
+            <textarea id="dd-answer-editor" class="dd-answer-editor-backup" maxlength="20000"
+              aria-hidden="true" tabindex="-1">${escapeHtml(question.answerText || '')}</textarea>` : `<textarea class="dd-answer-editor" id="dd-answer-editor" maxlength="20000"
               placeholder="I. ANSWER — State your direct answer.
 
 II. LEGAL BASIS — Cite the governing provision or doctrine.
 
 III. APPLICATION — Apply the exact facts to the law.
 
-IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || '')}</textarea>
+IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || '')}</textarea>`}
             <footer class="dd-answer-footer">
               <span id="dd-word-count">${wordCount(question.answerText)} words</span>
               <span class="dd-save-state is-saved" id="dd-save-state">Server revision ${Number(question.revision) || 0}</span>
@@ -838,13 +952,20 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
 
   function bindRoom() {
     const editor = document.getElementById('dd-answer-editor');
-    editor?.addEventListener('input', () => {
+    const richEditor = document.getElementById('dd-answer-rich-editor');
+    const updateAnswer = () => {
       const question = currentQuestion();
-      question.answerText = editor.value;
+      const answerText = richEditor ? plainTextFromRich(richEditor) : editor.value;
+      question.answerText = answerText;
+      if (richEditor) {
+        question.answerHtml = sanitizeRichHtml(richEditor.innerHTML);
+        editor.value = answerText;
+      }
       question.localRecoveryText = null;
-      document.getElementById('dd-word-count').textContent = `${wordCount(editor.value)} words`;
+      question.localRecoveryHtml = null;
+      document.getElementById('dd-word-count').textContent = `${wordCount(answerText)} words`;
       const submit = document.querySelector('[data-submit-current]');
-      if (submit) submit.disabled = !editor.value.trim();
+      if (submit) submit.disabled = !answerText.trim();
       const stateNode = document.getElementById('dd-save-state');
       if (stateNode) {
         stateNode.textContent = 'Unsaved changes';
@@ -853,6 +974,39 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       updateCountsNodes();
       saveRecovery();
       scheduleSave();
+    };
+    (richEditor || editor)?.addEventListener('input', updateAnswer);
+    richEditor?.addEventListener('paste', (event) => {
+      event.preventDefault();
+      const html = event.clipboardData?.getData('text/html') || '';
+      const plain = event.clipboardData?.getData('text/plain') || '';
+      document.execCommand(html ? 'insertHTML' : 'insertText', false,
+        html ? sanitizeRichHtml(html) : plain);
+      updateAnswer();
+    });
+    richEditor?.addEventListener('drop', (event) => {
+      if (event.dataTransfer?.files?.length) event.preventDefault();
+    });
+    document.querySelectorAll('[data-rich-command]').forEach((control) => {
+      control.addEventListener('mousedown', (event) => event.preventDefault());
+      control.addEventListener('click', () => {
+        richEditor?.focus();
+        const command = control.dataset.richCommand;
+        const value = command === 'formatBlock' ? 'p'
+          : command === 'hiliteColor' ? '#fff3a3' : null;
+        document.execCommand(command, false, value);
+        updateAnswer();
+      });
+    });
+    document.querySelector('[data-rich-font]')?.addEventListener('change', (event) => {
+      richEditor?.focus();
+      document.execCommand('fontName', false, event.target.value);
+      updateAnswer();
+    });
+    document.querySelector('[data-rich-size]')?.addEventListener('change', (event) => {
+      richEditor?.focus();
+      document.execCommand('fontSize', false, event.target.value);
+      updateAnswer();
     });
   }
 
@@ -1871,7 +2025,9 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
     if (event.target.closest('[data-use-local-draft]')) {
       const item = currentQuestion();
       item.answerText = item.localRecoveryText;
+      item.answerHtml = item.localRecoveryHtml || richHtmlFromText(item.localRecoveryText);
       item.localRecoveryText = null;
+      item.localRecoveryHtml = null;
       renderRoom();
     }
   }
@@ -1939,10 +2095,13 @@ IV. CONCLUSION — Reaffirm your position.">${escapeHtml(question.answerText || 
       saveCurrent({ silent: true }).then(() => heartbeat(false));
     });
     global.addEventListener('duediligence:session', (event) => {
-      if (!event.detail?.authenticated) {
-        if (state.active && ['room', 'review'].includes(state.screen)) saveRecovery();
-        stopActiveTimers();
+      if (event.detail?.authenticated) {
+        const recovery = readRecovery();
+        if (!state.active && recovery?.attemptId) resumeAttempt(recovery.attemptId);
+        return;
       }
+      if (state.active && ['room', 'review'].includes(state.screen)) saveRecovery();
+      stopActiveTimers();
     });
 
     const assignmentToken = new URLSearchParams(location.search).get('assignment');

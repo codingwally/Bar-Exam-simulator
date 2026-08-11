@@ -15,6 +15,7 @@ function between(start, end) {
 const gradingBlock = between('function openGrading', 'async function requestFullscreen');
 const renderBlock = between('function renderGrading', 'async function loadGradingModelAnswer');
 const saveBlock = between('async function saveGrade', 'function nextGrade');
+const moveBlock = between('function moveGrade', 'function nextGrade');
 const nextBlock = between('function nextGrade', 'async function unlockAttempt');
 const releaseBlock = between('async function releaseResults', 'function resultPdfFileName');
 const downloadBlock = between('async function downloadCandidateResult', 'async function requestFullscreen');
@@ -29,13 +30,20 @@ assert.doesNotMatch(saveBlock, /score:\s*Number\(value\('dd26-grade-score'\)\)/,
   'save_grade must not coerce an empty input with Number("")');
 
 // Every editable grade field exposes an unsaved state, and all navigation paths ask first.
-assert.match(renderBlock, /id="dd26-grading-unsaved" role="status" hidden/);
+assert.match(renderBlock, /id="dd26-grading-unsaved" role="status" \$\{draft \? '' : 'hidden'\}/);
+assert.match(renderBlock, /Draft restored\./,
+  'A locally preserved grading draft must be identified when restored.');
+assert.match(renderBlock, /if \(!filteredEntries\.length\)[\s\S]*No answers match the \$\{escapeHtml\(state\.exam\.gradingFilter\)\} filter\./,
+  'An empty grading filter must not display an unrelated student answer.');
+assert.match(frontend, /visibilitychange[\s\S]*persistCurrentGradingDraft\(\)/,
+  'Backgrounding the browser must preserve the current grading draft.');
 for (const id of ['dd26-grade-score', 'dd26-grade-state', 'dd26-grade-comment', 'dd26-grade-reason']) {
   assert.match(renderBlock, new RegExp(`'${id}'`));
 }
 assert.match(renderBlock, /if \(!mayLeaveCurrentGrade\(\)\)[\s\S]*event\.target\.value = String\(state\.exam\.gradingCandidate\)/);
 assert.match(renderBlock, /if \(!mayLeaveCurrentGrade\(\)\)[\s\S]*event\.target\.value = String\(state\.exam\.gradingQuestion\)/);
-assert.match(nextBlock, /if \(!grading \|\| !mayLeaveCurrentGrade\(\)\) return/);
+assert.match(moveBlock, /!skipUnsavedCheck && !mayLeaveCurrentGrade\(\)/);
+assert.match(nextBlock, /function nextGrade\(\) \{ moveGrade\(1\); \}/);
 assert.match(gradingBlock, /This grade has unsaved changes\. Leave without saving them\?/);
 assert.match(renderBlock, /getElementById\('dd26-exam-role-home'\)[\s\S]*stopImmediatePropagation\(\)[\s\S]*clearGradingWorkspace\(\)/,
   'the Examination Room back button must not retain the grading key or silently discard changes');
@@ -66,7 +74,8 @@ assert.doesNotMatch(downloadBlock, /release_results|confirmReleaseResults|includ
 
 // The retained grading secret is cleared on every explicit exit and after class release.
 assert.match(gradingBlock, /function clearGradingWorkspace\(\)[\s\S]*grading\.gradingKey = ''/);
-assert.match(gradingBlock, /global\.addEventListener\('pagehide', clearGradingWorkspace, \{ once: true \}\)/);
+assert.match(frontend, /pagehide'[\s\S]*persistCurrentGradingDraft\(\)[\s\S]*clearGradingWorkspace\(\)/,
+  'Leaving the page must preserve the draft while clearing the retained grading secret.');
 assert.match(gradingBlock, /function leaveGradingWorkspace\(\)[\s\S]*clearGradingWorkspace\(\)/);
 assert.match(releaseBlock, /clearGradingWorkspace\(\)[\s\S]*Graded results sent/);
 

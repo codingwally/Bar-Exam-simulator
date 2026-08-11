@@ -141,7 +141,7 @@ test('Legacy and current Quorum report routes email only support@duediligence.ph
     if (target.endsWith('/rest/v1/rpc/forum_create_report')) {
       return Response.json({ id: '33333333-3333-4333-8333-333333333333' });
     }
-    if (target.endsWith('/rest/v1/rpc/forum_quorum_command')) {
+    if (target.endsWith('/rest/v1/rpc/forum_quorum_command_v2')) {
       return Response.json({ reportId: 'qx_bbbbbbbbbbbbbbbbbbbb' });
     }
     if (target === 'https://api.resend.com/emails') {

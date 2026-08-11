@@ -50,7 +50,13 @@ assert.match(js, /preview\.questions\.length/);
 
 assert.match(js, /Your answer text and Gemini explanation are not saved/);
 assert.match(js, /Your answer text is not saved\. Only your thumbs-up or thumbs-down mastery result is recorded/);
-assert.doesNotMatch(js, /localStorage|sessionStorage/);
+assert.match(js, /return `dd:exam-room:grading:/,
+  'Professor grading drafts must use a narrowly namespaced local key.');
+assert.match(js, /global\.localStorage\?\.setItem\(gradingDraftKey/,
+  'Professor grading drafts must survive an accidental tab or window switch.');
+assert.doesNotMatch(js, /localStorage[^\n]*(?:answerText|studentAnswer)|(?:answerText|studentAnswer)[^\n]*localStorage/,
+  'Student answers must not be copied into localStorage by the public 2026 experience.');
+assert.doesNotMatch(js, /sessionStorage/);
 assert.match(store, /indexedDB/);
 assert.doesNotMatch(store, /localStorage|sessionStorage/);
 assert.match(js, /snapshot\?\.flags\?\.\[flag\] !== true/);
@@ -77,7 +83,7 @@ assert.match(js, /visibilitychange/);
 assert.match(js, /fullscreenchange/);
 assert.match(js, /not proof by themselves/);
 assert.doesNotMatch(js, /leak[- ]?proof/i);
-assert.match(js, /\['professor', 'Professor'[\s\S]*\['beadle', 'Beadle'[\s\S]*\['student', 'Student'[\s\S]*\['admin', 'Admin'/);
+assert.match(js, /\['professor', 'Professor'[\s\S]*\['beadle', 'Beadle'[\s\S]*\['student', 'Student'[\s\S]*\['exam_administrator', 'Exam Administrator'/);
 assert.match(js, /Submission pending — not yet received by Due Diligence/);
 assert.match(js, /Saved on this device/);
 assert.match(js, /Synced at/);

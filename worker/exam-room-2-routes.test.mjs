@@ -42,6 +42,7 @@ function harness(overrides = {}) {
   const calls = [];
   const adminCalls = [];
   const uploads = [];
+  const paymentUploads = [];
   const deletions = [];
   const rateModes = [];
   const rawHandlers = createDD2026Handlers({
@@ -76,11 +77,19 @@ function harness(overrides = {}) {
     },
     requireAuthenticatedUser: async () => overrides.user ?? ({ id: userId }),
     resolveVerdictQuestion: async () => null,
+    sendExamRoomEmail: overrides.sendEmail ?? (async () => ({ status: 'sent', providerId: 'email-test-1' })),
+    signExamRoomPaymentProof: overrides.signPaymentProof
+      ?? (async (_env, path) => `https://storage.test/private/${encodeURIComponent(path)}`),
     structuredGemini: async () => ({}),
+    uploadExamRoomPaymentProof: async (_env, path, bytes, mimeType) => {
+      paymentUploads.push({ path, bytes, mimeType });
+      return true;
+    },
     uploadExamRoomSource: async (_env, path, bytes, mimeType) => {
       uploads.push({ path, bytes, mimeType });
       return true;
     },
+    deleteExamRoomPaymentProof: async (_env, path) => { deletions.push(path); return true; },
   });
   const handlers = new Proxy(rawHandlers, {
     get(target, property) {
@@ -93,8 +102,140 @@ function harness(overrides = {}) {
       );
     },
   });
-  return { handlers, rawHandlers, calls, uploads, deletions, rateModes, adminCalls };
+  return {
+    handlers, rawHandlers, calls, uploads, paymentUploads, deletions, rateModes, adminCalls,
+  };
 }
+
+test('Examination Room requests remain authenticated and room-scoped at the Worker boundary', async () => {
+  const room = harness({
+    rpc: async (name, body) => {
+      if (name === 'exam_room_request_snapshot') {
+        return {
+          ok: true,
+          identity: { name: 'Professor Maria Santos', email: 'professor@example.edu' },
+          professorRequests: [],
+          beadleRequests: [],
+          administratorRequests: [],
+          unassignedRequests: [],
+        };
+      }
+      return { ok: true, body };
+    },
+  });
+  const response = await room.handlers.examQuery(request({ operation: 'room_requests' }), {}, '', '');
+  assert.equal(response.status, 200);
+  assert.equal(room.calls.at(-1).name, 'exam_room_request_snapshot');
+  assert.deepEqual(room.calls.at(-1).body, { p_user_id: userId });
+  assert.equal(room.adminCalls.length, 0,
+    'request visibility is determined by the room-scoped database snapshot, not a broad admin redirect');
+});
+
+test('private room payment proofs validate, store privately, and expose only a short-lived review URL', async () => {
+  const proofId = '123e4567-e89b-42d3-a456-426614174012';
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  const room = harness({
+    rpc: async (name, body) => {
+      if (name === 'exam_room_payment_proof_upload_context') {
+        return { objectPrefix: `exam-room/${examId}/${userId}/` };
+      }
+      if (name === 'exam_room_register_payment_proof') {
+        return { ok: true, proofId, status: 'submitted', requestId: examId };
+      }
+      if (name === 'exam_room_payment_proof_review_context') {
+        return {
+          ok: true,
+          requestId: examId,
+          proofId,
+          objectPath: `exam-room/${examId}/${userId}/proof.png`,
+          fileName: 'receipt.png',
+          mimeType: 'image/png',
+          status: 'under_review',
+        };
+      }
+      return { ok: true, body };
+    },
+  });
+  const uploaded = await room.handlers.paymentProofUpload(request({
+    requestId: examId,
+    fileName: 'receipt.png',
+    mimeType: 'image/png',
+    dataBase64: png.toString('base64'),
+    requestKey,
+  }), {}, '', '');
+  assert.equal(uploaded.status, 201);
+  assert.equal(room.paymentUploads.length, 1);
+  assert.match(room.paymentUploads[0].path, new RegExp(`^exam-room/${examId}/${userId}/[0-9a-f]{64}-receipt\\.png$`));
+  const registration = room.calls.find((call) => call.name === 'exam_room_register_payment_proof');
+  assert.equal(registration.body.p_user_id, userId);
+  assert.equal(registration.body.p_safe_file_name, 'receipt.png');
+  assert.match(registration.body.p_content_hash, /^[0-9a-f]{64}$/);
+
+  const reviewed = await room.handlers.examQuery(request({
+    operation: 'payment_proof_review',
+    requestId: examId,
+    proofId,
+  }), {}, '', '');
+  const reviewPayload = await reviewed.json();
+  assert.match(reviewPayload.result.downloadUrl, /^https:\/\/storage\.test\/private\//);
+  assert.equal(reviewPayload.result.expiresInSeconds, 300);
+  assert.equal('objectPath' in reviewPayload.result, false,
+    'private storage paths must not be returned to the browser');
+});
+
+test('quotation delivery and provisional Professor keys keep secrets out of storage calls', async () => {
+  const quotationCalls = [];
+  const room = harness({
+    sendEmail: async (_env, message) => {
+      quotationCalls.push(message);
+      return { status: 'sent', providerId: 'email-test-quotation' };
+    },
+    rpc: async (name, body) => {
+      if (name === 'exam_room_quotation_delivery_context') {
+        return {
+          requestId: examId,
+          recipientEmail: 'professor@example.edu',
+          recipientName: 'Professor Maria Santos',
+          professorName: 'Professor Maria Santos',
+          examinationTitle: 'Labor Law Midterm',
+          schoolName: 'Due Diligence College of Law',
+          courseSubject: 'Labor Law',
+          examinationDate: '2026-09-01',
+          startTime: '09:00',
+          timeZone: 'Asia/Manila',
+          amountCentavos: 150000,
+          currency: 'PHP',
+          quotationNotes: 'Private class quotation.',
+        };
+      }
+      if (name === 'exam_room_record_quotation_delivery') {
+        return { ok: true, status: 'quotation_sent', deliveryStatus: body.p_delivery_status };
+      }
+      if (name === 'exam_room_generate_provisional_key') {
+        return { ok: true, requestId: examId, activationId: versionId, oneTimeOnly: true };
+      }
+      return { ok: true, body };
+    },
+  });
+  const sent = await room.handlers.examCommand(request({
+    operation: 'send_room_quotation', requestId: examId, requestKey,
+  }), {}, '', '', {});
+  assert.equal(sent.status, 200);
+  assert.equal(quotationCalls.length, 1);
+  assert.equal(quotationCalls[0].recipient, 'professor@example.edu');
+  assert.match(quotationCalls[0].subject, /quotation \u2014 Labor Law Midterm/);
+
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
+  const generated = await room.handlers.examCommand(request({
+    operation: 'generate_provisional_room_key', requestId: examId, expiresAt, requestKey,
+  }), {}, '', '', {});
+  const generatedPayload = await generated.json();
+  const keyCall = room.calls.find((call) => call.name === 'exam_room_generate_provisional_key');
+  assert.match(keyCall.body.p_token_hash, /^[0-9a-f]{64}$/);
+  assert.equal('p_activation_key' in keyCall.body, false);
+  assert.match(generatedPayload.result.oneTimeProfessorKey, /^[A-Za-z0-9_-]{20,}$/);
+  assert.equal(JSON.stringify(keyCall.body).includes(generatedPayload.result.oneTimeProfessorKey), false);
+});
 
 test('Admin issues one scoped room key through a hashed, projected contract', async () => {
   const activationKey = 'professor-room-key-plain-secret';

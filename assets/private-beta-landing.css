@@ -20,7 +20,7 @@ body.private-beta-public {
   display: none !important;
 }
 
-body.private-beta-public .dd2-overlay:not(#dd2-native-view) {
+body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   display: none !important;
 }
 

@@ -9,11 +9,14 @@ const names = [
   '20260811002800_duediligence_2026_verdict_phase4_bridge.sql',
   '20260811002900_examination_room_integrity_unlock_fix.sql',
   '20260811003000_examination_room_admin_owner_repair.sql',
+  '20260811095128_live_experience_foundation.sql',
+  '20260811095200_examination_room_request_flow.sql',
 ];
 const migrations = await Promise.all(names.map((name) => (
   readFile(new URL(`supabase/migrations/${name}`, root), 'utf8')
 )));
-const [content, exam, delivery, verdict, integrityFix, adminOwnerRepair] = migrations;
+const [content, exam, delivery, verdict, integrityFix, adminOwnerRepair,
+  liveExperience, requestFlow] = migrations;
 const adminOwnerPreflight = await readFile(new URL(
   'supabase/review/examination_room_admin_owner_repair_preflight.sql',
   root,
@@ -111,5 +114,39 @@ assert.match(verdict, /num_nonnulls\(grading_result_id, exam_attempt_id\) = 1/i)
 assert.match(verdict, /sourceType', 'phase4_exam_attempt'/);
 assert.match(verdict, /a\.status = 'completed'/);
 assert.match(verdict, /revoke all on function public\.dd2026_verdict_result\(uuid, uuid\)[\s\S]*from public, anon, authenticated/i);
+
+assert.match(liveExperience, /restore_until/);
+assert.match(liveExperience, /interval '30 days'/i);
+assert.match(liveExperience, /dd2026_verdict_records/);
+assert.match(liveExperience, /forum_resolve_anonymous_identity/);
+assert.match(liveExperience, /revoke all[\s\S]*from public, anon, authenticated/i);
+
+for (const table of ['exam_room_requests', 'exam_room_request_payment_proofs']) {
+  assert.match(requestFlow, new RegExp(`create table if not exists public\\.${table}`));
+}
+assert.match(requestFlow, /alter table public\.exam_room_requests force row level security/i);
+assert.match(requestFlow, /alter table public\.exam_room_request_payment_proofs force row level security/i);
+assert.match(requestFlow, /revoke all on table public\.exam_room_requests from public, anon, authenticated/i);
+assert.match(requestFlow, /revoke all on table public\.exam_room_request_payment_proofs from public, anon, authenticated/i);
+assert.match(requestFlow, /create or replace function public\.exam_room_request_is_manager[\s\S]*assigned_administrator_user_id = p_user_id/i);
+const managerBlock = requestFlow.slice(
+  requestFlow.indexOf('create or replace function public.exam_room_request_is_manager'),
+  requestFlow.indexOf('create or replace function public.exam_room_request_snapshot'),
+);
+assert.doesNotMatch(managerBlock, /exam_room_is_admin/,
+  'an unassigned platform admin must claim a request before managing it');
+assert.match(requestFlow, /create or replace function public\.exam_room_claim_request[\s\S]*exam_room_require_admin\(p_actor_user_id\)/i);
+assert.match(requestFlow, /on conflict \(professor_user_id, request_key\) do nothing[\s\S]*EXAM_ROOM_REQUEST_IDEMPOTENCY_CONFLICT/i);
+assert.match(requestFlow, /on conflict \(submitted_by, request_key\) do nothing[\s\S]*EXAM_ROOM_PAYMENT_PROOF_IDEMPOTENCY_CONFLICT/i);
+const paymentProofReviewContextBlock = requestFlow.slice(
+  requestFlow.indexOf('create or replace function public.exam_room_payment_proof_review_context'),
+  requestFlow.indexOf('create or replace function public.exam_room_review_payment_proof'),
+);
+assert.doesNotMatch(paymentProofReviewContextBlock, /\bstable\b/i,
+  'payment-proof review context mutates review state and audit records, so it must remain volatile');
+assert.match(requestFlow, /create trigger exam_room_student_access_payment_gate[\s\S]*before insert or update on public\.exam_room_student_access_issuances/i);
+assert.match(requestFlow, /EXAM_ROOM_PAYMENT_VERIFICATION_REQUIRED/);
+assert.doesNotMatch(requestFlow, /\b(?:update|delete|truncate)\s+public\.(?:subjects|questions|examination_questions|subject_matter_courses|subject_matter_placements)\b/i,
+  'the request workflow must not mutate reviewed legal content');
 
 console.log('DueDiligence 2026 migration contracts passed.');

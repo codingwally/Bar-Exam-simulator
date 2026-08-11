@@ -56,9 +56,34 @@ function standaloneQuestion(result) {
     label: [result?.subject, result?.barYear, result?.questionNumber].filter(Boolean).join(' · '),
     question: result?.question,
     suggestedAnswer: result?.suggestedAnswer,
+    improvedAnswer: result?.improvedAnswer,
+    legalBasis: result?.legalBasis,
+    sources: result?.sources,
     userAnswer: result?.userAnswer,
     feedback: result?.feedback,
   };
+}
+
+function improvedAnswer(question) {
+  const feedback = question?.feedback;
+  if (!feedback || typeof feedback !== 'object') return text(question?.improvedAnswer);
+  return text(
+    question?.improvedAnswer
+    || feedback.improvedAlacAnswer
+    || feedback.improved_alac_answer
+    || feedback.modelAnswer
+    || feedback.model_answer,
+  );
+}
+
+function sourceText(question) {
+  return text(
+    question?.sources
+    || question?.sourceUrls
+    || question?.source_urls
+    || question?.officialSources
+    || question?.official_sources,
+  );
 }
 
 function resultSections(result) {
@@ -207,10 +232,19 @@ export async function buildVerdictPdf({ result, selectionKind = 'entire_result',
     drawBody(question.question);
     drawHeading('Suggested answer', { size: 9, color: GOLD, gap: 6 });
     drawBody(question.suggestedAnswer);
+    const improved = improvedAnswer(question);
+    if (improved && improved !== text(question.suggestedAnswer)) {
+      drawHeading('Improved ALAC answer', { size: 9, color: GOLD, gap: 6 });
+      drawBody(improved);
+    }
     drawHeading('Your answer', { size: 9, color: GOLD, gap: 6 });
     drawBody(question.userAnswer);
     drawHeading('Coaching tips and feedback', { size: 9, color: GOLD, gap: 6 });
     drawBody(feedbackText(question.feedback) || 'No additional coaching note was recorded.');
+    drawHeading('Legal basis', { size: 9, color: GOLD, gap: 6 });
+    drawBody(question.legalBasis || 'No separate legal-basis field was recorded for this legacy attempt.');
+    drawHeading('Primary sources', { size: 9, color: GOLD, gap: 6 });
+    drawBody(sourceText(question) || 'No separate source link was recorded for this legacy attempt.');
     if (index + 1 < questions.length) {
       ensureHeight(18);
       page.drawLine({

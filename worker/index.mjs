@@ -109,7 +109,9 @@ import {
   normalizeForumPostRequest,
   normalizeQuorumAdminRequest,
   normalizeQuorumCommandRequest,
+  normalizeQuorumAvatar,
   normalizeQuorumImage,
+  normalizeQuorumImages,
   normalizeQuorumQueryRequest,
   normalizeForumReactionRequest,
   normalizeForumReportRequest,
@@ -940,6 +942,30 @@ async function uploadQuorumImage(env, entryId, image) {
   return objectPath;
 }
 
+async function uploadQuorumAvatar(env, image) {
+  const objectPath = `profiles/${quorumRandomHex(12)}.${image.extension}`;
+  const response = await fetch(quorumStorageObjectUrl(env, objectPath), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': image.mimeType,
+      'x-upsert': 'false',
+      'Cache-Control': 'private, max-age=3600',
+    },
+    body: image.bytes,
+  });
+  if (!response.ok) {
+    console.error('Quorum profile photo upload failed', { status: response.status });
+    throw new ForumValidationError(
+      'QUORUM_IMAGE_UNAVAILABLE',
+      'Your profile photo could not be stored. Please try again.',
+      502,
+    );
+  }
+  return objectPath;
+}
+
 async function deleteQuorumImage(env, objectPath) {
   if (!objectPath) return true;
   const response = await fetch(quorumStorageObjectUrl(env, objectPath), {
@@ -963,6 +989,7 @@ function collectQuorumImagePaths(value, paths = new Set()) {
     return paths;
   }
   if (typeof value.imagePath === 'string' && value.imagePath) paths.add(value.imagePath);
+  if (typeof value.avatarPath === 'string' && value.avatarPath) paths.add(value.avatarPath);
   Object.values(value).forEach((item) => collectQuorumImagePaths(item, paths));
   return paths;
 }
@@ -1040,8 +1067,10 @@ function replaceQuorumImagePaths(value, signedUrls) {
   if (Array.isArray(value)) return value.map((item) => replaceQuorumImagePaths(item, signedUrls));
   const result = {};
   for (const [key, item] of Object.entries(value)) {
-    if (key === 'imagePath') {
-      result.imageUrl = item ? signedUrls.get(item) || null : null;
+    if (key === 'imagePath' || key === 'avatarPath') {
+      result[key === 'imagePath' ? 'imageUrl' : 'avatarUrl'] = item
+        ? signedUrls.get(item) || null
+        : null;
       continue;
     }
     result[key] = replaceQuorumImagePaths(item, signedUrls);
@@ -3071,7 +3100,7 @@ async function handleQuorumQuery(request, env, origin, allowedOrigin) {
       p_limit: query.payload.limit || 60,
     });
   } else {
-    result = await forumRpc(env, 'forum_quorum_query', {
+    result = await forumRpc(env, 'forum_quorum_query_v2', {
       p_user_id: user.id,
       p_operation: query.operation,
       p_payload: query.payload,
@@ -3090,18 +3119,48 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
   const user = await requireAuthenticatedUser(request, env);
   const raw = await parseBoundedJson(request, QUORUM_LIMITS.requestBytes);
   const command = normalizeQuorumCommandRequest(raw);
-  const image = ['create_entry', 'create_simple_entry'].includes(command.operation)
-    ? normalizeQuorumImage(raw?.image)
+  const isEntryCreate = ['create_entry', 'create_simple_entry'].includes(command.operation);
+  const images = isEntryCreate
+    ? (Array.isArray(raw?.images)
+      ? normalizeQuorumImages(raw.images)
+      : [normalizeQuorumImage(raw?.image)].filter(Boolean))
+    : [];
+  const avatar = command.operation === 'set_profile_avatar'
+    ? normalizeQuorumAvatar(raw?.profileImage)
     : null;
-  if (raw?.image && !['create_entry', 'create_simple_entry'].includes(command.operation)) {
+  if ((raw?.image || raw?.images) && !isEntryCreate) {
     throw new ForumValidationError(
       'INVALID_QUORUM_IMAGE',
-      'An image can be attached only while creating an entry.',
+      'Images can be attached only while creating an entry.',
     );
   }
 
   let result;
-  if (command.operation === 'set_affirm') {
+  if (command.operation === 'set_profile_avatar') {
+    let objectPath = null;
+    try {
+      objectPath = await uploadQuorumAvatar(env, avatar);
+      result = await forumRpc(env, 'forum_set_profile_avatar', {
+        p_user_id: user.id,
+        p_payload: {
+          objectPath,
+          mimeType: avatar.mimeType,
+          byteSize: avatar.byteSize,
+          width: avatar.width,
+          height: avatar.height,
+          cropX: avatar.cropX,
+          cropY: avatar.cropY,
+        },
+      });
+      if (result?.previousPath && result.previousPath !== objectPath) {
+        await deleteQuorumImage(env, result.previousPath);
+      }
+      result = { ...result, avatarPath: objectPath };
+    } catch (error) {
+      if (objectPath) await deleteQuorumImage(env, objectPath);
+      throw error;
+    }
+  } else if (command.operation === 'set_affirm') {
     result = await forumRpc(env, 'forum_set_affirm', {
       p_user_id: user.id,
       p_entry_id: command.payload.entryId,
@@ -3114,39 +3173,50 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
       p_payload: command.payload,
     });
   } else {
-    result = await forumRpc(env, 'forum_quorum_command', {
+    result = await forumRpc(env, 'forum_quorum_command_v2', {
       p_user_id: user.id,
       p_operation: command.operation,
       p_payload: command.payload,
     });
   }
 
-  if (['create_entry', 'create_simple_entry'].includes(command.operation) && image) {
-    let objectPath = null;
+  if (isEntryCreate && images.length) {
+    const objectPaths = [];
     try {
-      objectPath = await uploadQuorumImage(env, result.entryId, image);
-      await forumRpc(env, 'forum_quorum_command', {
-        p_user_id: user.id,
-        p_operation: 'register_attachment',
-        p_payload: {
-          entryId: result.entryId,
-          objectPath,
-          mimeType: image.mimeType,
-          byteSize: image.byteSize,
-        },
-      });
-      if (command.payload.imageAlt) {
-        await forumRpc(env, 'forum_set_attachment_alt', {
+      for (let index = 0; index < images.length; index += 1) {
+        const image = images[index];
+        const objectPath = await uploadQuorumImage(env, result.entryId, image);
+        objectPaths.push(objectPath);
+        await forumRpc(env, 'forum_quorum_command_v2', {
           p_user_id: user.id,
-          p_entry_id: result.entryId,
-          p_alt_text: command.payload.imageAlt,
+          p_operation: 'register_attachment',
+          p_payload: {
+            entryId: result.entryId,
+            objectPath,
+            mimeType: image.mimeType,
+            byteSize: image.byteSize,
+            sortOrder: index + 1,
+            altText: command.payload.imageAlts?.[index]
+              || command.payload.imageAlt
+              || '',
+          },
         });
       }
-      result = { ...result, imagePath: objectPath };
+      result = {
+        ...result,
+        imagePath: objectPaths[0] || null,
+        images: objectPaths.map((imagePath, index) => ({
+          imagePath,
+          imageAlt: command.payload.imageAlts?.[index]
+            || command.payload.imageAlt
+            || '',
+          order: index + 1,
+        })),
+      };
     } catch (error) {
-      if (objectPath) await deleteQuorumImage(env, objectPath);
+      await Promise.all(objectPaths.map((path) => deleteQuorumImage(env, path)));
       try {
-        await forumRpc(env, 'forum_quorum_command', {
+        await forumRpc(env, 'forum_quorum_command_v2', {
           p_user_id: user.id,
           p_operation: 'delete_entry',
           p_payload: { entryId: result.entryId },
@@ -3160,8 +3230,12 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
     }
   }
 
-  if (['delete_entry', 'remove_attachment'].includes(command.operation) && result?.imagePath) {
-    await deleteQuorumImage(env, result.imagePath);
+  if (['delete_entry', 'remove_attachment'].includes(command.operation)) {
+    const paths = [
+      ...(Array.isArray(result?.imagePaths) ? result.imagePaths : []),
+      ...(result?.imagePath ? [result.imagePath] : []),
+    ];
+    await Promise.all(paths.map((path) => deleteQuorumImage(env, path)));
   }
 
   if (command.operation === 'create_report') {
@@ -3195,11 +3269,17 @@ async function handleQuorumAdmin(request, env, origin, allowedOrigin) {
     raw,
     raw?.payload?.requestId || request.headers.get('X-Request-ID'),
   );
-  const result = await forumRpc(env, 'forum_quorum_admin', {
-    p_actor_user_id: user.id,
-    p_operation: normalized.operation,
-    p_payload: normalized.payload,
-  });
+  const result = normalized.operation === 'resolve_anonymous_identity'
+    ? await forumRpc(env, 'forum_resolve_anonymous_identity', {
+      p_actor_user_id: user.id,
+      p_entry_id: normalized.payload.entryId,
+      p_reason: normalized.payload.reason,
+    })
+    : await forumRpc(env, 'forum_quorum_admin', {
+      p_actor_user_id: user.id,
+      p_operation: normalized.operation,
+      p_payload: normalized.payload,
+    });
   return jsonResponse(
     { ok: true, data: await withSignedQuorumImages(result, env) },
     200,
@@ -5145,8 +5225,12 @@ const dd2026Handlers = createDD2026Handlers({
   requireAdministrator,
   requireAuthenticatedUser,
   resolveVerdictQuestion,
+  sendExamRoomEmail: sendExaminationEmail,
+  signExamRoomPaymentProof: signedPrivateProofUrl,
   structuredGemini: callGeminiStructured,
+  uploadExamRoomPaymentProof: uploadPrivateProof,
   uploadExamRoomSource,
+  deleteExamRoomPaymentProof: deletePrivateProof,
 });
 
 export default {
@@ -5217,6 +5301,12 @@ export default {
       if (pathname === '/dd2026/verdict/pdf') {
         return await dd2026Handlers.verdictPdf(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/dd2026/verdict/records') {
+        return await dd2026Handlers.verdictRecords(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/dd2026/verdict/archive') {
+        return await dd2026Handlers.verdictArchive(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/dd2026/editorial') {
         return await dd2026Handlers.editorial(request, env, origin, allowedOrigin);
       }
@@ -5234,6 +5324,9 @@ export default {
       }
       if (pathname === '/exam-room/upload/model-answer') {
         return await dd2026Handlers.modelAnswerUpload(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam-room/upload/payment-proof') {
+        return await dd2026Handlers.paymentProofUpload(request, env, origin, allowedOrigin);
       }
       if (pathname === '/exam-room/upload/roster') {
         return await dd2026Handlers.rosterUpload(request, env, origin, allowedOrigin);

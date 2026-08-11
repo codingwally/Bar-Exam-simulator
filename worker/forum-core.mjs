@@ -53,9 +53,12 @@ const QUORUM_COMMAND_OPERATIONS = new Set([
   'mark_notification',
   'mark_all_notifications',
   'remove_attachment',
+  'set_profile_avatar',
   'telemetry',
 ]);
-const QUORUM_ADMIN_OPERATIONS = new Set(['queue', 'analytics', 'action']);
+const QUORUM_ADMIN_OPERATIONS = new Set([
+  'queue', 'analytics', 'action', 'resolve_anonymous_identity',
+]);
 const QUORUM_ENTRY_TYPES = new Set([
   'ask_community',
   'discuss_legal_issue',
@@ -126,8 +129,11 @@ const QUORUM_ADMIN_ACTIONS = new Set([
   'unverify_profile',
 ]);
 export const QUORUM_LIMITS = Object.freeze({
-  requestBytes: 4_350_000,
+  requestBytes: 18_500_000,
   imageBytes: 3_145_728,
+  imageTotalBytes: 12_582_912,
+  maximumImages: 12,
+  avatarBytes: 5_242_880,
   entryCharacters: 4_000,
   commentCharacters: 2_000,
   repostCharacters: 1_000,
@@ -291,6 +297,11 @@ export function normalizeQuorumQueryRequest(input = {}) {
 }
 
 function normalizeEntryPayload(payload, mode) {
+  const imageAlts = Array.isArray(payload.imageAlts)
+    ? payload.imageAlts.slice(0, QUORUM_LIMITS.maximumImages).map((value) => forumPlainText(value, {
+      label: 'Image description', maximum: 500, optional: true,
+    }))
+    : [];
   const normalized = {
     body: forumPlainText(payload.body, {
       label: 'Entry',
@@ -320,6 +331,10 @@ function normalizeEntryPayload(payload, mode) {
       maximum: 500,
       optional: true,
     }),
+    imageAlts,
+    isAnonymous: payload.isAnonymous === undefined
+      ? false
+      : quorumBoolean(payload.isAnonymous, 'Anonymous posting choice'),
   };
   if (mode === 'update') normalized.entryId = forumPublicId(payload.entryId, ['qe'], 'Entry');
   if (normalized.entryType === 'share_case_note' && !normalized.caseTitle) {
@@ -343,6 +358,11 @@ export function normalizeQuorumCommandRequest(input = {}) {
   if (operation === 'create_entry') {
     normalized = normalizeEntryPayload(payload, 'create');
   } else if (operation === 'create_simple_entry') {
+    const imageAlts = Array.isArray(payload.imageAlts)
+      ? payload.imageAlts.slice(0, QUORUM_LIMITS.maximumImages).map((value) => forumPlainText(value, {
+        label: 'Image description', maximum: 500, optional: true,
+      }))
+      : [];
     normalized = {
       body: forumPlainText(payload.body, {
         label: 'Entry',
@@ -365,6 +385,10 @@ export function normalizeQuorumCommandRequest(input = {}) {
         maximum: 500,
         optional: true,
       }),
+      imageAlts,
+      isAnonymous: payload.isAnonymous === undefined
+        ? false
+        : quorumBoolean(payload.isAnonymous, 'Anonymous posting choice'),
     };
   } else if (operation === 'update_entry') {
     normalized = normalizeEntryPayload(payload, 'update');
@@ -407,6 +431,9 @@ export function normalizeQuorumCommandRequest(input = {}) {
         maximum: QUORUM_LIMITS.commentCharacters,
         forbidEmail: true,
       }),
+      isAnonymous: payload.isAnonymous === undefined
+        ? false
+        : quorumBoolean(payload.isAnonymous, 'Anonymous commenting choice'),
     };
   } else if (operation === 'update_comment') {
     normalized = {
@@ -494,7 +521,14 @@ export function normalizeQuorumCommandRequest(input = {}) {
   } else if (operation === 'mark_all_notifications') {
     normalized = {};
   } else if (operation === 'remove_attachment') {
-    normalized = { entryId: forumPublicId(payload.entryId, ['qe'], 'Entry') };
+    normalized = {
+      entryId: forumPublicId(payload.entryId, ['qe'], 'Entry'),
+      objectPath: forumPlainText(payload.objectPath, {
+        label: 'Image reference', maximum: 500, optional: true,
+      }),
+    };
+  } else if (operation === 'set_profile_avatar') {
+    normalized = {};
   } else if (operation === 'telemetry') {
     normalized = {
       eventType: quorumEnum(
@@ -522,7 +556,11 @@ export function normalizeQuorumCommandRequest(input = {}) {
   return { operation, payload: normalized };
 }
 
-function bytesFromBase64(value) {
+function bytesFromBase64(
+  value,
+  maximum = QUORUM_LIMITS.imageBytes,
+  message = 'Use a JPEG, PNG, or WebP image within the stated limit.',
+) {
   const source = String(value || '').trim();
   if (!source || !/^[A-Za-z0-9+/]*={0,2}$/.test(source) || source.length % 4 !== 0) {
     throw new ForumValidationError('INVALID_QUORUM_IMAGE', 'The selected image is invalid.');
@@ -534,10 +572,10 @@ function bytesFromBase64(value) {
     throw new ForumValidationError('INVALID_QUORUM_IMAGE', 'The selected image is invalid.');
   }
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  if (!bytes.length || bytes.length > QUORUM_LIMITS.imageBytes) {
+  if (!bytes.length || bytes.length > maximum) {
     throw new ForumValidationError(
       'INVALID_QUORUM_IMAGE',
-      'Use one JPEG, PNG, or WebP image no larger than 3 MB.',
+      message,
     );
   }
   return bytes;
@@ -578,6 +616,61 @@ export function normalizeQuorumImage(image) {
   return { bytes, mimeType, extension, byteSize: bytes.byteLength };
 }
 
+export function normalizeQuorumImages(images) {
+  if (images === undefined || images === null) return [];
+  if (!Array.isArray(images) || images.length > QUORUM_LIMITS.maximumImages) {
+    throw new ForumValidationError(
+      'INVALID_QUORUM_IMAGE',
+      `Choose no more than ${QUORUM_LIMITS.maximumImages} images.`,
+    );
+  }
+  const normalized = images.map((item) => normalizeQuorumImage(item));
+  const total = normalized.reduce((sum, item) => sum + item.byteSize, 0);
+  if (total > QUORUM_LIMITS.imageTotalBytes) {
+    throw new ForumValidationError(
+      'INVALID_QUORUM_IMAGE',
+      'The selected images are too large together. Choose fewer or smaller images.',
+    );
+  }
+  return normalized;
+}
+
+export function normalizeQuorumAvatar(image) {
+  const candidate = quorumObject(image, 'Profile photo');
+  const mimeType = String(candidate.mimeType || '').trim().toLowerCase();
+  const extension = QUORUM_IMAGE_MIMES[mimeType];
+  const width = Number(candidate.width);
+  const height = Number(candidate.height);
+  if (!extension || !Number.isInteger(width) || !Number.isInteger(height)
+      || width < 256 || height < 256 || width > 4096 || height > 4096) {
+    throw new ForumValidationError(
+      'INVALID_QUORUM_IMAGE',
+      'Choose a clear JPEG, PNG, or WebP profile photo at least 256 pixels wide and tall.',
+    );
+  }
+  const bytes = bytesFromBase64(
+    candidate.dataBase64,
+    QUORUM_LIMITS.avatarBytes,
+    'This photo is too large after optimization. Choose a smaller photo.',
+  );
+  if (!imageSignatureMatches(bytes, mimeType)) {
+    throw new ForumValidationError(
+      'INVALID_QUORUM_IMAGE',
+      'The file contents do not match the selected image type.',
+    );
+  }
+  return {
+    bytes,
+    mimeType,
+    extension,
+    byteSize: bytes.byteLength,
+    width,
+    height,
+    cropX: Math.min(1, Math.max(0, Number(candidate.cropX) || 0.5)),
+    cropY: Math.min(1, Math.max(0, Number(candidate.cropY) || 0.5)),
+  };
+}
+
 export function normalizeQuorumAdminRequest(input = {}, requestId = '') {
   const request = quorumObject(input);
   const operation = String(request.operation || '').trim().toLowerCase();
@@ -598,6 +691,17 @@ export function normalizeQuorumAdminRequest(input = {}, requestId = '') {
       payload: {
         from: quorumDate(payload.from, 'Start date'),
         to: quorumDate(payload.to, 'End date'),
+      },
+    };
+  }
+  if (operation === 'resolve_anonymous_identity') {
+    return {
+      operation,
+      payload: {
+        entryId: forumPublicId(payload.entryId, ['qe'], 'Entry'),
+        reason: forumPlainText(payload.reason, {
+          label: 'Resolution reason', minimum: 10, maximum: 1_000,
+        }),
       },
     };
   }

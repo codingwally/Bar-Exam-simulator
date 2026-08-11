@@ -148,7 +148,7 @@ function fakeNode(id, { tagName = 'DIV', open = false, display = 'block' } = {})
   );
 }
 
-async function runAuthenticatedSync({ pending, globalBetaEnabled = false, allowed = false }) {
+async function runAuthenticatedSync({ pending, globalBetaEnabled = false, allowed = false, gateEnabled = true }) {
   const calls = [];
   const statuses = [];
   const api = {
@@ -157,6 +157,7 @@ async function runAuthenticatedSync({ pending, globalBetaEnabled = false, allowe
     async status() { return { allowed }; },
   };
   const context = {
+    gateEnabled,
     currentSession() {
       return { access_token: 'authenticated-session' };
     },
@@ -185,6 +186,21 @@ async function runAuthenticatedSync({ pending, globalBetaEnabled = false, allowe
   vm.runInNewContext(syncSource, context);
   await context.syncAuthenticatedState({ authenticated: true });
   return { calls, statuses };
+}
+
+// The retired admission gate must never interrupt a normal authenticated
+// return when the production feature flag is disabled.
+{
+  const result = await runAuthenticatedSync({ pending: null, gateEnabled: false });
+  assert.ok(
+    result.calls.some(([name]) => name === 'showApplication'),
+    'A signed-in user must enter the application directly when the private-beta gate is disabled.',
+  );
+  assert.equal(
+    result.calls.some(([name]) => name === 'openAdmission'),
+    false,
+    'The disabled private-beta gate must not reopen any admission stage.',
+  );
 }
 
 // With the protected global policy enabled, an authenticated account no longer

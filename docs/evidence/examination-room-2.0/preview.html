@@ -200,18 +200,18 @@
         </button>
         <button class="dd26-role-card" type="button" data-open-view="beadle">
           <span class="dd26-role-number">02</span>
-          <span><strong>Beadle</strong><em>Prepare the class</em><small>Use the Beadle key from the Professor, save the class list, then copy and give the active student handout to the class.</small></span>
+          <span><strong>Beadle</strong><em>Confirm the class list</em><small>Use the Beadle key, upload or paste the class list, review validation, confirm once, and finish.</small></span>
         </button>
         <button class="dd26-role-card" type="button" data-student-entry>
           <span class="dd26-role-number">03</span>
-          <span><strong>Student</strong><em>Take the examination</em><small>Get the handout from the Beadle, sign in with the account on the class list, enter the student exam code, answer, and submit.</small></span>
+          <span><strong>Student</strong><em>Take the examination</em><small>Sign in with the account on the class list, enter the emailed class examination code, answer, and submit.</small></span>
         </button>
         <button class="dd26-role-card" type="button" data-open-view="admin">
           <span class="dd26-role-number">04</span>
           <span><strong>Admin</strong><em>Open the Admin area</em><small>Create one Professor key for each Examination Room and see who used every key.</small></span>
         </button>
       </div>
-      <div class="dd26-notice"><strong>Where does the student exam code come from?</strong> The Professor does not create it. After the Beadle saves the class list, Due Diligence creates the class-wide code. The Beadle page shows the active code beside the examination link and provides one <b>Copy class handout</b> action.</div>
+      <div class="dd26-notice"><strong>Where does the student exam code come from?</strong> After the Beadle confirms a valid class list, Due Diligence activates the class-wide code and queues one private email to each listed student. No examination link or per-student approval is required.</div>
       <div class="dd26-notice"><strong>Student sign-in is required.</strong> A student cannot open the Student examination page until signed in. Every student must also be on the class list.</div>
       <div class="dd26-privacy">During a monitored examination, copy, cut, and paste are blocked. Leaving the exam tab is recorded for the Professor and Beadle to review. It is not an automatic failure.</div>
     </section>
@@ -309,7 +309,7 @@
             <div><dt>Questions</dt><dd>8, selected by the Professor</dd></div>
             <div><dt>Schedule</dt><dd>15 August 2026, 8:00 AM to 11:00 AM, Asia/Manila</dd></div>
             <div><dt>Next classroom step</dt><dd>Give the new Beadle key to the Beadle so the class list can be uploaded</dd></div>
-            <div><dt>Student entry</dt><dd>After the Beadle saves the class list, Due Diligence creates the class-wide student exam code and shows it beside the examination link on the Beadle page.</dd></div>
+            <div><dt>Student entry</dt><dd>After the Beadle confirms the class list, Due Diligence activates the class code and queues each student’s email individually.</dd></div>
             <div><dt>Corrections</dt><dd>After a student starts, any correction appears as a visible Professor notice</dd></div>
           </dl>
           <label class="dd26-choice"><input id="qa-publish-confirm" type="checkbox"><span><strong>I reviewed the final questions, points, instructions, and schedule</strong><small>Publishing creates the Beadle key for the next classroom stage and the Professor grading key for later use.</small></span></label>
@@ -363,35 +363,30 @@
           <div class="dd26-stat-grid"><div class="dd26-stat"><strong>42</strong><span>Students listed</span></div><div class="dd26-stat"><strong>42</strong><span>Accounts matched</span></div><div class="dd26-stat"><strong>42</strong><span>Ready to enter</span></div><div class="dd26-stat"><strong>0</strong><span>Needs attention</span></div></div>
           <div class="dd26-form-grid"><label class="dd26-field"><span>Class list CSV or XLSX</span><input class="dd26-input" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><label class="dd26-field"><span>Or paste the class list</span><textarea class="dd26-textarea compact" placeholder="email, student number, exam number, name"></textarea></label></div>
           <div class="dd26-table-wrap"><table class="dd26-table dd26-editable-roster"><thead><tr><th>Exam number</th><th>Signed-in account</th><th>Student number</th><th>Check</th><th>Entry</th></tr></thead><tbody><tr><td>EV-001</td><td>a.cruz@example.edu.ph</td><td>2026-0041</td><td><span class="dd26-status qa-swatch-success">Matched</span></td><td>May enter</td></tr><tr><td>EV-014</td><td>m.santos@example.edu.ph</td><td>2026-0049</td><td><span class="dd26-status qa-swatch-success">Matched</span></td><td>May enter</td></tr><tr><td>EV-027</td><td>r.reyes@example.edu.ph</td><td>2026-0062</td><td><span class="dd26-status qa-swatch-success">Matched</span></td><td>May enter</td></tr></tbody></table></div>
-          <div class="dd26-success"><strong>The class list is ready.</strong> All 42 students have one signed-in account and one exam number. Save the list to open the active student handout.</div>
-          <div class="dd26-actions"><button class="dd26-button" type="button">Download class-list template</button><button class="dd26-button primary" type="button" data-beadle-next="handout">Save class list and open handout</button></div>
+          <div class="dd26-success"><strong>The class list is ready.</strong> All 42 students have one valid email and one student record. Confirm once to queue their private access emails.</div>
+          <div class="dd26-actions"><button class="dd26-button" type="button">Download optional template</button><button class="dd26-button primary" type="button" data-beadle-next="handout">Confirm class list and finish</button></div>
         </section>
       </div>
       <div data-state-panel="beadle:handout" hidden>
         <section class="dd26-card">
-          <div class="dd26-question-meta"><div><div class="dd26-label">Class handout</div><h2>Student handout</h2></div><span class="dd26-status qa-swatch-success">Active for class</span></div>
-          <div class="dd26-success"><strong>The class list is saved.</strong> Due Diligence created this class-wide student exam code. It is different from the Beadle key and Professor grading key.</div>
+          <div class="dd26-question-meta"><div><div class="dd26-label">Finished</div><h2>Student access is prepared</h2></div><span class="dd26-status qa-swatch-success">Emails queued</span></div>
+          <div class="dd26-success"><strong>The class list is confirmed.</strong> Due Diligence activated the class-wide code and queued one private email for every listed student.</div>
           <div class="dd26-form-grid qa-handout">
-            <label class="dd26-field"><span>Student examination link</span><input class="dd26-input" id="qa-student-exam-link" value="https://duediligence.ph/#examination-room?exam=EVIDENCE-MIDTERM" readonly></label>
-            <label class="dd26-field"><span>Active student exam code</span><input class="dd26-input qa-code" id="qa-student-exam-code" value="EVID-8K3J-7M2Q" readonly></label>
+            <label class="dd26-field"><span>Active class examination code</span><input class="dd26-input qa-code" id="qa-student-exam-code" value="EVID-8K3J-7M2Q" readonly></label>
           </div>
           <dl class="dd26-publish-summary"><div><dt>Examination</dt><dd>Evidence Midterm Examination</dd></div><div><dt>Class</dt><dd>Evidence — Section A · 42 students</dd></div><div><dt>Opens</dt><dd>15 August 2026, 8:00 AM</dd></div><div><dt>Students must</dt><dd>Sign in with the account on the class list and enter this code</dd></div></dl>
-          <p class="dd26-help">The active code remains beside the examination link on this Beadle page. Give the complete handout only to students on the saved class list.</p>
-          <div class="dd26-actions"><button class="dd26-button primary" id="qa-copy-class-handout" type="button" data-demo-toast="Class handout copied in this visual preview.">Copy class handout</button><button class="dd26-button" type="button" data-student-entry>Preview student entry</button></div>
-          <div class="dd26-privacy"><strong>The class handout contains only the examination link, active student exam code, and class instructions.</strong> It never includes the Beadle key, Professor grading key, questions, suggested answers, or grades.</div>
+          <p class="dd26-help">No per-student approval or manual email is required. The code may also be copied to an approved class channel.</p>
+          <div class="dd26-actions"><button class="dd26-button primary" id="qa-copy-class-handout" type="button" data-demo-toast="Class code copied in this visual preview.">Copy class code</button><button class="dd26-button" type="button" data-student-entry>Preview student entry</button></div>
+          <div class="dd26-privacy"><strong>The student email contains only the class code, schedule, waiting-room instructions, and support guidance.</strong> It never includes privileged keys, questions, suggested answers, or grades.</div>
         </section>
       </div>
       <div data-state-panel="beadle:attention" hidden>
         <section class="dd26-card">
           <div class="dd26-question-meta"><div><div class="dd26-label">Beadle / Needs attention</div><h2>Evidence Midterm Examination</h2></div><span class="dd26-status">In progress</span></div>
           <div class="dd26-stat-grid"><div class="dd26-stat"><strong>42</strong><span>Students listed</span></div><div class="dd26-stat"><strong>40</strong><span>Allowed to enter</span></div><div class="dd26-stat"><strong>7</strong><span>Submitted</span></div><div class="dd26-stat"><strong>3</strong><span>Needs attention</span></div></div>
-          <div class="dd26-attention-list">
-            <article><div><strong>EV-014</strong><small>Possible duplicate on the class list; entry is on hold</small></div><span class="dd26-status qa-swatch-danger">Check identity</span></article>
-            <article><div><strong>EV-022</strong><small>Temporary leave active for 6 minutes; timer continues</small></div><button class="dd26-button" type="button" data-demo-toast="Return recorded in synthetic QA.">Record return</button></article>
-            <article><div><strong>EV-031</strong><small>Student needs to move to another device after an in-person check</small></div><button class="dd26-button" type="button" data-demo-toast="Transfer check opened for synthetic QA.">Check device change</button></article>
-          </div>
-          <div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Exam number</th><th>Identity check</th><th>Exam status</th><th>Last connection</th><th>What the Beadle can do</th></tr></thead><tbody><tr><td>EV-001</td><td>In-person check passed</td><td>Answering</td><td>11 seconds ago</td><td>None required</td></tr><tr><td>EV-014</td><td>Pending</td><td>Entry on hold</td><td>—</td><td><button class="dd26-button primary" type="button" data-demo-toast="Identity check simulated.">Record identity check</button></td></tr><tr><td>EV-031</td><td>Passed 2 minutes ago</td><td>Device help</td><td>4 minutes ago</td><td><button class="dd26-button" type="button" data-demo-toast="Controlled device change simulated.">Move to new device</button></td></tr></tbody></table></div>
-          <div class="dd26-privacy">This page never shows exam questions, student answers, grades, or the Professor’s suggested answer.</div>
+          <div class="dd26-attention-list"><article><div><strong>Class list confirmed</strong><small>Any examination incident or accommodation is routed to the Professor or authorized room administrator.</small></div><span class="dd26-status qa-swatch-success">Beadle finished</span></article></div>
+          <div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Student</th><th>Signed-in account</th><th>Exam status</th><th>Access</th></tr></thead><tbody><tr><td>Ana Cruz</td><td>Matched</td><td>Answering</td><td>Eligible</td></tr><tr><td>Maria Santos</td><td>Matched</td><td>Not started</td><td>Eligible</td></tr><tr><td>Ramon Reyes</td><td>Matched</td><td>Submitted</td><td>Eligible</td></tr></tbody></table></div>
+          <div class="dd26-privacy">No per-student approval or manual email is required. This page never shows exam questions, student answers, grades, or the Professor’s suggested answer.</div>
         </section>
       </div>
       <p class="dd26-sr-status" id="qa-beadle-status" role="status" aria-live="polite"></p>
@@ -400,7 +395,7 @@
     <section class="dd26-shell" data-view-panel="student" hidden>
       <button class="dd26-back-link" type="button" data-open-view="roles">← Back to Examination Room</button>
       <header class="dd26-header"><div><div class="dd26-kicker">Stage 4 of 6 · Student</div><h1>Evidence Midterm Examination</h1><p>Sign in, enter the student exam code from the Beadle, answer each question, review your work, and submit.</p></div><span class="dd26-beta">Signed in · EV-001</span></header>
-      <div class="dd26-notice"><strong>Student sign-in is required.</strong> Students receive the examination link and student exam code from the Beadle. Students do not receive a Professor room key, Beadle key, Admin room key, or Professor grading key.</div>
+      <div class="dd26-notice"><strong>Student sign-in is required.</strong> Students receive the class examination code at their rostered email and enter it here. No examination link or separate reference is required. Students do not receive a Professor room key, Beadle key, Admin room key, or Professor grading key.</div>
       <div class="qa-screen-switcher"><div class="dd26-toolbar" role="tablist" aria-label="Student examination states"><button class="dd26-chip is-active" type="button" role="tab" aria-selected="true" data-state-group="student" data-state="preflight">Exam check</button><button class="dd26-chip" id="qa-student-waiting-tab" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="waiting" disabled>Waiting room</button><button class="dd26-chip" id="qa-student-workspace-tab" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="workspace" data-requires-exam-open disabled>Answering</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="offline" data-requires-exam-open disabled>Connection lost</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="recovery" data-requires-exam-open disabled>Choose saved answer</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="review" data-requires-exam-open disabled>Review</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="pending" data-requires-exam-open disabled>Sending</button><button class="dd26-chip" type="button" role="tab" aria-selected="false" aria-disabled="true" data-state-group="student" data-state="receipt" data-requires-exam-open disabled>Received</button></div></div>
 
       <div data-state-panel="student:preflight">

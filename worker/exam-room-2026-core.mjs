@@ -34,6 +34,7 @@ export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'exam_intent',
   'professor_authoring_snapshot',
   'preflight',
+  'student_entry',
   'beadle_portal',
   'incident_summary',
   'attempt',
@@ -77,11 +78,14 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'redeem_beadle_invitation',
   'revoke_beadle',
   'issue_student_access',
+  'finalize_roster_access',
   'reopen_exam_roster',
   'record_candidate_verification',
   'set_candidate_admission',
   'set_accommodation',
   'start_attempt',
+  'start_attempt_by_code',
+  'open_exam_now',
   'open_session',
   'save_answer',
   'save_answer_operation',
@@ -239,6 +243,33 @@ function rosterRows(value) {
       ),
       displayName: row.displayName
         ? boundedText(row.displayName, `Roster row ${index + 1} display name`, 200)
+        : null,
+    };
+  });
+}
+
+function classroomRosterRows(value) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > DD2026_LIMITS.rosterEntries) {
+    throw new DD2026ValidationError(
+      'ROSTER_SIZE_INVALID',
+      `A roster must contain between 1 and ${DD2026_LIMITS.rosterEntries} students.`,
+    );
+  }
+  return value.map((entry, index) => {
+    const row = object(entry);
+    return {
+      email: email(row.email, `Roster row ${index + 1} email`),
+      displayName: boundedText(
+        row.displayName ?? row.name,
+        `Roster row ${index + 1} student name`,
+        200,
+        { minimum: 2 },
+      ),
+      studentNumber: row.studentNumber
+        ? boundedText(row.studentNumber, `Roster row ${index + 1} student number`, 120)
+        : null,
+      candidateNumber: row.candidateNumber
+        ? boundedText(row.candidateNumber, `Roster row ${index + 1} candidate number`, 120)
         : null,
     };
   });
@@ -492,6 +523,11 @@ export function normalizeExamRoomQuery(input) {
     normalized.deviceInstanceHash = payload.deviceInstanceHash
       ? hexSha(payload.deviceInstanceHash, 'Device instance digest')
       : null;
+  } else if (operation === 'student_entry') {
+    normalized.studentKey = credential(payload.studentKey, 'Student exam access code');
+    normalized.deviceInstanceHash = payload.deviceInstanceHash
+      ? hexSha(payload.deviceInstanceHash, 'Device instance digest')
+      : null;
   } else if (operation === 'beadle_portal') {
     normalized.examId = optionalUuid(payload.examId, 'Examination');
   } else if (operation === 'incident_summary') {
@@ -526,10 +562,11 @@ export function normalizeExamRoomQuery(input) {
       || operation === 'student_result') {
     normalized.examId = uuid(payload.examId, 'Examination');
     if (operation === 'live_status'
-        || operation === 'live_status_v2'
-        || operation === 'grading_workspace'
-        || operation === 'grading_model_answer') {
+        || operation === 'live_status_v2') {
       normalized.gradingKey = credential(payload.gradingKey, 'Professor grading key');
+    } else if (operation === 'grading_workspace'
+        || operation === 'grading_model_answer') {
+      normalized.gradingKey = optionalCredential(payload.gradingKey, 'Professor grading key');
     }
   } else if (operation === 'dispute_view') {
     normalized.disputeId = uuid(payload.disputeId, 'Dispute review');
@@ -763,7 +800,7 @@ export function normalizeExamRoomCommand(input) {
       throw new DD2026ValidationError('INVALID_SCHEDULE', 'Hard close must follow the opening time.');
     }
     n.studentKey = optionalCredential(payload.studentKey, 'Student exam access code');
-    n.gradingKey = credential(payload.gradingKey, 'Professor grading key');
+    n.gradingKey = optionalCredential(payload.gradingKey, 'Professor grading key');
   } else if (operation === 'publish_exam') {
     n.examId = uuid(payload.examId, 'Examination');
     n.rules = examRules(payload.rules);
@@ -879,6 +916,13 @@ export function normalizeExamRoomCommand(input) {
     n.examId = uuid(payload.examId, 'Examination');
     n.studentKey = credential(payload.studentKey, 'Student exam access code');
     n.requestKey = requestKey(payload.requestKey);
+  } else if (operation === 'finalize_roster_access') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.rows = classroomRosterRows(payload.rows);
+    n.sourceKind = enumValue(payload.sourceKind, 'Roster source', ['xlsx', 'csv', 'paste', 'manual']);
+    n.sourceHash = hexSha(payload.sourceHash, 'Roster source digest');
+    n.studentKey = credential(payload.studentKey, 'Student exam access code');
+    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'reopen_exam_roster') {
     n.examId = uuid(payload.examId, 'Examination');
     n.reason = boundedText(payload.reason, 'Class-list correction reason', 1_000, { minimum: 5 });
@@ -928,6 +972,17 @@ export function normalizeExamRoomCommand(input) {
   } else if (operation === 'start_attempt') {
     n.examId = uuid(payload.examId, 'Examination');
     n.studentKey = optionalCredential(payload.studentKey, 'Student exam access code');
+  } else if (operation === 'start_attempt_by_code') {
+    n.studentKey = credential(payload.studentKey, 'Student exam access code');
+  } else if (operation === 'open_exam_now') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.reason = boundedText(
+      payload.reason ?? 'Opened by the Professor for the present class session.',
+      'Opening reason',
+      1_000,
+      { minimum: 5 },
+    );
+    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'open_session') {
     n.attemptId = uuid(payload.attemptId, 'Attempt');
     n.deviceInstanceHash = hexSha(payload.deviceInstanceHash, 'Device instance digest');
@@ -1129,7 +1184,7 @@ export function normalizeExamRoomCommand(input) {
     n.gradeState = enumValue(payload.gradeState, 'Grade state', ['draft', 'final']);
     n.expectedRevision = integer(payload.expectedRevision ?? 0, 'Grade revision', 0);
     n.changeReason = boundedText(payload.changeReason, 'Grade reason', 1_000, { minimum: 5 });
-    n.gradingKey = credential(payload.gradingKey, 'Professor grading key');
+    n.gradingKey = optionalCredential(payload.gradingKey, 'Professor grading key');
   } else if (operation === 'unlock_attempt') {
     n.attemptId = uuid(payload.attemptId, 'Attempt');
     n.reason = boundedText(payload.reason, 'Unlock reason', 1_000, { minimum: 5 });

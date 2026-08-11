@@ -72,10 +72,13 @@ assert.match(downloadBlock, /blob\.size > 5 \* 1024 \* 1024/);
 assert.doesNotMatch(downloadBlock, /release_results|confirmReleaseResults|includeQuestionnaire/,
   'downloading a candidate PDF must never send, release, or seal results');
 
-// The retained grading secret is cleared on every explicit exit and after class release.
+// Explicit exits and class release clear the retained grading secret. Page
+// lifecycle changes preserve the workspace and its durable local draft.
 assert.match(gradingBlock, /function clearGradingWorkspace\(\)[\s\S]*grading\.gradingKey = ''/);
-assert.match(frontend, /pagehide'[\s\S]*persistCurrentGradingDraft\(\)[\s\S]*clearGradingWorkspace\(\)/,
-  'Leaving the page must preserve the draft while clearing the retained grading secret.');
+const pagehideBlock = frontend.slice(frontend.indexOf("addEventListener?.('pagehide'"), frontend.indexOf("document.addEventListener?.('visibilitychange'"));
+assert.match(pagehideBlock, /persistCurrentGradingDraft\(\)/);
+assert.doesNotMatch(pagehideBlock, /clearGradingWorkspace|gradingKey = ''/,
+  'Alt-Tab, mobile backgrounding, and file pickers must not destroy grading state.');
 assert.match(gradingBlock, /function leaveGradingWorkspace\(\)[\s\S]*clearGradingWorkspace\(\)/);
 assert.match(releaseBlock, /clearGradingWorkspace\(\)[\s\S]*Graded results sent/);
 

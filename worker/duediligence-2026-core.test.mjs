@@ -168,11 +168,13 @@ test('server validators enforce 20,000-character answers and 5,000-character com
   }), /Nothing was truncated/);
 
   const comment = 'c'.repeat(5_000);
-  assert.equal(normalizeExamRoomCommand({
+  const normalizedGrade = normalizeExamRoomCommand({
     operation: 'save_grade', examId, attemptId: examId, questionId: examId,
     score: 5, comment, gradeState: 'draft', expectedRevision: 0,
-    changeReason: 'Initial grading review', gradingKey: 'secure-grading-key-1234',
-  }).comment.length, 5_000);
+    changeReason: 'Initial grading review',
+  });
+  assert.equal(normalizedGrade.comment.length, 5_000);
+  assert.equal(normalizedGrade.gradingKey, null);
 });
 
 test('Examination Room presets and incident names match the database contract', () => {

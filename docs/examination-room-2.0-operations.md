@@ -45,21 +45,20 @@ For this owner-operated beta, the owner’s explicit conversation approval plus 
 1. Sign in and use the Professor room key from Admin. One room key opens one Examination Room.
 2. Create the examination, choose the number of questions, upload or paste the questions, check every question and point value, set the schedule and rules, and enter the Beadle's account email.
 3. Publish the examination. Due Diligence shows the Beadle key and Professor grading key once. Send only the Beadle key to the named Beadle. Keep the grading key private.
-4. Wait for the Beadle to save the class list. Due Diligence then shows the active student exam code and examination link in the Beadle workspace. The Beadle copies the class handout for the students. The Professor does not create or send the student exam code in this flow.
-5. After the examination closes, grade every answer and mark every grade final. Then send the class results in one action. Each student sees only their own result. Downloading one student's PDF does not send or release anything.
+4. Wait for the Beadle to confirm the class list once. Due Diligence activates the universal class code and queues an individual access email to every validated student.
+5. Grade each final submission immediately, including while the room remains open and classmates are still answering. Mark every grade final before the separate class-results release action.
 
 #### Beadle
 
 1. Sign in and enter the one-time Beadle key sent by the Professor. Never give the Beadle key to students.
-2. Upload or paste the class list, correct any errors, and save the final list.
-3. After the class list is saved, Due Diligence creates the class-wide student exam code. The Beadle page shows the active code beside the examination link. Select **Copy class handout** and give the complete handout only to the students on the saved class list at the time set by the Professor.
-4. During the examination, use the Beadle workspace to confirm entry and help with approved exam-day concerns. The Beadle cannot see questions, answers, grades, or Professor-only material.
+2. Upload an XLSX or CSV file, paste the class list, or enter students manually. Correct the plain-language validation issues in the editable preview.
+3. Confirm once and finish. Due Diligence creates the universal class code, admits the validated roster under the automatic checks, and queues each student’s email individually. The Beadle does not approve students or send codes one by one.
 
 #### Student
 
-1. Get the examination link and student exam code from the Beadle.
+1. Get the class examination code sent to the email account on the confirmed class list.
 2. Sign in with the Due Diligence account whose email appears on the class list. Sign-in is required; the code alone cannot open the examination.
-3. Open the examination, enter the student exam code, and complete the class-list, code, device, and connection checks. If the examination has not opened, successful checks place the student in the waiting room only.
+3. Open Due Diligence, choose **Examination Room → Student**, enter the code, and complete the class-list, device, and connection checks. No examination link, UUID, or separate reference is required. If the examination has not opened, successful checks place the student in the waiting room only.
 4. In the waiting room, read the Professor's numbered instructions and watch the countdown based on Due Diligence server time. Questions, answer fields, and the attempt remain closed before the published opening time.
 5. When Due Diligence server time reaches the opening time, select **Start examination**, answer the questions, and submit. Do not treat the examination as submitted until Due Diligence shows a receipt.
 
@@ -76,7 +75,7 @@ For this owner-operated beta, the owner’s explicit conversation approval plus 
 |---|---|---|
 | Professor room key | Admin, from **Admin Dashboard → Examination Room** | The named Professor |
 | Beadle key | Due Diligence, when the Professor publishes | The Professor sends it to the named Beadle |
-| Student exam code | Due Diligence, after the Beadle saves the class list | The Beadle page shows the active code beside the examination link; the Beadle copies the class handout for the listed students |
+| Student exam code | Due Diligence, when the Beadle confirms a valid class list | Each validated roster email receives the code individually; the Beadle may copy the class code for an approved class channel |
 | Professor grading key | Due Diligence, when the Professor publishes | The Professor keeps it private |
 
 1. A Due Diligence Admin opens **Admin Dashboard → Examination Room** and creates a Professor key for one named Professor and one named Examination Room.
@@ -84,15 +83,15 @@ For this owner-operated beta, the owner’s explicit conversation approval plus 
 3. The Professor signs in with the exact email named by the Admin and redeems the key. Redemption creates that one Examination Room and assigns it to the Professor in the same transaction. One key cannot create a second room.
 4. A Professor who needs another Examination Room must redeem another Admin-issued room key. Free-form room creation is unavailable.
 5. Each key-created room accepts one examination. The Professor chooses the number of questions, uploads or pastes the examination, reviews the questions, sets the schedule, and publishes it. The server must confirm every step before the next one opens.
-6. Publishing creates two separate one-time secrets: the Beadle key, which the Professor sends to the exact named Beadle, and the grading key, which stays with the Professor. Publication must leave at least thirty minutes before the examination opens so the class can be prepared.
-7. The Beadle redeems the short-lived, one-use Beadle key, uploads and checks the class list, and saves the authoritative list. Redemption creates a separate assignment that remains active through the examination hard close, capped at 180 days, unless the Professor revokes it or the examination is sealed. Due Diligence then generates the separate class-wide student exam code. The Beadle page shows the active code beside the examination link and provides one **Copy class handout** action.
+6. Publishing creates two separate one-time secrets: the Beadle key, delivered to the exact named Beadle, and the grading key, delivered to the verified Professor. An examination may open immediately or be scheduled for later; there is no arbitrary 30-minute publication delay.
+7. The Beadle redeems the short-lived, one-use Beadle key, uploads or pastes the class list, reviews validation, and confirms once. Due Diligence versions the roster, activates the class-wide code, applies automatic eligibility, and queues one private email per validated student. No per-student approval or manual send is required.
 8. Every Student must sign in with the exact account on the saved class list and enter the student exam code. A code never replaces sign-in, list matching, admission, or schedule checks.
-9. The Professor monitors submissions and grades each answer. Class-wide result release is disabled until every score is final. The Professor may then send the class results in one action; each submitted student receives only their own result. The Professor may instead prepare a candidate-specific PDF without sending anything.
+9. The Professor may grade a student as soon as that student makes a final submission, even while other students remain active. Active autosaved drafts are never exposed as submissions. Class-wide result release remains disabled until every required score is final.
 10. Candidate PDFs have exactly three choices: questions with the candidate's submitted answers; submitted answers only; or grades with Professor comments only.
 
 An Admin may list and revoke Professor room-key records, but the dashboard never returns a previously displayed plaintext key. Audit rows answer which Admin issued the record, which Professor redeemed it, which room it created, and when those events occurred.
 
-For this classroom handoff, `publish_for_beadle` atomically fixes the reviewed examination and creates the Beadle invitation. No usable student code exists at publication. The Beadle can save the class list only before the examination opens and before any attempt exists; `issue_student_access` creates or rotates the first usable student code and locks the list for that examination. The Beadle interface then shows the active class-wide code beside the examination link and provides one **Copy class handout** action. A tightened `start_attempt` refuses an unpublished or unprepared examination, so a partial handoff is never student-visible. Professor room keys, Beadle keys, and Professor grading keys remain protected secrets; do not infer a database storage design for the active student-code display from this interface wording.
+For this classroom handoff, `publish_for_beadle` atomically fixes the reviewed examination and creates the Beadle invitation. The one-step `finalize_roster_access` operation versions the validated roster, applies automatic eligibility, activates the universal class code, and queues individual student emails in one idempotent transaction. The roster can be revised under its audited correction path without making the Beadle approve students one by one. Code-only student entry resolves the examination server-side and refuses unpublished, unrostered, unopened, or otherwise unauthorized access. Professor room keys, Beadle keys, and Professor grading keys remain protected secrets.
 
 The database migration, Worker, and Pages must be promoted in that order. Migration-first is backward-compatible because the older scheduling path keeps its roster requirement; Worker-first is unsafe because the new handoff functions would not exist yet.
 

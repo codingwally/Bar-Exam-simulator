@@ -1,4 +1,5 @@
 import { formulaNeutralizedCell } from './duediligence-2026-core.mjs';
+import { decryptStudentExamCode } from './exam-room-student-code-envelope.mjs';
 
 const TEMPLATE_SPREADSHEET_ID = '1alXFADSsgSduVW07nOCGYa5zz26k387DeeEMF_y_fdg';
 const BACKUP_TABS = Object.freeze([
@@ -379,8 +380,115 @@ export async function syncGoogleBackupEvent(env, event, context, fetchImpl = fet
   };
 }
 
-function emailMessage(job) {
+async function credentialFromPayload(env, payload) {
+  const envelope = payload?.credentialEnvelope;
+  if (!envelope) {
+    const error = new Error('The encrypted examination credential is unavailable.');
+    error.safeCode = 'EMAIL_CREDENTIAL_UNAVAILABLE';
+    throw error;
+  }
+  return decryptStudentExamCode(env, envelope);
+}
+
+function submittedAnswersText(answers) {
+  if (!Array.isArray(answers) || answers.length === 0) return 'No written answers were recorded.';
+  return answers.map((entry, index) => {
+    const ordinal = Number(entry?.ordinal ?? entry?.questionNumber ?? index + 1);
+    const question = String(entry?.questionText ?? entry?.prompt ?? '').trim();
+    const answer = String(entry?.answerText ?? entry?.answer ?? '').trim();
+    return [
+      `Question ${Number.isFinite(ordinal) ? ordinal : index + 1}`,
+      question || '[Question text unavailable]',
+      '',
+      'Your submitted answer:',
+      answer || '[Intentionally left blank]',
+    ].join('\n');
+  }).join('\n\n');
+}
+
+async function emailMessage(env, job) {
   const payload = job.payload || {};
+  if (job.email_type === 'professor_room_key') {
+    const key = await credentialFromPayload(env, payload);
+    return {
+      subject: `Due Diligence - Professor Room key for ${payload.title || 'Examination Room'}`,
+      text: [
+        'Your one-time Professor Room key is ready.',
+        `Room: ${payload.title || 'Examination Room'}`,
+        `Key: ${key}`,
+        `Expires: ${payload.expiresAt || 'See the secure portal.'}`,
+        'Keep this credential private. Due Diligence staff will never ask you to forward it.',
+        'https://duediligence.ph/#examination-room',
+      ].join('\n'),
+    };
+  }
+  if (job.email_type === 'professor_grading_key') {
+    const key = await credentialFromPayload(env, payload);
+    return {
+      subject: `Due Diligence - Grading key for ${payload.title || 'your examination'}`,
+      text: [
+        `Your grading key for ${payload.title || 'your examination'} is:`,
+        key,
+        'Use it only in the secure Professor grading workspace. Keep it private.',
+        resultLink(payload.examId || ''),
+      ].join('\n'),
+    };
+  }
+  if (job.email_type === 'beadle_key') {
+    const key = await credentialFromPayload(env, payload);
+    return {
+      subject: `Due Diligence - Beadle key for ${payload.title || 'your examination'}`,
+      text: [
+        `You were appointed Beadle for ${payload.title || 'an examination'}.`,
+        `Beadle key: ${key}`,
+        `Expires: ${payload.expiresAt || 'See the secure portal.'}`,
+        'Sign in with the invited Google account, then redeem this key. Keep it private.',
+        resultLink(payload.examId || ''),
+      ].join('\n'),
+    };
+  }
+  if (job.email_type === 'student_exam_code') {
+    const key = await credentialFromPayload(env, payload);
+    return {
+      subject: `Due Diligence - Access code for ${payload.title || 'your examination'}`,
+      text: [
+        `Hello ${payload.studentName || 'Student'},`,
+        `Your class access code for ${payload.title || 'your examination'} is:`,
+        key,
+        `Scheduled opening: ${payload.opensAt || 'See the waiting room.'}`,
+        `Hard close: ${payload.hardClosesAt || 'See the waiting room.'}`,
+        'Sign in using this same rostered email account. The code reveals no questions before the examination opens.',
+        'For access help, contact support@duediligence.ph.',
+        'https://duediligence.ph/#examination-room',
+      ].join('\n'),
+    };
+  }
+  if (job.email_type === 'professor_submission_notice') {
+    return {
+      subject: `Due Diligence - Submission received for ${payload.title || 'your examination'}`,
+      text: [
+        `${payload.studentName || payload.candidateNumber || 'A student'} submitted ${payload.title || 'the examination'}.`,
+        `Submitted at: ${payload.submittedAt || 'Recorded by the examination server.'}`,
+        'The submitted attempt is available for immediate grading. Student answers are not included in this email.',
+        resultLink(payload.examId || ''),
+      ].join('\n'),
+    };
+  }
+  if (job.email_type === 'student_submission_receipt') {
+    return {
+      subject: `Due Diligence - Submission receipt for ${payload.title || 'your examination'}`,
+      text: [
+        `Your submission for ${payload.title || 'the examination'} was received.`,
+        `Receipt: ${payload.receiptId || 'Recorded by the examination server.'}`,
+        `Submitted at: ${payload.submittedAt || 'Recorded by the examination server.'}`,
+        '',
+        'Your submitted answers:',
+        submittedAnswersText(payload.answers),
+        '',
+        'Keep this receipt for your records.',
+      ].join('\n'),
+    };
+  }
   if (job.email_type === 'exam_publication_replaced') {
     return {
       subject: `Due Diligence — updated ${payload.title || 'examination'} publication`,
@@ -439,7 +547,7 @@ export async function deliverExamRoomEmail(env, job, fetchImpl = fetch) {
     error.safeCode = 'EMAIL_NOT_CONFIGURED';
     throw error;
   }
-  const message = emailMessage(job);
+  const message = await emailMessage(env, job);
   const result = await jsonFetch(fetchImpl, 'https://api.resend.com/emails', {
     method: 'POST',
     headers: {

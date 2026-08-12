@@ -131,6 +131,38 @@ test('Examination Room requests remain authenticated and room-scoped at the Work
     'request visibility is determined by the room-scoped database snapshot, not a broad admin redirect');
 });
 
+test('Professor room requests reach the submit RPC with the selected quotation recipient', async () => {
+  const room = harness();
+  const examinationDate = new Date(Date.now() + 24 * 60 * 60 * 1_000)
+    .toISOString().slice(0, 10);
+  const response = await room.handlers.examCommand(request({
+    operation: 'submit_room_request',
+    professorName: 'Professor Maria Santos',
+    schoolName: 'Due Diligence College of Law',
+    courseSubject: 'Labor Law',
+    examinationTitle: 'Labor Law Midterm Examination',
+    examinationDate,
+    startTime: '09:30',
+    timeZone: 'Asia/Manila',
+    expectedDurationMinutes: 120,
+    estimatedStudentCount: 45,
+    examinationType: 'essay',
+    quotationRecipient: 'beadle',
+    beadleName: 'Juan Dela Cruz',
+    beadleEmail: 'beadle@example.edu',
+    notes: 'Please prepare one secure Examination Room.',
+    requestKey,
+  }), v2Env, '', '', {});
+
+  assert.equal(response.status, 200);
+  assert.equal(room.calls.length, 1);
+  assert.equal(room.calls[0].name, 'exam_room_submit_request');
+  assert.equal(room.calls[0].body.p_user_id, userId);
+  assert.equal(room.calls[0].body.p_quotation_recipient, 'beadle');
+  assert.equal(room.calls[0].body.p_beadle_email, 'beadle@example.edu');
+  assert.equal(room.calls[0].body.p_request_key, requestKey);
+});
+
 test('private room payment proofs validate, store privately, and expose only a short-lived review URL', async () => {
   const proofId = '123e4567-e89b-42d3-a456-426614174012';
   const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);

@@ -799,8 +799,22 @@ export function examRoom2026DatabaseError(error) {
   return dd2026DatabaseError(error);
 }
 
+export const EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS = Object.freeze([
+  'exam_room_request_snapshot',
+  'exam_room_submit_request',
+  'exam_room_claim_request',
+  'exam_room_prepare_quotation',
+  'exam_room_quotation_delivery_context',
+  'exam_room_record_quotation_delivery',
+  'exam_room_payment_proof_upload_context',
+  'exam_room_register_payment_proof',
+  'exam_room_payment_proof_review_context',
+  'exam_room_review_payment_proof',
+]);
+
 async function examRoom2026Rpc(env, functionName, body) {
   const allowedFunctions = new Set([
+    ...EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS,
     'exam_room_issue_professor_activation',
     'exam_room_redeem_professor_activation',
     'exam_room_admin_professor_activation_ledger',

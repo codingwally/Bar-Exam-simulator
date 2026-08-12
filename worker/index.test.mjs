@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import worker from './index.mjs';
+import worker, { EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS } from './index.mjs';
 import {
   RUBRIC_VERSION,
   applyDeterministicScoreCap,
@@ -42,6 +42,26 @@ const remedialContext = {
   sourceUrl: 'https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/68904',
   authority: 'legacy_client_context',
 };
+
+test('Examination Room request workflow RPCs remain in the Worker allowlist', () => {
+  const allowed = new Set(EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS);
+  const requestFlowFunctions = [
+    'exam_room_request_snapshot',
+    'exam_room_submit_request',
+    'exam_room_claim_request',
+    'exam_room_prepare_quotation',
+    'exam_room_quotation_delivery_context',
+    'exam_room_record_quotation_delivery',
+    'exam_room_payment_proof_upload_context',
+    'exam_room_register_payment_proof',
+    'exam_room_payment_proof_review_context',
+    'exam_room_review_payment_proof',
+  ];
+
+  for (const functionName of requestFlowFunctions) {
+    assert.equal(allowed.has(functionName), true, `${functionName} must remain callable`);
+  }
+});
 
 function modelAssessment(score = 5) {
   return {

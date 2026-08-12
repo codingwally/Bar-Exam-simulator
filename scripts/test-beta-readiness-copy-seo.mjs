@@ -52,7 +52,7 @@ assert.match(
 );
 assert.match(
   index,
-  /<a class="brand" href="\/" aria-label="Due Diligence home" aria-describedby="brand-subtitle-meaning">/,
+  /<a class="brand" href="\/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">/,
 );
 assert.match(index, /\.brand:hover:not\(\[data-meaning-dismissed="true"\]\) \.brand-meaning/);
 assert.match(index, /\.brand:focus-visible:not\(\[data-meaning-dismissed="true"\]\) \.brand-meaning/);

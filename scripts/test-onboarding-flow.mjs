@@ -6,9 +6,11 @@ const html = await fs.readFile(new URL('../index.html', import.meta.url), 'utf8'
 const phase2 = await fs.readFile(new URL('../assets/phase2-experience.js', import.meta.url), 'utf8');
 const phase4 = await fs.readFile(new URL('../assets/phase4-experience.js', import.meta.url), 'utf8');
 
-assert.match(html, /id="welcome-state"/);
-assert.match(html, /Prepare with purpose\./);
-assert.match(html, /id="start-practice"/);
+assert.match(html, /id="private-beta-landing"/);
+assert.match(html, /id="pb-pillars-title">Choose how you want to prepare\.<\/h2>/);
+assert.match(html, /class="pb-chamber-nav"[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room/);
+assert.doesNotMatch(html, /id="welcome-state"|Prepare with purpose\.|id="start-practice"/,
+  'The retired authenticated landing must be removed.');
 assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1">/, 'Mobile layouts require an explicit viewport declaration.');
 assert.match(html, /let currentSubj = null;/, 'A new visitor must not silently start in Civil Law.');
 assert.doesNotMatch(html, /requestAnimationFrame\(showInvestorWelcome\)/, 'Patron modal must not auto-open.');
@@ -34,8 +36,22 @@ assert.match(
 assert.match(
   html,
   /function exitSubjectSelection\(\) \{[\s\S]*pendingSubjectSelection = null;[\s\S]*showWelcome\(\);[\s\S]*\}/,
-  'Both exit controls must return to the existing Mock Bar welcome state.',
+  'Both exit controls must return through the homepage routing function.',
 );
+assert.match(
+  html,
+  /function showWelcome\(options = \{\}\)[\s\S]*setOnboardingView\('home'\)[\s\S]*DueDiligencePublicHome\?\.show/,
+  'The compatibility home function must display the new public homepage rather than a retired internal state.',
+);
+assert.match(
+  html,
+  /page === 'mock' && examStage === 'idle'[\s\S]*startPractice\(\)/,
+  'Opening Mock Bar from the application menu must go directly to the existing subject-selection flow.',
+);
+assert.match(phase2, /\['mock-bar', 'subject-matter', 'bar-feels', 'quorum', 'examination-room'\]/,
+  'The canonical Mock Bar route must be protected and restorable after sign-in.');
+assert.match(phase2, /hash === '#mock' \|\| hash === '#mock-bar'[\s\S]*showPage\?\.\('mock'/,
+  'OAuth return must restore the canonical Mock Bar route without the retired landing.');
 assert.match(
   html,
   /function showSubjectSelection\(\) \{[\s\S]*window\.scrollTo\(\{ top: 0, behavior: 'auto' \}\);[\s\S]*close\?\.focus\(\{ preventScroll: true \}\);[\s\S]*\}/,

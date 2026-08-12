@@ -250,7 +250,7 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/private-beta-landing\.css\?v=corrective-20260812-1/,
+  /assets\/private-beta-landing\.css\?v=homepage-default-20260812-1/,
   'The public sign-in visibility fix must ship behind a fresh browser cache key.',
 );
 

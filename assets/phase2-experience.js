@@ -559,7 +559,7 @@
   }
 
   function returnFromEntry() {
-    const protectedRoute = ['subject-matter', 'bar-feels', 'quorum', 'examination-room']
+    const protectedRoute = ['mock-bar', 'subject-matter', 'bar-feels', 'quorum', 'examination-room']
       .includes(location.hash.replace(/^#/, ''));
     closeEntry();
     if (!state.session?.access_token) {
@@ -601,7 +601,7 @@
   }
 
   function syncEntryWithHistoryRoute() {
-    const protectedRoute = ['subject-matter', 'bar-feels', 'quorum', 'examination-room']
+    const protectedRoute = ['mock-bar', 'subject-matter', 'bar-feels', 'quorum', 'examination-room']
       .includes(location.hash.replace(/^#/, ''));
     if (protectedRoute && !state.session?.access_token) {
       showEntry({ routeBound: true, returnHash: location.hash });
@@ -735,9 +735,8 @@
     }
     history.replaceState({}, '', `${location.pathname}${hash}`);
     requestAnimationFrame(() => {
-      if (hash === '#mock') {
+      if (hash === '#mock' || hash === '#mock-bar') {
         global.showPage?.('mock', document.getElementById('spa-mock'));
-        global.showWelcome?.({ preserveSession: true });
       } else if (hash === '#subject-matter') {
         global.DueDiligenceExaminations?.openPerSubject?.();
       } else if (hash === '#bar-feels') {

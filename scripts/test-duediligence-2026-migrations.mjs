@@ -11,12 +11,13 @@ const names = [
   '20260811003000_examination_room_admin_owner_repair.sql',
   '20260811095128_live_experience_foundation.sql',
   '20260811095200_examination_room_request_flow.sql',
+  '20260812185033_repair_subject_matter_title_encoding.sql',
 ];
 const migrations = await Promise.all(names.map((name) => (
   readFile(new URL(`supabase/migrations/${name}`, root), 'utf8')
 )));
 const [content, exam, delivery, verdict, integrityFix, adminOwnerRepair,
-  liveExperience, requestFlow] = migrations;
+  liveExperience, requestFlow, titleEncodingRepair] = migrations;
 const adminOwnerPreflight = await readFile(new URL(
   'supabase/review/examination_room_admin_owner_repair_preflight.sql',
   root,
@@ -148,5 +149,21 @@ assert.match(requestFlow, /create trigger exam_room_student_access_payment_gate[
 assert.match(requestFlow, /EXAM_ROOM_PAYMENT_VERIFICATION_REQUIRED/);
 assert.doesNotMatch(requestFlow, /\b(?:update|delete|truncate)\s+public\.(?:subjects|questions|examination_questions|subject_matter_courses|subject_matter_placements)\b/i,
   'the request workflow must not mutate reviewed legal content');
+
+assert.doesNotMatch(titleEncodingRepair, /[^\x00-\x7f]/,
+  'the title-encoding repair must remain ASCII-only in source control');
+assert.match(titleEncodingRepair,
+  /release_sync_subject_matter_v2\(uuid,jsonb,text,text,jsonb,text\)/);
+assert.match(titleEncodingRepair, /decode\('c3a2e282ace2809d', 'hex'\)/);
+assert.match(titleEncodingRepair, /U&'\\2014'/);
+assert.match(titleEncodingRepair,
+  /title = subject \|\| U&' \\2014 Subject Matter Practice'/);
+assert.match(titleEncodingRepair, /where track = 'per_subject'/);
+assert.match(titleEncodingRepair, /SUBJECT_MATTER_SYNC_FUNCTION_REPAIR_FAILED/);
+assert.match(titleEncodingRepair, /SUBJECT_MATTER_TITLE_REPAIR_INCOMPLETE/);
+assert.doesNotMatch(titleEncodingRepair, /\b(?:insert|delete|truncate)\b/i);
+assert.doesNotMatch(titleEncodingRepair,
+  /\bupdate\s+public\.(?:questions|examination_questions|subject_matter_placements)\b/i,
+  'the title repair must not mutate Subject Matter questions or placements');
 
 console.log('DueDiligence 2026 migration contracts passed.');

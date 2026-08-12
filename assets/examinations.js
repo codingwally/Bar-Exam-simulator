@@ -1839,6 +1839,25 @@
       <small>${escapeHtml(source.authority)} · External source</small></a>`).join('')}</div>`;
   }
 
+  function assessmentScoreWasCapped(assessment) {
+    if (!assessment || typeof assessment !== 'object' || Array.isArray(assessment)) return false;
+
+    const appliedCeiling = assessment.appliedScoreCeiling;
+    if (appliedCeiling && typeof appliedCeiling === 'object' && !Array.isArray(appliedCeiling)) {
+      const code = String(appliedCeiling.code || '').trim().toLowerCase();
+      const maximum = Number(appliedCeiling.maximum);
+      if ((code && code !== 'none') || (Number.isFinite(maximum) && maximum < 5)) return true;
+    }
+
+    const scoreCeilingCode = String(assessment.scoreCeilingCode || '').trim().toLowerCase();
+    if (scoreCeilingCode && scoreCeilingCode !== 'none') return true;
+
+    return ['errors', 'improvements'].some((field) => (
+      Array.isArray(assessment[field])
+      && assessment[field].some((value) => /^score capped because\b/i.test(String(value || '').trim()))
+    ));
+  }
+
   function assessmentBreakdown(breakdown, options = {}) {
     const rubricFields = new Set(['responsiveness', 'legalBasis', 'application', 'conclusion']);
     const entries = breakdown && typeof breakdown === 'object' && !Array.isArray(breakdown)
@@ -1928,7 +1947,7 @@
         <p class="assessment-rationale">${escapeHtml(assessment.rationale || 'The assessment record does not include a written rationale.')}</p>
         <section class="assessment-section"><h4>Governing rule and authority</h4>
           <div class="legal-explanation">${escapeHtml(assessment.legalExplanation || result.legalBasis || 'Review the controlling provision and doctrine identified in the released answer and legal sources.')}</div></section>
-        ${assessmentBreakdown(assessment.rubricBreakdown, { track })}
+        ${assessmentScoreWasCapped(assessment) ? '' : assessmentBreakdown(assessment.rubricBreakdown, { track })}
         <div class="assessment-grid">
           <section class="assessment-panel strengths"><h4>Strengths</h4>${assessmentList(assessment.strengths, 'No specific strength was identified.')}</section>
           <section class="assessment-panel errors"><h4>Errors or missing points</h4>${assessmentList(assessment.errors, 'No material error was identified.')}</section>

@@ -385,6 +385,112 @@ test('enabled email uses one idempotent Resend request and returns only provider
   assert.equal(JSON.parse(captured.options.body).to[0], 'professor@example.test');
 });
 
+test('professor release email contains a 30-student grade record and attached class workbook', async () => {
+  let captured;
+  const candidates = Array.from({ length: 30 }, (_, index) => ({
+    attemptId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    studentName: `Student ${String(index + 1).padStart(2, '0')}`,
+    studentEmail: `student${index + 1}@example.test`,
+    studentNumber: `2026-${String(index + 1).padStart(3, '0')}`,
+    candidateNumber: `C-${String(index + 1).padStart(2, '0')}`,
+    status: 'sealed',
+    startedAt: '2026-08-12T01:00:00Z',
+    serverDeadline: '2026-08-12T03:00:00Z',
+    submittedAt: '2026-08-12T02:45:00Z',
+    late: index === 29,
+    allGradesFinal: true,
+    unansweredCount: 0,
+    incidentCount: 0,
+    questions: [
+      { questionId: `q-${index + 1}-1`, ordinal: 1, prompt: 'Was the dismissal valid?', answer: 'No, due process was not observed.', maximumPoints: 5, score: 4.2, gradeState: 'final', comment: 'Sound application.' },
+      { questionId: `q-${index + 1}-2`, ordinal: 2, prompt: 'State the proper relief.', answer: 'Reinstatement with backwages.', maximumPoints: 5, score: 3.8, gradeState: 'final', comment: 'Complete the basis.' },
+    ],
+  }));
+  await deliverExamRoomEmail({
+    EXAMINATION_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'server-secret',
+    EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
+  }, {
+    id: 'professor-class-gradebook-job',
+    email_type: 'professor_release_summary',
+    recipient_email: 'professor@example.test',
+    payload: {
+      examId: context.examPublicId,
+      title: 'Labor Law Final Examination',
+      expected: 30,
+      classResults: {
+        examId: context.examPublicId,
+        title: 'Labor Law Final Examination',
+        releasedAt: '2026-08-12T04:00:00Z',
+        generatedAt: '2026-08-12T04:00:00Z',
+        expectedCount: 30,
+        classStatuses: candidates.map((candidate) => ({ ...candidate, displayStatus: 'Submitted' })),
+        candidates,
+      },
+    },
+  }, async (_url, options) => {
+    captured = JSON.parse(options.body);
+    return response({ id: 'resend-professor-gradebook' });
+  });
+  assert.deepEqual(captured.to, ['professor@example.test']);
+  assert.match(captured.subject, /class results and gradebook/);
+  assert.match(captured.text, /Submitted and graded: 30 of 30/);
+  assert.match(captured.text, /Class average: 80\.0%/);
+  assert.match(captured.text, /Student 30/);
+  assert.match(captured.text, /Q1 4\.20\/5\.00 · Q2 3\.80\/5\.00/);
+  assert.match(captured.html, /Class results and gradebook/);
+  assert.equal(captured.attachments.length, 1);
+  assert.match(captured.attachments[0].filename, /class-results.*\.xlsx$/);
+  assert.ok(captured.attachments[0].content.length > 10_000);
+  assert.equal(Buffer.from(captured.attachments[0].content, 'base64').subarray(0, 4).toString('hex'), '504b0304');
+});
+
+test('delivery queue enriches only the professor release job with its owner-scoped dashboard', async () => {
+  const calls = [];
+  let captured;
+  const professorJob = {
+    id: 'professor-release-job',
+    email_type: 'professor_release_summary',
+    recipient_user_id: '11111111-1111-4111-8111-111111111111',
+    recipient_email: 'professor@example.test',
+    payload: { examId: context.examPublicId, title: 'Labor Law Midterm' },
+  };
+  const rpc = async (_env, name, body) => {
+    calls.push({ name, body });
+    if (name === 'exam_room_auto_submit_due') return { autoSubmitted: 0 };
+    if (name === 'dd2026_service_flag_enabled') return false;
+    if (name === 'exam_room_claim_email_batch') return [professorJob];
+    if (name === 'exam_room_professor_results_dashboard_v1') return {
+      examId: context.examPublicId,
+      title: 'Labor Law Midterm',
+      releasedAt: '2026-08-12T04:00:00Z',
+      expectedCount: 1,
+      classStatuses: [{ studentName: 'Ana Reyes', studentEmail: 'ana@example.test', candidateNumber: 'C-01', displayStatus: 'Submitted' }],
+      candidates: [{
+        attemptId: '22222222-2222-4222-8222-222222222222', studentName: 'Ana Reyes',
+        studentEmail: 'ana@example.test', studentNumber: '2026-001', candidateNumber: 'C-01',
+        status: 'sealed', allGradesFinal: true, questions: [{ ordinal: 1, prompt: 'Question', answer: 'Answer', maximumPoints: 5, score: 4.2, gradeState: 'final' }],
+      }],
+    };
+    if (name === 'exam_room_complete_email') return { ok: true };
+    throw new Error(`Unexpected RPC ${name}`);
+  };
+  const result = await processExamRoomDeliveryQueues({
+    EXAMINATION_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'server-secret',
+    EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
+  }, {
+    rpc,
+    fetchImpl: async (_url, options) => { captured = JSON.parse(options.body); return response({ id: 'resend-enriched' }); },
+  });
+  assert.equal(result.emailSent, 1);
+  const dashboardCall = calls.find((entry) => entry.name === 'exam_room_professor_results_dashboard_v1');
+  assert.deepEqual(dashboardCall.body, {
+    p_professor_user_id: professorJob.recipient_user_id,
+    p_exam_public_id: context.examPublicId,
+  });
+  assert.match(captured.text, /Ana Reyes/);
+  assert.equal(captured.attachments.length, 1);
+});
+
 test('student submission receipt contains the final questions and only that student submitted answers', async () => {
   let captured;
   await deliverExamRoomEmail({
@@ -416,6 +522,40 @@ test('student submission receipt contains the final questions and only that stud
   assert.match(captured.text, /The employer failed to observe due process\./);
   assert.match(captured.text, /Discuss reinstatement\./);
   assert.match(captured.text, /\[Intentionally left blank\]/);
+  assert.doesNotMatch(captured.text, /must-not-send/);
+});
+
+test('student result email includes overall and per-question grades for only its recipient', async () => {
+  let captured;
+  await deliverExamRoomEmail({
+    EXAMINATION_EMAIL_MODE: 'enabled',
+    RESEND_API_KEY: 'server-secret',
+    EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
+  }, {
+    id: 'student-result-job',
+    email_type: 'student_result',
+    recipient_email: 'ana@example.test',
+    payload: {
+      examId: context.examPublicId,
+      title: 'Labor Law Midterm',
+      candidateNumber: 'C-01',
+      grades: [
+        { questionId: 'question-1', score: 4.2, maximumPoints: 5, comment: 'Correct rule and application.' },
+        { questionId: 'question-2', score: 3.8, maximumPoints: 5, comment: 'State the conclusion more directly.' },
+      ],
+      questions: [{ questionId: 'question-1', ordinal: 1 }, { questionId: 'question-2', ordinal: 2 }],
+      anotherStudentEmail: 'must-not-send@example.test',
+      anotherStudentAnswer: 'must-not-send',
+    },
+  }, async (_url, options) => {
+    captured = JSON.parse(options.body);
+    return response({ id: 'resend-student-result' });
+  });
+  assert.deepEqual(captured.to, ['ana@example.test']);
+  assert.match(captured.text, /Overall score: 8\.00 \/ 10\.00 \(80\.0%\)/);
+  assert.match(captured.text, /Question 1: 4\.20 \/ 5\.00/);
+  assert.match(captured.text, /Question 2: 3\.80 \/ 5\.00/);
+  assert.match(captured.text, /Correct rule and application\./);
   assert.doesNotMatch(captured.text, /must-not-send/);
 });
 

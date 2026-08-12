@@ -145,3 +145,45 @@ The existing navy background, gold card edge, serif heading, two-column subject 
 3. Final desktop, mobile, accessibility, and interaction comparisons passed without actionable findings.
 
 final result: passed
+
+# Examination Room Class Results Visual QA
+
+## Scope
+
+- Surface: owning-Professor class-results selection modal and analytics dashboard.
+- Local build: isolated feature worktree served on `127.0.0.1` with synthetic student data only.
+- Design constraint: preserve the live Examination Room navy/gold visual system and universal dialog exit controls.
+
+## Verified layouts
+
+- Desktop viewport: modal centered within the viewport, internally scrollable, no page-level horizontal overflow.
+- Mobile viewport: 390 × 844 override (375 CSS-pixel layout width in the in-app browser), modal inset within the viewport, no horizontal overflow.
+- Primary and secondary actions stack to full width at the mobile breakpoint.
+- Dense candidate lists remain independently scrollable at production-scale row counts.
+- Dashboard metric cards collapse through the existing responsive grid; question and student tables remain in bounded horizontal table wrappers.
+
+## Accessibility and interaction
+
+- Modal has an accessible heading and labelled student-selection group.
+- The established upper-right × control is visible and labelled “Close dialog and go back.”
+- The established Back action is present at the bottom of the modal.
+- Native checkboxes retain visible focus styling, select-all supports checked/indeterminate states, and disabled sending remains visibly distinct.
+- Text and controls use the existing high-contrast alabaster/gold-on-navy palette.
+- Downloading or sending closes the modal before rendering the dashboard; no interval, recursive render, or navigation loop is introduced.
+
+## Findings resolved
+
+1. Ungraded `null` scores were initially eligible for numeric-zero analytics. They now remain blank and are excluded from averages; a Professor-assigned zero remains valid.
+2. A selected export initially retained full-class attendance rows. It now includes only roster identities matching the selected submitted attempts.
+3. The offline workbook was initially gated by grade finalization. It is now available before finalization, while official release continues to require all final grades.
+4. Retrying an interrupted export initially changed the workbook creation timestamp and digest. The export now reuses its audited request timestamp so retries are byte-for-byte deterministic.
+
+## Workbook compatibility
+
+- A synthetic, non-production workbook opened successfully in installed Microsoft Excel.
+- Excel exposed all five expected sheets and preserved the exact Professor question, submitted answer, and decimal score.
+- Long Professor questions are split across labelled continuation cells before Excel's per-cell text limit, without dropping content.
+
+## Result
+
+**PASS — no P0, P1, or P2 visual, responsive, or interaction defects in the class-results workflow.**

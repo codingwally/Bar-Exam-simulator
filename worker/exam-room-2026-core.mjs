@@ -42,6 +42,7 @@ export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'live_status',
   'live_status_v2',
   'grading_workspace',
+  'results_dashboard',
   'grading_model_answer',
   'break_glass_view',
   'student_result',
@@ -513,7 +514,9 @@ export function normalizeExamRoomQuery(input) {
   } else if (operation === 'payment_proof_review') {
     normalized.requestId = uuid(payload.requestId, 'Examination Room request');
     normalized.proofId = optionalUuid(payload.proofId, 'Payment proof');
-  } else if (operation === 'exam_intent' || operation === 'professor_authoring_snapshot') {
+  } else if (operation === 'exam_intent'
+      || operation === 'professor_authoring_snapshot'
+      || operation === 'results_dashboard') {
     normalized.examId = uuid(payload.examId, 'Examination');
   } else if (operation === 'preflight') {
     normalized.examId = uuid(payload.examId, 'Examination');
@@ -587,6 +590,26 @@ export function normalizeExamResultPdfRequest(input) {
       'grades_comments',
     ]),
     gradingKey: credential(payload.gradingKey, 'Professor grading key'),
+    requestKey: requestKey(payload.requestKey),
+  };
+}
+
+export function normalizeExamClassResultsWorkbookRequest(input) {
+  const payload = object(input);
+  const attemptIds = uuidRows(payload.attemptIds, 'Selected examination attempt');
+  if (attemptIds.length < 1) {
+    throw new DD2026ValidationError(
+      'INVALID_REQUEST',
+      'Select at least one submitted student examination.',
+    );
+  }
+  return {
+    examId: uuid(payload.examId, 'Examination'),
+    attemptIds,
+    scope: enumValue(payload.scope, 'Class result workbook', [
+      'offline_grading',
+      'class_results',
+    ]),
     requestKey: requestKey(payload.requestKey),
   };
 }

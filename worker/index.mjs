@@ -899,12 +899,15 @@ async function examRoom2026Rpc(env, functionName, body) {
     'exam_room_live_status_v2',
     'exam_room_grading_workspace',
     'exam_room_grading_workspace_v3',
+    'exam_room_professor_results_dashboard_v1',
     'exam_room_save_grade',
     'exam_room_save_grade_v3',
     'exam_room_unlock_attempt',
     'exam_room_release_results',
     'exam_room_prepare_result_export_v3',
     'exam_room_complete_result_export_v3',
+    'exam_room_prepare_class_result_export_v1',
+    'exam_room_complete_class_result_export_v1',
     'exam_room_student_result',
     'exam_room_claim_backup_batch',
     'exam_room_complete_backup',
@@ -5411,6 +5414,9 @@ export default {
       }
       if (pathname === '/exam-room/results/pdf') {
         return await dd2026Handlers.examResultPdf(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/exam-room/results/workbook') {
+        return await dd2026Handlers.examClassResultsWorkbook(request, env, origin, allowedOrigin);
       }
       if (pathname === '/corrections') {
         return await handleCorrection(request, env, origin, allowedOrigin);

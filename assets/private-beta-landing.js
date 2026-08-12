@@ -14,6 +14,14 @@
     educationalOnly: 'educational-only',
     termsAndPrivacy: 'terms-privacy',
   });
+  const publicHomepageHashes = new Set([
+    '',
+    'public-platform',
+    'explore-academy',
+    'explore-commons',
+    'explore-barbound',
+    'explore-examination-room',
+  ]);
   const state = {
     stage: 'disclosure',
     disclosureEndReached: false,
@@ -23,6 +31,7 @@
     accessAllowed: null,
     globalBetaEnabled: null,
     policyPromise: null,
+    lastActivatedHash: '',
   };
 
   function privateBetaApi() {
@@ -53,14 +62,38 @@
     }));
   }
 
-  function showLanding() {
+  function normalizedHash(hash = location.hash) {
+    try {
+      return decodeURIComponent(String(hash || '').replace(/^#/, '')).trim();
+    } catch {
+      return String(hash || '').replace(/^#/, '').trim();
+    }
+  }
+
+  function applicationRouteRequested(hash = location.hash) {
+    return !publicHomepageHashes.has(normalizedHash(hash));
+  }
+
+  function showLanding(options = {}) {
     document.body.classList.add('private-beta-public');
     setHidden(landing, false);
     setHidden(appShell, true);
-    publishAccessState(false);
+    const accessAllowed = options.accessAllowed === true
+      || !gateEnabled
+      || state.accessAllowed === true;
+    publishAccessState(accessAllowed);
   }
 
-  function showApplication() {
+  function activateMockBarRoute(hash) {
+    const route = normalizedHash(hash).split(/[/?]/, 1)[0];
+    if (!['mock', 'mock-bar'].includes(route) || state.lastActivatedHash === route) return;
+    state.lastActivatedHash = route;
+    requestAnimationFrame(() => {
+      global.showPage?.('mock', document.getElementById('spa-mock'), { history: false });
+    });
+  }
+
+  function showApplication(options = {}) {
     if (dialog.open) dialog.close();
     document.body.classList.remove('private-beta-public');
     setHidden(landing, true);
@@ -69,7 +102,33 @@
     publishAccessState(true);
     const returnHash = safeReturnHash();
     if (returnHash && location.hash !== returnHash) history.replaceState({}, '', returnHash);
+    if (options.activateRoute !== false) activateMockBarRoute(returnHash || location.hash);
     requestAnimationFrame(() => document.querySelector('#authenticated-app-shell .topbar')?.focus?.());
+  }
+
+  function showPublicHomepage(options = {}) {
+    if (dialog.open) dialog.close();
+    state.lastActivatedHash = '';
+    showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
+    if (options.history !== false) {
+      const url = new URL(location.href);
+      for (const parameter of ['forumPost', 'quorumEntry', 'quorumView', 'quorumCircle', 'quorumQuery']) {
+        url.searchParams.delete(parameter);
+      }
+      url.hash = '';
+      const nextUrl = `${url.pathname}${url.search}`;
+      if (`${location.pathname}${location.search}${location.hash}` !== nextUrl) {
+        history[options.replace === true ? 'replaceState' : 'pushState'](
+          { ...(history.state || {}), dueDiligenceHome: true },
+          '',
+          nextUrl,
+        );
+      }
+    }
+    global.scrollTo?.({ top: 0, behavior: 'auto' });
+    if (options.focus !== false) {
+      requestAnimationFrame(() => document.querySelector('#private-beta-landing .pb-brand')?.focus?.({ preventScroll: true }));
+    }
   }
 
   function safeReturnHash() {
@@ -301,8 +360,8 @@
   async function syncAuthenticatedState(detail = {}) {
     const authenticated = detail.authenticated === true || Boolean(currentSession()?.access_token);
     if (!gateEnabled) {
-      if (authenticated) showApplication();
-      else showLanding();
+      if (authenticated && applicationRouteRequested()) showApplication();
+      else showLanding({ accessAllowed: true });
       return;
     }
     const api = privateBetaApi();
@@ -333,7 +392,8 @@
     try {
       const access = await api.status(currentSession().access_token);
       if (access?.allowed === true) {
-        showApplication();
+        if (applicationRouteRequested()) showApplication();
+        else showLanding({ accessAllowed: true });
         return;
       }
     } catch {
@@ -367,12 +427,12 @@
 
   function openProtectedFeature(feature, trigger = null) {
     const routes = {
-      mock: '#mock',
+      mock: '#mock-bar',
       quorum: '#quorum',
       'bar-feels': '#bar-feels',
       'examination-room': '#examination-room',
     };
-    const returnHash = routes[feature] || '#mock';
+    const returnHash = routes[feature] || '#mock-bar';
     if (!currentSession()?.access_token) {
       global.DueDiligencePhase2?.openSignIn?.({
         allowDismiss: true,
@@ -383,11 +443,11 @@
       });
       return;
     }
-    showApplication();
+    showApplication({ activateRoute: false });
     requestAnimationFrame(() => {
       if (feature === 'mock') {
+        state.lastActivatedHash = 'mock-bar';
         global.showPage?.('mock', document.getElementById('spa-mock'));
-        global.showWelcome?.({ preserveSession: true });
       } else if (feature === 'quorum') {
         global.showPage?.('community', document.getElementById('spa-community'));
       } else if (feature === 'bar-feels') {
@@ -400,6 +460,17 @@
   }
 
   function bindEvents() {
+    document.querySelectorAll('[data-public-home]').forEach((link) => {
+      link.addEventListener('click', async (event) => {
+        if (event.defaultPrevented || event.target.closest?.('#brand-subtitle')) return;
+        event.preventDefault();
+        if (typeof global.returnToPublicHomepage === 'function') {
+          await global.returnToPublicHomepage();
+        } else {
+          showPublicHomepage();
+        }
+      });
+    });
     document.querySelectorAll('[data-pb-open-admission]').forEach((button) => {
       button.addEventListener('click', () => { openPrimaryAdmission(button); });
     });
@@ -464,6 +535,15 @@
     global.addEventListener('duediligence:session', (event) => {
       syncAuthenticatedState(event.detail || {});
     });
+    global.addEventListener('popstate', () => {
+      if (!applicationRouteRequested()) {
+        showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
+        return;
+      }
+      if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
+        showApplication();
+      }
+    });
     const end = document.getElementById('pb-disclosure-end');
     if ('IntersectionObserver' in global && end && disclosureScroll) {
       const disclosureObserver = new IntersectionObserver(([entry]) => {
@@ -476,8 +556,8 @@
   async function initialize() {
     if (!gateEnabled) {
       bindEvents();
-      if (currentSession()?.access_token) showApplication();
-      else showLanding();
+      if (currentSession()?.access_token && applicationRouteRequested()) showApplication();
+      else showLanding({ accessAllowed: true });
       return;
     }
     showLanding();
@@ -487,6 +567,11 @@
     await resolveGlobalBetaPolicy();
     syncAuthenticatedState({ authenticated: Boolean(currentSession()?.access_token) });
   }
+
+  global.DueDiligencePublicHome = Object.freeze({
+    show: showPublicHomepage,
+    showApplication,
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initialize, { once: true });

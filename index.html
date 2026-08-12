@@ -941,7 +941,7 @@
 <link rel="stylesheet" href="assets/lex-forum.css?v=live-experience-quorum-back-20260811-1">
 <link rel="stylesheet" href="assets/examinations.css?v=corrective-20260812-1">
 <link rel="stylesheet" href="assets/duediligence-2026.css?v=past-exam-removal-20260812-1">
-<link rel="stylesheet" href="assets/private-beta-landing.css?v=corrective-20260812-1">
+<link rel="stylesheet" href="assets/private-beta-landing.css?v=homepage-default-20260812-1">
 <script src="assets/exam-session-controller.js"></script>
 <script src="assets/examination-room-2-store.js?v=exam-room-2-four-role-20260810"></script>
 </head>
@@ -949,7 +949,7 @@
 
 <div class="pb-landing" id="private-beta-landing">
   <header class="pb-header">
-    <a class="pb-brand" href="/" aria-label="Due Diligence — Amicus in Itinere Iuris">
+    <a class="pb-brand" href="/" data-public-home aria-label="Due Diligence — homepage">
       <img class="pb-crest" src="assets/brand/icon-192.png" width="50" height="50"
         alt="" aria-hidden="true">
       <span>
@@ -957,6 +957,12 @@
         <span class="pb-brand-sub">Amicus in Itinere Iuris</span>
       </span>
     </a>
+    <nav class="pb-chamber-nav" aria-label="Due Diligence chambers">
+      <a class="pb-chamber-pill pb-chamber-academy" href="#explore-academy">The Academy</a>
+      <a class="pb-chamber-pill pb-chamber-commons" href="#explore-commons">The Commons</a>
+      <a class="pb-chamber-pill pb-chamber-barbound" href="#explore-barbound">BarBound</a>
+      <a class="pb-chamber-pill pb-chamber-room" href="#explore-examination-room">Examination Room</a>
+    </nav>
     <nav class="pb-header-utilities" aria-label="Public utilities">
       <a href="#support" data-pb-legal="support">Support</a>
       <button type="button" data-public-action="docket">The Docket</button>
@@ -1174,7 +1180,7 @@
 </div>
 
 <header class="topbar">
-  <a class="brand" href="/" aria-label="Due Diligence home" aria-describedby="brand-subtitle-meaning">
+  <a class="brand" href="/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">
     <img class="crest" src="assets/brand/icon-192.png" width="42" height="42"
       alt="" aria-hidden="true">
     <div>
@@ -1252,52 +1258,6 @@
 
 <main id="spa-root">
 <section id="page-mock" class="page active">
-  <div id="welcome-state" class="onboarding-state">
-    <article class="welcome-card" aria-labelledby="welcome-title">
-      <div class="welcome-content">
-        <div class="welcome-kicker">Philippine Bar Essay Preparation</div>
-        <h1 id="welcome-title">Prepare with purpose.</h1>
-        <p>Build disciplined Bar answers through realistic essay simulations, the Philippine ALAC method, and source-based coaching designed for serious legal study.</p>
-        <div class="welcome-actions">
-          <button type="button" class="btn-primary" id="start-practice" onclick="startPractice()">Commence Examination</button>
-        </div>
-        <div class="moot-hub" aria-label="Mock Bar study routes">
-          <button class="moot-hub-card" type="button" onclick="startPractice()">
-            <span>Quick Practice</span>
-            <strong>Bar-Subject Essays</strong>
-            <p>Open the existing eight-subject essay workspace with ALAC coaching and individual five-point assessment.</p>
-          </button>
-          <button class="moot-hub-card" type="button"
-            onclick="window.DueDiligenceExaminations?.openPerSubject()">
-            <span>Structured Assessment</span>
-            <strong>Subject Matter Examinations</strong>
-            <p>Enter reviewed Midterm and Final versions with autosave, navigation, and one overall timer.</p>
-          </button>
-          <button class="moot-hub-card" type="button"
-            onclick="openPremiumBarFeels()">
-            <span>Examination Room</span>
-            <strong>Bar Feels</strong>
-            <p>Take a curated multi-question set or confirm a private authorized upload before the clock begins.</p>
-          </button>
-        </div>
-      </div>
-      <div class="welcome-feature-grid" aria-label="Mock Bar features">
-        <div class="welcome-feature">
-          <strong>Prepare by Subject</strong>
-          <p>Practice essay questions for your law-school courses and build confidence for quizzes, midterms, finals, and future Bar preparation.</p>
-        </div>
-        <div class="welcome-feature">
-          <strong>Strengthen Legal Analysis</strong>
-          <p>Improve issue spotting, legal reasoning, and structured A.L.A.C. writing through guided examination practice.</p>
-        </div>
-        <div class="welcome-feature">
-          <strong>Learn From Every Submission</strong>
-          <p>Receive actionable feedback, review the controlling legal authorities, and compare your work with a complete suggested answer after submission.</p>
-        </div>
-      </div>
-    </article>
-  </div>
-
   <div id="subject-selection-state" class="onboarding-state" hidden>
     <article class="subject-selection-card" aria-labelledby="subject-selection-title">
       <button type="button" class="subject-selection-close" id="subject-selection-close"
@@ -1845,7 +1805,11 @@ async function init() {
   setupEventListeners();
   await loadWebsiteQuestionBank();
   renderSubjectSelection();
-  showWelcome({ preserveSession: Boolean(readPersistedWorkspace()) });
+  showWelcome({
+    preserveSession: Boolean(readPersistedWorkspace()),
+    preserveRoute: Boolean(location.hash),
+    focus: false,
+  });
 }
 
 async function loadWebsiteQuestionBank() {
@@ -2066,10 +2030,8 @@ window.addEventListener('duediligence:access', (event) => {
 
 function setOnboardingView(stage) {
   onboardingStage = stage;
-  const welcome = document.getElementById('welcome-state');
   const subjects = document.getElementById('subject-selection-state');
   const exam = document.getElementById('exam-shell');
-  if (welcome) welcome.hidden = stage !== 'welcome';
   if (subjects) subjects.hidden = stage !== 'subjectSelection';
   if (exam) exam.hidden = stage !== 'complete';
   document.body.classList.toggle('onboarding-active', stage !== 'complete');
@@ -2082,10 +2044,21 @@ function showWelcome(options = {}) {
   pendingSubjectSelection = null;
   selectedSessionMode = null;
   examStage = 'idle';
-  setOnboardingView('welcome');
+  setOnboardingView('home');
   closeAllBlockingModals();
-  const start = document.getElementById('start-practice');
-  if (start) requestAnimationFrame(() => start.focus());
+  if (!options.preserveRoute) {
+    window.DueDiligencePublicHome?.show?.({
+      history: options.history !== false,
+      replace: options.replace === true,
+      focus: options.focus !== false,
+    });
+  }
+}
+
+async function returnToPublicHomepage() {
+  if (!await confirmMockWorkspaceExit('return to the homepage')) return false;
+  showWelcome();
+  return true;
 }
 
 function startPractice() {
@@ -3415,8 +3388,8 @@ function showPage(page, el, options = {}) {
     examPausedForPage = false;
     renderMainWrite();
     sessionController.resume();
-  } else if (page === 'mock' && onboardingStage === 'complete' && examStage === 'idle') {
-    showWelcome();
+  } else if (page === 'mock' && examStage === 'idle') {
+    startPractice();
   }
   if (options.history !== false && SPA_PAGE_HASHES[page]) {
     const url = new URL(location.href);
@@ -3440,6 +3413,10 @@ function showPage(page, el, options = {}) {
 
 window.addEventListener('popstate', () => {
   const hash = location.hash.replace(/^#/, '');
+  if (!hash) {
+    window.DueDiligencePublicHome?.show?.({ history: false, focus: false });
+    return;
+  }
   const page = Object.entries(SPA_PAGE_HASHES)
     .find(([, routeHash]) => routeHash === hash)?.[0]
     || (hash === 'lex-forum' ? 'community' : hash ? null : 'mock');
@@ -4232,7 +4209,7 @@ window.addEventListener('storage', (event) => {
 <script src="assets/examinations.js?v=corrective-20260812-1"></script>
 <script src="assets/duediligence-2026.js?v=past-exam-removal-20260812-1"></script>
 <script src="assets/phase3-analytics.js"></script>
-<script src="assets/private-beta-landing.js?v=corrective-20260812-1"></script>
+<script src="assets/private-beta-landing.js?v=homepage-default-20260812-1"></script>
 
 </body>
 </html>

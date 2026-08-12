@@ -21,6 +21,17 @@ const publicLanding = html.slice(
 assert.match(html, /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/);
 assert.match(html, /id="private-beta-landing"/);
 assert.match(html, /id="authenticated-app-shell" hidden inert aria-hidden="true"/);
+assert.match(publicLanding, /class="pb-brand"[^>]*data-public-home/,
+  'The public logo must return to the canonical homepage without discarding authentication.');
+assert.match(
+  publicLanding,
+  /class="pb-chamber-nav"[\s\S]*href="#explore-academy"[\s\S]*href="#explore-commons"[\s\S]*href="#explore-barbound"[\s\S]*href="#explore-examination-room"/,
+  'The public header must expose all four chamber pills.',
+);
+assert.match(html, /class="brand"[^>]*data-public-home[^>]*aria-label="Due Diligence homepage"/,
+  'The authenticated-shell logo must use the same public-home action.');
+assert.doesNotMatch(html, /id="welcome-state"|Prepare with purpose\.|id="start-practice"/,
+  'The retired authenticated landing must not ship.');
 assert.ok(publicLanding.indexOf('class="pb-header"') < publicLanding.indexOf('class="pb-pillars"'),
   'The preparation chooser must follow the public header directly.');
 assert.match(publicLanding, /<h2 id="pb-pillars-title">Choose how you want to prepare\.<\/h2>/);
@@ -54,8 +65,12 @@ assert.doesNotMatch(publicLanding, /EARLY ACCESS BETA|Enter the Beta|Private bet
 assert.doesNotMatch(`${html}\n${css}\n${script}\n${config}\n${build}`, /ARTICLE[0-9]+NCC/i);
 assert.match(script, /privateBetaGate === true/);
 assert.match(config, /privateBetaGate: false/);
-assert.match(script, /if \(!gateEnabled\)[\s\S]*showLanding\(\)/,
-  'The disabled admission gate must render the public landing directly.');
+assert.match(script, /if \(!gateEnabled\)[\s\S]*applicationRouteRequested\(\)[\s\S]*showApplication\(\)[\s\S]*showLanding\(\{ accessAllowed: true \}\)/,
+  'The disabled admission gate must retain the public homepage at root and open only explicit application routes.');
+assert.match(script, /global\.DueDiligencePublicHome = Object\.freeze/);
+assert.match(script, /mock: '#mock-bar'/, 'Mock Bar sign-in returns must use the canonical route.');
+assert.match(script, /addEventListener\('popstate'[\s\S]*!applicationRouteRequested\(\)[\s\S]*showLanding/,
+  'Browser Back must restore the public homepage for root and public chamber anchors.');
 assert.match(script, /IntersectionObserver/);
 assert.match(script, /prefers-reduced-motion: reduce/);
 assert.match(script, /completeAdmission/);
@@ -64,7 +79,11 @@ assert.match(script, /globalBetaEnabled/);
 assert.match(script, /privateBetaApi\(\)\?\.policy/);
 assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /#private-beta-dialog\[open\]/);
-assert.match(html, /assets\/private-beta-landing\.js\?v=corrective-20260812-1/);
+assert.match(html, /assets\/private-beta-landing\.js\?v=homepage-default-20260812-1/);
+assert.match(html, /assets\/private-beta-landing\.css\?v=homepage-default-20260812-1/);
+assert.match(css, /\.pb-chamber-nav\s*\{/);
+assert.match(css, /\.pb-chamber-pill\s*\{/);
+assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.pb-chamber-nav\s*\{[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
 assert.match(css, /\.pb-pillar-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
 assert.match(css, /@media \(max-width: 1120px\)[\s\S]*?\.pb-pillar-grid\s*\{[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
 assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.pb-pillar-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr/);

@@ -148,7 +148,13 @@ function fakeNode(id, { tagName = 'DIV', open = false, display = 'block' } = {})
   );
 }
 
-async function runAuthenticatedSync({ pending, globalBetaEnabled = false, allowed = false, gateEnabled = true }) {
+async function runAuthenticatedSync({
+  pending,
+  globalBetaEnabled = false,
+  allowed = false,
+  gateEnabled = true,
+  routeRequested = false,
+}) {
   const calls = [];
   const statuses = [];
   const api = {
@@ -165,6 +171,9 @@ async function runAuthenticatedSync({ pending, globalBetaEnabled = false, allowe
       return api;
     },
     state: { globalBetaEnabled },
+    applicationRouteRequested() {
+      return routeRequested;
+    },
     showLanding() {
       calls.push(['showLanding']);
     },
@@ -188,13 +197,13 @@ async function runAuthenticatedSync({ pending, globalBetaEnabled = false, allowe
   return { calls, statuses };
 }
 
-// The retired admission gate must never interrupt a normal authenticated
-// return when the production feature flag is disabled.
+// An authenticated visitor at the canonical root must see the new four-chamber
+// homepage even when the retired admission gate is disabled.
 {
   const result = await runAuthenticatedSync({ pending: null, gateEnabled: false });
   assert.ok(
-    result.calls.some(([name]) => name === 'showApplication'),
-    'A signed-in user must enter the application directly when the private-beta gate is disabled.',
+    result.calls.some(([name]) => name === 'showLanding'),
+    'A signed-in user at root must remain on the new homepage.',
   );
   assert.equal(
     result.calls.some(([name]) => name === 'openAdmission'),
@@ -203,9 +212,22 @@ async function runAuthenticatedSync({ pending, globalBetaEnabled = false, allowe
   );
 }
 
+// Explicit application deep links remain usable for authenticated visitors.
+{
+  const result = await runAuthenticatedSync({
+    pending: null,
+    gateEnabled: false,
+    routeRequested: true,
+  });
+  assert.ok(
+    result.calls.some(([name]) => name === 'showApplication'),
+    'A signed-in user must enter the application for an explicit feature route.',
+  );
+}
+
 // With the protected global policy enabled, an authenticated account no longer
-// depends on a browser-stored admission token and enters immediately after the
-// server confirms eligibility.
+// depends on a browser-stored admission token. At root it remains on the new
+// homepage after the server confirms eligibility.
 {
   const result = await runAuthenticatedSync({
     pending: null,
@@ -213,13 +235,27 @@ async function runAuthenticatedSync({ pending, globalBetaEnabled = false, allowe
     allowed: true,
   });
   assert.ok(
-    result.calls.some(([name]) => name === 'showApplication'),
-    'An eligible signed-in account must enter under Beta All Access without a legacy admission token.',
+    result.calls.some(([name]) => name === 'showLanding'),
+    'An eligible signed-in account at root must see the new homepage.',
   );
   assert.equal(
     result.calls.some(([name]) => name === 'openAdmission'),
     false,
     'A confirmed global-beta account must not be returned to the code or disclosure loop.',
+  );
+}
+
+
+{
+  const result = await runAuthenticatedSync({
+    pending: null,
+    globalBetaEnabled: true,
+    allowed: true,
+    routeRequested: true,
+  });
+  assert.ok(
+    result.calls.some(([name]) => name === 'showApplication'),
+    'An eligible signed-in account must enter an explicitly requested feature.',
   );
 }
 

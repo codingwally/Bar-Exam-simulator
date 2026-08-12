@@ -35,8 +35,8 @@ const seedDocument = JSON.parse(seedJsonText);
 const seed = seedDocument.rows;
 
 for (const id of [
-  'welcome-state',
-  'start-practice',
+  'private-beta-landing',
+  'explore-academy',
   'page-midterms',
   'dd-per-subject-app',
   'page-bar-feels',
@@ -44,6 +44,8 @@ for (const id of [
 ]) {
   assert.match(html, new RegExp(`id=["']${id}["']`), `index must retain/add #${id}`);
 }
+assert.doesNotMatch(html, /id=["']welcome-state["']|Prepare with purpose\.|id=["']start-practice["']/,
+  'The retired authenticated landing must not remain in the application shell.');
 assert.match(html, /DueDiligenceExaminations\?\.openPerSubject/);
 assert.match(html, /DueDiligenceExaminations\?\.openBarFeels/);
 assert.match(html, /id="spa-mock"[\s\S]*id="spa-subject-matter"[\s\S]*id="spa-progress"[\s\S]*id="spa-bar-feels"/);

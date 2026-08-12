@@ -168,5 +168,20 @@ assert.match(phase4, /await legacy\.refreshSession\?\.\(\)/);
 assert.match(phase2, /\{ attemptRefresh: false \}/);
 assert.match(phase4, /error\.authRetryExhausted = authenticationError/);
 assert.match(phase2, /attemptRefresh: error\?\.authRetryExhausted !== true/);
+assert.match(
+  phase2,
+  /function dispatchSessionState\(session,[\s\S]*state\.lastSessionEventUserId === userId[\s\S]*state\.lastSessionEventAccessToken === accessToken[\s\S]*return false/,
+  'Equivalent Supabase session notifications must be dispatched only once.',
+);
+assert.match(
+  phase2,
+  /if \(state\.userStatePromise && state\.userStateUserId === userId\)[\s\S]*return state\.userStatePromise/,
+  'Concurrent profile restoration must share one in-flight request.',
+);
+assert.match(
+  phase2,
+  /if \(state\.welcomedUserId !== userId\)[\s\S]*Welcome back/,
+  'A restored account must receive only one welcome notification per page lifecycle.',
+);
 
 console.log('Durable authentication session checks passed.');

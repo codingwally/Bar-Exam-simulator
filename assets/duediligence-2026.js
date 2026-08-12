@@ -33,8 +33,10 @@
     search: '',
     result: null,
     busy: false,
+    sessionUserId: null,
     exam: {
       portal: null,
+      portalPromise: null,
       roomRequests: null,
       section: 'entry',
       intentRole: null,
@@ -583,10 +585,7 @@
       }).catch(() => { /* local retention cleanup retries on the next Examination Room open */ });
     }
     if (isAuthenticated()) {
-      const [portalPayload, requestPayload] = await Promise.all([
-        api('/exam-room/query', { operation: 'portal' }),
-        api('/exam-room/query', { operation: 'room_requests' }).catch(() => null),
-      ]);
+      const [portalPayload, requestPayload] = await loadInitialExamRoomPortal();
       state.exam.portal = portalPayload.result || { roles: {}, classes: [], studentExams: [], beadleExams: [] };
       state.exam.roomRequests = requestPayload?.result || null;
       await enrichProfessorExamIntents(state.exam.portal);
@@ -596,6 +595,39 @@
       state.exam.section = 'entry';
     }
     renderExamRoom();
+  }
+
+  function isExamRoomAvailabilityError(error) {
+    return ['EXAMINATION_ROOM_DISABLED', 'EXAMINATION_ROOM_2_DISABLED']
+      .includes(String(error?.code || ''));
+  }
+
+  async function loadInitialExamRoomPortal() {
+    if (state.exam.portalPromise) return state.exam.portalPromise;
+    const requestPortal = () => Promise.all([
+      api('/exam-room/query', { operation: 'portal' }),
+      api('/exam-room/query', { operation: 'room_requests' }).catch(() => null),
+    ]);
+    const pending = (async () => {
+      try {
+        return await requestPortal();
+      } catch (error) {
+        if (!isExamRoomAvailabilityError(error)
+            || config?.features?.examinationRoom2 !== true) throw error;
+        state.featureSnapshot = null;
+        const snapshot = await features().catch(() => null);
+        const roomEnabled = snapshot?.flags?.[EXAMINATION_ROOM_BASE_FLAG] === true
+          && snapshot?.flags?.[FLAG_NAMES.exam_room] === true;
+        if (!roomEnabled) throw error;
+        return requestPortal();
+      }
+    })();
+    state.exam.portalPromise = pending;
+    try {
+      return await pending;
+    } finally {
+      if (state.exam.portalPromise === pending) state.exam.portalPromise = null;
+    }
   }
 
   function renderExamRoom() {
@@ -6486,11 +6518,15 @@
   };
   global.addEventListener('popstate', restoreRoute);
   global.addEventListener('duediligence:session', (event) => {
+    const sessionUserId = event.detail?.userId || null;
+    const identityChanged = state.sessionUserId !== sessionUserId;
+    state.sessionUserId = sessionUserId;
     state.featureSnapshot = null;
     if (event.detail?.authenticated) {
       const route = routeFromHash();
       const routePageActive = document.getElementById('page-dd2026')?.classList.contains('active');
       if (route?.[0] === 'exam_room') {
+        if (!identityChanged && routePageActive) return;
         open('exam_room', document.getElementById(CONTENT_PATHS.exam_room.tab), { replace: true, detailId: route[1] || null })
           .then(() => { if (state.exam.intentRole) selectExamRole(state.exam.intentRole); });
       } else if (route && !routePageActive) restoreRoute();

@@ -37,6 +37,21 @@ assert.match(
   /global\.addEventListener\('duediligence:session',[\s\S]*event\.detail\?\.authenticated[\s\S]*routeFromHash\(\)[\s\S]*open\('exam_room'/,
   'protected 2026 routes must retry after the persisted authentication session becomes ready',
 );
+assert.match(
+  js,
+  /if \(state\.exam\.portalPromise\) return state\.exam\.portalPromise/,
+  'Concurrent Examination Room restoration must share one portal request.',
+);
+assert.match(
+  js,
+  /isExamRoomAvailabilityError\(error\)[\s\S]*state\.featureSnapshot = null[\s\S]*roomEnabled[\s\S]*return requestPortal\(\)/,
+  'A transient room-availability mismatch may retry once only after a fresh enabled feature snapshot.',
+);
+assert.match(
+  js,
+  /const identityChanged = state\.sessionUserId !== sessionUserId[\s\S]*if \(!identityChanged && routePageActive\) return/,
+  'Token refresh and duplicate session signals must not reopen an already active Examination Room.',
+);
 
 assert.match(js, /maxlength="5000"/);
 assert.match(js, /maxlength="3000"/);

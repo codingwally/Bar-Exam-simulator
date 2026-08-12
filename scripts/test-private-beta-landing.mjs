@@ -79,7 +79,7 @@ assert.match(script, /globalBetaEnabled/);
 assert.match(script, /privateBetaApi\(\)\?\.policy/);
 assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /#private-beta-dialog\[open\]/);
-assert.match(html, /assets\/private-beta-landing\.js\?v=homepage-default-20260812-1/);
+assert.match(html, /assets\/private-beta-landing\.js\?v=auth-persistence-20260812-1/);
 assert.match(html, /assets\/private-beta-landing\.css\?v=homepage-default-20260812-1/);
 assert.match(css, /\.pb-chamber-nav\s*\{/);
 assert.match(css, /\.pb-chamber-pill\s*\{/);

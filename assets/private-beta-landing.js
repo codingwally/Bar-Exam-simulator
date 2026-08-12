@@ -425,7 +425,7 @@
     global.DueDiligencePhase2?.openView?.(view);
   }
 
-  function openProtectedFeature(feature, trigger = null) {
+  async function openProtectedFeature(feature, trigger = null) {
     const routes = {
       mock: '#mock-bar',
       quorum: '#quorum',
@@ -433,6 +433,7 @@
       'examination-room': '#examination-room',
     };
     const returnHash = routes[feature] || '#mock-bar';
+    await global.DueDiligencePhase2?.whenAuthReady?.();
     if (!currentSession()?.access_token) {
       global.DueDiligencePhase2?.openSignIn?.({
         allowDismiss: true,
@@ -554,6 +555,7 @@
   }
 
   async function initialize() {
+    await global.DueDiligencePhase2?.whenAuthReady?.();
     if (!gateEnabled) {
       bindEvents();
       if (currentSession()?.access_token && applicationRouteRequested()) showApplication();

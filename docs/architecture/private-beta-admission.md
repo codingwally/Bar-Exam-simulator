@@ -32,7 +32,10 @@ all release gates pass.
 - Only hashes of token identifiers are stored in Supabase.
 - The access code and reversible equivalents are never stored in the browser,
   database, repository, logs, responses, or static artifact.
-- Supabase PKCE session persistence uses `sessionStorage`, not `localStorage`.
+- Supabase PKCE sessions use durable `localStorage` so a signed-in browser profile
+  remains signed in across tabs and browser restarts until deliberate sign-out or
+  a provider-side security revocation. The release migrates a valid legacy
+  `sessionStorage` session without exposing its contents.
 - The browser gate controller stores only the opaque pending/access tokens and
   an unprivileged random flow identifier in `sessionStorage`.
 - Every authenticated Worker caller forwards the opaque access token through

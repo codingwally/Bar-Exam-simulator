@@ -27,6 +27,7 @@ const paths = {
   workerIndex: path.join(root, 'worker', 'index.mjs'),
   wrangler: path.join(root, 'worker', 'wrangler.toml'),
   phase2: path.join(root, 'assets', 'phase2-experience.js'),
+  authStorage: path.join(root, 'assets', 'auth-session-storage.js'),
   privateBetaSession: path.join(root, 'assets', 'private-beta-session.js'),
 };
 
@@ -115,8 +116,10 @@ assert.match(
 assert.doesNotMatch(source.wrangler, /PRIVATE_BETA_ACCESS_CODE_VERIFIER\s*=/);
 assert.doesNotMatch(source.wrangler, /PRIVATE_BETA_ACCESS_CODE_PEPPER\s*=/);
 assert.doesNotMatch(source.wrangler, /PRIVATE_BETA_FLOW_SIGNING_KEY\s*=/);
-assert.match(source.phase2, /storage:\s*global\.sessionStorage/);
-assert.doesNotMatch(source.phase2, /storage:\s*global\.localStorage/);
+assert.match(source.phase2, /storage:\s*authStorage/);
+assert.match(source.phase2, /DueDiligenceAuthSessionStorage\?\.prepare/);
+assert.match(source.authStorage, /const persistent = browserStorage\('localStorage'\)/);
+assert.match(source.authStorage, /const temporary = browserStorage\('sessionStorage'\)/);
 assert.match(source.privateBetaSession, /global\.sessionStorage/);
 assert.doesNotMatch(source.privateBetaSession, /global\.localStorage/);
 assert.match(source.privateBetaSession, /cache:\s*'no-store'/);

@@ -22,7 +22,13 @@
     authTimeout: null,
     signInNotificationAttempted: false,
     privateBetaAllowed: config.features?.privateBetaGate !== true,
+    sessionRefreshPromise: null,
   };
+
+  let resolveAuthReady;
+  const authReady = new Promise((resolve) => {
+    resolveAuthReady = resolve;
+  });
 
   const originalContinueAsGuest = global.continueAsGuest;
   const legalReviewNotice = 'Beta document — prepared for independent legal review.';
@@ -152,7 +158,7 @@
       <div class="dd2-overlay" id="dd2-onboarding-overlay" role="dialog" aria-modal="true"
         aria-labelledby="dd2-onboarding-title" aria-hidden="true">
         <section class="dd2-onboarding-card" tabindex="-1">
-          <button type="button" class="dd2-close dd2-card-close" id="dd2-onboarding-close" aria-label="Close setup and return to sign-in">×</button>
+          <button type="button" class="dd2-close dd2-card-close" id="dd2-onboarding-close" aria-label="Close setup and return to the homepage">×</button>
           <div class="dd2-view-kicker">First-time setup</div>
           <h2 id="dd2-onboarding-title">Make this chamber yours.</h2>
           <p>Tell us where you are in your legal studies. Your school and year level are optional if you are not yet enrolled.</p>
@@ -454,12 +460,44 @@
     syncAuthUi();
   }
 
-  async function handleSubmissionUnauthorized(view, draft = {}) {
+  async function refreshAuthenticatedSession() {
+    if (!state.client) return null;
+    if (state.sessionRefreshPromise) return state.sessionRefreshPromise;
+    state.sessionRefreshPromise = (async () => {
+      try {
+        const { data, error } = await state.client.auth.refreshSession();
+        const session = error ? null : data?.session || null;
+        if (!session?.access_token) return null;
+        state.session = session;
+        state.user = session.user || null;
+        syncAuthUi();
+        global.dispatchEvent(new CustomEvent('duediligence:session', {
+          detail: {
+            authenticated: true,
+            userId: state.user?.id || null,
+          },
+        }));
+        return session;
+      } catch {
+        return null;
+      }
+    })().finally(() => {
+      state.sessionRefreshPromise = null;
+    });
+    return state.sessionRefreshPromise;
+  }
+
+  async function handleSubmissionUnauthorized(view, draft = {}, options = {}) {
+    if (options.attemptRefresh !== false && await refreshAuthenticatedSession()) {
+      global.toast?.('Your session was restored. Please retry the last action.', 'ok');
+      return true;
+    }
     queuePendingSubmission(view, draft);
     await clearInvalidLocalSession();
     showEntry({
       message: 'Your secure session expired. Sign in again and your non-sensitive draft will be restored.',
     });
+    return false;
   }
 
   function trapOverlayFocus(event) {
@@ -573,20 +611,11 @@
     global.showWelcome?.({ preserveSession: true });
   }
 
-  async function returnFromOnboarding() {
+  function returnFromOnboarding() {
     if (state.onboardingBusy) return;
     setOverlay(false, 'dd2-onboarding-overlay');
-    try {
-      await state.client?.auth?.signOut?.({ scope: 'local' });
-    } catch {
-      // Local state is cleared below; the provider session is not altered.
-    }
-    state.session = null;
-    state.user = null;
-    state.profile = null;
-    state.admin = null;
     syncAuthUi();
-    showEntry({ allowDismiss: true });
+    global.DueDiligencePublicHome?.show?.();
   }
 
   function continueFromGuestReminder() {
@@ -1264,8 +1293,9 @@
 
   async function nativeWorkerRequest(path, options = {}) {
     const form = options.body instanceof FormData;
+    const requestId = options.requestId || randomId(18);
     const headers = {
-      'X-Request-ID': options.requestId || randomId(18),
+      'X-Request-ID': requestId,
       ...(form ? {} : { 'Content-Type': 'application/json' }),
       ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
       ...(state.session?.access_token
@@ -1291,9 +1321,17 @@
         || (response.status === 401 ? 'AUTHENTICATION_REQUIRED' : 'REQUEST_FAILED');
       if (response.status === 401
           || ['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(error.code)) {
+        if (options.authRetry !== false && await refreshAuthenticatedSession()) {
+          return nativeWorkerRequest(path, {
+            ...options,
+            requestId,
+            authRetry: false,
+          });
+        }
         await handleSubmissionUnauthorized(
           options.submissionView || 'account',
           options.submissionDraft || {},
+          { attemptRefresh: false },
         );
       }
       throw error;
@@ -1490,6 +1528,9 @@
       syncAuthUi();
       return;
     }
+    const authStorage = global.DueDiligenceAuthSessionStorage?.prepare?.(config.supabase.url)
+      || global.localStorage
+      || global.sessionStorage;
     state.client = global.supabase.createClient(
       config.supabase.url,
       config.supabase.publishableKey,
@@ -1497,7 +1538,7 @@
         auth: {
           flowType: 'pkce',
           persistSession: true,
-          storage: global.sessionStorage,
+          storage: authStorage,
           autoRefreshToken: true,
           detectSessionInUrl: true,
         },
@@ -1625,14 +1666,19 @@
           });
         } catch (error) {
           if (error?.code !== 'INVALID_SESSION') throw error;
-          state.session = null;
-          state.user = null;
-          state.profile = null;
-          state.admin = null;
-          syncAuthUi();
-          access = await requestGuestAccessStatus({
-            'X-Guest-Device-ID': guestDeviceId(),
-          });
+          const refreshed = await refreshAuthenticatedSession();
+          if (refreshed) {
+            access = await requestGuestAccessStatus({
+              Authorization: `Bearer ${refreshed.access_token}`,
+            });
+          } else {
+            await clearInvalidLocalSession();
+          }
+          if (!access) {
+            access = await requestGuestAccessStatus({
+              'X-Guest-Device-ID': guestDeviceId(),
+            });
+          }
         }
       } else {
         access = await requestGuestAccessStatus({
@@ -1749,7 +1795,12 @@
         recoverAuthAfterNavigation();
       }
     });
-    await initializeAuth();
+    try {
+      await initializeAuth();
+    } finally {
+      resolveAuthReady?.();
+      resolveAuthReady = null;
+    }
     if (!state.user) syncAuthUi();
   }
 
@@ -1798,12 +1849,16 @@
     if (typeof examStage !== 'undefined') examStage = 'answering';
     global.closeModal?.('checking-modal', { restoreFocus: false });
     if (error?.code === 'GUEST_LIMIT_REACHED') requireSignInForGuestLimit();
-    else handleSubmissionUnauthorized('grade', {
-      questionId: typeof currentSubj !== 'undefined' && typeof currentIdx !== 'undefined'
-        && typeof BAR_QUESTIONS !== 'undefined'
-        ? BAR_QUESTIONS?.[currentSubj]?.[currentIdx]?.id || ''
-        : '',
-    });
+    else handleSubmissionUnauthorized(
+      'grade',
+      {
+        questionId: typeof currentSubj !== 'undefined' && typeof currentIdx !== 'undefined'
+          && typeof BAR_QUESTIONS !== 'undefined'
+          ? BAR_QUESTIONS?.[currentSubj]?.[currentIdx]?.id || ''
+          : '',
+      },
+      { attemptRefresh: error?.authRetryExhausted !== true },
+    );
     return true;
   }
 
@@ -1817,6 +1872,8 @@
     openSignIn: showEntry,
     requireSubmissionAuthentication,
     handleSubmissionUnauthorized,
+    refreshSession: refreshAuthenticatedSession,
+    whenAuthReady: () => authReady,
     getSession: () => state.session,
     config,
   });

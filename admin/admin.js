@@ -3891,11 +3891,14 @@
       deny('The Admin dashboard is not configured.');
       return;
     }
+    const authStorage = global.DueDiligenceAuthSessionStorage?.prepare?.(config.supabase.url)
+      || global.localStorage
+      || global.sessionStorage;
     state.client = global.supabase.createClient(config.supabase.url, config.supabase.publishableKey, {
       auth: {
         flowType: 'pkce',
         persistSession: true,
-        storage: global.sessionStorage,
+        storage: authStorage,
         autoRefreshToken: true,
         detectSessionInUrl: true,
       },

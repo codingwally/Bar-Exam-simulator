@@ -11,6 +11,7 @@ const files = Object.fromEntries(await Promise.all(
     'index.html',
     'admin/index.html',
     'admin/admin.js',
+    'assets/auth-session-storage.js',
     'assets/private-beta-session.js',
     'assets/phase2-experience.js',
     'assets/phase3-analytics.js',
@@ -26,9 +27,11 @@ const files = Object.fromEntries(await Promise.all(
 
 for (const html of ['index.html', 'admin/index.html']) {
   const configPosition = files[html].indexOf('phase2-config.js');
+  const authStoragePosition = files[html].indexOf('auth-session-storage.js');
   const admissionPosition = files[html].indexOf('private-beta-session.js');
   assert.ok(configPosition >= 0, `${html} must load the shared configuration`);
-  assert.ok(admissionPosition > configPosition, `${html} must load admission after configuration`);
+  assert.ok(authStoragePosition > configPosition, `${html} must load durable auth storage after configuration`);
+  assert.ok(admissionPosition > authStoragePosition, `${html} must load admission after auth storage`);
 }
 assert.ok(
   files['index.html'].indexOf('private-beta-session.js')
@@ -39,6 +42,10 @@ assert.ok(
   files['admin/index.html'].indexOf('private-beta-session.js')
     < files['admin/index.html'].indexOf('admin.js'),
   'the admin app must load admission before the admin caller',
+);
+assert.match(
+  files['scripts/build-pages-artifact.mjs'],
+  /'assets\/auth-session-storage\.js'/,
 );
 assert.match(
   files['scripts/build-pages-artifact.mjs'],
@@ -58,8 +65,8 @@ for (const relative of [
     `${relative} must forward private-beta access`,
   );
 }
-assert.match(files['admin/admin.js'], /storage:\s*global\.sessionStorage/);
-assert.match(files['assets/phase2-experience.js'], /storage:\s*global\.sessionStorage/);
+assert.match(files['admin/admin.js'], /storage:\s*authStorage/);
+assert.match(files['assets/phase2-experience.js'], /storage:\s*authStorage/);
 assert.match(files['admin/admin.js'], /DueDiligencePrivateBeta\?\.clear\?\.\(\)/);
 assert.match(files['assets/phase2-experience.js'], /DueDiligencePrivateBeta\?\.clear\?\.\(\)/);
 

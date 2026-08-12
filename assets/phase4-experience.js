@@ -103,6 +103,14 @@
       error.status = response.status;
       error.pendingAttemptId = payload?.error?.pendingAttemptId || null;
       error.retryAfterHours = Number(payload?.error?.retryAfterHours) || null;
+      const authenticationError = response.status === 401
+        || ['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(error.code);
+      if (options.authRetry !== false
+          && authenticationError
+          && await legacy.refreshSession?.()) {
+        return request(path, { ...options, authRetry: false });
+      }
+      error.authRetryExhausted = authenticationError;
       throw error;
     }
     return payload;

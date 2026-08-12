@@ -43,6 +43,7 @@ const publicFiles = Object.freeze([
   'assets/examination-room-2-store.js',
   'assets/examination-room-beadle-class-list-template.xlsx',
   'assets/phase2-config.js',
+  'assets/auth-session-storage.js',
   'assets/private-beta-session.js',
   'assets/private-beta-landing.css',
   'assets/private-beta-landing.js',

@@ -192,9 +192,20 @@ function filteredExamRoomPortal(portal, dismissalResult) {
       .map((value) => String(value || '').toLowerCase()),
   );
   const isVisible = (exam) => !dismissed.has(String(exam?.examId || '').toLowerCase());
+  const archivedProfessorExams = [];
   const classes = (Array.isArray(portal?.classes) ? portal.classes : [])
     .map((classroom) => {
       const originalExams = Array.isArray(classroom?.exams) ? classroom.exams : [];
+      originalExams.filter((exam) => !isVisible(exam)).forEach((exam) => {
+        archivedProfessorExams.push({
+          examId: exam.examId,
+          title: exam.title,
+          status: exam.status,
+          sealedAt: exam.sealedAt || null,
+          hardClosesAt: exam.hardClosesAt || null,
+          classroomTitle: classroom.title || '',
+        });
+      });
       return { ...classroom, exams: originalExams.filter(isVisible), originalExamCount: originalExams.length };
     })
     // A room whose sole canonical exam was dismissed must not look like a new,
@@ -204,6 +215,9 @@ function filteredExamRoomPortal(portal, dismissalResult) {
   return {
     ...(portal || {}),
     classes,
+    // Removing a past exam hides it from the active workspace, never from the
+    // Professor's permanent grade-record archive.
+    archivedProfessorExams,
     studentExams: (Array.isArray(portal?.studentExams) ? portal.studentExams : []).filter(isVisible),
   };
 }

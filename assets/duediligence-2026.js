@@ -1116,14 +1116,20 @@
 
   function professorSection(portal) {
     const classes = portal.classes || [];
+    const archivedProfessorExams = Array.isArray(portal.archivedProfessorExams)
+      ? portal.archivedProfessorExams
+      : [];
     const activeClass = classes.find((entry) => entry.classroomId === state.exam.activeClassroomId) || classes[0] || null;
     if (activeClass) state.exam.activeClassroomId = activeClass.classroomId;
     const requests = state.exam.roomRequests?.professorRequests || [];
     const activeExam = activeClass?.exams?.[0] || null;
     const status = activeExam?.status || (activeClass ? 'Room ready' : 'No room');
     const workspace = classes.length ? `<section class="dd26-card dd26-professor-focus"><div class="dd26-question-meta"><div><div class="dd26-label">Professor workspace</div><h2>${escapeHtml(activeClass?.title || 'Your Examination Room')}</h2></div><span class="dd26-status">${escapeHtml(status)}</span></div><div class="dd26-toolbar">${classes.map((entry) => `<button class="dd26-chip${entry.classroomId === activeClass?.classroomId ? ' is-active' : ''}" type="button" data-dd26-class="${escapeHtml(entry.classroomId)}" ${entry.classroomId === activeClass?.classroomId ? 'aria-pressed="true"' : 'aria-pressed="false"'}>${escapeHtml(entry.title)}</button>`).join('')}</div>${activeClass ? professorClass(activeClass) : ''}</section>` : '<section class="dd26-card"><div class="dd26-empty">No Examination Room is open yet. Request a room or enter a one-time Professor key below.</div></section>';
+    const officialRecords = archivedProfessorExams.length
+      ? `<section class="dd26-card"><div class="dd26-question-meta"><div><div class="dd26-label">Permanent Professor record</div><h2>Official grade archive</h2></div><span class="dd26-status">${escapeHtml(archivedProfessorExams.length)} preserved</span></div><p>Past exams removed from the workspace remain available here. Their submissions, saved grades, comments, result delivery status, analytics, and workbook exports are never deleted.</p><div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Examination</th><th>Room</th><th>Status</th><th>Action</th></tr></thead><tbody>${archivedProfessorExams.map((exam) => `<tr><td><strong>${escapeHtml(exam.title || 'Past examination')}</strong><br><small>${escapeHtml(formatDate(exam.sealedAt || exam.hardClosesAt))}</small></td><td>${escapeHtml(exam.classroomTitle || 'Examination Room')}</td><td><span class="dd26-status">${escapeHtml(exam.status || 'preserved')}</span></td><td><button class="dd26-button primary" data-dd26-results-dashboard="${escapeHtml(exam.examId)}" type="button">Open grade record</button></td></tr>`).join('')}</tbody></table></div></section>`
+      : '';
     const setup = `<section class="dd26-card"><details class="dd26-room-setup" ${classes.length ? '' : 'open'}><summary>Room setup and access</summary><p>Use a new one-time key only when opening another Examination Room.</p><label class="dd26-field"><span>Professor invitation key</span><input class="dd26-input" id="dd26-activation-key" type="password" autocomplete="one-time-code"><small class="dd26-help">The key is tied to this signed-in Professor account and can be used once.</small></label><div class="dd26-actions"><button class="dd26-button" id="dd26-redeem-activation" type="button">Open another room</button><button class="dd26-button primary" id="dd26-request-room" type="button">Request another Examination Room</button><button class="dd26-button" data-dd26-refresh-room-requests type="button">Refresh request status</button></div></details></section>`;
-    return `${workspace}${setup}${roomRequestList(requests, 'professor', 'Your room requests')}`;
+    return `${workspace}${officialRecords}${setup}${roomRequestList(requests, 'professor', 'Your room requests')}`;
   }
 
   function professorClass(classroom) {

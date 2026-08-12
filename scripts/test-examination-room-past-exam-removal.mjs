@@ -48,6 +48,8 @@ assert.match(dismissFunction, /if not v_is_past then[\s\S]*EXAM_ROOM_PAST_EXAM_R
 assert.match(core, /'dismiss_past_exam'/);
 assert.match(routes, /dismiss_past_exam:[\s\S]*exam_room_dismiss_past_exam_v1/);
 assert.match(routes, /exam_room_dismissed_past_exam_ids_v1/);
+assert.match(routes, /archivedProfessorExams/);
+assert.match(routes, /Removing a past exam hides it from the active workspace, never from the[\s\S]*permanent grade-record archive/);
 assert.match(worker, /'exam_room_dismissed_past_exam_ids_v1'/);
 assert.match(worker, /'exam_room_dismiss_past_exam_v1'/);
 assert.match(worker, /EXAM_ROOM_PAST_EXAM_ACCESS_REQUIRED/);
@@ -59,6 +61,9 @@ assert.match(frontend, /pastExamRemovalButton\(exam, 'beadle'\)/);
 assert.match(frontend, /pastExamRemovalButton\(exam, 'student'\)/);
 assert.match(frontend, /function isPastExamForRole[\s\S]*\['closed', 'grading', 'sealed'\]/);
 assert.match(frontend, /data-dd26-delete-past-exam/);
+assert.match(frontend, /Official grade archive/);
+assert.match(frontend, /data-dd26-results-dashboard="\$\{escapeHtml\(exam\.examId\)\}"/);
+assert.match(frontend, /submissions, saved grades, comments, result delivery status, analytics, and workbook exports are never deleted/);
 
 // Confirmation is explicit and reuses the global accessible dialog contract.
 const dialogFlow = frontend.slice(

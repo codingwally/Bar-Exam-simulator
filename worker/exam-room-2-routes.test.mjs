@@ -1002,6 +1002,13 @@ test('portal removes only this user\'s dismissed past examinations across all ro
   assert.deepEqual(payload.result.classes.map((classroom) => classroom.classroomId), [
     'genuine-empty', 'visible-room',
   ]);
+  assert.deepEqual(payload.result.archivedProfessorExams, [{
+    examId,
+    title: 'Past exam',
+    sealedAt: null,
+    hardClosesAt: null,
+    classroomTitle: 'Old room',
+  }]);
 });
 
 test('authenticated past-exam removal is routed only through the user-scoped RPC', async () => {

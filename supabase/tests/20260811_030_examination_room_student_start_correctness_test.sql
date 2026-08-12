@@ -170,6 +170,18 @@ insert into public.exam_room_student_access_issuances (
   now() - interval '1 day'
 );
 
+insert into public.exam_room_beadle_assignments (
+  id, exam_id, beadle_user_id, status, assigned_by, assigned_at, expires_at
+) values (
+  '39000000-0000-4000-8000-000000000095'::uuid,
+  '39000000-0000-4000-8000-000000000020'::uuid,
+  '39000000-0000-4000-8000-000000000002'::uuid,
+  'active',
+  '39000000-0000-4000-8000-000000000001'::uuid,
+  now() - interval '1 day',
+  now() + interval '1 day'
+);
+
 do $student_start_correctness_behavior$
 declare
   v_professor constant uuid := '39000000-0000-4000-8000-000000000001'::uuid;
@@ -199,6 +211,50 @@ begin
       'EXECUTE'
     )
   then raise exception 'STUDENT_START_PRIVILEGE_BOUNDARY_FAILED'; end if;
+
+  if has_function_privilege(
+      'anon',
+      'public.exam_room_beadle_student_waiting_room_v1(uuid,uuid,text,text)',
+      'EXECUTE'
+    )
+    or has_function_privilege(
+      'authenticated',
+      'public.exam_room_beadle_student_waiting_room_v1(uuid,uuid,text,text)',
+      'EXECUTE'
+    )
+    or has_function_privilege(
+      'anon',
+      'public.exam_room_start_beadle_student_attempt_v1(uuid,uuid,text)',
+      'EXECUTE'
+    )
+    or has_function_privilege(
+      'authenticated',
+      'public.exam_room_start_beadle_student_attempt_v1(uuid,uuid,text)',
+      'EXECUTE'
+    )
+    or not has_function_privilege(
+      'service_role',
+      'public.exam_room_beadle_student_waiting_room_v1(uuid,uuid,text,text)',
+      'EXECUTE'
+    )
+    or not has_function_privilege(
+      'service_role',
+      'public.exam_room_start_beadle_student_attempt_v1(uuid,uuid,text)',
+      'EXECUTE'
+    )
+  then raise exception 'BEADLE_DIRECT_ENTRY_PRIVILEGE_BOUNDARY_FAILED'; end if;
+
+  begin
+    perform public.exam_room_beadle_student_waiting_room_v1(
+      v_professor, v_exam_public, v_rate_key, null
+    );
+    raise exception 'BEADLE_DIRECT_ENTRY_ASSIGNMENT_GUARD_FAILED';
+  exception
+    when others then
+      if sqlerrm not like '%EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED%' then
+        raise;
+      end if;
+  end;
 
   -- Outsiders continue to receive only the minimum denial; no schedule,
   -- instructions, rules, roster identity, or question material is disclosed.
@@ -328,6 +384,80 @@ begin
     )
   then raise exception 'STUDENT_START_WAITING_ROOM_REGRESSION'; end if;
 
+  v_result := public.exam_room_beadle_student_waiting_room_v1(
+    v_student, v_exam_public, v_rate_key, null
+  );
+  if v_result ->> 'startBlockerCode' <> 'EXAM_NOT_OPEN'
+    or (v_result ->> 'canStart')::boolean is not false
+    or v_result ->> 'waitingRoomState' <> 'waiting'
+    or (v_result ->> 'accessCodeAccepted')::boolean is not true
+    or (v_result ->> 'beadleDirectEntry')::boolean is not true
+    or v_result ->> 'accessAuthorization' <> 'active_beadle_assignment'
+    or v_result ?| array['studentKey', 'tokenHash', 'credentialHash', 'questions']
+  then raise exception 'BEADLE_DIRECT_WAITING_ROOM_FAILED'; end if;
+
+  -- Direct entry is tied to the live assignment, not a cached browser handoff.
+  -- Revocation and expiry must fail closed even after a successful preflight.
+  update public.exam_room_beadle_assignments
+  set status = 'revoked',
+      revoked_by = v_professor,
+      revoked_at = clock_timestamp(),
+      revoke_reason = 'Synthetic direct-entry revocation check.'
+  where id = '39000000-0000-4000-8000-000000000095'::uuid;
+  begin
+    perform public.exam_room_beadle_student_waiting_room_v1(
+      v_student, v_exam_public, v_rate_key, null
+    );
+    raise exception 'BEADLE_DIRECT_REVOKED_ASSIGNMENT_FAILED';
+  exception
+    when others then
+      if sqlerrm not like '%EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED%' then
+        raise;
+      end if;
+  end;
+
+  update public.exam_room_beadle_assignments
+  set status = 'active',
+      expires_at = clock_timestamp() - interval '1 minute',
+      revoked_by = null,
+      revoked_at = null,
+      revoke_reason = null
+  where id = '39000000-0000-4000-8000-000000000095'::uuid;
+  begin
+    perform public.exam_room_beadle_student_waiting_room_v1(
+      v_student, v_exam_public, v_rate_key, null
+    );
+    raise exception 'BEADLE_DIRECT_EXPIRED_ASSIGNMENT_FAILED';
+  exception
+    when others then
+      if sqlerrm not like '%EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED%' then
+        raise;
+      end if;
+  end;
+
+  update public.exam_room_beadle_assignments
+  set expires_at = clock_timestamp() + interval '1 day'
+  where id = '39000000-0000-4000-8000-000000000095'::uuid;
+
+  -- Assignment is not a substitute for enrollment. A Beadle who is absent
+  -- from the active class list receives the ordinary question-free denial.
+  update public.exam_room_roster
+  set status = 'inactive'
+  where id = '39000000-0000-4000-8000-000000000070'::uuid;
+  v_result := public.exam_room_beadle_student_waiting_room_v1(
+    v_student, v_exam_public, v_rate_key, null
+  );
+  if v_result ->> 'startBlockerCode' <> 'ROSTER_REQUIRED'
+    or (v_result ->> 'eligible')::boolean is not false
+    or v_result ?| array[
+      'title', 'instructions', 'rules', 'opensAt', 'entryClosesAt',
+      'hardClosesAt', 'studentAccessReady', 'rosterIdentity', 'questions'
+    ]
+  then raise exception 'BEADLE_DIRECT_ACTIVE_ROSTER_REQUIRED_FAILED'; end if;
+  update public.exam_room_roster
+  set status = 'active'
+  where id = '39000000-0000-4000-8000-000000000070'::uuid;
+
   -- During a valid entry window, the established bounded credential failure
   -- path remains active.
   update public.exam_room_exams
@@ -352,6 +482,60 @@ begin
         and credential_window.locked_until is null
     )
   then raise exception 'STUDENT_START_CREDENTIAL_LOCKOUT_REGRESSION'; end if;
+
+  v_result := public.exam_room_beadle_student_waiting_room_v1(
+    v_student, v_exam_public, v_rate_key, null
+  );
+  if (v_result ->> 'canStart')::boolean is not true
+    or v_result ->> 'startBlockerCode' <> 'READY'
+  then raise exception 'BEADLE_DIRECT_READY_CHECK_FAILED'; end if;
+
+  v_start_result := public.exam_room_start_beadle_student_attempt_v1(
+    v_student, v_exam_public, v_rate_key
+  );
+  if coalesce((v_start_result ->> 'ok')::boolean, false) is not true
+    or not exists (
+      select 1
+      from public.exam_room_attempts attempt
+      where attempt.exam_id = v_exam_id
+        and attempt.student_user_id = v_student
+        and attempt.status = 'in_progress'
+    )
+  then raise exception 'BEADLE_DIRECT_START_FAILED'; end if;
+
+  -- Refresh/retry is idempotent: the exact assigned examination resumes the
+  -- one existing attempt instead of creating a duplicate.
+  v_result := public.exam_room_beadle_student_waiting_room_v1(
+    v_student, v_exam_public, v_rate_key, null
+  );
+  if v_result ->> 'startBlockerCode' <> 'RESUME_READY'
+    or (v_result ->> 'canStart')::boolean is not true
+    or v_result ->> 'waitingRoomState' <> 'resume'
+  then raise exception 'BEADLE_DIRECT_RESUME_PREFLIGHT_FAILED'; end if;
+
+  v_start_result := public.exam_room_start_beadle_student_attempt_v1(
+    v_student, v_exam_public, v_rate_key
+  );
+  if coalesce((v_start_result ->> 'ok')::boolean, false) is not true
+    or coalesce((v_start_result ->> 'resumed')::boolean, false) is not true
+    or (
+      select count(*)
+      from public.exam_room_attempts attempt
+      where attempt.exam_id = v_exam_id
+        and attempt.student_user_id = v_student
+    ) <> 1
+  then raise exception 'BEADLE_DIRECT_DUPLICATE_START_FAILED'; end if;
+
+  update public.exam_room_attempts
+  set status = 'submitted', submitted_at = clock_timestamp()
+  where exam_id = v_exam_id and student_user_id = v_student;
+  v_result := public.exam_room_beadle_student_waiting_room_v1(
+    v_student, v_exam_public, v_rate_key, null
+  );
+  if v_result ->> 'startBlockerCode' <> 'ATTEMPT_ALREADY_SUBMITTED'
+    or (v_result ->> 'canStart')::boolean is not false
+    or v_result ? 'questions'
+  then raise exception 'BEADLE_DIRECT_SUBMITTED_TERMINAL_FAILED'; end if;
 end;
 $student_start_correctness_behavior$;
 

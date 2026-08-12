@@ -115,6 +115,7 @@ const EXAM_ROOM_2_QUERY_OPERATIONS = new Set([
   'professor_authoring_snapshot',
   'preflight',
   'student_entry',
+  'beadle_student_entry',
   'beadle_portal',
   'incident_summary',
   'submission_status',
@@ -155,6 +156,7 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'set_candidate_admission',
   'set_accommodation',
   'start_attempt_by_code',
+  'start_beadle_attempt',
   'open_exam_now',
   'dismiss_past_exam',
   'open_session',
@@ -1285,6 +1287,14 @@ export function createDD2026Handlers(deps) {
         p_code_fingerprint: studentKeyHash,
         p_device_instance_hash: input.deviceInstanceHash,
       };
+    } else if (input.operation === 'beadle_student_entry') {
+      functionName = 'exam_room_beadle_student_waiting_room_v1';
+      body = {
+        p_user_id: user.id,
+        p_exam_public_id: input.examId,
+        p_rate_key_hash: await examRoomRateKey(request, user.id, input.examId),
+        p_device_instance_hash: input.deviceInstanceHash,
+      };
     } else if (input.operation === 'beadle_portal') {
       functionName = 'exam_room_beadle_portal_v5';
       body = { p_user_id: user.id, p_exam_public_id: input.examId };
@@ -2091,6 +2101,14 @@ export function createDD2026Handlers(deps) {
           p_code_fingerprint: studentKeyHash,
         } };
       },
+      start_beadle_attempt: async () => ({
+        functionName: 'exam_room_start_beadle_student_attempt_v1',
+        body: {
+          p_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_rate_key_hash: rateHash,
+        },
+      }),
       open_exam_now: async () => ({ functionName: 'exam_room_open_exam_now_v1', body: {
         p_professor_user_id: userId,
         p_exam_public_id: input.examId,

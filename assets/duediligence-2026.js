@@ -22,6 +22,8 @@
   const EXAMINATION_ROOM_MIN_HANDOFF_MS = 0;
   const BEADLE_ROSTER_TEMPLATE_URL = '/assets/examination-room-beadle-class-list-template.xlsx';
   const BEADLE_ROSTER_TEMPLATE_VERSION = 'beadle-roster-v1';
+  const BEADLE_STUDENT_HANDOFF_KEY = 'duediligence.exam-room.beadle-student-handoff.v1';
+  const BEADLE_STUDENT_HANDOFF_MAX_AGE_MS = 36 * 60 * 60 * 1000;
   const state = {
     featureSnapshot: null,
     featureSnapshotUserId: null,
@@ -73,6 +75,7 @@
       waitingRoomTimer: null,
       waitingRoomPollTimer: null,
       waitingRoomPolling: false,
+      beadleHandoffPromise: null,
       submissionStatusTimer: null,
       serverOffsetMs: 0,
       serverClockBaseMs: 0,
@@ -282,7 +285,10 @@
     const previousUserId = state.sessionUserId;
     state.sessionUserId = normalizedUserId;
     beginExamPortalLifecycle({ clearData: true });
-    if (previousUserId && previousUserId !== normalizedUserId) state.exam.intentRole = null;
+    if (previousUserId && previousUserId !== normalizedUserId) {
+      state.exam.intentRole = null;
+      clearBeadleStudentHandoff();
+    }
     return true;
   }
 
@@ -755,6 +761,7 @@
       state.exam.section = 'entry';
     }
     renderExamRoom();
+    if (portalUserId) await restoreBeadleStudentHandoff();
     return true;
   }
 
@@ -870,6 +877,12 @@
     app().innerHTML = `<div class="dd26-shell"><button class="dd26-button dd26-exam-home-button" id="dd26-exam-role-home" type="button"><span aria-hidden="true">←</span> Return to Examination Room home</button><header class="dd26-header"><div><div class="dd26-kicker">Law school examination</div><h1>Examination Room</h1><p>One clear place to make, prepare, take, and grade a class examination.</p></div></header><main id="dd26-exam-main" tabindex="-1">${examSection(portal)}</main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
     bindExamSection();
     document.getElementById('dd26-exam-role-home')?.addEventListener('click', returnToExaminationRoomHome);
+    if (state.exam.preflight?.entryMode === 'beadle'
+        && state.exam.preflight?.autoEnter === true
+        && state.exam.preflight?.terminal !== true
+        && state.exam.preflight?.blockedView !== true) {
+      renderStudentWaitingRoom();
+    }
   }
 
   async function returnToExaminationRoomHome(event) {
@@ -898,6 +911,9 @@
     state.exam.rosterPreview = null;
     state.exam.questionPreview = null;
     state.exam.monitoring = null;
+    if (state.exam.preflight?.entryMode === 'beadle') {
+      clearBeadleStudentHandoff(state.exam.preflight.examId);
+    }
     state.exam.preflight = null;
     activatePage('exam_room', document.getElementById('spa-examination-room'), { replace: true });
     renderExamRoom();
@@ -1948,6 +1964,14 @@
       EXAM_NOT_OPEN: 'This examination has not opened yet.',
       EXAM_CLOSED: 'This examination is closed.',
       LATE_ADMISSION_CLOSED: 'Student entry is closed for this examination.',
+      DEADLINE_REACHED: 'Your examination deadline has been reached. Open the Student workspace to review the recorded status.',
+      ATTEMPT_ALREADY_SUBMITTED: 'This examination was already submitted. Open the saved receipt instead.',
+      EXAM_NOT_PUBLISHED: 'The Professor has not published this examination yet.',
+      ADMISSION_REQUIRED: 'The examination requires a separate admission decision before entry.',
+      ADMISSION_BLOCKED: 'Entry for this student account was blocked by the examination admission record.',
+      IDENTITY_VERIFICATION_BLOCKED: 'The saved identity check must be resolved before entry.',
+      STUDENT_NOT_ELIGIBLE: 'This signed-in account is not currently eligible for this examination.',
+      EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED: 'This Beadle assignment is no longer active. Return to assigned examinations for the latest room status.',
       STUDENT_ACCESS_NOT_READY: 'The Beadle must finish the class list and create the student exam code first.',
       STUDENT_ACCESS_ISSUED: 'The class-wide student exam code is already active.',
       EXAM_ROOM_STUDENT_ACCESS_NOT_ISSUABLE: 'The student handout cannot be created yet. Check the class list and opening time.',
@@ -2231,7 +2255,7 @@
       ${rosterEditor}
       ${studentHandout}
       ${attention.length ? `<div class="dd26-attention-list">${attention.map((item) => `<article><div><strong>${escapeHtml(item.candidateNumber || 'Student')}</strong><small>${escapeHtml(item.label || item.type || Object.keys(item.reasons || {}).join(', ') || 'Review required')}</small></div><span class="dd26-status">${escapeHtml(item.severity || item.reasons?.incidentSeverity || 'review')}</span></article>`).join('')}</div>` : '<div class="dd26-success">No student needs attention right now.</div>'}
-      <div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Student</th><th>Signed-in account</th><th>Exam status</th><th>Access</th></tr></thead><tbody>${candidates.map((candidate) => `<tr><td><strong>${escapeHtml(candidate.displayName || candidate.studentName || candidate.candidateNumber || 'Student')}</strong>${candidate.canonicalEmail || candidate.studentEmail || candidate.email ? `<small>${escapeHtml(candidate.canonicalEmail || candidate.studentEmail || candidate.email)}</small>` : ''}</td><td>${escapeHtml(candidate.accountLinked ? 'Matched' : 'Awaiting first sign-in')}</td><td>${escapeHtml(candidate.state || candidate.attemptStatus || 'On class list')}</td><td>${escapeHtml(candidate.admitted === false ? 'Review required' : 'Eligible')}</td></tr>`).join('') || '<tr><td colspan="4">No students are on the class list yet.</td></tr>'}</tbody></table></div><div class="dd26-actions"><button class="dd26-button" id="dd26-refresh-beadle" type="button">Refresh</button><button class="dd26-button" id="dd26-back-beadle" type="button">${professorView ? 'Back to Professor workspace' : 'Finish and return to assigned exams'}</button></div><div class="dd26-privacy">${professorView ? 'This review does not change the Beadle handoff or any student access.' : 'No per-student approval or manual email is required. This page never shows questions, answers, grades, or the Professor’s suggested answer.'}</div></section>`;
+      <div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Student</th><th>Signed-in account</th><th>Exam status</th><th>Access</th></tr></thead><tbody>${candidates.map((candidate) => `<tr><td><strong>${escapeHtml(candidate.displayName || candidate.studentName || candidate.candidateNumber || 'Student')}</strong>${candidate.canonicalEmail || candidate.studentEmail || candidate.email ? `<small>${escapeHtml(candidate.canonicalEmail || candidate.studentEmail || candidate.email)}</small>` : ''}</td><td>${escapeHtml(candidate.accountLinked ? 'Matched' : 'Awaiting first sign-in')}</td><td>${escapeHtml(candidate.state || candidate.attemptStatus || 'On class list')}</td><td>${escapeHtml(candidate.admitted === false ? 'Review required' : 'Eligible')}</td></tr>`).join('') || '<tr><td colspan="4">No students are on the class list yet.</td></tr>'}</tbody></table></div><div class="dd26-actions"><button class="dd26-button" id="dd26-refresh-beadle" type="button">Refresh</button><button class="dd26-button${professorView ? '' : ' primary'}" id="dd26-back-beadle" type="button">${professorView ? 'Back to Professor workspace' : 'Finish Beadle duties and enter my exam'}</button></div><div class="dd26-privacy">${professorView ? 'This review does not change the Beadle handoff or any student access.' : 'No per-student approval or manual email is required. If you are on this class list, Due Diligence takes you directly to your examination or waiting room. You never need to retain or re-enter the class code. This page never shows questions, answers, grades, or the Professor’s suggested answer.'}</div></section>`;
     bindRosterControls();
     document.getElementById('dd26-upsert-beadle-row')?.addEventListener('click', upsertBeadleRosterRow);
     document.getElementById('dd26-copy-active-class-handout')?.addEventListener('click', () => copyActiveClassHandout(snapshot, activeStudentCode));
@@ -2241,11 +2265,324 @@
     document.getElementById('dd26-refresh-beadle')?.addEventListener('click', () => openBeadleOperations(snapshot.examId, {
       mode: professorView ? 'professor' : 'beadle', focus: state.exam.operationFocus,
     }));
-    document.getElementById('dd26-back-beadle')?.addEventListener('click', () => refreshExamPortal(professorView ? 'professor' : 'beadle'));
+    document.getElementById('dd26-back-beadle')?.addEventListener('click', () => (
+      professorView
+        ? refreshExamPortal('professor')
+        : enterRosteredBeadleExam(snapshot)
+    ));
     const focusTarget = document.getElementById(state.exam.operationFocus === 'handout'
       ? 'dd26-student-code-panel' : 'dd26-class-list-panel');
     focusTarget?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
     focusTarget?.focus?.({ preventScroll: true });
+  }
+
+  function clearBeadleStudentHandoff(examId = null) {
+    try {
+      if (examId) {
+        const saved = JSON.parse(global.localStorage?.getItem(BEADLE_STUDENT_HANDOFF_KEY) || 'null');
+        if (String(saved?.examId || '') !== String(examId)) return;
+      }
+      global.localStorage?.removeItem(BEADLE_STUDENT_HANDOFF_KEY);
+    } catch {
+      global.localStorage?.removeItem?.(BEADLE_STUDENT_HANDOFF_KEY);
+    }
+  }
+
+  function saveBeadleStudentHandoff(examId) {
+    const userId = authenticatedUserId();
+    if (!userId || !examId) return false;
+    try {
+      global.localStorage?.setItem(BEADLE_STUDENT_HANDOFF_KEY, JSON.stringify({
+        version: 1,
+        userId,
+        examId: String(examId),
+        createdAt: Date.now(),
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function readBeadleStudentHandoff() {
+    try {
+      const saved = JSON.parse(global.localStorage?.getItem(BEADLE_STUDENT_HANDOFF_KEY) || 'null');
+      const age = Date.now() - Number(saved?.createdAt || 0);
+      if (saved?.version !== 1
+          || !saved?.examId
+          || saved.userId !== authenticatedUserId()
+          || !Number.isFinite(age)
+          || age < 0
+          || age > BEADLE_STUDENT_HANDOFF_MAX_AGE_MS) {
+        clearBeadleStudentHandoff();
+        return null;
+      }
+      return saved;
+    } catch {
+      clearBeadleStudentHandoff();
+      return null;
+    }
+  }
+
+  function stopStudentWaitingRoom(check = state.exam.preflight) {
+    clearInterval(state.exam.waitingRoomTimer);
+    clearTimeout(state.exam.waitingRoomPollTimer);
+    state.exam.waitingRoomTimer = null;
+    state.exam.waitingRoomPollTimer = null;
+    state.exam.waitingRoomPolling = false;
+    if (check) {
+      check.requestBusy = false;
+      check.autoEntryBusy = false;
+    }
+  }
+
+  function directBeadleServerCode(server = {}) {
+    return String(server.startBlockerCode || server.code || '').trim().toUpperCase();
+  }
+
+  function directBeadleAttempt(server = {}) {
+    return server.attempt && typeof server.attempt === 'object' ? server.attempt : {};
+  }
+
+  function directBeadleTerminalState(server = {}) {
+    const code = directBeadleServerCode(server);
+    const attempt = directBeadleAttempt(server);
+    const attemptStatus = String(attempt.status || server.attemptStatus || '').toLowerCase();
+    const sessionConflict = server.sessionConflict === true || server.checks?.sessionConflict === true;
+    if (sessionConflict) {
+      return {
+        code: 'SESSION_ACTIVE_ELSEWHERE', kind: 'session',
+        title: 'Your examination is already open on another session',
+        message: 'Due Diligence stopped automatic entry to protect the answers already in progress. Open the Student workspace to resume or follow the controlled session-recovery steps.',
+        attemptId: attempt.attemptId || server.attemptId || null,
+      };
+    }
+    if (code === 'ATTEMPT_ALREADY_SUBMITTED' || isClosedAttemptStatus(attemptStatus)) {
+      return {
+        code: code || 'ATTEMPT_ALREADY_SUBMITTED', kind: 'receipt',
+        title: 'This examination was already submitted',
+        message: 'Your recorded submission remains available. No new attempt was created and no class code is needed.',
+        attemptId: attempt.attemptId || server.attemptId || null,
+      };
+    }
+    if (['READY', 'RESUME_READY', 'EXAM_NOT_OPEN'].includes(code)) return null;
+    if (server.waitingRoomState !== 'blocked'
+        && server.eligible === true
+        && (server.canStart === true || code === 'EXAM_NOT_OPEN')) return null;
+    return {
+      code: code || 'STUDENT_NOT_ELIGIBLE', kind: 'blocked',
+      title: code === 'ROSTER_REQUIRED'
+        ? 'Your account is not on this class list'
+        : 'Automatic examination entry is not available',
+      message: examCodeMessage(code || 'STUDENT_NOT_ELIGIBLE'),
+      attemptId: attempt.attemptId || server.attemptId || null,
+    };
+  }
+
+  function isRetryableBeadleHandoffError(error) {
+    const status = Number(error?.status);
+    return error instanceof TypeError
+      || (error?.code === 'REQUEST_FAILED' && (!Number.isFinite(status) || status >= 500))
+      || status === 408
+      || status === 425
+      || status === 429
+      || status >= 500;
+  }
+
+  async function returnToBeadleWorkspace(message = '') {
+    const check = state.exam.preflight;
+    stopStudentWaitingRoom(check);
+    clearBeadleStudentHandoff(check?.examId);
+    state.exam.preflight = null;
+    state.exam.section = 'beadle';
+    renderExamRoom();
+    document.getElementById('dd26-exam-main')?.focus();
+    try {
+      await refreshExamPortal('beadle');
+    } catch {
+      global.toast?.(message || 'The saved Beadle workspace is shown. Refresh when your connection returns.', 'warn');
+    }
+  }
+
+  function renderDirectBeadleHandoffBlocker(check, failure = {}) {
+    if (!check) return;
+    stopStudentWaitingRoom(check);
+    check.terminal = failure.terminal !== false;
+    check.blockedView = true;
+    state.exam.preflight = check;
+    state.exam.section = 'beadle';
+    if (check.terminal) clearBeadleStudentHandoff(check.examId);
+    renderExamRoom();
+    const host = document.getElementById('dd26-exam-main');
+    if (!host) return;
+    const attemptId = failure.attemptId || directBeadleAttempt(check.server).attemptId || null;
+    const primaryAction = failure.kind === 'receipt' && attemptId
+      ? '<button class="dd26-button primary" id="dd26-direct-view-receipt" type="button">View submission receipt</button>'
+      : failure.kind === 'session'
+        ? '<button class="dd26-button primary" id="dd26-direct-open-student" type="button">Open Student recovery</button>'
+        : failure.retryable === true
+          ? '<button class="dd26-button primary" id="dd26-direct-retry" type="button">Try secure handoff again</button>'
+          : '';
+    host.innerHTML = `<section class="dd26-card"><div class="dd26-label">Secure Beadle handoff</div><h2>${escapeHtml(failure.title || 'Your examination could not be opened')}</h2><div class="${failure.retryable ? 'dd26-notice' : 'dd26-error'}" role="alert"><strong>No class code was lost or exposed.</strong> ${escapeHtml(failure.message || 'Due Diligence stopped safely before creating or opening an attempt.')}</div><div class="dd26-actions">${primaryAction}<button class="dd26-button" id="dd26-direct-return-beadle" type="button">Return to Beadle workspace</button></div><p class="dd26-privacy">No per-student approval or manual email is required. Every retry is checked again against the signed-in account, active Beadle assignment, and official class list. This page never shows questions, answers, grades, or the Professor’s suggested answer.</p></section>`;
+    document.getElementById('dd26-direct-view-receipt')?.addEventListener('click', () => {
+      clearBeadleStudentHandoff(check.examId);
+      state.exam.preflight = null;
+      state.exam.section = 'student';
+      void loadSubmissionStatus(attemptId);
+    });
+    document.getElementById('dd26-direct-open-student')?.addEventListener('click', () => {
+      clearBeadleStudentHandoff(check.examId);
+      state.exam.preflight = null;
+      void refreshExamPortal('student').catch(() => {
+        state.exam.section = 'student';
+        renderExamRoom();
+        global.toast?.('Student recovery could not refresh. Your saved Examination Room remains available.', 'warn');
+      });
+    });
+    document.getElementById('dd26-direct-retry')?.addEventListener('click', () => {
+      check.terminal = false;
+      check.blockedView = false;
+      void enterRosteredBeadleExam({ examId: check.examId }, { restored: true });
+    });
+    document.getElementById('dd26-direct-return-beadle')?.addEventListener('click', () => {
+      void returnToBeadleWorkspace();
+    });
+    host.focus();
+  }
+
+  function enterRosteredBeadleExam(snapshot, options = {}) {
+    const examId = String(snapshot?.examId || '').trim();
+    if (!examId) return Promise.resolve(false);
+    if (state.exam.beadleHandoffPromise) return state.exam.beadleHandoffPromise;
+    const pending = prepareRosteredBeadleExam(examId, options);
+    state.exam.beadleHandoffPromise = pending;
+    return pending.finally(() => {
+      if (state.exam.beadleHandoffPromise === pending) state.exam.beadleHandoffPromise = null;
+    });
+  }
+
+  async function prepareRosteredBeadleExam(examId, options = {}) {
+    if (!isAuthenticated()) {
+      clearBeadleStudentHandoff(examId);
+      requireAuthentication();
+      return false;
+    }
+    const handoffUserId = authenticatedUserId();
+    const button = document.getElementById('dd26-back-beadle');
+    if (!options.restored && button?.disabled) return false;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Opening your examination…';
+    }
+    saveBeadleStudentHandoff(examId);
+    let check = null;
+    try {
+      const storageApi = global.DueDiligenceExaminationRoomStore;
+      state.exam.store ||= storageApi?.createStore?.();
+      const storage = state.exam.store
+        ? await state.exam.store.init()
+        : { available: false, code: 'module_unavailable' };
+      const persistent = storage.available && navigator.storage?.persist
+        ? await navigator.storage.persist().catch(() => false)
+        : false;
+      const deviceSupported = Math.min(
+        global.screen?.width || global.innerWidth,
+        global.screen?.height || global.innerHeight,
+      ) >= 600;
+      const startedAt = performance.now();
+      const deviceInstanceHash = storage.available
+        ? await state.exam.store.getDeviceInstanceHash()
+        : null;
+      const payload = await api('/exam-room/query', {
+        operation: 'beadle_student_entry',
+        examId,
+        deviceInstanceHash,
+      });
+      if (authenticatedUserId() !== handoffUserId) return false;
+      const reachabilityMs = Math.max(0, Math.round(performance.now() - startedAt));
+      check = {
+        examId,
+        studentKey: null,
+        entryMode: 'beadle',
+        autoEnter: true,
+        autoEntryBusy: false,
+        autoEntryRetryAt: 0,
+        retryCount: 0,
+        requestBusy: false,
+        terminal: false,
+        storage,
+        persistent,
+        deviceSupported,
+        deviceInstanceHash,
+        reachabilityMs,
+        server: payload.result || {},
+      };
+      state.exam.preflight = check;
+      synchronizeServerClock(
+        check.server.serverNow || check.server.checks?.serverNow,
+      );
+      const terminal = directBeadleTerminalState(check.server);
+      if (terminal) {
+        renderDirectBeadleHandoffBlocker(check, { ...terminal, terminal: true });
+        return false;
+      }
+      if (!storage.available || !deviceSupported) {
+        const message = !deviceSupported
+          ? 'Use a desktop or tablet-sized screen for this formal examination. Your assignment and exam remain saved.'
+          : `${storage.message || 'Secure answer storage is unavailable in this browser.'} Enable normal browser storage, then try again.`;
+        renderDirectBeadleHandoffBlocker(check, {
+          terminal: false,
+          retryable: true,
+          title: 'This device needs attention before the exam can open',
+          message,
+        });
+        return false;
+      }
+      state.exam.section = 'student';
+      renderExamRoom();
+      return true;
+    } catch (error) {
+      if (authenticatedUserId() !== handoffUserId) return false;
+      const retryable = isRetryableBeadleHandoffError(error);
+      check ||= {
+        examId,
+        entryMode: 'beadle',
+        autoEnter: true,
+        autoEntryBusy: false,
+        autoEntryRetryAt: 0,
+        retryCount: 0,
+        requestBusy: false,
+        storage: { available: false },
+        deviceSupported: true,
+        server: {},
+      };
+      renderDirectBeadleHandoffBlocker(check, {
+        terminal: !retryable,
+        retryable,
+        title: retryable ? 'The connection was interrupted' : 'Secure examination entry was declined',
+        message: retryable
+          ? 'Your no-code handoff is preserved on this device. Reconnect and try again; no duplicate attempt will be created.'
+          : (error.message || 'Your Beadle assignment or student eligibility could not be verified.'),
+      });
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Finish Beadle duties and enter my exam';
+      }
+      return false;
+    }
+  }
+
+  async function restoreBeadleStudentHandoff() {
+    const saved = readBeadleStudentHandoff();
+    if (!saved || state.exam.attempt) return false;
+    if (state.exam.preflight?.entryMode === 'beadle'
+        && state.exam.preflight?.examId === saved.examId
+        && state.exam.preflight?.terminal !== true) {
+      state.exam.section = 'student';
+      renderExamRoom();
+      return true;
+    }
+    return enterRosteredBeadleExam({ examId: saved.examId }, { restored: true });
   }
 
   function openRosterCorrection(snapshot) {
@@ -4134,10 +4471,17 @@
     const nested = server.checks?.accessCodeRequired;
     const known = typeof primary === 'boolean' || typeof nested === 'boolean';
     const required = primary === true || nested === true;
+    const beadleAuthorized = server.beadleDirectEntry === true
+      && server.accessAuthorization === 'active_beadle_assignment';
     return {
       known,
       required,
-      ready: known && (!required || Boolean(String(studentKey || '').trim())),
+      beadleAuthorized,
+      ready: known && (
+        !required
+        || beadleAuthorized
+        || Boolean(String(studentKey || '').trim())
+      ),
     };
   }
 
@@ -4150,6 +4494,7 @@
       || server.checks?.accessCodeValid === true;
     if (!policy.known) return { accepted: false, className: 'is-fail', copy: 'Due Diligence could not confirm this examination’s student-code requirement. Return and refresh before trying again.' };
     if (!policy.required) return { accepted: true, className: 'is-pass', copy: 'This examination does not require a separate student exam code.' };
+    if (policy.beadleAuthorized && accepted) return { accepted: true, className: 'is-pass', copy: 'Your active Beadle assignment securely authorizes this handoff. No class code is needed.' };
     if (accepted) return { accepted: true, className: 'is-pass', copy: 'The student exam code is correct for this examination.' };
     if (!policy.ready || blocker === 'STUDENT_ACCESS_CODE_REQUIRED') return { accepted: false, className: 'is-fail', copy: 'Enter the active student exam code provided by the Beadle.' };
     if (blocker === 'CREDENTIAL_LOCKED' || status === 'locked') return { accepted: false, className: 'is-fail', copy: 'Too many incorrect code attempts. Student-code entry is locked for 15 minutes.' };
@@ -4210,6 +4555,9 @@
   function waitingRoomChecks(check = {}) {
     const server = check.server || {};
     const access = accessCodePreflightPolicy(server, check.studentKey);
+    const directBeadleAuthorized = check.entryMode !== 'beadle'
+      || (server.beadleDirectEntry === true
+        && server.accessAuthorization === 'active_beadle_assignment');
     const accessCodeValidated = !access.required
       || server.accessCodeAccepted === true
       || server.accessCodeStatus === 'accepted'
@@ -4225,8 +4573,25 @@
         && server.eligible === true
         && access.known
         && access.ready
+        && directBeadleAuthorized
         && accessCodeValidated
         && !sessionConflict,
+    };
+  }
+
+  function studentPreflightQuery(check = {}) {
+    if (check.entryMode === 'beadle') {
+      return {
+        operation: 'beadle_student_entry',
+        examId: check.examId,
+        deviceInstanceHash: check.deviceInstanceHash,
+      };
+    }
+    return {
+      operation: 'preflight',
+      examId: check.examId,
+      studentKey: check.studentKey,
+      deviceInstanceHash: check.deviceInstanceHash,
     };
   }
 
@@ -4273,49 +4638,95 @@
     const openingReached = remaining <= 0;
     const entryClosed = Number.isFinite(entryClosesAtMs) && officialNow >= entryClosesAtMs;
     const checks = waitingRoomChecks(check);
-    start.disabled = !checks.ready || !openingReached || entryClosed || acknowledgement?.checked !== true;
+    const automaticEntry = check.entryMode === 'beadle' && check.autoEnter === true;
+    start.disabled = automaticEntry
+      || !checks.ready
+      || !openingReached
+      || entryClosed
+      || acknowledgement?.checked !== true;
     if (entryClosed) status.textContent = 'Student entry has closed. Ask the Professor or Beadle for instructions.';
     else if (!openingReached) status.textContent = `Start unlocks when the official countdown reaches zero at ${formatDate(check.server.opensAt)}.`;
-    else status.textContent = 'Opening time reached. Review the acknowledgement, then select Start examination.';
+    else if (automaticEntry && checks.ready) {
+      status.textContent = check.autoEntryBusy
+        ? 'Opening time reached. Due Diligence is entering your examination now…'
+        : 'Opening time reached. Automatic entry is starting now…';
+      if (!check.autoEntryBusy && Date.now() >= Number(check.autoEntryRetryAt || 0)) {
+        void enterExamFromWaitingRoom({ automatic: true });
+      }
+    } else status.textContent = 'Opening time reached. Review the acknowledgement, then select Start examination.';
   }
 
   async function pollStudentWaitingRoom() {
     const check = state.exam.preflight;
-    if (!check || state.exam.waitingRoomPolling || !document.getElementById('dd26-waiting-countdown')) return;
+    if (!check || check.terminal || check.requestBusy || state.exam.waitingRoomPolling
+        || !document.getElementById('dd26-waiting-countdown')) return;
     state.exam.waitingRoomPolling = true;
+    check.requestBusy = true;
     try {
-      const payload = await api('/exam-room/query', {
-        operation: 'preflight',
-        examId: check.examId,
-        studentKey: check.studentKey,
-        deviceInstanceHash: check.deviceInstanceHash,
-      });
+      const payload = await api('/exam-room/query', studentPreflightQuery(check));
+      if (state.exam.preflight !== check || check.terminal) return;
       check.server = payload.result || {};
+      check.retryCount = 0;
+      check.autoEntryRetryAt = 0;
       synchronizeServerClock(check.server.serverNow || check.server.checks?.serverNow);
+      const terminal = check.entryMode === 'beadle' ? directBeadleTerminalState(check.server) : null;
+      if (terminal) {
+        renderDirectBeadleHandoffBlocker(check, { ...terminal, terminal: true });
+        return;
+      }
       updateStudentWaitingRoomClock();
       if (String(check.server.waitingRoomState || '') === 'blocked') {
-        clearInterval(state.exam.waitingRoomTimer);
-        clearTimeout(state.exam.waitingRoomPollTimer);
-        state.exam.waitingRoomTimer = null;
-        state.exam.waitingRoomPollTimer = null;
+        check.terminal = true;
+        stopStudentWaitingRoom(check);
         renderPreflight();
       }
-    } catch {
+    } catch (error) {
+      if (state.exam.preflight !== check || check.terminal) return;
+      if (check.entryMode === 'beadle' && !isRetryableBeadleHandoffError(error)) {
+        renderDirectBeadleHandoffBlocker(check, {
+          terminal: true,
+          title: 'Secure examination entry was declined',
+          message: error.message || 'Your active Beadle assignment or class-list identity could not be confirmed.',
+        });
+        return;
+      }
+      check.retryCount = Math.min(4, Number(check.retryCount || 0) + 1);
+      check.autoEntryRetryAt = Date.now() + waitingRoomRetryDelay(check);
       const status = document.getElementById('dd26-waiting-status');
-      if (status) status.textContent = 'The official time check will retry automatically. Keep this page open.';
+      if (status) status.textContent = navigator.onLine === false
+        ? 'You are offline. Due Diligence will recheck immediately when this device reconnects.'
+        : 'The official time check will retry safely. Keep this page open.';
     } finally {
       state.exam.waitingRoomPolling = false;
-      if (document.getElementById('dd26-waiting-countdown')
-          && state.exam.preflight?.server?.pollAfterMs != null) {
+      check.requestBusy = false;
+      if (state.exam.preflight === check
+          && !check.terminal
+          && document.getElementById('dd26-waiting-countdown')
+          && (
+            check.server?.pollAfterMs != null
+            || check.autoEnter === true
+          )) {
         scheduleStudentWaitingRoomPoll();
       }
     }
   }
 
-  function scheduleStudentWaitingRoomPoll() {
+  function waitingRoomRetryDelay(check = state.exam.preflight) {
+    const retryIndex = Math.max(0, Math.min(4, Number(check?.retryCount || 1) - 1));
+    return [5_000, 10_000, 20_000, 30_000, 30_000][retryIndex];
+  }
+
+  function scheduleStudentWaitingRoomPoll(delayOverride = null) {
     clearTimeout(state.exam.waitingRoomPollTimer);
+    const check = state.exam.preflight;
+    if (!check || check.terminal) return;
     const serverDelay = Number(state.exam.preflight?.server?.pollAfterMs);
-    const delay = Number.isFinite(serverDelay)
+    const requestedDelay = Number(delayOverride);
+    const delay = Number.isFinite(requestedDelay)
+      ? Math.max(0, Math.min(30_000, requestedDelay))
+      : Number(check.retryCount || 0) > 0
+        ? waitingRoomRetryDelay(check)
+        : Number.isFinite(serverDelay)
       ? Math.max(5000, Math.min(30_000, serverDelay))
       : 15_000;
     state.exam.waitingRoomPollTimer = setTimeout(() => {
@@ -4341,54 +4752,113 @@
     clearTimeout(state.exam.waitingRoomPollTimer);
     const rules = server.rules || {};
     const checks = waitingRoomChecks(check);
+    const automaticEntry = check.entryMode === 'beadle' && check.autoEnter === true;
     const accountLabel = server.studentEmail || server.signedInEmail || server.candidateEmail || 'Signed-in account confirmed';
-    host.innerHTML = `<section class="dd26-card dd26-waiting-room" aria-labelledby="dd26-waiting-title"><div class="dd26-label">Student waiting room</div><div class="dd26-question-meta"><div><h2 id="dd26-waiting-title">${escapeHtml(server.title || server.examTitle || 'Your examination')}</h2><p>Your identity, class-list entry, and student exam code have been checked. Examination questions are not shown before opening time.</p></div><span class="dd26-status">Ready for opening time</span></div><div class="dd26-waiting-clock" role="timer" aria-live="off"><span>Examination opens in</span><strong id="dd26-waiting-countdown">--:--:--</strong><small>Official Due Diligence countdown · opens ${escapeHtml(formatDate(server.opensAt))}</small></div><ul class="dd26-check-list dd26-waiting-checks"><li class="is-pass"><strong>Signed-in student</strong><span>${escapeHtml(accountLabel)}</span></li><li class="${server.eligible === true ? 'is-pass' : 'is-fail'}"><strong>Official class list</strong><span>${server.eligible === true ? 'Your signed-in account matches the saved class list' : 'Your account could not be matched to the class list'}</span></li><li class="${checks.accessCodeValidated ? 'is-pass' : 'is-fail'}"><strong>Student exam code</strong><span>${checks.accessCodeValidated ? 'The code from the Beadle is valid for this examination' : 'The student exam code could not be validated'}</span></li><li class="${check.storage?.available && check.deviceSupported ? 'is-pass' : 'is-fail'}"><strong>Device and answer saving</strong><span>${check.storage?.available && check.deviceSupported ? 'This device is ready to save examination answers' : 'This device is not ready to open the examination'}</span></li></ul><section class="dd26-waiting-instructions"><div class="dd26-label">Professor’s instructions</div>${studentInstructionsHtml(server.instructions)}</section><dl class="dd26-publish-summary"><div><dt>Exam time</dt><dd>${escapeHtml(formatDate(server.opensAt))} to ${escapeHtml(formatDate(server.serverDeadline || server.hardClosesAt))}</dd></div><div><dt>Allowed materials</dt><dd>${escapeHtml(rules.allowedMaterials || 'See the Professor’s instructions')}</dd></div><div><dt>Moving between questions</dt><dd>${escapeHtml(rules.navigationMode === 'one_way' ? 'Move forward only' : 'You may move between questions')}</dd></div><div><dt>Leaving the exam tab</dt><dd>${escapeHtml(rules.integrityMode === 'off' ? 'Not recorded under this exam setting' : 'Recorded for Professor review; it is not an automatic failure')}</dd></div></dl><label class="dd26-choice"><input id="dd26-preflight-ack" type="checkbox" ${checks.ready ? '' : 'disabled'}><span><strong>I reviewed the Professor’s instructions and exam rules</strong><small>The official examination clock continues even if I leave this page after the exam starts.</small></span></label><p class="dd26-waiting-status" id="dd26-waiting-status" role="status" aria-live="polite"></p><div class="dd26-actions"><button class="dd26-button primary" id="dd26-preflight-start" type="button" disabled>Start examination</button><button class="dd26-button" id="dd26-waiting-room-return" type="button">Return to Student page</button></div><div class="dd26-privacy">No attempt is created and no examination question is shown before the server confirms that opening time has arrived.</div></section>`;
+    const accessLabel = automaticEntry ? 'Secure Beadle handoff' : 'Student exam code';
+    const accessCopy = automaticEntry
+      ? 'Your active Beadle assignment and rostered account were verified; no code re-entry is needed'
+      : checks.accessCodeValidated
+        ? 'The code from the Beadle is valid for this examination'
+        : 'The student exam code could not be validated';
+    host.innerHTML = `<section class="dd26-card dd26-waiting-room" aria-labelledby="dd26-waiting-title"><div class="dd26-label">Student waiting room</div><div class="dd26-question-meta"><div><h2 id="dd26-waiting-title">${escapeHtml(server.title || server.examTitle || 'Your examination')}</h2><p>${automaticEntry ? 'Your Beadle assignment and class-list identity have been checked. Keep this page open; Due Diligence will enter the examination automatically when the Professor opens it.' : 'Your identity, class-list entry, and student exam code have been checked. Examination questions are not shown before opening time.'}</p></div><span class="dd26-status">${automaticEntry ? 'Automatic entry armed' : 'Ready for opening time'}</span></div><div class="dd26-waiting-clock" role="timer" aria-live="off"><span>Examination opens in</span><strong id="dd26-waiting-countdown">--:--:--</strong><small>Official Due Diligence countdown · opens ${escapeHtml(formatDate(server.opensAt))}</small></div><ul class="dd26-check-list dd26-waiting-checks"><li class="is-pass"><strong>Signed-in student</strong><span>${escapeHtml(accountLabel)}</span></li><li class="${server.eligible === true ? 'is-pass' : 'is-fail'}"><strong>Official class list</strong><span>${server.eligible === true ? 'Your signed-in account matches the saved class list' : 'Your account could not be matched to the class list'}</span></li><li class="${checks.accessCodeValidated ? 'is-pass' : 'is-fail'}"><strong>${accessLabel}</strong><span>${accessCopy}</span></li><li class="${check.storage?.available && check.deviceSupported ? 'is-pass' : 'is-fail'}"><strong>Device and answer saving</strong><span>${check.storage?.available && check.deviceSupported ? 'This device is ready to save examination answers' : 'This device is not ready to open the examination'}</span></li></ul><section class="dd26-waiting-instructions"><div class="dd26-label">Professor’s instructions</div>${studentInstructionsHtml(server.instructions)}</section><dl class="dd26-publish-summary"><div><dt>Exam time</dt><dd>${escapeHtml(formatDate(server.opensAt))} to ${escapeHtml(formatDate(server.serverDeadline || server.hardClosesAt))}</dd></div><div><dt>Allowed materials</dt><dd>${escapeHtml(rules.allowedMaterials || 'See the Professor’s instructions')}</dd></div><div><dt>Moving between questions</dt><dd>${escapeHtml(rules.navigationMode === 'one_way' ? 'Move forward only' : 'You may move between questions')}</dd></div><div><dt>Leaving the exam tab</dt><dd>${escapeHtml(rules.integrityMode === 'off' ? 'Not recorded under this exam setting' : 'Recorded for Professor review; it is not an automatic failure')}</dd></div></dl><label class="dd26-choice"><input id="dd26-preflight-ack" type="checkbox" ${automaticEntry ? 'checked disabled' : checks.ready ? '' : 'disabled'}><span><strong>${automaticEntry ? 'Enter automatically when the examination opens' : 'I reviewed the Professor’s instructions and exam rules'}</strong><small>${automaticEntry ? 'This was requested when you finished the Beadle workflow. Keep this page open; you may cancel below.' : 'The official examination clock continues even if I leave this page after the exam starts.'}</small></span></label><p class="dd26-waiting-status" id="dd26-waiting-status" role="status" aria-live="polite"></p><div class="dd26-actions"><button class="dd26-button primary" id="dd26-preflight-start" type="button" disabled>${automaticEntry ? 'Waiting for automatic entry' : 'Start examination'}</button><button class="dd26-button" id="dd26-waiting-room-return" type="button">${automaticEntry ? 'Cancel and return to Beadle workspace' : 'Return to Student page'}</button></div><div class="dd26-privacy">No attempt is created and no examination question is shown before the server confirms that opening time has arrived.</div></section>`;
     document.getElementById('dd26-preflight-ack')?.addEventListener('change', updateStudentWaitingRoomClock);
     document.getElementById('dd26-preflight-start')?.addEventListener('click', enterExamFromWaitingRoom);
     document.getElementById('dd26-waiting-room-return')?.addEventListener('click', () => {
-      state.exam.preflight = null;
-      renderExamRoom();
-      document.getElementById('dd26-exam-main')?.focus();
+      if (automaticEntry) {
+        void returnToBeadleWorkspace();
+      } else {
+        stopStudentWaitingRoom(check);
+        state.exam.preflight = null;
+        renderExamRoom();
+        document.getElementById('dd26-exam-main')?.focus();
+      }
     });
     updateStudentWaitingRoomClock();
     state.exam.waitingRoomTimer = setInterval(updateStudentWaitingRoomClock, 1000);
     scheduleStudentWaitingRoomPoll();
   }
 
-  async function enterExamFromWaitingRoom() {
+  async function enterExamFromWaitingRoom(options = {}) {
     const check = state.exam.preflight;
     const button = document.getElementById('dd26-preflight-start');
     if (!check || !button || !document.getElementById('dd26-preflight-ack')?.checked) return;
+    const automatic = options?.automatic === true;
+    if (check.terminal || check.requestBusy) return;
+    if (automatic) {
+      if (check.autoEntryBusy || Date.now() < Number(check.autoEntryRetryAt || 0)) return;
+      check.autoEntryBusy = true;
+    }
+    check.requestBusy = true;
     const shouldRequestFullscreen = check.server?.rules?.fullscreenPolicy !== 'off'
       && !check.server?.accommodation?.fullscreenExempt;
-    const fullscreenRequest = shouldRequestFullscreen
+    const fullscreenRequest = shouldRequestFullscreen && !automatic
       ? requestFullscreen()
       : Promise.resolve(false);
     button.disabled = true;
     button.textContent = 'Checking opening time…';
     try {
-      const payload = await api('/exam-room/query', {
-        operation: 'preflight',
-        examId: check.examId,
-        studentKey: check.studentKey,
-        deviceInstanceHash: check.deviceInstanceHash,
-      });
+      const payload = await api('/exam-room/query', studentPreflightQuery(check));
+      if (state.exam.preflight !== check || check.terminal) return;
       check.server = payload.result || {};
+      check.retryCount = 0;
+      check.autoEntryRetryAt = 0;
       synchronizeServerClock(check.server.serverNow || check.server.checks?.serverNow);
+      const terminal = check.entryMode === 'beadle' ? directBeadleTerminalState(check.server) : null;
+      if (terminal) {
+        renderDirectBeadleHandoffBlocker(check, { ...terminal, terminal: true });
+        return;
+      }
       if (!studentStartReadiness(check.server).canStart) {
         const enteredFullscreen = await fullscreenRequest;
         if (enteredFullscreen && document.fullscreenElement) await document.exitFullscreen?.().catch(() => null);
+        check.requestBusy = false;
+        check.autoEntryBusy = false;
         renderStudentWaitingRoom();
-        global.toast?.(studentStartReadiness(check.server).copy, 'warn');
+        if (!automatic) global.toast?.(studentStartReadiness(check.server).copy, 'warn');
         return;
       }
-      await beginAttemptAfterPreflight(fullscreenRequest);
+      const started = await beginAttemptAfterPreflight(fullscreenRequest);
+      if (!started && automatic) {
+        const startError = check.lastStartError;
+        if (startError && !isRetryableBeadleHandoffError(startError)) {
+          renderDirectBeadleHandoffBlocker(check, {
+            terminal: true,
+            title: 'Secure examination entry was declined',
+            message: startError.message || 'The server did not authorize this attempt to open.',
+          });
+          return;
+        }
+        check.autoEntryBusy = false;
+        check.retryCount = Math.min(4, Number(check.retryCount || 0) + 1);
+        check.autoEntryRetryAt = Date.now() + waitingRoomRetryDelay(check);
+      }
     } catch (error) {
+      if (state.exam.preflight !== check || check.terminal) return;
       const enteredFullscreen = await fullscreenRequest;
       if (enteredFullscreen && document.fullscreenElement) await document.exitFullscreen?.().catch(() => null);
+      if (check.entryMode === 'beadle' && !isRetryableBeadleHandoffError(error)) {
+        renderDirectBeadleHandoffBlocker(check, {
+          terminal: true,
+          title: 'Secure examination entry was declined',
+          message: error.message || 'The server did not authorize this attempt to open.',
+        });
+        return;
+      }
       button.disabled = false;
-      button.textContent = 'Start examination';
-      global.toast?.(error.message || 'Opening time could not be confirmed.', 'warn');
+      button.textContent = automatic ? 'Waiting for automatic entry' : 'Start examination';
+      if (automatic) {
+        check.autoEntryBusy = false;
+        check.retryCount = Math.min(4, Number(check.retryCount || 0) + 1);
+        check.autoEntryRetryAt = Date.now() + waitingRoomRetryDelay(check);
+        const status = document.getElementById('dd26-waiting-status');
+        if (status) status.textContent = navigator.onLine === false
+          ? 'You are offline. Automatic entry will resume when this device reconnects.'
+          : 'Automatic entry will retry safely. Keep this page open.';
+      } else {
+        global.toast?.(error.message || 'Opening time could not be confirmed.', 'warn');
+      }
+    } finally {
+      if (state.exam.preflight === check) check.requestBusy = false;
     }
   }
 
@@ -4463,7 +4933,7 @@
     const acknowledgement = document.getElementById('dd26-preflight-ack');
     const start = document.getElementById('dd26-preflight-start');
     acknowledgement?.addEventListener('change', () => { start.disabled = !acknowledgement.checked; });
-    start?.addEventListener('click', beginAttemptAfterPreflight);
+    start?.addEventListener('click', () => beginAttemptAfterPreflight());
   }
 
   async function beginAttemptAfterPreflight(preparedFullscreenRequest = null) {
@@ -4474,17 +4944,17 @@
       state.exam.section = 'entry';
       renderExamRoom();
       requireAuthentication();
-      return;
+      return false;
     }
     const check = state.exam.preflight;
-    if (!check || !document.getElementById('dd26-preflight-ack')?.checked) return;
+    if (!check || !document.getElementById('dd26-preflight-ack')?.checked) return false;
     if (!studentStartReadiness(check.server).canStart) {
       global.toast?.('Starting is blocked because the examination is not open for entry.', 'warn');
-      return;
+      return false;
     }
     if (!accessCodePreflightPolicy(check.server, check.studentKey).ready) {
       global.toast?.('Starting is blocked because the publication access-code policy is missing or unsatisfied.', 'warn');
-      return;
+      return false;
     }
     const shouldRequestFullscreen = check.server?.rules?.fullscreenPolicy !== 'off'
       && !check.server?.accommodation?.fullscreenExempt;
@@ -4495,8 +4965,11 @@
       : Promise.resolve(false));
     const button = document.getElementById('dd26-preflight-start');
     button.disabled = true; button.textContent = 'Starting…';
+    check.lastStartError = null;
     try {
-      const result = await command({ operation: 'start_attempt_by_code', studentKey: check.studentKey });
+      const result = await command(check.entryMode === 'beadle'
+        ? { operation: 'start_beadle_attempt', examId: check.examId }
+        : { operation: 'start_attempt_by_code', studentKey: check.studentKey });
       const session = await command({
         operation: 'open_session', attemptId: result.attemptId,
         deviceInstanceHash: check.deviceInstanceHash,
@@ -4504,18 +4977,31 @@
       });
       closeDialog();
       await fullscreenRequest;
-      await loadAttempt(result.attemptId, { ...session, publicationId: result.publicationId });
+      await loadAttempt(
+        result.attemptId,
+        { ...session, publicationId: result.publicationId },
+        { throwOnFailure: check.entryMode === 'beadle' },
+      );
+      clearInterval(state.exam.waitingRoomTimer);
+      clearTimeout(state.exam.waitingRoomPollTimer);
+      state.exam.waitingRoomTimer = null;
+      state.exam.waitingRoomPollTimer = null;
+      if (check.entryMode === 'beadle') clearBeadleStudentHandoff(check.examId);
+      state.exam.preflight = null;
+      return true;
     } catch (error) {
+      check.lastStartError = error;
       const enteredFullscreen = await fullscreenRequest;
       if (enteredFullscreen && document.fullscreenElement) {
         await document.exitFullscreen?.().catch(() => null);
       }
       button.disabled = false; button.textContent = 'Start examination';
-      global.toast?.(error.message, 'warn');
+      if (!check.autoEntryBusy) global.toast?.(error.message, 'warn');
+      return false;
     }
   }
 
-  async function loadAttempt(attemptId, sessionSeed = null) {
+  async function loadAttempt(attemptId, sessionSeed = null, options = {}) {
     let session = sessionSeed;
     let deviceInstanceHash = null;
     try {
@@ -4595,6 +5081,7 @@
         renderSubmissionRecoveryRequired('The retained writing session is no longer authoritative. Local work remains preserved for Beadle-assisted recovery.');
       }
       else global.toast?.(error.message, 'warn');
+      if (options.throwOnFailure === true) throw error;
     }
   }
 

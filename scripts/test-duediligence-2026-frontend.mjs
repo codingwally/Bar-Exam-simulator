@@ -139,7 +139,13 @@ const sessionCacheState = {
     roomRequests: null,
   },
 };
-const sessionCacheContext = { state: sessionCacheState };
+let sessionCacheHandoffClears = 0;
+const sessionCacheContext = {
+  state: sessionCacheState,
+  clearBeadleStudentHandoff() {
+    sessionCacheHandoffClears += 1;
+  },
+};
 sessionCacheContext.beginExamPortalLifecycle = vm.runInNewContext(
   `(${extractNamedFunction(js, 'beginExamPortalLifecycle')})`,
   sessionCacheContext,
@@ -173,6 +179,11 @@ const switchedUser = synchronizeSessionCaches('user-b');
 assert.equal(switchedUser.identityChanged, true, 'An account switch must invalidate all user-scoped caches.');
 assert.equal(sessionCacheState.featurePromise, null);
 assert.equal(sessionCacheState.featureGeneration, 8);
+assert.equal(
+  sessionCacheHandoffClears,
+  1,
+  'An account switch must discard a persisted Beadle-to-student handoff from the previous account.',
+);
 
 const shouldReopenSessionRoute = vm.runInNewContext(
   `(${extractNamedFunction(js, 'shouldReopenSessionRoute')})`,
@@ -307,7 +318,13 @@ const identityState = {
     roomRequests: { owner: 'user-a' },
   },
 };
-const identityContext = { state: identityState };
+let identityHandoffClears = 0;
+const identityContext = {
+  state: identityState,
+  clearBeadleStudentHandoff() {
+    identityHandoffClears += 1;
+  },
+};
 identityContext.beginExamPortalLifecycle = vm.runInNewContext(
   `(${extractNamedFunction(js, 'beginExamPortalLifecycle')})`,
   identityContext,
@@ -324,6 +341,7 @@ assert.equal(identityState.exam.portalPromiseUserId, null);
 assert.equal(identityState.exam.portalPromiseGeneration, null);
 assert.equal(identityState.exam.portal, null);
 assert.equal(identityState.exam.roomRequests, null);
+assert.equal(identityHandoffClears, 1, 'Switching accounts must clear the prior account handoff marker.');
 assert.equal(
   synchronizeExamPortalIdentity('user-b'),
   false,
@@ -338,6 +356,7 @@ assert.equal(synchronizeExamPortalIdentity(null), true, 'Sign-out must invalidat
 assert.equal(identityState.exam.portalRequestGeneration, 6);
 assert.equal(identityState.exam.portalPromise, null);
 assert.equal(identityState.exam.portal, null);
+assert.equal(identityHandoffClears, 2, 'Signing out must clear the signed-in account handoff marker.');
 
 let authenticatedPortalUserId = 'user-a';
 let portalPageActive = true;

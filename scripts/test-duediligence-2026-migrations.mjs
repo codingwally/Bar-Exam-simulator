@@ -11,7 +11,7 @@ const names = [
   '20260811003000_examination_room_admin_owner_repair.sql',
   '20260811095128_live_experience_foundation.sql',
   '20260811095200_examination_room_request_flow.sql',
-  '20260812185033_repair_subject_matter_title_encoding.sql',
+  '20260812185703_repair_subject_matter_title_encoding.sql',
 ];
 const migrations = await Promise.all(names.map((name) => (
   readFile(new URL(`supabase/migrations/${name}`, root), 'utf8')

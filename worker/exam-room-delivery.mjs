@@ -739,6 +739,98 @@ export async function deliverExamRoomEmail(env, job, fetchImpl = fetch) {
   return { providerId: String(result.id).slice(0, 500) };
 }
 
+const RESEND_DELIVERY_EVENTS = new Set([
+  'email.sent',
+  'email.delivered',
+  'email.delivery_delayed',
+  'email.bounced',
+  'email.complained',
+  'email.failed',
+]);
+
+function webhookBase64Bytes(value) {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function constantTimeBytesEqual(left, right) {
+  if (left.length !== right.length) return false;
+  let mismatch = 0;
+  for (let index = 0; index < left.length; index += 1) mismatch |= left[index] ^ right[index];
+  return mismatch === 0;
+}
+
+async function webhookSignature(secret, signedContent) {
+  const rawSecret = String(secret || '').replace(/^whsec_/, '');
+  const key = await crypto.subtle.importKey(
+    'raw',
+    webhookBase64Bytes(rawSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  return new Uint8Array(await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(signedContent),
+  ));
+}
+
+export async function verifyResendWebhookRequest(request, env, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const secret = String(env.RESEND_WEBHOOK_SECRET || '').trim();
+  const eventId = String(request.headers.get('svix-id') || '').trim();
+  const timestamp = String(request.headers.get('svix-timestamp') || '').trim();
+  const signatures = String(request.headers.get('svix-signature') || '').trim();
+  const numericTimestamp = Number(timestamp);
+  if (!secret || !/^whsec_[A-Za-z0-9+/=_-]{16,}$/.test(secret)
+      || !/^[A-Za-z0-9_-]{6,200}$/.test(eventId)
+      || !Number.isSafeInteger(numericTimestamp)
+      || Math.abs(nowSeconds - numericTimestamp) > 5 * 60
+      || !signatures) {
+    const error = new Error('The email-delivery webhook could not be verified.');
+    error.safeCode = 'EMAIL_WEBHOOK_INVALID';
+    throw error;
+  }
+  const rawBody = await request.text();
+  const expected = await webhookSignature(secret, `${eventId}.${timestamp}.${rawBody}`);
+  const verified = signatures.split(' ').some((entry) => {
+    const [version, encoded] = entry.split(',', 2);
+    if (version !== 'v1' || !encoded) return false;
+    try { return constantTimeBytesEqual(expected, webhookBase64Bytes(encoded)); }
+    catch { return false; }
+  });
+  if (!verified) {
+    const error = new Error('The email-delivery webhook signature is invalid.');
+    error.safeCode = 'EMAIL_WEBHOOK_INVALID';
+    throw error;
+  }
+  let event;
+  try { event = JSON.parse(rawBody); }
+  catch {
+    const error = new Error('The email-delivery webhook body is invalid.');
+    error.safeCode = 'EMAIL_WEBHOOK_INVALID';
+    throw error;
+  }
+  const eventType = String(event?.type || '');
+  const providerId = String(event?.data?.email_id || '');
+  const eventAt = String(event?.created_at || '');
+  if (!RESEND_DELIVERY_EVENTS.has(eventType)
+      || !/^[A-Za-z0-9_-]{6,500}$/.test(providerId)
+      || !Number.isFinite(Date.parse(eventAt))) {
+    const error = new Error('The email-delivery webhook event is unsupported.');
+    error.safeCode = 'EMAIL_WEBHOOK_INVALID';
+    throw error;
+  }
+  return {
+    providerId,
+    providerEventId: eventId,
+    providerEventType: eventType,
+    providerEventAt: new Date(eventAt).toISOString(),
+  };
+}
+
 export async function processExamRoomDeliveryQueues(env, {
   rpc,
   fetchImpl = fetch,

@@ -323,6 +323,11 @@
 .dd26-results-select-all{border-color:rgba(231,189,93,.68);background:rgba(197,160,89,.1);}
 .dd26-results-dashboard{max-width:1500px;margin-inline:auto;}
 .dd26-result-metrics{grid-template-columns:repeat(4,minmax(0,1fr));}
+.dd26-delivery-panel{border:1px solid rgba(197,160,89,.32);border-radius:8px;background:rgba(2,18,35,.3);}
+.dd26-delivery-status{display:block;max-width:260px;margin-bottom:8px;color:#cbd5e1;font-size:12px;line-height:1.45;}
+.dd26-delivery-status.is-delivered{color:#86efac;}
+.dd26-delivery-status.is-delayed{color:#fde68a;}
+.dd26-delivery-status.is-bounced,.dd26-delivery-status.is-failed,.dd26-delivery-status.is-complained{color:#fda4af;}
 .dd26-result-extremes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 24px;}
 .dd26-result-extremes>div{display:grid;gap:8px;padding:18px;border:1px solid rgba(197,160,89,.34);border-radius:7px;background:linear-gradient(145deg,rgba(197,160,89,.1),rgba(2,18,35,.28));}
 .dd26-result-extremes span{color:#aebaca;font:600 10px/1.45 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;}

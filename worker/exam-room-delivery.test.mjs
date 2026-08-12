@@ -4,6 +4,7 @@ import {
   deliverExamRoomEmail,
   processExamRoomDeliveryQueues,
   syncGoogleBackupEvent,
+  verifyResendWebhookRequest,
 } from './exam-room-delivery.mjs';
 
 function response(body, status = 200) {
@@ -12,6 +13,83 @@ function response(body, status = 200) {
     headers: { 'Content-Type': 'application/json' },
   });
 }
+
+async function signedWebhookRequest(event, {
+  eventId = 'msg_webhook_test_001',
+  timestamp = 1_786_477_200,
+  secretBytes = Uint8Array.from({ length: 32 }, (_, index) => index + 1),
+} = {}) {
+  const secretBody = Buffer.from(secretBytes).toString('base64');
+  const secret = `whsec_${secretBody}`;
+  const body = JSON.stringify(event);
+  const key = await crypto.subtle.importKey(
+    'raw', secretBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const signature = Buffer.from(await crypto.subtle.sign(
+    'HMAC', key, new TextEncoder().encode(`${eventId}.${timestamp}.${body}`),
+  )).toString('base64');
+  return {
+    secret,
+    request: new Request('https://worker.example/webhooks/resend/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'svix-id': eventId,
+        'svix-timestamp': String(timestamp),
+        'svix-signature': `v1,${signature}`,
+      },
+      body,
+    }),
+    timestamp,
+  };
+}
+
+test('Resend delivery webhook accepts only a fresh valid signature and returns bounded fields', async () => {
+  const signed = await signedWebhookRequest({
+    type: 'email.delivered',
+    created_at: '2026-08-12T04:20:00.000Z',
+    data: {
+      email_id: 'resend_student_result_123',
+      to: ['student-private@example.test'],
+      subject: 'must-not-be-returned',
+    },
+  });
+  const result = await verifyResendWebhookRequest(
+    signed.request,
+    { RESEND_WEBHOOK_SECRET: signed.secret },
+    signed.timestamp,
+  );
+  assert.deepEqual(result, {
+    providerId: 'resend_student_result_123',
+    providerEventId: 'msg_webhook_test_001',
+    providerEventType: 'email.delivered',
+    providerEventAt: '2026-08-12T04:20:00.000Z',
+  });
+  assert.doesNotMatch(JSON.stringify(result), /student-private|must-not-be-returned/);
+});
+
+test('Resend delivery webhook rejects tampered and stale requests', async () => {
+  const event = {
+    type: 'email.delivered',
+    created_at: '2026-08-12T04:20:00.000Z',
+    data: { email_id: 'resend_student_result_456' },
+  };
+  const signed = await signedWebhookRequest(event);
+  const tampered = new Request(signed.request.url, {
+    method: 'POST',
+    headers: signed.request.headers,
+    body: JSON.stringify({ ...event, type: 'email.bounced' }),
+  });
+  await assert.rejects(
+    verifyResendWebhookRequest(tampered, { RESEND_WEBHOOK_SECRET: signed.secret }, signed.timestamp),
+    /signature is invalid/,
+  );
+  const stale = await signedWebhookRequest(event, { eventId: 'msg_webhook_test_002' });
+  await assert.rejects(
+    verifyResendWebhookRequest(stale.request, { RESEND_WEBHOOK_SECRET: stale.secret }, stale.timestamp + 301),
+    /could not be verified/,
+  );
+});
 
 const event = Object.freeze({
   id: '11111111-1111-4111-8111-111111111111',

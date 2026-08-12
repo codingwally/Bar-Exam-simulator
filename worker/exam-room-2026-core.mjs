@@ -43,6 +43,7 @@ export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'live_status_v2',
   'grading_workspace',
   'results_dashboard',
+  'result_delivery_report',
   'grading_model_answer',
   'break_glass_view',
   'student_result',
@@ -110,6 +111,7 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'save_grade',
   'unlock_attempt',
   'release_results',
+  'retry_student_result_email',
   'open_dispute',
   'close_dispute',
   'admin_correct_grade',
@@ -516,7 +518,8 @@ export function normalizeExamRoomQuery(input) {
     normalized.proofId = optionalUuid(payload.proofId, 'Payment proof');
   } else if (operation === 'exam_intent'
       || operation === 'professor_authoring_snapshot'
-      || operation === 'results_dashboard') {
+      || operation === 'results_dashboard'
+      || operation === 'result_delivery_report') {
     normalized.examId = uuid(payload.examId, 'Examination');
   } else if (operation === 'preflight') {
     normalized.examId = uuid(payload.examId, 'Examination');
@@ -1221,6 +1224,10 @@ export function normalizeExamRoomCommand(input) {
     n.requestKey = requestKey(payload.requestKey);
     n.includeQuestionnaire = payload.includeQuestionnaire === true;
     n.gradingKey = credential(payload.gradingKey, 'Professor grading key');
+  } else if (operation === 'retry_student_result_email') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.attemptId = uuid(payload.attemptId, 'Attempt');
+    n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'open_dispute') {
     n.examId = uuid(payload.examId, 'Examination');
     n.caseReference = boundedText(payload.caseReference, 'Case reference', 200, { minimum: 2 });

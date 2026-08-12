@@ -30,6 +30,17 @@ assert.match(renderBlock, /id="dd26-grading-unsaved" role="status" \$\{draft \? 
 assert.match(renderBlock, /Draft restored\./);
 assert.match(renderBlock, /if \(!filteredEntries\.length\)[\s\S]*No answers match the \$\{escapeHtml\(state\.exam\.gradingFilter\)\} filter\./,
   'an empty grading filter must not display an unrelated student answer');
+assert.match(gradingBlock, /function preferredGradingFilter[\s\S]*gradingEntries\(grading, 'ungraded'\)[\s\S]*gradingEntries\(grading, 'draft'\)[\s\S]*gradingEntries\(grading, 'graded'\)/,
+  'reopening a fully graded examination must show its saved server grades instead of an empty ungraded view');
+assert.match(gradingBlock, /state\.exam\.gradingFilter = preferredGradingFilter\(state\.exam\.grading\)/,
+  'the initial grading filter must be selected from the actual saved records');
+assert.match(renderBlock, /Your saved grades remain in the official examination record/);
+assert.match(renderBlock, /id="dd26-open-saved-grades"[\s\S]*id="dd26-open-saved-class-results"/,
+  'an intentionally empty filter must provide direct recovery paths to saved grades and class results');
+assert.match(saveBlock, /!gradingEntries\(grading\)\.length[\s\S]*preferredGradingFilter\(grading\)/,
+  'saving the last ungraded item must transition to a visible saved-grade record');
+assert.match(moveBlock, /state\.exam\.gradingFilter = preferredGradingFilter\(grading\)/,
+  'Save and Next must not strand the Professor on an empty filter after completing the class');
 assert.match(frontend, /visibilitychange[\s\S]*persistCurrentGradingDraft\(\)/);
 for (const id of ['dd26-grade-score', 'dd26-grade-state', 'dd26-grade-comment', 'dd26-grade-reason']) {
   assert.match(renderBlock, new RegExp(`'${id}'`));

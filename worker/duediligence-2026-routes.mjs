@@ -120,6 +120,7 @@ const EXAM_ROOM_2_QUERY_OPERATIONS = new Set([
   'submission_status',
   'live_status_v2',
   'results_dashboard',
+  'result_delivery_report',
   'grading_model_answer',
   'break_glass_view',
 ]);
@@ -161,6 +162,7 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'heartbeat_v2',
   'record_integrity_event',
   'submit_attempt_generation',
+  'retry_student_result_email',
   'reopen_submission',
   'transfer_session',
   'issue_erratum',
@@ -1332,6 +1334,9 @@ export function createDD2026Handlers(deps) {
     } else if (input.operation === 'results_dashboard') {
       functionName = 'exam_room_professor_results_dashboard_v1';
       body = { p_professor_user_id: user.id, p_exam_public_id: input.examId };
+    } else if (input.operation === 'result_delivery_report') {
+      functionName = 'exam_room_result_delivery_report_v1';
+      body = { p_professor_user_id: user.id, p_exam_public_id: input.examId };
     } else {
       throw new DD2026ValidationError(
         'UNSUPPORTED_OPERATION',
@@ -1678,6 +1683,7 @@ export function createDD2026Handlers(deps) {
     if ([
       'submit_attempt', 'submit_attempt_generation', 'replace_publication',
       'reschedule_publication', 'reopen_submission', 'release_results',
+      'retry_student_result_email',
       'generate_provisional_room_key', 'publish_for_beadle',
       'finalize_roster_access',
     ].includes(input.operation)
@@ -2213,6 +2219,15 @@ export function createDD2026Handlers(deps) {
         p_request_key: input.requestKey, p_include_questionnaire: input.includeQuestionnaire,
         p_grading_key_hash: await h(input.gradingKey), p_rate_key_hash: rateHash,
       } }),
+      retry_student_result_email: async () => ({
+        functionName: 'exam_room_retry_student_result_email_v1',
+        body: {
+          p_professor_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_attempt_public_id: input.attemptId,
+          p_request_key: input.requestKey,
+        },
+      }),
     };
     if (!specs[input.operation]) {
       throw new DD2026ValidationError('UNSUPPORTED_OPERATION', 'This Examination Room operation is not supported.');

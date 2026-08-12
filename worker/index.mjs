@@ -149,7 +149,11 @@ import {
   dd2026DatabaseError,
 } from './duediligence-2026-core.mjs';
 import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
-import { googleAccessToken, processExamRoomDeliveryQueues } from './exam-room-delivery.mjs';
+import {
+  googleAccessToken,
+  processExamRoomDeliveryQueues,
+  verifyResendWebhookRequest,
+} from './exam-room-delivery.mjs';
 import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
 const WINDOW_MS = 10 * 60 * 1000;
@@ -900,6 +904,8 @@ async function examRoom2026Rpc(env, functionName, body) {
     'exam_room_grading_workspace',
     'exam_room_grading_workspace_v3',
     'exam_room_professor_results_dashboard_v1',
+    'exam_room_result_delivery_report_v1',
+    'exam_room_retry_student_result_email_v1',
     'exam_room_save_grade',
     'exam_room_save_grade_v3',
     'exam_room_unlock_attempt',
@@ -915,6 +921,7 @@ async function examRoom2026Rpc(env, functionName, body) {
     'exam_room_claim_email_batch',
     'exam_room_complete_email',
     'exam_room_fail_email',
+    'exam_room_record_email_delivery_event_v1',
     'exam_room_portal_snapshot',
     'exam_room_dismissed_past_exam_ids_v1',
     'exam_room_dismiss_past_exam_v1',
@@ -951,6 +958,38 @@ async function examRoom2026Rpc(env, functionName, body) {
     );
   }
   return result;
+}
+
+async function handleResendEmailDeliveryWebhook(request, env) {
+  if (request.method !== 'POST') {
+    throw new ExaminerError('METHOD_NOT_ALLOWED', 'Only POST requests are accepted.', 405);
+  }
+  let event;
+  try {
+    event = await verifyResendWebhookRequest(request, env);
+  } catch (error) {
+    throw new ExaminerError(
+      error?.safeCode === 'EMAIL_WEBHOOK_INVALID'
+        ? 'EMAIL_WEBHOOK_INVALID'
+        : 'EMAIL_WEBHOOK_UNAVAILABLE',
+      'The email-delivery event could not be verified.',
+      error?.safeCode === 'EMAIL_WEBHOOK_INVALID' ? 401 : 503,
+    );
+  }
+  const result = await examRoom2026Rpc(env, 'exam_room_record_email_delivery_event_v1', {
+    p_provider_id: event.providerId,
+    p_provider_event_id: event.providerEventId,
+    p_provider_event_type: event.providerEventType,
+    p_provider_event_at: event.providerEventAt,
+  });
+  return new Response(JSON.stringify({ ok: true, matched: result?.matched === true }), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
 }
 
 function quorumStorageObjectUrl(env, objectPath, suffix = '') {
@@ -5322,6 +5361,12 @@ export default {
     const allowedOrigin = env.ALLOWED_ORIGIN || 'https://duediligence.ph';
     const requestOrigin = request.headers.get('Origin') || '';
     try {
+      const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+      // Resend signs this server-to-server request. It has no browser Origin and
+      // must be verified before any payload is accepted or persisted.
+      if (pathname === '/webhooks/resend/email') {
+        return await handleResendEmailDeliveryWebhook(request, env);
+      }
       const origin = assertOrigin(request, allowedOrigin);
       if (request.method === 'OPTIONS') {
         return new Response(null, { status: 204, headers: corsHeaders(origin, allowedOrigin) });
@@ -5329,7 +5374,6 @@ export default {
       if (request.method !== 'POST') {
         throw new ExaminerError('METHOD_NOT_ALLOWED', 'Only POST requests are accepted.', 405);
       }
-      const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
       if (pathname === '/beta/access/policy') {
         return await handleGlobalBetaPublicPolicy(env, origin, allowedOrigin);
       }

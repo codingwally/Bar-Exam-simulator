@@ -34,6 +34,73 @@ import {
   validateProofSignature,
 } from './payment-core.mjs';
 
+async function signedDeliveryWebhook(event, {
+  eventId = 'msg_worker_webhook_001',
+  timestamp = 1_786_477_200,
+} = {}) {
+  const secretBytes = Uint8Array.from({ length: 32 }, (_, index) => 255 - index);
+  const secret = `whsec_${Buffer.from(secretBytes).toString('base64')}`;
+  const body = JSON.stringify(event);
+  const key = await crypto.subtle.importKey(
+    'raw', secretBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
+  );
+  const signature = Buffer.from(await crypto.subtle.sign(
+    'HMAC', key, new TextEncoder().encode(`${eventId}.${timestamp}.${body}`),
+  )).toString('base64');
+  return {
+    secret,
+    request: new Request('https://worker.example/webhooks/resend/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'svix-id': eventId,
+        'svix-timestamp': String(timestamp),
+        'svix-signature': `v1,${signature}`,
+      },
+      body,
+    }),
+  };
+}
+
+test('signed Resend webhook bypasses browser Origin but persists only a verified delivery event', async () => {
+  const originalNow = Date.now;
+  const originalFetch = globalThis.fetch;
+  const timestamp = 1_786_477_200;
+  const signed = await signedDeliveryWebhook({
+    type: 'email.delivered',
+    created_at: '2026-08-12T04:20:00.000Z',
+    data: { email_id: 'resend_result_789', to: ['private@example.test'] },
+  }, { timestamp });
+  let rpcBody = null;
+  Date.now = () => timestamp * 1000;
+  globalThis.fetch = async (url, options) => {
+    assert.match(String(url), /\/rest\/v1\/rpc\/exam_room_record_email_delivery_event_v1$/);
+    rpcBody = JSON.parse(options.body);
+    return new Response(JSON.stringify({ ok: true, matched: true }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  try {
+    const result = await worker.fetch(signed.request, {
+      ALLOWED_ORIGIN: 'https://duediligence.ph',
+      SUPABASE_URL: 'https://project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'service-secret',
+      RESEND_WEBHOOK_SECRET: signed.secret,
+    }, { waitUntil() {} });
+    assert.equal(result.status, 200);
+    assert.deepEqual(rpcBody, {
+      p_provider_id: 'resend_result_789',
+      p_provider_event_id: 'msg_worker_webhook_001',
+      p_provider_event_type: 'email.delivered',
+      p_provider_event_at: '2026-08-12T04:20:00.000Z',
+    });
+    assert.doesNotMatch(JSON.stringify(rpcBody), /private@example.test/);
+  } finally {
+    Date.now = originalNow;
+    globalThis.fetch = originalFetch;
+  }
+});
+
 const remedialContext = {
   subject: 'Remedial Law',
   question: 'Counsel allowed a nonlawyer employee to prepare an appellate brief, sign counsel’s name, and file it before counsel reviewed it. Was the delegation proper?',

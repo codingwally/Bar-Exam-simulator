@@ -58,3 +58,5 @@ crons = ["*/2 * * * *"]
 # Never add secret values to this file.
 # Google backup OAuth client ID, client secret, and refresh token must remain
 # encrypted Worker secrets. GOOGLE_BACKUP_FOLDER_ID may be a non-secret var.
+# RESEND_WEBHOOK_SECRET must remain an encrypted Worker secret. It verifies
+# signed provider delivery events and must never be exposed to the browser.

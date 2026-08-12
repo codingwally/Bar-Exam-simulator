@@ -313,6 +313,22 @@
 .dd26-grading-source p{white-space:pre-wrap;}
 .dd26-grading-form{position:sticky;top:84px;}
 .dd26-grading-actions{position:sticky;z-index:3;bottom:12px;margin:18px 0;padding:12px;border:1px solid rgba(197,160,89,.35);border-radius:8px;background:rgba(3,22,42,.95);box-shadow:0 12px 30px rgba(0,0,0,.26);}
+.dd26-result-selection{display:grid;gap:8px;max-height:310px;margin:14px 0;padding-right:6px;overflow:auto;scrollbar-color:#a77d2d transparent;}
+.dd26-result-selection .dd26-choice{margin:0;}
+.dd26-grading-queue{margin:14px 0;}
+.dd26-grading-queue>summary{cursor:pointer;color:#132b46;}
+.dd26-grading-queue .dd26-table-wrap{max-height:320px;overflow:auto;}
+.dd26-grading-queue .dd26-table tr.is-current td{background:rgba(212,175,55,.12);}
+.dd26-button.compact{min-height:36px;padding:8px 12px;}
+.dd26-results-select-all{border-color:rgba(231,189,93,.68);background:rgba(197,160,89,.1);}
+.dd26-results-dashboard{max-width:1500px;margin-inline:auto;}
+.dd26-result-metrics{grid-template-columns:repeat(4,minmax(0,1fr));}
+.dd26-result-extremes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 24px;}
+.dd26-result-extremes>div{display:grid;gap:8px;padding:18px;border:1px solid rgba(197,160,89,.34);border-radius:7px;background:linear-gradient(145deg,rgba(197,160,89,.1),rgba(2,18,35,.28));}
+.dd26-result-extremes span{color:#aebaca;font:600 10px/1.45 'IBM Plex Mono',monospace;letter-spacing:.08em;text-transform:uppercase;}
+.dd26-result-extremes strong{color:#f2cc70;font-family:'Playfair Display',serif;font-size:21px;line-height:1.3;}
+.dd26-result-bar{width:130px;height:8px;margin:0 0 7px;overflow:hidden;border-radius:999px;background:rgba(148,163,184,.2);}
+.dd26-result-bar span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#a77d2d,#f0ca70);}
 .dd26-question-nav button.is-flagged{border-color:#f59e0b;box-shadow:inset 0 -3px #f59e0b;}
 .dd26-essay-editor{min-height:320px;line-height:1.75;}
 .dd26-attention-return{margin:0 0 18px;}
@@ -357,6 +373,7 @@
   .dd26-waiting-instructions{padding:18px;}
   .dd26-form-grid>.dd26-field>span{min-height:0;align-items:flex-start;}
   .dd26-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .dd26-result-extremes{grid-template-columns:1fr;}
   .dd26-choice-grid{grid-template-columns:1fr;}
   .dd26-fact-row{grid-template-columns:1fr;gap:8px;}
   .dd26-exam-nav{grid-template-columns:1fr 1fr;}

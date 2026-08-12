@@ -1,5 +1,11 @@
 import { formulaNeutralizedCell } from './duediligence-2026-core.mjs';
 import { decryptStudentExamCode } from './exam-room-student-code-envelope.mjs';
+import {
+  buildExamClassResultsWorkbook,
+  examClassResultsWorkbookFileName,
+} from './exam-results-workbook.mjs';
+
+const MAX_PROFESSOR_GRADEBOOK_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 const TEMPLATE_SPREADSHEET_ID = '1alXFADSsgSduVW07nOCGYa5zz26k387DeeEMF_y_fdg';
 const BACKUP_TABS = Object.freeze([
@@ -67,6 +73,144 @@ function appendRequest(sheetId, rows) {
 
 function resultLink(examId) {
   return `https://duediligence.ph/#examination-room?exam=${encodeURIComponent(examId)}`;
+}
+
+function html(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function finiteNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function professorCandidateTotals(candidate) {
+  const questions = Array.isArray(candidate?.questions) ? candidate.questions : [];
+  const score = questions.reduce((sum, question) => sum + finiteNumber(question?.score), 0);
+  const maximum = questions.reduce((sum, question) => sum + finiteNumber(question?.maximumPoints), 0);
+  return { score, maximum, percentage: maximum > 0 ? (score / maximum) * 100 : 0 };
+}
+
+function base64Bytes(bytes) {
+  const chunkSize = 24_576;
+  let encoded = '';
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
+    let binary = '';
+    for (let index = 0; index < chunk.length; index += 1) binary += String.fromCharCode(chunk[index]);
+    encoded += btoa(binary);
+  }
+  return encoded;
+}
+
+function professorReleaseMessage(payload) {
+  const report = payload?.classResults && typeof payload.classResults === 'object'
+    ? payload.classResults : null;
+  const candidates = Array.isArray(report?.candidates) ? report.candidates : [];
+  if (!report || candidates.length === 0) {
+    return {
+      subject: `Due Diligence — ${payload.title || 'Examination'} release summary`,
+      text: [
+        `Results were released for ${payload.title || 'your examination'}.`,
+        `Expected: ${payload.expected ?? 0}`,
+        `Started: ${payload.started ?? 0}`,
+        `Submitted: ${payload.submitted ?? 0}`,
+        `Auto-submitted: ${payload.autoSubmitted ?? 0}`,
+        `Locked: ${payload.locked ?? 0}`,
+        `Secure grading record: ${resultLink(payload.examId || '')}`,
+      ].join('\n'),
+    };
+  }
+
+  const rows = candidates.map((candidate) => {
+    const totals = professorCandidateTotals(candidate);
+    const perQuestion = (candidate.questions || [])
+      .map((question) => `Q${finiteNumber(question.ordinal)} ${finiteNumber(question.score).toFixed(2)}/${finiteNumber(question.maximumPoints).toFixed(2)}`)
+      .join(' · ');
+    return {
+      name: candidate.studentName || candidate.candidateNumber || 'Student',
+      email: candidate.studentEmail || '',
+      studentNumber: candidate.studentNumber || '',
+      candidateNumber: candidate.candidateNumber || '',
+      totals,
+      perQuestion,
+      timing: candidate.late ? 'Late' : 'On time',
+    };
+  });
+  const totalPercentages = rows.map((row) => row.totals.percentage);
+  const average = totalPercentages.length
+    ? totalPercentages.reduce((sum, value) => sum + value, 0) / totalPercentages.length : 0;
+  const absent = (Array.isArray(report.classStatuses) ? report.classStatuses : [])
+    .filter((entry) => entry?.absent === true).length;
+  const late = (Array.isArray(report.classStatuses) ? report.classStatuses : [])
+    .filter((entry) => entry?.late === true).length;
+  const generatedAt = report.releasedAt || payload.releasedAt || report.generatedAt;
+  const dataset = {
+    ...report,
+    generatedAt,
+    exportScope: 'class_results',
+  };
+  let attachment = null;
+  try {
+    const bytes = buildExamClassResultsWorkbook({ dataset });
+    if (bytes.length <= MAX_PROFESSOR_GRADEBOOK_ATTACHMENT_BYTES) {
+      attachment = {
+        filename: examClassResultsWorkbookFileName({ dataset }),
+        content: base64Bytes(bytes),
+      };
+    }
+  } catch {
+    // The readable class summary and secure portal remain available. The
+    // delivery queue will not fail solely because a workbook is too large.
+  }
+  const attachmentLine = attachment
+    ? 'The complete class gradebook is attached in Excel/Google Sheets-compatible format.'
+    : 'Download the complete class gradebook from the secure Professor results dashboard.';
+  const studentLines = rows.map((row, index) => [
+    `${index + 1}. ${row.name}`,
+    `   Student no.: ${row.studentNumber || '—'} · Candidate: ${row.candidateNumber || '—'} · ${row.timing}`,
+    `   Overall: ${row.totals.score.toFixed(2)} / ${row.totals.maximum.toFixed(2)} (${row.totals.percentage.toFixed(1)}%)`,
+    `   ${row.perQuestion || 'No question-level grades recorded.'}`,
+  ].join('\n')).join('\n\n');
+  const tableRows = rows.map((row) => `<tr>
+    <td style="padding:10px;border-bottom:1px solid #d6dee8"><strong>${html(row.name)}</strong><br><span style="color:#526174">${html(row.email)}</span></td>
+    <td style="padding:10px;border-bottom:1px solid #d6dee8">${html(row.studentNumber || '—')}<br>${html(row.candidateNumber || '—')}</td>
+    <td style="padding:10px;border-bottom:1px solid #d6dee8;text-align:right"><strong>${row.totals.score.toFixed(2)} / ${row.totals.maximum.toFixed(2)}</strong><br>${row.totals.percentage.toFixed(1)}%</td>
+    <td style="padding:10px;border-bottom:1px solid #d6dee8">${html(row.perQuestion || 'No question-level grades recorded.')}</td>
+  </tr>`).join('');
+  return {
+    subject: `Due Diligence — ${payload.title || 'Examination'} class results and gradebook`,
+    text: [
+      `Final class results for ${payload.title || 'your examination'}.`,
+      '',
+      `Submitted and graded: ${rows.length} of ${report.expectedCount ?? payload.expected ?? rows.length}`,
+      `Class average: ${average.toFixed(1)}%`,
+      `Absent / no-show: ${absent}`,
+      `Late: ${late}`,
+      attachmentLine,
+      '',
+      'CLASS GRADE RECORD',
+      studentLines,
+      '',
+      `Professor results dashboard: ${resultLink(payload.examId || report.examId || '')}`,
+    ].join('\n'),
+    html: `<div style="margin:0;background:#f5f2e9;padding:32px 16px;font-family:Arial,sans-serif;color:#132238">
+      <div style="max-width:960px;margin:auto;background:#fff;border:1px solid #d4af37;border-top:5px solid #d4af37">
+        <div style="background:#061c35;color:#fff;padding:26px 30px"><div style="color:#e4bd54;font-size:12px;letter-spacing:2px;text-transform:uppercase">Due Diligence Examination Room</div><h1 style="margin:8px 0 0;font-family:Georgia,serif;font-size:30px">Class results and gradebook</h1></div>
+        <div style="padding:26px 30px"><h2 style="margin:0 0 8px;font-family:Georgia,serif;color:#061c35">${html(payload.title || report.title || 'Examination')}</h2><p style="margin:0 0 20px;color:#526174">${html(attachmentLine)}</p>
+          <table role="presentation" style="width:100%;border-collapse:collapse;margin-bottom:24px"><tr><td style="padding:14px;background:#f7f4ec"><strong>${rows.length}</strong><br>graded submissions</td><td style="padding:14px;background:#f7f4ec"><strong>${average.toFixed(1)}%</strong><br>class average</td><td style="padding:14px;background:#f7f4ec"><strong>${absent}</strong><br>absent / no-show</td><td style="padding:14px;background:#f7f4ec"><strong>${late}</strong><br>late</td></tr></table>
+          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:#0b2b4b;color:#fff"><th style="padding:11px;text-align:left">Student</th><th style="padding:11px;text-align:left">Record</th><th style="padding:11px;text-align:right">Overall</th><th style="padding:11px;text-align:left">Per question</th></tr></thead><tbody>${tableRows}</tbody></table></div>
+          <p style="margin:24px 0 0"><a href="${html(resultLink(payload.examId || report.examId || ''))}" style="display:inline-block;background:#d4af37;color:#061c35;text-decoration:none;font-weight:bold;padding:12px 18px">Open secure Professor dashboard</a></p>
+        </div>
+      </div>
+    </div>`,
+    attachments: attachment ? [attachment] : [],
+  };
 }
 
 async function jsonFetch(fetchImpl, url, options, safeFailure) {
@@ -406,6 +550,24 @@ function submittedAnswersText(answers) {
   }).join('\n\n');
 }
 
+function releasedGradesText(grades, questions = []) {
+  if (!Array.isArray(grades) || grades.length === 0) return 'No grade details were recorded.';
+  const totalScore = grades.reduce((sum, grade) => sum + (Number(grade?.score) || 0), 0);
+  const totalMaximum = grades.reduce((sum, grade) => sum + (Number(grade?.maximumPoints) || 0), 0);
+  const overall = totalMaximum > 0 ? `${totalScore.toFixed(2)} / ${totalMaximum.toFixed(2)} (${((totalScore / totalMaximum) * 100).toFixed(1)}%)` : 'Unavailable';
+  const details = grades.map((grade, index) => {
+    const question = Array.isArray(questions)
+      ? questions.find((entry) => String(entry?.questionId || '') === String(grade?.questionId || ''))
+      : null;
+    const ordinal = Number(grade?.ordinal ?? question?.ordinal) || index + 1;
+    return [
+    `Question ${ordinal}: ${Number(grade?.score || 0).toFixed(2)} / ${Number(grade?.maximumPoints || 0).toFixed(2)}`,
+    String(grade?.comment || '').trim() ? `Professor comment: ${String(grade.comment).trim()}` : 'Professor comment: None',
+  ].join('\n');
+  }).join('\n\n');
+  return `Overall score: ${overall}\n\n${details}`;
+}
+
 async function emailMessage(env, job) {
   const payload = job.payload || {};
   if (job.email_type === 'professor_room_key') {
@@ -512,23 +674,26 @@ async function emailMessage(env, job) {
     };
   }
   if (job.email_type === 'professor_release_summary') {
-    return {
-      subject: `Due Diligence — ${payload.title || 'Examination'} release summary`,
-      text: [
-        `Results were released for ${payload.title || 'your examination'}.`,
-        `Expected: ${payload.expected ?? 0}`,
-        `Started: ${payload.started ?? 0}`,
-        `Submitted: ${payload.submitted ?? 0}`,
-        `Auto-submitted: ${payload.autoSubmitted ?? 0}`,
-        `Locked: ${payload.locked ?? 0}`,
-        `Secure grading record: ${resultLink(payload.examId || '')}`,
-      ].join('\n'),
-    };
+    return professorReleaseMessage(payload);
   }
   if (job.email_type === 'student_correction') {
     return {
       subject: `Due Diligence — corrected result for ${payload.title || 'your examination'}`,
       text: `A reviewed correction is available in your secure Examination Room.\n${resultLink(payload.examId || '')}`,
+    };
+  }
+  if (job.email_type === 'student_result') {
+    return {
+      subject: `Due Diligence — results for ${payload.title || 'your examination'}`,
+      text: [
+        `Your Professor has released your result for ${payload.title || 'the examination'}.`,
+        payload.candidateNumber ? `Candidate number: ${payload.candidateNumber}` : '',
+        '',
+        releasedGradesText(payload.grades, payload.questions),
+        '',
+        'Sign in to view the protected examination record.',
+        resultLink(payload.examId || ''),
+      ].filter((line, index, rows) => line || (index > 0 && rows[index - 1] !== '')).join('\n'),
     };
   }
   return {
@@ -548,6 +713,15 @@ export async function deliverExamRoomEmail(env, job, fetchImpl = fetch) {
     throw error;
   }
   const message = await emailMessage(env, job);
+  const requestBody = {
+    from,
+    to: [job.recipient_email],
+    subject: message.subject,
+    text: message.text,
+    ...(message.html ? { html: message.html } : {}),
+    ...(Array.isArray(message.attachments) && message.attachments.length
+      ? { attachments: message.attachments } : {}),
+  };
   const result = await jsonFetch(fetchImpl, 'https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -555,12 +729,7 @@ export async function deliverExamRoomEmail(env, job, fetchImpl = fetch) {
       'Content-Type': 'application/json',
       'Idempotency-Key': `exam-room-${job.id}`,
     },
-    body: JSON.stringify({
-      from,
-      to: [job.recipient_email],
-      subject: message.subject,
-      text: message.text,
-    }),
+    body: JSON.stringify(requestBody),
   }, 'EMAIL_PROVIDER_FAILED');
   if (!result?.id) {
     const error = new Error('The email provider did not return a message identifier.');
@@ -625,7 +794,18 @@ export async function processExamRoomDeliveryQueues(env, {
   summary.emailClaimed = Array.isArray(jobs) ? jobs.length : 0;
   for (const job of jobs || []) {
     try {
-      const sent = await deliverExamRoomEmail(env, job, fetchImpl);
+      let deliveryJob = job;
+      if (job?.email_type === 'professor_release_summary') {
+        const classResults = await rpc(env, 'exam_room_professor_results_dashboard_v1', {
+          p_professor_user_id: job.recipient_user_id,
+          p_exam_public_id: job?.payload?.examId,
+        });
+        deliveryJob = {
+          ...job,
+          payload: { ...(job.payload || {}), classResults },
+        };
+      }
+      const sent = await deliverExamRoomEmail(env, deliveryJob, fetchImpl);
       await rpc(env, 'exam_room_complete_email', { p_job_id: job.id, p_provider_id: sent.providerId });
       summary.emailSent += 1;
     } catch (error) {

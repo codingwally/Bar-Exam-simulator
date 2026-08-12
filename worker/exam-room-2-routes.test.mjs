@@ -1616,6 +1616,45 @@ test('Professor result PDF is private, candidate-scoped, and has no release side
   assert.equal(flow.calls.some((entry) => entry.name === 'exam_room_release_results'), false);
 });
 
+test('Professor class workbook is owner-scoped, audited, and has no release side effect', async () => {
+  const exportId = '123e4567-e89b-42d3-a456-426614174012';
+  const flow = harness({
+    rpc: async (name, body) => {
+      if (name === 'exam_room_prepare_class_result_export_v1') {
+        return {
+          ok: true, exportId, dataset: {
+            examId, title: 'Labor Law Midterm', generatedAt: '2026-08-12T04:00:00Z',
+            expectedCount: 1, exportScope: body.p_export_scope,
+            classStatuses: [{ studentName: 'Ana Reyes', studentEmail: 'ana@example.test', candidateNumber: 'C-01' }],
+            candidates: [{
+              attemptId, studentName: 'Ana Reyes', studentEmail: 'ana@example.test',
+              studentNumber: '2026-001', candidateNumber: 'C-01', status: 'submitted', allGradesFinal: false,
+              questions: [{ questionId, ordinal: 1, prompt: 'Explain dismissal.', answer: 'No.', maximumPoints: 5, score: 1, gradeState: 'draft' }],
+            }],
+          },
+        };
+      }
+      if (name === 'exam_room_complete_class_result_export_v1') return { ok: true, exportId };
+      return { ok: true };
+    },
+  });
+  const response = await flow.handlers.examClassResultsWorkbook(request({
+    examId, attemptIds: [attemptId], scope: 'offline_grading', requestKey,
+  }), {}, '', '');
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Content-Type'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  assert.equal(response.headers.get('Cache-Control'), 'private, no-store, max-age=0');
+  assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
+  assert.deepEqual(flow.calls.map((entry) => entry.name), [
+    'exam_room_prepare_class_result_export_v1',
+    'exam_room_complete_class_result_export_v1',
+  ]);
+  assert.deepEqual(flow.calls[0].body.p_selected_attempt_public_ids, [attemptId]);
+  assert.match(flow.calls[1].body.p_output_sha256, /^[0-9a-f]{64}$/);
+  assert.equal(flow.calls.some((entry) => entry.name === 'exam_room_release_results'), false);
+});
+
 test('answer operation verifies content hash at the edge and forwards journal concurrency fields', async () => {
   const answerText = 'Stonehill requires particularity.';
   const contentHash = await sha256Hex(answerText);

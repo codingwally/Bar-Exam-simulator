@@ -22,6 +22,7 @@ import {
   EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION,
   examRoomRateKey,
   hashedCredential,
+  normalizeExamClassResultsWorkbookRequest,
   normalizeExamResultPdfRequest,
   normalizeExamRoomCommand,
   normalizeExamRoomPaymentProofUpload,
@@ -33,6 +34,10 @@ import {
   sha256Hex,
 } from './exam-room-2026-core.mjs';
 import { buildExamResultPdf, examResultPdfFileName } from './exam-result-pdf.mjs';
+import {
+  buildExamClassResultsWorkbook,
+  examClassResultsWorkbookFileName,
+} from './exam-results-workbook.mjs';
 import {
   decryptStudentExamCode,
   encryptStudentExamCode,
@@ -114,6 +119,7 @@ const EXAM_ROOM_2_QUERY_OPERATIONS = new Set([
   'incident_summary',
   'submission_status',
   'live_status_v2',
+  'results_dashboard',
   'grading_model_answer',
   'break_glass_view',
 ]);
@@ -1083,6 +1089,47 @@ export function createDD2026Handlers(deps) {
     });
   }
 
+  async function examClassResultsWorkbook(request, env, origin, allowedOrigin) {
+    requireExamRoom2Enabled(env);
+    const user = await requireAuthenticatedUser(request, env);
+    const input = normalizeExamClassResultsWorkbookRequest(
+      await parseBoundedJson(request, 40_000),
+    );
+    await examRateLimit(request, env, user.id, 'write', input.examId);
+    const result = await examRoomRpc(env, 'exam_room_prepare_class_result_export_v1', {
+      p_professor_user_id: user.id,
+      p_exam_public_id: input.examId,
+      p_selected_attempt_public_ids: input.attemptIds,
+      p_export_scope: input.scope,
+      p_request_key: input.requestKey,
+    });
+    if (result?.ok !== true || !result?.exportId || !result?.dataset) {
+      throw new DD2026ValidationError(
+        String(result?.code || 'EXAM_ROOM_CLASS_EXPORT_DENIED'),
+        'The Professor class workbook could not be authorized.',
+        403,
+      );
+    }
+    const bytes = buildExamClassResultsWorkbook(result);
+    await examRoomRpc(env, 'exam_room_complete_class_result_export_v1', {
+      p_professor_user_id: user.id,
+      p_export_id: result.exportId,
+      p_output_bytes: bytes.length,
+      p_output_sha256: await sha256Hex(bytes),
+    });
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        ...corsHeaders(origin, allowedOrigin),
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${examClassResultsWorkbookFileName(result)}"`,
+        'Cache-Control': 'private, no-store, max-age=0',
+        Pragma: 'no-cache',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  }
+
   async function importContent(request, env, origin, allowedOrigin) {
     await enforceAdminRateLimit(request, env);
     const admin = await requireAdministrator(request, env);
@@ -1282,6 +1329,9 @@ export function createDD2026Handlers(deps) {
     } else if (input.operation === 'student_result') {
       functionName = 'exam_room_student_result';
       body = { p_student_user_id: user.id, p_exam_public_id: input.examId };
+    } else if (input.operation === 'results_dashboard') {
+      functionName = 'exam_room_professor_results_dashboard_v1';
+      body = { p_professor_user_id: user.id, p_exam_public_id: input.examId };
     } else {
       throw new DD2026ValidationError(
         'UNSUPPORTED_OPERATION',
@@ -2177,6 +2227,7 @@ export function createDD2026Handlers(deps) {
     doctrineGrade,
     editorial,
     examCommand,
+    examClassResultsWorkbook,
     examQuery,
     examResultPdf,
     features,

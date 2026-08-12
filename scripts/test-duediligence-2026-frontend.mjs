@@ -39,12 +39,13 @@ function deferred() {
 }
 
 const root = new URL('../', import.meta.url);
-const [html, js, css, build, store] = await Promise.all([
+const [html, js, css, build, store, examinations] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/duediligence-2026.js', root), 'utf8'),
   readFile(new URL('assets/duediligence-2026.css', root), 'utf8'),
   readFile(new URL('scripts/build-pages-artifact.mjs', root), 'utf8'),
   readFile(new URL('assets/examination-room-2-store.js', root), 'utf8'),
+  readFile(new URL('assets/examinations.js', root), 'utf8'),
 ]);
 
 assert.match(html, /assets\/duediligence-2026\.css/);
@@ -53,6 +54,36 @@ assert.match(build, /assets\/duediligence-2026\.css/);
 assert.match(build, /assets\/duediligence-2026\.js/);
 assert.match(html, /assets\/examination-room-2-store\.js/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
+
+// Capped assessments keep the authoritative final score and omit the provider's
+// pre-cap component display, which can otherwise contradict that final score.
+const assessmentScoreWasCapped = vm.runInNewContext(
+  `(${extractNamedFunction(examinations, 'assessmentScoreWasCapped')})`,
+);
+assert.equal(assessmentScoreWasCapped({
+  score: 2.5,
+  appliedScoreCeiling: { code: 'rule_without_application', maximum: 2.5, changedScore: true },
+  rubricBreakdown: { conclusion: 5, legalBasis: 5, application: 5, responsiveness: 5 },
+}), true);
+assert.equal(assessmentScoreWasCapped({
+  score: 3.5,
+  scoreCeilingCode: 'major_central_gap',
+}), true, 'Stored semantic score ceilings must hide the component breakdown.');
+assert.equal(assessmentScoreWasCapped({
+  score: 2.5,
+  errors: ['Score capped because the answer lacks meaningful factual application.'],
+}), true, 'Legacy capped assessments must be recognized from their persisted cap note.');
+assert.equal(assessmentScoreWasCapped({
+  score: 4.6,
+  scoreCeilingCode: 'none',
+  appliedScoreCeiling: null,
+  errors: [],
+}), false, 'Uncapped assessments must retain their explanatory component breakdown.');
+assert.match(
+  examinations,
+  /assessmentScoreWasCapped\(assessment\) \? '' : assessmentBreakdown\(assessment\.rubricBreakdown, \{ track \}\)/,
+  'Capped assessments must not render a contradictory point-by-point comparison.',
+);
 
 for (const [id, handler] of [
   ['spa-bar-easy', 'openBarEasy'],

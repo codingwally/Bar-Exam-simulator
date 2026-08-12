@@ -23,6 +23,12 @@
     signInNotificationAttempted: false,
     privateBetaAllowed: config.features?.privateBetaGate !== true,
     sessionRefreshPromise: null,
+    userStatePromise: null,
+    userStateUserId: null,
+    welcomedUserId: null,
+    sessionEventInitialized: false,
+    lastSessionEventUserId: null,
+    lastSessionEventAccessToken: null,
   };
 
   let resolveAuthReady;
@@ -37,6 +43,27 @@
   const pendingSubmissionStorageKey = 'duediligence.pending-submission.v1';
   const authTimeoutMs = 12_000;
   const pendingSubmissionMaxAgeMs = 30 * 60 * 1000;
+
+  function dispatchSessionState(session, reason = 'session') {
+    const userId = session?.user?.id || null;
+    const accessToken = session?.access_token || null;
+    if (state.sessionEventInitialized
+        && state.lastSessionEventUserId === userId
+        && state.lastSessionEventAccessToken === accessToken) {
+      return false;
+    }
+    state.sessionEventInitialized = true;
+    state.lastSessionEventUserId = userId;
+    state.lastSessionEventAccessToken = accessToken;
+    global.dispatchEvent(new CustomEvent('duediligence:session', {
+      detail: {
+        authenticated: Boolean(accessToken),
+        userId,
+        reason,
+      },
+    }));
+    return true;
+  }
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, (character) => ({
@@ -471,12 +498,7 @@
         state.session = session;
         state.user = session.user || null;
         syncAuthUi();
-        global.dispatchEvent(new CustomEvent('duediligence:session', {
-          detail: {
-            authenticated: true,
-            userId: state.user?.id || null,
-          },
-        }));
+        dispatchSessionState(session, 'refresh');
         return session;
       } catch {
         return null;
@@ -828,11 +850,29 @@
   async function loadUserState() {
     if (!state.client || !state.user) return;
     if (deferOnboardingForPrivateBeta()) return;
+    const userId = state.user.id;
+    if (state.userStatePromise && state.userStateUserId === userId) {
+      return state.userStatePromise;
+    }
+    const pending = loadUserStateFor(userId);
+    state.userStateUserId = userId;
+    state.userStatePromise = pending;
+    try {
+      return await pending;
+    } finally {
+      if (state.userStatePromise === pending) {
+        state.userStatePromise = null;
+        state.userStateUserId = null;
+      }
+    }
+  }
+
+  async function loadUserStateFor(userId) {
     const [{ data: profile }, { data: terms }, { data: marketing }] = await Promise.all([
       state.client
         .from('profiles')
         .select('id,display_name,school,enrollment_status,year_level,profile_completed_at,subscription_tier,subscription_status')
-        .eq('id', state.user.id)
+        .eq('id', userId)
         .maybeSingle(),
       state.client
         .from('terms_acceptances')
@@ -846,6 +886,7 @@
         .order('changed_at', { ascending: false })
         .limit(1),
     ]);
+    if (state.user?.id !== userId) return;
     state.profile = profile || null;
     state.marketingOptIn = Boolean(marketing?.[0]?.opted_in);
     state.admin = null;
@@ -872,7 +913,10 @@
     } else {
       closeEntry();
       setOverlay(false, 'dd2-onboarding-overlay');
-      global.toast?.(`Welcome back, ${profile?.display_name || state.user?.user_metadata?.full_name || 'future counsel'}.`, 'ok');
+      if (state.welcomedUserId !== userId) {
+        state.welcomedUserId = userId;
+        global.toast?.(`Welcome back, ${profile?.display_name || state.user?.user_metadata?.full_name || 'future counsel'}.`, 'ok');
+      }
       restoreAuthDestination();
     }
   }
@@ -1548,12 +1592,7 @@
     state.session = sessionError ? null : data?.session || null;
     state.user = state.session?.user || null;
     syncAuthUi();
-    global.dispatchEvent(new CustomEvent('duediligence:session', {
-      detail: {
-        authenticated: Boolean(state.session?.access_token),
-        userId: state.user?.id || null,
-      },
-    }));
+    dispatchSessionState(state.session, 'initial');
     if (state.user) closeEntry();
     if (state.session?.access_token) {
       safeSessionRemove(authAttemptStorageKey);
@@ -1571,16 +1610,14 @@
         resetGoogleSignIn();
       } else if (event === 'SIGNED_OUT') {
         state.privateBetaAllowed = config.features?.privateBetaGate !== true;
+        state.welcomedUserId = null;
+        state.userStatePromise = null;
+        state.userStateUserId = null;
         global.DueDiligencePrivateBeta?.clear?.();
         resetGoogleSignIn();
       }
       syncAuthUi();
-      global.dispatchEvent(new CustomEvent('duediligence:session', {
-        detail: {
-          authenticated: Boolean(state.session?.access_token),
-          userId: state.user?.id || null,
-        },
-      }));
+      dispatchSessionState(session, event);
       if (session && ['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'].includes(event)) {
         closeEntry();
         if (event === 'SIGNED_IN') {

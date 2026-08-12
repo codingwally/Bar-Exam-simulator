@@ -305,7 +305,7 @@ assert.match(frontend, /Allow entry until the exam ends[\s\S]*Your current Profe
   'rescheduling must expose an explicit until-end choice without overwriting an earlier cutoff');
 assert.match(frontend, /entryCutoffReviewHtml\(opensAt, hardClosesAt, lateAdmissionMinutes\)/,
   'final publication review must prominently state the exact student-entry cutoff');
-assert.match(html, /duediligence-2026\.js\?v=class-results-20260812-1/,
+assert.match(html, /duediligence-2026\.js\?v=room-availability-20260813-1/,
   'the corrected student preflight must use a fresh production cache key');
 assert.match(frontend, /None of them replaces student sign-in and the class-list check/);
 assert.match(frontend, /publicationAttempt\.studentKey = null/,
@@ -347,8 +347,8 @@ assert.match(frontend, /publication\.questionVersionChanged === true/);
 assert.match(frontend, /allowed only before the exam opens and before any student starts/);
 assert.match(frontend, /After a student starts, send a correction or stop notice instead/);
 assert.match(frontend, /Use a correction notice/);
-assert.match(frontend, /refreshPortalSilently[\s\S]*await enrichProfessorExamIntents\(state\.exam\.portal\)/,
-  'silent portal refreshes must not bypass publication eligibility enrichment');
+assert.match(frontend, /async function refreshPortalSilently[\s\S]*const portal = payload\.result[\s\S]*await enrichProfessorExamIntents\(portal\)[\s\S]*if \(!isCurrentExamPortalLifecycle\(lifecycle\)\) return false;[\s\S]*state\.exam\.portal = portal/,
+  'silent portal refreshes must enrich locally and revalidate the session before publishing portal state');
 
 // Another submission is student-specific and preserves the first receipt under a one-use grading-key check.
 assert.match(frontend, /candidate\.canReopenSubmission === true/);
@@ -767,7 +767,7 @@ assert.match(css, /\.dd26-reschedule-comparison>div\{grid-template-columns:1fr;g
 assert.match(html, /assets\/examination-room-2-store\.js/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
 assert.match(html, /duediligence-2026\.css\?v=class-results-20260812-1/);
-assert.match(html, /duediligence-2026\.js\?v=class-results-20260812-1/);
+assert.match(html, /duediligence-2026\.js\?v=room-availability-20260813-1/);
 
 // Execute the pure disclosure gate: malformed, partial, and stale replacement
 // results must never unlock one-time secret rendering.

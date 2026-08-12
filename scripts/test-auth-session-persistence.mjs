@@ -12,6 +12,20 @@ const [storageSource, phase2, phase4, landing, admin, indexHtml, adminHtml] = aw
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
 ]);
 
+function extractNamedFunction(source, name) {
+  const match = new RegExp(`(?:async\\s+)?function\\s+${name}\\s*\\(`).exec(source);
+  assert.ok(match, `Expected ${name}() to exist in the production source.`);
+  const start = match.index;
+  const openingBrace = source.indexOf('{', start);
+  let depth = 0;
+  for (let index = openingBrace; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    if (source[index] === '}') depth -= 1;
+    if (depth === 0) return source.slice(start, index + 1);
+  }
+  assert.fail(`Could not extract the complete ${name}() function body.`);
+}
+
 class MemoryStorage {
   constructor(entries = []) {
     this.values = new Map(entries);
@@ -168,5 +182,168 @@ assert.match(phase4, /await legacy\.refreshSession\?\.\(\)/);
 assert.match(phase2, /\{ attemptRefresh: false \}/);
 assert.match(phase4, /error\.authRetryExhausted = authenticationError/);
 assert.match(phase2, /attemptRefresh: error\?\.authRetryExhausted !== true/);
+assert.match(
+  phase2,
+  /function dispatchSessionState\(session,[\s\S]*state\.lastSessionEventUserId === userId[\s\S]*state\.lastSessionEventAccessToken === accessToken[\s\S]*return false/,
+  'Equivalent Supabase session notifications must be dispatched only once.',
+);
+assert.match(
+  phase2,
+  /if \(state\.userStatePromise && state\.userStateUserId === userId\)[\s\S]*return state\.userStatePromise/,
+  'Concurrent profile restoration must share one in-flight request.',
+);
+assert.match(
+  phase2,
+  /if \(state\.welcomedUserId !== userId\)[\s\S]*Welcome back/,
+  'A restored account must receive only one welcome notification per page lifecycle.',
+);
+
+const dispatchedSessions = [];
+const dispatchContext = {
+  state: {
+    sessionEventInitialized: false,
+    lastSessionEventUserId: null,
+    lastSessionEventAccessToken: null,
+  },
+  global: {
+    dispatchEvent(event) {
+      dispatchedSessions.push(event.detail);
+    },
+  },
+  CustomEvent: class CustomEvent {
+    constructor(type, init) {
+      this.type = type;
+      this.detail = init.detail;
+    }
+  },
+};
+const dispatchSessionState = vm.runInNewContext(
+  `(${extractNamedFunction(phase2, 'dispatchSessionState')})`,
+  dispatchContext,
+);
+const restoredSession = {
+  access_token: 'restored-access-token',
+  user: { id: 'restored-user' },
+};
+assert.equal(dispatchSessionState(restoredSession, 'initial-session'), true);
+assert.equal(
+  dispatchSessionState(restoredSession, 'INITIAL_SESSION'),
+  false,
+  'The equivalent Supabase INITIAL_SESSION callback must not redispatch an explicitly restored session.',
+);
+assert.equal(
+  dispatchSessionState(restoredSession, 'auth-callback'),
+  false,
+  'An equivalent authentication callback must not redispatch the same user and access token.',
+);
+assert.deepEqual(
+  dispatchedSessions.map(({ authenticated, userId }) => ({ authenticated, userId })),
+  [{ authenticated: true, userId: 'restored-user' }],
+  'Equivalent startup session events must produce exactly one public session event.',
+);
+assert.equal(
+  dispatchSessionState({ ...restoredSession, access_token: 'refreshed-access-token' }, 'TOKEN_REFRESHED'),
+  true,
+  'A genuinely refreshed access token must still dispatch a new session event.',
+);
+
+let resolveUserState;
+let userStateLoads = 0;
+const coalescedResult = { profile: 'restored' };
+const coalescingState = {
+  client: {},
+  user: { id: 'restored-user' },
+  userStatePromise: null,
+  userStateUserId: null,
+};
+const loadUserState = vm.runInNewContext(
+  `(${extractNamedFunction(phase2, 'loadUserState')})`,
+  {
+    state: coalescingState,
+    deferOnboardingForPrivateBeta: () => false,
+    loadUserStateFor: () => {
+      userStateLoads += 1;
+      return new Promise((resolve) => {
+        resolveUserState = resolve;
+      });
+    },
+  },
+);
+const firstUserStateLoad = loadUserState();
+const concurrentUserStateLoad = loadUserState();
+assert.equal(userStateLoads, 1, 'Concurrent profile restoration calls must start only one backend load.');
+resolveUserState(coalescedResult);
+assert.deepEqual(
+  await Promise.all([firstUserStateLoad, concurrentUserStateLoad]),
+  [coalescedResult, coalescedResult],
+  'Every coalesced caller must receive the same completed restoration result.',
+);
+assert.equal(coalescingState.userStatePromise, null, 'The completed in-flight restoration must be released.');
+assert.equal(coalescingState.userStateUserId, null, 'The completed restoration user marker must be released.');
+
+const welcomeMessages = [];
+let restoredDestinations = 0;
+const welcomeState = {
+  client: {
+    from(table) {
+      const query = {
+        select() { return query; },
+        eq() { return query; },
+        order() { return query; },
+        maybeSingle() {
+          return Promise.resolve({ data: { id: welcomeState.user.id, display_name: 'Esteban' } });
+        },
+        limit() {
+          return Promise.resolve({
+            data: table === 'terms_acceptances'
+              ? [{ accepted_at: '2026-08-13T00:00:00Z' }]
+              : [{ opted_in: false, changed_at: '2026-08-13T00:00:00Z' }],
+          });
+        },
+      };
+      return query;
+    },
+  },
+  user: { id: 'restored-user', user_metadata: {} },
+  session: { access_token: 'restored-access-token' },
+  profile: null,
+  marketingOptIn: false,
+  admin: null,
+  welcomedUserId: null,
+};
+const loadUserStateFor = vm.runInNewContext(
+  `(${extractNamedFunction(phase2, 'loadUserStateFor')})`,
+  {
+    state: welcomeState,
+    config: {
+      legal: { termsVersion: 'terms-test', privacyVersion: 'privacy-test' },
+      features: { adminDashboard: false },
+      workerUrl: 'https://worker.invalid',
+    },
+    global: {
+      toast(message, tone) {
+        welcomeMessages.push({ message, tone });
+      },
+    },
+    fetch: () => assert.fail('Admin fetch must remain disabled in this focused restoration harness.'),
+    syncAuthUi() {},
+    openTermsAcceptance() {
+      assert.fail('Accepted terms must not reopen the terms dialog.');
+    },
+    closeEntry() {},
+    setOverlay() {},
+    restoreAuthDestination() {
+      restoredDestinations += 1;
+    },
+  },
+);
+await loadUserStateFor('restored-user');
+await loadUserStateFor('restored-user');
+assert.deepEqual(
+  welcomeMessages,
+  [{ message: 'Welcome back, Esteban.', tone: 'ok' }],
+  'Repeated restoration for the same signed-in user must emit exactly one welcome toast.',
+);
+assert.equal(restoredDestinations, 2, 'Deduplicating the toast must not suppress destination restoration.');
 
 console.log('Durable authentication session checks passed.');

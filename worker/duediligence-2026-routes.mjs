@@ -1629,6 +1629,7 @@ export function createDD2026Handlers(deps) {
       const delivery = await sendExamRoomEmail(env, {
         recipient: quotation?.recipientEmail,
         subject: `Due Diligence Examination Room quotation \u2014 ${quotation?.examinationTitle || 'Examination'}`,
+        idempotencyKey: `exam-room-quotation-${input.requestKey}`,
         text: [
           `Hello ${quotation?.recipientName || 'Professor'},`,
           '',

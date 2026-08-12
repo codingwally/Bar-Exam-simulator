@@ -6,6 +6,19 @@ import {
 } from './exam-results-workbook.mjs';
 
 const MAX_PROFESSOR_GRADEBOOK_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const EXAM_ROOM_EMAIL_TYPES = new Set([
+  'professor_room_key',
+  'professor_grading_key',
+  'beadle_key',
+  'student_exam_code',
+  'professor_submission_notice',
+  'student_submission_receipt',
+  'exam_publication_replaced',
+  'submission_reopened',
+  'professor_release_summary',
+  'student_correction',
+  'student_result',
+]);
 
 const TEMPLATE_SPREADSHEET_ID = '1alXFADSsgSduVW07nOCGYa5zz26k387DeeEMF_y_fdg';
 const BACKUP_TABS = Object.freeze([
@@ -703,7 +716,14 @@ async function emailMessage(env, job) {
 }
 
 export async function deliverExamRoomEmail(env, job, fetchImpl = fetch) {
-  const mode = String(env.EXAMINATION_EMAIL_MODE || '').trim().toLowerCase();
+  if (!EXAM_ROOM_EMAIL_TYPES.has(String(job?.email_type || ''))) {
+    const error = new Error('Examination Room email type is not supported.');
+    error.safeCode = 'EMAIL_TYPE_UNSUPPORTED';
+    throw error;
+  }
+  const mode = String(
+    env.EXAMINATION_ROOM_EMAIL_MODE ?? env.EXAMINATION_EMAIL_MODE ?? '',
+  ).trim().toLowerCase();
   if (mode === 'suppressed') return { providerId: `suppressed:${job.id}` };
   const apiKey = String(env.RESEND_API_KEY || '').trim();
   const from = String(env.EXAMINATION_EMAIL_FROM || '').trim();

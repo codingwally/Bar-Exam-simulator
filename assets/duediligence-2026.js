@@ -46,6 +46,11 @@
       portalPromiseGeneration: null,
       portalRequestGeneration: 0,
       roomRequests: null,
+      roomRequestsLoadState: 'idle',
+      roomRequestsPromise: null,
+      roomRequestsPromiseUserId: null,
+      roomRequestsPromiseGeneration: null,
+      roomRequestsPromiseForce: false,
       section: 'entry',
       intentRole: null,
       entryExamId: '',
@@ -259,6 +264,11 @@
     state.exam.portalPromise = null;
     state.exam.portalPromiseUserId = null;
     state.exam.portalPromiseGeneration = null;
+    state.exam.roomRequestsPromise = null;
+    state.exam.roomRequestsPromiseUserId = null;
+    state.exam.roomRequestsPromiseGeneration = null;
+    state.exam.roomRequestsPromiseForce = false;
+    state.exam.roomRequestsLoadState = 'idle';
     if (clearData) {
       state.exam.portal = null;
       state.exam.roomRequests = null;
@@ -737,6 +747,7 @@
       if (!isCurrentExamPortalRequest(portalUserId, portalGeneration)) return false;
       state.exam.portal = portal;
       state.exam.roomRequests = requestPayload?.result || null;
+      state.exam.roomRequestsLoadState = requestPayload?.degraded ? 'degraded' : 'ready';
     } else {
       synchronizeExamPortalIdentity(null);
       state.exam.portal = null;
@@ -752,6 +763,49 @@
       .includes(String(error?.code || ''));
   }
 
+  function roomRequestsSnapshotIsValid(snapshot) {
+    return Boolean(snapshot)
+      && typeof snapshot === 'object'
+      && typeof snapshot.roles === 'object'
+      && typeof snapshot.identity === 'object'
+      && typeof snapshot.identity.email === 'string'
+      && snapshot.identity.email.trim().length > 0
+      && [
+        snapshot.professorRequests,
+        snapshot.beadleRequests,
+        snapshot.administratorRequests,
+        snapshot.unassignedRequests,
+      ].every(Array.isArray);
+  }
+
+  function isTransientRoomRequestsError(error) {
+    const status = Number(error?.status);
+    return isTransientTransportFailure(error)
+      || error?.code === 'EXAM_ROOM_UNAVAILABLE'
+      || status === 408
+      || status === 429
+      || status >= 500;
+  }
+
+  async function queryRoomRequestsWithSingleRetry() {
+    const query = async () => {
+      const payload = await api('/exam-room/query', { operation: 'room_requests' });
+      if (!roomRequestsSnapshotIsValid(payload?.result)) {
+        const error = new Error('The Examination Room request response was incomplete.');
+        error.code = 'REQUEST_FAILED';
+        error.status = 502;
+        throw error;
+      }
+      return payload;
+    };
+    try {
+      return await query();
+    } catch (error) {
+      if (isExamRoomAvailabilityError(error) || !isTransientRoomRequestsError(error)) throw error;
+      return query();
+    }
+  }
+
   async function loadInitialExamRoomPortal(userId, generation) {
     if (!isCurrentExamPortalRequest(userId, generation)) return null;
     if (state.exam.portalPromise
@@ -761,9 +815,9 @@
     }
     const requestPortal = () => Promise.all([
       api('/exam-room/query', { operation: 'portal' }),
-      api('/exam-room/query', { operation: 'room_requests' }).catch((error) => {
+      queryRoomRequestsWithSingleRetry().catch((error) => {
         if (isExamRoomAvailabilityError(error)) throw error;
-        return null;
+        return { result: state.exam.roomRequests, degraded: true };
       }),
     ]);
     const pending = (async () => {
@@ -908,7 +962,7 @@
   function examSection(portal) {
     if (state.exam.section === 'student') return `${examRoleGuide('student')}${studentSection(portal)}`;
     if (state.exam.section === 'professor') return `${examRoleGuide('professor')}${portal.roles?.professor ? professorSection(portal) : activationSection(portal)}`;
-    if (state.exam.section === 'beadle') return `${examRoleGuide('beadle')}${beadleSection(portal)}`;
+    if (state.exam.section === 'beadle') return `${examRoleGuide('beadle')}${roomRequestLoadStatus()}${beadleSection(portal)}`;
     if (state.exam.section === 'exam_administrator') return `${examRoleGuide('exam_administrator')}${examAdministratorSection()}`;
     return '<section class="dd26-card"><div class="dd26-empty">Choose Professor, Beadle, Student, or Exam Administrator.</div></section>';
   }
@@ -955,21 +1009,54 @@
   async function loadRoomRequests(force = false, lifecycle = captureExamPortalLifecycle()) {
     if (!isCurrentExamPortalLifecycle(lifecycle)) return null;
     if (state.exam.roomRequests && !force) return state.exam.roomRequests;
+    const pending = state.exam.roomRequestsPromise;
+    const pendingMatches = pending
+      && state.exam.roomRequestsPromiseUserId === lifecycle.userId
+      && state.exam.roomRequestsPromiseGeneration === lifecycle.generation;
+    if (pendingMatches) {
+      if (!force || state.exam.roomRequestsPromiseForce) return pending;
+      await pending.catch(() => null);
+      if (!isCurrentExamPortalLifecycle(lifecycle)) return null;
+      return loadRoomRequests(true, lifecycle);
+    }
+
+    const fallback = state.exam.roomRequests;
+    const request = (async () => {
+      state.exam.roomRequestsLoadState = 'loading';
+      try {
+        const payload = await queryRoomRequestsWithSingleRetry();
+        if (!isCurrentExamPortalLifecycle(lifecycle)) return null;
+        const roomRequests = payload.result;
+        state.exam.roomRequests = roomRequests;
+        state.exam.roomRequestsLoadState = 'ready';
+        return roomRequests;
+      } catch (error) {
+        if (!isCurrentExamPortalLifecycle(lifecycle)) return null;
+        if (isExamRoomAvailabilityError(error)) {
+          state.exam.roomRequestsLoadState = 'degraded';
+          throw error;
+        }
+        // Request history is optional to the existing-room workspace. Preserve
+        // the last safe snapshot without converting a failure into a false empty list or a global
+        // warning-toast storm; an explicit refresh can try again later.
+        state.exam.roomRequests = fallback;
+        state.exam.roomRequestsLoadState = 'degraded';
+        return fallback;
+      }
+    })();
+    state.exam.roomRequestsPromise = request;
+    state.exam.roomRequestsPromiseUserId = lifecycle.userId;
+    state.exam.roomRequestsPromiseGeneration = lifecycle.generation;
+    state.exam.roomRequestsPromiseForce = force;
     try {
-      const payload = await api('/exam-room/query', { operation: 'room_requests' });
-      if (!isCurrentExamPortalLifecycle(lifecycle)) return null;
-      const roomRequests = payload.result || {
-        roles: {}, professorRequests: [], beadleRequests: [],
-        administratorRequests: [], unassignedRequests: [],
-      };
-      state.exam.roomRequests = roomRequests;
-      return roomRequests;
-    } catch (error) {
-      if (isExamRoomAvailabilityError(error)) throw error;
-      if (!isCurrentExamPortalLifecycle(lifecycle)) return null;
-      state.exam.roomRequests = null;
-      global.toast?.('Room requests could not load right now. Existing Examination Rooms are still available.', 'warn');
-      return null;
+      return await request;
+    } finally {
+      if (state.exam.roomRequestsPromise === request) {
+        state.exam.roomRequestsPromise = null;
+        state.exam.roomRequestsPromiseUserId = null;
+        state.exam.roomRequestsPromiseGeneration = null;
+        state.exam.roomRequestsPromiseForce = false;
+      }
     }
   }
 
@@ -1038,12 +1125,31 @@
     return `<section class="dd26-card dd26-room-request-list"><div class="dd26-question-meta"><div><div class="dd26-label">Examination Room requests</div><h2>${escapeHtml(title)}</h2></div><span class="dd26-status">${rows.length}</span></div><div class="dd26-attention-list">${rows.map((request) => `<article class="dd26-room-request-card" data-dd26-room-request-card="${escapeHtml(request.requestId)}"><div class="dd26-room-request-heading"><div><strong>${escapeHtml(request.examinationTitle || 'Examination Room')}</strong><small>${escapeHtml(request.schoolName || '')}${request.courseSubject ? ` · ${escapeHtml(request.courseSubject)}` : ''}</small></div><span class="dd26-status" data-status="${escapeHtml(request.status)}">${escapeHtml(roomRequestStatusLabel(request.status))}</span></div><dl class="dd26-room-request-summary"><div><dt>Professor</dt><dd>${escapeHtml(request.professorName || '—')}</dd></div><div><dt>Schedule</dt><dd>${escapeHtml(request.examinationDate || '—')} ${escapeHtml(String(request.startTime || '').slice(0, 5))} ${escapeHtml(request.timeZone || '')}</dd></div><div><dt>Students</dt><dd>${escapeHtml(request.estimatedStudentCount || '—')}</dd></div><div><dt>Quotation</dt><dd>${escapeHtml(formatQuotation(request.quotationAmountCentavos, request.quotationCurrency))}</dd></div>${request.latestProofStatus ? `<div><dt>Payment proof</dt><dd>${escapeHtml(roomRequestStatusLabel(request.latestProofStatus === 'verified' ? 'payment_verified' : request.latestProofStatus === 'rejected' ? 'awaiting_proof' : request.latestProofStatus === 'under_review' ? 'payment_under_review' : 'proof_submitted'))}</dd></div>` : ''}</dl>${request.quotationNotes ? `<p class="dd26-help">${escapeHtml(request.quotationNotes)}</p>` : ''}<div class="dd26-actions">${roomRequestActions(request, mode)}</div></article>`).join('')}</div></section>`;
   }
 
+  async function refreshRoomRequestsAfterMutation(lifecycle = captureExamPortalLifecycle()) {
+    if (!lifecycle) return false;
+    try {
+      await loadRoomRequestsWithAvailabilityRecovery(true, lifecycle);
+      return isCurrentExamPortalLifecycle(lifecycle)
+        && state.exam.roomRequestsLoadState === 'ready';
+    } catch {
+      if (isCurrentExamPortalLifecycle(lifecycle)) state.exam.roomRequestsLoadState = 'degraded';
+      return false;
+    }
+  }
+
+  function roomRequestLoadStatus() {
+    if (state.exam.roomRequestsLoadState !== 'degraded') return '';
+    const hasSnapshot = roomRequestsSnapshotIsValid(state.exam.roomRequests);
+    return `<div class="dd26-notice" data-dd26-room-request-load-status role="status" aria-live="polite"><strong>${hasSnapshot ? 'Showing the last available request status.' : 'Request status is temporarily unavailable.'}</strong> ${hasSnapshot ? 'Your saved request list remains visible.' : 'Existing Examination Rooms remain available, and you can still submit a new room request.'}<div class="dd26-actions"><button class="dd26-button" data-dd26-refresh-room-requests type="button">Refresh request status</button></div></div>`;
+  }
+
   function examAdministratorSection() {
     const snapshot = state.exam.roomRequests;
-    if (!snapshot) return '<section class="dd26-card"><div class="dd26-empty">Assigned room requests could not load. Return to the role hub and try again.</div></section>';
+    const header = '<section class="dd26-card"><div class="dd26-label">Exam Administrator</div><h2>Assigned Examination Rooms only</h2><p>This workspace is separate from Due Diligence platform administration. It shows only requests assigned to this account and does not provide access to users, subscriptions, secrets, or unrelated rooms.</p><div class="dd26-actions"><button class="dd26-button" data-dd26-refresh-room-requests type="button">Refresh requests</button></div></section>';
+    if (!roomRequestsSnapshotIsValid(snapshot)) return `${header}${roomRequestLoadStatus()}`;
     const assigned = snapshot.administratorRequests || [];
     const unassigned = snapshot.roles?.canClaimRequests ? snapshot.unassignedRequests || [] : [];
-    return `<section class="dd26-card"><div class="dd26-label">Exam Administrator</div><h2>Assigned Examination Rooms only</h2><p>This workspace is separate from Due Diligence platform administration. It shows only requests assigned to this account and does not provide access to users, subscriptions, secrets, or unrelated rooms.</p><div class="dd26-actions"><button class="dd26-button" data-dd26-refresh-room-requests type="button">Refresh requests</button></div></section>${roomRequestList(assigned, 'administrator', 'Requests assigned to you')}${roomRequestList(unassigned, 'unassigned', 'Unassigned requests available to claim')}${!assigned.length && !unassigned.length ? '<section class="dd26-card"><div class="dd26-empty">No Examination Room request is assigned to this account.</div></section>' : ''}`;
+    return `${header}${roomRequestLoadStatus()}${roomRequestList(assigned, 'administrator', 'Requests assigned to you')}${roomRequestList(unassigned, 'unassigned', 'Unassigned requests available to claim')}${!assigned.length && !unassigned.length ? '<section class="dd26-card"><div class="dd26-empty">No Examination Room request is assigned to this account.</div></section>' : ''}`;
   }
 
   function localDateOnly(daysAhead = 1) {
@@ -1055,7 +1161,15 @@
   }
 
   function openRoomRequestForm() {
-    const identity = state.exam.roomRequests?.identity || {};
+    const sessionUser = (global.DueDiligencePhase4 || global.DueDiligencePhase2)?.getSession?.()?.user || {};
+    const sessionEmail = String(sessionUser.email || '').trim();
+    const metadata = sessionUser.user_metadata || {};
+    const identity = (roomRequestsSnapshotIsValid(state.exam.roomRequests)
+      ? state.exam.roomRequests.identity
+      : null) || {
+      email: sessionEmail,
+      name: String(metadata.full_name || metadata.name || sessionEmail.split('@')[0] || '').trim(),
+    };
     openDialog(`<div class="dd26-label">Professor request</div><h2>Request an Examination Room</h2><p>Tell Due Diligence what your class needs. Essay examinations are available now; other formats will appear only after their complete student and grading flows are ready.</p><div class="dd26-form-grid"><label class="dd26-field"><span>Professor name</span><input class="dd26-input" id="dd26-request-professor-name" maxlength="200" value="${escapeHtml(identity.name || '')}" required></label><label class="dd26-field"><span>Signed-in Professor email</span><input class="dd26-input" value="${escapeHtml(identity.email || '')}" readonly aria-readonly="true"></label><label class="dd26-field"><span>School</span><input class="dd26-input" id="dd26-request-school" maxlength="300" required></label><label class="dd26-field"><span>Course or subject</span><input class="dd26-input" id="dd26-request-course" maxlength="200" required></label><label class="dd26-field wide"><span>Examination title</span><input class="dd26-input" id="dd26-request-title" maxlength="200" required></label><label class="dd26-field"><span>Examination date</span><input class="dd26-input" id="dd26-request-date" type="date" min="${localDateOnly(0)}" value="${localDateOnly(1)}" required></label><label class="dd26-field"><span>Start time</span><input class="dd26-input" id="dd26-request-time" type="time" value="09:00" required></label><label class="dd26-field"><span>Time zone</span><select class="dd26-select" id="dd26-request-zone"><option value="Asia/Manila" selected>Philippine Time (Asia/Manila)</option></select></label><label class="dd26-field"><span>Expected duration (minutes)</span><input class="dd26-input" id="dd26-request-duration" type="number" min="15" max="480" step="5" value="120" required></label><label class="dd26-field"><span>Estimated students</span><input class="dd26-input" id="dd26-request-students" type="number" min="1" max="500" value="40" required></label><label class="dd26-field"><span>Examination type</span><select class="dd26-select" id="dd26-request-type"><option value="essay" selected>Essay</option><option disabled>Multiple choice — not yet available</option><option disabled>Essay and multiple choice — not yet available</option><option disabled>Short answer or enumeration — not yet available</option><option disabled>Mixed assessment — not yet available</option></select></label><label class="dd26-field"><span>Send quotation to</span><select class="dd26-select" id="dd26-request-recipient"><option value="professor" selected>Me, the Professor</option><option value="beadle">The Beadle</option></select></label><div class="dd26-field wide dd26-request-beadle-fields" id="dd26-request-beadle-fields" hidden><div class="dd26-form-grid"><label class="dd26-field"><span>Beadle name</span><input class="dd26-input" id="dd26-request-beadle-name" maxlength="200"></label><label class="dd26-field"><span>Beadle email</span><input class="dd26-input" id="dd26-request-beadle-email" type="email" maxlength="254" autocomplete="email"></label></div></div><label class="dd26-field wide"><span>Useful notes (optional)</span><textarea class="dd26-textarea compact" id="dd26-request-notes" maxlength="3000"></textarea></label></div><div class="dd26-error" id="dd26-request-errors" role="alert" hidden></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-submit-room-request" data-request-key="${escapeHtml(randomKey('room_request'))}" type="button">Submit request</button><button class="dd26-button" data-dd26-close-dialog type="button">Back</button></div>`);
     const recipient = document.getElementById('dd26-request-recipient');
     const updateRecipient = () => {
@@ -1104,7 +1218,7 @@
         notes: value('dd26-request-notes', false),
         requestKey: button.dataset.requestKey,
       });
-      await loadRoomRequests(true);
+      await refreshRoomRequestsAfterMutation();
       closeDialog();
       renderExamRoom();
       global.toast?.('Your Examination Room request was submitted.', 'ok');
@@ -1162,7 +1276,7 @@
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || payload?.ok !== true) throw new Error(payload?.error?.message || 'The payment proof could not be uploaded.');
-      await loadRoomRequests(true);
+      await refreshRoomRequestsAfterMutation();
       closeDialog();
       renderExamRoom();
       global.toast?.('Payment proof submitted for private review.', 'ok');
@@ -1178,7 +1292,7 @@
     if (button) { button.disabled = true; button.textContent = 'Assigning…'; }
     try {
       await command({ operation: 'claim_room_request', requestId, requestKey: randomKey('room_claim') });
-      await loadRoomRequests(true);
+      await refreshRoomRequestsAfterMutation();
       renderExamRoom();
       global.toast?.('The request is now assigned to this Exam Administrator account.', 'ok');
     } catch (error) {
@@ -1211,7 +1325,7 @@
         amountCentavos: Math.round(amount * 100), notes: value('dd26-room-quote-notes', false),
         requestKey: button.dataset.requestKey,
       });
-      await loadRoomRequests(true);
+      await refreshRoomRequestsAfterMutation();
       closeDialog();
       renderExamRoom();
       global.toast?.('Quotation prepared. Review it before sending.', 'ok');
@@ -1227,7 +1341,7 @@
     if (button) { button.disabled = true; button.textContent = 'Sending…'; }
     try {
       const result = await command({ operation: 'send_room_quotation', requestId, requestKey: randomKey('quote_delivery') });
-      await loadRoomRequests(true);
+      await refreshRoomRequestsAfterMutation();
       renderExamRoom();
       global.toast?.(result.deliveryStatus === 'sent' ? 'Quotation sent.' : 'Quotation saved. Email delivery is currently queued or unavailable.', result.deliveryStatus === 'sent' ? 'ok' : 'warn');
     } catch (error) {
@@ -1257,7 +1371,7 @@
         operation: 'generate_provisional_room_key', requestId: button.dataset.requestId,
         expiresAt: expiresAt.toISOString(), requestKey: button.dataset.requestKey,
       });
-      await loadRoomRequests(true);
+      await refreshRoomRequestsAfterMutation();
       showOneTimeSecret('Provisional Professor key', result.oneTimeProfessorKey, 'Give this key only to the named Professor. It is shown once and does not open student access before payment verification.');
     } catch (error) {
       button.disabled = false;
@@ -1291,7 +1405,7 @@
         proofId: button.dataset.proofId, decision, reason,
         requestKey: randomKey('payment_review'),
       });
-      await loadRoomRequests(true);
+      await refreshRoomRequestsAfterMutation();
       closeDialog();
       renderExamRoom();
       global.toast?.(decision === 'verified' ? 'Payment verified. Student access may now be prepared.' : 'Payment proof rejected. A new proof may be submitted.', decision === 'verified' ? 'ok' : 'warn');
@@ -1335,7 +1449,7 @@
 
   function activationSection(portal) {
     const requests = state.exam.roomRequests?.professorRequests || [];
-    return `<section class="dd26-card dd26-room-request-hero"><div class="dd26-label">Professor access</div><h2>Request or open an Examination Room</h2><p>Submit a short request for a new room. After an Exam Administrator prepares the approved quotation, a provisional one-time key can let you begin draft setup while payment is reviewed.</p><div class="dd26-actions"><button class="dd26-button primary" id="dd26-request-room" type="button">Request an Examination Room</button><button class="dd26-button" data-dd26-refresh-room-requests type="button">Refresh request status</button></div></section>${roomRequestList(requests, 'professor', 'Your room requests')}<section class="dd26-card"><details class="dd26-room-setup" ${requests.length ? '' : 'open'}><summary>Already have a Professor key?</summary><p>The one-time key works only with the exact signed-in Professor email and expires at the time shown by Due Diligence.</p><label class="dd26-field"><span>Professor invitation key</span><input class="dd26-input" id="dd26-activation-key" type="password" autocomplete="one-time-code"></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-redeem-activation" type="button">Open Examination Room</button></div><div class="dd26-notice"><strong>Student access remains protected.</strong> A provisional Professor key can open draft setup, but the Beadle cannot create the student exam code until payment is verified.</div></details></section>`;
+    return `<section class="dd26-card dd26-room-request-hero"><div class="dd26-label">Professor access</div><h2>Request or open an Examination Room</h2><p>Submit a short request for a new room. After an Exam Administrator prepares the approved quotation, a provisional one-time key can let you begin draft setup while payment is reviewed.</p><div class="dd26-actions"><button class="dd26-button primary" id="dd26-request-room" type="button">Request an Examination Room</button><button class="dd26-button" data-dd26-refresh-room-requests type="button">Refresh request status</button></div></section>${roomRequestLoadStatus()}${roomRequestList(requests, 'professor', 'Your room requests')}<section class="dd26-card"><details class="dd26-room-setup" ${requests.length ? '' : 'open'}><summary>Already have a Professor key?</summary><p>The one-time key works only with the exact signed-in Professor email and expires at the time shown by Due Diligence.</p><label class="dd26-field"><span>Professor invitation key</span><input class="dd26-input" id="dd26-activation-key" type="password" autocomplete="one-time-code"></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-redeem-activation" type="button">Open Examination Room</button></div><div class="dd26-notice"><strong>Student access remains protected.</strong> A provisional Professor key can open draft setup, but the Beadle cannot create the student exam code before payment verification.</div></details></section>`;
   }
 
   function beadleSection(portal) {
@@ -1352,6 +1466,7 @@
     const activeClass = classes.find((entry) => entry.classroomId === state.exam.activeClassroomId) || classes[0] || null;
     if (activeClass) state.exam.activeClassroomId = activeClass.classroomId;
     const requests = state.exam.roomRequests?.professorRequests || [];
+    const requestStatus = roomRequestLoadStatus();
     const activeExam = activeClass?.exams?.[0] || null;
     const status = activeExam?.status || (activeClass ? 'Room ready' : 'No room');
     const workspace = classes.length ? `<section class="dd26-card dd26-professor-focus"><div class="dd26-question-meta"><div><div class="dd26-label">Professor workspace</div><h2>${escapeHtml(activeClass?.title || 'Your Examination Room')}</h2></div><span class="dd26-status">${escapeHtml(status)}</span></div><div class="dd26-toolbar">${classes.map((entry) => `<button class="dd26-chip${entry.classroomId === activeClass?.classroomId ? ' is-active' : ''}" type="button" data-dd26-class="${escapeHtml(entry.classroomId)}" ${entry.classroomId === activeClass?.classroomId ? 'aria-pressed="true"' : 'aria-pressed="false"'}>${escapeHtml(entry.title)}</button>`).join('')}</div>${activeClass ? professorClass(activeClass) : ''}</section>` : '<section class="dd26-card"><div class="dd26-empty">No Examination Room is open yet. Request a room or enter a one-time Professor key below.</div></section>';
@@ -1359,7 +1474,7 @@
       ? `<section class="dd26-card"><div class="dd26-question-meta"><div><div class="dd26-label">Permanent Professor record</div><h2>Official grade archive</h2></div><span class="dd26-status">${escapeHtml(archivedProfessorExams.length)} preserved</span></div><p>Past exams removed from the workspace remain available here. Their submissions, saved grades, comments, result delivery status, analytics, and workbook exports are never deleted.</p><div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Examination</th><th>Room</th><th>Status</th><th>Action</th></tr></thead><tbody>${archivedProfessorExams.map((exam) => `<tr><td><strong>${escapeHtml(exam.title || 'Past examination')}</strong><br><small>${escapeHtml(formatDate(exam.sealedAt || exam.hardClosesAt))}</small></td><td>${escapeHtml(exam.classroomTitle || 'Examination Room')}</td><td><span class="dd26-status">${escapeHtml(exam.status || 'preserved')}</span></td><td><button class="dd26-button primary" data-dd26-results-dashboard="${escapeHtml(exam.examId)}" type="button">Open grade record</button></td></tr>`).join('')}</tbody></table></div></section>`
       : '';
     const setup = `<section class="dd26-card"><details class="dd26-room-setup" ${classes.length ? '' : 'open'}><summary>Room setup and access</summary><p>Use a new one-time key only when opening another Examination Room.</p><label class="dd26-field"><span>Professor invitation key</span><input class="dd26-input" id="dd26-activation-key" type="password" autocomplete="one-time-code"><small class="dd26-help">The key is tied to this signed-in Professor account and can be used once.</small></label><div class="dd26-actions"><button class="dd26-button" id="dd26-redeem-activation" type="button">Open another room</button><button class="dd26-button primary" id="dd26-request-room" type="button">Request another Examination Room</button><button class="dd26-button" data-dd26-refresh-room-requests type="button">Refresh request status</button></div></details></section>`;
-    return `${workspace}${officialRecords}${setup}${roomRequestList(requests, 'professor', 'Your room requests')}`;
+    return `${workspace}${officialRecords}${requestStatus}${setup}${roomRequestList(requests, 'professor', 'Your room requests')}`;
   }
 
   function professorClass(classroom) {
@@ -1562,10 +1677,32 @@
     document.getElementById('dd26-redeem-beadle')?.addEventListener('click', redeemBeadleInvitation);
     document.getElementById('dd26-request-room')?.addEventListener('click', openRoomRequestForm);
     document.querySelectorAll('[data-dd26-refresh-room-requests]').forEach((button) => button.addEventListener('click', async () => {
+      const lifecycle = captureExamPortalLifecycle();
+      const originalLabel = button.textContent;
       button.disabled = true;
       button.textContent = 'Refreshing…';
-      await loadRoomRequests(true);
-      renderExamRoom();
+      try {
+        await loadRoomRequests(true, lifecycle);
+        if (!isCurrentExamPortalLifecycle(lifecycle)) return;
+        if (state.exam.roomRequestsLoadState === 'ready') {
+          global.toast?.('Request status is up to date.', 'ok');
+        }
+        renderExamRoom();
+      } catch (error) {
+        if (!isCurrentExamPortalLifecycle(lifecycle)) return;
+        state.exam.roomRequestsLoadState = 'degraded';
+        global.toast?.(
+          isExamRoomAvailabilityError(error)
+            ? 'Examination Room request status is temporarily unavailable.'
+            : 'Request status could not refresh. Your existing Examination Rooms remain available.',
+          'warn',
+        );
+      } finally {
+        if (button.isConnected) {
+          button.disabled = false;
+          button.textContent = originalLabel;
+        }
+      }
     }));
     document.querySelectorAll('[data-dd26-upload-room-proof]').forEach((button) => button.addEventListener('click', () => openRoomPaymentProof(button.dataset.dd26UploadRoomProof)));
     document.querySelectorAll('[data-dd26-copy-quotation]').forEach((button) => button.addEventListener('click', () => copyRoomQuotation(button.dataset.dd26CopyQuotation)));

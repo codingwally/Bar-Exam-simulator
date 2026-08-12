@@ -305,7 +305,7 @@ assert.match(frontend, /Allow entry until the exam ends[\s\S]*Your current Profe
   'rescheduling must expose an explicit until-end choice without overwriting an earlier cutoff');
 assert.match(frontend, /entryCutoffReviewHtml\(opensAt, hardClosesAt, lateAdmissionMinutes\)/,
   'final publication review must prominently state the exact student-entry cutoff');
-assert.match(html, /duediligence-2026\.js\?v=room-availability-20260813-1/,
+assert.match(html, /duediligence-2026\.js\?v=room-request-email-hotfix-20260813-1/,
   'the corrected student preflight must use a fresh production cache key');
 assert.match(frontend, /None of them replaces student sign-in and the class-list check/);
 assert.match(frontend, /publicationAttempt\.studentKey = null/,
@@ -767,7 +767,7 @@ assert.match(css, /\.dd26-reschedule-comparison>div\{grid-template-columns:1fr;g
 assert.match(html, /assets\/examination-room-2-store\.js/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
 assert.match(html, /duediligence-2026\.css\?v=class-results-20260812-1/);
-assert.match(html, /duediligence-2026\.js\?v=room-availability-20260813-1/);
+assert.match(html, /duediligence-2026\.js\?v=room-request-email-hotfix-20260813-1/);
 
 // Execute the pure disclosure gate: malformed, partial, and stale replacement
 // results must never unlock one-time secret rendering.

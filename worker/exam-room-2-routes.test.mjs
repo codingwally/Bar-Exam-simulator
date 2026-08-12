@@ -256,6 +256,7 @@ test('quotation delivery and provisional Professor keys keep secrets out of stor
   assert.equal(quotationCalls.length, 1);
   assert.equal(quotationCalls[0].recipient, 'professor@example.edu');
   assert.match(quotationCalls[0].subject, /quotation \u2014 Labor Law Midterm/);
+  assert.equal(quotationCalls[0].idempotencyKey, `exam-room-quotation-${requestKey}`);
 
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString();
   const generated = await room.handlers.examCommand(request({

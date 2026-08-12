@@ -163,12 +163,14 @@ assert.match(worker, /RESEND_API_KEY/);
 assert.match(worker, /questions\[0\]/, 'AI assessment must use bounded one-question batches');
 assert.doesNotMatch(worker, /console\.(?:log|error)\([^)]*(?:SERVICE_ROLE|API_KEY|RESEND)/);
 assert.match(productionWorkerConfig, /EXAMINATION_EMAIL_MODE\s*=\s*"enabled"/);
+assert.match(productionWorkerConfig, /EXAMINATION_ROOM_EMAIL_MODE\s*=\s*"enabled"/);
 assert.match(
   productionWorkerConfig,
   /EXAMINATION_EMAIL_FROM\s*=\s*"Due Diligence Examinations <examinations@duediligence\.ph>"/,
 );
 assert.doesNotMatch(productionWorkerConfig, /EXAMINATION_EMAIL_TEST_RECIPIENT/);
 assert.match(stagingWorkerConfig, /EXAMINATION_EMAIL_MODE\s*=\s*"suppressed"/);
+assert.match(stagingWorkerConfig, /EXAMINATION_ROOM_EMAIL_MODE\s*=\s*"suppressed"/);
 
 const tables = [
   'examination_questions',

@@ -6,12 +6,21 @@ import {
   syncGoogleBackupEvent,
   verifyResendWebhookRequest,
 } from './exam-room-delivery.mjs';
+import { encryptStudentExamCode } from './exam-room-student-code-envelope.mjs';
 
 function response(body, status = 200) {
   return new Response(body == null ? null : JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+function examinationEmailEnv(mode = 'enabled') {
+  return {
+    EXAMINATION_EMAIL_MODE: mode,
+    RESEND_API_KEY: 'server-secret',
+    EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
+  };
 }
 
 async function signedWebhookRequest(event, {
@@ -440,16 +449,145 @@ test('auto-submit failure is visible without blocking independent delivery queue
   assert.ok(calls.includes('exam_room_claim_email_batch'));
 });
 
-test('suppressed staging email completes without provider traffic', async () => {
+test('legacy suppressed Examination Room mode remains zero-provider-traffic when override is missing', async () => {
   let fetchCount = 0;
-  const result = await deliverExamRoomEmail({ EXAMINATION_EMAIL_MODE: 'suppressed' }, {
-    id: 'job-1', email_type: 'student_result', recipient_email: 'student@example.test', payload: {},
-  }, async () => { fetchCount += 1; return response({}); });
-  assert.equal(result.providerId, 'suppressed:job-1');
+  const result = await deliverExamRoomEmail(examinationEmailEnv('suppressed'), {
+    id: 'job-legacy-suppressed',
+    email_type: 'student_result',
+    recipient_email: 'student@example.test',
+    payload: {},
+  }, async () => {
+    fetchCount += 1;
+    return response({ id: 'must-not-send' });
+  });
+  assert.equal(result.providerId, 'suppressed:job-legacy-suppressed');
   assert.equal(fetchCount, 0);
 });
 
-test('enabled email uses one idempotent Resend request and returns only provider id', async () => {
+test('explicit room suppressed mode blocks provider traffic even when legacy mode is enabled', async () => {
+  let fetchCount = 0;
+  const result = await deliverExamRoomEmail({
+    ...examinationEmailEnv('enabled'),
+    EXAMINATION_ROOM_EMAIL_MODE: 'suppressed',
+  }, {
+    id: 'job-room-suppressed',
+    email_type: 'student_result',
+    recipient_email: 'student@example.test',
+    payload: {},
+  }, async () => {
+    fetchCount += 1;
+    return response({ id: 'must-not-send' });
+  });
+  assert.equal(result.providerId, 'suppressed:job-room-suppressed');
+  assert.equal(fetchCount, 0);
+});
+
+test('unknown Examination Room email types fail closed before provider traffic', async () => {
+  let fetchCount = 0;
+  await assert.rejects(
+    deliverExamRoomEmail({
+      ...examinationEmailEnv('suppressed'),
+      EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+    }, {
+      id: 'job-unknown',
+      email_type: 'future_unreviewed_email',
+      recipient_email: 'student@example.test',
+      payload: {},
+    }, async () => {
+      fetchCount += 1;
+      return response({ id: 'must-not-send' });
+    }),
+    (error) => error?.safeCode === 'EMAIL_TYPE_UNSUPPORTED',
+  );
+  assert.equal(fetchCount, 0);
+});
+
+test('an explicitly blank room mode fails closed instead of falling back to legacy enabled mode', async () => {
+  let fetchCount = 0;
+  await assert.rejects(
+    deliverExamRoomEmail({
+      ...examinationEmailEnv('enabled'),
+      EXAMINATION_ROOM_EMAIL_MODE: '',
+    }, {
+      id: 'job-room-blank',
+      email_type: 'student_result',
+      recipient_email: 'student@example.test',
+      payload: {},
+    }, async () => {
+      fetchCount += 1;
+      return response({ id: 'must-not-send' });
+    }),
+    (error) => error?.safeCode === 'EMAIL_NOT_CONFIGURED',
+  );
+  assert.equal(fetchCount, 0);
+});
+
+test('room enabled override delivers every Examination Room email type while unrelated modes are suppressed', async () => {
+  const studentCode = 'ExamRoomCode-2026';
+  const tokenHash = Buffer.from(await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(studentCode),
+  )).toString('hex');
+  const encryptionKey = Buffer.from(
+    Uint8Array.from({ length: 32 }, (_, index) => index + 1),
+  ).toString('base64url');
+  const env = {
+    ...examinationEmailEnv('suppressed'),
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+    ADMIN_DIRECTORY_EMAIL_MODE: 'suppressed',
+    SUPPORT_NOTIFICATION_EMAIL_MODE: 'suppressed',
+    SIGN_IN_NOTIFICATION_EMAIL_MODE: 'suppressed',
+    EXAM_ROOM_STUDENT_CODE_ACTIVE_KEY_ID: 'v1',
+    EXAM_ROOM_STUDENT_CODE_KEY_V1: encryptionKey,
+  };
+  const credentialEnvelope = {
+    examId: context.examPublicId,
+    tokenHash,
+    ...await encryptStudentExamCode(env, {
+      examId: context.examPublicId,
+      tokenHash,
+      studentKey: studentCode,
+    }),
+  };
+  const credentialPayload = {
+    examId: context.examPublicId,
+    title: context.title,
+    credentialEnvelope,
+  };
+  const cases = [
+    ['professor_room_key', credentialPayload],
+    ['professor_grading_key', credentialPayload],
+    ['beadle_key', credentialPayload],
+    ['student_exam_code', { ...credentialPayload, studentName: 'Student' }],
+    ['professor_submission_notice', { examId: context.examPublicId, title: context.title }],
+    ['student_submission_receipt', { title: context.title, answers: [] }],
+    ['exam_publication_replaced', { examId: context.examPublicId, title: context.title, publicationNumber: 2 }],
+    ['submission_reopened', { examId: context.examPublicId, title: context.title, generation: 2 }],
+    ['professor_release_summary', { examId: context.examPublicId, title: context.title }],
+    ['student_correction', { examId: context.examPublicId, title: context.title }],
+    ['student_result', { examId: context.examPublicId, title: context.title, grades: [] }],
+  ];
+  let fetchCount = 0;
+  for (const [emailType, payload] of cases) {
+    const id = `job-${emailType.replaceAll('_', '-')}`;
+    const result = await deliverExamRoomEmail(env, {
+      id,
+      email_type: emailType,
+      recipient_email: 'recipient@example.test',
+      payload,
+    }, async (url, options) => {
+      fetchCount += 1;
+      assert.equal(String(url), 'https://api.resend.com/emails');
+      assert.equal(options.headers['Idempotency-Key'], `exam-room-${id}`);
+      assert.deepEqual(JSON.parse(options.body).to, ['recipient@example.test']);
+      return response({ id: `resend-${fetchCount}` });
+    });
+    assert.deepEqual(result, { providerId: `resend-${fetchCount}` });
+  }
+  assert.equal(fetchCount, cases.length);
+});
+
+test('missing room override preserves legacy enabled delivery and idempotency behavior', async () => {
   let captured;
   const result = await deliverExamRoomEmail({
     EXAMINATION_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'server-secret',

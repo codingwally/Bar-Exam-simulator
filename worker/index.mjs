@@ -1424,13 +1424,19 @@ async function deleteExamRoomSource(env, objectPath) {
   }
 }
 
-function examinationEmailMode(env) {
-  const mode = String(env.EXAMINATION_EMAIL_MODE || '').trim().toLowerCase();
+export function examinationEmailMode(env, examRoom = false) {
+  const configured = examRoom
+    ? (env.EXAMINATION_ROOM_EMAIL_MODE ?? env.EXAMINATION_EMAIL_MODE)
+    : env.EXAMINATION_EMAIL_MODE;
+  const mode = String(configured || '').trim().toLowerCase();
   return ['suppressed', 'enabled'].includes(mode) ? mode : 'not_configured';
 }
 
-async function sendExaminationEmail(env, { recipient, subject, text }) {
-  const mode = examinationEmailMode(env);
+export async function sendExaminationEmail(
+  env,
+  { recipient, subject, text, examRoom = false, idempotencyKey = null },
+) {
+  const mode = examinationEmailMode(env, examRoom);
   if (mode === 'suppressed') return { status: 'suppressed', providerId: null };
   if (
     mode !== 'enabled'
@@ -1441,11 +1447,15 @@ async function sendExaminationEmail(env, { recipient, subject, text }) {
   }
   const target = String(env.EXAMINATION_EMAIL_TEST_RECIPIENT || recipient || '').trim();
   if (!target) return { status: 'failed', safeErrorCode: 'recipient_missing' };
+  const safeIdempotencyKey = /^[A-Za-z0-9._:-]{1,180}$/.test(String(idempotencyKey || ''))
+    ? String(idempotencyKey)
+    : null;
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
       'Content-Type': 'application/json',
+      ...(safeIdempotencyKey ? { 'Idempotency-Key': safeIdempotencyKey } : {}),
     },
     body: JSON.stringify({
       from: env.EXAMINATION_EMAIL_FROM,
@@ -5343,7 +5353,10 @@ const dd2026Handlers = createDD2026Handlers({
   requireAdministrator,
   requireAuthenticatedUser,
   resolveVerdictQuestion,
-  sendExamRoomEmail: sendExaminationEmail,
+  sendExamRoomEmail: (env, message) => sendExaminationEmail(env, {
+    ...message,
+    examRoom: true,
+  }),
   signExamRoomPaymentProof: signedPrivateProofUrl,
   structuredGemini: callGeminiStructured,
   uploadExamRoomPaymentProof: uploadPrivateProof,

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import worker, { EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS } from './index.mjs';
+import worker, {
+  EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS,
+  examinationEmailMode,
+  sendExaminationEmail,
+} from './index.mjs';
 import {
   RUBRIC_VERSION,
   applyDeterministicScoreCap,
@@ -61,6 +65,63 @@ async function signedDeliveryWebhook(event, {
     }),
   };
 }
+
+test('Examination Room email uses its explicit mode without weakening general suppression', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (_url, options) => {
+    requests.push(options);
+    return new Response(JSON.stringify({ id: 'resend-room-1' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  const baseEnv = {
+    EXAMINATION_EMAIL_MODE: 'suppressed',
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+    EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
+    RESEND_API_KEY: 'test-only-secret',
+  };
+  try {
+    assert.equal(examinationEmailMode(baseEnv), 'suppressed');
+    assert.equal(examinationEmailMode(baseEnv, true), 'enabled');
+
+    const general = await sendExaminationEmail(baseEnv, {
+      recipient: 'student@example.test', subject: 'General', text: 'General message',
+    });
+    assert.equal(general.status, 'suppressed');
+    assert.equal(requests.length, 0, 'The general pause must remain effective.');
+
+    const room = await sendExaminationEmail(baseEnv, {
+      recipient: 'student@example.test',
+      subject: 'Examination Room',
+      text: 'Room message',
+      examRoom: true,
+      idempotencyKey: 'exam-room-test-1',
+    });
+    assert.equal(room.status, 'sent');
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].headers['Idempotency-Key'], 'exam-room-test-1');
+
+    const explicitlyPausedRoom = await sendExaminationEmail({
+      ...baseEnv,
+      EXAMINATION_EMAIL_MODE: 'enabled',
+      EXAMINATION_ROOM_EMAIL_MODE: 'suppressed',
+    }, {
+      recipient: 'student@example.test', subject: 'Paused room', text: 'Never sent', examRoom: true,
+    });
+    assert.equal(explicitlyPausedRoom.status, 'suppressed');
+    assert.equal(requests.length, 1, 'An explicit Examination Room suppression must never send.');
+
+    assert.equal(
+      examinationEmailMode({ EXAMINATION_EMAIL_MODE: 'enabled' }, true),
+      'enabled',
+      'Missing room-specific configuration must preserve the legacy mode.',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('signed Resend webhook bypasses browser Origin but persists only a verified delivery event', async () => {
   const originalNow = Date.now;

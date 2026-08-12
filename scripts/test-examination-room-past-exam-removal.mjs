@@ -83,6 +83,6 @@ assert.match(dialogShell, /back\.textContent = 'Back'/);
 assert.match(css, /\.dd26-table-actions\{margin-top:0;gap:8px;\}/);
 
 assert.match(html, /duediligence-2026\.css\?v=class-results-20260812-1/);
-assert.match(html, /duediligence-2026\.js\?v=room-availability-20260813-1/);
+assert.match(html, /duediligence-2026\.js\?v=room-request-email-hotfix-20260813-1/);
 
 console.log('Examination Room past-exam removal contracts passed.');

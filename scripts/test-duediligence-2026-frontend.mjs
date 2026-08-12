@@ -342,6 +342,15 @@ assert.equal(identityState.exam.portal, null);
 let authenticatedPortalUserId = 'user-a';
 let portalPageActive = true;
 let portalRequests = [];
+const validRoomSnapshot = (overrides = {}) => ({
+  identity: { name: 'User A', email: 'user-a@example.test' },
+  roles: {},
+  professorRequests: [],
+  beadleRequests: [],
+  administratorRequests: [],
+  unassignedRequests: [],
+  ...overrides,
+});
 const portalState = {
   view: 'exam_room',
   sessionUserId: 'user-a',
@@ -351,6 +360,12 @@ const portalState = {
     portalPromiseUserId: null,
     portalPromiseGeneration: null,
     portalRequestGeneration: 1,
+    roomRequests: null,
+    roomRequestsLoadState: 'idle',
+    roomRequestsPromise: null,
+    roomRequestsPromiseUserId: null,
+    roomRequestsPromiseGeneration: null,
+    roomRequestsPromiseForce: false,
   },
 };
 const portalContext = {
@@ -366,6 +381,9 @@ const portalContext = {
   },
   config: { features: { examinationRoom2: true } },
   isExamRoomAvailabilityError: (error) => ['EXAMINATION_ROOM_DISABLED', 'EXAMINATION_ROOM_2_DISABLED'].includes(error?.code),
+  isTransientTransportFailure: (error) => error instanceof TypeError
+    || (!error?.code && !error?.status)
+    || (error?.code === 'REQUEST_FAILED' && (!error?.status || Number(error.status) >= 500)),
   features: async () => ({
     flags: { EXAMINATION_ROOM_ENABLED: true, EXAMINATION_ROOM_2_ENABLED: true },
   }),
@@ -384,15 +402,38 @@ portalContext.examRoomFeaturesEnabled = vm.runInNewContext(
   `(${extractNamedFunction(js, 'examRoomFeaturesEnabled')})`,
   portalContext,
 );
+portalContext.roomRequestsSnapshotIsValid = vm.runInNewContext(
+  `(${extractNamedFunction(js, 'roomRequestsSnapshotIsValid')})`,
+  portalContext,
+);
+assert.equal(portalContext.roomRequestsSnapshotIsValid(validRoomSnapshot()), true);
+assert.equal(portalContext.roomRequestsSnapshotIsValid({ roles: {}, professorRequests: [] }), false,
+  'An incomplete response must never be rendered as an empty request list.');
+portalContext.isTransientRoomRequestsError = vm.runInNewContext(
+  `(${extractNamedFunction(js, 'isTransientRoomRequestsError')})`,
+  portalContext,
+);
+portalContext.queryRoomRequestsWithSingleRetry = vm.runInNewContext(
+  `(${extractNamedFunction(js, 'queryRoomRequestsWithSingleRetry')})`,
+  portalContext,
+);
+portalContext.isCurrentExamPortalLifecycle = (lifecycle) => (
+  Boolean(lifecycle)
+  && portalContext.isCurrentExamPortalRequest(lifecycle.userId, lifecycle.generation)
+);
 const loadInitialExamRoomPortal = vm.runInNewContext(
   `(${extractNamedFunction(js, 'loadInitialExamRoomPortal')})`,
+  portalContext,
+);
+const loadRoomRequests = vm.runInNewContext(
+  `(${extractNamedFunction(js, 'loadRoomRequests')})`,
   portalContext,
 );
 const firstPortalLoad = loadInitialExamRoomPortal('user-a', 1);
 const concurrentPortalLoad = loadInitialExamRoomPortal('user-a', 1);
 assert.equal(portalRequests.length, 2, 'Same-user concurrent loads must issue one portal/request pair.');
 portalRequests.find(({ operation }) => operation === 'portal').resolve({ result: { owner: 'user-a' } });
-portalRequests.find(({ operation }) => operation === 'room_requests').resolve({ result: { owner: 'user-a' } });
+portalRequests.find(({ operation }) => operation === 'room_requests').resolve({ result: validRoomSnapshot({ owner: 'user-a' }) });
 const [firstPortalResult, concurrentPortalResult] = await Promise.all([firstPortalLoad, concurrentPortalLoad]);
 assert.equal(firstPortalResult[0].result.owner, 'user-a');
 assert.equal(concurrentPortalResult[0].result.owner, 'user-a');
@@ -413,7 +454,7 @@ portalState.exam.portalPromiseUserId = null;
 portalState.exam.portalPromiseGeneration = null;
 authenticatedPortalUserId = 'user-b';
 portalRequests.find(({ operation }) => operation === 'portal').resolve({ result: { owner: 'user-a' } });
-portalRequests.find(({ operation }) => operation === 'room_requests').resolve({ result: { owner: 'user-a' } });
+portalRequests.find(({ operation }) => operation === 'room_requests').resolve({ result: validRoomSnapshot({ owner: 'user-a' }) });
 assert.equal(
   await stalePortalLoad,
   null,
@@ -431,7 +472,7 @@ portalState.view = 'bar_easy';
 portalState.exam.portalRequestGeneration = 5;
 portalState.view = 'exam_room';
 portalRequests.find(({ operation }) => operation === 'portal').resolve({ result: { owner: 'user-a' } });
-portalRequests.find(({ operation }) => operation === 'room_requests').resolve({ result: { owner: 'user-a' } });
+portalRequests.find(({ operation }) => operation === 'room_requests').resolve({ result: validRoomSnapshot({ owner: 'user-a' }) });
 assert.equal(
   await navigatedAwayPortalLoad,
   null,
@@ -451,7 +492,7 @@ const hiddenPagePortalLoad = loadInitialExamRoomPortal('user-a', 6);
 assert.equal(portalRequests.length, 2);
 portalPageActive = false;
 portalRequests.find(({ operation }) => operation === 'portal').resolve({ result: { owner: 'user-a' } });
-portalRequests.find(({ operation }) => operation === 'room_requests').resolve({ result: { owner: 'user-a' } });
+portalRequests.find(({ operation }) => operation === 'room_requests').resolve({ result: validRoomSnapshot({ owner: 'user-a' }) });
 assert.equal(
   await hiddenPagePortalLoad,
   null,
@@ -479,9 +520,11 @@ portalContext.api = async (path, body) => {
 portalContext.features = async () => assert.fail('An ordinary optional room-request failure must not refresh features.');
 const optionalRoomResult = await loadInitialExamRoomPortal('user-a', 7);
 assert.equal(optionalPortalCalls, 1);
-assert.equal(optionalRoomRequestCalls, 1);
+assert.equal(optionalRoomRequestCalls, 2, 'A transient room-request failure receives one bounded retry.');
 assert.equal(optionalRoomResult[0].result.owner, 'user-a');
-assert.equal(optionalRoomResult[1], null, 'An ordinary room_requests failure must remain optional.');
+assert.equal(optionalRoomResult[1].degraded, true);
+assert.equal(optionalRoomResult[1].result, null,
+  'A persistent optional failure must not masquerade as an authoritative empty request list.');
 
 portalState.exam.portalRequestGeneration = 8;
 portalState.exam.portalPromise = null;
@@ -498,7 +541,7 @@ portalContext.api = async (path, body) => {
   }
   roomDisabledRequestCalls += 1;
   if (roomDisabledRequestCalls === 1) throw roomRequestsDisabledError;
-  return { result: { requests: [] } };
+  return { result: validRoomSnapshot({ requests: [] }) };
 };
 portalContext.features = async (options) => {
   roomDisabledFeatureCalls += 1;
@@ -524,7 +567,7 @@ portalContext.api = async (path, body) => {
     availabilityPortalCalls += 1;
     throw availabilityError;
   }
-  return { result: null };
+  return { result: validRoomSnapshot() };
 };
 portalContext.features = async (options) => {
   assert.equal(options.forceFresh, true);
@@ -549,7 +592,7 @@ portalContext.api = async (path, body) => {
     throw Object.assign(new Error('room unavailable'), { code: 'EXAMINATION_ROOM_DISABLED' });
   }
   boundedRoomRequestCalls += 1;
-  return { result: null };
+  return { result: validRoomSnapshot() };
 };
 portalContext.features = async (options) => {
   assert.equal(options.forceFresh, true);
@@ -562,6 +605,133 @@ await assert.rejects(
 );
 assert.equal(boundedPortalCalls, 2, 'Availability recovery must attempt the portal exactly twice in total.');
 assert.equal(boundedRoomRequestCalls, 2, 'Each bounded portal attempt may issue one room-request query only.');
+
+portalState.exam.portalRequestGeneration = 11;
+portalState.exam.roomRequests = null;
+portalState.exam.roomRequestsLoadState = 'idle';
+portalState.exam.roomRequestsPromise = null;
+portalState.exam.roomRequestsPromiseUserId = null;
+portalState.exam.roomRequestsPromiseGeneration = null;
+portalState.exam.roomRequestsPromiseForce = false;
+const roomLifecycle = { userId: 'user-a', generation: 11 };
+let coalescedRoomCalls = 0;
+const coalescedRoomRequest = deferred();
+portalContext.api = async (_path, body) => {
+  assert.equal(body.operation, 'room_requests');
+  coalescedRoomCalls += 1;
+  return coalescedRoomRequest.promise;
+};
+const roomLoadA = loadRoomRequests(false, roomLifecycle);
+const roomLoadB = loadRoomRequests(false, roomLifecycle);
+const roomLoadC = loadRoomRequests(false, roomLifecycle);
+assert.equal(coalescedRoomCalls, 1, 'Concurrent room-request loads must share one in-flight request.');
+coalescedRoomRequest.resolve({ result: validRoomSnapshot({ roles: { professor: true } }) });
+const coalescedResults = await Promise.all([roomLoadA, roomLoadB, roomLoadC]);
+assert.equal(coalescedResults.every((entry) => entry.roles.professor === true), true);
+assert.equal(portalState.exam.roomRequestsPromise, null, 'The room-request in-flight marker must clear after success.');
+assert.equal(portalState.exam.roomRequestsLoadState, 'ready');
+await loadRoomRequests(false, roomLifecycle);
+assert.equal(coalescedRoomCalls, 1, 'A non-forced load must reuse the safe cached snapshot.');
+
+let forcedRoomCalls = 0;
+portalContext.api = async () => {
+  forcedRoomCalls += 1;
+  return { result: validRoomSnapshot({ roles: { professor: true }, professorRequests: [{ requestId: 'fresh' }] }) };
+};
+const forcedRoomResult = await loadRoomRequests(true, roomLifecycle);
+assert.equal(forcedRoomCalls, 1, 'An explicit refresh must issue exactly one fresh request when it succeeds.');
+assert.equal(forcedRoomResult.professorRequests[0].requestId, 'fresh');
+
+const preservedRoomSnapshot = forcedRoomResult;
+let failedRoomCalls = 0;
+portalContext.api = async () => {
+  failedRoomCalls += 1;
+  throw Object.assign(new Error('temporary network failure'), { code: 'REQUEST_FAILED', status: 503 });
+};
+const degradedRoomResult = await loadRoomRequests(true, roomLifecycle);
+assert.equal(failedRoomCalls, 2, 'A transient request failure must stop after one retry.');
+assert.equal(degradedRoomResult, preservedRoomSnapshot, 'A failed refresh must preserve the last safe request snapshot.');
+assert.equal(portalState.exam.roomRequestsPromise, null, 'The room-request in-flight marker must clear after failure.');
+assert.equal(portalState.exam.roomRequestsLoadState, 'degraded');
+assert.doesNotMatch(js, /Room requests could not load right now/,
+  'Optional request-history failure must not create a global warning-toast storm.');
+
+portalState.exam.portalRequestGeneration = 12;
+portalState.exam.roomRequests = null;
+const staleRoomLifecycle = { userId: 'user-a', generation: 12 };
+const staleRoomDeferred = deferred();
+portalContext.api = async () => staleRoomDeferred.promise;
+const staleRoomLoad = loadRoomRequests(false, staleRoomLifecycle);
+portalState.exam.portalRequestGeneration = 13;
+staleRoomDeferred.resolve({ result: validRoomSnapshot({ professorRequests: [{ requestId: 'stale' }] }) });
+assert.equal(await staleRoomLoad, null, 'A room-request response from an invalidated lifecycle must be discarded.');
+assert.equal(portalState.exam.roomRequests, null, 'A stale response must never overwrite current room-request state.');
+
+portalState.exam.portalRequestGeneration = 14;
+portalState.exam.roomRequests = null;
+portalState.exam.roomRequestsLoadState = 'idle';
+let emptyFailureCalls = 0;
+portalContext.api = async () => {
+  emptyFailureCalls += 1;
+  throw Object.assign(new Error('temporary request failure'), { code: 'REQUEST_FAILED', status: 503 });
+};
+const noSnapshotResult = await loadRoomRequests(true, { userId: 'user-a', generation: 14 });
+assert.equal(emptyFailureCalls, 2);
+assert.equal(noSnapshotResult, null, 'A request failure with no prior snapshot must remain unknown, not empty.');
+assert.equal(portalState.exam.roomRequests, null);
+assert.equal(portalState.exam.roomRequestsLoadState, 'degraded');
+
+portalState.exam.portalRequestGeneration = 15;
+portalState.exam.roomRequests = null;
+portalState.exam.roomRequestsLoadState = 'idle';
+const firstRefresh = deferred();
+const forcedRefresh = deferred();
+let overlappingRefreshCalls = 0;
+portalContext.api = async () => {
+  overlappingRefreshCalls += 1;
+  return overlappingRefreshCalls === 1 ? firstRefresh.promise : forcedRefresh.promise;
+};
+const baseRefresh = loadRoomRequests(false, { userId: 'user-a', generation: 15 });
+const forcedRefreshA = loadRoomRequests(true, { userId: 'user-a', generation: 15 });
+const forcedRefreshB = loadRoomRequests(true, { userId: 'user-a', generation: 15 });
+firstRefresh.resolve({ result: validRoomSnapshot() });
+await baseRefresh;
+await Promise.resolve();
+assert.equal(overlappingRefreshCalls, 2,
+  'Multiple forced refreshes waiting behind one load must coalesce into one follow-up request.');
+forcedRefresh.resolve({ result: validRoomSnapshot({ professorRequests: [{ requestId: 'coalesced-force' }] }) });
+const forcedResults = await Promise.all([forcedRefreshA, forcedRefreshB]);
+assert.equal(forcedResults.every((result) => result.professorRequests[0].requestId === 'coalesced-force'), true);
+assert.equal(overlappingRefreshCalls, 2);
+
+portalContext.loadRoomRequestsWithAvailabilityRecovery = async () => {
+  throw Object.assign(new Error('refresh unavailable'), { code: 'REQUEST_FAILED', status: 503 });
+};
+const refreshRoomRequestsAfterMutation = vm.runInNewContext(
+  `(${extractNamedFunction(js, 'refreshRoomRequestsAfterMutation')})`,
+  portalContext,
+);
+assert.equal(
+  await refreshRoomRequestsAfterMutation({ userId: 'user-a', generation: 15 }),
+  false,
+  'A secondary refresh failure must not turn a successful primary mutation into a false failure.',
+);
+assert.equal(portalState.exam.roomRequestsLoadState, 'degraded');
+
+portalContext.roomRequestLoadStatus = vm.runInNewContext(
+  `(${extractNamedFunction(js, 'roomRequestLoadStatus')})`,
+  portalContext,
+);
+portalState.exam.roomRequests = null;
+assert.match(portalContext.roomRequestLoadStatus(), /temporarily unavailable/);
+assert.doesNotMatch(portalContext.roomRequestLoadStatus(), /No Examination Room request/);
+portalState.exam.roomRequests = validRoomSnapshot({ professorRequests: [{ requestId: 'last-safe' }] });
+assert.match(portalContext.roomRequestLoadStatus(), /last available request status/);
+
+assert.match(js, /sessionUser\.user_metadata/,
+  'The Professor request form must retain signed-in identity when request history is unavailable.');
+assert.match(js, /await refreshRoomRequestsAfterMutation\(\);[\s\S]{0,120}closeDialog\(\)/,
+  'Successful mutations must complete independently of the best-effort request-list refresh.');
 
 assert.match(js, /maxlength="5000"/);
 assert.match(js, /maxlength="3000"/);

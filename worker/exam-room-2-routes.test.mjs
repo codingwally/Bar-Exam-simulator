@@ -535,6 +535,7 @@ test('v2 exam, preflight, Beadle, and incident queries use scoped database RPCs'
   const cases = [
     ['exam_intent', 'exam_room_exam_access_v3'],
     ['preflight', 'exam_room_student_waiting_room_v4'],
+    ['beadle_student_entry', 'exam_room_beadle_student_waiting_room_v1'],
     ['beadle_portal', 'exam_room_beadle_portal_v5'],
     ['incident_summary', 'exam_room_incident_summary_v2'],
   ];
@@ -556,6 +557,34 @@ test('v2 exam, preflight, Beadle, and incident queries use scoped database RPCs'
   assert.match(calls.at(-1).body.p_student_key_hash, /^[0-9a-f]{64}$/);
   assert.match(calls.at(-1).body.p_rate_key_hash, /^[0-9a-f]{64}$/);
   assert.equal(JSON.stringify(calls.at(-1)).includes('student-exam-code-secret'), false);
+});
+
+test('assigned Beadle student handoff uses server authorization without a browser class code', async () => {
+  const deviceInstanceHash = 'a'.repeat(64);
+  const flow = harness();
+  await flow.handlers.examQuery(request({
+    operation: 'beadle_student_entry',
+    examId,
+    deviceInstanceHash,
+  }), {}, '', '');
+  assert.equal(flow.calls.at(-1).name, 'exam_room_beadle_student_waiting_room_v1');
+  assert.deepEqual(flow.calls.at(-1).body, {
+    p_user_id: userId,
+    p_exam_public_id: examId,
+    p_rate_key_hash: flow.calls.at(-1).body.p_rate_key_hash,
+    p_device_instance_hash: deviceInstanceHash,
+  });
+  assert.match(flow.calls.at(-1).body.p_rate_key_hash, /^[0-9a-f]{64}$/);
+
+  await flow.handlers.examCommand(request({
+    operation: 'start_beadle_attempt',
+    examId,
+  }), {}, '', '', {});
+  assert.equal(flow.calls.at(-1).name, 'exam_room_start_beadle_student_attempt_v1');
+  assert.equal(flow.calls.at(-1).body.p_user_id, userId);
+  assert.equal(flow.calls.at(-1).body.p_exam_public_id, examId);
+  assert.match(flow.calls.at(-1).body.p_rate_key_hash, /^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(flow.calls).includes('studentKey'), false);
 });
 
 test('Professor authoring snapshot is owner-scoped and defensively projected', async () => {

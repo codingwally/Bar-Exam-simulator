@@ -1000,6 +1000,15 @@ test('v2 portal query contracts require their examination scope', () => {
     studentKey: 'student-exam-code-secret',
     deviceInstanceHash: 'e'.repeat(64),
   });
+  assert.deepEqual(normalizeExamRoomQuery({
+    operation: 'beadle_student_entry',
+    examId,
+    deviceInstanceHash: 'f'.repeat(64),
+  }), {
+    operation: 'beadle_student_entry',
+    examId,
+    deviceInstanceHash: 'f'.repeat(64),
+  });
   assert.equal(normalizeExamRoomQuery({ operation: 'beadle_portal' }).examId, null);
   const attempt = normalizeExamRoomQuery({
     operation: 'attempt', attemptId, sessionId, sessionEpoch: 2,
@@ -1013,6 +1022,22 @@ test('v2 portal query contracts require their examination scope', () => {
     operation: 'submission_status', attemptId,
   }).attemptId, attemptId);
   assert.throws(() => normalizeExamRoomQuery({ operation: 'incident_summary' }));
+  assert.deepEqual(normalizeExamRoomCommand({
+    operation: 'start_beadle_attempt',
+    examId,
+  }), {
+    operation: 'start_beadle_attempt',
+    examId,
+  });
+});
+
+test('expired or revoked Beadle handoff maps to a terminal authorization error', () => {
+  const error = examRoom2026DatabaseError({
+    message: 'EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED private database detail',
+  });
+  assert.equal(error.code, 'EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED');
+  assert.equal(error.status, 403);
+  assert.doesNotMatch(error.message, /private database detail/);
 });
 
 test('grading model-answer retrieval accepts a remembered exam-scoped grading membership', () => {

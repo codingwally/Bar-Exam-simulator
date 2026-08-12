@@ -657,6 +657,7 @@ export function examRoom2026DatabaseError(error) {
     EXAM_ROOM_ACTIVATION_ROOM_BINDING_CONFLICT: [409, 'This Professor key cannot be bound to another Examination Room. Ask Admin for a new key.'],
     EXAM_ROOM_ONE_EXAM_LIMIT: [409, 'This Examination Room already has its examination. Ask Admin for another room key to make another examination.'],
     EXAM_ROOM_OPERATOR_REQUIRED: [403, 'Professor or active Beadle authorization is required.'],
+    EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED: [403, 'Your active Beadle assignment is no longer available. Return to assigned examinations and refresh the room.'],
     EXAM_ROOM_ROSTER_REQUIRED: [403, 'This account is not authorized for the examination.'],
     EXAM_ROOM_ROSTER_TEMPLATE_REQUIRED: [400, 'Use the official Beadle class-list template. Do not add, remove, or rename columns.'],
     EXAM_ROOM_ROSTER_TEMPLATE_RECEIPT_INVALID: [403, 'The class-list template confirmation does not belong to this examination. Upload the official template again.'],
@@ -816,8 +817,7 @@ export const EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS = Object.freeze([
   'exam_room_review_payment_proof',
 ]);
 
-async function examRoom2026Rpc(env, functionName, body) {
-  const allowedFunctions = new Set([
+export const EXAM_ROOM_2026_RPC_FUNCTIONS = Object.freeze([
     ...EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS,
     'exam_room_issue_professor_activation',
     'exam_room_redeem_professor_activation',
@@ -854,6 +854,7 @@ async function examRoom2026Rpc(env, functionName, body) {
     'exam_room_student_preflight_v3',
     'exam_room_student_waiting_room_v4',
     'exam_room_student_waiting_room_by_code_v1',
+    'exam_room_beadle_student_waiting_room_v1',
     'exam_room_incident_summary_v2',
     'exam_room_issue_beadle_invitation_v2',
     'exam_room_redeem_beadle_invitation_v2',
@@ -870,6 +871,7 @@ async function examRoom2026Rpc(env, functionName, body) {
     'exam_room_start_attempt_v3',
     'exam_room_start_attempt_v4',
     'exam_room_start_attempt_by_code_v1',
+    'exam_room_start_beadle_student_attempt_v1',
     'exam_room_open_exam_now_v1',
     'exam_room_open_session_v2',
     'exam_room_attempt_view',
@@ -926,7 +928,10 @@ async function examRoom2026Rpc(env, functionName, body) {
     'exam_room_dismissed_past_exam_ids_v1',
     'exam_room_dismiss_past_exam_v1',
     'exam_room_backup_context',
-  ]);
+]);
+
+async function examRoom2026Rpc(env, functionName, body) {
+  const allowedFunctions = new Set(EXAM_ROOM_2026_RPC_FUNCTIONS);
   if (!allowedFunctions.has(functionName)) {
     throw new DD2026ValidationError('UNSUPPORTED_OPERATION', 'This Examination Room operation is not supported.');
   }

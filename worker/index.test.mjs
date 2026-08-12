@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import worker, {
+  EXAM_ROOM_2026_RPC_FUNCTIONS,
   EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS,
+  examRoom2026DatabaseError,
   examinationEmailMode,
   sendExaminationEmail,
 } from './index.mjs';
@@ -189,6 +191,22 @@ test('Examination Room request workflow RPCs remain in the Worker allowlist', ()
   for (const functionName of requestFlowFunctions) {
     assert.equal(allowed.has(functionName), true, `${functionName} must remain callable`);
   }
+});
+
+test('Beadle student direct-entry RPCs remain in the production Worker allowlist', () => {
+  const allowed = new Set(EXAM_ROOM_2026_RPC_FUNCTIONS);
+  assert.equal(allowed.has('exam_room_beadle_student_waiting_room_v1'), true);
+  assert.equal(allowed.has('exam_room_start_beadle_student_attempt_v1'), true);
+});
+
+test('revoked Beadle direct-entry authorization is a terminal 403 response', () => {
+  const error = examRoom2026DatabaseError({
+    message: 'EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED private database detail',
+  });
+  assert.equal(error.code, 'EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED');
+  assert.equal(error.status, 403);
+  assert.match(error.message, /active Beadle assignment is no longer available/i);
+  assert.doesNotMatch(error.message, /private database detail/i);
 });
 
 function modelAssessment(score = 5) {

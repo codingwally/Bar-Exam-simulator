@@ -35,6 +35,7 @@ export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'professor_authoring_snapshot',
   'preflight',
   'student_entry',
+  'beadle_student_entry',
   'beadle_portal',
   'incident_summary',
   'attempt',
@@ -87,6 +88,7 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'set_accommodation',
   'start_attempt',
   'start_attempt_by_code',
+  'start_beadle_attempt',
   'open_exam_now',
   'dismiss_past_exam',
   'open_session',
@@ -532,6 +534,11 @@ export function normalizeExamRoomQuery(input) {
       : null;
   } else if (operation === 'student_entry') {
     normalized.studentKey = credential(payload.studentKey, 'Student exam access code');
+    normalized.deviceInstanceHash = payload.deviceInstanceHash
+      ? hexSha(payload.deviceInstanceHash, 'Device instance digest')
+      : null;
+  } else if (operation === 'beadle_student_entry') {
+    normalized.examId = uuid(payload.examId, 'Examination');
     normalized.deviceInstanceHash = payload.deviceInstanceHash
       ? hexSha(payload.deviceInstanceHash, 'Device instance digest')
       : null;
@@ -1001,6 +1008,8 @@ export function normalizeExamRoomCommand(input) {
     n.studentKey = optionalCredential(payload.studentKey, 'Student exam access code');
   } else if (operation === 'start_attempt_by_code') {
     n.studentKey = credential(payload.studentKey, 'Student exam access code');
+  } else if (operation === 'start_beadle_attempt') {
+    n.examId = uuid(payload.examId, 'Examination');
   } else if (operation === 'open_exam_now') {
     n.examId = uuid(payload.examId, 'Examination');
     n.reason = boundedText(

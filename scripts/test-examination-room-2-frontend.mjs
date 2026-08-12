@@ -431,6 +431,37 @@ assert.match(frontend, /snapshot\.activeStudentExamCode[\s\S]*state\.exam\.stude
   'the Beadle handout must consume a recoverable active code when the backend provides it');
 assert.match(frontend, /id="dd26-active-student-code"[\s\S]*id="dd26-copy-active-class-handout"[\s\S]*Copy class code/,
   'the active class-wide code has one optional class-channel copy action');
+assert.match(frontend, /Finish Beadle duties and enter my exam/);
+const beadleDirectEntryBlock = frontend.slice(
+  frontend.indexOf('function enterRosteredBeadleExam'),
+  frontend.indexOf('function openRosterCorrection'),
+);
+assert.match(beadleDirectEntryBlock, /operation: 'beadle_student_entry'[\s\S]*examId,[\s\S]*deviceInstanceHash/);
+const directEntryQueryStart = beadleDirectEntryBlock.indexOf("const payload = await api('/exam-room/query'");
+const directEntryQueryEnd = beadleDirectEntryBlock.indexOf(');', directEntryQueryStart);
+const directEntryQuery = beadleDirectEntryBlock.slice(directEntryQueryStart, directEntryQueryEnd);
+assert.doesNotMatch(directEntryQuery, /studentKey|dd26-student-key/,
+  'the Beadle handoff query must not ask for or send a browser class code');
+assert.match(beadleDirectEntryBlock, /entryMode: 'beadle'[\s\S]*autoEnter: true/,
+  'the direct handoff must preserve its waiting-room auto-entry intent');
+assert.match(beadleDirectEntryBlock, /beadleHandoffPromise[\s\S]*pending\.finally/,
+  'rapid repeated clicks must share one direct-entry request');
+const beadlePersistenceBlock = frontend.slice(
+  frontend.indexOf('function clearBeadleStudentHandoff'),
+  frontend.indexOf('function stopStudentWaitingRoom'),
+);
+assert.match(beadlePersistenceBlock, /BEADLE_STUDENT_HANDOFF_KEY[\s\S]*localStorage[\s\S]*userId[\s\S]*examId/,
+  'the no-secret handoff marker must survive a same-account reload');
+assert.match(frontend, /if \(portalUserId\) await restoreBeadleStudentHandoff\(\)/,
+  'a signed-in portal refresh must recover the exact saved Beadle handoff');
+const beadleTerminalBlock = frontend.slice(
+  frontend.indexOf('function stopStudentWaitingRoom'),
+  frontend.indexOf('function enterRosteredBeadleExam'),
+);
+assert.match(beadleTerminalBlock, /stopStudentWaitingRoom[\s\S]*directBeadleTerminalState[\s\S]*clearBeadleStudentHandoff/,
+  'terminal authorization and completed-attempt states must stop retrying and clear the handoff');
+assert.match(frontend, /This page never shows questions, answers, grades, or the Professor’s suggested answer/,
+  'the streamlined handoff must retain the Beadle privacy boundary');
 assert.match(frontend, /Create a new student exam code/,
   'a Beadle who cannot recover the active code gets one plain replacement action');
 assert.match(importRosterBlock, /Access-code emails were queued|access-code emails were queued|student access-code emails queued/i);
@@ -458,12 +489,24 @@ assert.doesNotMatch(waitingRoomBlock, /operation: 'start_attempt'|question\.prom
 const waitingEntryStart = frontend.indexOf('async function enterExamFromWaitingRoom');
 const waitingEntryEnd = frontend.indexOf('function examIntegrityPolicy', waitingEntryStart);
 const waitingEntryBlock = frontend.slice(waitingEntryStart, waitingEntryEnd);
-assert.ok(waitingEntryBlock.indexOf("operation: 'preflight'") < waitingEntryBlock.indexOf('beginAttemptAfterPreflight(fullscreenRequest)'),
+assert.ok(waitingEntryBlock.indexOf('studentPreflightQuery(check)') < waitingEntryBlock.indexOf('beginAttemptAfterPreflight(fullscreenRequest)'),
   'Start must recheck server opening time before attempt creation');
-assert.ok(waitingEntryBlock.indexOf('requestFullscreen()') < waitingEntryBlock.indexOf("operation: 'preflight'"),
+assert.ok(waitingEntryBlock.indexOf('requestFullscreen()') < waitingEntryBlock.indexOf('studentPreflightQuery(check)'),
   'the waiting-room Start click must preserve the browser gesture before its server recheck');
 assert.match(frontend, /serverDelay[\s\S]*Math\.max\(5000, Math\.min\(30_000, serverDelay\)\)[\s\S]*: 15_000/,
   'waiting-room polling must default to 15 seconds and use the server’s shorter final-minute cadence');
+assert.match(frontend, /accessAuthorization === 'active_beadle_assignment'/);
+assert.match(waitingRoomBlock, /Secure Beadle handoff/);
+assert.match(waitingRoomBlock, /Automatic entry armed/);
+assert.match(waitingRoomBlock, /autoEntryBusy[\s\S]*autoEntryRetryAt[\s\S]*5_000/,
+  'automatic Beadle entry must be single-flight and back off after a transient failure');
+assert.match(waitingRoomBlock, /!isRetryableBeadleHandoffError\(error\)[\s\S]*renderDirectBeadleHandoffBlocker/,
+  'terminal Beadle polling failures must stop instead of entering a retry loop');
+assert.match(waitingEntryBlock, /directBeadleTerminalState\(check\.server\)[\s\S]*renderDirectBeadleHandoffBlocker/,
+  'the final server recheck must route submitted, revoked, and ineligible states to recovery');
+assert.match(waitingEntryBlock, /check\.lastStartError[\s\S]*!isRetryableBeadleHandoffError\(startError\)/,
+  'a terminal start mutation failure must not be retried as a transport failure');
+assert.match(waitingRoomBlock, /Cancel and return to Beadle workspace/);
 assert.match(frontend, /clearInterval\(state\.exam\.waitingRoomTimer\)[\s\S]*clearTimeout\(state\.exam\.waitingRoomPollTimer\)/,
   'both waiting-room timers must be cleared when the student leaves or starts');
 
@@ -503,6 +546,8 @@ assert.match(preflightStartBlock, /studentStartReadiness\(check\.server\)\.canSt
   'the server-confirmed opening and entry window is checked again immediately before start');
 assert.ok(preflightStartBlock.indexOf('requestFullscreen()') < preflightStartBlock.indexOf("operation: 'start_attempt_by_code'"),
   'full screen must be requested synchronously from the Start click before a network wait');
+assert.match(preflightStartBlock, /entryMode === 'beadle'[\s\S]*operation: 'start_beadle_attempt'[\s\S]*examId: check\.examId/,
+  'the Beadle direct path must start only its server-authorized rostered attempt');
 assert.doesNotMatch(preflightRenderBlock, /checks it when you select Start examination/,
   'preflight must never describe an already rejected code as awaiting validation');
 assert.match(preflightRenderBlock, /studentAccessCodeState\(server, check\.studentKey\)[\s\S]*accessCodeState\.className/,
@@ -813,13 +858,20 @@ assert.ok(accessPolicyStart > 0 && accessPolicyEnd > accessPolicyStart);
 const accessCodePreflightPolicy = Function(
   `'use strict'; ${frontend.slice(accessPolicyStart, accessPolicyEnd)}; return accessCodePreflightPolicy;`,
 )();
-assert.deepEqual(accessCodePreflightPolicy({}, null), { known: false, required: false, ready: false });
+assert.deepEqual(accessCodePreflightPolicy({}, null),
+  { known: false, required: false, beadleAuthorized: false, ready: false });
 assert.deepEqual(accessCodePreflightPolicy({ accessCodeRequired: false }, null),
-  { known: true, required: false, ready: true });
+  { known: true, required: false, beadleAuthorized: false, ready: true });
 assert.deepEqual(accessCodePreflightPolicy({ accessCodeRequired: true }, null),
-  { known: true, required: true, ready: false });
+  { known: true, required: true, beadleAuthorized: false, ready: false });
 assert.deepEqual(accessCodePreflightPolicy({ checks: { accessCodeRequired: true } }, 'entered-code'),
-  { known: true, required: true, ready: true });
+  { known: true, required: true, beadleAuthorized: false, ready: true });
+assert.deepEqual(accessCodePreflightPolicy({
+  accessCodeRequired: true,
+  beadleDirectEntry: true,
+  accessAuthorization: 'active_beadle_assignment',
+}, null), { known: true, required: true, beadleAuthorized: true, ready: true },
+'an active server-authorized Beadle handoff satisfies the code gate without putting a code in the browser');
 
 const startReadinessStart = frontend.indexOf('function studentStartReadiness');
 const startReadinessEnd = frontend.indexOf('function examIntegrityPolicy', startReadinessStart);

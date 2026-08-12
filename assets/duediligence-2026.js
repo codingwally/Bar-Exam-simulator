@@ -24,7 +24,12 @@
   const BEADLE_ROSTER_TEMPLATE_VERSION = 'beadle-roster-v1';
   const state = {
     featureSnapshot: null,
+    featureSnapshotUserId: null,
+    featureSnapshotGeneration: null,
     featurePromise: null,
+    featurePromiseUserId: null,
+    featurePromiseGeneration: null,
+    featureGeneration: 0,
     view: null,
     items: new Map(),
     filtered: [],
@@ -37,6 +42,9 @@
     exam: {
       portal: null,
       portalPromise: null,
+      portalPromiseUserId: null,
+      portalPromiseGeneration: null,
+      portalRequestGeneration: 0,
       roomRequests: null,
       section: 'entry',
       intentRole: null,
@@ -240,6 +248,60 @@
     return Boolean(phase4?.getSession?.()?.access_token);
   }
 
+  function authenticatedUserId() {
+    const phase4 = global.DueDiligencePhase4 || global.DueDiligencePhase2;
+    const session = phase4?.getSession?.();
+    return session?.access_token && session?.user?.id ? String(session.user.id) : null;
+  }
+
+  function beginExamPortalLifecycle({ clearData = false } = {}) {
+    state.exam.portalRequestGeneration += 1;
+    state.exam.portalPromise = null;
+    state.exam.portalPromiseUserId = null;
+    state.exam.portalPromiseGeneration = null;
+    if (clearData) {
+      state.exam.portal = null;
+      state.exam.roomRequests = null;
+    }
+    return state.exam.portalRequestGeneration;
+  }
+
+  function synchronizeExamPortalIdentity(userId) {
+    const normalizedUserId = userId ? String(userId) : null;
+    if (state.sessionUserId === normalizedUserId) return false;
+    const previousUserId = state.sessionUserId;
+    state.sessionUserId = normalizedUserId;
+    beginExamPortalLifecycle({ clearData: true });
+    if (previousUserId && previousUserId !== normalizedUserId) state.exam.intentRole = null;
+    return true;
+  }
+
+  function isExamRoomPageActive() {
+    const page = typeof document === 'undefined' ? null : document.getElementById('page-dd2026');
+    return !page || page.classList.contains('active');
+  }
+
+  function isCurrentExamPortalRequest(userId, generation) {
+    return Boolean(userId)
+      && state.view === 'exam_room'
+      && isExamRoomPageActive()
+      && state.sessionUserId === userId
+      && state.exam.portalRequestGeneration === generation
+      && authenticatedUserId() === userId;
+  }
+
+  function captureExamPortalLifecycle() {
+    const userId = authenticatedUserId();
+    if (!userId || state.view !== 'exam_room') return null;
+    synchronizeExamPortalIdentity(userId);
+    return { userId, generation: state.exam.portalRequestGeneration };
+  }
+
+  function isCurrentExamPortalLifecycle(lifecycle) {
+    return Boolean(lifecycle)
+      && isCurrentExamPortalRequest(lifecycle.userId, lifecycle.generation);
+  }
+
   async function api(path, body) {
     const phase4 = global.DueDiligencePhase4 || global.DueDiligencePhase2;
     if (!phase4?.request) throw new Error('The secure study service is not ready.');
@@ -259,17 +321,88 @@
 
   function app() { return document.getElementById('dd2026-app'); }
 
-  async function features() {
-    if (state.featureSnapshot) return state.featureSnapshot;
-    if (!state.featurePromise) {
-      state.featurePromise = api('/dd2026/features', {})
-        .then((payload) => {
-          state.featureSnapshot = payload;
-          return payload;
-        })
-        .finally(() => { state.featurePromise = null; });
+  function invalidateFeatureCache() {
+    state.featureGeneration += 1;
+    state.featureSnapshot = null;
+    state.featureSnapshotUserId = null;
+    state.featureSnapshotGeneration = null;
+    state.featurePromise = null;
+    state.featurePromiseUserId = null;
+    state.featurePromiseGeneration = null;
+  }
+
+  function synchronizeSessionCaches(userId) {
+    const featureRequestWasPending = Boolean(state.featurePromise);
+    const identityChanged = synchronizeExamPortalIdentity(userId);
+    if (identityChanged || !featureRequestWasPending) invalidateFeatureCache();
+    return { identityChanged, featureRequestWasPending };
+  }
+
+  function shouldReopenSessionRoute(identityChanged, routePageActive) {
+    return identityChanged || !routePageActive;
+  }
+
+  function isCurrentFeatureRequest(userId, generation) {
+    return Boolean(userId)
+      && state.sessionUserId === userId
+      && state.featureGeneration === generation
+      && authenticatedUserId() === userId;
+  }
+
+  async function features({ forceFresh = false, userId = authenticatedUserId() } = {}) {
+    const scopedUserId = userId ? String(userId) : null;
+    if (!scopedUserId) return null;
+    if (state.sessionUserId !== scopedUserId) {
+      synchronizeExamPortalIdentity(scopedUserId);
+      invalidateFeatureCache();
     }
-    return state.featurePromise;
+    if (forceFresh) invalidateFeatureCache();
+    const generation = state.featureGeneration;
+    if (state.featureSnapshot
+        && state.featureSnapshotUserId === scopedUserId
+        && state.featureSnapshotGeneration === generation) {
+      return state.featureSnapshot;
+    }
+    if (state.featurePromise
+        && state.featurePromiseUserId === scopedUserId
+        && state.featurePromiseGeneration === generation) {
+      return state.featurePromise;
+    }
+    const pending = api('/dd2026/features', {});
+    state.featurePromise = pending;
+    state.featurePromiseUserId = scopedUserId;
+    state.featurePromiseGeneration = generation;
+    try {
+      const payload = await pending;
+      if (!isCurrentFeatureRequest(scopedUserId, generation)) return null;
+      state.featureSnapshot = payload;
+      state.featureSnapshotUserId = scopedUserId;
+      state.featureSnapshotGeneration = generation;
+      return payload;
+    } catch (error) {
+      if (!isCurrentFeatureRequest(scopedUserId, generation)) return null;
+      throw error;
+    } finally {
+      if (state.featurePromise === pending) {
+        state.featurePromise = null;
+        state.featurePromiseUserId = null;
+        state.featurePromiseGeneration = null;
+      }
+    }
+  }
+
+  function examRoomFeaturesEnabled(snapshot) {
+    return snapshot?.flags?.[EXAMINATION_ROOM_BASE_FLAG] === true
+      && snapshot?.flags?.[FLAG_NAMES.exam_room] === true;
+  }
+
+  async function loadExamRoomFeatures(userId) {
+    let snapshot = await features({ userId });
+    if (!snapshot || state.view !== 'exam_room' || authenticatedUserId() !== userId) return null;
+    if (!examRoomFeaturesEnabled(snapshot)) {
+      snapshot = await features({ forceFresh: true, userId });
+    }
+    return snapshot;
   }
 
   function activatePage(view, trigger, { replace = false, detailId = null } = {}) {
@@ -303,6 +436,12 @@
       clearGradingWorkspace();
     }
     if (view !== 'exam_room' && !requireAuthentication()) return false;
+    const openUserId = authenticatedUserId();
+    const previousView = state.view;
+    if (view === 'exam_room' && openUserId) synchronizeExamPortalIdentity(openUserId);
+    const portalGeneration = view === 'exam_room' || previousView === 'exam_room'
+      ? beginExamPortalLifecycle()
+      : null;
     state.view = view;
     state.result = null;
     activatePage(view, trigger, options);
@@ -312,21 +451,25 @@
         if (config?.features?.examinationRoom2 !== true) throw new Error('Examination Room 2.0 is not enabled for this environment.');
         if (options.detailId) state.exam.entryExamId = String(options.detailId).slice(0, 120);
         if (isAuthenticated()) {
-          const snapshot = await features();
+          const snapshot = await loadExamRoomFeatures(openUserId);
+          if (!snapshot || state.view !== view || authenticatedUserId() !== openUserId) return false;
           if (snapshot?.flags?.[EXAMINATION_ROOM_BASE_FLAG] !== true
-            || snapshot?.flags?.[FLAG_NAMES.exam_room] !== true) {
+              || snapshot?.flags?.[FLAG_NAMES.exam_room] !== true) {
             throw new Error('This module is temporarily unavailable.');
           }
         }
-        await openExamRoomView();
+        if (portalGeneration !== state.exam.portalRequestGeneration) return false;
+        if (!await openExamRoomView(openUserId, portalGeneration)) return false;
       } else {
-        const snapshot = await features();
+        const snapshot = await features({ userId: openUserId });
+        if (!snapshot || state.view !== view || authenticatedUserId() !== openUserId) return false;
         const flag = FLAG_NAMES[view];
         if (flag && snapshot?.flags?.[flag] !== true) throw new Error('This module is temporarily unavailable.');
         await openContentView(view, options.detailId || null);
       }
       return true;
     } catch (error) {
+      if (state.view !== view || authenticatedUserId() !== openUserId) return false;
       showError(error, () => open(view, trigger, { ...options, replace: true }));
       return false;
     }
@@ -575,7 +718,7 @@
     }
   }
 
-  async function openExamRoomView() {
+  async function openExamRoomView(portalUserId = authenticatedUserId(), portalGeneration = state.exam.portalRequestGeneration) {
     const localStoreApi = global.DueDiligenceExaminationRoomStore;
     if (localStoreApi?.createStore) {
       state.exam.store ||= localStoreApi.createStore();
@@ -584,17 +727,24 @@
         return null;
       }).catch(() => { /* local retention cleanup retries on the next Examination Room open */ });
     }
-    if (isAuthenticated()) {
-      const [portalPayload, requestPayload] = await loadInitialExamRoomPortal();
-      state.exam.portal = portalPayload.result || { roles: {}, classes: [], studentExams: [], beadleExams: [] };
+    if (portalUserId) {
+      if (!isCurrentExamPortalRequest(portalUserId, portalGeneration)) return false;
+      const payloads = await loadInitialExamRoomPortal(portalUserId, portalGeneration);
+      if (!payloads || !isCurrentExamPortalRequest(portalUserId, portalGeneration)) return false;
+      const [portalPayload, requestPayload] = payloads;
+      const portal = portalPayload.result || { roles: {}, classes: [], studentExams: [], beadleExams: [] };
+      await enrichProfessorExamIntents(portal);
+      if (!isCurrentExamPortalRequest(portalUserId, portalGeneration)) return false;
+      state.exam.portal = portal;
       state.exam.roomRequests = requestPayload?.result || null;
-      await enrichProfessorExamIntents(state.exam.portal);
     } else {
+      synchronizeExamPortalIdentity(null);
       state.exam.portal = null;
       state.exam.roomRequests = null;
       state.exam.section = 'entry';
     }
     renderExamRoom();
+    return true;
   }
 
   function isExamRoomAvailabilityError(error) {
@@ -602,31 +752,52 @@
       .includes(String(error?.code || ''));
   }
 
-  async function loadInitialExamRoomPortal() {
-    if (state.exam.portalPromise) return state.exam.portalPromise;
+  async function loadInitialExamRoomPortal(userId, generation) {
+    if (!isCurrentExamPortalRequest(userId, generation)) return null;
+    if (state.exam.portalPromise
+        && state.exam.portalPromiseUserId === userId
+        && state.exam.portalPromiseGeneration === generation) {
+      return state.exam.portalPromise;
+    }
     const requestPortal = () => Promise.all([
       api('/exam-room/query', { operation: 'portal' }),
-      api('/exam-room/query', { operation: 'room_requests' }).catch(() => null),
+      api('/exam-room/query', { operation: 'room_requests' }).catch((error) => {
+        if (isExamRoomAvailabilityError(error)) throw error;
+        return null;
+      }),
     ]);
     const pending = (async () => {
       try {
-        return await requestPortal();
+        const payloads = await requestPortal();
+        return isCurrentExamPortalRequest(userId, generation) ? payloads : null;
       } catch (error) {
+        if (!isCurrentExamPortalRequest(userId, generation)) return null;
         if (!isExamRoomAvailabilityError(error)
             || config?.features?.examinationRoom2 !== true) throw error;
-        state.featureSnapshot = null;
-        const snapshot = await features().catch(() => null);
-        const roomEnabled = snapshot?.flags?.[EXAMINATION_ROOM_BASE_FLAG] === true
-          && snapshot?.flags?.[FLAG_NAMES.exam_room] === true;
-        if (!roomEnabled) throw error;
-        return requestPortal();
+        const snapshot = await features({ forceFresh: true, userId });
+        if (!isCurrentExamPortalRequest(userId, generation)) return null;
+        if (!snapshot) return null;
+        if (!examRoomFeaturesEnabled(snapshot)) throw error;
+        try {
+          const payloads = await requestPortal();
+          return isCurrentExamPortalRequest(userId, generation) ? payloads : null;
+        } catch (retryError) {
+          if (!isCurrentExamPortalRequest(userId, generation)) return null;
+          throw retryError;
+        }
       }
     })();
     state.exam.portalPromise = pending;
+    state.exam.portalPromiseUserId = userId;
+    state.exam.portalPromiseGeneration = generation;
     try {
       return await pending;
     } finally {
-      if (state.exam.portalPromise === pending) state.exam.portalPromise = null;
+      if (state.exam.portalPromise === pending) {
+        state.exam.portalPromise = null;
+        state.exam.portalPromiseUserId = null;
+        state.exam.portalPromiseGeneration = null;
+      }
     }
   }
 
@@ -662,6 +833,7 @@
       }
       await recordIncident('focus_exit', { active: false, reason: 'returned_to_examination_room_home' });
     }
+    beginExamPortalLifecycle();
     clearGradingWorkspace();
     state.exam.section = 'entry';
     closeDialog();
@@ -707,17 +879,25 @@
       global.toast?.(`Sign in to continue as ${role}.`, 'warn');
       return;
     }
+    const lifecycle = captureExamPortalLifecycle();
+    if (!lifecycle) return false;
     if (!state.exam.portal) {
       const payload = await api('/exam-room/query', { operation: 'portal' });
-      state.exam.portal = payload.result || { roles: {}, classes: [], studentExams: [], beadleExams: [] };
-      await enrichProfessorExamIntents(state.exam.portal);
+      if (!isCurrentExamPortalLifecycle(lifecycle)) return false;
+      const portal = payload.result || { roles: {}, classes: [], studentExams: [], beadleExams: [] };
+      await enrichProfessorExamIntents(portal);
+      if (!isCurrentExamPortalLifecycle(lifecycle)) return false;
+      state.exam.portal = portal;
     }
-    if (role !== 'student') await loadRoomRequests();
+    if (role !== 'student') await loadRoomRequests()
+      .catch((error) => recoverRoomRequestsAvailability(error, false, lifecycle));
+    if (!isCurrentExamPortalLifecycle(lifecycle)) return false;
     if (state.exam.section !== role) state.exam.rosterPreview = null;
     state.exam.rosterMode = role === 'beadle' ? 'beadle' : 'professor';
     state.exam.section = role;
     renderExamRoom();
     document.getElementById('dd26-exam-main')?.focus();
+    return true;
   }
 
   function announceExamStatus(message) {
@@ -772,24 +952,42 @@
     return `<aside class="dd26-role-guide" aria-label="${escapeHtml(guide.label)}"><div class="dd26-label">${escapeHtml(guide.label)}</div><ol>${guide.steps.map((step) => `<li>${escapeHtml(step)}</li>`).join('')}</ol></aside>`;
   }
 
-  async function loadRoomRequests(force = false) {
-    if (!isAuthenticated()) {
-      state.exam.roomRequests = null;
-      return null;
-    }
+  async function loadRoomRequests(force = false, lifecycle = captureExamPortalLifecycle()) {
+    if (!isCurrentExamPortalLifecycle(lifecycle)) return null;
     if (state.exam.roomRequests && !force) return state.exam.roomRequests;
     try {
       const payload = await api('/exam-room/query', { operation: 'room_requests' });
-      state.exam.roomRequests = payload.result || {
+      if (!isCurrentExamPortalLifecycle(lifecycle)) return null;
+      const roomRequests = payload.result || {
         roles: {}, professorRequests: [], beadleRequests: [],
         administratorRequests: [], unassignedRequests: [],
       };
-      return state.exam.roomRequests;
+      state.exam.roomRequests = roomRequests;
+      return roomRequests;
     } catch (error) {
+      if (isExamRoomAvailabilityError(error)) throw error;
+      if (!isCurrentExamPortalLifecycle(lifecycle)) return null;
       state.exam.roomRequests = null;
       global.toast?.('Room requests could not load right now. Existing Examination Rooms are still available.', 'warn');
       return null;
     }
+  }
+
+  async function loadRoomRequestsWithAvailabilityRecovery(force = false, lifecycle = captureExamPortalLifecycle()) {
+    try {
+      return await loadRoomRequests(force, lifecycle);
+    } catch (error) {
+      return recoverRoomRequestsAvailability(error, force, lifecycle);
+    }
+  }
+
+  async function recoverRoomRequestsAvailability(error, force, lifecycle) {
+    if (!isExamRoomAvailabilityError(error) || !isCurrentExamPortalLifecycle(lifecycle)) throw error;
+    const snapshot = await features({ forceFresh: true, userId: lifecycle.userId });
+    if (!isCurrentExamPortalLifecycle(lifecycle)) return null;
+    if (!snapshot) return null;
+    if (!examRoomFeaturesEnabled(snapshot)) throw error;
+    return loadRoomRequests(force, lifecycle);
   }
 
   function roomRequestStatusLabel(status) {
@@ -1470,14 +1668,20 @@
       requireAuthentication();
       return;
     }
+    const lifecycle = captureExamPortalLifecycle();
+    if (!lifecycle) return false;
     const [payload] = await Promise.all([
       api('/exam-room/query', { operation: 'portal' }),
-      section === 'student' ? Promise.resolve(null) : loadRoomRequests(true),
+      section === 'student' ? Promise.resolve(null) : loadRoomRequestsWithAvailabilityRecovery(true, lifecycle),
     ]);
-    state.exam.portal = payload.result;
-    await enrichProfessorExamIntents(state.exam.portal);
+    if (!isCurrentExamPortalLifecycle(lifecycle)) return false;
+    const portal = payload.result;
+    await enrichProfessorExamIntents(portal);
+    if (!isCurrentExamPortalLifecycle(lifecycle)) return false;
+    state.exam.portal = portal;
     state.exam.section = section;
     renderExamRoom();
+    return true;
   }
 
   async function enrichProfessorExamIntents(portal) {
@@ -6457,10 +6661,15 @@
   }
   function value(id, trim = true) { const result = document.getElementById(id)?.value ?? ''; return trim ? String(result).trim() : String(result); }
   async function refreshPortalSilently() {
+    const lifecycle = captureExamPortalLifecycle();
+    if (!lifecycle) return false;
     try {
       const payload = await api('/exam-room/query', { operation: 'portal' });
-      state.exam.portal = payload.result;
-      await enrichProfessorExamIntents(state.exam.portal);
+      if (!isCurrentExamPortalLifecycle(lifecycle)) return false;
+      const portal = payload.result;
+      await enrichProfessorExamIntents(portal);
+      if (!isCurrentExamPortalLifecycle(lifecycle)) return false;
+      state.exam.portal = portal;
       return true;
     } catch { return false; }
   }
@@ -6518,18 +6727,21 @@
   };
   global.addEventListener('popstate', restoreRoute);
   global.addEventListener('duediligence:session', (event) => {
-    const sessionUserId = event.detail?.userId || null;
-    const identityChanged = state.sessionUserId !== sessionUserId;
-    state.sessionUserId = sessionUserId;
-    state.featureSnapshot = null;
+    const sessionUserId = event.detail?.authenticated ? event.detail?.userId || null : null;
+    const { identityChanged } = synchronizeSessionCaches(sessionUserId);
     if (event.detail?.authenticated) {
       const route = routeFromHash();
       const routePageActive = document.getElementById('page-dd2026')?.classList.contains('active');
       if (route?.[0] === 'exam_room') {
-        if (!identityChanged && routePageActive) return;
+        if (!shouldReopenSessionRoute(identityChanged, routePageActive)) return;
         open('exam_room', document.getElementById(CONTENT_PATHS.exam_room.tab), { replace: true, detailId: route[1] || null })
-          .then(() => { if (state.exam.intentRole) selectExamRole(state.exam.intentRole); });
-      } else if (route && !routePageActive) restoreRoute();
+          .then((opened) => {
+            if (opened !== true
+                || state.sessionUserId !== sessionUserId
+                || authenticatedUserId() !== sessionUserId) return;
+            if (state.exam.intentRole) selectExamRole(state.exam.intentRole);
+          });
+      } else if (route && shouldReopenSessionRoute(identityChanged, routePageActive)) restoreRoute();
       return;
     }
     if (state.view === 'exam_room') {

@@ -347,8 +347,8 @@ assert.match(frontend, /publication\.questionVersionChanged === true/);
 assert.match(frontend, /allowed only before the exam opens and before any student starts/);
 assert.match(frontend, /After a student starts, send a correction or stop notice instead/);
 assert.match(frontend, /Use a correction notice/);
-assert.match(frontend, /refreshPortalSilently[\s\S]*await enrichProfessorExamIntents\(state\.exam\.portal\)/,
-  'silent portal refreshes must not bypass publication eligibility enrichment');
+assert.match(frontend, /async function refreshPortalSilently[\s\S]*const portal = payload\.result[\s\S]*await enrichProfessorExamIntents\(portal\)[\s\S]*if \(!isCurrentExamPortalLifecycle\(lifecycle\)\) return false;[\s\S]*state\.exam\.portal = portal/,
+  'silent portal refreshes must enrich locally and revalidate the session before publishing portal state');
 
 // Another submission is student-specific and preserves the first receipt under a one-use grading-key check.
 assert.match(frontend, /candidate\.canReopenSubmission === true/);

@@ -5,6 +5,7 @@ import {
   EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_HEADERS,
   EXAM_ROOM_BEADLE_ROSTER_TEMPLATE_VERSION,
   EXAM_ROOM_HANDOFF_MINIMUM_LEAD_MINUTES,
+  normalizeExamClassResultsWorkbookRequest,
   normalizeExamResultPdfRequest,
   normalizeExamRoomCommand,
   normalizeExamRoomPaymentProofUpload,
@@ -610,12 +611,24 @@ test('Professor result PDF request is candidate-scoped and allows only three pac
     gradingKey: 'professor-grading-key-secret',
     requestKey,
   });
+  assert.equal(normalizeExamResultPdfRequest({
+    examId, attemptId, scope: 'grades_comments', requestKey,
+  }).gradingKey, null, 'remembered Professor access does not require the raw key on another device');
   assert.throws(() => normalizeExamResultPdfRequest({
     examId,
     attemptId,
     scope: 'all_database_evidence',
     gradingKey: 'professor-grading-key-secret',
     requestKey,
+  }), (error) => error.code === 'INVALID_REQUEST');
+});
+
+test('Professor class workbook permits a roster-only offline export but not an empty final export', () => {
+  assert.deepEqual(normalizeExamClassResultsWorkbookRequest({
+    examId, attemptIds: [], scope: 'offline_grading', requestKey,
+  }), { examId, attemptIds: [], scope: 'offline_grading', requestKey });
+  assert.throws(() => normalizeExamClassResultsWorkbookRequest({
+    examId, attemptIds: [], scope: 'class_results', requestKey,
   }), (error) => error.code === 'INVALID_REQUEST');
 });
 
@@ -1057,7 +1070,12 @@ test('grading model-answer retrieval accepts a remembered exam-scoped grading me
   }), {
     operation: 'grading_model_answer', examId, gradingKey: null,
   });
-  assert.throws(() => normalizeExamRoomQuery({ operation: 'live_status_v2', examId }));
+  assert.deepEqual(normalizeExamRoomQuery({ operation: 'live_status_v2', examId }), {
+    operation: 'live_status_v2', examId, gradingKey: null,
+  });
+  assert.equal(normalizeExamRoomCommand({
+    operation: 'release_results', examId, requestKey, includeQuestionnaire: true,
+  }).gradingKey, null);
 });
 
 test('session transfer verification failures map to a safe actionable conflict', () => {

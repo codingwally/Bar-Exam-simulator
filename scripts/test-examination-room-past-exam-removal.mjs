@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
-const [migration, core, routes, worker, frontend, css, html] = await Promise.all([
+const [migration, generalization, core, routes, worker, frontend, css, html] = await Promise.all([
   readFile(new URL('supabase/migrations/20260811230633_exam_room_user_past_exam_removal.sql', root), 'utf8'),
+  readFile(new URL('supabase/migrations/20260812235553_generalize_exam_workspace_removal.sql', root), 'utf8'),
   readFile(new URL('worker/exam-room-2026-core.mjs', root), 'utf8'),
   readFile(new URL('worker/duediligence-2026-routes.mjs', root), 'utf8'),
   readFile(new URL('worker/index.mjs', root), 'utf8'),
@@ -22,6 +23,7 @@ for (const canonical of [
   'exam_room_submissions', 'exam_room_submission_receipts', 'exam_room_audit_log',
 ]) {
   assert.doesNotMatch(migration, new RegExp(`delete\\s+from\\s+public\\.${canonical}`, 'i'));
+  assert.doesNotMatch(generalization, new RegExp(`delete\\s+from\\s+public\\.${canonical}`, 'i'));
 }
 
 // Ordinary browser roles cannot read or mutate dismissal records directly.
@@ -31,18 +33,19 @@ assert.match(migration, /revoke all privileges on table public\.exam_room_user_e
 assert.match(migration, /grant select, insert, update, delete on table public\.exam_room_user_exam_dismissals\s+to service_role/);
 
 // Authorization must cover each requested role and be tied to the authenticated user.
-const dismissFunction = migration.slice(migration.indexOf('exam_room_dismiss_past_exam_v1'));
+const dismissFunction = generalization.slice(generalization.indexOf('exam_room_dismiss_past_exam_v1'));
 assert.match(dismissFunction, /v_exam\.owner_professor_id = p_user_id/);
 assert.match(dismissFunction, /b\.beadle_user_id = p_user_id[\s\S]*b\.status = 'active'/);
 assert.match(dismissFunction, /a\.student_user_id = p_user_id/);
 assert.match(dismissFunction, /r\.student_user_id = p_user_id or r\.canonical_email = v_user_email/);
-assert.match(dismissFunction, /EXAM_ROOM_PAST_EXAM_ACCESS_REQUIRED/);
+assert.match(dismissFunction, /EXAM_ROOM_EXAM_ACCESS_REQUIRED/);
 
-// Only terminal/past records may be hidden; active and upcoming exams fail closed.
-assert.match(dismissFunction, /v_exam\.status in \('closed', 'grading', 'sealed'\)/);
-assert.match(dismissFunction, /v_exam\.hard_closes_at <= now\(\)/);
-assert.match(dismissFunction, /v_attempt_status in \('submitted', 'auto_submitted', 'sealed'\)/);
-assert.match(dismissFunction, /if not v_is_past then[\s\S]*EXAM_ROOM_PAST_EXAM_REQUIRED/);
+// Any lifecycle state may be removed from this user's workspace; access still fails closed.
+assert.doesNotMatch(dismissFunction, /EXAM_ROOM_PAST_EXAM_REQUIRED/);
+assert.doesNotMatch(dismissFunction, /if not v_is_past/);
+assert.match(dismissFunction, /'removedFromWorkspace', true/);
+assert.match(generalization, /revoke all on function public\.exam_room_dismiss_past_exam_v1\(uuid, uuid, text\)[\s\S]*from public, anon, authenticated/);
+assert.match(generalization, /grant execute on function public\.exam_room_dismiss_past_exam_v1\(uuid, uuid, text\)[\s\S]*to service_role/);
 
 // The validated Worker command carries only actor scope, exam UUID, and request key.
 assert.match(core, /'dismiss_past_exam'/);
@@ -52,27 +55,32 @@ assert.match(routes, /archivedProfessorExams/);
 assert.match(routes, /Removing a past exam hides it from the active workspace, never from the[\s\S]*permanent grade-record archive/);
 assert.match(worker, /'exam_room_dismissed_past_exam_ids_v1'/);
 assert.match(worker, /'exam_room_dismiss_past_exam_v1'/);
+assert.match(worker, /EXAM_ROOM_EXAM_ACCESS_REQUIRED:[\s\S]*their own workspace/);
 assert.match(worker, /EXAM_ROOM_PAST_EXAM_ACCESS_REQUIRED/);
 assert.match(worker, /EXAM_ROOM_PAST_EXAM_REQUIRED/);
 
-// Professor, Beadle, and Student surfaces all expose the same completed-only action.
-assert.match(frontend, /pastExamRemovalButton\(exam, 'professor'\)/);
-assert.match(frontend, /pastExamRemovalButton\(exam, 'beadle'\)/);
-assert.match(frontend, /pastExamRemovalButton\(exam, 'student'\)/);
-assert.match(frontend, /function isPastExamForRole[\s\S]*\['closed', 'grading', 'sealed'\]/);
-assert.match(frontend, /data-dd26-delete-past-exam/);
+// Professor, Beadle, and Student surfaces expose the same all-state workspace action.
+assert.match(frontend, /examWorkspaceRemovalButton\(exam, 'professor'\)/);
+assert.match(frontend, /examWorkspaceRemovalButton\(exam, 'beadle'\)/);
+assert.match(frontend, /examWorkspaceRemovalButton\(exam, 'student'\)/);
+assert.match(frontend, /data-dd26-delete-workspace-exam/);
+assert.match(frontend, /function professorExamList/);
+assert.match(frontend, /class="dd26-professor-exam-list" role="list"/);
+assert.match(frontend, /class="dd26-professor-exam-row\$\{selected \? ' is-selected' : ''\}"/);
+assert.doesNotMatch(frontend.slice(frontend.indexOf('function professorSection'), frontend.indexOf('function professorClass')), /class="dd26-toolbar"/);
 assert.match(frontend, /Official grade archive/);
 assert.match(frontend, /data-dd26-results-dashboard="\$\{escapeHtml\(exam\.examId\)\}"/);
 assert.match(frontend, /submissions, saved grades, comments, result delivery status, analytics, and workbook exports are never deleted/);
 
 // Confirmation is explicit and reuses the global accessible dialog contract.
 const dialogFlow = frontend.slice(
-  frontend.indexOf('function openPastExamRemoval'),
+  frontend.indexOf('function openExamWorkspaceRemoval'),
   frontend.indexOf('function bindExamSection'),
 );
 assert.match(dialogFlow, /Are you sure\?/);
-assert.match(dialogFlow, /Delete from Past Exams/);
+assert.match(dialogFlow, /Delete from my workspace/);
 assert.match(dialogFlow, /official records stay preserved/i);
+assert.match(dialogFlow, /does not close the examination, stop its clock, revoke access/);
 assert.match(dialogFlow, /operation: 'dismiss_past_exam'/);
 const dialogShell = frontend.slice(
   frontend.indexOf('function openDialog'),
@@ -81,8 +89,11 @@ const dialogShell = frontend.slice(
 assert.match(dialogShell, /class="dd26-dialog-close"/);
 assert.match(dialogShell, /back\.textContent = 'Back'/);
 assert.match(css, /\.dd26-table-actions\{margin-top:0;gap:8px;\}/);
+assert.match(css, /\.dd26-professor-exam-list\{/);
+assert.match(css, /\.dd26-professor-exam-row\.is-selected/);
+assert.match(css, /@media \(max-width:680px\)[\s\S]*\.dd26-professor-exam-row\{grid-template-columns:1fr/);
 
-assert.match(html, /duediligence-2026\.css\?v=class-results-20260812-1/);
-assert.match(html, /duediligence-2026\.js\?v=room-request-email-hotfix-20260813-1/);
+assert.match(html, /duediligence-2026\.css\?v=professor-virtual-room-20260813-2/);
+assert.match(html, /duediligence-2026\.js\?v=professor-virtual-room-20260813-2/);
 
-console.log('Examination Room past-exam removal contracts passed.');
+console.log('Examination Room all-state workspace removal and Professor list contracts passed.');

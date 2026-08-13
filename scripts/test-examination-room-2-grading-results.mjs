@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 
 const root = new URL('../', import.meta.url);
 const frontend = await readFile(new URL('assets/duediligence-2026.js', root), 'utf8');
@@ -19,6 +20,54 @@ const moveBlock = between('function moveGrade', 'function nextGrade');
 const nextBlock = between('function nextGrade', 'async function unlockAttempt');
 const classResultsBlock = between('function classResultCandidates', 'function resultPdfFileName');
 const downloadBlock = between('async function downloadCandidateResult', 'async function requestFullscreen');
+
+const scoreContext = vm.createContext({ Number, String, Array });
+vm.runInContext(`
+  function escapeHtml(value) { return String(value); }
+  ${between('function classResultCandidateTotals', 'function classResultsAnalytics')}
+  ${between('function candidateScoreDisclosure', 'function renderProfessorResultsDashboard')}
+  globalThis.scoreDisclosure = candidateScoreDisclosure;
+`, scoreContext);
+
+const pendingScore = scoreContext.scoreDisclosure({
+  studentName: 'Pending Student',
+  allGradesFinal: false,
+  questions: [{ ordinal: 1, score: null, maximumPoints: 5, gradeState: 'ungraded' }],
+});
+assert.match(pendingScore, /Recorded subtotal: 0\.00/);
+assert.match(pendingScore, /Pending \/ 5\.00/);
+assert.match(pendingScore, /0 of 1 questions graded/);
+assert.doesNotMatch(pendingScore, />0\.00 \/ 5\.00</,
+  'a pending grade must not be displayed as a scored zero');
+
+const partialScore = scoreContext.scoreDisclosure({
+  studentName: 'Partial Student',
+  allGradesFinal: false,
+  questions: [
+    { ordinal: 1, score: 2.5, maximumPoints: 5, gradeState: 'draft' },
+    { ordinal: 2, score: 1.7, maximumPoints: 5, gradeState: 'final' },
+    { ordinal: 3, score: '', maximumPoints: 5, gradeState: 'ungraded' },
+  ],
+});
+assert.match(partialScore, /Recorded subtotal: 4\.20/);
+assert.match(partialScore, /2 of 3 questions graded/);
+assert.match(partialScore, /Not final/);
+assert.match(partialScore, /2\.50 \/ 5\.00/);
+assert.match(partialScore, /1\.70 \/ 5\.00/);
+assert.match(partialScore, /Pending \/ 5\.00/);
+
+const finalScore = scoreContext.scoreDisclosure({
+  studentName: 'Final Student',
+  allGradesFinal: true,
+  questions: [
+    { ordinal: 1, score: 2.5, maximumPoints: 5, gradeState: 'final' },
+    { ordinal: 2, score: 1.7, maximumPoints: 5, gradeState: 'final' },
+  ],
+});
+assert.match(finalScore, /4\.20 \/ 10\.00/);
+assert.match(finalScore, /42\.0%/);
+assert.match(finalScore, /Final total/);
+assert.doesNotMatch(finalScore, /Not final|Pending/);
 
 assert.match(saveBlock, /const rawScore = String\(scoreInput\?\.value \|\| ''\)\.trim\(\)/);
 assert.ok(saveBlock.indexOf("if (!rawScore)") < saveBlock.indexOf('const result = await command'));
@@ -62,13 +111,17 @@ assert.match(renderBlock, /id="dd26-review-class-results"/);
 assert.match(classResultsBlock, /operation: 'results_dashboard'/);
 assert.match(classResultsBlock, /data-dd26-class-result-candidate/);
 assert.match(classResultsBlock, /Download selected workbook/);
+assert.match(classResultsBlock, /No student has submitted yet/);
+assert.match(classResultsBlock, /Download current workbook/);
+assert.match(classResultsBlock, /checkboxes\.length > 0 && selected\.length < 1/,
+  'the roster-only workbook must remain downloadable with zero submitted attempts');
 assert.match(classResultsBlock, /Send grades \+ download all/);
 assert.match(classResultsBlock, /offline_grading/);
 assert.match(classResultsBlock, /class_results/);
 assert.match(classResultsBlock, /\/exam-room\/results\/workbook/);
 assert.match(classResultsBlock, /bytes\[0\] !== 0x50 \|\| bytes\[1\] !== 0x4b/);
 assert.match(classResultsBlock, /operation: 'release_results'/);
-assert.match(classResultsBlock, /gradingQuestions\(grading\)\.filter\(\(question\) => question\.gradeState !== 'final'\)/);
+assert.match(classResultsBlock, /candidates\.filter\(\(candidate\) => candidate\.allGradesFinal !== true\)/);
 assert.match(classResultsBlock, /Include examination questions in student result emails/);
 assert.match(classResultsBlock, /The downloaded Professor workbook always includes questions and submitted answers/);
 assert.match(frontend, /Class grading queue/);
@@ -78,6 +131,10 @@ assert.match(frontend, /Save and Next continues through the selected grading fil
 assert.match(classResultsBlock, /await downloadClassWorkbook\(report, attemptIds, 'class_results'/);
 assert.match(classResultsBlock, /clearGradingWorkspace\(\)[\s\S]*Graded results were queued for delivery/);
 assert.match(classResultsBlock, /renderProfessorResultsDashboard\(report\)/);
+assert.match(classResultsBlock, /function candidateScoreDisclosure/);
+assert.match(classResultsBlock, /class="dd26-score-disclosure"/);
+assert.match(classResultsBlock, /View breakdown/);
+assert.match(classResultsBlock, /id="dd26-dashboard-refresh"/);
 for (const metric of ['Participation', 'Class average', 'Median score', 'Absent / no-show', 'Late entry or submission', 'Strongest item', 'Lowest-performing item']) {
   assert.match(classResultsBlock, new RegExp(metric));
 }

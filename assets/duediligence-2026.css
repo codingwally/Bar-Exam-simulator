@@ -278,6 +278,23 @@
 .dd26-room-setup>summary{display:flex;min-height:48px;align-items:center;color:#f3ca68;cursor:pointer;font-weight:750;}
 .dd26-room-setup[open]>summary{margin-bottom:14px;}
 .dd26-professor-focus{scroll-margin-top:90px;}
+.dd26-professor-exam-list{display:grid;gap:10px;margin:18px 0 24px;padding:0;list-style:none;}
+.dd26-professor-exam-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:20px;padding:16px 18px;border:1px solid var(--dd26-border-muted);border-left:3px solid transparent;border-radius:7px;background:rgba(15,23,42,.38);transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease;}
+.dd26-professor-exam-row:hover,.dd26-professor-exam-row:focus-within{border-color:rgba(231,189,93,.58);border-left-color:rgba(231,189,93,.58);background:rgba(10,37,66,.68);}
+.dd26-professor-exam-row:focus-visible{outline:2px solid #f1c65d;outline-offset:3px;box-shadow:0 0 0 3px rgba(212,175,55,.2);}
+.dd26-professor-exam-row.is-selected,.dd26-professor-exam-row.is-active,.dd26-professor-exam-row[aria-current="true"]{border-color:rgba(237,199,104,.72);border-left-color:var(--dd26-gold-bright);background:linear-gradient(135deg,rgba(197,160,89,.13),rgba(10,37,66,.72));box-shadow:0 10px 28px rgba(0,0,0,.16);}
+.dd26-professor-exam-summary{min-width:0;}
+.dd26-professor-exam-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.dd26-professor-exam-title>strong{display:block;margin:0;color:var(--dd26-text);font-family:'Playfair Display',serif;font-size:20px;line-height:1.25;overflow-wrap:anywhere;}
+.dd26-professor-exam-summary p{margin:6px 0 0;color:var(--dd26-text-muted);line-height:1.5;}
+.dd26-professor-exam-meta{display:flex;align-items:center;gap:7px 14px;flex-wrap:wrap;margin-top:7px;color:var(--dd26-text-muted);font-size:12px;line-height:1.5;}
+.dd26-professor-exam-meta span{display:inline-flex;align-items:center;min-width:0;}
+.dd26-professor-exam-meta span+span::before{content:'\2022';margin-right:14px;color:var(--dd26-gold);}
+.dd26-professor-exam-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap;margin:0;}
+.dd26-professor-exam-actions .dd26-button{min-height:42px;padding:10px 14px;}
+.dd26-professor-selected-workspace{scroll-margin-top:90px;margin-top:24px;padding-top:24px;border-top:1px solid var(--dd26-border);}
+.dd26-professor-selected-workspace:focus{outline:0;}
+.dd26-professor-selected-workspace:focus-visible{outline:2px solid #f1c65d;outline-offset:6px;}
 .dd26-request-beadle-fields{padding:14px;border:1px solid rgba(197,160,89,.25);border-radius:6px;background:rgba(2,18,35,.28);}
 .dd26-request-beadle-fields[hidden]{display:none;}
 .dd26-check-list{display:grid;gap:9px;padding:0;list-style:none;}
@@ -334,6 +351,32 @@
 .dd26-result-extremes strong{color:#f2cc70;font-family:'Playfair Display',serif;font-size:21px;line-height:1.3;}
 .dd26-result-bar{width:130px;height:8px;margin:0 0 7px;overflow:hidden;border-radius:999px;background:rgba(148,163,184,.2);}
 .dd26-result-bar span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#a77d2d,#f0ca70);}
+.dd26-professor-room{max-width:1500px;margin-inline:auto;}
+.dd26-professor-room-loading,.dd26-professor-room-waiting{display:flex;align-items:center;gap:18px;padding:24px;border:1px solid rgba(197,160,89,.38);border-radius:8px;background:linear-gradient(135deg,rgba(197,160,89,.1),rgba(2,18,35,.36));}
+.dd26-professor-room-loading{min-height:210px;justify-content:center;text-align:left;}
+.dd26-professor-room-loading h2{margin:5px 0 8px;}
+.dd26-professor-room-loading p,.dd26-professor-room-waiting p{margin:5px 0 0;color:var(--dd26-text-muted);}
+.dd26-room-spinner{width:34px;height:34px;flex:0 0 auto;border:3px solid rgba(241,198,93,.22);border-top-color:#f1c65d;border-radius:50%;animation:dd26-room-spin 1s linear infinite;}
+@keyframes dd26-room-spin{to{transform:rotate(360deg);}}
+.dd26-professor-room-stats{grid-template-columns:repeat(4,minmax(0,1fr));margin:22px 0;}
+.dd26-professor-room-warning{border-left-color:#facc15;}
+.dd26-live-state{display:inline-flex;align-items:center;min-height:28px;padding:4px 9px;border:1px solid rgba(148,163,184,.3);border-radius:999px;background:rgba(148,163,184,.08);color:#dbe5f0;font-size:12px;font-weight:700;}
+.dd26-live-state.is-active,.dd26-live-state.is-in_progress{border-color:rgba(74,222,128,.5);background:rgba(22,101,52,.22);color:#bbf7d0;}
+.dd26-live-state.is-submitted,.dd26-live-state.is-auto_submitted{border-color:rgba(96,165,250,.55);background:rgba(30,64,175,.24);color:#dbeafe;}
+.dd26-live-state.is-locked{border-color:rgba(251,191,36,.6);background:rgba(146,64,14,.22);color:#fde68a;}
+.dd26-integrity-summary{min-width:190px;}
+.dd26-integrity-summary strong,.dd26-integrity-summary small{display:block;}
+.dd26-integrity-summary small{margin-top:4px;color:var(--dd26-text-muted);}
+.dd26-score-disclosure{min-width:180px;}
+.dd26-score-disclosure summary{display:grid;grid-template-columns:auto auto;align-items:center;gap:2px 10px;cursor:pointer;list-style-position:outside;color:var(--dd26-text);}
+.dd26-score-disclosure summary>span{font:700 14px/1.35 'IBM Plex Mono',monospace;}
+.dd26-score-disclosure summary>strong{color:#f2cc70;font-size:14px;}
+.dd26-score-disclosure summary>small{grid-column:1/-1;color:var(--dd26-text-muted);font-size:11px;}
+.dd26-score-disclosure[open] summary{margin-bottom:10px;}
+.dd26-score-disclosure ol{display:grid;gap:6px;margin:0;padding:10px 10px 10px 28px;border:1px solid rgba(197,160,89,.25);border-radius:6px;background:rgba(2,18,35,.32);}
+.dd26-score-disclosure li{padding-left:3px;color:var(--dd26-text-muted);font-size:11px;}
+.dd26-score-disclosure li span,.dd26-score-disclosure li strong,.dd26-score-disclosure li small{display:block;}
+.dd26-score-disclosure li strong{color:var(--dd26-text);font-family:'IBM Plex Mono',monospace;}
 .dd26-question-nav button.is-flagged{border-color:#f59e0b;box-shadow:inset 0 -3px #f59e0b;}
 .dd26-essay-editor{min-height:320px;line-height:1.75;}
 .dd26-attention-return{margin:0 0 18px;}
@@ -378,6 +421,8 @@
   .dd26-waiting-instructions{padding:18px;}
   .dd26-form-grid>.dd26-field>span{min-height:0;align-items:flex-start;}
   .dd26-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .dd26-professor-room-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .dd26-professor-room-loading,.dd26-professor-room-waiting{align-items:flex-start;padding:18px;}
   .dd26-result-extremes{grid-template-columns:1fr;}
   .dd26-choice-grid{grid-template-columns:1fr;}
   .dd26-fact-row{grid-template-columns:1fr;gap:8px;}
@@ -397,6 +442,11 @@
   .dd26-question-meta{align-items:flex-start;flex-direction:column;gap:9px;}
   .dd26-attention-list article{align-items:flex-start;flex-direction:column;}
   .dd26-attention-list article>.dd26-actions{width:100%;margin-top:5px;}
+  .dd26-professor-exam-list{margin:15px 0 20px;}
+  .dd26-professor-exam-row{grid-template-columns:1fr;align-items:start;gap:14px;padding:16px;}
+  .dd26-professor-exam-actions{display:grid;grid-template-columns:1fr;width:100%;}
+  .dd26-professor-exam-actions .dd26-button{width:100%;}
+  .dd26-professor-selected-workspace{margin-top:18px;padding-top:18px;}
   .dd26-room-request-heading{align-items:flex-start;flex-direction:column;}
   .dd26-room-request-summary{grid-template-columns:1fr;}
   .dd26-actions{align-items:stretch;flex-direction:column;}
@@ -416,6 +466,8 @@
   .dd26-exam-nav{grid-template-columns:1fr;}
   .dd26-role-card{grid-template-columns:1fr;}
   .dd26-role-number{margin-bottom:-6px;}
+  .dd26-professor-exam-meta{display:grid;gap:4px;}
+  .dd26-professor-exam-meta span+span::before{display:none;}
 }
 @media (prefers-reduced-motion:reduce){
   .dd26-page *,

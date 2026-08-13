@@ -498,16 +498,27 @@ function reopenedSubmissionView(value, input) {
 
 function liveStatusV2View(value, input) {
   const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  if (source.ok !== true) {
+    const code = [
+      'GRADING_KEY_REQUIRED', 'CREDENTIAL_INVALID', 'CREDENTIAL_LOCKED',
+      'CREDENTIAL_NOT_ACTIVE',
+    ].includes(String(source.code || ''))
+      ? String(source.code)
+      : 'EXAM_ROOM_LIVE_STATUS_DENIED';
+    return { ok: false, examId: input.examId, code };
+  }
   const result = requireProjectedScope(projectScalarFields(source, [
     'ok', 'examId', 'title', 'status', 'opensAt', 'hardClosesAt', 'serverNow',
-    'reopenMaximumMinutes', 'accessCodeRequired',
+    'reopenMaximumMinutes', 'accessCodeRequired', 'rosterReady', 'studentAccessReady',
   ]), { examId: input.examId });
   return {
     ...result,
     candidates: projectEvidenceRows(source.candidates, [
-      'candidateNumber', 'attemptId', 'state', 'startedAt', 'serverDeadline',
+      'candidateNumber', 'studentName', 'studentNumber', 'attemptId', 'state', 'startedAt', 'serverDeadline',
       'submittedAt', 'generation', 'latestReceiptId', 'priorReceiptId',
       'activeReopeningId', 'canReopenSubmission', 'reopenBlockedReason',
+      'lastHeartbeatAt', 'incidentCount', 'focusExitCount', 'clipboardAttemptCount',
+      'lastIncidentAt',
     ], 500),
   };
 }
@@ -1069,14 +1080,16 @@ export function createDD2026Handlers(deps) {
       await parseBoundedJson(request, 20_000),
     );
     await examRateLimit(request, env, user.id, 'write', input.attemptId);
-    const rateHash = await examRoomRateKey(request, user.id, input.examId);
-    const result = await examRoomRpc(env, 'exam_room_prepare_result_export_v3', {
+    const rateHash = input.gradingKey
+      ? await examRoomRateKey(request, user.id, input.examId)
+      : null;
+    const result = await examRoomRpc(env, 'exam_room_prepare_result_export_v4', {
       p_professor_user_id: user.id,
       p_exam_public_id: input.examId,
       p_attempt_public_id: input.attemptId,
       p_export_scope: input.scope,
       p_request_key: input.requestKey,
-      p_grading_key_hash: await hashedCredential(input.gradingKey),
+      p_grading_key_hash: input.gradingKey ? await hashedCredential(input.gradingKey) : null,
       p_rate_key_hash: rateHash,
     });
     if (result?.ok !== true || !result?.exportId) {
@@ -2247,10 +2260,11 @@ export function createDD2026Handlers(deps) {
         p_grading_key_hash: input.gradingKey ? await h(input.gradingKey) : null,
         p_rate_key_hash: input.gradingKey ? rateHash : null,
       } }),
-      release_results: async () => ({ functionName: 'exam_room_release_results', body: {
+      release_results: async () => ({ functionName: 'exam_room_release_results_v2', body: {
         p_professor_user_id: userId, p_exam_public_id: input.examId,
         p_request_key: input.requestKey, p_include_questionnaire: input.includeQuestionnaire,
-        p_grading_key_hash: await h(input.gradingKey), p_rate_key_hash: rateHash,
+        p_grading_key_hash: input.gradingKey ? await h(input.gradingKey) : null,
+        p_rate_key_hash: input.gradingKey ? rateHash : null,
       } }),
       retry_student_result_email: async () => ({
         functionName: 'exam_room_retry_student_result_email_v1',

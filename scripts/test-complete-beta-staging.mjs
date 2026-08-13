@@ -13,8 +13,8 @@ assert.equal(
   'https://duediligence-examinations-staging.wallyesteban1993.workers.dev',
 );
 assert.ok(
-  SERVICE_ROLE_KEY.length > 80 || /^sb_secret_[A-Za-z0-9_-]{20,}$/.test(SERVICE_ROLE_KEY),
-  'A staging service-role or secret key is required.',
+  /^sb_secret_[A-Za-z0-9_-]{20,}$/.test(SERVICE_ROLE_KEY),
+  'A dedicated staging secret key is required.',
 );
 assert.match(PUBLISHABLE_KEY, /^sb_publishable_[A-Za-z0-9_-]{20,}$/);
 
@@ -24,7 +24,6 @@ const createdEntryIds = [];
 
 const serviceHeaders = {
   apikey: SERVICE_ROLE_KEY,
-  Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
   'Content-Type': 'application/json',
 };
 
@@ -300,7 +299,15 @@ try {
     term: criminalLaw.term,
   });
   assert.notEqual(next.body.data.setup.versionId, first.body.data.setup.versionId);
-  assert.equal(next.body.data.completedCount, 1);
+  for (const confidentialCount of [
+    'completedCount',
+    'attemptedCount',
+    'completedQuestions',
+    'attemptedQuestions',
+    'cycleComplete',
+  ]) {
+    assert.equal(confidentialCount in next.body.data, false);
+  }
 
   const performance = await examinationQuery(student, 'subject_performance', {
     subject: criminalLaw.subject,

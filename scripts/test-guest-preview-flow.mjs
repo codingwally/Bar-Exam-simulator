@@ -301,6 +301,13 @@ async function reconcileScenario({ session = null, responses }) {
     setTimeout,
     clearTimeout,
     guestDeviceId() { return 'device_123456789012345678901234567890'; },
+    async refreshAuthenticatedSession() { return null; },
+    async clearInvalidLocalSession() {
+      state.session = null;
+      state.user = null;
+      state.profile = null;
+      state.admin = null;
+    },
     syncAuthUi() { syncCount += 1; },
     requireSignInForGuestLimit() { promptCount += 1; },
   };

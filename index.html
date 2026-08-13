@@ -938,12 +938,8 @@
   }
 </style>
 <link rel="stylesheet" href="assets/phase2.css">
-<link rel="stylesheet" href="assets/lex-forum.css?v=live-experience-quorum-back-20260811-1">
-<link rel="stylesheet" href="assets/examinations.css?v=corrective-20260812-1">
-<link rel="stylesheet" href="assets/duediligence-2026.css?v=professor-virtual-room-20260813-2">
-<link rel="stylesheet" href="assets/private-beta-landing.css?v=homepage-default-20260812-1">
+<link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1">
 <script src="assets/exam-session-controller.js"></script>
-<script src="assets/examination-room-2-store.js?v=exam-room-2-four-role-20260810"></script>
 </head>
 <body class="private-beta-public">
 
@@ -958,10 +954,36 @@
       </span>
     </a>
     <nav class="pb-chamber-nav" aria-label="Due Diligence chambers">
-      <a class="pb-chamber-pill pb-chamber-academy" href="#explore-academy">The Academy</a>
-      <a class="pb-chamber-pill pb-chamber-commons" href="#explore-commons">The Commons</a>
-      <a class="pb-chamber-pill pb-chamber-barbound" href="#explore-barbound">BarBound</a>
-      <a class="pb-chamber-pill pb-chamber-room" href="#explore-examination-room">Examination Room</a>
+      <div class="pb-chamber-menu">
+        <button class="pb-chamber-pill pb-chamber-academy" type="button" aria-haspopup="menu"
+          aria-expanded="false" aria-controls="pb-academy-menu" data-pb-menu-trigger="academy">The Academy <span aria-hidden="true">▾</span></button>
+        <div class="pb-chamber-dropdown" id="pb-academy-menu" role="menu" aria-label="The Academy" hidden>
+          <button type="button" role="menuitem" data-public-feature="mock">Mock Bar</button>
+          <button type="button" role="menuitem" data-public-feature="subject-matter">Subject Matter</button>
+          <button type="button" role="menuitem" data-public-feature="verdict">The Verdict</button>
+        </div>
+      </div>
+      <div class="pb-chamber-menu">
+        <button class="pb-chamber-pill pb-chamber-commons" type="button" aria-haspopup="menu"
+          aria-expanded="false" aria-controls="pb-commons-menu" data-pb-menu-trigger="commons">The Commons <span aria-hidden="true">▾</span></button>
+        <div class="pb-chamber-dropdown" id="pb-commons-menu" role="menu" aria-label="The Commons" hidden>
+          <button type="button" role="menuitem" data-public-feature="bar-easy">Bar Easy</button>
+          <button type="button" role="menuitem" data-public-feature="quorum">Quorum</button>
+          <button type="button" role="menuitem" data-public-feature="retainer">Retainer</button>
+        </div>
+      </div>
+      <div class="pb-chamber-menu">
+        <button class="pb-chamber-pill pb-chamber-barbound" type="button" aria-haspopup="menu"
+          aria-expanded="false" aria-controls="pb-barbound-menu" data-pb-menu-trigger="barbound">BarBound <span aria-hidden="true">▾</span></button>
+        <div class="pb-chamber-dropdown" id="pb-barbound-menu" role="menu" aria-label="BarBound" hidden>
+          <button type="button" role="menuitem" data-public-feature="bar-feels">Bar Feels</button>
+          <button type="button" role="menuitem" data-public-feature="chair-cases">2026 Bar Chair&rsquo;s Cases</button>
+          <button type="button" role="menuitem" data-public-feature="doctrines">Doctrines</button>
+          <button type="button" role="menuitem" data-public-feature="anchor-cases">Anchor Case Digests</button>
+        </div>
+      </div>
+      <button class="pb-chamber-pill pb-chamber-room" type="button"
+        data-public-feature="examination-room">Examination Room</button>
     </nav>
     <nav class="pb-header-utilities" aria-label="Public utilities">
       <a href="#support" data-pb-legal="support">Support</a>
@@ -971,11 +993,11 @@
   <section class="pb-pillars" id="public-platform" aria-labelledby="pb-pillars-title">
     <div class="pb-pillars-heading">
       <p class="pb-eyebrow">One platform, four focused chambers</p>
-      <h2 id="pb-pillars-title">Choose how you want to prepare.</h2>
+      <h1 id="pb-pillars-title">Choose how you want to prepare.</h1>
       <p>Begin with the study experience that fits the work in front of you.</p>
     </div>
     <div class="pb-pillar-grid">
-      <a class="pb-pillar-card" href="#explore-academy">
+      <a class="pb-pillar-card" href="#chamber/academy">
         <picture class="pb-pillar-visual">
           <source type="image/avif" srcset="assets/private-beta/library-student-720.avif 720w, assets/private-beta/library-student-1440.avif 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
           <source type="image/webp" srcset="assets/private-beta/library-student-720.webp 720w, assets/private-beta/library-student-1440.webp 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
@@ -986,79 +1008,43 @@
         <p>Practice Philippine legal reasoning through Bar-style essays, course-based study, and a private record of your progress.</p>
         <strong>Open The Academy</strong>
       </a>
-      <a class="pb-pillar-card" href="#explore-commons">
+      <a class="pb-pillar-card" href="#chamber/commons">
         <picture class="pb-pillar-visual">
           <source type="image/avif" srcset="assets/private-beta/library-community-720.avif 720w, assets/private-beta/library-community-1440.avif 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
           <source type="image/webp" srcset="assets/private-beta/library-community-720.webp 720w, assets/private-beta/library-community-1440.webp 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <img src="assets/private-beta/library-community-720.jpg" width="720" height="480" loading="eager" decoding="async" alt="Students learning together in a library">
+          <img src="assets/private-beta/library-community-720.jpg" width="720" height="480" loading="lazy" decoding="async" alt="Students learning together in a library">
         </picture>
         <span class="pb-pillar-number">Bar Easy · Quorum · Retainer</span>
         <h3>The Commons</h3>
         <p>Practice legal reasoning in plain language, learn with the Due Diligence community, and manage your platform access.</p>
         <strong>Open The Commons</strong>
       </a>
-      <a class="pb-pillar-card" href="#explore-barbound">
+      <a class="pb-pillar-card" href="#chamber/barbound">
         <picture class="pb-pillar-visual">
           <source type="image/avif" srcset="assets/private-beta/writing-notes-720.avif 720w, assets/private-beta/writing-notes-1440.avif 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
           <source type="image/webp" srcset="assets/private-beta/writing-notes-720.webp 720w, assets/private-beta/writing-notes-1440.webp 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <img src="assets/private-beta/writing-notes-720.jpg" width="720" height="480" loading="eager" decoding="async" alt="Students reviewing notes and legal materials">
+          <img src="assets/private-beta/writing-notes-720.jpg" width="720" height="480" loading="lazy" decoding="async" alt="Students reviewing notes and legal materials">
         </picture>
         <span class="pb-pillar-number">Bar Feels · 2026 Bar Chair’s Cases · Doctrines · Anchor Case Digests</span>
         <h3>BarBound</h3>
         <p>Deepen Bar preparation through full simulations, doctrine mastery, Chair’s Cases, and foundational case digests.</p>
         <strong>Open BarBound</strong>
       </a>
-      <a class="pb-pillar-card" href="#explore-examination-room">
+      <button class="pb-pillar-card" type="button" data-public-feature="examination-room">
         <picture class="pb-pillar-visual">
           <source type="image/avif" srcset="assets/private-beta/writing-exam-720.avif 720w, assets/private-beta/writing-exam-1440.avif 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
           <source type="image/webp" srcset="assets/private-beta/writing-exam-720.webp 720w, assets/private-beta/writing-exam-1440.webp 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <img src="assets/private-beta/writing-exam-720.jpg" width="720" height="480" loading="eager" decoding="async" alt="Student writing an examination answer">
+          <img src="assets/private-beta/writing-exam-720.jpg" width="720" height="480" loading="lazy" decoding="async" alt="Student writing an examination answer">
         </picture>
         <span class="pb-pillar-number">Professor · Beadle · Student · Exam Administrator</span>
         <h3>Examination Room</h3>
         <p>One clear place to prepare, conduct, take, and grade a class examination.</p>
         <strong>Open Examination Room</strong>
-      </a>
+      </button>
     </div>
+    <p class="pb-continuity-assurance">Your private drafts, notes, answers, and progress belong to your account. Community posts and classroom records are shared only through the features you choose to use.</p>
   </section>
-  <section class="pb-category-pages" aria-label="Due Diligence categories">
-    <article class="pb-category-page" id="explore-academy">
-      <div>
-        <span class="pb-pillar-number">The Academy</span>
-        <h2>Practice, review, and understand your progress.</h2>
-        <p>Mock Bar delivers Philippine Bar essay drills with source-based A.L.A.C. feedback. Subject Matter organizes reviewed law-school questions by year and term. The Verdict keeps your personal attempt history and study exports in one place.</p>
-        <p class="pb-access-note">A Google account is required when you begin an examination or open personal results.</p>
-      </div>
-      <button class="pb-primary-action" type="button" data-protected-feature="mock">Try The Academy</button>
-    </article>
-    <article class="pb-category-page" id="explore-commons">
-      <div>
-        <span class="pb-pillar-number">The Commons</span>
-        <h2>Learn from materials and from one another.</h2>
-        <p>Bar Easy presents concise study material. Quorum is the signed-in academic community for questions, case notes, resources, and study circles. Retainer explains current access options without promising an official result.</p>
-        <p class="pb-access-note">Public information is open to visitors; community participation requires Google sign-in.</p>
-      </div>
-      <button class="pb-primary-action" type="button" data-protected-feature="quorum">Enter The Commons</button>
-    </article>
-    <article class="pb-category-page" id="explore-barbound">
-      <div>
-        <span class="pb-pillar-number">BarBound</span>
-        <h2>Move from review to deliberate Bar preparation.</h2>
-        <p>Bar Feels offers curated multi-question writing blocks. Chair&rsquo;s Cases, Doctrines, and Anchor Case Digests provide structured review material grounded in the platform&rsquo;s published content.</p>
-        <p class="pb-access-note">BarBound features require the applicable Premium entitlement. Pricing and access are shown before any commitment.</p>
-      </div>
-      <button class="pb-primary-action" type="button" data-protected-feature="bar-feels">Explore BarBound</button>
-    </article>
-    <article class="pb-category-page" id="explore-examination-room">
-      <div>
-        <span class="pb-pillar-number">Examination Room</span>
-        <h2>Run and sit controlled academic examinations.</h2>
-        <p>Professors prepare rooms and questions, Beadles assist with assigned operations, students take authorized examinations, and Exam Administrators manage only the rooms assigned to them.</p>
-        <p class="pb-access-note">Room access is role-scoped and may require an issued credential, published schedule, and verified payment state.</p>
-      </div>
-      <button class="pb-primary-action" type="button" data-protected-feature="examination-room">Open the Role Hub</button>
-    </article>
-  </section>
+  <section class="pb-chamber-view" id="pb-chamber-view" aria-live="polite" hidden></section>
 
   <footer class="pb-public-footer">
     <div class="pb-public-footer-inner">
@@ -1787,8 +1773,32 @@ const EXAMINER_WORKER_URL = 'https://duediligence-gemini-examiner.wallyesteban19
 const SC_RUBRIC_VERSION = 'SC-2025-BB4-PER-QUESTION-v1';
 const SC_2025_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/08/2025-Bar-Bar-Bulletin-No.-4-August-8-2025-Approved.pdf';
 const SC_2026_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/10/2026-BAR-Bar-Bulletin-No.-1-October-16-2025.pdf';
+function mockBarUserId() {
+  return String(window.DueDiligencePhase4?.getSession?.()?.user?.id || '').trim();
+}
+
+function mockBarScopedKey(baseKey) {
+  const userId = mockBarUserId();
+  return userId ? `duediligence.private.${userId}.mock-bar.${baseKey}` : '';
+}
+
+const mockBarTimerStorage = {
+  getItem(key) {
+    const scopedKey = mockBarScopedKey(key);
+    return scopedKey ? safeStorageGet(localStorage, scopedKey) : null;
+  },
+  setItem(key, value) {
+    const scopedKey = mockBarScopedKey(key);
+    if (scopedKey) safeStorageSet(localStorage, scopedKey, value);
+  },
+  removeItem(key) {
+    const scopedKey = mockBarScopedKey(key);
+    if (scopedKey) safeStorageRemove(localStorage, scopedKey);
+  },
+};
+
 const sessionController = DueDiligenceExamSession.createExamSessionController({
-  storage: localStorage,
+  storage: mockBarTimerStorage,
   storageKey: 'duediligence.exam.timer.v2',
   onTick: (state) => {
     timeLeft = state.remainingSeconds;
@@ -1878,10 +1888,14 @@ function questionAnswerKey(subject = currentSubj, index = currentIdx) {
 }
 
 function readPersistedWorkspace() {
+  const userId = mockBarUserId();
+  const storageKey = mockBarScopedKey(EXAM_WORKSPACE_KEY);
+  if (!userId || !storageKey) return null;
   try {
-    const saved = JSON.parse(safeStorageGet(localStorage, EXAM_WORKSPACE_KEY) || 'null');
+    const saved = JSON.parse(safeStorageGet(localStorage, storageKey) || 'null');
     if (
       saved?.version !== 2
+      || saved?.ownerUserId !== userId
       || !SUBJECTS.includes(saved.subject)
       || !/^[A-Z]{2,8}-(?:\d{3}|\d{4}-Q\d{1,3})$/i.test(String(saved.questionId || ''))
       || !['strict', 'selfPaced', 'none'].includes(saved.mode)
@@ -1899,8 +1913,12 @@ function persistWorkspace() {
   const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
   if (!question || !selectedSessionMode || !['answering', 'evaluating'].includes(examStage)) return;
   if (!currentAttemptKey) currentAttemptKey = newAttemptKey();
-  safeStorageSet(localStorage, EXAM_WORKSPACE_KEY, JSON.stringify({
+  const ownerUserId = mockBarUserId();
+  const storageKey = mockBarScopedKey(EXAM_WORKSPACE_KEY);
+  if (!ownerUserId || !storageKey) return;
+  safeStorageSet(localStorage, storageKey, JSON.stringify({
     version: 2,
+    ownerUserId,
     subject: currentSubj,
     questionId: question.id,
     mode: selectedSessionMode,
@@ -1911,7 +1929,8 @@ function persistWorkspace() {
 }
 
 function clearPersistedWorkspace() {
-  safeStorageRemove(localStorage, EXAM_WORKSPACE_KEY);
+  const storageKey = mockBarScopedKey(EXAM_WORKSPACE_KEY);
+  if (storageKey) safeStorageRemove(localStorage, storageKey);
 }
 
 function normalizeFivePointScore(value) {
@@ -1963,7 +1982,8 @@ async function syncRemoteExamHistory(userId) {
       seen.add(identity);
       return true;
     }).slice(0, 500);
-    safeStorageSet(localStorage, LS_KEY, JSON.stringify(historyLog));
+    const historyKey = mockBarScopedKey(LS_KEY);
+    if (historyKey) safeStorageSet(localStorage, historyKey, JSON.stringify(historyLog));
   } catch (error) {
     remoteHistoryLoadedForUser = null;
     console.warn('Cross-device history could not be synchronized.', { code: error?.code || 'HISTORY_UNAVAILABLE' });
@@ -2026,6 +2046,27 @@ window.addEventListener('duediligence:access', (event) => {
     syncRemoteExamHistory(userId);
     restorePersistedWorkspace(userId);
   }
+});
+
+window.addEventListener('duediligence:workspace-identity', (event) => {
+  const previousUserId = String(event.detail?.previousUserId || '');
+  const userId = String(event.detail?.userId || '');
+  if (!previousUserId || previousUserId === userId) return;
+  sessionController.pause();
+  userAnswers = {};
+  submissionResults = {};
+  historyLog = [];
+  currentAttemptKey = null;
+  currentSubj = null;
+  currentIdx = 0;
+  examStage = 'idle';
+  selectedSessionMode = null;
+  workspaceRestoreCompletedForUser = null;
+  remoteHistoryLoadedForUser = null;
+  const answerBox = document.getElementById('answer-box');
+  if (answerBox) answerBox.value = '';
+  document.getElementById('evaluation-result-area')?.replaceChildren();
+  showWelcome({ preserveSession: false, preserveRoute: false, focus: false });
 });
 
 function setOnboardingView(stage) {
@@ -2296,7 +2337,9 @@ function setQuestionControlsDisabled(disabled) {
 }
 
 function loadDrafts() {
-  try { return JSON.parse(localStorage.getItem(DRAFTS_KEY) || '{}'); } catch (error) { return {}; }
+  const storageKey = mockBarScopedKey(DRAFTS_KEY);
+  if (!storageKey) return {};
+  try { return JSON.parse(localStorage.getItem(storageKey) || '{}'); } catch (error) { return {}; }
 }
 
 function saveDraftForCurrentQuestion() {
@@ -2304,7 +2347,8 @@ function saveDraftForCurrentQuestion() {
   const key = questionAnswerKey();
   const drafts = loadDrafts();
   drafts[key] = userAnswers[key] || '';
-  safeStorageSet(localStorage, DRAFTS_KEY, JSON.stringify(drafts));
+  const storageKey = mockBarScopedKey(DRAFTS_KEY);
+  if (storageKey) safeStorageSet(localStorage, storageKey, JSON.stringify(drafts));
   persistWorkspace();
 }
 
@@ -3605,13 +3649,17 @@ function applyExamEnhancements() {
 /* ---------- Analytics (localStorage) ---------- */
 const LS_KEY = 'dd_attempts_v1';
 function loadAttempts() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (e) { return []; }
+  const storageKey = mockBarScopedKey(LS_KEY);
+  if (!storageKey) return [];
+  try { return JSON.parse(localStorage.getItem(storageKey) || '[]'); } catch (e) { return []; }
 }
 function logAttempt(obj) {
   try {
     const list = loadAttempts();
     list.unshift(obj);
-    localStorage.setItem(LS_KEY, JSON.stringify(list.slice(0, 500)));
+    const storageKey = mockBarScopedKey(LS_KEY);
+    if (!storageKey) return false;
+    localStorage.setItem(storageKey, JSON.stringify(list.slice(0, 500)));
     return true;
   } catch (e) {
     return false;
@@ -4181,10 +4229,12 @@ document.addEventListener('visibilitychange', () => {
 });
 
 window.addEventListener('storage', (event) => {
-  if (event.key === 'duediligence.exam.timer.v2' && examStage === 'answering') {
+  const timerKey = mockBarScopedKey('duediligence.exam.timer.v2');
+  const workspaceKey = mockBarScopedKey(EXAM_WORKSPACE_KEY);
+  if (timerKey && event.key === timerKey && examStage === 'answering') {
     sessionController.syncFromStorage();
   }
-  if (event.key === EXAM_WORKSPACE_KEY && examStage === 'answering') {
+  if (workspaceKey && event.key === workspaceKey && examStage === 'answering') {
     const saved = readPersistedWorkspace();
     const question = BAR_QUESTIONS[currentSubj]?.[currentIdx];
     const activeAnswerKey = questionAnswerKey();
@@ -4206,11 +4256,10 @@ window.addEventListener('storage', (event) => {
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
 <script src="assets/phase2-experience.js?v=preserve-route-20260813-1"></script>
 <script src="assets/phase4-experience.js?v=auth-persistence-20260812-1"></script>
-<script src="assets/lex-forum.js?v=live-experience-quorum-back-20260811-1"></script>
-<script src="assets/examinations.js?v=subject-submit-20260813-1"></script>
-<script src="assets/duediligence-2026.js?v=professor-virtual-room-20260813-2"></script>
 <script src="assets/phase3-analytics.js"></script>
-<script src="assets/private-beta-landing.js?v=route-restoration-20260813-1"></script>
+<script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
+<script src="assets/feature-loader.js?v=master-experience-20260813-1"></script>
+<script src="assets/private-beta-landing.js?v=master-experience-20260813-1"></script>
 
 </body>
 </html>

@@ -39,20 +39,25 @@ function deferred() {
 }
 
 const root = new URL('../', import.meta.url);
-const [html, js, css, build, store, examinations] = await Promise.all([
+const [html, js, css, build, store, examinations, featureLoader] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/duediligence-2026.js', root), 'utf8'),
   readFile(new URL('assets/duediligence-2026.css', root), 'utf8'),
   readFile(new URL('scripts/build-pages-artifact.mjs', root), 'utf8'),
   readFile(new URL('assets/examination-room-2-store.js', root), 'utf8'),
   readFile(new URL('assets/examinations.js', root), 'utf8'),
+  readFile(new URL('assets/feature-loader.js', root), 'utf8'),
 ]);
 
-assert.match(html, /assets\/duediligence-2026\.css/);
-assert.match(html, /assets\/duediligence-2026\.js/);
+assert.doesNotMatch(html, /<link[^>]+assets\/duediligence-2026\.css/);
+assert.doesNotMatch(html, /<script[^>]+assets\/duediligence-2026\.js/);
+assert.match(html, /assets\/feature-loader\.js\?v=master-experience-20260813-1/);
+assert.match(featureLoader, /assets\/duediligence-2026\.css\?v=master-experience-20260813-1/);
+assert.match(featureLoader, /assets\/duediligence-2026\.js\?v=master-experience-20260813-1/);
 assert.match(build, /assets\/duediligence-2026\.css/);
 assert.match(build, /assets\/duediligence-2026\.js/);
-assert.match(html, /assets\/examination-room-2-store\.js/);
+assert.doesNotMatch(html, /<script[^>]+assets\/examination-room-2-store\.js/);
+assert.match(featureLoader, /assets\/examination-room-2-store\.js\?v=master-experience-20260813-1/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
 
 // Capped assessments keep the authoritative final score and omit the provider's

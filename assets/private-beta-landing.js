@@ -17,11 +17,52 @@
   const publicHomepageHashes = new Set([
     '',
     'public-platform',
-    'explore-academy',
-    'explore-commons',
-    'explore-barbound',
-    'explore-examination-room',
+    'chamber/academy',
+    'chamber/commons',
+    'chamber/barbound',
   ]);
+  const chamberViews = Object.freeze({
+    academy: Object.freeze({
+      kicker: 'The Academy',
+      title: 'Practice, review, and understand your progress.',
+      copy: 'Build disciplined Philippine legal analysis through realistic essay practice, course-based study, and a private record of your own work.',
+      image: 'library-student',
+      alt: 'Law student preparing in a library',
+      features: Object.freeze([
+        Object.freeze({ id: 'mock', title: 'Mock Bar', copy: 'Philippine Bar-style essay practice across the eight Bar subjects, with source-backed assessment and coaching. It is educational practice, not an official Bar rating or prediction.' }),
+        Object.freeze({ id: 'subject-matter', title: 'Subject Matter', copy: 'Guided practice by verified law-school course, with question-aware technique, evaluation, legal explanation, discussion, and verified sources after submission.' }),
+        Object.freeze({ id: 'verdict', title: 'The Verdict', copy: 'Review your own attempts, assessments, and personal study exports. Your record is private and does not predict an official Bar result.' }),
+      ]),
+      access: 'Sign in when you begin an examination or open your personal record.',
+    }),
+    commons: Object.freeze({
+      kicker: 'The Commons',
+      title: 'Learn from clear materials and from one another.',
+      copy: 'Move between plain-language legal study, an academic community, and the live membership area without losing your place.',
+      image: 'library-community',
+      alt: 'Students learning together in a library',
+      features: Object.freeze([
+        Object.freeze({ id: 'bar-easy', title: 'Bar Easy', copy: 'Practice legal reasoning in plain language. Coaching and sources appear after submission, and answer text follows the feature’s existing privacy rules.' }),
+        Object.freeze({ id: 'quorum', title: 'Quorum', copy: 'A signed-in academic community for discussions, questions, case notes, resources, study support, profiles, and study circles—with optional anonymous participation.' }),
+        Object.freeze({ id: 'retainer', title: 'Retainer', copy: 'View the membership and access options currently available to your account. Only verified live entitlements are shown.' }),
+      ]),
+      access: 'Reading the introduction is public. Community participation and personal access details require sign-in.',
+    }),
+    barbound: Object.freeze({
+      kicker: 'BarBound',
+      title: 'Turn review into deliberate Bar preparation.',
+      copy: 'Use full simulations and reviewed legal-study libraries when you are ready for longer, more demanding preparation.',
+      image: 'writing-notes',
+      alt: 'Students reviewing notes and legal materials',
+      features: Object.freeze([
+        Object.freeze({ id: 'bar-feels', title: 'Bar Feels', copy: 'A curated multi-question Bar simulation using the current timer, editor, submission, grading, and coaching experience.' }),
+        Object.freeze({ id: 'chair-cases', title: '2026 Bar Chair’s Cases', copy: 'Review the current Chair’s Cases library through facts, issues, rulings, doctrines, dispositions, and official sources.' }),
+        Object.freeze({ id: 'doctrines', title: 'Doctrines', copy: 'Practice recall and explanation, then compare your understanding with the reviewed doctrine, limits, and authority.' }),
+        Object.freeze({ id: 'anchor-cases', title: 'Anchor Case Digests', copy: 'Search and filter foundational cases, read structured digest fields, and open the official primary source.' }),
+      ]),
+      access: 'Protected BarBound features open only when your current account has the required access.',
+    }),
+  });
   const state = {
     stage: 'disclosure',
     disclosureEndReached: false,
@@ -74,6 +115,45 @@
     return !publicHomepageHashes.has(normalizedHash(hash));
   }
 
+  function renderPublicRoute({ focus = false } = {}) {
+    const route = normalizedHash();
+    const chamber = route.startsWith('chamber/') ? route.slice('chamber/'.length) : '';
+    const definition = chamberViews[chamber];
+    const home = document.getElementById('public-platform');
+    const view = document.getElementById('pb-chamber-view');
+    if (!home || !view) return;
+    if (!definition) {
+      setHidden(home, false);
+      setHidden(view, true);
+      view.replaceChildren();
+      return;
+    }
+    const featureMarkup = definition.features.map((feature) => `<article class="pb-chamber-feature">
+      <div><h2>${feature.title}</h2><p>${feature.copy}</p></div>
+      <button type="button" data-public-feature="${feature.id}">Open ${feature.title}</button>
+    </article>`).join('');
+    view.innerHTML = `<article class="pb-chamber-intro">
+      <div class="pb-chamber-intro-copy">
+        <p class="pb-pillar-number">${definition.kicker}</p>
+        <h1 tabindex="-1">${definition.title}</h1>
+        <p>${definition.copy}</p>
+        <div class="pb-chamber-feature-list">${featureMarkup}</div>
+        <p class="pb-final-note">${definition.access}</p>
+        <button class="pb-chamber-back" type="button" data-public-home>Back to all chambers</button>
+      </div>
+      <div class="pb-chamber-intro-visual">
+        <picture>
+          <source type="image/avif" srcset="assets/private-beta/${definition.image}-720.avif 720w, assets/private-beta/${definition.image}-1440.avif 1440w" sizes="(max-width:1120px) 100vw, 42vw">
+          <source type="image/webp" srcset="assets/private-beta/${definition.image}-720.webp 720w, assets/private-beta/${definition.image}-1440.webp 1440w" sizes="(max-width:1120px) 100vw, 42vw">
+          <img src="assets/private-beta/${definition.image}-720.jpg" width="720" height="960" loading="eager" decoding="async" alt="${definition.alt}">
+        </picture>
+      </div>
+    </article>`;
+    setHidden(home, true);
+    setHidden(view, false);
+    if (focus) requestAnimationFrame(() => view.querySelector('h1')?.focus?.({ preventScroll: true }));
+  }
+
   function showLanding(options = {}) {
     document.body.classList.add('private-beta-public');
     setHidden(landing, false);
@@ -82,12 +162,14 @@
       || !gateEnabled
       || state.accessAllowed === true;
     publishAccessState(accessAllowed);
+    renderPublicRoute();
   }
 
-  function activateApplicationRoute(hash) {
+  async function activateApplicationRoute(hash) {
     const route = normalizedHash(hash).split(/[/?]/, 1)[0];
     if (state.lastActivatedHash === route) return;
     if (!['mock', 'mock-bar', 'subject-matter'].includes(route)) return;
+    if (route === 'subject-matter') await loadFeature('subject-matter');
     state.lastActivatedHash = route;
     requestAnimationFrame(() => {
       if (route === 'subject-matter') {
@@ -130,6 +212,7 @@
         );
       }
     }
+    renderPublicRoute();
     global.scrollTo?.({ top: 0, behavior: 'auto' });
     if (options.focus !== false) {
       requestAnimationFrame(() => document.querySelector('#private-beta-landing .pb-brand')?.focus?.({ preventScroll: true }));
@@ -430,11 +513,46 @@
     global.DueDiligencePhase2?.openView?.(view);
   }
 
+  function closePublicMenus({ restoreFocus = false } = {}) {
+    document.querySelectorAll('[data-pb-menu-trigger]').forEach((trigger) => {
+      const menu = document.getElementById(trigger.getAttribute('aria-controls'));
+      const wasOpen = trigger.getAttribute('aria-expanded') === 'true';
+      trigger.setAttribute('aria-expanded', 'false');
+      if (menu) menu.hidden = true;
+      if (restoreFocus && wasOpen) trigger.focus({ preventScroll: true });
+    });
+  }
+
+  function togglePublicMenu(trigger, forceOpen = null) {
+    const menu = document.getElementById(trigger?.getAttribute('aria-controls'));
+    if (!trigger || !menu) return;
+    const opening = forceOpen == null
+      ? trigger.getAttribute('aria-expanded') !== 'true'
+      : forceOpen === true;
+    closePublicMenus();
+    trigger.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    menu.hidden = !opening;
+    if (opening) requestAnimationFrame(() => menu.querySelector('[role="menuitem"]')?.focus?.());
+  }
+
+  async function loadFeature(feature) {
+    const loader = global.DueDiligenceFeatureLoader;
+    if (!loader?.loadForFeature) return;
+    await loader.loadForFeature(feature);
+  }
+
   async function openProtectedFeature(feature, trigger = null) {
     const routes = {
       mock: '#mock-bar',
+      'subject-matter': '#subject-matter',
+      verdict: '#mock-bar',
+      'bar-easy': '#bar-easy',
       quorum: '#quorum',
+      retainer: '#pricing',
       'bar-feels': '#bar-feels',
+      'chair-cases': '#chairs-cases',
+      doctrines: '#doctrines',
+      'anchor-cases': '#anchor-case-digests',
       'examination-room': '#examination-room',
     };
     const returnHash = routes[feature] || '#mock-bar';
@@ -449,15 +567,32 @@
       });
       return;
     }
+    await loadFeature(feature);
     showApplication({ activateRoute: false });
     requestAnimationFrame(() => {
       if (feature === 'mock') {
         state.lastActivatedHash = 'mock-bar';
         global.showPage?.('mock', document.getElementById('spa-mock'));
+      } else if (feature === 'subject-matter') {
+        global.DueDiligenceExaminations?.openPerSubject?.();
+      } else if (feature === 'verdict') {
+        state.lastActivatedHash = 'mock-bar';
+        global.showPage?.('mock', document.getElementById('spa-mock'));
+        document.getElementById('tab-history')?.click?.();
+      } else if (feature === 'bar-easy') {
+        global.openBarEasy?.();
       } else if (feature === 'quorum') {
-        global.showPage?.('community', document.getElementById('spa-community'));
+        global.DueDiligenceQuorum?.open?.(document.getElementById('spa-community'));
+      } else if (feature === 'retainer') {
+        openLegalView('pricing');
       } else if (feature === 'bar-feels') {
         global.openPremiumBarFeels?.();
+      } else if (feature === 'chair-cases') {
+        global.openChairCases?.();
+      } else if (feature === 'doctrines') {
+        global.openDoctrines?.();
+      } else if (feature === 'anchor-cases') {
+        global.openAnchorCases?.();
       } else if (feature === 'examination-room') {
         global.openExaminationRoom?.();
       }
@@ -466,14 +601,54 @@
   }
 
   function bindEvents() {
-    document.querySelectorAll('[data-public-home]').forEach((link) => {
-      link.addEventListener('click', async (event) => {
-        if (event.defaultPrevented || event.target.closest?.('#brand-subtitle')) return;
+    landing.addEventListener('click', async (event) => {
+      const home = event.target.closest?.('[data-public-home]');
+      if (home && !event.defaultPrevented && !event.target.closest?.('#brand-subtitle')) {
         event.preventDefault();
-        if (typeof global.returnToPublicHomepage === 'function') {
-          await global.returnToPublicHomepage();
-        } else {
-          showPublicHomepage();
+        closePublicMenus();
+        if (typeof global.returnToPublicHomepage === 'function') await global.returnToPublicHomepage();
+        else showPublicHomepage();
+        return;
+      }
+      const feature = event.target.closest?.('[data-public-feature]');
+      if (feature) {
+        event.preventDefault();
+        closePublicMenus();
+        await openProtectedFeature(feature.dataset.publicFeature, feature);
+        return;
+      }
+      const trigger = event.target.closest?.('[data-pb-menu-trigger]');
+      if (trigger) {
+        event.preventDefault();
+        togglePublicMenu(trigger);
+        return;
+      }
+      if (!event.target.closest?.('.pb-chamber-menu')) closePublicMenus();
+    });
+    document.querySelectorAll('[data-pb-menu-trigger]').forEach((trigger) => {
+      trigger.addEventListener('keydown', (event) => {
+        if (!['ArrowDown', 'ArrowUp', 'Escape'].includes(event.key)) return;
+        event.preventDefault();
+        if (event.key === 'Escape') closePublicMenus({ restoreFocus: true });
+        else {
+          togglePublicMenu(trigger, true);
+          const items = [...document.getElementById(trigger.getAttribute('aria-controls'))
+            ?.querySelectorAll('[role="menuitem"]') || []];
+          items[event.key === 'ArrowUp' ? items.length - 1 : 0]?.focus?.();
+        }
+      });
+    });
+    document.querySelectorAll('.pb-chamber-dropdown').forEach((menu) => {
+      menu.addEventListener('keydown', (event) => {
+        const items = [...menu.querySelectorAll('[role="menuitem"]')];
+        const index = items.indexOf(document.activeElement);
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closePublicMenus({ restoreFocus: true });
+        } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          const step = event.key === 'ArrowDown' ? 1 : -1;
+          items[(index + step + items.length) % items.length]?.focus?.();
         }
       });
     });
@@ -494,9 +669,6 @@
         if (currentSession()?.access_token) openLegalView('account');
         else global.DueDiligencePhase2?.openSignIn?.({ allowDismiss: true, returnHash: '#account' });
       });
-    });
-    document.querySelectorAll('[data-protected-feature]').forEach((button) => {
-      button.addEventListener('click', () => openProtectedFeature(button.dataset.protectedFeature, button));
     });
     document.getElementById('pb-dialog-close')?.addEventListener('click', closeAdmission);
     document.querySelectorAll('[data-pb-cancel]').forEach((button) => button.addEventListener('click', closeAdmission));
@@ -544,10 +716,17 @@
     global.addEventListener('popstate', () => {
       if (!applicationRouteRequested()) {
         showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
+        renderPublicRoute({ focus: true });
         return;
       }
       if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
         showApplication();
+      }
+    });
+    global.addEventListener('hashchange', () => {
+      if (!applicationRouteRequested()) {
+        showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
+        renderPublicRoute({ focus: true });
       }
     });
     const end = document.getElementById('pb-disclosure-end');
@@ -564,7 +743,10 @@
     if (!gateEnabled) {
       bindEvents();
       if (currentSession()?.access_token && applicationRouteRequested()) showApplication();
-      else showLanding({ accessAllowed: true });
+      else {
+        showLanding({ accessAllowed: true });
+        renderPublicRoute({ focus: normalizedHash().startsWith('chamber/') });
+      }
       return;
     }
     showLanding();

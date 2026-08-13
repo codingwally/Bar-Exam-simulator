@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildStagingFailureDiagnostic } from './staging-e2e-diagnostics.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const evidenceDir = path.join(root, 'artifacts', 'staging-e2e');
@@ -132,7 +133,7 @@ async function writeEvidence(suite, result, serviceRoleKey) {
   const cleanupComplete = /synthetic_cleanup=true/.test(result.output);
   const passed = result.code === 0 && cleanupComplete && !secretEchoed;
   const evidence = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     suite,
     status: passed ? 'PASS' : 'FAIL',
     projectRef: expected.projectRef,
@@ -144,6 +145,7 @@ async function writeEvidence(suite, result, serviceRoleKey) {
     lastSafeCheckpoint: lastSafeCheckpoint(result.output),
     outputDigest: createHash('sha256').update(result.output).digest('hex'),
     secretEchoDetected: secretEchoed,
+    failure: passed ? null : buildStagingFailureDiagnostic(result.output, result.code, serviceRoleKey),
   };
   await mkdir(evidenceDir, { recursive: true });
   await writeFile(
@@ -202,12 +204,11 @@ async function main() {
   assert.ok(Object.hasOwn(suites, argument), 'Unknown staging suite.');
   const serviceRoleKey = String(process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY || '');
   assert.ok(serviceRoleKey, 'The protected staging credential is unavailable.');
-  assert.equal(
-    serviceRoleKey.startsWith('sb_secret_'),
-    false,
-    'The legacy test transport must be modernized before an sb_secret key is used.',
+  assert.match(
+    serviceRoleKey,
+    /^sb_secret_[A-Za-z0-9_-]{20,}$/,
+    'The protected staging credential must be a dedicated revocable secret key.',
   );
-  assert.equal(serviceRoleKey.split('.').length, 3, 'The protected legacy credential is malformed.');
 
   const configuration = await loadStagingConfiguration();
   const result = await runChild(suites[argument], {
@@ -229,7 +230,7 @@ main().catch(async (error) => {
     await writeFile(
       path.join(evidenceDir, `${suite}.json`),
       `${JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         suite,
         status: 'FAIL',
         projectRef: expected.projectRef,
@@ -241,6 +242,11 @@ main().catch(async (error) => {
         lastSafeCheckpoint: null,
         outputDigest: createHash('sha256').update(String(error?.name || 'gate_error')).digest('hex'),
         secretEchoDetected: false,
+        failure: buildStagingFailureDiagnostic(
+          `${error?.name || 'Error'}: ${error?.message || 'the staging gate could not complete safely.'}\n${error?.stack || ''}`,
+          1,
+          String(process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY || ''),
+        ),
       }, null, 2)}\n`,
       'utf8',
     );

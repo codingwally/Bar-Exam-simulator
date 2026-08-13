@@ -572,7 +572,7 @@
     });
   }
 
-  function authorBlock(author = {}) {
+  function authorBlock(author = {}, viewerOwns = false) {
     const wrapper = document.createElement('button');
     wrapper.type = 'button';
     wrapper.className = 'lex-author';
@@ -592,9 +592,12 @@
     const name = author.verifiedAcademicIdentity
       ? `${author.displayName || 'Due Diligence Member'} · Verified Academic Identity`
       : author.displayName || 'Due Diligence Member';
+    const secondary = author.anonymous
+      ? `Anonymous${viewerOwns ? ' · You' : ''}`
+      : [author.school, author.yearLevel].filter(Boolean).join(' · ') || 'Due Diligence member';
     copy.append(
       textElement('strong', '', name),
-      textElement('span', '', [author.school, author.yearLevel].filter(Boolean).join(' · ') || 'Due Diligence member'),
+      textElement('span', author.anonymous ? 'lex-anonymous-badge' : '', secondary),
     );
     wrapper.append(copy);
     if (author.memberId) wrapper.addEventListener('click', () => showMemberProfile(author.memberId));
@@ -641,7 +644,7 @@
     inner.className = 'lex-post-inner';
     const header = document.createElement('header');
     header.className = 'lex-post-header';
-    header.append(authorBlock(item.author || {}), entryTime(item));
+    header.append(authorBlock(item.author || {}, item.viewerOwns), entryTime(item));
     inner.append(header);
 
     const chips = document.createElement('div');
@@ -1099,7 +1102,7 @@
     node.dataset.commentId = comment.commentId;
     const header = document.createElement('header');
     header.className = 'lex-comment-header';
-    header.append(authorBlock(comment.author || {}), textElement('span', '', relativeTime(comment.createdAt)));
+    header.append(authorBlock(comment.author || {}, comment.viewerOwns), textElement('span', '', relativeTime(comment.createdAt)));
     node.append(header, textElement('p', 'lex-comment-body', comment.body));
     if (comment.edited) node.append(textElement('span', 'lex-edit-counter', 'Edited'));
     const actions = document.createElement('div');

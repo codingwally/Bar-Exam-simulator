@@ -158,6 +158,13 @@
   margin-top: 28px;
 }
 
+.dd-subject-layout.is-compact-selector {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 980px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
 .dd-exam-panel,
 .dd-exam-card {
   border: 1px solid var(--dd-exam-border);
@@ -389,6 +396,11 @@ details[open] > summary .dd-subject-chevron {
   margin-bottom: 14px;
 }
 
+.dd-subject-selector-open {
+  display: inline-flex;
+  margin-bottom: 14px;
+}
+
 .dd-subject-workspace {
   min-width: 0;
 }
@@ -427,6 +439,37 @@ details[open] > summary .dd-subject-chevron {
   cursor: pointer;
   font-size: 12px;
   font-weight: 750;
+}
+
+.dd-study-disclosures {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.dd-study-disclosures details {
+  overflow: hidden;
+  border: 1px solid #d8dee7;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.dd-study-disclosures summary {
+  min-height: 48px;
+  padding: 14px 16px;
+  color: var(--dd-exam-navy);
+  cursor: pointer;
+  font: 750 13px/1.45 Inter, sans-serif;
+}
+
+.dd-study-disclosures details[open] summary {
+  border-bottom: 1px solid #e1e5eb;
+  background: #fffaf0;
+}
+
+.dd-study-disclosures details > :not(summary) {
+  margin: 0;
+  padding: 16px;
 }
 
 .dd-subject-empty {

@@ -3408,12 +3408,13 @@ async function handleQuorumAdmin(request, env, origin, allowedOrigin) {
     raw?.payload?.requestId || request.headers.get('X-Request-ID'),
   );
   const result = normalized.operation === 'resolve_anonymous_identity'
-    ? await forumRpc(env, 'forum_resolve_anonymous_identity', {
+    ? await forumRpc(env, 'forum_resolve_anonymous_identity_v2', {
       p_actor_user_id: user.id,
-      p_entry_id: normalized.payload.entryId,
+      p_target_type: normalized.payload.targetType,
+      p_target_public_id: normalized.payload.targetId,
       p_reason: normalized.payload.reason,
     })
-    : await forumRpc(env, 'forum_quorum_admin', {
+    : await forumRpc(env, 'forum_quorum_admin_safe', {
       p_actor_user_id: user.id,
       p_operation: normalized.operation,
       p_payload: normalized.payload,
@@ -3424,6 +3425,16 @@ async function handleQuorumAdmin(request, env, origin, allowedOrigin) {
     origin,
     allowedOrigin,
   );
+}
+
+function retiredForumWriteResponse(origin, allowedOrigin) {
+  return jsonResponse({
+    ok: false,
+    error: {
+      code: 'FORUM_ROUTE_RETIRED',
+      message: 'Refresh Due Diligence to publish through the current privacy-safe Quorum editor.',
+    },
+  }, 410, origin, allowedOrigin);
 }
 
 function examinationQuestionContext(question) {
@@ -3823,6 +3834,63 @@ async function handleExaminationAdmin(request, env, origin, allowedOrigin) {
     p_actor_user_id: user.id,
     p_operation: command.operation,
     p_payload: command,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
+const STUDY_RESOURCE_TYPES = new Set(['doctrine', 'chair_case', 'anchor_case', 'subject_matter']);
+
+function normalizeStudyResource(value, label) {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized.length > 240) {
+    throw new ExaminerError('STUDY_ANNOTATION_INVALID', `${label} is invalid.`, 400);
+  }
+  return normalized;
+}
+
+function normalizeStudyType(value) {
+  const type = String(value || '').trim().toLowerCase();
+  if (!STUDY_RESOURCE_TYPES.has(type)) {
+    throw new ExaminerError('STUDY_ANNOTATION_INVALID', 'Choose an eligible study resource.', 400);
+  }
+  return type;
+}
+
+async function handleStudyAnnotationQuery(request, env, origin, allowedOrigin) {
+  const user = await requireAuthenticatedUser(request, env);
+  const raw = await parseBoundedJson(request, 8_000);
+  const type = raw.resourceType == null ? null : normalizeStudyType(raw.resourceType);
+  const resourceId = raw.resourceId == null ? null : normalizeStudyResource(raw.resourceId, 'Study item');
+  const annotations = await protectedSupabaseRpc(env, 'study_annotation_query', {
+    p_user_id: user.id,
+    p_resource_type: type,
+    p_resource_id: resourceId,
+  });
+  return jsonResponse({ ok: true, data: { annotations } }, 200, origin, allowedOrigin);
+}
+
+async function handleStudyAnnotationCommand(request, env, origin, allowedOrigin) {
+  const user = await requireAuthenticatedUser(request, env);
+  const raw = await parseBoundedJson(request, 24_000);
+  const operation = String(raw.operation || '').trim().toLowerCase();
+  if (!['save', 'delete'].includes(operation)) {
+    throw new ExaminerError('STUDY_ANNOTATION_INVALID', 'Choose save or delete.', 400);
+  }
+  const payload = {
+    resourceType: normalizeStudyType(raw.resourceType),
+    resourceId: normalizeStudyResource(raw.resourceId, 'Study item'),
+    noteText: String(raw.noteText || '').slice(0, 12_001),
+    selectedText: raw.selectedText == null ? null : String(raw.selectedText).slice(0, 1_001),
+    expectedRevision: Number.isInteger(Number(raw.expectedRevision))
+      ? Number(raw.expectedRevision) : 0,
+  };
+  if (payload.noteText.length > 12_000 || String(payload.selectedText || '').length > 1_000) {
+    throw new ExaminerError('STUDY_ANNOTATION_INVALID', 'The study note is too long.', 400);
+  }
+  const result = await protectedSupabaseRpc(env, 'study_annotation_command', {
+    p_user_id: user.id,
+    p_operation: operation,
+    p_payload: payload,
   });
   return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
 }
@@ -5537,6 +5605,12 @@ export default {
       if (pathname === '/analytics/events') {
         return await handleAnalytics(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/study/annotations/query') {
+        return await handleStudyAnnotationQuery(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/study/annotations/command') {
+        return await handleStudyAnnotationCommand(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/examinations/query') {
         return await handleExaminationQuery(request, env, origin, allowedOrigin);
       }
@@ -5568,10 +5642,10 @@ export default {
         return await handleForumComments(request, env, origin, allowedOrigin);
       }
       if (pathname === '/forum/posts/create') {
-        return await handleForumPostCreate(request, env, origin, allowedOrigin);
+        return retiredForumWriteResponse(origin, allowedOrigin);
       }
       if (pathname === '/forum/posts/update') {
-        return await handleForumPostUpdate(request, env, origin, allowedOrigin);
+        return retiredForumWriteResponse(origin, allowedOrigin);
       }
       if (pathname === '/forum/posts/delete') {
         return await handleForumPostDelete(request, env, origin, allowedOrigin);
@@ -5580,10 +5654,10 @@ export default {
         return await handleForumReaction(request, env, origin, allowedOrigin);
       }
       if (pathname === '/forum/comments/create') {
-        return await handleForumCommentCreate(request, env, origin, allowedOrigin);
+        return retiredForumWriteResponse(origin, allowedOrigin);
       }
       if (pathname === '/forum/comments/update') {
-        return await handleForumCommentUpdate(request, env, origin, allowedOrigin);
+        return retiredForumWriteResponse(origin, allowedOrigin);
       }
       if (pathname === '/forum/comments/delete') {
         return await handleForumCommentDelete(request, env, origin, allowedOrigin);

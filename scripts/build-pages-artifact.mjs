@@ -47,6 +47,8 @@ const publicFiles = Object.freeze([
   'assets/private-beta-session.js',
   'assets/private-beta-landing.css',
   'assets/private-beta-landing.js',
+  'assets/feature-loader.js',
+  'assets/private-workspace.js',
   ...privateBetaImageFiles,
   'assets/phase2-experience.js',
   'assets/phase2-law-library.jpg',
@@ -55,6 +57,8 @@ const publicFiles = Object.freeze([
   'assets/phase4-experience.js',
   'assets/examinations.css',
   'assets/examinations.js',
+  'assets/study-workspace.css',
+  'assets/study-workspace.js',
   'assets/brand/apple-touch-icon.png',
   'assets/brand/favicon.ico',
   'assets/brand/favicon-16.png',
@@ -70,6 +74,8 @@ const publicFiles = Object.freeze([
   'assets/lex-forum.js',
   'assets/payments/gcash.png',
   'assets/payments/maribank.png',
+  'offline.html',
+  'service-worker.js',
 ]);
 
 const qrHashes = Object.freeze({

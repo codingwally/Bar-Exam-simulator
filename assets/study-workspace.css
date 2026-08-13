@@ -1,0 +1,50 @@
+.dd-study-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 16px;
+}
+
+.dd-study-tools-button,
+.dd-study-note-actions button {
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid #b58c37;
+  border-radius: 8px;
+  color: #082442;
+  background: #fffdf7;
+  font: 750 12px/1.25 Inter, sans-serif;
+  cursor: pointer;
+}
+
+.dd-study-notes-dialog {
+  width: min(92vw, 620px);
+  max-height: 88vh;
+  padding: 0;
+  border: 1px solid #c5a059;
+  border-top-width: 3px;
+  border-radius: 14px;
+  color: #0b2442;
+  background: #faf9f6;
+  box-shadow: 0 24px 80px rgba(2, 17, 39, .28);
+}
+
+.dd-study-notes-dialog::backdrop { background: rgba(2, 17, 39, .72); backdrop-filter: blur(6px); }
+.dd-study-notes-shell { position: relative; padding: 30px; }
+.dd-study-notes-shell h2 { margin: 4px 52px 10px 0; font: 700 28px/1.2 "Playfair Display", Georgia, serif; }
+.dd-study-eyebrow { margin: 0; color: #8a671e; font: 800 10px/1.4 "IBM Plex Mono", monospace; letter-spacing: .14em; text-transform: uppercase; }
+.dd-study-copy { color: #536177; line-height: 1.6; }
+.dd-study-notes-shell label { display: grid; gap: 8px; margin-top: 20px; font: 750 12px/1.4 Inter, sans-serif; }
+.dd-study-notes-shell textarea { min-height: 180px; padding: 14px; border: 1px solid #cbd4df; border-radius: 8px; resize: vertical; font: 400 15px/1.65 Inter, sans-serif; }
+.dd-study-notes-shell textarea:focus { outline: 3px solid rgba(197, 160, 89, .28); border-color: #b58c37; }
+.dd-study-notes-close { position: absolute; top: 18px; right: 18px; width: 44px; height: 44px; border: 1px solid #b58c37; border-radius: 50%; color: #0b2442; background: transparent; font-size: 26px; cursor: pointer; }
+.dd-study-sync { min-height: 22px; color: #38654f; font: 700 12px/1.5 Inter, sans-serif; }
+.dd-study-note-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.dd-study-note-actions .dd-study-primary { color: #071a31; background: linear-gradient(135deg, #f2cf70, #d6aa35); }
+.dd-study-note-actions .dd-study-delete { margin-right: auto; color: #8d2830; border-color: #d4a9ad; }
+
+@media (max-width: 600px) {
+  .dd-study-notes-dialog { width: 100vw; max-width: none; max-height: 92dvh; margin: auto 0 0; border-radius: 18px 18px 0 0; }
+  .dd-study-notes-shell { padding: 26px 20px; }
+  .dd-study-note-actions { display: grid; grid-template-columns: 1fr; }
+  .dd-study-note-actions .dd-study-delete { order: 3; margin: 8px 0 0; }
+}

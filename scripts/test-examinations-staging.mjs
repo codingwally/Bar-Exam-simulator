@@ -3,15 +3,17 @@ import { randomBytes, randomUUID } from 'node:crypto';
 
 const SUPABASE_URL = String(process.env.STAGING_SUPABASE_URL || '').replace(/\/+$/, '');
 const SERVICE_ROLE_KEY = String(process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY || '');
+const PUBLISHABLE_KEY = String(process.env.STAGING_SUPABASE_PUBLISHABLE_KEY || '');
 const WORKER_URL = String(process.env.STAGING_EXAMINATION_WORKER_URL || '').replace(/\/+$/, '');
 const ORIGIN = String(process.env.STAGING_EXAMINATION_ORIGIN || 'http://127.0.0.1:4173');
 const RUN_AI = process.env.STAGING_EXAMINATION_RUN_AI === 'true';
 
 assert.match(SUPABASE_URL, /^https:\/\/[a-z0-9]+\.supabase\.co$/);
 assert.ok(
-  SERVICE_ROLE_KEY.length > 80 || /^sb_secret_[A-Za-z0-9_-]{20,}$/.test(SERVICE_ROLE_KEY),
-  'A staging service-role or secret key is required.',
+  /^sb_secret_[A-Za-z0-9_-]{20,}$/.test(SERVICE_ROLE_KEY),
+  'A dedicated staging secret key is required.',
 );
+assert.match(PUBLISHABLE_KEY, /^sb_publishable_[A-Za-z0-9_-]{20,}$/);
 assert.match(WORKER_URL, /^https:\/\/[a-z0-9.-]+\.workers\.dev$/);
 
 const runId = `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
@@ -19,6 +21,7 @@ const createdUsers = [];
 const createdExams = [];
 const requestKey = (prefix) => `${prefix}_${randomUUID().replaceAll('-', '')}`;
 const tabToken = () => randomBytes(32).toString('hex');
+const serviceHeaders = Object.freeze({ apikey: SERVICE_ROLE_KEY });
 
 function headers(token = null) {
   return {
@@ -46,8 +49,7 @@ async function createUser(label) {
   const { body } = await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users`, {
     method: 'POST',
     headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      ...serviceHeaders,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -63,7 +65,7 @@ async function createUser(label) {
   const session = await jsonRequest(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: {
-      apikey: SERVICE_ROLE_KEY,
+      apikey: PUBLISHABLE_KEY,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ email, password }),
@@ -75,10 +77,7 @@ async function createUser(label) {
 async function deleteUser(userId) {
   await jsonRequest(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
     method: 'DELETE',
-    headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-    },
+    headers: serviceHeaders,
   }, [200, 204]);
 }
 
@@ -86,8 +85,7 @@ async function serviceRpc(name, payload) {
   const { body } = await jsonRequest(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
     method: 'POST',
     headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      ...serviceHeaders,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
@@ -99,8 +97,7 @@ async function grantSyntheticSuperAdmin(userId) {
   await jsonRequest(`${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}`, {
     method: 'PATCH',
     headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      ...serviceHeaders,
       'Content-Type': 'application/json',
       Prefer: 'return=minimal',
     },
@@ -116,10 +113,7 @@ async function deleteSyntheticExam(examId) {
   const { body: versions } = await jsonRequest(
     `${SUPABASE_URL}/rest/v1/examination_versions?select=id&exam_id=eq.${examId}`,
     {
-      headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      },
+      headers: serviceHeaders,
     },
   );
   const versionIds = versions.map((item) => item.id);
@@ -130,8 +124,7 @@ async function deleteSyntheticExam(examId) {
       {
         method: 'DELETE',
         headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          ...serviceHeaders,
           Prefer: 'return=minimal',
         },
       },
@@ -142,8 +135,7 @@ async function deleteSyntheticExam(examId) {
       {
         method: 'PATCH',
         headers: {
-          apikey: SERVICE_ROLE_KEY,
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+          ...serviceHeaders,
           'Content-Type': 'application/json',
           Prefer: 'return=minimal',
         },
@@ -158,18 +150,14 @@ async function deleteSyntheticExam(examId) {
   await jsonRequest(`${SUPABASE_URL}/rest/v1/examination_definitions?id=eq.${examId}`, {
     method: 'DELETE',
     headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      ...serviceHeaders,
       Prefer: 'return=minimal',
     },
   }, [200, 204]);
   const { body: remaining } = await jsonRequest(
     `${SUPABASE_URL}/rest/v1/examination_definitions?select=id&id=eq.${examId}`,
     {
-      headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      },
+      headers: serviceHeaders,
     },
   );
   assert.equal(remaining.length, 0, `Synthetic exam ${examId} was not removed.`);
@@ -189,8 +177,7 @@ async function deleteSyntheticUserRecords(userIds) {
     await jsonRequest(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
       method: 'DELETE',
       headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        ...serviceHeaders,
         Prefer: 'return=minimal',
       },
     }, [200, 204]);

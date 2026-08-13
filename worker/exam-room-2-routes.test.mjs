@@ -1728,7 +1728,7 @@ test('Professor class workbook is owner-scoped, audited, and has no release side
   const exportId = '123e4567-e89b-42d3-a456-426614174012';
   const flow = harness({
     rpc: async (name, body) => {
-      if (name === 'exam_room_prepare_class_result_export_v1') {
+      if (name === 'exam_room_prepare_class_result_export_v2') {
         return {
           ok: true, exportId, dataset: {
             examId, title: 'Labor Law Midterm', generatedAt: '2026-08-12T04:00:00Z',
@@ -1755,7 +1755,7 @@ test('Professor class workbook is owner-scoped, audited, and has no release side
   assert.equal(response.headers.get('Cache-Control'), 'private, no-store, max-age=0');
   assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
   assert.deepEqual(flow.calls.map((entry) => entry.name), [
-    'exam_room_prepare_class_result_export_v1',
+    'exam_room_prepare_class_result_export_v2',
     'exam_room_complete_class_result_export_v1',
   ]);
   assert.deepEqual(flow.calls[0].body.p_selected_attempt_public_ids, [attemptId]);
@@ -1767,7 +1767,7 @@ test('Professor can download a roster-only offline workbook before any submissio
   const exportId = '123e4567-e89b-42d3-a456-426614174012';
   const flow = harness({
     rpc: async (name, body) => {
-      if (name === 'exam_room_prepare_class_result_export_v1') {
+      if (name === 'exam_room_prepare_class_result_export_v2') {
         return {
           ok: true, exportId, dataset: {
             examId, title: 'Labor Law Midterm', generatedAt: '2026-08-12T04:00:00Z',

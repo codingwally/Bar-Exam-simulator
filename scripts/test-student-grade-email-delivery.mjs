@@ -35,8 +35,8 @@ assert.doesNotMatch(migration, /providerId|provider_id'[),]/,
 
 assert.match(core, /'result_delivery_report'/);
 assert.match(core, /'retry_student_result_email'/);
-assert.match(routes, /exam_room_result_delivery_report_v1/);
-assert.match(routes, /exam_room_retry_student_result_email_v1/);
+assert.match(routes, /exam_room_result_delivery_report_v2/);
+assert.match(routes, /exam_room_retry_student_result_email_v2/);
 assert.match(index, /pathname === '\/webhooks\/resend\/email'/);
 assert.ok(index.indexOf("pathname === '/webhooks/resend/email'") < index.indexOf('const origin = assertOrigin'),
   'the signed server webhook must be routed before browser Origin enforcement');

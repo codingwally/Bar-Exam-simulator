@@ -586,7 +586,16 @@ const submitBlock = frontend.slice(
   frontend.indexOf('async function sendPendingSubmission'),
 );
 assert.match(submitBlock, /ensureSubmissionIntent/);
-assert.match(frontend, /allowUncoordinatedWrite: false/);
+assert.match(frontend, /allowUncoordinatedWrite: true/,
+  'the browser must not turn a valid server-authorized multi-device session read-only');
+assert.match(frontend, /activeWritingSession[\s\S]*renderExamRoom\(\)[\s\S]*return;/,
+  'session refresh events must preserve an in-progress Examination Room attempt');
+assert.match(frontend, /attemptTimerKey[\s\S]*timerKey[\s\S]*updateAttemptClock\(\);[\s\S]*return;/,
+  'rerendering an attempt must not restart its timer and heartbeat intervals');
+assert.match(frontend, /Save answer & review/,
+  'the last question must lead directly to a complete review instead of disabling Next');
+assert.match(reviewBlock, /Review every question and answer[\s\S]*data-dd26-review-edit/,
+  'final review must show the actual questions and answers with edit controls');
 assert.match(frontend, /operation\.offlineSince/);
 assert.match(frontend, /error\.code === 'ANSWER_SET_MISMATCH'[\s\S]*refreshAttemptHash/);
 assert.match(frontend, /async function unresolvedAnswerConflicts/);
@@ -621,9 +630,10 @@ const leaseBlock = frontend.slice(
   frontend.indexOf('state.exam.tabLease.subscribe'),
   frontend.indexOf('await state.exam.tabLease.start'),
 );
-assert.match(leaseBlock, /changed[\s\S]*renderAttempt\(\)/,
-  'writer-to-reader lease changes must rerender and disable all mutating controls');
-assert.match(frontend, /This tab is read-only and cannot submit the examination/);
+assert.match(leaseBlock, /lease\.readonly = false/,
+  'browser tab coordination must not override a valid server-authorized writing session');
+assert.doesNotMatch(frontend, /This tab is read-only and cannot submit the examination/,
+  'a returning or second authorized device must not be blocked by a browser-only writer lease');
 
 const loadAttemptBlock = frontend.slice(
   frontend.indexOf('async function loadAttempt'),

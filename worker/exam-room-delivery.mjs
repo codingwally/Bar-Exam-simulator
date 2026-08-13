@@ -124,7 +124,7 @@ function professorGradingKeyMessage(payload, key) {
       'Open Class Results to download an Excel/Google Sheets-compatible workbook at any stage, including while other students are still taking the exam. It contains the overview, questions, submitted answers, current grades, and per-student detail.',
       '',
       '5. SEND FINAL RESULTS',
-      'When grading is complete, choose Send final grades. Each graded student receives only their own score and Professor comments. Sending seals the examination record; the class workbook remains available to the Professor.',
+      'When a student’s grading is complete, select that student and choose Send selected result. Each selected student receives only their own score and Professor comments. Sending does not close the examination or affect the rest of the class.',
       '',
       `OPEN THE SECURE EXAMINATION ROOM: ${link}`,
       '',
@@ -151,7 +151,7 @@ function professorGradingKeyMessage(payload, key) {
               <li style="padding:0 0 14px 6px"><strong>Wait for class preparation.</strong><br><span style="color:#526174">The Beadle confirms the class list and creates the student examination code. Monitor attendance, progress, submissions, and recorded integrity events from the Examination Room.</span></li>
               <li style="padding:0 0 14px 6px"><strong>Grade submitted examinations.</strong><br><span style="color:#526174">Open any submitted student examination, score each question, add Professor comments, and save as draft or final. Saved grades remain in the official class record.</span></li>
               <li style="padding:0 0 14px 6px"><strong>Download the class gradebook at any stage.</strong><br><span style="color:#526174">Class Results creates an Excel/Google Sheets-compatible workbook with the class overview, exact questions, submitted answers, current grades, and per-student detail—even before everyone finishes.</span></li>
-              <li style="padding:0 0 0 6px"><strong>Send final results when ready.</strong><br><span style="color:#526174">Each graded student receives only their own score and Professor comments. Sending seals the examination record; the Professor gradebook remains available.</span></li>
+              <li style="padding:0 0 0 6px"><strong>Send each result when ready.</strong><br><span style="color:#526174">Select any fully graded student and send only that student&rsquo;s score and Professor comments. Other students may continue taking the examination or remain ungraded.</span></li>
             </ol>
           </div>
           <div style="margin-top:26px;padding:16px 18px;background:#f7f4ec;border-left:4px solid #d4af37;color:#526174;line-height:1.55"><strong style="color:#061c35">Professor control:</strong> You may grade as submissions arrive, save work across sessions, download partial or final records, and send results only when you decide.</div>
@@ -965,14 +965,18 @@ export async function processExamRoomDeliveryQueues(env, {
   }
   const backupFlag = await rpc(env, 'dd2026_service_flag_enabled', { p_flag_key: 'EXAM_GOOGLE_BACKUP_ENABLED' });
   if (backupFlag === true && enabled(env.EXAM_GOOGLE_BACKUP_ENABLED, false)) {
-    const events = await rpc(env, 'exam_room_claim_backup_batch', { p_limit: backupBatchSize });
+    const events = await rpc(env, 'exam_room_claim_backup_batch_v2', {
+      p_limit: backupBatchSize,
+      p_lease_seconds: 600,
+    });
     summary.backupClaimed = Array.isArray(events) ? events.length : 0;
     for (const event of events || []) {
       try {
         const context = await rpc(env, 'exam_room_backup_context', { p_exam_id: event.exam_id });
         const synced = await syncGoogleBackupEvent(env, event, context, fetchImpl);
-        await rpc(env, 'exam_room_complete_backup', {
+        await rpc(env, 'exam_room_complete_backup_v2', {
           p_outbox_id: event.id,
+          p_claim_token: event.claim_token,
           p_provider_reference: synced.providerReference,
           p_verified_hash: synced.verifiedHash,
           p_google_sheet_id: synced.spreadsheetId,
@@ -980,8 +984,9 @@ export async function processExamRoomDeliveryQueues(env, {
         });
         summary.backupSynced += 1;
       } catch (error) {
-        await rpc(env, 'exam_room_fail_backup', {
+        await rpc(env, 'exam_room_fail_backup_v2', {
           p_outbox_id: event.id,
+          p_claim_token: event.claim_token,
           p_safe_error_code: safeCode(error?.safeCode, 'GOOGLE_BACKUP_FAILED'),
         });
         summary.backupFailed += 1;
@@ -989,7 +994,10 @@ export async function processExamRoomDeliveryQueues(env, {
     }
   }
 
-  const jobs = await rpc(env, 'exam_room_claim_email_batch', { p_limit: emailBatchSize });
+  const jobs = await rpc(env, 'exam_room_claim_email_batch_v2', {
+    p_limit: emailBatchSize,
+    p_lease_seconds: 300,
+  });
   summary.emailClaimed = Array.isArray(jobs) ? jobs.length : 0;
   for (const job of jobs || []) {
     try {
@@ -1005,11 +1013,16 @@ export async function processExamRoomDeliveryQueues(env, {
         };
       }
       const sent = await deliverExamRoomEmail(env, deliveryJob, fetchImpl);
-      await rpc(env, 'exam_room_complete_email', { p_job_id: job.id, p_provider_id: sent.providerId });
+      await rpc(env, 'exam_room_complete_email_v2', {
+        p_job_id: job.id,
+        p_claim_token: job.claim_token,
+        p_provider_id: sent.providerId,
+      });
       summary.emailSent += 1;
     } catch (error) {
-      await rpc(env, 'exam_room_fail_email', {
+      await rpc(env, 'exam_room_fail_email_v2', {
         p_job_id: job.id,
+        p_claim_token: job.claim_token,
         p_safe_error_code: safeCode(error?.safeCode, 'EMAIL_DELIVERY_FAILED'),
       });
       summary.emailFailed += 1;

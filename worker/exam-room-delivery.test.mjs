@@ -416,10 +416,10 @@ test('Google outage never throws past the queue and records a bounded retry fail
     calls.push(name);
     if (name === 'exam_room_auto_submit_due') return { autoSubmitted: 2 };
     if (name === 'dd2026_service_flag_enabled') return true;
-    if (name === 'exam_room_claim_backup_batch') return [event];
+    if (name === 'exam_room_claim_backup_batch_v2') return [{ ...event, claim_token: 'backup-claim-token' }];
     if (name === 'exam_room_backup_context') return context;
-    if (name === 'exam_room_fail_backup') return { ok: true };
-    if (name === 'exam_room_claim_email_batch') return [];
+    if (name === 'exam_room_fail_backup_v2') return { ok: true };
+    if (name === 'exam_room_claim_email_batch_v2') return [];
     throw new Error(`Unexpected RPC ${name}`);
   };
   const result = await processExamRoomDeliveryQueues({ EXAM_GOOGLE_BACKUP_ENABLED: 'true' }, {
@@ -430,7 +430,7 @@ test('Google outage never throws past the queue and records a bounded retry fail
   assert.equal(result.autoSubmitted, 2);
   assert.equal(result.autoSubmitFailed, 0);
   assert.equal(result.emailClaimed, 0);
-  assert.ok(calls.includes('exam_room_fail_backup'));
+  assert.ok(calls.includes('exam_room_fail_backup_v2'));
 });
 
 test('auto-submit failure is visible without blocking independent delivery queues', async () => {
@@ -439,14 +439,14 @@ test('auto-submit failure is visible without blocking independent delivery queue
     calls.push(name);
     if (name === 'exam_room_auto_submit_due') throw new Error('temporary database outage');
     if (name === 'dd2026_service_flag_enabled') return false;
-    if (name === 'exam_room_claim_email_batch') return [];
+    if (name === 'exam_room_claim_email_batch_v2') return [];
     throw new Error(`Unexpected RPC ${name}`);
   };
   const result = await processExamRoomDeliveryQueues({ EXAM_GOOGLE_BACKUP_ENABLED: 'true' }, { rpc });
   assert.equal(result.autoSubmitted, 0);
   assert.equal(result.autoSubmitFailed, 1);
   assert.equal(result.emailClaimed, 0);
-  assert.ok(calls.includes('exam_room_claim_email_batch'));
+  assert.ok(calls.includes('exam_room_claim_email_batch_v2'));
 });
 
 test('legacy suppressed Examination Room mode remains zero-provider-traffic when override is missing', async () => {
@@ -691,6 +691,7 @@ test('delivery queue enriches only the professor release job with its owner-scop
   let captured;
   const professorJob = {
     id: 'professor-release-job',
+    claim_token: 'email-claim-token',
     email_type: 'professor_release_summary',
     recipient_user_id: '11111111-1111-4111-8111-111111111111',
     recipient_email: 'professor@example.test',
@@ -700,7 +701,7 @@ test('delivery queue enriches only the professor release job with its owner-scop
     calls.push({ name, body });
     if (name === 'exam_room_auto_submit_due') return { autoSubmitted: 0 };
     if (name === 'dd2026_service_flag_enabled') return false;
-    if (name === 'exam_room_claim_email_batch') return [professorJob];
+    if (name === 'exam_room_claim_email_batch_v2') return [professorJob];
     if (name === 'exam_room_professor_results_dashboard_v1') return {
       examId: context.examPublicId,
       title: 'Labor Law Midterm',
@@ -713,7 +714,7 @@ test('delivery queue enriches only the professor release job with its owner-scop
         status: 'sealed', allGradesFinal: true, questions: [{ ordinal: 1, prompt: 'Question', answer: 'Answer', maximumPoints: 5, score: 4.2, gradeState: 'final' }],
       }],
     };
-    if (name === 'exam_room_complete_email') return { ok: true };
+    if (name === 'exam_room_complete_email_v2') return { ok: true };
     throw new Error(`Unexpected RPC ${name}`);
   };
   const result = await processExamRoomDeliveryQueues({

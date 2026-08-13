@@ -115,13 +115,15 @@ assert.match(classResultsBlock, /No student has submitted yet/);
 assert.match(classResultsBlock, /Download current workbook/);
 assert.match(classResultsBlock, /checkboxes\.length > 0 && selected\.length < 1/,
   'the roster-only workbook must remain downloadable with zero submitted attempts');
-assert.match(classResultsBlock, /Send grades \+ download all/);
+assert.match(classResultsBlock, /Send selected student result/);
 assert.match(classResultsBlock, /offline_grading/);
 assert.match(classResultsBlock, /class_results/);
 assert.match(classResultsBlock, /\/exam-room\/results\/workbook/);
 assert.match(classResultsBlock, /bytes\[0\] !== 0x50 \|\| bytes\[1\] !== 0x4b/);
-assert.match(classResultsBlock, /operation: 'release_results'/);
-assert.match(classResultsBlock, /candidates\.filter\(\(candidate\) => candidate\.allGradesFinal !== true\)/);
+assert.match(classResultsBlock, /operation: 'release_candidate_results'/);
+assert.match(classResultsBlock, /selectedCandidates\.filter\(\(candidate\) => candidate\.allGradesFinal !== true\)/);
+assert.match(classResultsBlock, /attemptIds: input\.attemptIds|attemptIds,/,
+  'candidate releases must carry only the explicitly selected attempt IDs');
 assert.match(classResultsBlock, /Include examination questions in student result emails/);
 assert.match(classResultsBlock, /The downloaded Professor workbook always includes questions and submitted answers/);
 assert.match(frontend, /Class grading queue/);
@@ -129,12 +131,18 @@ assert.match(frontend, /data-dd26-open-grading-candidate/);
 assert.match(frontend, /dd26-grading-queue" open/);
 assert.match(frontend, /Save and Next continues through the selected grading filter/);
 assert.match(classResultsBlock, /await downloadClassWorkbook\(report, attemptIds, 'class_results'/);
-assert.match(classResultsBlock, /clearGradingWorkspace\(\)[\s\S]*Graded results were queued for delivery/);
+assert.doesNotMatch(classResultsBlock, /the examination was sealed/,
+  'sending selected results must not seal the examination or affect unrelated students');
+assert.match(classResultsBlock, /Selected student results were queued for delivery verification/);
 assert.match(classResultsBlock, /renderProfessorResultsDashboard\(report\)/);
 assert.match(classResultsBlock, /function candidateScoreDisclosure/);
 assert.match(classResultsBlock, /class="dd26-score-disclosure"/);
 assert.match(classResultsBlock, /View breakdown/);
 assert.match(classResultsBlock, /id="dd26-dashboard-refresh"/);
+assert.match(classResultsBlock, /data-dd26-lifecycle="end_access"/);
+assert.match(classResultsBlock, /data-dd26-lifecycle="complete"/);
+assert.match(classResultsBlock, /data-dd26-lifecycle="archive"/);
+assert.match(classResultsBlock, /operation: 'update_exam_lifecycle'/);
 for (const metric of ['Participation', 'Class average', 'Median score', 'Absent / no-show', 'Late entry or submission', 'Strongest item', 'Lowest-performing item']) {
   assert.match(classResultsBlock, new RegExp(metric));
 }

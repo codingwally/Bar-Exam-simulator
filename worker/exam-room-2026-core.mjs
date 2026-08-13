@@ -113,6 +113,8 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'save_grade',
   'unlock_attempt',
   'release_results',
+  'release_candidate_results',
+  'update_exam_lifecycle',
   'retry_student_result_email',
   'open_dispute',
   'close_dispute',
@@ -1233,6 +1235,26 @@ export function normalizeExamRoomCommand(input) {
     n.examId = uuid(payload.examId, 'Examination');
     n.requestKey = requestKey(payload.requestKey);
     n.includeQuestionnaire = payload.includeQuestionnaire === true;
+    n.gradingKey = optionalCredential(payload.gradingKey, 'Professor grading key');
+  } else if (operation === 'release_candidate_results') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.attemptIds = uuidRows(payload.attemptIds, 'Selected examination attempt');
+    if (n.attemptIds.length < 1 || n.attemptIds.length > 500) {
+      throw new DD2026ValidationError(
+        'EXAM_ROOM_RESULT_SELECTION_INVALID',
+        'Select between 1 and 500 fully graded students.',
+      );
+    }
+    n.requestKey = requestKey(payload.requestKey);
+    n.includeQuestionnaire = payload.includeQuestionnaire === true;
+    n.gradingKey = optionalCredential(payload.gradingKey, 'Professor grading key');
+  } else if (operation === 'update_exam_lifecycle') {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.action = enumValue(payload.action, 'Lifecycle action', [
+      'end_access', 'complete', 'archive',
+    ]);
+    n.reason = boundedText(payload.reason, 'Lifecycle reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
     n.gradingKey = optionalCredential(payload.gradingKey, 'Professor grading key');
   } else if (operation === 'retry_student_result_email') {
     n.examId = uuid(payload.examId, 'Examination');

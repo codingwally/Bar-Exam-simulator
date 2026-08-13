@@ -565,7 +565,13 @@ test('room enabled override delivers every Examination Room email type while unr
     ['submission_reopened', { examId: context.examPublicId, title: context.title, generation: 2 }],
     ['professor_release_summary', { examId: context.examPublicId, title: context.title }],
     ['student_correction', { examId: context.examPublicId, title: context.title }],
-    ['student_result', { examId: context.examPublicId, title: context.title, grades: [] }],
+    ['student_result', {
+      examId: context.examPublicId,
+      title: context.title,
+      candidateNumber: 'CAND-001',
+      grades: [{ questionId: 'question-1', ordinal: 1, score: 4.2, maximumPoints: 5, comment: 'Strong application.' }],
+      questions: [{ questionId: 'question-1', ordinal: 1 }],
+    }],
   ];
   let fetchCount = 0;
   for (const [emailType, payload] of cases) {
@@ -579,7 +585,27 @@ test('room enabled override delivers every Examination Room email type while unr
       fetchCount += 1;
       assert.equal(String(url), 'https://api.resend.com/emails');
       assert.equal(options.headers['Idempotency-Key'], `exam-room-${id}`);
-      assert.deepEqual(JSON.parse(options.body).to, ['recipient@example.test']);
+      const body = JSON.parse(options.body);
+      assert.deepEqual(body.to, ['recipient@example.test']);
+      if (emailType === 'professor_grading_key') {
+        assert.match(body.subject, /published: Professor key and next steps/);
+        assert.match(body.text, /PRIVATE PROFESSOR GRADING KEY/);
+        assert.match(body.text, /1\. OPEN THE PROFESSOR WORKSPACE/);
+        assert.match(body.text, /4\. DOWNLOAD THE CLASS GRADEBOOK/);
+        assert.match(body.text, /5\. SEND FINAL RESULTS/);
+        assert.match(body.html, /Private Professor grading key/);
+        assert.match(body.html, /font-weight:700[^>]*>[^<]+<\/div>/);
+        assert.match(body.html, /Professor workflow/);
+        assert.match(body.html, /Open secure Examination Room/);
+      }
+      if (emailType === 'student_result') {
+        assert.match(body.subject, /^Score released:/);
+        assert.match(body.text, /Overall score: 4\.20 \/ 5\.00 \(84\.0%\)/);
+        assert.match(body.html, /Your score has been released/);
+        assert.match(body.html, /4\.20 \/ 5\.00/);
+        assert.match(body.html, /Strong application\./);
+        assert.match(body.html, /View protected result/);
+      }
       return response({ id: `resend-${fetchCount}` });
     });
     assert.deepEqual(result, { providerId: `resend-${fetchCount}` });

@@ -197,6 +197,16 @@ assert.match(
   /if \(state\.welcomedUserId !== userId\)[\s\S]*Welcome back/,
   'A restored account must receive only one welcome notification per page lifecycle.',
 );
+assert.match(
+  extractNamedFunction(phase2, 'restoreAuthDestination'),
+  /safeSessionRemove\(authReturnStorageKey\)[\s\S]*DueDiligencePublicHome\?\.show\?\.\(\{[\s\S]*replace:\s*true/,
+  'A completed sign-in must retain the session while returning every user to the homepage.',
+);
+assert.doesNotMatch(
+  extractNamedFunction(phase2, 'restoreAuthDestination'),
+  /openPremiumBarFeels|openPerSubject|openExaminationRoom|showPage/,
+  'A stale protected route must never reopen automatically after sign-in.',
+);
 
 const dispatchedSessions = [];
 const dispatchContext = {

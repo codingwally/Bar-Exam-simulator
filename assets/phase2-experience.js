@@ -777,29 +777,11 @@
   }
 
   function restoreAuthDestination() {
-    const stored = safeSessionRead(authReturnStorageKey);
-    const hash = safeReturnHash(stored);
     safeSessionRemove(authReturnStorageKey);
-    if (!hash) {
-      resumePendingSubmission();
-      return;
-    }
-    history.replaceState({}, '', `${location.pathname}${hash}`);
-    requestAnimationFrame(() => {
-      if (hash === '#mock' || hash === '#mock-bar') {
-        global.showPage?.('mock', document.getElementById('spa-mock'));
-      } else if (hash === '#subject-matter') {
-        global.DueDiligenceExaminations?.openPerSubject?.();
-      } else if (hash === '#bar-feels') {
-        global.openPremiumBarFeels?.();
-      } else if (hash === '#quorum') {
-        global.DueDiligenceQuorum?.open?.(document.getElementById('spa-community'));
-      } else if (hash === '#examination-room') {
-        global.openExaminationRoom?.();
-      } else if (hash === '#account') {
-        renderNativeView('account');
-      }
-      resumePendingSubmission();
+    global.DueDiligencePublicHome?.show?.({
+      history: true,
+      replace: true,
+      focus: true,
     });
   }
 

@@ -360,6 +360,7 @@ try {
 
   outcome = {
     ok: true,
+    runId,
     subjectMatter: {
       canonicalQuestions: 1490,
       placements: 1890,
@@ -385,12 +386,17 @@ try {
   };
 } finally {
   console.log('STAGING_GATE: cleaning isolated test data');
+  const cleanupErrors = [];
   for (const entryId of createdEntryIds.reverse()) {
-    await deleteSyntheticEntry(entryId).catch(() => {});
+    await deleteSyntheticEntry(entryId).catch((error) => cleanupErrors.push(error));
   }
   for (const userId of createdUsers.reverse()) {
-    await deleteUser(userId).catch(() => {});
+    await deleteUser(userId).catch((error) => cleanupErrors.push(error));
   }
+  if (cleanupErrors.length) {
+    throw new AggregateError(cleanupErrors, 'Complete beta staging cleanup failed.');
+  }
+  console.log(`STAGING_GATE: synthetic_cleanup=true run_id=${runId}`);
 }
 
 const residue = await serviceGet(

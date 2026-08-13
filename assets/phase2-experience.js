@@ -29,6 +29,7 @@
     sessionEventInitialized: false,
     lastSessionEventUserId: null,
     lastSessionEventAccessToken: null,
+    authReturnPending: isAuthenticationReturn(),
   };
 
   let resolveAuthReady;
@@ -777,6 +778,8 @@
   }
 
   function restoreAuthDestination() {
+    if (!state.authReturnPending) return;
+    state.authReturnPending = false;
     safeSessionRemove(authReturnStorageKey);
     global.DueDiligencePublicHome?.show?.({
       history: true,

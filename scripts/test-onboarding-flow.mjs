@@ -50,8 +50,8 @@ assert.match(
 );
 assert.match(phase2, /\['mock-bar', 'subject-matter', 'bar-feels', 'quorum', 'examination-room'\]/,
   'The canonical Mock Bar route must remain protected before sign-in.');
-assert.match(phase2, /function restoreAuthDestination\(\)[\s\S]*DueDiligencePublicHome\?\.show\?\.\(\{[\s\S]*replace:\s*true/,
-  'OAuth return must open the canonical homepage without restoring a stale protected route.');
+assert.match(phase2, /function restoreAuthDestination\(\)[\s\S]*if \(!state\.authReturnPending\) return;[\s\S]*DueDiligencePublicHome\?\.show\?\.\(\{[\s\S]*replace:\s*true/,
+  'OAuth return must open the canonical homepage once while routine session recovery preserves the active route.');
 assert.match(
   html,
   /function showSubjectSelection\(\) \{[\s\S]*window\.scrollTo\(\{ top: 0, behavior: 'auto' \}\);[\s\S]*close\?\.focus\(\{ preventScroll: true \}\);[\s\S]*\}/,

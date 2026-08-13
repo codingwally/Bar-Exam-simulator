@@ -1,0 +1,92 @@
+name: Trusted staging E2E release gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  staging-e2e:
+    name: Protected staging release gate
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.actor != 'dependabot[bot]'
+    environment: staging-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Enforce repository and trusted release branch
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY_NAME: ${{ github.repository }}
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          test "$EVENT_NAME" = "workflow_dispatch"
+          test "$REPOSITORY_NAME" = "codingwally/Bar-Exam-simulator"
+          test "$RELEASE_ACTOR" != "dependabot[bot]"
+          case "$RELEASE_REF" in
+            refs/heads/main|refs/heads/agent/master-experience-release-20260813) ;;
+            *)
+              echo "The staging gate may run only from an explicitly trusted release branch." >&2
+              exit 1
+              ;;
+          esac
+          echo "Trusted manual staging dispatch accepted."
+
+      - name: Checkout trusted release ref
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify staging-only endpoint contract
+        run: node scripts/run-staging-e2e-suite.mjs --preflight
+
+      - name: Complete beta staging suite
+        id: complete_beta
+        continue-on-error: true
+        env:
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/run-staging-e2e-suite.mjs complete-beta
+
+      - name: Due Diligence 2026 staging suite
+        id: duediligence_2026
+        continue-on-error: true
+        env:
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/run-staging-e2e-suite.mjs duediligence-2026
+
+      - name: Examinations staging suite
+        id: examinations
+        continue-on-error: true
+        env:
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/run-staging-e2e-suite.mjs examinations
+
+      - name: Publish sanitized suite summary
+        if: always()
+        run: node scripts/run-staging-e2e-suite.mjs --summary >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sanitized staging evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-e2e-sanitized-${{ github.run_id }}
+          path: artifacts/staging-e2e/*.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce all three staging suites
+        if: always()
+        run: node scripts/run-staging-e2e-suite.mjs --enforce

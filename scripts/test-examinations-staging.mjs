@@ -672,6 +672,7 @@ try {
   if (cleanupErrors.length) {
     throw new AggregateError(cleanupErrors, 'Synthetic staging cleanup failed.');
   }
+  console.log(`EXAMINATIONS_STAGING: synthetic_cleanup=true run_id=${runId}`);
 }
 
 console.log(JSON.stringify(outcome, null, 2));

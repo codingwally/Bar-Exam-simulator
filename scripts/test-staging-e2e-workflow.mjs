@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  buildStagingFailureDiagnostic,
+  sanitizeStagingDiagnostic,
+} from './staging-e2e-diagnostics.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workflow = await readFile(
@@ -32,7 +36,22 @@ assert.match(runner, /hbllomlijfznnuudpdvr/);
 assert.match(runner, /productionWorkerHost/);
 assert.match(runner, /synthetic_cleanup=true/);
 assert.match(runner, /secretEchoDetected/);
+assert.match(runner, /buildStagingFailureDiagnostic/);
 assert.match(runner, /serviceRoleKey\.startsWith\('sb_secret_'\)/);
 assert.doesNotMatch(runner, /console\.log\([^\n]*serviceRoleKey/);
+
+const syntheticSecret = 'eyJhbGciOiJIUzI1NiJ9.synthetic.signature';
+const diagnostic = buildStagingFailureDiagnostic(
+  `AssertionError [ERR_ASSERTION]: Request for https://example.test/path?token=private failed for student@example.test using Bearer ${syntheticSecret}\n    at file:///C:/repo/scripts/test-examinations-staging.mjs:443:10`,
+  1,
+  syntheticSecret,
+);
+assert.deepEqual(diagnostic, {
+  category: 'request',
+  message: 'Request for https://example.test/path failed for [email] using Bearer [credential]',
+  location: 'test-examinations-staging.mjs:443:10',
+  exitCode: 1,
+});
+assert.equal(sanitizeStagingDiagnostic(`token=${syntheticSecret}`, syntheticSecret).includes(syntheticSecret), false);
 
 console.log('Trusted staging E2E workflow contract checks passed.');

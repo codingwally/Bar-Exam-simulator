@@ -300,7 +300,15 @@ try {
     term: criminalLaw.term,
   });
   assert.notEqual(next.body.data.setup.versionId, first.body.data.setup.versionId);
-  assert.equal(next.body.data.completedCount, 1);
+  for (const confidentialCount of [
+    'completedCount',
+    'attemptedCount',
+    'completedQuestions',
+    'attemptedQuestions',
+    'cycleComplete',
+  ]) {
+    assert.equal(confidentialCount in next.body.data, false);
+  }
 
   const performance = await examinationQuery(student, 'subject_performance', {
     subject: criminalLaw.subject,

@@ -406,6 +406,15 @@
   line-height: 1.4;
 }
 
+.lex-author-copy .lex-anonymous-badge {
+  color: #9a6a12;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .lex-post-time {
   flex: 0 0 auto;
   text-align: right;

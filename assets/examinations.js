@@ -121,10 +121,21 @@
     try { return JSON.parse(value); } catch { return fallback; }
   }
 
+  function currentUserId() {
+    return String(global.DueDiligencePhase4?.getSession?.()?.user?.id || '').trim();
+  }
+
+  function privateKey(baseKey) {
+    return global.DueDiligencePrivateWorkspace?.scopedKey?.('examinations', baseKey) || '';
+  }
+
   function saveRecovery() {
-    if (!state.active?.attempt?.attemptId) return;
+    const ownerUserId = currentUserId();
+    const storageKey = privateKey(LOCAL_KEY);
+    if (!ownerUserId || !storageKey || !state.active?.attempt?.attemptId) return;
     const data = {
-      version: 1,
+      version: 2,
+      ownerUserId,
       attemptId: state.active.attempt.attemptId,
       versionId: state.active.attempt.versionId,
       currentIndex: state.currentIndex,
@@ -138,14 +149,18 @@
         revision: Number(question.revision) || 0,
       })),
     };
-    try { localStorage.setItem(LOCAL_KEY, JSON.stringify(data)); } catch {}
+    try { localStorage.setItem(storageKey, JSON.stringify(data)); } catch {}
   }
 
   function readRecovery() {
+    const ownerUserId = currentUserId();
+    const storageKey = privateKey(LOCAL_KEY);
+    if (!ownerUserId || !storageKey) return null;
     let value = null;
-    try { value = safeJson(localStorage.getItem(LOCAL_KEY)); } catch {}
+    try { value = safeJson(localStorage.getItem(storageKey)); } catch {}
     if (
-      value?.version !== 1
+      value?.version !== 2
+      || value?.ownerUserId !== ownerUserId
       || !value.attemptId
       || Date.now() - Number(value.savedAt || 0) > 14 * 24 * 60 * 60 * 1000
     ) return null;
@@ -153,7 +168,9 @@
   }
 
   function clearRecovery() {
-    try { localStorage.removeItem(LOCAL_KEY); } catch {}
+    const storageKey = privateKey(LOCAL_KEY);
+    if (!storageKey) return;
+    try { localStorage.removeItem(storageKey); } catch {}
   }
 
   async function api(path, body = {}) {
@@ -358,8 +375,10 @@
   }
 
   function readSubjectCatalogState() {
+    const storageKey = privateKey(SUBJECT_CATALOG_STATE_KEY);
+    if (!storageKey) return;
     let saved = null;
-    try { saved = safeJson(localStorage.getItem(SUBJECT_CATALOG_STATE_KEY)); } catch {}
+    try { saved = safeJson(localStorage.getItem(storageKey)); } catch {}
     if (saved?.version !== 2) return;
     state.selectedSubject = String(saved.selectedSubject || state.selectedSubject);
     state.subjectQuery = String(saved.query || '').slice(0, 160);
@@ -384,7 +403,9 @@
       state.subjectPageScroll = Math.max(0, global.scrollY || 0);
     }
     try {
-      localStorage.setItem(SUBJECT_CATALOG_STATE_KEY, JSON.stringify({
+      const storageKey = privateKey(SUBJECT_CATALOG_STATE_KEY);
+      if (!storageKey) return;
+      localStorage.setItem(storageKey, JSON.stringify({
         version: 2,
         selectedSubject: state.selectedSubject,
         query: state.subjectQuery,
@@ -445,8 +466,9 @@
                           ${item.courseCode ? `<small>${escapeHtml(item.courseCode)}</small>` : ''}
                           <strong>${escapeHtml(item.subject)}</strong>
                         </span>
-                        <small class="dd-subject-state is-ready">${Number(item.completedCount) || 0}
-                          ${Number(item.completedCount) === 1 ? 'answer' : 'answers'} submitted</small>
+                        <small class="dd-subject-state is-ready">${escapeHtml(
+                          item.progressState || 'Not started',
+                        )}</small>
                       </button>`).join('')}
                   </div>
                 </details>`;
@@ -581,7 +603,6 @@
     }
     state.selectedSubject = selected.subject;
     ensureSubjectPathOpen(selected);
-    const hierarchy = subjectHierarchyMarkup(selected, 'desktop');
     const mobileHierarchy = subjectHierarchyMarkup(selected, 'mobile');
     root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
       <header class="dd-exam-hero">
@@ -594,19 +615,9 @@
         <span class="dd-exam-beta">Question-aware coaching</span>
       </header>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
-      <div class="dd-subject-layout">
-        <aside class="dd-exam-panel dd-subject-panel" data-subject-selector>
-          <p class="dd-exam-panel-title">Choose a course</p>
-          <label class="sr-only" for="dd-subject-search">Search courses</label>
-          <input class="dd-subject-search" id="dd-subject-search" data-subject-search-input
-            type="search" value="${escapeAttribute(state.subjectQuery)}"
-            placeholder="Search course, code, year, or term" autocomplete="off">
-          <p class="dd-subject-result-count" data-subject-result-count role="status"></p>
-          <div class="dd-subject-list" data-subject-tree>${hierarchy}</div>
-          <p class="dd-subject-empty" data-subject-empty hidden>No matching course was found.</p>
-        </aside>
+      <div class="dd-subject-layout is-compact-selector">
         <main class="dd-subject-workspace">
-          <button class="dd-exam-button dd-subject-mobile-open" type="button"
+          <button class="dd-exam-button dd-subject-selector-open" type="button"
             data-subject-selector-open aria-haspopup="dialog" aria-controls="dd-subject-selector-dialog">
             Browse Year, Term, and Course
           </button>
@@ -626,7 +637,7 @@
               <span class="dd-exam-pill">Private practice</span>
             </div>
             <div class="dd-exam-meta">
-              <div><small>Your work</small><strong>${Number(selected.completedCount) || 0} submitted</strong></div>
+              <div><small>Your work</small><strong>${escapeHtml(selected.progressState || 'Not started')}</strong></div>
               <div><small>Selection</small><strong>No-repeat cycle</strong></div>
               <div><small>Timer</small><strong>${escapeHtml(practiceTimerLabel())}</strong></div>
             </div>
@@ -848,7 +859,8 @@
         const selected = dialog.querySelector('input[name="dd-practice-timer"]:checked')?.value;
         if (PRACTICE_TIMER_MODES.some((item) => item.value === selected)) {
           state.preferredTimerMode = selected;
-          try { localStorage.setItem('duediligence.subject-matter.timer-mode.v1', selected); } catch {}
+          const storageKey = privateKey('duediligence.subject-matter.timer-mode.v1');
+          try { if (storageKey) localStorage.setItem(storageKey, selected); } catch {}
           renderPerSubject();
         }
       }
@@ -1920,6 +1932,33 @@
       .filter((section) => section.text);
   }
 
+  function subjectMatterStudyDisclosures({ assessment, result, adaptiveSections, suggestedAnswer, sources }) {
+    const alac = assessment?.modelAnswerALAC || {};
+    const legalBasis = String(
+      result?.legalBasis || assessment?.legalBasis || alac.legalBasis || '',
+    ).trim();
+    const explanation = String(assessment?.legalExplanation || '').trim();
+    const discussion = adaptiveSections.length
+      ? adaptiveSections.map((section) => `<div class="alac-part"><b>${escapeHtml(section.label)}</b><p>${escapeHtml(section.text)}</p></div>`).join('')
+      : '<p>No separate suggested discussion is available for this item.</p>';
+    const releasedAnswer = String(suggestedAnswer || [
+      alac.answer, alac.legalBasis, alac.application, alac.conclusion,
+    ].filter(Boolean).join('\n\n')).trim();
+    return `<section class="dd-study-disclosures" aria-label="Post-evaluation study material">
+      <details><summary>Reveal suggested legal basis</summary><div class="legal-explanation">${escapeHtml(
+        legalBasis || 'No separate legal-basis field is available in the released record.',
+      )}</div></details>
+      <details><summary>Why this legal basis applies</summary><div class="legal-explanation">${escapeHtml(
+        explanation || 'The released assessment does not include a separate applicability explanation.',
+      )}</div></details>
+      <details><summary>Suggested discussion</summary><div class="alac-model dd-adaptive-model">${discussion}</div></details>
+      <details><summary>Suggested answer</summary><div class="dd-model-answer">${escapeHtml(
+        releasedAnswer || 'The suggested answer has not been released for this item.',
+      )}</div></details>
+      <details><summary>Verified sources</summary>${assessmentSources(sources)}</details>
+    </section>`;
+  }
+
   function assessmentCard(result, options = {}) {
     const assessment = result.aiAssessment || result.assessment || {};
     const alac = assessment.modelAnswerALAC || {};
@@ -1937,7 +1976,11 @@
     const sourceWarning = assessment.reviewRequired === true || assessment.sourceStatus === 'conflict'
       ? '<div class="assessment-warning"><strong>Review required.</strong> Verify the cited primary authorities before relying on this assessment.</div>'
       : '';
-    return `<article class="assessment-card dd-subject-assessment" aria-label="Individual Philippine Bar essay assessment">
+    const subjectStudyDisclosures = isSubjectMatter
+      ? subjectMatterStudyDisclosures({ assessment, result, adaptiveSections, suggestedAnswer, sources })
+      : '';
+    return `<article class="assessment-card dd-subject-assessment" aria-label="Individual Philippine Bar essay assessment"
+      ${isSubjectMatter && questionId ? `data-study-resource-type="subject_matter" data-study-resource-id="${escapeAttribute(questionId)}"` : ''}>
       <div class="assessment-hero">
         ${score != null ? `<div class="score-medallion"><div><strong>${Number(score).toFixed(1)} / 5</strong><span>Points earned</span></div></div>` : ''}
         <div><div class="assessment-kicker">Individual Question Assessment</div>
@@ -1953,15 +1996,15 @@
         ${options.answerText ? `<section class="assessment-section"><h4>Your answer</h4><div class="dd-model-answer">${escapeHtml(options.answerText)}</div></section>` : ''}
         <h4 class="panel-title">Why this score</h4>
         <p class="assessment-rationale">${escapeHtml(assessment.rationale || 'The assessment record does not include a written rationale.')}</p>
-        <section class="assessment-section"><h4>Governing rule and authority</h4>
-          <div class="legal-explanation">${escapeHtml(assessment.legalExplanation || result.legalBasis || 'Review the controlling provision and doctrine identified in the released answer and legal sources.')}</div></section>
+        ${isSubjectMatter ? '' : `<section class="assessment-section"><h4>Governing rule and authority</h4>
+          <div class="legal-explanation">${escapeHtml(assessment.legalExplanation || result.legalBasis || 'Review the controlling provision and doctrine identified in the released answer and legal sources.')}</div></section>`}
         ${assessmentScoreWasCapped(assessment) ? '' : assessmentBreakdown(assessment.rubricBreakdown, { track })}
         <div class="assessment-grid">
           <section class="assessment-panel strengths"><h4>Strengths</h4>${assessmentList(assessment.strengths, 'No specific strength was identified.')}</section>
           <section class="assessment-panel errors"><h4>Errors or missing points</h4>${assessmentList(assessment.errors, 'No material error was identified.')}</section>
           <section class="assessment-panel coaching"><h4>Prioritized improvements</h4>${assessmentList(assessment.improvements, 'Keep the answer direct, legally grounded, and fact-specific.')}</section>
         </div>
-        ${isSubjectMatter && adaptiveSections.length ? `<section class="assessment-section"><h4>Improved model response</h4>
+        ${isSubjectMatter ? subjectStudyDisclosures : adaptiveSections.length ? `<section class="assessment-section"><h4>Improved model response</h4>
           <div class="alac-model dd-adaptive-model">${adaptiveSections.map((section) => `<div class="alac-part">
             <b>${escapeHtml(section.label)}</b><p>${escapeHtml(section.text)}</p></div>`).join('')}</div></section>`
         : hasAlac ? `<section class="assessment-section"><h4>Improved Answer — ALAC Method</h4>
@@ -1969,10 +2012,10 @@
             <div class="alac-part"><b>LEGAL BASIS</b><p>${escapeHtml(alac.legalBasis || '')}</p></div>
             <div class="alac-part"><b>APPLICATION</b><p>${escapeHtml(alac.application || '')}</p></div>
             <div class="alac-part"><b>CONCLUSION</b><p>${escapeHtml(alac.conclusion || '')}</p></div></div></section>` : ''}
-        ${suggestedAnswer ? `<section class="assessment-section"><h4>Approved Model Answer</h4>
+        ${isSubjectMatter ? '' : suggestedAnswer ? `<section class="assessment-section"><h4>Approved Model Answer</h4>
           <div class="dd-model-answer">${escapeHtml(suggestedAnswer)}</div></section>`
         : '<p class="dd-exam-description">Model answer not yet released under this examination’s rule.</p>'}
-        <section class="assessment-section"><h4>Supporting legal sources</h4>${assessmentSources(sources)}</section>
+        ${isSubjectMatter ? '' : `<section class="assessment-section"><h4>Supporting legal sources</h4>${assessmentSources(sources)}</section>`}
         ${sourceWarning}
         ${result.humanComments ? `<section class="assessment-section"><h4>Human examiner</h4><div class="legal-explanation">${escapeHtml(result.humanComments)}</div></section>` : ''}
         <div class="assessment-meta">This AI-generated assessment is for Bar review and coaching only. It is not an official Supreme Court grade and does not guarantee or predict an examinee’s actual result.</div>
@@ -2074,6 +2117,24 @@
     pauseActiveClock();
     clearTimeout(state.saveTimer);
     state.saveTimer = null;
+  }
+
+  function resetForIdentityChange() {
+    stopActiveTimers();
+    state.catalog = [];
+    state.history = [];
+    state.setup = null;
+    state.active = null;
+    state.assignment = null;
+    state.uploadPreview = null;
+    state.currentIndex = 0;
+    state.screen = 'catalog';
+    state.resumeAttemptId = null;
+    state.saveInFlight = false;
+    state.pendingSave = false;
+    ['dd-per-subject-app', 'dd-bar-feels-app', 'dd-verdict-app'].forEach((id) => {
+      document.getElementById(id)?.replaceChildren();
+    });
   }
 
   async function loadCatalog(track = state.track) {
@@ -2468,7 +2529,8 @@
     state.initialized = true;
     readSubjectCatalogState();
     try {
-      const savedMode = localStorage.getItem('duediligence.subject-matter.timer-mode.v1');
+      const storageKey = privateKey('duediligence.subject-matter.timer-mode.v1');
+      const savedMode = storageKey ? localStorage.getItem(storageKey) : null;
       if (PRACTICE_TIMER_MODES.some((item) => item.value === savedMode)) {
         state.preferredTimerMode = savedMode;
       }
@@ -2518,6 +2580,9 @@
       }
       if (state.active && ['room', 'review'].includes(state.screen)) saveRecovery();
       stopActiveTimers();
+    });
+    global.DueDiligencePrivateWorkspace?.registerReset?.(({ previousUserId, nextUserId }) => {
+      if (previousUserId && previousUserId !== nextUserId) resetForIdentityChange();
     });
 
     const assignmentToken = new URLSearchParams(location.search).get('assignment');

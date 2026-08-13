@@ -104,7 +104,7 @@ test('Subject Matter catalog preserves course metadata but withholds bank invent
     const body = await response.json();
     assert.equal(response.status, 200);
     assert.equal(body.data.items[0].courseCode, 'CRIMLAW1');
-    assert.equal(body.data.items[0].completedCount, 2);
+    assert.equal('completedCount' in body.data.items[0], false);
     assert.equal('questionCount' in body.data.items[0], false);
     assert.equal('totalQuestions' in body.data.items[0].inventory, false);
     assert.equal('placementCount' in body.data, false);

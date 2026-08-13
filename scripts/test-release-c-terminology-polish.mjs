@@ -25,7 +25,7 @@ for (const label of [
   'Quid Pro Quo',
   'Partnerships',
   'The Docket',
-  'Commence Examination',
+  'Examination Room',
 ]) {
   assert.ok(index.includes(label), `Public experience must include “${label}”.`);
 }
@@ -38,7 +38,7 @@ assert.doesNotMatch(publicLanding, /class="pb-hero"|class="pb-summary"|class="pb
 assert.doesNotMatch(publicLanding, /Early Access Beta|Enter the Beta|Beta Access Active/i);
 assert.match(
   index,
-  /<a class="brand" href="\/" aria-label="Due Diligence home" aria-describedby="brand-subtitle-meaning">/,
+  /<a class="brand" href="\/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">/,
 );
 assert.match(index, /id="btn-signin"[^>]*>The Docket<\/button>[\s\S]*<\/nav>/);
 assert.match(index, /id="page-community" class="page"/);

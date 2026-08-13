@@ -35,9 +35,13 @@ for (const required of [
   'assets/examination-room-beadle-class-list-template.xlsx',
   'assets/private-beta-landing.css',
   'assets/private-beta-landing.js',
+  'assets/feature-loader.js',
+  'assets/private-workspace.js',
   'assets/private-beta/library-student-1440.avif',
   'assets/examinations.css',
   'assets/examinations.js',
+  'assets/study-workspace.css',
+  'assets/study-workspace.js',
   'assets/brand/apple-touch-icon.png',
   'assets/brand/favicon.ico',
   'assets/brand/favicon-16.png',
@@ -54,7 +58,7 @@ for (const required of [
 }
 
 assert.ok(files.includes('.nojekyll'));
-assert.ok(files.every((file) => !/content|worker|supabase|scripts|docs/i.test(file)));
+assert.ok(files.every((file) => !/(^|\/)(content|worker|supabase|scripts|docs)(\/|$)/i.test(file)));
 assert.ok(files.every((file) => !/\.(json|sql|mjs|csv)$/i.test(file)));
 
 const index = await readFile(path.join(output, 'index.html'), 'utf8');
@@ -67,7 +71,7 @@ assert.doesNotMatch(index, /PH Bar Essay Trainer|Advanced Pro Repository|PH Bar 
 assert.match(index, /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/);
 assert.match(index, /<html lang="en-PH">/);
 assert.match(index, /id="private-beta-landing"/);
-assert.match(index, /<h2 id="pb-pillars-title">Choose how you want to prepare\.<\/h2>/);
+assert.match(index, /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
 assert.match(index, /class="pb-pillar-grid"[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room/);
 assert.doesNotMatch(index, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
 assert.doesNotMatch(index, /A platform to express|Practice the reasoning\. Refine the writing\.|Explore Due Diligence|Learn How It Works|Pause Motion/i);

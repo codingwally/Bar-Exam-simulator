@@ -240,8 +240,8 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/examinations\.js\?v=subject-submit-20260813-1/,
-  'The protected examination-route fix must ship behind a fresh browser cache key.',
+  /assets\/feature-loader\.js\?v=master-experience-20260813-1/,
+  'Protected routes must use the release-scoped lazy feature loader.',
 );
 assert.match(
   privateBetaCss,
@@ -250,7 +250,7 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/private-beta-landing\.css\?v=homepage-default-20260812-1/,
+  /assets\/private-beta-landing\.css\?v=master-experience-20260813-1/,
   'The public sign-in visibility fix must ship behind a fresh browser cache key.',
 );
 

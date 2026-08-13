@@ -256,12 +256,11 @@ test('authenticated feed requests use the verified user and return controlled JS
   }
 });
 
-test('authenticated post creation cannot spoof author ownership', async () => {
-  let rpcBody;
+test('legacy post creation is retired in favor of the privacy-safe Quorum command route', async () => {
+  let rpcCalled = false;
   const restore = installForumFetch(async (url, options) => {
-    assert.match(url, /\/rest\/v1\/rpc\/forum_create_post$/);
-    rpcBody = JSON.parse(options.body);
-    return Response.json({ id: postA, createdAt: '2026-08-02T00:00:00Z' });
+    rpcCalled = true;
+    return Response.json({});
   });
   try {
     const response = await worker.fetch(
@@ -273,16 +272,15 @@ test('authenticated post creation cannot spoof author ownership', async () => {
       baseEnv,
     );
     const payload = await response.json();
-    assert.equal(response.status, 201);
-    assert.equal(payload.post.id, postA);
-    assert.equal(rpcBody.p_user_id, userA);
-    assert.equal('authorUserId' in rpcBody, false);
+    assert.equal(response.status, 410);
+    assert.equal(payload.error.code, 'FORUM_ROUTE_RETIRED');
+    assert.equal(rpcCalled, false);
   } finally {
     restore();
   }
 });
 
-test('unsafe post URLs are rejected before forum storage', async () => {
+test('legacy post creation stays retired even for an unsafe URL payload', async () => {
   let rpcCalled = false;
   const restore = installForumFetch(async () => {
     rpcCalled = true;
@@ -297,8 +295,8 @@ test('unsafe post URLs are rejected before forum storage', async () => {
       baseEnv,
     );
     const payload = await response.json();
-    assert.equal(response.status, 400);
-    assert.equal(payload.error.code, 'UNSAFE_FORUM_URL');
+    assert.equal(response.status, 410);
+    assert.equal(payload.error.code, 'FORUM_ROUTE_RETIRED');
     assert.equal(rpcCalled, false);
   } finally {
     restore();

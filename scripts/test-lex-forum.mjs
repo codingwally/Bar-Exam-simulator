@@ -6,6 +6,7 @@ const files = Object.fromEntries(await Promise.all([
   'assets/phase2-experience.js',
   'assets/lex-forum.js',
   'assets/lex-forum.css',
+  'assets/feature-loader.js',
   'worker/index.mjs',
   'worker/forum-core.mjs',
   'admin/index.html',
@@ -19,6 +20,7 @@ const page = files['index.html'];
 const auth = files['assets/phase2-experience.js'];
 const forum = files['assets/lex-forum.js'];
 const css = files['assets/lex-forum.css'];
+const featureLoader = files['assets/feature-loader.js'];
 const worker = files['worker/index.mjs'];
 const core = files['worker/forum-core.mjs'];
 const adminPage = files['admin/index.html'];
@@ -36,8 +38,9 @@ assert.match(
 assert.match(page, /id="lex-forum-app" hidden/);
 assert.match(page, /Quorum is an educational discussion space/);
 assert.doesNotMatch(page, /Lex Forum|Under Construction|Read-only/i);
-assert.match(page, /assets\/lex-forum\.css/);
-assert.match(page, /assets\/lex-forum\.js/);
+assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
+assert.match(featureLoader, /assets\/lex-forum\.css\?v=master-experience-20260813-1/);
+assert.match(featureLoader, /assets\/lex-forum\.js\?v=master-experience-20260813-1/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);

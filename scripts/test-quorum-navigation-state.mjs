@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const source = await readFile(new URL('../assets/lex-forum.js', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../assets/lex-forum.css', import.meta.url), 'utf8');
+const featureLoader = await readFile(new URL('../assets/feature-loader.js', import.meta.url), 'utf8');
 
 function relativeLuminance(hex) {
   const channels = [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16) / 255);
@@ -31,13 +32,13 @@ assert.match(
   'Profile must retain its own route/view identity.',
 );
 assert.match(
-  html,
-  /assets\/lex-forum\.css\?v=live-experience-quorum-back-20260811-1/,
+  featureLoader,
+  /assets\/lex-forum\.css\?v=master-experience-20260813-1/,
   'The Quorum accessibility fix must ship behind a fresh stylesheet cache key.',
 );
 assert.match(
-  html,
-  /assets\/lex-forum\.js\?v=live-experience-quorum-back-20260811-1/,
+  featureLoader,
+  /assets\/lex-forum\.js\?v=master-experience-20260813-1/,
   'The Quorum navigation fix must ship behind a fresh script cache key.',
 );
 assert.match(

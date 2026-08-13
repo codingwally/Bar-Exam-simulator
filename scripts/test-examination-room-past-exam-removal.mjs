@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
-const [migration, generalization, core, routes, worker, frontend, css, html] = await Promise.all([
+const [migration, generalization, core, routes, worker, frontend, css, html, featureLoader] = await Promise.all([
   readFile(new URL('supabase/migrations/20260811230633_exam_room_user_past_exam_removal.sql', root), 'utf8'),
   readFile(new URL('supabase/migrations/20260812235553_generalize_exam_workspace_removal.sql', root), 'utf8'),
   readFile(new URL('worker/exam-room-2026-core.mjs', root), 'utf8'),
@@ -11,6 +11,7 @@ const [migration, generalization, core, routes, worker, frontend, css, html] = a
   readFile(new URL('assets/duediligence-2026.js', root), 'utf8'),
   readFile(new URL('assets/duediligence-2026.css', root), 'utf8'),
   readFile(new URL('index.html', root), 'utf8'),
+  readFile(new URL('assets/feature-loader.js', root), 'utf8'),
 ]);
 
 // The database operation is a per-user tombstone, never a canonical deletion.
@@ -93,7 +94,7 @@ assert.match(css, /\.dd26-professor-exam-list\{/);
 assert.match(css, /\.dd26-professor-exam-row\.is-selected/);
 assert.match(css, /@media \(max-width:680px\)[\s\S]*\.dd26-professor-exam-row\{grid-template-columns:1fr/);
 
-assert.match(html, /duediligence-2026\.css\?v=professor-virtual-room-20260813-2/);
-assert.match(html, /duediligence-2026\.js\?v=professor-virtual-room-20260813-2/);
+assert.match(featureLoader, /duediligence-2026\.css\?v=master-experience-20260813-1/);
+assert.match(featureLoader, /duediligence-2026\.js\?v=master-experience-20260813-1/);
 
 console.log('Examination Room all-state workspace removal and Professor list contracts passed.');

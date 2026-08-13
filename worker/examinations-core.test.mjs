@@ -88,7 +88,8 @@ test('Subject Matter responses remove confidential inventory counts recursively'
   };
   const sanitizedCatalog = sanitizeSubjectMatterCatalog(catalog);
   assert.equal(sanitizedCatalog.items[0].subject, 'Criminal Law I');
-  assert.equal(sanitizedCatalog.items[0].completedCount, 3);
+  assert.equal(sanitizedCatalog.items[0].progressState, 'Ready for another review');
+  assert.equal('completedCount' in sanitizedCatalog.items[0], false);
   assert.equal('questionCount' in sanitizedCatalog.items[0], false);
   assert.deepEqual(sanitizedCatalog.items[0].nested, {});
   assert.equal('placementCount' in sanitizedCatalog, false);
@@ -102,7 +103,6 @@ test('Subject Matter responses remove confidential inventory counts recursively'
   });
   assert.deepEqual(selection, {
     exhausted: false,
-    completedCount: 3,
     setup: { versionId: VERSION_ID },
   });
 });

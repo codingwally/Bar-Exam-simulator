@@ -695,10 +695,20 @@ export function normalizeQuorumAdminRequest(input = {}, requestId = '') {
     };
   }
   if (operation === 'resolve_anonymous_identity') {
+    const targetType = quorumEnum(
+      String(payload.targetType || '').trim().toLowerCase(),
+      new Set(['post', 'comment', 'reply']),
+      'Anonymous target type',
+    );
     return {
       operation,
       payload: {
-        entryId: forumPublicId(payload.entryId, ['qe'], 'Entry'),
+        targetType,
+        targetId: forumPublicId(
+          payload.targetId,
+          targetType === 'post' ? ['qe'] : ['qc'],
+          'Anonymous target',
+        ),
         reason: forumPlainText(payload.reason, {
           label: 'Resolution reason', minimum: 10, maximum: 1_000,
         }),

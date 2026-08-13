@@ -208,6 +208,11 @@ const SUBJECT_MATTER_INVENTORY_KEYS = new Set([
   'placementcount',
   'canonicalcount',
   'totalcount',
+  'completedcount',
+  'attemptedcount',
+  'completedquestions',
+  'attemptedquestions',
+  'cyclecomplete',
 ]);
 
 function sanitizedSubjectMatterPayload(value) {
@@ -221,7 +226,27 @@ function sanitizedSubjectMatterPayload(value) {
 }
 
 export function sanitizeSubjectMatterCatalog(value) {
-  return sanitizedSubjectMatterPayload(value);
+  const source = value && typeof value === 'object' && !Array.isArray(value)
+    ? { ...value }
+    : value;
+  if (Array.isArray(source?.items)) {
+    source.items = source.items.map((item) => {
+      const completed = Number(item?.completedCount) || 0;
+      const attempted = Number(item?.attemptedCount) || completed;
+      const cycleComplete = item?.cycleComplete === true;
+      return {
+        ...item,
+        progressState: cycleComplete
+          ? 'Cycle complete'
+          : completed > 0
+            ? 'Ready for another review'
+            : attempted > 0
+              ? 'In progress'
+              : 'Not started',
+      };
+    });
+  }
+  return sanitizedSubjectMatterPayload(source);
 }
 
 export function sanitizeSubjectMatterSelection(value) {

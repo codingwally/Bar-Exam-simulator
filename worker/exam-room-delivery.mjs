@@ -97,6 +97,112 @@ function html(value) {
     .replace(/'/g, '&#39;');
 }
 
+function professorGradingKeyMessage(payload, key) {
+  const title = payload.title || 'your examination';
+  const link = resultLink(payload.examId || '');
+  return {
+    subject: `Due Diligence — ${title} published: Professor key and next steps`,
+    text: [
+      `Your examination, ${title}, is published.`,
+      '',
+      'PRIVATE PROFESSOR GRADING KEY',
+      key,
+      '',
+      'Keep this key private. Due Diligence staff will never ask you to forward it. Enter it only in the secure Professor workspace.',
+      '',
+      'WHAT TO DO NEXT',
+      '1. OPEN THE PROFESSOR WORKSPACE',
+      'Use the secure link below and verify this signed-in Professor account with the key. After verification, the account remembers access to this examination.',
+      '',
+      '2. WAIT FOR CLASS PREPARATION',
+      'The Beadle uploads and confirms the class list, then creates the student examination code. Monitor attendance and submissions from the Examination Room.',
+      '',
+      '3. GRADE SUBMITTED EXAMINATIONS',
+      'Open any submitted student examination. Enter the score and Professor comment for each question, then save it as a draft or final grade. Saved grades remain in the official class record.',
+      '',
+      '4. DOWNLOAD THE CLASS GRADEBOOK',
+      'Open Class Results to download an Excel/Google Sheets-compatible workbook at any stage, including while other students are still taking the exam. It contains the overview, questions, submitted answers, current grades, and per-student detail.',
+      '',
+      '5. SEND FINAL RESULTS',
+      'When grading is complete, choose Send final grades. Each graded student receives only their own score and Professor comments. Sending seals the examination record; the class workbook remains available to the Professor.',
+      '',
+      `OPEN THE SECURE EXAMINATION ROOM: ${link}`,
+      '',
+      'Need help? Email support@duediligence.ph.',
+    ].join('\n'),
+    html: `<div style="margin:0;background:#f5f2e9;padding:32px 16px;font-family:Arial,sans-serif;color:#132238">
+      <div style="max-width:720px;margin:auto;background:#fff;border:1px solid #d4af37;border-top:5px solid #d4af37">
+        <div style="background:#061c35;color:#fff;padding:26px 30px">
+          <div style="color:#e4bd54;font-size:12px;letter-spacing:2px;text-transform:uppercase">Due Diligence Examination Room</div>
+          <h1 style="margin:8px 0 0;font-family:Georgia,serif;font-size:30px;line-height:1.2">Your examination is published</h1>
+        </div>
+        <div style="padding:26px 30px">
+          <h2 style="margin:0 0 18px;font-family:Georgia,serif;color:#061c35;font-size:24px">${html(title)}</h2>
+          <div style="background:#fff8df;border:1px solid #d4af37;padding:18px 20px;margin:0 0 22px">
+            <div style="color:#735512;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px">Private Professor grading key</div>
+            <div style="font-family:Consolas,'Courier New',monospace;font-size:18px;line-height:1.5;font-weight:700;color:#061c35;word-break:break-all">${html(key)}</div>
+          </div>
+          <p style="margin:0 0 22px;color:#526174;line-height:1.6"><strong style="color:#9a2d35">Keep this key private.</strong> Due Diligence staff will never ask you to forward it. Enter it only in the secure Professor workspace.</p>
+          <p style="margin:0 0 28px"><a href="${html(link)}" style="display:inline-block;background:#d4af37;color:#061c35;text-decoration:none;font-weight:700;padding:13px 20px;border-radius:2px">Open secure Examination Room</a></p>
+          <div style="border-top:1px solid #d6dee8;padding-top:22px">
+            <div style="color:#9a6d10;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px">Professor workflow</div>
+            <ol style="margin:0;padding-left:22px;color:#132238;line-height:1.55">
+              <li style="padding:0 0 14px 6px"><strong>Open the Professor workspace.</strong><br><span style="color:#526174">Verify this signed-in Professor account with the key. The account then remembers access to this examination.</span></li>
+              <li style="padding:0 0 14px 6px"><strong>Wait for class preparation.</strong><br><span style="color:#526174">The Beadle confirms the class list and creates the student examination code. Monitor attendance, progress, submissions, and recorded integrity events from the Examination Room.</span></li>
+              <li style="padding:0 0 14px 6px"><strong>Grade submitted examinations.</strong><br><span style="color:#526174">Open any submitted student examination, score each question, add Professor comments, and save as draft or final. Saved grades remain in the official class record.</span></li>
+              <li style="padding:0 0 14px 6px"><strong>Download the class gradebook at any stage.</strong><br><span style="color:#526174">Class Results creates an Excel/Google Sheets-compatible workbook with the class overview, exact questions, submitted answers, current grades, and per-student detail—even before everyone finishes.</span></li>
+              <li style="padding:0 0 0 6px"><strong>Send final results when ready.</strong><br><span style="color:#526174">Each graded student receives only their own score and Professor comments. Sending seals the examination record; the Professor gradebook remains available.</span></li>
+            </ol>
+          </div>
+          <div style="margin-top:26px;padding:16px 18px;background:#f7f4ec;border-left:4px solid #d4af37;color:#526174;line-height:1.55"><strong style="color:#061c35">Professor control:</strong> You may grade as submissions arrive, save work across sessions, download partial or final records, and send results only when you decide.</div>
+        </div>
+        <div style="padding:18px 30px;background:#061c35;color:#cbd5e1;font-size:12px;line-height:1.5">Need help? <a href="mailto:support@duediligence.ph?subject=Due%20Diligence%20Support%20Request" style="color:#e4bd54">support@duediligence.ph</a></div>
+      </div>
+    </div>`,
+  };
+}
+
+function studentResultMessage(payload) {
+  const title = payload.title || 'your examination';
+  const grades = Array.isArray(payload.grades) ? payload.grades : [];
+  const totalScore = grades.reduce((sum, grade) => sum + finiteNumber(grade?.score), 0);
+  const totalMaximum = grades.reduce((sum, grade) => sum + finiteNumber(grade?.maximumPoints), 0);
+  const percentage = totalMaximum > 0 ? (totalScore / totalMaximum) * 100 : 0;
+  const scoreText = totalMaximum > 0
+    ? `${totalScore.toFixed(2)} / ${totalMaximum.toFixed(2)}` : 'See secure result';
+  const rows = grades.map((grade, index) => {
+    const question = Array.isArray(payload.questions)
+      ? payload.questions.find((entry) => String(entry?.questionId || '') === String(grade?.questionId || ''))
+      : null;
+    const ordinal = Number(grade?.ordinal ?? question?.ordinal) || index + 1;
+    return `<tr><td style="padding:11px;border-bottom:1px solid #d6dee8"><strong>Question ${html(ordinal)}</strong></td><td style="padding:11px;border-bottom:1px solid #d6dee8;text-align:right"><strong>${finiteNumber(grade?.score).toFixed(2)} / ${finiteNumber(grade?.maximumPoints).toFixed(2)}</strong></td><td style="padding:11px;border-bottom:1px solid #d6dee8;color:#526174">${html(String(grade?.comment || '').trim() || 'No Professor comment')}</td></tr>`;
+  }).join('');
+  const link = resultLink(payload.examId || '');
+  return {
+    subject: `Score released: ${title}`,
+    text: [
+      `Your Professor has released your result for ${title}.`,
+      payload.candidateNumber ? `Candidate number: ${payload.candidateNumber}` : '',
+      '',
+      releasedGradesText(grades, payload.questions),
+      '',
+      'Sign in to view your protected examination record.',
+      link,
+    ].filter((line, index, lines) => line || (index > 0 && lines[index - 1] !== '')).join('\n'),
+    html: `<div style="margin:0;background:#f5f2e9;padding:32px 16px;font-family:Arial,sans-serif;color:#132238">
+      <div style="max-width:680px;margin:auto;background:#fff;border:1px solid #d4af37;border-top:5px solid #d4af37">
+        <div style="background:#061c35;color:#fff;padding:26px 30px"><div style="color:#e4bd54;font-size:12px;letter-spacing:2px;text-transform:uppercase">Due Diligence Examination Room</div><h1 style="margin:8px 0 0;font-family:Georgia,serif;font-size:30px">Your score has been released</h1></div>
+        <div style="padding:26px 30px"><h2 style="margin:0 0 6px;font-family:Georgia,serif;color:#061c35">${html(title)}</h2>${payload.candidateNumber ? `<p style="margin:0 0 20px;color:#526174">Candidate number: ${html(payload.candidateNumber)}</p>` : ''}
+          <div style="padding:20px;background:#f7f4ec;border-left:5px solid #d4af37;margin-bottom:22px"><div style="font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#735512;font-weight:700">Overall score</div><div style="font-family:Georgia,serif;font-size:34px;color:#061c35;margin-top:5px"><strong>${html(scoreText)}</strong>${totalMaximum > 0 ? `<span style="display:block;font-family:Arial,sans-serif;font-size:15px;color:#526174;margin-top:4px">${percentage.toFixed(1)}%</span>` : ''}</div></div>
+          ${rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px"><thead><tr style="background:#0b2b4b;color:#fff"><th style="padding:11px;text-align:left">Item</th><th style="padding:11px;text-align:right">Score</th><th style="padding:11px;text-align:left">Professor comment</th></tr></thead><tbody>${rows}</tbody></table>` : '<p style="color:#526174">Open the secure record to review the released result and Professor comments.</p>'}
+          <p style="margin:0"><a href="${html(link)}" style="display:inline-block;background:#d4af37;color:#061c35;text-decoration:none;font-weight:700;padding:13px 20px;border-radius:2px">View protected result</a></p>
+        </div>
+        <div style="padding:18px 30px;background:#061c35;color:#cbd5e1;font-size:12px">This email contains only your own released result. Sign in with the same rostered account to open the protected record.</div>
+      </div>
+    </div>`,
+  };
+}
+
 function finiteNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -599,15 +705,7 @@ async function emailMessage(env, job) {
   }
   if (job.email_type === 'professor_grading_key') {
     const key = await credentialFromPayload(env, payload);
-    return {
-      subject: `Due Diligence - Grading key for ${payload.title || 'your examination'}`,
-      text: [
-        `Your grading key for ${payload.title || 'your examination'} is:`,
-        key,
-        'Use it only in the secure Professor grading workspace. Keep it private.',
-        resultLink(payload.examId || ''),
-      ].join('\n'),
-    };
+    return professorGradingKeyMessage(payload, key);
   }
   if (job.email_type === 'beadle_key') {
     const key = await credentialFromPayload(env, payload);
@@ -696,18 +794,7 @@ async function emailMessage(env, job) {
     };
   }
   if (job.email_type === 'student_result') {
-    return {
-      subject: `Due Diligence — results for ${payload.title || 'your examination'}`,
-      text: [
-        `Your Professor has released your result for ${payload.title || 'the examination'}.`,
-        payload.candidateNumber ? `Candidate number: ${payload.candidateNumber}` : '',
-        '',
-        releasedGradesText(payload.grades, payload.questions),
-        '',
-        'Sign in to view the protected examination record.',
-        resultLink(payload.examId || ''),
-      ].filter((line, index, rows) => line || (index > 0 && rows[index - 1] !== '')).join('\n'),
-    };
+    return studentResultMessage(payload);
   }
   return {
     subject: `Due Diligence — results for ${payload.title || 'your examination'}`,

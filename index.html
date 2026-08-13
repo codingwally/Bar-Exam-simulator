@@ -938,7 +938,7 @@
   }
 </style>
 <link rel="stylesheet" href="assets/phase2.css">
-<link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1">
+<link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=design-correction-20260814-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body class="private-beta-public">
@@ -954,27 +954,39 @@
       </span>
     </a>
     <nav class="pb-chamber-nav" aria-label="Due Diligence chambers">
-      <div class="pb-chamber-menu">
-        <button class="pb-chamber-pill pb-chamber-academy" type="button" aria-haspopup="menu"
-          aria-expanded="false" aria-controls="pb-academy-menu" data-pb-menu-trigger="academy">The Academy <span aria-hidden="true">▾</span></button>
+      <div class="pb-chamber-menu pb-chamber-academy">
+        <div class="pb-chamber-split">
+          <a class="pb-chamber-link" href="#chamber/academy" data-pb-chamber-link="academy">The Academy</a>
+          <button class="pb-chamber-toggle" type="button" aria-haspopup="menu"
+            aria-expanded="false" aria-controls="pb-academy-menu" data-pb-menu-trigger="academy"
+            aria-label="Show Academy features"><span aria-hidden="true">▾</span></button>
+        </div>
         <div class="pb-chamber-dropdown" id="pb-academy-menu" role="menu" aria-label="The Academy" hidden>
           <button type="button" role="menuitem" data-public-feature="mock">Mock Bar</button>
           <button type="button" role="menuitem" data-public-feature="subject-matter">Subject Matter</button>
           <button type="button" role="menuitem" data-public-feature="verdict">The Verdict</button>
         </div>
       </div>
-      <div class="pb-chamber-menu">
-        <button class="pb-chamber-pill pb-chamber-commons" type="button" aria-haspopup="menu"
-          aria-expanded="false" aria-controls="pb-commons-menu" data-pb-menu-trigger="commons">The Commons <span aria-hidden="true">▾</span></button>
+      <div class="pb-chamber-menu pb-chamber-commons">
+        <div class="pb-chamber-split">
+          <a class="pb-chamber-link" href="#chamber/commons" data-pb-chamber-link="commons">The Commons</a>
+          <button class="pb-chamber-toggle" type="button" aria-haspopup="menu"
+            aria-expanded="false" aria-controls="pb-commons-menu" data-pb-menu-trigger="commons"
+            aria-label="Show Commons features"><span aria-hidden="true">▾</span></button>
+        </div>
         <div class="pb-chamber-dropdown" id="pb-commons-menu" role="menu" aria-label="The Commons" hidden>
           <button type="button" role="menuitem" data-public-feature="bar-easy">Bar Easy</button>
           <button type="button" role="menuitem" data-public-feature="quorum">Quorum</button>
           <button type="button" role="menuitem" data-public-feature="retainer">Retainer</button>
         </div>
       </div>
-      <div class="pb-chamber-menu">
-        <button class="pb-chamber-pill pb-chamber-barbound" type="button" aria-haspopup="menu"
-          aria-expanded="false" aria-controls="pb-barbound-menu" data-pb-menu-trigger="barbound">BarBound <span aria-hidden="true">▾</span></button>
+      <div class="pb-chamber-menu pb-chamber-barbound">
+        <div class="pb-chamber-split">
+          <a class="pb-chamber-link" href="#chamber/barbound" data-pb-chamber-link="barbound">BarBound</a>
+          <button class="pb-chamber-toggle" type="button" aria-haspopup="menu"
+            aria-expanded="false" aria-controls="pb-barbound-menu" data-pb-menu-trigger="barbound"
+            aria-label="Show BarBound features"><span aria-hidden="true">▾</span></button>
+        </div>
         <div class="pb-chamber-dropdown" id="pb-barbound-menu" role="menu" aria-label="BarBound" hidden>
           <button type="button" role="menuitem" data-public-feature="bar-feels">Bar Feels</button>
           <button type="button" role="menuitem" data-public-feature="chair-cases">2026 Bar Chair&rsquo;s Cases</button>
@@ -996,51 +1008,53 @@
       <h1 id="pb-pillars-title">Choose how you want to prepare.</h1>
       <p>Begin with the study experience that fits the work in front of you.</p>
     </div>
-    <div class="pb-pillar-grid">
-      <a class="pb-pillar-card" href="#chamber/academy">
-        <picture class="pb-pillar-visual">
-          <source type="image/avif" srcset="assets/private-beta/library-student-720.avif 720w, assets/private-beta/library-student-1440.avif 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <source type="image/webp" srcset="assets/private-beta/library-student-720.webp 720w, assets/private-beta/library-student-1440.webp 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <img src="assets/private-beta/library-student-720.jpg" width="720" height="480" loading="eager" decoding="async" fetchpriority="high" alt="Law student preparing in a library">
+    <div class="pb-platform-composition">
+      <figure class="pb-platform-visual">
+        <picture>
+          <source type="image/avif" srcset="assets/private-beta/campus-students-720.avif 720w, assets/private-beta/campus-students-1440.avif 1440w" sizes="(max-width:760px) calc(100vw - 32px), 44vw">
+          <source type="image/webp" srcset="assets/private-beta/campus-students-720.webp 720w, assets/private-beta/campus-students-1440.webp 1440w" sizes="(max-width:760px) calc(100vw - 32px), 44vw">
+          <img src="assets/private-beta/campus-students-720.jpg" width="720" height="480" loading="eager" decoding="async" fetchpriority="high" alt="Law students exchanging notes on campus">
         </picture>
-        <span class="pb-pillar-number">Mock Bar · Subject Matter · The Verdict</span>
-        <h3>The Academy</h3>
-        <p>Practice Philippine legal reasoning through Bar-style essays, course-based study, and a private record of your progress.</p>
-        <strong>Open The Academy</strong>
-      </a>
-      <a class="pb-pillar-card" href="#chamber/commons">
-        <picture class="pb-pillar-visual">
-          <source type="image/avif" srcset="assets/private-beta/library-community-720.avif 720w, assets/private-beta/library-community-1440.avif 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <source type="image/webp" srcset="assets/private-beta/library-community-720.webp 720w, assets/private-beta/library-community-1440.webp 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <img src="assets/private-beta/library-community-720.jpg" width="720" height="480" loading="lazy" decoding="async" alt="Students learning together in a library">
-        </picture>
-        <span class="pb-pillar-number">Bar Easy · Quorum · Retainer</span>
-        <h3>The Commons</h3>
-        <p>Practice legal reasoning in plain language, learn with the Due Diligence community, and manage your platform access.</p>
-        <strong>Open The Commons</strong>
-      </a>
-      <a class="pb-pillar-card" href="#chamber/barbound">
-        <picture class="pb-pillar-visual">
-          <source type="image/avif" srcset="assets/private-beta/writing-notes-720.avif 720w, assets/private-beta/writing-notes-1440.avif 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <source type="image/webp" srcset="assets/private-beta/writing-notes-720.webp 720w, assets/private-beta/writing-notes-1440.webp 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <img src="assets/private-beta/writing-notes-720.jpg" width="720" height="480" loading="lazy" decoding="async" alt="Students reviewing notes and legal materials">
-        </picture>
-        <span class="pb-pillar-number">Bar Feels · 2026 Bar Chair’s Cases · Doctrines · Anchor Case Digests</span>
-        <h3>BarBound</h3>
-        <p>Deepen Bar preparation through full simulations, doctrine mastery, Chair’s Cases, and foundational case digests.</p>
-        <strong>Open BarBound</strong>
-      </a>
-      <button class="pb-pillar-card" type="button" data-public-feature="examination-room">
-        <picture class="pb-pillar-visual">
-          <source type="image/avif" srcset="assets/private-beta/writing-exam-720.avif 720w, assets/private-beta/writing-exam-1440.avif 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <source type="image/webp" srcset="assets/private-beta/writing-exam-720.webp 720w, assets/private-beta/writing-exam-1440.webp 1440w" sizes="(max-width:760px) calc(100vw - 32px), (max-width:1120px) 46vw, 24vw">
-          <img src="assets/private-beta/writing-exam-720.jpg" width="720" height="480" loading="lazy" decoding="async" alt="Student writing an examination answer">
-        </picture>
-        <span class="pb-pillar-number">Professor · Beadle · Student · Exam Administrator</span>
-        <h3>Examination Room</h3>
-        <p>One clear place to prepare, conduct, take, and grade a class examination.</p>
-        <strong>Open Examination Room</strong>
-      </button>
+        <figcaption>One legal-education platform, arranged around the way students actually prepare.</figcaption>
+      </figure>
+      <nav class="pb-chamber-index" aria-label="Preparation chambers">
+        <a class="pb-chamber-entry" href="#chamber/academy">
+          <span class="pb-chamber-entry-number">01</span>
+          <span class="pb-chamber-entry-copy">
+            <span class="pb-chamber-entry-features">Mock Bar &middot; Subject Matter &middot; The Verdict</span>
+            <strong>The Academy</strong>
+            <span>Build the habit of legal analysis through realistic essay practice, course-based review, and a private record that shows how your reasoning develops.</span>
+          </span>
+          <span class="pb-chamber-entry-action">Enter</span>
+        </a>
+        <a class="pb-chamber-entry" href="#chamber/commons">
+          <span class="pb-chamber-entry-number">02</span>
+          <span class="pb-chamber-entry-copy">
+            <span class="pb-chamber-entry-features">Bar Easy &middot; Quorum &middot; Retainer</span>
+            <strong>The Commons</strong>
+            <span>Learn the law in language you can use, exchange ideas with the Due Diligence community, and manage the access that supports your study.</span>
+          </span>
+          <span class="pb-chamber-entry-action">Enter</span>
+        </a>
+        <a class="pb-chamber-entry" href="#chamber/barbound">
+          <span class="pb-chamber-entry-number">03</span>
+          <span class="pb-chamber-entry-copy">
+            <span class="pb-chamber-entry-features">Bar Feels &middot; 2026 Bar Chair&rsquo;s Cases &middot; Doctrines &middot; Anchor Case Digests</span>
+            <strong>BarBound</strong>
+            <span>Move from study to performance through complete simulations, doctrine recall, Chair&rsquo;s Cases, and the decisions that anchor Philippine Bar subjects.</span>
+          </span>
+          <span class="pb-chamber-entry-action">Enter</span>
+        </a>
+        <button class="pb-chamber-entry" type="button" data-public-feature="examination-room">
+          <span class="pb-chamber-entry-number">04</span>
+          <span class="pb-chamber-entry-copy">
+            <span class="pb-chamber-entry-features">Professor &middot; Beadle &middot; Student &middot; Exam Administrator</span>
+            <strong>Examination Room</strong>
+            <span>One dependable place for a class to prepare, conduct, take, and grade a law-school examination.</span>
+          </span>
+          <span class="pb-chamber-entry-action">Enter</span>
+        </button>
+      </nav>
     </div>
     <p class="pb-continuity-assurance">Your private drafts, notes, answers, and progress belong to your account. Community posts and classroom records are shared only through the features you choose to use.</p>
   </section>
@@ -4258,8 +4272,8 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase4-experience.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=master-experience-20260813-1"></script>
-<script src="assets/private-beta-landing.js?v=master-experience-20260813-1"></script>
+<script src="assets/feature-loader.js?v=master-experience-20260813-1&amp;release=design-correction-20260814-1"></script>
+<script src="assets/private-beta-landing.js?v=master-experience-20260813-1&amp;release=design-correction-20260814-1"></script>
 
 </body>
 </html>

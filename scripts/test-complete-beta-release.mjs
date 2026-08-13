@@ -114,9 +114,9 @@ assert.match(
   /The floor is yours—speak your mind, ask questions, share your law school journey, and learn together\./,
 );
 assert.match(html, /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
-assert.match(html, /Mock Bar · Subject Matter · The Verdict/);
-assert.match(html, /Bar Easy · Quorum · Retainer/);
-assert.match(html, /Bar Feels · 2026 Bar Chair(?:&rsquo;|’)s Cases · Doctrines · Anchor Case Digests/);
+assert.match(html, /Mock Bar (?:&middot;|·) Subject Matter (?:&middot;|·) The Verdict/);
+assert.match(html, /Bar Easy (?:&middot;|·) Quorum (?:&middot;|·) Retainer/);
+assert.match(html, /Bar Feels (?:&middot;|·) 2026 Bar Chair(?:&rsquo;|’)s Cases (?:&middot;|·) Doctrines (?:&middot;|·) Anchor Case Digests/);
 assert.doesNotMatch(html, /Co-Counsel|Joint Venture/);
 assert.doesNotMatch(experience, /Co-Counsel|Joint Venture|amountPhp|pricePhp|₱/);
 assert.match(experience, /Pricing will be announced after beta testing\./);

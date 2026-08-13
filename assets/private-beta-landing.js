@@ -25,40 +25,40 @@
     academy: Object.freeze({
       kicker: 'The Academy',
       title: 'Practice, review, and understand your progress.',
-      copy: 'Build disciplined Philippine legal analysis through realistic essay practice, course-based study, and a private record of your own work.',
+      copy: 'Build the habit of legal analysis through realistic essay practice, course-based review, and a private record that shows how your reasoning develops.',
       image: 'library-student',
       alt: 'Law student preparing in a library',
       features: Object.freeze([
-        Object.freeze({ id: 'mock', title: 'Mock Bar', copy: 'Philippine Bar-style essay practice across the eight Bar subjects, with source-backed assessment and coaching. It is educational practice, not an official Bar rating or prediction.' }),
-        Object.freeze({ id: 'subject-matter', title: 'Subject Matter', copy: 'Guided practice by verified law-school course, with question-aware technique, evaluation, legal explanation, discussion, and verified sources after submission.' }),
-        Object.freeze({ id: 'verdict', title: 'The Verdict', copy: 'Review your own attempts, assessments, and personal study exports. Your record is private and does not predict an official Bar result.' }),
+        Object.freeze({ id: 'mock', title: 'Mock Bar', copy: 'Practice Philippine Bar-style essays across the existing eight subjects and receive source-backed coaching on the approved 0–5 practice scale. Expect realistic prompts and structured feedback, never an official Bar rating or prediction.' }),
+        Object.freeze({ id: 'subject-matter', title: 'Subject Matter', copy: 'Choose a law-school course and practice one question at a time with technique matched to the task. After submission, review the suggested legal basis, why it applies, an adaptive discussion, answer guidance, and verified sources.' }),
+        Object.freeze({ id: 'verdict', title: 'The Verdict', copy: 'Return to your private record of attempts, answers, coaching, and personal study exports. Use it to understand how your reasoning develops; it does not predict an official Bar result.' }),
       ]),
       access: 'Sign in when you begin an examination or open your personal record.',
     }),
     commons: Object.freeze({
       kicker: 'The Commons',
       title: 'Learn from clear materials and from one another.',
-      copy: 'Move between plain-language legal study, an academic community, and the live membership area without losing your place.',
+      copy: 'Learn the law in language you can use, exchange ideas with the Due Diligence community, and manage the access that supports your study.',
       image: 'library-community',
       alt: 'Students learning together in a library',
       features: Object.freeze([
-        Object.freeze({ id: 'bar-easy', title: 'Bar Easy', copy: 'Practice legal reasoning in plain language. Coaching and sources appear after submission, and answer text follows the feature’s existing privacy rules.' }),
-        Object.freeze({ id: 'quorum', title: 'Quorum', copy: 'A signed-in academic community for discussions, questions, case notes, resources, study support, profiles, and study circles—with optional anonymous participation.' }),
-        Object.freeze({ id: 'retainer', title: 'Retainer', copy: 'View the membership and access options currently available to your account. Only verified live entitlements are shown.' }),
+        Object.freeze({ id: 'bar-easy', title: 'Bar Easy', copy: 'Express legal reasoning in plain language before seeing coaching and verified legal material. Expect a focused practice exchange that helps turn understanding into usable legal explanation.' }),
+        Object.freeze({ id: 'quorum', title: 'Quorum', copy: 'Join Due Diligence’s academic community for questions, discussions, case notes, study assistance, resources, and study circles. Signed-in members may also use anonymous participation where the live feature allows it.' }),
+        Object.freeze({ id: 'retainer', title: 'Retainer', copy: 'Review the membership and access options currently available to your account. Expect only verified live entitlements and plan information, not a discussion or study-posting area.' }),
       ]),
       access: 'Reading the introduction is public. Community participation and personal access details require sign-in.',
     }),
     barbound: Object.freeze({
       kicker: 'BarBound',
       title: 'Turn review into deliberate Bar preparation.',
-      copy: 'Use full simulations and reviewed legal-study libraries when you are ready for longer, more demanding preparation.',
+      copy: 'Move from study to performance through complete simulations, doctrine recall, Chair’s Cases, and the decisions that anchor Philippine Bar subjects.',
       image: 'writing-notes',
       alt: 'Students reviewing notes and legal materials',
       features: Object.freeze([
-        Object.freeze({ id: 'bar-feels', title: 'Bar Feels', copy: 'A curated multi-question Bar simulation using the current timer, editor, submission, grading, and coaching experience.' }),
-        Object.freeze({ id: 'chair-cases', title: '2026 Bar Chair’s Cases', copy: 'Review the current Chair’s Cases library through facts, issues, rulings, doctrines, dispositions, and official sources.' }),
-        Object.freeze({ id: 'doctrines', title: 'Doctrines', copy: 'Practice recall and explanation, then compare your understanding with the reviewed doctrine, limits, and authority.' }),
-        Object.freeze({ id: 'anchor-cases', title: 'Anchor Case Digests', copy: 'Search and filter foundational cases, read structured digest fields, and open the official primary source.' }),
+        Object.freeze({ id: 'bar-feels', title: 'Bar Feels', copy: 'Enter a curated multi-question Bar simulation with the existing navigation, timed writing, review, and submission flow. Afterward, receive the current coaching experience without changing the approved grading system.' }),
+        Object.freeze({ id: 'chair-cases', title: '2026 Bar Chair’s Cases', copy: 'Study selected decisions through their Bar relevance, facts, issue, ruling, doctrine, and disposition. Each record leads back to its official source for careful review.' }),
+        Object.freeze({ id: 'doctrines', title: 'Doctrines', copy: 'Use a Recall → Explain → Verify sequence to retrieve a rule before reading it. Active recall makes the doctrine, its limits, and its authority easier to retain.' }),
+        Object.freeze({ id: 'anchor-cases', title: 'Anchor Case Digests', copy: 'Review foundational cases through structured facts, issue, ruling, doctrine, disposition, and ALAC use where appropriate. Search the library and open the official primary source when deeper reading is needed.' }),
       ]),
       access: 'Protected BarBound features open only when your current account has the required access.',
     }),
@@ -128,26 +128,39 @@
       view.replaceChildren();
       return;
     }
-    const featureMarkup = definition.features.map((feature) => `<article class="pb-chamber-feature">
-      <div><h2>${feature.title}</h2><p>${feature.copy}</p></div>
+    const featureMarkup = definition.features.map((feature, index) => `<article class="pb-chamber-feature">
+      <span class="pb-chamber-feature-number" aria-hidden="true">0${index + 1}</span>
+      <div><h3>${feature.title}</h3><p>${feature.copy}</p></div>
       <button type="button" data-public-feature="${feature.id}">Open ${feature.title}</button>
     </article>`).join('');
-    view.innerHTML = `<article class="pb-chamber-intro">
-      <div class="pb-chamber-intro-copy">
-        <p class="pb-pillar-number">${definition.kicker}</p>
-        <h1 tabindex="-1">${definition.title}</h1>
-        <p>${definition.copy}</p>
+    const firstFeature = definition.features[0];
+    view.innerHTML = `<article class="pb-chamber-page">
+      <section class="pb-chamber-intro">
+        <div class="pb-chamber-intro-copy">
+          <p class="pb-pillar-number">${definition.kicker}</p>
+          <h1 tabindex="-1">${definition.title}</h1>
+          <p>${definition.copy}</p>
+          <div class="pb-chamber-intro-actions">
+            <button class="pb-chamber-primary" type="button" data-public-feature="${firstFeature.id}">Begin with ${firstFeature.title}</button>
+            <button class="pb-chamber-back" type="button" data-public-home>Back to all chambers</button>
+          </div>
+        </div>
+        <figure class="pb-chamber-intro-visual">
+          <picture>
+            <source type="image/avif" srcset="assets/private-beta/${definition.image}-720.avif 720w, assets/private-beta/${definition.image}-1440.avif 1440w" sizes="(max-width:1120px) 100vw, 48vw">
+            <source type="image/webp" srcset="assets/private-beta/${definition.image}-720.webp 720w, assets/private-beta/${definition.image}-1440.webp 1440w" sizes="(max-width:1120px) 100vw, 48vw">
+            <img src="assets/private-beta/${definition.image}-720.jpg" width="720" height="960" loading="eager" decoding="async" alt="${definition.alt}">
+          </picture>
+        </figure>
+      </section>
+      <section class="pb-chamber-feature-index" aria-labelledby="pb-chamber-feature-title">
+        <header>
+          <p class="pb-eyebrow">Inside ${definition.kicker}</p>
+          <h2 id="pb-chamber-feature-title">Choose your next step.</h2>
+        </header>
         <div class="pb-chamber-feature-list">${featureMarkup}</div>
         <p class="pb-final-note">${definition.access}</p>
-        <button class="pb-chamber-back" type="button" data-public-home>Back to all chambers</button>
-      </div>
-      <div class="pb-chamber-intro-visual">
-        <picture>
-          <source type="image/avif" srcset="assets/private-beta/${definition.image}-720.avif 720w, assets/private-beta/${definition.image}-1440.avif 1440w" sizes="(max-width:1120px) 100vw, 42vw">
-          <source type="image/webp" srcset="assets/private-beta/${definition.image}-720.webp 720w, assets/private-beta/${definition.image}-1440.webp 1440w" sizes="(max-width:1120px) 100vw, 42vw">
-          <img src="assets/private-beta/${definition.image}-720.jpg" width="720" height="960" loading="eager" decoding="async" alt="${definition.alt}">
-        </picture>
-      </div>
+      </section>
     </article>`;
     setHidden(home, true);
     setHidden(view, false);
@@ -518,6 +531,8 @@
       const menu = document.getElementById(trigger.getAttribute('aria-controls'));
       const wasOpen = trigger.getAttribute('aria-expanded') === 'true';
       trigger.setAttribute('aria-expanded', 'false');
+      trigger.setAttribute('aria-label', `Show ${trigger.dataset.pbMenuTrigger === 'barbound'
+        ? 'BarBound' : `${trigger.dataset.pbMenuTrigger[0].toUpperCase()}${trigger.dataset.pbMenuTrigger.slice(1)}`} features`);
       if (menu) menu.hidden = true;
       if (restoreFocus && wasOpen) trigger.focus({ preventScroll: true });
     });
@@ -531,6 +546,8 @@
       : forceOpen === true;
     closePublicMenus();
     trigger.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    trigger.setAttribute('aria-label', `${opening ? 'Hide' : 'Show'} ${trigger.dataset.pbMenuTrigger === 'barbound'
+      ? 'BarBound' : `${trigger.dataset.pbMenuTrigger[0].toUpperCase()}${trigger.dataset.pbMenuTrigger.slice(1)}`} features`);
     menu.hidden = !opening;
     if (opening) requestAnimationFrame(() => menu.querySelector('[role="menuitem"]')?.focus?.());
   }
@@ -615,6 +632,11 @@
         event.preventDefault();
         closePublicMenus();
         await openProtectedFeature(feature.dataset.publicFeature, feature);
+        return;
+      }
+      const chamberLink = event.target.closest?.('[data-pb-chamber-link]');
+      if (chamberLink) {
+        closePublicMenus();
         return;
       }
       const trigger = event.target.closest?.('[data-pb-menu-trigger]');
@@ -714,6 +736,7 @@
       syncAuthenticatedState(event.detail || {});
     });
     global.addEventListener('popstate', () => {
+      closePublicMenus();
       if (!applicationRouteRequested()) {
         showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
         renderPublicRoute({ focus: true });
@@ -724,6 +747,7 @@
       }
     });
     global.addEventListener('hashchange', () => {
+      closePublicMenus();
       if (!applicationRouteRequested()) {
         showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
         renderPublicRoute({ focus: true });

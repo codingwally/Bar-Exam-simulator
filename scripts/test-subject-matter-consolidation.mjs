@@ -79,7 +79,7 @@ assert.match(examinationsUi, /data-assessment-rating="up"/);
 assert.match(examinationsUi, /data-suggest-exam-correction/);
 assert.match(examinationsUi, /assessmentCard\(result, \{ track \}\)/);
 assert.match(examinationsUi, /assessmentCard\(item, \{ answerText: item\.answerText, track: 'per_subject' \}\)/);
-assert.match(examinationsUi, /Individual question assessments\./);
+assert.match(examinationsUi, /Review and retain\./);
 assert.match(examinationsUi, /Individual ALAC assessments\./);
 assert.match(examinerCore, /modelAnswerSectionsForQuestion/);
 assert.match(examinerCore, /'procedure'[\s\S]*'doctrine'[\s\S]*'mixed'/);

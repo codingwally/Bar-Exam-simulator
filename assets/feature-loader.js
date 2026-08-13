@@ -12,12 +12,12 @@
     }),
     examinations: Object.freeze({
       styles: [
-        'assets/examinations.css?v=master-experience-20260813-1',
+        'assets/examinations.css?v=design-correction-20260814-1',
         'assets/study-workspace.css?v=master-experience-20260813-1',
       ],
       scripts: [
         'assets/study-workspace.js?v=master-experience-20260813-1',
-        'assets/examinations.js?v=master-experience-20260813-1',
+        'assets/examinations.js?v=design-correction-20260814-1',
       ],
     }),
     content: Object.freeze({

@@ -49,9 +49,9 @@ assert.match(
   'Opening Mock Bar from the application menu must go directly to the existing subject-selection flow.',
 );
 assert.match(phase2, /\['mock-bar', 'subject-matter', 'bar-feels', 'quorum', 'examination-room'\]/,
-  'The canonical Mock Bar route must be protected and restorable after sign-in.');
-assert.match(phase2, /hash === '#mock' \|\| hash === '#mock-bar'[\s\S]*showPage\?\.\('mock'/,
-  'OAuth return must restore the canonical Mock Bar route without the retired landing.');
+  'The canonical Mock Bar route must remain protected before sign-in.');
+assert.match(phase2, /function restoreAuthDestination\(\)[\s\S]*DueDiligencePublicHome\?\.show\?\.\(\{[\s\S]*replace:\s*true/,
+  'OAuth return must open the canonical homepage without restoring a stale protected route.');
 assert.match(
   html,
   /function showSubjectSelection\(\) \{[\s\S]*window\.scrollTo\(\{ top: 0, behavior: 'auto' \}\);[\s\S]*close\?\.focus\(\{ preventScroll: true \}\);[\s\S]*\}/,

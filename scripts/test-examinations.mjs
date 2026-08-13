@@ -126,6 +126,17 @@ assert.match(frontend, /The examiner response was incomplete\. Retrying once saf
 assert.doesNotMatch(frontend, /secure browser|proctored|encrypted examination environment/i);
 assert.match(frontend, /No cumulative percentage, class rank, pass\/fail claim/);
 assert.match(frontend, /PDF is not accepted in this beta/);
+assert.match(frontend, /bindRoom\(root\)/);
+assert.match(
+  frontend,
+  /function bindRoom\(root\)[\s\S]*root\.querySelector\('#dd-answer-editor'\)[\s\S]*root\.querySelector\('\[data-submit-current\]'\)/,
+  'Subject Matter input must enable the submit button inside its active exam track only.',
+);
+assert.match(
+  frontend,
+  /async function saveCurrent[\s\S]*pageRoot\(state\.active\?\.examination\?\.track \|\| state\.track\)[\s\S]*root\?\.querySelector\('#dd-answer-editor'\)/,
+  'Autosave must read the answer from the active exam track rather than a duplicate hidden editor.',
+);
 
 for (const viewport of [/max-width:\s*1120px/, /max-width:\s*820px/, /max-width:\s*520px/]) {
   assert.match(styles, viewport);

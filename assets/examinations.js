@@ -1261,14 +1261,14 @@
       <nav class="dd-room-bottom" aria-label="Question navigation">
         ${singleSubject ? `
           <button class="dd-exam-button" data-return-catalog type="button">Return to Subjects</button>
-          <span class="dd-room-bottom-status">${wordCount(question.answerText)} words &middot;
+          <span class="dd-room-bottom-status" data-current-word-status>${wordCount(question.answerText)} words &middot;
             ${timerMode === 'strict' ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}</span>
           <button class="dd-exam-button is-primary" data-submit-current type="button"
             ${question.answerText?.trim() ? '' : 'disabled'}>Submit Answer</button>
         ` : `
           <button class="dd-exam-button" data-question-prev type="button"
             ${state.currentIndex === 0 ? 'disabled' : ''}>Previous</button>
-          <span class="dd-room-bottom-status">${wordCount(question.answerText)} words &middot;
+          <span class="dd-room-bottom-status" data-current-word-status>${wordCount(question.answerText)} words &middot;
             ${timerMode === 'strict' ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}</span>
           <button class="dd-exam-button is-primary" data-question-next type="button">
             ${state.currentIndex === summary.total - 1 ? 'Review All' : 'Next Question'}
@@ -1276,13 +1276,13 @@
         `}
       </nav>
     </div>`;
-    bindRoom();
+    bindRoom(root);
     updateClockNode();
   }
 
-  function bindRoom() {
-    const editor = document.getElementById('dd-answer-editor');
-    const richEditor = document.getElementById('dd-answer-rich-editor');
+  function bindRoom(root) {
+    const editor = root.querySelector('#dd-answer-editor');
+    const richEditor = root.querySelector('#dd-answer-rich-editor');
     const updateAnswer = () => {
       const question = currentQuestion();
       const answerText = richEditor ? plainTextFromRich(richEditor) : editor.value;
@@ -1293,10 +1293,17 @@
       }
       question.localRecoveryText = null;
       question.localRecoveryHtml = null;
-      document.getElementById('dd-word-count').textContent = `${wordCount(answerText)} words`;
-      const submit = document.querySelector('[data-submit-current]');
+      root.querySelector('#dd-word-count').textContent = `${wordCount(answerText)} words`;
+      const bottomStatus = root.querySelector('[data-current-word-status]');
+      if (bottomStatus) {
+        const timerMode = state.active.examination.track === 'per_subject'
+          ? state.practiceTimerMode : state.active.attempt.timerMode;
+        bottomStatus.textContent = `${wordCount(answerText)} words · ${timerMode === 'strict'
+          ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}`;
+      }
+      const submit = root.querySelector('[data-submit-current]');
       if (submit) submit.disabled = !answerText.trim();
-      const stateNode = document.getElementById('dd-save-state');
+      const stateNode = root.querySelector('#dd-save-state');
       if (stateNode) {
         stateNode.textContent = 'Unsaved changes';
         stateNode.className = 'dd-save-state is-saving';
@@ -1317,7 +1324,7 @@
     richEditor?.addEventListener('drop', (event) => {
       if (event.dataTransfer?.files?.length) event.preventDefault();
     });
-    document.querySelectorAll('[data-rich-command]').forEach((control) => {
+    root.querySelectorAll('[data-rich-command]').forEach((control) => {
       control.addEventListener('mousedown', (event) => event.preventDefault());
       control.addEventListener('click', () => {
         richEditor?.focus();
@@ -1328,12 +1335,12 @@
         updateAnswer();
       });
     });
-    document.querySelector('[data-rich-font]')?.addEventListener('change', (event) => {
+    root.querySelector('[data-rich-font]')?.addEventListener('change', (event) => {
       richEditor?.focus();
       document.execCommand('fontName', false, event.target.value);
       updateAnswer();
     });
-    document.querySelector('[data-rich-size]')?.addEventListener('change', (event) => {
+    root.querySelector('[data-rich-size]')?.addEventListener('change', (event) => {
       richEditor?.focus();
       document.execCommand('fontSize', false, event.target.value);
       updateAnswer();
@@ -1348,14 +1355,15 @@
   async function saveCurrent(options = {}) {
     const question = currentQuestion();
     if (!question || !state.active) return true;
-    const editor = document.getElementById('dd-answer-editor');
+    const root = pageRoot(state.active?.examination?.track || state.track);
+    const editor = root?.querySelector('#dd-answer-editor');
     if (editor) question.answerText = editor.value;
     if (state.saveInFlight) {
       state.pendingSave = true;
       return false;
     }
     state.saveInFlight = true;
-    const saveNode = document.getElementById('dd-save-state');
+    const saveNode = root?.querySelector('#dd-save-state');
     if (saveNode) {
       saveNode.textContent = 'Saving securely…';
       saveNode.className = 'dd-save-state is-saving';

@@ -240,7 +240,7 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/examinations\.js\?v=corrective-20260812-1/,
+  /assets\/examinations\.js\?v=subject-submit-20260813-1/,
   'The protected examination-route fix must ship behind a fresh browser cache key.',
 );
 assert.match(

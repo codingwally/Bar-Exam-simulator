@@ -203,7 +203,7 @@ assert.match(examinations, /data-subject-search-input/);
 assert.match(examinations, /id="dd-subject-selector-dialog"/);
 assert.match(examinations, /function subjectWritingGuide\(question = \{\}\)/);
 assert.match(examinations, /Improved model response/);
-assert.match(examinations, /Individual question assessments\./);
+assert.match(examinations, /Review and retain\./);
 assert.match(examinations, /Subject Matter/);
 for (const timerLabel of ['12-minute practice', 'Stopwatch', 'Untimed practice']) {
   assert.match(examinations, new RegExp(timerLabel));

@@ -604,56 +604,53 @@
     state.selectedSubject = selected.subject;
     ensureSubjectPathOpen(selected);
     const mobileHierarchy = subjectHierarchyMarkup(selected, 'mobile');
-    root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
-      <header class="dd-exam-hero">
+    root.innerHTML = `<div class="dd-exam-page dd-subject-study-page"><div class="dd-exam-shell">
+      <header class="dd-exam-hero dd-subject-study-hero">
         <div>
-          <p class="dd-exam-kicker">Guided legal writing practice</p>
+          <p class="dd-exam-kicker">Study by law-school course</p>
           <h1>Subject Matter</h1>
-          <p>Choose a law-school course, answer one randomly selected question, and receive
-            coaching that follows the task actually asked.</p>
+          <p>Choose a course, work through one focused question, then review the law and
+            the reasoning behind a stronger response.</p>
         </div>
-        <span class="dd-exam-beta">Question-aware coaching</span>
+        <span class="dd-subject-study-mark">Question-aware study</span>
       </header>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
       <div class="dd-subject-layout is-compact-selector">
         <main class="dd-subject-workspace">
-          <button class="dd-exam-button dd-subject-selector-open" type="button"
-            data-subject-selector-open aria-haspopup="dialog" aria-controls="dd-subject-selector-dialog">
-            Browse Year, Term, and Course
-          </button>
-          <header class="dd-selected-heading" id="dd-selected-course-heading" tabindex="-1">
+          <header class="dd-selected-heading dd-subject-study-intro" id="dd-selected-course-heading" tabindex="-1">
             <p class="dd-exam-kicker">Year ${Number(selected.yearLevel)} · Term ${Number(selected.term)}</p>
             <h2>${escapeHtml(selected.subject)}</h2>
-            <p>Questions appear in a random, no-repeat cycle. Start with your current timer,
-              or adjust it before you begin.</p>
+            <p>Practice the precise task a course question asks, then use the evaluated record
+              to understand, review, and retain the governing law.</p>
           </header>
-          <article class="dd-exam-card">
-            <div class="dd-exam-card-head">
-              <div>
-                <h3>One-question course practice</h3>
-                <p class="dd-exam-description">Each submission receives a task-aware assessment,
-                  an improved model response, the controlling legal basis, and available sources.</p>
-              </div>
-              <span class="dd-exam-pill">Private practice</span>
+          <section class="dd-subject-study-start" aria-labelledby="dd-subject-study-start-title">
+            <div class="dd-subject-study-copy">
+              <p class="dd-exam-kicker">One-question study session</p>
+              <h3 id="dd-subject-study-start-title">Begin when you are ready to write.</h3>
+              <p>Questions appear in a random, no-repeat cycle. Your response stays connected to
+                your account, and the coaching appears only after you submit.</p>
             </div>
-            <div class="dd-exam-meta">
-              <div><small>Your work</small><strong>${escapeHtml(selected.progressState || 'Not started')}</strong></div>
-              <div><small>Selection</small><strong>No-repeat cycle</strong></div>
-              <div><small>Timer</small><strong>${escapeHtml(practiceTimerLabel())}</strong></div>
-            </div>
-            <div class="dd-exam-actions">
+            <dl class="dd-subject-study-meta">
+              <div><dt>Your progress</dt><dd>${escapeHtml(selected.progressState || 'Not started')}</dd></div>
+              <div><dt>Current timer</dt><dd>${escapeHtml(practiceTimerLabel())}</dd></div>
+            </dl>
+            <div class="dd-exam-actions dd-subject-study-actions">
               <button class="dd-exam-button is-primary" type="button"
                 data-subject-start="${escapeAttribute(selected.subject)}"
                 data-year="${Number(selected.yearLevel)}" data-term="${Number(selected.term)}">
                 Start
               </button>
+              <button class="dd-exam-button dd-subject-selector-open" type="button"
+                data-subject-selector-open aria-haspopup="dialog" aria-controls="dd-subject-selector-dialog">
+                Change course
+              </button>
               <button class="dd-exam-button" type="button" data-subject-timer-settings>
                 Timer settings
               </button>
               <button class="dd-exam-button" type="button"
-                data-subject-performance="${escapeAttribute(selected.subject)}">Review My Performance</button>
+                data-subject-performance="${escapeAttribute(selected.subject)}">Review my work</button>
             </div>
-            <details class="dd-practice-note">
+            <details class="dd-practice-note dd-subject-study-note">
               <summary>How this practice works</summary>
               <ol class="dd-syllabus-list">
                 <li>Review the exact task and write in the structure it calls for.</li>
@@ -662,7 +659,7 @@
                 <li>Continue to a different random question.</li>
               </ol>
             </details>
-          </article>
+          </section>
         </main>
       </div>
       <dialog class="dd-subject-drawer" id="dd-subject-selector-dialog"
@@ -1175,6 +1172,67 @@
     return { type, ...(guides[type] || guides.other) };
   }
 
+  function subjectPracticeRoomMarkup({ question, timerMode, writingGuide }) {
+    const course = state.active.examination.subject || state.selectedSubject || 'Selected course';
+    const answerText = question.answerText || '';
+    return `<div class="dd-subject-practice">
+      <header class="dd-subject-practice-header">
+        <div>
+          <p class="dd-exam-kicker">${escapeHtml(course)}</p>
+          <h1>Subject Matter Practice</h1>
+          <p>Read the task carefully, write in the form it requires, and submit when your response is complete.</p>
+        </div>
+        <div class="dd-subject-practice-clock ${timerMode === 'none' ? 'is-hidden' : ''}" id="dd-room-clock">
+          <small>${timerMode === 'strict' ? 'Time remaining' : 'Writing time'}</small>
+          <strong id="dd-room-clock-value">${formatClock(
+            timerMode === 'strict' ? state.clientRemaining : state.clientElapsed,
+          )}</strong>
+        </div>
+      </header>
+      <div class="dd-subject-practice-layout">
+        <section class="dd-subject-practice-question" aria-labelledby="dd-subject-question-title">
+          <p class="dd-question-label">Your practice question · ${escapeHtml(writingGuide.label)}</p>
+          <h2 class="dd-question-prompt" id="dd-subject-question-title">${escapeHtml(question.prompt)}</h2>
+        </section>
+        <aside class="dd-subject-study-companion" aria-labelledby="dd-subject-approach-title">
+          <p class="dd-exam-kicker">Study companion</p>
+          <h2 id="dd-subject-approach-title">How to approach this question</h2>
+          <p>Use the task itself to choose your structure. Before writing, make sure your response covers:</p>
+          <ol>
+            ${writingGuide.focus.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+          </ol>
+          <p class="dd-subject-companion-note">Technique only. The suggested legal basis, discussion, answer, and sources remain unavailable until after submission.</p>
+        </aside>
+        <section class="dd-subject-practice-answer" aria-labelledby="dd-subject-answer-title">
+          ${question.localRecoveryText != null ? `<div class="dd-exam-status is-error">
+            A newer local draft differs from the server revision.
+            <button class="dd-exam-button" type="button" data-use-local-draft>Use local draft</button>
+          </div>` : ''}
+          <div class="dd-subject-answer-heading">
+            <div><p class="dd-exam-kicker">Your response</p><h2 id="dd-subject-answer-title">Your answer</h2></div>
+            <span>Use the legal format the question requires.</span>
+          </div>
+          <section class="dd-answer-card">
+            <label class="sr-only" for="dd-answer-editor">Your answer</label>
+            <textarea class="dd-answer-editor" id="dd-answer-editor" maxlength="20000"
+              placeholder="Write your answer in the structure the question requires. You may use ALAC or another clear legal format where appropriate.">${escapeHtml(answerText)}</textarea>
+            <footer class="dd-answer-footer">
+              <span id="dd-word-count">${wordCount(answerText)} words</span>
+              <span class="dd-save-state is-saved" id="dd-save-state">Server revision ${Number(question.revision) || 0}</span>
+            </footer>
+          </section>
+        </section>
+        <nav class="dd-subject-practice-actions" aria-label="Subject Matter practice actions">
+          <button class="dd-exam-button" data-return-catalog type="button">Return to courses</button>
+          <span class="dd-room-bottom-status" data-current-word-status>${wordCount(answerText)} words ·
+            ${timerMode === 'strict' ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}</span>
+          <button class="dd-exam-button is-primary" data-submit-current type="button"
+            ${answerText.trim() ? '' : 'disabled'}>Submit answer</button>
+        </nav>
+      </div>
+    </div>`;
+  }
+
   function renderRoom() {
     const root = pageRoot(state.active?.examination?.track || state.track);
     if (!root || !state.active) return;
@@ -1191,6 +1249,12 @@
     const safeAnswerHtml = richWriting
       ? sanitizeRichHtml(question.answerHtml || richHtmlFromText(question.answerText || ''))
       : '';
+    if (subjectPractice) {
+      root.innerHTML = subjectPracticeRoomMarkup({ question, timerMode, writingGuide });
+      bindRoom(root);
+      updateClockNode();
+      return;
+    }
     root.innerHTML = `<div class="dd-exam-room">
       <header class="dd-exam-room-bar">
         <div class="dd-room-brand"><strong>Due Diligence</strong><span>PH BAR EXAM SIMULATOR</span></div>
@@ -1944,18 +2008,23 @@
     const releasedAnswer = String(suggestedAnswer || [
       alac.answer, alac.legalBasis, alac.application, alac.conclusion,
     ].filter(Boolean).join('\n\n')).trim();
-    return `<section class="dd-study-disclosures" aria-label="Post-evaluation study material">
+    return `<section class="dd-study-disclosures" aria-labelledby="dd-study-disclosures-title">
+      <header class="dd-study-disclosures-heading">
+        <p class="dd-exam-kicker">Continue your review</p>
+        <h4 id="dd-study-disclosures-title">Study the law behind your response.</h4>
+        <p>Open each part when you are ready to compare, correct, and retain the governing material.</p>
+      </header>
       <details><summary>Reveal suggested legal basis</summary><div class="legal-explanation">${escapeHtml(
         legalBasis || 'No separate legal-basis field is available in the released record.',
       )}</div></details>
       <details><summary>Why this legal basis applies</summary><div class="legal-explanation">${escapeHtml(
         explanation || 'The released assessment does not include a separate applicability explanation.',
       )}</div></details>
-      <details><summary>Suggested discussion</summary><div class="alac-model dd-adaptive-model">${discussion}</div></details>
-      <details><summary>Suggested answer</summary><div class="dd-model-answer">${escapeHtml(
+      <details><summary>Show suggested discussion</summary><div class="alac-model dd-adaptive-model">${discussion}</div></details>
+      <details><summary>Show suggested answer</summary><div class="dd-model-answer">${escapeHtml(
         releasedAnswer || 'The suggested answer has not been released for this item.',
       )}</div></details>
-      <details><summary>Verified sources</summary>${assessmentSources(sources)}</details>
+      <details><summary>View verified sources</summary>${assessmentSources(sources)}</details>
     </section>`;
   }
 
@@ -1979,11 +2048,11 @@
     const subjectStudyDisclosures = isSubjectMatter
       ? subjectMatterStudyDisclosures({ assessment, result, adaptiveSections, suggestedAnswer, sources })
       : '';
-    return `<article class="assessment-card dd-subject-assessment" aria-label="Individual Philippine Bar essay assessment"
+    return `<article class="assessment-card dd-subject-assessment ${isSubjectMatter ? 'dd-subject-review-card' : ''}" aria-label="${isSubjectMatter ? 'Subject Matter review and retention assessment' : 'Individual Philippine Bar essay assessment'}"
       ${isSubjectMatter && questionId ? `data-study-resource-type="subject_matter" data-study-resource-id="${escapeAttribute(questionId)}"` : ''}>
       <div class="assessment-hero">
         ${score != null ? `<div class="score-medallion"><div><strong>${Number(score).toFixed(1)} / 5</strong><span>Points earned</span></div></div>` : ''}
-        <div><div class="assessment-kicker">Individual Question Assessment</div>
+        <div><div class="assessment-kicker">${isSubjectMatter ? 'Evaluation overview' : 'Individual Question Assessment'}</div>
           <h3 class="assessment-title">${escapeHtml(assessment.performanceLabel || 'Philippine Bar essay assessment')}</h3>
           <div class="assessment-equivalent">Scored on the 0.0–5.0 Philippine Bar essay practice scale</div>
           <div class="assessment-badges"><span class="assessment-badge">${escapeHtml(assessment.label || 'Question-bank assessment')}</span>
@@ -1994,15 +2063,15 @@
       <div class="assessment-body">
         ${prompt ? `<section class="assessment-section"><h4>Question</h4><div class="dd-question-prompt">${escapeHtml(prompt)}</div></section>` : ''}
         ${options.answerText ? `<section class="assessment-section"><h4>Your answer</h4><div class="dd-model-answer">${escapeHtml(options.answerText)}</div></section>` : ''}
-        <h4 class="panel-title">Why this score</h4>
+        <h4 class="panel-title">${isSubjectMatter ? 'Why this response received its score' : 'Why this score'}</h4>
         <p class="assessment-rationale">${escapeHtml(assessment.rationale || 'The assessment record does not include a written rationale.')}</p>
         ${isSubjectMatter ? '' : `<section class="assessment-section"><h4>Governing rule and authority</h4>
           <div class="legal-explanation">${escapeHtml(assessment.legalExplanation || result.legalBasis || 'Review the controlling provision and doctrine identified in the released answer and legal sources.')}</div></section>`}
         ${assessmentScoreWasCapped(assessment) ? '' : assessmentBreakdown(assessment.rubricBreakdown, { track })}
         <div class="assessment-grid">
           <section class="assessment-panel strengths"><h4>Strengths</h4>${assessmentList(assessment.strengths, 'No specific strength was identified.')}</section>
-          <section class="assessment-panel errors"><h4>Errors or missing points</h4>${assessmentList(assessment.errors, 'No material error was identified.')}</section>
-          <section class="assessment-panel coaching"><h4>Prioritized improvements</h4>${assessmentList(assessment.improvements, 'Keep the answer direct, legally grounded, and fact-specific.')}</section>
+          <section class="assessment-panel errors"><h4>${isSubjectMatter ? 'Important points missed' : 'Errors or missing points'}</h4>${assessmentList(assessment.errors, 'No material error was identified.')}</section>
+          <section class="assessment-panel coaching"><h4>${isSubjectMatter ? 'How to improve' : 'Prioritized improvements'}</h4>${assessmentList(assessment.improvements, 'Keep the answer direct, legally grounded, and fact-specific.')}</section>
         </div>
         ${isSubjectMatter ? subjectStudyDisclosures : adaptiveSections.length ? `<section class="assessment-section"><h4>Improved model response</h4>
           <div class="alac-model dd-adaptive-model">${adaptiveSections.map((section) => `<div class="alac-part">
@@ -2044,11 +2113,12 @@
         limit: 30,
         offset: 0,
       });
-      root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
-        <p class="dd-exam-kicker">The Verdict / Multi-Question Examination</p>
-        <h1>${track === 'per_subject' ? 'Individual question assessments.' : 'Individual ALAC assessments.'}</h1>
-        <p class="dd-exam-description">No cumulative percentage, class rank, pass/fail claim,
-          or unsupported average is calculated.</p>
+      root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-review-page' : ''}"><section class="dd-verdict-screen">
+        <p class="dd-exam-kicker">${track === 'per_subject' ? 'Subject Matter' : 'The Verdict / Multi-Question Examination'}</p>
+        <h1>${track === 'per_subject' ? 'Review and retain.' : 'Individual ALAC assessments.'}</h1>
+        <p class="dd-exam-description">${track === 'per_subject'
+          ? 'Understand the evaluation, then reveal the legal basis, discussion, suggested answer, and verified sources at your own pace.'
+          : 'No cumulative percentage, class rank, pass/fail claim, or unsupported average is calculated.'}</p>
         ${verdict.results.map((result) => `<div class="dd-verdict-question">
           <p class="dd-question-label">Question ${Number(result.ordinal)}</p>
           ${result.humanScore != null ? `<div class="dd-score-five">Human ${Number(result.humanScore).toFixed(1)} / 5.0</div>` : ''}

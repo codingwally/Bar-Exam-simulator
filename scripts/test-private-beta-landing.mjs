@@ -25,9 +25,17 @@ assert.match(publicLanding, /class="pb-brand"[^>]*data-public-home/,
   'The public logo must return to the canonical homepage without discarding authentication.');
 assert.match(
   publicLanding,
-  /class="pb-chamber-nav"[\s\S]*data-pb-menu-trigger="academy"[\s\S]*data-pb-menu-trigger="commons"[\s\S]*data-pb-menu-trigger="barbound"[\s\S]*data-public-feature="examination-room"/,
+  /class="pb-chamber-nav"[\s\S]*data-pb-chamber-link="academy"[\s\S]*data-pb-menu-trigger="academy"[\s\S]*data-pb-chamber-link="commons"[\s\S]*data-pb-menu-trigger="commons"[\s\S]*data-pb-chamber-link="barbound"[\s\S]*data-pb-menu-trigger="barbound"[\s\S]*data-public-feature="examination-room"/,
   'The public header must expose all four chamber pills.',
 );
+for (const [chamber, label] of [
+  ['academy', 'Academy'], ['commons', 'Commons'], ['barbound', 'BarBound'],
+]) {
+  assert.match(publicLanding, new RegExp(
+    `<a class="pb-chamber-link" href="#chamber/${chamber}"[^>]*>${label === 'BarBound' ? 'BarBound' : `The ${label}`}<\\/a>`
+    + `[\\s\\S]*?<button class="pb-chamber-toggle"[^>]*data-pb-menu-trigger="${chamber}"[\\s\\S]*?aria-label="Show ${label} features"`,
+  ), `${label} must use separate navigation and feature-menu controls.`);
+}
 assert.match(html, /class="brand"[^>]*data-public-home[^>]*aria-label="Due Diligence homepage"/,
   'The authenticated-shell logo must use the same public-home action.');
 assert.doesNotMatch(html, /id="welcome-state"|Prepare with purpose\.|id="start-practice"/,
@@ -37,26 +45,29 @@ assert.ok(publicLanding.indexOf('class="pb-header"') < publicLanding.indexOf('cl
 assert.match(publicLanding, /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
 assert.match(publicLanding, /One platform, four focused chambers/i);
 assert.doesNotMatch(publicLanding, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
+assert.match(publicLanding, /class="pb-platform-composition"/);
+assert.match(publicLanding, /class="pb-chamber-index"/);
+assert.doesNotMatch(publicLanding, /class="pb-pillar-card"/,
+  'The homepage must not regress to four generic boxed cards.');
 assert.doesNotMatch(publicLanding, /A platform to express|Practice the reasoning\. Refine the writing\.|Explore Due Diligence|Learn How It Works|Pause Motion/i);
-for (const [pillar, route, image] of [
-  ['The Academy', 'chamber/academy', 'library-student'],
-  ['The Commons', 'chamber/commons', 'library-community'],
-  ['BarBound', 'chamber/barbound', 'writing-notes'],
-]) {
-  assert.match(
-    publicLanding,
-    new RegExp(`<a class="pb-pillar-card" href="#${route}">[\\s\\S]*?${image}-720\\.avif[\\s\\S]*?<h3>${pillar}<\\/h3>`),
-    `missing image-led public platform pillar: ${pillar}`,
-  );
-}
+assert.match(publicLanding, /campus-students-720\.avif/,
+  'The homepage must retain an optimized editorial photographic field.');
+for (const [chamber, route] of [
+  ['The Academy', 'chamber/academy'],
+  ['The Commons', 'chamber/commons'],
+  ['BarBound', 'chamber/barbound'],
+]) assert.match(publicLanding, new RegExp(
+  `<a class="pb-chamber-entry" href="#${route}">[\\s\\S]*?<strong>${chamber}<\\/strong>`,
+), `missing editorial chamber entry: ${chamber}`);
+assert.match(publicLanding, /<button class="pb-chamber-entry"[^>]*data-public-feature="examination-room"/);
 assert.match(publicLanding, /id="pb-chamber-view"/);
 assert.match(script, /academy:[\s\S]*commons:[\s\S]*barbound:/);
 for (const taxonomy of [
-  'Mock Bar · Subject Matter · The Verdict',
-  'Bar Easy · Quorum · Retainer',
-  'Bar Feels · 2026 Bar Chair’s Cases · Doctrines · Anchor Case Digests',
-  'Professor · Beadle · Student · Exam Administrator',
-]) assert.ok(publicLanding.includes(taxonomy), `missing homepage taxonomy: ${taxonomy}`);
+  /Mock Bar[\s\S]*Subject Matter[\s\S]*The Verdict/,
+  /Bar Easy[\s\S]*Quorum[\s\S]*Retainer/,
+  /Bar Feels[\s\S]*2026 Bar Chair(?:&rsquo;|’|')s Cases[\s\S]*Doctrines[\s\S]*Anchor Case Digests/,
+  /Professor[\s\S]*Beadle[\s\S]*Student[\s\S]*Exam Administrator/,
+]) assert.match(publicLanding, taxonomy, `missing homepage taxonomy: ${taxonomy}`);
 assert.doesNotMatch(publicLanding, /EARLY ACCESS BETA|Enter the Beta|Private beta access code/i,
   'The public homepage must not expose the retired admission gate.');
 
@@ -87,14 +98,16 @@ assert.match(script, /globalBetaEnabled/);
 assert.match(script, /privateBetaApi\(\)\?\.policy/);
 assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /#private-beta-dialog\[open\]/);
-assert.match(html, /assets\/private-beta-landing\.js\?v=master-experience-20260813-1/);
-assert.match(html, /assets\/private-beta-landing\.css\?v=master-experience-20260813-1/);
+assert.match(html, /assets\/private-beta-landing\.js\?v=master-experience-20260813-1&amp;release=design-correction-20260814-1/);
+assert.match(html, /assets\/private-beta-landing\.css\?v=master-experience-20260813-1&amp;release=design-correction-20260814-1/);
 assert.match(css, /\.pb-chamber-nav\s*\{/);
 assert.match(css, /\.pb-chamber-pill\s*\{/);
+assert.match(css, /\.pb-chamber-link\s*,[\s\S]*?\.pb-chamber-toggle\s*\{/);
 assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.pb-chamber-nav\s*\{[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
-assert.match(css, /\.pb-pillar-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/);
-assert.match(css, /@media \(max-width: 1120px\)[\s\S]*?\.pb-pillar-grid\s*\{[\s\S]*?repeat\(2, minmax\(0, 1fr\)\)/);
-assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.pb-pillar-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
+assert.match(css, /\.pb-platform-composition\s*\{[\s\S]*?grid-template-columns:/);
+assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.pb-platform-composition\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
+assert.match(css, /\.pb-chamber-feature\s*\{[\s\S]*?border-top:/);
+assert.doesNotMatch(css, /\.pb-pillar-card/);
 assert.doesNotMatch(css, /pb-slide-left|pb-slide-right|\.pb-rail/);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 

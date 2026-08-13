@@ -199,8 +199,13 @@ assert.match(
 );
 assert.match(
   extractNamedFunction(phase2, 'restoreAuthDestination'),
-  /safeSessionRemove\(authReturnStorageKey\)[\s\S]*DueDiligencePublicHome\?\.show\?\.\(\{[\s\S]*replace:\s*true/,
-  'A completed sign-in must retain the session while returning every user to the homepage.',
+  /if \(!state\.authReturnPending\) return;[\s\S]*state\.authReturnPending = false;[\s\S]*safeSessionRemove\(authReturnStorageKey\)[\s\S]*DueDiligencePublicHome\?\.show\?\.\(\{[\s\S]*replace:\s*true/,
+  'Only a genuine completed authentication return may send the user to the homepage.',
+);
+assert.match(
+  phase2,
+  /authReturnPending:\s*isAuthenticationReturn\(\)/,
+  'Authentication-return state must be captured once so ordinary session refreshes preserve the active page.',
 );
 assert.doesNotMatch(
   extractNamedFunction(phase2, 'restoreAuthDestination'),

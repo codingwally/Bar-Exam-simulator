@@ -1,4 +1,4 @@
--- Transactional behavioral proof for per-user Past Exams removal.
+-- Transactional behavioral proof for per-user examination workspace removal.
 -- Every synthetic identity and record is rolled back.
 
 begin;
@@ -114,31 +114,44 @@ begin
     raise exception 'PAST_EXAM_OUTSIDER_ALLOWED';
   exception when others then
     if sqlerrm = 'PAST_EXAM_OUTSIDER_ALLOWED'
-      or sqlerrm not like '%EXAM_ROOM_PAST_EXAM_ACCESS_REQUIRED%'
+      or sqlerrm not like '%EXAM_ROOM_EXAM_ACCESS_REQUIRED%'
     then raise; end if;
   end;
 
-  begin
-    perform public.exam_room_dismiss_past_exam_v1(
-      v_professor, v_upcoming, 'next_professor_20260812'
-    );
-    raise exception 'PAST_EXAM_UPCOMING_PROFESSOR_ALLOWED';
-  exception when others then
-    if sqlerrm = 'PAST_EXAM_UPCOMING_PROFESSOR_ALLOWED'
-      or sqlerrm not like '%EXAM_ROOM_PAST_EXAM_REQUIRED%'
-    then raise; end if;
-  end;
+  v_result := public.exam_room_dismiss_past_exam_v1(
+    v_professor, v_upcoming, 'next_professor_20260812'
+  );
+  if (v_result ->> 'scope') <> 'professor'
+    or (v_result ->> 'removedFromWorkspace')::boolean is not true
+  then
+    raise exception 'WORKSPACE_UPCOMING_PROFESSOR_REMOVE_FAILED';
+  end if;
 
-  begin
-    perform public.exam_room_dismiss_past_exam_v1(
-      v_student, v_upcoming, 'next_student_20260812'
-    );
-    raise exception 'PAST_EXAM_UPCOMING_STUDENT_ALLOWED';
-  exception when others then
-    if sqlerrm = 'PAST_EXAM_UPCOMING_STUDENT_ALLOWED'
-      or sqlerrm not like '%EXAM_ROOM_PAST_EXAM_REQUIRED%'
-    then raise; end if;
-  end;
+  v_result := public.exam_room_dismiss_past_exam_v1(
+    v_beadle, v_upcoming, 'next_beadle_20260812'
+  );
+  if (v_result ->> 'scope') <> 'beadle' then
+    raise exception 'WORKSPACE_UPCOMING_BEADLE_REMOVE_FAILED';
+  end if;
+
+  v_result := public.exam_room_dismiss_past_exam_v1(
+    v_student, v_upcoming, 'next_student_20260812'
+  );
+  if (v_result ->> 'scope') <> 'student' then
+    raise exception 'WORKSPACE_UPCOMING_STUDENT_REMOVE_FAILED';
+  end if;
+
+  if (select count(*) from public.exam_room_user_exam_dismissals where exam_id =
+      '5b000000-0000-4000-8000-000000000022') <> 3 then
+    raise exception 'WORKSPACE_UPCOMING_PER_USER_ROWS_FAILED';
+  end if;
+
+  if (select count(*) from public.exam_room_exams where id in (
+      '5b000000-0000-4000-8000-000000000020',
+      '5b000000-0000-4000-8000-000000000022'
+  )) <> 2 then
+    raise exception 'WORKSPACE_CANONICAL_RECORD_CHANGED';
+  end if;
 
   if has_table_privilege('anon', 'public.exam_room_user_exam_dismissals', 'select')
     or has_table_privilege('authenticated', 'public.exam_room_user_exam_dismissals', 'insert')

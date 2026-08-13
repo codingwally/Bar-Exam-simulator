@@ -918,7 +918,7 @@ test('grading model-answer query is credentialed and projects only safe owner-gr
   assert.equal(remembered.calls.at(-1).body.p_rate_key_hash, null);
 });
 
-test('v2 owner monitor is grading-key authenticated and projects bounded reopen eligibility only', async () => {
+test('v2 owner monitor supports first-key and remembered access while projecting bounded live evidence only', async () => {
   const gradingKey = 'professor-grading-key-secret';
   const candidateNumber = '0007';
   const monitor = harness({
@@ -933,8 +933,12 @@ test('v2 owner monitor is grading-key authenticated and projects bounded reopen 
         serverNow: '2026-08-10T04:15:00Z',
         reopenMaximumMinutes: 240,
         accessCodeRequired: false,
+        rosterReady: true,
+        studentAccessReady: true,
         candidates: [{
           candidateNumber,
+          studentName: 'Ana Reyes',
+          studentNumber: '2026-001',
           attemptId,
           state: 'submitted',
           startedAt: '2026-08-10T01:00:00Z',
@@ -946,6 +950,11 @@ test('v2 owner monitor is grading-key authenticated and projects bounded reopen 
           activeReopeningId: null,
           canReopenSubmission: true,
           reopenBlockedReason: null,
+          lastHeartbeatAt: '2026-08-10T03:58:00Z',
+          incidentCount: 3,
+          focusExitCount: 2,
+          clipboardAttemptCount: 1,
+          lastIncidentAt: '2026-08-10T03:57:00Z',
           answerSnapshot: 'must-not-project',
           email: 'must-not-project',
         }],
@@ -965,7 +974,69 @@ test('v2 owner monitor is grading-key authenticated and projects bounded reopen 
   assert.equal(payload.result.candidates[0].canReopenSubmission, true);
   assert.equal(payload.result.candidates[0].generation, 1);
   assert.equal(payload.result.accessCodeRequired, false);
+  assert.equal(payload.result.rosterReady, true);
+  assert.equal(payload.result.studentAccessReady, true);
+  assert.equal(payload.result.candidates[0].studentName, 'Ana Reyes');
+  assert.equal(payload.result.candidates[0].incidentCount, 3);
+  assert.equal(payload.result.candidates[0].focusExitCount, 2);
+  assert.equal(payload.result.candidates[0].clipboardAttemptCount, 1);
   assert.equal(JSON.stringify(payload).includes('must-not-project'), false);
+
+  await monitor.handlers.examQuery(request({ operation: 'live_status_v2', examId }), {}, '', '');
+  const rememberedCall = monitor.calls.at(-1);
+  assert.equal(rememberedCall.body.p_grading_key_hash, null);
+  assert.equal(rememberedCall.body.p_rate_key_hash, null);
+});
+
+test('result release uses the remembered-access wrapper without exposing the Professor key', async () => {
+  const gradingKey = 'professor-grading-key-secret';
+  const release = harness({
+    rpc: async (name) => name === 'exam_room_release_results_v2'
+      ? { ok: true, examId, released: true, releasedAt: '2026-08-13T03:00:00Z' }
+      : { ok: true },
+  });
+  const firstResponse = await release.handlers.examCommand(request({
+    operation: 'release_results', examId, requestKey,
+    includeQuestionnaire: true, gradingKey,
+  }), {}, '', '', {});
+  const firstPayload = await firstResponse.json();
+  const firstCall = release.calls.at(-1);
+  assert.equal(firstResponse.status, 200);
+  assert.equal(firstPayload.result.released, true);
+  assert.equal(firstCall.name, 'exam_room_release_results_v2');
+  assert.match(firstCall.body.p_grading_key_hash, /^[0-9a-f]{64}$/);
+  assert.match(firstCall.body.p_rate_key_hash, /^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(firstCall.body).includes(gradingKey), false);
+  assert.equal(JSON.stringify(firstPayload).includes(gradingKey), false);
+
+  await release.handlers.examCommand(request({
+    operation: 'release_results', examId,
+    requestKey: 'request_2026_remembered_access',
+    includeQuestionnaire: false,
+  }), {}, '', '', {});
+  const rememberedCall = release.calls.at(-1);
+  assert.equal(rememberedCall.name, 'exam_room_release_results_v2');
+  assert.equal(rememberedCall.body.p_grading_key_hash, null);
+  assert.equal(rememberedCall.body.p_rate_key_hash, null);
+});
+
+test('result release preserves a database denial and never leaks the submitted Professor key', async () => {
+  const gradingKey = 'professor-grading-key-denied-secret';
+  const denied = harness({
+    rpc: async (name) => name === 'exam_room_release_results_v2'
+      ? { ok: false, code: 'EXAM_ROOM_FINAL_GRADES_REQUIRED', message: 'Finish grading before release.' }
+      : { ok: true },
+  });
+  const response = await denied.handlers.examCommand(request({
+    operation: 'release_results', examId, requestKey,
+    includeQuestionnaire: true, gradingKey,
+  }), {}, '', '', {});
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(payload.result.ok, false);
+  assert.equal(payload.result.code, 'EXAM_ROOM_FINAL_GRADES_REQUIRED');
+  assert.equal(JSON.stringify(denied.calls).includes(gradingKey), false);
+  assert.equal(JSON.stringify(payload).includes(gradingKey), false);
 });
 
 test('legacy portal merges safe Beadle assignments for the role landing page', async () => {
@@ -1604,7 +1675,7 @@ test('Professor result PDF is private, candidate-scoped, and has no release side
   const exportId = '123e4567-e89b-42d3-a456-426614174012';
   const flow = harness({
     rpc: async (name, body) => {
-      if (name === 'exam_room_prepare_result_export_v3') {
+      if (name === 'exam_room_prepare_result_export_v4') {
         return {
           ok: true,
           exportId,
@@ -1644,7 +1715,7 @@ test('Professor result PDF is private, candidate-scoped, and has no release side
   assert.match(response.headers.get('Content-Disposition'), /grades-comments\.pdf"$/);
   assert.equal(new TextDecoder().decode(bytes.slice(0, 4)), '%PDF');
   assert.deepEqual(flow.calls.map((entry) => entry.name), [
-    'exam_room_prepare_result_export_v3',
+    'exam_room_prepare_result_export_v4',
     'exam_room_complete_result_export_v3',
   ]);
   assert.match(flow.calls[0].body.p_grading_key_hash, /^[0-9a-f]{64}$/);
@@ -1690,6 +1761,36 @@ test('Professor class workbook is owner-scoped, audited, and has no release side
   assert.deepEqual(flow.calls[0].body.p_selected_attempt_public_ids, [attemptId]);
   assert.match(flow.calls[1].body.p_output_sha256, /^[0-9a-f]{64}$/);
   assert.equal(flow.calls.some((entry) => entry.name === 'exam_room_release_results'), false);
+});
+
+test('Professor can download a roster-only offline workbook before any submission', async () => {
+  const exportId = '123e4567-e89b-42d3-a456-426614174012';
+  const flow = harness({
+    rpc: async (name, body) => {
+      if (name === 'exam_room_prepare_class_result_export_v1') {
+        return {
+          ok: true, exportId, dataset: {
+            examId, title: 'Labor Law Midterm', generatedAt: '2026-08-12T04:00:00Z',
+            expectedCount: 2, exportScope: body.p_export_scope, candidates: [],
+            classStatuses: [
+              { studentName: 'Ana Reyes', studentEmail: 'ana@example.test', studentNumber: '2026-001', candidateNumber: 'C-01', status: 'not_started' },
+              { studentName: 'Ben Cruz', studentEmail: 'ben@example.test', studentNumber: '2026-002', candidateNumber: 'C-02', status: 'not_started' },
+            ],
+          },
+        };
+      }
+      if (name === 'exam_room_complete_class_result_export_v1') return { ok: true, exportId };
+      return { ok: true };
+    },
+  });
+  const response = await flow.handlers.examClassResultsWorkbook(request({
+    examId, attemptIds: [], scope: 'offline_grading', requestKey,
+  }), {}, '', '');
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  assert.equal(response.status, 200);
+  assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
+  assert.deepEqual(flow.calls[0].body.p_selected_attempt_public_ids, []);
+  assert.equal(flow.calls[0].body.p_export_scope, 'offline_grading');
 });
 
 test('answer operation verifies content hash at the edge and forwards journal concurrency fields', async () => {

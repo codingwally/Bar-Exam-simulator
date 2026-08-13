@@ -142,6 +142,43 @@ insert into public.exam_room_credentials (
   '5a000000-0000-4000-8000-000000000001'
 );
 
+-- A second Professor-owned room deliberately has no roster. It proves that a
+-- published-room monitor can wait safely for the Beadle instead of failing or
+-- inventing candidate rows.
+insert into public.exam_room_classrooms (
+  id, public_id, owner_professor_id, title, school_name, academic_term
+) values (
+  '5a000000-0000-4000-8000-000000000090',
+  '5a000000-0000-4000-8000-000000000091',
+  '5a000000-0000-4000-8000-000000000001',
+  'Waiting For Beadle Room', 'Synthetic College of Law', 'Beta 2026'
+);
+
+insert into public.exam_room_exams (
+  id, public_id, classroom_id, owner_professor_id, title, instructions,
+  requested_question_count, duration_minutes, opens_at, hard_closes_at,
+  status, integrity_preset, include_questionnaire
+) values (
+  '5a000000-0000-4000-8000-000000000092',
+  '5a000000-0000-4000-8000-000000000093',
+  '5a000000-0000-4000-8000-000000000090',
+  '5a000000-0000-4000-8000-000000000001',
+  'Waiting For Beadle Examination', 'Wait for the valid class list.',
+  1, 120, clock_timestamp() + interval '30 minutes',
+  clock_timestamp() + interval '3 hours', 'scheduled', 'standard', false
+);
+
+insert into public.exam_room_credentials (
+  id, exam_id, credential_type, token_hash, scoped_user_id, status,
+  valid_from, expires_at, created_by
+) values (
+  '5a000000-0000-4000-8000-000000000094',
+  '5a000000-0000-4000-8000-000000000092', 'professor_grading',
+  repeat('e', 64), '5a000000-0000-4000-8000-000000000001', 'active',
+  clock_timestamp() - interval '1 hour', clock_timestamp() + interval '30 days',
+  '5a000000-0000-4000-8000-000000000001'
+);
+
 do $real_classroom_behavior$
 declare
   v_professor constant uuid := '5a000000-0000-4000-8000-000000000001';
@@ -152,12 +189,15 @@ declare
   v_outsider constant uuid := '5a000000-0000-4000-8000-000000000006';
   v_exam_id constant uuid := '5a000000-0000-4000-8000-000000000020';
   v_exam_public constant uuid := '5a000000-0000-4000-8000-000000000021';
+  v_empty_exam_public constant uuid := '5a000000-0000-4000-8000-000000000093';
   v_question constant uuid := '5a000000-0000-4000-8000-000000000050';
   v_publication constant uuid := '5a000000-0000-4000-8000-000000000060';
   v_question_version constant uuid := '5a000000-0000-4000-8000-000000000040';
   v_student_hash constant text := repeat('2', 64);
   v_result jsonb;
   v_workspace jsonb;
+  v_live_status jsonb;
+  v_offline_export jsonb;
   v_roster_submitted uuid;
   v_roster_blank uuid;
   v_roster_active uuid;
@@ -171,6 +211,14 @@ begin
       'public.exam_room_save_grade_v3(uuid,uuid,uuid,uuid,numeric,text,text,integer,text,text,text)',
       'execute')
   then raise exception 'REAL_CLASSROOM_PRIVILEGE_BOUNDARY_FAILED'; end if;
+
+  v_live_status := public.exam_room_live_status_v2(
+    v_professor, v_empty_exam_public, repeat('e', 64), repeat('f', 64)
+  );
+  if not coalesce((v_live_status ->> 'ok')::boolean, false)
+    or (v_live_status ->> 'rosterReady')::boolean is not false
+    or jsonb_array_length(v_live_status -> 'candidates') <> 0
+  then raise exception 'REAL_CLASSROOM_WAITING_FOR_BEADLE_FAILED'; end if;
 
   v_result := public.exam_room_finalize_roster_access_v1(
     v_beadle, v_exam_public,
@@ -293,6 +341,12 @@ begin
      jsonb_build_array(jsonb_build_object('questionId', v_question, 'answerText', '')),
      repeat('c', 64), repeat('d', 64), false);
 
+  insert into public.exam_room_integrity_events (
+    exam_id, attempt_id, student_user_id, event_type, details
+  ) values
+    (v_exam_id, v_attempt_active, v_active, 'focus_exit', '{"surface":"exam"}'::jsonb),
+    (v_exam_id, v_attempt_active, v_active, 'paste_attempt', '{"surface":"answer"}'::jsonb);
+
   v_workspace := public.exam_room_grading_workspace_v3(
     v_professor, v_exam_public, repeat('5', 64), repeat('6', 64)
   );
@@ -366,6 +420,121 @@ begin
     or (select count(*) from public.exam_room_grading_memberships
         where exam_id = v_exam_id and professor_user_id = v_professor) <> 1
   then raise exception 'REAL_CLASSROOM_GRADE_RELOAD_FAILED'; end if;
+
+  v_live_status := public.exam_room_live_status_v2(
+    v_professor, v_exam_public, null, null
+  );
+  if not coalesce((v_live_status ->> 'ok')::boolean, false)
+    or jsonb_array_length(v_live_status -> 'candidates') <> 3
+    or not exists (
+      select 1
+      from jsonb_array_elements(v_live_status -> 'candidates') candidate
+      where candidate ->> 'studentName' = 'Active Student'
+        and candidate ->> 'state' = 'in_progress'
+        and (candidate ->> 'incidentCount')::integer = 2
+        and (candidate ->> 'focusExitCount')::integer = 1
+        and (candidate ->> 'clipboardAttemptCount')::integer = 1
+    )
+    or v_live_status::text like '%answerText%'
+    or v_live_status::text like '%classroom-active@example.invalid%'
+  then raise exception 'REAL_CLASSROOM_PROFESSOR_LIVE_STATUS_FAILED'; end if;
+
+  begin
+    perform public.exam_room_live_status_v2(v_outsider, v_exam_public, null, null);
+    raise exception 'REAL_CLASSROOM_OUTSIDER_LIVE_STATUS_ALLOWED';
+  exception when others then
+    if sqlerrm = 'REAL_CLASSROOM_OUTSIDER_LIVE_STATUS_ALLOWED'
+      or sqlerrm not like '%EXAM_ROOM_PROFESSOR_REQUIRED%'
+    then raise; end if;
+  end;
+
+  v_offline_export := public.exam_room_prepare_class_result_export_v1(
+    v_professor, v_exam_public, '{}'::uuid[], 'offline_grading',
+    'classroom_offline_export_0001'
+  );
+  if not coalesce((v_offline_export ->> 'ok')::boolean, false)
+    or (v_offline_export #>> '{dataset,durationMinutes}')::integer <> 120
+    or jsonb_array_length(v_offline_export #> '{dataset,questions}') <> 1
+    or v_offline_export #>> '{dataset,questions,0,prompt}'
+      <> 'Explain the controlling legal rule and apply it.'
+  then raise exception 'REAL_CLASSROOM_OFFLINE_EXPORT_CONTEXT_FAILED'; end if;
+
+  -- Complete all submitted work, then prove remembered-access wrappers for an
+  -- individual export and the irreversible release path before rolling back.
+  v_result := public.exam_room_save_grade_v3(
+    v_professor, v_exam_public,
+    '5a000000-0000-4000-8000-000000000111', v_question,
+    4.2, 'Legally responsive and applied.', 'final', 1,
+    'Finalize the saved grading draft.', null, null
+  );
+  if not coalesce((v_result ->> 'ok')::boolean, false)
+    or v_result ->> 'gradeState' <> 'final'
+  then raise exception 'REAL_CLASSROOM_FINALIZE_DRAFT_FAILED'; end if;
+
+  update public.exam_room_attempts
+  set status = 'auto_submitted', submitted_at = clock_timestamp(), updated_at = clock_timestamp()
+  where id = v_attempt_active;
+  insert into public.exam_room_submissions (
+    attempt_id, publication_id, generation, request_key,
+    answer_snapshot, answer_snapshot_hash, client_answer_set_hash, automatic
+  ) values (
+    v_attempt_active, v_publication, 1, 'classroom_submit_active_0001',
+    jsonb_build_array(jsonb_build_object(
+      'questionId', v_question, 'answerText', 'The active student answer was preserved.'
+    )), repeat('e', 64), repeat('f', 64), true
+  );
+  v_result := public.exam_room_save_grade_v3(
+    v_professor, v_exam_public,
+    (select public_id from public.exam_room_attempts where id = v_attempt_active),
+    v_question, 3.8, 'Responsive final answer.', 'final', 0,
+    'Finalize the auto-submitted attempt.', null, null
+  );
+  if not coalesce((v_result ->> 'ok')::boolean, false)
+  then raise exception 'REAL_CLASSROOM_ACTIVE_FINAL_GRADE_FAILED'; end if;
+
+  -- Advance only this rolled-back fixture beyond every candidate deadline so
+  -- the actual release readiness guard is exercised rather than bypassed.
+  update public.exam_room_exams
+  set opens_at = clock_timestamp() - interval '3 hours',
+      hard_closes_at = clock_timestamp() - interval '10 minutes'
+  where id = v_exam_id;
+  update public.exam_room_attempts
+  set started_at = least(started_at, clock_timestamp() - interval '3 hours'),
+      server_deadline = clock_timestamp() - interval '10 minutes'
+  where exam_id = v_exam_id;
+
+  v_result := public.exam_room_prepare_result_export_v4(
+    v_professor, v_exam_public, '5a000000-0000-4000-8000-000000000111',
+    'questions_answers', 'classroom_result_export_0001', null, null
+  );
+  if not coalesce((v_result ->> 'ok')::boolean, false)
+    or v_result ->> 'scope' <> 'questions_answers'
+    or v_result #>> '{questions,0,prompt}'
+      <> 'Explain the controlling legal rule and apply it.'
+    or v_result #>> '{questions,0,answer}'
+      <> 'Yes. The governing rule applies to the stated facts.'
+    or v_result::text like '%5555555555555555%'
+  then raise exception 'REAL_CLASSROOM_REMEMBERED_EXPORT_FAILED'; end if;
+
+  v_result := public.exam_room_release_results_v2(
+    v_professor, v_exam_public, 'classroom_release_0001', true, null, null
+  );
+  if not coalesce((v_result ->> 'ok')::boolean, false)
+    or (select status from public.exam_room_exams where id = v_exam_id) <> 'sealed'
+    or (select count(*) from public.exam_room_email_jobs
+        where exam_id = v_exam_id and email_type = 'student_result') <> 3
+    or (select count(*) from public.exam_room_email_jobs
+        where exam_id = v_exam_id and email_type = 'professor_release_summary') <> 1
+    or v_result::text like '%5555555555555555%'
+  then raise exception 'REAL_CLASSROOM_REMEMBERED_RELEASE_FAILED'; end if;
+
+  if has_function_privilege('public',
+      'public.exam_room_live_status_v2(uuid,uuid,text,text)', 'execute')
+    or has_function_privilege('anon',
+      'public.exam_room_prepare_class_result_export_v1(uuid,uuid,uuid[],text,text)', 'execute')
+    or has_function_privilege('authenticated',
+      'public.exam_room_release_results_v2(uuid,uuid,text,boolean,text,text)', 'execute')
+  then raise exception 'REAL_CLASSROOM_PROFESSOR_SERVICE_BOUNDARY_FAILED'; end if;
 end;
 $real_classroom_behavior$;
 

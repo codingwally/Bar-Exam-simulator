@@ -176,6 +176,7 @@ const sessionCacheContext = {
   clearBeadleStudentHandoff() {
     sessionCacheHandoffClears += 1;
   },
+  stopProfessorRoomPolling() {},
 };
 sessionCacheContext.beginExamPortalLifecycle = vm.runInNewContext(
   `(${extractNamedFunction(js, 'beginExamPortalLifecycle')})`,
@@ -352,6 +353,7 @@ const identityState = {
 let identityHandoffClears = 0;
 const identityContext = {
   state: identityState,
+  stopProfessorRoomPolling() {},
   clearBeadleStudentHandoff() {
     identityHandoffClears += 1;
   },

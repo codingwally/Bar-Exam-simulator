@@ -575,10 +575,10 @@ export function normalizeExamRoomQuery(input) {
       || operation === 'grading_model_answer'
       || operation === 'student_result') {
     normalized.examId = uuid(payload.examId, 'Examination');
-    if (operation === 'live_status'
-        || operation === 'live_status_v2') {
+    if (operation === 'live_status') {
       normalized.gradingKey = credential(payload.gradingKey, 'Professor grading key');
-    } else if (operation === 'grading_workspace'
+    } else if (operation === 'live_status_v2'
+        || operation === 'grading_workspace'
         || operation === 'grading_model_answer') {
       normalized.gradingKey = optionalCredential(payload.gradingKey, 'Professor grading key');
     }
@@ -599,27 +599,28 @@ export function normalizeExamResultPdfRequest(input) {
       'answers_only',
       'grades_comments',
     ]),
-    gradingKey: credential(payload.gradingKey, 'Professor grading key'),
+    gradingKey: optionalCredential(payload.gradingKey, 'Professor grading key'),
     requestKey: requestKey(payload.requestKey),
   };
 }
 
 export function normalizeExamClassResultsWorkbookRequest(input) {
   const payload = object(input);
+  const scope = enumValue(payload.scope, 'Class result workbook', [
+    'offline_grading',
+    'class_results',
+  ]);
   const attemptIds = uuidRows(payload.attemptIds, 'Selected examination attempt');
-  if (attemptIds.length < 1) {
+  if (scope === 'class_results' && attemptIds.length < 1) {
     throw new DD2026ValidationError(
       'INVALID_REQUEST',
-      'Select at least one submitted student examination.',
+      'Select at least one fully graded student examination.',
     );
   }
   return {
     examId: uuid(payload.examId, 'Examination'),
     attemptIds,
-    scope: enumValue(payload.scope, 'Class result workbook', [
-      'offline_grading',
-      'class_results',
-    ]),
+    scope,
     requestKey: requestKey(payload.requestKey),
   };
 }
@@ -1232,7 +1233,7 @@ export function normalizeExamRoomCommand(input) {
     n.examId = uuid(payload.examId, 'Examination');
     n.requestKey = requestKey(payload.requestKey);
     n.includeQuestionnaire = payload.includeQuestionnaire === true;
-    n.gradingKey = credential(payload.gradingKey, 'Professor grading key');
+    n.gradingKey = optionalCredential(payload.gradingKey, 'Professor grading key');
   } else if (operation === 'retry_student_result_email') {
     n.examId = uuid(payload.examId, 'Examination');
     n.attemptId = uuid(payload.attemptId, 'Attempt');

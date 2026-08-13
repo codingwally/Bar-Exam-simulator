@@ -164,6 +164,8 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'heartbeat_v2',
   'record_integrity_event',
   'submit_attempt_generation',
+  'release_candidate_results',
+  'update_exam_lifecycle',
   'retry_student_result_email',
   'reopen_submission',
   'transfer_session',
@@ -1127,7 +1129,7 @@ export function createDD2026Handlers(deps) {
       await parseBoundedJson(request, 40_000),
     );
     await examRateLimit(request, env, user.id, 'write', input.examId);
-    const result = await examRoomRpc(env, 'exam_room_prepare_class_result_export_v1', {
+    const result = await examRoomRpc(env, 'exam_room_prepare_class_result_export_v2', {
       p_professor_user_id: user.id,
       p_exam_public_id: input.examId,
       p_selected_attempt_public_ids: input.attemptIds,
@@ -1369,10 +1371,10 @@ export function createDD2026Handlers(deps) {
       functionName = 'exam_room_student_result';
       body = { p_student_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'results_dashboard') {
-      functionName = 'exam_room_professor_results_dashboard_v1';
+      functionName = 'exam_room_professor_results_dashboard_v2';
       body = { p_professor_user_id: user.id, p_exam_public_id: input.examId };
     } else if (input.operation === 'result_delivery_report') {
-      functionName = 'exam_room_result_delivery_report_v1';
+      functionName = 'exam_room_result_delivery_report_v2';
       body = { p_professor_user_id: user.id, p_exam_public_id: input.examId };
     } else {
       throw new DD2026ValidationError(
@@ -1721,12 +1723,28 @@ export function createDD2026Handlers(deps) {
     if ([
       'submit_attempt', 'submit_attempt_generation', 'replace_publication',
       'reschedule_publication', 'reopen_submission', 'release_results',
+      'release_candidate_results',
       'retry_student_result_email',
       'generate_provisional_room_key', 'publish_for_beadle',
       'finalize_roster_access',
     ].includes(input.operation)
+        && !['generate_provisional_room_key', 'publish_for_beadle',
+          'finalize_roster_access', 'release_results', 'release_candidate_results',
+          'retry_student_result_email'].includes(input.operation)
         && ctx?.waitUntil) {
       ctx.waitUntil(processExamRoomQueues(env));
+    }
+    if (['generate_provisional_room_key', 'publish_for_beadle',
+      'finalize_roster_access', 'release_results', 'release_candidate_results',
+      'retry_student_result_email'].includes(input.operation)) {
+      const delivery = await processExamRoomQueues(env);
+      if (Number(delivery?.emailFailed || 0) > 0) {
+        throw new DD2026ValidationError(
+          'EXAM_ROOM_EMAIL_DELIVERY_PENDING',
+          'The Examination Room saved the action, but one or more emails need retry. Open delivery status before leaving.',
+          503,
+        );
+      }
     }
     const publicResult = input.operation === 'issue_activation'
       ? professorActivationIssueView(result, input)
@@ -2133,7 +2151,7 @@ export function createDD2026Handlers(deps) {
         p_exam_public_id: input.examId,
         p_request_key: input.requestKey,
       } }),
-      open_session: async () => ({ functionName: 'exam_room_open_session_v2', body: {
+      open_session: async () => ({ functionName: 'exam_room_open_session_v3', body: {
         p_student_user_id: userId, p_attempt_public_id: input.attemptId,
         p_device_instance_hash: input.deviceInstanceHash, p_request_key: input.requestKey,
       } }),
@@ -2266,8 +2284,32 @@ export function createDD2026Handlers(deps) {
         p_grading_key_hash: input.gradingKey ? await h(input.gradingKey) : null,
         p_rate_key_hash: input.gradingKey ? rateHash : null,
       } }),
+      release_candidate_results: async () => ({
+        functionName: 'exam_room_release_candidate_results_v1',
+        body: {
+          p_professor_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_attempt_public_ids: input.attemptIds,
+          p_include_questionnaire: input.includeQuestionnaire,
+          p_request_key: input.requestKey,
+          p_grading_key_hash: input.gradingKey ? await h(input.gradingKey) : null,
+          p_rate_key_hash: input.gradingKey ? rateHash : null,
+        },
+      }),
+      update_exam_lifecycle: async () => ({
+        functionName: 'exam_room_update_lifecycle_v1',
+        body: {
+          p_professor_user_id: userId,
+          p_exam_public_id: input.examId,
+          p_action: input.action,
+          p_reason: input.reason,
+          p_request_key: input.requestKey,
+          p_grading_key_hash: input.gradingKey ? await h(input.gradingKey) : null,
+          p_rate_key_hash: input.gradingKey ? rateHash : null,
+        },
+      }),
       retry_student_result_email: async () => ({
-        functionName: 'exam_room_retry_student_result_email_v1',
+        functionName: 'exam_room_retry_student_result_email_v2',
         body: {
           p_professor_user_id: userId,
           p_exam_public_id: input.examId,

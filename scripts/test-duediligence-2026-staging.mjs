@@ -11,7 +11,10 @@ assert.equal(
   WORKER_URL,
   'https://duediligence-examinations-staging.wallyesteban1993.workers.dev',
 );
-assert.ok(SERVICE_ROLE_KEY.length > 80, 'A staging service-role key is required.');
+assert.ok(
+  SERVICE_ROLE_KEY.length > 80 || /^sb_secret_[A-Za-z0-9_-]{20,}$/.test(SERVICE_ROLE_KEY),
+  'A staging service-role or secret key is required.',
+);
 assert.match(PUBLISHABLE_KEY, /^sb_publishable_[A-Za-z0-9_-]{20,}$/);
 
 const runId = `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;

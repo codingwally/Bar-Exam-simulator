@@ -8,7 +8,10 @@ const ORIGIN = String(process.env.STAGING_EXAMINATION_ORIGIN || 'http://127.0.0.
 const RUN_AI = process.env.STAGING_EXAMINATION_RUN_AI === 'true';
 
 assert.match(SUPABASE_URL, /^https:\/\/[a-z0-9]+\.supabase\.co$/);
-assert.ok(SERVICE_ROLE_KEY.length > 80, 'A staging service-role key is required.');
+assert.ok(
+  SERVICE_ROLE_KEY.length > 80 || /^sb_secret_[A-Za-z0-9_-]{20,}$/.test(SERVICE_ROLE_KEY),
+  'A staging service-role or secret key is required.',
+);
 assert.match(WORKER_URL, /^https:\/\/[a-z0-9.-]+\.workers\.dev$/);
 
 const runId = `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;

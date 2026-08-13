@@ -12,7 +12,10 @@ assert.equal(
   WORKER_URL,
   'https://duediligence-examinations-staging.wallyesteban1993.workers.dev',
 );
-assert.ok(SERVICE_ROLE_KEY.length > 80, 'A staging service-role key is required.');
+assert.ok(
+  SERVICE_ROLE_KEY.length > 80 || /^sb_secret_[A-Za-z0-9_-]{20,}$/.test(SERVICE_ROLE_KEY),
+  'A staging service-role or secret key is required.',
+);
 assert.match(PUBLISHABLE_KEY, /^sb_publishable_[A-Za-z0-9_-]{20,}$/);
 
 const runId = `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
@@ -207,8 +210,9 @@ try {
   assert.equal(catalog.body.ok, true);
   assert.equal(catalog.body.data.items.length, 42);
   assert.equal(
-    catalog.body.data.items.reduce((total, item) => total + item.questionCount, 0),
-    1890,
+    catalog.body.data.items.every((item) => !('questionCount' in item)),
+    true,
+    'Public Subject Matter discovery must not disclose inventory counts.',
   );
 
   const criminalLaw = catalog.body.data.items.find(
@@ -216,7 +220,7 @@ try {
       && item.yearLevel === 1
       && item.term === 1,
   );
-  assert.equal(criminalLaw.questionCount, 50);
+  assert.ok(criminalLaw, 'Criminal Law I must remain available in Subject Matter discovery.');
 
   const first = await examinationQuery(student, 'subject_next', {
     subject: criminalLaw.subject,

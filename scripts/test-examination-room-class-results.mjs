@@ -50,7 +50,7 @@ assert.match(extension, /exam_room_prepare_result_export_v4[\s\S]*exam_room_veri
   'individual export must support remembered Professor access');
 
 assert.match(worker, /normalizeExamClassResultsWorkbookRequest/);
-assert.match(worker, /exam_room_prepare_class_result_export_v1/);
+assert.match(worker, /exam_room_prepare_class_result_export_v2/);
 assert.match(worker, /exam_room_prepare_result_export_v4/);
 assert.match(worker, /exam_room_complete_class_result_export_v1/);
 assert.match(worker, /private, no-store/);

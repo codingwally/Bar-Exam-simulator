@@ -74,6 +74,7 @@
       heartbeatTimer: null,
       countdownTimer: null,
       safetySaveTimer: null,
+      attemptTimerKey: null,
       waitingRoomTimer: null,
       waitingRoomPollTimer: null,
       waitingRoomPolling: false,
@@ -875,7 +876,9 @@
   }
 
   function renderExamRoom() {
-    clearAttemptTimers();
+    const activeAttempt = state.exam.section === 'student'
+      && state.exam.attempt?.status === 'in_progress';
+    if (!activeAttempt) clearAttemptTimers();
     if (state.exam.section !== 'entry' && !isAuthenticated()) {
       state.exam.portal = null;
       state.exam.section = 'entry';
@@ -889,6 +892,10 @@
     app().innerHTML = `<div class="dd26-shell"><button class="dd26-button dd26-exam-home-button" id="dd26-exam-role-home" type="button"><span aria-hidden="true">←</span> Return to Examination Room home</button><header class="dd26-header"><div><div class="dd26-kicker">Law school examination</div><h1>Examination Room</h1><p>One clear place to make, prepare, take, and grade a class examination.</p></div></header><main id="dd26-exam-main" tabindex="-1">${examSection(portal)}</main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
     bindExamSection();
     document.getElementById('dd26-exam-role-home')?.addEventListener('click', returnToExaminationRoomHome);
+    if (activeAttempt) {
+      renderAttempt();
+      return;
+    }
     if (state.exam.preflight?.entryMode === 'beadle'
         && state.exam.preflight?.autoEnter === true
         && state.exam.preflight?.terminal !== true
@@ -5218,14 +5225,16 @@
       .filter((conflict) => conflict.state === 'unresolved' && conflict.reason !== 'late_evidence_quarantined');
     if (attempt.unresolvedConflicts.length) attempt.recoveryAvailable = true;
     state.exam.tabLease?.stop?.();
+    attempt.readonlyTab = false;
     state.exam.tabLease = storageApi.createLeaseCoordinator({
       attemptId: attemptScope().attemptId,
       examVersionId: attemptScope().examVersionId,
       sessionEpoch: attemptScope().sessionEpoch,
-      allowUncoordinatedWrite: false,
+      allowUncoordinatedWrite: true,
     });
     state.exam.tabLease.subscribe((lease) => {
       if (!state.exam.attempt) return;
+      lease.readonly = false;
       const changed = state.exam.attempt.readonlyTab !== lease.readonly;
       state.exam.attempt.readonlyTab = lease.readonly;
       if (changed) renderAttempt();
@@ -5281,7 +5290,7 @@
     const attempt = state.exam.attempt;
     const question = attempt?.questions?.[state.exam.attemptIndex];
     if (!attempt || !question) return;
-    const mutable = attempt.status === 'in_progress' && !attempt.readonlyTab;
+    const mutable = attempt.status === 'in_progress';
     const oneWay = attempt.rules?.navigationMode === 'one_way';
     const integrity = examIntegrityPolicy(attempt.rules || {}, attempt.accommodation || {});
     const fullscreenSignalsEnabled = integrity.recordingEnabled
@@ -5316,6 +5325,11 @@
       return `<button type="button" data-dd26-attempt-question="${index}" class="${index === state.exam.attemptIndex ? 'is-active' : ''}${String(entry.answer || '').trim() ? ' is-saved' : ''}${entry.flagged ? ' is-flagged' : ''}" ${index === state.exam.attemptIndex ? 'aria-current="step"' : ''} ${blockedByOneWay ? 'disabled' : ''} aria-label="Question ${entry.ordinal}${String(entry.answer || '').trim() ? ', answered' : ', unanswered'}${entry.flagged ? ', flagged for review' : ''}${blockedByOneWay ? ', unavailable under one-way navigation' : ''}">${entry.ordinal}</button>`;
     }).join('');
     document.getElementById('dd26-exam-main').innerHTML = `<section class="dd26-card dd26-attempt-workspace" id="dd26-attempt-surface" aria-labelledby="dd26-attempt-title"><div class="dd26-attempt-top"><div><div class="dd26-label" id="dd26-attempt-title">${escapeHtml(attempt.title)}</div><span class="dd26-save-state${mutable ? '' : ' is-error'}" id="dd26-save-state" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(mutable ? initialSaveState : 'Answer editing is unavailable; preserved work remains visible')}</span></div><div><div class="dd26-clock" id="dd26-attempt-clock" role="timer" aria-label="Time remaining">--:--:--</div><small class="dd26-clock-label">Official exam clock</small></div></div>${attentionReturnHtml}${offlineBundleNotice}${recoveryHtml}${attempt.readonlyTab ? '<div class="dd26-error" role="alert">Another tab holds the active writing lease. This tab is read-only to prevent conflicting edits.</div>' : ''}${mutable ? '' : '<div class="dd26-error" role="status">This attempt is not editable. You may review preserved answers, but no answer can change until an authorized recovery or reopen action.</div>'}${errataHtml}<details class="dd26-instructions"><summary>Examination instructions</summary>${studentInstructionsHtml(attempt.instructions || 'Follow the published instructions and permitted-materials policy.')}</details>${oneWay ? '<div class="dd26-notice"><strong>One-way navigation is enabled.</strong> After moving forward, earlier questions cannot be reopened in this workspace.</div>' : ''}<div class="dd26-integrity">${escapeHtml(monitoringDisclosure)}</div><div class="dd26-progress-summary"><span>${answered} of ${attempt.questions.length} answered</span><span>${flagged} flagged for review</span></div><div class="dd26-question-nav" aria-label="Question navigator">${navigatorHtml}</div><div class="dd26-question-meta"><span>Question ${question.ordinal} of ${attempt.questions.length}</span><span>${escapeHtml(question.maximumPoints)} points</span></div><h2 class="dd26-prompt">${escapeHtml(question.prompt)}</h2><label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea dd26-essay-editor" id="dd26-attempt-answer" maxlength="20000" ${mutable ? '' : 'readonly aria-readonly="true"'}>${escapeHtml(question.answer)}</textarea><small class="dd26-counter"><span id="dd26-attempt-words">${String(question.answer || '').trim() ? String(question.answer).trim().split(/\s+/u).length : 0} words</span><span id="dd26-attempt-count">${codePointLength(question.answer).toLocaleString()} / 20,000 characters</span></small></label><div class="dd26-actions"><button class="dd26-button" id="dd26-attempt-prev" type="button" ${oneWay || state.exam.attemptIndex === 0 ? 'disabled' : ''}>Previous</button><button class="dd26-button" id="dd26-attempt-next" type="button" ${state.exam.attemptIndex === attempt.questions.length - 1 ? 'disabled' : ''}>Next</button><button class="dd26-button ${question.flagged ? 'is-active' : ''}" id="dd26-attempt-flag" type="button" ${mutable ? '' : 'disabled'}>${question.flagged ? 'Remove review flag' : 'Flag for review'}</button><button class="dd26-button" id="dd26-attempt-leave" type="button" ${mutable ? '' : 'disabled'}>${attempt.activeLeave ? 'Return from temporary leave' : 'Temporary leave'}</button><button class="dd26-button" id="dd26-report-technical" type="button">Report technical issue</button><button class="dd26-button primary" id="dd26-attempt-submit" type="button" ${mutable ? '' : 'disabled'}>Review and submit</button></div>${attempt.activeLeave ? `<div class="dd26-notice">Temporary leave began ${escapeHtml(formatDate(attempt.activeLeave.departedAt))}. The examination timer continues. Return when ready; no automatic grading penalty is applied.</div>` : ''}</section>`;
+    const nextButton = document.getElementById('dd26-attempt-next');
+    if (nextButton && mutable) nextButton.disabled = false;
+    if (nextButton) nextButton.textContent = state.exam.attemptIndex === attempt.questions.length - 1
+      ? 'Save answer & review'
+      : 'Save answer & next';
     bindAttempt();
     startAttemptTimers();
   }
@@ -5323,7 +5337,10 @@
   function bindAttempt() {
     document.querySelectorAll('[data-dd26-attempt-question]').forEach((button) => button.addEventListener('click', () => navigateAttempt(Number(button.dataset.dd26AttemptQuestion))));
     document.getElementById('dd26-attempt-prev')?.addEventListener('click', () => navigateAttempt(state.exam.attemptIndex - 1));
-    document.getElementById('dd26-attempt-next')?.addEventListener('click', () => navigateAttempt(state.exam.attemptIndex + 1));
+    document.getElementById('dd26-attempt-next')?.addEventListener('click', async () => {
+      if (state.exam.attemptIndex === state.exam.attempt.questions.length - 1) await openSubmissionReview();
+      else await navigateAttempt(state.exam.attemptIndex + 1);
+    });
     document.getElementById('dd26-attempt-submit')?.addEventListener('click', openSubmissionReview);
     document.getElementById('dd26-resolve-conflicts')?.addEventListener('click', openConflictRecovery);
     document.getElementById('dd26-attempt-flag')?.addEventListener('click', () => {
@@ -5335,7 +5352,7 @@
     document.getElementById('dd26-report-technical')?.addEventListener('click', reportTechnicalIssue);
     bindAttentionReturnNotice();
     const answer = document.getElementById('dd26-attempt-answer');
-    if (state.exam.attempt.status === 'in_progress' && !state.exam.attempt.readonlyTab) answer?.addEventListener('input', () => {
+    if (state.exam.attempt.status === 'in_progress') answer?.addEventListener('input', () => {
       const question = state.exam.attempt.questions[state.exam.attemptIndex];
       question.answer = answer.value;
       document.getElementById('dd26-attempt-count').textContent = `${codePointLength(answer.value).toLocaleString()} / 20,000 characters`;
@@ -5375,7 +5392,7 @@
       return;
     }
     const question = state.exam.attempt?.questions?.[state.exam.attemptIndex];
-    if (question && !state.exam.attempt?.readonlyTab) await flushLocalAnswer(question);
+    if (question) await flushLocalAnswer(question);
     state.exam.attemptIndex = Math.max(0, Math.min(index, state.exam.attempt.questions.length - 1));
     state.exam.maxVisitedIndex = Math.max(state.exam.maxVisitedIndex, state.exam.attemptIndex);
     renderAttempt();
@@ -5533,7 +5550,7 @@
   }
 
   async function flushLocalAnswer(question) {
-    if (!question || !state.exam.store || state.exam.attempt?.readonlyTab) return null;
+    if (!question || !state.exam.store) return null;
     clearTimeout(state.exam.saveTimers.get(question.id));
     state.exam.saveTimers.delete(question.id);
     if (question.lastLocalContent === question.answer) return question.localOperationId || null;
@@ -5759,10 +5776,20 @@
   }
 
   function startAttemptTimers() {
+    const attempt = state.exam.attempt;
+    const timerKey = attempt
+      ? `${attempt.attemptId || ''}:${attempt.sessionId || ''}:${attempt.sessionEpoch || ''}`
+      : null;
+    if (timerKey && state.exam.attemptTimerKey === timerKey
+        && state.exam.countdownTimer && state.exam.heartbeatTimer && state.exam.safetySaveTimer) {
+      updateAttemptClock();
+      return;
+    }
     clearInterval(state.exam.countdownTimer);
     clearInterval(state.exam.heartbeatTimer);
     clearInterval(state.exam.safetySaveTimer);
     clearTimeout(state.exam.submissionStatusTimer);
+    state.exam.attemptTimerKey = timerKey;
     updateAttemptClock();
     state.exam.countdownTimer = setInterval(updateAttemptClock, 1000);
     state.exam.heartbeatTimer = setInterval(sendHeartbeat, 60000);
@@ -5785,6 +5812,7 @@
     state.exam.countdownTimer = null;
     state.exam.heartbeatTimer = null;
     state.exam.safetySaveTimer = null;
+    state.exam.attemptTimerKey = null;
     state.exam.waitingRoomTimer = null;
     state.exam.waitingRoomPollTimer = null;
     state.exam.waitingRoomPolling = false;
@@ -5952,8 +5980,8 @@
 
   async function openSubmissionReview() {
     try {
-      if (state.exam.attempt?.readonlyTab || state.exam.attempt?.status !== 'in_progress') {
-        global.toast?.('This tab is read-only and cannot submit the examination.', 'warn');
+      if (state.exam.attempt?.status !== 'in_progress') {
+        global.toast?.('This examination is not currently open for submission.', 'warn');
         return;
       }
       await flushAllLocalSaves();
@@ -5965,6 +5993,19 @@
       const unanswered = questions.filter((question) => !String(question.answer || '').trim());
       const flagged = questions.filter((question) => question.flagged);
       openDialog(`<div class="dd26-label">Final review</div><h2>Review before submission</h2><div class="dd26-stat-grid"><div class="dd26-stat"><strong>${questions.length - unanswered.length}</strong><span>Answered</span></div><div class="dd26-stat"><strong>${unanswered.length}</strong><span>Unanswered</span></div><div class="dd26-stat"><strong>${flagged.length}</strong><span>Flagged</span></div><div class="dd26-stat"><strong>${questions.length}</strong><span>Total</span></div></div>${unanswered.length ? `<div class="dd26-error">Unanswered: ${unanswered.map((question) => question.ordinal).join(', ')}</div>` : '<div class="dd26-success">Every question has an answer on this device.</div>'}${flagged.length ? `<div class="dd26-notice">Flagged for review: ${flagged.map((question) => question.ordinal).join(', ')}</div>` : ''}<p>Due Diligence will first synchronize queued answer operations, then request one server receipt using the same stable submission key on every retry.</p><label class="dd26-choice"><input id="dd26-submit-ack" type="checkbox"><span><strong>I intend to submit this examination</strong><small>I understand that only a server receipt confirms submission. If offline, the intent remains pending and local work stays on this device.</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-confirm-submit" type="button" disabled>Submit and request receipt</button><button class="dd26-button" data-dd26-close-dialog type="button">Return to answers</button></div>`);
+      const acknowledgement = document.getElementById('dd26-submit-ack')?.closest('.dd26-choice');
+      const review = document.createElement('section');
+      review.className = 'dd26-section dd26-submission-answer-review';
+      review.setAttribute('aria-label', 'Question and answer review');
+      review.innerHTML = `<h3>Review every question and answer</h3>${questions.map((entry, index) => {
+        const mayEdit = state.exam.attempt.rules?.navigationMode !== 'one_way' || index >= state.exam.attemptIndex;
+        return `<article class="dd26-card"><div class="dd26-question-meta"><strong>Question ${escapeHtml(entry.ordinal)}</strong>${entry.flagged ? '<span class="dd26-status">Flagged</span>' : ''}</div><p class="dd26-prompt">${escapeHtml(entry.prompt)}</p><div class="dd26-notice"><strong>Your answer</strong><p class="dd26-long-cell">${escapeHtml(String(entry.answer || '').trim() || 'No answer entered.')}</p></div><button class="dd26-button compact" data-dd26-review-edit="${index}" type="button" ${mayEdit ? '' : 'disabled'}>${mayEdit ? 'Edit this answer' : 'Earlier answer locked by one-way navigation'}</button></article>`;
+      }).join('')}`;
+      acknowledgement?.before(review);
+      review.querySelectorAll('[data-dd26-review-edit]').forEach((button) => button.addEventListener('click', async () => {
+        closeDialog();
+        await navigateAttempt(Number(button.dataset.dd26ReviewEdit));
+      }));
       const checkbox = document.getElementById('dd26-submit-ack');
       const submit = document.getElementById('dd26-confirm-submit');
       checkbox?.addEventListener('change', () => { submit.disabled = !checkbox.checked; });
@@ -5974,8 +6015,8 @@
 
   async function submitAttempt(automatic = false) {
     try {
-      if (!automatic && (state.exam.attempt?.readonlyTab || state.exam.attempt?.status !== 'in_progress')) {
-        global.toast?.('This tab is read-only and cannot submit the examination.', 'warn');
+      if (!automatic && state.exam.attempt?.status !== 'in_progress') {
+        global.toast?.('This examination is not currently open for submission.', 'warn');
         return;
       }
       await flushAllLocalSaves();
@@ -6199,6 +6240,36 @@
     } catch (error) { global.toast?.(error.message, 'warn'); }
   }
 
+  function downloadSubmissionAnswerCopy(receipt, attempt) {
+    const questions = Array.isArray(attempt?.questions) ? attempt.questions : [];
+    const lines = [
+      'DUE DILIGENCE — EXAMINATION ANSWER COPY',
+      `Examination: ${attempt?.title || receipt.examVersionId || 'Examination'}`,
+      `Receipt: ${receipt.receiptId || receipt.submissionId || 'Recorded'}`,
+      `Received: ${formatDate(receipt.receivedAt || receipt.submittedAt)}`,
+      '',
+      ...questions.flatMap((question) => [
+        `QUESTION ${question.ordinal}`,
+        String(question.prompt || ''),
+        '',
+        'YOUR ANSWER',
+        String(question.answer || '').trim() || '[No answer entered]',
+        '',
+        '────────────────────────────────────────',
+        '',
+      ]),
+    ];
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `due-diligence-answer-copy-${String(receipt.receiptId || 'receipt').replace(/[^a-zA-Z0-9_-]/g, '-')}.txt`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
+
   function showSubmissionReceipt(receipt) {
     clearAttemptTimers();
     const host = document.getElementById('dd26-exam-main');
@@ -6212,6 +6283,16 @@
       state.exam.store?.clearSessionEnvelope?.(receiptAttemptId).catch(() => null);
     }
     host.innerHTML = `<section class="dd26-card"><div class="dd26-success" role="status"><strong>Submission received by Due Diligence.</strong> This receipt—not the earlier pending screen—confirms delivery.</div>${excludedLocalWork ? `<div class="dd26-error" role="alert"><strong>A saved answer needs review.</strong> ${recoveryEvidenceCount || 'At least one'} local edit${recoveryEvidenceCount === 1 ? '' : 's'} was kept separately and was not included in the answers confirmed by this receipt. Contact the Professor or Beadle and give them this receipt number.</div>` : ''}<div class="dd26-receipt"><div class="dd26-label">Submission receipt</div><h2>${escapeHtml(receipt.receiptId || receipt.submissionId || 'Receipt recorded')}</h2><dl><div><dt>Examination</dt><dd>${escapeHtml(examVersionId)}</dd></div><div><dt>Due Diligence exam record</dt><dd>${escapeHtml(receiptAttemptId)}</dd></div><div><dt>Received by Due Diligence</dt><dd>${escapeHtml(formatDate(receipt.receivedAt || receipt.submittedAt))}</dd></div><div><dt>Status</dt><dd>${escapeHtml(receipt.status || 'received')}</dd></div><div><dt>Confirmation number</dt><dd><code>${escapeHtml(receipt.answerSnapshotHash || receipt.snapshotHash || 'Recorded in this receipt')}</code></dd></div><div><dt>Connection and exam review</dt><dd>${escapeHtml(receipt.incidentReviewStatus || (excludedLocalWork ? 'A saved answer is waiting for review' : 'No record automatically determines misconduct'))}</dd></div></dl></div><div class="dd26-actions"><button class="dd26-button" id="dd26-return-portal" type="button">Return to Examination Room</button></div><p class="dd26-privacy">Local work remains for a short recovery period after this confirmed receipt; storage on this browser is not permanent.</p></section>`;
+    const receiptActions = host.querySelector('.dd26-actions');
+    if (receiptActions && activeAttempt?.questions?.length && !excludedLocalWork) {
+      const answerCopyButton = document.createElement('button');
+      answerCopyButton.className = 'dd26-button';
+      answerCopyButton.id = 'dd26-download-answer-copy';
+      answerCopyButton.type = 'button';
+      answerCopyButton.textContent = 'Download my answer copy';
+      answerCopyButton.addEventListener('click', () => downloadSubmissionAnswerCopy(receipt, activeAttempt));
+      receiptActions.prepend(answerCopyButton);
+    }
     if (receipt.localRetentionWarning) {
       const localRetentionNotice = document.createElement('div');
       localRetentionNotice.className = 'dd26-notice';
@@ -6826,7 +6907,7 @@
     const currentFilteredIndex = Math.max(0, filteredEntries.findIndex((entry) => entry.candidateIndex === state.exam.gradingCandidate
       && entry.questionIndex === state.exam.gradingQuestion));
     const scoreValue = draft ? draft.score : (question.score ?? '');
-    const gradeStateValue = draft?.gradeState || question.gradeState || 'draft';
+    const gradeStateValue = draft?.gradeState || (question.gradeState === 'draft' ? 'draft' : 'final');
     const commentValue = draft ? draft.comment : (question.comment || '');
     const reasonValue = draft?.reason || 'Initial Professor assessment';
     const candidateNameCounts = new Map();
@@ -6878,11 +6959,15 @@
       </section>
       <section class="dd26-section" aria-labelledby="dd26-class-results-heading">
         <h3 id="dd26-class-results-heading">Class results and offline grading</h3>
-        <p>Choose any submitted students and download an Excel workbook containing the Professor&rsquo;s exact questions, submitted answers, roster details, timing, current scores, comments, and analysis. Final sending remains a separate class-wide action that seals the examination.</p>
+        <p>Choose any submitted students and download an Excel workbook containing the Professor&rsquo;s exact questions, submitted answers, roster details, timing, current scores, comments, and analysis. Send each selected student only their own finalized result; releasing one result does not close the examination or affect the rest of the class.</p>
         <div class="dd26-actions"><button class="dd26-button primary" id="dd26-review-class-results" type="button">Review send / download</button><button class="dd26-button" id="dd26-leave-grading" type="button">Return to Professor workspace</button></div>
         ${allGradesFinal ? '<p class="dd26-help">All grades are final. You may send every student their own result and download the final class workbook.</p>' : `<p class="dd26-help">An offline-grading workbook is available now. Finalize ${escapeHtml(unfinishedCount)} remaining grade${unfinishedCount === 1 ? '' : 's'} in the secure workspace before sending official results.</p>`}
       </section>
     </section>`;
+    const saveGradeButton = document.getElementById('dd26-save-grade');
+    const saveNextGradeButton = document.getElementById('dd26-save-next-grade');
+    if (saveGradeButton) saveGradeButton.textContent = gradeStateValue === 'final' ? 'Save final grade' : 'Save draft';
+    if (saveNextGradeButton) saveNextGradeButton.textContent = gradeStateValue === 'final' ? 'Save final grade & next' : 'Save draft & next';
     document.getElementById('dd26-grading-candidate')?.addEventListener('change', (event) => {
       if (!mayLeaveCurrentGrade()) {
         event.target.value = String(state.exam.gradingCandidate);
@@ -7198,6 +7283,16 @@
     if (count) count.textContent = `${selected.length} of ${checkboxes.length} students selected`;
     const download = document.getElementById('dd26-download-class-workbook');
     if (download) download.disabled = checkboxes.length > 0 && selected.length < 1;
+    const send = document.getElementById('dd26-confirm-release-results');
+    if (send) {
+      const selectedIds = new Set(selected.map((input) => String(input.value || '')));
+      const selectedCandidates = classResultCandidates().filter((candidate) => selectedIds.has(String(candidate.attemptId || '')));
+      send.disabled = selectedCandidates.length < 1
+        || selectedCandidates.some((candidate) => candidate.allGradesFinal !== true);
+      send.textContent = selectedCandidates.length === 1
+        ? 'Send selected student result'
+        : `Send ${selectedCandidates.length || ''} selected results`.trim();
+    }
   }
 
   function candidateSelectionScoreText(candidate, totals = classResultCandidateTotals(candidate)) {
@@ -7217,7 +7312,6 @@
     catch (error) { global.toast?.(error.message, 'warn'); return; }
     const candidates = classResultCandidates(report);
     const hasCandidates = candidates.length > 0;
-    const allFinal = hasCandidates && candidates.every((candidate) => candidate.allGradesFinal === true);
     const portalExam = (state.exam.portal?.classes || [])
       .flatMap((classroom) => classroom.exams || [])
       .find((exam) => exam.examId === examId);
@@ -7227,7 +7321,21 @@
     const selection = hasCandidates
       ? `<label class="dd26-choice dd26-results-select-all"><input id="dd26-class-result-select-all" type="checkbox" checked><span><strong>Select all submitted students</strong><small id="dd26-class-result-selection-count">${escapeHtml(candidates.length)} of ${escapeHtml(candidates.length)} students selected</small></span></label><div class="dd26-result-selection" role="group" aria-label="Choose students for class results download">${candidates.map((candidate) => { const totals = classResultCandidateTotals(candidate); return `<label class="dd26-choice"><input data-dd26-class-result-candidate type="checkbox" value="${escapeHtml(candidate.attemptId)}" checked><span><strong>${escapeHtml(candidate.studentName || candidate.candidateNumber || 'Student')}</strong><small>${escapeHtml(candidate.studentNumber || 'No student number')} &middot; ${escapeHtml(candidate.studentEmail || '')} &middot; ${escapeHtml(candidateSelectionScoreText(candidate, totals))}</small></span></label>`; }).join('')}</div>`
       : '<div class="dd26-notice"><strong>No student has submitted yet.</strong> Download the current roster, attendance state, schedule, and empty offline-grading template now. Submitted answers and per-student tabs will appear automatically in later downloads.</div>';
-    openDialog(`<div class="dd26-label">Professor class results</div><h2>Send grades or download an offline workbook</h2><p>${hasCandidates ? 'Select students for the workbook. It includes each selected student&rsquo;s name, email, student number, exact examination questions, submitted answers, current grades, comments, timing, and question analytics.' : 'A Professor workbook is available at every stage of the examination, including before the first submission.'}</p><div class="dd26-notice"><strong>The Professor controls this examination record.</strong> Downloading never changes or sends grades. Sending is class-wide, emails each graded student only their own result, seals the examination, and then downloads the final class workbook.</div>${selection}${hasCandidates ? `<label class="dd26-choice"><input id="dd26-release-questionnaire" type="checkbox" ${defaultIncludesQuestions ? 'checked' : ''}><span><strong>Include examination questions in student result emails</strong><small>The downloaded Professor workbook always includes questions and submitted answers.</small></span></label>` : ''}<div class="dd26-error" id="dd26-class-results-error" role="alert" hidden></div><div class="dd26-actions"><button class="dd26-button" id="dd26-download-class-workbook" type="button">${hasCandidates ? 'Download selected workbook' : 'Download current workbook'}</button>${report.released || !hasCandidates ? '' : `<button class="dd26-button primary" id="dd26-confirm-release-results" type="button" ${allFinal ? '' : 'disabled'}>Send grades + download all</button>`}</div>${allFinal || report.released || !hasCandidates ? '' : '<p class="dd26-help">The offline workbook is available now. Official sending unlocks only after every submitted answer has a final Professor grade.</p>'}`);
+    openDialog(`<div class="dd26-label">Professor class results</div><h2>Send grades or download an offline workbook</h2><p>${hasCandidates ? 'Select students for the workbook. It includes each selected student&rsquo;s name, email, student number, exact examination questions, submitted answers, current grades, comments, timing, and question analytics.' : 'A Professor workbook is available at every stage of the examination, including before the first submission.'}</p><div class="dd26-notice"><strong>The Professor controls this examination record.</strong> Downloading never changes or sends grades. Sending applies only to selected, fully graded students and does not close the examination or affect anyone else.</div>${selection}${hasCandidates ? `<label class="dd26-choice"><input id="dd26-release-questionnaire" type="checkbox" ${defaultIncludesQuestions ? 'checked' : ''}><span><strong>Include examination questions in student result emails</strong><small>The downloaded Professor workbook always includes questions and submitted answers.</small></span></label>` : ''}<div class="dd26-error" id="dd26-class-results-error" role="alert" hidden></div><div class="dd26-actions"><button class="dd26-button" id="dd26-download-class-workbook" type="button">${hasCandidates ? 'Download selected workbook' : 'Download current workbook'}</button>${report.released || !hasCandidates ? '' : '<button class="dd26-button primary" id="dd26-confirm-release-results" type="button">Send selected results</button>'}</div>${report.released || !hasCandidates ? '' : '<p class="dd26-help">Select only students whose grading is complete. Other students may remain active, submitted, or ungraded.</p>'}`);
+    const notice = document.querySelector('#dd26-dialog .dd26-notice');
+    if (notice) notice.innerHTML = '<strong>The Professor controls this examination record.</strong> Downloading never changes or sends grades. Sending applies only to the selected fully graded students and does not close the exam, revoke access, or affect any other student.';
+    const help = document.querySelector('#dd26-dialog .dd26-help');
+    if (help && hasCandidates) help.textContent = 'Select only students whose grading is complete. Other students may remain active, submitted, or ungraded.';
+    const sendButton = document.getElementById('dd26-confirm-release-results');
+    if (!sendButton && hasCandidates && !report.released) {
+      const actions = document.querySelector('#dd26-dialog .dd26-actions');
+      const candidateSend = document.createElement('button');
+      candidateSend.className = 'dd26-button primary';
+      candidateSend.id = 'dd26-confirm-release-results';
+      candidateSend.type = 'button';
+      candidateSend.textContent = 'Send selected results';
+      actions?.append(candidateSend);
+    }
     document.getElementById('dd26-class-result-select-all')?.addEventListener('change', (event) => {
       document.querySelectorAll('[data-dd26-class-result-candidate]').forEach((input) => { input.checked = event.target.checked; });
       refreshClassResultsSelectionState();
@@ -7335,35 +7443,35 @@
     const grading = state.exam.grading;
     const reportBeforeRelease = state.exam.resultsDashboard;
     const candidates = classResultCandidates(reportBeforeRelease);
-    const unfinished = candidates.filter((candidate) => candidate.allGradesFinal !== true);
-    if (!candidates.length || unfinished.length) {
-      global.toast?.(candidates.length
-        ? `${unfinished.length} submitted student grade sets are not final.`
-        : 'There are no submitted student examinations to release.', 'warn');
+    const attemptIds = selectedClassResultAttemptIds();
+    const selectedCandidates = candidates.filter((candidate) => attemptIds.includes(String(candidate.attemptId || '')));
+    const unfinished = selectedCandidates.filter((candidate) => candidate.allGradesFinal !== true);
+    if (!selectedCandidates.length || unfinished.length) {
+      global.toast?.(selectedCandidates.length
+        ? `${unfinished.length} selected student grade set${unfinished.length === 1 ? ' is' : 's are'} not final.`
+        : 'Select at least one submitted student.', 'warn');
       return;
     }
     const includeQuestionnaire = document.getElementById('dd26-release-questionnaire')?.checked === true;
     const examId = grading?.examId || reportBeforeRelease?.examId || state.exam.activeExamId;
-    const attemptIds = candidates.map((candidate) => candidate.attemptId);
     const button = document.getElementById('dd26-confirm-release-results');
     if (button) {
       button.disabled = true;
       button.textContent = 'Sending…';
     }
     try {
-      await command({ operation: 'release_results', examId, requestKey: randomKey('release'), includeQuestionnaire, gradingKey: grading?.gradingKey || '' });
+      await command({ operation: 'release_candidate_results', examId, attemptIds, requestKey: randomKey('candidate_release'), includeQuestionnaire, gradingKey: grading?.gradingKey || '' });
       let report;
       try { report = await loadResultsDashboard(examId); }
       catch { report = { ...reportBeforeRelease, released: true, resultDelivery: null }; state.exam.resultsDashboard = report; }
       let workbookReady = false;
       try { workbookReady = await downloadClassWorkbook(report, attemptIds, 'class_results', button); }
       catch (downloadError) { global.toast?.(`Results were sent, but the workbook needs a retry: ${downloadError.message}`, 'warn'); }
-      clearGradingWorkspace();
       closeDialog();
       renderProfessorResultsDashboard(report);
       global.toast?.(workbookReady
-        ? 'Graded results were queued for delivery verification, the examination was sealed, and the final workbook is ready.'
-        : 'Graded results were queued for delivery verification and the examination was sealed. Retry the workbook from the dashboard.', 'ok');
+        ? 'Selected student results were queued for delivery verification, and the selected workbook is ready.'
+        : 'Selected student results were queued for delivery verification. Retry the workbook from the dashboard.', 'ok');
       await refreshPortalSilently();
     } catch (error) {
       if (button) {
@@ -7398,6 +7506,42 @@
     return `<details class="dd26-score-disclosure"><summary aria-label="${escapeHtml(accessibleScore)}. Open score breakdown for ${escapeHtml(candidate.studentName || candidate.candidateNumber || 'student')}">${headline}<small>${escapeHtml(status)} &middot; View breakdown</small></summary>${breakdown}</details>`;
   }
 
+  function openExamLifecycleDialog(action) {
+    const report = state.exam.resultsDashboard;
+    if (!report?.examId || !['end_access', 'complete', 'archive'].includes(action)) return;
+    const labels = {
+      end_access: ['End student access', 'Stops new student entry without submitting, grading, or sending any result. Active answer records remain preserved.'],
+      complete: ['Mark examination complete', 'Marks the administrative examination work complete. Student access must be ended first. Results remain available.'],
+      archive: ['Archive examination', 'Moves the completed examination to the permanent Professor archive. Complete the examination first.'],
+    };
+    const [title, explanation] = labels[action];
+    openDialog(`<div class="dd26-label">Separate lifecycle control</div><h2>${escapeHtml(title)}</h2><div class="dd26-notice"><strong>This action never sends grades.</strong> ${escapeHtml(explanation)}</div><label class="dd26-field"><span>Reason</span><textarea class="dd26-textarea compact" id="dd26-lifecycle-reason" minlength="5" maxlength="1000" required></textarea></label><label class="dd26-field"><span>Professor grading key (only if this device has not been remembered)</span><input class="dd26-input" id="dd26-lifecycle-key" type="password" autocomplete="one-time-code"></label><div class="dd26-error" id="dd26-lifecycle-error" role="alert" hidden></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-confirm-lifecycle" type="button">${escapeHtml(title)}</button><button class="dd26-button" data-dd26-close-dialog type="button">Back</button></div>`);
+    document.getElementById('dd26-confirm-lifecycle')?.addEventListener('click', async () => {
+      const reason = value('dd26-lifecycle-reason');
+      const gradingKey = value('dd26-lifecycle-key');
+      const errorHost = document.getElementById('dd26-lifecycle-error');
+      if (reason.length < 5) {
+        errorHost.hidden = false;
+        errorHost.textContent = 'Enter a short reason of at least five characters.';
+        return;
+      }
+      const button = document.getElementById('dd26-confirm-lifecycle');
+      button.disabled = true;
+      try {
+        await command({ operation: 'update_exam_lifecycle', examId: report.examId, action, reason, gradingKey, requestKey: randomKey('exam_lifecycle') });
+        closeDialog();
+        const refreshed = await loadResultsDashboard(report.examId);
+        renderProfessorResultsDashboard(refreshed);
+        global.toast?.(`${title} was recorded. No grades were sent.`, 'ok');
+        await refreshPortalSilently();
+      } catch (error) {
+        button.disabled = false;
+        errorHost.hidden = false;
+        errorHost.textContent = error.message;
+      }
+    });
+  }
+
   function renderProfessorResultsDashboard(report = state.exam.resultsDashboard) {
     if (!report) return;
     state.exam.resultsDashboard = report;
@@ -7408,13 +7552,40 @@
     const gradeRate = analytics.submitted ? (analytics.finalized / analytics.submitted) * 100 : 0;
     const participation = analytics.expected ? (analytics.submitted / analytics.expected) * 100 : 0;
     const questionRows = analytics.questionAnalytics.map((question) => `<tr><td><strong>Question ${escapeHtml(question.ordinal)}</strong></td><td class="dd26-long-cell">${escapeHtml(question.prompt)}</td><td>${escapeHtml(question.answered)} / ${escapeHtml(analytics.submitted)}</td><td>${escapeHtml(question.finals)}</td><td>${escapeHtml(question.averageScore.toFixed(2))} / ${escapeHtml(question.maximum.toFixed(2))}</td><td><div class="dd26-result-bar" aria-label="Question ${escapeHtml(question.ordinal)} average ${escapeHtml(question.averagePercentage.toFixed(1))} percent"><span style="width:${Math.max(0, Math.min(100, question.averagePercentage))}%"></span></div><strong>${escapeHtml(question.averagePercentage.toFixed(1))}%</strong></td></tr>`).join('');
-    const candidateRows = candidates.map((candidate) => { const delivery = deliveryByAttempt.get(String(candidate.attemptId || '')); const retry = report.released && delivery?.retryable === true ? `<button class="dd26-button compact" data-dd26-retry-result-email="${escapeHtml(candidate.attemptId)}" type="button">Retry grade email</button>` : ''; return `<tr><td><strong>${escapeHtml(candidate.studentName || candidate.candidateNumber || 'Student')}</strong><br><small>${escapeHtml(candidate.studentNumber || 'No student number')}</small></td><td>${escapeHtml(candidate.studentEmail || '')}</td><td>${escapeHtml(candidate.candidateNumber || '')}</td><td>${escapeHtml(candidate.status || '')}${candidate.late ? ' &middot; Late' : ''}</td><td>${candidateScoreDisclosure(candidate)}</td><td>${candidate.allGradesFinal ? 'Final' : 'Draft / incomplete'}</td>${report.released ? `<td><span class="dd26-delivery-status is-${escapeHtml(delivery?.deliveryStatus || 'pending')}">${escapeHtml(resultDeliveryLabel(delivery))}</span>${retry}</td>` : ''}</tr>`; }).join('');
-    const deliveryMetrics = report.released && report.resultDelivery ? `<section class="dd26-section dd26-delivery-panel"><div class="dd26-question-meta"><div><div class="dd26-label">Student email delivery</div><h3>Provider-confirmed result delivery</h3></div><button class="dd26-button compact" id="dd26-refresh-delivery" type="button">Refresh delivery status</button></div><p>Email-provider acceptance is not shown as successful delivery. A student is marked Delivered only after the recipient mail server accepts the message.</p><div class="dd26-stat-grid"><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.delivered || 0)}</strong><span>Delivered</span></div><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.accepted || 0)}</strong><span>Awaiting confirmation</span></div><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.delayed || 0)}</strong><span>Delayed</span></div><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.failed || 0)}</strong><span>Failed / bounced</span></div></div></section>` : '';
+    const candidateRows = candidates.map((candidate) => {
+      const delivery = deliveryByAttempt.get(String(candidate.attemptId || ''));
+      const released = candidate.released === true || report.released === true;
+      const retry = released && delivery?.retryable === true
+        ? `<button class="dd26-button compact" data-dd26-retry-result-email="${escapeHtml(candidate.attemptId)}" type="button">Retry grade email</button>`
+        : '';
+      return `<tr><td><strong>${escapeHtml(candidate.studentName || candidate.candidateNumber || 'Student')}</strong><br><small>${escapeHtml(candidate.studentNumber || 'No student number')}</small></td><td>${escapeHtml(candidate.studentEmail || '')}</td><td>${escapeHtml(candidate.candidateNumber || '')}</td><td>${escapeHtml(candidate.status || '')}${candidate.late ? ' &middot; Late' : ''}</td><td>${candidateScoreDisclosure(candidate)}</td><td>${candidate.allGradesFinal ? 'Final' : 'Draft / incomplete'}</td><td>${released ? `<span class="dd26-delivery-status is-${escapeHtml(delivery?.deliveryStatus || candidate.deliveryStatus || 'pending')}">${escapeHtml(resultDeliveryLabel(delivery || candidate))}</span>${retry}` : 'Not sent'}</td></tr>`;
+    }).join('');
+    const deliveryMetrics = report.resultDelivery ? `<section class="dd26-section dd26-delivery-panel"><div class="dd26-question-meta"><div><div class="dd26-label">Student email delivery</div><h3>Provider-confirmed result delivery</h3></div><button class="dd26-button compact" id="dd26-refresh-delivery" type="button">Refresh delivery status</button></div><p>Email-provider acceptance is not shown as successful delivery. A student is marked Delivered only after the recipient mail server accepts the message.</p><div class="dd26-stat-grid"><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.delivered || 0)}</strong><span>Delivered</span></div><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.accepted || 0)}</strong><span>Awaiting confirmation</span></div><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.delayed || 0)}</strong><span>Delayed</span></div><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.failed || 0)}</strong><span>Failed / bounced</span></div></div></section>` : '';
     document.getElementById('dd26-exam-main').innerHTML = `<section class="dd26-card dd26-results-dashboard"><section class="dd26-section"><div class="dd26-label">Professor results dashboard</div><div class="dd26-question-meta"><h2>${escapeHtml(report.title || 'Class results')}</h2><span class="dd26-status">${report.released ? 'Released and sealed' : 'Professor working record'}</span></div><p>Authoritative class analysis for the owning Professor. Workbook downloads contain the exact examination questions and each selected student&rsquo;s final submitted answers for verification or offline grading.</p><div class="dd26-actions"><button class="dd26-button primary" id="dd26-dashboard-download" type="button">Choose students / download</button>${!report.released && analytics.submitted > 0 && analytics.ungraded === 0 ? '<button class="dd26-button" id="dd26-dashboard-send" type="button">Send final grades</button>' : ''}<button class="dd26-button" id="dd26-dashboard-refresh" type="button">Refresh dashboard</button><button class="dd26-button" id="dd26-dashboard-back" type="button">Return to Professor workspace</button></div><p class="dd26-help">Server-saved view refreshed ${escapeHtml(formatDate(report.generatedAt || new Date().toISOString()))}. Final totals open to show the question-by-question breakdown; incomplete grading is labeled as a recorded subtotal.</p></section><div class="dd26-stat-grid dd26-result-metrics"><div class="dd26-stat"><strong>${escapeHtml(analytics.submitted)}</strong><span>Submitted of ${escapeHtml(analytics.expected)} expected</span></div><div class="dd26-stat"><strong>${escapeHtml(participation.toFixed(1))}%</strong><span>Participation</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.average.toFixed(1))}%</strong><span>Class average</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.median.toFixed(1))}%</strong><span>Median score</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.finalized)}</strong><span>Fully graded</span></div><div class="dd26-stat"><strong>${escapeHtml(gradeRate.toFixed(1))}%</strong><span>Grading complete</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.absent)}</strong><span>Absent / no-show</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.late)}</strong><span>Late entry or submission</span></div></div>${deliveryMetrics}<section class="dd26-section"><div class="dd26-result-extremes"><div><span>Strongest item</span><strong>${analytics.highestQuestion ? `Question ${escapeHtml(analytics.highestQuestion.ordinal)} &middot; ${escapeHtml(analytics.highestQuestion.averagePercentage.toFixed(1))}%` : 'No finalized score data'}</strong></div><div><span>Lowest-performing item</span><strong>${analytics.lowestQuestion ? `Question ${escapeHtml(analytics.lowestQuestion.ordinal)} &middot; ${escapeHtml(analytics.lowestQuestion.averagePercentage.toFixed(1))}%` : 'No finalized score data'}</strong></div></div><h3>Question performance</h3>${questionRows ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Item</th><th>Professor question</th><th>Answered</th><th>Final</th><th>Average score</th><th>Performance</th></tr></thead><tbody>${questionRows}</tbody></table></div>` : '<div class="dd26-empty">No question-level grades are available.</div>'}</section><section class="dd26-section"><h3>Student results</h3>${candidateRows ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Student</th><th>Email</th><th>Candidate</th><th>Timing</th><th>Total score</th><th>Grade status</th>${report.released ? '<th>Email delivery</th>' : ''}</tr></thead><tbody>${candidateRows}</tbody></table></div>` : '<div class="dd26-empty">No submitted student examinations are available.</div>'}</section></section>`;
+    const dashboardActions = document.querySelector('.dd26-results-dashboard > .dd26-section .dd26-actions');
+    if (!document.getElementById('dd26-dashboard-send') && !report.released && analytics.finalized > 0) {
+      const send = document.createElement('button');
+      send.className = 'dd26-button';
+      send.id = 'dd26-dashboard-send';
+      send.type = 'button';
+      send.textContent = 'Send selected grades';
+      dashboardActions?.insertBefore(send, document.getElementById('dd26-dashboard-refresh'));
+    }
+    if (!report.released) {
+      const lifecycle = document.createElement('div');
+      lifecycle.className = 'dd26-actions dd26-lifecycle-actions';
+      lifecycle.setAttribute('aria-label', 'Separate examination lifecycle controls');
+      lifecycle.innerHTML = '<button class="dd26-button" data-dd26-lifecycle="end_access" type="button">End student access</button><button class="dd26-button" data-dd26-lifecycle="complete" type="button">Mark exam complete</button><button class="dd26-button" data-dd26-lifecycle="archive" type="button">Archive exam</button>';
+      dashboardActions?.after(lifecycle);
+    }
+    const studentResultTable = [...document.querySelectorAll('.dd26-results-dashboard table')].at(-1);
+    const studentHeader = studentResultTable?.querySelector('thead tr');
+    if (studentHeader && studentHeader.children.length === 6) studentHeader.insertAdjacentHTML('beforeend', '<th>Email delivery</th>');
     document.getElementById('dd26-dashboard-download')?.addEventListener('click', () => openClassResultsDialog(report.examId));
     document.getElementById('dd26-dashboard-send')?.addEventListener('click', releaseResults);
     document.getElementById('dd26-dashboard-refresh')?.addEventListener('click', () => openResultsDashboard(report.examId));
     document.getElementById('dd26-refresh-delivery')?.addEventListener('click', () => openResultsDashboard(report.examId));
+    document.querySelectorAll('[data-dd26-lifecycle]').forEach((button) => button.addEventListener('click', () => openExamLifecycleDialog(button.dataset.dd26Lifecycle)));
     document.querySelectorAll('[data-dd26-retry-result-email]').forEach((button) => button.addEventListener('click', () => retryStudentResultEmail(button)));
     document.getElementById('dd26-dashboard-back')?.addEventListener('click', async () => {
       state.exam.resultsDashboard = null;
@@ -7613,8 +7784,11 @@
   }, { capture: true });
   global.addEventListener?.('pageshow', (event) => {
     if (event.persisted && state.view === 'exam_room') {
+      if (state.exam.attempt?.status === 'in_progress') state.exam.section = 'student';
       renderExamRoom();
-      announceExamStatus('Examination Room restored. Your current workspace was preserved.');
+      announceExamStatus(state.exam.attempt?.status === 'in_progress'
+        ? 'Your examination was restored at the exact question you left. The official timer continued.'
+        : 'Examination Room restored. Your current workspace was preserved.');
     }
   }, { capture: true });
   document.addEventListener?.('visibilitychange', () => {
@@ -7664,6 +7838,15 @@
     const sessionUserId = event.detail?.authenticated ? event.detail?.userId || null : null;
     const { identityChanged } = synchronizeSessionCaches(sessionUserId);
     if (event.detail?.authenticated) {
+      const activeWritingSession = state.view === 'exam_room'
+        && state.exam.attempt?.status === 'in_progress'
+        && state.sessionUserId === sessionUserId
+        && authenticatedUserId() === sessionUserId;
+      if (activeWritingSession) {
+        state.exam.section = 'student';
+        if (!document.getElementById('dd26-attempt-surface')) renderExamRoom();
+        return;
+      }
       const route = routeFromHash();
       const routePageActive = document.getElementById('page-dd2026')?.classList.contains('active');
       if (route?.[0] === 'exam_room') {

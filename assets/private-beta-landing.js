@@ -84,11 +84,16 @@
     publishAccessState(accessAllowed);
   }
 
-  function activateMockBarRoute(hash) {
+  function activateApplicationRoute(hash) {
     const route = normalizedHash(hash).split(/[/?]/, 1)[0];
-    if (!['mock', 'mock-bar'].includes(route) || state.lastActivatedHash === route) return;
+    if (state.lastActivatedHash === route) return;
+    if (!['mock', 'mock-bar', 'subject-matter'].includes(route)) return;
     state.lastActivatedHash = route;
     requestAnimationFrame(() => {
+      if (route === 'subject-matter') {
+        global.DueDiligenceExaminations?.openPerSubject?.();
+        return;
+      }
       global.showPage?.('mock', document.getElementById('spa-mock'), { history: false });
     });
   }
@@ -102,7 +107,7 @@
     publishAccessState(true);
     const returnHash = safeReturnHash();
     if (returnHash && location.hash !== returnHash) history.replaceState({}, '', returnHash);
-    if (options.activateRoute !== false) activateMockBarRoute(returnHash || location.hash);
+    if (options.activateRoute !== false) activateApplicationRoute(returnHash || location.hash);
     requestAnimationFrame(() => document.querySelector('#authenticated-app-shell .topbar')?.focus?.());
   }
 

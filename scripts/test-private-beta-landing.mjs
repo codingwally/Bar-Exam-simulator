@@ -69,6 +69,16 @@ assert.match(script, /if \(!gateEnabled\)[\s\S]*applicationRouteRequested\(\)[\s
   'The disabled admission gate must retain the public homepage at root and open only explicit application routes.');
 assert.match(script, /global\.DueDiligencePublicHome = Object\.freeze/);
 assert.match(script, /mock: '#mock-bar'/, 'Mock Bar sign-in returns must use the canonical route.');
+assert.match(
+  script,
+  /\['mock', 'mock-bar', 'subject-matter'\]/,
+  'Application restoration must recognize the Subject Matter route.',
+);
+assert.match(
+  script,
+  /route === 'subject-matter'[\s\S]*DueDiligenceExaminations\?\.openPerSubject\?\.\(\)/,
+  'Refreshing an authenticated Subject Matter route must reload its catalog.',
+);
 assert.match(script, /addEventListener\('popstate'[\s\S]*!applicationRouteRequested\(\)[\s\S]*showLanding/,
   'Browser Back must restore the public homepage for root and public chamber anchors.');
 assert.match(script, /IntersectionObserver/);
@@ -79,7 +89,7 @@ assert.match(script, /globalBetaEnabled/);
 assert.match(script, /privateBetaApi\(\)\?\.policy/);
 assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /#private-beta-dialog\[open\]/);
-assert.match(html, /assets\/private-beta-landing\.js\?v=auth-persistence-20260812-1/);
+assert.match(html, /assets\/private-beta-landing\.js\?v=route-restoration-20260813-1/);
 assert.match(html, /assets\/private-beta-landing\.css\?v=homepage-default-20260812-1/);
 assert.match(css, /\.pb-chamber-nav\s*\{/);
 assert.match(css, /\.pb-chamber-pill\s*\{/);

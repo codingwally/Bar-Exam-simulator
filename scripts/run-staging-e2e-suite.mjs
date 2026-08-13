@@ -204,12 +204,11 @@ async function main() {
   assert.ok(Object.hasOwn(suites, argument), 'Unknown staging suite.');
   const serviceRoleKey = String(process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY || '');
   assert.ok(serviceRoleKey, 'The protected staging credential is unavailable.');
-  assert.equal(
-    serviceRoleKey.startsWith('sb_secret_'),
-    false,
-    'The legacy test transport must be modernized before an sb_secret key is used.',
+  assert.match(
+    serviceRoleKey,
+    /^sb_secret_[A-Za-z0-9_-]{20,}$/,
+    'The protected staging credential must be a dedicated revocable secret key.',
   );
-  assert.equal(serviceRoleKey.split('.').length, 3, 'The protected legacy credential is malformed.');
 
   const configuration = await loadStagingConfiguration();
   const result = await runChild(suites[argument], {

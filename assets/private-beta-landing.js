@@ -74,6 +74,7 @@
     globalBetaEnabled: null,
     policyPromise: null,
     lastActivatedHash: '',
+    routeActivationVersion: 0,
   };
 
   function privateBetaApi() {
@@ -188,9 +189,15 @@
     const route = requestedApplicationRoute(hash);
     if (state.lastActivatedHash === route && route !== 'examination-room') return;
     if (!['mock', 'mock-bar', 'subject-matter', 'bar-feels', 'examination-room'].includes(route)) return;
+    const activationVersion = ++state.routeActivationVersion;
+    const ownerUserId = String(currentSession()?.user?.id || '').trim();
+    const isCurrent = () => activationVersion === state.routeActivationVersion
+      && requestedApplicationRoute() === route
+      && String(currentSession()?.user?.id || '').trim() === ownerUserId;
     if (route === 'examination-room') {
       const routeModuleWasLoaded = typeof global.DueDiligence2026?.restoreRoute === 'function';
       await loadFeature('examination-room');
+      if (!isCurrent()) return;
       state.lastActivatedHash = route;
       if (routeModuleWasLoaded) {
         requestAnimationFrame(() => global.DueDiligence2026?.restoreRoute?.());
@@ -198,23 +205,26 @@
       return;
     }
     if (route === 'subject-matter' || route === 'bar-feels') await loadFeature(route);
-    state.lastActivatedHash = route;
-    requestAnimationFrame(() => {
-      if (route === 'subject-matter' || route === 'bar-feels') {
-        Promise.resolve(global.DueDiligenceExaminations?.restoreRoute?.(
-          route === 'bar-feels' ? 'bar_feels' : 'per_subject',
-        )).then((restored) => {
-          if (restored) return;
-          if (route === 'bar-feels') global.openPremiumBarFeels?.();
-          else global.DueDiligenceExaminations?.openPerSubject?.();
-        }).catch(() => {
-          if (route === 'bar-feels') global.openPremiumBarFeels?.();
-          else global.DueDiligenceExaminations?.openPerSubject?.();
-        });
-        return;
+    if (!isCurrent()) return;
+    if (route === 'subject-matter') {
+      if (typeof global.DueDiligenceExaminations?.restoreRoute !== 'function') {
+        throw new Error('Subject Matter could not be restored. Please refresh and try again.');
       }
-      global.showPage?.('mock', document.getElementById('spa-mock'), { history: false });
-    });
+      const outcome = await global.DueDiligenceExaminations.restoreRoute('per_subject', { isCurrent });
+      if (!isCurrent()) return;
+      if (outcome?.status === 'retryable_error') return;
+      if (outcome?.status !== 'restored') await global.DueDiligenceExaminations.openPerSubject?.();
+      if (isCurrent()) state.lastActivatedHash = route;
+      return;
+    }
+    if (route === 'bar-feels') {
+      const outcome = await global.openPremiumBarFeels?.({ restoreActive: true, isCurrent });
+      if (!isCurrent()) return;
+      if (outcome?.status !== 'retryable_error') state.lastActivatedHash = route;
+      return;
+    }
+    global.showPage?.('mock', document.getElementById('spa-mock'), { history: false });
+    if (isCurrent()) state.lastActivatedHash = route;
   }
 
   function showApplication(options = {}) {
@@ -226,7 +236,11 @@
     publishAccessState(true);
     const returnHash = safeReturnHash();
     if (returnHash && location.hash !== returnHash) history.replaceState({}, '', returnHash);
-    if (options.activateRoute !== false) activateApplicationRoute(returnHash || location.hash);
+    if (options.activateRoute !== false) {
+      activateApplicationRoute(returnHash || location.hash).catch((error) => {
+        global.toast?.(error?.message || 'This page could not be opened. Please try again.', 'warn');
+      });
+    }
     requestAnimationFrame(() => siteHeader.querySelector('.brand')?.focus?.({ preventScroll: true }));
   }
 

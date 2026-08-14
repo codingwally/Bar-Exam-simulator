@@ -90,9 +90,11 @@ assert.match(
 );
 assert.match(
   script,
-  /route === 'subject-matter' \|\| route === 'bar-feels'[\s\S]*DueDiligenceExaminations\?\.restoreRoute\?\.\([\s\S]*openPremiumBarFeels\?\.\(\)[\s\S]*openPerSubject\?\.\(\)/,
-  'Refreshing either examination track must restore an active attempt before falling back to its authorized catalog.',
+  /route === 'subject-matter'[\s\S]*restoreRoute\('per_subject'[\s\S]*route === 'bar-feels'[\s\S]*openPremiumBarFeels\?\.\(\{ restoreActive: true, isCurrent \}\)/,
+  'Subject Matter must restore directly while Bar Feels restores only through its Premium access controller.',
 );
+assert.match(script, /routeActivationVersion[\s\S]*const isCurrent = \(\) =>/,
+  'Asynchronous route restoration must reject stale hash or identity responses.');
 assert.match(script, /addEventListener\('popstate'[\s\S]*!applicationRouteRequested\(\)[\s\S]*showLanding/,
   'Browser Back must restore the public homepage for root and public chamber anchors.');
 assert.match(script, /IntersectionObserver/);

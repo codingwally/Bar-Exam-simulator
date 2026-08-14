@@ -66,7 +66,6 @@
     subjectPageScroll: 0,
     subjectSelectorReturnFocus: null,
     resumeAttemptId: null,
-    resumeAttemptPromise: null,
     reviewMaterialCache: new Map(),
     reviewMaterialRequests: new Map(),
     initialized: false,
@@ -1048,50 +1047,51 @@
     history.pushState({ dueDiligenceExamination: state.active.attempt.attemptId }, '', location.href);
   }
 
-  async function resumeAttempt(attemptId) {
-    if (!attemptId) return null;
-    if (state.active?.attempt?.attemptId === attemptId) return state.active;
-    if (state.resumeAttemptId === attemptId && state.resumeAttemptPromise) {
-      return state.resumeAttemptPromise;
+  async function resumeAttempt(attemptId, options = {}) {
+    if (!attemptId) return { status: 'no_match', active: null };
+    const expectedTrack = String(options.expectedTrack || '').trim();
+    if (state.active?.attempt?.attemptId === attemptId) {
+      if (expectedTrack && state.active?.examination?.track !== expectedTrack) {
+        return { status: 'no_match', active: null };
+      }
+      return { status: 'restored', active: state.active };
     }
     state.resumeAttemptId = attemptId;
     const ownerUserId = currentUserId();
-    const pending = (async () => {
-      setStatus('Recovering your server-saved examination…');
-      try {
-        const active = await api('/examinations/query', {
-          operation: 'resume',
-          attemptId,
-        });
-        if (!ownerUserId || currentUserId() !== ownerUserId) return null;
-        activateAttempt(active);
-        await heartbeat(false);
-        return state.active;
-      } catch (error) {
-        setStatus(error.message, 'error');
-        return null;
-      }
-    })();
-    state.resumeAttemptPromise = pending;
+    setStatus('Recovering your server-saved examination…');
     try {
-      return await pending;
-    } finally {
-      if (state.resumeAttemptPromise === pending) {
-        state.resumeAttemptId = null;
-        state.resumeAttemptPromise = null;
+      const active = await api('/examinations/query', {
+        operation: 'resume',
+        attemptId,
+      });
+      if (!ownerUserId || currentUserId() !== ownerUserId || options.isCurrent?.() === false) {
+        return { status: 'stale', active: null };
       }
+      if (expectedTrack && active?.examination?.track !== expectedTrack) {
+        return { status: 'no_match', active: null };
+      }
+      activateAttempt(active);
+      heartbeat(false).catch(() => {});
+      return { status: 'restored', active: state.active };
+    } catch (error) {
+      setStatus(error.message, 'error');
+      return { status: 'retryable_error', active: null };
+    } finally {
+      if (state.resumeAttemptId === attemptId) state.resumeAttemptId = null;
     }
   }
 
-  async function restoreRoute(track) {
+  async function restoreRoute(track, options = {}) {
     const recovery = readRecovery();
     if (!recovery?.attemptId || !global.DueDiligencePhase4?.getSession?.()?.access_token) {
-      return false;
+      return { status: 'no_match', active: null };
     }
     state.track = track;
     showTrackPage(track);
-    const active = await resumeAttempt(recovery.attemptId);
-    return Boolean(active?.attempt?.attemptId);
+    return resumeAttempt(recovery.attemptId, {
+      expectedTrack: track,
+      isCurrent: options.isCurrent,
+    });
   }
 
   function currentQuestion() {
@@ -2517,7 +2517,6 @@
     state.currentIndex = 0;
     state.screen = 'catalog';
     state.resumeAttemptId = null;
-    state.resumeAttemptPromise = null;
     state.saveInFlight = false;
     state.pendingSave = false;
     state.reviewMaterialCache.clear();
@@ -2991,11 +2990,7 @@
       saveCurrent({ silent: true }).then(() => heartbeat(false));
     });
     global.addEventListener('duediligence:session', (event) => {
-      if (event.detail?.authenticated) {
-        const recovery = readRecovery();
-        if (!state.active && recovery?.attemptId) resumeAttempt(recovery.attemptId);
-        return;
-      }
+      if (event.detail?.authenticated) return;
       if (state.active && ['room', 'review'].includes(state.screen)) saveRecovery();
       stopActiveTimers();
     });
@@ -3007,10 +3002,6 @@
     if (assignmentToken?.length >= 32) {
       openAssignment(assignmentToken);
       return;
-    }
-    const recovery = readRecovery();
-    if (recovery?.attemptId && global.DueDiligencePhase4?.getSession?.()?.access_token) {
-      resumeAttempt(recovery.attemptId);
     }
   }
 

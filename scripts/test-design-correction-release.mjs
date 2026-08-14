@@ -16,6 +16,10 @@ const publicLanding = html.slice(
   html.indexOf('<div class="pb-landing" id="private-beta-landing">'),
   html.indexOf('<dialog class="pb-dialog" id="private-beta-dialog"'),
 );
+const sharedHeader = html.slice(
+  html.indexOf('<header class="topbar pb-header pb-shared-header" id="site-header">'),
+  html.indexOf('<div class="pb-landing" id="private-beta-landing">'),
+);
 const perSubject = examJs.slice(
   examJs.indexOf('function renderPerSubject'),
   examJs.indexOf('function curatedBarCards'),
@@ -25,7 +29,7 @@ const subjectRoom = examJs.slice(
   examJs.indexOf('function renderRoom'),
 );
 const subjectReview = examJs.slice(
-  examJs.indexOf('function subjectMatterStudyDisclosures'),
+  examJs.indexOf('function subjectReviewMaterialKey'),
   examJs.indexOf('function subjectMatterResultMarkup'),
 );
 const subjectResult = examJs.slice(
@@ -34,22 +38,28 @@ const subjectResult = examJs.slice(
 );
 
 assert.match(publicLanding, /class="pb-platform-composition"/);
-assert.match(publicLanding, /class="pb-chamber-index"/);
+assert.match(publicLanding, /class="pb-welcome-note"/);
+assert.doesNotMatch(publicLanding, /class="pb-chamber-index"/);
 assert.doesNotMatch(publicLanding, /pb-pillar-card|pb-pillar-grid/);
+assert.equal((html.match(/id="site-header"/g) || []).length, 1,
+  'Public and authenticated ordinary pages must share one canonical header.');
+assert.ok(html.indexOf('id="site-header"') < html.indexOf('id="private-beta-landing"'));
+assert.ok(html.indexOf('id="site-header"') < html.indexOf('id="authenticated-app-shell"'));
+assert.match(sharedHeader, /id="header-account-control"[^>]*data-public-action="docket"/);
 
 for (const [slug, visible, accessible] of [
   ['academy', 'The Academy', 'Academy'],
   ['commons', 'The Commons', 'Commons'],
   ['barbound', 'BarBound', 'BarBound'],
 ]) {
-  assert.match(publicLanding, new RegExp(
+  assert.match(sharedHeader, new RegExp(
     `<a class="pb-chamber-link" href="#chamber/${slug}"[^>]*>${visible}<\\/a>`,
   ));
-  assert.match(publicLanding, new RegExp(
+  assert.match(sharedHeader, new RegExp(
     `class="pb-chamber-toggle"[\\s\\S]{0,240}data-pb-menu-trigger="${slug}"[\\s\\S]{0,240}aria-label="Show ${accessible} features"`,
   ));
 }
-assert.match(publicLanding, /data-public-feature="examination-room"[^>]*>\s*Examination Room/);
+assert.match(sharedHeader, /data-public-feature="examination-room"[^>]*>\s*Examination Room/);
 assert.match(landingJs, /const chamberLink = event\.target\.closest\?\.\('\[data-pb-chamber-link\]'\)/);
 assert.match(landingJs, /global\.addEventListener\('popstate'[\s\S]*closePublicMenus\(\)/);
 assert.match(landingJs, /global\.addEventListener\('hashchange'[\s\S]*closePublicMenus\(\)/);
@@ -59,7 +69,7 @@ assert.doesNotMatch(chamberLinkHandler, /scrollIntoView/,
   'Primary public chamber navigation must not use scrolling.');
 
 assert.match(landingJs, /class="pb-chamber-feature-index"/);
-assert.doesNotMatch(publicLanding, /pb-chamber-entry-number|>0[1-4]</,
+assert.doesNotMatch(`${publicLanding}\n${sharedHeader}`, /pb-chamber-entry-number|>0[1-4]</,
   'The public chamber chooser must not use generic numbered decoration.');
 assert.doesNotMatch(landingJs, /pb-chamber-feature-number|0\$\{index \+ 1\}/,
   'Public chamber introductions must not number their features.');
@@ -78,10 +88,11 @@ assert.doesNotMatch(perSubject, /questionCount|availableCount|remainingQuestions
 assert.match(subjectRoom, /class="dd-subject-editorial"/);
 assert.match(subjectRoom, /class="dd-subject-editorial-header"/);
 assert.match(subjectRoom, /class="dd-subject-editorial-grid"/);
-assert.match(subjectRoom, /class="dd-subject-editorial-pane is-writing"/);
-assert.match(subjectRoom, /class="dd-subject-editorial-pane is-coaching[^"]*"/);
-assert.match(subjectRoom, /\bdd-subject-coaching-locked\b/);
-assert.match(subjectRoom, /<h[23] id="dd-subject-answer-title">Your answer<\/h[23]>/);
+assert.match(subjectRoom, /class="dd-subject-editorial-pane is-review"/);
+assert.match(subjectRoom, /class="dd-subject-editorial-pane is-coaching dd-subject-practice-answer"/);
+assert.match(subjectRoom, /<h2 id="dd-subject-answer-title">Write from memory<\/h2>/);
+assert.match(subjectRoom, /Review question/);
+assert.match(subjectRoom, /Submit for coaching/);
 assert.doesNotMatch(subjectRoom, /\bALAC\b|A\.L\.A\.C\.|I\.\s*ANSWER|II\.\s*LEGAL BASIS/i,
   'Subject Matter must not force ALAC onto questions that require another form of answer.');
 assert.doesNotMatch(subjectRoom, /Question\s+\$\{[^}]*\}\s+of|questionCount|availableCount|totalQuestions|remainingQuestions|bankSize|placement totals/i,
@@ -92,34 +103,38 @@ assert.match(examJs, /if \(subjectPractice\) \{[\s\S]*?subjectPracticeRoomMarkup
 
 for (const control of [
   'Reveal suggested legal basis',
-  'Guidance: why this basis applies',
-  'Suggested discussion',
-  'Suggested answer',
-  'Official sources',
+  'Why this legal basis applies',
+  'How to approach this question',
 ]) {
-  assert.ok(subjectReview.includes(control), `missing post-evaluation control: ${control}`);
-  assert.ok(subjectFixture.includes(control), `fixture missing post-evaluation control: ${control}`);
+  assert.ok(subjectReview.includes(control), `missing review control: ${control}`);
+  assert.ok(subjectFixture.includes(control), `fixture missing review control: ${control}`);
 }
 assert.equal(
-  (subjectReview.match(/<details>/g) || []).length,
-  5,
-  'Subject Matter must keep all five study disclosures in the opposite review pane.',
+  (subjectReview.match(/<details/g) || []).length,
+  3,
+  'Subject Matter must expose exactly three collapsed review controls on the left.',
 );
 assert.doesNotMatch(subjectReview, /<details[^>]*\sopen(?:\s|>)/i,
   'Every production study disclosure must remain hidden until the user opens it.');
 assert.doesNotMatch(subjectFixture, /<details[^>]*\sopen(?:\s|>)/i,
   'The visual QA fixture must represent the collapsed-by-default production state.');
 assert.ok(subjectResult, 'Subject Matter must render a dedicated Option 3 post-submission review.');
-assert.match(examJs, /class="dd-subject-review-summary"/);
+assert.match(subjectResult, /subjectReviewMaterialControls\(\{ attemptId: resolvedAttemptId, questionId, writingGuide \}\)/);
 assert.match(subjectResult, /class="dd-subject-editorial-pane is-coaching[^"]*"/);
-assert.match(subjectReview, /result\?\.legal_basis_snapshot\s*\|\|\s*result\?\.legalBasis/,
-  'The revealed legal basis must prefer the released, approved question record.');
-assert.doesNotMatch(subjectReview, /assessment\?\.legalBasis/,
-  'A generic assessment field must not replace the released legal basis.');
+assert.match(subjectReview, /operation:\s*'subject_review_material',\s*attemptId/,
+  'Review material must load from the narrow owner-bound operation only after reveal.');
+assert.match(subjectReview, /state\.reviewMaterialRequests\.get\(key\)/,
+  'Concurrent reveals must coalesce into one request.');
+assert.match(subjectReview, /state\.reviewMaterialCache\.set\(key, material\)/,
+  'Verified material must cache only for the current user and attempt key.');
+assert.match(subjectReview, /material\?\.attemptId !== attemptId \|\| material\?\.questionId !== questionId/,
+  'Returned material must match the exact attempt and question.');
+assert.doesNotMatch(subjectReview, /assessment\?\.|modelAnswer|suggestedAnswer|legal_basis_snapshot|result\?\.legalBasis/,
+  'The reveal controls must not consume broad assessment or verdict fields.');
 assert.doesNotMatch(subjectReview,
   /No separate legal-basis field|released assessment does not include|Review the controlling provision|The law applies\.?/i,
   'Generic coaching copy must never masquerade as a question-specific legal basis.');
-assert.match(examJs, /Review and retain\./);
+assert.match(examJs, /Review and retention/);
 assert.match(examJs, /Evaluation overview/);
 assert.match(examCss, /\.dd-subject-editorial\s*\{[\s\S]*?background:/,
   'Subject Matter must use the approved navy editorial surface.');
@@ -132,7 +147,7 @@ assert.match(examCss, /@media \(max-width: 900px\)[\s\S]*?\.dd-subject-editorial
 assert.match(examCss, /\.dd-study-disclosures details\s*\{[\s\S]*?border-top:/);
 
 for (const source of [html, loader, serviceWorker]) {
-  assert.match(source, /design-correction-20260814-1|duediligence-shell-20260814-design-1/);
+  assert.match(source, /header-subject-review-20260814-1|duediligence-shell-20260814-header-review-1/);
 }
 assert.doesNotMatch(`${publicLanding}\n${landingJs}\n${examJs}`, /\bpractise\b/i);
 

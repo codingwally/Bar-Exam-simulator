@@ -72,7 +72,9 @@ assert.match(index, /<title>Due Diligence — A Friend on Your Journey Through t
 assert.match(index, /<html lang="en-PH">/);
 assert.match(index, /id="private-beta-landing"/);
 assert.match(index, /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
-assert.match(index, /class="pb-platform-composition"[\s\S]*class="pb-chamber-index"[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room/);
+assert.equal((index.match(/id="site-header"/g) || []).length, 1);
+assert.match(index, /id="site-header"[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room[\s\S]*class="pb-platform-composition"[\s\S]*class="pb-welcome-note"/);
+assert.doesNotMatch(index, /class="pb-chamber-index"/);
 assert.doesNotMatch(index, /class="pb-pillar-grid"|class="pb-pillar-card"/);
 assert.doesNotMatch(index, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
 assert.doesNotMatch(index, /A platform to express|Practice the reasoning\. Refine the writing\.|Explore Due Diligence|Learn How It Works|Pause Motion/i);

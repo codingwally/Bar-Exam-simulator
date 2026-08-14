@@ -123,6 +123,8 @@ import {
   EXAMINATION_LIMITS,
   ExaminationValidationError,
   examinationDatabaseError,
+  examinationText,
+  examinationUuid,
   extractUploadedQuestions,
   normalizeExaminationAdmin,
   normalizeExaminationCommand,
@@ -554,6 +556,7 @@ async function examinationRpc(env, functionName, body) {
     'subject_matter_catalog',
     'subject_matter_next_question',
     'subject_matter_performance',
+    'subject_matter_review_material',
     'release_sync_subject_matter',
     'release_sync_bar_feels',
     'release_sync_all_content',
@@ -3624,6 +3627,59 @@ async function authorizeExaminationAccess(env, userId, options = {}) {
   });
 }
 
+function sanitizeSubjectReviewMaterial(value, expectedAttemptId) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.status !== 'available') {
+    throw new ExaminationValidationError(
+      'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
+      'Verified review material is not available for this question.',
+      404,
+    );
+  }
+  let attemptId;
+  let questionId;
+  try {
+    attemptId = examinationUuid(value.attemptId, 'Attempt');
+    questionId = examinationUuid(value.questionId, 'Question');
+  } catch {
+    throw new ExaminationValidationError(
+      'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
+      'Verified review material is not available for this question.',
+      404,
+    );
+  }
+  const legalBasis = examinationText(value.legalBasis, 12_000);
+  const whyThisApplies = examinationText(value.whyThisApplies, 12_000);
+  const sources = Array.isArray(value.sources)
+    ? value.sources.filter((source) => typeof source === 'string').map((source) => source.trim())
+    : [];
+  const sourcesAreSafe = sources.length >= 1
+    && sources.length <= 12
+    && sources.length === value.sources.length
+    && sources.every((source) => {
+      try {
+        const url = new URL(source);
+        return url.protocol === 'https:' && source.length <= 2_048;
+      } catch {
+        return false;
+      }
+    });
+  if (attemptId !== expectedAttemptId || !legalBasis || !whyThisApplies || !sourcesAreSafe) {
+    throw new ExaminationValidationError(
+      'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
+      'Verified review material is not available for this question.',
+      404,
+    );
+  }
+  return {
+    status: 'available',
+    attemptId,
+    questionId,
+    legalBasis,
+    whyThisApplies,
+    sources,
+  };
+}
+
 async function handleExaminationQuery(request, env, origin, allowedOrigin) {
   await enforceExaminationRateLimit(request, env);
   const raw = await parseBoundedJson(request, 24_000);
@@ -3654,6 +3710,18 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
       p_limit: query.limit,
     });
     return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+  }
+  if (user && query.operation === 'subject_review_material') {
+    const result = await examinationRpc(env, 'subject_matter_review_material', {
+      p_user_id: user.id,
+      p_attempt_id: query.attemptId,
+    });
+    return jsonResponse(
+      { ok: true, data: sanitizeSubjectReviewMaterial(result, query.attemptId) },
+      200,
+      origin,
+      allowedOrigin,
+    );
   }
   if (user) {
     if (query.operation === 'catalog') {

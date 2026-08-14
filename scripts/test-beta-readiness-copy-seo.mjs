@@ -44,7 +44,7 @@ assert.doesNotMatch(index, /PH Bar Exam Simulator/);
 
 assert.match(
   index,
-  /<div class="brand-sub" id="brand-subtitle">Amicus in Itinere Iuris<\/div>/,
+  /<span class="brand-sub pb-brand-sub" id="brand-subtitle">Amicus in Itinere Iuris<\/span>/,
 );
 assert.match(
   index,
@@ -52,7 +52,7 @@ assert.match(
 );
 assert.match(
   index,
-  /<a class="brand" href="\/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">/,
+  /<a class="brand pb-brand" href="\/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">/,
 );
 assert.match(index, /\.brand:hover:not\(\[data-meaning-dismissed="true"\]\) \.brand-meaning/);
 assert.match(index, /\.brand:focus-visible:not\(\[data-meaning-dismissed="true"\]\) \.brand-meaning/);

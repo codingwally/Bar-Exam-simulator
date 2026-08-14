@@ -39,7 +39,7 @@ function deferred() {
 }
 
 const root = new URL('../', import.meta.url);
-const [html, js, css, build, store, examinations, featureLoader] = await Promise.all([
+const [html, js, css, build, store, examinations, featureLoader, publicLanding] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/duediligence-2026.js', root), 'utf8'),
   readFile(new URL('assets/duediligence-2026.css', root), 'utf8'),
@@ -47,6 +47,7 @@ const [html, js, css, build, store, examinations, featureLoader] = await Promise
   readFile(new URL('assets/examination-room-2-store.js', root), 'utf8'),
   readFile(new URL('assets/examinations.js', root), 'utf8'),
   readFile(new URL('assets/feature-loader.js', root), 'utf8'),
+  readFile(new URL('assets/private-beta-landing.js', root), 'utf8'),
 ]);
 
 assert.doesNotMatch(html, /<link[^>]+assets\/duediligence-2026\.css/);
@@ -90,14 +91,15 @@ assert.match(
   'Capped assessments must not render a contradictory point-by-point comparison.',
 );
 
-for (const [id, handler] of [
-  ['spa-bar-easy', 'openBarEasy'],
-  ['spa-chairs-case', 'openChairCases'],
-  ['spa-jurisprudence', 'openDoctrines'],
-  ['spa-case-digest', 'openAnchorCases'],
-  ['spa-examination-room', 'openExaminationRoom'],
+for (const [id, feature, handler] of [
+  ['spa-bar-easy', 'bar-easy', 'openBarEasy'],
+  ['spa-chairs-case', 'chair-cases', 'openChairCases'],
+  ['spa-jurisprudence', 'doctrines', 'openDoctrines'],
+  ['spa-case-digest', 'anchor-cases', 'openAnchorCases'],
+  ['spa-examination-room', 'examination-room', 'openExaminationRoom'],
 ]) {
-  assert.match(html, new RegExp(`id="${id}"[\\s\\S]*?onclick="${handler}\\(\\)"`));
+  assert.match(html, new RegExp(`id="${id}"[^>]*data-public-feature="${feature}"`));
+  assert.match(publicLanding, new RegExp(`feature === '${feature}'[\\s\\S]*?global\\.${handler}\\?\\.\\(\\)`));
   assert.match(js, new RegExp(`global\\.${handler} =`));
 }
 

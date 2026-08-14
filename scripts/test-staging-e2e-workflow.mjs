@@ -19,6 +19,7 @@ assert.doesNotMatch(workflow, /pull_request_target|\bpull_request\s*:/);
 assert.match(workflow, /environment:\s*staging-e2e/);
 assert.match(workflow, /github\.actor != 'dependabot\[bot\]'/);
 assert.match(workflow, /refs\/heads\/agent\/master-experience-release-20260813/);
+assert.match(workflow, /refs\/heads\/agent\/header-subject-review-correction-20260814/);
 assert.equal(
   (workflow.match(/STAGING_SUPABASE_SERVICE_ROLE_KEY:\s*\$\{\{ secrets\.STAGING_SUPABASE_SERVICE_ROLE_KEY \}\}/g) || []).length,
   3,

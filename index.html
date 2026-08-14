@@ -938,75 +938,86 @@
   }
 </style>
 <link rel="stylesheet" href="assets/phase2.css">
-<link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=design-correction-20260814-1">
+<link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=header-subject-review-20260814-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body class="private-beta-public">
 
-<div class="pb-landing" id="private-beta-landing">
-  <header class="pb-header">
-    <a class="pb-brand" href="/" data-public-home aria-label="Due Diligence — homepage">
-      <img class="pb-crest" src="assets/brand/icon-192.png" width="50" height="50"
+<header class="topbar pb-header pb-shared-header" id="site-header">
+    <a class="brand pb-brand" href="/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">
+      <img class="crest pb-crest" src="assets/brand/icon-192.png" width="50" height="50"
         alt="" aria-hidden="true">
       <span>
-        <span class="pb-brand-name">Due Diligence</span>
-        <span class="pb-brand-sub">Amicus in Itinere Iuris</span>
+        <span class="brand-name pb-brand-name">Due Diligence</span>
+        <span class="brand-sub pb-brand-sub" id="brand-subtitle">Amicus in Itinere Iuris</span>
       </span>
+      <span class="brand-meaning" id="brand-subtitle-meaning" role="tooltip">A friend on the journey of law.</span>
     </a>
-    <nav class="pb-chamber-nav" aria-label="Due Diligence chambers">
+    <button class="site-menu-toggle" id="site-menu-toggle" type="button"
+      aria-controls="spa-nav" aria-expanded="false">Menu</button>
+    <div class="topbar-actions">
+      <button class="pb-account-control" id="header-account-control" type="button"
+        data-public-action="docket" aria-label="Sign in or open account controls">Sign in</button>
+      <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>00:00:00</div>
+    </div>
+    <nav class="spa-nav pb-chamber-nav" id="spa-nav" aria-label="Primary navigation">
+      <div class="nav-audience-cluster" role="group" aria-label="Preparation chambers">
       <div class="pb-chamber-menu pb-chamber-academy">
         <div class="pb-chamber-split">
-          <a class="pb-chamber-link" href="#chamber/academy" data-pb-chamber-link="academy">The Academy</a>
+          <a class="pb-chamber-link" href="#chamber/academy" id="chamber-academy" data-pb-chamber-link="academy">The Academy</a>
           <button class="pb-chamber-toggle" type="button" aria-haspopup="menu"
             aria-expanded="false" aria-controls="pb-academy-menu" data-pb-menu-trigger="academy"
             aria-label="Show Academy features"><span aria-hidden="true">▾</span></button>
         </div>
         <div class="pb-chamber-dropdown" id="pb-academy-menu" role="menu" aria-label="The Academy" hidden>
-          <button type="button" role="menuitem" data-public-feature="mock">Mock Bar</button>
-          <button type="button" role="menuitem" data-public-feature="subject-matter">Subject Matter</button>
-          <button type="button" role="menuitem" data-public-feature="verdict">The Verdict</button>
+          <button id="spa-mock" type="button" role="menuitem" data-public-feature="mock">Mock Bar</button>
+          <button id="spa-subject-matter" type="button" role="menuitem" data-public-feature="subject-matter">Subject Matter</button>
+          <button id="spa-progress" type="button" role="menuitem" data-public-feature="verdict">The Verdict</button>
         </div>
       </div>
       <div class="pb-chamber-menu pb-chamber-commons">
         <div class="pb-chamber-split">
-          <a class="pb-chamber-link" href="#chamber/commons" data-pb-chamber-link="commons">The Commons</a>
+          <a class="pb-chamber-link" href="#chamber/commons" id="chamber-commons" data-pb-chamber-link="commons">The Commons</a>
           <button class="pb-chamber-toggle" type="button" aria-haspopup="menu"
             aria-expanded="false" aria-controls="pb-commons-menu" data-pb-menu-trigger="commons"
             aria-label="Show Commons features"><span aria-hidden="true">▾</span></button>
         </div>
         <div class="pb-chamber-dropdown" id="pb-commons-menu" role="menu" aria-label="The Commons" hidden>
-          <button type="button" role="menuitem" data-public-feature="bar-easy">Bar Easy</button>
-          <button type="button" role="menuitem" data-public-feature="quorum">Quorum</button>
-          <button type="button" role="menuitem" data-public-feature="retainer">Retainer</button>
+          <button id="spa-bar-easy" type="button" role="menuitem" data-public-feature="bar-easy">Bar Easy</button>
+          <button id="spa-community" type="button" role="menuitem" data-public-feature="quorum">Quorum</button>
+          <button id="spa-pricing" type="button" role="menuitem" data-public-feature="retainer">Retainer</button>
         </div>
       </div>
       <div class="pb-chamber-menu pb-chamber-barbound">
         <div class="pb-chamber-split">
-          <a class="pb-chamber-link" href="#chamber/barbound" data-pb-chamber-link="barbound">BarBound</a>
+          <a class="pb-chamber-link" href="#chamber/barbound" id="chamber-barbound" data-pb-chamber-link="barbound">BarBound</a>
           <button class="pb-chamber-toggle" type="button" aria-haspopup="menu"
             aria-expanded="false" aria-controls="pb-barbound-menu" data-pb-menu-trigger="barbound"
             aria-label="Show BarBound features"><span aria-hidden="true">▾</span></button>
         </div>
         <div class="pb-chamber-dropdown" id="pb-barbound-menu" role="menu" aria-label="BarBound" hidden>
-          <button type="button" role="menuitem" data-public-feature="bar-feels">Bar Feels</button>
-          <button type="button" role="menuitem" data-public-feature="chair-cases">2026 Bar Chair&rsquo;s Cases</button>
-          <button type="button" role="menuitem" data-public-feature="doctrines">Doctrines</button>
-          <button type="button" role="menuitem" data-public-feature="anchor-cases">Anchor Case Digests</button>
+          <button class="btn-angel" id="spa-bar-feels" type="button" role="menuitem" data-public-feature="bar-feels">Bar Feels</button>
+          <button class="btn-angel" id="spa-chairs-case" type="button" role="menuitem" data-public-feature="chair-cases">2026 Bar Chair&rsquo;s Cases</button>
+          <button class="btn-angel" id="spa-jurisprudence" type="button" role="menuitem" data-public-feature="doctrines">Doctrines</button>
+          <button class="btn-angel" id="spa-case-digest" type="button" role="menuitem" data-public-feature="anchor-cases">Anchor Case Digests</button>
         </div>
       </div>
-      <button class="pb-chamber-pill pb-chamber-room" type="button"
-        data-public-feature="examination-room">Examination Room</button>
-    </nav>
-    <nav class="pb-header-utilities" aria-label="Public utilities">
-      <a href="#support" data-pb-legal="support">Support</a>
-      <button type="button" data-public-action="docket">The Docket</button>
+      </div>
+      <div class="nav-utilities pb-header-utilities" role="group" aria-label="Website utilities">
+        <button class="pb-chamber-pill pb-chamber-room" id="spa-examination-room" type="button"
+          data-public-feature="examination-room">Examination Room</button>
+        <button id="spa-support" type="button" data-pb-legal="support">Support</button>
+        <button class="account-tab" id="btn-signin" type="button">The Docket</button>
+      </div>
     </nav>
   </header>
+
+<div class="pb-landing" id="private-beta-landing">
   <section class="pb-pillars" id="public-platform" aria-labelledby="pb-pillars-title">
     <div class="pb-pillars-heading">
       <p class="pb-eyebrow">Philippine legal education</p>
       <h1 id="pb-pillars-title">Choose how you want to prepare.</h1>
-      <p>Whether you are building confidence, reviewing doctrine, preparing for the Bar, or conducting a class examination, begin with the chamber made for that work.</p>
+      <p>Review the law, strengthen your legal reasoning, and prepare for the work ahead through the part of Due Diligence made for that purpose.</p>
     </div>
     <div class="pb-platform-composition">
       <figure class="pb-platform-visual">
@@ -1017,42 +1028,11 @@
         </picture>
         <figcaption>A serious place to practice, retain, and apply the law.</figcaption>
       </figure>
-      <nav class="pb-chamber-index" aria-label="Preparation chambers">
-        <a class="pb-chamber-entry" href="#chamber/academy">
-          <span class="pb-chamber-entry-copy">
-            <span class="pb-chamber-entry-features">Mock Bar &middot; Subject Matter &middot; The Verdict</span>
-            <strong>The Academy</strong>
-            <span>Build the habit of legal analysis through realistic essay practice, course-based review, and a private record that shows how your reasoning develops.</span>
-          </span>
-          <span class="pb-chamber-entry-action">Explore <span aria-hidden="true">&rarr;</span></span>
-        </a>
-        <a class="pb-chamber-entry" href="#chamber/commons">
-          <span class="pb-chamber-entry-copy">
-            <span class="pb-chamber-entry-features">Bar Easy &middot; Quorum &middot; Retainer</span>
-            <strong>The Commons</strong>
-            <span>Learn the law in language you can use, exchange ideas with the Due Diligence community, and manage the access that supports your study.</span>
-          </span>
-          <span class="pb-chamber-entry-action">Explore <span aria-hidden="true">&rarr;</span></span>
-        </a>
-        <a class="pb-chamber-entry" href="#chamber/barbound">
-          <span class="pb-chamber-entry-copy">
-            <span class="pb-chamber-entry-features">Bar Feels &middot; 2026 Bar Chair&rsquo;s Cases &middot; Doctrines &middot; Anchor Case Digests</span>
-            <strong>BarBound</strong>
-            <span>Move from study to performance through complete simulations, doctrine recall, Chair&rsquo;s Cases, and the decisions that anchor Philippine Bar subjects.</span>
-          </span>
-          <span class="pb-chamber-entry-action">Explore <span aria-hidden="true">&rarr;</span></span>
-        </a>
-        <button class="pb-chamber-entry" type="button" data-public-feature="examination-room">
-          <span class="pb-chamber-entry-copy">
-            <span class="pb-chamber-entry-features">Professor &middot; Beadle &middot; Student &middot; Exam Administrator</span>
-            <strong>Examination Room</strong>
-            <span>One dependable place for a class to prepare, conduct, take, and grade a law-school examination.</span>
-          </span>
-          <span class="pb-chamber-entry-action">Open <span aria-hidden="true">&rarr;</span></span>
-        </button>
-      </nav>
+      <div class="pb-welcome-note">
+        <p class="pb-welcome-rule">Begin with the chamber above that matches the work in front of you.</p>
+        <p>Move between focused review, shared learning, and full examination preparation without losing your place.</p>
+      </div>
     </div>
-    <p class="pb-continuity-assurance">Your private drafts, notes, answers, and progress belong to your account. Community posts and classroom records are shared only through the features you choose to use.</p>
   </section>
   <section class="pb-chamber-view" id="pb-chamber-view" aria-live="polite" hidden></section>
 
@@ -1174,83 +1154,6 @@
   <div class="marble"></div>
   <div class="glass"></div>
 </div>
-
-<header class="topbar">
-  <a class="brand" href="/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">
-    <img class="crest" src="assets/brand/icon-192.png" width="42" height="42"
-      alt="" aria-hidden="true">
-    <div>
-      <div class="brand-name">Due Diligence</div>
-      <div class="brand-sub" id="brand-subtitle">Amicus in Itinere Iuris</div>
-    </div>
-    <span class="brand-meaning" id="brand-subtitle-meaning" role="tooltip">A friend on the journey of law.</span>
-  </a>
-
-  <button class="site-menu-toggle" id="site-menu-toggle" type="button"
-    aria-controls="spa-nav" aria-expanded="false">Menu</button>
-  <nav class="spa-nav" id="spa-nav" aria-label="Primary navigation">
-    <div class="nav-audience-cluster" role="group" aria-label="Audience navigation">
-      <section class="nav-audience-group nav-group-academy" aria-labelledby="nav-academy-label">
-      <details class="nav-group-disclosure" name="audience-navigation">
-        <summary class="nav-group-label" id="nav-academy-label" aria-controls="nav-academy-menu" aria-expanded="false">The Academy</summary>
-        <div class="nav-group-items" id="nav-academy-menu" aria-labelledby="nav-academy-label">
-          <button class="spa-tab active" id="spa-mock" aria-current="page" title="Practice Philippine Bar-style questions."
-            onclick="showPage('mock', this)">Mock Bar</button>
-          <button class="spa-tab" id="spa-subject-matter" title="Open Subject Matter examinations."
-            onclick="openSubjectMatterMenu()">Subject Matter</button>
-          <button class="spa-tab" id="spa-progress" title="Review scores, feedback, and performance."
-            onclick="openAnalytics()">Verdict</button>
-        </div>
-      </details>
-      </section>
-
-      <section class="nav-audience-group nav-group-commons" aria-labelledby="nav-commons-label">
-      <details class="nav-group-disclosure" name="audience-navigation">
-        <summary class="nav-group-label" id="nav-commons-label" aria-controls="nav-commons-menu" aria-expanded="false">The Commons</summary>
-        <div class="nav-group-items" id="nav-commons-menu" aria-labelledby="nav-commons-label">
-          <button class="spa-tab" id="spa-bar-easy" type="button"
-            onclick="openBarEasy()">Bar Easy</button>
-          <button class="spa-tab" id="spa-community"
-            title="Open Quorum, the signed-in Due Diligence academic community."
-            aria-label="Open Quorum"
-            onclick="window.DueDiligenceQuorum?.open(this) || window.DueDiligenceLexForum?.open(this) || showPage('community', this)">Quorum</button>
-          <button class="spa-tab" id="spa-pricing" title="Manage your plan and platform access."
-            data-dd2-view="pricing">Retainer</button>
-        </div>
-      </details>
-      </section>
-
-      <section class="nav-audience-group nav-group-premium" aria-labelledby="nav-premium-label">
-      <details class="nav-group-disclosure" name="audience-navigation">
-        <summary class="nav-group-label" id="nav-premium-label" aria-controls="nav-premium-menu" aria-expanded="false">BarBound</summary>
-        <div class="nav-group-items" id="nav-premium-menu" aria-labelledby="nav-premium-label">
-          <button class="spa-tab btn-angel" id="spa-bar-feels" title="Bar Feels — Premium only."
-            aria-label="Bar Feels — Premium only." onclick="openPremiumBarFeels()">Bar Feels</button>
-          <button class="spa-tab btn-angel" id="spa-chairs-case" type="button"
-            onclick="openChairCases()">Chair’s Case</button>
-          <button class="spa-tab btn-angel" id="spa-jurisprudence" title="Review important legal developments and cases."
-            onclick="openDoctrines()">Doctrines</button>
-          <button class="spa-tab btn-angel" id="spa-case-digest" type="button"
-            onclick="openAnchorCases()">Case Digest</button>
-        </div>
-      </details>
-      </section>
-    </div>
-
-    <div class="nav-utilities" role="group" aria-label="Website utilities">
-      <button class="spa-tab" id="spa-examination-room" type="button"
-        onclick="openExaminationRoom()">Examination Room</button>
-      <button class="spa-tab" id="spa-support" title="Get technical and account assistance."
-        data-dd2-view="support">Support</button>
-      <button class="spa-tab account-tab" id="btn-signin" type="button"
-        title="Manage your profile, preferences, and activity.">The Docket</button>
-    </div>
-  </nav>
-
-  <div class="topbar-actions">
-    <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>00:00:00</div>
-  </div>
-</header>
 
 <main id="spa-root">
 <section id="page-mock" class="page active">
@@ -2501,7 +2404,7 @@ function setSiteMenuOpen(open) {
   if (!open) closeAudienceDropdowns({ restoreFocus: true });
   menu.classList.toggle('is-open', open);
   toggle.setAttribute('aria-expanded', String(open));
-  if (!open && focusedInsideMenu && window.innerWidth <= 700) {
+  if (!open && focusedInsideMenu && window.innerWidth <= 900) {
     toggle.focus({ preventScroll: true });
   }
 }
@@ -2560,11 +2463,20 @@ function setupBrandMeaningTooltip() {
 }
 
 function activatePrimaryMenuItem(id) {
-  document.querySelectorAll('.spa-tab').forEach((tab) => {
-    const active = tab.id === id;
-    tab.classList.toggle('active', active);
-    if (active) tab.setAttribute('aria-current', 'page');
-    else tab.removeAttribute('aria-current');
+  const header = document.getElementById('site-header');
+  if (!header) return;
+  const controls = header.querySelectorAll(
+    '[data-pb-chamber-link], [data-public-feature], [data-pb-legal], #btn-signin',
+  );
+  controls.forEach((control) => {
+    const active = Boolean(id) && control.id === id;
+    control.classList.toggle('active', active);
+    if (active) control.setAttribute('aria-current', 'page');
+    else control.removeAttribute('aria-current');
+  });
+  header.querySelectorAll('.pb-chamber-menu').forEach((menu) => {
+    const active = Boolean(id) && Boolean(menu.querySelector(`#${CSS.escape(id)}`));
+    menu.classList.toggle('is-active', active);
   });
 }
 
@@ -2634,11 +2546,12 @@ function setupEventListeners() {
   document.getElementById('spa-nav')?.addEventListener('click', (event) => {
     const control = event.target.closest('button,a');
     if (!control) return;
+    if (control.matches('[data-pb-menu-trigger]')) return;
     if (control.id !== 'spa-bar-feels') cancelPremiumNavigationIntent();
     setSiteMenuOpen(false);
   });
   window.addEventListener('resize', () => {
-    if (window.innerWidth > 700) setSiteMenuOpen(false);
+    if (window.innerWidth > 900) setSiteMenuOpen(false);
   });
   document.getElementById("tab-write").addEventListener("click", () => {
     document.getElementById("tab-write").classList.add("active");
@@ -4268,8 +4181,8 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase4-experience.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=master-experience-20260813-1&amp;release=design-correction-20260814-1"></script>
-<script src="assets/private-beta-landing.js?v=master-experience-20260813-1&amp;release=design-correction-20260814-1"></script>
+<script src="assets/feature-loader.js?v=master-experience-20260813-1&amp;release=header-subject-review-20260814-1"></script>
+<script src="assets/private-beta-landing.js?v=master-experience-20260813-1&amp;release=header-subject-review-20260814-1"></script>
 
 </body>
 </html>

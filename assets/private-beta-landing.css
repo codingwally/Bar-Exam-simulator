@@ -1517,3 +1517,231 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   }
 
 }
+
+/* The site header is intentionally shared by the public and signed-in shells. */
+#site-header.pb-shared-header {
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 14px 26px 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px 22px;
+}
+
+#site-header .pb-brand {
+  grid-column: 1;
+  grid-row: 1;
+  width: max-content;
+  max-width: 100%;
+  justify-self: start;
+}
+
+#site-header .topbar-actions {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+#site-header .pb-account-control {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(197, 160, 89, .46);
+  border-radius: 999px;
+  background: rgba(4, 19, 39, .7);
+  color: #f8edcf;
+  font: 700 11px/1 'Inter', Arial, sans-serif;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+#site-header .pb-account-control:hover {
+  border-color: rgba(221, 190, 120, .86);
+  background: rgba(16, 43, 73, .88);
+}
+
+#site-header .pb-account-control:focus-visible {
+  outline: 3px solid #f4d878;
+  outline-offset: 3px;
+}
+
+#site-header #spa-nav {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+  width: 100%;
+  min-height: 58px;
+}
+
+#site-header .nav-audience-cluster {
+  position: relative;
+  left: auto;
+  grid-column: 2;
+  grid-row: 1;
+  transform: none;
+}
+
+#site-header .pb-header-utilities {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: start;
+  justify-self: end;
+  padding-left: 16px;
+  border-left: 1px solid rgba(196, 164, 95, .24);
+}
+
+#site-header .pb-header-utilities button {
+  min-height: 40px;
+}
+
+#site-header .pb-chamber-menu.is-active .pb-chamber-split,
+#site-header [aria-current="page"] {
+  outline: 1px solid rgba(244, 216, 120, .88);
+  outline-offset: 2px;
+}
+
+.pb-welcome-note {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  padding: clamp(30px, 5vw, 76px);
+  color: #c6cfdb;
+}
+
+.pb-welcome-note p {
+  max-width: 520px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.72;
+}
+
+.pb-welcome-note .pb-welcome-rule {
+  padding-top: 22px;
+  border-top: 1px solid rgba(196, 164, 95, .54);
+  color: #f3ead6;
+  font: 500 clamp(23px, 2.4vw, 34px)/1.25 'Playfair Display', Georgia, serif;
+}
+
+@media (max-width: 1120px) and (min-width: 901px) {
+  #site-header #spa-nav {
+    grid-template-columns: 1fr;
+  }
+
+  #site-header .nav-audience-cluster,
+  #site-header .pb-header-utilities {
+    grid-column: 1;
+    justify-self: center;
+  }
+
+  #site-header .pb-header-utilities {
+    grid-row: 2;
+    padding: 10px 0 0;
+    border-top: 1px solid rgba(196, 164, 95, .24);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  #site-header.pb-shared-header {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    padding-inline: 16px;
+  }
+
+  #site-header .site-menu-toggle {
+    display: inline-flex;
+    grid-column: 2;
+    grid-row: 1;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  #site-header .topbar-actions {
+    grid-column: 3;
+  }
+
+  #site-header #spa-nav {
+    display: none;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    min-height: 0;
+  }
+
+  #site-header #spa-nav.is-open {
+    display: grid;
+  }
+
+  #site-header .nav-audience-cluster {
+    grid-column: 1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+
+  #site-header .pb-chamber-menu,
+  #site-header .pb-chamber-split {
+    width: 100%;
+  }
+
+  #site-header .pb-header-utilities {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: stretch;
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, .75fr) minmax(0, .9fr);
+    gap: 6px;
+    width: 100%;
+    padding: 12px 0 0;
+    border-top: 1px solid rgba(196, 164, 95, .24);
+    border-left: 0;
+  }
+
+  #site-header .pb-header-utilities button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding-inline: 7px;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 760px) {
+  .pb-platform-composition {
+    grid-template-columns: 1fr;
+  }
+
+  .pb-welcome-note {
+    padding: 28px 20px 34px;
+  }
+}
+
+@media (max-width: 560px) {
+  #site-header.pb-shared-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  #site-header .topbar-actions {
+    display: none;
+  }
+
+  #site-header .nav-audience-cluster {
+    grid-template-columns: 1fr;
+  }
+
+  #site-header .pb-chamber-link {
+    font-size: 11px;
+    text-align: left;
+  }
+
+  #site-header .pb-brand-sub {
+    font-size: 8px;
+    letter-spacing: .08em;
+  }
+}

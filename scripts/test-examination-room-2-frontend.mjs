@@ -13,18 +13,19 @@ const [html, frontend, css, build, phase2Config, stagingBuild, featureLoader] = 
 ]);
 
 // The owner explicitly approved a live beta-wide activation. The entry is
-// available to every admitted beta user, while the independent client and two
-// server gates remain fail-closed and role actions remain server-authorized.
+// available from the canonical shared header, while authentication plus the
+// independent client and two server gates remain fail-closed and role actions
+// remain server-authorized.
 assert.match(phase2Config, /examinationRoom2:\s*true/);
 assert.match(html, /id="spa-examination-room" type="button"/);
 assert.doesNotMatch(html, /id="spa-examination-room" type="button" hidden/);
-const authenticatedShellStart = html.indexOf('<div id="authenticated-app-shell" hidden inert aria-hidden="true">');
-const authenticatedShellEnd = html.indexOf('</div><!-- /authenticated-app-shell -->');
+const sharedHeaderStart = html.indexOf('<header class="topbar pb-header pb-shared-header" id="site-header">');
+const sharedHeaderEnd = html.indexOf('</header>', sharedHeaderStart);
 const examinationRoomEntry = html.indexOf('id="spa-examination-room"');
-assert.ok(authenticatedShellStart >= 0
-  && examinationRoomEntry > authenticatedShellStart
-  && examinationRoomEntry < authenticatedShellEnd,
-'the beta-wide entry must stay inside the admitted-user application shell');
+assert.ok(sharedHeaderStart >= 0
+  && examinationRoomEntry > sharedHeaderStart
+  && examinationRoomEntry < sharedHeaderEnd,
+'the beta-wide entry must stay inside the canonical shared header');
 assert.match(frontend, /exam_room:\s*'EXAMINATION_ROOM_2_ENABLED'/);
 assert.match(frontend, /const EXAMINATION_ROOM_BASE_FLAG = 'EXAMINATION_ROOM_ENABLED'/);
 const openBlock = frontend.slice(

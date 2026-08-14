@@ -25,6 +25,7 @@ export const EXAMINATION_QUERY_OPERATIONS = new Set([
   'subject_catalog',
   'subject_next',
   'subject_performance',
+  'subject_review_material',
 ]);
 
 export const EXAMINATION_COMMAND_OPERATIONS = new Set([
@@ -192,6 +193,8 @@ export function normalizeExaminationQuery(value) {
   } else if (operation === 'subject_performance') {
     normalized.subject = examinationText(payload.subject, 120) || null;
     normalized.limit = integer(payload.limit ?? 50, 'History limit', 1, 100);
+  } else if (operation === 'subject_review_material') {
+    normalized.attemptId = examinationUuid(payload.attemptId, 'Attempt');
   }
 
   return normalized;
@@ -821,6 +824,7 @@ export function examinationDatabaseError(error) {
     'EXAM_GRADING_JOB_NOT_FOUND',
     'EXAM_GRADING_JOB_CLOSED',
     'EXAM_ACTIVE_ATTEMPTS_EXIST',
+    'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
   ];
   const code = known.find((candidate) => message.includes(candidate));
   if (!code) return error;
@@ -848,6 +852,7 @@ export function examinationDatabaseError(error) {
     EXAM_GRADING_JOB_NOT_FOUND: 'The AI grading job could not be found.',
     EXAM_GRADING_JOB_CLOSED: 'The AI grading job is already closed.',
     EXAM_ACTIVE_ATTEMPTS_EXIST: 'This examination still has active attempts and cannot be closed.',
+    EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE: 'Verified review material is not available for this question.',
   };
   const status = [
     'EXAM_BETA_ACCESS_REQUIRED',

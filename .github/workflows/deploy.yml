@@ -77,6 +77,8 @@ jobs:
           node scripts/test-beta-readiness-copy-seo.mjs
           node scripts/test-lifetime-grade-ui.mjs
           node scripts/test-audience-menu.mjs
+          node scripts/test-design-correction-release.mjs
+          node scripts/test-subject-matter-consolidation.mjs
           node scripts/test-duediligence-2026-frontend.mjs
           node scripts/test-examination-room-2-frontend.mjs
           node scripts/test-examination-room-past-exam-removal.mjs

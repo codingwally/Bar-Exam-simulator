@@ -8,7 +8,8 @@ const phase4 = await fs.readFile(new URL('../assets/phase4-experience.js', impor
 
 assert.match(html, /id="private-beta-landing"/);
 assert.match(html, /id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
-assert.match(html, /class="pb-chamber-nav"[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room/);
+assert.match(html, /id="site-header"[\s\S]*class="spa-nav pb-chamber-nav"[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room/);
+assert.equal((html.match(/id="site-header"/g) || []).length, 1);
 assert.doesNotMatch(html, /id="welcome-state"|Prepare with purpose\.|id="start-practice"/,
   'The retired authenticated landing must be removed.');
 assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1">/, 'Mobile layouts require an explicit viewport declaration.');

@@ -764,6 +764,17 @@
         : 'Open The Docket to sign in.';
       signInButton.hidden = false;
     }
+    const headerAccount = document.getElementById('header-account-control');
+    if (headerAccount) {
+      headerAccount.textContent = signedIn ? 'Account' : 'Sign in';
+      headerAccount.title = signedIn
+        ? 'Open your account controls in The Docket.'
+        : 'Sign in to Due Diligence.';
+      headerAccount.setAttribute(
+        'aria-label',
+        signedIn ? 'Open signed-in account controls' : 'Sign in to Due Diligence',
+      );
+    }
     const badge = document.getElementById('dd2-guest-badge');
     if (badge) {
       badge.classList.toggle('is-visible', !signedIn && Boolean(state.guestUsage));

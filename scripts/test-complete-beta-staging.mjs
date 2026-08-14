@@ -257,7 +257,7 @@ try {
     Object.keys(reviewMaterial.body.data).sort(),
     [
       'assistanceKnown', 'assisted', 'attemptId', 'citation', 'classification', 'doctrine', 'explanationSource',
-      'governingProvision', 'jurisprudence', 'legalBasis', 'questionId',
+      'governingProvision', 'jurisprudence', 'legalBasis', 'legalReview', 'questionId',
       'reviewMaterialRevealedAt', 'sources', 'status', 'suggestedAnswer', 'teachingModel',
       'whyThisAnswerIsCorrect',
     ].sort(),
@@ -279,6 +279,15 @@ try {
       'finalConclusion', 'materialExceptionsOrLimits',
     ].sort(),
   );
+  assert.deepEqual(
+    Object.keys(reviewMaterial.body.data.legalReview).sort(),
+    [
+      'applicationToFacts', 'authorityReferences', 'controllingLawAndDoctrine',
+      'finalConclusion', 'jurisprudence', 'materialExceptionsOrLimits',
+    ].sort(),
+  );
+  assert.ok(reviewMaterial.body.data.legalReview.controllingLawAndDoctrine.trim().length >= 20);
+  assert.ok(reviewMaterial.body.data.legalReview.applicationToFacts.trim().length >= 20);
   assert.ok(reviewMaterial.body.data.sources.every((source) => /^https:\/\//.test(source)));
   const repeatedReview = await examinationCommand(student, 'subject_reveal_review', { attemptId });
   assert.equal(

@@ -149,7 +149,14 @@ assert.doesNotMatch(worker, /examinationRpc\(env, 'subject_matter_review_materia
   'The retired read-only review operation must not bypass assisted classification.');
 assert.match(reviewCore, /Use only the CURATED CORPUS/);
 assert.match(reviewCore, /fallbackSubjectMatterTeachingExplanation/);
+assert.match(reviewCore, /buildSubjectMatterLegalReview/);
+assert.match(reviewCore, /entry\.caseName \|\| entry\.title \|\| entry\.case/,
+  'Stored case values must be canonicalized instead of discarded.');
+assert.match(reviewCore, /isBareSubjectMatterDoctrine/,
+  'Bare yes/no content must not be presented as doctrine.');
 assert.match(examinationsUi, /Reveal Complete Review/);
+assert.match(examinationsUi, /Controlling Law &amp; Doctrine/);
+assert.match(examinationsUi, /Application and Material Limits/);
 assert.match(examinationsUi, /operation:\s*'subject_reveal_review'/);
 assert.match(examinationsCore, /SUBJECT_MATTER_INVENTORY_KEYS/);
 const subjectSurface = examinationsUi.slice(

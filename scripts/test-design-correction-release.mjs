@@ -101,10 +101,16 @@ assert.doesNotMatch(subjectRoom, /modelAnswer|suggestedAnswer|legalBasis|caseLaw
   'The pre-submission Subject Matter renderer must not receive released answer or authority fields.');
 assert.match(examJs, /if \(subjectPractice\) \{[\s\S]*?subjectPracticeRoomMarkup\([\s\S]*?return;/);
 
-for (const control of ['Reveal Complete Review', 'Suggested Answer', 'Complete Legal Basis',
-  'Why This Answer Is Correct', 'Verified official sources']) {
+for (const control of ['Reveal Complete Review', 'Suggested Answer', 'Controlling Law &amp; Doctrine',
+  'Cited Authorities', 'Related Jurisprudence', 'Application and Material Limits',
+  'Verified official sources']) {
   assert.ok(subjectReview.includes(control), `missing complete-review control: ${control}`);
 }
+assert.doesNotMatch(subjectReview,
+  /<h5>Governing provision<\/h5>|<h5>Doctrine<\/h5>|<h5>Citation<\/h5>/,
+  'The review must not repeat the same raw authority under three low-value labels.');
+assert.match(subjectReview, /material\?\.legalReview/,
+  'The review must prefer the normalized high-value legalReview response.');
 assert.match(subjectFixture, /Reveal Complete Review/);
 assert.equal(
   (subjectRoom.match(/data-subject-review-reveal/g) || []).length,

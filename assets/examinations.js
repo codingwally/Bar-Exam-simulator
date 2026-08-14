@@ -2100,13 +2100,72 @@
     </section>`;
   }
 
-  function subjectReviewExplanationMarkup(explanation) {
+  function normalizedSubjectReviewText(value) {
+    return String(value || '').trim().toLowerCase().normalize('NFKD')
+      .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function isLowValueSubjectReviewText(value) {
+    const text = String(value || '').trim();
+    return !text
+      || /^(?:answer\s*:\s*)?(?:yes|no)\.?$/i.test(text)
+      || /^(?:n\/?a|n\.\s*a\.|none|not applicable)(?:\s*[-\u2013\u2014:]\s*.*)?\.?$/i.test(text);
+  }
+
+  function uniqueSubjectReviewValues(values) {
+    const seen = new Set();
+    return (Array.isArray(values) ? values : []).map((value) => String(value || '').trim())
+      .filter((value) => {
+        const key = normalizedSubjectReviewText(value);
+        if (!key || seen.has(key) || isLowValueSubjectReviewText(value)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  function resolvedSubjectLegalReview(material) {
+    const supplied = material?.legalReview && typeof material.legalReview === 'object'
+      ? material.legalReview
+      : {};
+    const explanation = material?.whyThisAnswerIsCorrect || {};
+    const jurisprudence = (Array.isArray(supplied.jurisprudence)
+      ? supplied.jurisprudence
+      : (Array.isArray(material?.jurisprudence) ? material.jurisprudence : []))
+      .map((entry) => {
+        if (typeof entry === 'string') return { caseName: entry, citation: '', doctrine: '' };
+        return {
+          caseName: String(entry?.caseName || entry?.title || entry?.case || '').trim(),
+          citation: String(entry?.citation || '').trim(),
+          doctrine: String(entry?.doctrine || entry?.holding || entry?.disposition || '').trim(),
+        };
+      })
+      .filter((entry) => !isLowValueSubjectReviewText(entry.caseName || entry.citation)
+        && (/\b(?:v|vs)\.?\s+/i.test(entry.caseName)
+          || /^(?:in re|re:|matter of)\b/i.test(entry.caseName)
+          || /\b(?:G\.?\s*R\.?|A\.?\s*C\.?|A\.?\s*M\.?|B\.?\s*M\.?)\s*(?:No\.?|Nos\.?)\s*/i.test(entry.citation)));
+    return {
+      controllingLawAndDoctrine: String(supplied.controllingLawAndDoctrine
+        || explanation.controllingLawAndElements || material?.legalBasis || '').trim(),
+      authorityReferences: uniqueSubjectReviewValues(
+        supplied.authorityReferences?.length
+          ? supplied.authorityReferences
+          : [material?.legalBasis, material?.governingProvision, material?.citation],
+      ),
+      jurisprudence,
+      applicationToFacts: String(supplied.applicationToFacts
+        || explanation.applicationToFacts || '').trim(),
+      materialExceptionsOrLimits: String(supplied.materialExceptionsOrLimits
+        || explanation.materialExceptionsOrLimits || '').trim(),
+      finalConclusion: String(supplied.finalConclusion
+        || explanation.finalConclusion || '').trim(),
+    };
+  }
+
+  function subjectReviewApplicationMarkup(review) {
     const sections = [
-      ['Direct answer', explanation?.directAnswer],
-      ['Controlling law and elements', explanation?.controllingLawAndElements],
-      ['Application to the exact facts', explanation?.applicationToFacts],
-      ['Material exceptions or limits', explanation?.materialExceptionsOrLimits],
-      ['Final conclusion', explanation?.finalConclusion],
+      ['Application to the exact facts', review?.applicationToFacts],
+      ['Material exceptions or limits', review?.materialExceptionsOrLimits],
+      ['Final conclusion', review?.finalConclusion],
     ].filter(([, value]) => String(value || '').trim());
     if (!sections.length) return '<p class="dd-study-hold">The approved teaching explanation is temporarily unavailable.</p>';
     return `<div class="dd-subject-teaching-sections">${sections.map(([label, value]) => `<section>
@@ -2115,18 +2174,21 @@
   }
 
   function completeSubjectReviewContent(material) {
-    const jurisprudence = (Array.isArray(material?.jurisprudence) ? material.jurisprudence : [])
-      .map((entry) => (typeof entry === 'string'
-        ? entry
-        : [entry?.caseName || entry?.title, entry?.citation, entry?.doctrine || entry?.holding]
-          .filter(Boolean).join(' — ')))
-      .filter(Boolean);
-    const supporting = [
-      material?.governingProvision ? `<div><h5>Governing provision</h5><div class="legal-explanation">${escapeHtml(material.governingProvision)}</div></div>` : '',
-      material?.doctrine ? `<div><h5>Doctrine</h5><div class="legal-explanation">${escapeHtml(material.doctrine)}</div></div>` : '',
-      material?.citation ? `<div><h5>Citation</h5><div class="legal-explanation">${escapeHtml(material.citation)}</div></div>` : '',
-      jurisprudence.length ? `<div><h5>Related jurisprudence</h5><ul>${jurisprudence.map((entry) => `<li>${escapeHtml(entry)}</li>`).join('')}</ul></div>` : '',
-    ].filter(Boolean).join('');
+    const review = resolvedSubjectLegalReview(material);
+    const authorityMarkup = review.authorityReferences.length
+      ? `<section class="dd-subject-review-section"><h4>Cited Authorities</h4>
+          <ul class="dd-subject-review-citations">${review.authorityReferences
+    .map((authority) => `<li>${escapeHtml(authority)}</li>`).join('')}</ul></section>`
+      : '';
+    const jurisprudenceMarkup = review.jurisprudence.length
+      ? `<section class="dd-subject-review-section"><h4>Related Jurisprudence</h4>
+          <div class="dd-subject-review-cases">${review.jurisprudence.map((entry) => `<article>
+            ${entry.caseName ? `<h5>${escapeHtml(entry.caseName)}</h5>` : ''}
+            ${entry.citation ? `<p class="dd-subject-review-case-citation">${escapeHtml(entry.citation)}</p>` : ''}
+            ${entry.doctrine && !isLowValueSubjectReviewText(entry.doctrine)
+    ? `<div class="legal-explanation">${escapeHtml(entry.doctrine)}</div>` : ''}
+          </article>`).join('')}</div></section>`
+      : '';
     return `<div class="dd-subject-review-complete" data-subject-review-content tabindex="-1">
       <header class="dd-subject-review-revealed-heading">
         <div><p class="dd-exam-kicker">Complete review unlocked</p><h3>Study the approved legal material.</h3></div>
@@ -2136,11 +2198,12 @@
       </header>
       <section class="dd-subject-review-section"><h4>Suggested Answer</h4>
         <div class="dd-subject-review-prose">${escapeHtml(material.suggestedAnswer)}</div></section>
-      <section class="dd-subject-review-section"><h4>Complete Legal Basis</h4>
-        <div class="dd-subject-review-prose">${escapeHtml(material.legalBasis)}</div>
-        ${supporting ? `<div class="dd-subject-review-authorities">${supporting}</div>` : ''}</section>
-      <section class="dd-subject-review-section"><h4>Why This Answer Is Correct</h4>
-        ${subjectReviewExplanationMarkup(material.whyThisAnswerIsCorrect)}</section>
+      <section class="dd-subject-review-section"><h4>Controlling Law &amp; Doctrine</h4>
+        <div class="dd-subject-review-prose">${escapeHtml(review.controllingLawAndDoctrine)}</div></section>
+      ${authorityMarkup}
+      ${jurisprudenceMarkup}
+      <section class="dd-subject-review-section"><h4>Application and Material Limits</h4>
+        ${subjectReviewApplicationMarkup(review)}</section>
       ${completeSubjectReviewSources(material.sources)}
       <p class="dd-subject-review-source-note">The explanation is limited to Due Diligence's approved question-bank material. It does not add independent authorities.</p>
     </div>`;

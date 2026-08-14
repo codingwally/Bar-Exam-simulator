@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildSubjectMatterLegalReview,
   buildSubjectMatterTeachingPrompt,
   fallbackSubjectMatterTeachingExplanation,
+  normalizeSubjectMatterJurisprudence,
   publicSubjectMatterReviewPayload,
   sanitizeSubjectMatterRevealRecord,
   validateSubjectMatterTeachingExplanation,
@@ -80,9 +82,52 @@ test('rejects a new URL or authority outside the curated corpus', () => {
 test('fallback stays complete when Gemini is unavailable', () => {
   const fallback = fallbackSubjectMatterTeachingExplanation(record);
   assert.match(fallback.directAnswer, /^No\./);
-  assert.match(fallback.controllingLawAndElements, /Revised Penal Code/);
+  assert.match(fallback.controllingLawAndElements, /political-offense doctrine/);
   assert.match(fallback.applicationToFacts, /personal revenge/i);
   assert.match(fallback.finalConclusion, /prosecuted separately/i);
+});
+
+test('repairs the SM-CPII-H08 low-value authority stack without inventing law', () => {
+  const repeatedAuthority = 'Rules of Court, Rule 68, Sections 2-3; Act No. 3135, Section 6';
+  const material = sanitizeSubjectMatterRevealRecord({
+    ...record,
+    prompt: 'After a Rule 68 foreclosure sale is confirmed, the mortgagor demands a one-year statutory redemption period merely because the property is land. Is the demand necessarily correct?',
+    suggestedAnswer: 'No. In ordinary judicial foreclosure under Rule 68, the mortgagor has equity of redemption—payment before confirmation under the judgment\'s terms—but no statutory right of redemption after confirmation unless a statute grants one, as in specified bank or institutional mortgage situations. Extrajudicial foreclosure under Act No. 3135 generally carries statutory redemption. The remedy therefore depends on the foreclosure mode, parties, and special law, not simply on the collateral being land.',
+    legalBasis: repeatedAuthority,
+    governingProvision: repeatedAuthority,
+    doctrine: 'No.',
+    jurisprudence: [{
+      case: 'N/A — provision/rule-based candidate',
+      citation: repeatedAuthority,
+    }],
+    citation: repeatedAuthority,
+  }, attemptId);
+  const fallback = fallbackSubjectMatterTeachingExplanation(material);
+  const review = buildSubjectMatterLegalReview(material, fallback);
+
+  assert.equal(material.doctrine, '');
+  assert.deepEqual(material.jurisprudence, []);
+  assert.doesNotMatch(review.controllingLawAndDoctrine, /^No\.?$/i);
+  assert.match(review.controllingLawAndDoctrine, /equity of redemption/i);
+  assert.match(review.controllingLawAndDoctrine, /Extrajudicial foreclosure/i);
+  assert.match(review.applicationToFacts, /depends on the foreclosure mode/i);
+  assert.equal(review.authorityReferences.length, 1);
+  assert.equal(review.authorityReferences[0], repeatedAuthority);
+  assert.deepEqual(review.jurisprudence, []);
+});
+
+test('canonicalizes the stored case key and retains a genuine G.R. citation', () => {
+  assert.deepEqual(normalizeSubjectMatterJurisprudence([{
+    case: 'Tañada v. Tuvera',
+    citation: 'G.R. No. L-63915, December 29, 1986',
+  }]), [{
+    caseName: 'Tañada v. Tuvera',
+    citation: 'G.R. No. L-63915, December 29, 1986',
+  }]);
+  assert.deepEqual(normalizeSubjectMatterJurisprudence([{
+    case: 'Batas Pambansa Blg. 22 — Bouncing Checks Law',
+    citation: 'B.P. Blg. 22',
+  }]), [], 'A statute title must not be presented as jurisprudence.');
 });
 
 test('post-submission reveal remains unassisted and does not imply a grading penalty', () => {
@@ -100,5 +145,7 @@ test('post-submission reveal remains unassisted and does not imply a grading pen
   assert.equal(payload.assistanceKnown, true);
   assert.equal(payload.classification, 'unassisted');
   assert.equal(payload.reviewMaterialRevealedAt, '2026-08-14T06:00:00.000Z');
+  assert.match(payload.legalReview.controllingLawAndDoctrine, /political-offense doctrine/);
+  assert.equal(payload.legalReview.authorityReferences.length > 0, true);
   assert.equal('score' in payload, false);
 });

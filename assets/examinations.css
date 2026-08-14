@@ -2580,6 +2580,9 @@ details[open] > summary .dd-subject-chevron {
 }
 
 .dd-subject-editorial .fb-btn {
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 14px;
   border-color: rgba(212, 170, 79, .46);
   color: #e7edf4;
   background: #062140;

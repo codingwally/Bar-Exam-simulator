@@ -7,8 +7,8 @@ import {
 } from '../worker/subject-matter-placement-manifest.mjs';
 
 const [
-  migration, transportMigration, reviewMigration, preflight, worker, releaseCore, examinationsUi,
-  examinationsCss, examinerCore, examinationsCore,
+  migration, transportMigration, reviewMigration, reviewNormalizationMigration, preflight, worker,
+  releaseCore, examinationsUi, examinationsCss, examinerCore, examinationsCore,
 ] = await Promise.all([
   readFile(new URL(
     '../supabase/migrations/20260811004000_subject_matter_two_bank_consolidation.sql',
@@ -20,6 +20,10 @@ const [
   ), 'utf8'),
   readFile(new URL(
     '../supabase/migrations/20260814065530_subject_matter_review_material.sql',
+    import.meta.url,
+  ), 'utf8'),
+  readFile(new URL(
+    '../supabase/migrations/20260814083000_subject_matter_review_source_normalization.sql',
     import.meta.url,
   ), 'utf8'),
   readFile(new URL(
@@ -76,6 +80,15 @@ for (const contract of [
   /revoke all on function public\.subject_matter_review_material\(uuid, uuid\)\s+from public, anon, authenticated/,
   /grant execute on function public\.subject_matter_review_material\(uuid, uuid\)\s+to service_role/,
 ]) assert.match(reviewMigration, contract);
+for (const contract of [
+  /create or replace function public\.subject_matter_review_material/,
+  /when 'string' then btrim\(source\.entry #>> '\{\}'\)/,
+  /when 'object' then btrim\(source\.entry->>'url'\)/,
+  /jsonb_agg\(normalized\.url order by source\.ordinality\)/,
+  /normalized\.url !~ '\^https:\/\/'/,
+  /revoke all on function public\.subject_matter_review_material\(uuid, uuid\)\s+from public, anon, authenticated/,
+  /grant execute on function public\.subject_matter_review_material\(uuid, uuid\)\s+to service_role/,
+]) assert.match(reviewNormalizationMigration, contract);
 assert.match(worker, /release_stage_subject_matter_v2/);
 assert.match(worker, /release_finalize_all_content_v2/);
 assert.match(worker, /await stageParts\('rows', subjectSource\.rows, 100\)/);
@@ -139,6 +152,7 @@ assert.doesNotMatch(
 assert.doesNotMatch(migration, /grant\s+(select|insert|update|delete).*\b(anon|authenticated)\b/i);
 assert.doesNotMatch(transportMigration, /grant\s+(select|insert|update|delete).*\b(anon|authenticated)\b/i);
 assert.doesNotMatch(reviewMigration, /grant\s+execute.*\b(anon|authenticated)\b/i);
+assert.doesNotMatch(reviewNormalizationMigration, /grant\s+execute.*\b(anon|authenticated)\b/i);
 
 console.log(JSON.stringify({
   courses: SUBJECT_MATTER_COURSES.length,

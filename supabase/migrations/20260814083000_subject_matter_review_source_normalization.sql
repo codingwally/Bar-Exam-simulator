@@ -1,8 +1,7 @@
--- Subject Matter review material is intentionally separated from the general
--- examination payload. The Worker calls this service-role-only function only
--- after authenticating the browser user. The function independently verifies
--- attempt ownership, the current entitlement, the Subject Matter track, and
--- exact content-revision integrity before returning a narrow allowlisted shape.
+-- Normalize canonical source snapshots at the narrow Subject Matter review
+-- boundary. Existing immutable snapshots store either URL strings or source
+-- descriptor objects. Only the HTTPS URL is returned to the authenticated
+-- attempt owner; titles, types, model answers, and inventory remain private.
 
 create or replace function public.subject_matter_review_material(
   p_user_id uuid,

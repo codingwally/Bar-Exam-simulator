@@ -826,6 +826,9 @@
       else {
         showLanding({ accessAllowed: true });
         renderPublicRoute({ focus: normalizedHash().startsWith('chamber/') });
+        if (requestedApplicationRoute() === 'examination-room') {
+          await openProtectedFeature('examination-room');
+        }
       }
       return;
     }

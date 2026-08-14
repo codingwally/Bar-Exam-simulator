@@ -76,6 +76,11 @@ assert.match(script, /privateBetaGate === true/);
 assert.match(config, /privateBetaGate: false/);
 assert.match(script, /if \(!gateEnabled\)[\s\S]*applicationRouteRequested\(\)[\s\S]*showApplication\(\)[\s\S]*showLanding\(\{ accessAllowed: true \}\)/,
   'The disabled admission gate must retain the public homepage at root and open only explicit application routes.');
+assert.match(
+  script,
+  /async function initialize\(\)[\s\S]*if \(!gateEnabled\)[\s\S]*requestedApplicationRoute\(\) === 'examination-room'[\s\S]*await openProtectedFeature\('examination-room'\)/,
+  'Initial signed-out Examination Room deep links must open the protected sign-in flow when the retired admission gate is disabled.',
+);
 assert.match(script, /global\.DueDiligencePublicHome = Object\.freeze/);
 assert.match(script, /mock: '#mock-bar'/, 'Mock Bar sign-in returns must use the canonical route.');
 assert.match(

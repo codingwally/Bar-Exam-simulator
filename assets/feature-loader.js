@@ -121,7 +121,6 @@
   }
 
   global.DueDiligenceFeatureLoader = Object.freeze({ loadForFeature, loadGroup });
-  global.openPremiumBarFeels = deferredFunction('bar-feels', 'openPremiumBarFeels');
   global.openBarEasy = deferredFunction('bar-easy', 'openBarEasy');
   global.openChairCases = deferredFunction('chair-cases', 'openChairCases');
   global.openDoctrines = deferredFunction('doctrines', 'openDoctrines');

@@ -375,7 +375,7 @@ async function openCatalog(page, track) {
         && window.DueDiligenceExaminations?.getState?.().track === selectedTrack
       ),
       track,
-      { timeout: 30_000 },
+      { timeout: 15_000 },
     );
   } catch (error) {
     const safeNavigationState = await page.evaluate(() => ({

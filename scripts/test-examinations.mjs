@@ -17,6 +17,7 @@ const [
   preflight,
   productionWorkerConfig,
   stagingWorkerConfig,
+  featureLoader,
 ] = await Promise.all([
   read('index.html'),
   read('assets/examinations.js'),
@@ -30,6 +31,7 @@ const [
   read('supabase/review/examinations_production_preflight.sql'),
   read('worker/wrangler.toml'),
   read('worker/wrangler.staging.toml'),
+  read('assets/feature-loader.js'),
 ]);
 const seedDocument = JSON.parse(seedJsonText);
 const seed = seedDocument.rows;
@@ -53,6 +55,11 @@ assert.match(html, /id="spa-bar-feels"[^>]*aria-label="Bar Feels — Premium onl
 assert.doesNotMatch(html, /menu-premium-badge/);
 assert.match(html, /function openSubjectMatterMenu\(\)[\s\S]*openPerSubject\(\)/);
 assert.match(html, /function openPremiumBarFeels\(\)[\s\S]*planCode === 'premium'[\s\S]*subscription\.status === 'active'[\s\S]*openView\?\.\('pricing'\)[\s\S]*openBarFeels\(\)/);
+assert.doesNotMatch(
+  featureLoader,
+  /global\.openPremiumBarFeels\s*=/,
+  'The lazy loader must not overwrite the premium access controller defined by the application shell.',
+);
 assert.equal((html.match(/class="[^"]*\bbtn-angel\b[^"]*"/g) || []).length, 4);
 assert.match(html, /\.btn-angel\{[\s\S]*linear-gradient\(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B\)[\s\S]*animation:sheen 3\.2s linear infinite/);
 assert.match(html, /@keyframes sheen\{0%\{background-position:200% 0;\}100%\{background-position:-40% 0;\}\}/);

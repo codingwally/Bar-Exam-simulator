@@ -469,7 +469,11 @@ async function completeSubjectMatter(page) {
   assert.match(practiceRoomText, /Reveal Complete Review/i);
   assert.match(practiceRoomText, /Assisted \/ Open-book/i);
   assert.doesNotMatch(practiceRoomText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
-  assert.doesNotMatch(practiceRoomText, /Suggested Answer|Complete Legal Basis|Why This Answer Is Correct|Official source \d/i);
+  assert.equal(
+    await practiceRoom.locator('[data-subject-review-content]').count(),
+    0,
+    'The complete review content must not exist in the DOM before the reveal operation succeeds.',
+  );
   assert.doesNotMatch(practiceRoomText, /\bA\.?L\.?A\.?C\.?\b/i);
   const attemptId = await page.evaluate(
     () => window.DueDiligenceExaminations.getState().activeAttemptId,

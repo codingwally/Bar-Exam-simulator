@@ -390,6 +390,10 @@ async function openCatalog(page, track) {
   }
   const rootSelector = track === 'bar_feels' ? '#dd-bar-feels-app' : '#dd-per-subject-app';
   await page.locator(rootSelector).waitFor({ state: 'visible', timeout: 15_000 });
+  await page.locator(rootSelector).getByRole('heading', {
+    name: track === 'bar_feels' ? 'Bar Feels' : 'Subject Matter',
+    exact: true,
+  }).waitFor({ state: 'visible', timeout: 15_000 });
 }
 
 async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {

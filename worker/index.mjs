@@ -3712,10 +3712,27 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
     return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
   }
   if (user && query.operation === 'subject_review_material') {
-    const result = await examinationRpc(env, 'subject_matter_review_material', {
-      p_user_id: user.id,
-      p_attempt_id: query.attemptId,
-    });
+    let result;
+    try {
+      result = await examinationRpc(env, 'subject_matter_review_material', {
+        p_user_id: user.id,
+        p_attempt_id: query.attemptId,
+      });
+    } catch (error) {
+      const message = String(error?.message || '');
+      const code = String(error?.code || '');
+      if (
+        /EXAM_(?:ATTEMPT_NOT_FOUND|ACCESS_REQUIRED|SUBJECT_REVIEW_MATERIAL_UNAVAILABLE)/.test(code)
+        || /EXAM_(?:ATTEMPT_NOT_FOUND|ACCESS_REQUIRED|SUBJECT_REVIEW_MATERIAL_UNAVAILABLE)/.test(message)
+      ) {
+        throw new ExaminationValidationError(
+          'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
+          'Verified review material is not available for this question.',
+          404,
+        );
+      }
+      throw error;
+    }
     return jsonResponse(
       { ok: true, data: sanitizeSubjectReviewMaterial(result, query.attemptId) },
       200,

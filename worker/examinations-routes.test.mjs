@@ -214,6 +214,27 @@ test('Subject Matter review material rejects malformed database output without l
   });
 });
 
+test('Subject Matter review material masks cross-user attempt ownership failures', async () => {
+  await withFetchMock(async (url) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_review_material`);
+    return Response.json(
+      { message: 'EXAM_ATTEMPT_NOT_FOUND' },
+      { status: 400 },
+    );
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'subject_review_material',
+      attemptId,
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 404);
+    assert.equal(body.error.code, 'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE');
+    assert.doesNotMatch(JSON.stringify(body), /ATTEMPT_NOT_FOUND/);
+  });
+});
+
 test('examination query rejects a missing authenticated session before database access', async () => {
   await withFetchMock(async (url) => {
     if (String(url).endsWith('/auth/v1/user')) {

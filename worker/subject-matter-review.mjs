@@ -43,7 +43,7 @@ function looksLikeCaseName(value) {
   const text = cleanText(value, 2_000);
   if (!text || isSubjectMatterJurisprudencePlaceholder(text)) return false;
   return /\b(?:v|vs)\.?\s+/i.test(text)
-    || /^(?:in re|in the matter of|matter of)\b/i.test(text);
+    || /^(?:in re\b|re\s*:|in the matter of\b|matter of\b|ex parte\b)/i.test(text);
 }
 
 function uniqueTextValues(values, { splitSemicolons = false } = {}) {
@@ -94,7 +94,8 @@ export function normalizeSubjectMatterJurisprudence(value) {
     const caseName = cleanText(entry.caseName || entry.title || entry.case, 4_000);
     const citation = cleanText(entry.citation, 4_000);
     if (looksLikeCaseName(caseName)) normalized.caseName = caseName;
-    if (!isSubjectMatterJurisprudencePlaceholder(citation)) normalized.citation = citation;
+    if (!normalized.caseName && looksLikeCaseName(citation)) normalized.caseName = citation;
+    if (looksLikeDocketCitation(citation)) normalized.citation = citation;
     ['doctrine', 'holding', 'disposition'].forEach((key) => {
       const content = cleanText(entry[key], 4_000);
       if (content && !isBareSubjectMatterDoctrine(content)
@@ -228,10 +229,24 @@ function extractedAuthorityReferences(value) {
     /\bSection\s+\d+[A-Za-z0-9().-]*/gi,
     /\bRule\s+\d+[A-Za-z0-9().-]*/gi,
     /\b(?:Republic Act|R\.?\s*A\.?)\s*(?:No\.?\s*)?\d+/gi,
+    /\b(?:Act|Commonwealth Act|C\.?\s*A\.?)\s*(?:No\.?\s*)\d+/gi,
+    /\b(?:Batas Pambansa|B\.?\s*P\.?)\s*(?:Blg\.?|No\.?)\s*\d+/gi,
+    /\b(?:Presidential Decree|P\.?\s*D\.?)\s*(?:No\.?\s*)?\d+/gi,
+    /\b(?:Executive Order|E\.?\s*O\.?)\s*(?:No\.?\s*)?\d+/gi,
+    /\b(?:Administrative Matter|A\.?\s*M\.?)\s*(?:No\.?\s*)[A-Za-z0-9-]+/gi,
+    /\b(?:Civil Code|Revised Penal Code|Labor Code|Family Code|Rules of Court|Constitution)\b/gi,
     /\bG\.?\s*R\.?\s*(?:No\.?|Nos\.?)\s*[A-Za-z0-9&., -]{2,80}/gi,
     /\b[A-Z][A-Za-z.' -]{1,55}\s+v(?:s)?\.?\s+[A-Z][A-Za-z.' -]{1,55}/g,
+    /\b(?:[A-Z][A-Za-z'-]+\s+){1,5}(?:[Dd]octrine|[Rr]ule|[Tt]est|[Pp]rinciple)\b/g,
   ];
   return [...new Set(patterns.flatMap((pattern) => text.match(pattern) || []))];
+}
+
+function isSubstantiveLegalExplanation(value) {
+  const text = cleanText(value, 20_000);
+  if (isBareSubjectMatterDoctrine(text) || normalizedWords(text).length < 10) return false;
+  return /\b(?:is|are|was|were|has|have|had|may|must|shall|requires?|allows?|permits?|prohibits?|bars?|applies?|provides?|means?|grants?|entitles?|limits?|depends?|distinguish(?:es|ed)?|governs?|controls?)\b/i
+    .test(text);
 }
 
 export function validateSubjectMatterTeachingExplanation(value, material) {
@@ -291,31 +306,35 @@ function withoutBareOpeningAnswer(value) {
 
 function substantiveFallbackRule(material) {
   const legalBasisSection = sectionFromSuggestedAnswer(material.suggestedAnswer, 'Legal Basis');
-  if (legalBasisSection && !isBareSubjectMatterDoctrine(legalBasisSection)
-      && normalizedWords(legalBasisSection).length >= 12) return legalBasisSection;
+  if (isSubstantiveLegalExplanation(legalBasisSection)) return legalBasisSection;
   const ruleSentences = answerSentences(material.suggestedAnswer).filter((sentence, index) => (
     !(index === 0 && isBareSubjectMatterDoctrine(sentence))
     && !/^(?:therefore|thus|hence|accordingly|consequently|the remedy\b)/i.test(sentence)
   ));
   const extractedRule = ruleSentences.join(' ');
-  if (normalizedWords(extractedRule).length >= 12) return extractedRule;
+  if (isSubstantiveLegalExplanation(extractedRule)) return extractedRule;
   const answerWithoutBareOpening = withoutBareOpeningAnswer(material.suggestedAnswer);
-  if (normalizedWords(answerWithoutBareOpening).length >= 12) return answerWithoutBareOpening;
-  return uniqueTextValues([
+  if (isSubstantiveLegalExplanation(answerWithoutBareOpening)) return answerWithoutBareOpening;
+  const authorities = uniqueTextValues([
     material.legalBasis,
     material.governingProvision,
     material.citation,
-  ]).join('\n\n');
+  ]).join('; ');
+  return `The approved suggested answer supplies the controlling explanation: ${answerWithoutBareOpening}`
+    + (authorities ? ` The approved authorities are ${authorities}.` : '');
 }
 
 function substantiveFallbackApplication(material) {
   const application = sectionFromSuggestedAnswer(material.suggestedAnswer, 'Application');
-  if (application && !isBareSubjectMatterDoctrine(application)) return application;
+  if (isSubstantiveLegalExplanation(application)) return application;
   const candidates = answerSentences(material.suggestedAnswer).filter((sentence) => (
     /\b(?:because|therefore|thus|hence|here|on these facts|under the facts|depends|not simply|not merely)\b/i
       .test(sentence)
   ));
-  return candidates.join(' ') || substantiveFallbackRule(material);
+  const extractedApplication = candidates.join(' ');
+  if (isSubstantiveLegalExplanation(extractedApplication)) return extractedApplication;
+  const approvedAnswer = withoutBareOpeningAnswer(material.suggestedAnswer);
+  return `Applied to the facts stated in the question, the approved answer explains: ${approvedAnswer}`;
 }
 
 function substantiveFallbackLimits(material) {

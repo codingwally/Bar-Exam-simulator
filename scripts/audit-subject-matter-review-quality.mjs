@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import {
+  buildSubjectMatterLegalReview,
+  fallbackSubjectMatterTeachingExplanation,
   isBareSubjectMatterDoctrine,
   isSubjectMatterJurisprudencePlaceholder,
   normalizeSubjectMatterJurisprudence,
+  sanitizeSubjectMatterRevealRecord,
 } from '../worker/subject-matter-review.mjs';
 import {
   SUBJECT_MATTER_RELEASE_SNAPSHOT,
@@ -13,10 +16,13 @@ const [headers, ...values] = SUBJECT_MATTER_RELEASE_VALUES;
 const headerIndex = new Map(headers.map((header, index) => [String(header || '').trim(), index]));
 const requiredHeaders = [
   'Question ID',
+  'Essay Question',
+  'Suggested Answer',
   'Legal Basis / Provision',
   'Controlling Doctrine',
   'Jurisprudence / Case',
   'Citation / G.R. No.',
+  'Source URL',
 ];
 requiredHeaders.forEach((header) => assert.equal(headerIndex.has(header), true, `Missing ${header}.`));
 assert.equal(
@@ -72,6 +78,37 @@ assert.equal(
   0,
   'A provision-only placeholder must never survive as jurisprudence.',
 );
+const h08Material = sanitizeSubjectMatterRevealRecord({
+  status: 'available',
+  attemptId: '11111111-1111-4111-8111-111111111111',
+  questionId: '22222222-2222-4222-8222-222222222222',
+  prompt: field(h08, 'Essay Question'),
+  suggestedAnswer: field(h08, 'Suggested Answer'),
+  legalBasis: field(h08, 'Legal Basis / Provision'),
+  governingProvision: field(h08, 'Legal Basis / Provision'),
+  doctrine: field(h08, 'Controlling Doctrine'),
+  jurisprudence: [{
+    case: field(h08, 'Jurisprudence / Case'),
+    citation: field(h08, 'Citation / G.R. No.'),
+  }],
+  citation: field(h08, 'Citation / G.R. No.'),
+  sources: [field(h08, 'Source URL')],
+  assisted: true,
+  assistanceKnown: true,
+  reviewMaterialRevealedAt: '2026-08-15T00:00:00.000Z',
+}, '11111111-1111-4111-8111-111111111111');
+const h08Review = buildSubjectMatterLegalReview(
+  h08Material,
+  fallbackSubjectMatterTeachingExplanation(h08Material),
+);
+assert.doesNotMatch(h08Review.controllingLawAndDoctrine, /^No\.?$/i);
+assert.match(h08Review.controllingLawAndDoctrine, /equity of redemption/i);
+assert.match(h08Review.controllingLawAndDoctrine, /extrajudicial foreclosure/i);
+assert.match(h08Review.applicationToFacts, /foreclosure mode/i);
+assert.deepEqual(h08Review.jurisprudence, []);
+assert.equal(h08Review.authorityReferences.length, 1);
+assert.equal((h08Review.authorityReferences.join('\n').match(/Rule 68/gi) || []).length, 1);
+assert.equal((h08Review.authorityReferences.join('\n').match(/Act No\. 3135/gi) || []).length, 1);
 
 console.log(JSON.stringify({
   status: 'SUBJECT_MATTER_REVIEW_QUALITY_AUDIT_COMPLETE',

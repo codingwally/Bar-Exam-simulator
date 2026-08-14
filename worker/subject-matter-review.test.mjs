@@ -77,6 +77,14 @@ test('rejects a new URL or authority outside the curated corpus', () => {
     ...base,
     controllingLawAndElements: 'Article 999 of the Civil Code independently controls.',
   }, record), /authority outside/);
+  assert.throws(() => validateSubjectMatterTeachingExplanation({
+    ...base,
+    controllingLawAndElements: 'Act No. 9999 independently grants the claimed remedy.',
+  }, record), /authority outside/);
+  assert.throws(() => validateSubjectMatterTeachingExplanation({
+    ...base,
+    controllingLawAndElements: 'The Imaginary Reliance Doctrine independently controls the result.',
+  }, record), /authority outside/);
 });
 
 test('fallback stays complete when Gemini is unavailable', () => {
@@ -128,6 +136,33 @@ test('canonicalizes the stored case key and retains a genuine G.R. citation', ()
     case: 'Batas Pambansa Blg. 22 — Bouncing Checks Law',
     citation: 'B.P. Blg. 22',
   }]), [], 'A statute title must not be presented as jurisprudence.');
+  assert.deepEqual(normalizeSubjectMatterJurisprudence([{
+    case: 'People v. Sample',
+    citation: 'B.P. Blg. 22',
+  }]), [{ caseName: 'People v. Sample' }], 'A statute must not be mislabeled as a case citation.');
+  assert.deepEqual(normalizeSubjectMatterJurisprudence([{
+    case: 'Re: Anonymous Bar Matter',
+    citation: 'B.M. No. 1234',
+  }]), [{
+    caseName: 'Re: Anonymous Bar Matter',
+    citation: 'B.M. No. 1234',
+  }]);
+});
+
+test('citation-only legal basis falls back to the substantive approved answer', () => {
+  const material = sanitizeSubjectMatterRevealRecord({
+    ...record,
+    suggestedAnswer: 'No. The remedy is unavailable because the approved rule requires a condition that the stated facts do not satisfy.',
+    legalBasis: 'Rule 68, Section 3; Act No. 3135, Section 6',
+    governingProvision: 'Rule 68, Section 3; Act No. 3135, Section 6',
+    doctrine: 'No.',
+    jurisprudence: [],
+    citation: 'Rule 68, Section 3; Act No. 3135, Section 6',
+  }, attemptId);
+  const fallback = fallbackSubjectMatterTeachingExplanation(material);
+  assert.match(fallback.controllingLawAndElements, /approved rule requires a condition/i);
+  assert.match(fallback.applicationToFacts, /stated facts do not satisfy/i);
+  assert.doesNotMatch(fallback.controllingLawAndElements, /^Rule 68/i);
 });
 
 test('post-submission reveal remains unassisted and does not imply a grading penalty', () => {

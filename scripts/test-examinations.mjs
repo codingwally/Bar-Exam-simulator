@@ -68,6 +68,8 @@ assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
 assert.match(html, /assets\/feature-loader\.js\?v=exam-room-ux-20260814-1/);
 assert.match(html, /Mock Bar/);
 assert.match(frontend, /Subject Matter Examinations/);
+assert.match(styles, /\.dd-subject-study-page \.dd-subject-study-copy > \.dd-exam-kicker\s*\{[\s\S]*?color:\s*#e6bd59/,
+  'The dark Subject Matter course page must keep its session kicker at WCAG AA contrast.');
 assert.match(frontend, /async function restoreRoute\(track, options = \{\}\)/);
 assert.match(frontend, /restoreRoute,/);
 assert.match(frontend, /active\?\.examination\?\.track !== expectedTrack/);

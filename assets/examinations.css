@@ -3003,6 +3003,10 @@ details[open] > summary .dd-subject-chevron {
   color: #c7d3e1;
 }
 
+.dd-subject-study-page .dd-subject-study-copy > .dd-exam-kicker {
+  color: #e6bd59;
+}
+
 .dd-subject-study-page .dd-subject-study-mark,
 .dd-subject-study-page .dd-subject-study-meta dt,
 .dd-subject-study-page .dd-practice-note summary {

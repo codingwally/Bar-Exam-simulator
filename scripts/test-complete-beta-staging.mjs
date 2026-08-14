@@ -251,19 +251,42 @@ try {
   const attemptId = started.body.data.attempt.attemptId;
   const questionId = started.body.data.questions[0].questionId;
 
-  console.log('STAGING_GATE: revealing exact owner-bound Subject Matter review material');
-  const reviewMaterial = await examinationQuery(student, 'subject_review_material', { attemptId });
+  console.log('STAGING_GATE: revealing exact owner-bound Subject Matter complete review');
+  const reviewMaterial = await examinationCommand(student, 'subject_reveal_review', { attemptId });
   assert.deepEqual(
     Object.keys(reviewMaterial.body.data).sort(),
-    ['attemptId', 'legalBasis', 'questionId', 'sources', 'status', 'whyThisApplies'].sort(),
+    [
+      'assistanceKnown', 'assisted', 'attemptId', 'citation', 'classification', 'doctrine', 'explanationSource',
+      'governingProvision', 'jurisprudence', 'legalBasis', 'questionId',
+      'reviewMaterialRevealedAt', 'sources', 'status', 'suggestedAnswer', 'teachingModel',
+      'whyThisAnswerIsCorrect',
+    ].sort(),
   );
   assert.equal(reviewMaterial.body.data.status, 'available');
   assert.equal(reviewMaterial.body.data.attemptId, attemptId);
   assert.equal(reviewMaterial.body.data.questionId, questionId);
-  assert.ok(reviewMaterial.body.data.legalBasis.trim().length > 0);
-  assert.ok(reviewMaterial.body.data.whyThisApplies.trim().length > 0);
+  assert.equal(reviewMaterial.body.data.assisted, true);
+  assert.equal(reviewMaterial.body.data.assistanceKnown, true);
+  assert.equal(reviewMaterial.body.data.classification, 'assisted');
+  assert.ok(Number.isFinite(Date.parse(reviewMaterial.body.data.reviewMaterialRevealedAt)));
+  assert.ok(reviewMaterial.body.data.suggestedAnswer.trim().length >= 20);
+  assert.ok(reviewMaterial.body.data.legalBasis.trim().length >= 20);
+  assert.ok(reviewMaterial.body.data.doctrine.trim().length > 0);
+  assert.deepEqual(
+    Object.keys(reviewMaterial.body.data.whyThisAnswerIsCorrect).sort(),
+    [
+      'applicationToFacts', 'controllingLawAndElements', 'directAnswer',
+      'finalConclusion', 'materialExceptionsOrLimits',
+    ].sort(),
+  );
   assert.ok(reviewMaterial.body.data.sources.every((source) => /^https:\/\//.test(source)));
-  const peerReview = await examinationQuery(peer, 'subject_review_material', { attemptId }, [404]);
+  const repeatedReview = await examinationCommand(student, 'subject_reveal_review', { attemptId });
+  assert.equal(
+    repeatedReview.body.data.reviewMaterialRevealedAt,
+    reviewMaterial.body.data.reviewMaterialRevealedAt,
+    'Repeated reveal must preserve the original assisted-classification timestamp.',
+  );
+  const peerReview = await examinationCommand(peer, 'subject_reveal_review', { attemptId }, [404]);
   assert.equal(peerReview.body.error.code, 'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE');
 
   await examinationCommand(student, 'save_response', {
@@ -323,6 +346,40 @@ try {
   ]) {
     assert.equal(confidentialCount in next.body.data, false);
   }
+
+  console.log('STAGING_GATE: proving post-submission reveal remains unassisted');
+  const secondTab = tabToken();
+  const secondStarted = await examinationCommand(student, 'start_attempt', {
+    versionId: next.body.data.setup.versionId,
+    timerMode: 'none',
+    requestKey: requestKey('start_unassisted'),
+    tabToken: secondTab,
+  }, [201]);
+  const secondAttemptId = secondStarted.body.data.attempt.attemptId;
+  const secondQuestionId = secondStarted.body.data.questions[0].questionId;
+  await examinationCommand(student, 'save_response', {
+    attemptId: secondAttemptId,
+    questionId: secondQuestionId,
+    tabToken: secondTab,
+    answerText: alacAnswer(),
+    expectedRevision: 0,
+    flagged: false,
+  });
+  await examinationCommand(student, 'submit_attempt', {
+    attemptId: secondAttemptId,
+    tabToken: secondTab,
+    requestKey: requestKey('submit_unassisted'),
+    confirmed: true,
+  });
+  const postSubmissionReview = await examinationCommand(
+    student,
+    'subject_reveal_review',
+    { attemptId: secondAttemptId },
+  );
+  assert.equal(postSubmissionReview.body.data.assisted, false);
+  assert.equal(postSubmissionReview.body.data.assistanceKnown, true);
+  assert.equal(postSubmissionReview.body.data.classification, 'unassisted');
+  assert.ok(Number.isFinite(Date.parse(postSubmissionReview.body.data.reviewMaterialRevealedAt)));
 
   const performance = await examinationQuery(student, 'subject_performance', {
     subject: criminalLaw.subject,
@@ -391,6 +448,8 @@ try {
       noRepeatAfterSubmission: true,
       timerModes: 3,
       assessmentScore: assessment.aiScore,
+      assistedRevealDurable: true,
+      postSubmissionRevealUnassisted: true,
     },
     barFeels: {
       destinations: 6,

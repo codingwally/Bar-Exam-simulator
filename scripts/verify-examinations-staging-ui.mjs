@@ -380,6 +380,47 @@ async function openCatalog(page, track) {
   );
 }
 
+async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    const layout = await page.evaluate(() => {
+      const writing = document.querySelector('.dd-subject-editorial-pane.is-writing');
+      const review = document.querySelector('.dd-subject-editorial-pane.is-review-panel');
+      const grid = document.querySelector('.dd-subject-editorial-grid');
+      const buttons = [...document.querySelectorAll(
+        '.dd-subject-editorial button:not([hidden]), .dd-subject-editorial a:not([hidden])',
+      )].filter((element) => getComputedStyle(element).display !== 'none');
+      const writingRect = writing?.getBoundingClientRect();
+      const reviewRect = review?.getBoundingClientRect();
+      return {
+        overflow: document.documentElement.scrollWidth > innerWidth,
+        writingLeft: writingRect?.left ?? null,
+        writingTop: writingRect?.top ?? null,
+        reviewLeft: reviewRect?.left ?? null,
+        reviewTop: reviewRect?.top ?? null,
+        writingOverflowY: writing ? getComputedStyle(writing).overflowY : null,
+        reviewOverflowY: review ? getComputedStyle(review).overflowY : null,
+        gridColumns: grid ? getComputedStyle(grid).gridTemplateColumns : null,
+        shortControls: buttons
+          .map((element) => ({ text: element.textContent.trim().slice(0, 60), height: element.getBoundingClientRect().height }))
+          .filter((entry) => entry.height > 0 && entry.height < 43),
+      };
+    });
+    const label = `${stateLabel}-${viewport.width}x${viewport.height}`;
+    results.responsive[label] = layout;
+    assert.equal(layout.overflow, false, `${label} must not overflow horizontally.`);
+    assert.deepEqual(layout.shortControls, [], `${label} must retain 44px touch targets.`);
+    if (viewport.width > 900) {
+      assert.ok(layout.writingLeft < layout.reviewLeft, `${label} must keep writing on the left.`);
+      assert.match(layout.writingOverflowY, /auto|scroll/);
+      assert.match(layout.reviewOverflowY, /auto|scroll/);
+    } else {
+      assert.ok(layout.writingTop < layout.reviewTop, `${label} must stack writing before review.`);
+    }
+    await runAccessibilityAudit(page, label);
+  }
+}
+
 async function completeSubjectMatter(page) {
   await completeOnboardingIfShown(page);
   await openCatalog(page, 'per_subject');
@@ -408,19 +449,59 @@ async function completeSubjectMatter(page) {
   await practiceRoom.locator('.dd-subject-editorial-grid').waitFor({ state: 'visible' });
   assert.equal(await practiceRoom.locator('.dd-subject-editorial-pane.is-writing').count(), 1);
   assert.equal(
-    await practiceRoom.locator('.dd-subject-editorial-pane.is-coaching.dd-subject-coaching-locked').count(),
+    await practiceRoom.locator('.dd-subject-editorial-pane.is-coaching.is-review-panel').count(),
     1,
   );
   const practiceRoomText = await practiceRoom.innerText();
   assert.match(practiceRoomText, /WRITING TIME/i);
   assert.match(practiceRoomText, /\b\d{2}:\d{2}\b/);
+  assert.match(practiceRoomText, /Reveal Complete Review/i);
+  assert.match(practiceRoomText, /Assisted \/ Open-book/i);
   assert.doesNotMatch(practiceRoomText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
-  assert.doesNotMatch(practiceRoomText, /Reveal suggested legal basis|Official sources/i);
+  assert.doesNotMatch(practiceRoomText, /Suggested Answer|Complete Legal Basis|Why This Answer Is Correct|Official source \d/i);
   assert.doesNotMatch(practiceRoomText, /\bA\.?L\.?A\.?C\.?\b/i);
   const attemptId = await page.evaluate(
     () => window.DueDiligenceExaminations.getState().activeAttemptId,
   );
   assert.match(attemptId, /^[0-9a-f-]{36}$/i);
+
+  await verifySubjectWorkspaceLayout(page, 'subject-locked', [
+    { width: 1_366, height: 768 },
+    { width: 1_440, height: 900 },
+    { width: 768, height: 1_024 },
+    { width: 375, height: 812 },
+    { width: 320, height: 568 },
+  ]);
+  await page.setViewportSize({ width: 1_440, height: 900 });
+
+  const revealButton = practiceRoom.locator('[data-subject-review-reveal]');
+  await revealButton.click();
+  const completeReview = practiceRoom.locator('[data-subject-review-content]');
+  await completeReview.waitFor({ state: 'visible', timeout: 150_000 });
+  const completeReviewText = await completeReview.innerText();
+  assert.match(completeReviewText, /Suggested Answer/i);
+  assert.match(completeReviewText, /Complete Legal Basis/i);
+  assert.match(completeReviewText, /Why This Answer Is Correct/i);
+  assert.match(completeReviewText, /Verified official sources/i);
+  assert.match(completeReviewText, /Assisted \/ Open-book/i);
+  const legalBasisText = await completeReview.locator('.dd-subject-review-section')
+    .filter({ hasText: 'Complete Legal Basis' })
+    .locator('.dd-subject-review-prose')
+    .innerText();
+  assert.ok(legalBasisText.length >= 20, 'Subject Matter must reveal a substantive approved legal basis.');
+  assert.doesNotMatch(legalBasisText, /Not released|general writing tip|Review the controlling provision/i);
+  const teachingText = await completeReview.locator('.dd-subject-review-section')
+    .filter({ hasText: 'Why This Answer Is Correct' })
+    .innerText();
+  assert.ok(teachingText.length >= 100, 'Subject Matter must reveal a substantial source-bound teaching explanation.');
+  assert.ok(await completeReview.locator('a[href^="https://"]').count() >= 1,
+    'Subject Matter must reveal at least one linked official source.');
+
+  await verifySubjectWorkspaceLayout(page, 'subject-revealed', [
+    { width: 1_366, height: 768 },
+    { width: 375, height: 812 },
+  ]);
+  await page.setViewportSize({ width: 1_440, height: 900 });
 
   await page.locator('#dd-answer-editor').fill(subjectMatterAnswer);
   await waitForSaved(page);
@@ -439,37 +520,22 @@ async function completeSubjectMatter(page) {
   scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5$/));
   const verdictText = await subjectResult.innerText();
   assert.match(verdictText, /Evaluation overview/i);
-  assert.match(verdictText, /Reveal suggested legal basis/i);
-  assert.match(verdictText, /Guidance: why this basis applies/i);
-  assert.match(verdictText, /Suggested discussion/i);
-  assert.match(verdictText, /Suggested answer/i);
-  assert.match(verdictText, /Official sources/i);
+  assert.match(verdictText, /Suggested Answer/i);
+  assert.match(verdictText, /Complete Legal Basis/i);
+  assert.match(verdictText, /Why This Answer Is Correct/i);
+  assert.match(verdictText, /Verified official sources/i);
+  assert.match(verdictText, /Assisted \/ Open-book/i);
   assert.doesNotMatch(verdictText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
   assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
   assert.doesNotMatch(verdictText, /\bA\.?L\.?A\.?C\.?\b/i);
+  assert.equal(await subjectResult.locator('[data-subject-review-content]').count(), 1,
+    'The complete review must persist beside the graded result without another reveal.');
 
-  const disclosure = (label) => subjectResult.locator('.dd-study-disclosures details')
-    .filter({ hasText: label })
-    .first();
-  const basisDetails = disclosure('Reveal suggested legal basis');
-  await basisDetails.locator('summary').click();
-  const basisText = (await basisDetails.innerText()).replace('Reveal suggested legal basis', '').trim();
-  assert.ok(basisText.length >= 20, 'Subject Matter must reveal a substantive approved legal basis.');
-  assert.doesNotMatch(basisText, /Not released|general writing tip|Review the controlling provision/i);
-
-  const guidanceDetails = disclosure('Guidance: why this basis applies');
-  await guidanceDetails.locator('summary').click();
-  const guidanceText = (await guidanceDetails.innerText())
-    .replace('Guidance: why this basis applies', '')
-    .trim();
-  assert.ok(guidanceText.length >= 60, 'Subject Matter guidance must explain why the basis applies.');
-  assert.doesNotMatch(guidanceText, /Specific guidance unavailable|general writing tip/i);
-
-  const sourceDetails = disclosure('Official sources');
-  await sourceDetails.locator('summary').click();
-  const sourceLinks = sourceDetails.locator('a[href^="https://"]');
-  assert.ok(await sourceLinks.count() >= 1, 'Subject Matter must reveal at least one linked official source.');
-  assert.doesNotMatch(await sourceDetails.innerText(), /No verified source was returned/i);
+  await verifySubjectWorkspaceLayout(page, 'subject-graded', [
+    { width: 1_366, height: 768 },
+    { width: 375, height: 812 },
+  ]);
+  await page.setViewportSize({ width: 1_440, height: 1_100 });
 
   return { track: 'per_subject', attemptId, scores };
 }

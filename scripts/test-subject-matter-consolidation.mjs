@@ -7,8 +7,9 @@ import {
 } from '../worker/subject-matter-placement-manifest.mjs';
 
 const [
-  migration, transportMigration, reviewMigration, reviewNormalizationMigration, preflight, worker,
-  releaseCore, examinationsUi, examinationsCss, examinerCore, examinationsCore,
+  migration, transportMigration, reviewMigration, reviewNormalizationMigration, assistedReviewMigration,
+  preflight, worker, reviewCore, releaseCore, examinationsUi, examinationsCss, examinerCore,
+  examinationsCore,
 ] = await Promise.all([
   readFile(new URL(
     '../supabase/migrations/20260811004000_subject_matter_two_bank_consolidation.sql',
@@ -27,10 +28,15 @@ const [
     import.meta.url,
   ), 'utf8'),
   readFile(new URL(
+    '../supabase/migrations/20260814131651_subject_matter_assisted_review.sql',
+    import.meta.url,
+  ), 'utf8'),
+  readFile(new URL(
     '../supabase/review/subject_matter_two_bank_production_preflight.sql',
     import.meta.url,
   ), 'utf8'),
   readFile(new URL('../worker/index.mjs', import.meta.url), 'utf8'),
+  readFile(new URL('../worker/subject-matter-review.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../worker/release-content-core.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../assets/examinations.js', import.meta.url), 'utf8'),
   readFile(new URL('../assets/examinations.css', import.meta.url), 'utf8'),
@@ -89,6 +95,21 @@ for (const contract of [
   /revoke all on function public\.subject_matter_review_material\(uuid, uuid\)\s+from public, anon, authenticated/,
   /grant execute on function public\.subject_matter_review_material\(uuid, uuid\)\s+to service_role/,
 ]) assert.match(reviewNormalizationMigration, contract);
+for (const contract of [
+  /add column if not exists review_material_revealed_at timestamptz/,
+  /add column if not exists review_material_revealed_before_submission boolean/,
+  /create or replace function public\.subject_matter_reveal_review/,
+  /attempt\.user_id = p_user_id/,
+  /question\.content_hash = version_question\.snapshot_hash/,
+  /question\.publication_ready is true/,
+  /lower\(question\.review_status\) in \('approved', 'owner_override'\)/,
+  /v_attempt\.status in \('in_progress', 'review'\)/,
+  /review_material_revealed_at is null/,
+  /revoke all on function public\.subject_matter_reveal_review\(uuid, uuid\)\s+from public, anon, authenticated/,
+  /grant execute on function public\.subject_matter_reveal_review\(uuid, uuid\)\s+to service_role/,
+  /unassistedAverageScore/,
+  /a\.review_material_revealed_before_submission is false/,
+]) assert.match(assistedReviewMigration, contract);
 assert.match(worker, /release_stage_subject_matter_v2/);
 assert.match(worker, /release_finalize_all_content_v2/);
 assert.match(worker, /await stageParts\('rows', subjectSource\.rows, 100\)/);
@@ -122,8 +143,14 @@ assert.match(examinerCore, /modelAnswerSectionsForQuestion/);
 assert.match(examinerCore, /'procedure'[\s\S]*'doctrine'[\s\S]*'mixed'/);
 assert.match(worker, /sanitizeSubjectMatterCatalog\(result\)/);
 assert.match(worker, /sanitizeSubjectMatterSelection\(result\)/);
-assert.match(worker, /sanitizeSubjectReviewMaterial\(result, query\.attemptId\)/);
-assert.match(worker, /examinationRpc\(env, 'subject_matter_review_material'/);
+assert.match(worker, /examinationRpc\(env, 'subject_matter_reveal_review'/);
+assert.match(worker, /command\.operation === 'subject_reveal_review'/);
+assert.doesNotMatch(worker, /examinationRpc\(env, 'subject_matter_review_material'/,
+  'The retired read-only review operation must not bypass assisted classification.');
+assert.match(reviewCore, /Use only the CURATED CORPUS/);
+assert.match(reviewCore, /fallbackSubjectMatterTeachingExplanation/);
+assert.match(examinationsUi, /Reveal Complete Review/);
+assert.match(examinationsUi, /operation:\s*'subject_reveal_review'/);
 assert.match(examinationsCore, /SUBJECT_MATTER_INVENTORY_KEYS/);
 const subjectSurface = examinationsUi.slice(
   examinationsUi.indexOf('function renderPerSubject'),

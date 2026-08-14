@@ -134,6 +134,14 @@ import {
   sanitizeSubjectMatterSelection,
 } from './examinations-core.mjs';
 import {
+  SUBJECT_MATTER_TEACHING_SCHEMA,
+  buildSubjectMatterTeachingPrompt,
+  fallbackSubjectMatterTeachingExplanation,
+  publicSubjectMatterReviewPayload,
+  sanitizeSubjectMatterRevealRecord,
+  validateSubjectMatterTeachingExplanation,
+} from './subject-matter-review.mjs';
+import {
   ReleaseContentError,
   SUBJECT_MATTER_CSV_URL,
   SUBJECT_MATTER_SHEET_RANGE,
@@ -164,6 +172,7 @@ const MAX_CORRECTIONS_PER_WINDOW = 5;
 const MAX_SUPPORT_REQUESTS_PER_WINDOW = 4;
 const DUPLICATE_TTL_MS = 20 * 1000;
 const GEMINI_TIMEOUT_MS = 45 * 1000;
+const SUBJECT_MATTER_TEACHING_TIMEOUT_MS = 8 * 1000;
 const GEMINI_TRANSIENT_ATTEMPTS = 2;
 const GEMINI_RETRY_DELAY_MS = 750;
 const rateWindows = new Map();
@@ -556,7 +565,7 @@ async function examinationRpc(env, functionName, body) {
     'subject_matter_catalog',
     'subject_matter_next_question',
     'subject_matter_performance',
-    'subject_matter_review_material',
+    'subject_matter_reveal_review',
     'release_sync_subject_matter',
     'release_sync_bar_feels',
     'release_sync_all_content',
@@ -2667,14 +2676,16 @@ async function callGeminiStructured(env, prompt, responseSchema, validateResult)
   let quotaSeen = false;
   let timeoutSeen = false;
   let providerFailureSeen = false;
-  for (const model of orderedModels(env.GEMINI_MODEL)) {
+  // A reveal must never sit behind the examiner's full multi-model retry budget.
+  // One configured model gets one repair attempt, then the curated fallback wins.
+  for (const model of orderedModels(env.GEMINI_MODEL).slice(0, 1)) {
     let unsupported = false;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const repair = attempt === 1
         ? '\n\nREPAIR: Return only valid JSON matching the supplied schema. Do not add markdown or commentary outside JSON.'
         : '';
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+      const timeout = setTimeout(() => controller.abort(), SUBJECT_MATTER_TEACHING_TIMEOUT_MS);
       let response;
       let responseText = '';
       try {
@@ -3627,59 +3638,6 @@ async function authorizeExaminationAccess(env, userId, options = {}) {
   });
 }
 
-function sanitizeSubjectReviewMaterial(value, expectedAttemptId) {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || value.status !== 'available') {
-    throw new ExaminationValidationError(
-      'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
-      'Verified review material is not available for this question.',
-      404,
-    );
-  }
-  let attemptId;
-  let questionId;
-  try {
-    attemptId = examinationUuid(value.attemptId, 'Attempt');
-    questionId = examinationUuid(value.questionId, 'Question');
-  } catch {
-    throw new ExaminationValidationError(
-      'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
-      'Verified review material is not available for this question.',
-      404,
-    );
-  }
-  const legalBasis = examinationText(value.legalBasis, 12_000);
-  const whyThisApplies = examinationText(value.whyThisApplies, 12_000);
-  const sources = Array.isArray(value.sources)
-    ? value.sources.filter((source) => typeof source === 'string').map((source) => source.trim())
-    : [];
-  const sourcesAreSafe = sources.length >= 1
-    && sources.length <= 12
-    && sources.length === value.sources.length
-    && sources.every((source) => {
-      try {
-        const url = new URL(source);
-        return url.protocol === 'https:' && source.length <= 2_048;
-      } catch {
-        return false;
-      }
-    });
-  if (attemptId !== expectedAttemptId || !legalBasis || !whyThisApplies || !sourcesAreSafe) {
-    throw new ExaminationValidationError(
-      'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
-      'Verified review material is not available for this question.',
-      404,
-    );
-  }
-  return {
-    status: 'available',
-    attemptId,
-    questionId,
-    legalBasis,
-    whyThisApplies,
-    sources,
-  };
-}
-
 async function handleExaminationQuery(request, env, origin, allowedOrigin) {
   await enforceExaminationRateLimit(request, env);
   const raw = await parseBoundedJson(request, 24_000);
@@ -3710,35 +3668,6 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
       p_limit: query.limit,
     });
     return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
-  }
-  if (user && query.operation === 'subject_review_material') {
-    let result;
-    try {
-      result = await examinationRpc(env, 'subject_matter_review_material', {
-        p_user_id: user.id,
-        p_attempt_id: query.attemptId,
-      });
-    } catch (error) {
-      const message = String(error?.message || '');
-      const code = String(error?.code || '');
-      if (
-        /EXAM_(?:ATTEMPT_NOT_FOUND|ACCESS_REQUIRED|SUBJECT_REVIEW_MATERIAL_UNAVAILABLE)/.test(code)
-        || /EXAM_(?:ATTEMPT_NOT_FOUND|ACCESS_REQUIRED|SUBJECT_REVIEW_MATERIAL_UNAVAILABLE)/.test(message)
-      ) {
-        throw new ExaminationValidationError(
-          'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
-          'Verified review material is not available for this question.',
-          404,
-        );
-      }
-      throw error;
-    }
-    return jsonResponse(
-      { ok: true, data: sanitizeSubjectReviewMaterial(result, query.attemptId) },
-      200,
-      origin,
-      allowedOrigin,
-    );
   }
   if (user) {
     if (query.operation === 'catalog') {
@@ -3789,15 +3718,76 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
         track: 'bar_feels',
         allowHistorical: true,
       });
-    } else if (command.attemptId) {
+    } else if (command.attemptId && command.operation !== 'subject_reveal_review') {
       await authorizeExaminationAccess(env, user.id, {
         attemptId: command.attemptId,
-        allowHistorical: ['request_ai_grading', 'release_model_answers'].includes(
+        allowHistorical: ['request_ai_grading', 'release_model_answers', 'subject_reveal_review'].includes(
           command.operation,
         ),
       });
     }
   }
+
+  if (user && command.operation === 'subject_reveal_review') {
+    let stored;
+    try {
+      stored = await examinationRpc(env, 'subject_matter_reveal_review', {
+        p_user_id: user.id,
+        p_attempt_id: command.attemptId,
+      });
+    } catch (error) {
+      const code = String(error?.code || '');
+      const message = String(error?.message || '');
+      if (/EXAM_(?:ATTEMPT_NOT_FOUND|ACCESS_REQUIRED|SUBJECT_REVIEW_MATERIAL_UNAVAILABLE)/.test(
+        `${code} ${message}`,
+      )) {
+        throw new ExaminationValidationError(
+          'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
+          'Verified review material is not available for this question.',
+          404,
+        );
+      }
+      throw error;
+    }
+
+    let material;
+    try {
+      material = sanitizeSubjectMatterRevealRecord(stored, command.attemptId);
+    } catch {
+      throw new ExaminationValidationError(
+        'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
+        'Verified review material is not available for this question.',
+        404,
+      );
+    }
+    let explanation = fallbackSubjectMatterTeachingExplanation(material);
+    let explanationSource = 'curated_fallback';
+    let teachingModel = null;
+    try {
+      const generated = await callGeminiStructured(
+        env,
+        buildSubjectMatterTeachingPrompt(material),
+        SUBJECT_MATTER_TEACHING_SCHEMA,
+        (value) => validateSubjectMatterTeachingExplanation(value, material),
+      );
+      explanation = generated.result;
+      explanationSource = 'gemini_curated';
+      teachingModel = generated.model;
+    } catch (error) {
+      console.warn('Subject Matter teaching explanation used curated fallback', {
+        code: String(error?.code || 'validation_failed').slice(0, 48),
+      });
+    }
+
+    return jsonResponse({
+      ok: true,
+      data: publicSubjectMatterReviewPayload(material, explanation, {
+        explanationSource,
+        teachingModel,
+      }),
+    }, 200, origin, allowedOrigin);
+  }
+
   const result = await examinationRpc(env, 'examination_command', {
     p_user_id: user?.id || null,
     p_operation: command.operation,

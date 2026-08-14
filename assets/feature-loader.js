@@ -12,12 +12,12 @@
     }),
     examinations: Object.freeze({
       styles: [
-        'assets/examinations.css?v=header-subject-review-20260814-1',
+        'assets/examinations.css?v=header-subject-review-20260814-1&release=subject-review-split-20260815-1',
         'assets/study-workspace.css?v=master-experience-20260813-1',
       ],
       scripts: [
         'assets/study-workspace.js?v=master-experience-20260813-1',
-        'assets/examinations.js?v=header-subject-review-20260814-1',
+        'assets/examinations.js?v=header-subject-review-20260814-1&release=subject-review-split-20260815-1',
       ],
     }),
     content: Object.freeze({
@@ -121,7 +121,6 @@
   }
 
   global.DueDiligenceFeatureLoader = Object.freeze({ loadForFeature, loadGroup });
-  global.openPremiumBarFeels = deferredFunction('bar-feels', 'openPremiumBarFeels');
   global.openBarEasy = deferredFunction('bar-easy', 'openBarEasy');
   global.openChairCases = deferredFunction('chair-cases', 'openChairCases');
   global.openDoctrines = deferredFunction('doctrines', 'openDoctrines');

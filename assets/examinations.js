@@ -1047,23 +1047,51 @@
     history.pushState({ dueDiligenceExamination: state.active.attempt.attemptId }, '', location.href);
   }
 
-  async function resumeAttempt(attemptId) {
-    if (!attemptId || state.active?.attempt?.attemptId === attemptId) return;
-    if (state.resumeAttemptId === attemptId) return;
+  async function resumeAttempt(attemptId, options = {}) {
+    if (!attemptId) return { status: 'no_match', active: null };
+    const expectedTrack = String(options.expectedTrack || '').trim();
+    if (state.active?.attempt?.attemptId === attemptId) {
+      if (expectedTrack && state.active?.examination?.track !== expectedTrack) {
+        return { status: 'no_match', active: null };
+      }
+      return { status: 'restored', active: state.active };
+    }
     state.resumeAttemptId = attemptId;
+    const ownerUserId = currentUserId();
     setStatus('Recovering your server-saved examination…');
     try {
       const active = await api('/examinations/query', {
         operation: 'resume',
         attemptId,
       });
+      if (!ownerUserId || currentUserId() !== ownerUserId || options.isCurrent?.() === false) {
+        return { status: 'stale', active: null };
+      }
+      if (expectedTrack && active?.examination?.track !== expectedTrack) {
+        return { status: 'no_match', active: null };
+      }
       activateAttempt(active);
-      await heartbeat(false);
+      heartbeat(false).catch(() => {});
+      return { status: 'restored', active: state.active };
     } catch (error) {
       setStatus(error.message, 'error');
+      return { status: 'retryable_error', active: null };
     } finally {
-      state.resumeAttemptId = null;
+      if (state.resumeAttemptId === attemptId) state.resumeAttemptId = null;
     }
+  }
+
+  async function restoreRoute(track, options = {}) {
+    const recovery = readRecovery();
+    if (!recovery?.attemptId || !global.DueDiligencePhase4?.getSession?.()?.access_token) {
+      return { status: 'no_match', active: null };
+    }
+    state.track = track;
+    showTrackPage(track);
+    return resumeAttempt(recovery.attemptId, {
+      expectedTrack: track,
+      isCurrent: options.isCurrent,
+    });
   }
 
   function currentQuestion() {
@@ -1195,6 +1223,7 @@
     const course = state.active.examination.subject || state.selectedSubject || 'Selected course';
     const answerText = question.answerText || '';
     const attemptId = state.active.attempt.attemptId;
+    const assisted = state.active.attempt.assisted === true;
     return `<div class="dd-subject-editorial">
       <header class="dd-subject-editorial-header">
         <div>
@@ -1213,15 +1242,18 @@
         </div>
       </header>
       <div class="dd-subject-editorial-grid">
-        <main class="dd-subject-editorial-pane is-review" aria-labelledby="dd-subject-question-title">
-          <p class="dd-question-label">${escapeHtml(course)}</p>
-          <p class="dd-subject-task-label">Review question</p>
-          <h2 class="dd-question-prompt" id="dd-subject-question-title" tabindex="-1">${escapeHtml(question.prompt)}</h2>
-          ${subjectReviewMaterialControls({ attemptId, questionId: question.questionId, writingGuide })}
-        </main>
-        <aside class="dd-subject-editorial-pane is-coaching dd-subject-practice-answer" aria-labelledby="dd-subject-answer-title">
+        <main class="dd-subject-editorial-pane is-writing dd-subject-practice-answer" aria-labelledby="dd-subject-question-title">
+          <div class="dd-subject-question-block">
+            <div class="dd-subject-question-meta">
+              <p class="dd-question-label">${escapeHtml(course)}</p>
+              <span class="dd-subject-attempt-badge ${assisted ? 'is-assisted' : 'is-unassisted'}"
+                data-subject-attempt-classification>${assisted ? 'Assisted / Open-book' : 'Unassisted'}</span>
+            </div>
+            <p class="dd-subject-task-label">Your practice question</p>
+            <h2 class="dd-question-prompt" id="dd-subject-question-title" tabindex="-1">${escapeHtml(question.prompt)}</h2>
+          </div>
           <div class="dd-subject-answer-heading">
-            <div><p class="dd-exam-kicker">Optional recall practice</p><h2 id="dd-subject-answer-title">Write from memory</h2></div>
+            <div><p class="dd-exam-kicker">Your response</p><h3 id="dd-subject-answer-title">Write your answer</h3></div>
             <span>Autosave active</span>
           </div>
           ${question.localRecoveryText != null ? `<div class="dd-exam-status is-error">
@@ -1252,6 +1284,17 @@
               ${answerText.trim() ? '' : 'disabled'}>Submit for coaching</button>
             <button class="dd-exam-button" data-return-catalog type="button">Return to courses</button>
           </nav>
+          <div class="dd-exam-status dd-subject-writing-status-message" data-subject-writing-status
+            role="status" aria-live="polite" aria-atomic="true"></div>
+        </main>
+        <aside class="dd-subject-editorial-pane is-coaching is-review-panel" aria-label="Complete Subject Matter review">
+          ${subjectReviewPanelMarkup({
+            attemptId,
+            questionId: question.questionId,
+            assisted,
+            submitted: false,
+            writingGuide,
+          })}
         </aside>
       </div>
     </div>`;
@@ -1276,6 +1319,7 @@
     if (subjectPractice) {
       root.innerHTML = subjectPracticeRoomMarkup({ question, timerMode, writingGuide });
       bindRoom(root);
+      restoreRevealedSubjectReview(root);
       updateClockNode();
       return;
     }
@@ -1463,6 +1507,9 @@
       return false;
     }
     state.saveInFlight = true;
+    const answerSnapshot = question.answerText || '';
+    const flaggedSnapshot = question.flagged === true;
+    const revisionSnapshot = Number(question.revision) || 0;
     const saveNode = root?.querySelector('#dd-save-state');
     if (saveNode) {
       saveNode.textContent = 'Saving securely…';
@@ -1474,23 +1521,34 @@
         attemptId: state.active.attempt.attemptId,
         questionId: question.questionId,
         tabToken: tabToken(),
-        answerText: question.answerText || '',
-        expectedRevision: Number(question.revision) || 0,
-        flagged: question.flagged === true,
+        answerText: answerSnapshot,
+        expectedRevision: revisionSnapshot,
+        flagged: flaggedSnapshot,
       });
-      question.answerText = result.answerText;
-      question.flagged = result.flagged;
+      const newerLocalChanges = (question.answerText || '') !== answerSnapshot
+        || (question.flagged === true) !== flaggedSnapshot;
       question.revision = result.revision;
       question.savedAt = result.savedAt;
-      question.localRecoveryText = null;
+      if (newerLocalChanges) {
+        state.pendingSave = true;
+      } else {
+        question.answerText = result.answerText;
+        question.flagged = result.flagged;
+        question.localRecoveryText = null;
+        question.localRecoveryHtml = null;
+      }
       state.active.attempt.lastSavedAt = result.savedAt;
       if (Number.isFinite(Number(result.remainingSeconds))) {
         state.clientRemaining = Number(result.remainingSeconds);
         state.serverSyncAt = Date.now();
       }
       if (saveNode) {
-        saveNode.textContent = `Saved ${formatDate(result.savedAt)}`;
-        saveNode.className = 'dd-save-state is-saved';
+        saveNode.textContent = newerLocalChanges
+          ? 'Unsaved changes'
+          : `Saved ${formatDate(result.savedAt)}`;
+        saveNode.className = newerLocalChanges
+          ? 'dd-save-state is-saving'
+          : 'dd-save-state is-saved';
       }
       saveRecovery();
       return true;
@@ -1727,24 +1785,29 @@
   async function submitCurrentSubjectAnswer(button) {
     const question = currentQuestion();
     if (!question?.answerText?.trim() || !state.active) return;
+    const alreadySubmitted = Boolean(state.active.attempt.submittedAt)
+      || ['submitted', 'expired'].includes(state.active.attempt.status);
     button.disabled = true;
-    button.textContent = 'Submitting securely…';
-    setStatus('Saving your answer before assessment…');
+    button.textContent = alreadySubmitted ? 'Retrying assessment…' : 'Submitting securely…';
+    setStatus(alreadySubmitted
+      ? 'Your submitted answer is preserved. Retrying the assessment only…'
+      : 'Saving your answer before assessment…');
     try {
-      if (!await flushCurrentSave()) {
-        throw new Error('Your latest answer could not be confirmed. Nothing was submitted.');
+      if (!alreadySubmitted) {
+        if (!await flushCurrentSave()) {
+          throw new Error('Your latest answer could not be confirmed. Nothing was submitted.');
+        }
+        const receipt = await api('/examinations/command', {
+          operation: 'submit_attempt',
+          attemptId: state.active.attempt.attemptId,
+          tabToken: tabToken(),
+          requestKey: requestKey('submit'),
+          confirmed: true,
+        });
+        stopActiveTimers();
+        state.active.attempt.status = receipt.status;
+        state.active.attempt.submittedAt = receipt.submittedAt;
       }
-      const receipt = await api('/examinations/command', {
-        operation: 'submit_attempt',
-        attemptId: state.active.attempt.attemptId,
-        tabToken: tabToken(),
-        requestKey: requestKey('submit'),
-        confirmed: true,
-      });
-      stopActiveTimers();
-      clearRecovery();
-      state.active.attempt.status = receipt.status;
-      state.active.attempt.submittedAt = receipt.submittedAt;
       button.textContent = 'Assessing your response…';
       const maximumBatches = Math.max(2, state.active.questions.length + 1);
       let result = null;
@@ -1775,7 +1838,9 @@
     } catch (error) {
       setStatus(error.message, 'error');
       button.disabled = false;
-      button.textContent = 'Submit Answer';
+      button.textContent = state.active?.attempt?.submittedAt
+        ? 'Retry assessment'
+        : 'Submit for coaching';
     }
   }
 
@@ -2024,63 +2089,118 @@
     return `${currentUserId()}:${String(attemptId || '').trim()}`;
   }
 
-  function subjectReviewSources(sources) {
+  function completeSubjectReviewSources(sources) {
     const safeSources = (Array.isArray(sources) ? sources : []).filter((source) => {
       try { return new URL(source).protocol === 'https:'; } catch { return false; }
     });
     if (!safeSources.length) return '';
-    return `<div class="dd-subject-review-sources"><h5>Official sources</h5>${safeSources.map((source, index) => `<a class="source-link" href="${escapeAttribute(source)}" target="_blank" rel="noopener noreferrer"><span>Official source ${index + 1}</span><small>${escapeHtml(new URL(source).hostname)}</small></a>`).join('')}</div>`;
-  }
-
-  function subjectReviewMaterialContent(material, kind) {
-    if (kind === 'basis') {
-      return `<div class="legal-explanation">${escapeHtml(material.legalBasis)}</div>${subjectReviewSources(material.sources)}`;
-    }
-    return `<div class="legal-explanation">${escapeHtml(material.whyThisApplies)}</div>`;
-  }
-
-  function subjectReviewMaterialControls({ attemptId, questionId, writingGuide }) {
-    const shared = `data-attempt-id="${escapeAttribute(attemptId)}" data-question-id="${escapeAttribute(questionId)}"`;
-    return `<section class="dd-study-disclosures dd-subject-review-material" aria-labelledby="dd-subject-review-material-title">
-      <header class="dd-study-disclosures-heading">
-        <p class="dd-exam-kicker">Review and retention</p>
-        <h3 id="dd-subject-review-material-title">Open the law when you are ready.</h3>
-        <p>The verified basis and explanation load only when you deliberately reveal them.</p>
-      </header>
-      <details ${shared} data-subject-review-material="basis">
-        <summary data-subject-review-reveal>Reveal suggested legal basis</summary>
-        <div data-subject-review-slot><p class="dd-study-hold">Open this section to load the vetted legal basis and its official sources.</p></div>
-      </details>
-      <details ${shared} data-subject-review-material="why">
-        <summary data-subject-review-reveal>Why this legal basis applies</summary>
-        <div data-subject-review-slot><p class="dd-study-hold">Open this section to load the explanation tied to this question.</p></div>
-      </details>
-      <details>
-        <summary>How to approach this question</summary>
-        <div class="legal-explanation">${escapeHtml(writingGuide.approach)}</div>
-      </details>
+    return `<section class="dd-subject-review-section dd-subject-review-sources" aria-labelledby="dd-subject-review-sources-title">
+      <h4 id="dd-subject-review-sources-title">Verified official sources</h4>
+      <div>${safeSources.map((source, index) => `<a class="source-link" href="${escapeAttribute(source)}" target="_blank" rel="noopener noreferrer"><span>Official source ${index + 1}</span><small>${escapeHtml(new URL(source).hostname)}</small></a>`).join('')}</div>
     </section>`;
   }
 
-  function updateSubjectReviewMaterialSlots(attemptId, questionId, material) {
-    document.querySelectorAll(`[data-subject-review-material][data-attempt-id="${attemptId}"]`).forEach((details) => {
-      if (details.dataset.questionId !== questionId) return;
-      const slot = details.querySelector('[data-subject-review-slot]');
-      if (slot) slot.innerHTML = subjectReviewMaterialContent(material, details.dataset.subjectReviewMaterial);
-    });
+  function subjectReviewExplanationMarkup(explanation) {
+    const sections = [
+      ['Direct answer', explanation?.directAnswer],
+      ['Controlling law and elements', explanation?.controllingLawAndElements],
+      ['Application to the exact facts', explanation?.applicationToFacts],
+      ['Material exceptions or limits', explanation?.materialExceptionsOrLimits],
+      ['Final conclusion', explanation?.finalConclusion],
+    ].filter(([, value]) => String(value || '').trim());
+    if (!sections.length) return '<p class="dd-study-hold">The approved teaching explanation is temporarily unavailable.</p>';
+    return `<div class="dd-subject-teaching-sections">${sections.map(([label, value]) => `<section>
+      <h5>${escapeHtml(label)}</h5><div class="legal-explanation">${escapeHtml(value)}</div>
+    </section>`).join('')}</div>`;
   }
 
-  function showSubjectReviewMaterialError(details, message) {
-    const slot = details?.querySelector('[data-subject-review-slot]');
-    if (!slot) return;
-    slot.innerHTML = `<div class="dd-exam-status is-error">${escapeHtml(message || 'Verified review material could not be loaded right now.')}</div>
+  function completeSubjectReviewContent(material) {
+    const jurisprudence = (Array.isArray(material?.jurisprudence) ? material.jurisprudence : [])
+      .map((entry) => (typeof entry === 'string'
+        ? entry
+        : [entry?.caseName || entry?.title, entry?.citation, entry?.doctrine || entry?.holding]
+          .filter(Boolean).join(' — ')))
+      .filter(Boolean);
+    const supporting = [
+      material?.governingProvision ? `<div><h5>Governing provision</h5><div class="legal-explanation">${escapeHtml(material.governingProvision)}</div></div>` : '',
+      material?.doctrine ? `<div><h5>Doctrine</h5><div class="legal-explanation">${escapeHtml(material.doctrine)}</div></div>` : '',
+      material?.citation ? `<div><h5>Citation</h5><div class="legal-explanation">${escapeHtml(material.citation)}</div></div>` : '',
+      jurisprudence.length ? `<div><h5>Related jurisprudence</h5><ul>${jurisprudence.map((entry) => `<li>${escapeHtml(entry)}</li>`).join('')}</ul></div>` : '',
+    ].filter(Boolean).join('');
+    return `<div class="dd-subject-review-complete" data-subject-review-content tabindex="-1">
+      <header class="dd-subject-review-revealed-heading">
+        <div><p class="dd-exam-kicker">Complete review unlocked</p><h3>Study the approved legal material.</h3></div>
+        <span class="dd-subject-attempt-badge ${material.assisted ? 'is-assisted' : 'is-unassisted'}">
+          ${material.assisted ? 'Assisted / Open-book' : 'Unassisted submission'}
+        </span>
+      </header>
+      <section class="dd-subject-review-section"><h4>Suggested Answer</h4>
+        <div class="dd-subject-review-prose">${escapeHtml(material.suggestedAnswer)}</div></section>
+      <section class="dd-subject-review-section"><h4>Complete Legal Basis</h4>
+        <div class="dd-subject-review-prose">${escapeHtml(material.legalBasis)}</div>
+        ${supporting ? `<div class="dd-subject-review-authorities">${supporting}</div>` : ''}</section>
+      <section class="dd-subject-review-section"><h4>Why This Answer Is Correct</h4>
+        ${subjectReviewExplanationMarkup(material.whyThisAnswerIsCorrect)}</section>
+      ${completeSubjectReviewSources(material.sources)}
+      <p class="dd-subject-review-source-note">The explanation is limited to Due Diligence's approved question-bank material. It does not add independent authorities.</p>
+    </div>`;
+  }
+
+  function subjectReviewPanelMarkup({ attemptId, questionId, assisted, submitted, writingGuide }) {
+    const material = state.reviewMaterialCache.get(subjectReviewMaterialKey(attemptId));
+    if (material?.questionId === questionId) return completeSubjectReviewContent(material);
+    const classificationNotice = submitted
+      ? 'Your answer was submitted before this review was opened. Revealing it now will not change the attempt\'s Unassisted classification.'
+      : 'Opening this review before submission marks this attempt Assisted / Open-book. You may continue writing and submit normally; your score is not reduced.';
+    return `<section class="dd-subject-review-lock" data-subject-review-panel
+      data-attempt-id="${escapeAttribute(attemptId)}" data-question-id="${escapeAttribute(questionId)}"
+      data-submitted="${submitted ? 'true' : 'false'}" aria-labelledby="dd-subject-review-lock-title">
+      <div class="dd-subject-review-lock-seal" aria-hidden="true"><span>DD</span></div>
+      <p class="dd-exam-kicker">Private review chamber</p>
+      <h2 id="dd-subject-review-lock-title">Complete Review</h2>
+      <p class="dd-subject-review-lock-lead">Reveal the approved answer, complete legal basis, source-bound teaching explanation, and verified official sources.</p>
+      <div class="dd-subject-review-classification-note">
+        <strong>${assisted ? 'This attempt is Assisted / Open-book.' : 'Choose when to reveal.'}</strong>
+        <span>${escapeHtml(assisted ? 'The review was opened before submission. Your score is unchanged, and this attempt remains in private history outside unassisted mastery metrics.' : classificationNotice)}</span>
+      </div>
+      <button class="dd-subject-review-reveal" type="button" data-subject-review-reveal>
+        <span>Reveal Complete Review</span><small>Suggested answer · legal basis · explanation · sources</small>
+      </button>
+      <p class="dd-subject-review-assurance">Revealing never changes the Gemini grading rubric or imposes a score penalty.</p>
+      <details class="dd-subject-approach"><summary>Writing approach</summary>
+        <div class="legal-explanation">${escapeHtml(writingGuide?.approach || 'Answer the precise legal task, state the governing law, apply the material facts, and give a clear conclusion.')}</div>
+      </details>
+      <div class="dd-subject-review-status" data-subject-review-status role="status" aria-live="polite"></div>
+    </section>`;
+  }
+
+  function updateCompleteSubjectReviewPanels(attemptId, questionId, material, { focus = false } = {}) {
+    document.querySelectorAll(`[data-subject-review-panel][data-attempt-id="${attemptId}"]`).forEach((panel) => {
+      if (panel.dataset.questionId !== questionId) return;
+      panel.outerHTML = completeSubjectReviewContent(material);
+    });
+    document.querySelectorAll('[data-subject-attempt-classification]').forEach((badge) => {
+      badge.classList.toggle('is-assisted', material.assisted === true);
+      badge.classList.toggle('is-unassisted', material.assisted !== true);
+      badge.textContent = material.assisted ? 'Assisted / Open-book' : 'Unassisted';
+    });
+    if (focus) document.querySelector('[data-subject-review-content]')?.focus({ preventScroll: true });
+  }
+
+  function showCompleteSubjectReviewError(panel, message) {
+    const status = panel?.querySelector('[data-subject-review-status]');
+    const button = panel?.querySelector('[data-subject-review-reveal]');
+    if (button) button.disabled = false;
+    if (!status) return;
+    status.innerHTML = `<div class="dd-exam-status is-error">${escapeHtml(message || 'Verified review material could not be loaded right now.')}</div>
       <button class="dd-exam-button" type="button" data-subject-review-retry>Retry</button>`;
   }
 
-  async function loadSubjectReviewMaterial(details, { retry = false } = {}) {
-    const attemptId = details?.dataset.attemptId || '';
-    const questionId = details?.dataset.questionId || '';
-    if (!attemptId || !questionId || !details.open) return;
+  async function loadCompleteSubjectReview(button, { retry = false, automatic = false } = {}) {
+    const panel = button?.closest('[data-subject-review-panel]');
+    const attemptId = panel?.dataset.attemptId || '';
+    const questionId = panel?.dataset.questionId || '';
+    if (!attemptId || !questionId) return;
     const key = subjectReviewMaterialKey(attemptId);
     if (retry) {
       state.reviewMaterialCache.delete(key);
@@ -2088,14 +2208,17 @@
     }
     const cached = state.reviewMaterialCache.get(key);
     if (cached) {
-      updateSubjectReviewMaterialSlots(attemptId, questionId, cached);
+      updateCompleteSubjectReviewPanels(attemptId, questionId, cached, { focus: !automatic });
       return;
     }
-    const slot = details.querySelector('[data-subject-review-slot]');
-    if (slot) slot.innerHTML = '<p class="dd-study-hold" role="status">Loading verified review material…</p>';
+    button.disabled = true;
+    const submitButton = pageRoot('per_subject')?.querySelector('[data-submit-current]');
+    if (submitButton) submitButton.disabled = true;
+    const status = panel.querySelector('[data-subject-review-status]');
+    if (status) status.textContent = 'Opening the approved review material…';
     let request = state.reviewMaterialRequests.get(key);
     if (!request) {
-      request = api('/examinations/query', { operation: 'subject_review_material', attemptId })
+      request = api('/examinations/command', { operation: 'subject_reveal_review', attemptId })
         .then((material) => {
           if (material?.attemptId !== attemptId || material?.questionId !== questionId) {
             throw new Error('Verified review material does not match this question.');
@@ -2108,11 +2231,27 @@
     }
     try {
       const material = await request;
-      if (!document.body.contains(details)) return;
-      updateSubjectReviewMaterialSlots(attemptId, questionId, material);
+      if (state.active?.attempt?.attemptId === attemptId) {
+        state.active.attempt.assisted = material.assisted === true;
+        state.active.attempt.assistanceKnown = material.assistanceKnown === true;
+        state.active.attempt.reviewMaterialRevealedAt = material.reviewMaterialRevealedAt || null;
+      }
+      if (!document.body.contains(panel)) return;
+      updateCompleteSubjectReviewPanels(attemptId, questionId, material, { focus: !automatic });
     } catch (error) {
-      if (document.body.contains(details)) showSubjectReviewMaterialError(details, error?.message);
+      if (document.body.contains(panel)) showCompleteSubjectReviewError(panel, error?.message);
+    } finally {
+      if (submitButton && state.active?.attempt?.attemptId === attemptId
+          && !state.active.attempt.submittedAt) {
+        submitButton.disabled = !currentQuestion()?.answerText?.trim();
+      }
     }
+  }
+
+  function restoreRevealedSubjectReview(root) {
+    if (!state.active?.attempt?.reviewMaterialRevealedAt) return;
+    const button = root?.querySelector('[data-subject-review-reveal]');
+    if (button) loadCompleteSubjectReview(button, { automatic: true });
   }
 
   function subjectMatterResultMarkup(result, attemptId = '') {
@@ -2124,6 +2263,8 @@
     const answerText = String(result?.answerText || '').trim();
     const questionId = result?.questionId || result?.id || '';
     const resolvedAttemptId = attemptId || result?.attemptId || state.active?.attempt?.attemptId || '';
+    const assisted = result?.assisted === true
+      || state.active?.attempt?.assisted === true;
     return `<div class="dd-subject-editorial is-result">
       <header class="dd-subject-editorial-header">
         <div>
@@ -2142,30 +2283,38 @@
         </div>
       </header>
       <div class="dd-subject-editorial-grid">
-        <main class="dd-subject-editorial-pane is-review" aria-labelledby="dd-subject-result-question-title">
-          <p class="dd-question-label">${escapeHtml(course)}</p>
-          <p class="dd-subject-task-label">Review question</p>
-          <h2 class="dd-question-prompt" id="dd-subject-result-question-title">${escapeHtml(result?.prompt || '')}</h2>
-          ${subjectReviewMaterialControls({ attemptId: resolvedAttemptId, questionId, writingGuide })}
+        <main class="dd-subject-editorial-pane is-writing is-result-summary" aria-labelledby="dd-subject-result-question-title">
+          <div class="dd-subject-question-block">
+            <div class="dd-subject-question-meta">
+              <p class="dd-question-label">${escapeHtml(course)}</p>
+              <span class="dd-subject-attempt-badge ${assisted ? 'is-assisted' : 'is-unassisted'}"
+                data-subject-attempt-classification>${assisted ? 'Assisted / Open-book' : 'Unassisted'}</span>
+            </div>
+            <p class="dd-subject-task-label">Submitted question</p>
+            <h2 class="dd-question-prompt" id="dd-subject-result-question-title">${escapeHtml(result?.prompt || '')}</h2>
+          </div>
           <section class="dd-subject-submitted-response" aria-labelledby="dd-subject-submitted-answer-title">
             <h3 id="dd-subject-submitted-answer-title">Your answer</h3>
             <div class="dd-subject-submitted-answer">${escapeHtml(answerText || 'No answer text is available in this released record.')}</div>
           </section>
+          <section class="dd-subject-result-assessment" aria-label="Score and examiner feedback">
+            ${assessmentCard(result, { track: 'per_subject', compactSubject: true })}
+          </section>
           <nav class="dd-subject-practice-actions" aria-label="Subject Matter review actions">
             <button class="dd-exam-button is-primary" type="button" data-subject-next>Next question</button>
             <button class="dd-exam-button" type="button" data-return-catalog>Return to courses</button>
+            <button class="dd-subject-review-work" type="button"
+              data-subject-performance="${escapeAttribute(course)}">Review my saved work</button>
           </nav>
         </main>
-        <aside class="dd-subject-editorial-pane is-coaching" aria-label="Subject Matter coaching">
-          <p class="dd-exam-kicker">Coaching result</p>
-          ${assessmentCard(result, { track: 'per_subject', compactSubject: true })}
-          <div class="dd-subject-review-tools" aria-label="Subject Matter review tools">
-            <p>This coaching supports legal study. It is not an official Supreme Court grade or prediction.</p>
-            <div>
-              <button class="dd-subject-review-work" type="button"
-                data-subject-performance="${escapeAttribute(course)}">Review my saved work</button>
-            </div>
-          </div>
+        <aside class="dd-subject-editorial-pane is-coaching is-review-panel" aria-label="Complete Subject Matter review">
+          ${subjectReviewPanelMarkup({
+            attemptId: resolvedAttemptId,
+            questionId,
+            assisted,
+            submitted: true,
+            writingGuide,
+          })}
         </aside>
       </div>
     </div>`;
@@ -2213,12 +2362,12 @@
           <section class="assessment-panel errors"><h4>${isSubjectMatter ? 'Important points missed' : 'Errors or missing points'}</h4>${assessmentList(assessment.errors, 'No material error was identified.')}</section>
           <section class="assessment-panel coaching"><h4>${isSubjectMatter ? 'How to improve' : 'Prioritized improvements'}</h4>${assessmentList(assessment.improvements, 'Keep the answer direct, legally grounded, and fact-specific.')}</section>
         </div>
-        ${isSubjectMatter ? `${adaptiveSections.length ? `<section class="assessment-section"><h4>Suggested discussion</h4>
+        ${isSubjectMatter ? (options.compactSubject ? '' : `${adaptiveSections.length ? `<section class="assessment-section"><h4>Suggested discussion</h4>
           <div class="alac-model dd-adaptive-model">${adaptiveSections.map((section) => `<div class="alac-part">
             <b>${escapeHtml(section.label)}</b><p>${escapeHtml(section.text)}</p></div>`).join('')}</div></section>`
           : '<section class="assessment-section"><h4>Suggested discussion</h4><p class="dd-study-hold">A suggested discussion has not been released for this item.</p></section>'}
           ${suggestedAnswer ? `<section class="assessment-section"><h4>Suggested answer</h4><div class="dd-model-answer">${escapeHtml(suggestedAnswer)}</div></section>`
-          : '<section class="assessment-section"><h4>Suggested answer</h4><p class="dd-study-hold">The suggested answer has not been released for this item.</p></section>'}`
+          : '<section class="assessment-section"><h4>Suggested answer</h4><p class="dd-study-hold">The suggested answer has not been released for this item.</p></section>'}`)
         : adaptiveSections.length ? `<section class="assessment-section"><h4>Improved model response</h4>
           <div class="alac-model dd-adaptive-model">${adaptiveSections.map((section) => `<div class="alac-part">
             <b>${escapeHtml(section.label)}</b><p>${escapeHtml(section.text)}</p></div>`).join('')}</div></section>`
@@ -2259,8 +2408,12 @@
         limit: 30,
         offset: 0,
       });
+      if (verdict?.attempt && state.active?.attempt) {
+        Object.assign(state.active.attempt, verdict.attempt);
+      }
       if (track === 'per_subject') {
         const result = Array.isArray(verdict.results) ? verdict.results[0] : null;
+        if (result) clearRecovery();
         root.innerHTML = result
           ? subjectMatterResultMarkup(result, attemptId)
           : `<div class="dd-subject-editorial"><section class="dd-subject-result-unavailable">
@@ -2269,6 +2422,7 @@
             <p>Your submitted answer is preserved, but no released assessment record is available yet.</p>
             <button class="dd-exam-button" type="button" data-return-catalog>Return to courses</button>
           </section></div>`;
+        if (result) restoreRevealedSubjectReview(root);
         focusRendered(root, result ? '[data-subject-result-heading]' : 'h1');
         return;
       }
@@ -2323,9 +2477,12 @@
         <div class="dd-review-summary">
           <div><strong>${Number(performance.attemptedQuestions) || 0}</strong><span>Questions opened</span></div>
           <div><strong>${Number(performance.completedQuestions) || 0}</strong><span>Answers submitted</span></div>
+          <div><strong>${Number(performance.unassistedCompletedQuestions) || 0}</strong><span>Unassisted submissions</span></div>
+          <div><strong>${performance.unassistedAverageScore == null ? '—' : Number(performance.unassistedAverageScore).toFixed(1)}</strong><span>Unassisted average / 5</span></div>
         </div>
         ${attempts.length ? attempts.map((item) => `<article class="dd-verdict-question">
-          <p class="dd-question-label">${escapeHtml(item.topic || subject)} · ${escapeHtml(formatDate(item.submittedAt))}</p>
+          <div class="dd-subject-history-heading"><p class="dd-question-label">${escapeHtml(item.topic || subject)} · ${escapeHtml(formatDate(item.submittedAt))}</p>
+            <span class="dd-subject-attempt-badge ${item.assistanceKnown === false ? 'is-unknown' : (item.assisted ? 'is-assisted' : 'is-unassisted')}">${item.assistanceKnown === false ? 'Legacy / Unclassified' : (item.assisted ? 'Assisted / Open-book' : 'Unassisted')}</span></div>
           ${item.assessment ? assessmentCard(item, { answerText: item.answerText, track: 'per_subject' })
             : `<p>Assessment pending.</p><h3>Your answer</h3><div class="dd-model-answer">${escapeHtml(item.answerText || '')}</div>`}
         </article>`).join('') : '<p class="dd-exam-description">Submit your first answer to begin this private performance record.</p>'}
@@ -2646,17 +2803,15 @@
     const reviewRetry = event.target.closest('[data-subject-review-retry]');
     if (reviewRetry) {
       event.preventDefault();
-      const details = reviewRetry.closest('[data-subject-review-material]');
-      if (details) {
-        details.open = true;
-        loadSubjectReviewMaterial(details, { retry: true });
-      }
+      const panel = reviewRetry.closest('[data-subject-review-panel]');
+      const revealButton = panel?.querySelector('[data-subject-review-reveal]');
+      if (revealButton) loadCompleteSubjectReview(revealButton, { retry: true });
       return;
     }
     const reviewReveal = event.target.closest('[data-subject-review-reveal]');
     if (reviewReveal) {
-      const details = reviewReveal.closest('[data-subject-review-material]');
-      global.setTimeout(() => loadSubjectReviewMaterial(details), 0);
+      event.preventDefault();
+      loadCompleteSubjectReview(reviewReveal);
       return;
     }
     const subjectSelectorOpen = event.target.closest('[data-subject-selector-open]');
@@ -2835,11 +2990,7 @@
       saveCurrent({ silent: true }).then(() => heartbeat(false));
     });
     global.addEventListener('duediligence:session', (event) => {
-      if (event.detail?.authenticated) {
-        const recovery = readRecovery();
-        if (!state.active && recovery?.attemptId) resumeAttempt(recovery.attemptId);
-        return;
-      }
+      if (event.detail?.authenticated) return;
       if (state.active && ['room', 'review'].includes(state.screen)) saveRecovery();
       stopActiveTimers();
     });
@@ -2852,15 +3003,12 @@
       openAssignment(assignmentToken);
       return;
     }
-    const recovery = readRecovery();
-    if (recovery?.attemptId && global.DueDiligencePhase4?.getSession?.()?.access_token) {
-      resumeAttempt(recovery.attemptId);
-    }
   }
 
   global.DueDiligenceExaminations = Object.freeze({
     openPerSubject: () => loadCatalog('per_subject'),
     openBarFeels: () => loadCatalog('bar_feels'),
+    restoreRoute,
     resumeAttempt,
     openVerdict,
     getState: () => ({

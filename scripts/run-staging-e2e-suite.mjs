@@ -16,9 +16,12 @@ const expected = Object.freeze({
   productionWorkerHost: 'duediligence-gemini-examiner.wallyesteban1993.workers.dev',
 });
 const suites = Object.freeze({
-  'complete-beta': 'scripts/test-complete-beta-staging.mjs',
-  'duediligence-2026': 'scripts/test-duediligence-2026-staging.mjs',
-  examinations: 'scripts/test-examinations-staging.mjs',
+  'complete-beta': ['scripts/test-complete-beta-staging.mjs'],
+  'duediligence-2026': ['scripts/test-duediligence-2026-staging.mjs'],
+  examinations: [
+    'scripts/test-examinations-staging.mjs',
+    'scripts/test-examinations-staging-ui.mjs',
+  ],
 });
 
 function stop(message) {
@@ -130,7 +133,10 @@ function lastSafeCheckpoint(output) {
 
 async function writeEvidence(suite, result, serviceRoleKey) {
   const secretEchoed = Boolean(serviceRoleKey) && result.output.includes(serviceRoleKey);
-  const cleanupComplete = /synthetic_cleanup=true/.test(result.output);
+  const cleanupComplete = suite === 'examinations'
+    ? /EXAMINATIONS_STAGING: synthetic_cleanup=true/.test(result.output)
+      && /EXAMINATIONS_UI_STAGING: synthetic_cleanup=true/.test(result.output)
+    : /synthetic_cleanup=true/.test(result.output);
   const passed = result.code === 0 && cleanupComplete && !secretEchoed;
   const evidence = {
     schemaVersion: 2,
@@ -211,7 +217,7 @@ async function main() {
   );
 
   const configuration = await loadStagingConfiguration();
-  const result = await runChild(suites[argument], {
+  const environment = {
     ...process.env,
     STAGING_SUPABASE_URL: configuration.supabaseUrl,
     STAGING_SUPABASE_PUBLISHABLE_KEY: configuration.publishableKey,
@@ -219,7 +225,17 @@ async function main() {
     STAGING_EXAMINATION_ORIGIN: configuration.origin,
     STAGING_SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey,
     NO_COLOR: '1',
-  });
+  };
+  const childResults = [];
+  for (const script of suites[argument]) {
+    const childResult = await runChild(script, environment);
+    childResults.push(childResult);
+    if (childResult.code !== 0) break;
+  }
+  const result = {
+    code: childResults.every((childResult) => childResult.code === 0) ? 0 : 1,
+    output: childResults.map((childResult) => childResult.output).join('\n'),
+  };
   await writeEvidence(argument, result, serviceRoleKey);
 }
 

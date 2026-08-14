@@ -149,11 +149,11 @@ test('Subject Matter random selection uses the dedicated no-repeat RPC', async (
   });
 });
 
-test('Subject Matter review material uses the dedicated owner-bound RPC and returns only allowlisted fields', async () => {
+test('Subject Matter complete review uses the owner-bound reveal RPC and curated fallback', async () => {
   await withFetchMock(async (url, options) => {
     const auth = authResponse(url);
     if (auth) return auth;
-    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_review_material`);
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_reveal_review`);
     assert.deepEqual(JSON.parse(options.body), {
       p_user_id: userId,
       p_attempt_id: attemptId,
@@ -162,49 +162,57 @@ test('Subject Matter review material uses the dedicated owner-bound RPC and retu
       status: 'available',
       attemptId,
       questionId: versionId,
-      legalBasis: 'Article 19 of the Civil Code.',
-      whyThisApplies: 'The facts directly raise the duty to act with justice and good faith.',
+      prompt: 'Did the defendant violate the duty to act with justice and good faith under the stated facts?',
+      suggestedAnswer: 'Answer: Yes.\n\nLegal Basis: Article 19 of the Civil Code requires every person to act with justice and good faith.\n\nApplication: The stated conduct violated that duty.\n\nConclusion: The defendant is liable.',
+      legalBasis: 'Article 19 of the Civil Code requires every person to act with justice, give everyone his due, and observe honesty and good faith.',
+      governingProvision: 'Article 19 of the Civil Code.',
+      doctrine: 'The facts directly raise the duty to act with justice and good faith.',
+      jurisprudence: [],
+      citation: '',
       sources: ['https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/12345'],
-      modelAnswer: 'must never leave the Worker',
-      inventory: { total: 1_490 },
+      assisted: true,
+      assistanceKnown: true,
+      reviewMaterialRevealedAt: '2026-08-14T05:00:00.000Z',
+      privateNote: 'must never leave the Worker',
     });
   }, async () => {
-    const response = await worker.fetch(request('/examinations/query', {
-      operation: 'subject_review_material',
+    const response = await worker.fetch(request('/examinations/command', {
+      operation: 'subject_reveal_review',
       attemptId,
     }), env);
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.deepEqual(body.data, {
-      status: 'available',
-      attemptId,
-      questionId: versionId,
-      legalBasis: 'Article 19 of the Civil Code.',
-      whyThisApplies: 'The facts directly raise the duty to act with justice and good faith.',
-      sources: ['https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/12345'],
-    });
-    assert.equal('modelAnswer' in body.data, false);
-    assert.equal('inventory' in body.data, false);
+    assert.equal(body.data.attemptId, attemptId);
+    assert.equal(body.data.questionId, versionId);
+    assert.equal(body.data.assisted, true);
+    assert.equal(body.data.assistanceKnown, true);
+    assert.equal(body.data.classification, 'assisted');
+    assert.match(body.data.whyThisAnswerIsCorrect.controllingLawAndElements, /Article 19/);
+    assert.equal(body.data.explanationSource, 'curated_fallback');
+    assert.equal('privateNote' in body.data, false);
   });
 });
 
-test('Subject Matter review material rejects malformed database output without leaking it', async () => {
+test('Subject Matter complete review rejects malformed database output without leaking it', async () => {
   await withFetchMock(async (url) => {
     const auth = authResponse(url);
     if (auth) return auth;
-    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_review_material`);
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_reveal_review`);
     return Response.json({
       status: 'available',
       attemptId,
       questionId: versionId,
+      prompt: 'This prompt is long enough to pass basic validation.',
+      suggestedAnswer: 'This suggested answer is long enough to pass basic validation.',
       legalBasis: 'Article 19 of the Civil Code.',
-      whyThisApplies: 'Relevant doctrine.',
+      doctrine: 'Relevant doctrine.',
+      jurisprudence: [],
       sources: ['javascript:alert(1)'],
       privateNote: 'database-only detail',
     });
   }, async () => {
-    const response = await worker.fetch(request('/examinations/query', {
-      operation: 'subject_review_material',
+    const response = await worker.fetch(request('/examinations/command', {
+      operation: 'subject_reveal_review',
       attemptId,
     }), env);
     const body = await response.json();
@@ -214,18 +222,18 @@ test('Subject Matter review material rejects malformed database output without l
   });
 });
 
-test('Subject Matter review material masks cross-user attempt ownership failures', async () => {
+test('Subject Matter complete review masks cross-user attempt ownership failures', async () => {
   await withFetchMock(async (url) => {
     const auth = authResponse(url);
     if (auth) return auth;
-    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_review_material`);
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_reveal_review`);
     return Response.json(
       { message: 'EXAM_ATTEMPT_NOT_FOUND' },
       { status: 400 },
     );
   }, async () => {
-    const response = await worker.fetch(request('/examinations/query', {
-      operation: 'subject_review_material',
+    const response = await worker.fetch(request('/examinations/command', {
+      operation: 'subject_reveal_review',
       attemptId,
     }), env);
     const body = await response.json();

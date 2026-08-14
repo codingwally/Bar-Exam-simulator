@@ -17,6 +17,7 @@ const [
   preflight,
   productionWorkerConfig,
   stagingWorkerConfig,
+  featureLoader,
 ] = await Promise.all([
   read('index.html'),
   read('assets/examinations.js'),
@@ -30,6 +31,7 @@ const [
   read('supabase/review/examinations_production_preflight.sql'),
   read('worker/wrangler.toml'),
   read('worker/wrangler.staging.toml'),
+  read('assets/feature-loader.js'),
 ]);
 const seedDocument = JSON.parse(seedJsonText);
 const seed = seedDocument.rows;
@@ -52,7 +54,12 @@ assert.match(html, /id="spa-mock"[\s\S]*id="spa-subject-matter"[\s\S]*id="spa-pr
 assert.match(html, /id="spa-bar-feels"[^>]*aria-label="Bar Feels — Premium only\."/);
 assert.doesNotMatch(html, /menu-premium-badge/);
 assert.match(html, /function openSubjectMatterMenu\(\)[\s\S]*openPerSubject\(\)/);
-assert.match(html, /function openPremiumBarFeels\(\)[\s\S]*planCode === 'premium'[\s\S]*subscription\.status === 'active'[\s\S]*openView\?\.\('pricing'\)[\s\S]*openBarFeels\(\)/);
+assert.match(html, /function openPremiumBarFeels\(options = \{\}\)[\s\S]*planCode === 'premium'[\s\S]*subscription\.status === 'active'[\s\S]*openView\?\.\('pricing'\)[\s\S]*restoreRoute\?\.\('bar_feels'[\s\S]*openBarFeels\(\)/);
+assert.doesNotMatch(
+  featureLoader,
+  /global\.openPremiumBarFeels\s*=/,
+  'The lazy loader must not overwrite the premium access controller defined by the application shell.',
+);
 assert.equal((html.match(/class="[^"]*\bbtn-angel\b[^"]*"/g) || []).length, 4);
 assert.match(html, /\.btn-angel\{[\s\S]*linear-gradient\(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B\)[\s\S]*animation:sheen 3\.2s linear infinite/);
 assert.match(html, /@keyframes sheen\{0%\{background-position:200% 0;\}100%\{background-position:-40% 0;\}\}/);
@@ -61,6 +68,16 @@ assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
 assert.match(html, /assets\/feature-loader\.js\?v=exam-room-ux-20260814-1/);
 assert.match(html, /Mock Bar/);
 assert.match(frontend, /Subject Matter Examinations/);
+assert.match(styles, /\.dd-subject-study-page \.dd-subject-study-copy > \.dd-exam-kicker\s*\{[\s\S]*?color:\s*#e6bd59/,
+  'The dark Subject Matter course page must keep its session kicker at WCAG AA contrast.');
+assert.match(frontend, /async function restoreRoute\(track, options = \{\}\)/);
+assert.match(frontend, /restoreRoute,/);
+assert.match(frontend, /active\?\.examination\?\.track !== expectedTrack/);
+assert.match(
+  frontend,
+  /const ownerUserId = currentUserId\(\)[\s\S]*currentUserId\(\) !== ownerUserId/,
+  'A delayed resume response must not activate after the signed-in identity changes.',
+);
 assert.match(frontend, /data-exam-setup=[\s\S]*Review &amp; Begin/);
 assert.match(
   frontend,
@@ -109,13 +126,13 @@ for (const contract of [
 assert.match(frontend, /resumeAttemptId:\s*null/);
 assert.match(
   frontend,
-  /global\.addEventListener\('duediligence:session',[\s\S]*event\.detail\?\.authenticated[\s\S]*readRecovery\(\)[\s\S]*resumeAttempt\(recovery\.attemptId\)/,
-  'an authenticated session becoming ready must resume the newest local examination recovery record',
+  /global\.addEventListener\('duediligence:session',[\s\S]*if \(event\.detail\?\.authenticated\) return/,
+  'The application route coordinator must remain the sole authenticated recovery owner.',
 );
 assert.match(
   frontend,
-  /async function resumeAttempt\(attemptId\)[\s\S]*state\.resumeAttemptId === attemptId[\s\S]*finally[\s\S]*state\.resumeAttemptId = null/,
-  'recovery retries must be deduplicated while a resume request is active',
+  /async function resumeAttempt\(attemptId, options = \{\}\)[\s\S]*expectedTrack[\s\S]*options\.isCurrent\?\.\(\) === false[\s\S]*status: 'retryable_error'/,
+  'Recovery must reject stale identities/routes, require the expected track, and preserve retryable failures.',
 );
 assert.equal(
   [...frontend.matchAll(/error\?\.code === 'MALFORMED_MODEL_RESPONSE' && transientRetries < 1/g)].length,

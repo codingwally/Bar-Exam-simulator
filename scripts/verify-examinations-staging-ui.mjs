@@ -84,11 +84,10 @@ async function runAccessibilityAudit(page, label) {
     targets: violation.nodes.map((node) => node.target),
     summaries: violation.nodes.map((node) => node.failureSummary),
   }));
-  assert.deepEqual(
-    results.accessibility[label],
-    [],
-    `${label} has WCAG A/AA violations.`,
-  );
+  if (results.accessibility[label].length) {
+    const first = results.accessibility[label][0];
+    assert.fail(`${label} has WCAG A/AA violations: ${first.id}; target=${JSON.stringify(first.targets[0] || [])}; ${first.summaries[0] || ''}`);
+  }
 }
 
 async function completeOnboardingIfShown(page) {
@@ -363,33 +362,101 @@ async function publishFixture(page, {
 }
 
 async function openCatalog(page, track) {
-  await page.evaluate(async (selectedTrack) => {
-    if (selectedTrack === 'bar_feels') {
-      await window.DueDiligenceExaminations.openBarFeels();
+  const triggerId = track === 'bar_feels' ? 'spa-bar-feels' : 'spa-subject-matter';
+  await page.evaluate((id) => {
+    const trigger = document.getElementById(id);
+    if (!trigger) throw new Error(`The public navigation control ${id} is unavailable.`);
+    trigger.click();
+  }, triggerId);
+  try {
+    await page.waitForFunction(
+      (selectedTrack) => (
+        window.DueDiligenceExaminations?.getState?.().screen === 'catalog'
+        && window.DueDiligenceExaminations?.getState?.().track === selectedTrack
+      ),
+      track,
+      { timeout: 15_000 },
+    );
+  } catch (error) {
+    const safeNavigationState = await page.evaluate(() => ({
+      activePage: document.querySelector('.page.active')?.id || null,
+      hash: location.hash,
+      state: window.DueDiligenceExaminations?.getState?.() || null,
+    }));
+    throw new Error(
+      `Public navigation did not open ${track}: ${JSON.stringify(safeNavigationState)}`,
+      { cause: error },
+    );
+  }
+  const rootSelector = track === 'bar_feels' ? '#dd-bar-feels-app' : '#dd-per-subject-app';
+  await page.locator(rootSelector).waitFor({ state: 'visible', timeout: 15_000 });
+  await page.locator(rootSelector).getByRole('heading', {
+    name: track === 'bar_feels' ? 'Bar Feels' : 'Subject Matter',
+    exact: true,
+  }).waitFor({ state: 'visible', timeout: 15_000 });
+}
+
+async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    const layout = await page.evaluate(() => {
+      const writing = document.querySelector('.dd-subject-editorial-pane.is-writing');
+      const review = document.querySelector('.dd-subject-editorial-pane.is-review-panel');
+      const grid = document.querySelector('.dd-subject-editorial-grid');
+      const buttons = [...document.querySelectorAll(
+        '.dd-subject-editorial button:not([hidden]), .dd-subject-editorial a:not([hidden])',
+      )].filter((element) => getComputedStyle(element).display !== 'none');
+      const writingRect = writing?.getBoundingClientRect();
+      const reviewRect = review?.getBoundingClientRect();
+      return {
+        overflow: document.documentElement.scrollWidth > innerWidth,
+        writingLeft: writingRect?.left ?? null,
+        writingTop: writingRect?.top ?? null,
+        reviewLeft: reviewRect?.left ?? null,
+        reviewTop: reviewRect?.top ?? null,
+        writingOverflowY: writing ? getComputedStyle(writing).overflowY : null,
+        reviewOverflowY: review ? getComputedStyle(review).overflowY : null,
+        gridColumns: grid ? getComputedStyle(grid).gridTemplateColumns : null,
+        shortControls: buttons
+          .map((element) => ({ text: element.textContent.trim().slice(0, 60), height: element.getBoundingClientRect().height }))
+          .filter((entry) => entry.height > 0 && entry.height < 43),
+      };
+    });
+    const label = `${stateLabel}-${viewport.width}x${viewport.height}`;
+    results.responsive[label] = layout;
+    assert.equal(layout.overflow, false, `${label} must not overflow horizontally.`);
+    assert.deepEqual(layout.shortControls, [], `${label} must retain 44px touch targets.`);
+    if (viewport.width > 900) {
+      assert.ok(layout.writingLeft < layout.reviewLeft, `${label} must keep writing on the left.`);
+      assert.match(layout.writingOverflowY, /auto|scroll/);
+      assert.match(layout.reviewOverflowY, /auto|scroll/);
     } else {
-      await window.DueDiligenceExaminations.openPerSubject();
+      assert.ok(layout.writingTop < layout.reviewTop, `${label} must stack writing before review.`);
     }
-  }, track);
-  await page.waitForFunction(
-    (selectedTrack) => (
-      window.DueDiligenceExaminations?.getState?.().screen === 'catalog'
-      && window.DueDiligenceExaminations?.getState?.().track === selectedTrack
-    ),
-    track,
-    { timeout: 15_000 },
-  );
+    await runAccessibilityAudit(page, label);
+  }
 }
 
 async function completeSubjectMatter(page) {
   await completeOnboardingIfShown(page);
+  await completeTermsAcceptanceIfShown(page);
   await openCatalog(page, 'per_subject');
   const subject = 'Civil Procedure II';
-  await page.locator('[data-subject-selector-open]').click();
+  const courseChooser = page.locator('#dd-per-subject-app [data-subject-selector-open]');
+  await courseChooser.scrollIntoViewIfNeeded();
+  assert.equal(await courseChooser.isVisible(), true, 'The Subject Matter course chooser must be visible.');
+  assert.equal(await courseChooser.isEnabled(), true, 'The Subject Matter course chooser must be enabled.');
+  await courseChooser.focus();
+  await courseChooser.press('Enter');
   const subjectSelector = page.locator('#dd-subject-selector-dialog[open]');
   await subjectSelector.waitFor({ state: 'visible', timeout: 15_000 });
   await subjectSelector.locator('#dd-subject-search-mobile').fill(subject);
-  await subjectSelector.locator(`[data-exam-subject="${subject}"]`).click();
-  await page.locator(`[data-subject-start="${subject}"]`).click();
+  const courseChoice = subjectSelector.locator(`[data-exam-subject="${subject}"]`);
+  await courseChoice.focus();
+  await courseChoice.press('Enter');
+  const startButton = page.locator(`[data-subject-start="${subject}"]`);
+  await startButton.focus();
+  await startButton.press('Enter');
   await page.waitForFunction(
     () => (
       window.DueDiligenceExaminations?.getState?.().screen === 'room'
@@ -408,19 +475,62 @@ async function completeSubjectMatter(page) {
   await practiceRoom.locator('.dd-subject-editorial-grid').waitFor({ state: 'visible' });
   assert.equal(await practiceRoom.locator('.dd-subject-editorial-pane.is-writing').count(), 1);
   assert.equal(
-    await practiceRoom.locator('.dd-subject-editorial-pane.is-coaching.dd-subject-coaching-locked').count(),
+    await practiceRoom.locator('.dd-subject-editorial-pane.is-coaching.is-review-panel').count(),
     1,
   );
   const practiceRoomText = await practiceRoom.innerText();
   assert.match(practiceRoomText, /WRITING TIME/i);
   assert.match(practiceRoomText, /\b\d{2}:\d{2}\b/);
+  assert.match(practiceRoomText, /Reveal Complete Review/i);
+  assert.match(practiceRoomText, /Assisted \/ Open-book/i);
   assert.doesNotMatch(practiceRoomText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
-  assert.doesNotMatch(practiceRoomText, /Reveal suggested legal basis|Official sources/i);
-  assert.doesNotMatch(practiceRoomText, /\bA\.?L\.?A\.?C\.?\b/i);
+  assert.equal(
+    await practiceRoom.locator('[data-subject-review-content]').count(),
+    0,
+    'The complete review content must not exist in the DOM before the reveal operation succeeds.',
+  );
   const attemptId = await page.evaluate(
     () => window.DueDiligenceExaminations.getState().activeAttemptId,
   );
   assert.match(attemptId, /^[0-9a-f-]{36}$/i);
+
+  await verifySubjectWorkspaceLayout(page, 'subject-locked', [
+    { width: 1_366, height: 768 },
+    { width: 1_440, height: 900 },
+    { width: 768, height: 1_024 },
+    { width: 375, height: 812 },
+    { width: 320, height: 568 },
+  ]);
+  await page.setViewportSize({ width: 1_440, height: 900 });
+
+  const revealButton = practiceRoom.locator('[data-subject-review-reveal]');
+  await revealButton.click();
+  const completeReview = practiceRoom.locator('[data-subject-review-content]');
+  await completeReview.waitFor({ state: 'visible', timeout: 150_000 });
+  const completeReviewText = await completeReview.innerText();
+  assert.match(completeReviewText, /Suggested Answer/i);
+  assert.match(completeReviewText, /Complete Legal Basis/i);
+  assert.match(completeReviewText, /Why This Answer Is Correct/i);
+  assert.match(completeReviewText, /Verified official sources/i);
+  assert.match(completeReviewText, /Assisted \/ Open-book/i);
+  const legalBasisText = await completeReview.locator('.dd-subject-review-section')
+    .filter({ hasText: 'Complete Legal Basis' })
+    .locator('.dd-subject-review-prose')
+    .innerText();
+  assert.ok(legalBasisText.length >= 20, 'Subject Matter must reveal a substantive approved legal basis.');
+  assert.doesNotMatch(legalBasisText, /Not released|general writing tip|Review the controlling provision/i);
+  const teachingText = await completeReview.locator('.dd-subject-review-section')
+    .filter({ hasText: 'Why This Answer Is Correct' })
+    .innerText();
+  assert.ok(teachingText.length >= 100, 'Subject Matter must reveal a substantial source-bound teaching explanation.');
+  assert.ok(await completeReview.locator('a[href^="https://"]').count() >= 1,
+    'Subject Matter must reveal at least one linked official source.');
+
+  await verifySubjectWorkspaceLayout(page, 'subject-revealed', [
+    { width: 1_366, height: 768 },
+    { width: 375, height: 812 },
+  ]);
+  await page.setViewportSize({ width: 1_440, height: 900 });
 
   await page.locator('#dd-answer-editor').fill(subjectMatterAnswer);
   await waitForSaved(page);
@@ -439,37 +549,21 @@ async function completeSubjectMatter(page) {
   scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5$/));
   const verdictText = await subjectResult.innerText();
   assert.match(verdictText, /Evaluation overview/i);
-  assert.match(verdictText, /Reveal suggested legal basis/i);
-  assert.match(verdictText, /Guidance: why this basis applies/i);
-  assert.match(verdictText, /Suggested discussion/i);
-  assert.match(verdictText, /Suggested answer/i);
-  assert.match(verdictText, /Official sources/i);
+  assert.match(verdictText, /Suggested Answer/i);
+  assert.match(verdictText, /Complete Legal Basis/i);
+  assert.match(verdictText, /Why This Answer Is Correct/i);
+  assert.match(verdictText, /Verified official sources/i);
+  assert.match(verdictText, /Assisted \/ Open-book/i);
   assert.doesNotMatch(verdictText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
   assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
-  assert.doesNotMatch(verdictText, /\bA\.?L\.?A\.?C\.?\b/i);
+  assert.equal(await subjectResult.locator('[data-subject-review-content]').count(), 1,
+    'The complete review must persist beside the graded result without another reveal.');
 
-  const disclosure = (label) => subjectResult.locator('.dd-study-disclosures details')
-    .filter({ hasText: label })
-    .first();
-  const basisDetails = disclosure('Reveal suggested legal basis');
-  await basisDetails.locator('summary').click();
-  const basisText = (await basisDetails.innerText()).replace('Reveal suggested legal basis', '').trim();
-  assert.ok(basisText.length >= 20, 'Subject Matter must reveal a substantive approved legal basis.');
-  assert.doesNotMatch(basisText, /Not released|general writing tip|Review the controlling provision/i);
-
-  const guidanceDetails = disclosure('Guidance: why this basis applies');
-  await guidanceDetails.locator('summary').click();
-  const guidanceText = (await guidanceDetails.innerText())
-    .replace('Guidance: why this basis applies', '')
-    .trim();
-  assert.ok(guidanceText.length >= 60, 'Subject Matter guidance must explain why the basis applies.');
-  assert.doesNotMatch(guidanceText, /Specific guidance unavailable|general writing tip/i);
-
-  const sourceDetails = disclosure('Official sources');
-  await sourceDetails.locator('summary').click();
-  const sourceLinks = sourceDetails.locator('a[href^="https://"]');
-  assert.ok(await sourceLinks.count() >= 1, 'Subject Matter must reveal at least one linked official source.');
-  assert.doesNotMatch(await sourceDetails.innerText(), /No verified source was returned/i);
+  await verifySubjectWorkspaceLayout(page, 'subject-graded', [
+    { width: 1_366, height: 768 },
+    { width: 375, height: 812 },
+  ]);
+  await page.setViewportSize({ width: 1_440, height: 1_100 });
 
   return { track: 'per_subject', attemptId, scores };
 }
@@ -664,9 +758,12 @@ try {
           .filter((item) => item.right > innerWidth + 1 || item.left < -1)
           .slice(0, 12),
       }));
+      const activeRoot = page.locator(
+        catalog.track === 'bar_feels' ? '#dd-bar-feels-app' : '#dd-per-subject-app',
+      );
       results.responsive[label] = {
         ...layout,
-        headingVisible: await page.getByRole('heading', {
+        headingVisible: await activeRoot.getByRole('heading', {
           name: catalog.heading,
           exact: true,
         }).isVisible(),
@@ -676,7 +773,11 @@ try {
         false,
         `${label} overflow: ${JSON.stringify(results.responsive[label])}`,
       );
-      assert.equal(results.responsive[label].headingVisible, true);
+      assert.equal(
+        results.responsive[label].headingVisible,
+        true,
+        `${label} heading was not visible in the active examination root`,
+      );
       await runAccessibilityAudit(page, label);
     }
   }

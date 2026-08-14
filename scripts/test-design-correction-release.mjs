@@ -88,10 +88,10 @@ assert.doesNotMatch(perSubject, /questionCount|availableCount|remainingQuestions
 assert.match(subjectRoom, /class="dd-subject-editorial"/);
 assert.match(subjectRoom, /class="dd-subject-editorial-header"/);
 assert.match(subjectRoom, /class="dd-subject-editorial-grid"/);
-assert.match(subjectRoom, /class="dd-subject-editorial-pane is-review"/);
-assert.match(subjectRoom, /class="dd-subject-editorial-pane is-coaching dd-subject-practice-answer"/);
-assert.match(subjectRoom, /<h2 id="dd-subject-answer-title">Write from memory<\/h2>/);
-assert.match(subjectRoom, /Review question/);
+assert.match(subjectRoom, /class="dd-subject-editorial-pane is-writing dd-subject-practice-answer"/);
+assert.match(subjectRoom, /class="dd-subject-editorial-pane is-coaching is-review-panel"/);
+assert.match(subjectRoom, /<h3 id="dd-subject-answer-title">Write your answer<\/h3>/);
+assert.match(subjectRoom, /Your practice question/);
 assert.match(subjectRoom, /Submit for coaching/);
 assert.doesNotMatch(subjectRoom, /\bALAC\b|A\.L\.A\.C\.|I\.\s*ANSWER|II\.\s*LEGAL BASIS/i,
   'Subject Matter must not force ALAC onto questions that require another form of answer.');
@@ -101,27 +101,23 @@ assert.doesNotMatch(subjectRoom, /modelAnswer|suggestedAnswer|legalBasis|caseLaw
   'The pre-submission Subject Matter renderer must not receive released answer or authority fields.');
 assert.match(examJs, /if \(subjectPractice\) \{[\s\S]*?subjectPracticeRoomMarkup\([\s\S]*?return;/);
 
-for (const control of [
-  'Reveal suggested legal basis',
-  'Why this legal basis applies',
-  'How to approach this question',
-]) {
-  assert.ok(subjectReview.includes(control), `missing review control: ${control}`);
-  assert.ok(subjectFixture.includes(control), `fixture missing review control: ${control}`);
+for (const control of ['Reveal Complete Review', 'Suggested Answer', 'Complete Legal Basis',
+  'Why This Answer Is Correct', 'Verified official sources']) {
+  assert.ok(subjectReview.includes(control), `missing complete-review control: ${control}`);
 }
+assert.match(subjectFixture, /Reveal Complete Review/);
 assert.equal(
-  (subjectReview.match(/<details/g) || []).length,
-  3,
-  'Subject Matter must expose exactly three collapsed review controls on the left.',
+  (subjectRoom.match(/data-subject-review-reveal/g) || []).length,
+  0,
+  'The writing renderer delegates one complete-review control to the right review panel.',
 );
-assert.doesNotMatch(subjectReview, /<details[^>]*\sopen(?:\s|>)/i,
-  'Every production study disclosure must remain hidden until the user opens it.');
-assert.doesNotMatch(subjectFixture, /<details[^>]*\sopen(?:\s|>)/i,
-  'The visual QA fixture must represent the collapsed-by-default production state.');
+assert.equal((subjectReview.match(/<button[^>]*data-subject-review-reveal/g) || []).length, 1,
+  'The review panel must render exactly one complete-review reveal button.');
 assert.ok(subjectResult, 'Subject Matter must render a dedicated Option 3 post-submission review.');
-assert.match(subjectResult, /subjectReviewMaterialControls\(\{ attemptId: resolvedAttemptId, questionId, writingGuide \}\)/);
-assert.match(subjectResult, /class="dd-subject-editorial-pane is-coaching[^"]*"/);
-assert.match(subjectReview, /operation:\s*'subject_review_material',\s*attemptId/,
+assert.match(subjectResult, /subjectReviewPanelMarkup\(\{/);
+assert.match(subjectResult, /class="dd-subject-editorial-pane is-writing is-result-summary"/);
+assert.match(subjectResult, /class="dd-subject-editorial-pane is-coaching is-review-panel"/);
+assert.match(subjectReview, /operation:\s*'subject_reveal_review',\s*attemptId/,
   'Review material must load from the narrow owner-bound operation only after reveal.');
 assert.match(subjectReview, /state\.reviewMaterialRequests\.get\(key\)/,
   'Concurrent reveals must coalesce into one request.');
@@ -129,8 +125,8 @@ assert.match(subjectReview, /state\.reviewMaterialCache\.set\(key, material\)/,
   'Verified material must cache only for the current user and attempt key.');
 assert.match(subjectReview, /material\?\.attemptId !== attemptId \|\| material\?\.questionId !== questionId/,
   'Returned material must match the exact attempt and question.');
-assert.doesNotMatch(subjectReview, /assessment\?\.|modelAnswer|suggestedAnswer|legal_basis_snapshot|result\?\.legalBasis/,
-  'The reveal controls must not consume broad assessment or verdict fields.');
+assert.doesNotMatch(subjectReview, /legal_basis_snapshot|model_answer_snapshot|result\?\.legalBasis/,
+  'The reveal panel must not consume database snapshots or broad verdict fields directly.');
 assert.doesNotMatch(subjectReview,
   /No separate legal-basis field|released assessment does not include|Review the controlling provision|The law applies\.?/i,
   'Generic coaching copy must never masquerade as a question-specific legal basis.');
@@ -138,8 +134,8 @@ assert.match(examJs, /Review and retention/);
 assert.match(examJs, /Evaluation overview/);
 assert.match(examCss, /\.dd-subject-editorial\s*\{[\s\S]*?background:/,
   'Subject Matter must use the approved navy editorial surface.');
-assert.match(examCss, /\.dd-subject-editorial-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
-  'Option 3 must divide the writing and coaching areas equally on desktop.');
+assert.match(examCss, /\.dd-subject-editorial-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1\.12fr\)\s+minmax\(380px,\s*\.88fr\)/,
+  'Subject Matter must keep the question and editor on the wider left pane and review on the right.');
 assert.match(examCss, /\.dd-subject-editorial-pane\.is-coaching\s*\{[\s\S]*?border-left:/,
   'Option 3 must retain its centered coaching divider on desktop.');
 assert.match(examCss, /@media \(max-width: 900px\)[\s\S]*?\.dd-subject-editorial-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr[\s\S]*?\.dd-subject-editorial-pane\.is-coaching\s*\{[\s\S]*?border-left:\s*0[\s\S]*?border-top:/,

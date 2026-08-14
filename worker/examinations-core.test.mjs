@@ -75,25 +75,29 @@ test('query operations normalize catalog and private assignment tokens', () => {
   });
 });
 
-test('Subject Matter review material requires only a valid attempt identifier', () => {
-  assert.deepEqual(normalizeExaminationQuery({
-    operation: 'subject_review_material',
+test('Subject Matter complete review reveal requires only a valid attempt identifier', () => {
+  assert.deepEqual(normalizeExaminationCommand({
+    operation: 'subject_reveal_review',
     attemptId: ATTEMPT_ID,
     questionId: QUESTION_ID,
     versionId: VERSION_ID,
     unexpected: 'ignored',
   }), {
-    operation: 'subject_review_material',
+    operation: 'subject_reveal_review',
     attemptId: ATTEMPT_ID,
   });
 
-  throwsCode(() => normalizeExaminationQuery({
-    operation: 'subject_review_material',
+  throwsCode(() => normalizeExaminationCommand({
+    operation: 'subject_reveal_review',
   }), 'INVALID_IDENTIFIER');
-  throwsCode(() => normalizeExaminationQuery({
-    operation: 'subject_review_material',
+  throwsCode(() => normalizeExaminationCommand({
+    operation: 'subject_reveal_review',
     attemptId: 'not-an-attempt-uuid',
   }), 'INVALID_IDENTIFIER');
+  throwsCode(() => normalizeExaminationQuery({
+    operation: 'subject_review_material',
+    attemptId: ATTEMPT_ID,
+  }), 'UNSUPPORTED_OPERATION');
 });
 
 test('Subject Matter responses remove confidential inventory counts recursively', () => {

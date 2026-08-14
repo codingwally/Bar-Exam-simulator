@@ -28,7 +28,7 @@
     .dd-subject-course-control { width: 100%; min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 16px; border: 1px solid #ad7e28; border-radius: 3px; color: inherit; background: #061d3a; cursor: pointer; text-align: left; }
     .dd-subject-course-control strong { flex: 1 1 auto; overflow: hidden; color: #fffaf0; font: 500 18px/1.35 "Playfair Display", Georgia, serif; white-space: nowrap; text-overflow: ellipsis; }
     .dd-subject-course-control span { flex: 0 0 auto; color: #e6bd59; font: 750 9px/1.4 "IBM Plex Mono", monospace; letter-spacing: .11em; text-transform: uppercase; }
-    .dd-subject-editorial-grid { width: min(100%, 1500px); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 770px; margin: 0 auto; }
+    .dd-subject-editorial-grid { width: min(100%, 1500px); display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(380px, .88fr); height: max(470px, min(780px, calc(100dvh - 255px))); margin: 0 auto; }
     .dd-subject-editorial-pane { min-width: 0; padding: 22px clamp(34px, 4.1vw, 62px) 42px 0; }
     .dd-subject-editorial-pane.is-coaching { grid-area: auto; padding-top: 14px; padding-right: 0; padding-left: clamp(34px, 4.1vw, 62px); border-left: 1px solid #b88930; }
     .dd-question-label { position: relative; margin: 0 0 34px; color: #e6bd59; font: 750 10px/1.4 "IBM Plex Mono", monospace; letter-spacing: .13em; text-transform: uppercase; }
@@ -46,11 +46,12 @@
     .dd-exam-button.is-primary { border-color: #d5aa49; color: #061a35; background: #e2bb5d; }
     .dd-subject-result-intro { padding: 2px 8px 23px; border-bottom: 1px solid rgba(212,170,79,.54); }
     .dd-subject-result-intro p { max-width: 610px; margin: 0; color: #f2ece2; font: 400 clamp(17px, 1.55vw, 20px)/1.55 "Playfair Display", Georgia, serif; }
-    .dd-study-disclosures { display: grid; margin: 0; border-bottom: 1px solid rgba(212,170,79,.6); }
-    .dd-study-disclosures details { overflow: hidden; border: 0; border-top: 1px solid rgba(212,170,79,.42); }
-    .dd-study-disclosures summary { min-height: 66px; padding: 22px 8px; color: #e6bd59; cursor: pointer; font: 750 12px/1.5 "IBM Plex Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
-    .dd-study-disclosures details[open] summary { border-bottom: 1px solid rgba(212,170,79,.3); color: #fff0b8; }
-    .dd-study-disclosures details > :not(summary) { margin: 0; padding: 12px 8px 22px; }
+    .dd-subject-review-shell { display: grid; min-height: 100%; align-content: center; gap: 22px; padding: clamp(22px, 3vw, 38px); border: 1px solid rgba(212,170,79,.58); background: linear-gradient(155deg, rgba(13,42,74,.98), rgba(3,20,43,.98)); box-shadow: inset 0 1px rgba(255,255,255,.04), 0 20px 55px rgba(0,0,0,.22); }
+    .dd-subject-review-lock { width: 52px; height: 52px; display: grid; place-items: center; border: 1px solid #d5aa49; border-radius: 50%; color: #e6bd59; font-size: 24px; }
+    .dd-subject-review-shell h2 { margin: 0; color: #fffaf0; font: 500 clamp(28px, 2.5vw, 40px)/1.12 "Playfair Display", Georgia, serif; }
+    .dd-subject-review-shell p { margin: 0; color: #dce5ef; line-height: 1.7; }
+    .dd-subject-review-note { padding: 15px 17px; border-left: 3px solid #d5aa49; background: rgba(212,170,79,.09); }
+    .dd-subject-review-reveal { min-height: 58px; border: 1px solid #f0cd74; color: #061a35; background: linear-gradient(110deg, #f3d477, #c8921c); font: 750 12px/1.3 "IBM Plex Mono", monospace; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; box-shadow: 0 12px 30px rgba(212,170,79,.24); }
     .legal-explanation, .source-link { margin: 0; padding: 0; border: 0; color: #e5ebf2; background: transparent; font: 400 17px/1.65 "Playfair Display", Georgia, serif; }
     .source-link { display: flex; justify-content: space-between; gap: 18px; color: inherit; text-decoration: none; }
     .source-link small { display: block; color: #e6bd59; font: 700 10px/1.5 "IBM Plex Mono", monospace; }
@@ -60,7 +61,7 @@
       .dd-subject-editorial { padding-inline: 20px; }
       .dd-subject-editorial-header { display: block; padding: 24px 0 28px; }
       .dd-subject-course-picker { margin-top: 24px; }
-      .dd-subject-editorial-grid { grid-template-columns: 1fr; min-height: 0; }
+      .dd-subject-editorial-grid { grid-template-columns: 1fr; height: auto; min-height: 0; }
       .dd-subject-editorial-pane, .dd-subject-editorial-pane.is-coaching { padding: 30px 0 42px; }
       .dd-subject-editorial-pane.is-coaching { border-top: 1px solid #b88930; border-left: 0; }
     }
@@ -71,7 +72,7 @@
       .dd-question-prompt { font-size: 31px; line-height: 1.24; }
       .dd-subject-practice-actions { display: grid; grid-template-columns: 1fr; }
       .dd-exam-button { width: 100%; }
-      .dd-subject-result-intro, .dd-study-disclosures summary, .dd-study-disclosures details > :not(summary) { padding-inline: 0; }
+      .dd-subject-result-intro { padding-inline: 0; }
     }
   </style>
 </head>
@@ -95,24 +96,12 @@
       </div>
     </header>
     <div class="dd-subject-editorial-grid">
-      <main class="dd-subject-editorial-pane is-review">
+      <main class="dd-subject-editorial-pane is-writing dd-subject-practice-answer">
         <p class="dd-question-label">Civil and Land Titles and Deeds</p>
-        <p class="dd-subject-task-label">Review question</p>
+        <p class="dd-subject-task-label">Your practice question</p>
         <h2 class="dd-question-prompt">What three basic elements must generally be present for a contract to exist under the Civil Code?</h2>
-        <section class="dd-study-disclosures dd-subject-review-material" aria-labelledby="fixture-review-material-title">
-          <header class="dd-study-disclosures-heading">
-            <p class="dd-exam-kicker">Review and retention</p>
-            <h3 id="fixture-review-material-title">Open the law when you are ready.</h3>
-            <p>The verified basis and explanation load only when you deliberately reveal them.</p>
-          </header>
-          <details><summary>Reveal suggested legal basis</summary><div><p class="dd-study-hold">Open this section to load the vetted legal basis and its official sources.</p></div></details>
-          <details><summary>Why this legal basis applies</summary><div><p class="dd-study-hold">Open this section to load the explanation tied to this question.</p></div></details>
-          <details><summary>How to approach this question</summary><div class="legal-explanation">List every item requested, then briefly explain each one. Completeness and accuracy matter more than a long factual application.</div></details>
-        </section>
-      </main>
-      <aside class="dd-subject-editorial-pane is-coaching dd-subject-practice-answer" aria-labelledby="fixture-answer-title">
         <div class="dd-subject-answer-heading">
-          <div><p class="dd-exam-kicker">Optional recall practice</p><h2 id="fixture-answer-title">Write from memory</h2></div>
+          <div><p class="dd-exam-kicker">Answer workspace</p><h3 id="fixture-answer-title">Write your answer</h3></div>
           <span>Autosave active</span>
         </div>
         <section class="dd-answer-card">
@@ -124,6 +113,16 @@
           <button class="dd-exam-button is-primary" type="button" disabled>Submit for coaching</button>
           <button class="dd-exam-button" type="button">Return to courses</button>
         </nav>
+      </main>
+      <aside class="dd-subject-editorial-pane is-coaching is-review-panel" aria-labelledby="fixture-review-title">
+        <section class="dd-subject-review-shell is-locked">
+          <div class="dd-subject-review-lock" aria-hidden="true">&#128274;</div>
+          <p class="dd-exam-kicker">Complete legal review</p>
+          <h2 id="fixture-review-title">Open the answer when you choose.</h2>
+          <p>The suggested answer, complete legal basis, teaching explanation, and verified official sources remain concealed until you reveal them.</p>
+          <p class="dd-subject-review-note"><strong>Before submission:</strong> revealing marks this attempt Assisted / Open-book. Your score is not reduced, but it will be excluded from unassisted mastery metrics.</p>
+          <button class="dd-subject-review-reveal" type="button">Reveal Complete Review</button>
+        </section>
       </aside>
     </div>
   </div>

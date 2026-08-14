@@ -7,7 +7,7 @@ const guardSource = html.match(
   /\/\* PREMIUM NAVIGATION INTENT START \*\/([\s\S]*?)\/\* PREMIUM NAVIGATION INTENT END \*\//,
 )?.[1];
 const openPremiumSource = html.match(
-  /async function openPremiumBarFeels\(\) \{[\s\S]*?\n\}/,
+  /async function openPremiumBarFeels\(options = \{\}\) \{[\s\S]*?\n\}/,
 )?.[0];
 
 assert.ok(guardSource, 'Premium navigation intent guard must be present.');
@@ -22,6 +22,7 @@ let resolveAccess;
 let openedBarFeels = 0;
 let openedPricing = 0;
 let activatedBarFeels = 0;
+let restoredBarFeels = 0;
 const accessPromise = new Promise((resolve) => {
   resolveAccess = resolve;
 });
@@ -37,6 +38,11 @@ const context = vm.createContext({
     DueDiligenceExaminations: {
       openBarFeels: () => {
         openedBarFeels += 1;
+      },
+      restoreRoute: async (track) => {
+        assert.equal(track, 'bar_feels');
+        restoredBarFeels += 1;
+        return { status: 'restored' };
       },
     },
   },
@@ -68,5 +74,14 @@ assert.equal(
 );
 assert.equal(activatedBarFeels, 0);
 assert.equal(openedPricing, 0);
+
+const restoredNavigation = context.openPremiumBarFeelsForTest({
+  restoreActive: true,
+  isCurrent: () => true,
+});
+await restoredNavigation;
+assert.equal(restoredBarFeels, 1, 'Premium access must be verified before restoring Bar Feels.');
+assert.equal(openedBarFeels, 0, 'A restored Bar Feels attempt must not be replaced by the catalog.');
+assert.equal(activatedBarFeels, 1);
 
 console.log('Premium navigation race regression passed.');

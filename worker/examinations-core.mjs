@@ -25,7 +25,6 @@ export const EXAMINATION_QUERY_OPERATIONS = new Set([
   'subject_catalog',
   'subject_next',
   'subject_performance',
-  'subject_review_material',
 ]);
 
 export const EXAMINATION_COMMAND_OPERATIONS = new Set([
@@ -33,6 +32,7 @@ export const EXAMINATION_COMMAND_OPERATIONS = new Set([
   'heartbeat',
   'save_response',
   'flag_response',
+  'subject_reveal_review',
   'submit_attempt',
   'request_ai_grading',
   'create_examiner_assignment',
@@ -193,8 +193,6 @@ export function normalizeExaminationQuery(value) {
   } else if (operation === 'subject_performance') {
     normalized.subject = examinationText(payload.subject, 120) || null;
     normalized.limit = integer(payload.limit ?? 50, 'History limit', 1, 100);
-  } else if (operation === 'subject_review_material') {
-    normalized.attemptId = examinationUuid(payload.attemptId, 'Attempt');
   }
 
   return normalized;
@@ -302,6 +300,8 @@ export function normalizeExaminationCommand(value) {
       1_000_000,
     );
     normalized.flagged = boolean(payload.flagged);
+  } else if (operation === 'subject_reveal_review') {
+    normalized.attemptId = examinationUuid(payload.attemptId, 'Attempt');
   } else if (operation === 'submit_attempt') {
     normalized.attemptId = examinationUuid(payload.attemptId, 'Attempt');
     normalized.tabToken = secureTabToken(payload.tabToken);

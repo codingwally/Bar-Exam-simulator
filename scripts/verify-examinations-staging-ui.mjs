@@ -754,9 +754,12 @@ try {
           .filter((item) => item.right > innerWidth + 1 || item.left < -1)
           .slice(0, 12),
       }));
+      const activeRoot = page.locator(
+        catalog.track === 'bar_feels' ? '#dd-bar-feels-app' : '#dd-per-subject-app',
+      );
       results.responsive[label] = {
         ...layout,
-        headingVisible: await page.getByRole('heading', {
+        headingVisible: await activeRoot.getByRole('heading', {
           name: catalog.heading,
           exact: true,
         }).isVisible(),
@@ -766,7 +769,11 @@ try {
         false,
         `${label} overflow: ${JSON.stringify(results.responsive[label])}`,
       );
-      assert.equal(results.responsive[label].headingVisible, true);
+      assert.equal(
+        results.responsive[label].headingVisible,
+        true,
+        `${label} heading was not visible in the active examination root`,
+      );
       await runAccessibilityAudit(page, label);
     }
   }

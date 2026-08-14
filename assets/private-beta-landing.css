@@ -426,7 +426,7 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 }
 
 .pb-pillars-heading {
-  max-width: 780px;
+  max-width: 900px;
   margin-bottom: clamp(20px, 2.4vw, 30px);
 }
 
@@ -450,7 +450,7 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 }
 
 .pb-pillars-heading > p:last-child {
-  max-width: 680px;
+  max-width: 820px;
   margin: 12px 0 0;
   color: #c6cfdb;
   font-size: 15px;
@@ -459,7 +459,7 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 
 .pb-platform-composition {
   display: grid;
-  grid-template-columns: minmax(340px, .82fr) minmax(0, 1.18fr);
+  grid-template-columns: minmax(360px, .88fr) minmax(0, 1.12fr);
   min-height: 464px;
   border-top: 1px solid rgba(196, 164, 95, .42);
   border-bottom: 1px solid rgba(196, 164, 95, .42);
@@ -515,8 +515,8 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 .pb-chamber-entry {
   min-width: 0;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 26px;
   align-items: center;
   border: 0;
   border-top: 1px solid rgba(196, 164, 95, .25);
@@ -545,7 +545,6 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   outline-offset: 4px;
 }
 
-.pb-chamber-entry-number,
 .pb-chamber-entry-features,
 .pb-chamber-entry-action {
   color: var(--pb-gold-bright);
@@ -553,12 +552,6 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   font-weight: 700;
   letter-spacing: .1em;
   text-transform: uppercase;
-}
-
-.pb-chamber-entry-number {
-  align-self: start;
-  padding-top: 5px;
-  font-size: 9px;
 }
 
 .pb-chamber-entry-copy {
@@ -574,7 +567,7 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 
 .pb-chamber-entry-copy > span:last-child {
   color: #c8d1dc;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.48;
 }
 
@@ -584,7 +577,21 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 }
 
 .pb-chamber-entry-action {
-  font-size: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 8.5px;
+  white-space: nowrap;
+}
+
+.pb-chamber-entry-action span {
+  font-size: 15px;
+  line-height: 1;
+  transition: transform .18s ease;
+}
+
+.pb-chamber-entry:hover .pb-chamber-entry-action span {
+  transform: translateX(4px);
 }
 
 .pb-continuity-assurance {
@@ -611,7 +618,7 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 
 .pb-chamber-intro {
   display: grid;
-  grid-template-columns: minmax(0, .88fr) minmax(390px, 1.12fr);
+  grid-template-columns: minmax(0, .9fr) minmax(390px, 1.1fr);
   align-items: stretch;
   border-top: 1px solid rgba(196, 164, 95, .46);
   border-bottom: 1px solid rgba(196, 164, 95, .46);
@@ -619,14 +626,14 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 
 .pb-chamber-intro-copy {
   align-self: center;
-  padding: clamp(42px, 5vw, 72px) clamp(34px, 5vw, 68px) clamp(42px, 5vw, 72px) 0;
+  padding: clamp(34px, 4vw, 58px) clamp(34px, 5vw, 68px) clamp(34px, 4vw, 58px) 0;
 }
 
 .pb-chamber-intro-copy h1 {
   margin: 12px 0 14px;
   color: #fff;
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: clamp(42px, 5.5vw, 72px);
+  font-size: clamp(40px, 5vw, 66px);
   font-weight: 500;
   line-height: .98;
   letter-spacing: -.035em;
@@ -652,9 +659,9 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 
 .pb-chamber-feature-index {
   display: grid;
-  grid-template-columns: minmax(220px, .38fr) minmax(0, 1fr);
+  grid-template-columns: minmax(220px, .34fr) minmax(0, 1fr);
   gap: clamp(34px, 6vw, 90px);
-  padding: clamp(48px, 7vw, 88px) 0 0;
+  padding: clamp(42px, 5.5vw, 68px) 0 0;
 }
 
 .pb-chamber-feature-index > header {
@@ -676,10 +683,10 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 
 .pb-chamber-feature {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: clamp(16px, 2vw, 28px);
   align-items: start;
-  padding: 23px 0;
+  padding: 24px 0;
   border-top: 1px solid rgba(196, 164, 95, .28);
 }
 
@@ -687,11 +694,12 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   border-top-color: rgba(196, 164, 95, .52);
 }
 
-.pb-chamber-feature-number {
-  padding-top: 5px;
+.pb-chamber-feature-eyebrow {
+  margin: 0 0 7px;
   color: var(--pb-gold-bright);
-  font: 700 9px/1 'IBM Plex Mono', ui-monospace, monospace;
-  letter-spacing: .1em;
+  font: 700 8px/1.4 'IBM Plex Mono', ui-monospace, monospace;
+  letter-spacing: .14em;
+  text-transform: uppercase;
 }
 
 .pb-chamber-feature h3 {
@@ -701,7 +709,7 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   font-size: 25px;
 }
 
-.pb-chamber-feature p {
+.pb-chamber-feature-copy > p:last-child {
   margin: 0;
   color: #c7d1dd;
   font-size: 13px;
@@ -741,7 +749,8 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 }
 
 .pb-chamber-intro-visual {
-  min-height: 510px;
+  min-height: 430px;
+  max-height: 540px;
   margin: 0;
   background: #14243a;
 }
@@ -758,7 +767,7 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   filter: saturate(.82) contrast(1.04) brightness(.8);
 }
 
-.pb-pillar-number {
+.pb-chamber-kicker {
   display: block;
   margin: 0;
   color: var(--pb-gold-bright);
@@ -1176,6 +1185,15 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   font-size: 12px;
 }
 
+.pb-landing .pb-chamber-feature-index > .pb-final-note {
+  margin-top: 6px;
+  padding: 18px 0;
+  border-top: 1px solid rgba(196, 164, 95, .3);
+  border-left: 0;
+  color: #ead9aa;
+  background: transparent;
+}
+
 @media (max-width: 1120px) {
   .pb-header {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1327,7 +1345,7 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   }
 
   .pb-chamber-entry {
-    grid-template-columns: 28px minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 11px;
     padding: 17px 4px;
   }
@@ -1370,12 +1388,12 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   }
 
   .pb-chamber-feature {
-    grid-template-columns: 28px minmax(0, 1fr);
+    grid-template-columns: 1fr;
     gap: 12px;
   }
 
   .pb-chamber-feature button {
-    grid-column: 2;
+    grid-column: 1;
     width: 100%;
   }
 

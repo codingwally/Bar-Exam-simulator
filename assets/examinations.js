@@ -1121,51 +1121,61 @@
       problem: {
         label: 'Fact-based legal problem',
         focus: ['Direct position', 'Governing rule', 'Material facts', 'Clear result'],
+        approach: 'Take a clear position on the legal issue, identify the controlling rule, and connect only the material facts to that rule before stating the result. Address a competing argument only when the facts genuinely raise one.',
         placeholder: 'Answer the precise legal issue. State the governing rule, apply the material facts, and give a clear result. Use the structure that best fits your analysis.',
       },
       definition: {
         label: 'Definition',
         focus: ['Precise meaning', 'Governing authority', 'Elements or scope', 'Qualifications'],
+        approach: 'Give the precise legal meaning first. Then identify the essential elements, scope, and any qualification the question actually calls for. Do not turn a definition question into an invented factual problem.',
         placeholder: 'Give the precise legal definition requested. Explain its essential elements, scope, and material qualifications without inventing facts.',
       },
       explanation: {
         label: 'Legal explanation',
         focus: ['Core proposition', 'Governing authority', 'Complete explanation', 'Limits or exceptions'],
+        approach: 'State the core proposition directly, explain how the rule operates, and add only the limits or exceptions needed to make the explanation legally complete. Keep the response centered on the concept named in the question.',
         placeholder: 'Explain the requested concept completely. State the controlling rule or doctrine, develop the reasoning, and address material limits or exceptions.',
       },
       enumeration: {
         label: 'Enumeration',
         focus: ['Complete list', 'Governing source', 'Brief explanation', 'Qualifications'],
+        approach: 'List every item requested, then briefly explain each one. For this kind of question, completeness and accuracy matter more than a long factual application. Cite the governing source if you know it.',
         placeholder: 'Provide the complete enumeration requested. Identify the governing source and briefly explain each material item or qualification.',
       },
       distinction: {
         label: 'Distinction',
         focus: ['Point of comparison', 'First concept', 'Second concept', 'Legal effect'],
+        approach: 'Compare the concepts using the same legally relevant points: their rule, elements, operation, and legal effect. A paired comparison is usually clearer than two unrelated definitions.',
         placeholder: 'Distinguish the concepts using the legally relevant points of comparison, their governing rules, and the practical legal effect of each difference.',
       },
       procedure: {
         label: 'Procedure or remedy',
         focus: ['Proper remedy', 'Governing rule', 'Required steps', 'Timing and effect'],
+        approach: 'Identify the proper remedy or procedural step first. Then explain who may use it, when it is available, the required sequence, and the consequence of following or missing the rule.',
         placeholder: 'Identify the proper procedure or remedy. Explain the controlling rule, required steps, timing, and legal effect.',
       },
       practical: {
         label: 'Practical legal task',
         focus: ['Requested action', 'Legal requirements', 'Tailored execution', 'Safeguards'],
+        approach: 'Produce the exact legal work requested. Check each formal and substantive requirement against the facts given, and include the safeguards needed to make the work usable and accurate.',
         placeholder: 'Perform the requested practical task. Follow the governing legal requirements and tailor the response to the circumstances stated.',
       },
       doctrine: {
         label: 'Doctrine',
         focus: ['Doctrine', 'Authority', 'Scope and operation', 'Limits or exceptions'],
+        approach: 'State the doctrine accurately, explain when it operates, and identify its material limits or exceptions. Use the authority to support the doctrine, not as a substitute for explaining it.',
         placeholder: 'State the doctrine accurately, identify its authority, and explain its scope, operation, and material limits or exceptions.',
       },
       mixed: {
         label: 'Multi-part question',
         focus: ['Every subpart', 'Governing rules', 'Complete analysis', 'Clear dispositions'],
+        approach: 'Separate the response by task so no subpart is missed. Give each subpart its own controlling rule and analysis, then state a clear result wherever the question requires one.',
         placeholder: 'Answer every subpart separately and completely. Use the appropriate rule and analysis for each task, then give a clear disposition where required.',
       },
       other: {
         label: 'Legal response',
         focus: ['Precise task', 'Governing law', 'Complete reasoning', 'Clear response'],
+        approach: 'Identify the exact legal task before writing. Respond directly, ground the explanation in the governing law, and use the structure that makes the requested answer easiest to verify.',
         placeholder: 'Respond directly to the task asked. State the governing law and develop a complete, clear legal explanation.',
       },
     };
@@ -1175,60 +1185,71 @@
   function subjectPracticeRoomMarkup({ question, timerMode, writingGuide }) {
     const course = state.active.examination.subject || state.selectedSubject || 'Selected course';
     const answerText = question.answerText || '';
-    return `<div class="dd-subject-practice">
-      <header class="dd-subject-practice-header">
+    return `<div class="dd-subject-editorial">
+      <header class="dd-subject-editorial-header">
         <div>
-          <p class="dd-exam-kicker">${escapeHtml(course)}</p>
-          <h1>Subject Matter Practice</h1>
-          <p>Read the task carefully, write in the form it requires, and submit when your response is complete.</p>
+          <p class="dd-subject-breadcrumb"><span>The Academy</span><b aria-hidden="true">/</b> Subject Matter</p>
+          <h1>Subject Matter</h1>
+          <p>Review the law by answering one focused question at a time.</p>
         </div>
-        <div class="dd-subject-practice-clock ${timerMode === 'none' ? 'is-hidden' : ''}" id="dd-room-clock">
-          <small>${timerMode === 'strict' ? 'Time remaining' : 'Writing time'}</small>
-          <strong id="dd-room-clock-value">${formatClock(
-            timerMode === 'strict' ? state.clientRemaining : state.clientElapsed,
-          )}</strong>
+        <div class="dd-subject-course-picker">
+          <p>Choose a course</p>
+          <button class="dd-subject-course-control" type="button" data-subject-change-course
+            aria-label="Change course. Opens the searchable Year, Term, and Course chooser.">
+            <strong>${escapeHtml(course)}</strong>
+            <span>Change</span>
+          </button>
         </div>
       </header>
-      <div class="dd-subject-practice-layout">
-        <section class="dd-subject-practice-question" aria-labelledby="dd-subject-question-title">
-          <p class="dd-question-label">Your practice question · ${escapeHtml(writingGuide.label)}</p>
+      <div class="dd-subject-editorial-grid">
+        <main class="dd-subject-editorial-pane is-writing" aria-labelledby="dd-subject-question-title">
+          <p class="dd-question-label">${escapeHtml(course)}</p>
+          <p class="dd-subject-task-label">Practice question</p>
           <h2 class="dd-question-prompt" id="dd-subject-question-title">${escapeHtml(question.prompt)}</h2>
-        </section>
-        <aside class="dd-subject-study-companion" aria-labelledby="dd-subject-approach-title">
-          <p class="dd-exam-kicker">Study companion</p>
-          <h2 id="dd-subject-approach-title">How to approach this question</h2>
-          <p>Use the task itself to choose your structure. Before writing, make sure your response covers:</p>
-          <ol>
-            ${writingGuide.focus.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
-          </ol>
-          <p class="dd-subject-companion-note">Technique only. The suggested legal basis, discussion, answer, and sources remain unavailable until after submission.</p>
-        </aside>
-        <section class="dd-subject-practice-answer" aria-labelledby="dd-subject-answer-title">
+          <section class="dd-subject-approach" aria-labelledby="dd-subject-approach-title">
+            <h3 id="dd-subject-approach-title">How to approach</h3>
+            <p>${escapeHtml(writingGuide.approach)}</p>
+          </section>
+          <section class="dd-subject-practice-answer" aria-labelledby="dd-subject-answer-title">
           ${question.localRecoveryText != null ? `<div class="dd-exam-status is-error">
             A newer local draft differs from the server revision.
             <button class="dd-exam-button" type="button" data-use-local-draft>Use local draft</button>
           </div>` : ''}
-          <div class="dd-subject-answer-heading">
-            <div><p class="dd-exam-kicker">Your response</p><h2 id="dd-subject-answer-title">Your answer</h2></div>
-            <span>Use the legal format the question requires.</span>
-          </div>
+          <h3 id="dd-subject-answer-title">Your answer</h3>
           <section class="dd-answer-card">
             <label class="sr-only" for="dd-answer-editor">Your answer</label>
             <textarea class="dd-answer-editor" id="dd-answer-editor" maxlength="20000"
-              placeholder="Write your answer in the structure the question requires. You may use ALAC or another clear legal format where appropriate.">${escapeHtml(answerText)}</textarea>
+              placeholder="${escapeAttribute(writingGuide.placeholder)}">${escapeHtml(answerText)}</textarea>
             <footer class="dd-answer-footer">
               <span id="dd-word-count">${wordCount(answerText)} words</span>
-              <span class="dd-save-state is-saved" id="dd-save-state">Server revision ${Number(question.revision) || 0}</span>
+              <span class="dd-save-state is-saved" id="dd-save-state">${Number(question.revision) > 0 ? 'Saved' : 'Ready to save'}</span>
             </footer>
           </section>
-        </section>
-        <nav class="dd-subject-practice-actions" aria-label="Subject Matter practice actions">
-          <button class="dd-exam-button" data-return-catalog type="button">Return to courses</button>
-          <span class="dd-room-bottom-status" data-current-word-status>${wordCount(answerText)} words ·
-            ${timerMode === 'strict' ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}</span>
-          <button class="dd-exam-button is-primary" data-submit-current type="button"
-            ${answerText.trim() ? '' : 'disabled'}>Submit answer</button>
-        </nav>
+          </section>
+          <div class="dd-subject-writing-status">
+            <div class="dd-subject-practice-clock ${timerMode === 'none' ? 'is-hidden' : ''}" id="dd-room-clock">
+              <small>${timerMode === 'strict' ? 'Time remaining' : 'Writing time'}</small>
+              <strong id="dd-room-clock-value">${formatClock(
+                timerMode === 'strict' ? state.clientRemaining : state.clientElapsed,
+              )}</strong>
+            </div>
+            <span class="dd-room-bottom-status" data-current-word-status>${wordCount(answerText)} words &middot;
+              ${timerMode === 'strict' ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}</span>
+          </div>
+          <nav class="dd-subject-practice-actions" aria-label="Subject Matter practice actions">
+            <button class="dd-exam-button is-primary" data-submit-current type="button"
+              ${answerText.trim() ? '' : 'disabled'}>Submit answer</button>
+            <button class="dd-exam-button" data-return-catalog type="button">Return to courses</button>
+          </nav>
+        </main>
+        <aside class="dd-subject-editorial-pane is-coaching dd-subject-coaching-locked" aria-labelledby="dd-subject-coaching-title">
+          <div>
+            <p class="dd-exam-kicker">Review and retention</p>
+            <h2 id="dd-subject-coaching-title">Coaching follows your submission.</h2>
+            <p>Your evaluation, approved suggested legal basis, guidance, suggested discussion, answer, and official sources will appear here after you submit.</p>
+          </div>
+          <p class="dd-subject-coaching-note">Nothing on this side reveals the answer while you are still writing.</p>
+        </aside>
       </div>
     </div>`;
   }
@@ -1996,36 +2017,149 @@
       .filter((section) => section.text);
   }
 
+  const SUBJECT_GUIDANCE_STOP_WORDS = new Set([
+    'about', 'after', 'again', 'against', 'answer', 'applies', 'basis', 'because',
+    'article', 'before', 'being', 'between', 'civil', 'clear', 'code', 'could',
+    'court', 'does', 'from', 'governing', 'legal', 'must', 'question', 'republic',
+    'response', 'revised', 'rule', 'section', 'should', 'states', 'statute', 'that',
+    'their', 'there', 'these', 'they', 'this', 'under', 'when', 'where', 'which',
+    'with', 'would',
+  ]);
+
+  function subjectGuidanceTokens(value) {
+    return new Set(String(value || '').toLowerCase().match(/[a-z0-9]{4,}/g)
+      ?.filter((token) => !SUBJECT_GUIDANCE_STOP_WORDS.has(token)) || []);
+  }
+
+  function subjectGuidanceIsSpecific(explanation, prompt, legalBasis) {
+    const text = String(explanation || '').trim();
+    if (text.length < 60 || !legalBasis) return false;
+    const explanationTokens = subjectGuidanceTokens(text);
+    const basisMatches = [...subjectGuidanceTokens(legalBasis)]
+      .filter((token) => explanationTokens.has(token)).length;
+    const questionMatches = [...subjectGuidanceTokens(prompt)]
+      .filter((token) => explanationTokens.has(token)).length;
+    const citations = String(legalBasis).match(/\b(?:article|section|rule|republic act|r\.a\.|a\.m\.)\s*(?:no\.?\s*)?[ivxlcdm\d-]+/gi) || [];
+    const repeatsCitation = citations.some((citation) => text.toLowerCase().includes(citation.toLowerCase()));
+    return questionMatches >= 1 && (basisMatches >= 1 || repeatsCitation);
+  }
+
   function subjectMatterStudyDisclosures({ assessment, result, adaptiveSections, suggestedAnswer, sources }) {
-    const alac = assessment?.modelAnswerALAC || {};
     const legalBasis = String(
-      result?.legalBasis || assessment?.legalBasis || alac.legalBasis || '',
+      result?.legal_basis_snapshot || result?.legalBasis || '',
     ).trim();
-    const explanation = String(assessment?.legalExplanation || '').trim();
+    const candidateGuidance = String(assessment?.legalExplanation || '').trim();
+    const explanation = subjectGuidanceIsSpecific(
+      candidateGuidance,
+      result?.prompt,
+      legalBasis,
+    ) ? candidateGuidance : '';
     const discussion = adaptiveSections.length
       ? adaptiveSections.map((section) => `<div class="alac-part"><b>${escapeHtml(section.label)}</b><p>${escapeHtml(section.text)}</p></div>`).join('')
-      : '<p>No separate suggested discussion is available for this item.</p>';
-    const releasedAnswer = String(suggestedAnswer || [
-      alac.answer, alac.legalBasis, alac.application, alac.conclusion,
-    ].filter(Boolean).join('\n\n')).trim();
+      : '<p class="dd-study-hold">A suggested discussion has not been released for this item.</p>';
+    const releasedAnswer = String(suggestedAnswer || '').trim();
     return `<section class="dd-study-disclosures" aria-labelledby="dd-study-disclosures-title">
       <header class="dd-study-disclosures-heading">
         <p class="dd-exam-kicker">Continue your review</p>
         <h4 id="dd-study-disclosures-title">Study the law behind your response.</h4>
         <p>Open each part when you are ready to compare, correct, and retain the governing material.</p>
       </header>
-      <details><summary>Reveal suggested legal basis</summary><div class="legal-explanation">${escapeHtml(
-        legalBasis || 'No separate legal-basis field is available in the released record.',
-      )}</div></details>
-      <details><summary>Why this legal basis applies</summary><div class="legal-explanation">${escapeHtml(
-        explanation || 'The released assessment does not include a separate applicability explanation.',
-      )}</div></details>
-      <details><summary>Show suggested discussion</summary><div class="alac-model dd-adaptive-model">${discussion}</div></details>
-      <details><summary>Show suggested answer</summary><div class="dd-model-answer">${escapeHtml(
-        releasedAnswer || 'The suggested answer has not been released for this item.',
-      )}</div></details>
-      <details><summary>View verified sources</summary>${assessmentSources(sources)}</details>
+      <details><summary>Reveal suggested legal basis</summary>${legalBasis
+        ? `<div class="legal-explanation">${escapeHtml(legalBasis)}</div>`
+        : '<p class="dd-study-hold"><strong>Not released.</strong> This item has no approved legal-basis snapshot available. It is held here instead of being replaced with a general writing tip.</p>'}</details>
+      <details><summary>Guidance: why this basis applies</summary>${explanation
+        ? `<div class="legal-explanation">${escapeHtml(explanation)}</div>`
+        : '<p class="dd-study-hold"><strong>Specific guidance unavailable.</strong> The released record does not contain an explanation tied closely enough to this exact question and legal basis.</p>'}</details>
+      <details><summary>Suggested discussion</summary><div class="alac-model dd-adaptive-model">${discussion}</div></details>
+      <details><summary>Suggested answer</summary>${releasedAnswer
+        ? `<div class="dd-model-answer">${escapeHtml(releasedAnswer)}</div>`
+        : '<p class="dd-study-hold">The approved suggested answer has not been released for this item.</p>'}</details>
+      <details><summary>Official sources</summary>${assessmentSources(sources)}</details>
     </section>`;
+  }
+
+  function subjectMatterResultMarkup(result) {
+    const course = result?.subject
+      || state.active?.examination?.subject
+      || state.selectedSubject
+      || 'Selected course';
+    const writingGuide = subjectWritingGuide(result || {});
+    const answerText = String(result?.answerText || '').trim();
+    const assessment = result?.aiAssessment || result?.assessment || {};
+    const score = result?.aiScore ?? result?.score;
+    const suggestedAnswer = result?.modelAnswer || result?.suggestedAnswer || '';
+    const sources = result?.sources || [];
+    const adaptiveSections = adaptiveModelAnswerSections(assessment, {
+      ...result,
+      prompt: result?.prompt || '',
+    });
+    const studyDisclosures = subjectMatterStudyDisclosures({
+      assessment,
+      result,
+      adaptiveSections,
+      suggestedAnswer,
+      sources,
+    });
+    const summary = String(assessment?.rationale || '').trim()
+      || 'Compare your response with the released legal basis and study material below.';
+    const questionId = result?.questionId || result?.id || '';
+    return `<div class="dd-subject-editorial is-result">
+      <header class="dd-subject-editorial-header">
+        <div>
+          <p class="dd-subject-breadcrumb"><span>The Academy</span><b aria-hidden="true">/</b> Subject Matter</p>
+          <h1>Subject Matter</h1>
+          <p>Review the law by answering one focused question at a time.</p>
+        </div>
+        <div class="dd-subject-course-picker">
+          <p>Choose a course</p>
+          <button class="dd-subject-course-control" type="button" data-subject-change-course
+            aria-label="Change course. Opens the searchable Year, Term, and Course chooser.">
+            <strong>${escapeHtml(course)}</strong>
+            <span>Change</span>
+          </button>
+        </div>
+      </header>
+      <div class="dd-subject-editorial-grid">
+        <main class="dd-subject-editorial-pane is-writing" aria-labelledby="dd-subject-result-question-title">
+          <p class="dd-question-label">${escapeHtml(course)}</p>
+          <p class="dd-subject-task-label">Practice question</p>
+          <h2 class="dd-question-prompt" id="dd-subject-result-question-title">${escapeHtml(result?.prompt || '')}</h2>
+          <section class="dd-subject-approach" aria-labelledby="dd-subject-result-approach-title">
+            <h3 id="dd-subject-result-approach-title">How to approach</h3>
+            <p>${escapeHtml(writingGuide.approach)}</p>
+          </section>
+          <section class="dd-subject-submitted-response" aria-labelledby="dd-subject-submitted-answer-title">
+            <h3 id="dd-subject-submitted-answer-title">Your answer</h3>
+            <div class="dd-subject-submitted-answer">${escapeHtml(answerText || 'No answer text is available in this released record.')}</div>
+          </section>
+          <nav class="dd-subject-practice-actions" aria-label="Subject Matter review actions">
+            <button class="dd-exam-button is-primary" type="button" data-subject-next>Next question</button>
+            <button class="dd-exam-button" type="button" data-return-catalog>Return to courses</button>
+          </nav>
+        </main>
+        <aside class="dd-subject-editorial-pane is-coaching" aria-label="Subject Matter coaching and study material">
+          <div class="dd-subject-review-summary">
+            <section class="dd-subject-result-intro" aria-labelledby="dd-subject-review-summary-title">
+              <h2 class="sr-only" id="dd-subject-review-summary-title">Your coaching result</h2>
+              <p>${escapeHtml(summary)}</p>
+            </section>
+            ${studyDisclosures}
+          </div>
+          <div class="dd-subject-review-tools" aria-label="Subject Matter review tools">
+            ${score != null ? `<p class="dd-subject-result-score"><strong>${Number(score).toFixed(1)} / 5</strong><span>Legal-study practice score</span></p>` : ''}
+            <p>This coaching supports legal study. It is not an official Supreme Court grade or prediction.</p>
+            <div>
+              <button class="dd-subject-review-work" type="button" data-assessment-rating="up">Helpful</button>
+              <button class="dd-subject-review-work" type="button" data-assessment-rating="down">Needs work</button>
+              ${questionId ? `<button class="dd-subject-review-work" type="button" data-suggest-exam-correction
+                data-question-id="${escapeAttribute(questionId)}" data-question-subject="${escapeAttribute(course)}">Suggest a correction</button>` : ''}
+              <button class="dd-subject-review-work" type="button"
+                data-subject-performance="${escapeAttribute(course)}">Review my saved work</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>`;
   }
 
   function assessmentCard(result, options = {}) {
@@ -2036,7 +2170,7 @@
     const score = result.aiScore ?? result.score;
     const prompt = result.prompt || options.prompt || '';
     const suggestedAnswer = result.modelAnswer || result.suggestedAnswer || '';
-    const sources = result.sources || assessment.sources || [];
+    const sources = isSubjectMatter ? (result.sources || []) : (result.sources || assessment.sources || []);
     const questionId = result.questionId || result.id || '';
     const hasAlac = ['answer', 'legalBasis', 'application', 'conclusion'].some((key) => alac[key]);
     const adaptiveSections = isSubjectMatter
@@ -2053,16 +2187,16 @@
       <div class="assessment-hero">
         ${score != null ? `<div class="score-medallion"><div><strong>${Number(score).toFixed(1)} / 5</strong><span>Points earned</span></div></div>` : ''}
         <div><div class="assessment-kicker">${isSubjectMatter ? 'Evaluation overview' : 'Individual Question Assessment'}</div>
-          <h3 class="assessment-title">${escapeHtml(assessment.performanceLabel || 'Philippine Bar essay assessment')}</h3>
-          <div class="assessment-equivalent">Scored on the 0.0–5.0 Philippine Bar essay practice scale</div>
+          <h3 class="assessment-title">${escapeHtml(assessment.performanceLabel || (isSubjectMatter ? 'Question review' : 'Philippine Bar essay assessment'))}</h3>
+          <div class="assessment-equivalent">Scored on the 0.0–5.0 ${isSubjectMatter ? 'legal-study practice' : 'Philippine Bar essay practice'} scale</div>
           <div class="assessment-badges"><span class="assessment-badge">${escapeHtml(assessment.label || 'Question-bank assessment')}</span>
             ${assessment.tier ? `<span class="assessment-badge">Official tier ${escapeHtml(assessment.tier)}</span>` : ''}
             ${assessment.sourceStatus ? `<span class="assessment-badge">Source: ${escapeHtml(assessment.sourceStatus)}</span>` : ''}</div>
         </div>
       </div>
       <div class="assessment-body">
-        ${prompt ? `<section class="assessment-section"><h4>Question</h4><div class="dd-question-prompt">${escapeHtml(prompt)}</div></section>` : ''}
-        ${options.answerText ? `<section class="assessment-section"><h4>Your answer</h4><div class="dd-model-answer">${escapeHtml(options.answerText)}</div></section>` : ''}
+        ${prompt && !(isSubjectMatter && options.compactSubject) ? `<section class="assessment-section"><h4>Question</h4><div class="dd-question-prompt">${escapeHtml(prompt)}</div></section>` : ''}
+        ${options.answerText && !(isSubjectMatter && options.compactSubject) ? `<section class="assessment-section"><h4>Your answer</h4><div class="dd-model-answer">${escapeHtml(options.answerText)}</div></section>` : ''}
         <h4 class="panel-title">${isSubjectMatter ? 'Why this response received its score' : 'Why this score'}</h4>
         <p class="assessment-rationale">${escapeHtml(assessment.rationale || 'The assessment record does not include a written rationale.')}</p>
         ${isSubjectMatter ? '' : `<section class="assessment-section"><h4>Governing rule and authority</h4>
@@ -2087,7 +2221,7 @@
         ${isSubjectMatter ? '' : `<section class="assessment-section"><h4>Supporting legal sources</h4>${assessmentSources(sources)}</section>`}
         ${sourceWarning}
         ${result.humanComments ? `<section class="assessment-section"><h4>Human examiner</h4><div class="legal-explanation">${escapeHtml(result.humanComments)}</div></section>` : ''}
-        <div class="assessment-meta">This AI-generated assessment is for Bar review and coaching only. It is not an official Supreme Court grade and does not guarantee or predict an examinee’s actual result.</div>
+        <div class="assessment-meta">This AI-generated assessment is for ${isSubjectMatter ? 'legal study and coaching' : 'Bar review and coaching'} only. It is not an official Supreme Court grade and does not guarantee or predict an examinee’s actual result.</div>
         <div class="fb-bar"><span class="fb-label">Was this coaching helpful?</span>
           <button class="fb-btn" type="button" data-assessment-rating="up">Helpful</button>
           <button class="fb-btn" type="button" data-assessment-rating="down">Needs work</button>
@@ -2113,6 +2247,18 @@
         limit: 30,
         offset: 0,
       });
+      if (track === 'per_subject') {
+        const result = Array.isArray(verdict.results) ? verdict.results[0] : null;
+        root.innerHTML = result
+          ? subjectMatterResultMarkup(result)
+          : `<div class="dd-subject-editorial"><section class="dd-subject-result-unavailable">
+            <p class="dd-exam-kicker">Subject Matter</p>
+            <h1>Review unavailable.</h1>
+            <p>Your submitted answer is preserved, but no released assessment record is available yet.</p>
+            <button class="dd-exam-button" type="button" data-return-catalog>Return to courses</button>
+          </section></div>`;
+        return;
+      }
       root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-review-page' : ''}"><section class="dd-verdict-screen">
         <p class="dd-exam-kicker">${track === 'per_subject' ? 'Subject Matter' : 'The Verdict / Multi-Question Examination'}</p>
         <h1>${track === 'per_subject' ? 'Review and retain.' : 'Individual ALAC assessments.'}</h1>
@@ -2445,19 +2591,21 @@
     }
   }
 
-  async function returnCatalog() {
+  async function returnCatalog(options = {}) {
     const activeAttempt = state.active?.attempt;
     const attemptOpen = activeAttempt
       && ['room', 'review'].includes(state.screen)
       && !['submitted', 'expired', 'cancelled'].includes(
         String(activeAttempt.status || 'in_progress'),
-      );
+    );
     if (attemptOpen) {
       saveRecovery();
       const confirmed = await confirmDecision({
-        title: 'Leave this examination?',
-        copy: 'Your latest answer will be saved and you can resume it later.',
-        confirmLabel: 'Leave Examination',
+        title: options.openSubjectSelector ? 'Change course?' : 'Leave this examination?',
+        copy: options.openSubjectSelector
+          ? 'Your latest answer will be saved before the course chooser opens.'
+          : 'Your latest answer will be saved and you can resume it later.',
+        confirmLabel: options.openSubjectSelector ? 'Change course' : 'Leave Examination',
       });
       if (!confirmed) return;
       const saved = await flushCurrentSave();
@@ -2468,6 +2616,12 @@
     state.setup = null;
     state.screen = 'catalog';
     await loadCatalog(state.track);
+    if (options.openSubjectSelector === true && state.track === 'per_subject') {
+      requestAnimationFrame(() => {
+        const trigger = document.querySelector('[data-subject-selector-open]');
+        openSubjectSelector(trigger);
+      });
+    }
   }
 
   function handleClick(event) {
@@ -2493,6 +2647,10 @@
     }
     if (event.target.closest('[data-subject-timer-settings]')) {
       openSubjectTimerSettings();
+      return;
+    }
+    if (event.target.closest('[data-subject-change-course]')) {
+      returnCatalog({ openSubjectSelector: true });
       return;
     }
     const subjectPerformance = event.target.closest('[data-subject-performance]');

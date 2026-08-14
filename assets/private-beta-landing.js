@@ -24,41 +24,41 @@
   const chamberViews = Object.freeze({
     academy: Object.freeze({
       kicker: 'The Academy',
-      title: 'Practice, review, and understand your progress.',
-      copy: 'Build the habit of legal analysis through realistic essay practice, course-based review, and a private record that shows how your reasoning develops.',
+      title: 'Practice the work. Understand the law. See your progress.',
+      copy: 'The Academy brings focused legal writing, course-based review, and your private learning record into one deliberate study path. Begin with the kind of practice you need today, then return to see how your reasoning develops.',
       image: 'library-student',
       alt: 'Law student preparing in a library',
       features: Object.freeze([
-        Object.freeze({ id: 'mock', title: 'Mock Bar', copy: 'Practice Philippine Bar-style essays across the existing eight subjects and receive source-backed coaching on the approved 0–5 practice scale. Expect realistic prompts and structured feedback, never an official Bar rating or prediction.' }),
-        Object.freeze({ id: 'subject-matter', title: 'Subject Matter', copy: 'Choose a law-school course and practice one question at a time with technique matched to the task. After submission, review the suggested legal basis, why it applies, an adaptive discussion, answer guidance, and verified sources.' }),
-        Object.freeze({ id: 'verdict', title: 'The Verdict', copy: 'Return to your private record of attempts, answers, coaching, and personal study exports. Use it to understand how your reasoning develops; it does not predict an official Bar result.' }),
+        Object.freeze({ id: 'mock', title: 'Mock Bar', eyebrow: 'Bar-style essay practice', action: 'Try Mock Bar', copy: 'Work through realistic Philippine Bar-style essays across eight subjects. Receive candid, source-backed coaching on the approved 0–5 practice scale—never a prediction of an official Bar result.' }),
+        Object.freeze({ id: 'subject-matter', title: 'Subject Matter', eyebrow: 'Course-based review', action: 'Review a subject', copy: 'Choose a law-school course and answer one focused question at a time. After submission, study the suggested legal basis, why it applies, a guided discussion, the suggested answer, and verified sources.' }),
+        Object.freeze({ id: 'verdict', title: 'The Verdict', eyebrow: 'Your private learning record', action: 'View The Verdict', copy: 'Return to your own attempts, answers, coaching, and study exports. Use the record to revisit difficult questions and notice how your legal reasoning changes over time.' }),
       ]),
       access: 'Sign in when you begin an examination or open your personal record.',
     }),
     commons: Object.freeze({
       kicker: 'The Commons',
-      title: 'Learn from clear materials and from one another.',
-      copy: 'Learn the law in language you can use, exchange ideas with the Due Diligence community, and manage the access that supports your study.',
+      title: 'Make the law clearer—and learning less solitary.',
+      copy: 'The Commons is where plain-language practice meets academic community. Work through a legal idea in your own words, exchange questions and resources with fellow learners, and manage the access that supports your study.',
       image: 'library-community',
       alt: 'Students learning together in a library',
       features: Object.freeze([
-        Object.freeze({ id: 'bar-easy', title: 'Bar Easy', copy: 'Express legal reasoning in plain language before seeing coaching and verified legal material. Expect a focused practice exchange that helps turn understanding into usable legal explanation.' }),
-        Object.freeze({ id: 'quorum', title: 'Quorum', copy: 'Join Due Diligence’s academic community for questions, discussions, case notes, study assistance, resources, and study circles. Signed-in members may also use anonymous participation where the live feature allows it.' }),
-        Object.freeze({ id: 'retainer', title: 'Retainer', copy: 'Review the membership and access options currently available to your account. Expect only verified live entitlements and plan information, not a discussion or study-posting area.' }),
+        Object.freeze({ id: 'bar-easy', title: 'Bar Easy', eyebrow: 'Legal reasoning in plain language', action: 'Open Bar Easy', copy: 'Explain a legal idea in words that make sense to you before viewing coaching and verified legal material. It is a calmer way to turn understanding into a usable legal explanation.' }),
+        Object.freeze({ id: 'quorum', title: 'Quorum', eyebrow: 'Academic community', action: 'Enter Quorum', copy: 'Ask questions, exchange case notes, share study help and resources, and find study circles within the signed-in Due Diligence community.' }),
+        Object.freeze({ id: 'retainer', title: 'Retainer', eyebrow: 'Membership and access', action: 'View Retainer', copy: 'Review the membership and access options currently available to your account. Only the plans and benefits configured in the live platform are shown.' }),
       ]),
       access: 'Reading the introduction is public. Community participation and personal access details require sign-in.',
     }),
     barbound: Object.freeze({
       kicker: 'BarBound',
-      title: 'Turn review into deliberate Bar preparation.',
-      copy: 'Move from study to performance through complete simulations, doctrine recall, Chair’s Cases, and the decisions that anchor Philippine Bar subjects.',
+      title: 'Move beyond recall. Prepare to perform.',
+      copy: 'BarBound gathers the deeper work of Bar preparation: sustained writing under exam conditions, disciplined doctrine recall, the Chair’s Cases, and the decisions that anchor the syllabus.',
       image: 'writing-notes',
       alt: 'Students reviewing notes and legal materials',
       features: Object.freeze([
-        Object.freeze({ id: 'bar-feels', title: 'Bar Feels', copy: 'Enter a curated multi-question Bar simulation with the existing navigation, timed writing, review, and submission flow. Afterward, receive the current coaching experience without changing the approved grading system.' }),
-        Object.freeze({ id: 'chair-cases', title: '2026 Bar Chair’s Cases', copy: 'Study selected decisions through their Bar relevance, facts, issue, ruling, doctrine, and disposition. Each record leads back to its official source for careful review.' }),
-        Object.freeze({ id: 'doctrines', title: 'Doctrines', copy: 'Use a Recall → Explain → Verify sequence to retrieve a rule before reading it. Active recall makes the doctrine, its limits, and its authority easier to retain.' }),
-        Object.freeze({ id: 'anchor-cases', title: 'Anchor Case Digests', copy: 'Review foundational cases through structured facts, issue, ruling, doctrine, disposition, and ALAC use where appropriate. Search the library and open the official primary source when deeper reading is needed.' }),
+        Object.freeze({ id: 'bar-feels', title: 'Bar Feels', eyebrow: 'Full examination simulation', action: 'Start Bar Feels', copy: 'Enter a curated multi-question Bar simulation with timed writing, question navigation, review, and submission. The approved coaching and grading experience follows your completed attempt.' }),
+        Object.freeze({ id: 'chair-cases', title: '2026 Bar Chair’s Cases', eyebrow: 'Decisions shaping the 2026 Bar', action: 'Study Chair’s Cases', copy: 'Study selected decisions through their Bar relevance, facts, issue, ruling, controlling doctrine, and disposition, with a path to the official full text.' }),
+        Object.freeze({ id: 'doctrines', title: 'Doctrines', eyebrow: 'Recall, explain, verify', action: 'Practice Doctrines', copy: 'Retrieve a doctrine before reading it, explain it in your own words, then verify its meaning, limits, exceptions, and authority.' }),
+        Object.freeze({ id: 'anchor-cases', title: 'Anchor Case Digests', eyebrow: 'Foundational decisions', action: 'Browse Anchor Cases', copy: 'Search foundational decisions and review their facts, issue, ruling, doctrine, disposition, and practical use, with official sources available for deeper reading.' }),
       ]),
       access: 'Protected BarBound features open only when your current account has the required access.',
     }),
@@ -128,20 +128,19 @@
       view.replaceChildren();
       return;
     }
-    const featureMarkup = definition.features.map((feature, index) => `<article class="pb-chamber-feature">
-      <span class="pb-chamber-feature-number" aria-hidden="true">0${index + 1}</span>
-      <div><h3>${feature.title}</h3><p>${feature.copy}</p></div>
-      <button type="button" data-public-feature="${feature.id}">Open ${feature.title}</button>
+    const featureMarkup = definition.features.map((feature) => `<article class="pb-chamber-feature">
+      <div class="pb-chamber-feature-copy"><p class="pb-chamber-feature-eyebrow">${feature.eyebrow}</p><h3>${feature.title}</h3><p>${feature.copy}</p></div>
+      <button type="button" data-public-feature="${feature.id}">${feature.action}</button>
     </article>`).join('');
     const firstFeature = definition.features[0];
     view.innerHTML = `<article class="pb-chamber-page">
       <section class="pb-chamber-intro">
         <div class="pb-chamber-intro-copy">
-          <p class="pb-pillar-number">${definition.kicker}</p>
+          <p class="pb-chamber-kicker">${definition.kicker}</p>
           <h1 tabindex="-1">${definition.title}</h1>
           <p>${definition.copy}</p>
           <div class="pb-chamber-intro-actions">
-            <button class="pb-chamber-primary" type="button" data-public-feature="${firstFeature.id}">Begin with ${firstFeature.title}</button>
+            <button class="pb-chamber-primary" type="button" data-public-feature="${firstFeature.id}">${firstFeature.action}</button>
             <button class="pb-chamber-back" type="button" data-public-home>Back to all chambers</button>
           </div>
         </div>
@@ -156,7 +155,7 @@
       <section class="pb-chamber-feature-index" aria-labelledby="pb-chamber-feature-title">
         <header>
           <p class="pb-eyebrow">Inside ${definition.kicker}</p>
-          <h2 id="pb-chamber-feature-title">Choose your next step.</h2>
+          <h2 id="pb-chamber-feature-title">What you can do here.</h2>
         </header>
         <div class="pb-chamber-feature-list">${featureMarkup}</div>
         <p class="pb-final-note">${definition.access}</p>

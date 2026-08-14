@@ -174,6 +174,12 @@ async function runAuthenticatedSync({
     applicationRouteRequested() {
       return routeRequested;
     },
+    requestedApplicationRoute() {
+      return routeRequested ? 'examination-room' : '';
+    },
+    async openProtectedFeature(feature) {
+      calls.push(['openProtectedFeature', feature]);
+    },
     showLanding() {
       calls.push(['showLanding']);
     },
@@ -195,6 +201,33 @@ async function runAuthenticatedSync({
   vm.runInNewContext(syncSource, context);
   await context.syncAuthenticatedState({ authenticated: true });
   return { calls, statuses };
+}
+
+async function runUnauthenticatedSync({ gateEnabled = true, route = '' } = {}) {
+  const calls = [];
+  const context = {
+    gateEnabled,
+    currentSession() { return null; },
+    privateBetaApi() { return { getPending() { return null; } }; },
+    state: { globalBetaEnabled: false },
+    applicationRouteRequested() { return Boolean(route); },
+    requestedApplicationRoute() { return route; },
+    showLanding(options) { calls.push(['showLanding', options]); },
+    showApplication() { calls.push(['showApplication']); },
+    async openProtectedFeature(feature) { calls.push(['openProtectedFeature', feature]); },
+    openAdmission(stage) { calls.push(['openAdmission', stage]); },
+    setStatus() {},
+    URLSearchParams,
+    location: { search: '' },
+  };
+  const syncSource = between(
+    privateBetaLanding,
+    'async function syncAuthenticatedState(detail = {})',
+    'function openLegalView(view)',
+  );
+  vm.runInNewContext(syncSource, context);
+  await context.syncAuthenticatedState({ authenticated: false });
+  return calls;
 }
 
 // An authenticated visitor at the canonical root must see the new four-chamber
@@ -222,6 +255,24 @@ async function runAuthenticatedSync({
   assert.ok(
     result.calls.some(([name]) => name === 'showApplication'),
     'A signed-in user must enter the application for an explicit feature route.',
+  );
+}
+
+// A direct Examination Room link must open the route-bound sign-in path even
+// when the feature bundle has not yet been loaded in this browser session.
+{
+  const calls = await runUnauthenticatedSync({ gateEnabled: false, route: 'examination-room' });
+  assert.ok(
+    calls.some(([name, feature]) => name === 'openProtectedFeature' && feature === 'examination-room'),
+    'A signed-out Examination Room deep link must enter the protected sign-in flow.',
+  );
+}
+
+{
+  const calls = await runUnauthenticatedSync({ gateEnabled: true, route: 'examination-room' });
+  assert.ok(
+    calls.some(([name, feature]) => name === 'openProtectedFeature' && feature === 'examination-room'),
+    'The private-beta gate must preserve the Examination Room sign-in return path.',
   );
 }
 

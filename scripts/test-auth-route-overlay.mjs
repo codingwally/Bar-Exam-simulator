@@ -259,6 +259,16 @@ assert.match(phase2Source, /question && !submissionId[\s\S]*submissionId && role
 assert.match(privateBetaSource, /function normalizeSafeReturnHash[\s\S]*question && !submissionId[\s\S]*submissionId && role !== 'professor'/,
   'private-beta admission must preserve the same strict Examination Room deep-link contract');
 assert.match(
+  privateBetaSource,
+  /requestedApplicationRoute\(\) === 'examination-room'[\s\S]{0,240}openProtectedFeature\('examination-room'\)/,
+  'A signed-out direct Examination Room route must open the protected sign-in flow.',
+);
+assert.match(
+  privateBetaSource,
+  /feature === 'examination-room'[\s\S]{0,180}normalizeSafeReturnHash\(location\.hash\)/,
+  'The Examination Room sign-in path must preserve a validated structured deep link.',
+);
+assert.match(
   html,
   /assets\/private-beta-landing\.css\?v=master-experience-20260813-1/,
   'The public sign-in visibility fix must ship behind a fresh browser cache key.',

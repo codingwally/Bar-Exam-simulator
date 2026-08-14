@@ -187,7 +187,7 @@
   async function activateApplicationRoute(hash) {
     const route = requestedApplicationRoute(hash);
     if (state.lastActivatedHash === route && route !== 'examination-room') return;
-    if (!['mock', 'mock-bar', 'subject-matter', 'examination-room'].includes(route)) return;
+    if (!['mock', 'mock-bar', 'subject-matter', 'bar-feels', 'examination-room'].includes(route)) return;
     if (route === 'examination-room') {
       const routeModuleWasLoaded = typeof global.DueDiligence2026?.restoreRoute === 'function';
       await loadFeature('examination-room');
@@ -197,11 +197,20 @@
       }
       return;
     }
-    if (route === 'subject-matter') await loadFeature('subject-matter');
+    if (route === 'subject-matter' || route === 'bar-feels') await loadFeature(route);
     state.lastActivatedHash = route;
     requestAnimationFrame(() => {
-      if (route === 'subject-matter') {
-        global.DueDiligenceExaminations?.openPerSubject?.();
+      if (route === 'subject-matter' || route === 'bar-feels') {
+        Promise.resolve(global.DueDiligenceExaminations?.restoreRoute?.(
+          route === 'bar-feels' ? 'bar_feels' : 'per_subject',
+        )).then((restored) => {
+          if (restored) return;
+          if (route === 'bar-feels') global.openPremiumBarFeels?.();
+          else global.DueDiligenceExaminations?.openPerSubject?.();
+        }).catch(() => {
+          if (route === 'bar-feels') global.openPremiumBarFeels?.();
+          else global.DueDiligenceExaminations?.openPerSubject?.();
+        });
         return;
       }
       global.showPage?.('mock', document.getElementById('spa-mock'), { history: false });

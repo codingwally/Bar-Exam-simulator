@@ -68,6 +68,14 @@ assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
 assert.match(html, /assets\/feature-loader\.js\?v=exam-room-ux-20260814-1/);
 assert.match(html, /Mock Bar/);
 assert.match(frontend, /Subject Matter Examinations/);
+assert.match(frontend, /resumeAttemptPromise/);
+assert.match(frontend, /async function restoreRoute\(track\)/);
+assert.match(frontend, /restoreRoute,/);
+assert.match(
+  frontend,
+  /const ownerUserId = currentUserId\(\)[\s\S]*currentUserId\(\) !== ownerUserId/,
+  'A delayed resume response must not activate after the signed-in identity changes.',
+);
 assert.match(frontend, /data-exam-setup=[\s\S]*Review &amp; Begin/);
 assert.match(
   frontend,

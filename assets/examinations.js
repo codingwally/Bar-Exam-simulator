@@ -66,6 +66,7 @@
     subjectPageScroll: 0,
     subjectSelectorReturnFocus: null,
     resumeAttemptId: null,
+    resumeAttemptPromise: null,
     reviewMaterialCache: new Map(),
     reviewMaterialRequests: new Map(),
     initialized: false,
@@ -1048,22 +1049,49 @@
   }
 
   async function resumeAttempt(attemptId) {
-    if (!attemptId || state.active?.attempt?.attemptId === attemptId) return;
-    if (state.resumeAttemptId === attemptId) return;
-    state.resumeAttemptId = attemptId;
-    setStatus('Recovering your server-saved examination…');
-    try {
-      const active = await api('/examinations/query', {
-        operation: 'resume',
-        attemptId,
-      });
-      activateAttempt(active);
-      await heartbeat(false);
-    } catch (error) {
-      setStatus(error.message, 'error');
-    } finally {
-      state.resumeAttemptId = null;
+    if (!attemptId) return null;
+    if (state.active?.attempt?.attemptId === attemptId) return state.active;
+    if (state.resumeAttemptId === attemptId && state.resumeAttemptPromise) {
+      return state.resumeAttemptPromise;
     }
+    state.resumeAttemptId = attemptId;
+    const ownerUserId = currentUserId();
+    const pending = (async () => {
+      setStatus('Recovering your server-saved examination…');
+      try {
+        const active = await api('/examinations/query', {
+          operation: 'resume',
+          attemptId,
+        });
+        if (!ownerUserId || currentUserId() !== ownerUserId) return null;
+        activateAttempt(active);
+        await heartbeat(false);
+        return state.active;
+      } catch (error) {
+        setStatus(error.message, 'error');
+        return null;
+      }
+    })();
+    state.resumeAttemptPromise = pending;
+    try {
+      return await pending;
+    } finally {
+      if (state.resumeAttemptPromise === pending) {
+        state.resumeAttemptId = null;
+        state.resumeAttemptPromise = null;
+      }
+    }
+  }
+
+  async function restoreRoute(track) {
+    const recovery = readRecovery();
+    if (!recovery?.attemptId || !global.DueDiligencePhase4?.getSession?.()?.access_token) {
+      return false;
+    }
+    state.track = track;
+    showTrackPage(track);
+    const active = await resumeAttempt(recovery.attemptId);
+    return Boolean(active?.attempt?.attemptId);
   }
 
   function currentQuestion() {
@@ -2489,6 +2517,7 @@
     state.currentIndex = 0;
     state.screen = 'catalog';
     state.resumeAttemptId = null;
+    state.resumeAttemptPromise = null;
     state.saveInFlight = false;
     state.pendingSave = false;
     state.reviewMaterialCache.clear();
@@ -2988,6 +3017,7 @@
   global.DueDiligenceExaminations = Object.freeze({
     openPerSubject: () => loadCatalog('per_subject'),
     openBarFeels: () => loadCatalog('bar_feels'),
+    restoreRoute,
     resumeAttempt,
     openVerdict,
     getState: () => ({

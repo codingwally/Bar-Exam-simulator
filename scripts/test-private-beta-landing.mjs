@@ -85,13 +85,13 @@ assert.match(script, /global\.DueDiligencePublicHome = Object\.freeze/);
 assert.match(script, /mock: '#mock-bar'/, 'Mock Bar sign-in returns must use the canonical route.');
 assert.match(
   script,
-  /\['mock', 'mock-bar', 'subject-matter', 'examination-room'\]/,
-  'Application restoration must recognize Subject Matter and Examination Room routes.',
+  /\['mock', 'mock-bar', 'subject-matter', 'bar-feels', 'examination-room'\]/,
+  'Application restoration must recognize both examination tracks and Examination Room routes.',
 );
 assert.match(
   script,
-  /route === 'subject-matter'[\s\S]*DueDiligenceExaminations\?\.openPerSubject\?\.\(\)/,
-  'Refreshing an authenticated Subject Matter route must reload its catalog.',
+  /route === 'subject-matter' \|\| route === 'bar-feels'[\s\S]*DueDiligenceExaminations\?\.restoreRoute\?\.\([\s\S]*openPremiumBarFeels\?\.\(\)[\s\S]*openPerSubject\?\.\(\)/,
+  'Refreshing either examination track must restore an active attempt before falling back to its authorized catalog.',
 );
 assert.match(script, /addEventListener\('popstate'[\s\S]*!applicationRouteRequested\(\)[\s\S]*showLanding/,
   'Browser Back must restore the public homepage for root and public chamber anchors.');

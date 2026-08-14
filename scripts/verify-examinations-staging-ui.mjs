@@ -423,14 +423,24 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
 
 async function completeSubjectMatter(page) {
   await completeOnboardingIfShown(page);
+  await completeTermsAcceptanceIfShown(page);
   await openCatalog(page, 'per_subject');
   const subject = 'Civil Procedure II';
-  await page.locator('[data-subject-selector-open]').click();
+  const courseChooser = page.locator('#dd-per-subject-app [data-subject-selector-open]');
+  await courseChooser.scrollIntoViewIfNeeded();
+  assert.equal(await courseChooser.isVisible(), true, 'The Subject Matter course chooser must be visible.');
+  assert.equal(await courseChooser.isEnabled(), true, 'The Subject Matter course chooser must be enabled.');
+  await courseChooser.focus();
+  await courseChooser.press('Enter');
   const subjectSelector = page.locator('#dd-subject-selector-dialog[open]');
   await subjectSelector.waitFor({ state: 'visible', timeout: 15_000 });
   await subjectSelector.locator('#dd-subject-search-mobile').fill(subject);
-  await subjectSelector.locator(`[data-exam-subject="${subject}"]`).click();
-  await page.locator(`[data-subject-start="${subject}"]`).click();
+  const courseChoice = subjectSelector.locator(`[data-exam-subject="${subject}"]`);
+  await courseChoice.focus();
+  await courseChoice.press('Enter');
+  const startButton = page.locator(`[data-subject-start="${subject}"]`);
+  await startButton.focus();
+  await startButton.press('Enter');
   await page.waitForFunction(
     () => (
       window.DueDiligenceExaminations?.getState?.().screen === 'room'

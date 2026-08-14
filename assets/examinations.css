@@ -2947,6 +2947,56 @@ details[open] > summary .dd-subject-chevron {
   line-height: 1.65;
 }
 
+.dd-subject-review-citations {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dd-subject-review-citations li {
+  padding: 13px 15px;
+  border: 1px solid rgba(212, 170, 79, .34);
+  border-left: 3px solid #d4aa4f;
+  border-radius: 5px;
+  color: #f3e6c7;
+  background: rgba(255, 255, 255, .035);
+  font: 650 13px/1.65 "IBM Plex Mono", monospace;
+}
+
+.dd-subject-review-cases {
+  display: grid;
+  gap: 12px;
+}
+
+.dd-subject-review-cases article {
+  padding: 17px 18px;
+  border: 1px solid rgba(212, 170, 79, .28);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .035);
+}
+
+.dd-subject-review-cases h5 {
+  margin: 0;
+  color: #fffaf0;
+  font: 600 17px/1.45 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-review-case-citation {
+  margin: 6px 0 0;
+  color: #f1d28a;
+  font: 650 11px/1.55 "IBM Plex Mono", monospace;
+  letter-spacing: .035em;
+}
+
+.dd-subject-review-cases .legal-explanation {
+  margin-top: 11px;
+  color: #d7e0ea;
+  font-size: 14px;
+  line-height: 1.68;
+}
+
 .dd-subject-review-sources > div {
   display: grid;
   gap: 8px;

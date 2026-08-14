@@ -509,18 +509,19 @@ async function completeSubjectMatter(page) {
   await completeReview.waitFor({ state: 'visible', timeout: 150_000 });
   const completeReviewText = await completeReview.innerText();
   assert.match(completeReviewText, /Suggested Answer/i);
-  assert.match(completeReviewText, /Complete Legal Basis/i);
-  assert.match(completeReviewText, /Why This Answer Is Correct/i);
+  assert.match(completeReviewText, /Controlling Law & Doctrine/i);
+  assert.match(completeReviewText, /Cited Authorities/i);
+  assert.match(completeReviewText, /Application and Material Limits/i);
   assert.match(completeReviewText, /Verified official sources/i);
   assert.match(completeReviewText, /Assisted \/ Open-book/i);
   const legalBasisText = await completeReview.locator('.dd-subject-review-section')
-    .filter({ hasText: 'Complete Legal Basis' })
+    .filter({ hasText: 'Controlling Law & Doctrine' })
     .locator('.dd-subject-review-prose')
     .innerText();
   assert.ok(legalBasisText.length >= 20, 'Subject Matter must reveal a substantive approved legal basis.');
   assert.doesNotMatch(legalBasisText, /Not released|general writing tip|Review the controlling provision/i);
   const teachingText = await completeReview.locator('.dd-subject-review-section')
-    .filter({ hasText: 'Why This Answer Is Correct' })
+    .filter({ hasText: 'Application and Material Limits' })
     .innerText();
   assert.ok(teachingText.length >= 100, 'Subject Matter must reveal a substantial source-bound teaching explanation.');
   assert.ok(await completeReview.locator('a[href^="https://"]').count() >= 1,
@@ -550,8 +551,9 @@ async function completeSubjectMatter(page) {
   const verdictText = await subjectResult.innerText();
   assert.match(verdictText, /Evaluation overview/i);
   assert.match(verdictText, /Suggested Answer/i);
-  assert.match(verdictText, /Complete Legal Basis/i);
-  assert.match(verdictText, /Why This Answer Is Correct/i);
+  assert.match(verdictText, /Controlling Law & Doctrine/i);
+  assert.match(verdictText, /Cited Authorities/i);
+  assert.match(verdictText, /Application and Material Limits/i);
   assert.match(verdictText, /Verified official sources/i);
   assert.match(verdictText, /Assisted \/ Open-book/i);
   assert.doesNotMatch(verdictText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);

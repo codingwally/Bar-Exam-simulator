@@ -18,6 +18,51 @@ function normalizedForComparison(value) {
     .trim();
 }
 
+function normalizedWords(value) {
+  return normalizedForComparison(value).split(' ').filter(Boolean);
+}
+
+export function isBareSubjectMatterDoctrine(value) {
+  return /^(?:answer\s*:\s*)?(?:yes|no)\.?$/i.test(cleanText(value, 200));
+}
+
+export function isSubjectMatterJurisprudencePlaceholder(value) {
+  const text = cleanText(value, 500);
+  if (!text) return true;
+  return /^(?:n\/?a|n\.\s*a\.|none|not applicable)(?:\s*[-\u2013\u2014:]\s*.*)?\.?$/i.test(text)
+    || /^(?:no\s+)?(?:jurisprudence|case(?:\s+law)?)\s*(?:stored|provided|applicable|available)?\.?$/i.test(text)
+    || /^(?:provision|rule|statute|codal)[\s/-]*based\s+(?:candidate|question)\.?$/i.test(text);
+}
+
+function looksLikeDocketCitation(value) {
+  return /\b(?:G\.?\s*R\.?|A\.?\s*C\.?|A\.?\s*M\.?|B\.?\s*M\.?|U\.?D\.?K\.?)\s*(?:No\.?|Nos\.?)\s*[A-Za-z0-9-]/i
+    .test(cleanText(value, 1_000));
+}
+
+function looksLikeCaseName(value) {
+  const text = cleanText(value, 2_000);
+  if (!text || isSubjectMatterJurisprudencePlaceholder(text)) return false;
+  return /\b(?:v|vs)\.?\s+/i.test(text)
+    || /^(?:in re|in the matter of|matter of)\b/i.test(text);
+}
+
+function uniqueTextValues(values, { splitSemicolons = false } = {}) {
+  const candidates = values.flatMap((value) => {
+    const text = cleanText(value, 12_000);
+    if (!text) return [];
+    return splitSemicolons ? text.split(/\s*;\s*/).filter(Boolean) : [text];
+  });
+  const result = [];
+  candidates.forEach((candidate) => {
+    const key = normalizedForComparison(candidate);
+    if (!key || isSubjectMatterJurisprudencePlaceholder(candidate)) return;
+    const exactIndex = result.findIndex((existing) => normalizedForComparison(existing) === key);
+    if (exactIndex >= 0) return;
+    result.push(candidate);
+  });
+  return result;
+}
+
 function reviewError() {
   const error = new Error('Verified review material is not available for this question.');
   error.code = 'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE';
@@ -34,18 +79,37 @@ function safeSources(value) {
   return sources;
 }
 
-function safeJurisprudence(value) {
+export function normalizeSubjectMatterJurisprudence(value) {
   if (!Array.isArray(value) || value.length > 24) throw reviewError();
-  return value.map((entry) => {
-    if (typeof entry === 'string') return cleanText(entry, 4_000);
+  const normalizedEntries = value.map((entry) => {
+    if (typeof entry === 'string') {
+      const text = cleanText(entry, 4_000);
+      if (isSubjectMatterJurisprudencePlaceholder(text)) return null;
+      if (looksLikeDocketCitation(text)) return { citation: text };
+      if (looksLikeCaseName(text)) return { caseName: text };
+      return null;
+    }
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw reviewError();
     const normalized = {};
-    ['caseName', 'title', 'citation', 'doctrine', 'holding', 'disposition'].forEach((key) => {
+    const caseName = cleanText(entry.caseName || entry.title || entry.case, 4_000);
+    const citation = cleanText(entry.citation, 4_000);
+    if (looksLikeCaseName(caseName)) normalized.caseName = caseName;
+    if (!isSubjectMatterJurisprudencePlaceholder(citation)) normalized.citation = citation;
+    ['doctrine', 'holding', 'disposition'].forEach((key) => {
       const content = cleanText(entry[key], 4_000);
-      if (content) normalized[key] = content;
+      if (content && !isBareSubjectMatterDoctrine(content)
+          && !isSubjectMatterJurisprudencePlaceholder(content)) normalized[key] = content;
     });
-    if (!Object.keys(normalized).length) throw reviewError();
+    const genuineCase = Boolean(normalized.caseName) || looksLikeDocketCitation(normalized.citation);
+    if (!genuineCase) return null;
     return normalized;
+  }).filter(Boolean);
+  const seen = new Set();
+  return normalizedEntries.filter((entry) => {
+    const key = normalizedForComparison(`${entry.caseName || ''}\n${entry.citation || ''}`);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 }
 
@@ -62,9 +126,13 @@ export function sanitizeSubjectMatterRevealRecord(value, expectedAttemptId) {
   const suggestedAnswer = cleanText(value.suggestedAnswer);
   const legalBasis = cleanText(value.legalBasis);
   const governingProvision = cleanText(value.governingProvision, 12_000);
-  const doctrine = cleanText(value.doctrine, 12_000);
+  const rawDoctrine = cleanText(value.doctrine, 12_000);
+  const doctrine = isBareSubjectMatterDoctrine(rawDoctrine)
+    || isSubjectMatterJurisprudencePlaceholder(rawDoctrine)
+    ? ''
+    : rawDoctrine;
   const citation = cleanText(value.citation, 4_000);
-  if (prompt.length < 20 || suggestedAnswer.length < 20 || legalBasis.length < 10 || !doctrine) {
+  if (prompt.length < 20 || suggestedAnswer.length < 20 || legalBasis.length < 10) {
     throw reviewError();
   }
   const reviewMaterialRevealedAt = value.reviewMaterialRevealedAt == null
@@ -84,7 +152,7 @@ export function sanitizeSubjectMatterRevealRecord(value, expectedAttemptId) {
     legalBasis,
     governingProvision,
     doctrine,
-    jurisprudence: safeJurisprudence(value.jurisprudence),
+    jurisprudence: normalizeSubjectMatterJurisprudence(value.jurisprudence),
     citation,
     sources: safeSources(value.sources),
     assisted: value.assisted === true,
@@ -209,25 +277,110 @@ function sectionFromSuggestedAnswer(answer, label) {
   return cleanText(answer.match(pattern)?.[1], 6_000);
 }
 
+function answerSentences(value) {
+  return cleanText(value, 20_000)
+    .replace(/(?:^|\n)\s*(?:Answer|Legal Basis|Application|Conclusion)\s*:\s*/gi, ' ')
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9])/)
+    .map((sentence) => cleanText(sentence, 6_000))
+    .filter(Boolean);
+}
+
+function withoutBareOpeningAnswer(value) {
+  return cleanText(value, 20_000).replace(/^(?:yes|no)\.?(?:\s+|$)/i, '').trim();
+}
+
+function substantiveFallbackRule(material) {
+  const legalBasisSection = sectionFromSuggestedAnswer(material.suggestedAnswer, 'Legal Basis');
+  if (legalBasisSection && !isBareSubjectMatterDoctrine(legalBasisSection)
+      && normalizedWords(legalBasisSection).length >= 12) return legalBasisSection;
+  const ruleSentences = answerSentences(material.suggestedAnswer).filter((sentence, index) => (
+    !(index === 0 && isBareSubjectMatterDoctrine(sentence))
+    && !/^(?:therefore|thus|hence|accordingly|consequently|the remedy\b)/i.test(sentence)
+  ));
+  const extractedRule = ruleSentences.join(' ');
+  if (normalizedWords(extractedRule).length >= 12) return extractedRule;
+  const answerWithoutBareOpening = withoutBareOpeningAnswer(material.suggestedAnswer);
+  if (normalizedWords(answerWithoutBareOpening).length >= 12) return answerWithoutBareOpening;
+  return uniqueTextValues([
+    material.legalBasis,
+    material.governingProvision,
+    material.citation,
+  ]).join('\n\n');
+}
+
+function substantiveFallbackApplication(material) {
+  const application = sectionFromSuggestedAnswer(material.suggestedAnswer, 'Application');
+  if (application && !isBareSubjectMatterDoctrine(application)) return application;
+  const candidates = answerSentences(material.suggestedAnswer).filter((sentence) => (
+    /\b(?:because|therefore|thus|hence|here|on these facts|under the facts|depends|not simply|not merely)\b/i
+      .test(sentence)
+  ));
+  return candidates.join(' ') || substantiveFallbackRule(material);
+}
+
+function substantiveFallbackLimits(material) {
+  const candidates = answerSentences(material.suggestedAnswer).filter((sentence) => (
+    /\b(?:except|exception|unless|however|but|limit|qualification|special|specified|depends)\b/i
+      .test(sentence)
+  ));
+  return candidates.join(' ')
+    || 'No additional material exception is stated in the approved review material.';
+}
+
 export function fallbackSubjectMatterTeachingExplanation(material) {
+  const sentences = answerSentences(material.suggestedAnswer);
   const answer = sectionFromSuggestedAnswer(material.suggestedAnswer, 'Answer')
+    || sentences[0]
     || cleanText(material.suggestedAnswer.split(/\n\s*\n/)[0], 6_000);
-  const application = sectionFromSuggestedAnswer(material.suggestedAnswer, 'Application')
-    || material.doctrine;
+  const application = substantiveFallbackApplication(material);
   const conclusion = sectionFromSuggestedAnswer(material.suggestedAnswer, 'Conclusion')
+    || sentences.at(-1)
     || cleanText(material.suggestedAnswer.split(/\n\s*\n/).at(-1), 6_000);
-  const controlling = [material.legalBasis, material.governingProvision, material.doctrine]
-    .filter(Boolean).join('\n\n');
+  const controlling = substantiveFallbackRule(material);
   return {
     directAnswer: answer || material.suggestedAnswer,
     controllingLawAndElements: controlling,
     applicationToFacts: application,
-    materialExceptionsOrLimits: /\b(?:except|unless|however|limit|qualification)\b/i.test(
-      material.suggestedAnswer,
-    )
-      ? material.doctrine
-      : 'No additional material exception is stated in the approved review material.',
+    materialExceptionsOrLimits: substantiveFallbackLimits(material),
     finalConclusion: conclusion || answer || material.suggestedAnswer,
+  };
+}
+
+function substantiveReviewText(value, fallback) {
+  const text = cleanText(value, 6_000);
+  if (normalizedWords(text).length >= 8 && !isBareSubjectMatterDoctrine(text)) return text;
+  return cleanText(fallback, 6_000);
+}
+
+export function buildSubjectMatterLegalReview(material, explanation) {
+  const fallback = fallbackSubjectMatterTeachingExplanation(material);
+  const controllingLawAndDoctrine = substantiveReviewText(
+    explanation?.controllingLawAndElements,
+    fallback.controllingLawAndElements,
+  );
+  const applicationToFacts = substantiveReviewText(
+    explanation?.applicationToFacts,
+    fallback.applicationToFacts,
+  );
+  const materialExceptionsOrLimits = substantiveReviewText(
+    explanation?.materialExceptionsOrLimits,
+    fallback.materialExceptionsOrLimits,
+  );
+  const finalConclusion = substantiveReviewText(
+    explanation?.finalConclusion,
+    fallback.finalConclusion,
+  );
+  return {
+    controllingLawAndDoctrine,
+    authorityReferences: uniqueTextValues([
+      material.legalBasis,
+      material.governingProvision,
+      material.citation,
+    ]),
+    jurisprudence: normalizeSubjectMatterJurisprudence(material.jurisprudence),
+    applicationToFacts,
+    materialExceptionsOrLimits,
+    finalConclusion,
   };
 }
 
@@ -248,6 +401,7 @@ export function publicSubjectMatterReviewPayload(material, explanation, metadata
     doctrine: material.doctrine,
     jurisprudence: material.jurisprudence,
     citation: material.citation,
+    legalReview: buildSubjectMatterLegalReview(material, explanation),
     whyThisAnswerIsCorrect: explanation,
     explanationSource: metadata.explanationSource || 'curated_fallback',
     teachingModel: metadata.teachingModel || null,

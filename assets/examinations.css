@@ -2534,6 +2534,14 @@ details[open] > summary .dd-subject-chevron {
   font: 400 17px/1.65 "Playfair Display", Georgia, serif;
 }
 
+.dd-subject-editorial .dd-subject-review-sources .source-link {
+  min-height: 44px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(212, 170, 79, .22);
+}
+
 .dd-subject-editorial .alac-part + .alac-part {
   margin-top: 18px;
 }

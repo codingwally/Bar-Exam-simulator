@@ -72,7 +72,10 @@ jobs:
         continue-on-error: true
         env:
           STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
-        run: node scripts/run-staging-e2e-suite.mjs examinations
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: |
+          npm install --no-save --no-package-lock playwright@1.54.2
+          node scripts/run-staging-e2e-suite.mjs examinations
 
       - name: Publish sanitized suite summary
         if: always()

@@ -1,4 +1,4 @@
-const allowedSuiteLocation = /(?:^|[\\/])(test-(?:complete-beta|duediligence-2026|examinations)-staging\.mjs):(\d+):(\d+)/i;
+const allowedSuiteLocation = /(?:^|[\\/])((?:test-(?:complete-beta|duediligence-2026|examinations)-staging|test-examinations-staging-ui|verify-examinations-staging-ui)\.mjs):(\d+):(\d+)/i;
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

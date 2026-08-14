@@ -24,13 +24,18 @@ assert.equal(
   (workflow.match(/STAGING_SUPABASE_SERVICE_ROLE_KEY:\s*\$\{\{ secrets\.STAGING_SUPABASE_SERVICE_ROLE_KEY \}\}/g) || []).length,
   3,
 );
-assert.equal((workflow.match(/run: node scripts\/run-staging-e2e-suite\.mjs (?!-)/g) || []).length, 3);
+assert.equal(
+  (workflow.match(/node scripts\/run-staging-e2e-suite\.mjs (?:complete-beta|duediligence-2026|examinations)/g) || []).length,
+  3,
+);
 for (const suite of ['complete-beta', 'duediligence-2026', 'examinations']) {
   assert.match(workflow, new RegExp(`run-staging-e2e-suite\\.mjs ${suite}`));
 }
 assert.match(workflow, /if:\s*always\(\)/);
 assert.match(workflow, /artifacts\/staging-e2e\/\*\.json/);
 assert.doesNotMatch(workflow, /echo[^\n]*(SERVICE_ROLE|Authorization|apikey)/i);
+assert.match(workflow, /PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD:\s*'1'/);
+assert.match(workflow, /npm install --no-save --no-package-lock playwright@1\.54\.2/);
 
 assert.match(runner, /hlzqmreeoghbldnhlybr/);
 assert.match(runner, /hbllomlijfznnuudpdvr/);
@@ -39,6 +44,8 @@ assert.match(runner, /synthetic_cleanup=true/);
 assert.match(runner, /secretEchoDetected/);
 assert.match(runner, /buildStagingFailureDiagnostic/);
 assert.match(runner, /\^sb_secret_/);
+assert.match(runner, /test-examinations-staging-ui\.mjs/);
+assert.match(runner, /EXAMINATIONS_UI_STAGING: synthetic_cleanup=true/);
 assert.doesNotMatch(runner, /console\.log\([^\n]*serviceRoleKey/);
 
 for (const suite of [

@@ -384,7 +384,11 @@ async function completeSubjectMatter(page) {
   await completeOnboardingIfShown(page);
   await openCatalog(page, 'per_subject');
   const subject = 'Civil Procedure II';
-  await page.locator(`[data-exam-subject="${subject}"]`).click();
+  await page.locator('[data-subject-selector-open]').click();
+  const subjectSelector = page.locator('#dd-subject-selector-dialog[open]');
+  await subjectSelector.waitFor({ state: 'visible', timeout: 15_000 });
+  await subjectSelector.locator('#dd-subject-search-mobile').fill(subject);
+  await subjectSelector.locator(`[data-exam-subject="${subject}"]`).click();
   await page.locator(`[data-subject-start="${subject}"]`).click();
   await page.waitForFunction(
     () => (
@@ -399,9 +403,20 @@ async function completeSubjectMatter(page) {
     false,
     'Subject Matter must start directly without a mandatory timer dialog.',
   );
-  const practiceRoomText = await page.locator('#dd-per-subject-app').innerText();
-  assert.match(practiceRoomText, /TOTAL WRITING TIME/i);
-  assert.match(practiceRoomText, /00:0\d/);
+  const practiceRoom = page.locator('#dd-per-subject-app .dd-subject-editorial:not(.is-result)');
+  await practiceRoom.waitFor({ state: 'visible', timeout: 15_000 });
+  await practiceRoom.locator('.dd-subject-editorial-grid').waitFor({ state: 'visible' });
+  assert.equal(await practiceRoom.locator('.dd-subject-editorial-pane.is-writing').count(), 1);
+  assert.equal(
+    await practiceRoom.locator('.dd-subject-editorial-pane.is-coaching.dd-subject-coaching-locked').count(),
+    1,
+  );
+  const practiceRoomText = await practiceRoom.innerText();
+  assert.match(practiceRoomText, /WRITING TIME/i);
+  assert.match(practiceRoomText, /\b\d{2}:\d{2}\b/);
+  assert.doesNotMatch(practiceRoomText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
+  assert.doesNotMatch(practiceRoomText, /Reveal suggested legal basis|Official sources/i);
+  assert.doesNotMatch(practiceRoomText, /\bA\.?L\.?A\.?C\.?\b/i);
   const attemptId = await page.evaluate(
     () => window.DueDiligenceExaminations.getState().activeAttemptId,
   );
@@ -416,17 +431,45 @@ async function completeSubjectMatter(page) {
     subjectMatterAnswer,
   );
   await page.locator('[data-submit-current]').click();
-  await page.locator('#dd-per-subject-app .dd-verdict-screen h1').filter({
-    hasText: 'Individual ALAC assessments.',
-  }).waitFor({ state: 'visible', timeout: 150_000 });
+  const subjectResult = page.locator('#dd-per-subject-app .dd-subject-editorial.is-result');
+  await subjectResult.waitFor({ state: 'visible', timeout: 150_000 });
 
-  const scores = await page.locator('#dd-per-subject-app .score-medallion strong').allTextContents();
+  const scores = await subjectResult.locator('.score-medallion strong').allTextContents();
   assert.equal(scores.length, 1);
   scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5$/));
-  const verdictText = await page.locator('#dd-per-subject-app .dd-verdict-screen').innerText();
-  assert.match(verdictText, /Approved Model Answer/i);
-  assert.match(verdictText, /Individual Question Assessment/i);
+  const verdictText = await subjectResult.innerText();
+  assert.match(verdictText, /Evaluation overview/i);
+  assert.match(verdictText, /Reveal suggested legal basis/i);
+  assert.match(verdictText, /Guidance: why this basis applies/i);
+  assert.match(verdictText, /Suggested discussion/i);
+  assert.match(verdictText, /Suggested answer/i);
+  assert.match(verdictText, /Official sources/i);
+  assert.doesNotMatch(verdictText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
   assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
+  assert.doesNotMatch(verdictText, /\bA\.?L\.?A\.?C\.?\b/i);
+
+  const disclosure = (label) => subjectResult.locator('.dd-study-disclosures details')
+    .filter({ hasText: label })
+    .first();
+  const basisDetails = disclosure('Reveal suggested legal basis');
+  await basisDetails.locator('summary').click();
+  const basisText = (await basisDetails.innerText()).replace('Reveal suggested legal basis', '').trim();
+  assert.ok(basisText.length >= 20, 'Subject Matter must reveal a substantive approved legal basis.');
+  assert.doesNotMatch(basisText, /Not released|general writing tip|Review the controlling provision/i);
+
+  const guidanceDetails = disclosure('Guidance: why this basis applies');
+  await guidanceDetails.locator('summary').click();
+  const guidanceText = (await guidanceDetails.innerText())
+    .replace('Guidance: why this basis applies', '')
+    .trim();
+  assert.ok(guidanceText.length >= 60, 'Subject Matter guidance must explain why the basis applies.');
+  assert.doesNotMatch(guidanceText, /Specific guidance unavailable|general writing tip/i);
+
+  const sourceDetails = disclosure('Official sources');
+  await sourceDetails.locator('summary').click();
+  const sourceLinks = sourceDetails.locator('a[href^="https://"]');
+  assert.ok(await sourceLinks.count() >= 1, 'Subject Matter must reveal at least one linked official source.');
+  assert.doesNotMatch(await sourceDetails.innerText(), /No verified source was returned/i);
 
   return { track: 'per_subject', attemptId, scores };
 }

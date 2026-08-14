@@ -43,12 +43,14 @@ assert.doesNotMatch(html, /id="welcome-state"|Prepare with purpose\.|id="start-p
 assert.ok(publicLanding.indexOf('class="pb-header"') < publicLanding.indexOf('class="pb-pillars"'),
   'The preparation chooser must follow the public header directly.');
 assert.match(publicLanding, /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
-assert.match(publicLanding, /One platform, four focused chambers/i);
+assert.match(publicLanding, /Philippine legal education/i);
 assert.doesNotMatch(publicLanding, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
 assert.match(publicLanding, /class="pb-platform-composition"/);
 assert.match(publicLanding, /class="pb-chamber-index"/);
 assert.doesNotMatch(publicLanding, /class="pb-pillar-card"/,
   'The homepage must not regress to four generic boxed cards.');
+assert.doesNotMatch(publicLanding, /pb-chamber-entry-number|>0[1-4]</,
+  'The homepage must not use generic numbered chamber decoration.');
 assert.doesNotMatch(publicLanding, /A platform to express|Practice the reasoning\. Refine the writing\.|Explore Due Diligence|Learn How It Works|Pause Motion/i);
 assert.match(publicLanding, /campus-students-720\.avif/,
   'The homepage must retain an optimized editorial photographic field.');
@@ -107,6 +109,7 @@ assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.pb-chamber-nav\s*\{[\s\S
 assert.match(css, /\.pb-platform-composition\s*\{[\s\S]*?grid-template-columns:/);
 assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.pb-platform-composition\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
 assert.match(css, /\.pb-chamber-feature\s*\{[\s\S]*?border-top:/);
+assert.doesNotMatch(script, /pb-chamber-feature-number|0\$\{index \+ 1\}/);
 assert.doesNotMatch(css, /\.pb-pillar-card/);
 assert.doesNotMatch(css, /pb-slide-left|pb-slide-right|\.pb-rail/);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);

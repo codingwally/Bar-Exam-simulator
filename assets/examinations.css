@@ -1918,6 +1918,784 @@ details[open] > summary .dd-subject-chevron {
   margin-top: 22px;
 }
 
+/* Subject Matter — selected editorial Option 3. This surface is intentionally
+   scoped so Bar Easy, Bar Feels, and the Examination Room retain their own UI. */
+.dd-subject-editorial {
+  min-height: calc(100vh - 83px);
+  padding: 0 clamp(24px, 3.9vw, 58px);
+  color: #f7f1e5;
+  background: #041d3b;
+}
+
+.dd-subject-editorial-header {
+  width: min(100%, 1500px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(430px, 590px);
+  align-items: center;
+  gap: clamp(40px, 7vw, 106px);
+  margin: 0 auto;
+  padding: 28px 0 32px;
+}
+
+.dd-subject-editorial .dd-exam-kicker,
+.dd-subject-editorial .dd-question-label,
+.dd-subject-editorial .dd-subject-task-label {
+  color: #e6bd59;
+}
+
+.dd-subject-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  color: #f7f1e5;
+  font: 500 14px/1.4 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-breadcrumb span,
+.dd-subject-breadcrumb b {
+  color: #e6bd59;
+  font-weight: 500;
+}
+
+.dd-subject-editorial-header h1 {
+  margin: 23px 0 0;
+  color: #fffaf0;
+  font: 500 clamp(42px, 4.1vw, 60px)/1 "Playfair Display", Georgia, serif;
+  letter-spacing: -.035em;
+}
+
+.dd-subject-editorial-header > div:first-child > p:last-child {
+  margin: 12px 0 0;
+  color: #e8e2d9;
+  font: 400 16px/1.55 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-course-picker {
+  align-self: center;
+  justify-self: start;
+  width: min(100%, 550px);
+  margin-top: 12px;
+}
+
+.dd-subject-course-picker > p {
+  margin: 0 0 8px;
+  color: #e6bd59;
+  font: 750 10px/1.4 "IBM Plex Mono", monospace;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.dd-subject-course-control {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 16px;
+  border: 1px solid #ad7e28;
+  border-radius: 3px;
+  color: inherit;
+  background: #061d3a;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dd-subject-course-control:hover,
+.dd-subject-course-control:focus-visible {
+  border-color: #f1d071;
+  outline: 2px solid rgba(230, 189, 89, .48);
+  outline-offset: 3px;
+}
+
+.dd-subject-course-control span {
+  flex: 0 0 auto;
+  color: #e6bd59;
+  font: 750 9px/1.4 "IBM Plex Mono", monospace;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.dd-subject-course-control strong {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: #fffaf0;
+  font: 500 18px/1.35 "Playfair Display", Georgia, serif;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dd-subject-editorial-grid {
+  width: min(100%, 1500px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 770px;
+  margin: 0 auto;
+}
+
+.dd-subject-editorial-pane {
+  min-width: 0;
+  padding: 22px clamp(34px, 4.1vw, 62px) 42px 0;
+}
+
+.dd-subject-editorial-pane.is-coaching {
+  padding-top: 14px;
+  padding-right: 0;
+  padding-left: clamp(34px, 4.1vw, 62px);
+  border-left: 1px solid #b88930;
+}
+
+.dd-subject-editorial .dd-question-label {
+  position: relative;
+  margin: 0 0 34px;
+  color: #e6bd59;
+  font: 750 10px/1.4 "IBM Plex Mono", monospace;
+  letter-spacing: .13em;
+}
+
+.dd-subject-editorial .dd-question-label::after {
+  position: absolute;
+  bottom: -17px;
+  left: 0;
+  width: 78px;
+  height: 1px;
+  background: #b88930;
+  content: "";
+}
+
+.dd-subject-task-label {
+  width: max-content;
+  margin: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(230, 189, 89, .72);
+  font: 750 10px/1.4 "IBM Plex Mono", monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.dd-subject-editorial .dd-question-prompt {
+  max-width: 690px;
+  margin: 21px 0 46px;
+  color: #fffaf0;
+  font: 500 clamp(30px, 3vw, 45px)/1.22 "Playfair Display", Georgia, serif;
+  letter-spacing: -.018em;
+}
+
+.dd-subject-approach {
+  max-width: 690px;
+  padding: 0 0 22px;
+  border-bottom: 1px solid rgba(212, 170, 79, .46);
+}
+
+.dd-subject-approach h3 {
+  margin: 0;
+  color: #e6bd59;
+  font: 750 10px/1.4 "IBM Plex Mono", monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.dd-subject-approach p {
+  margin: 13px 0 0;
+  color: #f0e9df;
+  font: 400 16px/1.75 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-editorial .dd-subject-practice-answer,
+.dd-subject-submitted-response {
+  margin-top: 22px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.dd-subject-editorial .dd-subject-practice-answer > h3,
+.dd-subject-submitted-response > h3 {
+  margin-top: 0;
+  margin-bottom: 22px;
+  color: #e6bd59;
+  font: 750 10px/1.4 "IBM Plex Mono", monospace;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.dd-subject-editorial .dd-subject-answer-heading h3 {
+  margin: 0;
+  color: #fffaf0;
+  font: 600 24px/1.2 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-editorial .dd-subject-answer-heading > span {
+  color: #9fb0c4;
+}
+
+.dd-subject-editorial .dd-answer-card {
+  border: 1px solid #aa7e2c;
+  border-radius: 3px;
+  background: #031831;
+  box-shadow: none;
+}
+
+.dd-subject-editorial .dd-answer-editor {
+  box-sizing: border-box;
+  min-height: 170px;
+  padding: 20px;
+  color: #f7f1e5;
+  background: #031831;
+  font: 400 16px/1.65 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-editorial .dd-answer-editor::placeholder {
+  color: #8194ab;
+}
+
+.dd-subject-editorial .dd-answer-editor:focus {
+  box-shadow: inset 0 0 0 2px #e0b754;
+}
+
+.dd-subject-editorial .dd-answer-footer {
+  min-height: 38px;
+  padding-block: 7px;
+  border-top-color: rgba(212, 170, 79, .35);
+  color: #aebed0;
+  background: #041b36;
+}
+
+.dd-subject-editorial .dd-save-state.is-saved {
+  color: #a9d7bd;
+}
+
+.dd-subject-writing-status {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 12px;
+}
+
+.dd-subject-editorial .dd-subject-practice-clock {
+  min-width: 0;
+  padding: 0;
+  border-left: 0;
+  text-align: left;
+}
+
+.dd-subject-editorial .dd-subject-practice-clock small {
+  color: #aebed0;
+}
+
+.dd-subject-editorial .dd-subject-practice-clock strong {
+  color: #fffaf0;
+  font-size: 20px;
+}
+
+.dd-subject-editorial .dd-room-bottom-status {
+  color: #aebed0;
+}
+
+.dd-subject-editorial .dd-subject-practice-actions {
+  display: flex;
+  grid-template-columns: none;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 0;
+}
+
+.dd-subject-editorial .dd-exam-button {
+  min-height: 52px;
+  padding-inline: 24px;
+  border-color: #b88930;
+  border-radius: 3px;
+  color: #fffaf0;
+  background: transparent;
+}
+
+.dd-subject-editorial .dd-exam-button:hover,
+.dd-subject-editorial .dd-exam-button:focus-visible {
+  border-color: #efd071;
+  color: #061a35;
+  background: #efd071;
+}
+
+.dd-subject-editorial .dd-exam-button.is-primary {
+  border-color: #d5aa49;
+  color: #061a35;
+  background: #e2bb5d;
+}
+
+.dd-subject-coaching-locked {
+  display: grid;
+  align-content: center;
+  min-height: 650px;
+}
+
+.dd-subject-coaching-locked h2 {
+  max-width: 560px;
+  margin: 10px 0 0;
+  color: #fffaf0;
+  font: 600 clamp(28px, 3vw, 42px)/1.22 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-coaching-locked > div > p:last-child {
+  max-width: 600px;
+  margin: 18px 0 0;
+  color: #c7d3e1;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.dd-subject-coaching-note {
+  max-width: 600px;
+  margin: 36px 0 0;
+  padding-top: 17px;
+  border-top: 1px solid rgba(212, 170, 79, .38);
+  color: #94a7bd;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.dd-subject-submitted-answer {
+  box-sizing: border-box;
+  min-height: 170px;
+  padding: 20px;
+  border: 1px solid rgba(212, 170, 79, .56);
+  color: #e5ebf2;
+  background: #031831;
+  font: 400 16px/1.65 "Playfair Display", Georgia, serif;
+  white-space: pre-wrap;
+}
+
+.dd-subject-result-intro {
+  padding: 2px 8px 23px;
+  border-bottom: 1px solid rgba(212, 170, 79, .54);
+}
+
+.dd-subject-result-intro > p:first-of-type {
+  max-width: 610px;
+  margin: 0;
+  color: #f2ece2;
+  font: 400 clamp(17px, 1.55vw, 20px)/1.55 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-result-score {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 15px 0 0 !important;
+  color: #aebed0 !important;
+}
+
+.dd-subject-result-score strong {
+  color: #e6bd59;
+  font: 600 16px/1.3 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-result-score span {
+  font: 700 9px/1.35 "IBM Plex Mono", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dd-subject-editorial .dd-subject-review-card {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dd-subject-editorial .dd-subject-review-card .assessment-hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  padding: 0 0 28px;
+  border: 0;
+  border-bottom: 1px solid rgba(212, 170, 79, .48);
+  border-radius: 0;
+  color: #f7f1e5;
+  background: transparent;
+}
+
+.dd-subject-editorial .score-medallion {
+  width: auto;
+  height: auto;
+  min-width: 104px;
+  padding: 2px 18px 2px 0;
+  border: 0;
+  border-right: 1px solid rgba(212, 170, 79, .7);
+  border-radius: 0;
+  place-items: start;
+  color: #fffaf0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+
+.dd-subject-editorial .score-medallion strong {
+  display: block;
+  color: #e6bd59;
+  font-size: 27px;
+}
+
+.dd-subject-editorial .score-medallion span {
+  display: block;
+  margin-top: 6px;
+  color: #aebed0;
+  font: 700 9px/1.35 "IBM Plex Mono", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dd-subject-editorial .assessment-title {
+  color: #fffaf0;
+}
+
+.dd-subject-editorial .assessment-kicker,
+.dd-subject-editorial .assessment-equivalent,
+.dd-subject-editorial .assessment-badge {
+  color: #c6d2df;
+}
+
+.dd-subject-editorial .assessment-badge {
+  border-color: rgba(212, 170, 79, .48);
+  background: #062140;
+}
+
+.dd-subject-editorial .dd-subject-review-card .assessment-body {
+  padding: 28px 0 0;
+  border: 0;
+  color: #dce4ed;
+  background: transparent;
+}
+
+.dd-subject-editorial .panel-title,
+.dd-subject-editorial .assessment-section h4,
+.dd-subject-editorial .assessment-panel h4 {
+  color: #e6bd59;
+}
+
+.dd-subject-editorial .assessment-rationale,
+.dd-subject-editorial .assessment-panel li,
+.dd-subject-editorial .assessment-meta {
+  color: #d4deea;
+}
+
+.dd-subject-editorial .dd-subject-review-card .assessment-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin-top: 25px;
+  border-top: 1px solid rgba(212, 170, 79, .38);
+  border-bottom: 0;
+}
+
+.dd-subject-editorial .dd-subject-review-card .assessment-panel,
+.dd-subject-editorial .dd-subject-review-card .assessment-panel + .assessment-panel {
+  padding: 20px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(212, 170, 79, .28);
+  background: transparent;
+}
+
+.dd-subject-editorial .dd-assessment-breakdown > div {
+  border-color: rgba(212, 170, 79, .35);
+  color: #dce4ed;
+  background: #062140;
+}
+
+.dd-subject-editorial .dd-assessment-breakdown span,
+.dd-subject-editorial .dd-assessment-breakdown strong {
+  color: #e7edf4;
+}
+
+.dd-subject-editorial .dd-study-disclosures {
+  margin-top: 0;
+  border-top: 0;
+  border-bottom-color: rgba(212, 170, 79, .6);
+}
+
+.dd-subject-editorial.is-result .dd-study-disclosures-heading {
+  display: none;
+}
+
+.dd-subject-editorial .dd-study-disclosures-heading h4 {
+  color: #fffaf0;
+}
+
+.dd-subject-editorial .dd-study-disclosures-heading > p:last-child {
+  color: #b8c7d7;
+}
+
+.dd-subject-editorial .dd-study-disclosures details {
+  border-top-color: rgba(212, 170, 79, .42);
+}
+
+.dd-subject-editorial .dd-study-disclosures summary {
+  box-sizing: border-box;
+  min-height: 66px;
+  padding: 22px 8px;
+  color: #e6bd59;
+  font: 750 12px/1.5 "IBM Plex Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.dd-subject-editorial .dd-study-disclosures summary:hover,
+.dd-subject-editorial .dd-study-disclosures details[open] summary {
+  color: #fff0b8;
+  background: transparent;
+}
+
+.dd-subject-editorial .dd-study-disclosures details[open] summary {
+  border-bottom-color: rgba(212, 170, 79, .3);
+}
+
+.dd-subject-editorial .dd-study-disclosures details > :not(summary) {
+  padding: 12px 8px 22px;
+}
+
+.dd-subject-editorial .legal-explanation,
+.dd-subject-editorial .dd-model-answer,
+.dd-subject-editorial .alac-part,
+.dd-subject-editorial .source-link {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #e5ebf2;
+  background: transparent;
+  font: 400 17px/1.65 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-editorial .alac-part + .alac-part {
+  margin-top: 18px;
+}
+
+.dd-subject-editorial .alac-part b,
+.dd-subject-editorial .source-link small {
+  color: #e6bd59;
+}
+
+.dd-study-hold {
+  color: #c5d0dd;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.dd-study-hold strong {
+  color: #f1d28a;
+}
+
+.dd-subject-editorial .assessment-warning {
+  border-color: #c68b43;
+  color: #f6dfad;
+  background: #31230e;
+}
+
+.dd-subject-editorial .assessment-meta {
+  border-top-color: rgba(212, 170, 79, .34);
+}
+
+.dd-subject-editorial .fb-bar {
+  border-top-color: rgba(212, 170, 79, .35);
+}
+
+.dd-subject-editorial .fb-label {
+  color: #b9c7d6;
+}
+
+.dd-subject-editorial .fb-btn {
+  border-color: rgba(212, 170, 79, .46);
+  color: #e7edf4;
+  background: #062140;
+}
+
+.dd-subject-review-tools {
+  padding: 18px 8px 0;
+  color: #91a3b8;
+}
+
+.dd-subject-review-tools > p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.dd-subject-review-tools > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.dd-subject-review-work {
+  margin-top: 14px;
+  padding: 0 0 7px;
+  border: 0;
+  border-bottom: 1px solid #b88930;
+  color: #e6bd59;
+  background: transparent;
+  cursor: pointer;
+  font: 750 10px/1.4 "IBM Plex Mono", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dd-subject-review-work:hover,
+.dd-subject-review-work:focus-visible {
+  color: #fff2be;
+  outline: 2px solid rgba(230, 189, 89, .5);
+  outline-offset: 4px;
+}
+
+.dd-subject-result-unavailable {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 80px 0;
+}
+
+.dd-subject-result-unavailable h1 {
+  color: #fffaf0;
+  font: 650 44px/1.1 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-result-unavailable p:not(.dd-exam-kicker) {
+  color: #c5d0dd;
+}
+
+/* The course landing retains its hierarchy while joining the same navy family. */
+.dd-subject-study-page {
+  color: #f7f1e5;
+  background: #041d3b;
+}
+
+.dd-subject-study-page .dd-exam-hero,
+.dd-subject-study-page .dd-selected-heading,
+.dd-subject-study-page .dd-subject-study-actions,
+.dd-subject-study-page .dd-subject-study-meta {
+  border-color: rgba(212, 170, 79, .42);
+}
+
+.dd-subject-study-page .dd-exam-hero h1,
+.dd-subject-study-page .dd-subject-study-intro h2,
+.dd-subject-study-page .dd-subject-study-copy h3,
+.dd-subject-study-page .dd-subject-study-meta dd {
+  color: #fffaf0;
+}
+
+.dd-subject-study-page .dd-exam-hero p,
+.dd-subject-study-page .dd-subject-study-intro p,
+.dd-subject-study-page .dd-subject-study-copy > p:last-child {
+  color: #c7d3e1;
+}
+
+.dd-subject-study-page .dd-subject-study-mark,
+.dd-subject-study-page .dd-subject-study-meta dt,
+.dd-subject-study-page .dd-practice-note summary {
+  color: #e6bd59;
+}
+
+.dd-subject-study-page .dd-subject-study-meta div,
+.dd-subject-study-page .dd-subject-study-note {
+  border-color: rgba(212, 170, 79, .35);
+}
+
+.dd-subject-study-page .dd-exam-button {
+  border-color: #b88930;
+  color: #fffaf0;
+  background: transparent;
+}
+
+.dd-subject-study-page .dd-exam-button.is-primary {
+  border-color: #d5aa49;
+  color: #061a35;
+  background: #e2bb5d;
+}
+
+@media (max-width: 900px) {
+  .dd-subject-editorial {
+    padding-inline: 20px;
+  }
+
+  .dd-subject-editorial-header {
+    display: block;
+    padding: 24px 0 28px;
+  }
+
+  .dd-subject-course-picker {
+    width: 100%;
+    margin-top: 24px;
+  }
+
+  .dd-subject-course-control {
+    width: 100%;
+  }
+
+  .dd-subject-editorial-grid {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .dd-subject-editorial-pane,
+  .dd-subject-editorial-pane.is-coaching {
+    padding: 30px 0 42px;
+  }
+
+  .dd-subject-editorial-pane.is-coaching {
+    border-top: 1px solid #b88930;
+    border-left: 0;
+  }
+
+  .dd-subject-coaching-locked {
+    min-height: 380px;
+  }
+
+  .dd-subject-editorial .dd-question-prompt {
+    margin-bottom: 34px;
+  }
+}
+
+@media (max-width: 520px) {
+  .dd-subject-editorial {
+    padding-inline: 17px;
+  }
+
+  .dd-subject-editorial-header h1 {
+    margin-top: 15px;
+    font-size: 42px;
+  }
+
+  .dd-subject-editorial-header > div:first-child > p:last-child {
+    font-size: 15px;
+  }
+
+  .dd-subject-course-control strong {
+    font-size: 16px;
+  }
+
+  .dd-subject-editorial .dd-question-prompt {
+    font-size: 31px;
+    line-height: 1.24;
+  }
+
+  .dd-subject-editorial .dd-subject-practice-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .dd-subject-editorial .dd-exam-button {
+    width: 100%;
+  }
+
+  .dd-subject-result-intro {
+    padding-inline: 0;
+  }
+
+  .dd-subject-editorial .dd-study-disclosures summary,
+  .dd-subject-editorial .dd-study-disclosures details > :not(summary) {
+    padding-inline: 0;
+  }
+}
+
 @media (max-width: 1120px) {
   .dd-subject-layout {
     grid-template-columns: 230px minmax(0, 1fr);

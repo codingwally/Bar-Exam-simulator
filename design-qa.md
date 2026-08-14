@@ -1,3 +1,81 @@
+# Option 3 Homepage, Chambers, and Subject Matter Design QA
+
+## Scope and visual source
+
+- Selected source: `/workspace/scratch/9fcc851bbb9a/generated_images/exec-5e55cd69-84e0-4779-99ca-0ccf276d5ab8.png`
+- Preserved source copy: `docs/qa/option3-approved-reference.jpg`
+- Source pixels: `1487 × 1058`.
+- Implemented surfaces: public homepage, Academy/Commons/BarBound introductions, and Subject Matter writing/review views.
+- Production files reviewed: `index.html`, `assets/private-beta-landing.css`, `assets/private-beta-landing.js`, `assets/examinations.css`, and `assets/examinations.js`.
+- Subject Matter implementation fixture: `docs/qa/option3-subject-matter-fixture.html`.
+- Responsive QA frame: `docs/qa/option3-mobile-frame.html`.
+- Same-input comparison harness: `docs/qa/option3-comparison.html`.
+- Examination Room internals were outside scope and were not modified.
+
+## Selected-design fidelity
+
+- The public experience retains Due Diligence's deep navy, ivory, and restrained gold editorial language without numbered chambers or a generic four-card grid.
+- The homepage uses one photographic field and four rule-separated chamber choices. The main chamber label navigates to its introduction; a separate chevron exposes feature shortcuts.
+- Chamber introductions reuse the same header, palette, type hierarchy, and image-led editorial composition rather than switching to a different template.
+- Subject Matter uses a true equal desktop split, with the writing area and review area measured at `620.844px / 620.844px` in the browser comparison and a one-pixel centered gold divider.
+- The header/body boundary renders at `y=277` against the source's approximate `y=276`; the first reveal row begins at `y=411` and measures `66px`, matching the source composition.
+- The outlined course selector measures `550 × 56px`, and the submitted-answer surface is `170px` high, matching the approved proportions.
+- The right pane is locked before submission and becomes a native disclosure sequence after submission: legal basis, why it applies, discussion, answer, and official sources.
+- The layout stacks writing before coaching below 900px. A 375px responsive frame measured a 341px content column with readable wrapping and no page-level horizontal overflow.
+- No visible ALAC instruction or confidential question-bank total appears in the Subject Matter design.
+
+## Issues found and corrected
+
+1. The first rendered comparison was 1,497px tall and placed a large score panel, rationale, and extra study heading before the requested legal guidance.
+   - Rebuilt the Subject Matter result pane as the approved editorial disclosure sequence. The page reduced to approximately the source height, and the score remains available below the study material without distorting the composition.
+2. The selected-course display was initially non-interactive.
+   - Converted it to a real outlined course control that preserves the draft and opens the existing searchable Year → Term → Course chooser.
+3. Changing a course initially reused the more severe “Leave this examination?” wording.
+   - Added a specific, plain-language Change course confirmation while preserving the same safe draft flush.
+4. Previous release tests accepted numbered decoration and checked only the presence of reveal labels.
+   - Replaced those contracts with structural Option 3 checks and a staging flow that requires a substantive released basis, question-specific guidance, and an HTTPS source.
+5. The detached HTML preview lost production typography and styling when copied into the Windows temporary-preview folder.
+   - Added the production font declarations and a self-contained visual fallback so the exact file the owner opens remains faithful.
+
+## Data and interaction safeguards
+
+- The legal-basis disclosure reads only the released `legal_basis_snapshot` / `legalBasis` record; generic coaching cannot replace it.
+- Applicability guidance is shown only when it has substantive overlap with both the exact prompt and the released basis. Otherwise it is marked unavailable.
+- Before submission, the answer, legal basis, model answer, and sources remain absent from the writing pane.
+- Existing questions, IDs, random/no-repeat behavior, timers, autosave, 0–5 grading, history, and content counts are preserved.
+
+## Verification and comparison evidence
+
+- Desktop homepage: 1363 × 936, no horizontal overflow; full welcome composition measured 1023px high.
+- Desktop Subject Matter viewport: 1363 × 936 CSS pixels at DPR 1; the full browser-rendered page was compared with the `1487 × 1058` source after fitting each into equal comparison frames. The normalized side-by-side evidence is rendered by `docs/qa/option3-comparison.html`.
+- Browser-rendered implementation evidence was captured inline from `docs/qa/option3-subject-matter-fixture.html`; the browser surface did not expose a persistent screenshot filepath.
+- Mobile Subject Matter fixture: 375px iframe width, 341px single-column content, readable course/question hierarchy, and no horizontal overflow.
+- Homepage navigation, Academy introduction, and separate chamber chevron behavior were exercised in the cloud browser.
+- The legal-basis disclosure was closed and reopened successfully in the browser. The right side stayed locked before submission.
+- Console review found no page error; only unrelated browser-extension metadata messages appeared.
+- Focused design, landing, Pages artifact, authentication-overlay, audience-menu, dialog, Examination, LEB Subject Matter, and content-preservation contracts passed.
+- Authenticated staging Subject Matter coverage was updated but was not executed in this local design pass because disposable staging credentials were not available.
+
+## Final comparison assessment
+
+- Fonts and typography: Playfair Display, Inter, and IBM Plex Mono now match the production design family and the source hierarchy closely. The serif question, guidance, and answer copy retain readable optical weights.
+- Spacing and layout rhythm: header break, equal split, course selector, disclosure start, answer height, and vertical rules now align closely with the source. The safe post-submission state intentionally contains the user's submitted answer instead of the source mock's empty placeholder.
+- Colors and tokens: deep judicial navy, ivory type, and restrained gold structure are consistent with the selected image. Minor background-depth differences remain within the existing Due Diligence system.
+- Image quality: this screen contains no photographic or illustrative product asset beyond the existing official header mark; no placeholder art or replacement logo was introduced.
+- Copy and content: the implementation preserves real product language, real released legal-basis data, task-specific guidance, and the existing 0–5 study score. It does not copy mock content in place of production records.
+
+## Comparison history
+
+1. Initial pass — blocked: oversized evaluation panel, delayed disclosures, stale fallback typography, and a 1,497px page materially changed the approved hierarchy.
+2. Tightening pass — fixed: direct result introduction, 50/50 editorial split, outlined course control, 66px disclosure rows, source-backed study sections, compact score placement, and production fonts.
+3. Post-fix pass — passed: the same-input comparison shows the approved and tightened views with closely aligned geometry. No actionable P0/P1/P2 difference remains. Native disclosure markers and the explicit `Change` label are acceptable P3/product-control differences; they preserve semantics and are not generic box decoration.
+
+## Final QA result
+
+final result: passed
+
+This is a local design and regression result. It is not a production deployment claim.
+
 # Quorum Design QA
 
 ## Scope

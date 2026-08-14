@@ -363,13 +363,12 @@ async function publishFixture(page, {
 }
 
 async function openCatalog(page, track) {
-  await page.evaluate(async (selectedTrack) => {
-    if (selectedTrack === 'bar_feels') {
-      await window.DueDiligenceExaminations.openBarFeels();
-    } else {
-      await window.DueDiligenceExaminations.openPerSubject();
-    }
-  }, track);
+  const triggerId = track === 'bar_feels' ? 'spa-bar-feels' : 'spa-subject-matter';
+  await page.evaluate((id) => {
+    const trigger = document.getElementById(id);
+    if (!trigger) throw new Error(`The public navigation control ${id} is unavailable.`);
+    trigger.click();
+  }, triggerId);
   await page.waitForFunction(
     (selectedTrack) => (
       window.DueDiligenceExaminations?.getState?.().screen === 'catalog'
@@ -378,6 +377,8 @@ async function openCatalog(page, track) {
     track,
     { timeout: 15_000 },
   );
+  const rootSelector = track === 'bar_feels' ? '#dd-bar-feels-app' : '#dd-per-subject-app';
+  await page.locator(rootSelector).waitFor({ state: 'visible', timeout: 15_000 });
 }
 
 async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {

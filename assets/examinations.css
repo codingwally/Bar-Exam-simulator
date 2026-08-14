@@ -2569,6 +2569,7 @@ details[open] > summary .dd-subject-chevron {
 
 .dd-subject-editorial .assessment-meta {
   border-top-color: rgba(212, 170, 79, .34);
+  background: #062140;
 }
 
 .dd-subject-editorial .fb-bar {

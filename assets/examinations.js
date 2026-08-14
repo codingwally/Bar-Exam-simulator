@@ -1479,6 +1479,9 @@
       return false;
     }
     state.saveInFlight = true;
+    const answerSnapshot = question.answerText || '';
+    const flaggedSnapshot = question.flagged === true;
+    const revisionSnapshot = Number(question.revision) || 0;
     const saveNode = root?.querySelector('#dd-save-state');
     if (saveNode) {
       saveNode.textContent = 'Saving securely…';
@@ -1490,23 +1493,34 @@
         attemptId: state.active.attempt.attemptId,
         questionId: question.questionId,
         tabToken: tabToken(),
-        answerText: question.answerText || '',
-        expectedRevision: Number(question.revision) || 0,
-        flagged: question.flagged === true,
+        answerText: answerSnapshot,
+        expectedRevision: revisionSnapshot,
+        flagged: flaggedSnapshot,
       });
-      question.answerText = result.answerText;
-      question.flagged = result.flagged;
+      const newerLocalChanges = (question.answerText || '') !== answerSnapshot
+        || (question.flagged === true) !== flaggedSnapshot;
       question.revision = result.revision;
       question.savedAt = result.savedAt;
-      question.localRecoveryText = null;
+      if (newerLocalChanges) {
+        state.pendingSave = true;
+      } else {
+        question.answerText = result.answerText;
+        question.flagged = result.flagged;
+        question.localRecoveryText = null;
+        question.localRecoveryHtml = null;
+      }
       state.active.attempt.lastSavedAt = result.savedAt;
       if (Number.isFinite(Number(result.remainingSeconds))) {
         state.clientRemaining = Number(result.remainingSeconds);
         state.serverSyncAt = Date.now();
       }
       if (saveNode) {
-        saveNode.textContent = `Saved ${formatDate(result.savedAt)}`;
-        saveNode.className = 'dd-save-state is-saved';
+        saveNode.textContent = newerLocalChanges
+          ? 'Unsaved changes'
+          : `Saved ${formatDate(result.savedAt)}`;
+        saveNode.className = newerLocalChanges
+          ? 'dd-save-state is-saving'
+          : 'dd-save-state is-saved';
       }
       saveRecovery();
       return true;

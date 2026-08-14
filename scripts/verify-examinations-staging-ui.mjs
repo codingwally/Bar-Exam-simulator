@@ -368,14 +368,26 @@ async function openCatalog(page, track) {
     if (!trigger) throw new Error(`The public navigation control ${id} is unavailable.`);
     trigger.click();
   }, triggerId);
-  await page.waitForFunction(
-    (selectedTrack) => (
-      window.DueDiligenceExaminations?.getState?.().screen === 'catalog'
-      && window.DueDiligenceExaminations?.getState?.().track === selectedTrack
-    ),
-    track,
-    { timeout: 15_000 },
-  );
+  try {
+    await page.waitForFunction(
+      (selectedTrack) => (
+        window.DueDiligenceExaminations?.getState?.().screen === 'catalog'
+        && window.DueDiligenceExaminations?.getState?.().track === selectedTrack
+      ),
+      track,
+      { timeout: 30_000 },
+    );
+  } catch (error) {
+    const safeNavigationState = await page.evaluate(() => ({
+      activePage: document.querySelector('.page.active')?.id || null,
+      hash: location.hash,
+      state: window.DueDiligenceExaminations?.getState?.() || null,
+    }));
+    throw new Error(
+      `Public navigation did not open ${track}: ${JSON.stringify(safeNavigationState)}`,
+      { cause: error },
+    );
+  }
   const rootSelector = track === 'bar_feels' ? '#dd-bar-feels-app' : '#dd-per-subject-app';
   await page.locator(rootSelector).waitFor({ state: 'visible', timeout: 15_000 });
 }

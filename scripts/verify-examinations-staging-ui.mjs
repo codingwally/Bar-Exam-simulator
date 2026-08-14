@@ -84,11 +84,10 @@ async function runAccessibilityAudit(page, label) {
     targets: violation.nodes.map((node) => node.target),
     summaries: violation.nodes.map((node) => node.failureSummary),
   }));
-  assert.deepEqual(
-    results.accessibility[label],
-    [],
-    `${label} has WCAG A/AA violations.`,
-  );
+  if (results.accessibility[label].length) {
+    const first = results.accessibility[label][0];
+    assert.fail(`${label} has WCAG A/AA violations: ${first.id}; target=${JSON.stringify(first.targets[0] || [])}; ${first.summaries[0] || ''}`);
+  }
 }
 
 async function completeOnboardingIfShown(page) {

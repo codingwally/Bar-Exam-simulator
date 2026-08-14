@@ -116,6 +116,10 @@
     return !publicHomepageHashes.has(normalizedHash(hash));
   }
 
+  function requestedApplicationRoute(hash = location.hash) {
+    return normalizedHash(hash).split(/[/?]/, 1)[0];
+  }
+
   function renderPublicRoute({ focus = false } = {}) {
     const route = normalizedHash();
     const chamber = route.startsWith('chamber/') ? route.slice('chamber/'.length) : '';
@@ -181,9 +185,18 @@
   }
 
   async function activateApplicationRoute(hash) {
-    const route = normalizedHash(hash).split(/[/?]/, 1)[0];
-    if (state.lastActivatedHash === route) return;
-    if (!['mock', 'mock-bar', 'subject-matter'].includes(route)) return;
+    const route = requestedApplicationRoute(hash);
+    if (state.lastActivatedHash === route && route !== 'examination-room') return;
+    if (!['mock', 'mock-bar', 'subject-matter', 'examination-room'].includes(route)) return;
+    if (route === 'examination-room') {
+      const routeModuleWasLoaded = typeof global.DueDiligence2026?.restoreRoute === 'function';
+      await loadFeature('examination-room');
+      state.lastActivatedHash = route;
+      if (routeModuleWasLoaded) {
+        requestAnimationFrame(() => global.DueDiligence2026?.restoreRoute?.());
+      }
+      return;
+    }
     if (route === 'subject-matter') await loadFeature('subject-matter');
     state.lastActivatedHash = route;
     requestAnimationFrame(() => {
@@ -234,19 +247,40 @@
     }
   }
 
+  function normalizeSafeReturnHash(value) {
+    const hash = String(value || '');
+    if (/^#[a-z0-9][a-z0-9-]{0,64}$/i.test(hash) && !/^#(?:admin|auth|callback)/i.test(hash)) return hash;
+    if (!hash.startsWith('#examination-room?')) return '';
+    const parameters = new URLSearchParams(hash.slice('#examination-room?'.length));
+    const allowed = new Set(['exam', 'submission', 'question', 'role']);
+    const keys = [...parameters.keys()];
+    if (keys.some((key) => !allowed.has(key)) || new Set(keys).size !== keys.length) return '';
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const examId = String(parameters.get('exam') || '');
+    const submissionId = String(parameters.get('submission') || '');
+    const question = String(parameters.get('question') || '');
+    const role = String(parameters.get('role') || '');
+    if (!uuid.test(examId) || (submissionId && !uuid.test(submissionId))
+        || (question && (!/^\d{1,3}$/.test(question) || Number(question) < 1 || Number(question) > 200))
+        || (role && !['student', 'professor'].includes(role))
+        || (question && !submissionId)
+        || (submissionId && role !== 'professor')) return '';
+    const safe = new URLSearchParams({ exam: examId });
+    if (role) safe.set('role', role);
+    if (submissionId) safe.set('submission', submissionId);
+    if (question) safe.set('question', question);
+    return `#examination-room?${safe}`;
+  }
+
   function safeReturnHash() {
     const value = global.sessionStorage?.getItem('duediligence.private-beta.return.v1') || '';
     global.sessionStorage?.removeItem('duediligence.private-beta.return.v1');
-    return /^#[a-z0-9][a-z0-9-]{0,64}$/i.test(value) && !/^#(?:admin|auth|callback)/i.test(value)
-      ? value
-      : '';
+    return normalizeSafeReturnHash(value);
   }
 
   function preserveSafeReturnHash() {
-    const hash = location.hash || '';
-    if (/^#[a-z0-9][a-z0-9-]{0,64}$/i.test(hash) && !/^#(?:admin|auth|callback)/i.test(hash)) {
-      global.sessionStorage?.setItem('duediligence.private-beta.return.v1', hash);
-    }
+    const hash = normalizeSafeReturnHash(location.hash || '');
+    if (hash) global.sessionStorage?.setItem('duediligence.private-beta.return.v1', hash);
   }
 
   function statusElement(id) {
@@ -464,12 +498,21 @@
     const authenticated = detail.authenticated === true || Boolean(currentSession()?.access_token);
     if (!gateEnabled) {
       if (authenticated && applicationRouteRequested()) showApplication();
-      else showLanding({ accessAllowed: true });
+      else {
+        showLanding({ accessAllowed: true });
+        if (!authenticated && requestedApplicationRoute() === 'examination-room') {
+          await openProtectedFeature('examination-room');
+        }
+      }
       return;
     }
     const api = privateBetaApi();
     if (!authenticated) {
       showLanding();
+      if (requestedApplicationRoute() === 'examination-room') {
+        await openProtectedFeature('examination-room');
+        return;
+      }
       if (api?.getPending?.()) {
         setStatus(
           'pb-google-status',
@@ -574,7 +617,9 @@
       'anchor-cases': '#anchor-case-digests',
       'examination-room': '#examination-room',
     };
-    const returnHash = routes[feature] || '#mock-bar';
+    const returnHash = feature === 'examination-room'
+      ? normalizeSafeReturnHash(location.hash) || routes[feature]
+      : routes[feature] || '#mock-bar';
     await global.DueDiligencePhase2?.whenAuthReady?.();
     if (!currentSession()?.access_token) {
       global.DueDiligencePhase2?.openSignIn?.({
@@ -749,6 +794,8 @@
       }
       if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
         showApplication();
+      } else if (!currentSession()?.access_token && requestedApplicationRoute() === 'examination-room') {
+        openProtectedFeature('examination-room');
       }
     });
     global.addEventListener('hashchange', () => {
@@ -756,6 +803,10 @@
       if (!applicationRouteRequested()) {
         showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
         renderPublicRoute({ focus: true });
+      } else if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
+        showApplication();
+      } else if (!currentSession()?.access_token && requestedApplicationRoute() === 'examination-room') {
+        openProtectedFeature('examination-room');
       }
     });
     const end = document.getElementById('pb-disclosure-end');
@@ -775,6 +826,9 @@
       else {
         showLanding({ accessAllowed: true });
         renderPublicRoute({ focus: normalizedHash().startsWith('chamber/') });
+        if (requestedApplicationRoute() === 'examination-room') {
+          await openProtectedFeature('examination-room');
+        }
       }
       return;
     }

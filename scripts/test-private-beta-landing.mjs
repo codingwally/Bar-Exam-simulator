@@ -76,12 +76,17 @@ assert.match(script, /privateBetaGate === true/);
 assert.match(config, /privateBetaGate: false/);
 assert.match(script, /if \(!gateEnabled\)[\s\S]*applicationRouteRequested\(\)[\s\S]*showApplication\(\)[\s\S]*showLanding\(\{ accessAllowed: true \}\)/,
   'The disabled admission gate must retain the public homepage at root and open only explicit application routes.');
+assert.match(
+  script,
+  /async function initialize\(\)[\s\S]*if \(!gateEnabled\)[\s\S]*requestedApplicationRoute\(\) === 'examination-room'[\s\S]*await openProtectedFeature\('examination-room'\)/,
+  'Initial signed-out Examination Room deep links must open the protected sign-in flow when the retired admission gate is disabled.',
+);
 assert.match(script, /global\.DueDiligencePublicHome = Object\.freeze/);
 assert.match(script, /mock: '#mock-bar'/, 'Mock Bar sign-in returns must use the canonical route.');
 assert.match(
   script,
-  /\['mock', 'mock-bar', 'subject-matter'\]/,
-  'Application restoration must recognize the Subject Matter route.',
+  /\['mock', 'mock-bar', 'subject-matter', 'examination-room'\]/,
+  'Application restoration must recognize Subject Matter and Examination Room routes.',
 );
 assert.match(
   script,
@@ -98,7 +103,7 @@ assert.match(script, /globalBetaEnabled/);
 assert.match(script, /privateBetaApi\(\)\?\.policy/);
 assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /#private-beta-dialog\[open\]/);
-assert.match(html, /assets\/private-beta-landing\.js\?v=master-experience-20260813-1&amp;release=header-subject-review-20260814-1/);
+assert.match(html, /assets\/private-beta-landing\.js\?v=exam-room-ux-20260814-2/);
 assert.match(html, /assets\/private-beta-landing\.css\?v=master-experience-20260813-1&amp;release=header-subject-review-20260814-1/);
 assert.match(css, /\.pb-chamber-nav\s*\{/);
 assert.match(css, /\.pb-chamber-pill\s*\{/);

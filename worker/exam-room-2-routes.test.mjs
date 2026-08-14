@@ -69,7 +69,7 @@ function harness(overrides = {}) {
       headers: { 'Content-Type': 'application/json' },
     }),
     parseBoundedJson: async (input) => input.json(),
-    processExamRoomQueues: async () => ({}),
+    processExamRoomQueues: overrides.processQueues ?? (async () => ({})),
     requireAdministrator: async () => {
       adminCalls.push(true);
       if (overrides.adminError) throw overrides.adminError;
@@ -1615,6 +1615,27 @@ test('publication completion returns only the new one-time Beadle key and defers
   assert.equal(payload.result.oneTimeBeadleKey, beadleInvitationKey);
   assert.equal(payload.result.oneTimeOnly, true);
   assert.equal(payload.result.studentAccessReady, false);
+});
+
+test('a saved Examination Room action returns bounded pending delivery status instead of a false transaction failure', async () => {
+  const flow = harness({
+    result: { ok: true, examId, queued: true },
+    processQueues: async () => ({ emailFailed: 3 }),
+  });
+  const response = await flow.handlers.examCommand(request({
+    operation: 'retry_student_result_email',
+    examId,
+    attemptId,
+    requestKey,
+  }), {}, '', '', {});
+  const payload = await response.json();
+  assert.equal(response.status, 202);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.result.ok, true);
+  assert.equal(payload.result.deliveryPending, true);
+  assert.equal(payload.result.deliveryFailureCount, 3);
+  assert.match(payload.result.deliveryMessage, /action is saved/i);
+  assert.equal(flow.calls.at(-1).name, 'exam_room_retry_student_result_email_v2');
 });
 
 test('assigned Beadle issues an encrypted-at-rest student code recoverable on refresh', async () => {

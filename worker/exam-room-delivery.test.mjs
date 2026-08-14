@@ -23,6 +23,25 @@ function examinationEmailEnv(mode = 'enabled') {
   };
 }
 
+function assertProfessionalExamRoomEmail(body, emailType) {
+  assert.equal(typeof body.text, 'string', `${emailType} must include plain text`);
+  assert.ok(body.text.trim(), `${emailType} plain text must not be empty`);
+  assert.equal(typeof body.html, 'string', `${emailType} must include HTML`);
+  assert.match(body.html, /<!doctype html>/i, `${emailType} must use the shared document shell`);
+  assert.match(body.html, /<meta name="viewport"/i, `${emailType} must declare a mobile viewport`);
+  assert.match(body.html, /@media only screen and \(max-width: 640px\)/i, `${emailType} must include the mobile layout`);
+  assert.match(body.html, /Due Diligence Examination Room/, `${emailType} must be branded`);
+  assert.equal((body.html.match(/<a\b/gi) || []).length, 1, `${emailType} must have one CTA`);
+  assert.equal(
+    (body.text.match(/https:\/\/duediligence\.ph\/#examination-room/g) || []).length,
+    1,
+    `${emailType} plain text must have one portal action`,
+  );
+  const rendered = `${body.subject}\n${body.text}\n${body.html}`;
+  assert.doesNotMatch(rendered, /\b(?:undefined|null)\b|\[object Object\]|\?exam=(?:["'\s]|$)/i);
+  assert.doesNotMatch(rendered, /raw-attempt-id|raw-receipt-id|raw-snapshot-hash|raw-token-hash/);
+}
+
 async function signedWebhookRequest(event, {
   eventId = 'msg_webhook_test_001',
   timestamp = 1_786_477_200,
@@ -554,24 +573,66 @@ test('room enabled override delivers every Examination Room email type while unr
     title: context.title,
     credentialEnvelope,
   };
+  const schedule = {
+    opensAt: '2026-08-12T01:00:00Z',
+    hardClosesAt: '2026-08-12T05:00:00Z',
+    durationMinutes: 120,
+  };
+  const sensitivePayload = {
+    attemptId: 'raw-attempt-id',
+    receiptId: 'raw-receipt-id',
+    snapshotHash: 'raw-snapshot-hash',
+    rawToken: 'raw-token-hash',
+  };
+  const gradePayload = {
+    examId: context.examPublicId,
+    title: context.title,
+    candidateNumber: 'CAND-001',
+    durationMinutes: 120,
+    extraMinutes: 30,
+    grades: [{ questionId: 'question-1', ordinal: 1, score: 4.2, maximumPoints: 5, comment: 'Strong application.' }],
+    questions: [{ questionId: 'question-1', ordinal: 1 }],
+    ...sensitivePayload,
+  };
   const cases = [
-    ['professor_room_key', credentialPayload],
-    ['professor_grading_key', credentialPayload],
-    ['beadle_key', credentialPayload],
-    ['student_exam_code', { ...credentialPayload, studentName: 'Student' }],
-    ['professor_submission_notice', { examId: context.examPublicId, title: context.title }],
-    ['student_submission_receipt', { title: context.title, answers: [] }],
-    ['exam_publication_replaced', { examId: context.examPublicId, title: context.title, publicationNumber: 2 }],
-    ['submission_reopened', { examId: context.examPublicId, title: context.title, generation: 2 }],
-    ['professor_release_summary', { examId: context.examPublicId, title: context.title }],
-    ['student_correction', { examId: context.examPublicId, title: context.title }],
-    ['student_result', {
-      examId: context.examPublicId,
-      title: context.title,
-      candidateNumber: 'CAND-001',
-      grades: [{ questionId: 'question-1', ordinal: 1, score: 4.2, maximumPoints: 5, comment: 'Strong application.' }],
-      questions: [{ questionId: 'question-1', ordinal: 1 }],
+    ['professor_room_key', {
+      ...credentialPayload, ...sensitivePayload,
+      issuedAt: '2026-08-11T01:00:00Z', expiresAt: '2026-08-11T03:00:00Z',
     }],
+    ['professor_grading_key', { ...credentialPayload, ...schedule, ...sensitivePayload }],
+    ['beadle_key', {
+      ...credentialPayload, ...sensitivePayload,
+      issuedAt: '2026-08-11T01:00:00Z', expiresAt: '2026-08-12T01:00:00Z',
+    }],
+    ['student_exam_code', {
+      ...credentialPayload, ...schedule, ...sensitivePayload,
+      studentName: 'Student', extraMinutes: 30,
+    }],
+    ['professor_submission_notice', {
+      examId: context.examPublicId, title: context.title, studentName: 'Student',
+      startedAt: '2026-08-12T01:00:00Z', submittedAt: '2026-08-12T02:45:00Z',
+      ...sensitivePayload,
+    }],
+    ['student_submission_receipt', {
+      examId: context.examPublicId, title: context.title, answers: [],
+      startedAt: '2026-08-12T01:00:00Z', submittedAt: '2026-08-12T02:45:00Z',
+      ...sensitivePayload,
+    }],
+    ['exam_publication_replaced', {
+      examId: context.examPublicId, title: context.title, publicationNumber: 2,
+      ...schedule, extraMinutes: 30, ...sensitivePayload,
+    }],
+    ['submission_reopened', {
+      examId: context.examPublicId, title: context.title,
+      authorizedAt: '2026-08-12T03:00:00Z', newDeadline: '2026-08-12T03:45:00Z',
+      ...sensitivePayload,
+    }],
+    ['professor_release_summary', {
+      examId: context.examPublicId, title: context.title, durationMinutes: 120,
+      ...sensitivePayload,
+    }],
+    ['student_correction', gradePayload],
+    ['student_result', gradePayload],
   ];
   let fetchCount = 0;
   for (const [emailType, payload] of cases) {
@@ -587,8 +648,14 @@ test('room enabled override delivers every Examination Room email type while unr
       assert.equal(options.headers['Idempotency-Key'], `exam-room-${id}`);
       const body = JSON.parse(options.body);
       assert.deepEqual(body.to, ['recipient@example.test']);
+      assertProfessionalExamRoomEmail(body, emailType);
+      assert.doesNotMatch(`${body.text}\n${body.html}`, new RegExp(tokenHash, 'i'));
+      if (emailType === 'professor_room_key') {
+        assert.match(body.text, /Professor key validity: 2 hours/);
+      }
       if (emailType === 'professor_grading_key') {
         assert.match(body.subject, /published: Professor key and next steps/);
+        assert.match(body.text, /Published student time: 2 hours/);
         assert.match(body.text, /PRIVATE PROFESSOR GRADING KEY/);
         assert.match(body.text, /1\. OPEN THE PROFESSOR WORKSPACE/);
         assert.match(body.text, /4\. DOWNLOAD THE CLASS GRADEBOOK/);
@@ -598,8 +665,37 @@ test('room enabled override delivers every Examination Room email type while unr
         assert.match(body.html, /Professor workflow/);
         assert.match(body.html, /Open secure Examination Room/);
       }
+      if (emailType === 'beadle_key') {
+        assert.match(body.text, /Beadle key validity: 1 day/);
+      }
+      if (emailType === 'student_exam_code') {
+        assert.match(body.text, /Your time allowed: 2 hours 30 minutes/);
+        assert.match(body.text, /Scheduled room window: 4 hours/);
+      }
+      if (emailType === 'professor_submission_notice') {
+        assert.match(body.text, /Recorded work time: 1 hour 45 minutes/);
+      }
+      if (emailType === 'student_submission_receipt') {
+        assert.match(body.text, /Your recorded work time: 1 hour 45 minutes/);
+      }
+      if (emailType === 'exam_publication_replaced') {
+        assert.match(body.text, /Your time allowed: 2 hours 30 minutes/);
+      }
+      if (emailType === 'submission_reopened') {
+        assert.match(body.text, /Reopened session window: 45 minutes/);
+      }
+      if (emailType === 'professor_release_summary') {
+        assert.match(body.text, /Published student time: 2 hours/);
+      }
+      if (emailType === 'student_correction') {
+        assert.match(body.subject, /^Corrected score available:/);
+        assert.match(body.text, /Overall score: 4\.20 \/ 5\.00 \(84\.0%\)/);
+        assert.match(body.html, /Your corrected score is available/);
+        assert.match(body.text, /Your time allowed: 2 hours 30 minutes/);
+      }
       if (emailType === 'student_result') {
         assert.match(body.subject, /^Score released:/);
+        assert.match(body.text, /Your time allowed: 2 hours 30 minutes/);
         assert.match(body.text, /Overall score: 4\.20 \/ 5\.00 \(84\.0%\)/);
         assert.match(body.html, /Your score has been released/);
         assert.match(body.html, /4\.20 \/ 5\.00/);
@@ -674,6 +770,7 @@ test('professor release email contains a 30-student grade record and attached cl
     return response({ id: 'resend-professor-gradebook' });
   });
   assert.deepEqual(captured.to, ['professor@example.test']);
+  assertProfessionalExamRoomEmail(captured, 'professor_release_summary');
   assert.match(captured.subject, /class results and gradebook/);
   assert.match(captured.text, /Submitted and graded: 30 of 30/);
   assert.match(captured.text, /Class average: 80\.0%/);
@@ -761,10 +858,13 @@ test('student submission receipt contains the final questions and only that stud
     return response({ id: 'resend-student-receipt' });
   });
   assert.equal(captured.to[0], 'student@example.test');
+  assertProfessionalExamRoomEmail(captured, 'student_submission_receipt');
   assert.match(captured.text, /Is the dismissal valid\? Explain\./);
   assert.match(captured.text, /The employer failed to observe due process\./);
   assert.match(captured.text, /Discuss reinstatement\./);
   assert.match(captured.text, /\[Intentionally left blank\]/);
+  assert.match(captured.html, /The employer failed to observe due process\./);
+  assert.doesNotMatch(`${captured.text}\n${captured.html}`, /receipt-safe-123/);
   assert.doesNotMatch(captured.text, /must-not-send/);
 });
 
@@ -795,6 +895,7 @@ test('student result email includes overall and per-question grades for only its
     return response({ id: 'resend-student-result' });
   });
   assert.deepEqual(captured.to, ['ana@example.test']);
+  assertProfessionalExamRoomEmail(captured, 'student_result');
   assert.match(captured.text, /Overall score: 8\.00 \/ 10\.00 \(80\.0%\)/);
   assert.match(captured.text, /Question 1: 4\.20 \/ 5\.00/);
   assert.match(captured.text, /Question 2: 3\.80 \/ 5\.00/);
@@ -848,6 +949,7 @@ test('replacement and reopening notices are bounded, idempotent, and contain no 
       assert.equal(options.headers['Idempotency-Key'], `exam-room-${entry.id}`);
       return response({ id: `resend-${entry.id}` });
     });
+    assertProfessionalExamRoomEmail(captured, entry.email_type);
     assert.match(captured.text, entry.expected);
     assert.doesNotMatch(captured.text, entry.forbidden);
     assert.equal(captured.to[0], 'student@example.test');

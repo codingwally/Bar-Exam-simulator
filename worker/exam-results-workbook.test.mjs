@@ -101,7 +101,7 @@ test('class workbook is a styled multi-sheet OOXML package with offline grading 
   assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
   assert.ok(bytes.length > 5_000);
   const text = zipText(bytes);
-  for (const name of ['Summary', 'Class Results', 'Offline Grading', 'Question Analytics', 'Attendance &amp; Timing']) {
+  for (const name of ['Summary', 'Class Results', 'Offline Grading', 'Question Analytics', 'Attendance']) {
     assert.match(text, new RegExp(name));
   }
   assert.match(text, /Student 01 - =HYPERLINK/,
@@ -154,7 +154,7 @@ test('offline workbook remains available before the first student submission', (
   const questionAnalytics = entries.get('xl/worksheets/sheet4.xml') || '';
   const attendance = entries.get('xl/worksheets/sheet5.xml') || '';
   assert.deepEqual([...bytes.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
-  assert.match(text, /ATTENDANCE &amp; TIMING/);
+  assert.match(text, />ATTENDANCE</);
   assert.match(text, /Ana Reyes/);
   assert.match(text, /Ben Cruz/);
   assert.match(text, /Was the dismissal valid\? Explain\./);
@@ -174,7 +174,35 @@ test('offline workbook remains available before the first student submission', (
   assert.match(classResults, /Ben Cruz/);
   assert.match(classResults, /No grade recorded/);
   assert.doesNotMatch(classResults, />On time</);
+  assert.doesNotMatch(classResults, /Candidate Number|>Timing<|>Late</);
   assert.match(attendance, /Not started/);
+  assert.doesNotMatch(attendance, /Candidate Number|Late Entry|Late Submission|>Timing<|>On time</);
+});
+
+test('final-grade workbook reopens with the required A/B headers and exact values', () => {
+  const finalDataset = structuredClone(dataset);
+  finalDataset.exportScope = 'class_results';
+  finalDataset.candidates[0].questions[0].gradeState = 'final';
+  finalDataset.candidates[0].questions[1].gradeState = 'final';
+  finalDataset.candidates[0].questions[1].score = 4;
+  finalDataset.candidates[0].allGradesFinal = true;
+  const bytes = buildExamClassResultsWorkbook({ dataset: finalDataset });
+  const entries = unpackStoredZip(bytes);
+  const classResults = entries.get('xl/worksheets/sheet2.xml') || '';
+  const expectedHeaders = [
+    'Overall Final Grade', 'Raw Score', 'Student Name', 'Email', 'Student Number',
+    'Status', 'Started At', 'Deadline', 'Submitted At', 'Final Maximum', 'Grade Status',
+    'Unanswered', 'Incidents', 'Q1 Score', 'Q1 Max', 'Q1 Comment', 'Q2 Score', 'Q2 Max',
+    'Q2 Comment',
+  ];
+  expectedHeaders.forEach((header, index) => {
+    const column = String.fromCharCode(65 + index);
+    assert.match(worksheetCell(classResults, `${column}4`), new RegExp(`>${header.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}<`),
+      `${column}4 must retain the approved class-results header order`);
+  });
+  assert.match(worksheetCell(classResults, 'A5'), /<v>0\.75<\/v>/);
+  assert.match(worksheetCell(classResults, 'B5'), /<v>7\.5<\/v>/);
+  assert.doesNotMatch(classResults, /Candidate Number|>Timing<|>Late</);
 });
 
 test('partial detailed export keeps class-wide roster and clearly separates class and selection counts', () => {
@@ -272,4 +300,19 @@ test('long Professor questions are preserved in Excel-safe continuation cells', 
 
 test('class workbook rejects malformed or unscoped data', () => {
   assert.throws(() => buildExamClassResultsWorkbook({ dataset: { title: 'Missing ID', candidates: [] } }), /INVALID/);
+});
+
+test('class workbook rejects an aggregate export that exceeds the bounded in-memory budget', () => {
+  const oversized = structuredClone(dataset);
+  oversized.candidates = Array.from({ length: 300 }, (_, candidateIndex) => ({
+    ...structuredClone(dataset.candidates[0]),
+    attemptId: `attempt-${candidateIndex}`,
+    studentEmail: `student-${candidateIndex}@example.test`,
+    questions: Array.from({ length: 200 }, (_, questionIndex) => ({
+      ...structuredClone(dataset.candidates[0].questions[0]),
+      questionId: `question-${candidateIndex}-${questionIndex}`,
+      ordinal: questionIndex + 1,
+    })),
+  }));
+  assert.throws(() => buildExamClassResultsWorkbook({ dataset: oversized }), /TOO_LARGE/);
 });

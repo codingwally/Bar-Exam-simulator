@@ -58,7 +58,7 @@ assert.match(html, /\.btn-angel\{[\s\S]*linear-gradient\(120deg,#B8860B,#F5E28C 
 assert.match(html, /@keyframes sheen\{0%\{background-position:200% 0;\}100%\{background-position:-40% 0;\}\}/);
 assert.match(html, /\.btn-angel:hover,\.btn-angel\.active\{[^}]*filter:brightness\(1\.06\);transform:translateY\(-1px\);/);
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
-assert.match(html, /assets\/feature-loader\.js\?v=master-experience-20260813-1/);
+assert.match(html, /assets\/feature-loader\.js\?v=exam-room-ux-20260814-1/);
 assert.match(html, /Mock Bar/);
 assert.match(frontend, /Subject Matter Examinations/);
 assert.match(frontend, /data-exam-setup=[\s\S]*Review &amp; Begin/);

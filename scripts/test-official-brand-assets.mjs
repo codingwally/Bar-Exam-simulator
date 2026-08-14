@@ -44,8 +44,8 @@ assert.ok(ico.readUInt16LE(4) >= 1, 'ICO must contain an image');
 
 const index = await readFile(path.join(root, 'index.html'), 'utf8');
 const admin = await readFile(path.join(root, 'admin', 'index.html'), 'utf8');
-assert.match(index, /<img class="pb-crest" src="assets\/brand\/icon-192\.png"/);
-assert.match(index, /<img class="crest" src="assets\/brand\/icon-192\.png"/);
+assert.match(index, /<img class="[^"]*\bpb-crest\b[^"]*" src="assets\/brand\/icon-192\.png"/);
+assert.match(index, /<img class="[^"]*\bcrest\b[^"]*" src="assets\/brand\/icon-192\.png"/);
 assert.match(admin, /<img src="\.\.\/assets\/brand\/icon-192\.png"/);
 assert.doesNotMatch(index, /<svg class="(?:pb-crest|crest)"/);
 assert.doesNotMatch(admin, /<svg[^>]*>\s*<path d="M24 7v29/);

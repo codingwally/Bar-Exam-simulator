@@ -481,6 +481,35 @@
       });
     }
 
+    async function saveQuestionFlags(input) {
+      const scope = normalizeScope(input, false);
+      const questionIds = [...new Set((Array.isArray(input.questionIds) ? input.questionIds : [])
+        .map((value) => assertString(value, 'questionId', 512)))];
+      if (questionIds.length > 200) {
+        throw new StoreError('invalid_input', 'Question flags exceed the examination limit.');
+      }
+      const record = {
+        key: `attempt-flags:${scope.attemptId}`,
+        attemptKey: attemptKey(scope),
+        ...scope,
+        questionIds,
+        updatedAt: now(),
+      };
+      await transact([STORE_NAMES.meta], 'readwrite', async (stores) => {
+        await requestPromise(stores.meta.put(record));
+      });
+      return safeClone(record);
+    }
+
+    async function getQuestionFlags(input) {
+      const scope = normalizeScope(input, false);
+      return transact([STORE_NAMES.meta], 'readonly', async (stores) => {
+        const record = await requestPromise(stores.meta.get(`attempt-flags:${scope.attemptId}`));
+        if (!record || record.attemptKey !== attemptKey(scope) || record.sessionEpoch !== scope.sessionEpoch) return [];
+        return Array.isArray(record.questionIds) ? [...record.questionIds] : [];
+      });
+    }
+
     async function transact(names, mode, work) {
       const db = await requireDatabase();
       let transaction;
@@ -1294,6 +1323,8 @@
       clearSessionEnvelope,
       saveAttemptBundle,
       getAttemptBundle,
+      saveQuestionFlags,
+      getQuestionFlags,
       saveAnswer,
       getLatestAnswers,
       getAnswerHistory,

@@ -175,10 +175,11 @@ export async function buildExamResultPdf(result) {
     lineHeight = 13,
     color = INK,
     maximum = MAX_PROMPT_CHARACTERS,
+    emptyText = 'No response recorded.',
   } = {}) {
     const lines = wrappedLines(
       font,
-      value || 'No response recorded.',
+      value || emptyText,
       size,
       PAGE.width - PAGE.margin * 2,
       maximum,
@@ -210,9 +211,9 @@ export async function buildExamResultPdf(result) {
       heading('Question', { size: 9, gap: 4 });
       body(question?.prompt, { maximum: MAX_PROMPT_CHARACTERS });
       heading('Submitted answer', { size: 9, gap: 4 });
-      body(question?.answer, { maximum: MAX_ANSWER_CHARACTERS });
+      body(question?.answer, { maximum: MAX_ANSWER_CHARACTERS, emptyText: 'Unanswered' });
     } else if (scope === 'answers_only') {
-      body(question?.answer, { maximum: MAX_ANSWER_CHARACTERS });
+      body(question?.answer, { maximum: MAX_ANSWER_CHARACTERS, emptyText: 'Unanswered' });
     } else {
       heading('Grade', { size: 9, gap: 4 });
       body(`${finiteNumber(question?.score)} / ${finiteNumber(question?.maximumPoints)}`);

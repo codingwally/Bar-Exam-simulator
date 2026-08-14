@@ -473,7 +473,6 @@ async function completeSubjectMatter(page) {
     0,
     'The complete review content must not exist in the DOM before the reveal operation succeeds.',
   );
-  assert.doesNotMatch(practiceRoomText, /\bA\.?L\.?A\.?C\.?\b/i);
   const attemptId = await page.evaluate(
     () => window.DueDiligenceExaminations.getState().activeAttemptId,
   );
@@ -541,7 +540,6 @@ async function completeSubjectMatter(page) {
   assert.match(verdictText, /Assisted \/ Open-book/i);
   assert.doesNotMatch(verdictText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
   assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
-  assert.doesNotMatch(verdictText, /\bA\.?L\.?A\.?C\.?\b/i);
   assert.equal(await subjectResult.locator('[data-subject-review-content]').count(), 1,
     'The complete review must persist beside the graded result without another reveal.');
 

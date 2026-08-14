@@ -7,8 +7,8 @@ import {
 } from '../worker/subject-matter-placement-manifest.mjs';
 
 const [
-  migration, transportMigration, preflight, worker, releaseCore, examinationsUi,
-  examinerCore, examinationsCore,
+  migration, transportMigration, reviewMigration, reviewNormalizationMigration, preflight, worker,
+  releaseCore, examinationsUi, examinationsCss, examinerCore, examinationsCore,
 ] = await Promise.all([
   readFile(new URL(
     '../supabase/migrations/20260811004000_subject_matter_two_bank_consolidation.sql',
@@ -19,12 +19,21 @@ const [
     import.meta.url,
   ), 'utf8'),
   readFile(new URL(
+    '../supabase/migrations/20260814065530_subject_matter_review_material.sql',
+    import.meta.url,
+  ), 'utf8'),
+  readFile(new URL(
+    '../supabase/migrations/20260814083000_subject_matter_review_source_normalization.sql',
+    import.meta.url,
+  ), 'utf8'),
+  readFile(new URL(
     '../supabase/review/subject_matter_two_bank_production_preflight.sql',
     import.meta.url,
   ), 'utf8'),
   readFile(new URL('../worker/index.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../worker/release-content-core.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../assets/examinations.js', import.meta.url), 'utf8'),
+  readFile(new URL('../assets/examinations.css', import.meta.url), 'utf8'),
   readFile(new URL('../worker/examiner-core.mjs', import.meta.url), 'utf8'),
   readFile(new URL('../worker/examinations-core.mjs', import.meta.url), 'utf8'),
 ]);
@@ -56,6 +65,30 @@ assert.match(transportMigration, /create table if not exists public\.release_sub
 assert.match(transportMigration, /release_stage_subject_matter_v2/);
 assert.match(transportMigration, /release_finalize_all_content_v2/);
 assert.match(transportMigration, /expires_at <= now\(\)/);
+for (const contract of [
+  /create or replace function public\.subject_matter_review_material/,
+  /security definer/,
+  /attempt\.user_id = p_user_id/,
+  /v_track <> 'per_subject'/,
+  /v_assessment_kind <> 'quiz'/,
+  /question\.content_hash = version_question\.snapshot_hash/,
+  /version_question\.legal_basis_snapshot/,
+  /version_question\.source_urls_snapshot/,
+  /question\.doctrine/,
+  /question\.publication_ready is true/,
+  /lower\(question\.review_status\) in \('approved', 'owner_override'\)/,
+  /revoke all on function public\.subject_matter_review_material\(uuid, uuid\)\s+from public, anon, authenticated/,
+  /grant execute on function public\.subject_matter_review_material\(uuid, uuid\)\s+to service_role/,
+]) assert.match(reviewMigration, contract);
+for (const contract of [
+  /create or replace function public\.subject_matter_review_material/,
+  /when 'string' then btrim\(source\.entry #>> '\{\}'\)/,
+  /when 'object' then btrim\(source\.entry->>'url'\)/,
+  /jsonb_agg\(normalized\.url order by source\.ordinality\)/,
+  /normalized\.url !~ '\^https:\/\/'/,
+  /revoke all on function public\.subject_matter_review_material\(uuid, uuid\)\s+from public, anon, authenticated/,
+  /grant execute on function public\.subject_matter_review_material\(uuid, uuid\)\s+to service_role/,
+]) assert.match(reviewNormalizationMigration, contract);
 assert.match(worker, /release_stage_subject_matter_v2/);
 assert.match(worker, /release_finalize_all_content_v2/);
 assert.match(worker, /await stageParts\('rows', subjectSource\.rows, 100\)/);
@@ -79,12 +112,18 @@ assert.match(examinationsUi, /data-assessment-rating="up"/);
 assert.match(examinationsUi, /data-suggest-exam-correction/);
 assert.match(examinationsUi, /assessmentCard\(result, \{ track \}\)/);
 assert.match(examinationsUi, /assessmentCard\(item, \{ answerText: item\.answerText, track: 'per_subject' \}\)/);
+assert.match(examinationsCss, /\.dd-subject-editorial \.dd-subject-practice-answer,[\s\S]*?grid-area:\s*auto/,
+  'The editorial coaching pane must neutralize the legacy named grid area.');
+assert.match(examinationsCss, /@media \(max-width: 900px\)[\s\S]*?\.dd-subject-editorial-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr/,
+  'Subject Matter must collapse to one full-width column on narrow screens.');
 assert.match(examinationsUi, /Review and retain\./);
 assert.match(examinationsUi, /Individual ALAC assessments\./);
 assert.match(examinerCore, /modelAnswerSectionsForQuestion/);
 assert.match(examinerCore, /'procedure'[\s\S]*'doctrine'[\s\S]*'mixed'/);
 assert.match(worker, /sanitizeSubjectMatterCatalog\(result\)/);
 assert.match(worker, /sanitizeSubjectMatterSelection\(result\)/);
+assert.match(worker, /sanitizeSubjectReviewMaterial\(result, query\.attemptId\)/);
+assert.match(worker, /examinationRpc\(env, 'subject_matter_review_material'/);
 assert.match(examinationsCore, /SUBJECT_MATTER_INVENTORY_KEYS/);
 const subjectSurface = examinationsUi.slice(
   examinationsUi.indexOf('function renderPerSubject'),
@@ -112,6 +151,8 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(migration, /grant\s+(select|insert|update|delete).*\b(anon|authenticated)\b/i);
 assert.doesNotMatch(transportMigration, /grant\s+(select|insert|update|delete).*\b(anon|authenticated)\b/i);
+assert.doesNotMatch(reviewMigration, /grant\s+execute.*\b(anon|authenticated)\b/i);
+assert.doesNotMatch(reviewNormalizationMigration, /grant\s+execute.*\b(anon|authenticated)\b/i);
 
 console.log(JSON.stringify({
   courses: SUBJECT_MATTER_COURSES.length,

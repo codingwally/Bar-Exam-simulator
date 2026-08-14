@@ -251,6 +251,21 @@ try {
   const attemptId = started.body.data.attempt.attemptId;
   const questionId = started.body.data.questions[0].questionId;
 
+  console.log('STAGING_GATE: revealing exact owner-bound Subject Matter review material');
+  const reviewMaterial = await examinationQuery(student, 'subject_review_material', { attemptId });
+  assert.deepEqual(
+    Object.keys(reviewMaterial.body.data).sort(),
+    ['attemptId', 'legalBasis', 'questionId', 'sources', 'status', 'whyThisApplies'].sort(),
+  );
+  assert.equal(reviewMaterial.body.data.status, 'available');
+  assert.equal(reviewMaterial.body.data.attemptId, attemptId);
+  assert.equal(reviewMaterial.body.data.questionId, questionId);
+  assert.ok(reviewMaterial.body.data.legalBasis.trim().length > 0);
+  assert.ok(reviewMaterial.body.data.whyThisApplies.trim().length > 0);
+  assert.ok(reviewMaterial.body.data.sources.every((source) => /^https:\/\//.test(source)));
+  const peerReview = await examinationQuery(peer, 'subject_review_material', { attemptId }, [404]);
+  assert.equal(peerReview.body.error.code, 'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE');
+
   await examinationCommand(student, 'save_response', {
     attemptId,
     questionId,

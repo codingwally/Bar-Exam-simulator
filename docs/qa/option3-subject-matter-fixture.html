@@ -30,7 +30,7 @@
     .dd-subject-course-control span { flex: 0 0 auto; color: #e6bd59; font: 750 9px/1.4 "IBM Plex Mono", monospace; letter-spacing: .11em; text-transform: uppercase; }
     .dd-subject-editorial-grid { width: min(100%, 1500px); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 770px; margin: 0 auto; }
     .dd-subject-editorial-pane { min-width: 0; padding: 22px clamp(34px, 4.1vw, 62px) 42px 0; }
-    .dd-subject-editorial-pane.is-coaching { padding-top: 14px; padding-right: 0; padding-left: clamp(34px, 4.1vw, 62px); border-left: 1px solid #b88930; }
+    .dd-subject-editorial-pane.is-coaching { grid-area: auto; padding-top: 14px; padding-right: 0; padding-left: clamp(34px, 4.1vw, 62px); border-left: 1px solid #b88930; }
     .dd-question-label { position: relative; margin: 0 0 34px; color: #e6bd59; font: 750 10px/1.4 "IBM Plex Mono", monospace; letter-spacing: .13em; text-transform: uppercase; }
     .dd-question-label::after { position: absolute; bottom: -17px; left: 0; width: 78px; height: 1px; background: #b88930; content: ""; }
     .dd-subject-task-label { width: max-content; margin: 0; padding-bottom: 12px; border-bottom: 1px solid rgba(230,189,89,.72); color: #e6bd59; font: 750 10px/1.4 "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
@@ -80,12 +80,12 @@
     <div class="qa-brand">DUE DILIGENCE<small>Amicus in Itinere Iuris</small></div>
     <nav class="qa-nav" aria-label="Design fixture navigation"><span>The Academy</span><span>The Commons</span><span>BarBound</span><span>Examination Room</span><span>Support</span><span>The Docket</span></nav>
   </header>
-  <div class="dd-subject-editorial is-result">
+  <div class="dd-subject-editorial">
     <header class="dd-subject-editorial-header">
       <div>
         <p class="dd-subject-breadcrumb"><span>The Academy</span><b aria-hidden="true">/</b> Subject Matter</p>
         <h1>Subject Matter</h1>
-        <p>Review the law by answering one focused question at a time.</p>
+        <p>Choose a course, review one focused question, and open the legal basis when you are ready.</p>
       </div>
       <div class="dd-subject-course-picker">
         <p>Choose a course</p>
@@ -95,33 +95,35 @@
       </div>
     </header>
     <div class="dd-subject-editorial-grid">
-      <main class="dd-subject-editorial-pane is-writing">
+      <main class="dd-subject-editorial-pane is-review">
         <p class="dd-question-label">Civil and Land Titles and Deeds</p>
-        <p class="dd-subject-task-label">Practice question</p>
+        <p class="dd-subject-task-label">Review question</p>
         <h2 class="dd-question-prompt">What three basic elements must generally be present for a contract to exist under the Civil Code?</h2>
-        <section class="dd-subject-approach">
-          <h3>How to approach</h3>
-          <p>List every item requested, then briefly explain each one. For this kind of question, completeness and accuracy matter more than a long factual application.</p>
+        <section class="dd-study-disclosures dd-subject-review-material" aria-labelledby="fixture-review-material-title">
+          <header class="dd-study-disclosures-heading">
+            <p class="dd-exam-kicker">Review and retention</p>
+            <h3 id="fixture-review-material-title">Open the law when you are ready.</h3>
+            <p>The verified basis and explanation load only when you deliberately reveal them.</p>
+          </header>
+          <details><summary>Reveal suggested legal basis</summary><div><p class="dd-study-hold">Open this section to load the vetted legal basis and its official sources.</p></div></details>
+          <details><summary>Why this legal basis applies</summary><div><p class="dd-study-hold">Open this section to load the explanation tied to this question.</p></div></details>
+          <details><summary>How to approach this question</summary><div class="legal-explanation">List every item requested, then briefly explain each one. Completeness and accuracy matter more than a long factual application.</div></details>
         </section>
-        <section class="dd-subject-submitted-response">
-          <h3>Your answer</h3>
-          <div class="dd-subject-submitted-answer">A valid contract generally requires consent of the contracting parties, a certain object that is the subject of the contract, and a lawful cause for the obligation.</div>
-        </section>
-        <nav class="dd-subject-practice-actions" aria-label="Fixture actions"><button class="dd-exam-button is-primary" type="button">Next question</button><button class="dd-exam-button" type="button">Return to courses</button></nav>
       </main>
-      <aside class="dd-subject-editorial-pane is-coaching" aria-label="Subject Matter coaching and study material">
-        <div class="dd-subject-review-summary">
-          <section class="dd-subject-result-intro">
-            <p>Your response shows a solid grasp of the core idea. Review the legal basis below and compare it with your answer to strengthen your understanding.</p>
-          </section>
-          <section class="dd-study-disclosures" aria-label="Subject Matter study material">
-            <details><summary>Reveal suggested legal basis</summary><div class="legal-explanation">Civil Code, Article 1318 — consent of the contracting parties, an object certain which is the subject matter of the contract, and the cause of the obligation.</div></details>
-            <details><summary>Guidance: why this basis applies</summary><div class="legal-explanation">Article 1318 states the three essential elements of a contract: (1) consent of the parties, (2) object certain which is the matter of the contract, and (3) a cause or consideration that gives rise to the obligation. All three must be present for a contract to exist. This question asks for an enumeration of those elements, and Article 1318 provides that exact list.</div></details>
-            <details><summary>Suggested discussion</summary></details>
-            <details><summary>Suggested answer</summary></details>
-            <details><summary>Official sources</summary><div class="source-list"><a class="source-link" href="https://lawphil.net/statutes/repacts/ra1949/ra_386_1949.html"><span>Civil Code of the Philippines<small>Article 1318</small></span><small>Primary legal source</small></a></div></details>
-          </section>
+      <aside class="dd-subject-editorial-pane is-coaching dd-subject-practice-answer" aria-labelledby="fixture-answer-title">
+        <div class="dd-subject-answer-heading">
+          <div><p class="dd-exam-kicker">Optional recall practice</p><h2 id="fixture-answer-title">Write from memory</h2></div>
+          <span>Autosave active</span>
         </div>
+        <section class="dd-answer-card">
+          <label class="sr-only" for="fixture-answer">Your answer</label>
+          <textarea class="dd-answer-editor" id="fixture-answer" placeholder="Write a concise response from memory."></textarea>
+          <footer class="dd-answer-footer"><span>0 words</span><span class="dd-save-state is-saved">Ready to save</span></footer>
+        </section>
+        <nav class="dd-subject-practice-actions" aria-label="Fixture practice actions">
+          <button class="dd-exam-button is-primary" type="button" disabled>Submit for coaching</button>
+          <button class="dd-exam-button" type="button">Return to courses</button>
+        </nav>
       </aside>
     </div>
   </div>

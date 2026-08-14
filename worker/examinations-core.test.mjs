@@ -75,6 +75,27 @@ test('query operations normalize catalog and private assignment tokens', () => {
   });
 });
 
+test('Subject Matter review material requires only a valid attempt identifier', () => {
+  assert.deepEqual(normalizeExaminationQuery({
+    operation: 'subject_review_material',
+    attemptId: ATTEMPT_ID,
+    questionId: QUESTION_ID,
+    versionId: VERSION_ID,
+    unexpected: 'ignored',
+  }), {
+    operation: 'subject_review_material',
+    attemptId: ATTEMPT_ID,
+  });
+
+  throwsCode(() => normalizeExaminationQuery({
+    operation: 'subject_review_material',
+  }), 'INVALID_IDENTIFIER');
+  throwsCode(() => normalizeExaminationQuery({
+    operation: 'subject_review_material',
+    attemptId: 'not-an-attempt-uuid',
+  }), 'INVALID_IDENTIFIER');
+});
+
 test('Subject Matter responses remove confidential inventory counts recursively', () => {
   const catalog = {
     items: [{

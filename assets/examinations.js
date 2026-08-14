@@ -66,6 +66,8 @@
     subjectPageScroll: 0,
     subjectSelectorReturnFocus: null,
     resumeAttemptId: null,
+    reviewMaterialCache: new Map(),
+    reviewMaterialRequests: new Map(),
     initialized: false,
   };
 
@@ -223,6 +225,13 @@
     const page = track === 'bar_feels' ? 'bar-feels' : 'midterms';
     global.showPage?.(page, null);
     document.querySelectorAll('.spa-tab').forEach((tab) => tab.classList.remove('active'));
+  }
+
+  function focusRendered(root, selector) {
+    requestAnimationFrame(() => {
+      const target = root?.querySelector?.(selector);
+      target?.focus?.({ preventScroll: true });
+    });
   }
 
   function formatDuration(seconds) {
@@ -595,7 +604,7 @@
     const selected = subjectCatalogItem();
     if (!selected) {
       root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
-        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">Guided legal writing practice</p>
+        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">Review and retention</p>
           <h1>Subject Matter</h1></div></header>
         <div class="dd-exam-status is-error">No Subject Matter courses are available right now.</div>
       </div></div>`;
@@ -607,10 +616,9 @@
     root.innerHTML = `<div class="dd-exam-page dd-subject-study-page"><div class="dd-exam-shell">
       <header class="dd-exam-hero dd-subject-study-hero">
         <div>
-          <p class="dd-exam-kicker">Study by law-school course</p>
+          <p class="dd-exam-kicker">Review and retention</p>
           <h1>Subject Matter</h1>
-          <p>Choose a course, work through one focused question, then review the law and
-            the reasoning behind a stronger response.</p>
+          <p>Choose a course, review one focused question, and open the legal basis when you are ready.</p>
         </div>
         <span class="dd-subject-study-mark">Question-aware study</span>
       </header>
@@ -620,15 +628,13 @@
           <header class="dd-selected-heading dd-subject-study-intro" id="dd-selected-course-heading" tabindex="-1">
             <p class="dd-exam-kicker">Year ${Number(selected.yearLevel)} · Term ${Number(selected.term)}</p>
             <h2>${escapeHtml(selected.subject)}</h2>
-            <p>Practice the precise task a course question asks, then use the evaluated record
-              to understand, review, and retain the governing law.</p>
+            <p>Review the precise task, open the governing law when you are ready, and write only when testing recall will help.</p>
           </header>
           <section class="dd-subject-study-start" aria-labelledby="dd-subject-study-start-title">
             <div class="dd-subject-study-copy">
-              <p class="dd-exam-kicker">One-question study session</p>
-              <h3 id="dd-subject-study-start-title">Begin when you are ready to write.</h3>
-              <p>Questions appear in a random, no-repeat cycle. Your response stays connected to
-                your account, and the coaching appears only after you submit.</p>
+              <p class="dd-exam-kicker">One-question review session</p>
+              <h3 id="dd-subject-study-start-title">Begin when you are ready to review.</h3>
+              <p>Questions appear in a random, no-repeat cycle. Review materials are available with each question; writing from memory remains optional.</p>
             </div>
             <dl class="dd-subject-study-meta">
               <div><dt>Your progress</dt><dd>${escapeHtml(selected.progressState || 'Not started')}</dd></div>
@@ -651,11 +657,11 @@
                 data-subject-performance="${escapeAttribute(selected.subject)}">Review my work</button>
             </div>
             <details class="dd-practice-note dd-subject-study-note">
-              <summary>How this practice works</summary>
+              <summary>How this review works</summary>
               <ol class="dd-syllabus-list">
-                <li>Review the exact task and write in the structure it calls for.</li>
-                <li>Submit one answer for question-aware legal coaching.</li>
-                <li>Study the model response, legal basis, and official sources.</li>
+                <li>Review the exact task and reveal the approved legal basis when you are ready.</li>
+                <li>Study why the basis applies and follow its official primary sources.</li>
+                <li>Optionally answer from memory and submit for question-aware coaching.</li>
                 <li>Continue to a different random question.</li>
               </ol>
             </details>
@@ -1033,6 +1039,9 @@
     state.expiryInFlight = false;
     showTrackPage(state.active.examination.track);
     renderRoom();
+    if (state.active.examination.track === 'per_subject') {
+      focusRendered(pageRoot('per_subject'), '#dd-subject-question-title');
+    }
     saveRecovery();
     resumeActiveClock();
     history.pushState({ dueDiligenceExamination: state.active.attempt.attemptId }, '', location.href);
@@ -1185,37 +1194,40 @@
   function subjectPracticeRoomMarkup({ question, timerMode, writingGuide }) {
     const course = state.active.examination.subject || state.selectedSubject || 'Selected course';
     const answerText = question.answerText || '';
+    const attemptId = state.active.attempt.attemptId;
     return `<div class="dd-subject-editorial">
       <header class="dd-subject-editorial-header">
         <div>
+          <p class="dd-exam-kicker">Review and retention</p>
           <p class="dd-subject-breadcrumb"><span>The Academy</span><b aria-hidden="true">/</b> Subject Matter</p>
           <h1>Subject Matter</h1>
-          <p>Review the law by answering one focused question at a time.</p>
+          <p>Choose a course, review one focused question, and open the legal basis when you are ready.</p>
         </div>
         <div class="dd-subject-course-picker">
           <p>Choose a course</p>
           <button class="dd-subject-course-control" type="button" data-subject-change-course
-            aria-label="Change course. Opens the searchable Year, Term, and Course chooser.">
+            aria-label="${escapeAttribute(course)} — change course. Opens the searchable Year, Term, and Course chooser.">
             <strong>${escapeHtml(course)}</strong>
             <span>Change</span>
           </button>
         </div>
       </header>
       <div class="dd-subject-editorial-grid">
-        <main class="dd-subject-editorial-pane is-writing" aria-labelledby="dd-subject-question-title">
+        <main class="dd-subject-editorial-pane is-review" aria-labelledby="dd-subject-question-title">
           <p class="dd-question-label">${escapeHtml(course)}</p>
-          <p class="dd-subject-task-label">Practice question</p>
-          <h2 class="dd-question-prompt" id="dd-subject-question-title">${escapeHtml(question.prompt)}</h2>
-          <section class="dd-subject-approach" aria-labelledby="dd-subject-approach-title">
-            <h3 id="dd-subject-approach-title">How to approach</h3>
-            <p>${escapeHtml(writingGuide.approach)}</p>
-          </section>
-          <section class="dd-subject-practice-answer" aria-labelledby="dd-subject-answer-title">
+          <p class="dd-subject-task-label">Review question</p>
+          <h2 class="dd-question-prompt" id="dd-subject-question-title" tabindex="-1">${escapeHtml(question.prompt)}</h2>
+          ${subjectReviewMaterialControls({ attemptId, questionId: question.questionId, writingGuide })}
+        </main>
+        <aside class="dd-subject-editorial-pane is-coaching dd-subject-practice-answer" aria-labelledby="dd-subject-answer-title">
+          <div class="dd-subject-answer-heading">
+            <div><p class="dd-exam-kicker">Optional recall practice</p><h2 id="dd-subject-answer-title">Write from memory</h2></div>
+            <span>Autosave active</span>
+          </div>
           ${question.localRecoveryText != null ? `<div class="dd-exam-status is-error">
             A newer local draft differs from the server revision.
             <button class="dd-exam-button" type="button" data-use-local-draft>Use local draft</button>
           </div>` : ''}
-          <h3 id="dd-subject-answer-title">Your answer</h3>
           <section class="dd-answer-card">
             <label class="sr-only" for="dd-answer-editor">Your answer</label>
             <textarea class="dd-answer-editor" id="dd-answer-editor" maxlength="20000"
@@ -1224,7 +1236,6 @@
               <span id="dd-word-count">${wordCount(answerText)} words</span>
               <span class="dd-save-state is-saved" id="dd-save-state">${Number(question.revision) > 0 ? 'Saved' : 'Ready to save'}</span>
             </footer>
-          </section>
           </section>
           <div class="dd-subject-writing-status">
             <div class="dd-subject-practice-clock ${timerMode === 'none' ? 'is-hidden' : ''}" id="dd-room-clock">
@@ -1238,17 +1249,9 @@
           </div>
           <nav class="dd-subject-practice-actions" aria-label="Subject Matter practice actions">
             <button class="dd-exam-button is-primary" data-submit-current type="button"
-              ${answerText.trim() ? '' : 'disabled'}>Submit answer</button>
+              ${answerText.trim() ? '' : 'disabled'}>Submit for coaching</button>
             <button class="dd-exam-button" data-return-catalog type="button">Return to courses</button>
           </nav>
-        </main>
-        <aside class="dd-subject-editorial-pane is-coaching dd-subject-coaching-locked" aria-labelledby="dd-subject-coaching-title">
-          <div>
-            <p class="dd-exam-kicker">Review and retention</p>
-            <h2 id="dd-subject-coaching-title">Coaching follows your submission.</h2>
-            <p>Your evaluation, approved suggested legal basis, guidance, suggested discussion, answer, and official sources will appear here after you submit.</p>
-          </div>
-          <p class="dd-subject-coaching-note">Nothing on this side reveals the answer while you are still writing.</p>
         </aside>
       </div>
     </div>`;
@@ -2017,117 +2020,133 @@
       .filter((section) => section.text);
   }
 
-  const SUBJECT_GUIDANCE_STOP_WORDS = new Set([
-    'about', 'after', 'again', 'against', 'answer', 'applies', 'basis', 'because',
-    'article', 'before', 'being', 'between', 'civil', 'clear', 'code', 'could',
-    'court', 'does', 'from', 'governing', 'legal', 'must', 'question', 'republic',
-    'response', 'revised', 'rule', 'section', 'should', 'states', 'statute', 'that',
-    'their', 'there', 'these', 'they', 'this', 'under', 'when', 'where', 'which',
-    'with', 'would',
-  ]);
-
-  function subjectGuidanceTokens(value) {
-    return new Set(String(value || '').toLowerCase().match(/[a-z0-9]{4,}/g)
-      ?.filter((token) => !SUBJECT_GUIDANCE_STOP_WORDS.has(token)) || []);
+  function subjectReviewMaterialKey(attemptId) {
+    return `${currentUserId()}:${String(attemptId || '').trim()}`;
   }
 
-  function subjectGuidanceIsSpecific(explanation, prompt, legalBasis) {
-    const text = String(explanation || '').trim();
-    if (text.length < 60 || !legalBasis) return false;
-    const explanationTokens = subjectGuidanceTokens(text);
-    const basisMatches = [...subjectGuidanceTokens(legalBasis)]
-      .filter((token) => explanationTokens.has(token)).length;
-    const questionMatches = [...subjectGuidanceTokens(prompt)]
-      .filter((token) => explanationTokens.has(token)).length;
-    const citations = String(legalBasis).match(/\b(?:article|section|rule|republic act|r\.a\.|a\.m\.)\s*(?:no\.?\s*)?[ivxlcdm\d-]+/gi) || [];
-    const repeatsCitation = citations.some((citation) => text.toLowerCase().includes(citation.toLowerCase()));
-    return questionMatches >= 1 && (basisMatches >= 1 || repeatsCitation);
+  function subjectReviewSources(sources) {
+    const safeSources = (Array.isArray(sources) ? sources : []).filter((source) => {
+      try { return new URL(source).protocol === 'https:'; } catch { return false; }
+    });
+    if (!safeSources.length) return '';
+    return `<div class="dd-subject-review-sources"><h5>Official sources</h5>${safeSources.map((source, index) => `<a class="source-link" href="${escapeAttribute(source)}" target="_blank" rel="noopener noreferrer"><span>Official source ${index + 1}</span><small>${escapeHtml(new URL(source).hostname)}</small></a>`).join('')}</div>`;
   }
 
-  function subjectMatterStudyDisclosures({ assessment, result, adaptiveSections, suggestedAnswer, sources }) {
-    const legalBasis = String(
-      result?.legal_basis_snapshot || result?.legalBasis || '',
-    ).trim();
-    const candidateGuidance = String(assessment?.legalExplanation || '').trim();
-    const explanation = subjectGuidanceIsSpecific(
-      candidateGuidance,
-      result?.prompt,
-      legalBasis,
-    ) ? candidateGuidance : '';
-    const discussion = adaptiveSections.length
-      ? adaptiveSections.map((section) => `<div class="alac-part"><b>${escapeHtml(section.label)}</b><p>${escapeHtml(section.text)}</p></div>`).join('')
-      : '<p class="dd-study-hold">A suggested discussion has not been released for this item.</p>';
-    const releasedAnswer = String(suggestedAnswer || '').trim();
-    return `<section class="dd-study-disclosures" aria-labelledby="dd-study-disclosures-title">
+  function subjectReviewMaterialContent(material, kind) {
+    if (kind === 'basis') {
+      return `<div class="legal-explanation">${escapeHtml(material.legalBasis)}</div>${subjectReviewSources(material.sources)}`;
+    }
+    return `<div class="legal-explanation">${escapeHtml(material.whyThisApplies)}</div>`;
+  }
+
+  function subjectReviewMaterialControls({ attemptId, questionId, writingGuide }) {
+    const shared = `data-attempt-id="${escapeAttribute(attemptId)}" data-question-id="${escapeAttribute(questionId)}"`;
+    return `<section class="dd-study-disclosures dd-subject-review-material" aria-labelledby="dd-subject-review-material-title">
       <header class="dd-study-disclosures-heading">
-        <p class="dd-exam-kicker">Continue your review</p>
-        <h4 id="dd-study-disclosures-title">Study the law behind your response.</h4>
-        <p>Open each part when you are ready to compare, correct, and retain the governing material.</p>
+        <p class="dd-exam-kicker">Review and retention</p>
+        <h3 id="dd-subject-review-material-title">Open the law when you are ready.</h3>
+        <p>The verified basis and explanation load only when you deliberately reveal them.</p>
       </header>
-      <details><summary>Reveal suggested legal basis</summary>${legalBasis
-        ? `<div class="legal-explanation">${escapeHtml(legalBasis)}</div>`
-        : '<p class="dd-study-hold"><strong>Not released.</strong> This item has no approved legal-basis snapshot available. It is held here instead of being replaced with a general writing tip.</p>'}</details>
-      <details><summary>Guidance: why this basis applies</summary>${explanation
-        ? `<div class="legal-explanation">${escapeHtml(explanation)}</div>`
-        : '<p class="dd-study-hold"><strong>Specific guidance unavailable.</strong> The released record does not contain an explanation tied closely enough to this exact question and legal basis.</p>'}</details>
-      <details><summary>Suggested discussion</summary><div class="alac-model dd-adaptive-model">${discussion}</div></details>
-      <details><summary>Suggested answer</summary>${releasedAnswer
-        ? `<div class="dd-model-answer">${escapeHtml(releasedAnswer)}</div>`
-        : '<p class="dd-study-hold">The approved suggested answer has not been released for this item.</p>'}</details>
-      <details><summary>Official sources</summary>${assessmentSources(sources)}</details>
+      <details ${shared} data-subject-review-material="basis">
+        <summary data-subject-review-reveal>Reveal suggested legal basis</summary>
+        <div data-subject-review-slot><p class="dd-study-hold">Open this section to load the vetted legal basis and its official sources.</p></div>
+      </details>
+      <details ${shared} data-subject-review-material="why">
+        <summary data-subject-review-reveal>Why this legal basis applies</summary>
+        <div data-subject-review-slot><p class="dd-study-hold">Open this section to load the explanation tied to this question.</p></div>
+      </details>
+      <details>
+        <summary>How to approach this question</summary>
+        <div class="legal-explanation">${escapeHtml(writingGuide.approach)}</div>
+      </details>
     </section>`;
   }
 
-  function subjectMatterResultMarkup(result) {
+  function updateSubjectReviewMaterialSlots(attemptId, questionId, material) {
+    document.querySelectorAll(`[data-subject-review-material][data-attempt-id="${attemptId}"]`).forEach((details) => {
+      if (details.dataset.questionId !== questionId) return;
+      const slot = details.querySelector('[data-subject-review-slot]');
+      if (slot) slot.innerHTML = subjectReviewMaterialContent(material, details.dataset.subjectReviewMaterial);
+    });
+  }
+
+  function showSubjectReviewMaterialError(details, message) {
+    const slot = details?.querySelector('[data-subject-review-slot]');
+    if (!slot) return;
+    slot.innerHTML = `<div class="dd-exam-status is-error">${escapeHtml(message || 'Verified review material could not be loaded right now.')}</div>
+      <button class="dd-exam-button" type="button" data-subject-review-retry>Retry</button>`;
+  }
+
+  async function loadSubjectReviewMaterial(details, { retry = false } = {}) {
+    const attemptId = details?.dataset.attemptId || '';
+    const questionId = details?.dataset.questionId || '';
+    if (!attemptId || !questionId || !details.open) return;
+    const key = subjectReviewMaterialKey(attemptId);
+    if (retry) {
+      state.reviewMaterialCache.delete(key);
+      state.reviewMaterialRequests.delete(key);
+    }
+    const cached = state.reviewMaterialCache.get(key);
+    if (cached) {
+      updateSubjectReviewMaterialSlots(attemptId, questionId, cached);
+      return;
+    }
+    const slot = details.querySelector('[data-subject-review-slot]');
+    if (slot) slot.innerHTML = '<p class="dd-study-hold" role="status">Loading verified review material…</p>';
+    let request = state.reviewMaterialRequests.get(key);
+    if (!request) {
+      request = api('/examinations/query', { operation: 'subject_review_material', attemptId })
+        .then((material) => {
+          if (material?.attemptId !== attemptId || material?.questionId !== questionId) {
+            throw new Error('Verified review material does not match this question.');
+          }
+          state.reviewMaterialCache.set(key, material);
+          return material;
+        })
+        .finally(() => state.reviewMaterialRequests.delete(key));
+      state.reviewMaterialRequests.set(key, request);
+    }
+    try {
+      const material = await request;
+      if (!document.body.contains(details)) return;
+      updateSubjectReviewMaterialSlots(attemptId, questionId, material);
+    } catch (error) {
+      if (document.body.contains(details)) showSubjectReviewMaterialError(details, error?.message);
+    }
+  }
+
+  function subjectMatterResultMarkup(result, attemptId = '') {
     const course = result?.subject
       || state.active?.examination?.subject
       || state.selectedSubject
       || 'Selected course';
     const writingGuide = subjectWritingGuide(result || {});
     const answerText = String(result?.answerText || '').trim();
-    const assessment = result?.aiAssessment || result?.assessment || {};
-    const score = result?.aiScore ?? result?.score;
-    const suggestedAnswer = result?.modelAnswer || result?.suggestedAnswer || '';
-    const sources = result?.sources || [];
-    const adaptiveSections = adaptiveModelAnswerSections(assessment, {
-      ...result,
-      prompt: result?.prompt || '',
-    });
-    const studyDisclosures = subjectMatterStudyDisclosures({
-      assessment,
-      result,
-      adaptiveSections,
-      suggestedAnswer,
-      sources,
-    });
-    const summary = String(assessment?.rationale || '').trim()
-      || 'Compare your response with the released legal basis and study material below.';
     const questionId = result?.questionId || result?.id || '';
+    const resolvedAttemptId = attemptId || result?.attemptId || state.active?.attempt?.attemptId || '';
     return `<div class="dd-subject-editorial is-result">
       <header class="dd-subject-editorial-header">
         <div>
+          <p class="dd-exam-kicker">Review and retention</p>
           <p class="dd-subject-breadcrumb"><span>The Academy</span><b aria-hidden="true">/</b> Subject Matter</p>
-          <h1>Subject Matter</h1>
-          <p>Review the law by answering one focused question at a time.</p>
+          <h1 data-subject-result-heading tabindex="-1">Subject Matter</h1>
+          <p>Choose a course, review one focused question, and open the legal basis when you are ready.</p>
         </div>
         <div class="dd-subject-course-picker">
           <p>Choose a course</p>
           <button class="dd-subject-course-control" type="button" data-subject-change-course
-            aria-label="Change course. Opens the searchable Year, Term, and Course chooser.">
+            aria-label="${escapeAttribute(course)} — change course. Opens the searchable Year, Term, and Course chooser.">
             <strong>${escapeHtml(course)}</strong>
             <span>Change</span>
           </button>
         </div>
       </header>
       <div class="dd-subject-editorial-grid">
-        <main class="dd-subject-editorial-pane is-writing" aria-labelledby="dd-subject-result-question-title">
+        <main class="dd-subject-editorial-pane is-review" aria-labelledby="dd-subject-result-question-title">
           <p class="dd-question-label">${escapeHtml(course)}</p>
-          <p class="dd-subject-task-label">Practice question</p>
+          <p class="dd-subject-task-label">Review question</p>
           <h2 class="dd-question-prompt" id="dd-subject-result-question-title">${escapeHtml(result?.prompt || '')}</h2>
-          <section class="dd-subject-approach" aria-labelledby="dd-subject-result-approach-title">
-            <h3 id="dd-subject-result-approach-title">How to approach</h3>
-            <p>${escapeHtml(writingGuide.approach)}</p>
-          </section>
+          ${subjectReviewMaterialControls({ attemptId: resolvedAttemptId, questionId, writingGuide })}
           <section class="dd-subject-submitted-response" aria-labelledby="dd-subject-submitted-answer-title">
             <h3 id="dd-subject-submitted-answer-title">Your answer</h3>
             <div class="dd-subject-submitted-answer">${escapeHtml(answerText || 'No answer text is available in this released record.')}</div>
@@ -2137,22 +2156,12 @@
             <button class="dd-exam-button" type="button" data-return-catalog>Return to courses</button>
           </nav>
         </main>
-        <aside class="dd-subject-editorial-pane is-coaching" aria-label="Subject Matter coaching and study material">
-          <div class="dd-subject-review-summary">
-            <section class="dd-subject-result-intro" aria-labelledby="dd-subject-review-summary-title">
-              <h2 class="sr-only" id="dd-subject-review-summary-title">Your coaching result</h2>
-              <p>${escapeHtml(summary)}</p>
-            </section>
-            ${studyDisclosures}
-          </div>
+        <aside class="dd-subject-editorial-pane is-coaching" aria-label="Subject Matter coaching">
+          <p class="dd-exam-kicker">Coaching result</p>
+          ${assessmentCard(result, { track: 'per_subject', compactSubject: true })}
           <div class="dd-subject-review-tools" aria-label="Subject Matter review tools">
-            ${score != null ? `<p class="dd-subject-result-score"><strong>${Number(score).toFixed(1)} / 5</strong><span>Legal-study practice score</span></p>` : ''}
             <p>This coaching supports legal study. It is not an official Supreme Court grade or prediction.</p>
             <div>
-              <button class="dd-subject-review-work" type="button" data-assessment-rating="up">Helpful</button>
-              <button class="dd-subject-review-work" type="button" data-assessment-rating="down">Needs work</button>
-              ${questionId ? `<button class="dd-subject-review-work" type="button" data-suggest-exam-correction
-                data-question-id="${escapeAttribute(questionId)}" data-question-subject="${escapeAttribute(course)}">Suggest a correction</button>` : ''}
               <button class="dd-subject-review-work" type="button"
                 data-subject-performance="${escapeAttribute(course)}">Review my saved work</button>
             </div>
@@ -2179,9 +2188,6 @@
     const sourceWarning = assessment.reviewRequired === true || assessment.sourceStatus === 'conflict'
       ? '<div class="assessment-warning"><strong>Review required.</strong> Verify the cited primary authorities before relying on this assessment.</div>'
       : '';
-    const subjectStudyDisclosures = isSubjectMatter
-      ? subjectMatterStudyDisclosures({ assessment, result, adaptiveSections, suggestedAnswer, sources })
-      : '';
     return `<article class="assessment-card dd-subject-assessment ${isSubjectMatter ? 'dd-subject-review-card' : ''}" aria-label="${isSubjectMatter ? 'Subject Matter review and retention assessment' : 'Individual Philippine Bar essay assessment'}"
       ${isSubjectMatter && questionId ? `data-study-resource-type="subject_matter" data-study-resource-id="${escapeAttribute(questionId)}"` : ''}>
       <div class="assessment-hero">
@@ -2207,7 +2213,13 @@
           <section class="assessment-panel errors"><h4>${isSubjectMatter ? 'Important points missed' : 'Errors or missing points'}</h4>${assessmentList(assessment.errors, 'No material error was identified.')}</section>
           <section class="assessment-panel coaching"><h4>${isSubjectMatter ? 'How to improve' : 'Prioritized improvements'}</h4>${assessmentList(assessment.improvements, 'Keep the answer direct, legally grounded, and fact-specific.')}</section>
         </div>
-        ${isSubjectMatter ? subjectStudyDisclosures : adaptiveSections.length ? `<section class="assessment-section"><h4>Improved model response</h4>
+        ${isSubjectMatter ? `${adaptiveSections.length ? `<section class="assessment-section"><h4>Suggested discussion</h4>
+          <div class="alac-model dd-adaptive-model">${adaptiveSections.map((section) => `<div class="alac-part">
+            <b>${escapeHtml(section.label)}</b><p>${escapeHtml(section.text)}</p></div>`).join('')}</div></section>`
+          : '<section class="assessment-section"><h4>Suggested discussion</h4><p class="dd-study-hold">A suggested discussion has not been released for this item.</p></section>'}
+          ${suggestedAnswer ? `<section class="assessment-section"><h4>Suggested answer</h4><div class="dd-model-answer">${escapeHtml(suggestedAnswer)}</div></section>`
+          : '<section class="assessment-section"><h4>Suggested answer</h4><p class="dd-study-hold">The suggested answer has not been released for this item.</p></section>'}`
+        : adaptiveSections.length ? `<section class="assessment-section"><h4>Improved model response</h4>
           <div class="alac-model dd-adaptive-model">${adaptiveSections.map((section) => `<div class="alac-part">
             <b>${escapeHtml(section.label)}</b><p>${escapeHtml(section.text)}</p></div>`).join('')}</div></section>`
         : hasAlac ? `<section class="assessment-section"><h4>Improved Answer — ALAC Method</h4>
@@ -2237,8 +2249,8 @@
     state.screen = 'verdict';
     showTrackPage(track);
     const root = pageRoot(track);
-    root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
-      <p class="dd-exam-kicker">The Verdict</p><h1>Loading individual assessments…</h1>
+    root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen" role="status" aria-live="polite">
+      <p class="dd-exam-kicker">The Verdict</p><h1 tabindex="-1">Loading individual assessments…</h1>
     </section></div>`;
     try {
       const verdict = await api('/examinations/query', {
@@ -2250,13 +2262,14 @@
       if (track === 'per_subject') {
         const result = Array.isArray(verdict.results) ? verdict.results[0] : null;
         root.innerHTML = result
-          ? subjectMatterResultMarkup(result)
+          ? subjectMatterResultMarkup(result, attemptId)
           : `<div class="dd-subject-editorial"><section class="dd-subject-result-unavailable">
             <p class="dd-exam-kicker">Subject Matter</p>
             <h1>Review unavailable.</h1>
             <p>Your submitted answer is preserved, but no released assessment record is available yet.</p>
             <button class="dd-exam-button" type="button" data-return-catalog>Return to courses</button>
           </section></div>`;
+        focusRendered(root, result ? '[data-subject-result-heading]' : 'h1');
         return;
       }
       root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-review-page' : ''}"><section class="dd-verdict-screen">
@@ -2283,10 +2296,11 @@
         </div>
       </section></div>`;
     } catch (error) {
-      root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
+      root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen" role="alert" tabindex="-1">
         <p class="dd-exam-kicker">The Verdict</p><h1>Assessment unavailable.</h1>
         <div class="dd-exam-status is-error">${escapeHtml(error.message)}</div>
       </section></div>`;
+      focusRendered(root, '[role="alert"]');
     }
   }
 
@@ -2348,6 +2362,8 @@
     state.resumeAttemptId = null;
     state.saveInFlight = false;
     state.pendingSave = false;
+    state.reviewMaterialCache.clear();
+    state.reviewMaterialRequests.clear();
     ['dd-per-subject-app', 'dd-bar-feels-app', 'dd-verdict-app'].forEach((id) => {
       document.getElementById(id)?.replaceChildren();
     });
@@ -2357,7 +2373,7 @@
     showTrackPage(track);
     const root = pageRoot(track);
     if (root) root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
-      <div class="dd-exam-status">Preparing your examination choices…</div>
+      <div class="dd-exam-status" role="status" aria-live="polite">Preparing your examination choices…</div>
     </div></div>`;
     try {
       const [catalog, history] = track === 'per_subject'
@@ -2378,13 +2394,15 @@
       state.screen = 'catalog';
       if (track === 'per_subject') renderPerSubject();
       else renderBarFeels();
+      focusRendered(root, track === 'per_subject' ? '#dd-selected-course-heading' : '.dd-exam-hero h1');
     } catch (error) {
       if (root) root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
         <header class="dd-exam-hero"><div><p class="dd-exam-kicker">Mock Bar</p>
           <h1>${track === 'per_subject' ? 'Subject Matter Examinations' : 'Bar Feels'}</h1></div></header>
-        <div class="dd-exam-status is-error">${escapeHtml(error.message)}</div>
+        <div class="dd-exam-status is-error" role="alert" tabindex="-1">${escapeHtml(error.message)}</div>
         <button class="dd-exam-button" type="button" data-retry-catalog="${track}">Retry</button>
       </div></div>`;
+      focusRendered(root, '[role="alert"]');
     }
   }
 
@@ -2625,6 +2643,22 @@
   }
 
   function handleClick(event) {
+    const reviewRetry = event.target.closest('[data-subject-review-retry]');
+    if (reviewRetry) {
+      event.preventDefault();
+      const details = reviewRetry.closest('[data-subject-review-material]');
+      if (details) {
+        details.open = true;
+        loadSubjectReviewMaterial(details, { retry: true });
+      }
+      return;
+    }
+    const reviewReveal = event.target.closest('[data-subject-review-reveal]');
+    if (reviewReveal) {
+      const details = reviewReveal.closest('[data-subject-review-material]');
+      global.setTimeout(() => loadSubjectReviewMaterial(details), 0);
+      return;
+    }
     const subjectSelectorOpen = event.target.closest('[data-subject-selector-open]');
     if (subjectSelectorOpen) {
       openSubjectSelector(subjectSelectorOpen);

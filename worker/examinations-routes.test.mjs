@@ -149,6 +149,92 @@ test('Subject Matter random selection uses the dedicated no-repeat RPC', async (
   });
 });
 
+test('Subject Matter review material uses the dedicated owner-bound RPC and returns only allowlisted fields', async () => {
+  await withFetchMock(async (url, options) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_review_material`);
+    assert.deepEqual(JSON.parse(options.body), {
+      p_user_id: userId,
+      p_attempt_id: attemptId,
+    });
+    return Response.json({
+      status: 'available',
+      attemptId,
+      questionId: versionId,
+      legalBasis: 'Article 19 of the Civil Code.',
+      whyThisApplies: 'The facts directly raise the duty to act with justice and good faith.',
+      sources: ['https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/12345'],
+      modelAnswer: 'must never leave the Worker',
+      inventory: { total: 1_490 },
+    });
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'subject_review_material',
+      attemptId,
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(body.data, {
+      status: 'available',
+      attemptId,
+      questionId: versionId,
+      legalBasis: 'Article 19 of the Civil Code.',
+      whyThisApplies: 'The facts directly raise the duty to act with justice and good faith.',
+      sources: ['https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/12345'],
+    });
+    assert.equal('modelAnswer' in body.data, false);
+    assert.equal('inventory' in body.data, false);
+  });
+});
+
+test('Subject Matter review material rejects malformed database output without leaking it', async () => {
+  await withFetchMock(async (url) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_review_material`);
+    return Response.json({
+      status: 'available',
+      attemptId,
+      questionId: versionId,
+      legalBasis: 'Article 19 of the Civil Code.',
+      whyThisApplies: 'Relevant doctrine.',
+      sources: ['javascript:alert(1)'],
+      privateNote: 'database-only detail',
+    });
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'subject_review_material',
+      attemptId,
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 404);
+    assert.equal(body.error.code, 'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE');
+    assert.doesNotMatch(JSON.stringify(body), /javascript|database-only/i);
+  });
+});
+
+test('Subject Matter review material masks cross-user attempt ownership failures', async () => {
+  await withFetchMock(async (url) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_review_material`);
+    return Response.json(
+      { message: 'EXAM_ATTEMPT_NOT_FOUND' },
+      { status: 400 },
+    );
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'subject_review_material',
+      attemptId,
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 404);
+    assert.equal(body.error.code, 'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE');
+    assert.doesNotMatch(JSON.stringify(body), /ATTEMPT_NOT_FOUND/);
+  });
+});
+
 test('examination query rejects a missing authenticated session before database access', async () => {
   await withFetchMock(async (url) => {
     if (String(url).endsWith('/auth/v1/user')) {

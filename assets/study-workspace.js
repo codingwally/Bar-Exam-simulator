@@ -371,7 +371,7 @@
       if (previousUserId) purgeOwner(previousUserId).catch(() => {});
     });
     if ('serviceWorker' in navigator && location.protocol === 'https:') {
-      navigator.serviceWorker.register('/service-worker.js?v=master-experience-20260813-1').catch(() => {});
+      navigator.serviceWorker.register('/service-worker.js?v=header-subject-review-20260814-1').catch(() => {});
     }
   }
 

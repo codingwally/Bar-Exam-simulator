@@ -3,9 +3,10 @@
 
   const config = global.DueDiligencePhase2Config;
   const landing = document.getElementById('private-beta-landing');
+  const siteHeader = document.getElementById('site-header');
   const appShell = document.getElementById('authenticated-app-shell');
   const dialog = document.getElementById('private-beta-dialog');
-  if (!landing || !appShell || !dialog) return;
+  if (!landing || !siteHeader || !appShell || !dialog) return;
 
   const gateEnabled = config?.features?.privateBetaGate === true;
   const stages = ['disclosure', 'code', 'google-intro', 'google', 'final'];
@@ -30,7 +31,7 @@
       alt: 'Law student preparing in a library',
       features: Object.freeze([
         Object.freeze({ id: 'mock', title: 'Mock Bar', eyebrow: 'Bar-style essay practice', action: 'Try Mock Bar', copy: 'Work through realistic Philippine Bar-style essays across eight subjects. Receive candid, source-backed coaching on the approved 0–5 practice scale—never a prediction of an official Bar result.' }),
-        Object.freeze({ id: 'subject-matter', title: 'Subject Matter', eyebrow: 'Course-based review', action: 'Review a subject', copy: 'Choose a law-school course and answer one focused question at a time. After submission, study the suggested legal basis, why it applies, a guided discussion, the suggested answer, and verified sources.' }),
+        Object.freeze({ id: 'subject-matter', title: 'Subject Matter', eyebrow: 'Review and retention', action: 'Review a subject', copy: 'Choose a law-school course, review one focused question, and reveal its vetted legal basis, explanation, and official sources when you are ready. Writing from memory remains available beside the review.' }),
         Object.freeze({ id: 'verdict', title: 'The Verdict', eyebrow: 'Your private learning record', action: 'View The Verdict', copy: 'Return to your own attempts, answers, coaching, and study exports. Use the record to revisit difficult questions and notice how your legal reasoning changes over time.' }),
       ]),
       access: 'Sign in when you begin an examination or open your personal record.',
@@ -126,8 +127,10 @@
       setHidden(home, false);
       setHidden(view, true);
       view.replaceChildren();
+      global.activatePrimaryMenuItem?.('');
       return;
     }
+    global.activatePrimaryMenuItem?.(`chamber-${chamber}`);
     const featureMarkup = definition.features.map((feature) => `<article class="pb-chamber-feature">
       <div class="pb-chamber-feature-copy"><p class="pb-chamber-feature-eyebrow">${feature.eyebrow}</p><h3>${feature.title}</h3><p>${feature.copy}</p></div>
       <button type="button" data-public-feature="${feature.id}">${feature.action}</button>
@@ -202,7 +205,7 @@
     const returnHash = safeReturnHash();
     if (returnHash && location.hash !== returnHash) history.replaceState({}, '', returnHash);
     if (options.activateRoute !== false) activateApplicationRoute(returnHash || location.hash);
-    requestAnimationFrame(() => document.querySelector('#authenticated-app-shell .topbar')?.focus?.());
+    requestAnimationFrame(() => siteHeader.querySelector('.brand')?.focus?.({ preventScroll: true }));
   }
 
   function showPublicHomepage(options = {}) {
@@ -227,7 +230,7 @@
     renderPublicRoute();
     global.scrollTo?.({ top: 0, behavior: 'auto' });
     if (options.focus !== false) {
-      requestAnimationFrame(() => document.querySelector('#private-beta-landing .pb-brand')?.focus?.({ preventScroll: true }));
+      requestAnimationFrame(() => siteHeader.querySelector('.brand')?.focus?.({ preventScroll: true }));
     }
   }
 
@@ -612,12 +615,11 @@
       } else if (feature === 'examination-room') {
         global.openExaminationRoom?.();
       }
-      trigger?.blur?.();
     });
   }
 
   function bindEvents() {
-    landing.addEventListener('click', async (event) => {
+    const handlePublicNavigation = async (event) => {
       const home = event.target.closest?.('[data-public-home]');
       if (home && !event.defaultPrevented && !event.target.closest?.('#brand-subtitle')) {
         event.preventDefault();
@@ -644,6 +646,10 @@
         togglePublicMenu(trigger);
         return;
       }
+      if (!event.target.closest?.('.pb-chamber-menu')) closePublicMenus();
+    };
+    [landing, siteHeader].forEach((root) => root.addEventListener('click', handlePublicNavigation));
+    document.addEventListener('click', (event) => {
       if (!event.target.closest?.('.pb-chamber-menu')) closePublicMenus();
     });
     document.querySelectorAll('[data-pb-menu-trigger]').forEach((trigger) => {

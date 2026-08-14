@@ -2104,6 +2104,7 @@ details[open] > summary .dd-subject-chevron {
 
 .dd-subject-editorial .dd-subject-practice-answer,
 .dd-subject-submitted-response {
+  grid-area: auto;
   margin-top: 22px;
   padding-top: 0;
   border-top: 0;
@@ -2123,6 +2124,12 @@ details[open] > summary .dd-subject-chevron {
   margin: 0;
   color: #fffaf0;
   font: 600 24px/1.2 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-editorial .dd-subject-answer-heading h2 {
+  margin: 4px 0 0;
+  color: #fffaf0;
+  font: 600 28px/1.18 "Playfair Display", Georgia, serif;
 }
 
 .dd-subject-editorial .dd-subject-answer-heading > span {
@@ -2413,6 +2420,66 @@ details[open] > summary .dd-subject-chevron {
   margin-top: 0;
   border-top: 0;
   border-bottom-color: rgba(212, 170, 79, .6);
+}
+
+.dd-subject-editorial .dd-subject-review-material {
+  max-width: 690px;
+  margin-top: 34px;
+}
+
+.dd-subject-editorial .dd-subject-review-material .dd-study-disclosures-heading,
+.dd-subject-editorial.is-result .dd-subject-review-material .dd-study-disclosures-heading {
+  display: block;
+  padding-bottom: 18px;
+}
+
+.dd-subject-editorial .dd-subject-review-material .dd-study-disclosures-heading h3 {
+  margin: 7px 0 0;
+  color: #fffaf0;
+  font: 500 25px/1.25 "Playfair Display", Georgia, serif;
+}
+
+.dd-subject-editorial .dd-subject-review-material .dd-study-disclosures-heading > p:last-child {
+  margin: 9px 0 0;
+  color: #b8c7d7;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.dd-subject-review-sources {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(212, 170, 79, .34);
+}
+
+.dd-subject-review-sources h5 {
+  margin: 0 0 2px;
+  color: #e6bd59;
+  font: 750 10px/1.4 "IBM Plex Mono", monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.dd-subject-review-sources .source-link {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(212, 170, 79, .22);
+  text-decoration: none;
+}
+
+.dd-subject-review-sources .source-link:hover,
+.dd-subject-review-sources .source-link:focus-visible {
+  color: #fff2be;
+  outline: 2px solid rgba(230, 189, 89, .5);
+  outline-offset: 3px;
+}
+
+.dd-subject-review-material [data-subject-review-slot] > .dd-exam-button {
+  margin-top: 12px;
 }
 
 .dd-subject-editorial.is-result .dd-study-disclosures-heading {

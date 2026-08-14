@@ -48,7 +48,7 @@ assert.match(delivery, /exam_room_complete_email_v2/);
 assert.match(delivery, /claim_token/);
 assert.doesNotMatch(delivery, /Sending seals the examination record/);
 
-assert.match(frontend, /Save answer & review/);
+assert.match(frontend, /id="dd26-attempt-review"[^>]*>Review All Answers<[\s\S]*id="dd26-attempt-submit"[^>]*>Submit</);
 assert.match(frontend, /Review every question and answer/);
 assert.match(frontend, /release_candidate_results/);
 assert.match(frontend, /End student access/);

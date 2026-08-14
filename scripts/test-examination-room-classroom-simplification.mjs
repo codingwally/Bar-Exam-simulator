@@ -82,7 +82,8 @@ assert.doesNotMatch(frontend, /Grading opens after the examination closes and al
 assert.doesNotMatch(frontend, /Open after the exam ends/);
 assert.match(frontend, /leave it blank if this account has already verified access/);
 assert.match(frontend, /Grading Draft/);
-assert.match(frontend, /'active', 'absent', 'late', 'accommodated'/);
+assert.match(frontend, /'active', 'absent', 'accommodated'/);
+assert.doesNotMatch(frontend, /const GRADING_FILTERS = \[[^\]]*'late'/);
 assert.match(routes, /p_grading_key_hash: input\.gradingKey \? await h\(input\.gradingKey\) : null/);
 
 // Preview/live numbered navigation is interactive and page lifecycle is

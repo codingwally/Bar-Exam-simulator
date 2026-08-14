@@ -1734,16 +1734,18 @@ export function createDD2026Handlers(deps) {
         && ctx?.waitUntil) {
       ctx.waitUntil(processExamRoomQueues(env));
     }
+    let deliveryPending = false;
+    let deliveryFailureCount = 0;
     if (['generate_provisional_room_key', 'publish_for_beadle',
       'finalize_roster_access', 'release_results', 'release_candidate_results',
       'retry_student_result_email'].includes(input.operation)) {
-      const delivery = await processExamRoomQueues(env);
-      if (Number(delivery?.emailFailed || 0) > 0) {
-        throw new DD2026ValidationError(
-          'EXAM_ROOM_EMAIL_DELIVERY_PENDING',
-          'The Examination Room saved the action, but one or more emails need retry. Open delivery status before leaving.',
-          503,
-        );
+      try {
+        const delivery = await processExamRoomQueues(env);
+        deliveryFailureCount = Math.max(0, Number(delivery?.emailFailed || 0));
+        deliveryPending = deliveryFailureCount > 0;
+      } catch {
+        deliveryPending = true;
+        deliveryFailureCount = 1;
       }
     }
     const publicResult = input.operation === 'issue_activation'
@@ -1786,8 +1788,16 @@ export function createDD2026Handlers(deps) {
               oneTimeOnly: true,
             }
           : result;
+    const responseResult = deliveryPending
+      ? {
+        ...(publicResult || {}),
+        deliveryPending: true,
+        deliveryFailureCount,
+        deliveryMessage: 'The action is saved. One or more emails remain queued for verified retry.',
+      }
+      : publicResult;
     provisionalRoomKey = null;
-    return jsonResponse({ ok: true, result: publicResult }, 200, origin, allowedOrigin);
+    return jsonResponse({ ok: true, result: responseResult }, deliveryPending ? 202 : 200, origin, allowedOrigin);
   }
 
   async function commandSpec(input, userId, rateHash, stepUp = null, env = {}) {

@@ -234,19 +234,40 @@
     }
   }
 
+  function normalizeSafeReturnHash(value) {
+    const hash = String(value || '');
+    if (/^#[a-z0-9][a-z0-9-]{0,64}$/i.test(hash) && !/^#(?:admin|auth|callback)/i.test(hash)) return hash;
+    if (!hash.startsWith('#examination-room?')) return '';
+    const parameters = new URLSearchParams(hash.slice('#examination-room?'.length));
+    const allowed = new Set(['exam', 'submission', 'question', 'role']);
+    const keys = [...parameters.keys()];
+    if (keys.some((key) => !allowed.has(key)) || new Set(keys).size !== keys.length) return '';
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const examId = String(parameters.get('exam') || '');
+    const submissionId = String(parameters.get('submission') || '');
+    const question = String(parameters.get('question') || '');
+    const role = String(parameters.get('role') || '');
+    if (!uuid.test(examId) || (submissionId && !uuid.test(submissionId))
+        || (question && (!/^\d{1,3}$/.test(question) || Number(question) < 1 || Number(question) > 200))
+        || (role && !['student', 'professor'].includes(role))
+        || (question && !submissionId)
+        || (submissionId && role !== 'professor')) return '';
+    const safe = new URLSearchParams({ exam: examId });
+    if (role) safe.set('role', role);
+    if (submissionId) safe.set('submission', submissionId);
+    if (question) safe.set('question', question);
+    return `#examination-room?${safe}`;
+  }
+
   function safeReturnHash() {
     const value = global.sessionStorage?.getItem('duediligence.private-beta.return.v1') || '';
     global.sessionStorage?.removeItem('duediligence.private-beta.return.v1');
-    return /^#[a-z0-9][a-z0-9-]{0,64}$/i.test(value) && !/^#(?:admin|auth|callback)/i.test(value)
-      ? value
-      : '';
+    return normalizeSafeReturnHash(value);
   }
 
   function preserveSafeReturnHash() {
-    const hash = location.hash || '';
-    if (/^#[a-z0-9][a-z0-9-]{0,64}$/i.test(hash) && !/^#(?:admin|auth|callback)/i.test(hash)) {
-      global.sessionStorage?.setItem('duediligence.private-beta.return.v1', hash);
-    }
+    const hash = normalizeSafeReturnHash(location.hash || '');
+    if (hash) global.sessionStorage?.setItem('duediligence.private-beta.return.v1', hash);
   }
 
   function statusElement(id) {

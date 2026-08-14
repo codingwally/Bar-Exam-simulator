@@ -67,10 +67,15 @@
       studentExamCodes: new Map(),
       rosterMode: 'professor',
       rosterPreview: null,
+      rosterValidationTimer: null,
+      rosterValidationGeneration: 0,
+      rosterFinalization: null,
       questionPreview: null,
       attempt: null,
       attemptIndex: 0,
+      entryBusy: false,
       saveTimers: new Map(),
+      localSavePromises: new Map(),
       heartbeatTimer: null,
       countdownTimer: null,
       safetySaveTimer: null,
@@ -88,6 +93,11 @@
       gradingCandidate: 0,
       gradingQuestion: 0,
       gradingFilter: 'ungraded',
+      gradingDetailOpen: false,
+      gradingSaveBusy: false,
+      routeSubmissionId: '',
+      routeQuestionOrdinal: 0,
+      routeRole: '',
       resultsDashboard: null,
       monitoring: null,
       professorRoomPollTimer: null,
@@ -160,17 +170,44 @@
     });
   }
 
+  function manilaDateTime(value) {
+    if (value instanceof Date) return new Date(value.getTime());
+    const raw = String(value || '').trim();
+    const local = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (local) {
+      const [, year, month, day, hour, minute, second = '0'] = local;
+      return new Date(Date.UTC(
+        Number(year), Number(month) - 1, Number(day),
+        Number(hour) - 8, Number(minute), Number(second),
+      ));
+    }
+    return new Date(raw);
+  }
+
+  function manilaInputValue(value) {
+    const date = manilaDateTime(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(date).reduce((result, part) => {
+      if (part.type !== 'literal') result[part.type] = part.value;
+      return result;
+    }, {});
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  }
+
   function scheduledWindowMinutes(opensAt, hardClosesAt) {
-    const opensAtMs = new Date(opensAt).getTime();
-    const hardClosesAtMs = new Date(hardClosesAt).getTime();
+    const opensAtMs = manilaDateTime(opensAt).getTime();
+    const hardClosesAtMs = manilaDateTime(hardClosesAt).getTime();
     if (!Number.isFinite(opensAtMs) || !Number.isFinite(hardClosesAtMs)
         || hardClosesAtMs <= opensAtMs) return null;
     return Math.ceil((hardClosesAtMs - opensAtMs) / 60000);
   }
 
   function entryClosesAtForSchedule(opensAt, hardClosesAt, lateAdmissionMinutes) {
-    const opensAtMs = new Date(opensAt).getTime();
-    const hardClosesAtMs = new Date(hardClosesAt).getTime();
+    const opensAtMs = manilaDateTime(opensAt).getTime();
+    const hardClosesAtMs = manilaDateTime(hardClosesAt).getTime();
     const lateMinutes = Number(lateAdmissionMinutes);
     if (!Number.isFinite(opensAtMs) || !Number.isFinite(hardClosesAtMs)
         || hardClosesAtMs <= opensAtMs || !Number.isSafeInteger(lateMinutes)
@@ -180,7 +217,7 @@
 
   function entryCutoffReviewHtml(opensAt, hardClosesAt, lateAdmissionMinutes) {
     const entryClosesAt = entryClosesAtForSchedule(opensAt, hardClosesAt, lateAdmissionMinutes);
-    const hardClosesAtMs = new Date(hardClosesAt).getTime();
+    const hardClosesAtMs = manilaDateTime(hardClosesAt).getTime();
     if (!entryClosesAt || !Number.isFinite(hardClosesAtMs)) return '';
     const closesEarly = entryClosesAt.getTime() < hardClosesAtMs;
     return `<div class="${closesEarly ? 'dd26-error' : 'dd26-success'} dd26-entry-cutoff-review" role="status"><strong>${closesEarly ? 'Student entry closes before the examination ends.' : 'Students may start until the examination ends.'}</strong> The last time a listed, signed-in student may start is ${escapeHtml(formatDate(entryClosesAt))}. ${closesEarly ? 'A student who has not started by then will be blocked.' : ''}</div>`;
@@ -435,9 +472,16 @@
     const item = trigger || document.getElementById(CONTENT_PATHS[view]?.tab);
     global.showPage?.('dd2026', item, { history: false });
     const path = CONTENT_PATHS[view]?.hash || 'mock-bar';
-    const hash = detailId
+    let hash = detailId
       ? (view === 'exam_room' ? `${path}?exam=${encodeURIComponent(detailId)}` : `${path}/${encodeURIComponent(detailId)}`)
       : path;
+    if (view === 'exam_room' && detailId) {
+      const parameters = new URLSearchParams({ exam: String(detailId) });
+      if (state.exam.routeRole) parameters.set('role', state.exam.routeRole);
+      if (state.exam.routeSubmissionId) parameters.set('submission', state.exam.routeSubmissionId);
+      if (state.exam.routeQuestionOrdinal > 0) parameters.set('question', String(state.exam.routeQuestionOrdinal));
+      hash = `${path}?${parameters}`;
+    }
     const url = `${location.pathname}${location.search}#${hash}`;
     if (`${location.pathname}${location.search}${location.hash}` !== url) {
       history[replace ? 'replaceState' : 'pushState']({ ...(history.state || {}), dueDiligence2026: view }, '', url);
@@ -456,6 +500,12 @@
 
   async function open(view, trigger, options = {}) {
     if (!CONTENT_PATHS[view]) return false;
+    if (view === 'exam_room') {
+      state.exam.routeRole = String(options.role || '');
+      state.exam.routeSubmissionId = String(options.submissionId || '');
+      state.exam.routeQuestionOrdinal = Number(options.questionOrdinal || 0);
+      if (state.exam.routeSubmissionId) state.exam.gradingDetailOpen = true;
+    }
     if (view !== 'exam_room' && state.exam.grading) {
       if (!mayLeaveCurrentGrade()) return false;
       clearGradingWorkspace();
@@ -489,6 +539,14 @@
         }
         if (portalGeneration !== state.exam.portalRequestGeneration) return false;
         if (!await openExamRoomView(openUserId, portalGeneration)) return false;
+        if (isAuthenticated() && state.exam.routeSubmissionId && state.exam.entryExamId) {
+          await loadGradingWorkspace(state.exam.entryExamId, {
+            attemptId: state.exam.routeSubmissionId,
+            questionOrdinal: state.exam.routeQuestionOrdinal,
+          });
+        } else if (state.exam.routeRole === 'student') {
+          await selectExamRole('student');
+        }
       } else {
         const snapshot = await features({ userId: openUserId });
         if (!snapshot || state.view !== view || authenticatedUserId() !== openUserId) return false;
@@ -926,6 +984,10 @@
     clearAttemptTimers();
     state.exam.intentRole = null;
     state.exam.entryExamId = '';
+    state.exam.routeRole = '';
+    state.exam.routeSubmissionId = '';
+    state.exam.routeQuestionOrdinal = 0;
+    state.exam.gradingDetailOpen = false;
     state.exam.activeBeadleSnapshot = null;
     state.exam.rosterPreview = null;
     state.exam.questionPreview = null;
@@ -1765,9 +1827,16 @@
       openBookOption.textContent = 'Open book';
     }
     document.querySelectorAll('[data-dd26-class]').forEach((button) => button.addEventListener('click', () => {
+      if (button.disabled) return;
+      button.disabled = true;
       state.exam.activeClassroomId = button.dataset.dd26Class;
       state.exam.rosterPreview = null;
       renderExamRoom();
+      requestAnimationFrame(() => {
+        const workspace = document.querySelector('.dd26-professor-selected-workspace');
+        workspace?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+        (document.getElementById('dd26-exam-title') || workspace)?.focus?.({ preventScroll: true });
+      });
     }));
     document.getElementById('dd26-back-to-professor-exam-list')?.addEventListener('click', () => {
       state.exam.activeClassroomId = null;
@@ -1824,7 +1893,12 @@
         .forEach((id) => document.getElementById(id)?.setAttribute('required', ''));
     }
     createExamButton?.addEventListener('click', createExam);
-    document.getElementById('dd26-start-attempt')?.addEventListener('click', startAttempt);
+    const startAttemptButton = document.getElementById('dd26-start-attempt');
+    if (startAttemptButton && !document.getElementById('dd26-entry-ack')) {
+      startAttemptButton.textContent = 'Enter examination';
+      startAttemptButton.closest('.dd26-actions')?.insertAdjacentHTML('beforebegin', '<label class="dd26-choice"><input id="dd26-entry-ack" type="checkbox"><span><strong>I reviewed the Professor\'s instructions and am ready to enter</strong><small>A valid class code enters the examination immediately when it is open, or places me in the waiting room until opening time.</small></span></label>');
+    }
+    startAttemptButton?.addEventListener('click', startAttempt);
     document.querySelectorAll('[data-dd26-resume-attempt]').forEach((button) => button.addEventListener('click', () => loadAttempt(button.dataset.dd26ResumeAttempt)));
     document.querySelectorAll('[data-dd26-submission-status]').forEach((button) => button.addEventListener('click', () => loadSubmissionStatus(button.dataset.dd26SubmissionStatus)));
     document.querySelectorAll('[data-dd26-student-result]').forEach((button) => button.addEventListener('click', () => loadStudentResult(button.dataset.dd26StudentResult)));
@@ -1858,12 +1932,30 @@
   }
 
   function bindRosterControls() {
-    document.getElementById('dd26-validate-roster')?.addEventListener('click', validateRoster);
-    document.getElementById('dd26-roster-file')?.addEventListener('change', () => {
-      announceExamStatus('Class-list file selected. Your current checked list remains available until the new file passes validation.');
+    document.getElementById('dd26-validate-roster')?.remove();
+    document.getElementById('dd26-validate-roster-paste')?.remove();
+    document.getElementById('dd26-revalidate-roster')?.remove();
+    const confirmRoster = document.getElementById('dd26-import-roster');
+    if (confirmRoster) confirmRoster.textContent = 'Confirm and Finish';
+    document.getElementById('dd26-roster-file')?.addEventListener('change', async () => {
+      announceExamStatus('Checking the selected class list now.');
+      await validateRoster();
     });
-    document.getElementById('dd26-validate-roster-paste')?.addEventListener('click', validatePastedRoster);
-    document.getElementById('dd26-revalidate-roster')?.addEventListener('click', revalidateRosterPreview);
+    document.getElementById('dd26-roster-paste')?.addEventListener('input', () => {
+      const pasted = value('dd26-roster-paste', false).trim();
+      clearTimeout(state.exam.rosterValidationTimer);
+      state.exam.rosterValidationGeneration += 1;
+      if (!pasted) {
+        if (state.exam.rosterPreview?.sourceKind === 'paste') {
+          state.exam.rosterPreview = null;
+          rerenderRosterSurface();
+        }
+        return;
+      }
+      state.exam.rosterValidationTimer = setTimeout(() => {
+        validatePastedRoster();
+      }, 350);
+    });
     document.getElementById('dd26-add-roster-row')?.addEventListener('click', addRosterPreviewRow);
     document.getElementById('dd26-roster-add-row')?.addEventListener('click', addRosterPreviewRow);
     document.getElementById('dd26-download-roster-template')?.addEventListener('click', downloadRosterTemplate);
@@ -1883,19 +1975,18 @@
     }
     state.exam.rosterPreview.validation = {
       ok: false,
-      errors: [{ message: state.exam.rosterMode === 'beadle'
-        ? 'Check the edited class list again before confirming it.'
-        : 'Check the edited class list again before saving.' }],
+      errors: [{ message: 'Checking the edited class list…' }],
     };
     const save = document.getElementById('dd26-import-roster');
     if (save) save.disabled = true;
     const status = document.getElementById('dd26-roster-preview-status');
     if (status) {
       status.className = 'dd26-error';
-      status.textContent = state.exam.rosterMode === 'beadle'
-        ? 'This preview changed. Update the official template and upload it again before saving.'
-        : 'The class list changed. Select Check corrections before saving.';
+      status.textContent = 'Checking the edited class list…';
     }
+    clearTimeout(state.exam.rosterValidationTimer);
+    const generation = state.exam.rosterValidationGeneration += 1;
+    state.exam.rosterValidationTimer = setTimeout(() => revalidateRosterPreview(generation), 350);
   }
 
   async function refreshExamPortal(section = state.exam.section) {
@@ -2136,6 +2227,7 @@
         : 'Choose a CSV or XLSX roster first.', 'warn');
       return;
     }
+    const generation = state.exam.rosterValidationGeneration += 1;
     const button = document.getElementById('dd26-validate-roster');
     if (button) { button.disabled = true; button.textContent = 'Checking template...'; }
     try {
@@ -2143,7 +2235,9 @@
       if (beadleMode && lowerName.endsWith('.csv')) {
         const text = await file.text();
         const rows = parseDelimitedRoster(text);
-        await prepareClassroomRosterPreview(rows, 'csv', await sha256Text(text));
+        const sourceHash = await sha256Text(text);
+        if (generation !== state.exam.rosterValidationGeneration) return;
+        await prepareClassroomRosterPreview(rows, 'csv', sourceHash, generation);
         document.getElementById('dd26-roster-file')?.removeAttribute('aria-invalid');
         return;
       }
@@ -2151,6 +2245,7 @@
         ? { examId: state.exam.activeExamId }
         : { classroomId: state.exam.activeClassroomId };
       const payload = await api('/exam-room/upload/roster', { ...scope, ...await filePayload(file) });
+      if (generation !== state.exam.rosterValidationGeneration) return;
       if (beadleMode && payload?.validation?.ok === true
         && (!payload.templateReceiptId || payload.templateVersion !== BEADLE_ROSTER_TEMPLATE_VERSION)) {
         const error = new Error('The official template check did not finish. Upload the file again.');
@@ -2321,9 +2416,9 @@
         <ol class="dd26-roster-template-flow" aria-label="Class-list steps">
           <li><span class="dd26-roster-step-number" aria-hidden="true">1</span><div class="dd26-roster-step-copy"><h4>Choose a file or start from the template</h4><p>An existing XLSX or CSV is accepted when it contains Email Address, Student Number, and Student Name. The optional template is available for a clean start.</p><a class="dd26-button dd26-roster-download" id="dd26-beadle-download-roster-template" href="${BEADLE_ROSTER_TEMPLATE_URL}" download="examination-room-beadle-class-list-template.xlsx">Download optional template</a></div></li>
           <li><span class="dd26-roster-step-number" aria-hidden="true">2</span><div class="dd26-roster-step-copy"><h4>Review the three student fields</h4><ul class="dd26-roster-field-list"><li><strong>Email Address</strong><span>The exact account the student uses to sign in.</span></li><li><strong>Student Number</strong><span>The school-issued student number, when available.</span></li><li><strong>Student Name</strong><span>The name the Professor will see while grading.</span></li></ul><p class="dd26-help">Use one row per student. You can correct any detected issue in the preview.</p></div></li>
-          <li><span class="dd26-roster-step-number" aria-hidden="true">3</span><div class="dd26-roster-step-copy"><h4>Check once, confirm once, finish</h4><p>Due Diligence validates every row, activates the class code, and queues an individual email to each listed student.</p><label class="dd26-field dd26-roster-file-field"><span>Class list file</span><input class="dd26-input" id="dd26-roster-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"><small class="dd26-help">XLSX and CSV are supported on desktop and tablet.</small></label><div class="dd26-actions dd26-roster-actions"><button class="dd26-button" id="dd26-validate-roster" type="button">Check selected file</button><button class="dd26-button primary" id="dd26-import-roster" type="button" ${rosterReadyToSave ? '' : 'disabled'}>Confirm class list and finish</button></div></div></li>
+          <li><span class="dd26-roster-step-number" aria-hidden="true">3</span><div class="dd26-roster-step-copy"><h4>Automatic check, then confirm once</h4><p>Due Diligence checks every row immediately, then activates the class code and queues an individual email to each listed student after confirmation.</p><label class="dd26-field dd26-roster-file-field"><span>Class list file</span><input class="dd26-input" id="dd26-roster-file" type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"><small class="dd26-help">XLSX and CSV are supported on desktop and tablet.</small></label><div class="dd26-actions dd26-roster-actions"><button class="dd26-button primary" id="dd26-import-roster" type="button" ${rosterReadyToSave ? '' : 'disabled'}>Confirm and Finish</button></div></div></li>
         </ol>
-        <label class="dd26-field"><span>Or paste a class list</span><textarea class="dd26-textarea compact" id="dd26-roster-paste" placeholder="Email Address,Student Number,Student Name"></textarea></label><div class="dd26-actions"><button class="dd26-button" id="dd26-validate-roster-paste" type="button">Check pasted list</button><button class="dd26-button" id="dd26-roster-add-row" type="button">Add one student manually</button></div>
+        <label class="dd26-field"><span>Or paste a class list</span><textarea class="dd26-textarea compact" id="dd26-roster-paste" placeholder="Email Address,Student Number,Student Name"></textarea><small class="dd26-help">Pasted rows are checked automatically as you edit.</small></label><div class="dd26-actions"><button class="dd26-button" id="dd26-roster-add-row" type="button">Add one student manually</button></div>
         ${rosterPreviewHtml()}
       </details>` : `<section class="dd26-section" id="dd26-class-list-panel" tabindex="-1"><div class="dd26-label">Step 4 · Class list</div><h3>${professorView ? 'Review the class list' : 'Class list saved'}</h3><div class="dd26-notice"><strong>${professorView ? 'Professor review only.' : 'The class list is locked.'}</strong> ${escapeHtml(professorView ? 'The Beadle prepares and corrects this list. You can review its current status here without changing the handoff.' : snapshot.rosterLockedReason || 'Student access was issued, the exam opened, or a student already started.')}</div>${canReopenRoster ? '<div class="dd26-actions"><button class="dd26-button danger" id="dd26-reopen-roster" type="button">Correct class list</button></div>' : ''}</section>`;
     const codeValue = activeStudentCode
@@ -2794,7 +2889,7 @@
   }
 
   function parseDelimitedRoster(text) {
-    const source = String(text || '').replace(/^\uFEFF/, '').trim();
+    const source = String(text || '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
     if (!source) return [];
     const delimiter = source.includes('\t') ? '\t' : ',';
     const records = [];
@@ -2807,7 +2902,10 @@
       else if (!quoted && character === '\n') { record.push(cell.replace(/\r$/, '')); records.push(record); record = []; cell = ''; }
       else cell += character;
     }
+    if (quoted) throw new Error('The class list contains an unfinished quoted value. Correct the file and try again.');
     record.push(cell.replace(/\r$/, '')); records.push(record);
+    while (records.length && records[records.length - 1].every((entry) => !String(entry).trim())) records.pop();
+    if (!records.length) return [];
     const aliases = new Map([
       ['email', 'email'], ['email address', 'email'], ['primary email', 'email'],
       ['student number', 'studentNumber'], ['student id', 'studentNumber'], ['student no', 'studentNumber'],
@@ -2819,7 +2917,14 @@
       if (header.includes('student name')) return 'displayName';
       return aliases.get(header) || null;
     }) || [];
-    return records.filter((row) => row.some((entry) => String(entry).trim())).map((row) => Object.fromEntries(
+    const recognizedHeaders = headers.filter(Boolean);
+    if (!recognizedHeaders.includes('email') || !recognizedHeaders.includes('displayName')) {
+      throw new Error('The class list must include Email Address and Student Name columns.');
+    }
+    if (new Set(recognizedHeaders).size !== recognizedHeaders.length) {
+      throw new Error('The class list repeats a required column. Keep only one Email Address, Student Number, Candidate Number, and Student Name column.');
+    }
+    return records.map((row) => Object.fromEntries(
       headers.map((header, index) => [header, String(row[index] ?? '').trim()]).filter(([header]) => header),
     ));
   }
@@ -2830,17 +2935,27 @@
   }
 
   async function validatePastedRoster() {
-    const rows = parseDelimitedRoster(value('dd26-roster-paste', false));
-    if (!rows.length) { global.toast?.('Paste a header row and at least one candidate row.', 'warn'); return; }
-    if (state.exam.rosterMode === 'beadle') {
+    const generation = state.exam.rosterValidationGeneration += 1;
+    try {
       const source = value('dd26-roster-paste', false);
-      await prepareClassroomRosterPreview(rows, 'paste', await sha256Text(source));
-      return;
+      const rows = parseDelimitedRoster(source);
+      if (!rows.length) throw new Error('Paste a header row and at least one candidate row.');
+      if (state.exam.rosterMode === 'beadle') {
+        const sourceHash = await sha256Text(source);
+        if (generation !== state.exam.rosterValidationGeneration) return;
+        await prepareClassroomRosterPreview(rows, 'paste', sourceHash, generation);
+        return;
+      }
+      await validateRosterRows(rows, generation);
+    } catch (error) {
+      if (generation !== state.exam.rosterValidationGeneration) return;
+      state.exam.rosterPreview = null;
+      rerenderRosterSurface();
+      global.toast?.(error.message, 'warn');
     }
-    await validateRosterRows(rows);
   }
 
-  async function prepareClassroomRosterPreview(rows, sourceKind = 'manual', sourceHash = '') {
+  async function prepareClassroomRosterPreview(rows, sourceKind = 'manual', sourceHash = '', generation = state.exam.rosterValidationGeneration) {
     const normalizedRows = rows.map((row) => ({
       email: String(row.email || '').trim().toLowerCase(),
       studentNumber: String(row.studentNumber || '').trim(),
@@ -2849,12 +2964,21 @@
     }));
     const errors = [];
     const emails = new Set();
+    const studentNumbers = new Set();
+    const candidateNumbers = new Set();
     normalizedRows.forEach((row, index) => {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(row.email)) errors.push({ row: index + 1, message: 'Enter a valid sign-in email.' });
       if (row.displayName.length < 2) errors.push({ row: index + 1, message: 'Enter the student name.' });
       if (emails.has(row.email)) errors.push({ row: index + 1, message: 'This email appears more than once.' });
       emails.add(row.email);
+      const studentNumberKey = row.studentNumber.toLocaleLowerCase('en-US');
+      const candidateNumberKey = row.candidateNumber.toLocaleLowerCase('en-US');
+      if (studentNumberKey && studentNumbers.has(studentNumberKey)) errors.push({ row: index + 1, message: 'This student number appears more than once.' });
+      if (candidateNumberKey && candidateNumbers.has(candidateNumberKey)) errors.push({ row: index + 1, message: 'This candidate number appears more than once.' });
+      if (studentNumberKey) studentNumbers.add(studentNumberKey);
+      if (candidateNumberKey) candidateNumbers.add(candidateNumberKey);
     });
+    if (generation !== state.exam.rosterValidationGeneration) return;
     state.exam.rosterPreview = {
       rows: normalizedRows,
       sourceKind,
@@ -2876,9 +3000,9 @@
     });
   }
 
-  async function validateRosterRows(rows) {
+  async function validateRosterRows(rows, generation = state.exam.rosterValidationGeneration) {
     if (state.exam.rosterMode === 'beadle') {
-      await prepareClassroomRosterPreview(rows, state.exam.rosterPreview?.sourceKind || 'manual');
+      await prepareClassroomRosterPreview(rows, state.exam.rosterPreview?.sourceKind || 'manual', '', generation);
       return;
     }
     try {
@@ -2891,6 +3015,7 @@
       const validation = await command({
         operation: 'validate_roster', classroomId: state.exam.activeClassroomId, rows: normalizedRows,
       });
+      if (generation !== state.exam.rosterValidationGeneration) return;
       state.exam.rosterPreview = {
         rows: normalizedRows,
         sourceHash: await sha256Text(JSON.stringify(normalizedRows)),
@@ -2900,8 +3025,8 @@
     } catch (error) { global.toast?.(error.message, 'warn'); }
   }
 
-  async function revalidateRosterPreview() {
-    await validateRosterRows(collectRosterPreviewRows());
+  async function revalidateRosterPreview(generation = state.exam.rosterValidationGeneration) {
+    await validateRosterRows(collectRosterPreviewRows(), generation);
   }
 
   function addRosterPreviewRow() {
@@ -2909,6 +3034,7 @@
     rows.push({ email: '', studentNumber: '', candidateNumber: '', displayName: '' });
     state.exam.rosterPreview = { rows, sourceKind: 'manual', sourceHash: '', validation: { ok: false, errors: [{ message: 'Enter the student name and email, then check corrections.' }] } };
     rerenderRosterSurface();
+    markRosterPreviewDirty();
   }
 
   function removeRosterPreviewRow(index) {
@@ -2916,6 +3042,8 @@
     rows.splice(index, 1);
     state.exam.rosterPreview = { rows, sourceKind: state.exam.rosterPreview?.sourceKind || 'manual', sourceHash: '', validation: { ok: false, errors: [{ message: 'Check the corrected class list.' }] } };
     rerenderRosterSurface();
+    const generation = state.exam.rosterValidationGeneration += 1;
+    setTimeout(() => revalidateRosterPreview(generation), 0);
   }
 
   function downloadRosterTemplate() {
@@ -2931,23 +3059,39 @@
   async function importRoster() {
     const preview = state.exam.rosterPreview;
     if (!preview?.validation?.ok) return;
+    const button = document.getElementById('dd26-import-roster');
+    if (state.exam.rosterFinalization?.busy) return;
     try {
       if (state.exam.rosterMode === 'beadle') {
-        let studentKey = randomKey('student_exam');
+        const sourceHash = preview.sourceHash || await sha256Text(JSON.stringify(preview.rows));
+        let finalization = state.exam.rosterFinalization;
+        if (!finalization || finalization.sourceHash !== sourceHash) {
+          finalization = {
+            sourceHash,
+            studentKey: randomKey('student_exam'),
+            requestKey: randomKey('roster_finalize'),
+            busy: false,
+          };
+          state.exam.rosterFinalization = finalization;
+        }
+        finalization.busy = true;
+        if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Confirming…'; }
         const result = await command({
           operation: 'finalize_roster_access', examId: state.exam.activeExamId,
           rows: preview.rows,
           sourceKind: preview.sourceKind || 'manual',
-          sourceHash: preview.sourceHash || await sha256Text(JSON.stringify(preview.rows)),
-          studentKey,
-          requestKey: randomKey('roster_finalize'),
+          sourceHash,
+          studentKey: finalization.studentKey,
+          requestKey: finalization.requestKey,
         });
         if (result?.ok !== true || result?.studentAccessReady !== true) {
           throw new Error('The server did not confirm the class list and student access code. Nothing was announced as complete.');
         }
-        state.exam.studentExamCodes.set(state.exam.activeExamId, studentKey);
-        studentKey = '';
+        state.exam.studentExamCodes.set(state.exam.activeExamId, finalization.studentKey);
+        finalization.studentKey = '';
+        state.exam.rosterFinalization = null;
       } else {
+        if (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); button.textContent = 'Confirming…'; }
         await command({ operation: 'import_roster', classroomId: state.exam.activeClassroomId, rows: preview.rows, sourceHash: preview.sourceHash, requestKey: randomKey('roster') });
       }
       state.exam.rosterPreview = null;
@@ -2963,6 +3107,8 @@
         await refreshExamPortal('professor');
       }
     } catch (error) {
+      if (state.exam.rosterFinalization) state.exam.rosterFinalization.busy = false;
+      if (button?.isConnected) { button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Confirm and Finish'; }
       global.toast?.(state.exam.rosterMode === 'beadle'
         ? rosterTemplateErrorMessage(error)
         : error.message, 'warn');
@@ -3363,8 +3509,8 @@
   function publicationRescheduleValidation(input = {}) {
     const errors = [];
     const add = (field, message) => errors.push({ field, message });
-    const opensAt = new Date(String(input.opensAt || ''));
-    const hardClosesAt = new Date(String(input.hardClosesAt || ''));
+    const opensAt = manilaDateTime(input.opensAt);
+    const hardClosesAt = manilaDateTime(input.hardClosesAt);
     if (!Number.isFinite(opensAt.getTime())) add('dd26-reschedule-opens-at', 'Choose the new opening date and time.');
     if (!Number.isFinite(hardClosesAt.getTime())) add('dd26-reschedule-closes-at', 'Choose the new ending date and time.');
     if (Number.isFinite(opensAt.getTime()) && Number.isFinite(hardClosesAt.getTime())
@@ -3379,7 +3525,10 @@
       }
       return parsed;
     };
-    const durationMinutes = integer(input.durationMinutes, 'dd26-reschedule-duration', 'Time allowed', 1, 480);
+    const durationMinutes = scheduledWindowMinutes(opensAt, hardClosesAt);
+    if (Number.isSafeInteger(durationMinutes) && durationMinutes > 480) {
+      add('dd26-reschedule-closes-at', 'The examination window cannot exceed 480 minutes.');
+    }
     const lateAdmissionMinutes = integer(input.lateAdmissionMinutes, 'dd26-reschedule-late-admission', 'Late entry', 0, 480);
     const submissionGraceMinutes = integer(input.submissionGraceMinutes, 'dd26-reschedule-submission-grace', 'Reconnect and submission time', 0, 120);
     const reason = String(input.reason || '').trim();
@@ -3390,7 +3539,7 @@
       errors,
       opensAt: Number.isFinite(opensAt.getTime()) ? opensAt.toISOString() : '',
       hardClosesAt: Number.isFinite(hardClosesAt.getTime()) ? hardClosesAt.toISOString() : '',
-      durationMinutes,
+      durationMinutes: Number.isSafeInteger(durationMinutes) ? durationMinutes : 0,
       lateAdmissionMinutes,
       submissionGraceMinutes,
       reason,
@@ -3435,6 +3584,19 @@
     const entryUntilEnd = Number.isSafeInteger(existingWindowMinutes)
       && existingWindowMinutes <= 480 && existingLateMinutes >= existingWindowMinutes;
     openDialog(`<div class="dd26-label">Step 3 · Change exam time</div><h2>Set the updated examination schedule</h2><div class="dd26-notice"><strong>Only the exam time changes.</strong> Questions, the class list, Beadle access, and the student exam code stay with this examination.</div><div class="dd26-error" id="dd26-reschedule-errors" role="alert" tabindex="-1" hidden></div><div class="dd26-form-grid"><label class="dd26-field"><span>Exam opens</span><input class="dd26-input" id="dd26-reschedule-opens-at" type="datetime-local" value="${escapeHtml(localDateValue(opensAt))}" required><small class="dd26-help">Choose an immediate or future opening time.</small></label><label class="dd26-field"><span>Exam ends</span><input class="dd26-input" id="dd26-reschedule-closes-at" type="datetime-local" value="${escapeHtml(localDateValue(hardClosesAt))}" required></label><label class="dd26-field"><span>Time allowed in minutes</span><input class="dd26-input" id="dd26-reschedule-duration" type="number" min="1" max="480" step="1" value="${escapeHtml(saved.durationMinutes ?? '')}" required></label><label class="dd26-field wide"><span>When may a student start?</span><select class="dd26-select" id="dd26-reschedule-entry-window-mode"><option value="until_end" ${entryUntilEnd ? 'selected' : ''}>Allow entry until the exam ends</option><option value="custom" ${entryUntilEnd ? '' : 'selected'}>Close student entry earlier</option></select><small class="dd26-help">Your current Professor setting is kept unless you change this choice.</small></label><label class="dd26-field"><span>Minutes after opening when entry closes</span><input class="dd26-input" id="dd26-reschedule-late-admission" type="number" min="0" max="480" step="1" value="${escapeHtml(saved.lateAdmissionMinutes ?? 0)}" required><small class="dd26-help">Use a shorter time only when students who have not started should be blocked before the exam ends.</small></label><div class="dd26-notice" id="dd26-reschedule-entry-cutoff" role="status"></div><label class="dd26-field"><span>Extra time to reconnect and submit</span><input class="dd26-input" id="dd26-reschedule-submission-grace" type="number" min="0" max="120" step="1" value="${escapeHtml(saved.submissionGraceMinutes ?? 0)}" required></label><label class="dd26-field wide"><span>Reason for changing the time</span><textarea class="dd26-textarea compact" id="dd26-reschedule-reason" minlength="10" maxlength="1000" required>${escapeHtml(draft?.reason || '')}</textarea><small class="dd26-help">This reason becomes part of the examination record.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-review-reschedule" type="button">Review time change</button><button class="dd26-button" id="dd26-cancel-reschedule" type="button">Return without changing</button></div>`);
+    const rescheduleDuration = document.getElementById('dd26-reschedule-duration');
+    const rescheduleOpensLabel = document.getElementById('dd26-reschedule-opens-at')?.closest('label')?.querySelector('span');
+    const rescheduleClosesLabel = document.getElementById('dd26-reschedule-closes-at')?.closest('label')?.querySelector('span');
+    if (rescheduleOpensLabel) rescheduleOpensLabel.textContent = 'Exam opens (Philippine Time)';
+    if (rescheduleClosesLabel) rescheduleClosesLabel.textContent = 'Exam ends (Philippine Time)';
+    if (rescheduleDuration) {
+      rescheduleDuration.type = 'hidden';
+      rescheduleDuration.removeAttribute('required');
+      rescheduleDuration.value = String(existingWindowMinutes || '');
+      rescheduleDuration.closest('label')?.querySelector('span')?.replaceChildren('Automatically calculated duration');
+      rescheduleDuration.insertAdjacentHTML('beforebegin', `<output class="dd26-notice" id="dd26-reschedule-duration-display" for="dd26-reschedule-opens-at dd26-reschedule-closes-at">${Number.isSafeInteger(existingWindowMinutes) ? `${escapeHtml(existingWindowMinutes)} minutes` : 'Choose a valid opening and ending time'}</output>`);
+      rescheduleDuration.insertAdjacentHTML('afterend', '<small class="dd26-help">Calculated from the opening and ending times in Philippine Time.</small>');
+    }
     const entryMode = document.getElementById('dd26-reschedule-entry-window-mode');
     const lateEntry = document.getElementById('dd26-reschedule-late-admission');
     const preservedEarlierCutoff = entryUntilEnd ? '' : String(saved.lateAdmissionMinutes ?? 0);
@@ -3443,6 +3605,10 @@
         value('dd26-reschedule-opens-at'),
         value('dd26-reschedule-closes-at'),
       );
+      if (rescheduleDuration) rescheduleDuration.value = Number.isSafeInteger(windowMinutes) ? String(windowMinutes) : '';
+      const durationDisplay = document.getElementById('dd26-reschedule-duration-display');
+      if (durationDisplay) durationDisplay.textContent = Number.isSafeInteger(windowMinutes)
+        ? `${windowMinutes} minutes` : 'Choose a valid opening and ending time';
       const untilEnd = entryMode?.value === 'until_end';
       if (untilEnd && Number.isSafeInteger(windowMinutes) && windowMinutes <= 480) {
         lateEntry.value = String(windowMinutes);
@@ -3917,8 +4083,8 @@
   function publishStepValidation(input = {}) {
     const errors = [];
     const add = (field, message) => errors.push({ field, message });
-    const opensAt = new Date(String(input.opensAt || ''));
-    const hardClosesAt = new Date(String(input.hardClosesAt || ''));
+    const opensAt = manilaDateTime(input.opensAt);
+    const hardClosesAt = manilaDateTime(input.hardClosesAt);
     if (!Number.isFinite(opensAt.getTime())) add('dd26-opens-at', 'Choose when the examination opens.');
     if (!Number.isFinite(hardClosesAt.getTime())) add('dd26-closes-at', 'Choose when the examination ends.');
     if (Number.isFinite(opensAt.getTime()) && Number.isFinite(hardClosesAt.getTime())
@@ -3936,7 +4102,10 @@
       }
       return parsed;
     };
-    const durationMinutes = integer(input.durationMinutes, 'dd26-duration', 'Time allowed', 1, 480);
+    const durationMinutes = scheduledWindowMinutes(opensAt, hardClosesAt);
+    if (Number.isSafeInteger(durationMinutes) && durationMinutes > 480) {
+      add('dd26-closes-at', 'The examination window cannot exceed 480 minutes.');
+    }
     const lateAdmissionMinutes = integer(input.lateAdmissionMinutes, 'dd26-late-admission', 'Late entry', 0, 480);
     const submissionGraceMinutes = integer(input.submissionGraceMinutes, 'dd26-submission-grace', 'Reconnect and submission time', 0, 120);
     if (String(input.allowedMaterials ?? '').length > 2_000) {
@@ -3979,7 +4148,7 @@
       errors,
       opensAt,
       hardClosesAt,
-      durationMinutes,
+      durationMinutes: Number.isSafeInteger(durationMinutes) ? durationMinutes : 0,
       lateAdmissionMinutes,
       submissionGraceMinutes,
       beadleEmail,
@@ -4026,8 +4195,7 @@
     const savedClose = new Date(saved.hardClosesAt || '');
     const close = Number.isFinite(savedClose.getTime())
       ? savedClose : new Date(now.getTime() + 2 * 3600000);
-    const durationValue = Number.isSafeInteger(Number(saved.durationMinutes))
-      ? Number(saved.durationMinutes) : 120;
+    const durationValue = scheduledWindowMinutes(now, close) || 120;
     const lateAdmissionWasChosen = saved.lateAdmissionMinutes != null
       && String(saved.lateAdmissionMinutes).trim() !== '';
     const lateAdmissionValue = lateAdmissionWasChosen
@@ -4041,7 +4209,20 @@
     openDialog(`<div class="dd26-label">Step 3 · Set exam rules${replacement ? ' / replacement' : ''}</div><h2>Set the schedule and exam rules</h2>${replacementNotice}${storedDraft ? `<div class="dd26-success">Your saved rules draft from ${escapeHtml(formatDate(storedDraft.updatedAt))} is open for further review.</div>` : '<div class="dd26-notice"><strong>Open now or schedule ahead.</strong> The examination may open immediately. Student access still requires the Beadle class list and class code.</div>'}<div class="dd26-form-grid"><label class="dd26-field"><span>Exam opens</span><input class="dd26-input" id="dd26-opens-at" type="datetime-local" value="${localDateValue(now)}"><small class="dd26-help">Choose an immediate or future opening time.</small></label><label class="dd26-field"><span>Exam ends</span><input class="dd26-input" id="dd26-closes-at" type="datetime-local" value="${localDateValue(close)}"></label><label class="dd26-field"><span>Time allowed in minutes</span><input class="dd26-input" id="dd26-duration" type="number" min="1" max="480" value="${escapeHtml(saved.durationMinutes ?? 120)}"></label><label class="dd26-field"><span>Late entry allowed (minutes)</span><input class="dd26-input" id="dd26-late-admission" type="number" min="0" max="480" value="${escapeHtml(saved.lateAdmissionMinutes ?? 15)}"><small class="dd26-help">Late entry does not extend the published exam end time.</small></label><label class="dd26-field"><span>Extra time to reconnect and submit</span><input class="dd26-input" id="dd26-submission-grace" type="number" min="0" max="120" value="${escapeHtml(saved.submissionGraceMinutes ?? 15)}"><small class="dd26-help">Answers written after the exam ends are kept separately for review and are not silently added to the submitted answers.</small></label><label class="dd26-field"><span>Allowed materials</span><input class="dd26-input" id="dd26-allowed-materials" maxlength="2000" value="${escapeHtml(saved.allowedMaterials ?? 'Professor-published materials only')}"></label><label class="dd26-field"><span>Moving between questions</span><select class="dd26-select" id="dd26-navigation-mode"><option value="free" ${selected(saved.navigationMode, 'free', true)}>Students may move between questions</option><option value="one_way" ${selected(saved.navigationMode, 'one_way')}>Move forward only</option></select></label><label class="dd26-field"><span>If a student leaves the exam tab</span><select class="dd26-select" id="dd26-monitoring-mode"><option value="record_only" ${selected(saved.integrityMode, 'record_only', true)}>Record for Professor review</option><option value="warn_and_record" ${selected(saved.integrityMode, 'warn_and_record')}>Warn the student and record</option></select><small class="dd26-help">Copy, cut, paste, and right-click are blocked during the monitored exam. A recorded event is never an automatic failure.</small></label><label class="dd26-field"><span>Full screen</span><select class="dd26-select" id="dd26-fullscreen-policy"><option value="requested" ${selected(saved.fullscreenPolicy, 'requested', true)}>Ask students to use full screen</option><option value="off" ${selected(saved.fullscreenPolicy, 'off')}>Do not ask for full screen</option><option value="required_with_exemptions" ${selected(saved.fullscreenPolicy, 'required_with_exemptions')}>Require full screen, with approved exemptions</option></select></label><label class="dd26-field"><span>Student entry</span><select class="dd26-select" id="dd26-admission-mode"><option value="automatic" selected>Allow after sign-in, code, and class-list checks</option></select><small class="dd26-help">The Beadle does not approve students one by one.</small></label><label class="dd26-field"><span>Temporary leave</span><select class="dd26-select" id="dd26-leave-policy"><option value="false" selected>Student records leaving and returning</option></select><small class="dd26-help">The event is recorded for Professor review; no Beadle acknowledgment is required.</small></label><label class="dd26-field"><span>Suggested answer for grading</span><select class="dd26-select" id="dd26-model-answer-mode"><option value="none" ${selected(saved.suggestedAnswerMode, 'none', true)}>None</option><option value="paste" ${selected(saved.suggestedAnswerMode, 'paste')}>Paste before publishing</option><option value="upload">Upload a private source</option></select></label></div><label class="dd26-choice"><input id="dd26-student-access-code-required" type="checkbox" checked><span><strong>Require the class examination code</strong><small>This is an extra check. Every student must still sign in with the exact class-list account and meet the entry rules.</small></span></label><label class="dd26-field" id="dd26-model-answer-field" ${saved.suggestedAnswerMode === 'paste' ? '' : 'hidden'}><span>Suggested answer for grading</span><textarea class="dd26-textarea" id="dd26-model-answer" maxlength="100000">${escapeHtml(saved.suggestedAnswer || '')}</textarea></label><label class="dd26-field" id="dd26-model-answer-upload-field" hidden><span>Private suggested-answer source</span><input class="dd26-input" id="dd26-model-answer-file" type="file" accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><small class="dd26-help">TXT, DOCX, or an inactive unencrypted PDF, maximum 10 MB. Students never receive this file.</small></label><details class="dd26-advanced"><summary>More about exam safeguards</summary><p>Leaving the tab or exam window is recorded for the Professor to review. Copy, cut, paste, and right-click are blocked during the exam unless an approved accommodation requires otherwise. These records are not proof by themselves and never automatically fail, submit, close, or erase an examination. Camera collection and AI grading are off.</p></details><div class="dd26-actions"><button class="dd26-button primary" id="dd26-review-publish" type="button">Review before publishing</button>${replacement ? '' : '<button class="dd26-button" id="dd26-save-rules-draft" type="button">Save draft and return</button>'}<button class="dd26-button" data-dd26-close-dialog type="button">Return without saving</button></div>`);
     const durationField = document.getElementById('dd26-duration');
     const lateAdmissionField = document.getElementById('dd26-late-admission');
-    if (durationField) durationField.value = String(durationValue);
+    const opensLabel = document.getElementById('dd26-opens-at')?.closest('label')?.querySelector('span');
+    const closesLabel = document.getElementById('dd26-closes-at')?.closest('label')?.querySelector('span');
+    if (opensLabel) opensLabel.textContent = 'Exam opens (Philippine Time)';
+    if (closesLabel) closesLabel.textContent = 'Exam ends (Philippine Time)';
+    if (durationField) {
+      durationField.value = String(durationValue);
+      durationField.type = 'hidden';
+      durationField.removeAttribute('required');
+      durationField.closest('label')?.querySelector('span')?.replaceChildren('Automatically calculated duration');
+      durationField.insertAdjacentHTML('beforebegin', `<output class="dd26-notice" id="dd26-duration-display" for="dd26-opens-at dd26-closes-at">${escapeHtml(durationValue)} minutes</output>`);
+      const help = durationField.closest('label')?.querySelector('small');
+      if (help) help.textContent = 'Calculated from the opening and ending times in Philippine Time.';
+      else durationField.insertAdjacentHTML('afterend', '<small class="dd26-help">Calculated from the opening and ending times in Philippine Time.</small>');
+    }
     if (lateAdmissionField) {
       lateAdmissionField.value = String(lateAdmissionValue);
       const lateAdmissionLabel = lateAdmissionField.closest('label');
@@ -4053,6 +4234,14 @@
     }
     let lateAdmissionUntouched = !lateAdmissionWasChosen;
     const updateDraftEntryCutoff = () => {
+      const windowMinutes = scheduledWindowMinutes(value('dd26-opens-at'), value('dd26-closes-at'));
+      if (durationField) durationField.value = Number.isSafeInteger(windowMinutes) ? String(windowMinutes) : '';
+      const durationDisplay = document.getElementById('dd26-duration-display');
+      if (durationDisplay) durationDisplay.textContent = Number.isSafeInteger(windowMinutes)
+        ? `${windowMinutes} minutes` : 'Choose a valid opening and ending time';
+      if (lateAdmissionUntouched && lateAdmissionField && Number.isSafeInteger(windowMinutes)) {
+        lateAdmissionField.value = String(windowMinutes);
+      }
       const cutoff = entryClosesAtForSchedule(
         value('dd26-opens-at'), value('dd26-closes-at'), lateAdmissionField?.value,
       );
@@ -4061,10 +4250,6 @@
         ? `<strong>Student entry closes ${escapeHtml(formatDate(cutoff))}.</strong> Students who already started keep their own examination deadline.`
         : '<strong>Choose a valid opening, ending, and entry time.</strong>';
     };
-    durationField?.addEventListener('input', () => {
-      if (lateAdmissionUntouched && lateAdmissionField) lateAdmissionField.value = durationField.value;
-      updateDraftEntryCutoff();
-    });
     lateAdmissionField?.addEventListener('input', () => {
       lateAdmissionUntouched = false;
       updateDraftEntryCutoff();
@@ -4076,7 +4261,7 @@
       'beforebegin',
       '<div class="dd26-error" id="dd26-publish-rule-errors" role="alert" tabindex="-1" hidden></div>',
     );
-    ['dd26-opens-at', 'dd26-closes-at', 'dd26-duration', 'dd26-late-admission', 'dd26-submission-grace']
+    ['dd26-opens-at', 'dd26-closes-at', 'dd26-late-admission', 'dd26-submission-grace']
       .forEach((id) => document.getElementById(id)?.setAttribute('required', ''));
     document.getElementById('dd26-student-access-code-required')?.closest('label')?.remove();
     document.querySelector('#dd26-dialog-card .dd26-advanced')?.insertAdjacentHTML(
@@ -4522,8 +4707,7 @@
   }
 
   function localDateValue(date) {
-    const offset = date.getTimezoneOffset();
-    return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+    return manilaInputValue(date);
   }
 
   async function startAttempt() {
@@ -4535,8 +4719,21 @@
       requireAuthentication();
       return;
     }
+    if (document.getElementById('dd26-entry-ack')?.checked !== true) {
+      global.toast?.('Review the acknowledgement before entering the examination.', 'warn');
+      document.getElementById('dd26-entry-ack')?.focus();
+      return;
+    }
     const studentKey = value('dd26-student-key', false).trim();
     if (!studentKey) { global.toast?.('Enter the current student exam code.', 'warn'); return; }
+    if (state.exam.entryBusy) return;
+    state.exam.entryBusy = true;
+    const entryButton = document.getElementById('dd26-start-attempt');
+    if (entryButton) {
+      entryButton.disabled = true;
+      entryButton.setAttribute('aria-busy', 'true');
+      entryButton.textContent = 'Checking access…';
+    }
     try {
       const storageApi = global.DueDiligenceExaminationRoomStore;
       state.exam.store ||= storageApi?.createStore?.();
@@ -4552,11 +4749,25 @@
       });
       const reachabilityMs = Math.max(0, Math.round(performance.now() - startedAt));
       const examId = String(payload.result?.examId || '');
-      state.exam.preflight = { examId, studentKey, storage, persistent, deviceSupported, deviceInstanceHash, reachabilityMs, server: payload.result || {} };
+      state.exam.preflight = {
+        examId, studentKey, storage, persistent, deviceSupported, deviceInstanceHash,
+        reachabilityMs, server: payload.result || {}, autoEnter: true, acknowledged: true,
+      };
       synchronizeServerClock(state.exam.preflight.server.serverNow || state.exam.preflight.server.checks?.serverNow);
       if (shouldRenderStudentWaitingRoom(state.exam.preflight)) renderStudentWaitingRoom();
-      else renderPreflight();
+      else if (waitingRoomChecks(state.exam.preflight).ready
+          && studentStartReadiness(state.exam.preflight.server).canStart) {
+        await beginAttemptAfterPreflight(null, true);
+      } else renderPreflight();
     } catch (error) { global.toast?.(error.message, 'warn'); }
+    finally {
+      state.exam.entryBusy = false;
+      if (entryButton?.isConnected) {
+        entryButton.disabled = false;
+        entryButton.removeAttribute('aria-busy');
+        entryButton.textContent = 'Enter examination';
+      }
+    }
   }
 
   function accessCodePreflightPolicy(server = {}, studentKey = null) {
@@ -4731,7 +4942,7 @@
     const openingReached = remaining <= 0;
     const entryClosed = Number.isFinite(entryClosesAtMs) && officialNow >= entryClosesAtMs;
     const checks = waitingRoomChecks(check);
-    const automaticEntry = check.entryMode === 'beadle' && check.autoEnter === true;
+    const automaticEntry = check.autoEnter === true;
     start.disabled = automaticEntry
       || !checks.ready
       || !openingReached
@@ -4845,7 +5056,7 @@
     clearTimeout(state.exam.waitingRoomPollTimer);
     const rules = server.rules || {};
     const checks = waitingRoomChecks(check);
-    const automaticEntry = check.entryMode === 'beadle' && check.autoEnter === true;
+    const automaticEntry = check.autoEnter === true;
     const accountLabel = server.studentEmail || server.signedInEmail || server.candidateEmail || 'Signed-in account confirmed';
     const accessLabel = automaticEntry ? 'Secure Beadle handoff' : 'Student exam code';
     const accessCopy = automaticEntry
@@ -5029,7 +5240,7 @@
     start?.addEventListener('click', () => beginAttemptAfterPreflight());
   }
 
-  async function beginAttemptAfterPreflight(preparedFullscreenRequest = null) {
+  async function beginAttemptAfterPreflight(preparedFullscreenRequest = null, acknowledged = false) {
     if (!isAuthenticated()) {
       state.exam.preflight = null;
       closeDialog();
@@ -5040,7 +5251,8 @@
       return false;
     }
     const check = state.exam.preflight;
-    if (!check || !document.getElementById('dd26-preflight-ack')?.checked) return false;
+    if (!check || !(acknowledged || check.acknowledged === true
+        || document.getElementById('dd26-preflight-ack')?.checked)) return false;
     if (!studentStartReadiness(check.server).canStart) {
       global.toast?.('Starting is blocked because the examination is not open for entry.', 'warn');
       return false;
@@ -5056,24 +5268,26 @@
     const fullscreenRequest = preparedFullscreenRequest || (shouldRequestFullscreen
       ? requestFullscreen()
       : Promise.resolve(false));
-    const button = document.getElementById('dd26-preflight-start');
-    button.disabled = true; button.textContent = 'Starting…';
+    const button = document.getElementById('dd26-preflight-start') || document.getElementById('dd26-start-attempt');
+    if (button) { button.disabled = true; button.textContent = 'Starting…'; }
     check.lastStartError = null;
     try {
-      const result = await command(check.entryMode === 'beadle'
+      const result = check.startedAttempt || await command(check.entryMode === 'beadle'
         ? { operation: 'start_beadle_attempt', examId: check.examId }
         : { operation: 'start_attempt_by_code', studentKey: check.studentKey });
-      const session = await command({
+      check.startedAttempt = result;
+      const session = check.startedSession || await command({
         operation: 'open_session', attemptId: result.attemptId,
         deviceInstanceHash: check.deviceInstanceHash,
-        requestKey: randomKey('session_open'),
+        requestKey: check.sessionRequestKey ||= randomKey('session_open'),
       });
+      check.startedSession = session;
       closeDialog();
       await fullscreenRequest;
       await loadAttempt(
         result.attemptId,
         { ...session, publicationId: result.publicationId },
-        { throwOnFailure: check.entryMode === 'beadle' },
+        { throwOnFailure: true },
       );
       clearInterval(state.exam.waitingRoomTimer);
       clearTimeout(state.exam.waitingRoomPollTimer);
@@ -5088,7 +5302,7 @@
       if (enteredFullscreen && document.fullscreenElement) {
         await document.exitFullscreen?.().catch(() => null);
       }
-      button.disabled = false; button.textContent = 'Start examination';
+      if (button?.isConnected) { button.disabled = false; button.textContent = 'Enter examination'; }
       if (!check.autoEntryBusy) global.toast?.(error.message, 'warn');
       return false;
     }
@@ -5200,10 +5414,15 @@
     state.exam.store ||= storageApi.createStore();
     const availability = await state.exam.store.init();
     if (!availability.available) throw new Error(availability.message || 'IndexedDB is unavailable for this examination.');
-    const localAnswers = await state.exam.store.getLatestAnswers(attemptScope());
-    const localHistory = await state.exam.store.getAnswerHistory(attemptScope());
+    const [localAnswers, localHistory, localFlags] = await Promise.all([
+      state.exam.store.getLatestAnswers(attemptScope()),
+      state.exam.store.getAnswerHistory(attemptScope()),
+      state.exam.store.getQuestionFlags(attemptScope()),
+    ]);
+    const flaggedQuestionIds = new Set(localFlags.map(String));
     let recovered = 0;
     for (const question of attempt.questions) {
+      question.flagged = question.flagged === true || flaggedQuestionIds.has(String(question.id));
       const pendingForQuestion = localHistory.filter((operation) => String(operation.questionId) === String(question.id) && operation.state === 'queued');
       question.nextExpectedRevision = Math.max(
         Number(question.revision) || 0,
@@ -5324,12 +5543,7 @@
       const blockedByOneWay = oneWay && index !== state.exam.attemptIndex && index !== state.exam.attemptIndex + 1;
       return `<button type="button" data-dd26-attempt-question="${index}" class="${index === state.exam.attemptIndex ? 'is-active' : ''}${String(entry.answer || '').trim() ? ' is-saved' : ''}${entry.flagged ? ' is-flagged' : ''}" ${index === state.exam.attemptIndex ? 'aria-current="step"' : ''} ${blockedByOneWay ? 'disabled' : ''} aria-label="Question ${entry.ordinal}${String(entry.answer || '').trim() ? ', answered' : ', unanswered'}${entry.flagged ? ', flagged for review' : ''}${blockedByOneWay ? ', unavailable under one-way navigation' : ''}">${entry.ordinal}</button>`;
     }).join('');
-    document.getElementById('dd26-exam-main').innerHTML = `<section class="dd26-card dd26-attempt-workspace" id="dd26-attempt-surface" aria-labelledby="dd26-attempt-title"><div class="dd26-attempt-top"><div><div class="dd26-label" id="dd26-attempt-title">${escapeHtml(attempt.title)}</div><span class="dd26-save-state${mutable ? '' : ' is-error'}" id="dd26-save-state" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(mutable ? initialSaveState : 'Answer editing is unavailable; preserved work remains visible')}</span></div><div><div class="dd26-clock" id="dd26-attempt-clock" role="timer" aria-label="Time remaining">--:--:--</div><small class="dd26-clock-label">Official exam clock</small></div></div>${attentionReturnHtml}${offlineBundleNotice}${recoveryHtml}${attempt.readonlyTab ? '<div class="dd26-error" role="alert">Another tab holds the active writing lease. This tab is read-only to prevent conflicting edits.</div>' : ''}${mutable ? '' : '<div class="dd26-error" role="status">This attempt is not editable. You may review preserved answers, but no answer can change until an authorized recovery or reopen action.</div>'}${errataHtml}<details class="dd26-instructions"><summary>Examination instructions</summary>${studentInstructionsHtml(attempt.instructions || 'Follow the published instructions and permitted-materials policy.')}</details>${oneWay ? '<div class="dd26-notice"><strong>One-way navigation is enabled.</strong> After moving forward, earlier questions cannot be reopened in this workspace.</div>' : ''}<div class="dd26-integrity">${escapeHtml(monitoringDisclosure)}</div><div class="dd26-progress-summary"><span>${answered} of ${attempt.questions.length} answered</span><span>${flagged} flagged for review</span></div><div class="dd26-question-nav" aria-label="Question navigator">${navigatorHtml}</div><div class="dd26-question-meta"><span>Question ${question.ordinal} of ${attempt.questions.length}</span><span>${escapeHtml(question.maximumPoints)} points</span></div><h2 class="dd26-prompt">${escapeHtml(question.prompt)}</h2><label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea dd26-essay-editor" id="dd26-attempt-answer" maxlength="20000" ${mutable ? '' : 'readonly aria-readonly="true"'}>${escapeHtml(question.answer)}</textarea><small class="dd26-counter"><span id="dd26-attempt-words">${String(question.answer || '').trim() ? String(question.answer).trim().split(/\s+/u).length : 0} words</span><span id="dd26-attempt-count">${codePointLength(question.answer).toLocaleString()} / 20,000 characters</span></small></label><div class="dd26-actions"><button class="dd26-button" id="dd26-attempt-prev" type="button" ${oneWay || state.exam.attemptIndex === 0 ? 'disabled' : ''}>Previous</button><button class="dd26-button" id="dd26-attempt-next" type="button" ${state.exam.attemptIndex === attempt.questions.length - 1 ? 'disabled' : ''}>Next</button><button class="dd26-button ${question.flagged ? 'is-active' : ''}" id="dd26-attempt-flag" type="button" ${mutable ? '' : 'disabled'}>${question.flagged ? 'Remove review flag' : 'Flag for review'}</button><button class="dd26-button" id="dd26-attempt-leave" type="button" ${mutable ? '' : 'disabled'}>${attempt.activeLeave ? 'Return from temporary leave' : 'Temporary leave'}</button><button class="dd26-button" id="dd26-report-technical" type="button">Report technical issue</button><button class="dd26-button primary" id="dd26-attempt-submit" type="button" ${mutable ? '' : 'disabled'}>Review and submit</button></div>${attempt.activeLeave ? `<div class="dd26-notice">Temporary leave began ${escapeHtml(formatDate(attempt.activeLeave.departedAt))}. The examination timer continues. Return when ready; no automatic grading penalty is applied.</div>` : ''}</section>`;
-    const nextButton = document.getElementById('dd26-attempt-next');
-    if (nextButton && mutable) nextButton.disabled = false;
-    if (nextButton) nextButton.textContent = state.exam.attemptIndex === attempt.questions.length - 1
-      ? 'Save answer & review'
-      : 'Save answer & next';
+    document.getElementById('dd26-exam-main').innerHTML = `<section class="dd26-card dd26-attempt-workspace" id="dd26-attempt-surface" aria-labelledby="dd26-attempt-title"><div class="dd26-attempt-top"><div><div class="dd26-label" id="dd26-attempt-title">${escapeHtml(attempt.title)}</div><span class="dd26-save-state${mutable ? '' : ' is-error'}" id="dd26-save-state" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(mutable ? initialSaveState : 'Answer editing is unavailable; preserved work remains visible')}</span></div><div><div class="dd26-clock" id="dd26-attempt-clock" role="timer" aria-label="Time remaining">--:--:--</div><small class="dd26-clock-label">Official exam clock</small></div></div>${attentionReturnHtml}${offlineBundleNotice}${recoveryHtml}${attempt.readonlyTab ? '<div class="dd26-error" role="alert">Another tab holds the active writing lease. This tab is read-only to prevent conflicting edits.</div>' : ''}${mutable ? '' : '<div class="dd26-error" role="status">This attempt is not editable. You may review preserved answers, but no answer can change until an authorized recovery or reopen action.</div>'}${errataHtml}<details class="dd26-instructions"><summary>Examination instructions</summary>${studentInstructionsHtml(attempt.instructions || 'Follow the published instructions and permitted-materials policy.')}</details>${oneWay ? '<div class="dd26-notice"><strong>One-way navigation is enabled.</strong> After moving forward, earlier questions cannot be reopened in this workspace.</div>' : ''}<div class="dd26-integrity">${escapeHtml(monitoringDisclosure)}</div><div class="dd26-progress-summary"><span>${answered} of ${attempt.questions.length} answered</span><span>${flagged} flagged for review</span></div><div class="dd26-question-nav" aria-label="Question navigator">${navigatorHtml}</div><div class="dd26-question-meta"><span>Question ${question.ordinal} of ${attempt.questions.length}</span><span>${escapeHtml(question.maximumPoints)} points</span></div><h2 class="dd26-prompt">${escapeHtml(question.prompt)}</h2><label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea dd26-essay-editor" id="dd26-attempt-answer" maxlength="20000" ${mutable ? '' : 'readonly aria-readonly="true"'}>${escapeHtml(question.answer)}</textarea><small class="dd26-counter"><span id="dd26-attempt-words">${String(question.answer || '').trim() ? String(question.answer).trim().split(/\s+/u).length : 0} words</span><span id="dd26-attempt-count">${codePointLength(question.answer).toLocaleString()} / 20,000 characters</span></small></label><div class="dd26-actions dd26-attempt-primary-actions" aria-label="Examination controls"><button class="dd26-button" id="dd26-attempt-prev" type="button" ${oneWay || state.exam.attemptIndex === 0 ? 'disabled' : ''}>Previous</button><button class="dd26-button" id="dd26-attempt-next" type="button" ${state.exam.attemptIndex === attempt.questions.length - 1 ? 'disabled' : ''}>Next</button><button class="dd26-button ${question.flagged ? 'is-active' : ''}" id="dd26-attempt-flag" type="button" ${mutable ? '' : 'disabled'}>${question.flagged ? 'Remove flag' : 'Flag'}</button><button class="dd26-button" id="dd26-attempt-review" type="button">Review All Answers</button><button class="dd26-button primary" id="dd26-attempt-submit" type="button" ${mutable ? '' : 'disabled'}>Submit</button></div><details class="dd26-instructions dd26-attempt-support"><summary>Need to leave briefly or report a problem?</summary><div class="dd26-actions"><button class="dd26-button" id="dd26-attempt-leave" type="button" ${mutable ? '' : 'disabled'}>${attempt.activeLeave ? 'Return from temporary leave' : 'Temporary leave'}</button><button class="dd26-button" id="dd26-report-technical" type="button">Report technical issue</button></div></details>${attempt.activeLeave ? `<div class="dd26-notice">Temporary leave began ${escapeHtml(formatDate(attempt.activeLeave.departedAt))}. The examination timer continues. Return when ready; no automatic grading penalty is applied.</div>` : ''}</section>`;
     bindAttempt();
     startAttemptTimers();
   }
@@ -5337,16 +5551,22 @@
   function bindAttempt() {
     document.querySelectorAll('[data-dd26-attempt-question]').forEach((button) => button.addEventListener('click', () => navigateAttempt(Number(button.dataset.dd26AttemptQuestion))));
     document.getElementById('dd26-attempt-prev')?.addEventListener('click', () => navigateAttempt(state.exam.attemptIndex - 1));
-    document.getElementById('dd26-attempt-next')?.addEventListener('click', async () => {
-      if (state.exam.attemptIndex === state.exam.attempt.questions.length - 1) await openSubmissionReview();
-      else await navigateAttempt(state.exam.attemptIndex + 1);
-    });
+    document.getElementById('dd26-attempt-next')?.addEventListener('click', () => navigateAttempt(state.exam.attemptIndex + 1));
+    document.getElementById('dd26-attempt-review')?.addEventListener('click', openSubmissionReview);
     document.getElementById('dd26-attempt-submit')?.addEventListener('click', openSubmissionReview);
     document.getElementById('dd26-resolve-conflicts')?.addEventListener('click', openConflictRecovery);
-    document.getElementById('dd26-attempt-flag')?.addEventListener('click', () => {
+    document.getElementById('dd26-attempt-flag')?.addEventListener('click', async () => {
       const question = state.exam.attempt.questions[state.exam.attemptIndex];
       question.flagged = !question.flagged;
       renderAttempt();
+      try {
+        await state.exam.store.saveQuestionFlags({
+          ...attemptScope(),
+          questionIds: state.exam.attempt.questions.filter((entry) => entry.flagged).map((entry) => entry.id),
+        });
+      } catch (error) {
+        global.toast?.(`The flag could not be preserved on this device: ${error.message}`, 'warn');
+      }
     });
     document.getElementById('dd26-attempt-leave')?.addEventListener('click', toggleTemporaryLeave);
     document.getElementById('dd26-report-technical')?.addEventListener('click', reportTechnicalIssue);
@@ -5510,7 +5730,7 @@
 
   async function recordTechnicalIncident(eventType, details = {}) {
     const attempt = state.exam.attempt;
-    if (!attempt) return;
+    if (!attempt) return false;
     try {
       await command({
         operation: 'record_technical_incident',
@@ -5522,7 +5742,8 @@
         details,
         clientOccurredAt: new Date().toISOString(),
       });
-    } catch { /* technical reporting is non-authoritative and must not block answering */ }
+      return true;
+    } catch { return false; /* technical reporting is non-authoritative and must not block answering */ }
   }
 
   async function reportTechnicalIssue() {
@@ -5532,8 +5753,10 @@
       global.toast?.('Keep the technical note to 500 characters or fewer.', 'warn');
       return;
     }
-    await recordTechnicalIncident('support_requested', { note });
-    global.toast?.('Technical issue recorded for the Beadle and Professor. Continue working if you safely can.', 'ok');
+    const recorded = await recordTechnicalIncident('support_requested', { note });
+    global.toast?.(recorded
+      ? 'Technical issue recorded for the Beadle and Professor. Continue working if you safely can.'
+      : 'The technical note could not reach the server. Your answers remain saved on this device; tell the Beadle directly if you safely can.', recorded ? 'ok' : 'warn');
   }
 
   function queueAnswerSave(question) {
@@ -5553,29 +5776,42 @@
     if (!question || !state.exam.store) return null;
     clearTimeout(state.exam.saveTimers.get(question.id));
     state.exam.saveTimers.delete(question.id);
+    const inFlight = state.exam.localSavePromises.get(question.id);
+    if (inFlight) return inFlight;
     if (question.lastLocalContent === question.answer) return question.localOperationId || null;
-    try {
-      const baseRevision = Number(question.nextExpectedRevision ?? question.revision) || 0;
-      const saved = await state.exam.store.saveAnswer({
-        ...attemptScope(question.id),
-        content: question.answer,
-        baseRevision,
-        offlineSince: state.exam.offlineSince ? new Date(state.exam.offlineSince).getTime() : null,
-        outageEvidence: state.exam.offlineSince ? { clientReportedOffline: true } : null,
-      });
-      question.localOperationId = saved.operation.operationId;
-      question.localContentHash = saved.operation.contentHash;
-      question.localSequence = saved.operation.localSequence;
-      question.nextExpectedRevision = baseRevision + 1;
-      question.lastLocalContent = question.answer;
-      question.localOnly = true;
+    const savePromise = (async () => {
+      while (question.lastLocalContent !== question.answer) {
+        const contentAtStart = String(question.answer ?? '');
+        const baseRevision = Number(question.nextExpectedRevision ?? question.revision) || 0;
+        const saved = await state.exam.store.saveAnswer({
+          ...attemptScope(question.id),
+          content: contentAtStart,
+          baseRevision,
+          offlineSince: state.exam.offlineSince ? new Date(state.exam.offlineSince).getTime() : null,
+          outageEvidence: state.exam.offlineSince ? { clientReportedOffline: true } : null,
+        });
+        question.localOperationId = saved.operation.operationId;
+        question.localContentHash = saved.operation.contentHash;
+        question.localSequence = saved.operation.localSequence;
+        question.nextExpectedRevision = baseRevision + 1;
+        question.lastLocalContent = contentAtStart;
+        question.localOnly = true;
+      }
       setSaveStatus(global.navigator.onLine === false ? 'Offline — saved on this device' : 'Saved on this device', 'saved');
       flushSyncQueue();
-      return saved.operation.operationId;
+      return question.localOperationId || null;
+    })();
+    state.exam.localSavePromises.set(question.id, savePromise);
+    try {
+      return await savePromise;
     } catch (error) {
       setSaveStatus('Save problem — keep this page open and contact the Beadle', 'error');
       global.toast?.(error.message, 'warn');
       throw error;
+    } finally {
+      if (state.exam.localSavePromises.get(question.id) === savePromise) {
+        state.exam.localSavePromises.delete(question.id);
+      }
     }
   }
 
@@ -6651,17 +6887,55 @@
     const gradingKeyInput = document.getElementById('dd26-grading-key');
     const gradingKey = String(gradingKeyInput?.value || '');
     if (gradingKeyInput) gradingKeyInput.value = '';
+    await loadGradingWorkspace(state.exam.activeExamId, { gradingKey });
+  }
+
+  async function loadGradingWorkspace(examId, options = {}) {
+    const gradingKey = String(options.gradingKey || '');
     try {
-      const payload = await api('/exam-room/query', { operation: 'grading_workspace', examId: state.exam.activeExamId, gradingKey });
+      const payload = await api('/exam-room/query', { operation: 'grading_workspace', examId, gradingKey });
       state.exam.grading = { ...payload.result, gradingKey, unsavedChanges: false };
       state.exam.gradingModelAnswer = null;
-      state.exam.gradingCandidate = 0;
-      state.exam.gradingQuestion = 0;
+      state.exam.activeExamId = examId;
+      const candidates = state.exam.grading.candidates || [];
+      const candidateIndex = options.attemptId
+        ? candidates.findIndex((entry) => entry.attemptId === options.attemptId)
+        : 0;
+      if (options.attemptId && candidateIndex < 0) {
+        state.exam.gradingDetailOpen = false;
+        state.exam.routeSubmissionId = '';
+        state.exam.routeQuestionOrdinal = 0;
+        closeDialog();
+        renderGrading();
+        global.toast?.('That submitted examination is unavailable or is not authorized for this Professor account.', 'warn');
+        return;
+      }
+      const candidate = state.exam.grading.candidates?.[candidateIndex];
+      const questionIndex = Number(options.questionOrdinal) > 0
+        ? (candidate?.questions || []).findIndex((entry) => Number(entry.ordinal) === Number(options.questionOrdinal))
+        : 0;
+      if (Number(options.questionOrdinal) > 0 && questionIndex < 0) {
+        state.exam.gradingDetailOpen = false;
+        state.exam.routeSubmissionId = '';
+        state.exam.routeQuestionOrdinal = 0;
+        closeDialog();
+        renderGrading();
+        global.toast?.('That question is unavailable for the selected submitted examination.', 'warn');
+        return;
+      }
+      state.exam.gradingCandidate = candidateIndex;
+      state.exam.gradingQuestion = questionIndex;
       state.exam.gradingFilter = preferredGradingFilter(state.exam.grading);
-      if (state.exam.professorRoomReturnExamId === state.exam.activeExamId) stopProfessorRoomPolling();
+      state.exam.gradingDetailOpen = Boolean(options.attemptId);
+      state.exam.routeSubmissionId = state.exam.gradingDetailOpen ? String(candidate?.attemptId || '') : '';
+      state.exam.routeQuestionOrdinal = state.exam.gradingDetailOpen
+        ? Number(candidate?.questions?.[questionIndex]?.ordinal || 0) : 0;
+      if (state.exam.professorRoomReturnExamId === examId) stopProfessorRoomPolling();
       closeDialog();
       renderGrading();
-    } catch (error) { global.toast?.(error.message, 'warn'); }
+    } catch (error) {
+      global.toast?.(error.message, 'warn');
+    }
   }
 
   function gradingQuestions(grading = state.exam.grading) {
@@ -6697,7 +6971,7 @@
     return 'all';
   }
 
-  const GRADING_FILTERS = ['ungraded', 'draft', 'graded', 'active', 'absent', 'late', 'accommodated', 'flagged', 'all'];
+  const GRADING_FILTERS = ['ungraded', 'draft', 'graded', 'active', 'absent', 'accommodated', 'flagged', 'all'];
 
   function gradingFilterLabel(filter) {
     return filter === 'draft' ? 'Grading Draft' : `${filter[0].toUpperCase()}${filter.slice(1)}`;
@@ -6774,8 +7048,10 @@
     persistCurrentGradingDraft();
     const notice = document.getElementById('dd26-grading-unsaved');
     if (notice) notice.hidden = false;
-    const download = document.getElementById('dd26-download-candidate-result');
-    if (download) download.disabled = true;
+    ['dd26-download-answer-sheet', 'dd26-download-grade-report'].forEach((id) => {
+      const download = document.getElementById(id);
+      if (download) download.disabled = true;
+    });
     const release = document.getElementById('dd26-review-class-results');
     if (release) release.disabled = true;
     const modelAnswer = document.getElementById('dd26-load-model-answer');
@@ -6798,12 +7074,19 @@
     state.exam.gradingModelAnswer = null;
     state.exam.gradingCandidate = 0;
     state.exam.gradingQuestion = 0;
+    state.exam.gradingDetailOpen = false;
+    state.exam.gradingSaveBusy = false;
+    state.exam.routeSubmissionId = '';
+    state.exam.routeQuestionOrdinal = 0;
   }
 
   function leaveGradingWorkspace() {
     if (!mayLeaveCurrentGrade()) return;
     const returnExamId = state.exam.professorRoomReturnExamId;
+    const examId = state.exam.grading?.examId || state.exam.activeExamId;
     clearGradingWorkspace();
+    state.exam.routeRole = 'professor';
+    if (examId) activatePage('exam_room', document.getElementById('spa-examination-room'), { replace: true, detailId: examId });
     if (returnExamId) {
       state.exam.professorRoomReturnExamId = null;
       void openLiveStatus(returnExamId);
@@ -6835,9 +7118,33 @@
       state.exam.gradingFilter = 'all';
       state.exam.gradingCandidate = Number(button.dataset.dd26OpenGradingCandidate);
       state.exam.gradingQuestion = Number(button.dataset.dd26OpenGradingQuestion) || 0;
+      state.exam.gradingDetailOpen = true;
+      updateGradingRoute(false);
       renderGrading();
       document.getElementById('dd26-grade-score')?.focus();
     }));
+  }
+
+  function updateGradingRoute(replace = true) {
+    const grading = state.exam.grading;
+    const candidate = grading?.candidates?.[state.exam.gradingCandidate];
+    const question = candidate?.questions?.[state.exam.gradingQuestion];
+    state.exam.routeRole = 'professor';
+    state.exam.routeSubmissionId = state.exam.gradingDetailOpen ? String(candidate?.attemptId || '') : '';
+    state.exam.routeQuestionOrdinal = state.exam.gradingDetailOpen ? Number(question?.ordinal || 0) : 0;
+    activatePage('exam_room', document.getElementById('spa-examination-room'), {
+      replace, detailId: grading?.examId || state.exam.activeExamId,
+    });
+  }
+
+  function returnToGradingQueue() {
+    if (!mayLeaveCurrentGrade()) return;
+    state.exam.gradingDetailOpen = false;
+    state.exam.routeSubmissionId = '';
+    state.exam.routeQuestionOrdinal = 0;
+    updateGradingRoute(false);
+    renderGrading();
+    document.querySelector('.dd26-grading-queue')?.focus?.();
   }
 
   function renderGrading() {
@@ -6848,6 +7155,17 @@
     const allQuestions = gradingQuestions(grading);
     const finalCount = allQuestions.filter((entry) => entry.gradeState === 'final').length;
     const unfinishedCount = allQuestions.length - finalCount;
+    if (!state.exam.gradingDetailOpen && !statusOnlyFilter) {
+      document.getElementById('dd26-exam-main').innerHTML = `<section class="dd26-card"><section class="dd26-section"><div class="dd26-label">Professor grading / ${escapeHtml(grading?.title || 'Examination')}</div><div class="dd26-stat-grid"><div class="dd26-stat"><strong>${escapeHtml(grading?.candidates?.length || 0)}</strong><span>Submitted exams</span></div><div class="dd26-stat"><strong>${escapeHtml(finalCount)}</strong><span>Final grades</span></div><div class="dd26-stat"><strong>${escapeHtml(unfinishedCount)}</strong><span>Needs grading</span></div><div class="dd26-stat"><strong>Professor</strong><span>Official decision</span></div></div><div class="dd26-grading-filter" role="group" aria-label="Filter grading work">${GRADING_FILTERS.map((filter) => `<button class="dd26-chip${state.exam.gradingFilter === filter ? ' is-active' : ''}" data-dd26-grading-filter="${filter}" type="button" aria-pressed="${state.exam.gradingFilter === filter}">${escapeHtml(gradingFilterLabel(filter))}</button>`).join('')}</div>${gradingQueueHtml(grading)}<div class="dd26-actions"><button class="dd26-button primary" id="dd26-open-saved-class-results" type="button">Open class results</button><button class="dd26-button" id="dd26-leave-grading" type="button">Return to Professor workspace</button></div></section></section>`;
+      document.querySelectorAll('[data-dd26-grading-filter]').forEach((button) => button.addEventListener('click', () => {
+        state.exam.gradingFilter = button.dataset.dd26GradingFilter;
+        renderGrading();
+      }));
+      bindGradingQueue();
+      document.getElementById('dd26-open-saved-class-results')?.addEventListener('click', () => openResultsDashboard(grading.examId));
+      document.getElementById('dd26-leave-grading')?.addEventListener('click', leaveGradingWorkspace);
+      return;
+    }
     if (statusOnlyFilter) {
       document.getElementById('dd26-exam-main').innerHTML = `<section class="dd26-card"><section class="dd26-section"><div class="dd26-label">Professor grading / ${escapeHtml(grading?.title || 'Examination')}</div><h2>${escapeHtml(gradingFilterLabel(state.exam.gradingFilter))} students</h2><p>This status view never exposes an active student’s autosaved answers. Only a final submitted examination can be opened for grading.</p><div class="dd26-grading-filter" role="group" aria-label="Filter grading work">${GRADING_FILTERS.map((filter) => `<button class="dd26-chip${state.exam.gradingFilter === filter ? ' is-active' : ''}" data-dd26-grading-filter="${filter}" type="button" aria-pressed="${state.exam.gradingFilter === filter}">${escapeHtml(gradingFilterLabel(filter))}</button>`).join('')}</div>${statusEntries.length ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Student</th><th>Email</th><th>Status</th><th>Submission</th></tr></thead><tbody>${statusEntries.map((entry) => `<tr><td><strong>${escapeHtml(entry.studentName || entry.candidateNumber || 'Student')}</strong></td><td>${escapeHtml(entry.studentEmail || '—')}</td><td>${escapeHtml(entry.displayStatus || entry.status || state.exam.gradingFilter)}</td><td>${entry.submittedAt ? escapeHtml(formatDate(entry.submittedAt)) : 'Not submitted'}</td></tr>`).join('')}</tbody></table></div>` : `<div class="dd26-empty" role="status">No students match the ${escapeHtml(gradingFilterLabel(state.exam.gradingFilter))} filter.</div>`}<div class="dd26-actions"><button class="dd26-button" id="dd26-leave-grading" type="button">Return to Professor workspace</button></div></section></section>`;
       document.querySelectorAll('[data-dd26-grading-filter]').forEach((button) => button.addEventListener('click', () => {
@@ -6932,10 +7250,9 @@
         <div class="dd26-grading-filter" role="group" aria-label="Filter grading work">
           ${GRADING_FILTERS.map((filter) => `<button class="dd26-chip${state.exam.gradingFilter === filter ? ' is-active' : ''}" data-dd26-grading-filter="${filter}" type="button" aria-pressed="${state.exam.gradingFilter === filter}">${escapeHtml(gradingFilterLabel(filter))}</button>`).join('')}
         </div>
-        ${gradingQueueHtml(grading)}
         <div class="dd26-form-grid">
           <label class="dd26-field"><span>Student</span><select class="dd26-select" id="dd26-grading-candidate">${grading.candidates.map((entry, index) => `<option value="${index}" ${index === state.exam.gradingCandidate ? 'selected' : ''}>${escapeHtml(candidateLabel(entry))}</option>`).join('')}</select></label>
-          <label class="dd26-field"><span>Question</span><select class="dd26-select" id="dd26-grading-question">${candidate.questions.map((entry, index) => `<option value="${index}" ${index === state.exam.gradingQuestion ? 'selected' : ''}>Question ${escapeHtml(entry.ordinal)} — ${escapeHtml(entry.gradeState || 'draft')}</option>`).join('')}</select></label>
+          <label class="dd26-field"><span>Question</span><select class="dd26-select" id="dd26-grading-question">${candidate.questions.map((entry, index) => `<option value="${index}" ${index === state.exam.gradingQuestion ? 'selected' : ''}>Question ${escapeHtml(entry.ordinal)}</option>`).join('')}</select></label>
         </div>
         <div class="dd26-notice"><strong>Professor judgment is required.</strong> AI grading is off and no suggestion can finalize or send a grade.</div>
         <div class="dd26-notice" id="dd26-grading-unsaved" role="status" ${draft ? '' : 'hidden'}><strong>${draft ? 'Draft restored.' : 'Unsaved changes.'}</strong> ${draft ? 'Your grading draft was restored from this device.' : 'Save this grade before moving to another student or question.'}</div>
@@ -6947,15 +7264,10 @@
       <div class="dd26-grading-split"><section class="dd26-grading-source"><h2 class="dd26-prompt">${escapeHtml(question.prompt)}</h2><section class="dd26-section"><h3>Student answer</h3><p>${escapeHtml(question.answer || 'No answer submitted.')}</p></section>${modelAnswer?.mode === 'paste' && modelAnswer.available ? `<details class="dd26-section"><summary>Professor-only suggested answer</summary><p class="dd26-long-cell">${escapeHtml(modelAnswer.answerText)}</p></details>` : ''}</section><section class="dd26-grading-form"><div class="dd26-error" id="dd26-grade-errors" role="alert" tabindex="-1" hidden></div><div class="dd26-form-grid"><label class="dd26-field"><span>Score / ${escapeHtml(question.maximumPoints)}</span><input class="dd26-input" id="dd26-grade-score" type="number" min="0" max="${escapeHtml(question.maximumPoints)}" step="0.1" value="${escapeHtml(scoreValue)}" aria-describedby="dd26-grade-errors" required></label><label class="dd26-field"><span>Grade status</span><select class="dd26-select" id="dd26-grade-state"><option value="draft" ${gradeStateValue === 'draft' ? 'selected' : ''}>Draft</option><option value="final" ${gradeStateValue === 'final' ? 'selected' : ''}>Final</option></select></label><label class="dd26-field wide"><span>Professor comment</span><textarea class="dd26-textarea" id="dd26-grade-comment" maxlength="5000">${escapeHtml(commentValue)}</textarea></label><label class="dd26-field wide"><span>Reason for this grade</span><input class="dd26-input" id="dd26-grade-reason" maxlength="1000" value="${escapeHtml(reasonValue)}"></label></div></section></div>
       <div class="dd26-actions dd26-grading-actions"><button class="dd26-button" id="dd26-previous-grade" type="button">Previous</button><button class="dd26-button" id="dd26-save-grade" type="button">Save</button><button class="dd26-button primary" id="dd26-save-next-grade" type="button">Save and Next</button><button class="dd26-button" id="dd26-next-ungraded" type="button">Next</button>${candidate.status === 'locked' ? '<button class="dd26-button danger" id="dd26-unlock-attempt" type="button">Review access</button>' : ''}</div>
       <section class="dd26-section" aria-labelledby="dd26-candidate-download-heading">
-        <h3 id="dd26-candidate-download-heading">Download this student’s result</h3>
-        <p>This creates a private PDF for Student ${escapeHtml(candidate.candidateNumber)} only. Downloading does not send results or change the examination.</p>
-        <div class="dd26-choice-grid">
-          <label class="dd26-choice"><input type="radio" name="dd26-result-pdf-scope" value="questions_answers" checked><span><strong>Questions and answers</strong><small>The questions and this student’s answers.</small></span></label>
-          <label class="dd26-choice"><input type="radio" name="dd26-result-pdf-scope" value="answers_only"><span><strong>Answers only</strong><small>This student’s submitted answers.</small></span></label>
-          <label class="dd26-choice"><input type="radio" name="dd26-result-pdf-scope" value="grades_comments"><span><strong>Grades and comments only</strong><small>The final scores and Professor comments.</small></span></label>
-        </div>
-        <div class="dd26-actions"><button class="dd26-button" id="dd26-download-candidate-result" type="button" ${candidateGradesFinal ? '' : 'disabled'}>Download private PDF</button></div>
-        ${candidateGradesFinal ? '' : '<p class="dd26-help">Finalize every grade for this student before downloading the result.</p>'}
+        <h3 id="dd26-candidate-download-heading">Download this student&rsquo;s records</h3>
+        <p>Answer sheets and grade reports are separate private documents. Downloading either file does not send results or change the examination.</p>
+        <div class="dd26-actions"><button class="dd26-button" id="dd26-download-answer-sheet" type="button">Download student answer PDF</button><button class="dd26-button" id="dd26-download-grade-report" type="button" ${candidateGradesFinal ? '' : 'disabled'}>Download final grade PDF</button></div>
+        ${candidateGradesFinal ? '' : '<p class="dd26-help">The exact questions and submitted answers are available now. Finalize every grade before downloading the grade report.</p>'}
       </section>
       <section class="dd26-section" aria-labelledby="dd26-class-results-heading">
         <h3 id="dd26-class-results-heading">Class results and offline grading</h3>
@@ -6964,6 +7276,9 @@
         ${allGradesFinal ? '<p class="dd26-help">All grades are final. You may send every student their own result and download the final class workbook.</p>' : `<p class="dd26-help">An offline-grading workbook is available now. Finalize ${escapeHtml(unfinishedCount)} remaining grade${unfinishedCount === 1 ? '' : 's'} in the secure workspace before sending official results.</p>`}
       </section>
     </section>`;
+    document.querySelector('#dd26-exam-main .dd26-card > .dd26-section')?.insertAdjacentHTML('afterbegin', '<div class="dd26-actions"><button class="dd26-button" id="dd26-back-to-grading-queue" type="button">Back to grading list</button></div>');
+    document.getElementById('dd26-back-to-grading-queue')?.addEventListener('click', returnToGradingQueue);
+    updateGradingRoute(true);
     const saveGradeButton = document.getElementById('dd26-save-grade');
     const saveNextGradeButton = document.getElementById('dd26-save-next-grade');
     if (saveGradeButton) saveGradeButton.textContent = gradeStateValue === 'final' ? 'Save final grade' : 'Save draft';
@@ -7002,7 +7317,8 @@
     document.getElementById('dd26-next-ungraded')?.addEventListener('click', nextGrade);
     document.getElementById('dd26-unlock-attempt')?.addEventListener('click', unlockAttempt);
     document.getElementById('dd26-review-class-results')?.addEventListener('click', releaseResults);
-    document.getElementById('dd26-download-candidate-result')?.addEventListener('click', downloadCandidateResult);
+    document.getElementById('dd26-download-answer-sheet')?.addEventListener('click', () => downloadCandidateResult('questions_answers'));
+    document.getElementById('dd26-download-grade-report')?.addEventListener('click', () => downloadCandidateResult('grades_comments'));
     document.getElementById('dd26-leave-grading')?.addEventListener('click', leaveGradingWorkspace);
     const gradingHost = document.getElementById('dd26-exam-main');
     if (gradingHost) gradingHost.onkeydown = (event) => {
@@ -7041,7 +7357,7 @@
 
   async function saveGrade(advanceAfterSave = false) {
     const grading = state.exam.grading;
-    if (!grading) return;
+    if (!grading || state.exam.gradingSaveBusy) return;
     const candidate = grading.candidates[state.exam.gradingCandidate];
     const question = candidate.questions[state.exam.gradingQuestion];
     const scoreInput = document.getElementById('dd26-grade-score');
@@ -7070,7 +7386,11 @@
     const comment = value('dd26-grade-comment', false);
     const gradeState = value('dd26-grade-state');
     const changeReason = value('dd26-grade-reason');
+    state.exam.gradingSaveBusy = true;
     const saveButton = document.getElementById(advanceAfterSave ? 'dd26-save-next-grade' : 'dd26-save-grade');
+    const saveButtons = ['dd26-save-grade', 'dd26-save-next-grade']
+      .map((id) => document.getElementById(id)).filter(Boolean);
+    saveButtons.forEach((button) => { button.disabled = true; button.setAttribute('aria-busy', 'true'); });
     if (saveButton) {
       saveButton.disabled = true;
       saveButton.textContent = 'Saving…';
@@ -7090,15 +7410,19 @@
         renderGrading();
       }
     } catch (error) {
-      if (saveButton) {
-        saveButton.disabled = false;
-        saveButton.textContent = advanceAfterSave ? 'Save and Next' : 'Save';
-      }
       if (errorHost) {
         errorHost.textContent = error.message;
         errorHost.hidden = false;
       }
       global.toast?.(error.message, 'warn');
+    } finally {
+      state.exam.gradingSaveBusy = false;
+      saveButtons.forEach((button) => {
+        if (!button.isConnected) return;
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+        button.textContent = button.id === 'dd26-save-next-grade' ? 'Save and Next' : 'Save';
+      });
     }
   }
 
@@ -7558,10 +7882,10 @@
       const retry = released && delivery?.retryable === true
         ? `<button class="dd26-button compact" data-dd26-retry-result-email="${escapeHtml(candidate.attemptId)}" type="button">Retry grade email</button>`
         : '';
-      return `<tr><td><strong>${escapeHtml(candidate.studentName || candidate.candidateNumber || 'Student')}</strong><br><small>${escapeHtml(candidate.studentNumber || 'No student number')}</small></td><td>${escapeHtml(candidate.studentEmail || '')}</td><td>${escapeHtml(candidate.candidateNumber || '')}</td><td>${escapeHtml(candidate.status || '')}${candidate.late ? ' &middot; Late' : ''}</td><td>${candidateScoreDisclosure(candidate)}</td><td>${candidate.allGradesFinal ? 'Final' : 'Draft / incomplete'}</td><td>${released ? `<span class="dd26-delivery-status is-${escapeHtml(delivery?.deliveryStatus || candidate.deliveryStatus || 'pending')}">${escapeHtml(resultDeliveryLabel(delivery || candidate))}</span>${retry}` : 'Not sent'}</td></tr>`;
+      return `<tr><td><strong>${escapeHtml(candidate.studentName || candidate.candidateNumber || 'Student')}</strong><br><small>${escapeHtml(candidate.studentNumber || 'No student number')}</small></td><td>${escapeHtml(candidate.studentEmail || '')}</td><td>${escapeHtml(candidate.status || '')}</td><td>${candidateScoreDisclosure(candidate)}</td><td>${candidate.allGradesFinal ? 'Final' : 'Draft / incomplete'}</td><td>${released ? `<span class="dd26-delivery-status is-${escapeHtml(delivery?.deliveryStatus || candidate.deliveryStatus || 'pending')}">${escapeHtml(resultDeliveryLabel(delivery || candidate))}</span>${retry}` : 'Not sent'}</td></tr>`;
     }).join('');
     const deliveryMetrics = report.resultDelivery ? `<section class="dd26-section dd26-delivery-panel"><div class="dd26-question-meta"><div><div class="dd26-label">Student email delivery</div><h3>Provider-confirmed result delivery</h3></div><button class="dd26-button compact" id="dd26-refresh-delivery" type="button">Refresh delivery status</button></div><p>Email-provider acceptance is not shown as successful delivery. A student is marked Delivered only after the recipient mail server accepts the message.</p><div class="dd26-stat-grid"><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.delivered || 0)}</strong><span>Delivered</span></div><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.accepted || 0)}</strong><span>Awaiting confirmation</span></div><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.delayed || 0)}</strong><span>Delayed</span></div><div class="dd26-stat"><strong>${escapeHtml(deliverySummary.failed || 0)}</strong><span>Failed / bounced</span></div></div></section>` : '';
-    document.getElementById('dd26-exam-main').innerHTML = `<section class="dd26-card dd26-results-dashboard"><section class="dd26-section"><div class="dd26-label">Professor results dashboard</div><div class="dd26-question-meta"><h2>${escapeHtml(report.title || 'Class results')}</h2><span class="dd26-status">${report.released ? 'Released and sealed' : 'Professor working record'}</span></div><p>Authoritative class analysis for the owning Professor. Workbook downloads contain the exact examination questions and each selected student&rsquo;s final submitted answers for verification or offline grading.</p><div class="dd26-actions"><button class="dd26-button primary" id="dd26-dashboard-download" type="button">Choose students / download</button>${!report.released && analytics.submitted > 0 && analytics.ungraded === 0 ? '<button class="dd26-button" id="dd26-dashboard-send" type="button">Send final grades</button>' : ''}<button class="dd26-button" id="dd26-dashboard-refresh" type="button">Refresh dashboard</button><button class="dd26-button" id="dd26-dashboard-back" type="button">Return to Professor workspace</button></div><p class="dd26-help">Server-saved view refreshed ${escapeHtml(formatDate(report.generatedAt || new Date().toISOString()))}. Final totals open to show the question-by-question breakdown; incomplete grading is labeled as a recorded subtotal.</p></section><div class="dd26-stat-grid dd26-result-metrics"><div class="dd26-stat"><strong>${escapeHtml(analytics.submitted)}</strong><span>Submitted of ${escapeHtml(analytics.expected)} expected</span></div><div class="dd26-stat"><strong>${escapeHtml(participation.toFixed(1))}%</strong><span>Participation</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.average.toFixed(1))}%</strong><span>Class average</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.median.toFixed(1))}%</strong><span>Median score</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.finalized)}</strong><span>Fully graded</span></div><div class="dd26-stat"><strong>${escapeHtml(gradeRate.toFixed(1))}%</strong><span>Grading complete</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.absent)}</strong><span>Absent / no-show</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.late)}</strong><span>Late entry or submission</span></div></div>${deliveryMetrics}<section class="dd26-section"><div class="dd26-result-extremes"><div><span>Strongest item</span><strong>${analytics.highestQuestion ? `Question ${escapeHtml(analytics.highestQuestion.ordinal)} &middot; ${escapeHtml(analytics.highestQuestion.averagePercentage.toFixed(1))}%` : 'No finalized score data'}</strong></div><div><span>Lowest-performing item</span><strong>${analytics.lowestQuestion ? `Question ${escapeHtml(analytics.lowestQuestion.ordinal)} &middot; ${escapeHtml(analytics.lowestQuestion.averagePercentage.toFixed(1))}%` : 'No finalized score data'}</strong></div></div><h3>Question performance</h3>${questionRows ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Item</th><th>Professor question</th><th>Answered</th><th>Final</th><th>Average score</th><th>Performance</th></tr></thead><tbody>${questionRows}</tbody></table></div>` : '<div class="dd26-empty">No question-level grades are available.</div>'}</section><section class="dd26-section"><h3>Student results</h3>${candidateRows ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Student</th><th>Email</th><th>Candidate</th><th>Timing</th><th>Total score</th><th>Grade status</th>${report.released ? '<th>Email delivery</th>' : ''}</tr></thead><tbody>${candidateRows}</tbody></table></div>` : '<div class="dd26-empty">No submitted student examinations are available.</div>'}</section></section>`;
+    document.getElementById('dd26-exam-main').innerHTML = `<section class="dd26-card dd26-results-dashboard"><section class="dd26-section"><div class="dd26-label">Professor results dashboard</div><div class="dd26-question-meta"><h2>${escapeHtml(report.title || 'Class results')}</h2><span class="dd26-status">${report.released ? 'Released and sealed' : 'Professor working record'}</span></div><p>Authoritative class analysis for the owning Professor. Workbook downloads contain the exact examination questions and each selected student&rsquo;s final submitted answers for verification or offline grading.</p><div class="dd26-actions"><button class="dd26-button primary" id="dd26-dashboard-download" type="button">Choose students / download</button>${!report.released && analytics.submitted > 0 && analytics.ungraded === 0 ? '<button class="dd26-button" id="dd26-dashboard-send" type="button">Send final grades</button>' : ''}<button class="dd26-button" id="dd26-dashboard-refresh" type="button">Refresh dashboard</button><button class="dd26-button" id="dd26-dashboard-back" type="button">Return to Professor workspace</button></div><p class="dd26-help">Server-saved view refreshed ${escapeHtml(formatDate(report.generatedAt || new Date().toISOString()))}. Final totals open to show the question-by-question breakdown; incomplete grading is labeled as a recorded subtotal.</p></section><div class="dd26-stat-grid dd26-result-metrics"><div class="dd26-stat"><strong>${escapeHtml(analytics.submitted)}</strong><span>Submitted of ${escapeHtml(analytics.expected)} expected</span></div><div class="dd26-stat"><strong>${escapeHtml(participation.toFixed(1))}%</strong><span>Participation</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.average.toFixed(1))}%</strong><span>Class average</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.median.toFixed(1))}%</strong><span>Median score</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.finalized)}</strong><span>Fully graded</span></div><div class="dd26-stat"><strong>${escapeHtml(gradeRate.toFixed(1))}%</strong><span>Grading complete</span></div><div class="dd26-stat"><strong>${escapeHtml(analytics.absent)}</strong><span>Absent / no-show</span></div></div>${deliveryMetrics}<section class="dd26-section"><div class="dd26-result-extremes"><div><span>Strongest item</span><strong>${analytics.highestQuestion ? `Question ${escapeHtml(analytics.highestQuestion.ordinal)} &middot; ${escapeHtml(analytics.highestQuestion.averagePercentage.toFixed(1))}%` : 'No finalized score data'}</strong></div><div><span>Lowest-performing item</span><strong>${analytics.lowestQuestion ? `Question ${escapeHtml(analytics.lowestQuestion.ordinal)} &middot; ${escapeHtml(analytics.lowestQuestion.averagePercentage.toFixed(1))}%` : 'No finalized score data'}</strong></div></div><h3>Question performance</h3>${questionRows ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Item</th><th>Professor question</th><th>Answered</th><th>Final</th><th>Average score</th><th>Performance</th></tr></thead><tbody>${questionRows}</tbody></table></div>` : '<div class="dd26-empty">No question-level grades are available.</div>'}</section><section class="dd26-section"><h3>Student results</h3>${candidateRows ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Student</th><th>Email</th><th>Status</th><th>Total score</th><th>Grade status</th><th>Email delivery</th></tr></thead><tbody>${candidateRows}</tbody></table></div>` : '<div class="dd26-empty">No submitted student examinations are available.</div>'}</section></section>`;
     const dashboardActions = document.querySelector('.dd26-results-dashboard > .dd26-section .dd26-actions');
     if (!document.getElementById('dd26-dashboard-send') && !report.released && analytics.finalized > 0) {
       const send = document.createElement('button');
@@ -7578,9 +7902,6 @@
       lifecycle.innerHTML = '<button class="dd26-button" data-dd26-lifecycle="end_access" type="button">End student access</button><button class="dd26-button" data-dd26-lifecycle="complete" type="button">Mark exam complete</button><button class="dd26-button" data-dd26-lifecycle="archive" type="button">Archive exam</button>';
       dashboardActions?.after(lifecycle);
     }
-    const studentResultTable = [...document.querySelectorAll('.dd26-results-dashboard table')].at(-1);
-    const studentHeader = studentResultTable?.querySelector('thead tr');
-    if (studentHeader && studentHeader.children.length === 6) studentHeader.insertAdjacentHTML('beforeend', '<th>Email delivery</th>');
     document.getElementById('dd26-dashboard-download')?.addEventListener('click', () => openClassResultsDialog(report.examId));
     document.getElementById('dd26-dashboard-send')?.addEventListener('click', releaseResults);
     document.getElementById('dd26-dashboard-refresh')?.addEventListener('click', () => openResultsDashboard(report.examId));
@@ -7602,7 +7923,7 @@
     return safeSupplied || `due-diligence-${String(candidate || 'student').replace(/[^a-zA-Z0-9_-]/g, '-')}-${scope}.pdf`;
   }
 
-  async function downloadCandidateResult() {
+  async function downloadCandidateResult(scope = 'questions_answers') {
     const grading = state.exam.grading;
     const candidate = grading?.candidates?.[state.exam.gradingCandidate];
     if (!grading || !candidate) return;
@@ -7610,18 +7931,17 @@
       global.toast?.('Save the current grade before downloading this result.', 'warn');
       return;
     }
-    if (!currentCandidateGradesAreFinal()) {
+    if (scope === 'grades_comments' && !currentCandidateGradesAreFinal()) {
       global.toast?.('Finalize every grade for this student before downloading the result.', 'warn');
       return;
     }
-    const scope = document.querySelector('input[name="dd26-result-pdf-scope"]:checked')?.value || 'questions_answers';
-    if (!['questions_answers', 'answers_only', 'grades_comments'].includes(scope)) return;
+    if (!['questions_answers', 'grades_comments'].includes(scope)) return;
     const session = (global.DueDiligencePhase4 || global.DueDiligencePhase2)?.getSession?.();
     if (!session?.access_token) {
       requireAuthentication();
       return;
     }
-    const button = document.getElementById('dd26-download-candidate-result');
+    const button = document.getElementById(scope === 'grades_comments' ? 'dd26-download-grade-report' : 'dd26-download-answer-sheet');
     if (button) {
       button.disabled = true;
       button.textContent = 'Preparing PDF…';
@@ -7661,7 +7981,7 @@
     } finally {
       if (button) {
         button.disabled = false;
-        button.textContent = 'Download private PDF';
+        button.textContent = scope === 'grades_comments' ? 'Download final grade PDF' : 'Download student answer PDF';
       }
     }
   }
@@ -7712,8 +8032,10 @@
         dialogReturnFocus = null;
       });
     }
+    const nextReturnFocus = document.activeElement;
+    const preserveOriginalFocus = dialog.open && dialogReturnFocus?.isConnected;
     finishDialogLifecycle(dialog);
-    dialogReturnFocus = document.activeElement;
+    if (!preserveOriginalFocus) dialogReturnFocus = nextReturnFocus;
     dialog.dataset.persistent = options.persistent ? 'true' : 'false';
     dialog.dataset.sensitive = options.sensitive ? 'true' : 'false';
     dialogCleanup = typeof options.onClose === 'function' ? options.onClose : null;
@@ -7796,15 +8118,32 @@
   }, { capture: true });
 
   function routeFromHash() {
-    const raw = decodeURIComponent(location.hash.replace(/^#/, ''));
+    let raw = '';
+    try { raw = decodeURIComponent(location.hash.replace(/^#/, '')); }
+    catch { return null; }
     if (raw === 'bar-easy') return ['bar_easy'];
     if (raw === 'chairs-cases') return ['chair_case'];
     if (raw === 'doctrines') return ['doctrine'];
     if (raw === 'examination-room') return ['exam_room'];
     if (raw.startsWith('examination-room?')) {
       const parameters = new URLSearchParams(raw.slice('examination-room?'.length));
+      const allowed = new Set(['exam', 'submission', 'question', 'role']);
+      const keys = [...parameters.keys()];
+      if (keys.some((key) => !allowed.has(key)) || new Set(keys).size !== keys.length) return null;
       const examId = String(parameters.get('exam') || '').trim();
-      return ['exam_room', examId.slice(0, 120)];
+      const role = ['student', 'professor'].includes(parameters.get('role')) ? parameters.get('role') : '';
+      const submissionId = String(parameters.get('submission') || '').trim();
+      const questionOrdinal = Number(parameters.get('question') || 0);
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuid.test(examId) || (submissionId && !uuid.test(submissionId))
+          || (questionOrdinal && (!Number.isSafeInteger(questionOrdinal) || questionOrdinal < 1 || questionOrdinal > 200))
+          || (submissionId && role !== 'professor')
+          || (questionOrdinal && !submissionId)) return null;
+      return ['exam_room', examId, {
+        role,
+        submissionId,
+        questionOrdinal,
+      }];
     }
     if (raw === 'anchor-case-digests') return ['anchor_case'];
     if (raw.startsWith('anchor-case-digests/')) return ['anchor_case', raw.slice('anchor-case-digests/'.length)];
@@ -7813,7 +8152,9 @@
 
   function restoreRoute() {
     const route = routeFromHash();
-    if (route) open(route[0], document.getElementById(CONTENT_PATHS[route[0]].tab), { replace: true, detailId: route[1] || null });
+    if (route) open(route[0], document.getElementById(CONTENT_PATHS[route[0]].tab), {
+      replace: true, detailId: route[1] || null, ...(route[2] || {}),
+    });
   }
 
   global.DueDiligence2026 = Object.freeze({ open, exportVerdict, openVerdictExport, refreshExamPortal, restoreRoute });
@@ -7831,6 +8172,10 @@
     state.exam.section = 'entry';
     state.exam.intentRole = null;
     state.exam.entryExamId = '';
+    state.exam.routeRole = '';
+    state.exam.routeSubmissionId = '';
+    state.exam.routeQuestionOrdinal = 0;
+    state.exam.gradingDetailOpen = false;
     return open('exam_room', document.getElementById('spa-examination-room'));
   };
   global.addEventListener('popstate', restoreRoute);
@@ -7851,7 +8196,9 @@
       const routePageActive = document.getElementById('page-dd2026')?.classList.contains('active');
       if (route?.[0] === 'exam_room') {
         if (!shouldReopenSessionRoute(identityChanged, routePageActive)) return;
-        open('exam_room', document.getElementById(CONTENT_PATHS.exam_room.tab), { replace: true, detailId: route[1] || null })
+        open('exam_room', document.getElementById(CONTENT_PATHS.exam_room.tab), {
+          replace: true, detailId: route[1] || null, ...(route[2] || {}),
+        })
           .then((opened) => {
             if (opened !== true
                 || state.sessionUserId !== sessionUserId

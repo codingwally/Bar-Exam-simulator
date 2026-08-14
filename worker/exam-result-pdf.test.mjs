@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { PDFDocument } from 'pdf-lib';
 import { buildExamResultPdf, examResultPdfFileName } from './exam-result-pdf.mjs';
+import notoSansBase64 from './noto-sans-latin-ext.mjs';
 
 const base = Object.freeze({
   exportId: '123e4567-e89b-42d3-a456-426614174012',
@@ -12,6 +13,11 @@ const base = Object.freeze({
   generatedAt: '2026-08-10T05:00:00Z',
   questionCount: 1,
   totals: { score: 8, maximumPoints: 10 },
+});
+
+test('embedded Noto Sans asset is a renderable TrueType font rather than a webfont container', () => {
+  const header = Buffer.from(notoSansBase64, 'base64').subarray(0, 4);
+  assert.deepEqual([...header], [0x00, 0x01, 0x00, 0x00]);
 });
 
 test('all three candidate PDF packages render as bounded valid documents', async () => {

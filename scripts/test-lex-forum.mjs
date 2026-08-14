@@ -30,7 +30,7 @@ const migration = files['supabase/migrations/20260802_011_lex_forum_social_beta.
 const preflight = files['supabase/review/lex_forum_production_preflight.sql'];
 
 assert.match(page, />Quorum<\/button>/);
-assert.match(page, /aria-label="Open Quorum"/);
+assert.match(page, />Open Quorum menu<\/button>/);
 assert.match(
   page,
   /<h2>Quorum<\/h2>[\s\S]*The floor is yours—speak your mind, ask questions, share your law school journey, and learn together\./,

@@ -301,13 +301,15 @@ assert.match(frontend, /document\.getElementById\('dd26-student-access-code-requ
 assert.match(frontend, /studentAccessCodeRequired: true/);
 assert.match(frontend, /lateAdmissionValue = lateAdmissionWasChosen[\s\S]*: durationValue/,
   'a new examination must default student entry to the full exam duration');
-assert.match(frontend, /lateAdmissionUntouched[\s\S]*lateAdmissionField\.value = durationField\.value/,
-  'the default student-entry duration must follow the exam duration until the Professor edits it');
+assert.match(frontend, /lateAdmissionUntouched[\s\S]*scheduledWindowMinutes[\s\S]*lateAdmissionField\.value = String\(windowMinutes\)/,
+  'the default student-entry cutoff must follow the calculated schedule until the Professor edits it');
+assert.match(frontend, /durationField\.type = 'hidden'[\s\S]*Automatically calculated duration[\s\S]*Calculated from the opening and ending times in Philippine Time/,
+  'exam duration must be calculated from the Philippine-Time schedule rather than edited separately');
 assert.match(frontend, /Allow entry until the exam ends[\s\S]*Your current Professor setting is kept unless you change this choice/,
   'rescheduling must expose an explicit until-end choice without overwriting an earlier cutoff');
 assert.match(frontend, /entryCutoffReviewHtml\(opensAt, hardClosesAt, lateAdmissionMinutes\)/,
   'final publication review must prominently state the exact student-entry cutoff');
-assert.match(featureLoader, /duediligence-2026\.js\?v=master-experience-20260813-1/,
+assert.match(featureLoader, /duediligence-2026\.js\?v=exam-room-ux-20260814-1/,
   'the corrected student preflight must retain a release-scoped lazy cache key');
 assert.match(frontend, /None of them replaces student sign-in and the class-list check/);
 assert.match(frontend, /publicationAttempt\.studentKey = null/,
@@ -401,8 +403,10 @@ for (const field of ['Email Address', 'Student Number', 'Student Name']) {
   assert.match(rosterSurface, new RegExp(field));
 }
 assert.match(rosterSurface, /existing XLSX or CSV is accepted/);
-assert.match(rosterSurface, /dd26-roster-paste[\s\S]*Check pasted list[\s\S]*dd26-roster-add-row/,
-  'the Beadle can use file upload, paste, or manual entry');
+assert.match(rosterSurface, /dd26-roster-paste[\s\S]*checked automatically as you edit[\s\S]*dd26-roster-add-row/,
+  'the Beadle can use auto-checked file upload, paste, or manual entry');
+assert.doesNotMatch(rosterSurface, /Check selected file|Check pasted list/,
+  'the simplified class-list flow must not require separate validation buttons');
 const rosterPreviewStart = frontend.indexOf('if (beadleMode) {', frontend.indexOf('function rosterPreviewHtml'));
 const rosterPreviewEnd = frontend.indexOf('return `<div class=', rosterPreviewStart);
 const beadleRosterPreview = frontend.slice(rosterPreviewStart, rosterPreviewEnd);
@@ -415,14 +419,16 @@ const importRosterBlock = frontend.slice(
   frontend.indexOf('async function importRoster'),
   frontend.indexOf('function rerenderRosterSurface'),
 );
-assert.match(importRosterBlock, /operation: 'finalize_roster_access'[\s\S]*rows: preview\.rows[\s\S]*sourceKind:[\s\S]*sourceHash:[\s\S]*studentKey/,
+assert.match(importRosterBlock, /operation: 'finalize_roster_access'[\s\S]*rows: preview\.rows[\s\S]*sourceKind:[\s\S]*sourceHash,[\s\S]*studentKey: finalization\.studentKey[\s\S]*requestKey: finalization\.requestKey/,
   'one idempotent roster confirmation versions the list and activates student access');
+assert.match(importRosterBlock, /finalization = state\.exam\.rosterFinalization[\s\S]*finalization\.sourceHash !== sourceHash[\s\S]*state\.exam\.rosterFinalization = finalization/,
+  'a retry must reuse the same class-code and request keys for an unchanged validated list');
 const dirtyRosterBlock = frontend.slice(
   frontend.indexOf('function markRosterPreviewDirty'),
   frontend.indexOf('async function refreshExamPortal'),
 );
-assert.match(dirtyRosterBlock, /templateReceiptId = ''[\s\S]*templateVersion = ''[\s\S]*upload it again before saving/,
-  'editing the preview invalidates the official-template receipt');
+assert.match(dirtyRosterBlock, /templateReceiptId = ''[\s\S]*templateVersion = ''[\s\S]*rosterValidationGeneration \+= 1[\s\S]*revalidateRosterPreview/,
+  'editing the preview invalidates prior validation and automatically checks the new rows');
 assert.match(frontend, /const canEditRoster = !professorView && snapshot\.canEditRoster === true/,
   'Professor Step 4/5 review must not bind Beadle roster mutations');
 assert.match(frontend, /canReopenRoster = !professorView && snapshot\.canReopenRoster === true/);
@@ -594,8 +600,8 @@ assert.match(frontend, /activeWritingSession[\s\S]*renderExamRoom\(\)[\s\S]*retu
   'session refresh events must preserve an in-progress Examination Room attempt');
 assert.match(frontend, /attemptTimerKey[\s\S]*timerKey[\s\S]*updateAttemptClock\(\);[\s\S]*return;/,
   'rerendering an attempt must not restart its timer and heartbeat intervals');
-assert.match(frontend, /Save answer & review/,
-  'the last question must lead directly to a complete review instead of disabling Next');
+assert.match(frontend, /id="dd26-attempt-review"[^>]*>Review All Answers<[\s\S]*id="dd26-attempt-submit"[^>]*>Submit</,
+  'students must always have explicit review and submit controls, including on the last question');
 assert.match(reviewBlock, /Review every question and answer[\s\S]*data-dd26-review-edit/,
   'final review must show the actual questions and answers with edit controls');
 assert.match(frontend, /operation\.offlineSince/);
@@ -616,7 +622,9 @@ assert.match(frontend, /visibilitychange[\s\S]*persistCurrentGradingDraft\(\)/,
   'backgrounding the browser must preserve the current Professor grading draft');
 assert.match(frontend, /pagehide[\s\S]*persistCurrentGradingDraft\(\)/,
   'Alt-Tab or page exit must preserve the current Professor grading draft');
-assert.match(frontend, /\['ungraded', 'draft', 'graded', 'active', 'absent', 'late', 'accommodated', 'flagged', 'all'\]/);
+assert.match(frontend, /\['ungraded', 'draft', 'graded', 'active', 'absent', 'accommodated', 'flagged', 'all'\]/);
+assert.doesNotMatch(frontend, /const GRADING_FILTERS = \[[^\]]*'late'/,
+  'late-status classifications must not appear in Professor grading filters');
 assert.match(frontend, /class="dd26-grading-split"/);
 assert.match(frontend, /id="dd26-save-next-grade"/);
 assert.match(frontend, /event\.altKey[\s\S]*ArrowRight[\s\S]*ArrowLeft/,
@@ -822,10 +830,10 @@ assert.match(css, /\.dd26-reschedule-comparison>div\{grid-template-columns:1fr;g
   'the schedule comparison becomes a readable vertical list on small screens');
 
 assert.doesNotMatch(html, /<script[^>]+assets\/examination-room-2-store\.js/);
-assert.match(featureLoader, /assets\/examination-room-2-store\.js\?v=master-experience-20260813-1/);
+assert.match(featureLoader, /assets\/examination-room-2-store\.js\?v=exam-room-ux-20260814-1/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
-assert.match(featureLoader, /duediligence-2026\.css\?v=master-experience-20260813-1/);
-assert.match(featureLoader, /duediligence-2026\.js\?v=master-experience-20260813-1/);
+assert.match(featureLoader, /duediligence-2026\.css\?v=exam-room-ux-20260814-1/);
+assert.match(featureLoader, /duediligence-2026\.js\?v=exam-room-ux-20260814-1/);
 
 // Execute the pure disclosure gate: malformed, partial, and stale replacement
 // results must never unlock one-time secret rendering.
@@ -936,8 +944,10 @@ assert.ok(questionReviewValidation([
 
 const rescheduleValidationStart = frontend.indexOf('function publicationRescheduleValidation');
 const rescheduleValidationEnd = frontend.indexOf('function showPublicationRescheduleErrors', rescheduleValidationStart);
+const manilaDateTimeStart = frontend.indexOf('function manilaDateTime');
+const scheduleHelpersEnd = frontend.indexOf('function entryClosesAtForSchedule', manilaDateTimeStart);
 const publicationRescheduleValidation = Function(
-  `'use strict'; ${frontend.slice(rescheduleValidationStart, rescheduleValidationEnd)}; return publicationRescheduleValidation;`,
+  `'use strict'; ${frontend.slice(manilaDateTimeStart, scheduleHelpersEnd)}; ${frontend.slice(rescheduleValidationStart, rescheduleValidationEnd)}; return publicationRescheduleValidation;`,
 )();
 assert.equal(publicationRescheduleValidation({
   opensAt: '2035-08-10T12:00:00.000Z', hardClosesAt: '2035-08-10T14:00:00.000Z',
@@ -955,13 +965,13 @@ assert.ok(publicationRescheduleValidation({
   opensAt: '2035-08-10T10:20:00.000Z', hardClosesAt: '2035-08-10T10:10:00.000Z',
   durationMinutes: '0', lateAdmissionMinutes: '481', submissionGraceMinutes: '121',
   reason: 'short', nowMs: Date.parse('2035-08-10T10:00:00.000Z'),
-}).errors.length >= 5,
-'schedule changes still enforce end order, minute limits, and a recorded reason');
+}).errors.length >= 4,
+'schedule changes enforce end order, entry/grace limits, and a recorded reason while duration is calculated');
 
 const publishValidationStart = frontend.indexOf('function publishStepValidation');
 const publishValidationEnd = frontend.indexOf('function showPublishStepErrors', publishValidationStart);
 const publishStepValidation = Function(
-  `'use strict'; ${frontend.slice(publishValidationStart, publishValidationEnd)}; return publishStepValidation;`,
+  `'use strict'; ${frontend.slice(manilaDateTimeStart, scheduleHelpersEnd)}; ${frontend.slice(publishValidationStart, publishValidationEnd)}; return publishStepValidation;`,
 )();
 const validPublishStep = publishStepValidation({
   opensAt: '2035-08-10T12:00:00.000Z',

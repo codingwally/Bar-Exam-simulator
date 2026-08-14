@@ -20,7 +20,7 @@ assert.match(index, /data-pb-menu-trigger="academy"/);
 assert.match(index, /data-pb-menu-trigger="commons"/);
 assert.match(index, /data-pb-menu-trigger="barbound"/);
 assert.match(index, /assets\/private-workspace\.js\?v=master-experience-20260813-1/);
-assert.match(index, /assets\/feature-loader\.js\?v=master-experience-20260813-1/);
+assert.match(index, /assets\/feature-loader\.js\?v=exam-room-ux-20260814-1/);
 assert.doesNotMatch(index, /<script[^>]+src="assets\/(?:lex-forum|examinations|duediligence-2026)\.js/);
 assert.doesNotMatch(index, /<link[^>]+href="assets\/(?:lex-forum|examinations|duediligence-2026)\.css/);
 

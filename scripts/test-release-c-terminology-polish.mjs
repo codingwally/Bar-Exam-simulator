@@ -32,13 +32,16 @@ for (const label of [
 
 assert.match(
   publicLanding,
-  /Choose how you want to prepare\.[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room/,
+  /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/,
 );
+for (const chamberId of ['chamber-academy', 'chamber-commons', 'chamber-barbound', 'spa-examination-room']) {
+  assert.match(index, new RegExp(`id="${chamberId}"`));
+}
 assert.doesNotMatch(publicLanding, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
 assert.doesNotMatch(publicLanding, /Early Access Beta|Enter the Beta|Beta Access Active/i);
 assert.match(
   index,
-  /<a class="brand" href="\/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">/,
+  /<a class="brand pb-brand" href="\/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">/,
 );
 assert.match(index, /id="btn-signin"[^>]*>The Docket<\/button>[\s\S]*<\/nav>/);
 assert.match(index, /id="page-community" class="page"/);

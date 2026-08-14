@@ -102,8 +102,10 @@ assert.match(gradingBlock, /This grade has unsaved changes\. Leave without savin
 assert.match(renderBlock, /getElementById\('dd26-exam-role-home'\)[\s\S]*stopImmediatePropagation\(\)[\s\S]*clearGradingWorkspace\(\)/,
   'the Examination Room back button must not retain the grading key or silently discard changes');
 
-assert.match(renderBlock, /Download this student(?:â€™|’)s result/);
-assert.match(renderBlock, /Downloading does not send results or change the examination/);
+assert.match(renderBlock, /Download this student&(?:rsquo|#8217);s records/);
+assert.match(renderBlock, /Downloading either file does not send results or change the examination/);
+assert.match(renderBlock, /id="dd26-download-answer-sheet"[\s\S]*Download student answer PDF[\s\S]*id="dd26-download-grade-report"[\s\S]*Download final grade PDF/,
+  'Professor answer sheets and final grade reports must remain separate private exports');
 assert.match(renderBlock, /Class results and offline grading/);
 assert.match(renderBlock, /exact questions, submitted answers, roster details, timing, current scores, comments, and analysis/);
 assert.match(renderBlock, /id="dd26-review-class-results"/);
@@ -143,14 +145,18 @@ assert.match(classResultsBlock, /data-dd26-lifecycle="end_access"/);
 assert.match(classResultsBlock, /data-dd26-lifecycle="complete"/);
 assert.match(classResultsBlock, /data-dd26-lifecycle="archive"/);
 assert.match(classResultsBlock, /operation: 'update_exam_lifecycle'/);
-for (const metric of ['Participation', 'Class average', 'Median score', 'Absent / no-show', 'Late entry or submission', 'Strongest item', 'Lowest-performing item']) {
+for (const metric of ['Participation', 'Class average', 'Median score', 'Absent / no-show', 'Strongest item', 'Lowest-performing item']) {
   assert.match(classResultsBlock, new RegExp(metric));
 }
+assert.doesNotMatch(classResultsBlock, /Late entry or submission/,
+  'Professor-visible results must not classify students by timing');
 assert.doesNotMatch(classResultsBlock, /setInterval|setTimeout\([^)]*renderProfessorResultsDashboard/,
   'the results dashboard must not create a render loop');
 
-const scopes = [...renderBlock.matchAll(/name="dd26-result-pdf-scope" value="([a-z_]+)"/g)].map((match) => match[1]);
-assert.deepEqual(scopes, ['questions_answers', 'answers_only', 'grades_comments']);
+assert.match(renderBlock, /dd26-download-answer-sheet[^\n]*downloadCandidateResult\('questions_answers'\)/);
+assert.match(renderBlock, /dd26-download-grade-report[^\n]*downloadCandidateResult\('grades_comments'\)/);
+assert.doesNotMatch(renderBlock, /downloadCandidateResult\('answers_only'\)/,
+  'the simplified Professor workflow must expose only answer-sheet and final-grade PDFs');
 assert.match(downloadBlock, /fetch\(`\$\{config\.workerUrl\}\/exam-room\/results\/pdf`/);
 assert.match(downloadBlock, /credentials: 'same-origin'/);
 assert.match(downloadBlock, /Authorization: `Bearer \$\{session\.access_token\}`/);

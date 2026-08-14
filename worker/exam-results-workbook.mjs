@@ -1,5 +1,7 @@
 const encoder = new TextEncoder();
 const EXCEL_CELL_TEXT_LIMIT = 32_760;
+const MAX_WORKBOOK_TEXT_CHARACTERS = 8_000_000;
+const MAX_WORKBOOK_DETAIL_CELLS = 50_000;
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -175,13 +177,6 @@ function optionalNumber(value) {
 
 function percentage(score, maximum) {
   return maximum > 0 ? (score / maximum) : 0;
-}
-
-function timingLabel(entry) {
-  const status = String(entry?.displayStatus || entry?.status || '').toLowerCase();
-  if (entry?.absent === true || status === 'absent' || status === 'no_show') return 'Absent / no-show';
-  if (!entry?.startedAt) return 'Not started';
-  return entry?.late === true ? 'Late' : 'On time';
 }
 
 function classResultRows(dataset, candidates) {
@@ -376,7 +371,6 @@ function worksheetXml({ rows, widths, merges = [], freezeRows = 0, autoFilter = 
 function summarySheet(dataset, candidates, report) {
   const statuses = Array.isArray(dataset?.classStatuses) ? dataset.classStatuses : [];
   const absent = statuses.filter((entry) => entry.absent === true).length;
-  const late = statuses.filter((entry) => entry.late === true).length;
   const submitted = number(dataset?.submittedCount);
   const unanswered = candidates.reduce((sum, candidate) => sum + number(candidate.unansweredCount), 0);
   const incidents = candidates.reduce((sum, candidate) => sum + number(candidate.incidentCount), 0);
@@ -391,9 +385,8 @@ function summarySheet(dataset, candidates, report) {
     rowXml(9, [{ value: 'Fully graded detailed records', style: 9 }, { value: report.gradedCount, style: 6 }, { value: 'Selected students with every question finalized', style: 4 }]),
     rowXml(10, [{ value: 'Final average of detailed records', style: 9 }, { value: report.averagePercentage === null ? '' : report.averagePercentage / 100, style: 7 }, { value: report.gradedCount ? 'Based on fully finalized selected grades only' : 'No fully finalized grade set yet', style: 4 }]),
     rowXml(11, [{ value: 'Absent / no-show', style: 9 }, { value: absent, style: 6 }, { value: 'Class-wide roster status', style: 4 }]),
-    rowXml(12, [{ value: 'Late', style: 9 }, { value: late, style: 6 }, { value: 'Class-wide late entry or submission status', style: 4 }]),
-    rowXml(13, [{ value: 'Unanswered items', style: 9 }, { value: unanswered, style: 6 }, { value: 'Blank answers across detailed submitted records', style: 4 }]),
-    rowXml(14, [{ value: 'Recorded incidents', style: 9 }, { value: incidents, style: 6 }, { value: 'Integrity events across detailed submitted records', style: 4 }]),
+    rowXml(12, [{ value: 'Unanswered items', style: 9 }, { value: unanswered, style: 6 }, { value: 'Blank answers across detailed submitted records', style: 4 }]),
+    rowXml(13, [{ value: 'Recorded incidents', style: 9 }, { value: incidents, style: 6 }, { value: 'Integrity events across detailed submitted records', style: 4 }]),
     rowXml(16, [{ value: 'Strongest question', style: 3 }, { value: report.highestQuestion ? `Question ${report.highestQuestion.ordinal}` : '—', style: 8 }, { value: report.highestQuestion ? `${(report.highestQuestion.averagePercentage * 100).toFixed(1)}% average` : 'No scores available', style: 4 }]),
     rowXml(17, [{ value: 'Lowest-performing question', style: 3 }, { value: report.lowestQuestion ? `Question ${report.lowestQuestion.ordinal}` : '—', style: 8 }, { value: report.lowestQuestion ? `${(report.lowestQuestion.averagePercentage * 100).toFixed(1)}% average` : 'No scores available', style: 4 }]),
     rowXml(19, [{ value: 'EXAMINATION SCHEDULE', style: 3 }]),
@@ -412,7 +405,7 @@ function classResultsSheet(dataset, candidates) {
     ...normalizedExamQuestions(dataset).map((question) => Number(question.ordinal)),
     ...classRows.flatMap((candidate) => candidate.questions.map((question) => Number(question.ordinal))),
   ])].filter((ordinal) => Number.isInteger(ordinal) && ordinal > 0).sort((a, b) => a - b);
-  const headers = ['Student Name', 'Email', 'Student Number', 'Candidate Number', 'Status', 'Started At', 'Deadline', 'Submitted At', 'Timing', 'Recorded Score', 'Final Maximum', 'Final Percentage', 'Grade Status', 'Unanswered', 'Incidents', ...ordinals.flatMap((ordinal) => [`Q${ordinal} Score`, `Q${ordinal} Max`, `Q${ordinal} Comment`])];
+  const headers = ['Overall Final Grade', 'Raw Score', 'Student Name', 'Email', 'Student Number', 'Status', 'Started At', 'Deadline', 'Submitted At', 'Final Maximum', 'Grade Status', 'Unanswered', 'Incidents', ...ordinals.flatMap((ordinal) => [`Q${ordinal} Score`, `Q${ordinal} Max`, `Q${ordinal} Comment`])];
   const rows = [
     rowXml(1, [{ value: 'CLASS RESULTS', style: 1 }], { height: 32 }),
     rowXml(2, [{ value: `${dataset.title || 'Examination'} · complete class-list overview with ${candidates.length} detailed submitted record${candidates.length === 1 ? '' : 's'}`, style: 2 }]),
@@ -427,16 +420,15 @@ function classResultsSheet(dataset, candidates) {
         ? 'Detailed record not selected' : 'No grade recorded')
       : (candidate.allGradesFinal ? 'Final'
         : (hasRecordedScore ? `Recorded subtotal (${totals.gradedCount} of ${totals.questionCount} graded)` : 'No grade recorded'));
-    const scoreColumns = ordinals.map((_, ordinalIndex) => columnName(16 + (ordinalIndex * 3)));
-    const maxColumns = ordinals.map((_, ordinalIndex) => columnName(17 + (ordinalIndex * 3)));
+    const scoreColumns = ordinals.map((_, ordinalIndex) => columnName(14 + (ordinalIndex * 3)));
+    const maxColumns = ordinals.map((_, ordinalIndex) => columnName(15 + (ordinalIndex * 3)));
     const values = [
-      candidate.studentName || candidate.candidateNumber || 'Student', candidate.studentEmail || '',
-      candidate.studentNumber || '', candidate.candidateNumber || '', candidate.displayStatus || candidate.status || '',
-      dateText(candidate.startedAt), dateText(candidate.serverDeadline), dateText(candidate.submittedAt),
-      timingLabel(candidate),
+      totals.complete ? { value: totals.percentage, style: 7, formula: `IFERROR(B${rowNumber}/J${rowNumber},0)` } : '',
       hasRecordedScore ? { value: totals.totalScore, style: 6, formula: scoreColumns.length ? scoreColumns.map((column) => `${column}${rowNumber}`).join('+') : null } : '',
+      candidate.studentName || candidate.candidateNumber || 'Student', candidate.studentEmail || '',
+      candidate.studentNumber || '', candidate.displayStatus || candidate.status || '',
+      dateText(candidate.startedAt), dateText(candidate.serverDeadline), dateText(candidate.submittedAt),
       { value: totals.totalMaximum, style: 6, formula: maxColumns.length ? maxColumns.map((column) => `${column}${rowNumber}`).join('+') : null },
-      totals.complete ? { value: totals.percentage, style: 7, formula: `IFERROR(J${rowNumber}/K${rowNumber},0)` } : '',
       detailStatus, optionalNumber(candidate.unansweredCount) ?? '', optionalNumber(candidate.incidentCount) ?? '',
       ...ordinals.flatMap((ordinal) => {
         const question = candidate.questions.find((entry) => Number(entry.ordinal) === ordinal) || {};
@@ -449,7 +441,7 @@ function classResultsSheet(dataset, candidates) {
   });
   return worksheetXml({
     rows,
-    widths: [24, 30, 18, 18, 18, 22, 22, 22, 14, 14, 14, 14, 18, 12, 12, ...ordinals.flatMap(() => [12, 12, 36])],
+    widths: [20, 14, 24, 30, 18, 18, 22, 22, 22, 14, 20, 12, 12, ...ordinals.flatMap(() => [12, 12, 36])],
     merges: [`A1:${columnName(headers.length)}1`, `A2:${columnName(headers.length)}2`],
     freezeRows: 4,
     autoFilter: `A4:${columnName(headers.length)}${Math.max(4, classRows.length + 4)}`,
@@ -458,7 +450,7 @@ function classResultsSheet(dataset, candidates) {
 }
 
 function offlineGradingSheet(dataset, candidates) {
-  const headers = ['Student Name', 'Email', 'Student Number', 'Candidate Number', 'Question', 'Exact Professor Question (Part 1)', 'Exact Professor Question (Part 2)', 'Submitted Student Answer (Part 1)', 'Submitted Student Answer (Part 2)', 'Maximum Points', 'Server Score', 'Grade State', 'Professor Comment', 'Offline Score Entry', 'Offline Comment / Verification Notes'];
+  const headers = ['Student Name', 'Email', 'Student Number', 'Question', 'Exact Professor Question (Part 1)', 'Exact Professor Question (Part 2)', 'Submitted Student Answer (Part 1)', 'Submitted Student Answer (Part 2)', 'Maximum Points', 'Server Score', 'Grade State', 'Professor Comment', 'Offline Score Entry', 'Offline Comment / Verification Notes'];
   const rows = [
     rowXml(1, [{ value: 'OFFLINE GRADING WORKSHEET', style: 1 }], { height: 32 }),
     rowXml(2, [{ value: `${dataset.title || 'Examination'} · Gold cells are for offline Professor work and are not automatically uploaded.`, style: 2 }]),
@@ -471,13 +463,13 @@ function offlineGradingSheet(dataset, candidates) {
       const answerParts = splitCellText(question.answer);
       const values = [
         candidate.studentName || candidate.candidateNumber || 'Student', candidate.studentEmail || '',
-        candidate.studentNumber || '', candidate.candidateNumber || '', `Question ${question.ordinal}`,
+        candidate.studentNumber || '', `Question ${question.ordinal}`,
         ...promptParts, ...answerParts, number(question.maximumPoints),
         optionalNumber(question.score) ?? '', question.gradeState || 'ungraded', question.comment || '', '', '',
       ];
       rows.push(rowXml(rowNumber, values.map((value, index) => ({
         value,
-        style: index >= 13 ? 10 : (index === 9 || index === 10 ? 6 : ((rowNumber % 2) ? 4 : 5)),
+        style: index >= 12 ? 10 : (index === 8 || index === 9 ? 6 : ((rowNumber % 2) ? 4 : 5)),
       })), { height: 84 }));
       rowNumber += 1;
     }
@@ -486,21 +478,21 @@ function offlineGradingSheet(dataset, candidates) {
     for (const question of normalizedExamQuestions(dataset)) {
       const promptParts = splitCellText(question.prompt);
       const values = [
-        '', '', '', '', `Question ${question.ordinal}`, ...promptParts, '', '',
+        '', '', '', `Question ${question.ordinal}`, ...promptParts, '', '',
         number(question.maximumPoints), '', 'Not submitted', '', '', '',
       ];
       rows.push(rowXml(rowNumber, values.map((value, index) => ({
         value,
-        style: index >= 13 ? 10 : (index === 9 || index === 10 ? 6 : ((rowNumber % 2) ? 4 : 5)),
+        style: index >= 12 ? 10 : (index === 8 || index === 9 ? 6 : ((rowNumber % 2) ? 4 : 5)),
       })), { height: 84 }));
       rowNumber += 1;
     }
   }
   return worksheetXml({
     rows,
-    widths: [24, 30, 18, 18, 12, 62, 62, 68, 68, 14, 14, 16, 42, 18, 46],
-    merges: ['A1:O1', 'A2:O2'], freezeRows: 4,
-    autoFilter: `A4:O${Math.max(4, rowNumber - 1)}`, landscape: true,
+    widths: [24, 30, 18, 18, 62, 62, 68, 68, 14, 14, 16, 42, 18, 46],
+    merges: ['A1:N1', 'A2:N2'], freezeRows: 4,
+    autoFilter: `A4:N${Math.max(4, rowNumber - 1)}`, landscape: true,
   });
 }
 
@@ -512,10 +504,9 @@ function studentDetailSheet(dataset, candidate) {
     rowXml(4, ['Student', candidate.studentName || candidate.candidateNumber || 'Student'].map((value, index) => ({ value, style: index ? 4 : 9 }))),
     rowXml(5, ['Email', candidate.studentEmail || ''].map((value, index) => ({ value, style: index ? 4 : 9 }))),
     rowXml(6, ['Student number', candidate.studentNumber || ''].map((value, index) => ({ value, style: index ? 4 : 9 }))),
-    rowXml(7, ['Candidate number', candidate.candidateNumber || ''].map((value, index) => ({ value, style: index ? 4 : 9 }))),
-    rowXml(8, [totals.complete ? 'Overall score' : 'Recorded subtotal (not final)', totals.totalScore, 'Final maximum', totals.totalMaximum, 'Final percentage', totals.complete ? totals.percentage : 'Not final']
+    rowXml(7, [totals.complete ? 'Overall score' : 'Recorded subtotal (not final)', totals.totalScore, 'Final maximum', totals.totalMaximum, 'Final percentage', totals.complete ? totals.percentage : 'Not final']
       .map((value, index) => ({ value, style: index % 2 ? (index === 5 && totals.complete ? 7 : 6) : 9 }))),
-    rowXml(9, ['Grading status', totals.complete ? 'Final' : `${totals.gradedCount} of ${totals.questionCount} questions graded`]
+    rowXml(8, ['Grading status', totals.complete ? 'Final' : `${totals.gradedCount} of ${totals.questionCount} questions graded`]
       .map((value, index) => ({ value, style: index ? 4 : 9 }))),
     rowXml(10, ['Question', 'Exact Professor Question (Part 1)', 'Exact Professor Question (Part 2)', 'Submitted Student Answer (Part 1)', 'Submitted Student Answer (Part 2)', 'Score', 'Maximum', 'Grade State', 'Professor Comment', 'Offline Score Entry', 'Offline Comment / Verification Notes']
       .map((value) => ({ value, style: 3 })), { height: 42 }),
@@ -568,24 +559,23 @@ function questionAnalyticsSheet(dataset, report, candidateCount) {
 
 function attendanceSheet(dataset) {
   const statuses = Array.isArray(dataset?.classStatuses) ? dataset.classStatuses : [];
-  const headers = ['Student Name', 'Email', 'Student Number', 'Candidate Number', 'Class Status', 'Started At', 'Deadline', 'Submitted At', 'Late Entry', 'Late Submission', 'Timing'];
+  const headers = ['Student Name', 'Email', 'Student Number', 'Class Status', 'Started At', 'Deadline', 'Submitted At'];
   const rows = [
-    rowXml(1, [{ value: 'ATTENDANCE & TIMING', style: 1 }], { height: 32 }),
+    rowXml(1, [{ value: 'ATTENDANCE', style: 1 }], { height: 32 }),
     rowXml(2, [{ value: `${dataset.title || 'Examination'} · server-recorded class participation`, style: 2 }]),
     rowXml(4, headers.map((value) => ({ value, style: 3 })), { height: 36 }),
   ];
   statuses.forEach((entry, index) => {
     rows.push(rowXml(index + 5, [
       entry.studentName || entry.candidateNumber || 'Student', entry.studentEmail || '', entry.studentNumber || '',
-      entry.candidateNumber || '', entry.displayStatus || entry.status || '', dateText(entry.startedAt),
-      dateText(entry.serverDeadline), dateText(entry.submittedAt), entry.lateEntry === true ? 'Yes' : 'No',
-      entry.lateSubmission === true ? 'Yes' : 'No', timingLabel(entry),
+      entry.displayStatus || entry.status || '', dateText(entry.startedAt),
+      dateText(entry.serverDeadline), dateText(entry.submittedAt),
     ].map((value) => ({ value, style: index % 2 ? 5 : 4 })), { height: 30 }));
   });
   return worksheetXml({
-    rows, widths: [24, 30, 18, 18, 22, 22, 22, 22, 13, 16, 14],
-    merges: ['A1:K1', 'A2:K2'], freezeRows: 4,
-    autoFilter: `A4:K${Math.max(4, statuses.length + 4)}`, landscape: true,
+    rows, widths: [24, 30, 18, 22, 22, 22, 22],
+    merges: ['A1:G1', 'A2:G2'], freezeRows: 4,
+    autoFilter: `A4:G${Math.max(4, statuses.length + 4)}`, landscape: true,
   });
 }
 
@@ -613,7 +603,7 @@ function workbookEntries(dataset, sheets) {
 }
 
 function uniqueStudentSheetNames(candidates) {
-  const used = new Set(['summary', 'class results', 'offline grading', 'question analytics', 'attendance & timing']);
+  const used = new Set(['summary', 'class results', 'offline grading', 'question analytics', 'attendance']);
   return candidates.map((candidate, index) => {
     const identity = String(candidate.studentName || candidate.candidateNumber || `Student ${index + 1}`)
       .replace(/[\\/\?*\[\]:']/g, ' ')
@@ -633,6 +623,34 @@ function uniqueStudentSheetNames(candidates) {
   });
 }
 
+function assertWorkbookResourceBounds(dataset, candidates) {
+  const detailCells = candidates.reduce((total, candidate) => (
+    total + 16 + ((Array.isArray(candidate.questions) ? candidate.questions.length : 0) * 12)
+  ), 0);
+  if (detailCells > MAX_WORKBOOK_DETAIL_CELLS
+      || candidates.some((candidate) => (candidate.questions || []).length > 200)) {
+    throw new Error('EXAM_ROOM_CLASS_WORKBOOK_TOO_LARGE');
+  }
+  const stack = [dataset];
+  const visited = new Set();
+  let characters = 0;
+  let nodes = 0;
+  while (stack.length) {
+    const value = stack.pop();
+    nodes += 1;
+    if (nodes > 250_000) throw new Error('EXAM_ROOM_CLASS_WORKBOOK_TOO_LARGE');
+    if (typeof value === 'string') {
+      characters += Array.from(value).length;
+      if (characters > MAX_WORKBOOK_TEXT_CHARACTERS) throw new Error('EXAM_ROOM_CLASS_WORKBOOK_TOO_LARGE');
+      continue;
+    }
+    if (!value || typeof value !== 'object' || visited.has(value)) continue;
+    visited.add(value);
+    if (Array.isArray(value)) stack.push(...value);
+    else stack.push(...Object.values(value));
+  }
+}
+
 export function buildExamClassResultsWorkbook(input) {
   const dataset = input?.dataset && typeof input.dataset === 'object' ? input.dataset : input;
   const candidates = normalizedCandidates(dataset);
@@ -644,6 +662,7 @@ export function buildExamClassResultsWorkbook(input) {
   if (candidates.some((candidate) => !candidate.attemptId || !candidate.studentEmail)) {
     throw new Error('EXAM_ROOM_CLASS_WORKBOOK_INVALID');
   }
+  assertWorkbookResourceBounds(dataset, candidates);
   const report = analytics(candidates, dataset);
   const studentSheetNames = uniqueStudentSheetNames(candidates);
   const sheets = [
@@ -651,7 +670,7 @@ export function buildExamClassResultsWorkbook(input) {
     { name: 'Class Results', data: classResultsSheet(dataset, candidates) },
     { name: 'Offline Grading', data: offlineGradingSheet(dataset, candidates) },
     { name: 'Question Analytics', data: questionAnalyticsSheet(dataset, report, candidates.length) },
-    { name: 'Attendance & Timing', data: attendanceSheet(dataset) },
+    { name: 'Attendance', data: attendanceSheet(dataset) },
     ...candidates.map((candidate, index) => ({
       name: studentSheetNames[index], data: studentDetailSheet(dataset, candidate),
     })),

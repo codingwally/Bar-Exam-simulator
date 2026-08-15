@@ -44,6 +44,7 @@
     'subject-matter': 'examinations',
     'bar-feels': 'examinations',
     'bar-easy': 'content',
+    verdict: 'content',
     'chair-cases': 'content',
     doctrines: 'content',
     'anchor-cases': 'content',

@@ -3781,6 +3781,20 @@ function renderVerdictDashboard() {
   bindVerdictDashboard();
 }
 
+async function withVerdictExportApi(callback) {
+  try {
+    await window.DueDiligenceFeatureLoader?.loadForFeature?.('verdict');
+    const api = window.DueDiligence2026;
+    if (typeof api?.openVerdictExport !== 'function' || typeof api?.exportVerdict !== 'function') {
+      throw new Error('The Verdict export could not be loaded. Please refresh and try again.');
+    }
+    return await callback(api);
+  } catch (error) {
+    toast(error?.message || 'The Verdict export could not be loaded. Please try again.', 'warn');
+    return false;
+  }
+}
+
 function bindVerdictDashboard() {
   const bindings = [
     ['verdict-query', 'query'], ['verdict-subject', 'subject'], ['verdict-feature', 'feature'],
@@ -3796,8 +3810,8 @@ function bindVerdictDashboard() {
     control.checked ? verdictDashboard.selected.add(control.dataset.verdictSelect) : verdictDashboard.selected.delete(control.dataset.verdictSelect);
     renderVerdictDashboard();
   }));
-  document.querySelectorAll('[data-verdict-export-one]').forEach((control) => control.addEventListener('click', () => {
-    window.DueDiligence2026?.openVerdictExport(control.dataset.verdictExportOne);
+  document.querySelectorAll('[data-verdict-export-one]').forEach((control) => control.addEventListener('click', async () => {
+    await withVerdictExportApi((api) => api.openVerdictExport(control.dataset.verdictExportOne));
   }));
   document.getElementById('verdict-select-visible')?.addEventListener('click', () => {
     const rows = filteredVerdictRecords();
@@ -3810,7 +3824,7 @@ function bindVerdictDashboard() {
   });
   document.getElementById('verdict-export-selected')?.addEventListener('click', async () => {
     const records = filteredVerdictRecords().filter((record) => verdictDashboard.selected.has(`${record.sourceType}:${record.id}`) && !record.localOnly);
-    if (records.length) await window.DueDiligence2026?.exportVerdict(records.map((record) => record.id));
+    if (records.length) await withVerdictExportApi((api) => api.exportVerdict(records.map((record) => record.id)));
   });
   document.getElementById('verdict-toggle-deleted')?.addEventListener('click', () => {
     verdictDashboard.showDeleted = !verdictDashboard.showDeleted;
@@ -4201,8 +4215,8 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase4-experience.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=exam-room-ux-20260814-1&amp;release=high-value-review-20260815-1"></script>
-<script src="assets/private-beta-landing.js?v=exam-room-ux-20260814-2&amp;release=verdict-p1-20260815-1"></script>
+<script src="assets/feature-loader.js?v=exam-room-ux-20260814-1&amp;release=verdict-export-p1-20260815-1"></script>
+<script src="assets/private-beta-landing.js?v=exam-room-ux-20260814-2&amp;release=verdict-export-p1-20260815-1"></script>
 
 </body>
 </html>

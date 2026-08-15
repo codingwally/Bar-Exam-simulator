@@ -204,7 +204,7 @@
       }
       return;
     }
-    if (route === 'subject-matter' || route === 'bar-feels') await loadFeature(route);
+    if (route === 'subject-matter' || route === 'bar-feels' || route === 'verdict') await loadFeature(route);
     if (!isCurrent()) return;
     if (route === 'subject-matter') {
       if (typeof global.DueDiligenceExaminations?.restoreRoute !== 'function') {

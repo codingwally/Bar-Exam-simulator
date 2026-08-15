@@ -3515,6 +3515,11 @@ function returnFromModal(id) {
     settleDecision(false);
     return;
   }
+  if (id === 'analytics-modal' && location.hash === '#verdict') {
+    closeModal(id, { restoreFocus: false });
+    window.DueDiligencePublicHome?.show?.({ history: true, focus: false });
+    return;
+  }
   if (id === 'terms-modal' || id === 'signin-prompt-modal') {
     closeModal(id, { restoreFocus: false });
     showWelcome({ preserveSession: true });

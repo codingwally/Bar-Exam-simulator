@@ -105,6 +105,8 @@ assert.doesNotMatch(script, /feature === 'verdict'[\s\S]{0,240}tab-history/,
   'The Verdict button must not fall back to the legacy Mock Bar history tab.');
 assert.match(html, /window\.openVerdictDashboard = openAnalytics;/,
   'The existing private Verdict dashboard must expose a narrow navigation entrypoint.');
+assert.match(html, /id === 'analytics-modal' && location\.hash === '#verdict'[\s\S]*DueDiligencePublicHome\?\.show/,
+  'Closing the routed Verdict dashboard must return to the public homepage instead of a blank application shell.');
 assert.match(script, /addEventListener\('popstate'[\s\S]*!applicationRouteRequested\(\)[\s\S]*showLanding/,
   'Browser Back must restore the public homepage for root and public chamber anchors.');
 assert.match(script, /IntersectionObserver/);

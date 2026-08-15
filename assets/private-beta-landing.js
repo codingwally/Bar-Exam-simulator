@@ -188,7 +188,7 @@
   async function activateApplicationRoute(hash) {
     const route = requestedApplicationRoute(hash);
     if (state.lastActivatedHash === route && route !== 'examination-room') return;
-    if (!['mock', 'mock-bar', 'subject-matter', 'bar-feels', 'examination-room'].includes(route)) return;
+    if (!['mock', 'mock-bar', 'subject-matter', 'bar-feels', 'verdict', 'examination-room'].includes(route)) return;
     const activationVersion = ++state.routeActivationVersion;
     const ownerUserId = String(currentSession()?.user?.id || '').trim();
     const isCurrent = () => activationVersion === state.routeActivationVersion
@@ -221,6 +221,14 @@
       const outcome = await global.openPremiumBarFeels?.({ restoreActive: true, isCurrent });
       if (!isCurrent()) return;
       if (outcome?.status !== 'retryable_error') state.lastActivatedHash = route;
+      return;
+    }
+    if (route === 'verdict') {
+      if (typeof global.openVerdictDashboard !== 'function') {
+        throw new Error('The Verdict could not be opened. Please refresh and try again.');
+      }
+      state.lastActivatedHash = route;
+      global.openVerdictDashboard();
       return;
     }
     global.showPage?.('mock', document.getElementById('spa-mock'), { history: false });
@@ -630,7 +638,7 @@
     const routes = {
       mock: '#mock-bar',
       'subject-matter': '#subject-matter',
-      verdict: '#mock-bar',
+      verdict: '#verdict',
       'bar-easy': '#bar-easy',
       quorum: '#quorum',
       retainer: '#pricing',
@@ -663,9 +671,14 @@
       } else if (feature === 'subject-matter') {
         global.DueDiligenceExaminations?.openPerSubject?.();
       } else if (feature === 'verdict') {
-        state.lastActivatedHash = 'mock-bar';
-        global.showPage?.('mock', document.getElementById('spa-mock'));
-        document.getElementById('tab-history')?.click?.();
+        const url = new URL(location.href);
+        url.hash = routes.verdict;
+        const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+        if (`${location.pathname}${location.search}${location.hash}` !== nextUrl) {
+          history.pushState({ ...(history.state || {}), dueDiligenceRoute: 'verdict' }, '', nextUrl);
+        }
+        state.lastActivatedHash = 'verdict';
+        global.openVerdictDashboard?.();
       } else if (feature === 'bar-easy') {
         global.openBarEasy?.();
       } else if (feature === 'quorum') {

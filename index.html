@@ -3854,6 +3854,7 @@ function openAnalytics() {
   openModal('analytics-modal');
   loadVerdictDashboard();
 }
+window.openVerdictDashboard = openAnalytics;
 
 function fmtSecs(s) { s = Number(s) || 0; const m = Math.floor(s / 60), r = s % 60; return `${m}:${String(r).padStart(2, '0')}`; }
 /* ---------- Content pages (curated placeholders — verify before citing) ---------- */
@@ -4196,7 +4197,7 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
 <script src="assets/feature-loader.js?v=exam-room-ux-20260814-1&amp;release=high-value-review-20260815-1"></script>
-<script src="assets/private-beta-landing.js?v=exam-room-ux-20260814-2&amp;release=subject-review-split-20260815-1"></script>
+<script src="assets/private-beta-landing.js?v=exam-room-ux-20260814-2&amp;release=verdict-p1-20260815-1"></script>
 
 </body>
 </html>

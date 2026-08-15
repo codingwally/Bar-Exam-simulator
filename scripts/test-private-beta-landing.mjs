@@ -83,10 +83,12 @@ assert.match(
 );
 assert.match(script, /global\.DueDiligencePublicHome = Object\.freeze/);
 assert.match(script, /mock: '#mock-bar'/, 'Mock Bar sign-in returns must use the canonical route.');
+assert.match(script, /verdict: '#verdict'/,
+  'The Verdict sign-in return must use its own canonical route instead of opening Mock Bar.');
 assert.match(
   script,
-  /\['mock', 'mock-bar', 'subject-matter', 'bar-feels', 'examination-room'\]/,
-  'Application restoration must recognize both examination tracks and Examination Room routes.',
+  /\['mock', 'mock-bar', 'subject-matter', 'bar-feels', 'verdict', 'examination-room'\]/,
+  'Application restoration must recognize both examination tracks, The Verdict, and Examination Room routes.',
 );
 assert.match(
   script,
@@ -95,6 +97,14 @@ assert.match(
 );
 assert.match(script, /routeActivationVersion[\s\S]*const isCurrent = \(\) =>/,
   'Asynchronous route restoration must reject stale hash or identity responses.');
+assert.match(script, /route === 'verdict'[\s\S]*global\.openVerdictDashboard\(\)/,
+  'Direct Verdict routes must restore the existing private Verdict dashboard.');
+assert.match(script, /feature === 'verdict'[\s\S]*dueDiligenceRoute: 'verdict'[\s\S]*global\.openVerdictDashboard\?\.\(\)/,
+  'The Verdict button must open the private dashboard directly without launching Mock Bar.');
+assert.doesNotMatch(script, /feature === 'verdict'[\s\S]{0,240}tab-history/,
+  'The Verdict button must not fall back to the legacy Mock Bar history tab.');
+assert.match(html, /window\.openVerdictDashboard = openAnalytics;/,
+  'The existing private Verdict dashboard must expose a narrow navigation entrypoint.');
 assert.match(script, /addEventListener\('popstate'[\s\S]*!applicationRouteRequested\(\)[\s\S]*showLanding/,
   'Browser Back must restore the public homepage for root and public chamber anchors.');
 assert.match(script, /IntersectionObserver/);
@@ -106,6 +116,8 @@ assert.match(script, /privateBetaApi\(\)\?\.policy/);
 assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /#private-beta-dialog\[open\]/);
 assert.match(html, /assets\/private-beta-landing\.js\?v=exam-room-ux-20260814-2/);
+assert.match(html, /assets\/private-beta-landing\.js\?v=exam-room-ux-20260814-2&amp;release=verdict-p1-20260815-1/,
+  'The Verdict P1 navigation fix must use a fresh browser cache key.');
 assert.match(html, /assets\/private-beta-landing\.css\?v=master-experience-20260813-1&amp;release=header-subject-review-20260814-1/);
 assert.match(css, /\.pb-chamber-nav\s*\{/);
 assert.match(css, /\.pb-chamber-pill\s*\{/);

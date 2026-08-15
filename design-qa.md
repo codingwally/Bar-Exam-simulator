@@ -317,6 +317,8 @@ The implementation preserves the live navy, gold, cream, serif, and mono design 
 - `node scripts/test-exam-session-controller.mjs` — passed.
 - `node scripts/test-contact-routes.mjs` — passed.
 - `node scripts/test-website-question-bank.mjs` — passed.
+- Complete local non-staging regression inventory — 71 of 71 test scripts passed.
+- Five credentialed staging suites were reserved for the protected GitHub staging environment; no credential was requested or exposed locally.
 - `git diff --check` — passed.
 
 final result: passed

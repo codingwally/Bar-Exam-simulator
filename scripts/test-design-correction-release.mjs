@@ -37,8 +37,10 @@ const subjectResult = examJs.slice(
   examJs.indexOf('function assessmentCard'),
 );
 
-assert.match(publicLanding, /class="pb-platform-composition"/);
-assert.match(publicLanding, /class="pb-welcome-note"/);
+assert.match(publicLanding, /class="pb-feature-ledger"/);
+assert.match(publicLanding, /feature-previews\/mock-bar\.png[\s\S]*feature-previews\/subject-matter\.png[\s\S]*feature-previews\/verdict\.png/,
+  'The Academy must present real product previews instead of the retired stock-photo composition.');
+assert.doesNotMatch(publicLanding, /class="pb-platform-composition"|class="pb-welcome-note"/);
 assert.doesNotMatch(publicLanding, /class="pb-chamber-index"/);
 assert.doesNotMatch(publicLanding, /pb-pillar-card|pb-pillar-grid/);
 assert.equal((html.match(/id="site-header"/g) || []).length, 1,
@@ -69,8 +71,8 @@ assert.doesNotMatch(chamberLinkHandler, /scrollIntoView/,
   'Primary public chamber navigation must not use scrolling.');
 
 assert.match(landingJs, /class="pb-chamber-feature-index"/);
-assert.doesNotMatch(`${publicLanding}\n${sharedHeader}`, /pb-chamber-entry-number|>0[1-4]</,
-  'The public chamber chooser must not use generic numbered decoration.');
+assert.match(publicLanding, />01<\/span>[\s\S]*>02<\/span>[\s\S]*>03<\/span>[\s\S]*>04<\/span>/,
+  'The selected editorial feature ledger must preserve its ordered four-part sequence.');
 assert.doesNotMatch(landingJs, /pb-chamber-feature-number|0\$\{index \+ 1\}/,
   'Public chamber introductions must not number their features.');
 assert.match(landingJs, /\$\{firstFeature\.action\}/);
@@ -148,9 +150,10 @@ assert.match(examCss, /@media \(max-width: 900px\)[\s\S]*?\.dd-subject-editorial
   'The centered split must become a readable vertical flow on smaller screens.');
 assert.match(examCss, /\.dd-study-disclosures details\s*\{[\s\S]*?border-top:/);
 
-for (const source of [html, loader, serviceWorker]) {
-  assert.match(source, /header-subject-review-20260814-1|duediligence-shell-20260814-header-review-1/);
-}
+assert.match(html, /homepage-feature-ledger-20260815-1/);
+assert.match(loader, /header-subject-review-20260814-1/);
+assert.match(serviceWorker, /duediligence-shell-20260815-homepage-ledger-1/);
+assert.match(serviceWorker, /private-beta-landing\.css[^'\n]*homepage-feature-ledger-20260815-1/);
 assert.doesNotMatch(`${publicLanding}\n${landingJs}\n${examJs}`, /\bpractise\b/i);
 
 console.log('Focused design-correction contract checks passed.');

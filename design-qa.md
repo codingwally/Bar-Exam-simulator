@@ -265,3 +265,59 @@ final result: passed
 ## Result
 
 **PASS — no P0, P1, or P2 visual, responsive, or interaction defects in the class-results workflow.**
+
+# Homepage Feature Ledger and Chamber Pages Design QA
+
+## Visual target
+
+- Approved reference: `C:\Users\wally\.codex\generated_images\019f94a6-ad52-78e1-b319-4945649d7e3c\exec-92abb1fd-3434-4e41-8617-90697d86fd64.png`
+- Latest implementation capture: `C:\Users\wally\AppData\Local\Temp\duediligence-homepage-ledger-1440-v3.jpg`
+- Side-by-side comparison: `C:\Users\wally\AppData\Local\Temp\duediligence-homepage-ledger-comparison-v3.jpg`
+
+The implementation preserves the live navy, gold, cream, serif, and mono design language while replacing the old stock-photo landing composition with the approved 2×2 editorial feature ledger. Every visual uses a real product screenshot, and the existing top-level navigation controls remain intact.
+
+## Homepage verification
+
+- Four distinct ledger sections render in the intended order: The Academy, The Commons, BarBound, and Examination Room.
+- The Academy exposes real Mock Bar, Subject Matter, and Verdict previews.
+- The Commons exposes real Bar Easy, Quorum, and Retainer previews.
+- BarBound exposes real Bar Feels, Chair's Cases, Doctrines, and Anchor Cases previews.
+- Examination Room uses the real role-entry interface preview.
+- Screenshot previews and text actions preserve the existing feature routes and access checks.
+- No stock-photo reference remains in the homepage or chamber rendering path.
+
+## Chamber verification
+
+- The Academy renders three feature rows.
+- The Commons renders three feature rows.
+- BarBound renders four feature rows.
+- Each chamber uses an editorial introduction, real screenshot collage, alternating feature rows, and existing feature actions.
+- Back navigation returns to the four-section ledger.
+
+## Responsive and accessibility verification
+
+- Browser-tested at 1366×768, 1024×768, 768×1024, 390×844, and 320×700.
+- No horizontal overflow at any tested width.
+- Mobile chamber feature rows stack in reading order.
+- All visible primary and chamber actions are at least 44px high.
+- Every screenshot has meaningful alternative text.
+- Every screenshot button has an accessible label.
+- Focus-visible outlines remain present for ledger, chamber, header, and dialog controls.
+- Reduced-motion handling remains present.
+- Color and typography stay within the existing high-contrast navy/gold system.
+
+## Regression evidence
+
+- `node --check assets/private-beta-landing.js` — passed.
+- `node scripts/test-private-beta-landing.mjs` — passed.
+- `node scripts/test-pages-artifact.mjs` — passed.
+- `node scripts/test-duediligence-2026-frontend.mjs` — passed.
+- `node scripts/test-afk-production-debug.mjs` — passed.
+- `node scripts/test-dialog-exit-controls.mjs` — passed.
+- `node scripts/test-exam-session-controller.mjs` — passed.
+- `node scripts/test-contact-routes.mjs` — passed.
+- `node scripts/test-website-question-bank.mjs` — passed.
+- `git diff --check` — passed.
+
+final result: passed
+

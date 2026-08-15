@@ -51,16 +51,23 @@ assert.ok(html.indexOf('id="site-header"') < html.indexOf('class="pb-pillars"'),
 assert.match(publicLanding, /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
 assert.match(publicLanding, /Philippine legal education/i);
 assert.doesNotMatch(publicLanding, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
-assert.match(publicLanding, /class="pb-platform-composition"/);
-assert.match(publicLanding, /class="pb-welcome-note"/);
+assert.match(publicLanding, /class="pb-feature-ledger"/);
+for (const chamberClass of ['academy', 'commons', 'barbound', 'examination-room']) {
+  assert.match(publicLanding, new RegExp(`class="pb-ledger-entry pb-ledger-${chamberClass}"`),
+    `The ${chamberClass} ledger entry must remain visible on the homepage.`);
+}
 assert.doesNotMatch(publicLanding, /class="pb-chamber-index"/);
 assert.doesNotMatch(publicLanding, /class="pb-pillar-card"/,
   'The homepage must not regress to four generic boxed cards.');
-assert.doesNotMatch(publicLanding, /pb-chamber-entry-number|>0[1-4]</,
-  'The homepage must not use generic numbered chamber decoration.');
+assert.match(publicLanding, />01<\/span>[\s\S]*>02<\/span>[\s\S]*>03<\/span>[\s\S]*>04<\/span>/,
+  'The editorial feature ledger must retain its ordered chamber sequence.');
 assert.doesNotMatch(publicLanding, /A platform to express|Practice the reasoning\. Refine the writing\.|Explore Due Diligence|Learn How It Works|Pause Motion/i);
-assert.match(publicLanding, /campus-students-720\.avif/,
-  'The homepage must retain an optimized editorial photographic field.');
+assert.doesNotMatch(`${publicLanding}\n${script}`, /campus-students|library-community|library-student|writing-notes/,
+  'Retired stock photography must not appear in the homepage or chamber rendering paths.');
+assert.match(publicLanding, /feature-previews\/mock-bar\.png[\s\S]*feature-previews\/subject-matter\.png[\s\S]*feature-previews\/verdict\.png/,
+  'The Academy ledger must show the real Mock Bar, Subject Matter, and Verdict interfaces.');
+assert.match(publicLanding, /feature-previews\/examination-room\.png/,
+  'The Examination Room ledger must show its real role-entry interface.');
 assert.match(publicLanding, /id="pb-chamber-view"/);
 assert.match(script, /academy:[\s\S]*commons:[\s\S]*barbound:/);
 for (const taxonomy of [
@@ -118,17 +125,18 @@ assert.match(script, /privateBetaApi\(\)\?\.policy/);
 assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /#private-beta-dialog\[open\]/);
 assert.match(html, /assets\/private-beta-landing\.js\?v=exam-room-ux-20260814-2/);
-assert.match(html, /assets\/private-beta-landing\.js\?v=exam-room-ux-20260814-2&amp;release=verdict-export-p1-20260815-1/,
-  'The Verdict export P1 fix must use a fresh browser cache key.');
-assert.match(html, /assets\/private-beta-landing\.css\?v=master-experience-20260813-1&amp;release=header-subject-review-20260814-1/);
+assert.match(html, /assets\/private-beta-landing\.js\?v=exam-room-ux-20260814-2&amp;release=verdict-export-p1-20260815-1-homepage-feature-ledger-20260815-1/,
+  'The combined Verdict and homepage release must use a fresh browser cache key.');
+assert.match(html, /assets\/private-beta-landing\.css\?v=master-experience-20260813-1&amp;release=homepage-feature-ledger-20260815-1/);
 assert.match(css, /\.pb-chamber-nav\s*\{/);
 assert.match(css, /\.pb-chamber-pill\s*\{/);
 assert.match(css, /\.pb-chamber-link\s*,[\s\S]*?\.pb-chamber-toggle\s*\{/);
 assert.match(css, /@media \(max-width: 900px\)[\s\S]*?#site-header #spa-nav\s*\{[\s\S]*?display:\s*none/);
 assert.match(css, /#site-header #spa-nav\.is-open\s*\{[\s\S]*?display:\s*grid/);
-assert.match(css, /\.pb-platform-composition\s*\{[\s\S]*?grid-template-columns:/);
-assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.pb-platform-composition\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
-assert.match(css, /\.pb-chamber-feature\s*\{[\s\S]*?border-top:/);
+assert.match(css, /\.pb-feature-ledger\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,/);
+assert.match(css, /@media \(max-width: 1120px\)[\s\S]*?\.pb-feature-ledger\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
+assert.match(css, /\.pb-chamber-feature\s*\{[\s\S]*?grid-template-columns:[\s\S]*?border-top:/);
+assert.match(css, /\.pb-chamber-feature:nth-child\(even\) \.pb-chamber-feature-preview/);
 assert.doesNotMatch(script, /pb-chamber-feature-number|0\$\{index \+ 1\}/);
 assert.doesNotMatch(css, /\.pb-pillar-card/);
 assert.doesNotMatch(css, /pb-slide-left|pb-slide-right|\.pb-rail/);
@@ -150,6 +158,26 @@ for (const stem of imageStems) {
       assert.ok(build.includes(`assets/private-beta/`), 'the Pages allowlist must ship private-beta images');
     }
   }
+}
+
+const featurePreviewNames = [
+  'anchor-cases.png',
+  'bar-easy.png',
+  'bar-feels.png',
+  'chairs-cases.png',
+  'doctrines.png',
+  'examination-room.png',
+  'mock-bar.png',
+  'quorum.png',
+  'retainer.png',
+  'subject-matter.png',
+  'verdict.png',
+];
+for (const name of featurePreviewNames) {
+  const relative = `assets/feature-previews/${name}`;
+  const details = await stat(path.join(root, relative));
+  assert.ok(details.isFile() && details.size > 20_000, `${relative} must be a non-empty real product screenshot`);
+  assert.ok(build.includes('...featurePreviewFiles'), 'the Pages allowlist must ship all feature previews');
 }
 
 const approvedReference = await readFile(path.join(

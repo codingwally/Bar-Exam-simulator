@@ -28,6 +28,20 @@ const privateBetaImageFiles = Object.freeze([
   (extension) => `assets/private-beta/${name}-${width}.${extension}`,
 ))));
 
+const featurePreviewFiles = Object.freeze([
+  'anchor-cases.png',
+  'bar-easy.png',
+  'bar-feels.png',
+  'chairs-cases.png',
+  'doctrines.png',
+  'examination-room.png',
+  'mock-bar.png',
+  'quorum.png',
+  'retainer.png',
+  'subject-matter.png',
+  'verdict.png',
+].map((name) => `assets/feature-previews/${name}`));
+
 const publicFiles = Object.freeze([
   'index.html',
   'CNAME',
@@ -50,6 +64,7 @@ const publicFiles = Object.freeze([
   'assets/feature-loader.js',
   'assets/private-workspace.js',
   ...privateBetaImageFiles,
+  ...featurePreviewFiles,
   'assets/phase2-experience.js',
   'assets/phase2-law-library.jpg',
   'assets/phase2.css',

@@ -27,8 +27,6 @@
       kicker: 'The Academy',
       title: 'Practice the work. Understand the law. See your progress.',
       copy: 'The Academy brings focused legal writing, course-based review, and your private learning record into one deliberate study path. Begin with the kind of practice you need today, then return to see how your reasoning develops.',
-      image: 'library-student',
-      alt: 'Law student preparing in a library',
       features: Object.freeze([
         Object.freeze({ id: 'mock', title: 'Mock Bar', eyebrow: 'Bar-style essay practice', action: 'Try Mock Bar', copy: 'Work through realistic Philippine Bar-style essays across eight subjects. Receive candid, source-backed coaching on the approved 0–5 practice scale—never a prediction of an official Bar result.' }),
         Object.freeze({ id: 'subject-matter', title: 'Subject Matter', eyebrow: 'Review and retention', action: 'Review a subject', copy: 'Choose a law-school course, review one focused question, and reveal its vetted legal basis, explanation, and official sources when you are ready. Writing from memory remains available beside the review.' }),
@@ -40,8 +38,6 @@
       kicker: 'The Commons',
       title: 'Make the law clearer—and learning less solitary.',
       copy: 'The Commons is where plain-language practice meets academic community. Work through a legal idea in your own words, exchange questions and resources with fellow learners, and manage the access that supports your study.',
-      image: 'library-community',
-      alt: 'Students learning together in a library',
       features: Object.freeze([
         Object.freeze({ id: 'bar-easy', title: 'Bar Easy', eyebrow: 'Legal reasoning in plain language', action: 'Open Bar Easy', copy: 'Explain a legal idea in words that make sense to you before viewing coaching and verified legal material. It is a calmer way to turn understanding into a usable legal explanation.' }),
         Object.freeze({ id: 'quorum', title: 'Quorum', eyebrow: 'Academic community', action: 'Enter Quorum', copy: 'Ask questions, exchange case notes, share study help and resources, and find study circles within the signed-in Due Diligence community.' }),
@@ -53,8 +49,6 @@
       kicker: 'BarBound',
       title: 'Move beyond recall. Prepare to perform.',
       copy: 'BarBound gathers the deeper work of Bar preparation: sustained writing under exam conditions, disciplined doctrine recall, the Chair’s Cases, and the decisions that anchor the syllabus.',
-      image: 'writing-notes',
-      alt: 'Students reviewing notes and legal materials',
       features: Object.freeze([
         Object.freeze({ id: 'bar-feels', title: 'Bar Feels', eyebrow: 'Full examination simulation', action: 'Start Bar Feels', copy: 'Enter a curated multi-question Bar simulation with timed writing, question navigation, review, and submission. The approved coaching and grading experience follows your completed attempt.' }),
         Object.freeze({ id: 'chair-cases', title: '2026 Bar Chair’s Cases', eyebrow: 'Decisions shaping the 2026 Bar', action: 'Study Chair’s Cases', copy: 'Study selected decisions through their Bar relevance, facts, issue, ruling, controlling doctrine, and disposition, with a path to the official full text.' }),
@@ -63,6 +57,19 @@
       ]),
       access: 'Protected BarBound features open only when your current account has the required access.',
     }),
+  });
+  const featurePreviews = Object.freeze({
+    mock: Object.freeze({ file: 'mock-bar.png', alt: 'Mock Bar subject selection inside Due Diligence' }),
+    'subject-matter': Object.freeze({ file: 'subject-matter.png', alt: 'Subject Matter question and legal writing workspace' }),
+    verdict: Object.freeze({ file: 'verdict.png', alt: 'Private Verdict assessment and coaching record' }),
+    'bar-easy': Object.freeze({ file: 'bar-easy.png', alt: 'Bar Easy guided legal reasoning interface' }),
+    quorum: Object.freeze({ file: 'quorum.png', alt: 'Quorum academic community feed' }),
+    retainer: Object.freeze({ file: 'retainer.png', alt: 'Retainer membership and access options' }),
+    'bar-feels': Object.freeze({ file: 'bar-feels.png', alt: 'Bar Feels multi-question examination workspace' }),
+    'chair-cases': Object.freeze({ file: 'chairs-cases.png', alt: '2026 Bar Chair\u2019s Cases study interface' }),
+    doctrines: Object.freeze({ file: 'doctrines.png', alt: 'Doctrines recall and verification interface' }),
+    'anchor-cases': Object.freeze({ file: 'anchor-cases.png', alt: 'Anchor Case Digests research interface' }),
+    'examination-room': Object.freeze({ file: 'examination-room.png', alt: 'Examination Room role selection interface' }),
   });
   const state = {
     stage: 'disclosure',
@@ -136,11 +143,25 @@
       return;
     }
     global.activatePrimaryMenuItem?.(`chamber-${chamber}`);
-    const featureMarkup = definition.features.map((feature) => `<article class="pb-chamber-feature">
-      <div class="pb-chamber-feature-copy"><p class="pb-chamber-feature-eyebrow">${feature.eyebrow}</p><h3>${feature.title}</h3><p>${feature.copy}</p></div>
-      <button type="button" data-public-feature="${feature.id}">${feature.action}</button>
-    </article>`).join('');
+    const featureMarkup = definition.features.map((feature) => {
+      const preview = featurePreviews[feature.id];
+      return `<article class="pb-chamber-feature">
+        <button class="pb-chamber-feature-preview" type="button" data-public-feature="${feature.id}" aria-label="Open ${feature.title}">
+          <img src="assets/feature-previews/${preview.file}" width="1440" height="900" loading="lazy" decoding="async" alt="${preview.alt}">
+        </button>
+        <div class="pb-chamber-feature-copy"><p class="pb-chamber-feature-eyebrow">${feature.eyebrow}</p><h3>${feature.title}</h3><p>${feature.copy}</p>
+          <button class="pb-chamber-feature-action" type="button" data-public-feature="${feature.id}">${feature.action}</button>
+        </div>
+      </article>`;
+    }).join('');
     const firstFeature = definition.features[0];
+    const introPreviews = definition.features.slice(0, 3).map((feature) => {
+      const preview = featurePreviews[feature.id];
+      return `<button class="pb-chamber-intro-preview" type="button" data-public-feature="${feature.id}" aria-label="Open ${feature.title}">
+        <img src="assets/feature-previews/${preview.file}" width="1440" height="900" loading="eager" decoding="async" alt="${preview.alt}">
+        <span>${feature.title}</span>
+      </button>`;
+    }).join('');
     view.innerHTML = `<article class="pb-chamber-page">
       <section class="pb-chamber-intro">
         <div class="pb-chamber-intro-copy">
@@ -152,13 +173,7 @@
             <button class="pb-chamber-back" type="button" data-public-home>Back to all chambers</button>
           </div>
         </div>
-        <figure class="pb-chamber-intro-visual">
-          <picture>
-            <source type="image/avif" srcset="assets/private-beta/${definition.image}-720.avif 720w, assets/private-beta/${definition.image}-1440.avif 1440w" sizes="(max-width:1120px) 100vw, 48vw">
-            <source type="image/webp" srcset="assets/private-beta/${definition.image}-720.webp 720w, assets/private-beta/${definition.image}-1440.webp 1440w" sizes="(max-width:1120px) 100vw, 48vw">
-            <img src="assets/private-beta/${definition.image}-720.jpg" width="720" height="960" loading="eager" decoding="async" alt="${definition.alt}">
-          </picture>
-        </figure>
+        <div class="pb-chamber-intro-visual" aria-label="${definition.kicker} feature previews">${introPreviews}</div>
       </section>
       <section class="pb-chamber-feature-index" aria-labelledby="pb-chamber-feature-title">
         <header>

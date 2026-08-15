@@ -52,9 +52,6 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="image" href="assets/private-beta/library-student-1440.avif"
-  imagesrcset="assets/private-beta/library-student-720.avif 720w, assets/private-beta/library-student-1440.avif 1440w"
-  imagesizes="(max-width:760px) 76vw, (max-width:1120px) 68vw, 38vw" type="image/avif" fetchpriority="high">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   /* ==========================================================================
@@ -938,7 +935,7 @@
   }
 </style>
 <link rel="stylesheet" href="assets/phase2.css">
-<link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=header-subject-review-20260814-1">
+<link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=homepage-feature-ledger-20260815-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body class="private-beta-public">
@@ -1019,19 +1016,98 @@
       <h1 id="pb-pillars-title">Choose how you want to prepare.</h1>
       <p>Review the law, strengthen your legal reasoning, and prepare for the work ahead through the part of Due Diligence made for that purpose.</p>
     </div>
-    <div class="pb-platform-composition">
-      <figure class="pb-platform-visual">
-        <picture>
-          <source type="image/avif" srcset="assets/private-beta/campus-students-720.avif 720w, assets/private-beta/campus-students-1440.avif 1440w" sizes="(max-width:760px) calc(100vw - 32px), 44vw">
-          <source type="image/webp" srcset="assets/private-beta/campus-students-720.webp 720w, assets/private-beta/campus-students-1440.webp 1440w" sizes="(max-width:760px) calc(100vw - 32px), 44vw">
-          <img src="assets/private-beta/campus-students-720.jpg" width="720" height="480" loading="eager" decoding="async" fetchpriority="high" alt="Law students exchanging notes on campus">
-        </picture>
-        <figcaption>A serious place to practice, retain, and apply the law.</figcaption>
-      </figure>
-      <div class="pb-welcome-note">
-        <p class="pb-welcome-rule">Begin with the chamber above that matches the work in front of you.</p>
-        <p>Move between focused review, shared learning, and full examination preparation without losing your place.</p>
-      </div>
+    <div class="pb-feature-ledger" aria-label="Due Diligence preparation chambers">
+      <article class="pb-ledger-entry pb-ledger-academy">
+        <div class="pb-ledger-copy">
+          <span class="pb-ledger-number" aria-hidden="true">01</span>
+          <h2><a href="#chamber/academy" data-pb-chamber-link="academy">The Academy</a></h2>
+          <p class="pb-ledger-kicker">Build your doctrinal foundation.</p>
+          <p>Move from realistic Bar essays to focused subject review, then return to your private learning record.</p>
+          <a class="pb-ledger-route" href="#chamber/academy" data-pb-chamber-link="academy">Enter The Academy <span aria-hidden="true">&rarr;</span></a>
+        </div>
+        <div class="pb-ledger-previews pb-ledger-previews-three" aria-label="Academy feature previews">
+          <button type="button" data-public-feature="mock" aria-label="Open Mock Bar">
+            <img src="assets/feature-previews/mock-bar.png" width="1440" height="900" loading="eager" decoding="async" fetchpriority="high" alt="Mock Bar subject selection inside Due Diligence">
+            <span>Mock Bar</span>
+          </button>
+          <button type="button" data-public-feature="subject-matter" aria-label="Open Subject Matter">
+            <img src="assets/feature-previews/subject-matter.png" width="1440" height="900" loading="eager" decoding="async" alt="Subject Matter question and legal writing workspace">
+            <span>Subject Matter</span>
+          </button>
+          <button type="button" data-public-feature="verdict" aria-label="Open The Verdict">
+            <img src="assets/feature-previews/verdict.png" width="1440" height="900" loading="eager" decoding="async" alt="Private Verdict assessment and coaching record">
+            <span>The Verdict</span>
+          </button>
+        </div>
+      </article>
+
+      <article class="pb-ledger-entry pb-ledger-commons">
+        <div class="pb-ledger-copy">
+          <span class="pb-ledger-number" aria-hidden="true">02</span>
+          <h2><a href="#chamber/commons" data-pb-chamber-link="commons">The Commons</a></h2>
+          <p class="pb-ledger-kicker">Learn out loud.</p>
+          <p>Clarify difficult legal ideas, learn with peers, and manage the access that supports your study.</p>
+          <a class="pb-ledger-route" href="#chamber/commons" data-pb-chamber-link="commons">Explore The Commons <span aria-hidden="true">&rarr;</span></a>
+        </div>
+        <div class="pb-ledger-previews pb-ledger-previews-three" aria-label="Commons feature previews">
+          <button type="button" data-public-feature="bar-easy" aria-label="Open Bar Easy">
+            <img src="assets/feature-previews/bar-easy.png" width="1440" height="900" loading="lazy" decoding="async" alt="Bar Easy guided legal reasoning interface">
+            <span>Bar Easy</span>
+          </button>
+          <button type="button" data-public-feature="quorum" aria-label="Open Quorum">
+            <img src="assets/feature-previews/quorum.png" width="1440" height="900" loading="lazy" decoding="async" alt="Quorum academic community feed">
+            <span>Quorum</span>
+          </button>
+          <button type="button" data-public-feature="retainer" aria-label="Open Retainer">
+            <img src="assets/feature-previews/retainer.png" width="1440" height="900" loading="lazy" decoding="async" alt="Retainer membership and access options">
+            <span>Retainer</span>
+          </button>
+        </div>
+      </article>
+
+      <article class="pb-ledger-entry pb-ledger-barbound">
+        <div class="pb-ledger-copy">
+          <span class="pb-ledger-number" aria-hidden="true">03</span>
+          <h2><a href="#chamber/barbound" data-pb-chamber-link="barbound">BarBound</a></h2>
+          <p class="pb-ledger-kicker">Practice with purpose.</p>
+          <p>Train under pressure, master the controlling doctrines, and study the decisions that anchor the Bar syllabus.</p>
+          <a class="pb-ledger-route" href="#chamber/barbound" data-pb-chamber-link="barbound">Practice in BarBound <span aria-hidden="true">&rarr;</span></a>
+        </div>
+        <div class="pb-ledger-previews pb-ledger-previews-four" aria-label="BarBound feature previews">
+          <button type="button" data-public-feature="bar-feels" aria-label="Open Bar Feels — Premium only">
+            <img src="assets/feature-previews/bar-feels.png" width="1440" height="900" loading="lazy" decoding="async" alt="Bar Feels multi-question examination workspace">
+            <span>Bar Feels</span>
+          </button>
+          <button type="button" data-public-feature="chair-cases" aria-label="Open 2026 Bar Chair's Cases">
+            <img src="assets/feature-previews/chairs-cases.png" width="1440" height="900" loading="lazy" decoding="async" alt="2026 Bar Chair's Cases study interface">
+            <span>Chair&rsquo;s Cases</span>
+          </button>
+          <button type="button" data-public-feature="doctrines" aria-label="Open Doctrines">
+            <img src="assets/feature-previews/doctrines.png" width="1440" height="900" loading="lazy" decoding="async" alt="Doctrines recall and verification interface">
+            <span>Doctrines</span>
+          </button>
+          <button type="button" data-public-feature="anchor-cases" aria-label="Open Anchor Case Digests">
+            <img src="assets/feature-previews/anchor-cases.png" width="1440" height="900" loading="lazy" decoding="async" alt="Anchor Case Digests research interface">
+            <span>Anchor Cases</span>
+          </button>
+        </div>
+      </article>
+
+      <article class="pb-ledger-entry pb-ledger-examination-room">
+        <div class="pb-ledger-copy">
+          <span class="pb-ledger-number" aria-hidden="true">04</span>
+          <h2><button type="button" data-public-feature="examination-room">Examination Room</button></h2>
+          <p class="pb-ledger-kicker">Examine under real conditions.</p>
+          <p>Run role-based class examinations with secure access, saved answers, live monitoring, and auditable results.</p>
+          <button class="pb-ledger-route" type="button" data-public-feature="examination-room">Enter the Examination Room <span aria-hidden="true">&rarr;</span></button>
+        </div>
+        <div class="pb-ledger-previews pb-ledger-previews-single" aria-label="Examination Room preview">
+          <button type="button" data-public-feature="examination-room" aria-label="Open Examination Room">
+            <img src="assets/feature-previews/examination-room.png" width="1440" height="900" loading="lazy" decoding="async" alt="Examination Room role selection interface">
+            <span>Professor &middot; Beadle &middot; Student</span>
+          </button>
+        </div>
+      </article>
     </div>
   </section>
   <section class="pb-chamber-view" id="pb-chamber-view" aria-live="polite" hidden></section>
@@ -4216,7 +4292,7 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
 <script src="assets/feature-loader.js?v=exam-room-ux-20260814-1&amp;release=verdict-export-p1-20260815-1"></script>
-<script src="assets/private-beta-landing.js?v=exam-room-ux-20260814-2&amp;release=verdict-export-p1-20260815-1"></script>
+<script src="assets/private-beta-landing.js?v=exam-room-ux-20260814-2&amp;release=verdict-export-p1-20260815-1-homepage-feature-ledger-20260815-1"></script>
 
 </body>
 </html>

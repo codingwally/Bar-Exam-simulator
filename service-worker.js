@@ -1,8 +1,8 @@
-const CACHE_VERSION = 'duediligence-shell-20260814-header-review-1';
+const CACHE_VERSION = 'duediligence-shell-20260815-homepage-ledger-1';
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',
-  '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=header-subject-review-20260814-1',
+  '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=homepage-feature-ledger-20260815-1',
   '/assets/study-workspace.css?v=master-experience-20260813-1',
 ]);
 

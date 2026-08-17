@@ -21,6 +21,7 @@ const config = sandbox.window.DueDiligencePhase2Config;
 assert.equal(config.guest.gradeLimit, 3);
 assert.equal(config.legal.termsVersion, 'terms-beta-v2-2026-07-28');
 assert.equal(config.legal.privacyVersion, 'privacy-beta-v2-2026-07-28');
+assert.equal('marketingConsentVersion' in config.legal, false);
 assert.deepEqual(Array.from(config.plans.items, (plan) => [
   plan.id,
   plan.pricingHidden,
@@ -41,11 +42,26 @@ for (const expected of [
   'Guest access includes 3 graded questions across all subjects.',
   'You have completed your 3 guest questions.',
   'accept_terms',
-  'record_marketing_consent',
   'complete_profile_onboarding',
 ]) {
   assert.ok(experience.includes(expected), `Phase 2 experience must include: ${expected}`);
 }
+
+for (const removedMarketingSurface of [
+  'record_marketing_consent',
+  'dd2-marketing-consent',
+  'dd2-account-marketing',
+  'Send me optional product and Bar-review updates',
+  'Receive optional product and Bar-review updates',
+]) {
+  assert.equal(
+    experience.includes(removedMarketingSurface),
+    false,
+    `Phase 2 experience must not collect a marketing preference: ${removedMarketingSurface}`,
+  );
+}
+assert.ok(experience.includes('does not currently operate an email-marketing program'));
+assert.ok(experience.includes('No email-marketing program is active.'));
 
 for (const requiredHook of [
   'DueDiligencePhase2.beforeGrade',
@@ -63,7 +79,7 @@ assert.ok(index.includes('data-dd2-view="privacy"'));
 assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
-assert.ok(index.includes('assets/phase2-experience.js?v=exam-room-ux-20260814-1'));
+assert.ok(index.includes('assets/phase2-experience.js?v=email-marketing-retired-20260817-1'));
 
 for (const table of [
   'guest_grading_usage',

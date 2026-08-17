@@ -9,7 +9,8 @@ Baseline: `3e5004eb71dd3322a8237aa5dc7778ac47175601`
 - Static, framework-free HTML/CSS/JavaScript deployed by GitHub Pages at `https://duediligence.ph`.
 - Supabase Auth and PostgreSQL are the identity and authoritative data systems.
 - A Cloudflare Worker (`duediligence-gemini-examiner`) mediates privileged database operations, Gemini grading, email, uploads, and administrative operations.
-- Resend is the existing transactional email provider.
+- Resend is retained only for independently controlled transactional systems,
+  including Examination Room. Practice Exam and marketing email are disabled.
 - The existing design system is navy, cream, restrained gold, editorial serif headings, and compact pill navigation. The 2026 work reuses those conventions and does not replace the application shell.
 - Existing Mock Bar, Subject Matter, Bar Feels, Quorum, account, subscription, payment, and administration behavior remains unchanged.
 

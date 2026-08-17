@@ -18,7 +18,6 @@
     legal: Object.freeze({
       termsVersion: 'terms-beta-v2-2026-07-28',
       privacyVersion: 'privacy-beta-v2-2026-07-28',
-      marketingConsentVersion: 'marketing-beta-v1-2026-08-15',
       aiImprovementConsentVersion: 'ai-improvement-beta-v1-2026-07-28',
     }),
     features: Object.freeze({

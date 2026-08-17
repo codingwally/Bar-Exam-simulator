@@ -9,7 +9,6 @@
     session: null,
     user: null,
     profile: null,
-    marketingOptIn: false,
     initialized: false,
     onboardingBusy: false,
     nativeView: null,
@@ -219,10 +218,6 @@
               <input type="checkbox" id="dd2-legal-acceptance" required>
               <span>I accept the <button class="link-button" type="button" data-dd2-view="terms">Beta Terms</button>
                 and acknowledge the <button class="link-button" type="button" data-dd2-view="privacy">Beta Privacy Notice</button>.</span>
-            </label>
-            <label class="dd2-check">
-              <input type="checkbox" id="dd2-marketing-consent">
-              <span>Send me optional product and Bar-review updates. I can withdraw this at any time.</span>
             </label>
             <label class="dd2-check">
               <input type="checkbox" id="dd2-ai-improvement-consent">
@@ -893,7 +888,7 @@
   }
 
   async function loadUserStateFor(userId) {
-    const [{ data: profile }, { data: terms }, { data: marketing }] = await Promise.all([
+    const [{ data: profile }, { data: terms }] = await Promise.all([
       state.client
         .from('profiles')
         .select('id,display_name,school,enrollment_status,year_level,profile_completed_at,subscription_tier,subscription_status')
@@ -905,15 +900,9 @@
         .eq('terms_version', config.legal.termsVersion)
         .eq('privacy_version', config.legal.privacyVersion)
         .limit(1),
-      state.client
-        .from('marketing_consents')
-        .select('opted_in,changed_at')
-        .order('changed_at', { ascending: false })
-        .limit(1),
     ]);
     if (state.user?.id !== userId) return;
     state.profile = profile || null;
-    state.marketingOptIn = Boolean(marketing?.[0]?.opted_in);
     state.admin = null;
     if (state.session?.access_token && config.features.adminDashboard) {
       try {
@@ -956,8 +945,6 @@
     if (school) school.value = state.profile?.school || '';
     if (enrollment) enrollment.value = state.profile?.enrollment_status || 'enrolled';
     if (year) year.value = state.profile?.year_level || '';
-    const marketing = document.getElementById('dd2-marketing-consent');
-    if (marketing) marketing.checked = state.marketingOptIn;
     const legal = document.getElementById('dd2-legal-acceptance');
     if (legal) legal.checked = false;
     updateEnrollmentFields();
@@ -981,7 +968,6 @@
     const enrollmentStatus = document.getElementById('dd2-enrollment-status').value;
     const yearLevel = document.getElementById('dd2-year-level').value;
     const accepted = document.getElementById('dd2-legal-acceptance').checked;
-    const marketingOptIn = document.getElementById('dd2-marketing-consent').checked;
     const aiImprovementOptIn = document.getElementById('dd2-ai-improvement-consent').checked;
     if (displayName.length < 2) {
       setStatus('dd2-onboarding-status', 'Enter the name you want shown in Due Diligence.', 'error');
@@ -1006,12 +992,6 @@
         p_acceptance_source: 'web_onboarding',
       });
       if (termsError) throw termsError;
-      const { error: marketingError } = await state.client.rpc('record_marketing_consent', {
-        p_opted_in: marketingOptIn,
-        p_consent_version: config.legal.marketingConsentVersion,
-        p_source: 'web_onboarding',
-      });
-      if (marketingError) throw marketingError;
       const { error: aiConsentError } = await state.client.rpc('record_ai_improvement_consent', {
         p_opted_in: aiImprovementOptIn,
         p_consent_version: config.legal.aiImprovementConsentVersion,
@@ -1035,7 +1015,6 @@
         year_level: yearLevel || null,
         profile_completed_at: new Date().toISOString(),
       };
-      state.marketingOptIn = marketingOptIn;
       setStatus('dd2-onboarding-status', 'Profile saved.', 'success');
       setOverlay(false, 'dd2-onboarding-overlay');
       syncAuthUi();
@@ -1092,7 +1071,7 @@
       <div class="dd2-copy">
         <p><strong>Version:</strong> ${escapeHtml(config.legal.privacyVersion)}<br>${legalReviewNotice}</p>
         <h3>What the platform handles</h3>
-        <p>For signed-in users, Supabase stores account identity, approved profile fields, legal-document acceptance, marketing preference, roles, and future account records. Google processes the secure sign-in consent flow.</p>
+        <p>For signed-in users, Supabase stores account identity, approved profile fields, legal-document acceptance, roles, and future account records. Historical marketing-consent records may remain for audit, but Due Diligence does not currently operate an email-marketing program or collect a new marketing preference. Google processes the secure sign-in consent flow.</p>
         <h3>Essay assessment</h3>
         <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to Gemini for assessment. Do not place client secrets or confidential case information in practice answers.</p>
         <h3>Access records</h3>
@@ -1102,7 +1081,7 @@
         <h3>Payments and infrastructure</h3>
         <p>Payment amount, channel, date, reference, status, and proof are processed for manual verification. Proofs are private and available only through short-lived authorized review. Supabase, Cloudflare, GitHub Pages, Google authentication, and Gemini process data only as needed for their platform roles.</p>
         <h3>Purpose and legal basis</h3>
-        <p>We process account and answer data to perform the requested educational service, secure the platform, prevent fraud, maintain records, and meet legal obligations. Optional marketing and AI-improvement processing relies on separate consent that may be withdrawn.</p>
+        <p>We process account and answer data to perform the requested educational service, secure the platform, prevent fraud, maintain records, and meet legal obligations. Optional AI-improvement processing relies on separate consent that may be withdrawn. No email-marketing program is active.</p>
         <h3>Retention and security</h3>
         <p>Account, legal-acceptance, grading, payment, support, and audit records are retained only as needed for the service, disputes, security, and applicable law. Payment proofs are removed under the approved retention schedule. Controls include least-privilege access, private storage, row-level security, authenticated Worker routes, and audit trails.</p>
         <h3>Your rights</h3>
@@ -1212,10 +1191,6 @@
             <option value="">Select year level</option>
             ${['1', '2', '3', '4', 'review'].map((value) => `<option value="${value}"${state.profile?.year_level === value ? ' selected' : ''}>${value === 'review' ? 'Graduate / Bar review' : `${value}${value === '1' ? 'st' : value === '2' ? 'nd' : value === '3' ? 'rd' : 'th'} year`}</option>`).join('')}
           </select>
-        </label>
-        <label class="dd2-check">
-          <input type="checkbox" id="dd2-account-marketing"${state.marketingOptIn ? ' checked' : ''}>
-          <span>Receive optional product and Bar-review updates.</span>
         </label>
         <div class="dd2-status" id="dd2-account-status" role="status" aria-live="polite"></div>
         <button class="dd2-button dd2-button-primary" type="submit">Save approved profile fields</button>
@@ -1473,7 +1448,6 @@
       enrollmentStatus: document.getElementById('dd2-account-enrollment').value,
       school: document.getElementById('dd2-account-school').value.trim(),
       yearLevel: document.getElementById('dd2-account-year').value,
-      marketing: document.getElementById('dd2-account-marketing').checked,
     };
     if (values.displayName.length < 2
       || (values.enrollmentStatus === 'enrolled' && (!values.school || !values.yearLevel))) {
@@ -1491,12 +1465,6 @@
         p_privacy_version: config.legal.privacyVersion,
       });
       if (profileError) throw profileError;
-      const { error: marketingError } = await state.client.rpc('record_marketing_consent', {
-        p_opted_in: values.marketing,
-        p_consent_version: config.legal.marketingConsentVersion,
-        p_source: 'account_settings',
-      });
-      if (marketingError) throw marketingError;
       state.profile = {
         ...state.profile,
         display_name: values.displayName,
@@ -1504,7 +1472,6 @@
         school: values.school || null,
         year_level: values.yearLevel || null,
       };
-      state.marketingOptIn = values.marketing;
       syncAuthUi();
       setStatus('dd2-account-status', 'Docket preferences saved.', 'success');
     } catch {
@@ -1522,7 +1489,6 @@
     state.session = null;
     state.user = null;
     state.profile = null;
-    state.marketingOptIn = false;
     global.DueDiligencePrivateBeta?.clear?.();
     syncAuthUi();
     hideNativeView();

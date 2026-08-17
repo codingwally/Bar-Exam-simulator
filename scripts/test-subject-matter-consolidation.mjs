@@ -125,7 +125,7 @@ assert.match(examinationsUi, /aria-controls=/);
 assert.match(examinationsUi, /data-subject-search-input/);
 assert.match(examinationsUi, /SUBJECT_CATALOG_STATE_KEY/);
 assert.match(examinationsUi, /id="dd-subject-selector-dialog"/);
-assert.match(examinationsUi, /data-subject-selector-close aria-label="Close course chooser and go back"/);
+assert.match(examinationsUi, /data-subject-selector-close aria-label="Close course chooser"/);
 assert.match(examinationsUi, /function subjectWritingGuide\(/);
 assert.match(examinationsUi, /Improved model response/);
 assert.match(examinationsUi, /Improved Answer — ALAC Method/);
@@ -133,10 +133,21 @@ assert.match(examinationsUi, /data-assessment-rating="up"/);
 assert.match(examinationsUi, /data-suggest-exam-correction/);
 assert.match(examinationsUi, /assessmentCard\(result, \{ track \}\)/);
 assert.match(examinationsUi, /assessmentCard\(item, \{ answerText: item\.answerText, track: 'per_subject' \}\)/);
-assert.match(examinationsCss, /\.dd-subject-editorial \.dd-subject-practice-answer,[\s\S]*?grid-area:\s*auto/,
+assert.match(examinationsCss, /\.dd-subject-editorial-pane\.dd-subject-practice-answer\s*\{[\s\S]*?grid-area:\s*auto/,
   'The editorial coaching pane must neutralize the legacy named grid area.');
 assert.match(examinationsCss, /@media \(max-width: 900px\)[\s\S]*?\.dd-subject-editorial-grid\s*\{[\s\S]*?grid-template-columns:\s*1fr/,
   'Subject Matter must collapse to one full-width column on narrow screens.');
+const subjectPracticeRoom = examinationsUi.slice(
+  examinationsUi.indexOf('function subjectPracticeRoomMarkup'),
+  examinationsUi.indexOf('function renderRoom'),
+);
+assert.ok(
+  subjectPracticeRoom.indexOf('class="dd-subject-editorial-pane is-writing dd-subject-practice-answer"')
+    < subjectPracticeRoom.indexOf('class="dd-subject-editorial-pane is-reading is-review-panel"'),
+  'Subject Matter must keep the question and answer on the left and review disclosures on the right.',
+);
+assert.doesNotMatch(subjectPracticeRoom, /one focused question|One-question review session/i,
+  'Subject Matter must not retain the redundant one-question wording.');
 assert.match(examinationsUi, /Review and retain\./);
 assert.match(examinationsUi, /Individual ALAC assessments\./);
 assert.match(examinerCore, /modelAnswerSectionsForQuestion/);
@@ -154,10 +165,24 @@ assert.match(reviewCore, /entry\.caseName \|\| entry\.title \|\| entry\.case/,
   'Stored case values must be canonicalized instead of discarded.');
 assert.match(reviewCore, /isBareSubjectMatterDoctrine/,
   'Bare yes/no content must not be presented as doctrine.');
-assert.match(examinationsUi, /Reveal Complete Review/);
+assert.match(examinationsUi, /Reveal suggested answer/);
+assert.match(examinationsUi, /Reveal controlling law and doctrine/);
+assert.match(examinationsUi, /Reveal application, limits, and sources/);
 assert.match(examinationsUi, /Controlling Law &amp; Doctrine/);
 assert.match(examinationsUi, /Application and Material Limits/);
 assert.match(examinationsUi, /operation:\s*'subject_reveal_review'/);
+const subjectReviewLock = examinationsUi.slice(
+  examinationsUi.indexOf('function subjectReviewPanelMarkup'),
+  examinationsUi.indexOf('function updateCompleteSubjectReviewPanels'),
+);
+assert.equal((subjectReviewLock.match(/<details>/g) || []).length, 3,
+  'The locked Subject Matter review must expose three native disclosures.');
+assert.equal((subjectReviewLock.match(/<summary[^>]*data-subject-review-reveal/g) || []).length, 3,
+  'Each review category must own one secure disclosure summary.');
+assert.doesNotMatch(subjectReviewLock, /<details[^>]+\sopen(?:\s|>)/,
+  'All review disclosures must be closed before the user chooses one.');
+assert.doesNotMatch(subjectReviewLock, /<button[^>]*data-subject-review-reveal/,
+  'The obsolete one-button reveal contract must not return.');
 assert.match(examinationsCore, /SUBJECT_MATTER_INVENTORY_KEYS/);
 const subjectSurface = examinationsUi.slice(
   examinationsUi.indexOf('function renderPerSubject'),

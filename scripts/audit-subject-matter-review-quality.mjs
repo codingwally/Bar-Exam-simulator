@@ -3,10 +3,12 @@ import {
   buildSubjectMatterLegalReview,
   fallbackSubjectMatterTeachingExplanation,
   isBareSubjectMatterDoctrine,
+  isNearDuplicateSubjectMatterReview,
   isSubjectMatterJurisprudencePlaceholder,
   normalizeSubjectMatterJurisprudence,
   sanitizeSubjectMatterRevealRecord,
 } from '../worker/subject-matter-review.mjs';
+import { SUBJECT_MATTER_PLACEMENTS } from '../worker/subject-matter-placement-manifest.mjs';
 import {
   SUBJECT_MATTER_RELEASE_SNAPSHOT,
   SUBJECT_MATTER_RELEASE_VALUES,
@@ -41,7 +43,11 @@ const findings = {
   placeholderJurisprudence: [],
   duplicateAuthorityFields: [],
   malformedCaseEntries: [],
+  exactSuggestedAnswerReviewDuplicates: [],
+  nearSuggestedAnswerReviewDuplicates: [],
 };
+
+const canonicalQuestionIds = new Set(SUBJECT_MATTER_PLACEMENTS.map((placement) => placement[2]));
 
 values.forEach((row) => {
   const questionId = field(row, 'Question ID');
@@ -65,7 +71,38 @@ values.forEach((row) => {
   if (genuineSourceCase && normalizedCases.length === 0) {
     findings.malformedCaseEntries.push(questionId);
   }
+
+  if (canonicalQuestionIds.has(questionId)) {
+    const material = {
+      suggestedAnswer: field(row, 'Suggested Answer'),
+      legalBasis,
+      governingProvision: legalBasis,
+      doctrine,
+      jurisprudence: [{ case: caseName, citation }],
+      citation,
+    };
+    const fallback = fallbackSubjectMatterTeachingExplanation(material);
+    const review = buildSubjectMatterLegalReview(material, fallback);
+    if (normalized(review.controllingLawAndDoctrine) === normalized(material.suggestedAnswer)) {
+      findings.exactSuggestedAnswerReviewDuplicates.push(questionId);
+    }
+    if (isNearDuplicateSubjectMatterReview(
+      review.controllingLawAndDoctrine,
+      material.suggestedAnswer,
+    )) {
+      findings.nearSuggestedAnswerReviewDuplicates.push(questionId);
+    }
+  }
 });
+
+assert.equal(canonicalQuestionIds.size, 1490,
+  'The review-duplication gate must cover every canonical Subject Matter question.');
+if (process.argv.includes('--strict')) {
+  assert.deepEqual(findings.exactSuggestedAnswerReviewDuplicates, [],
+    'A controlling-law review must never exactly repeat the complete Suggested Answer.');
+  assert.deepEqual(findings.nearSuggestedAnswerReviewDuplicates, [],
+    'A controlling-law review must never near-repeat the complete Suggested Answer.');
+}
 
 const h08 = values.find((row) => field(row, 'Question ID') === 'SM-CPII-H08');
 assert.ok(h08, 'SM-CPII-H08 must remain in the release-quality audit.');
@@ -113,6 +150,7 @@ assert.equal((h08Review.authorityReferences.join('\n').match(/Act No\. 3135/gi) 
 console.log(JSON.stringify({
   status: 'SUBJECT_MATTER_REVIEW_QUALITY_AUDIT_COMPLETE',
   auditedRecords: values.length,
+  canonicalRecords: canonicalQuestionIds.size,
   snapshotSha256: SUBJECT_MATTER_RELEASE_SNAPSHOT.csvSha256,
   counts: Object.fromEntries(Object.entries(findings).map(([key, ids]) => [key, ids.length])),
   sampleQuestionIds: Object.fromEntries(Object.entries(findings).map(([key, ids]) => [key, samples(ids)])),

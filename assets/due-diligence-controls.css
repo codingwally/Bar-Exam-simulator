@@ -1,0 +1,542 @@
+:root {
+  --dd-control-height: 46px;
+  --dd-control-radius: 6px;
+  --dd-control-navy: #061a35;
+  --dd-control-navy-hover: #0a294d;
+  --dd-control-gold: #d4af57;
+  --dd-control-gold-hover: #e0bf70;
+  --dd-control-ivory: #f8fafc;
+  --dd-control-muted: #98a8ba;
+  --dd-control-border: rgba(197, 160, 89, .58);
+  --dd-control-focus: #f3cd78;
+  --dd-control-focus-dark: #061a35;
+}
+
+.dd-icon-control {
+  box-sizing: border-box;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+}
+
+.dd-picker-control,
+.dd-choice-control,
+.dd-disclosure-control {
+  box-sizing: border-box;
+  min-height: 44px;
+}
+
+/*
+ * Shared Due Diligence action controls.
+ *
+ * `.dd26-button` remains the compatibility class for Bar Easy, Doctrines and
+ * Examination Room. Subject Matter shares the examination renderer with Bar
+ * Feels, so its alias is owner-scoped while the light examination surface uses
+ * the same dimensions and states through examinations.css.
+ */
+.dd-control,
+.dd26-button,
+#dd-per-subject-app .dd-exam-button,
+.dd-exam-dialog.is-subject-matter .dd-exam-button {
+  appearance: none;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: var(--dd-control-height);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 20px;
+  border: 1px solid var(--dd-control-border);
+  border-radius: var(--dd-control-radius);
+  color: var(--dd-control-ivory);
+  background: rgba(2, 18, 35, .42);
+  box-shadow: none;
+  font: 700 13px/1.2 Inter, system-ui, sans-serif;
+  letter-spacing: .01em;
+  text-align: center;
+  text-decoration: none;
+  text-transform: none;
+  cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease,
+    box-shadow .16s ease, transform .16s ease;
+}
+
+.dd-control:hover,
+.dd26-button:hover,
+#dd-per-subject-app .dd-exam-button:hover,
+.dd-exam-dialog.is-subject-matter .dd-exam-button:hover {
+  border-color: var(--dd-control-gold-hover);
+  color: #fff;
+  background: rgba(197, 160, 89, .1);
+  transform: translateY(-1px);
+}
+
+.dd-control:active,
+.dd26-button:active,
+#dd-per-subject-app .dd-exam-button:active,
+.dd-exam-dialog.is-subject-matter .dd-exam-button:active {
+  background: rgba(197, 160, 89, .16);
+  transform: translateY(0);
+}
+
+.dd-control:focus-visible,
+.dd26-button:focus-visible,
+#dd-per-subject-app .dd-exam-button:focus-visible,
+.dd-exam-dialog.is-subject-matter .dd-exam-button:focus-visible {
+  border-color: var(--dd-control-gold-hover);
+  color: #fff;
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--dd-control-focus-dark),
+    0 0 0 5px var(--dd-control-focus);
+}
+
+.dd-control.is-primary,
+.dd26-button.primary,
+#dd-per-subject-app .dd-exam-button:is(.is-primary, .is-gold),
+.dd-exam-dialog.is-subject-matter .dd-exam-button:is(.is-primary, .is-gold) {
+  border-color: var(--dd-control-gold);
+  color: var(--dd-control-navy);
+  background: var(--dd-control-gold);
+  box-shadow: 0 7px 18px rgba(98, 70, 20, .14);
+}
+
+.dd-control.is-primary:hover,
+.dd-control.is-primary:focus-visible,
+.dd26-button.primary:hover,
+.dd26-button.primary:focus-visible,
+#dd-per-subject-app .dd-exam-button:is(.is-primary, .is-gold):hover,
+#dd-per-subject-app .dd-exam-button:is(.is-primary, .is-gold):focus-visible,
+.dd-exam-dialog.is-subject-matter .dd-exam-button:is(.is-primary, .is-gold):hover,
+.dd-exam-dialog.is-subject-matter .dd-exam-button:is(.is-primary, .is-gold):focus-visible {
+  border-color: var(--dd-control-gold-hover);
+  color: var(--dd-control-navy);
+  background: var(--dd-control-gold-hover);
+}
+
+.dd-control.is-primary:active,
+.dd26-button.primary:active,
+#dd-per-subject-app .dd-exam-button:is(.is-primary, .is-gold):active,
+.dd-exam-dialog.is-subject-matter .dd-exam-button:is(.is-primary, .is-gold):active {
+  border-color: #c79d45;
+  background: #c79d45;
+}
+
+.dd-control.is-primary:focus-visible,
+.dd26-button.primary:focus-visible,
+#dd-per-subject-app .dd-exam-button:is(.is-primary, .is-gold):focus-visible,
+.dd-exam-dialog.is-subject-matter .dd-exam-button:is(.is-primary, .is-gold):focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--dd-control-focus-dark),
+    0 0 0 5px var(--dd-control-focus), 0 7px 18px rgba(98, 70, 20, .14);
+}
+
+.dd-control.is-secondary {
+  border-color: var(--dd-control-border);
+  color: var(--dd-control-ivory);
+  background: rgba(2, 18, 35, .42);
+}
+
+.dd-control.is-tertiary,
+#dd-per-subject-app .dd-exam-button.is-tertiary,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-tertiary {
+  min-width: 0;
+  min-height: 44px;
+  padding-right: 2px;
+  padding-left: 2px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  border-color: rgba(212, 175, 87, .7);
+  color: #e4c476;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dd-control.is-tertiary:hover,
+.dd-control.is-tertiary:focus-visible,
+#dd-per-subject-app .dd-exam-button.is-tertiary:hover,
+#dd-per-subject-app .dd-exam-button.is-tertiary:focus-visible,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-tertiary:hover,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-tertiary:focus-visible {
+  border-color: #fff;
+  color: #fff;
+  background: transparent;
+  outline: 0;
+  box-shadow: none;
+  transform: none;
+}
+
+.dd-control.is-tertiary:focus-visible,
+#dd-per-subject-app .dd-exam-button.is-tertiary:focus-visible,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-tertiary:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--dd-control-focus-dark),
+    0 0 0 5px var(--dd-control-focus);
+}
+
+.dd-control.is-tertiary.is-on-light {
+  border-color: #8a6725;
+  color: #6b4f18;
+  background: transparent;
+}
+
+.dd-control.is-tertiary.is-on-light:hover,
+.dd-control.is-tertiary.is-on-light:focus-visible {
+  border-color: var(--dd-control-navy);
+  color: var(--dd-control-navy);
+  background: rgba(212, 175, 87, .08);
+}
+
+.dd-control.is-tertiary.is-on-light:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--dd-control-focus-dark),
+    0 0 0 5px var(--dd-control-focus);
+}
+
+.dd-control.is-danger,
+.dd26-button.danger,
+#dd-per-subject-app .dd-exam-button.is-danger,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-danger {
+  border-color: rgba(248, 113, 113, .62);
+  color: #fecaca;
+  background: rgba(127, 29, 29, .16);
+}
+
+.dd-control.is-danger:hover,
+.dd-control.is-danger:focus-visible,
+.dd26-button.danger:hover,
+.dd26-button.danger:focus-visible,
+#dd-per-subject-app .dd-exam-button.is-danger:hover,
+#dd-per-subject-app .dd-exam-button.is-danger:focus-visible,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-danger:hover,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-danger:focus-visible {
+  border-color: #fca5a5;
+  color: #fff;
+  background: rgba(127, 29, 29, .28);
+}
+
+.dd-control[aria-busy="true"],
+.dd26-button[aria-busy="true"],
+#dd-per-subject-app .dd-exam-button[aria-busy="true"],
+.dd-exam-dialog.is-subject-matter .dd-exam-button[aria-busy="true"] {
+  color: var(--dd-control-muted);
+  background: #243247;
+  cursor: progress;
+  pointer-events: none;
+}
+
+.dd-control.is-success,
+.dd26-button.is-success,
+#dd-per-subject-app .dd-exam-button.is-success,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-success {
+  border-color: rgba(74, 222, 128, .6);
+  color: #dcfce7;
+  background: rgba(20, 83, 45, .28);
+}
+
+.dd-control.is-success:hover,
+.dd-control.is-success:focus-visible,
+.dd26-button.is-success:hover,
+.dd26-button.is-success:focus-visible,
+#dd-per-subject-app .dd-exam-button.is-success:hover,
+#dd-per-subject-app .dd-exam-button.is-success:focus-visible,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-success:hover,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-success:focus-visible {
+  border-color: #86efac;
+  color: #f0fdf4;
+  background: rgba(20, 83, 45, .38);
+}
+
+.dd-control.is-error,
+.dd26-button.is-error,
+#dd-per-subject-app .dd-exam-button.is-error,
+.dd-exam-dialog.is-subject-matter .dd-exam-button.is-error {
+  border-color: rgba(248, 113, 113, .62);
+  color: #fecaca;
+  background: rgba(127, 29, 29, .18);
+}
+
+.dd-control:disabled,
+.dd-control[aria-disabled="true"],
+.dd26-button:disabled,
+.dd26-button[aria-disabled="true"],
+#dd-per-subject-app .dd-exam-button:disabled,
+#dd-per-subject-app .dd-exam-button[aria-disabled="true"],
+.dd-exam-dialog.is-subject-matter .dd-exam-button:disabled,
+.dd-exam-dialog.is-subject-matter .dd-exam-button[aria-disabled="true"] {
+  border-color: rgba(148, 163, 184, .24);
+  color: #8290a2;
+  background: #243247;
+  box-shadow: none;
+  opacity: 1;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.dd26-button.compact {
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+/*
+ * Compatibility contract for older, still-active action surfaces. Navigation,
+ * tabs, chips, disclosures, icon controls, card choices and toolbars remain on
+ * their purpose-built treatments; only true next-step actions are normalized.
+ */
+:is(
+  .btn-primary,
+  .btn-secondary,
+  .btn-next,
+  .dd2-button,
+  .pb-primary-action,
+  .pb-dialog-primary,
+  .pb-dialog-secondary,
+  .pb-chamber-primary,
+  .pb-chamber-back,
+  .pb-chamber-feature-action
+) {
+  appearance: none;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: var(--dd-control-height);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 20px;
+  border: 1px solid var(--dd-control-border);
+  border-radius: var(--dd-control-radius);
+  color: var(--dd-control-ivory);
+  background: rgba(2, 18, 35, .42);
+  box-shadow: none;
+  font: 700 13px/1.2 Inter, system-ui, sans-serif;
+  letter-spacing: .01em;
+  text-align: center;
+  text-decoration: none;
+  text-transform: none;
+  cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease,
+    box-shadow .16s ease, transform .16s ease;
+}
+
+:is(
+  .btn-primary,
+  .btn-next,
+  .dd2-button-primary,
+  .dd2-button-gold,
+  .pb-primary-action,
+  .pb-dialog-primary,
+  .pb-chamber-primary,
+  .pb-chamber-feature-action
+) {
+  border-color: var(--dd-control-gold);
+  color: var(--dd-control-navy);
+  background: var(--dd-control-gold);
+  box-shadow: 0 7px 18px rgba(98, 70, 20, .14);
+}
+
+:is(
+  .btn-primary,
+  .btn-next,
+  .dd2-button-primary,
+  .dd2-button-gold,
+  .pb-primary-action,
+  .pb-dialog-primary,
+  .pb-chamber-primary,
+  .pb-chamber-feature-action
+):hover:not(:disabled) {
+  border-color: var(--dd-control-gold-hover);
+  color: var(--dd-control-navy);
+  background: var(--dd-control-gold-hover);
+  box-shadow: 0 9px 21px rgba(98, 70, 20, .18);
+  filter: none;
+  transform: translateY(-1px);
+}
+
+:is(
+  .btn-primary,
+  .btn-next,
+  .dd2-button-primary,
+  .dd2-button-gold,
+  .pb-primary-action,
+  .pb-dialog-primary,
+  .pb-chamber-primary,
+  .pb-chamber-feature-action
+):active:not(:disabled) {
+  border-color: #c79d45;
+  background: #c79d45;
+  box-shadow: none;
+  transform: translateY(0);
+}
+
+/* Secondary actions on the site's ivory forms and dialogs. */
+:is(.btn-secondary, .dd2-button-secondary, .pb-dialog-secondary) {
+  border-color: rgba(6, 26, 53, .34);
+  color: var(--dd-control-navy);
+  background: rgba(255, 255, 255, .68);
+  box-shadow: none;
+}
+
+:is(.btn-secondary, .dd2-button-secondary, .pb-dialog-secondary):hover:not(:disabled) {
+  border-color: var(--dd-control-gold);
+  color: var(--dd-control-navy);
+  background: rgba(212, 175, 87, .09);
+  transform: translateY(-1px);
+}
+
+:is(.btn-secondary, .dd2-button-secondary, .pb-dialog-secondary):active:not(:disabled) {
+  background: rgba(212, 175, 87, .15);
+  transform: translateY(0);
+}
+
+/* Dark-surface return and low-emphasis links retain a true tertiary role. */
+:is(.pb-chamber-back, .pb-text-button) {
+  min-height: 44px;
+  padding-right: 2px;
+  padding-left: 2px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  border-color: rgba(212, 175, 87, .7);
+  color: #e4c476;
+  background: transparent;
+  box-shadow: none;
+  font: 700 13px/1.2 Inter, system-ui, sans-serif;
+  letter-spacing: .01em;
+  text-transform: none;
+}
+
+:is(.pb-chamber-back, .pb-text-button):hover,
+:is(.pb-chamber-back, .pb-text-button):focus-visible {
+  border-color: #fff;
+  color: #fff;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+:is(
+  .btn-primary,
+  .btn-secondary,
+  .btn-next,
+  .dd2-button,
+  .pb-primary-action,
+  .pb-dialog-primary,
+  .pb-dialog-secondary,
+  .pb-chamber-primary,
+  .pb-chamber-back,
+  .pb-chamber-feature-action,
+  .pb-text-button
+):focus-visible {
+  border-color: var(--dd-control-gold-hover);
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--dd-control-focus-dark),
+    0 0 0 5px var(--dd-control-focus);
+}
+
+:is(
+  .btn-primary,
+  .btn-secondary,
+  .btn-next,
+  .dd2-button,
+  .pb-primary-action,
+  .pb-dialog-primary,
+  .pb-dialog-secondary,
+  .pb-chamber-primary,
+  .pb-chamber-back,
+  .pb-chamber-feature-action
+)[aria-busy="true"] {
+  color: #8290a2;
+  background: #e7ebf0;
+  cursor: progress;
+  pointer-events: none;
+}
+
+:is(
+  .btn-primary,
+  .btn-secondary,
+  .btn-next,
+  .dd2-button,
+  .pb-primary-action,
+  .pb-dialog-primary,
+  .pb-dialog-secondary,
+  .pb-chamber-primary,
+  .pb-chamber-feature-action
+).is-success {
+  border-color: #4ade80;
+  color: #14532d;
+  background: #dcfce7;
+}
+
+:is(
+  .btn-primary,
+  .btn-secondary,
+  .btn-next,
+  .dd2-button,
+  .pb-primary-action,
+  .pb-dialog-primary,
+  .pb-dialog-secondary,
+  .pb-chamber-primary,
+  .pb-chamber-feature-action
+).is-error {
+  border-color: #f87171;
+  color: #7f1d1d;
+  background: #fef2f2;
+}
+
+:is(
+  .btn-primary,
+  .btn-secondary,
+  .btn-next,
+  .dd2-button,
+  .pb-primary-action,
+  .pb-dialog-primary,
+  .pb-dialog-secondary,
+  .pb-chamber-primary,
+  .pb-chamber-back,
+  .pb-chamber-feature-action
+):disabled,
+:is(
+  .btn-primary,
+  .btn-secondary,
+  .btn-next,
+  .dd2-button,
+  .pb-primary-action,
+  .pb-dialog-primary,
+  .pb-dialog-secondary,
+  .pb-chamber-primary,
+  .pb-chamber-back,
+  .pb-chamber-feature-action
+)[aria-disabled="true"] {
+  border-color: rgba(148, 163, 184, .24);
+  color: #8290a2;
+  background: #e7ebf0;
+  box-shadow: none;
+  opacity: 1;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-control,
+  .dd26-button,
+  #dd-per-subject-app .dd-exam-button,
+  .dd-exam-dialog.is-subject-matter .dd-exam-button,
+  :is(
+    .btn-primary,
+    .btn-secondary,
+    .btn-next,
+    .dd2-button,
+    .pb-primary-action,
+    .pb-dialog-primary,
+    .pb-dialog-secondary,
+    .pb-chamber-primary,
+    .pb-chamber-back,
+    .pb-chamber-feature-action,
+    .pb-text-button
+  ) {
+    transition-duration: .01ms;
+  }
+}

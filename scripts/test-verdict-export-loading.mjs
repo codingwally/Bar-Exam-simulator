@@ -17,7 +17,7 @@ assert.match(html, /data-verdict-export-one[\s\S]*withVerdictExportApi\(\(api\) 
   'Single-record export controls must not silently no-op when the bundle is deferred.');
 assert.match(html, /verdict-export-selected[\s\S]*withVerdictExportApi\(\(api\) => api\.exportVerdict/,
   'Bulk export must use the same guarded export dependency.');
-assert.match(html, /feature-loader\.js[^"\n]*release=verdict-export-p1-20260815-1/,
+assert.match(html, /feature-loader\.js[^"\n]*release=subject-matter-gil-fixes-20260817-4/,
   'The feature-loader hotfix must use a fresh browser cache key.');
 assert.match(html, /private-beta-landing\.js[^"\n]*release=verdict-export-p1-20260815-1/,
   'The routed Verdict hotfix must use a fresh browser cache key.');

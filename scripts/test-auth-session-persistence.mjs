@@ -300,19 +300,16 @@ const welcomeMessages = [];
 let restoredDestinations = 0;
 const welcomeState = {
   client: {
-    from(table) {
+    from() {
       const query = {
         select() { return query; },
         eq() { return query; },
-        order() { return query; },
         maybeSingle() {
           return Promise.resolve({ data: { id: welcomeState.user.id, display_name: 'Esteban' } });
         },
         limit() {
           return Promise.resolve({
-            data: table === 'terms_acceptances'
-              ? [{ accepted_at: '2026-08-13T00:00:00Z' }]
-              : [{ opted_in: false, changed_at: '2026-08-13T00:00:00Z' }],
+            data: [{ accepted_at: '2026-08-13T00:00:00Z' }],
           });
         },
       };
@@ -322,7 +319,6 @@ const welcomeState = {
   user: { id: 'restored-user', user_metadata: {} },
   session: { access_token: 'restored-access-token' },
   profile: null,
-  marketingOptIn: false,
   admin: null,
   welcomedUserId: null,
 };

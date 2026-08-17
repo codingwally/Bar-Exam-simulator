@@ -48,7 +48,7 @@ for (const id of [
   const fallbackEnd = html.indexOf('</div><!-- /authenticated-app-shell -->', idPosition);
   const markup = html.slice(start, next > start ? next : fallbackEnd);
   assert.ok(idPosition >= 0 && start >= 0 && markup, `${id} must remain present.`);
-  assert.match(markup, /class="modal-close"[^>]*aria-label="Close/i, `${id} needs a labelled upper-right close control.`);
+  assert.match(markup, /class="[^"]*\bmodal-close\b[^"]*"[^>]*aria-label="Close/i, `${id} needs a labelled upper-right close control.`);
   assert.match(markup, /class="[^"]*modal-back[^"]*"[^>]*>Back<\/button>/, `${id} needs a lower-right Back action.`);
 }
 
@@ -73,7 +73,24 @@ for (const [closeId, backId] of [
 assert.match(forum, /button\('×', 'lex-dialog-close', closeDialog\)/);
 assert.match(forum, /back = button\('Back', 'lex-button', closeDialog\)/);
 assert.match(examinations, /aria-label="Close time-mode selection"[\s\S]*?data-dialog-cancel>Back<\/button>/);
-assert.match(examinations, /aria-label="Close Human Examiner invitation"[\s\S]*?data-dialog-cancel>Back<\/button>/);
+assert.match(examinations, /aria-label="Close Human Examiner assignment"[\s\S]*?data-dialog-cancel>Back<\/button>/);
+assert.match(examinations, /Practice Exam email delivery is disabled[\s\S]*?Examiner email \(assignment record\)/);
+assert.match(examinations, /result\.assignmentUrl[\s\S]*?data-copy-human-assignment[\s\S]*?navigator\.clipboard\.writeText\(assignmentUrl\)/);
+assert.match(examinations, /candidate\.origin !== fallback\.origin[\s\S]*?candidate\.searchParams\.get\('assignment'\) !== assignmentToken[\s\S]*?candidate\.hash !== '#examiner-review'/,
+  'The returned manual link must remain same-origin and bound to the generated token.');
+assert.match(examinations, /Assignment created\. No email was sent\./);
+assert.doesNotMatch(examinations, /Examiner invitation sent|No answer or model answer is attached to email/);
+const humanAssignmentStart = examinations.indexOf('async function createHumanAssignment');
+const humanAssignmentEnd = examinations.indexOf('\n  function assessmentList', humanAssignmentStart);
+const humanAssignment = examinations.slice(humanAssignmentStart, humanAssignmentEnd);
+assert.ok(humanAssignmentStart >= 0 && humanAssignmentEnd > humanAssignmentStart);
+assert.doesNotMatch(humanAssignment, /humanDialog\(\)\.close\(\)/,
+  'The manual secure link must remain visible after it is created.');
+assert.match(humanAssignment, /emailInput\.readOnly = true[\s\S]*?button\.textContent = 'Assignment link created'/);
+assert.match(humanAssignment, /linkInput\.focus\(\)[\s\S]*?linkInput\.select\(\)/,
+  'Clipboard failures must leave the secure link visibly selected for manual copying.');
+assert.match(examinations, /Human Examiner Review finalized and saved at[\s\S]*?No Practice Exam email was sent/);
+assert.doesNotMatch(examinations, /Student notification status|studentNotificationStatus/);
 assert.match(examinations, /aria-label="Close extracted question preview"[\s\S]*?data-upload-cancel>Back<\/button>/);
 assert.match(examinations, /id = 'dd-exam-decision-dialog'[\s\S]*?aria-label="Close confirmation and go back"[\s\S]*?>Back<\/button>/);
 

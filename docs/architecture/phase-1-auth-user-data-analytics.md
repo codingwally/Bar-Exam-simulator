@@ -137,9 +137,14 @@ migration.
 ### `marketing_consents`
 
 Stores append-only, timestamped consent changes. `opted_in` defaults to false,
-and no row is also interpreted as not opted in. `record_marketing_consent`
-supports both opt-in and withdrawal. Marketing consent is never checked by
-`complete_profile_onboarding`, so it remains optional and separate from Terms.
+and no row is also interpreted as not opted in. The active product no longer
+presents, reads, or writes a marketing preference, and no marketing sender
+consumes this table. A forward migration turns `record_marketing_consent` into
+an authenticated compatibility no-op: stale clients can complete a profile
+save, but opt-in and withdrawal calls create no row. Existing rows remain only
+as an audit record. A future marketing program must obtain fresh,
+purpose-specific consent rather than treating a historical row as current
+authorization.
 
 ### `user_roles`
 

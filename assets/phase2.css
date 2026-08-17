@@ -297,11 +297,12 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
-  padding: 11px 17px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  font: 750 13px/1 var(--sans, sans-serif);
+  padding: 0 20px;
+  border: 1px solid var(--dd-control-border, rgba(197, 160, 89, .58));
+  border-radius: var(--dd-control-radius, 6px);
+  font: 700 13px/1.2 Inter, var(--sans, sans-serif);
   letter-spacing: .01em;
+  text-transform: none;
   cursor: pointer;
   transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;
 }
@@ -318,19 +319,22 @@
 }
 
 .dd2-button-primary {
-  color: #fff;
-  background: var(--dd2-navy);
-  box-shadow: 0 10px 24px rgba(7, 24, 47, .18);
+  color: var(--dd-control-navy, #061a35);
+  border-color: var(--dd-control-gold, #d4af57);
+  background: var(--dd-control-gold, #d4af57);
+  box-shadow: 0 7px 18px rgba(98, 70, 20, .14);
 }
 
 .dd2-button-primary:hover {
-  background: #0c2749;
+  color: var(--dd-control-navy, #061a35);
+  border-color: var(--dd-control-gold-hover, #e0bf70);
+  background: var(--dd-control-gold-hover, #e0bf70);
 }
 
 .dd2-button-secondary {
   color: var(--dd2-navy);
-  background: transparent;
-  border-color: rgba(15, 39, 68, .28);
+  background: rgba(255, 255, 255, .68);
+  border-color: rgba(6, 26, 53, .34);
 }
 
 .dd2-button-secondary:hover {
@@ -339,9 +343,10 @@
 }
 
 .dd2-button-gold {
-  color: #10213a;
-  background: linear-gradient(135deg, #d8bb7b, #b78e45);
-  box-shadow: 0 10px 24px rgba(94, 67, 19, .2);
+  color: var(--dd-control-navy, #061a35);
+  border-color: var(--dd-control-gold, #d4af57);
+  background: var(--dd-control-gold, #d4af57);
+  box-shadow: 0 7px 18px rgba(98, 70, 20, .14);
 }
 
 .dd2-entry-actions {

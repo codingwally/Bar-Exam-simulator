@@ -1,5 +1,16 @@
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DISTINCT_CONTROLLING_LAW_UNAVAILABLE = 'No distinct controlling-law explanation is available in the approved source material for this item.';
+const OFFICIAL_SOURCE_HOSTS = Object.freeze([
+  'lawphil.net',
+  'judiciary.gov.ph',
+  'officialgazette.gov.ph',
+  'leb.gov.ph',
+  'dole.gov.ph',
+  'bir.gov.ph',
+  'senate.gov.ph',
+  'legal.un.org',
+]);
 
 function cleanText(value, maximum = 20_000) {
   return String(value ?? '')
@@ -20,6 +31,28 @@ function normalizedForComparison(value) {
 
 function normalizedWords(value) {
   return normalizedForComparison(value).split(' ').filter(Boolean);
+}
+
+export function isNearDuplicateSubjectMatterReview(value, suggestedAnswer) {
+  const candidate = normalizedForComparison(value);
+  const answer = normalizedForComparison(suggestedAnswer);
+  if (!candidate || !answer) return false;
+  if (candidate === answer) return true;
+
+  const lengthRatio = Math.min(candidate.length, answer.length)
+    / Math.max(candidate.length, answer.length, 1);
+  if (lengthRatio >= 0.8 && (candidate.includes(answer) || answer.includes(candidate))) {
+    return true;
+  }
+
+  const candidateWords = new Set(candidate.split(' ').filter(Boolean));
+  const answerWords = new Set(answer.split(' ').filter(Boolean));
+  let intersection = 0;
+  candidateWords.forEach((word) => {
+    if (answerWords.has(word)) intersection += 1;
+  });
+  const union = candidateWords.size + answerWords.size - intersection;
+  return lengthRatio >= 0.7 && union > 0 && intersection / union >= 0.9;
 }
 
 export function isBareSubjectMatterDoctrine(value) {
@@ -70,12 +103,21 @@ function reviewError() {
   return error;
 }
 
+export function isOfficialSubjectMatterSource(value) {
+  try {
+    const url = new URL(cleanText(value, 2_048));
+    if (url.protocol !== 'https:' || url.username || url.password) return false;
+    const hostname = url.hostname.toLowerCase();
+    return OFFICIAL_SOURCE_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`));
+  } catch {
+    return false;
+  }
+}
+
 function safeSources(value) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 12) throw reviewError();
   const sources = value.map((source) => cleanText(source, 2_048));
-  if (sources.some((source) => {
-    try { return new URL(source).protocol !== 'https:'; } catch { return true; }
-  })) throw reviewError();
+  if (sources.some((source) => !isOfficialSubjectMatterSource(source))) throw reviewError();
   return sources;
 }
 
@@ -304,24 +346,41 @@ function withoutBareOpeningAnswer(value) {
   return cleanText(value, 20_000).replace(/^(?:yes|no)\.?(?:\s+|$)/i, '').trim();
 }
 
-function substantiveFallbackRule(material) {
+function sourceBoundFallbackRule(material) {
   const legalBasisSection = sectionFromSuggestedAnswer(material.suggestedAnswer, 'Legal Basis');
-  if (isSubstantiveLegalExplanation(legalBasisSection)) return legalBasisSection;
-  const ruleSentences = answerSentences(material.suggestedAnswer).filter((sentence, index) => (
-    !(index === 0 && isBareSubjectMatterDoctrine(sentence))
-    && !/^(?:therefore|thus|hence|accordingly|consequently|the remedy\b)/i.test(sentence)
-  ));
-  const extractedRule = ruleSentences.join(' ');
-  if (isSubstantiveLegalExplanation(extractedRule)) return extractedRule;
-  const answerWithoutBareOpening = withoutBareOpeningAnswer(material.suggestedAnswer);
-  if (isSubstantiveLegalExplanation(answerWithoutBareOpening)) return answerWithoutBareOpening;
-  const authorities = uniqueTextValues([
+  const candidates = uniqueTextValues([
+    legalBasisSection,
+    material.doctrine,
     material.legalBasis,
     material.governingProvision,
     material.citation,
-  ]).join('; ');
-  return `The approved suggested answer supplies the controlling explanation: ${answerWithoutBareOpening}`
-    + (authorities ? ` The approved authorities are ${authorities}.` : '');
+  ]).filter((candidate) => (
+    !isBareSubjectMatterDoctrine(candidate)
+    && !isNearDuplicateSubjectMatterReview(candidate, material.suggestedAnswer)
+  ));
+  const substantive = candidates.find(isSubstantiveLegalExplanation);
+  if (substantive) return substantive;
+
+  // Some approved legacy answers contain a concise rule discussion without
+  // headings while their legal-basis field contains citations only. Preserve
+  // that useful rule only when it is a genuinely smaller, distinct excerpt;
+  // never promote the complete answer under a second heading.
+  const extractedRule = answerSentences(material.suggestedAnswer)
+    .filter((sentence, index) => (
+      !(index === 0 && isBareSubjectMatterDoctrine(sentence))
+      && !/^(?:therefore|thus|hence|accordingly|consequently|the remedy\b)/i.test(sentence)
+    ))
+    .join(' ');
+  if (isSubstantiveLegalExplanation(extractedRule)
+      && !isNearDuplicateSubjectMatterReview(extractedRule, material.suggestedAnswer)) {
+    return extractedRule;
+  }
+  if (candidates.length) return candidates[0];
+
+  // A complete legal basis is required by the owner-bound reveal record. If
+  // every approved rule field repeats the answer, say so explicitly instead
+  // of manufacturing authority or rendering the same text under two headings.
+  return DISTINCT_CONTROLLING_LAW_UNAVAILABLE;
 }
 
 function substantiveFallbackApplication(material) {
@@ -355,7 +414,7 @@ export function fallbackSubjectMatterTeachingExplanation(material) {
   const conclusion = sectionFromSuggestedAnswer(material.suggestedAnswer, 'Conclusion')
     || sentences.at(-1)
     || cleanText(material.suggestedAnswer.split(/\n\s*\n/).at(-1), 6_000);
-  const controlling = substantiveFallbackRule(material);
+  const controlling = sourceBoundFallbackRule(material);
   return {
     directAnswer: answer || material.suggestedAnswer,
     controllingLawAndElements: controlling,
@@ -373,10 +432,16 @@ function substantiveReviewText(value, fallback) {
 
 export function buildSubjectMatterLegalReview(material, explanation) {
   const fallback = fallbackSubjectMatterTeachingExplanation(material);
-  const controllingLawAndDoctrine = substantiveReviewText(
+  const suppliedControllingLaw = substantiveReviewText(
     explanation?.controllingLawAndElements,
     fallback.controllingLawAndElements,
   );
+  const controllingLawAndDoctrine = isNearDuplicateSubjectMatterReview(
+    suppliedControllingLaw,
+    material.suggestedAnswer,
+  )
+    ? fallback.controllingLawAndElements
+    : suppliedControllingLaw;
   const applicationToFacts = substantiveReviewText(
     explanation?.applicationToFacts,
     fallback.applicationToFacts,

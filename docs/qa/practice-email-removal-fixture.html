@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Practice Exam email removal — browser QA</title>
+  <link rel="icon" href="../../assets/brand/favicon.ico" sizes="any">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&amp;family=Playfair+Display:wght@500;600;700&amp;family=Inter:wght@400;600;700;800&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../assets/phase2.css">
+  <link rel="stylesheet" href="../../assets/private-beta-landing.css">
+  <link rel="stylesheet" href="../../assets/due-diligence-controls.css">
+  <link rel="stylesheet" href="../../assets/examinations.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+  </style>
+</head>
+<body class="private-beta-public" data-qa-fixture="practice-email-removal-production-renderer">
+  <header class="topbar pb-header pb-shared-header" id="site-header">
+    <a class="brand pb-brand" href="../../index.html" aria-label="Due Diligence homepage">
+      <img class="crest pb-crest" src="../../assets/brand/icon-192.png" width="50" height="50" alt="" aria-hidden="true">
+      <span>
+        <span class="brand-name pb-brand-name">Due Diligence</span>
+        <span class="brand-sub pb-brand-sub">Amicus in Itinere Iuris</span>
+      </span>
+    </a>
+  </header>
+
+  <main id="dd-bar-feels-app" aria-label="Practice Exam"></main>
+
+  <script>
+    (() => {
+      const attemptId = 'qa-practice-attempt-00000001';
+      const activeAttempt = {
+        examination: {
+          track: 'bar_feels',
+          title: 'Bar Feels — Controlled Practice Review',
+          subject: 'Civil Law',
+          gradingRoute: 'human',
+        },
+        attempt: {
+          attemptId,
+          versionId: 'qa-practice-version-00000001',
+          timerMode: 'none',
+          status: 'in_progress',
+          elapsedSeconds: 0,
+          remainingSeconds: null,
+        },
+        questions: [{
+          questionId: 'qa-practice-question-00000001',
+          prompt: 'Explain the essential elements of a civil obligation.',
+          answerText: 'A civil obligation requires an obligee, an obligor, a prestation, and a juridical tie.',
+          answerHtml: '<p>A civil obligation requires an obligee, an obligor, a prestation, and a juridical tie.</p>',
+          revision: 1,
+          flagged: false,
+        }],
+      };
+
+      window.DueDiligencePhase2Config = { workerUrl: 'https://browser-qa.invalid' };
+      window.DueDiligencePrivateWorkspace = {
+        generation: () => 1,
+        scopedKey: (_namespace, key) => `dd-practice-email-qa:${key}`,
+        registerReset: () => {},
+      };
+      window.DueDiligencePhase4 = {
+        getSession: () => ({
+          access_token: 'browser-qa-session',
+          user: { id: 'browser-qa-user', email: 'browser-qa@example.invalid' },
+        }),
+        request: async (path, options = {}) => {
+          const operation = options.body?.operation;
+          if (path === '/examinations/query' && operation === 'resume') {
+            return { data: structuredClone(activeAttempt) };
+          }
+          if (path === '/examinations/command' && operation === 'save_response') {
+            return { data: {
+              answerText: activeAttempt.questions[0].answerText,
+              answerHtml: activeAttempt.questions[0].answerHtml,
+              flagged: false,
+              revision: 1,
+              savedAt: new Date().toISOString(),
+              remainingSeconds: null,
+            } };
+          }
+          if (path === '/examinations/command' && operation === 'heartbeat') {
+            return { data: { remainingSeconds: null, elapsedSeconds: 0 } };
+          }
+          if (path === '/examinations/command' && operation === 'submit_attempt') {
+            return { data: {
+              attemptId,
+              status: 'submitted',
+              submittedAt: new Date().toISOString(),
+              receiptCode: 'QA-PRACTICE-RECEIPT',
+              answeredCount: 1,
+              flaggedCount: 0,
+              questionCount: 1,
+              automatic: false,
+            } };
+          }
+          if (path === '/examinations/command' && operation === 'create_examiner_assignment') {
+            const token = String(options.body?.assignmentToken || '');
+            return { data: {
+              assignmentId: 'qa-human-assignment-00000001',
+              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+              invitationStatus: 'suppressed',
+              assignmentUrl: `${location.origin}/?assignment=${encodeURIComponent(token)}#examiner-review`,
+            } };
+          }
+          throw new Error(`Unexpected QA request: ${path} / ${operation}`);
+        },
+        openSignIn: () => {},
+      };
+      window.showPage = () => {};
+      window.toast = () => {};
+
+      window.__DD_EMAIL_QA_READY = (async () => {
+        await new Promise((resolve) => addEventListener('load', resolve, { once: true }));
+        await window.DueDiligenceExaminations.resumeAttempt(attemptId, { expectedTrack: 'bar_feels' });
+        document.querySelector('[data-review-all]')?.click();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        document.querySelector('[data-submit-exam]')?.click();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        document.querySelector('[data-request-human]')?.click();
+      })();
+    })();
+  </script>
+  <script src="../../assets/examinations.js"></script>
+</body>
+</html>

@@ -387,6 +387,10 @@ async function completeHumanReview(student, attempt) {
     requestKey: requestKey('assignment'),
   }, [201]);
   assert.equal(assigned.body.data.invitationStatus, 'suppressed');
+  const manualAssignmentUrl = new URL(assigned.body.data.assignmentUrl);
+  assert.equal(manualAssignmentUrl.origin, new URL(ORIGIN).origin);
+  assert.equal(manualAssignmentUrl.searchParams.get('assignment'), assignmentToken);
+  assert.equal(manualAssignmentUrl.hash, '#examiner-review');
 
   const assignment = await query(null, 'assignment', { assignmentToken });
   assert.equal(assignment.body.ok, true);

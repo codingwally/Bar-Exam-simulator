@@ -35,6 +35,7 @@ function signInRequest(sessionId) {
 
 const env = {
   ALLOWED_ORIGIN: 'https://duediligence.ph',
+  OUTBOUND_EMAIL_MODE: 'enabled',
   SUPABASE_URL: 'https://project.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY: 'test-service-role',
   RESEND_API_KEY: 'test-resend-key',

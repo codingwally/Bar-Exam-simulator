@@ -6,14 +6,40 @@
 
 .dd-study-tools-button,
 .dd-study-note-actions button {
-  min-height: 44px;
-  padding: 10px 15px;
-  border: 1px solid #b58c37;
-  border-radius: 8px;
-  color: #082442;
-  background: #fffdf7;
-  font: 750 12px/1.25 Inter, sans-serif;
+  min-height: var(--dd-control-height, 46px);
+  padding: 0 20px;
+  border: 1px solid rgba(6, 26, 53, .34);
+  border-radius: var(--dd-control-radius, 6px);
+  color: var(--dd-control-navy, #061a35);
+  background: rgba(255, 255, 255, .68);
+  box-shadow: none;
+  font: 700 13px/1.2 Inter, system-ui, sans-serif;
+  letter-spacing: .01em;
+  text-transform: none;
   cursor: pointer;
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease,
+    box-shadow .16s ease, transform .16s ease;
+}
+
+.dd-study-tools-button:hover,
+.dd-study-note-actions button:hover:not(:disabled) {
+  border-color: var(--dd-control-gold, #d4af57);
+  background: rgba(212, 175, 87, .09);
+  transform: translateY(-1px);
+}
+
+.dd-study-tools-button:active,
+.dd-study-note-actions button:active:not(:disabled) {
+  background: rgba(212, 175, 87, .15);
+  transform: translateY(0);
+}
+
+.dd-study-tools-button:focus-visible,
+.dd-study-note-actions button:focus-visible {
+  border-color: var(--dd-control-gold-hover, #e0bf70);
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--dd-control-focus-dark, #061a35),
+    0 0 0 5px var(--dd-control-focus, #f3cd78);
 }
 
 .dd-study-notes-dialog {
@@ -39,12 +65,41 @@
 .dd-study-notes-close { position: absolute; top: 18px; right: 18px; width: 44px; height: 44px; border: 1px solid #b58c37; border-radius: 50%; color: #0b2442; background: transparent; font-size: 26px; cursor: pointer; }
 .dd-study-sync { min-height: 22px; color: #38654f; font: 700 12px/1.5 Inter, sans-serif; }
 .dd-study-note-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-.dd-study-note-actions .dd-study-primary { color: #071a31; background: linear-gradient(135deg, #f2cf70, #d6aa35); }
-.dd-study-note-actions .dd-study-delete { margin-right: auto; color: #8d2830; border-color: #d4a9ad; }
+.dd-study-note-actions .dd-study-primary {
+  color: var(--dd-control-navy, #061a35);
+  border-color: var(--dd-control-gold, #d4af57);
+  background: var(--dd-control-gold, #d4af57);
+  box-shadow: 0 7px 18px rgba(98, 70, 20, .14);
+}
+.dd-study-note-actions .dd-study-primary:hover:not(:disabled) {
+  border-color: var(--dd-control-gold-hover, #e0bf70);
+  background: var(--dd-control-gold-hover, #e0bf70);
+}
+.dd-study-note-actions .dd-study-delete { margin-right: auto; color: #8d2830; border-color: #d4a9ad; background: transparent; }
+.dd-study-note-actions .dd-study-delete:hover:not(:disabled) { color: #7f1d1d; border-color: #b65f66; background: #fff4f4; }
+.dd-study-tools-button[aria-busy="true"],
+.dd-study-note-actions button[aria-busy="true"] { cursor: progress; }
+.dd-study-tools-button:disabled,
+.dd-study-tools-button[aria-disabled="true"],
+.dd-study-note-actions button:disabled,
+.dd-study-note-actions button[aria-disabled="true"] {
+  border-color: rgba(148, 163, 184, .24);
+  color: #8290a2;
+  background: #e7ebf0;
+  box-shadow: none;
+  opacity: 1;
+  cursor: not-allowed;
+  transform: none;
+}
 
 @media (max-width: 600px) {
   .dd-study-notes-dialog { width: 100vw; max-width: none; max-height: 92dvh; margin: auto 0 0; border-radius: 18px 18px 0 0; }
   .dd-study-notes-shell { padding: 26px 20px; }
   .dd-study-note-actions { display: grid; grid-template-columns: 1fr; }
   .dd-study-note-actions .dd-study-delete { order: 3; margin: 8px 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-study-tools-button,
+  .dd-study-note-actions button { transition-duration: .01ms; }
 }

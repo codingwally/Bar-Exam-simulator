@@ -17,7 +17,8 @@ function response(body, status = 200) {
 
 function examinationEmailEnv(mode = 'enabled') {
   return {
-    EXAMINATION_EMAIL_MODE: mode,
+    OUTBOUND_EMAIL_MODE: 'suppressed',
+    EXAMINATION_ROOM_EMAIL_MODE: mode,
     RESEND_API_KEY: 'server-secret',
     EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
   };
@@ -441,7 +442,10 @@ test('Google outage never throws past the queue and records a bounded retry fail
     if (name === 'exam_room_claim_email_batch_v2') return [];
     throw new Error(`Unexpected RPC ${name}`);
   };
-  const result = await processExamRoomDeliveryQueues({ EXAM_GOOGLE_BACKUP_ENABLED: 'true' }, {
+  const result = await processExamRoomDeliveryQueues({
+    EXAM_GOOGLE_BACKUP_ENABLED: 'true',
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+  }, {
     rpc,
     fetchImpl: async () => response({ error: 'unavailable' }, 503),
   });
@@ -461,14 +465,18 @@ test('auto-submit failure is visible without blocking independent delivery queue
     if (name === 'exam_room_claim_email_batch_v2') return [];
     throw new Error(`Unexpected RPC ${name}`);
   };
-  const result = await processExamRoomDeliveryQueues({ EXAM_GOOGLE_BACKUP_ENABLED: 'true' }, { rpc });
+  const result = await processExamRoomDeliveryQueues({
+    OUTBOUND_EMAIL_MODE: 'enabled',
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+    EXAM_GOOGLE_BACKUP_ENABLED: 'true',
+  }, { rpc });
   assert.equal(result.autoSubmitted, 0);
   assert.equal(result.autoSubmitFailed, 1);
   assert.equal(result.emailClaimed, 0);
   assert.ok(calls.includes('exam_room_claim_email_batch_v2'));
 });
 
-test('legacy suppressed Examination Room mode remains zero-provider-traffic when override is missing', async () => {
+test('explicitly suppressed Examination Room mode remains zero-provider-traffic', async () => {
   let fetchCount = 0;
   const result = await deliverExamRoomEmail(examinationEmailEnv('suppressed'), {
     id: 'job-legacy-suppressed',
@@ -483,7 +491,7 @@ test('legacy suppressed Examination Room mode remains zero-provider-traffic when
   assert.equal(fetchCount, 0);
 });
 
-test('explicit room suppressed mode blocks provider traffic even when legacy mode is enabled', async () => {
+test('explicit room suppressed mode blocks provider traffic independently of other email modes', async () => {
   let fetchCount = 0;
   const result = await deliverExamRoomEmail({
     ...examinationEmailEnv('enabled'),
@@ -499,6 +507,63 @@ test('explicit room suppressed mode blocks provider traffic even when legacy mod
   });
   assert.equal(result.providerId, 'suppressed:job-room-suppressed');
   assert.equal(fetchCount, 0);
+});
+
+test('global non-Room pause does not override an explicitly enabled Examination Room sender', async () => {
+  let fetchCount = 0;
+  const result = await deliverExamRoomEmail({
+    ...examinationEmailEnv('enabled'),
+    OUTBOUND_EMAIL_MODE: 'suppressed',
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+  }, {
+    id: 'job-global-suppressed',
+    email_type: 'student_result',
+    recipient_email: 'student@example.test',
+    payload: {},
+  }, async () => {
+    fetchCount += 1;
+    return response({ id: 'resend-room-independent' });
+  });
+  assert.equal(result.providerId, 'resend-room-independent');
+  assert.equal(fetchCount, 1);
+});
+
+test('global non-Room pause does not hold an enabled Examination Room delivery queue', async () => {
+  const calls = [];
+  let fetchCount = 0;
+  const rpc = async (_env, name) => {
+    calls.push(name);
+    if (name === 'exam_room_auto_submit_due') return { autoSubmitted: 0 };
+    if (name === 'dd2026_service_flag_enabled') return false;
+    if (name === 'exam_room_claim_email_batch_v2') return [{
+      id: 'room-queue-independent',
+      email_type: 'student_result',
+      recipient_email: 'student@example.test',
+      payload: {},
+      claim_token: 'claim-room-independent',
+    }];
+    if (name === 'exam_room_complete_email_v2') return { ok: true };
+    throw new Error(`Unexpected RPC ${name}`);
+  };
+  const result = await processExamRoomDeliveryQueues({
+    ...examinationEmailEnv('enabled'),
+    OUTBOUND_EMAIL_MODE: 'suppressed',
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+  }, {
+    rpc,
+    fetchImpl: async () => {
+      fetchCount += 1;
+      return response({ id: 'resend-room-queue-independent' });
+    },
+  });
+  assert.equal(result.emailPaused, false);
+  assert.equal(result.emailClaimed, 1);
+  assert.equal(result.emailSent, 1);
+  assert.equal(result.emailFailed, 0);
+  assert.equal(fetchCount, 1);
+  assert.equal(calls.includes('exam_room_claim_email_batch_v2'), true);
+  assert.equal(calls.includes('exam_room_complete_email_v2'), true);
+  assert.equal(calls.includes('exam_room_fail_email_v2'), false);
 });
 
 test('unknown Examination Room email types fail closed before provider traffic', async () => {
@@ -521,7 +586,7 @@ test('unknown Examination Room email types fail closed before provider traffic',
   assert.equal(fetchCount, 0);
 });
 
-test('an explicitly blank room mode fails closed instead of falling back to legacy enabled mode', async () => {
+test('an explicitly blank room mode fails closed', async () => {
   let fetchCount = 0;
   await assert.rejects(
     deliverExamRoomEmail({
@@ -709,10 +774,10 @@ test('room enabled override delivers every Examination Room email type while unr
   assert.equal(fetchCount, cases.length);
 });
 
-test('missing room override preserves legacy enabled delivery and idempotency behavior', async () => {
+test('explicit room enablement preserves delivery and idempotency behavior', async () => {
   let captured;
   const result = await deliverExamRoomEmail({
-    EXAMINATION_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'server-secret',
+    OUTBOUND_EMAIL_MODE: 'suppressed', EXAMINATION_ROOM_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'server-secret',
     EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
   }, {
     id: 'job-2', email_type: 'professor_release_summary', recipient_email: 'professor@example.test',
@@ -745,7 +810,7 @@ test('professor release email contains a 30-student grade record and attached cl
     ],
   }));
   await deliverExamRoomEmail({
-    EXAMINATION_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'server-secret',
+    OUTBOUND_EMAIL_MODE: 'suppressed', EXAMINATION_ROOM_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'server-secret',
     EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
   }, {
     id: 'professor-class-gradebook-job',
@@ -815,7 +880,7 @@ test('delivery queue enriches only the professor release job with its owner-scop
     throw new Error(`Unexpected RPC ${name}`);
   };
   const result = await processExamRoomDeliveryQueues({
-    EXAMINATION_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'server-secret',
+    OUTBOUND_EMAIL_MODE: 'suppressed', EXAMINATION_ROOM_EMAIL_MODE: 'enabled', RESEND_API_KEY: 'server-secret',
     EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
   }, {
     rpc,
@@ -834,7 +899,8 @@ test('delivery queue enriches only the professor release job with its owner-scop
 test('student submission receipt contains the final questions and only that student submitted answers', async () => {
   let captured;
   await deliverExamRoomEmail({
-    EXAMINATION_EMAIL_MODE: 'enabled',
+    OUTBOUND_EMAIL_MODE: 'suppressed',
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
     RESEND_API_KEY: 'server-secret',
     EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
   }, {
@@ -871,7 +937,8 @@ test('student submission receipt contains the final questions and only that stud
 test('student result email includes overall and per-question grades for only its recipient', async () => {
   let captured;
   await deliverExamRoomEmail({
-    EXAMINATION_EMAIL_MODE: 'enabled',
+    OUTBOUND_EMAIL_MODE: 'suppressed',
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
     RESEND_API_KEY: 'server-secret',
     EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
   }, {
@@ -936,7 +1003,8 @@ test('replacement and reopening notices are bounded, idempotent, and contain no 
   for (const entry of cases) {
     let captured;
     await deliverExamRoomEmail({
-      EXAMINATION_EMAIL_MODE: 'enabled',
+      OUTBOUND_EMAIL_MODE: 'suppressed',
+      EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
       RESEND_API_KEY: 'server-secret',
       EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
     }, {

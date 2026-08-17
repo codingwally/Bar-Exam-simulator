@@ -5,7 +5,9 @@ import worker, {
   EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS,
   examRoom2026DatabaseError,
   examinationEmailMode,
+  outboundEmailMode,
   sendExaminationEmail,
+  sendSecureNotification,
 } from './index.mjs';
 import {
   RUBRIC_VERSION,
@@ -79,7 +81,7 @@ test('Examination Room email uses its explicit mode without weakening general su
     });
   };
   const baseEnv = {
-    EXAMINATION_EMAIL_MODE: 'suppressed',
+    OUTBOUND_EMAIL_MODE: 'enabled',
     EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
     EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
     RESEND_API_KEY: 'test-only-secret',
@@ -107,7 +109,6 @@ test('Examination Room email uses its explicit mode without weakening general su
 
     const explicitlyPausedRoom = await sendExaminationEmail({
       ...baseEnv,
-      EXAMINATION_EMAIL_MODE: 'enabled',
       EXAMINATION_ROOM_EMAIL_MODE: 'suppressed',
     }, {
       recipient: 'student@example.test', subject: 'Paused room', text: 'Never sent', examRoom: true,
@@ -116,10 +117,53 @@ test('Examination Room email uses its explicit mode without weakening general su
     assert.equal(requests.length, 1, 'An explicit Examination Room suppression must never send.');
 
     assert.equal(
-      examinationEmailMode({ EXAMINATION_EMAIL_MODE: 'enabled' }, true),
-      'enabled',
-      'Missing room-specific configuration must preserve the legacy mode.',
+      examinationEmailMode({ OUTBOUND_EMAIL_MODE: 'enabled', EXAMINATION_EMAIL_MODE: 'enabled' }, true),
+      'not_configured',
+      'Examination Room must use only its explicit configuration.',
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('global non-Room policy fails closed without overriding Examination Room', async () => {
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  globalThis.fetch = async () => {
+    providerCalls += 1;
+    return Response.json({ id: 'provider-call-must-not-happen' });
+  };
+  const enabledCategories = {
+    OUTBOUND_EMAIL_MODE: 'invalid-operator-value',
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+    EXAMINATION_EMAIL_FROM: 'Due Diligence <support@duediligence.ph>',
+    RESEND_API_KEY: 'test-only-secret',
+    WEB3FORMS_ACCESS_KEY: 'test-only-web3forms-secret',
+  };
+  try {
+    assert.equal(outboundEmailMode({}), 'suppressed');
+    assert.equal(outboundEmailMode({ OUTBOUND_EMAIL_MODE: 'enabled' }), 'enabled');
+    assert.equal(outboundEmailMode({ OUTBOUND_EMAIL_MODE: 'suppressed' }), 'suppressed');
+    assert.equal(outboundEmailMode(enabledCategories), 'suppressed');
+    assert.equal(examinationEmailMode(enabledCategories), 'suppressed');
+    assert.equal(examinationEmailMode(enabledCategories, true), 'enabled');
+
+    const general = await sendExaminationEmail(enabledCategories, {
+      recipient: 'student@example.test', subject: 'General', text: 'Never sent',
+    });
+    const room = await sendExaminationEmail(enabledCategories, {
+      recipient: 'student@example.test', subject: 'Room', text: 'Room delivery', examRoom: true,
+    });
+    const web3forms = await sendSecureNotification(enabledCategories, {
+      mailbox: 'founders@duediligence.ph',
+      subject: 'Never sent',
+      adminPath: '/admin/',
+    });
+
+    assert.equal(general.status, 'suppressed');
+    assert.equal(room.status, 'sent');
+    assert.equal(web3forms.status, 'suppressed');
+    assert.equal(providerCalls, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -10,6 +10,7 @@ const entryId = 'qe_aaaaaaaaaaaaaaaaaaaa';
 
 const baseEnv = Object.freeze({
   ALLOWED_ORIGIN: origin,
+  OUTBOUND_EMAIL_MODE: 'enabled',
   PRIVATE_BETA_GATE_ENABLED: 'false',
   REQUIRE_AUTHENTICATED_SUBMISSIONS: 'true',
   GUEST_USAGE_HMAC_KEY: 'test-only-support-rate-key',

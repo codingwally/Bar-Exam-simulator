@@ -356,19 +356,20 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 
 .pb-primary-action,
 .pb-dialog-primary {
-  min-height: 52px;
-  border: 1px solid var(--pb-gold);
-  border-radius: 0;
-  padding: 0 27px;
-  color: #071426;
-  background: var(--pb-gold);
-  box-shadow: 0 10px 26px rgba(196, 164, 95, .18);
+  min-height: var(--dd-control-height, 46px);
+  border: 1px solid var(--dd-control-gold, #d4af57);
+  border-radius: var(--dd-control-radius, 6px);
+  padding: 0 20px;
+  color: var(--dd-control-navy, #061a35);
+  background: var(--dd-control-gold, #d4af57);
+  box-shadow: 0 7px 18px rgba(98, 70, 20, .14);
   cursor: pointer;
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 10px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: .18em;
-  text-transform: uppercase;
+  line-height: 1.2;
+  letter-spacing: .01em;
+  text-transform: none;
   transition: background-color .2s ease, color .2s ease, transform .2s ease, box-shadow .2s ease;
 }
 
@@ -378,10 +379,10 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 
 .pb-primary-action:hover,
 .pb-dialog-primary:hover:not(:disabled) {
-  color: #061123;
-  background: #d9bd7d;
-  transform: translateY(-2px);
-  box-shadow: 0 15px 34px rgba(196, 164, 95, .26);
+  color: var(--dd-control-navy, #061a35);
+  background: var(--dd-control-gold-hover, #e0bf70);
+  transform: translateY(-1px);
+  box-shadow: 0 9px 21px rgba(98, 70, 20, .18);
 }
 
 .pb-primary-action:focus-visible,
@@ -776,17 +777,19 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 .pb-chamber-primary,
 .pb-chamber-back,
 .pb-chamber-feature-action {
-  min-height: 44px;
-  border: 1px solid var(--pb-gold);
-  padding: 10px 14px;
-  color: #071426;
-  background: var(--pb-gold-bright);
+  min-height: var(--dd-control-height, 46px);
+  border: 1px solid var(--dd-control-gold, #d4af57);
+  border-radius: var(--dd-control-radius, 6px);
+  padding: 0 20px;
+  color: var(--dd-control-navy, #061a35);
+  background: var(--dd-control-gold, #d4af57);
   cursor: pointer;
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 9px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: .1em;
-  text-transform: uppercase;
+  line-height: 1.2;
+  letter-spacing: .01em;
+  text-transform: none;
 }
 
 .pb-chamber-primary:hover,
@@ -795,13 +798,19 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 .pb-chamber-back:focus-visible,
 .pb-chamber-feature-action:hover,
 .pb-chamber-feature-action:focus-visible {
-  background: #f1d587;
-  outline: 3px solid #fff;
-  outline-offset: 2px;
+  background: var(--dd-control-gold-hover, #e0bf70);
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--dd-control-focus-dark, #061a35),
+    0 0 0 5px var(--dd-control-focus, #f3cd78);
 }
 
 .pb-chamber-back {
-  color: #f4e6be;
+  min-height: 44px;
+  padding-right: 2px;
+  padding-left: 2px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  color: #e4c476;
   background: transparent;
 }
 
@@ -1213,23 +1222,24 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
 }
 
 .pb-dialog-secondary {
-  min-height: 48px;
-  border: 1px solid #6b7789;
-  border-radius: 0;
+  min-height: var(--dd-control-height, 46px);
+  border: 1px solid rgba(6, 26, 53, .34);
+  border-radius: var(--dd-control-radius, 6px);
   padding: 0 20px;
-  color: #26364c;
-  background: transparent;
+  color: var(--dd-control-navy, #061a35);
+  background: rgba(255, 255, 255, .68);
   cursor: pointer;
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: .12em;
-  text-transform: uppercase;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: .01em;
+  text-transform: none;
 }
 
 .pb-dialog-secondary:hover {
-  border-color: #2d3b50;
-  background: #ece7dc;
+  border-color: var(--dd-control-gold, #d4af57);
+  background: rgba(212, 175, 87, .09);
 }
 
 .pb-dialog-primary:disabled,

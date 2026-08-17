@@ -396,6 +396,77 @@ async function openCatalog(page, track) {
   }).waitFor({ state: 'visible', timeout: 15_000 });
 }
 
+async function verifySubjectChooserGeometry(page) {
+  for (const viewport of [
+    { width: 1_440, height: 900 },
+    { width: 375, height: 812 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const callout = page.locator('#dd-per-subject-app .dd-subject-selection-callout');
+    await callout.waitFor({ state: 'visible', timeout: 15_000 });
+    const geometry = await callout.evaluate((section) => {
+      const shell = section.closest('.dd-exam-shell');
+      const heading = section.querySelector('#dd-subject-course-selection-heading');
+      const summary = section.querySelector('.dd-subject-selection-summary');
+      const browse = section.querySelector('[data-subject-selector-open]');
+      const note = section.querySelector('.dd-subject-selection-note');
+      const rect = (node) => {
+        const bounds = node.getBoundingClientRect();
+        return {
+          left: bounds.left,
+          right: bounds.right,
+          top: bounds.top,
+          bottom: bounds.bottom,
+          width: bounds.width,
+          height: bounds.height,
+          centerX: bounds.left + (bounds.width / 2),
+        };
+      };
+      const browseStyle = getComputedStyle(browse);
+      return {
+        shell: rect(shell),
+        section: rect(section),
+        heading: rect(heading),
+        summary: rect(summary),
+        browse: rect(browse),
+        note: rect(note),
+        sectionAlignItems: getComputedStyle(section).alignItems,
+        browseBackgroundImage: browseStyle.backgroundImage,
+        browseClasses: [...browse.classList],
+        overflow: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+    const label = `subject-chooser-${viewport.width}x${viewport.height}`;
+    results.responsive[label] = geometry;
+    const withinPixel = (a, b) => Math.abs(a - b) <= 1;
+    assert.equal(geometry.overflow, false, `${label} must not overflow horizontally.`);
+    assert.equal(geometry.sectionAlignItems, 'center', `${label} must use centered flex alignment.`);
+    assert.ok(withinPixel(geometry.section.centerX, geometry.shell.centerX),
+      `${label} callout must be centered within the Subject Matter shell.`);
+    for (const [name, bounds] of [
+      ['heading', geometry.heading],
+      ['summary', geometry.summary],
+      ['Browse courses', geometry.browse],
+      ['supporting note', geometry.note],
+    ]) {
+      assert.ok(withinPixel(bounds.centerX, geometry.section.centerX),
+        `${label} ${name} must share the callout centerline.`);
+    }
+    assert.ok(geometry.summary.bottom < geometry.browse.top,
+      `${label} Browse courses must sit below the study guidance.`);
+    assert.ok(geometry.browse.bottom < geometry.note.top,
+      `${label} the supporting note must follow the Browse courses action.`);
+    assert.ok(geometry.browse.height >= 44, `${label} Browse courses must preserve a 44px target.`);
+    assert.ok(geometry.browseClasses.includes('dd-control')
+      && geometry.browseClasses.includes('is-primary'),
+    `${label} Browse courses must use the shared primary control.`);
+    assert.equal(geometry.browseBackgroundImage, 'none',
+      `${label} the primary action must use a solid surface, not a gradient.`);
+    await runAccessibilityAudit(page, label);
+  }
+  await page.setViewportSize({ width: 1_440, height: 900 });
+}
+
 async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
@@ -403,8 +474,8 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
       const writing = document.querySelector('.dd-subject-editorial-pane.is-writing');
       const review = document.querySelector('.dd-subject-editorial-pane.is-review-panel');
       const grid = document.querySelector('.dd-subject-editorial-grid');
-      const buttons = [...document.querySelectorAll(
-        '.dd-subject-editorial button:not([hidden]), .dd-subject-editorial a:not([hidden])',
+      const controls = [...document.querySelectorAll(
+        '.dd-subject-editorial button:not([hidden]), .dd-subject-editorial a:not([hidden]), .dd-subject-editorial summary',
       )].filter((element) => getComputedStyle(element).display !== 'none');
       const writingRect = writing?.getBoundingClientRect();
       const reviewRect = review?.getBoundingClientRect();
@@ -417,21 +488,25 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
         writingOverflowY: writing ? getComputedStyle(writing).overflowY : null,
         reviewOverflowY: review ? getComputedStyle(review).overflowY : null,
         gridColumns: grid ? getComputedStyle(grid).gridTemplateColumns : null,
-        shortControls: buttons
+        shortControls: controls
           .map((element) => ({ text: element.textContent.trim().slice(0, 60), height: element.getBoundingClientRect().height }))
           .filter((entry) => entry.height > 0 && entry.height < 43),
+        unsharedActions: [...document.querySelectorAll(
+          '.dd-subject-editorial button.dd-exam-button:not(.dd-control)',
+        )].map((element) => element.textContent.trim().slice(0, 60)),
       };
     });
     const label = `${stateLabel}-${viewport.width}x${viewport.height}`;
     results.responsive[label] = layout;
     assert.equal(layout.overflow, false, `${label} must not overflow horizontally.`);
     assert.deepEqual(layout.shortControls, [], `${label} must retain 44px touch targets.`);
+    assert.deepEqual(layout.unsharedActions, [], `${label} must use shared Subject Matter action controls.`);
     if (viewport.width > 900) {
-      assert.ok(layout.writingLeft < layout.reviewLeft, `${label} must keep writing on the left.`);
-      assert.match(layout.writingOverflowY, /auto|scroll/);
-      assert.match(layout.reviewOverflowY, /auto|scroll/);
+      assert.ok(layout.writingLeft < layout.reviewLeft, `${label} must keep the answer workspace on the left.`);
+      assert.equal(layout.writingOverflowY, 'visible', `${label} must use the document reading flow.`);
+      assert.equal(layout.reviewOverflowY, 'visible', `${label} must avoid competing pane scrollbars.`);
     } else {
-      assert.ok(layout.writingTop < layout.reviewTop, `${label} must stack writing before review.`);
+      assert.ok(layout.writingTop < layout.reviewTop, `${label} must stack the answer workspace before review.`);
     }
     await runAccessibilityAudit(page, label);
   }
@@ -441,6 +516,7 @@ async function completeSubjectMatter(page) {
   await completeOnboardingIfShown(page);
   await completeTermsAcceptanceIfShown(page);
   await openCatalog(page, 'per_subject');
+  await verifySubjectChooserGeometry(page);
   const subject = 'Civil Procedure II';
   const courseChooser = page.locator('#dd-per-subject-app [data-subject-selector-open]');
   await courseChooser.scrollIntoViewIfNeeded();
@@ -475,13 +551,15 @@ async function completeSubjectMatter(page) {
   await practiceRoom.locator('.dd-subject-editorial-grid').waitFor({ state: 'visible' });
   assert.equal(await practiceRoom.locator('.dd-subject-editorial-pane.is-writing').count(), 1);
   assert.equal(
-    await practiceRoom.locator('.dd-subject-editorial-pane.is-coaching.is-review-panel').count(),
+    await practiceRoom.locator('.dd-subject-editorial-pane.is-reading.is-review-panel').count(),
     1,
   );
   const practiceRoomText = await practiceRoom.innerText();
   assert.match(practiceRoomText, /WRITING TIME/i);
   assert.match(practiceRoomText, /\b\d{2}:\d{2}\b/);
-  assert.match(practiceRoomText, /Reveal Complete Review/i);
+  assert.match(practiceRoomText, /Reveal suggested answer/i);
+  assert.match(practiceRoomText, /Reveal controlling law and doctrine/i);
+  assert.match(practiceRoomText, /Reveal application, limits, and sources/i);
   assert.match(practiceRoomText, /Assisted \/ Open-book/i);
   assert.doesNotMatch(practiceRoomText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
   assert.equal(
@@ -489,6 +567,11 @@ async function completeSubjectMatter(page) {
     0,
     'The complete review content must not exist in the DOM before the reveal operation succeeds.',
   );
+  const lockedDisclosures = practiceRoom.locator('.dd-subject-review-disclosures.is-locked > details');
+  assert.equal(await lockedDisclosures.count(), 3,
+    'The secure review must begin with exactly three native disclosures.');
+  assert.deepEqual(await lockedDisclosures.evaluateAll((details) => details.map((detail) => detail.open)),
+    [false, false, false], 'All secure review disclosures must be closed initially.');
   const attemptId = await page.evaluate(
     () => window.DueDiligenceExaminations.getState().activeAttemptId,
   );
@@ -503,12 +586,20 @@ async function completeSubjectMatter(page) {
   ]);
   await page.setViewportSize({ width: 1_440, height: 900 });
 
-  const revealButton = practiceRoom.locator('[data-subject-review-reveal]');
-  await revealButton.click();
+  const revealControls = practiceRoom.locator('[data-subject-review-reveal]');
+  assert.equal(await revealControls.count(), 3,
+    'The locked review must expose one secure control per review category.');
+  await revealControls.filter({ hasText: 'Reveal suggested answer' }).click();
   const completeReview = practiceRoom.locator('[data-subject-review-content]');
   await completeReview.waitFor({ state: 'visible', timeout: 150_000 });
+  const revealedDisclosures = completeReview.locator('.dd-subject-review-disclosures > details');
+  assert.equal(await revealedDisclosures.count(), 3);
+  assert.deepEqual(await revealedDisclosures.evaluateAll((details) => details.map((detail) => detail.open)),
+    [true, false, false], 'Only the review section chosen by the user should open after loading.');
+  await revealedDisclosures.nth(1).locator('summary').click();
+  await revealedDisclosures.nth(2).locator('summary').click();
   const completeReviewText = await completeReview.innerText();
-  assert.match(completeReviewText, /Suggested Answer/i);
+  assert.match(completeReviewText, /Reveal suggested answer/i);
   assert.match(completeReviewText, /Controlling Law & Doctrine/i);
   assert.match(completeReviewText, /Cited Authorities/i);
   assert.match(completeReviewText, /Application and Material Limits/i);
@@ -548,9 +639,21 @@ async function completeSubjectMatter(page) {
   const scores = await subjectResult.locator('.score-medallion strong').allTextContents();
   assert.equal(scores.length, 1);
   scores.forEach((score) => assert.match(score, /^[0-5]\.\d \/ 5$/));
+  assert.equal(await subjectResult.locator('[data-subject-review-content]').count(), 1,
+    'The complete review must persist beside the graded result without another secure request.');
+  const resultDisclosures = subjectResult.locator(
+    '[data-subject-review-content] .dd-subject-review-disclosures > details',
+  );
+  assert.equal(await resultDisclosures.count(), 3,
+    'The graded review must retain the same three native disclosures.');
+  assert.deepEqual(await resultDisclosures.evaluateAll((details) => details.map((detail) => detail.open)),
+    [false, false, false], 'The graded review should return to a calm, closed disclosure state.');
+  for (let index = 0; index < 3; index += 1) {
+    await resultDisclosures.nth(index).locator('summary').click();
+  }
   const verdictText = await subjectResult.innerText();
   assert.match(verdictText, /Evaluation overview/i);
-  assert.match(verdictText, /Suggested Answer/i);
+  assert.match(verdictText, /Reveal suggested answer/i);
   assert.match(verdictText, /Controlling Law & Doctrine/i);
   assert.match(verdictText, /Cited Authorities/i);
   assert.match(verdictText, /Application and Material Limits/i);
@@ -558,8 +661,6 @@ async function completeSubjectMatter(page) {
   assert.match(verdictText, /Assisted \/ Open-book/i);
   assert.doesNotMatch(verdictText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
   assert.doesNotMatch(verdictText, /\b\d{1,3}\s*\/\s*100\b/);
-  assert.equal(await subjectResult.locator('[data-subject-review-content]').count(), 1,
-    'The complete review must persist beside the graded result without another reveal.');
 
   await verifySubjectWorkspaceLayout(page, 'subject-graded', [
     { width: 1_366, height: 768 },

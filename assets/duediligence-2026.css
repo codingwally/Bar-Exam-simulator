@@ -56,13 +56,7 @@
 .dd26-counter{display:flex;justify-content:flex-end;margin-top:6px;color:#94a3b8;font:11px/1.4 'IBM Plex Mono',monospace;}
 .dd26-actions{display:flex;gap:11px;align-items:center;flex-wrap:wrap;margin-top:22px;}
 .dd26-table-actions{margin-top:0;gap:8px;}
-.dd26-button{appearance:none;display:inline-flex;min-height:46px;align-items:center;justify-content:center;border:1px solid rgba(197,160,89,.52);border-radius:6px;background:rgba(2,18,35,.32);color:#f8fafc;padding:12px 19px;font:600 11px/1.35 'IBM Plex Mono',monospace;letter-spacing:.085em;text-align:center;text-transform:uppercase;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease;}
-.dd26-button:hover{border-color:#e7bd5d;background:rgba(197,160,89,.08);color:#f8cf70;transform:translateY(-1px);}
-.dd26-button:focus-visible{border-color:#f1c65d;color:#f8cf70;outline:0;box-shadow:0 0 0 3px rgba(212,175,55,.26);}
-.dd26-button.primary{background:linear-gradient(135deg,#edcb70,#c99c3c);border-color:#e3b951;color:#07182b;box-shadow:0 9px 24px rgba(197,160,89,.17);}
-.dd26-button.primary:hover,.dd26-button.primary:focus-visible{color:#07182b;filter:brightness(1.06);}
-.dd26-button.danger{border-color:rgba(239,68,68,.55);color:#fca5a5;}
-.dd26-button:disabled,.dd26-button[aria-disabled="true"]{border-color:rgba(148,163,184,.25);background:#303847;color:#8f9bad;opacity:1;cursor:not-allowed;box-shadow:none;filter:none;transform:none;}
+/* Shared action states live in due-diligence-controls.css. */
 .dd26-back-link{appearance:none;margin:0 0 18px;padding:0;border:0;border-bottom:1px solid rgba(197,160,89,.5);background:transparent;color:#e8c36b;font:600 12px/1.6 'Inter',sans-serif;cursor:pointer;}
 .dd26-back-link:hover,.dd26-back-link:focus-visible{color:#fff;border-bottom-color:#fff;outline:2px solid #d4af37;outline-offset:5px;}
 .dd26-exam-home-button{position:sticky;top:12px;z-index:12;margin:0 0 20px;border-color:rgba(237,199,104,.72);background:#082541;color:#f6d889;box-shadow:0 9px 24px rgba(0,0,0,.24);}
@@ -291,7 +285,7 @@
 .dd26-professor-exam-meta span{display:inline-flex;align-items:center;min-width:0;}
 .dd26-professor-exam-meta span+span::before{content:'\2022';margin-right:14px;color:var(--dd26-gold);}
 .dd26-professor-exam-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap;margin:0;}
-.dd26-professor-exam-actions .dd26-button{min-height:42px;padding:10px 14px;}
+.dd26-professor-exam-actions .dd26-button{min-height:44px;padding:0 14px;}
 .dd26-professor-selected-workspace{scroll-margin-top:90px;margin-top:24px;padding-top:24px;border-top:1px solid var(--dd26-border);}
 .dd26-professor-selected-workspace:focus{outline:0;}
 .dd26-professor-selected-workspace:focus-visible{outline:2px solid #f1c65d;outline-offset:6px;}
@@ -339,7 +333,7 @@
 .dd26-grading-queue>summary:focus-visible{outline:3px solid #f2cc70;outline-offset:4px;}
 .dd26-grading-queue .dd26-table-wrap{max-height:320px;overflow:auto;}
 .dd26-grading-queue .dd26-table tr.is-current td{background:rgba(212,175,55,.12);}
-.dd26-button.compact{min-height:36px;padding:8px 12px;}
+.dd26-button.compact{min-height:44px;padding:0 14px;}
 .dd26-results-select-all{border-color:rgba(231,189,93,.68);background:rgba(197,160,89,.1);}
 .dd26-results-dashboard{max-width:1500px;margin-inline:auto;}
 .dd26-result-metrics{grid-template-columns:repeat(4,minmax(0,1fr));}

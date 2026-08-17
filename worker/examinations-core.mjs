@@ -32,6 +32,7 @@ export const EXAMINATION_COMMAND_OPERATIONS = new Set([
   'heartbeat',
   'save_response',
   'flag_response',
+  'subject_skip_question',
   'subject_reveal_review',
   'submit_attempt',
   'request_ai_grading',
@@ -231,12 +232,24 @@ export function sanitizeSubjectMatterCatalog(value) {
     ? { ...value }
     : value;
   if (Array.isArray(source?.items)) {
-    source.items = source.items.map((item) => {
+    source.items = source.items.filter((item) => {
+      const subject = String(item?.subject || '').trim();
+      const courseCode = String(item?.courseCode || '').trim();
+      const yearLevel = Number(item?.yearLevel);
+      const term = Number(item?.term);
+      return Boolean(subject && courseCode)
+        && Number.isInteger(yearLevel) && yearLevel >= 1 && yearLevel <= 4
+        && Number.isInteger(term) && term >= 1 && term <= 2;
+    }).map((item) => {
       const completed = Number(item?.completedCount) || 0;
       const attempted = Number(item?.attemptedCount) || completed;
       const cycleComplete = item?.cycleComplete === true;
       return {
         ...item,
+        subject: String(item.subject).trim(),
+        courseCode: String(item.courseCode).trim(),
+        yearLevel: Number(item.yearLevel),
+        term: Number(item.term),
         progressState: cycleComplete
           ? 'Cycle complete'
           : completed > 0
@@ -300,6 +313,10 @@ export function normalizeExaminationCommand(value) {
       1_000_000,
     );
     normalized.flagged = boolean(payload.flagged);
+  } else if (operation === 'subject_skip_question') {
+    normalized.attemptId = examinationUuid(payload.attemptId, 'Attempt');
+    normalized.tabToken = secureTabToken(payload.tabToken);
+    normalized.requestKey = examinationRequestKey(payload.requestKey);
   } else if (operation === 'subject_reveal_review') {
     normalized.attemptId = examinationUuid(payload.attemptId, 'Attempt');
   } else if (operation === 'submit_attempt') {
@@ -824,6 +841,9 @@ export function examinationDatabaseError(error) {
     'EXAM_GRADING_JOB_NOT_FOUND',
     'EXAM_GRADING_JOB_CLOSED',
     'EXAM_ACTIVE_ATTEMPTS_EXIST',
+    'EXAM_SUBJECT_SKIP_INVALID',
+    'EXAM_SUBJECT_SKIP_UNAVAILABLE',
+    'EXAM_SUBJECT_NO_ALTERNATE_QUESTION',
     'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
   ];
   const code = known.find((candidate) => message.includes(candidate));
@@ -852,6 +872,9 @@ export function examinationDatabaseError(error) {
     EXAM_GRADING_JOB_NOT_FOUND: 'The AI grading job could not be found.',
     EXAM_GRADING_JOB_CLOSED: 'The AI grading job is already closed.',
     EXAM_ACTIVE_ATTEMPTS_EXIST: 'This examination still has active attempts and cannot be closed.',
+    EXAM_SUBJECT_SKIP_INVALID: 'This question could not be skipped because the request was invalid.',
+    EXAM_SUBJECT_SKIP_UNAVAILABLE: 'This question can no longer be skipped safely.',
+    EXAM_SUBJECT_NO_ALTERNATE_QUESTION: 'No different question is available in this course right now.',
     EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE: 'Verified review material is not available for this question.',
   };
   const status = [

@@ -1048,6 +1048,7 @@ test('manual founder directory email sends one private CSV attachment and record
       }),
     }), {
       ...workerEnv,
+      OUTBOUND_EMAIL_MODE: 'enabled',
       ADMIN_DIRECTORY_EMAIL_MODE: 'enabled',
       ADMIN_DIRECTORY_EMAIL_FROM: 'Due Diligence <reports@duediligence.ph>',
       ADMIN_DIRECTORY_RECIPIENTS_JSON: JSON.stringify({

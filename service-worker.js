@@ -1,9 +1,11 @@
-const CACHE_VERSION = 'duediligence-shell-20260815-homepage-ledger-1';
+const CACHE_VERSION = 'duediligence-shell-20260817-subject-matter-controls-4';
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',
-  '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=homepage-feature-ledger-20260815-1',
-  '/assets/study-workspace.css?v=master-experience-20260813-1',
+  '/assets/phase2.css?release=subject-matter-gil-fixes-20260817-4',
+  '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
+  '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
+  '/assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
 ]);
 
 self.addEventListener('install', (event) => {

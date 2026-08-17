@@ -322,38 +322,28 @@ select is(
 );
 select lives_ok(
   $test$select public.record_marketing_consent()$test$,
-  'marketing consent can be recorded with the default opt-out'
-);
-select is(
-  (
-    select opted_in
-    from public.marketing_consents
-    order by changed_at desc, id desc
-    limit 1
-  ),
-  false,
-  'marketing consent defaults to false'
+  'a stale default marketing-consent call is safely absorbed'
 );
 select lives_ok(
   $test$select public.record_marketing_consent(true)$test$,
-  'student may opt in to marketing'
+  'a stale marketing opt-in call is safely absorbed'
 );
 select lives_ok(
   $test$select public.record_marketing_consent(false)$test$,
-  'student may withdraw marketing consent'
+  'a stale marketing withdrawal call is safely absorbed'
+);
+select is(
+  (select count(*) from public.marketing_consents),
+  0::bigint,
+  'retired marketing-consent calls create no rows'
 );
 select ok(
-  (
-    select count(*) = 3
-    from public.marketing_consents
-  )
-  and not (
-    select opted_in
-    from public.marketing_consents
-    order by changed_at desc, id desc
-    limit 1
+  has_function_privilege(
+    'authenticated',
+    'public.record_marketing_consent(boolean,text,text)',
+    'EXECUTE'
   ),
-  'marketing consent preserves history and latest withdrawal'
+  'the compatibility tombstone remains callable by stale authenticated clients'
 );
 select throws_ok(
   $test$

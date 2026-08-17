@@ -7,6 +7,8 @@ const supabaseUrl = 'https://staging-test.supabase.co';
 const userId = '11111111-1111-4111-8111-111111111111';
 const versionId = '22222222-2222-4222-8222-222222222222';
 const attemptId = '33333333-3333-4333-8333-333333333333';
+const jobId = '44444444-4444-4444-8444-444444444444';
+const tabToken = 'tab_token_that_is_long_enough_for_a_secure_hash';
 
 const env = {
   ALLOWED_ORIGIN: origin,
@@ -44,6 +46,33 @@ function authResponse(url) {
     return Response.json({ id: userId, email: 'synthetic@example.com' });
   }
   return null;
+}
+
+function examinationAssessment() {
+  return {
+    scoreTenths: 40,
+    maxScore: 5,
+    percentagePointValue: 4,
+    tier: '4.0',
+    performanceLabel: 'Strong answer',
+    assessmentType: 'question_bank',
+    label: 'Question-bank assessment',
+    rationale: 'The response states the correct result, identifies the governing rule, and applies the material facts directly.',
+    strengths: ['Direct answer', 'Correct governing rule', 'Fact-specific application'],
+    errors: [],
+    improvements: ['State the final conclusion in one separate sentence.'],
+    legalExplanation: 'Article 19 requires every person to act with justice, give everyone their due, and observe honesty and good faith.',
+    modelAnswerALAC: {
+      answer: 'Yes. The defendant violated the governing duty of conduct.',
+      legalBasis: 'Article 19 of the Civil Code requires every person to act with justice, give everyone their due, and observe honesty and good faith.',
+      application: 'The deliberate conduct described in the question denied the claimant their due and was inconsistent with honesty and good faith.',
+      conclusion: 'Therefore, the defendant is answerable under the stated governing rule.',
+    },
+    sources: [],
+    sourceStatus: 'stored',
+    reviewRequired: false,
+    rubricVersion: 'SC-2025-BB4-PER-QUESTION-v1',
+  };
 }
 
 test('authenticated examination catalog reaches only the allowlisted RPC', async () => {
@@ -149,6 +178,66 @@ test('Subject Matter random selection uses the dedicated no-repeat RPC', async (
   });
 });
 
+test('Subject Matter skip is owner-authorized and routed only to the dedicated idempotent RPC', async () => {
+  let skipCalls = 0;
+  await withFetchMock(async (url, options) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    const target = String(url);
+    const payload = JSON.parse(options.body);
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      assert.deepEqual(payload, {
+        p_user_id: userId,
+        p_track: null,
+        p_version_id: null,
+        p_attempt_id: attemptId,
+        p_allow_historical: false,
+      });
+      return Response.json({ allowed: true, basis: 'current_owner', track: 'per_subject' });
+    }
+    assert.equal(target, `${supabaseUrl}/rest/v1/rpc/subject_matter_skip_question`);
+    assert.equal(options.headers.Authorization, `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`);
+    assert.deepEqual(payload, {
+      p_user_id: userId,
+      p_attempt_id: attemptId,
+      p_request_key: 'subject_skip_test_0001',
+      p_tab_token: tabToken,
+    });
+    skipCalls += 1;
+    return Response.json({
+      skipped: true,
+      replayed: false,
+      attemptId,
+      skippedAt: '2026-08-17T11:13:06.000Z',
+      flaggedForLater: true,
+      cyclePreserved: true,
+      setup: {
+        versionId,
+        track: 'per_subject',
+        questionCount: 1,
+      },
+      questionCount: 50,
+    });
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/command', {
+      operation: 'subject_skip_question',
+      attemptId,
+      requestKey: 'subject_skip_test_0001',
+      tabToken,
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.data.skipped, true);
+    assert.equal(body.data.flaggedForLater, true);
+    assert.equal(body.data.cyclePreserved, true);
+    assert.equal(body.data.setup.versionId, versionId);
+    assert.equal('questionCount' in body.data, false);
+    assert.equal('questionCount' in body.data.setup, false);
+    assert.equal(skipCalls, 1);
+  });
+});
+
 test('Subject Matter complete review uses the owner-bound reveal RPC and curated fallback', async () => {
   await withFetchMock(async (url, options) => {
     const auth = authResponse(url);
@@ -240,6 +329,174 @@ test('Subject Matter complete review masks cross-user attempt ownership failures
     assert.equal(response.status, 404);
     assert.equal(body.error.code, 'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE');
     assert.doesNotMatch(JSON.stringify(body), /ATTEMPT_NOT_FOUND/);
+  });
+});
+
+for (const track of ['per_subject', 'bar_feels']) {
+test(`${track} AI completion suppresses email without calling a provider or failing on audit error`, async () => {
+  let providerCalls = 0;
+  let deliveryRecorded = null;
+  await withFetchMock(async (url, options = {}) => {
+    const target = String(url);
+    const auth = authResponse(url);
+    if (auth) return auth;
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      assert.deepEqual(JSON.parse(options.body), {
+        p_user_id: userId,
+        p_track: null,
+        p_version_id: null,
+        p_attempt_id: attemptId,
+        p_allow_historical: true,
+      });
+      return Response.json({ allowed: true, basis: 'historical_owner', track });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_command`) {
+      return Response.json({
+        jobId,
+        attemptId,
+        status: 'queued',
+        questions: [{
+          questionId: versionId,
+          subject: 'Persons and Family Law',
+          prompt: 'Did the defendant violate the duty to act with justice and good faith under the stated facts?',
+          studentAnswer: 'Yes. Article 19 requires justice, honesty, and good faith. The deliberate refusal to give the claimant what was due violated that duty, so the defendant is answerable.',
+          modelAnswer: 'Answer: Yes.\n\nLegal Basis: Article 19 applies.\n\nApplication: The conduct violated the statutory duty.\n\nConclusion: The defendant is answerable.',
+          legalBasis: 'Article 19 of the Civil Code requires justice, honesty, and good faith.',
+          application: 'The deliberate conduct denied the claimant what was due.',
+          conclusion: 'The defendant is answerable under Article 19.',
+          jurisprudence: [],
+          citation: 'Civil Code, Article 19',
+          sourceUrls: [{
+            title: 'Civil Code of the Philippines',
+            url: 'https://lawphil.net/statutes/repacts/ra1949/ra_386_1949.html',
+          }],
+          modelAnswerHash: 'a'.repeat(64),
+        }],
+      });
+    }
+    if (target.includes('generativelanguage.googleapis.com')) {
+      return Response.json({
+        candidates: [{ content: { parts: [{ text: JSON.stringify(examinationAssessment()) }] } }],
+      });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_store_ai_assessment`) {
+      return Response.json({
+        jobId,
+        attemptId,
+        status: 'completed',
+        completedQuestions: 1,
+        questionCount: 1,
+        modelsReleased: true,
+      });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_record_delivery`) {
+      deliveryRecorded = JSON.parse(options.body);
+      if (track === 'bar_feels') {
+        return Response.json({ message: 'synthetic audit outage' }, { status: 503 });
+      }
+      return Response.json({ attemptId, status: deliveryRecorded.p_status });
+    }
+    if (target === 'https://api.resend.com/emails') {
+      providerCalls += 1;
+      return Response.json({ id: 'must-not-send' });
+    }
+    throw new Error(`Unexpected request: ${target}`);
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/command', {
+      operation: 'request_ai_grading',
+      attemptId,
+      requestKey: 'route_subject_ai_0001',
+    }), {
+      ...env,
+      OUTBOUND_EMAIL_MODE: 'enabled',
+      EXAMINATION_EMAIL_MODE: 'enabled',
+      EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+      EXAMINATION_EMAIL_FROM: 'Due Diligence <support@duediligence.ph>',
+      RESEND_API_KEY: 'test-only-resend-key',
+      GEMINI_API_KEY: 'test-only-gemini-key',
+      GEMINI_MODEL: 'gemini-test',
+      GEMINI_GROUNDING_ENABLED: 'false',
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.data.status, 'completed');
+    assert.equal(body.data.modelAnswerEmailStatus, 'suppressed');
+    assert.equal(providerCalls, 0);
+    assert.equal(deliveryRecorded.p_target_type, 'model_answers_released');
+    assert.equal(deliveryRecorded.p_target_id, attemptId);
+    assert.equal(deliveryRecorded.p_status, 'suppressed');
+    assert.equal(deliveryRecorded.p_provider_id, null);
+  });
+});
+}
+
+test('Human Examiner assignment returns a manual link without calling an email provider', async () => {
+  const assignmentId = '55555555-5555-4555-8555-555555555555';
+  const assignmentToken = 'assignment-token-1234567890abcdef1234567890abcdef';
+  let providerCalls = 0;
+  let deliveryRecorded = null;
+  await withFetchMock(async (url, options = {}) => {
+    const target = String(url);
+    const auth = authResponse(url);
+    if (auth) return auth;
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      assert.deepEqual(JSON.parse(options.body), {
+        p_user_id: userId,
+        p_track: null,
+        p_version_id: null,
+        p_attempt_id: attemptId,
+        p_allow_historical: false,
+      });
+      return Response.json({ allowed: true, basis: 'current_owner', track: 'bar_feels' });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_command`) {
+      const payload = JSON.parse(options.body);
+      assert.equal(payload.p_operation, 'create_examiner_assignment');
+      assert.equal(payload.p_payload.examinerEmail, 'examiner@example.test');
+      return Response.json({
+        assignmentId,
+        expiresAt: '2026-08-18T12:00:00.000Z',
+      });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_record_delivery`) {
+      deliveryRecorded = JSON.parse(options.body);
+      return Response.json({ message: 'synthetic audit outage' }, { status: 503 });
+    }
+    if (target === 'https://api.resend.com/emails') {
+      providerCalls += 1;
+      return Response.json({ id: 'must-not-send' });
+    }
+    throw new Error(`Unexpected request: ${target}`);
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/command', {
+      operation: 'create_examiner_assignment',
+      attemptId,
+      examinerEmail: 'examiner@example.test',
+      assignmentToken,
+      requestKey: 'route_examiner_assignment_0001',
+    }), {
+      ...env,
+      OUTBOUND_EMAIL_MODE: 'enabled',
+      EXAMINATION_EMAIL_MODE: 'enabled',
+      EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+      EXAMINATION_EMAIL_FROM: 'Due Diligence <support@duediligence.ph>',
+      RESEND_API_KEY: 'test-only-resend-key',
+    });
+    const body = await response.json();
+    assert.equal(response.status, 201);
+    assert.equal(body.ok, true);
+    assert.equal(body.data.invitationStatus, 'suppressed');
+    assert.equal(
+      body.data.assignmentUrl,
+      `${origin}/?assignment=${encodeURIComponent(assignmentToken)}#examiner-review`,
+    );
+    assert.equal(providerCalls, 0);
+    assert.equal(deliveryRecorded.p_target_type, 'examiner_invitation');
+    assert.equal(deliveryRecorded.p_target_id, assignmentId);
+    assert.equal(deliveryRecorded.p_status, 'suppressed');
+    assert.equal(deliveryRecorded.p_provider_id, null);
+    assert.equal(deliveryRecorded.p_safe_error_code, 'practice_exam_email_removed');
   });
 });
 

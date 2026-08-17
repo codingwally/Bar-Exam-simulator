@@ -67,7 +67,8 @@ assert.match(html, /\.btn-angel:hover,\.btn-angel\.active\{[^}]*filter:brightnes
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
 assert.match(html, /assets\/feature-loader\.js\?v=exam-room-ux-20260814-1/);
 assert.match(html, /Mock Bar/);
-assert.match(frontend, /Subject Matter Examinations/);
+assert.match(frontend, /track === 'per_subject' \? 'Subject Matter' : 'Mock Bar'/);
+assert.doesNotMatch(frontend, /Subject Matter Examinations/);
 assert.match(styles, /\.dd-subject-study-page \.dd-subject-study-copy > \.dd-exam-kicker\s*\{[\s\S]*?color:\s*#e6bd59/,
   'The dark Subject Matter course page must keep its session kicker at WCAG AA contrast.');
 assert.match(frontend, /async function restoreRoute\(track, options = \{\}\)/);
@@ -78,6 +79,21 @@ assert.match(
   /const ownerUserId = currentUserId\(\)[\s\S]*currentUserId\(\) !== ownerUserId/,
   'A delayed resume response must not activate after the signed-in identity changes.',
 );
+assert.match(
+  frontend,
+  /function privateRequestIdentity\(\)[\s\S]*generation:[\s\S]*function privateRequestIdentityIsCurrent\(identity\)[\s\S]*identity\.generation/,
+  'Every authenticated examination request must capture both its owner and workspace generation.',
+);
+assert.match(
+  frontend,
+  /const payload = await phase4\.request\(path, \{ body \}\);[\s\S]*!privateRequestIdentityIsCurrent\(identity\)[\s\S]*STALE_IDENTITY[\s\S]*return payload\.data/,
+  'Late responses from a previous signed-in identity must be rejected before private data reaches a renderer.',
+);
+for (const privateRenderer of ['openVerdict', 'renderSubjectPerformance', 'loadCatalog']) {
+  const renderer = frontend.match(new RegExp(`async function ${privateRenderer}\\([\\s\\S]*?(?=\\n  (?:async )?function |\\n  global\\.)`))?.[0] || '';
+  assert.match(renderer, /isStaleIdentityError\(error\)\) return;/,
+    `${privateRenderer} must silently discard an identity-stale response.`);
+}
 assert.match(frontend, /data-exam-setup=[\s\S]*Review &amp; Begin/);
 assert.match(
   frontend,
@@ -185,19 +201,65 @@ for (const route of [
 ]) {
   assert.match(worker, new RegExp(route.replaceAll('/', '\\/')));
 }
-assert.match(worker, /EXAMINATION_EMAIL_MODE/);
+assert.match(worker, /outboundEmailSuppressed/);
 assert.match(worker, /RESEND_API_KEY/);
 assert.match(worker, /questions\[0\]/, 'AI assessment must use bounded one-question batches');
 assert.doesNotMatch(worker, /console\.(?:log|error)\([^)]*(?:SERVICE_ROLE|API_KEY|RESEND)/);
-assert.match(productionWorkerConfig, /EXAMINATION_EMAIL_MODE\s*=\s*"enabled"/);
+assert.match(productionWorkerConfig, /OUTBOUND_EMAIL_MODE\s*=\s*"suppressed"/);
+for (const categoryMode of [
+  'ADMIN_DIRECTORY_EMAIL_MODE',
+  'SUPPORT_NOTIFICATION_EMAIL_MODE',
+  'SIGN_IN_NOTIFICATION_EMAIL_MODE',
+]) {
+  assert.match(productionWorkerConfig, new RegExp(`${categoryMode}\\s*=\\s*"suppressed"`));
+}
+assert.doesNotMatch(productionWorkerConfig, /EXAMINATION_EMAIL_MODE\s*=/);
 assert.match(productionWorkerConfig, /EXAMINATION_ROOM_EMAIL_MODE\s*=\s*"enabled"/);
 assert.match(
   productionWorkerConfig,
   /EXAMINATION_EMAIL_FROM\s*=\s*"Due Diligence Examinations <examinations@duediligence\.ph>"/,
 );
 assert.doesNotMatch(productionWorkerConfig, /EXAMINATION_EMAIL_TEST_RECIPIENT/);
-assert.match(stagingWorkerConfig, /EXAMINATION_EMAIL_MODE\s*=\s*"suppressed"/);
+assert.match(stagingWorkerConfig, /OUTBOUND_EMAIL_MODE\s*=\s*"suppressed"/);
+assert.doesNotMatch(stagingWorkerConfig, /EXAMINATION_EMAIL_MODE\s*=/);
 assert.match(stagingWorkerConfig, /EXAMINATION_ROOM_EMAIL_MODE\s*=\s*"suppressed"/);
+assert.match(
+  worker,
+  /function examinationEmailMode\(env, examRoom = false\)[\s\S]*?if \(!examRoom\) return 'suppressed';/,
+  'Practice Exam email must remain removed even if an operator enables unrelated email modes.',
+);
+const aiPracticeEmailBlock = worker.slice(
+  worker.indexOf('async function processExaminationAiJob'),
+  worker.indexOf('async function authorizeExaminationAccess'),
+);
+const examinerAssignmentBlockStart = worker.indexOf(
+  "if (command.operation === 'create_examiner_assignment')",
+);
+const examinerAssignmentEmailBlock = worker.slice(
+  examinerAssignmentBlockStart,
+  worker.indexOf("if (command.operation === 'delete_upload'", examinerAssignmentBlockStart),
+);
+assert.match(
+  aiPracticeEmailBlock,
+  /practice_exam_email_removed/,
+);
+assert.match(examinerAssignmentEmailBlock, /practice_exam_email_removed/);
+assert.doesNotMatch(
+  `${aiPracticeEmailBlock}\n${examinerAssignmentEmailBlock}`,
+  /sendExaminationEmail|model-answers-released-|Model answers are now available|Human Examiner assignment:/,
+  'No Practice Exam completion or examiner-assignment path may call the email provider.',
+);
+assert.equal(
+  (worker.match(/sendExaminationEmail\(/g) || []).length,
+  2,
+  'The shared transport may appear only in its definition and the Examination Room adapter.',
+);
+assert.match(worker, /sendExamRoomEmail:[\s\S]*sendExaminationEmail\(env,[\s\S]*examRoom: true/);
+assert.match(
+  worker,
+  /function sendSecureNotification[\s\S]*outboundEmailSuppressed\(env\)/,
+  'The global outbound pause must also cover the Web3Forms notification transport.',
+);
 
 const tables = [
   'examination_questions',

@@ -70,6 +70,7 @@ jobs:
           node scripts/test-private-beta-auth-regression.mjs
           node scripts/test-auth-session-persistence.mjs
           node scripts/test-phase2-contract.mjs
+          node scripts/test-email-marketing-retirement.mjs
           node scripts/test-dialog-exit-controls.mjs
           node scripts/test-auth-route-overlay.mjs
           node scripts/test-onboarding-flow.mjs
@@ -79,6 +80,11 @@ jobs:
           node scripts/test-audience-menu.mjs
           node scripts/test-design-correction-release.mjs
           node scripts/test-subject-matter-consolidation.mjs
+          node scripts/test-subject-matter-skip-flag.mjs
+          node scripts/test-examinations.mjs
+          node scripts/test-correction-workflow.mjs
+          node scripts/test-complete-beta-release.mjs
+          node scripts/test-verdict-export-loading.mjs
           node scripts/audit-subject-matter-review-quality.mjs
           node scripts/test-duediligence-2026-frontend.mjs
           node scripts/test-examination-room-2-frontend.mjs

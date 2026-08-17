@@ -7,31 +7,31 @@
 
   const manifests = Object.freeze({
     quorum: Object.freeze({
-      styles: ['assets/lex-forum.css?v=master-experience-20260813-1'],
+      styles: ['assets/lex-forum.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4'],
       scripts: ['assets/lex-forum.js?v=master-experience-20260813-1'],
     }),
     examinations: Object.freeze({
       styles: [
-        'assets/examinations.css?v=header-subject-review-20260814-1&release=high-value-review-20260815-1',
-        'assets/study-workspace.css?v=master-experience-20260813-1',
+        'assets/examinations.css?v=subject-matter-gil-fixes-20260817-5',
+        'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
       ],
       scripts: [
-        'assets/study-workspace.js?v=master-experience-20260813-1',
-        'assets/examinations.js?v=header-subject-review-20260814-1&release=high-value-review-20260815-1',
+        'assets/study-workspace.js?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
+        'assets/examinations.js?v=subject-matter-gil-fixes-20260817-6',
       ],
     }),
     content: Object.freeze({
       styles: [
-        'assets/duediligence-2026.css?v=exam-room-ux-20260814-1',
-        'assets/study-workspace.css?v=master-experience-20260813-1',
+        'assets/duediligence-2026.css?v=exam-room-ux-20260814-1&release=subject-matter-gil-fixes-20260817-4',
+        'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
       ],
       scripts: [
-        'assets/study-workspace.js?v=master-experience-20260813-1',
+        'assets/study-workspace.js?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
         'assets/duediligence-2026.js?v=exam-room-ux-20260814-1',
       ],
     }),
     examinationRoom: Object.freeze({
-      styles: ['assets/duediligence-2026.css?v=exam-room-ux-20260814-1'],
+      styles: ['assets/duediligence-2026.css?v=exam-room-ux-20260814-1&release=subject-matter-gil-fixes-20260817-4'],
       scripts: [
         'assets/examination-room-2-store.js?v=exam-room-ux-20260814-1',
         'assets/duediligence-2026.js?v=exam-room-ux-20260814-1',

@@ -34,6 +34,7 @@ for (const required of [
   'assets/private-beta-session.js',
   'assets/examination-room-beadle-class-list-template.xlsx',
   'assets/private-beta-landing.css',
+  'assets/due-diligence-controls.css',
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
   'assets/private-workspace.js',

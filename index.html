@@ -307,14 +307,16 @@
 
   /* ---------------- Primary CTA ---------------- */
   .btn-primary{
-    font-family:var(--sans);font-weight:700;font-size:13.5px;letter-spacing:.6px;text-transform:uppercase;
-    background:var(--gold-grad);color:#1a1204;border:none;
-    padding:14px 28px;border-radius:12px;cursor:pointer;
-    box-shadow:0 10px 24px rgba(197,160,89,.32);
-    transition:transform .2s ease, box-shadow .2s ease, filter .2s ease;
+    min-height:46px;display:inline-flex;align-items:center;justify-content:center;gap:9px;
+    padding:0 20px;border:1px solid #d4af57;border-radius:6px;
+    color:#061a35;background:#d4af57;box-shadow:0 7px 18px rgba(98,70,20,.14);
+    font-family:var(--sans);font-weight:700;font-size:13px;line-height:1.2;letter-spacing:.01em;text-transform:none;
+    cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease;
   }
-  .btn-primary:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 16px 32px rgba(197,160,89,.42);filter:brightness(1.05);}
-  .btn-primary:disabled{opacity:.4;cursor:default;box-shadow:none;filter:grayscale(.3);}
+  .btn-primary:hover:not(:disabled){border-color:#e0bf70;background:#e0bf70;transform:translateY(-1px);box-shadow:0 9px 21px rgba(98,70,20,.18);filter:none;}
+  .btn-primary:active:not(:disabled){border-color:#c79d45;background:#c79d45;box-shadow:none;transform:translateY(0);}
+  .btn-primary:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(212,175,55,.28);}
+  .btn-primary:disabled,.btn-primary[aria-disabled="true"]{border-color:rgba(148,163,184,.24);color:#8290a2;background:#e7ebf0;opacity:1;cursor:not-allowed;box-shadow:none;filter:none;transform:none;}
 
   /* ---------------- Result / stamp ---------------- */
   .result{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:8px;}
@@ -385,8 +387,11 @@
   .modal-textarea{min-height:150px;resize:vertical;}
   .modal-input:focus,.modal-textarea:focus,.modal-select:focus{outline:none;border-color:var(--gold);box-shadow:var(--ring-gold);}
   .modal-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:4px;}
-  .btn-secondary{font-family:var(--sans);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.4px;background:transparent;border:1px solid var(--border);color:var(--ink-soft);padding:12px 18px;border-radius:10px;cursor:pointer;transition:all .2s;}
-  .btn-secondary:hover{background:rgba(15,23,42,.05);color:var(--ink);}
+  .btn-secondary{min-height:46px;display:inline-flex;align-items:center;justify-content:center;gap:9px;padding:0 20px;border:1px solid rgba(6,26,53,.34);border-radius:6px;color:#061a35;background:rgba(255,255,255,.68);box-shadow:none;font-family:var(--sans);font-weight:700;font-size:13px;line-height:1.2;letter-spacing:.01em;text-transform:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease;}
+  .btn-secondary:hover:not(:disabled){border-color:#d4af57;background:rgba(212,175,87,.09);transform:translateY(-1px);}
+  .btn-secondary:active:not(:disabled){background:rgba(212,175,87,.15);transform:translateY(0);}
+  .btn-secondary:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(212,175,55,.28);}
+  .btn-secondary:disabled,.btn-secondary[aria-disabled="true"]{border-color:rgba(148,163,184,.24);color:#8290a2;background:#e7ebf0;opacity:1;cursor:not-allowed;box-shadow:none;transform:none;}
 
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   @keyframes pop{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
@@ -749,12 +754,17 @@
   /* ---- Feedback loop under model answer ---- */
   .fb-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:18px;padding-top:16px;border-top:1px dashed var(--border);}
   .fb-bar .fb-label{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-soft);margin-right:2px;}
-  .fb-btn{font-family:var(--sans);font-weight:600;font-size:13px;border:1px solid var(--border);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 12px;cursor:pointer;transition:all .18s;}
+  .fb-btn{min-height:44px;font-family:var(--sans);font-weight:700;font-size:13px;line-height:1.2;letter-spacing:.01em;border:1px solid var(--border);background:var(--card);color:var(--ink);border-radius:6px;padding:0 14px;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease;}
   .fb-btn:hover{border-color:var(--gold);background:var(--card-2);transform:translateY(-1px);}
+  .fb-btn:active{transform:translateY(0);}
+  .fb-btn:focus-visible{outline:0;border-color:#d4af57;box-shadow:0 0 0 3px rgba(212,175,55,.28);}
+  .fb-btn:disabled,.fb-btn[aria-disabled="true"]{border-color:rgba(148,163,184,.24);color:#8290a2;background:#e7ebf0;opacity:1;cursor:not-allowed;box-shadow:none;transform:none;}
   .fb-btn.suggest{margin-left:auto;background:var(--navy);color:#fff;border-color:var(--navy);}
   .fb-btn.suggest:hover{background:#0b2547;color:#fff;}
-  .btn-next{font-family:var(--sans);font-weight:700;font-size:13.5px;letter-spacing:.4px;text-transform:uppercase;background:var(--gold-grad);color:#1a1204;border:none;border-radius:12px;padding:13px 22px;cursor:pointer;box-shadow:0 8px 22px rgba(197,160,89,.32);transition:all .2s;margin-top:16px;}
-  .btn-next:hover{transform:translateY(-2px);filter:brightness(1.05);}
+  .btn-next{min-height:46px;display:inline-flex;align-items:center;justify-content:center;gap:9px;margin-top:16px;padding:0 20px;border:1px solid #d4af57;border-radius:6px;color:#061a35;background:#d4af57;box-shadow:0 7px 18px rgba(98,70,20,.14);font-family:var(--sans);font-weight:700;font-size:13px;line-height:1.2;letter-spacing:.01em;text-transform:none;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease,transform .16s ease;}
+  .btn-next:hover{border-color:#e0bf70;background:#e0bf70;box-shadow:0 9px 21px rgba(98,70,20,.18);transform:translateY(-1px);}
+  .btn-next:active{border-color:#c79d45;background:#c79d45;box-shadow:none;transform:translateY(0);}
+  .btn-next:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(212,175,55,.28);}
 
   /* ---- Voice mic ---- */
   .btn-tool.mic{border-color:var(--border-gold);color:var(--maroon);}
@@ -865,7 +875,7 @@
   .welcome-content>p,.subject-selection-card>p{max-width:690px;margin:22px 0 30px;color:#334155;font-family:var(--sans);font-size:17px;line-height:1.75;}
   .welcome-content>p{max-width:590px;color:#eef3f8;font-size:16.5px;line-height:1.72;text-shadow:0 2px 16px rgba(0,0,0,.3);}
   .welcome-actions{display:flex;align-items:center;gap:15px;flex-wrap:wrap;}
-  .welcome-actions .btn-primary{min-width:226px;padding:15px 25px;border-radius:7px;font-size:12px;letter-spacing:1.2px;box-shadow:0 12px 28px rgba(0,0,0,.24);}
+  .welcome-actions .btn-primary{min-width:226px;padding:0 20px;border-radius:6px;font-size:13px;letter-spacing:.01em;box-shadow:0 7px 18px rgba(98,70,20,.14);}
   .welcome-proof{display:flex;gap:10px 24px;flex-wrap:wrap;margin-top:20px;color:#c8d3df;font-family:var(--mono);font-size:9.5px;letter-spacing:.7px;text-transform:uppercase;}
   .welcome-proof span{display:inline-flex;align-items:center;gap:7px;}
   .welcome-proof span:before{content:"";width:4px;height:4px;border-radius:50%;background:var(--gold);}
@@ -934,8 +944,9 @@
     .exam-clock-copy,.exam-clock.no-digits .exam-clock-copy{text-align:left;}
   }
 </style>
-<link rel="stylesheet" href="assets/phase2.css">
-<link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=homepage-feature-ledger-20260815-1">
+<link rel="stylesheet" href="assets/phase2.css?release=subject-matter-gil-fixes-20260817-4">
+<link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
+<link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body class="private-beta-public">
@@ -1166,7 +1177,7 @@
         <p class="pb-dialog-status" id="pb-disclosure-status" role="status" aria-live="polite"></p>
         <div class="pb-dialog-actions">
           <button class="pb-dialog-secondary" type="button" data-pb-cancel>Back</button>
-          <button class="pb-dialog-primary" id="pb-disclosure-continue" type="button" disabled>I Agree — Continue to Access Code</button>
+          <button class="pb-dialog-primary" id="pb-disclosure-continue" type="button" disabled>I agree — continue to access code</button>
         </div>
       </section>
 
@@ -1182,7 +1193,7 @@
           <p class="pb-dialog-status" id="pb-code-status" role="status" aria-live="polite"></p>
           <div class="pb-dialog-actions">
             <button class="pb-dialog-secondary" id="pb-code-back" type="button">Back</button>
-            <button class="pb-dialog-primary" id="pb-code-submit" type="submit">Verify Access Code</button>
+            <button class="pb-dialog-primary" id="pb-code-submit" type="submit">Verify access code</button>
           </div>
         </form>
       </section>
@@ -1193,7 +1204,7 @@
         <p class="pb-final-note">Access has not yet been granted. Google sign-in and final authenticated acceptance are still required.</p>
         <div class="pb-dialog-actions">
           <button class="pb-dialog-secondary" id="pb-google-intro-back" type="button">Back</button>
-          <button class="pb-dialog-primary" id="pb-google-intro-continue" type="button">Continue to Google Sign-In</button>
+          <button class="pb-dialog-primary" id="pb-google-intro-continue" type="button">Continue to Google sign-in</button>
         </div>
       </section>
 
@@ -1203,7 +1214,7 @@
         <p class="pb-dialog-status" id="pb-google-status" role="status" aria-live="polite"></p>
         <div class="pb-dialog-actions">
           <button class="pb-dialog-secondary" id="pb-google-back" type="button">Back</button>
-          <button class="pb-dialog-primary pb-google-button" id="pb-google-signin" type="button"><span class="pb-google-mark" aria-hidden="true">G</span>Sign In with Google</button>
+          <button class="pb-dialog-primary pb-google-button" id="pb-google-signin" type="button"><span class="pb-google-mark" aria-hidden="true">G</span>Sign in with Google</button>
         </div>
       </section>
 
@@ -1218,7 +1229,7 @@
         <p class="pb-dialog-status" id="pb-final-status" role="status" aria-live="polite"></p>
         <div class="pb-dialog-actions">
           <button class="pb-dialog-secondary" id="pb-final-back" type="button">Back</button>
-          <button class="pb-dialog-primary" id="pb-final-continue" type="button" disabled>I Agree — Enter Private Beta</button>
+          <button class="pb-dialog-primary" id="pb-final-continue" type="button" disabled>I agree — enter private beta</button>
         </div>
       </section>
     </div>
@@ -1557,7 +1568,7 @@
     </div>
     <div class="modal-actions" style="margin-top:20px;">
       <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('terms-modal')">Back</button>
-      <button type="button" class="btn-primary" id="accept-terms" onclick="acceptTerms()">I Understand and Accept</button>
+      <button type="button" class="btn-primary" id="accept-terms" onclick="acceptTerms()">I understand and accept</button>
     </div>
   </div>
 </div>
@@ -1571,8 +1582,8 @@
     <span class="tier-badge">Authentication is required before an examination question is displayed.</span>
     <div class="signin-prompt-actions">
       <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('signin-prompt-modal')">Back</button>
-      <button type="button" class="btn-primary" id="onboarding-signin" onclick="beginOnboardingSignIn()">Sign In</button>
-      <button type="button" class="btn-secondary" id="guest-continue" onclick="continueAsGuest()" hidden>Maybe Later</button>
+      <button type="button" class="btn-primary" id="onboarding-signin" onclick="beginOnboardingSignIn()">Sign in</button>
+      <button type="button" class="btn-secondary" id="guest-continue" onclick="continueAsGuest()" hidden>Maybe later</button>
     </div>
   </div>
 </div>
@@ -1650,11 +1661,11 @@
 </div>
 
 
-<!-- Suggest a Correction/Better Answer modal -->
+<!-- Suggest a correction modal -->
 <div class="modal-overlay" id="suggest-modal" role="dialog" aria-modal="true" aria-labelledby="suggest-title">
   <div class="modal-card">
-    <button type="button" class="modal-close" aria-label="Close correction suggestion" onclick="returnFromModal('suggest-modal')">&times;</button>
-    <h3 class="modal-title" id="suggest-title">Suggest a Correction/Better Answer</h3>
+    <button type="button" class="dd-icon-control modal-close" aria-label="Close correction suggestion" onclick="returnFromModal('suggest-modal')">&times;</button>
+    <h3 class="modal-title" id="suggest-title">Suggest a correction</h3>
     <div class="modal-sub" id="suggest-qid">Editorial review for the selected question</div>
     <label class="field-label" for="suggest-type">Correction type</label>
     <select class="modal-select" id="suggest-type">
@@ -1665,15 +1676,15 @@
       <option value="other">Other</option>
     </select>
     <label class="field-label" for="suggest-text">Proposed correction or better answer</label>
-    <textarea class="modal-textarea" id="suggest-text" maxlength="6000" placeholder="Provide the precise corrected text or a better ALAC answer."></textarea>
+    <textarea class="modal-textarea" id="suggest-text" maxlength="6000" placeholder="Provide the precise corrected text or a better answer."></textarea>
     <label class="field-label" for="suggest-explanation">Explanation</label>
     <textarea class="modal-textarea" id="suggest-explanation" maxlength="3000" placeholder="Explain why the current material should be corrected." style="min-height:100px;"></textarea>
     <label class="field-label" for="suggest-sources">Optional supporting source links</label>
     <textarea class="modal-textarea" id="suggest-sources" placeholder="One http:// or https:// URL per line (maximum 5)." style="min-height:86px;"></textarea>
     <div class="suggest-status" id="suggest-status" role="status" aria-live="polite"></div>
     <div class="modal-actions">
-      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('suggest-modal')">Back</button>
-      <button class="btn-primary" id="suggest-submit" type="button" onclick="submitSuggestion()">Suggest a Correction/Better Answer</button>
+      <button type="button" class="dd-control btn-secondary modal-back" onclick="returnFromModal('suggest-modal')">Back</button>
+      <button class="dd-control is-primary btn-primary" id="suggest-submit" type="button" onclick="submitSuggestion()">Submit suggestion</button>
     </div>
     <div class="mock-note" style="margin-top:12px;">Question ID and subject are attached automatically. Do not include your exam answer or personal information.</div>
   </div>
@@ -2720,7 +2731,7 @@ function renderLaborQuestionBankMessage() {
     main.innerHTML = `<div class="loading">Loading Labor Law questions…</div>`;
     return;
   }
-  main.innerHTML = `<div class="err">Labor Law questions could not be loaded. <button class="btn-tool" onclick="loadLaborFromSheet()">Try Again</button></div>`;
+  main.innerHTML = `<div class="err">Labor Law questions could not be loaded. <button class="btn-tool" onclick="loadLaborFromSheet()">Try again</button></div>`;
 }
 
 function questionSourceMetadata(question) {
@@ -2787,7 +2798,7 @@ function legacyRenderMainWrite() {
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation (Beta)">Dictate<span class="beta-tag">BETA</span></button>
-          <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${!currentText.trim() ? 'disabled' : ''}>Evaluate & Grade Essay</button>
+          <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${!currentText.trim() ? 'disabled' : ''}>Evaluate and grade essay</button>
         </div>
       </div>
     </div>
@@ -2920,7 +2931,7 @@ function renderMainWrite() {
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation (Beta)" ${workspaceLocked ? 'disabled' : ''}>Dictate<span class="beta-tag">BETA</span></button>
-          <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${workspaceLocked || !currentText.trim() ? 'disabled' : ''}>Evaluate &amp; Grade Essay</button>
+          <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${workspaceLocked || !currentText.trim() ? 'disabled' : ''}>Evaluate and grade essay</button>
         </div>
       </div>
     </div>
@@ -3310,9 +3321,9 @@ function renderResultHTML(key) {
 
         <div class="fb-bar">
           <span class="fb-label">Was this model answer helpful?</span>
-          <button class="fb-btn" onclick="rateModel('up')">👍 Helpful</button>
-          <button class="fb-btn" onclick="rateModel('down')">👎 Needs work</button>
-          <button class="fb-btn suggest" onclick="openSuggest()">✎ Suggest a Correction/Better Answer</button>
+          <button class="fb-btn" type="button" onclick="rateModel('up')">Helpful</button>
+          <button class="fb-btn" type="button" onclick="rateModel('down')">Needs work</button>
+          <button class="dd-control is-tertiary is-on-light fb-btn suggest" type="button" onclick="openSuggest()">Suggest a correction</button>
         </div>
         <div class="review-actions">
           ${res.id ? `<button class="btn-tool" onclick="window.DueDiligence2026?.openVerdictExport('${escapeHtml(res.id)}','${escapeHtml(res.qId || '')}')">Export Verdict PDF</button>` : ''}
@@ -4074,16 +4085,40 @@ function tickSession() { updateSessionClock(); }
 /* ---------- Model-answer feedback loop ---------- */
 function rateModel(dir) {
   toast(dir === 'up'
-    ? '👍 Thanks — your endorsement was recorded for the editorial board.'
-    : '👎 Noted — flagged for editorial review. Consider suggesting a better answer.',
+    ? 'Thanks — your endorsement was recorded for the editorial board.'
+    : 'Noted — flagged for editorial review. Consider suggesting a better answer.',
     dir === 'up' ? 'ok' : 'warn');
 }
-function openSuggest() {
-  openSuggestWithDraft(null);
+let activeSuggestionQuestion = null;
+
+function suggestionQuestion(context = null) {
+  if (context?.id) {
+    const subject = String(context.subject || 'Subject Matter').trim() || 'Subject Matter';
+    return { id: String(context.id).trim(), sourceSubject: subject, subject };
+  }
+  return BAR_QUESTIONS[currentSubj]?.[currentIdx] || null;
 }
 
-function openSuggestWithDraft(restoredDraft) {
-  const q = BAR_QUESTIONS[currentSubj][currentIdx];
+function openSuggest(context = null) {
+  const question = suggestionQuestion(context);
+  if (!question?.id) {
+    toast('Return to the question before suggesting a correction.', 'warn');
+    return;
+  }
+  activeSuggestionQuestion = question;
+  openSuggestWithDraft(null, question);
+}
+
+function openSuggestWithDraft(restoredDraft, restoredQuestion = null) {
+  const q = restoredQuestion || activeSuggestionQuestion || suggestionQuestion({
+    id: restoredDraft?.questionId,
+    subject: restoredDraft?.subject,
+  });
+  if (!q?.id) {
+    toast('Return to the original question to restore the correction draft.', 'warn');
+    return;
+  }
+  activeSuggestionQuestion = q;
   const authDraft = restoredDraft || { questionId: q.id };
   if (globalThis.DueDiligencePhase2?.requireSubmissionAuthentication
       && !globalThis.DueDiligencePhase2.requireSubmissionAuthentication('correction', authDraft)) {
@@ -4100,7 +4135,9 @@ function openSuggestWithDraft(restoredDraft) {
   setSuggestStatus('', '');
   const submitButton = document.getElementById('suggest-submit');
   submitButton.disabled = false;
-  submitButton.textContent = 'Suggest a Correction/Better Answer';
+  submitButton.removeAttribute('aria-busy');
+  submitButton.classList.remove('is-success');
+  submitButton.textContent = 'Submit suggestion';
   openModal('suggest-modal');
 }
 
@@ -4132,7 +4169,11 @@ function correctionSourceUrls() {
 }
 
 async function submitSuggestion() {
-  const q = BAR_QUESTIONS[currentSubj][currentIdx];
+  const q = activeSuggestionQuestion || suggestionQuestion();
+  if (!q?.id) {
+    setSuggestStatus('Return to the original question before submitting this suggestion.', 'error');
+    return;
+  }
   const proposedCorrection = (document.getElementById('suggest-text').value || '').trim();
   const explanation = (document.getElementById('suggest-explanation').value || '').trim();
   const rawSourceUrls = (document.getElementById('suggest-sources').value || '')
@@ -4142,6 +4183,7 @@ async function submitSuggestion() {
     .slice(0, 5);
   const submissionDraft = {
     questionId: q.id,
+    subject: q.sourceSubject || q.subject || currentSubj,
     correctionType: document.getElementById('suggest-type').value,
     proposedCorrection,
     explanation,
@@ -4169,8 +4211,9 @@ async function submitSuggestion() {
 
   const submitButton = document.getElementById('suggest-submit');
   submitButton.disabled = true;
-  submitButton.textContent = 'Submitting…';
-  setSuggestStatus('Submitting Suggest a Correction/Better Answer…', 'loading');
+  submitButton.setAttribute('aria-busy', 'true');
+  submitButton.textContent = 'Submit suggestion';
+  setSuggestStatus('Submitting your correction suggestion…', 'loading');
 
   try {
     const response = await fetch(`${EXAMINER_WORKER_URL}/corrections`, {
@@ -4191,7 +4234,7 @@ async function submitSuggestion() {
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
       const submissionError = new Error(
-        payload?.error?.message || 'Suggest a Correction/Better Answer could not be submitted.',
+        payload?.error?.message || 'The correction suggestion could not be submitted.',
       );
       submissionError.code = payload?.error?.code
         || (response.status === 401 ? 'AUTHENTICATION_REQUIRED' : 'CORRECTION_FAILED');
@@ -4206,34 +4249,41 @@ async function submitSuggestion() {
       throw submissionError;
     }
 
-    setSuggestStatus('Suggest a Correction/Better Answer submitted successfully.', 'success');
+    setSuggestStatus('Correction suggestion submitted successfully.', 'success');
     globalThis.DueDiligenceAnalytics?.track('correction_submitted', {
       subject: q.sourceSubject || q.subject || currentSubj,
       questionId: q.id,
       resultCategory: document.getElementById('suggest-type').value,
     });
-    toast('Suggest a Correction/Better Answer submitted successfully.', 'ok');
+    toast('Correction suggestion submitted successfully.', 'ok');
+    submitButton.removeAttribute('aria-busy');
+    submitButton.classList.add('is-success');
     submitButton.textContent = 'Submitted';
   } catch (error) {
     setSuggestStatus(
-      error.message || 'Suggest a Correction/Better Answer could not be submitted. Please try again.',
+      error.message || 'The correction suggestion could not be submitted. Please try again.',
       'error',
     );
-    toast('Suggest a Correction/Better Answer could not be submitted.', 'warn');
+    toast('The correction suggestion could not be submitted.', 'warn');
     submitButton.disabled = false;
-    submitButton.textContent = 'Suggest a Correction/Better Answer';
+    submitButton.removeAttribute('aria-busy');
+    submitButton.classList.remove('is-success');
+    submitButton.textContent = 'Submit suggestion';
   }
 }
 
 globalThis.addEventListener?.('duediligence:submission-resume', (event) => {
   const pending = event.detail;
   if (pending?.view !== 'correction') return;
-  const q = BAR_QUESTIONS[currentSubj]?.[currentIdx];
+  const q = activeSuggestionQuestion || suggestionQuestion({
+    id: pending.draft?.questionId,
+    subject: pending.draft?.subject,
+  });
   if (!q || (pending.draft?.questionId && pending.draft.questionId !== q.id)) {
     toast('Signed in. Return to the original question to restore the correction draft.', 'warn');
     return;
   }
-  openSuggestWithDraft(pending.draft || null);
+  openSuggestWithDraft(pending.draft || null, q);
 });
 
 /* ---------- Voice-to-text dictation (real, with fallback) ---------- */
@@ -4284,14 +4334,14 @@ window.addEventListener('storage', (event) => {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"
   crossorigin="anonymous"></script>
-<script src="assets/phase2-config.js?v=leb-premium-20260804-1"></script>
+<script src="assets/phase2-config.js?v=email-marketing-retired-20260817-1"></script>
 <script src="assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
-<script src="assets/phase2-experience.js?v=exam-room-ux-20260814-1"></script>
+<script src="assets/phase2-experience.js?v=email-marketing-retired-20260817-1"></script>
 <script src="assets/phase4-experience.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=exam-room-ux-20260814-1&amp;release=verdict-export-p1-20260815-1"></script>
+<script src="assets/feature-loader.js?v=exam-room-ux-20260814-1&amp;release=subject-matter-gil-fixes-20260817-4"></script>
 <script src="assets/private-beta-landing.js?v=exam-room-ux-20260814-2&amp;release=verdict-export-p1-20260815-1-homepage-feature-ledger-20260815-1"></script>
 
 </body>

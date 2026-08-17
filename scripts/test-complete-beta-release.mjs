@@ -126,7 +126,7 @@ assert.match(examinations, /operation: 'subject_catalog'/);
 assert.match(examinations, /operation: 'subject_next'/);
 assert.match(examinations, /operation: 'subject_performance'/);
 assert.match(examinations, /data-submit-current/);
-assert.match(examinations, /Next Random Question/);
+assert.match(examinations, /Next question/);
 assert.match(forum, /command\('create_entry'/);
 assert.doesNotMatch(forum, /create_simple_entry/);
 assert.match(forum, /set_affirm/);

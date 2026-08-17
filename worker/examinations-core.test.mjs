@@ -100,20 +100,67 @@ test('Subject Matter complete review reveal requires only a valid attempt identi
   }), 'UNSUPPORTED_OPERATION');
 });
 
+test('Subject Matter skip requires an attempt, secure tab, and idempotency key', () => {
+  assert.deepEqual(normalizeExaminationCommand({
+    operation: 'subject_skip_question',
+    attemptId: ATTEMPT_ID,
+    tabToken: TAB_TOKEN,
+    requestKey: REQUEST_KEY,
+    unexpected: 'ignored',
+  }), {
+    operation: 'subject_skip_question',
+    attemptId: ATTEMPT_ID,
+    tabToken: TAB_TOKEN,
+    requestKey: REQUEST_KEY,
+  });
+
+  throwsCode(() => normalizeExaminationCommand({
+    operation: 'subject_skip_question',
+    attemptId: ATTEMPT_ID,
+    tabToken: 'short',
+    requestKey: REQUEST_KEY,
+  }), 'TAB_TOKEN_REQUIRED');
+
+  throwsCode(() => normalizeExaminationCommand({
+    operation: 'subject_skip_question',
+    attemptId: ATTEMPT_ID,
+    tabToken: TAB_TOKEN,
+    requestKey: 'short',
+  }), 'INVALID_REQUEST_KEY');
+});
+
 test('Subject Matter responses remove confidential inventory counts recursively', () => {
   const catalog = {
     items: [{
       subject: 'Criminal Law I',
       courseCode: 'CRIMLAW1',
+      yearLevel: 1,
+      term: 1,
       completedCount: 3,
       questionCount: 55,
       nested: { bankSize: 55, totalQuestions: 55 },
+    }, {
+      subject: '   ',
+      courseCode: 'BLANK',
+      yearLevel: 1,
+      term: 1,
+    }, {
+      subject: 'Evidence',
+      courseCode: '',
+      yearLevel: 2,
+      term: 2,
+    }, {
+      subject: 'Invalid term',
+      courseCode: 'INVALID',
+      yearLevel: 1,
+      term: 3,
     }],
     placementCount: 99,
   };
   const sanitizedCatalog = sanitizeSubjectMatterCatalog(catalog);
   assert.equal(sanitizedCatalog.items[0].subject, 'Criminal Law I');
   assert.equal(sanitizedCatalog.items[0].progressState, 'Ready for another review');
+  assert.equal(sanitizedCatalog.items.length, 1, 'malformed rows must never render as blank course controls');
   assert.equal('completedCount' in sanitizedCatalog.items[0], false);
   assert.equal('questionCount' in sanitizedCatalog.items[0], false);
   assert.deepEqual(sanitizedCatalog.items[0].nested, {});

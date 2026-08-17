@@ -63,9 +63,11 @@ sign-in.
 
 First-time users accept `terms-beta-v1-2026-08-15` and
 `privacy-beta-v1-2026-08-15`, then complete the approved profile fields through
-the Phase 1 RPCs. Marketing consent defaults to false, is optional, and uses the
-dedicated consent RPC. Protected subscription, role, administrative, and system
-fields are never directly updated by the browser.
+the Phase 1 RPCs. The active product does not collect an email-marketing
+preference and has no marketing sender; historical consent rows remain dormant
+for audit only. The legacy consent RPC is an authenticated compatibility no-op,
+so stale clients store no preference. Protected subscription, role,
+administrative, and system fields are never directly updated by the browser.
 
 Founder roles are not inferred from names or client claims. The first
 super-admin bootstrap remains service-role-only and must be called exactly once
@@ -92,4 +94,3 @@ not legal advice, and that AI grading can be inaccurate. They make no claim of
 government affiliation, certification, guaranteed security, regulatory
 compliance, or guaranteed Bar results. Both documents require independent legal
 review before final public-policy approval.
-

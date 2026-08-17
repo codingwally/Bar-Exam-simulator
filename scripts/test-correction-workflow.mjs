@@ -3,17 +3,13 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-const exactLabel = 'Suggest a Correction/Better Answer';
+const exactLabel = 'Submit suggestion';
 
-assert.ok(
-  html.split(exactLabel).length - 1 >= 8,
-  'The exact correction workflow label must be used consistently.',
-);
 assert.match(
   html,
-  /<h3 class="modal-title"[^>]*>Suggest a Correction\/Better Answer<\/h3>/,
+  /<h3 class="modal-title"[^>]*>Suggest a correction<\/h3>/,
 );
-assert.match(html, /onclick="openSuggest\(\)">[^<]*Suggest a Correction\/Better Answer<\/button>/);
+assert.match(html, /onclick="openSuggest\(\)">Suggest a correction<\/button>/);
 assert.match(html, /id="suggest-type"/);
 assert.match(html, /id="suggest-text" maxlength="6000"/);
 assert.match(html, /id="suggest-explanation" maxlength="3000"/);
@@ -24,17 +20,19 @@ assert.match(html, /fetch\(`\$\{EXAMINER_WORKER_URL\}\/corrections`/);
 assert.match(html, /questionId:\s*q\.id/);
 assert.match(html, /subject:\s*q\.sourceSubject \|\| q\.subject \|\| currentSubj/);
 assert.match(html, /correctionType:\s*document\.getElementById\('suggest-type'\)\.value/);
-assert.match(html, /setSuggestStatus\('Submitting Suggest a Correction\/Better Answer…', 'loading'\)/);
-assert.match(html, /setSuggestStatus\('Suggest a Correction\/Better Answer submitted successfully\.', 'success'\)/);
+assert.match(html, /setSuggestStatus\('Submitting your correction suggestion…', 'loading'\)/);
+assert.match(html, /setSuggestStatus\('Correction suggestion submitted successfully\.', 'success'\)/);
 assert.match(html, /setSuggestStatus\(error\.message, 'error'\)/);
-assert.match(html, /Suggest a Correction\/Better Answer could not be submitted/);
+assert.match(html, /The correction suggestion could not be submitted/);
+assert.match(html, /function suggestionQuestion\(context = null\)/,
+  'Subject Matter must pass its exact question and course into the correction workflow.');
 assert.doesNotMatch(html, /id="suggest-email"/);
 assert.doesNotMatch(html, /id="suggest-mailto"/);
 assert.doesNotMatch(html, /ORIGINAL MODEL ANSWER/);
 assert.doesNotMatch(html, /Submitter email/);
 
 const functionSource = html.match(
-  /function openSuggest\(\) \{[\s\S]*?(?=\/\* ---------- Voice-to-text dictation \(real, with fallback\) ---------- \*\/)/,
+  /let activeSuggestionQuestion = null;[\s\S]*?(?=\/\* ---------- Voice-to-text dictation \(real, with fallback\) ---------- \*\/)/,
 )?.[0];
 assert.ok(functionSource, 'Correction workflow functions must be extractable for behavioral tests.');
 
@@ -47,13 +45,25 @@ function testContext() {
     'suggest-sources',
     'suggest-status',
     'suggest-submit',
-  ].map((id) => [id, {
-    id,
-    value: '',
-    textContent: '',
-    className: '',
-    disabled: false,
-  }]));
+  ].map((id) => {
+    const classes = new Set();
+    const attributes = new Map();
+    return [id, {
+      id,
+      value: '',
+      textContent: '',
+      className: '',
+      disabled: false,
+      classList: {
+        add(value) { classes.add(value); },
+        remove(value) { classes.delete(value); },
+        contains(value) { return classes.has(value); },
+      },
+      setAttribute(name, value) { attributes.set(name, String(value)); },
+      removeAttribute(name) { attributes.delete(name); },
+      getAttribute(name) { return attributes.get(name) || null; },
+    }];
+  }));
   const toasts = [];
   const context = vm.createContext({
     BAR_QUESTIONS: {
@@ -117,7 +127,7 @@ function testContext() {
   assert.equal(elements['suggest-status'].className, 'suggest-status success');
   assert.equal(
     elements['suggest-status'].textContent,
-    'Suggest a Correction/Better Answer submitted successfully.',
+    'Correction suggestion submitted successfully.',
   );
   assert.equal(elements['suggest-submit'].textContent, 'Submitted');
 }

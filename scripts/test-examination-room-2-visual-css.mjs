@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const css = await readFile(new URL('../assets/duediligence-2026.css', import.meta.url), 'utf8');
+const sharedControlsCss = await readFile(new URL('../assets/due-diligence-controls.css', import.meta.url), 'utf8');
 
 assert.match(css, /#dd26-exam-main\{max-width:1200px;margin-inline:auto;outline:0;\}/,
   'the classroom workspace should stay at a readable professional width');
@@ -15,8 +16,10 @@ assert.match(css, /\.dd26-textarea:focus-visible,\.dd26-input:focus-visible,\.dd
   'keyboard focus must be visible on every form control');
 assert.match(css, /\[aria-invalid="true"\][^}]*:user-invalid/,
   'server and browser validation states both need visible error styling');
-assert.match(css, /\.dd26-button:disabled,\.dd26-button\[aria-disabled="true"\]\{[^}]*cursor:not-allowed/,
-  'blocked actions need an unmistakable disabled state');
+assert.match(sharedControlsCss, /\.dd26-button:disabled,[\s\S]*?\.dd26-button\[aria-disabled="true"\][^{]*\{[^}]*cursor:\s*not-allowed/,
+  'shared controls must give blocked Examination Room actions an unmistakable disabled state');
+assert.match(sharedControlsCss, /\.dd26-button\[aria-busy="true"\][^{]*\{[^}]*cursor:\s*progress/,
+  'shared controls must give busy Examination Room actions an unmistakable loading state');
 assert.match(css, /\.dd26-stepper:has\(>button\)\{grid-template-columns:repeat\(5,minmax\(0,1fr\)\);\}/,
   'the five-control preview must not leave one authoring step stranded on a new row');
 assert.match(css, /\.dd26-rules-summary dl div,\.dd26-publish-summary div,\.dd26-receipt dl div\{[^}]*grid-template-columns:minmax\(180px,\.32fr\) minmax\(0,1fr\)/,

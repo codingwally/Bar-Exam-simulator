@@ -1587,13 +1587,17 @@
       <section class="panel">
         <h3>Human examiner assignments</h3>
         ${assignments.length ? table(
-          ['Created', 'Assignment', 'Attempt', 'Status', 'Invitation', 'Expires'],
+          ['Created', 'Assignment', 'Attempt', 'Status', 'Link handoff', 'Expires'],
           assignments.map((item) => [
             dateTime(item.createdAt),
             maskOperationalIdentifier(item.assignmentId),
             maskOperationalIdentifier(item.attemptId),
             item.status,
-            item.invitationStatus,
+            item.invitationStatus === 'suppressed'
+              ? 'Manual secure link'
+              : item.invitationStatus === 'sent'
+                ? 'Email sent (historical)'
+                : item.invitationStatus,
             dateTime(item.expiresAt),
           ]),
         ) : empty('No human examiner assignments exist.')}
@@ -1737,7 +1741,7 @@
           requestKey: uuidKey(),
         });
         state.examinationData = null;
-        toast('Model answers released. Email status remains provider-confirmed only.');
+        toast('Model answers released in the application. No Practice Exam email is sent.');
         await renderSection('examinations');
       } catch (error) { toast(error.message); }
     }));

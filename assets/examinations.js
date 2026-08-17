@@ -34,13 +34,26 @@
   const LOCAL_KEY = 'duediligence.examinations.recovery.v1';
   const TAB_KEY = 'duediligence.examinations.tab-token.v1';
   const SUBJECT_CATALOG_STATE_KEY = 'duediligence.subject-matter.catalog-state.v2';
+  const LEGACY_DEFAULT_SUBJECT = 'Criminal Law I';
+  const DISTINCT_CONTROLLING_LAW_UNAVAILABLE = 'No distinct controlling-law explanation is available in the approved source material for this item.';
+  const OFFICIAL_SUBJECT_SOURCE_HOSTS = Object.freeze([
+    'lawphil.net',
+    'judiciary.gov.ph',
+    'officialgazette.gov.ph',
+    'leb.gov.ph',
+    'dole.gov.ph',
+    'bir.gov.ph',
+    'senate.gov.ph',
+    'legal.un.org',
+  ]);
   const HEARTBEAT_MS = 30_000;
   const AUTOSAVE_MS = 1_100;
 
   const state = {
     catalog: [],
     history: [],
-    selectedSubject: 'Criminal Law I',
+    selectedSubject: '',
+    subjectSelectionConfirmed: false,
     track: 'per_subject',
     setup: null,
     active: null,
@@ -68,6 +81,7 @@
     resumeAttemptId: null,
     reviewMaterialCache: new Map(),
     reviewMaterialRequests: new Map(),
+    pendingSubjectSkip: null,
     initialized: false,
   };
 
@@ -109,6 +123,18 @@
     return `${prefix}_${randomToken(18)}`;
   }
 
+  function subjectSkipRequestKey(attemptId) {
+    const normalizedAttemptId = String(attemptId || '')
+      .replace(/[^A-Za-z0-9]/g, '')
+      .slice(0, 96);
+    if (normalizedAttemptId.length < 16) {
+      throw new Error('The current question cannot be skipped safely. Refresh and try again.');
+    }
+    // Stable per attempt so retrying after a lost HTTP response reaches the
+    // server's same-key replay path instead of issuing a second mutation.
+    return `skip_${normalizedAttemptId}`;
+  }
+
   function tabToken() {
     let token = '';
     try { token = sessionStorage.getItem(TAB_KEY) || ''; } catch {}
@@ -127,6 +153,23 @@
     return String(global.DueDiligencePhase4?.getSession?.()?.user?.id || '').trim();
   }
 
+  function privateRequestIdentity() {
+    return Object.freeze({
+      ownerUserId: currentUserId(),
+      generation: Number(global.DueDiligencePrivateWorkspace?.generation?.()) || 0,
+    });
+  }
+
+  function privateRequestIdentityIsCurrent(identity) {
+    return Boolean(identity?.ownerUserId)
+      && currentUserId() === identity.ownerUserId
+      && (Number(global.DueDiligencePrivateWorkspace?.generation?.()) || 0) === identity.generation;
+  }
+
+  function isStaleIdentityError(error) {
+    return error?.code === 'STALE_IDENTITY';
+  }
+
   function privateKey(baseKey) {
     return global.DueDiligencePrivateWorkspace?.scopedKey?.('examinations', baseKey) || '';
   }
@@ -142,6 +185,10 @@
       versionId: state.active.attempt.versionId,
       currentIndex: state.currentIndex,
       practiceTimerMode: state.practiceTimerMode,
+      pendingSubjectSkipRequestKey:
+        state.pendingSubjectSkip?.attemptId === state.active.attempt.attemptId
+          ? state.pendingSubjectSkip.requestKey
+          : null,
       savedAt: Date.now(),
       questions: state.active.questions.map((question) => ({
         questionId: question.questionId,
@@ -171,6 +218,7 @@
 
   function clearRecovery() {
     const storageKey = privateKey(LOCAL_KEY);
+    state.pendingSubjectSkip = null;
     if (!storageKey) return;
     try { localStorage.removeItem(storageKey); } catch {}
   }
@@ -183,7 +231,13 @@
       error.code = 'AUTHENTICATION_REQUIRED';
       throw error;
     }
+    const identity = privateRequestIdentity();
     const payload = await phase4.request(path, { body });
+    if (!privateRequestIdentityIsCurrent(identity)) {
+      const error = new Error('The signed-in account changed before the request completed.');
+      error.code = 'STALE_IDENTITY';
+      throw error;
+    }
     return payload.data;
   }
 
@@ -362,7 +416,7 @@
   }
 
   function subjectCatalogItem(subjectName = state.selectedSubject) {
-    return state.catalog.find((item) => item.subject === subjectName) || state.catalog[0] || null;
+    return state.catalog.find((item) => item.subject === subjectName) || null;
   }
 
   function subjectTermKey(item) {
@@ -388,8 +442,14 @@
     if (!storageKey) return;
     let saved = null;
     try { saved = safeJson(localStorage.getItem(storageKey)); } catch {}
-    if (saved?.version !== 2) return;
-    state.selectedSubject = String(saved.selectedSubject || state.selectedSubject);
+    if (![2, 3].includes(saved?.version)) return;
+    state.subjectSelectionConfirmed = saved.version === 3
+      ? saved.selectionConfirmed === true
+      : Boolean(String(saved.selectedSubject || '').trim())
+        && String(saved.selectedSubject || '').trim() !== LEGACY_DEFAULT_SUBJECT;
+    state.selectedSubject = state.subjectSelectionConfirmed
+      ? String(saved.selectedSubject || '')
+      : '';
     state.subjectQuery = String(saved.query || '').slice(0, 160);
     state.subjectOpenYears = new Set(
       Array.isArray(saved.openYears) ? saved.openYears.map(String).slice(0, 8) : [],
@@ -415,8 +475,9 @@
       const storageKey = privateKey(SUBJECT_CATALOG_STATE_KEY);
       if (!storageKey) return;
       localStorage.setItem(storageKey, JSON.stringify({
-        version: 2,
+        version: 3,
         selectedSubject: state.selectedSubject,
+        selectionConfirmed: state.subjectSelectionConfirmed,
         query: state.subjectQuery,
         openYears: [...state.subjectOpenYears],
         openTerms: [...state.subjectOpenTerms],
@@ -450,7 +511,7 @@
         const yearPanelId = `dd-subject-${prefix}-year-${year}`;
         return `<details class="dd-subject-year" data-subject-year="${escapeAttribute(year)}"
           ${yearOpen ? 'open' : ''}>
-          <summary aria-expanded="${yearOpen ? 'true' : 'false'}"
+          <summary class="dd-disclosure-control" aria-expanded="${yearOpen ? 'true' : 'false'}"
             aria-controls="${escapeAttribute(yearPanelId)}"><span>Year ${escapeHtml(year)}</span>
             <span class="dd-subject-chevron" aria-hidden="true"></span></summary>
           <div class="dd-subject-year-body" id="${escapeAttribute(yearPanelId)}">
@@ -462,13 +523,14 @@
                 const termPanelId = `dd-subject-${prefix}-term-${year}-${term}`;
                 return `<details class="dd-subject-term" data-subject-term="${escapeAttribute(termKey)}"
                   ${termOpen ? 'open' : ''}>
-                  <summary aria-expanded="${termOpen ? 'true' : 'false'}"
+                  <summary class="dd-disclosure-control" aria-expanded="${termOpen ? 'true' : 'false'}"
                     aria-controls="${escapeAttribute(termPanelId)}"><span>Term ${escapeHtml(term)}</span>
                     <span class="dd-subject-chevron" aria-hidden="true"></span></summary>
                   <div class="dd-subject-group" id="${escapeAttribute(termPanelId)}">
                     ${items.map((item) => `
-                      <button class="dd-subject-button ${item.subject === selected?.subject ? 'is-selected' : ''}"
+                      <button class="dd-choice-control dd-subject-button ${item.subject === selected?.subject ? 'is-selected' : ''}"
                         type="button" data-exam-subject="${escapeAttribute(item.subject)}"
+                        aria-label="Select ${escapeAttribute(item.courseCode ? `${item.courseCode}: ${item.subject}` : item.subject)}. ${escapeAttribute(item.progressState || 'Not started')}."
                         data-subject-search="${escapeAttribute(subjectSearchText(item))}"
                         ${item.subject === selected?.subject ? 'aria-current="true"' : ''}>
                         <span class="dd-subject-name">
@@ -581,6 +643,7 @@
     const selected = subjectCatalogItem(subjectName);
     if (!selected) return;
     state.selectedSubject = selected.subject;
+    state.subjectSelectionConfirmed = true;
     ensureSubjectPathOpen(selected);
     persistSubjectCatalogState();
     const dialog = document.getElementById('dd-subject-selector-dialog');
@@ -598,29 +661,79 @@
     });
   }
 
+  function subjectSelectorDialogMarkup(selected) {
+    const hierarchy = subjectHierarchyMarkup(selected, 'mobile');
+    return `<dialog class="dd-subject-drawer" id="dd-subject-selector-dialog"
+      aria-labelledby="dd-subject-selector-title">
+      <div class="dd-subject-drawer-shell" data-subject-selector>
+        <button class="dd-icon-control dd-exam-dialog-close dd-subject-drawer-close" type="button"
+          data-subject-selector-close aria-label="Close course chooser">&times;</button>
+        <header>
+          <p class="dd-exam-kicker">Subject Matter</p>
+          <h2 id="dd-subject-selector-title">Choose a course</h2>
+          <label class="dd-subject-search-label" for="dd-subject-search-mobile">Find a course</label>
+          <input class="dd-subject-search" id="dd-subject-search-mobile" data-subject-search-input
+            type="search" value="${escapeAttribute(state.subjectQuery)}"
+            placeholder="Search course, code, year, or term" autocomplete="off">
+          <p class="dd-subject-search-help">Search by course title or code, or browse the Year and Term sections.</p>
+          <p class="dd-subject-result-count" data-subject-result-count role="status"></p>
+        </header>
+        <div class="dd-subject-list" data-subject-tree>${hierarchy}</div>
+        <p class="dd-subject-empty" data-subject-empty hidden>No matching course was found.</p>
+        <footer><button class="dd-control dd-exam-button" type="button" data-subject-selector-close
+          aria-label="Close course chooser and return to Subject Matter">Back</button></footer>
+      </div>
+    </dialog>`;
+  }
+
   function renderPerSubject() {
     const root = pageRoot('per_subject');
     if (!root) return;
     const selected = subjectCatalogItem();
     if (!selected) {
-      root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
-        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">Review and retention</p>
-          <h1>Subject Matter</h1></div></header>
-        <div class="dd-exam-status is-error">No Subject Matter courses are available right now.</div>
+      if (!state.catalog.length) {
+        root.innerHTML = `<div class="dd-exam-page dd-subject-study-page"><div class="dd-exam-shell">
+          <header class="dd-exam-hero"><div><p class="dd-exam-kicker">Review and retention</p>
+            <h1>Subject Matter</h1></div></header>
+          <div class="dd-exam-status is-error" role="alert">No Subject Matter courses are available right now.</div>
+          <button class="dd-control dd-exam-button is-primary" type="button"
+            data-retry-catalog="per_subject">Retry loading courses</button>
+        </div></div>`;
+        return;
+      }
+      root.innerHTML = `<div class="dd-exam-page dd-subject-study-page"><div class="dd-exam-shell">
+        <header class="dd-exam-hero dd-subject-study-hero">
+          <div>
+            <p class="dd-exam-kicker">Review and retention</p>
+            <h1>Subject Matter</h1>
+            <p>Open the governing law when you are ready.</p>
+          </div>
+        </header>
+        <div class="dd-exam-status" role="status" aria-live="polite"></div>
+        <section class="dd-subject-selection-callout" aria-labelledby="dd-subject-course-selection-heading">
+          <p class="dd-exam-kicker">Your course</p>
+          <h2 id="dd-subject-course-selection-heading" tabindex="-1">Choose what you are studying today.</h2>
+          <p class="dd-subject-selection-summary">You can change courses at any time.</p>
+          <button class="dd-control dd-exam-button is-primary dd-subject-selection-button" type="button"
+            data-subject-selector-open aria-haspopup="dialog" aria-controls="dd-subject-selector-dialog"
+            aria-describedby="dd-subject-selection-note">
+            Browse courses
+          </button>
+          <p class="dd-subject-selection-note" id="dd-subject-selection-note">Search by course title or code, or browse by year and term.</p>
+        </section>
+        ${subjectSelectorDialogMarkup(null)}
       </div></div>`;
+      bindSubjectCatalogControls();
       return;
     }
     state.selectedSubject = selected.subject;
     ensureSubjectPathOpen(selected);
-    const mobileHierarchy = subjectHierarchyMarkup(selected, 'mobile');
     root.innerHTML = `<div class="dd-exam-page dd-subject-study-page"><div class="dd-exam-shell">
       <header class="dd-exam-hero dd-subject-study-hero">
         <div>
           <p class="dd-exam-kicker">Review and retention</p>
           <h1>Subject Matter</h1>
-          <p>Choose a course, review one focused question, and open the legal basis when you are ready.</p>
         </div>
-        <span class="dd-subject-study-mark">Question-aware study</span>
       </header>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
       <div class="dd-subject-layout is-compact-selector">
@@ -628,65 +741,37 @@
           <header class="dd-selected-heading dd-subject-study-intro" id="dd-selected-course-heading" tabindex="-1">
             <p class="dd-exam-kicker">Year ${Number(selected.yearLevel)} · Term ${Number(selected.term)}</p>
             <h2>${escapeHtml(selected.subject)}</h2>
-            <p>Review the precise task, open the governing law when you are ready, and write only when testing recall will help.</p>
           </header>
           <section class="dd-subject-study-start" aria-labelledby="dd-subject-study-start-title">
             <div class="dd-subject-study-copy">
-              <p class="dd-exam-kicker">One-question review session</p>
-              <h3 id="dd-subject-study-start-title">Begin when you are ready to review.</h3>
-              <p>Questions appear in a random, no-repeat cycle. Review materials are available with each question; writing from memory remains optional.</p>
+              <p class="dd-exam-kicker">Review session</p>
+              <h3 id="dd-subject-study-start-title">Begin when you are ready.</h3>
+              <p>Questions rotate without repeats. Writing from memory is optional.</p>
             </div>
             <dl class="dd-subject-study-meta">
               <div><dt>Your progress</dt><dd>${escapeHtml(selected.progressState || 'Not started')}</dd></div>
               <div><dt>Current timer</dt><dd>${escapeHtml(practiceTimerLabel())}</dd></div>
             </dl>
             <div class="dd-exam-actions dd-subject-study-actions">
-              <button class="dd-exam-button is-primary" type="button"
+              <button class="dd-control dd-exam-button is-primary" type="button"
                 data-subject-start="${escapeAttribute(selected.subject)}"
                 data-year="${Number(selected.yearLevel)}" data-term="${Number(selected.term)}">
                 Start
               </button>
-              <button class="dd-exam-button dd-subject-selector-open" type="button"
+              <button class="dd-control dd-exam-button is-tertiary" type="button"
                 data-subject-selector-open aria-haspopup="dialog" aria-controls="dd-subject-selector-dialog">
                 Change course
               </button>
-              <button class="dd-exam-button" type="button" data-subject-timer-settings>
+              <button class="dd-control dd-exam-button" type="button" data-subject-timer-settings>
                 Timer settings
               </button>
-              <button class="dd-exam-button" type="button"
+              <button class="dd-control dd-exam-button" type="button"
                 data-subject-performance="${escapeAttribute(selected.subject)}">Review my work</button>
             </div>
-            <details class="dd-practice-note dd-subject-study-note">
-              <summary>How this review works</summary>
-              <ol class="dd-syllabus-list">
-                <li>Review the exact task and reveal the approved legal basis when you are ready.</li>
-                <li>Study why the basis applies and follow its official primary sources.</li>
-                <li>Optionally answer from memory and submit for question-aware coaching.</li>
-                <li>Continue to a different random question.</li>
-              </ol>
-            </details>
           </section>
         </main>
       </div>
-      <dialog class="dd-subject-drawer" id="dd-subject-selector-dialog"
-        aria-labelledby="dd-subject-selector-title">
-        <div class="dd-subject-drawer-shell" data-subject-selector>
-          <button class="dd-exam-dialog-close dd-subject-drawer-close" type="button"
-            data-subject-selector-close aria-label="Close course chooser and go back">&times;</button>
-          <header>
-            <p class="dd-exam-kicker">Subject Matter</p>
-            <h2 id="dd-subject-selector-title">Choose a course</h2>
-            <label class="sr-only" for="dd-subject-search-mobile">Search courses</label>
-            <input class="dd-subject-search" id="dd-subject-search-mobile" data-subject-search-input
-              type="search" value="${escapeAttribute(state.subjectQuery)}"
-              placeholder="Search course, code, year, or term" autocomplete="off">
-            <p class="dd-subject-result-count" data-subject-result-count role="status"></p>
-          </header>
-          <div class="dd-subject-list" data-subject-tree>${mobileHierarchy}</div>
-          <p class="dd-subject-empty" data-subject-empty hidden>No matching course was found.</p>
-          <footer><button class="dd-exam-button" type="button" data-subject-selector-close>Back</button></footer>
-        </div>
-      </dialog>
+      ${subjectSelectorDialogMarkup(selected)}
     </div></div>`;
     bindSubjectCatalogControls();
   }
@@ -797,16 +882,19 @@
 
   function confirmDecision(options = {}) {
     const dialog = decisionDialog();
+    const subjectMatter = state.track === 'per_subject';
+    dialog.classList.toggle('is-subject-matter', subjectMatter);
+    const controlClass = subjectMatter ? 'dd-control ' : '';
     const opener = document.activeElement;
     dialog.innerHTML = `<div class="dd-exam-dialog-inner">
-      <button class="dd-exam-dialog-close" type="button" data-decision-back
+      <button class="${subjectMatter ? 'dd-icon-control ' : ''}dd-exam-dialog-close" type="button" data-decision-back
         aria-label="Close confirmation and go back">&times;</button>
       <p class="dd-exam-kicker">Confirm your choice</p>
       <h2 id="dd-exam-decision-title">${escapeHtml(options.title || 'Please confirm')}</h2>
       <p class="dd-exam-description">${escapeHtml(options.copy || '')}</p>
       <div class="dd-exam-dialog-actions">
-        <button class="dd-exam-button" type="button" data-decision-back>Back</button>
-        <button class="dd-exam-button is-primary" type="button" data-decision-confirm>
+        <button class="${controlClass}dd-exam-button" type="button" data-decision-back>Back</button>
+        <button class="${controlClass}dd-exam-button is-primary" type="button" data-decision-confirm>
           ${escapeHtml(options.confirmLabel || 'Continue')}
         </button>
       </div>
@@ -837,9 +925,10 @@
 
   function openSubjectTimerSettings() {
     const dialog = setupDialog();
+    dialog.classList.add('is-subject-matter');
     const opener = document.activeElement;
     dialog.innerHTML = `<div class="dd-exam-dialog-inner">
-      <button class="dd-exam-dialog-close" type="button" data-dialog-close
+      <button class="dd-icon-control dd-exam-dialog-close" type="button" data-dialog-close
         aria-label="Close timer settings">&times;</button>
       <p class="dd-exam-kicker">Subject Matter</p>
       <h2 id="dd-exam-setup-title">Timer settings</h2>
@@ -853,8 +942,8 @@
         </label>`).join('')}
       </fieldset>
       <div class="dd-exam-dialog-actions">
-        <button class="dd-exam-button" type="button" data-dialog-cancel>Back</button>
-        <button class="dd-exam-button is-primary" type="button" data-timer-apply>Apply setting</button>
+        <button class="dd-control dd-exam-button" type="button" data-dialog-cancel>Back</button>
+        <button class="dd-control dd-exam-button is-primary" type="button" data-timer-apply>Apply setting</button>
       </div>
     </div>`;
     const finish = (apply = false) => {
@@ -889,8 +978,10 @@
         ['none', 'Untimed practice', 'Write without a clock or time limit.'],
       ].filter(([mode]) => (setup.allowedTimerModes || []).includes(mode));
       const compact = setup.track === 'per_subject';
+      dialog.classList.toggle('is-subject-matter', compact);
+      const controlClass = compact ? 'dd-control ' : '';
       dialog.innerHTML = `<div class="dd-exam-dialog-inner">
-        <button class="dd-exam-dialog-close" type="button" data-dialog-close
+        <button class="${compact ? 'dd-icon-control ' : ''}dd-exam-dialog-close" type="button" data-dialog-close
           aria-label="Close time-mode selection">&times;</button>
         <p class="dd-exam-kicker">${escapeHtml(compact ? 'Subject Matter' : 'Bar Feels')}</p>
         <h2 id="dd-exam-setup-title">${escapeHtml(compact ? setup.subject : setup.title)}</h2>
@@ -909,8 +1000,8 @@
           </select>
         </label>` : ''}
         <div class="dd-exam-dialog-actions">
-          <button class="dd-exam-button" type="button" data-dialog-cancel>Back</button>
-          <button class="dd-exam-button is-primary" type="button" data-exam-begin>Begin Examination</button>
+          <button class="${controlClass}dd-exam-button" type="button" data-dialog-cancel>Back</button>
+          <button class="${controlClass}dd-exam-button is-primary" type="button" data-exam-begin>${compact ? 'Begin review' : 'Begin examination'}</button>
         </div>
       </div>`;
       dialog.querySelector('[data-dialog-close]').addEventListener('click', () => dialog.close('cancel'));
@@ -921,6 +1012,25 @@
     } catch (error) {
       setStatus(error.message, 'error');
     }
+  }
+
+  async function startSubjectSetup(setup, options = {}) {
+    const practiceTimerMode = PRACTICE_TIMER_MODES.some(
+      (item) => item.value === options.practiceTimerMode,
+    ) ? options.practiceTimerMode : state.preferredTimerMode;
+    state.setup = setup;
+    const active = await api('/examinations/command', {
+      operation: 'start_attempt',
+      versionId: setup.versionId,
+      // Subject Matter's 12-minute target is advisory. The server stopwatch
+      // preserves the draft without auto-submitting when the target ends.
+      timerMode: practiceTimerMode === 'strict' ? 'selfPaced' : practiceTimerMode,
+      requestKey: requestKey('start'),
+      tabToken: tabToken(),
+    });
+    active.practiceTimerMode = practiceTimerMode;
+    activateAttempt(active);
+    return active;
   }
 
   async function requestSubjectQuestion(options = {}) {
@@ -939,7 +1049,7 @@
         const restart = await confirmDecision({
           title: 'Start a new randomized cycle?',
           copy: `You completed every available ${selected.subject} question in this cycle. Your performance history will remain available.`,
-          confirmLabel: 'Start New Cycle',
+          confirmLabel: 'Start new cycle',
         });
         if (restart) {
           await requestSubjectQuestion({ subject: selected.subject, resetCycle: true });
@@ -950,18 +1060,9 @@
       }
       state.setup = selection.setup;
       if (options.autoStart === true) {
-        const clientTimerMode = state.preferredTimerMode;
-        const active = await api('/examinations/command', {
-          operation: 'start_attempt',
-          versionId: selection.setup.versionId,
-          // A practice countdown warns at zero without triggering the formal
-          // examination engine's automatic-expiry submission behavior.
-          timerMode: clientTimerMode === 'strict' ? 'selfPaced' : clientTimerMode,
-          requestKey: requestKey('start'),
-          tabToken: tabToken(),
+        await startSubjectSetup(selection.setup, {
+          practiceTimerMode: state.preferredTimerMode,
         });
-        active.practiceTimerMode = clientTimerMode;
-        activateAttempt(active);
         return;
       }
       await openSetup(selection.setup.versionId);
@@ -1022,6 +1123,13 @@
     stopActiveTimers();
     const recovery = readRecovery();
     state.active = reconcileRecovery(active);
+    state.pendingSubjectSkip = recovery?.attemptId === state.active?.attempt?.attemptId
+      && /^[A-Za-z0-9_-]{16,128}$/.test(String(recovery.pendingSubjectSkipRequestKey || ''))
+      ? {
+        attemptId: state.active.attempt.attemptId,
+        requestKey: recovery.pendingSubjectSkipRequestKey,
+      }
+      : null;
     state.practiceTimerMode = state.active.examination.track === 'per_subject'
       ? active.practiceTimerMode || recovery?.practiceTimerMode || state.preferredTimerMode
       : state.active.attempt.timerMode;
@@ -1074,6 +1182,7 @@
       heartbeat(false).catch(() => {});
       return { status: 'restored', active: state.active };
     } catch (error) {
+      if (isStaleIdentityError(error)) return { status: 'stale', active: null };
       setStatus(error.message, 'error');
       return { status: 'retryable_error', active: null };
     } finally {
@@ -1224,20 +1333,21 @@
     const answerText = question.answerText || '';
     const attemptId = state.active.attempt.attemptId;
     const assisted = state.active.attempt.assisted === true;
+    const reviewConfirmationPending = state.active.attempt.reviewConfirmationPending === true;
     return `<div class="dd-subject-editorial">
       <header class="dd-subject-editorial-header">
         <div>
           <p class="dd-exam-kicker">Review and retention</p>
           <p class="dd-subject-breadcrumb"><span>The Academy</span><b aria-hidden="true">/</b> Subject Matter</p>
           <h1>Subject Matter</h1>
-          <p>Choose a course, review one focused question, and open the legal basis when you are ready.</p>
         </div>
         <div class="dd-subject-course-picker">
-          <p>Choose a course</p>
-          <button class="dd-subject-course-control" type="button" data-subject-change-course
+          <p>Current course</p>
+          <button class="dd-picker-control dd-subject-course-control" type="button" data-subject-change-course
+            aria-haspopup="dialog"
             aria-label="${escapeAttribute(course)} — change course. Opens the searchable Year, Term, and Course chooser.">
             <strong>${escapeHtml(course)}</strong>
-            <span>Change</span>
+            <span>Change course</span>
           </button>
         </div>
       </header>
@@ -1252,13 +1362,16 @@
             <p class="dd-subject-task-label">Your practice question</p>
             <h2 class="dd-question-prompt" id="dd-subject-question-title" tabindex="-1">${escapeHtml(question.prompt)}</h2>
           </div>
+          <section class="dd-subject-approach" aria-labelledby="dd-subject-writing-approach-title">
+            <h3 id="dd-subject-writing-approach-title">Writing approach</h3>
+            <p>${escapeHtml(writingGuide.approach)}</p>
+          </section>
           <div class="dd-subject-answer-heading">
             <div><p class="dd-exam-kicker">Your response</p><h3 id="dd-subject-answer-title">Write your answer</h3></div>
-            <span>Autosave active</span>
           </div>
           ${question.localRecoveryText != null ? `<div class="dd-exam-status is-error">
             A newer local draft differs from the server revision.
-            <button class="dd-exam-button" type="button" data-use-local-draft>Use local draft</button>
+            <button class="dd-control dd-exam-button" type="button" data-use-local-draft>Restore local draft</button>
           </div>` : ''}
           <section class="dd-answer-card">
             <label class="sr-only" for="dd-answer-editor">Your answer</label>
@@ -1276,24 +1389,29 @@
                 timerMode === 'strict' ? state.clientRemaining : state.clientElapsed,
               )}</strong>
             </div>
-            <span class="dd-room-bottom-status" data-current-word-status>${wordCount(answerText)} words &middot;
-              ${timerMode === 'strict' ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}</span>
           </div>
           <nav class="dd-subject-practice-actions" aria-label="Subject Matter practice actions">
-            <button class="dd-exam-button is-primary" data-submit-current type="button"
-              ${answerText.trim() ? '' : 'disabled'}>Submit for coaching</button>
-            <button class="dd-exam-button" data-return-catalog type="button">Return to courses</button>
+            <button class="dd-control dd-exam-button is-primary" data-submit-current type="button"
+              ${answerText.trim() && !reviewConfirmationPending ? '' : 'disabled'}>Submit for coaching</button>
+            <button class="dd-control dd-exam-button" id="dd-subject-flag-button" type="button"
+              aria-pressed="${question.flagged === true ? 'true' : 'false'}">
+              ${question.flagged === true ? 'Flagged for later' : 'Flag for later'}
+            </button>
+            <button class="dd-control dd-exam-button" data-subject-skip type="button"
+              aria-describedby="dd-subject-skip-note">Skip question</button>
+            <button class="dd-control dd-exam-button is-tertiary" data-return-catalog type="button">Return to courses</button>
           </nav>
+          <p class="dd-subject-action-note" id="dd-subject-skip-note">Skip saves this draft but does not submit or score it.</p>
           <div class="dd-exam-status dd-subject-writing-status-message" data-subject-writing-status
             role="status" aria-live="polite" aria-atomic="true"></div>
         </main>
-        <aside class="dd-subject-editorial-pane is-coaching is-review-panel" aria-label="Complete Subject Matter review">
+        <aside class="dd-subject-editorial-pane is-reading is-review-panel"
+          aria-label="Suggested answer and legal review">
           ${subjectReviewPanelMarkup({
             attemptId,
             questionId: question.questionId,
             assisted,
             submitted: false,
-            writingGuide,
           })}
         </aside>
       </div>
@@ -1360,7 +1478,7 @@
           <div class="dd-question-prompt">${escapeHtml(question.prompt)}</div>
           ${question.localRecoveryText != null ? `<div class="dd-exam-status is-error">
             A newer local draft differs from the server revision.
-            <button class="dd-exam-button" type="button" data-use-local-draft>Use local draft</button>
+            <button class="dd-exam-button" type="button" data-use-local-draft>Restore local draft</button>
           </div>` : ''}
           <section class="dd-answer-card">
             ${subjectPractice ? `<div class="dd-writing-guide" aria-label="Suggested focus for this ${escapeAttribute(writingGuide.label.toLowerCase())}">
@@ -1404,7 +1522,7 @@
       </div>
       <nav class="dd-room-bottom" aria-label="Question navigation">
         ${singleSubject ? `
-          <button class="dd-exam-button" data-return-catalog type="button">Return to Subjects</button>
+          <button class="dd-exam-button" data-return-catalog type="button">Return to catalog</button>
           <span class="dd-room-bottom-status" data-current-word-status>${wordCount(question.answerText)} words &middot;
             ${timerMode === 'strict' ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}</span>
           <button class="dd-exam-button is-primary" data-submit-current type="button"
@@ -1446,7 +1564,7 @@
           ? `${formatClock(state.clientRemaining)} remaining` : 'Autosave active'}`;
       }
       const submit = root.querySelector('[data-submit-current]');
-      if (submit) submit.disabled = !answerText.trim();
+      if (submit) submit.disabled = !answerText.trim() || subjectReviewSubmissionBlocked();
       const stateNode = root.querySelector('#dd-save-state');
       if (stateNode) {
         stateNode.textContent = 'Unsaved changes';
@@ -1719,8 +1837,114 @@
       question.savedAt = result.savedAt;
       saveRecovery();
       renderRoom();
+      requestAnimationFrame(() => pageRoot('per_subject')
+        ?.querySelector('#dd-subject-flag-button')?.focus());
     } catch (error) {
       notify(error.message, 'warn');
+    }
+  }
+
+  async function skipCurrentSubjectQuestion(button) {
+    const question = currentQuestion();
+    if (!question || !state.active || state.active.examination.track !== 'per_subject') return;
+    const confirmed = await confirmDecision({
+      title: 'Skip this question?',
+      copy: 'Your draft and any flag will remain saved. This question will not be submitted, assessed, or counted in your performance. A different question will open.',
+      confirmLabel: 'Skip question',
+    });
+    if (!confirmed || !state.active) return;
+
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    const attemptId = state.active.attempt.attemptId;
+    const pendingSkip = state.pendingSubjectSkip?.attemptId === attemptId
+      ? state.pendingSubjectSkip
+      : null;
+    const skipRequestKey = pendingSkip?.requestKey || subjectSkipRequestKey(attemptId);
+    let skipResult = null;
+    setStatus(pendingSkip
+      ? 'Confirming the same safe skip request…'
+      : 'Saving this draft before opening a different question…');
+    try {
+      if (!pendingSkip) {
+        if (!await flushCurrentSave()) {
+          throw new Error('The latest draft could not be confirmed. The question was not skipped.');
+        }
+        state.pendingSubjectSkip = { attemptId, requestKey: skipRequestKey };
+        saveRecovery();
+      }
+      skipResult = await api('/examinations/command', {
+        operation: 'subject_skip_question',
+        attemptId,
+        requestKey: skipRequestKey,
+        tabToken: tabToken(),
+      });
+      if (!skipResult?.skipped || !skipResult?.setup?.versionId) {
+        throw new Error('The next question could not be prepared safely.');
+      }
+
+      pauseActiveClock();
+      clearRecovery();
+      await startSubjectSetup(skipResult.setup, {
+        practiceTimerMode: state.practiceTimerMode,
+      });
+      notify(
+        skipResult.flaggedForLater
+          ? 'Question skipped without a score and kept in Flagged for later.'
+          : 'Question skipped. No submission or score was recorded.',
+        'ok',
+      );
+    } catch (error) {
+      if (skipResult?.skipped) {
+        stopActiveTimers();
+        clearRecovery();
+        state.active = null;
+        state.setup = null;
+        state.screen = 'catalog';
+        await loadCatalog('per_subject');
+        setStatus('The question was skipped without a score. Select Start to open the next question.', 'success');
+      } else {
+        // Preserve the key when the response is ambiguous. If the server
+        // committed before the connection failed, the next click replays that
+        // exact mutation and does not try to save against a closed attempt.
+        if (String(error?.code || '').startsWith('EXAM_')) {
+          state.pendingSubjectSkip = null;
+        }
+        saveRecovery();
+        setStatus(error.message, 'error');
+      }
+    } finally {
+      if (button.isConnected) {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
+    }
+  }
+
+  async function retryFlaggedSubjectQuestion(button) {
+    const versionId = String(button?.dataset.subjectRetryFlagged || '').trim();
+    const subject = String(button?.dataset.subject || state.selectedSubject || '').trim();
+    if (!versionId || !subject) return;
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    setStatus('Opening this flagged question as a new practice attempt…');
+    try {
+      state.selectedSubject = subject;
+      state.subjectSelectionConfirmed = true;
+      persistSubjectCatalogState();
+      // This deliberate retry starts the stored version directly. It does not
+      // mutate subject_matter_cycles, whose already-selected next question and
+      // no-repeat order remain intact.
+      await startSubjectSetup({ versionId }, {
+        practiceTimerMode: state.preferredTimerMode,
+      });
+      notify('Flagged question reopened. It will leave the queue after a later submission.', 'ok');
+    } catch (error) {
+      setStatus(error.message, 'error');
+      if (button.isConnected) {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+      }
     }
   }
 
@@ -1785,10 +2009,17 @@
   async function submitCurrentSubjectAnswer(button) {
     const question = currentQuestion();
     if (!question?.answerText?.trim() || !state.active) return;
+    if (subjectReviewSubmissionBlocked()) {
+      button.disabled = true;
+      setStatus('Submission remains paused until Due Diligence confirms whether the review was opened. Retry the review first.', 'error');
+      return;
+    }
     const alreadySubmitted = Boolean(state.active.attempt.submittedAt)
       || ['submitted', 'expired'].includes(state.active.attempt.status);
+    const idleLabel = alreadySubmitted ? 'Retry assessment' : 'Submit for coaching';
     button.disabled = true;
-    button.textContent = alreadySubmitted ? 'Retrying assessment…' : 'Submitting securely…';
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = idleLabel;
     setStatus(alreadySubmitted
       ? 'Your submitted answer is preserved. Retrying the assessment only…'
       : 'Saving your answer before assessment…');
@@ -1808,7 +2039,7 @@
         state.active.attempt.status = receipt.status;
         state.active.attempt.submittedAt = receipt.submittedAt;
       }
-      button.textContent = 'Assessing your response…';
+      setStatus('Your answer is preserved. Due Diligence is preparing the coaching assessment…');
       const maximumBatches = Math.max(2, state.active.questions.length + 1);
       let result = null;
       let transientRetries = 0;
@@ -1837,10 +2068,9 @@
       await openVerdict(state.active.attempt.attemptId);
     } catch (error) {
       setStatus(error.message, 'error');
-      button.disabled = false;
-      button.textContent = state.active?.attempt?.submittedAt
-        ? 'Retry assessment'
-        : 'Submit for coaching';
+      button.disabled = subjectReviewSubmissionBlocked() || !currentQuestion()?.answerText?.trim();
+      button.removeAttribute('aria-busy');
+      button.textContent = state.active?.attempt?.submittedAt ? 'Retry assessment' : 'Submit for coaching';
     }
   }
 
@@ -1931,17 +2161,19 @@
     dialog.setAttribute('aria-labelledby', 'dd-human-review-title');
     dialog.innerHTML = `<form class="dd-exam-dialog-inner" id="dd-human-form">
       <button class="dd-exam-dialog-close" type="button" data-dialog-close
-        aria-label="Close Human Examiner invitation">&times;</button>
+        aria-label="Close Human Examiner assignment">&times;</button>
       <p class="dd-exam-kicker">Structured Review</p>
-      <h2 id="dd-human-review-title">Invite a Human Examiner</h2>
-      <p class="dd-exam-description">The invitation contains only an expiring secure link.
-        No answer or model answer is attached to email.</p>
-      <label class="dd-exam-field">Examiner email
-        <input type="email" id="dd-examiner-email" maxlength="254" required>
+      <h2 id="dd-human-review-title">Create a Human Examiner Assignment</h2>
+      <p class="dd-exam-description">Practice Exam email delivery is disabled. Create the assignment,
+        then copy and share the expiring secure link directly.</p>
+      <label class="dd-exam-field">Examiner email (assignment record)
+        <input type="email" id="dd-examiner-email" maxlength="254" autocomplete="email"
+          aria-describedby="dd-examiner-email-help" required>
+        <small id="dd-examiner-email-help">This identifies the intended examiner. The expiring secure link controls access.</small>
       </label>
       <div class="dd-exam-dialog-actions">
         <button class="dd-exam-button" type="button" data-dialog-cancel>Back</button>
-        <button class="dd-exam-button is-primary" type="submit">Create Assignment</button>
+        <button class="dd-exam-button is-primary" type="submit">Create assignment link</button>
       </div>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
     </form>`;
@@ -1952,11 +2184,34 @@
     return dialog;
   }
 
+  function humanAssignmentUrl(returnedUrl, assignmentToken) {
+    const fallback = new URL(global.location.href);
+    fallback.pathname = '/';
+    fallback.search = '';
+    fallback.hash = '';
+    fallback.searchParams.set('assignment', assignmentToken);
+    try {
+      const candidate = new URL(String(returnedUrl || ''));
+      if (!['https:', 'http:'].includes(candidate.protocol)
+          || candidate.username || candidate.password
+          || candidate.origin !== fallback.origin
+          || candidate.searchParams.get('assignment') !== assignmentToken
+          || candidate.hash !== '#examiner-review') return fallback.href;
+      return candidate.href;
+    } catch {
+      return fallback.href;
+    }
+  }
+
   async function createHumanAssignment(event) {
     event.preventDefault();
-    const button = event.submitter;
+    const form = event.currentTarget;
+    const button = event.submitter || form.querySelector('[type="submit"]');
+    const status = form.querySelector('.dd-exam-status');
+    const emailInput = form.querySelector('#dd-examiner-email');
     button.disabled = true;
-    const examinerEmail = document.getElementById('dd-examiner-email').value.trim();
+    button.textContent = 'Creating assignment link…';
+    const examinerEmail = emailInput.value.trim();
     const assignmentToken = randomToken(36);
     try {
       const result = await api('/examinations/command', {
@@ -1966,14 +2221,47 @@
         requestKey: requestKey('human'),
         assignmentToken,
       });
-      humanDialog().close();
-      const truthful = result.invitationStatus === 'sent'
-        ? 'Examiner invitation sent and assignment preserved.'
-        : `Assignment preserved. Email status: ${result.invitationStatus}.`;
-      notify(truthful, result.invitationStatus === 'sent' ? 'ok' : 'warn');
+      const assignmentUrl = humanAssignmentUrl(result.assignmentUrl, assignmentToken);
+      emailInput.readOnly = true;
+      emailInput.setAttribute('aria-readonly', 'true');
+      button.textContent = 'Assignment link created';
+      status.className = 'dd-exam-status is-success';
+      status.innerHTML = `<strong>Assignment created. No email was sent.</strong>
+        <p>Copy and share this expiring secure link directly with ${escapeHtml(examinerEmail)}.</p>
+        <label class="dd-exam-field">Secure assignment link
+          <input type="url" id="dd-human-assignment-link" value="${escapeAttribute(assignmentUrl)}"
+            readonly aria-readonly="true">
+        </label>
+        <div class="dd-exam-dialog-actions">
+          <button class="dd-exam-button is-primary" type="button" data-copy-human-assignment>
+            Copy secure link
+          </button>
+        </div>
+        <small data-human-copy-status></small>`;
+      const linkInput = status.querySelector('#dd-human-assignment-link');
+      const copyButton = status.querySelector('[data-copy-human-assignment]');
+      const copyStatus = status.querySelector('[data-human-copy-status]');
+      copyButton.addEventListener('click', async () => {
+        try {
+          if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+          await navigator.clipboard.writeText(assignmentUrl);
+          copyButton.textContent = 'Copied';
+          copyStatus.textContent = 'Secure link copied.';
+          global.toast?.('Secure assignment link copied.', 'ok');
+        } catch {
+          linkInput.focus();
+          linkInput.select();
+          copyButton.textContent = 'Link selected';
+          copyStatus.textContent = 'Copy the selected link, then share it directly with the examiner.';
+          global.toast?.('The link is selected. Copy it using your browser or keyboard.', 'warn');
+        }
+      });
+      global.toast?.('Assignment created. No email was sent.', 'ok');
     } catch (error) {
-      setStatus(error.message, 'error');
+      status.textContent = error.message;
+      status.className = 'dd-exam-status is-error';
       button.disabled = false;
+      button.textContent = 'Create assignment link';
     }
   }
 
@@ -2089,9 +2377,22 @@
     return `${currentUserId()}:${String(attemptId || '').trim()}`;
   }
 
+  function subjectReviewSubmissionBlocked() {
+    return state.active?.examination?.track === 'per_subject'
+      && !state.active?.attempt?.submittedAt
+      && state.active?.attempt?.reviewConfirmationPending === true;
+  }
+
   function completeSubjectReviewSources(sources) {
     const safeSources = (Array.isArray(sources) ? sources : []).filter((source) => {
-      try { return new URL(source).protocol === 'https:'; } catch { return false; }
+      try {
+        const url = new URL(source);
+        const hostname = url.hostname.toLowerCase();
+        return url.protocol === 'https:' && !url.username && !url.password
+          && OFFICIAL_SUBJECT_SOURCE_HOSTS.some((host) => (
+            hostname === host || hostname.endsWith(`.${host}`)
+          ));
+      } catch { return false; }
     });
     if (!safeSources.length) return '';
     return `<section class="dd-subject-review-section dd-subject-review-sources" aria-labelledby="dd-subject-review-sources-title">
@@ -2103,6 +2404,26 @@
   function normalizedSubjectReviewText(value) {
     return String(value || '').trim().toLowerCase().normalize('NFKD')
       .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function isNearDuplicateSubjectReviewText(value, suggestedAnswer) {
+    const candidate = normalizedSubjectReviewText(value);
+    const answer = normalizedSubjectReviewText(suggestedAnswer);
+    if (!candidate || !answer) return false;
+    if (candidate === answer) return true;
+    const lengthRatio = Math.min(candidate.length, answer.length)
+      / Math.max(candidate.length, answer.length, 1);
+    if (lengthRatio >= 0.8 && (candidate.includes(answer) || answer.includes(candidate))) {
+      return true;
+    }
+    const candidateWords = new Set(candidate.split(' ').filter(Boolean));
+    const answerWords = new Set(answer.split(' ').filter(Boolean));
+    let intersection = 0;
+    candidateWords.forEach((word) => {
+      if (answerWords.has(word)) intersection += 1;
+    });
+    const union = candidateWords.size + answerWords.size - intersection;
+    return lengthRatio >= 0.7 && union > 0 && intersection / union >= 0.9;
   }
 
   function isLowValueSubjectReviewText(value) {
@@ -2121,6 +2442,37 @@
         seen.add(key);
         return true;
       });
+  }
+
+  function distinctSubjectReviewFallback(material) {
+    return [material?.doctrine, material?.legalBasis, material?.governingProvision, material?.citation]
+      .map((value) => String(value || '').trim())
+      .find((value) => value && !isLowValueSubjectReviewText(value)
+        && !isNearDuplicateSubjectReviewText(value, material?.suggestedAnswer))
+      || DISTINCT_CONTROLLING_LAW_UNAVAILABLE;
+  }
+
+  function subjectReviewSuggestedAnswerMarkup(value) {
+    const text = String(value || '').replace(/\r\n?/g, '\n').trim();
+    if (!text) return '<p class="dd-study-hold">The suggested answer has not been released for this item.</p>';
+    const headingPattern = /^[ \t]*(?:(?:I|II|III|IV)\.[ \t]*)?(Answer|Legal Basis|Application|Conclusion)(?:[ \t]*:[ \t]*|[ \t]*(?=\n|$))/gim;
+    const matches = [...text.matchAll(headingPattern)];
+    const paragraphMarkup = (content) => String(content || '').split(/\n{2,}/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+      .join('');
+    if (!matches.length) {
+      return `<div class="dd-subject-review-prose dd-subject-review-structured">${paragraphMarkup(text)}</div>`;
+    }
+    const sections = [];
+    const introduction = text.slice(0, matches[0].index).trim();
+    if (introduction) sections.push(paragraphMarkup(introduction));
+    matches.forEach((match, index) => {
+      const content = text.slice(match.index + match[0].length, matches[index + 1]?.index ?? text.length).trim();
+      sections.push(`<section class="dd-subject-review-answer-part"><h5>${escapeHtml(match[1])}</h5>${paragraphMarkup(content)}</section>`);
+    });
+    return `<div class="dd-subject-review-prose dd-subject-review-structured">${sections.join('')}</div>`;
   }
 
   function resolvedSubjectLegalReview(material) {
@@ -2143,9 +2495,13 @@
         && (/\b(?:v|vs)\.?\s+/i.test(entry.caseName)
           || /^(?:in re|re:|matter of)\b/i.test(entry.caseName)
           || /\b(?:G\.?\s*R\.?|A\.?\s*C\.?|A\.?\s*M\.?|B\.?\s*M\.?)\s*(?:No\.?|Nos\.?)\s*/i.test(entry.citation)));
+    const suppliedControllingLaw = String(supplied.controllingLawAndDoctrine
+      || explanation.controllingLawAndElements || material?.legalBasis || '').trim();
     return {
-      controllingLawAndDoctrine: String(supplied.controllingLawAndDoctrine
-        || explanation.controllingLawAndElements || material?.legalBasis || '').trim(),
+      controllingLawAndDoctrine: isNearDuplicateSubjectReviewText(
+        suppliedControllingLaw,
+        material?.suggestedAnswer,
+      ) ? distinctSubjectReviewFallback(material) : suppliedControllingLaw,
       authorityReferences: uniqueSubjectReviewValues(
         supplied.authorityReferences?.length
           ? supplied.authorityReferences
@@ -2173,8 +2529,10 @@
     </section>`).join('')}</div>`;
   }
 
-  function completeSubjectReviewContent(material) {
+  function completeSubjectReviewContent(material, { openSection = '' } = {}) {
     const review = resolvedSubjectLegalReview(material);
+    const headingId = `dd-subject-review-heading-${String(material.attemptId || material.questionId || 'current')
+      .replace(/[^a-zA-Z0-9_-]/g, '-')}`;
     const authorityMarkup = review.authorityReferences.length
       ? `<section class="dd-subject-review-section"><h4>Cited Authorities</h4>
           <ul class="dd-subject-review-citations">${review.authorityReferences
@@ -2189,81 +2547,137 @@
     ? `<div class="legal-explanation">${escapeHtml(entry.doctrine)}</div>` : ''}
           </article>`).join('')}</div></section>`
       : '';
-    return `<div class="dd-subject-review-complete" data-subject-review-content tabindex="-1">
+    const open = (section) => (openSection === section ? ' open' : '');
+    return `<section class="dd-subject-review-complete" data-subject-review-content
+      data-attempt-id="${escapeAttribute(material.attemptId || '')}"
+      data-question-id="${escapeAttribute(material.questionId || '')}"
+      aria-labelledby="${escapeAttribute(headingId)}">
       <header class="dd-subject-review-revealed-heading">
-        <div><p class="dd-exam-kicker">Complete review unlocked</p><h3>Study the approved legal material.</h3></div>
+        <div><p class="dd-exam-kicker">Review material</p><h3 id="${escapeAttribute(headingId)}">Suggested answer and legal review</h3></div>
         <span class="dd-subject-attempt-badge ${material.assisted ? 'is-assisted' : 'is-unassisted'}">
           ${material.assisted ? 'Assisted / Open-book' : 'Unassisted submission'}
         </span>
       </header>
-      <section class="dd-subject-review-section"><h4>Suggested Answer</h4>
-        <div class="dd-subject-review-prose">${escapeHtml(material.suggestedAnswer)}</div></section>
-      <section class="dd-subject-review-section"><h4>Controlling Law &amp; Doctrine</h4>
-        <div class="dd-subject-review-prose">${escapeHtml(review.controllingLawAndDoctrine)}</div></section>
-      ${authorityMarkup}
-      ${jurisprudenceMarkup}
-      <section class="dd-subject-review-section"><h4>Application and Material Limits</h4>
-        ${subjectReviewApplicationMarkup(review)}</section>
-      ${completeSubjectReviewSources(material.sources)}
-      <p class="dd-subject-review-source-note">The explanation is limited to Due Diligence's approved question-bank material. It does not add independent authorities.</p>
-    </div>`;
-  }
-
-  function subjectReviewPanelMarkup({ attemptId, questionId, assisted, submitted, writingGuide }) {
-    const material = state.reviewMaterialCache.get(subjectReviewMaterialKey(attemptId));
-    if (material?.questionId === questionId) return completeSubjectReviewContent(material);
-    const classificationNotice = submitted
-      ? 'Your answer was submitted before this review was opened. Revealing it now will not change the attempt\'s Unassisted classification.'
-      : 'Opening this review before submission marks this attempt Assisted / Open-book. You may continue writing and submit normally; your score is not reduced.';
-    return `<section class="dd-subject-review-lock" data-subject-review-panel
-      data-attempt-id="${escapeAttribute(attemptId)}" data-question-id="${escapeAttribute(questionId)}"
-      data-submitted="${submitted ? 'true' : 'false'}" aria-labelledby="dd-subject-review-lock-title">
-      <div class="dd-subject-review-lock-seal" aria-hidden="true"><span>DD</span></div>
-      <p class="dd-exam-kicker">Private review chamber</p>
-      <h2 id="dd-subject-review-lock-title">Complete Review</h2>
-      <p class="dd-subject-review-lock-lead">Reveal the approved answer, complete legal basis, source-bound teaching explanation, and verified official sources.</p>
-      <div class="dd-subject-review-classification-note">
-        <strong>${assisted ? 'This attempt is Assisted / Open-book.' : 'Choose when to reveal.'}</strong>
-        <span>${escapeHtml(assisted ? 'The review was opened before submission. Your score is unchanged, and this attempt remains in private history outside unassisted mastery metrics.' : classificationNotice)}</span>
+      <div class="dd-subject-review-disclosures">
+        <details data-subject-review-section="suggested-answer"${open('suggested-answer')}>
+          <summary class="dd-disclosure-control"><span>Reveal suggested answer</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span></summary>
+          <div class="dd-subject-review-disclosure-body">
+            ${subjectReviewSuggestedAnswerMarkup(material.suggestedAnswer)}
+          </div>
+        </details>
+        <details data-subject-review-section="controlling-law"${open('controlling-law')}>
+          <summary class="dd-disclosure-control"><span>Reveal controlling law and doctrine</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span></summary>
+          <div class="dd-subject-review-disclosure-body">
+            <section class="dd-subject-review-section"><h4>Controlling Law &amp; Doctrine</h4>
+              <div class="dd-subject-review-prose">${escapeHtml(review.controllingLawAndDoctrine)}</div></section>
+            ${authorityMarkup}
+            ${jurisprudenceMarkup}
+          </div>
+        </details>
+        <details data-subject-review-section="application-guidance"${open('application-guidance')}>
+          <summary class="dd-disclosure-control"><span>Reveal application, limits, and sources</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span></summary>
+          <div class="dd-subject-review-disclosure-body">
+            <section class="dd-subject-review-section"><h4>Application and Material Limits</h4>
+              ${subjectReviewApplicationMarkup(review)}</section>
+            ${completeSubjectReviewSources(material.sources)}
+            <p class="dd-subject-review-source-note">The explanation is limited to Due Diligence's approved question-bank material. It does not add independent authorities.</p>
+          </div>
+        </details>
       </div>
-      <button class="dd-subject-review-reveal" type="button" data-subject-review-reveal>
-        <span>Reveal Complete Review</span><small>Suggested answer · legal basis · explanation · sources</small>
-      </button>
-      <p class="dd-subject-review-assurance">Revealing never changes the Gemini grading rubric or imposes a score penalty.</p>
-      <details class="dd-subject-approach"><summary>Writing approach</summary>
-        <div class="legal-explanation">${escapeHtml(writingGuide?.approach || 'Answer the precise legal task, state the governing law, apply the material facts, and give a clear conclusion.')}</div>
-      </details>
-      <div class="dd-subject-review-status" data-subject-review-status role="status" aria-live="polite"></div>
     </section>`;
   }
 
-  function updateCompleteSubjectReviewPanels(attemptId, questionId, material, { focus = false } = {}) {
+  function subjectReviewPanelMarkup({ attemptId, questionId, assisted, submitted }) {
+    const material = state.reviewMaterialCache.get(subjectReviewMaterialKey(attemptId));
+    if (material?.questionId === questionId) return completeSubjectReviewContent(material);
+    const classificationNotice = assisted
+      ? 'Review opened before submission. Your score is unchanged, and this attempt is excluded from unassisted mastery metrics.'
+      : submitted
+        ? 'Your answer was submitted before reveal, so its Unassisted classification will not change.'
+        : 'Opening any section marks this attempt Assisted / Open-book. Your score is unchanged, and it is excluded from unassisted mastery metrics.';
+    return `<section class="dd-subject-review-lock" data-subject-review-panel
+      data-attempt-id="${escapeAttribute(attemptId)}" data-question-id="${escapeAttribute(questionId)}"
+      data-submitted="${submitted ? 'true' : 'false'}" aria-labelledby="dd-subject-review-lock-title">
+      <p class="dd-exam-kicker">Review material</p>
+      <h2 id="dd-subject-review-lock-title">Suggested answer and legal review</h2>
+      <div class="dd-subject-review-classification-note">
+        <strong>${assisted ? 'Assisted / Open-book' : submitted ? 'Submitted before reveal' : 'Before submission'}</strong>
+        <span>${escapeHtml(classificationNotice)}</span>
+      </div>
+      <div class="dd-subject-review-disclosures is-locked">
+        <details>
+          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="suggested-answer">
+            <span>Reveal suggested answer</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span>
+          </summary>
+        </details>
+        <details>
+          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="controlling-law">
+            <span>Reveal controlling law and doctrine</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span>
+          </summary>
+        </details>
+        <details>
+          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="application-guidance">
+            <span>Reveal application, limits, and sources</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span>
+          </summary>
+        </details>
+      </div>
+      <div class="dd-subject-review-status" id="dd-subject-review-region-${escapeAttribute(attemptId)}"
+        data-subject-review-status role="status" aria-live="polite"></div>
+      <div class="dd-subject-review-error-actions" data-subject-review-actions></div>
+    </section>`;
+  }
+
+  function updateCompleteSubjectReviewPanels(attemptId, questionId, material, {
+    focus = false,
+    openSection = '',
+  } = {}) {
     document.querySelectorAll(`[data-subject-review-panel][data-attempt-id="${attemptId}"]`).forEach((panel) => {
       if (panel.dataset.questionId !== questionId) return;
-      panel.outerHTML = completeSubjectReviewContent(material);
+      panel.outerHTML = completeSubjectReviewContent(material, { openSection });
     });
     document.querySelectorAll('[data-subject-attempt-classification]').forEach((badge) => {
       badge.classList.toggle('is-assisted', material.assisted === true);
       badge.classList.toggle('is-unassisted', material.assisted !== true);
       badge.textContent = material.assisted ? 'Assisted / Open-book' : 'Unassisted';
     });
-    if (focus) document.querySelector('[data-subject-review-content]')?.focus({ preventScroll: true });
+    if (focus) {
+      const completed = [...document.querySelectorAll('[data-subject-review-content]')]
+        .find((section) => section.dataset.attemptId === attemptId
+          && section.dataset.questionId === questionId);
+      completed?.querySelector('details[open] > summary')?.focus({ preventScroll: true });
+    }
   }
 
-  function showCompleteSubjectReviewError(panel, message) {
+  function showCompleteSubjectReviewError(panel) {
     const status = panel?.querySelector('[data-subject-review-status]');
-    const button = panel?.querySelector('[data-subject-review-reveal]');
-    if (button) button.disabled = false;
-    if (!status) return;
-    status.innerHTML = `<div class="dd-exam-status is-error">${escapeHtml(message || 'Verified review material could not be loaded right now.')}</div>
-      <button class="dd-exam-button" type="button" data-subject-review-retry>Retry</button>`;
+    const actions = panel?.querySelector('[data-subject-review-actions]');
+    const submitted = state.active?.attempt?.attemptId === panel?.dataset.attemptId
+      && Boolean(state.active.attempt.submittedAt);
+    if (panel) delete panel.dataset.reviewLoading;
+    panel?.querySelectorAll('[data-subject-review-reveal]').forEach((summary) => {
+      summary.removeAttribute('aria-busy');
+      summary.removeAttribute('aria-disabled');
+    });
+    if (status) status.innerHTML = `<div class="dd-exam-status is-error">
+      <strong>Review status could not be confirmed.</strong>
+      <span>${submitted
+        ? 'Your submitted answer is unchanged, and Retry assessment remains available. Retry the review to open the protected material.'
+        : 'Your saved answer is unchanged. This attempt may already be classified Assisted / Open-book, so submission remains paused until Due Diligence confirms the review state.'}</span>
+    </div>`;
+    if (actions) actions.innerHTML = `<button class="dd-control dd-exam-button is-primary" type="button" data-subject-review-retry
+      data-subject-review-section="${escapeAttribute(panel?.dataset.pendingReviewSection || 'suggested-answer')}">Retry review</button>`;
   }
 
-  async function loadCompleteSubjectReview(button, { retry = false, automatic = false } = {}) {
+  async function loadCompleteSubjectReview(button, {
+    retry = false,
+    automatic = false,
+    openSection = button?.dataset.subjectReviewSection || 'suggested-answer',
+  } = {}) {
     const panel = button?.closest('[data-subject-review-panel]');
     const attemptId = panel?.dataset.attemptId || '';
     const questionId = panel?.dataset.questionId || '';
     if (!attemptId || !questionId) return;
+    if (panel.dataset.reviewLoading === 'true') return;
     const key = subjectReviewMaterialKey(attemptId);
     if (retry) {
       state.reviewMaterialCache.delete(key);
@@ -2271,13 +2685,33 @@
     }
     const cached = state.reviewMaterialCache.get(key);
     if (cached) {
-      updateCompleteSubjectReviewPanels(attemptId, questionId, cached, { focus: !automatic });
+      if (state.active?.attempt?.attemptId === attemptId) {
+        state.active.attempt.reviewConfirmationPending = false;
+      }
+      updateCompleteSubjectReviewPanels(attemptId, questionId, cached, {
+        focus: !automatic,
+        openSection,
+      });
+      const submitButton = pageRoot('per_subject')?.querySelector('[data-submit-current]');
+      if (submitButton && !state.active?.attempt?.submittedAt) {
+        submitButton.disabled = !currentQuestion()?.answerText?.trim();
+      }
       return;
     }
-    button.disabled = true;
+    panel.dataset.pendingReviewSection = openSection;
+    panel.dataset.reviewLoading = 'true';
+    button.setAttribute('aria-disabled', 'true');
+    button.setAttribute('aria-busy', 'true');
     const submitButton = pageRoot('per_subject')?.querySelector('[data-submit-current]');
-    if (submitButton) submitButton.disabled = true;
+    const reviewAffectsSubmission = state.active?.attempt?.attemptId === attemptId
+      && !state.active.attempt.submittedAt;
+    if (submitButton && reviewAffectsSubmission) submitButton.disabled = true;
+    if (state.active?.attempt?.attemptId === attemptId) {
+      state.active.attempt.reviewConfirmationPending = reviewAffectsSubmission;
+    }
     const status = panel.querySelector('[data-subject-review-status]');
+    const actions = panel.querySelector('[data-subject-review-actions]');
+    if (actions) actions.replaceChildren();
     if (status) status.textContent = 'Opening the approved review material…';
     let request = state.reviewMaterialRequests.get(key);
     if (!request) {
@@ -2292,19 +2726,25 @@
         .finally(() => state.reviewMaterialRequests.delete(key));
       state.reviewMaterialRequests.set(key, request);
     }
+    let reviewConfirmed = false;
     try {
       const material = await request;
       if (state.active?.attempt?.attemptId === attemptId) {
         state.active.attempt.assisted = material.assisted === true;
         state.active.attempt.assistanceKnown = material.assistanceKnown === true;
         state.active.attempt.reviewMaterialRevealedAt = material.reviewMaterialRevealedAt || null;
+        state.active.attempt.reviewConfirmationPending = false;
       }
       if (!document.body.contains(panel)) return;
-      updateCompleteSubjectReviewPanels(attemptId, questionId, material, { focus: !automatic });
+      updateCompleteSubjectReviewPanels(attemptId, questionId, material, {
+        focus: !automatic,
+        openSection,
+      });
+      reviewConfirmed = true;
     } catch (error) {
-      if (document.body.contains(panel)) showCompleteSubjectReviewError(panel, error?.message);
+      if (document.body.contains(panel)) showCompleteSubjectReviewError(panel);
     } finally {
-      if (submitButton && state.active?.attempt?.attemptId === attemptId
+      if (reviewConfirmed && submitButton && state.active?.attempt?.attemptId === attemptId
           && !state.active.attempt.submittedAt) {
         submitButton.disabled = !currentQuestion()?.answerText?.trim();
       }
@@ -2322,7 +2762,6 @@
       || state.active?.examination?.subject
       || state.selectedSubject
       || 'Selected course';
-    const writingGuide = subjectWritingGuide(result || {});
     const answerText = String(result?.answerText || '').trim();
     const questionId = result?.questionId || result?.id || '';
     const resolvedAttemptId = attemptId || result?.attemptId || state.active?.attempt?.attemptId || '';
@@ -2334,14 +2773,14 @@
           <p class="dd-exam-kicker">Review and retention</p>
           <p class="dd-subject-breadcrumb"><span>The Academy</span><b aria-hidden="true">/</b> Subject Matter</p>
           <h1 data-subject-result-heading tabindex="-1">Subject Matter</h1>
-          <p>Choose a course, review one focused question, and open the legal basis when you are ready.</p>
         </div>
         <div class="dd-subject-course-picker">
-          <p>Choose a course</p>
-          <button class="dd-subject-course-control" type="button" data-subject-change-course
+          <p>Current course</p>
+          <button class="dd-picker-control dd-subject-course-control" type="button" data-subject-change-course
+            aria-haspopup="dialog"
             aria-label="${escapeAttribute(course)} — change course. Opens the searchable Year, Term, and Course chooser.">
             <strong>${escapeHtml(course)}</strong>
-            <span>Change</span>
+            <span>Change course</span>
           </button>
         </div>
       </header>
@@ -2364,19 +2803,19 @@
             ${assessmentCard(result, { track: 'per_subject', compactSubject: true })}
           </section>
           <nav class="dd-subject-practice-actions" aria-label="Subject Matter review actions">
-            <button class="dd-exam-button is-primary" type="button" data-subject-next>Next question</button>
-            <button class="dd-exam-button" type="button" data-return-catalog>Return to courses</button>
-            <button class="dd-subject-review-work" type="button"
-              data-subject-performance="${escapeAttribute(course)}">Review my saved work</button>
+            <button class="dd-control dd-exam-button is-primary" type="button" data-subject-next>Next question</button>
+            <button class="dd-control dd-exam-button" type="button"
+              data-subject-performance="${escapeAttribute(course)}">Review my work</button>
+            <button class="dd-control dd-exam-button is-tertiary" type="button" data-return-catalog>Return to courses</button>
           </nav>
         </main>
-        <aside class="dd-subject-editorial-pane is-coaching is-review-panel" aria-label="Complete Subject Matter review">
+        <aside class="dd-subject-editorial-pane is-reading is-review-panel"
+          aria-label="Suggested answer and legal review">
           ${subjectReviewPanelMarkup({
             attemptId: resolvedAttemptId,
             questionId,
             assisted,
             submitted: true,
-            writingGuide,
           })}
         </aside>
       </div>
@@ -2447,10 +2886,11 @@
         ${result.humanComments ? `<section class="assessment-section"><h4>Human examiner</h4><div class="legal-explanation">${escapeHtml(result.humanComments)}</div></section>` : ''}
         <div class="assessment-meta">This AI-generated assessment is for ${isSubjectMatter ? 'legal study and coaching' : 'Bar review and coaching'} only. It is not an official Supreme Court grade and does not guarantee or predict an examinee’s actual result.</div>
         <div class="fb-bar"><span class="fb-label">Was this coaching helpful?</span>
-          <button class="fb-btn" type="button" data-assessment-rating="up">Helpful</button>
-          <button class="fb-btn" type="button" data-assessment-rating="down">Needs work</button>
-          ${questionId ? `<button class="fb-btn suggest" type="button" data-suggest-exam-correction
-            data-question-id="${escapeHtml(questionId)}" data-question-subject="${escapeHtml(result.subject || state.selectedSubject || '')}">Suggest a Correction/Better Answer</button>` : ''}
+          <button class="${isSubjectMatter ? 'dd-control ' : ''}fb-btn" type="button" data-assessment-rating="up" aria-pressed="false">Helpful</button>
+          <button class="${isSubjectMatter ? 'dd-control ' : ''}fb-btn" type="button" data-assessment-rating="down" aria-pressed="false">Needs work</button>
+          ${questionId ? `<button class="${isSubjectMatter ? 'dd-control is-tertiary ' : ''}fb-btn suggest" type="button" data-suggest-exam-correction
+            data-question-id="${escapeHtml(questionId)}" data-question-subject="${escapeHtml(result.subject || state.selectedSubject || '')}">Suggest a correction</button>` : ''}
+          <span class="sr-only" data-assessment-rating-status role="status" aria-live="polite"></span>
         </div>
       </div>
     </article>`;
@@ -2483,7 +2923,8 @@
             <p class="dd-exam-kicker">Subject Matter</p>
             <h1>Review unavailable.</h1>
             <p>Your submitted answer is preserved, but no released assessment record is available yet.</p>
-            <button class="dd-exam-button" type="button" data-return-catalog>Return to courses</button>
+            <button class="dd-control dd-exam-button is-primary" type="button" data-exam-verdict="${escapeAttribute(attemptId)}">Retry assessment</button>
+            <button class="dd-control dd-exam-button is-tertiary" type="button" data-return-catalog>Return to courses</button>
           </section></div>`;
         if (result) restoreRevealedSubjectReview(root);
         focusRendered(root, result ? '[data-subject-result-heading]' : 'h1');
@@ -2502,21 +2943,31 @@
         </div>`).join('')}
         <div class="dd-exam-actions" style="margin-top:24px">
           ${state.active?.examination?.track === 'per_subject' ? `
-            <button class="dd-exam-button is-primary" type="button" data-subject-next>Next Random Question</button>
-            <button class="dd-exam-button" type="button" data-subject-change-timer>Change Timer</button>
-            <button class="dd-exam-button" type="button"
+            <button class="dd-control dd-exam-button is-primary" type="button" data-subject-next>Next question</button>
+            <button class="dd-control dd-exam-button" type="button" data-subject-change-timer>Timer settings</button>
+            <button class="dd-control dd-exam-button" type="button"
               data-subject-performance="${escapeHtml(state.active.examination.subject || state.selectedSubject)}">
-              Review My Performance
+              Review my work
             </button>
-            <button class="dd-exam-button" type="button" data-return-catalog>Return to Subjects</button>
+            <button class="dd-control dd-exam-button is-tertiary" type="button" data-return-catalog>Return to courses</button>
           ` : '<button class="dd-exam-button" type="button" data-return-catalog>Return to Examination Catalog</button>'}
         </div>
       </section></div>`;
     } catch (error) {
-      root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen" role="alert" tabindex="-1">
-        <p class="dd-exam-kicker">The Verdict</p><h1>Assessment unavailable.</h1>
-        <div class="dd-exam-status is-error">${escapeHtml(error.message)}</div>
-      </section></div>`;
+      if (isStaleIdentityError(error)) return;
+      root.innerHTML = track === 'per_subject'
+        ? `<div class="dd-subject-editorial"><section class="dd-subject-result-unavailable" role="alert" tabindex="-1">
+          <p class="dd-exam-kicker">Subject Matter</p><h1>Assessment unavailable.</h1>
+          <p>Your submitted answer remains saved. Due Diligence could not load the coaching assessment right now.</p>
+          <div class="dd-exam-actions">
+            <button class="dd-control dd-exam-button is-primary" type="button" data-exam-verdict="${escapeAttribute(attemptId)}">Retry assessment</button>
+            <button class="dd-control dd-exam-button is-tertiary" type="button" data-return-catalog>Return to courses</button>
+          </div>
+        </section></div>`
+        : `<div class="dd-exam-page"><section class="dd-verdict-screen" role="alert" tabindex="-1">
+          <p class="dd-exam-kicker">The Verdict</p><h1>Assessment unavailable.</h1>
+          <div class="dd-exam-status is-error">${escapeHtml(error.message)}</div>
+        </section></div>`;
       focusRendered(root, '[role="alert"]');
     }
   }
@@ -2524,7 +2975,7 @@
   async function renderSubjectPerformance(subject = state.selectedSubject) {
     const root = pageRoot('per_subject');
     if (!root) return;
-    root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
+    root.innerHTML = `<div class="dd-subject-editorial dd-subject-performance-page"><section class="dd-verdict-screen">
       <p class="dd-exam-kicker">Subject Matter</p><h1>Loading your performance…</h1>
     </section></div>`;
     try {
@@ -2534,15 +2985,38 @@
         limit: 50,
       });
       const attempts = performance.recentAttempts || [];
-      root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
+      const flaggedForLater = Array.isArray(performance.flaggedForLater)
+        ? performance.flaggedForLater
+        : [];
+      root.innerHTML = `<div class="dd-subject-editorial dd-subject-performance-page"><section class="dd-verdict-screen">
         <p class="dd-exam-kicker">Your private learning record</p>
         <h1>${escapeHtml(subject)} Performance</h1>
         <div class="dd-review-summary">
           <div><strong>${Number(performance.attemptedQuestions) || 0}</strong><span>Questions opened</span></div>
           <div><strong>${Number(performance.completedQuestions) || 0}</strong><span>Answers submitted</span></div>
+          <div><strong>${Number(performance.skippedQuestions) || 0}</strong><span>Questions skipped</span></div>
           <div><strong>${Number(performance.unassistedCompletedQuestions) || 0}</strong><span>Unassisted submissions</span></div>
           <div><strong>${performance.unassistedAverageScore == null ? '—' : Number(performance.unassistedAverageScore).toFixed(1)}</strong><span>Unassisted average / 5</span></div>
         </div>
+        ${flaggedForLater.length ? `<section class="dd-subject-flagged-queue" aria-labelledby="dd-subject-flagged-title">
+          <header><p class="dd-exam-kicker">Your saved review queue</p><h2 id="dd-subject-flagged-title">Flagged for later</h2></header>
+          ${flaggedForLater.map((item) => `<article class="dd-subject-flagged-row">
+            <div>
+              <p class="dd-question-label">${escapeHtml(item.topic || 'Practice question')} · ${escapeHtml(item.resumable === true ? 'Open draft' : 'Skipped without a score')} · ${escapeHtml(formatDate(item.queuedAt || item.skippedAt))}</p>
+              <h3>${escapeHtml(item.prompt || 'Flagged Subject Matter question')}</h3>
+              ${String(item.answerText || '').trim() ? `<details class="dd-subject-flagged-draft">
+                <summary>Saved draft</summary>
+                <div>${escapeHtml(item.answerText)}</div>
+              </details>` : ''}
+            </div>
+            ${item.resumable === true
+              ? `<button class="dd-control dd-exam-button" type="button"
+                data-exam-resume="${escapeAttribute(item.attemptId)}">Resume question</button>`
+              : `<button class="dd-control dd-exam-button" type="button"
+                data-subject-retry-flagged="${escapeAttribute(item.versionId)}"
+                data-subject="${escapeAttribute(item.subject || subject)}">Practice again</button>`}
+          </article>`).join('')}
+        </section>` : ''}
         ${attempts.length ? attempts.map((item) => `<article class="dd-verdict-question">
           <div class="dd-subject-history-heading"><p class="dd-question-label">${escapeHtml(item.topic || subject)} · ${escapeHtml(formatDate(item.submittedAt))}</p>
             <span class="dd-subject-attempt-badge ${item.assistanceKnown === false ? 'is-unknown' : (item.assisted ? 'is-assisted' : 'is-unassisted')}">${item.assistanceKnown === false ? 'Legacy / Unclassified' : (item.assisted ? 'Assisted / Open-book' : 'Unassisted')}</span></div>
@@ -2550,15 +3024,17 @@
             : `<p>Assessment pending.</p><h3>Your answer</h3><div class="dd-model-answer">${escapeHtml(item.answerText || '')}</div>`}
         </article>`).join('') : '<p class="dd-exam-description">Submit your first answer to begin this private performance record.</p>'}
         <div class="dd-exam-actions" style="margin-top:24px">
-          <button class="dd-exam-button is-primary" type="button" data-return-catalog>Return to Subjects</button>
+          <button class="dd-control dd-exam-button is-tertiary" type="button" data-return-catalog>Return to courses</button>
         </div>
       </section></div>`;
     } catch (error) {
-      root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen">
+      if (isStaleIdentityError(error)) return;
+      root.innerHTML = `<div class="dd-subject-editorial dd-subject-performance-page"><section class="dd-verdict-screen">
         <p class="dd-exam-kicker">Your private learning record</p>
         <h1>Performance unavailable.</h1>
-        <div class="dd-exam-status is-error">${escapeHtml(error.message)}</div>
-        <button class="dd-exam-button" type="button" data-return-catalog>Return to Subjects</button>
+        <div class="dd-exam-status is-error">Your saved answers and scores are unchanged. Due Diligence could not load this private record right now.</div>
+        <button class="dd-control dd-exam-button is-primary" type="button" data-subject-performance="${escapeAttribute(subject)}">Retry performance</button>
+        <button class="dd-control dd-exam-button is-tertiary" type="button" data-return-catalog>Return to courses</button>
       </section></div>`;
     }
   }
@@ -2573,6 +3049,14 @@
     stopActiveTimers();
     state.catalog = [];
     state.history = [];
+    state.selectedSubject = '';
+    state.subjectSelectionConfirmed = false;
+    state.subjectQuery = '';
+    state.subjectOpenYears = new Set();
+    state.subjectOpenTerms = new Set();
+    state.subjectSelectorScroll = 0;
+    state.subjectPageScroll = 0;
+    state.subjectSelectorReturnFocus = null;
     state.setup = null;
     state.active = null;
     state.assignment = null;
@@ -2582,6 +3066,7 @@
     state.resumeAttemptId = null;
     state.saveInFlight = false;
     state.pendingSave = false;
+    state.pendingSubjectSkip = null;
     state.reviewMaterialCache.clear();
     state.reviewMaterialRequests.clear();
     ['dd-per-subject-app', 'dd-bar-feels-app', 'dd-verdict-app'].forEach((id) => {
@@ -2607,20 +3092,31 @@
         ]);
       state.catalog = catalog.items || [];
       state.history = history.items || [];
-      if (track === 'per_subject'
-          && !state.catalog.some((item) => item.subject === state.selectedSubject)) {
-        state.selectedSubject = state.catalog[0]?.subject || '';
+      if (track === 'per_subject' && (
+        !state.subjectSelectionConfirmed
+        || !state.catalog.some((item) => item.subject === state.selectedSubject)
+      )) {
+        state.selectedSubject = '';
+        state.subjectSelectionConfirmed = false;
       }
       state.screen = 'catalog';
       if (track === 'per_subject') renderPerSubject();
       else renderBarFeels();
-      focusRendered(root, track === 'per_subject' ? '#dd-selected-course-heading' : '.dd-exam-hero h1');
+      focusRendered(root, track === 'per_subject'
+        ? (state.subjectSelectionConfirmed
+          ? '#dd-selected-course-heading'
+          : '#dd-subject-course-selection-heading')
+        : '.dd-exam-hero h1');
     } catch (error) {
-      if (root) root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
-        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">Mock Bar</p>
-          <h1>${track === 'per_subject' ? 'Subject Matter Examinations' : 'Bar Feels'}</h1></div></header>
-        <div class="dd-exam-status is-error" role="alert" tabindex="-1">${escapeHtml(error.message)}</div>
-        <button class="dd-exam-button" type="button" data-retry-catalog="${track}">Retry</button>
+      if (isStaleIdentityError(error)) return;
+      if (root) root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-study-page' : ''}"><div class="dd-exam-shell">
+        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">${track === 'per_subject' ? 'Subject Matter' : 'Mock Bar'}</p>
+          <h1>${track === 'per_subject' ? 'Subject Matter' : 'Bar Feels'}</h1></div></header>
+        <div class="dd-exam-status is-error" role="alert" tabindex="-1">${track === 'per_subject'
+          ? 'Courses could not be loaded. Your saved course choice and prior work are unchanged.'
+          : escapeHtml(error.message)}</div>
+        <button class="${track === 'per_subject' ? 'dd-control ' : ''}dd-exam-button is-primary" type="button"
+          data-retry-catalog="${track}">${track === 'per_subject' ? 'Retry loading courses' : 'Retry'}</button>
       </div></div>`;
       focusRendered(root, '[role="alert"]');
     }
@@ -2820,9 +3316,8 @@
         confirmed: true,
       });
       document.getElementById('dd-examiner-form').innerHTML = `
-        <div class="dd-exam-status is-success">Human Examiner Review finalized at
-          ${escapeHtml(formatDate(result.finalizedAt))}. Student notification status:
-          ${escapeHtml(result.studentNotificationStatus)}.</div>`;
+        <div class="dd-exam-status is-success">Human Examiner Review finalized and saved at
+          ${escapeHtml(formatDate(result.finalizedAt))}. No Practice Exam email was sent.</div>`;
     } catch (error) {
       setStatus(error.message, 'error');
       button.disabled = false;
@@ -2843,7 +3338,7 @@
         copy: options.openSubjectSelector
           ? 'Your latest answer will be saved before the course chooser opens.'
           : 'Your latest answer will be saved and you can resume it later.',
-        confirmLabel: options.openSubjectSelector ? 'Change course' : 'Leave Examination',
+        confirmLabel: options.openSubjectSelector ? 'Change course' : 'Leave examination',
       });
       if (!confirmed) return;
       const saved = await flushCurrentSave();
@@ -2867,8 +3362,11 @@
     if (reviewRetry) {
       event.preventDefault();
       const panel = reviewRetry.closest('[data-subject-review-panel]');
-      const revealButton = panel?.querySelector('[data-subject-review-reveal]');
-      if (revealButton) loadCompleteSubjectReview(revealButton, { retry: true });
+      const openSection = reviewRetry.dataset.subjectReviewSection || 'suggested-answer';
+      const revealButton = panel?.querySelector(
+        `[data-subject-review-reveal][data-subject-review-section="${openSection}"]`,
+      ) || panel?.querySelector('[data-subject-review-reveal]');
+      if (revealButton) loadCompleteSubjectReview(revealButton, { retry: true, openSection });
       return;
     }
     const reviewReveal = event.target.closest('[data-subject-review-reveal]');
@@ -2893,8 +3391,17 @@
     }
     const subjectStart = event.target.closest('[data-subject-start]');
     if (subjectStart) {
+      if (subjectStart.disabled || subjectStart.getAttribute('aria-busy') === 'true') return;
+      subjectStart.disabled = true;
+      subjectStart.setAttribute('aria-busy', 'true');
       state.selectedSubject = subjectStart.dataset.subjectStart;
-      requestSubjectQuestion({ subject: state.selectedSubject, autoStart: true });
+      state.subjectSelectionConfirmed = true;
+      persistSubjectCatalogState();
+      requestSubjectQuestion({ subject: state.selectedSubject, autoStart: true }).finally(() => {
+        if (!subjectStart.isConnected) return;
+        subjectStart.disabled = false;
+        subjectStart.removeAttribute('aria-busy');
+      });
       return;
     }
     if (event.target.closest('[data-subject-timer-settings]')) {
@@ -2925,7 +3432,11 @@
       else navigateQuestion(state.currentIndex + 1);
       return;
     }
-    if (event.target.closest('#dd-flag-button')) { toggleFlag(); return; }
+    if (event.target.closest('#dd-subject-flag-button, #dd-flag-button')) { toggleFlag(); return; }
+    const subjectSkip = event.target.closest('[data-subject-skip]');
+    if (subjectSkip) { skipCurrentSubjectQuestion(subjectSkip); return; }
+    const retryFlagged = event.target.closest('[data-subject-retry-flagged]');
+    if (retryFlagged) { retryFlaggedSubjectQuestion(retryFlagged); return; }
     if (event.target.closest('[data-review-all]')) { showReview(); return; }
     const reviewQuestion = event.target.closest('[data-review-question]');
     if (reviewQuestion) {
@@ -2946,17 +3457,35 @@
     const verdict = event.target.closest('[data-exam-verdict]');
     if (verdict) { openVerdict(verdict.dataset.examVerdict); return; }
     const retry = event.target.closest('[data-retry-catalog]');
-    if (retry) { loadCatalog(retry.dataset.retryCatalog); return; }
+    if (retry) {
+      if (retry.disabled || retry.getAttribute('aria-busy') === 'true') return;
+      retry.disabled = true;
+      retry.setAttribute('aria-busy', 'true');
+      loadCatalog(retry.dataset.retryCatalog).finally(() => {
+        if (!retry.isConnected) return;
+        retry.disabled = false;
+        retry.removeAttribute('aria-busy');
+      });
+      return;
+    }
     if (event.target.closest('[data-request-ai]')) {
       requestAiAssessment(event.target.closest('[data-request-ai]')); return;
     }
     if (event.target.closest('[data-request-human]')) {
       humanDialog().showModal(); return;
     }
-    if (event.target.closest('[data-subject-next]')) {
+    const subjectNext = event.target.closest('[data-subject-next]');
+    if (subjectNext) {
+      if (subjectNext.disabled || subjectNext.getAttribute('aria-busy') === 'true') return;
+      subjectNext.disabled = true;
+      subjectNext.setAttribute('aria-busy', 'true');
       requestSubjectQuestion({
         subject: state.active?.examination?.subject || state.selectedSubject,
         autoStart: true,
+      }).finally(() => {
+        if (!subjectNext.isConnected) return;
+        subjectNext.disabled = false;
+        subjectNext.removeAttribute('aria-busy');
       });
       return;
     }
@@ -2968,6 +3497,13 @@
     }
     const rating = event.target.closest('[data-assessment-rating]');
     if (rating) {
+      rating.closest('.fb-bar')?.querySelectorAll('[data-assessment-rating]').forEach((control) => {
+        const selected = control === rating;
+        control.setAttribute('aria-pressed', String(selected));
+        control.classList.toggle('is-selected', selected);
+      });
+      const status = rating.closest('.fb-bar')?.querySelector('[data-assessment-rating-status]');
+      if (status) status.textContent = `${rating.textContent.trim()} feedback selected.`;
       global.rateModel?.(rating.dataset.assessmentRating);
       return;
     }
@@ -3058,7 +3594,9 @@
       stopActiveTimers();
     });
     global.DueDiligencePrivateWorkspace?.registerReset?.(({ previousUserId, nextUserId }) => {
-      if (previousUserId && previousUserId !== nextUserId) resetForIdentityChange();
+      if (previousUserId === nextUserId) return;
+      resetForIdentityChange();
+      if (nextUserId) readSubjectCatalogState();
     });
 
     const assignmentToken = new URLSearchParams(location.search).get('assignment');

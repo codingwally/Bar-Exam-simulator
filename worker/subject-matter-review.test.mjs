@@ -4,6 +4,8 @@ import {
   buildSubjectMatterLegalReview,
   buildSubjectMatterTeachingPrompt,
   fallbackSubjectMatterTeachingExplanation,
+  isOfficialSubjectMatterSource,
+  isNearDuplicateSubjectMatterReview,
   normalizeSubjectMatterJurisprudence,
   publicSubjectMatterReviewPayload,
   sanitizeSubjectMatterRevealRecord,
@@ -40,6 +42,16 @@ test('sanitizes the exact immutable review record and no private extras', () => 
   assert.equal(sanitized.questionId, questionId);
   assert.equal(sanitized.assisted, true);
   assert.equal('privateNote' in sanitized, false);
+});
+
+test('labels only allowlisted official authorities as verified sources', () => {
+  assert.equal(isOfficialSubjectMatterSource(record.sources[0]), true);
+  assert.equal(isOfficialSubjectMatterSource('https://legal.un.org/avl/ha/udhr/udhr.html'), true);
+  assert.equal(isOfficialSubjectMatterSource('https://example.com/looks-official'), false);
+  assert.throws(() => sanitizeSubjectMatterRevealRecord({
+    ...record,
+    sources: ['https://example.com/looks-official'],
+  }, attemptId), /not available/i);
 });
 
 test('teaching prompt is explicitly corpus-bound and separate from grading', () => {
@@ -93,6 +105,87 @@ test('fallback stays complete when Gemini is unavailable', () => {
   assert.match(fallback.controllingLawAndElements, /political-offense doctrine/);
   assert.match(fallback.applicationToFacts, /personal revenge/i);
   assert.match(fallback.finalConclusion, /prosecuted separately/i);
+});
+
+test('fallback controlling law never repeats an unstructured suggested answer', () => {
+  const suggestedAnswer = 'Article 19 applies because the defendant deliberately acted against justice and good faith, causing the claimant proven injury.';
+  const material = {
+    ...record,
+    suggestedAnswer,
+    legalBasis: 'Article 19 of the Civil Code requires every person to act with justice, give everyone his due, and observe honesty and good faith.',
+    governingProvision: 'Article 19 of the Civil Code.',
+    doctrine: suggestedAnswer,
+    jurisprudence: [],
+    citation: '',
+  };
+  const fallback = fallbackSubjectMatterTeachingExplanation(material);
+  assert.equal(
+    isNearDuplicateSubjectMatterReview(fallback.controllingLawAndElements, suggestedAnswer),
+    false,
+  );
+  assert.match(fallback.controllingLawAndElements, /Article 19 of the Civil Code/);
+});
+
+test('fallback stays distinct when every approved rule field copies the suggested answer', () => {
+  const suggestedAnswer = 'Article 19 applies because the defendant deliberately acted against justice and good faith, causing the claimant proven injury.';
+  const material = {
+    ...record,
+    suggestedAnswer,
+    legalBasis: suggestedAnswer,
+    governingProvision: suggestedAnswer,
+    doctrine: suggestedAnswer,
+    jurisprudence: [],
+    citation: suggestedAnswer,
+  };
+  const fallback = fallbackSubjectMatterTeachingExplanation(material);
+  const review = buildSubjectMatterLegalReview(material, {
+    ...fallback,
+    controllingLawAndElements: suggestedAnswer,
+  });
+  assert.equal(
+    fallback.controllingLawAndElements,
+    'No distinct controlling-law explanation is available in the approved source material for this item.',
+  );
+  assert.equal(
+    isNearDuplicateSubjectMatterReview(fallback.controllingLawAndElements, suggestedAnswer),
+    false,
+  );
+  assert.equal(review.controllingLawAndDoctrine, fallback.controllingLawAndElements);
+});
+
+test('fallback prefers a substantive stored doctrine over a citation-only legal basis', () => {
+  const material = {
+    ...record,
+    suggestedAnswer: 'No. Statutory redemption is unavailable after confirmation in an ordinary judicial foreclosure, although a special statute may provide otherwise.',
+    legalBasis: 'Rule 68, Section 3; Act No. 3135, Section 6',
+    governingProvision: 'Rule 68, Section 3; Act No. 3135, Section 6',
+    doctrine: 'Ordinary judicial foreclosure permits equity of redemption before confirmation, while statutory redemption after confirmation exists only when a governing statute grants it.',
+    jurisprudence: [],
+    citation: 'Rule 68, Section 3; Act No. 3135, Section 6',
+  };
+  const fallback = fallbackSubjectMatterTeachingExplanation(material);
+  assert.match(fallback.controllingLawAndElements, /equity of redemption before confirmation/i);
+  assert.doesNotMatch(fallback.controllingLawAndElements, /^Rule 68/i);
+});
+
+test('legal review repairs a Gemini controlling-law field copied from the suggested answer', () => {
+  const fallback = fallbackSubjectMatterTeachingExplanation(record);
+  const review = buildSubjectMatterLegalReview(record, {
+    ...fallback,
+    controllingLawAndElements: record.suggestedAnswer,
+  });
+  assert.equal(
+    isNearDuplicateSubjectMatterReview(review.controllingLawAndDoctrine, record.suggestedAnswer),
+    false,
+  );
+  assert.match(review.controllingLawAndDoctrine, /political-offense doctrine/);
+  assert.doesNotMatch(review.controllingLawAndDoctrine, /personal revenge/i);
+});
+
+test('ALAC fallback isolates the legal-basis section from application and conclusion', () => {
+  const fallback = fallbackSubjectMatterTeachingExplanation(record);
+  assert.match(fallback.controllingLawAndElements, /^Under the political-offense doctrine/i);
+  assert.doesNotMatch(fallback.controllingLawAndElements, /personal revenge|prosecuted separately/i);
 });
 
 test('repairs the SM-CPII-H08 low-value authority stack without inventing law', () => {
@@ -149,7 +242,7 @@ test('canonicalizes the stored case key and retains a genuine G.R. citation', ()
   }]);
 });
 
-test('citation-only legal basis falls back to the substantive approved answer', () => {
+test('citation-only legal basis does not repeat a one-sentence approved answer', () => {
   const material = sanitizeSubjectMatterRevealRecord({
     ...record,
     suggestedAnswer: 'No. The remedy is unavailable because the approved rule requires a condition that the stated facts do not satisfy.',
@@ -160,9 +253,15 @@ test('citation-only legal basis falls back to the substantive approved answer', 
     citation: 'Rule 68, Section 3; Act No. 3135, Section 6',
   }, attemptId);
   const fallback = fallbackSubjectMatterTeachingExplanation(material);
-  assert.match(fallback.controllingLawAndElements, /approved rule requires a condition/i);
+  assert.equal(fallback.controllingLawAndElements, 'Rule 68, Section 3; Act No. 3135, Section 6');
+  assert.equal(
+    isNearDuplicateSubjectMatterReview(
+      fallback.controllingLawAndElements,
+      material.suggestedAnswer,
+    ),
+    false,
+  );
   assert.match(fallback.applicationToFacts, /stated facts do not satisfy/i);
-  assert.doesNotMatch(fallback.controllingLawAndElements, /^Rule 68/i);
 });
 
 test('post-submission reveal remains unassisted and does not imply a grading penalty', () => {

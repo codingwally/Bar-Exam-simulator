@@ -60,6 +60,7 @@ const publicFiles = Object.freeze([
   'assets/auth-session-storage.js',
   'assets/private-beta-session.js',
   'assets/private-beta-landing.css',
+  'assets/due-diligence-controls.css',
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
   'assets/private-workspace.js',

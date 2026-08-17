@@ -164,7 +164,14 @@ import {
   processExamRoomDeliveryQueues,
   verifyResendWebhookRequest,
 } from './exam-room-delivery.mjs';
+import {
+  outboundEmailMode,
+  outboundEmailSuppressed,
+  resolvedEmailMode,
+} from './outbound-email-policy.mjs';
 import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
+
+export { outboundEmailMode };
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
@@ -565,6 +572,7 @@ async function examinationRpc(env, functionName, body) {
     'subject_matter_catalog',
     'subject_matter_next_question',
     'subject_matter_performance',
+    'subject_matter_skip_question',
     'subject_matter_reveal_review',
     'release_sync_subject_matter',
     'release_sync_bar_feels',
@@ -1460,10 +1468,11 @@ async function deleteExamRoomSource(env, objectPath) {
 }
 
 export function examinationEmailMode(env, examRoom = false) {
-  const configured = examRoom
-    ? (env.EXAMINATION_ROOM_EMAIL_MODE ?? env.EXAMINATION_EMAIL_MODE)
-    : env.EXAMINATION_EMAIL_MODE;
-  const mode = String(configured || '').trim().toLowerCase();
+  // Practice-exam email is deliberately decommissioned. Examination Room
+  // delivery remains independently controlled by its existing explicit mode.
+  if (!examRoom) return 'suppressed';
+  const configured = env.EXAMINATION_ROOM_EMAIL_MODE;
+  const mode = String(configured ?? '').trim().toLowerCase();
   return ['suppressed', 'enabled'].includes(mode) ? mode : 'not_configured';
 }
 
@@ -1508,8 +1517,7 @@ export async function sendExaminationEmail(
 }
 
 function adminDirectoryEmailMode(env) {
-  const mode = String(env.ADMIN_DIRECTORY_EMAIL_MODE || '').trim().toLowerCase();
-  return ['suppressed', 'enabled'].includes(mode) ? mode : 'not_configured';
+  return resolvedEmailMode(env, env.ADMIN_DIRECTORY_EMAIL_MODE);
 }
 
 async function sendAdminDirectoryEmail(
@@ -1560,8 +1568,7 @@ const SIGN_IN_NOTIFICATION_RECIPIENT_KEY = 'wally';
 const SIGN_IN_NOTIFICATION_DEDUPE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function supportNotificationEmailMode(env) {
-  const mode = String(env.SUPPORT_NOTIFICATION_EMAIL_MODE || '').trim().toLowerCase();
-  return ['suppressed', 'enabled'].includes(mode) ? mode : 'not_configured';
+  return resolvedEmailMode(env, env.SUPPORT_NOTIFICATION_EMAIL_MODE);
 }
 
 function supportReplyAddress(value) {
@@ -1626,8 +1633,7 @@ function safeSingleLine(value, maximum = 160) {
 }
 
 function signInNotificationEmailMode(env) {
-  const mode = String(env.SIGN_IN_NOTIFICATION_EMAIL_MODE || '').trim().toLowerCase();
-  return ['suppressed', 'enabled'].includes(mode) ? mode : 'not_configured';
+  return resolvedEmailMode(env, env.SIGN_IN_NOTIFICATION_EMAIL_MODE);
 }
 
 function decodeJwtPayload(authorization) {
@@ -1799,7 +1805,10 @@ async function sendSignInNotification(env, request, user, sessionDigest) {
   }
 }
 
-async function sendSecureNotification(env, { mailbox, subject, adminPath }) {
+export async function sendSecureNotification(env, { mailbox, subject, adminPath }) {
+  if (outboundEmailSuppressed(env)) {
+    return { sent: false, queued: true, status: 'suppressed' };
+  }
   if (!env.WEB3FORMS_ACCESS_KEY) return { sent: false, queued: true };
   const response = await fetch('https://api.web3forms.com/submit', {
     method: 'POST',
@@ -3592,25 +3601,25 @@ async function processExaminationAiJob(env, user, gradingPackage) {
       p_model_answer_hash: question.modelAnswerHash,
     });
     if (finalState?.modelsReleased) {
-      const delivery = await sendExaminationEmail(env, {
-        recipient: user.email,
-        subject: 'Due Diligence model answers are available',
-        text: [
-          'Your model answers and individual ALAC assessments are now available in The Verdict.',
-          '',
-          'Open https://duediligence.ph and select Mock Bar, then sign in to review them.',
-          '',
-          'Educational use only. This message contains no examination answers.',
-        ].join('\n'),
-      });
-      await examinationRpc(env, 'examination_record_delivery', {
-        p_actor_user_id: user.id,
-        p_target_type: 'model_answers_released',
-        p_target_id: gradingPackage.attemptId,
-        p_status: delivery.status,
-        p_provider_id: delivery.providerId || null,
-        p_safe_error_code: delivery.safeErrorCode || null,
-      });
+      const delivery = {
+        status: 'suppressed',
+        providerId: null,
+        safeErrorCode: 'practice_exam_email_removed',
+      };
+      try {
+        await examinationRpc(env, 'examination_record_delivery', {
+          p_actor_user_id: user.id,
+          p_target_type: 'model_answers_released',
+          p_target_id: gradingPackage.attemptId,
+          p_status: delivery.status,
+          p_provider_id: delivery.providerId || null,
+          p_safe_error_code: delivery.safeErrorCode || null,
+        });
+      } catch {
+        // Email delivery is permanently absent for Practice Exams. A legacy
+        // audit-row failure must not turn completed grading into a failed job.
+        console.error('Practice Exam email-removal audit requires operator review');
+      }
       finalState.modelAnswerEmailStatus = delivery.status;
     }
     return finalState;
@@ -3710,7 +3719,11 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
     : await requireAuthenticatedUser(request, env);
   if (user) {
     if (command.operation === 'start_attempt') {
-      await authorizeExaminationAccess(env, user.id, { versionId: command.versionId });
+      await authorizeExaminationAccess(
+        env,
+        user.id,
+        { versionId: command.versionId },
+      );
     } else if (command.operation === 'confirm_upload') {
       await authorizeExaminationAccess(env, user.id, { track: 'bar_feels' });
     } else if (command.operation === 'delete_upload') {
@@ -3788,6 +3801,19 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
     }, 200, origin, allowedOrigin);
   }
 
+  if (user && command.operation === 'subject_skip_question') {
+    const result = await examinationRpc(env, 'subject_matter_skip_question', {
+      p_user_id: user.id,
+      p_attempt_id: command.attemptId,
+      p_request_key: command.requestKey,
+      p_tab_token: command.tabToken,
+    });
+    return jsonResponse({
+      ok: true,
+      data: sanitizeSubjectMatterSelection(result),
+    }, 200, origin, allowedOrigin);
+  }
+
   const result = await examinationRpc(env, 'examination_command', {
     p_user_id: user?.id || null,
     p_operation: command.operation,
@@ -3814,27 +3840,27 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
     const assignmentUrl = `${allowedOrigin}/?assignment=${encodeURIComponent(
       command.assignmentToken,
     )}#examiner-review`;
-    const delivery = await sendExaminationEmail(env, {
-      recipient: command.examinerEmail,
-      subject: 'Due Diligence Human Examiner Review invitation',
-      text: [
-        'You have been invited to review a submitted Due Diligence examination.',
-        '',
-        `Secure assignment link (expires ${result.expiresAt}):`,
-        assignmentUrl,
-        '',
-        'The email contains no student answer or model answer. Open the secure link to review.',
-      ].join('\n'),
-    });
-    await examinationRpc(env, 'examination_record_delivery', {
-      p_actor_user_id: user.id,
-      p_target_type: 'examiner_invitation',
-      p_target_id: result.assignmentId,
-      p_status: delivery.status,
-      p_provider_id: delivery.providerId || null,
-      p_safe_error_code: delivery.safeErrorCode || null,
-    });
+    const delivery = {
+      status: 'suppressed',
+      providerId: null,
+      safeErrorCode: 'practice_exam_email_removed',
+    };
+    try {
+      await examinationRpc(env, 'examination_record_delivery', {
+        p_actor_user_id: user.id,
+        p_target_type: 'examiner_invitation',
+        p_target_id: result.assignmentId,
+        p_status: delivery.status,
+        p_provider_id: delivery.providerId || null,
+        p_safe_error_code: delivery.safeErrorCode || null,
+      });
+    } catch {
+      // The assignment and its manual secure link already exist. Do not hide
+      // that link merely because the legacy delivery audit could not be saved.
+      console.error('Practice Exam email-removal audit requires operator review');
+    }
     result.invitationStatus = delivery.status;
+    result.assignmentUrl = assignmentUrl;
   }
 
   if (command.operation === 'delete_upload' && result?.objectPath) {
@@ -5381,7 +5407,7 @@ async function handlePartnershipSubmit(request, env, origin, allowedOrigin) {
   return jsonResponse({
     ok: true,
     inquiry: result,
-    message: 'Your inquiry has been sent to the Due Diligence founders.',
+    message: 'Your inquiry has been saved securely for Due Diligence founder review.',
   }, 201, origin, allowedOrigin);
 }
 

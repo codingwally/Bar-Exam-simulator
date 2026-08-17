@@ -1236,9 +1236,7 @@ export async function deliverExamRoomEmail(env, job, fetchImpl = fetch) {
     error.safeCode = 'EMAIL_TYPE_UNSUPPORTED';
     throw error;
   }
-  const mode = String(
-    env.EXAMINATION_ROOM_EMAIL_MODE ?? env.EXAMINATION_EMAIL_MODE ?? '',
-  ).trim().toLowerCase();
+  const mode = String(env.EXAMINATION_ROOM_EMAIL_MODE ?? '').trim().toLowerCase();
   if (mode === 'suppressed') return { providerId: `suppressed:${job.id}` };
   const apiKey = String(env.RESEND_API_KEY || '').trim();
   const from = String(env.EXAMINATION_EMAIL_FROM || '').trim();
@@ -1382,6 +1380,7 @@ export async function processExamRoomDeliveryQueues(env, {
     emailClaimed: 0,
     emailSent: 0,
     emailFailed: 0,
+    emailPaused: false,
   };
   try {
     const due = await rpc(env, 'exam_room_auto_submit_due', { p_exam_id: null });
@@ -1422,6 +1421,17 @@ export async function processExamRoomDeliveryQueues(env, {
     }
   }
 
+  const roomEmailMode = String(env.EXAMINATION_ROOM_EMAIL_MODE ?? '').trim().toLowerCase();
+  if (roomEmailMode !== 'enabled') {
+    // Examination Room delivery is independent from the Practice Exam and
+    // general non-Room outbound policy. Only its own explicit mode may pause
+    // this queue.
+    // Missing, invalid, or explicitly paused configuration leaves jobs pending
+    // with their attempt count unchanged.
+    summary.emailPaused = true;
+    return summary;
+  }
+
   const jobs = await rpc(env, 'exam_room_claim_email_batch_v2', {
     p_limit: emailBatchSize,
     p_lease_seconds: 300,
@@ -1441,6 +1451,12 @@ export async function processExamRoomDeliveryQueues(env, {
         };
       }
       const sent = await deliverExamRoomEmail(env, deliveryJob, fetchImpl);
+      if (String(sent?.providerId || '').startsWith('suppressed:')) {
+        // A policy change after the batch was claimed must not mark the job as
+        // sent. The lease will expire and make the job eligible after resume.
+        summary.emailPaused = true;
+        continue;
+      }
       await rpc(env, 'exam_room_complete_email_v2', {
         p_job_id: job.id,
         p_claim_token: job.claim_token,

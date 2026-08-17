@@ -2,9 +2,9 @@
 
 ## Status
 
-This record covers the pending release. Local tests and protected staging
-database verification are complete. Production publication is not claimed until
-the final addendum records the merged commit and successful deployment runs.
+This record covers the published production release. Local tests, protected
+staging database verification, production migrations, and both deployment
+workflows are complete. The exact publication evidence is recorded below.
 
 ## Subject Matter UI proof
 
@@ -31,7 +31,7 @@ The final inline captures shown to the owner were hashed from the exact JPEG byt
 - Desktop, Suggested Answer open and standardized actions visible: `101,214` bytes; SHA-256 `3ffe7dcb1eb54a0962a2d097a5f7a7dee9bff606e08c1bec03e0aac78aee24fa`.
 - Mobile, 390px responsive frame: `62,266` bytes; SHA-256 `9969b6a311e4d6b762d4d63ac7e559b2c2a9689a3a27244dde6d8938e71948dd`.
 
-## Email proof: what the pending change actually does
+## Email proof: what the published change actually does
 
 Practice Exam email is removed at the call sites and hard-disabled at the shared
 transport boundary. This is stronger than relying on a configuration pause: a
@@ -79,20 +79,39 @@ explicitly controlled transactional system.
 - Protected staging marketing-retirement migration `20260817121625`: no-write
   compatibility pgTAP **6/6 passed**.
 
-## Approval boundary
+## Production publication evidence
 
-This evidence establishes the local code path, hostile-configuration provider
-assertions, and protected staging database behavior. It is not production proof
-until the merged build is deployed. The remaining publication evidence is:
+| Evidence | Verified value |
+| --- | --- |
+| Production commit | `e1928235292e4b7704912436b92112f428caa076` |
+| Worker workflow | Run `32033258390`, job `95397834075`, **success** |
+| Worker version | `e0a885e5-7323-478d-a2da-7a78bb43d2c5` |
+| Pages workflow | Run `32033494107`, job `95398561692`, **success** |
+| Production Skip/Flag migration | `20260817123037` |
+| Production retired-marketing migration | `20260817123050` |
 
-1. the authenticated staging Subject Matter browser journey;
-2. a zero-provider-traffic check for all Practice Exam routes even under hostile enabled configuration;
-3. a controlled Examination Room delivery check, if Room delivery is part of the release verification;
-4. production application and structural/no-write verification of both reviewed
-   migrations; and
-5. confirmation in the merged tree that the two new production-critical files are included:
-   `assets/due-diligence-controls.css` and `worker/outbound-email-policy.mjs`.
+The production marketing compatibility RPC is `SECURITY INVOKER`, remains
+callable only as intended for signed-in legacy clients, and contains no insert
+or update. A transactional production call left the existing row set unchanged
+and was rolled back. The Worker release contains both
+`worker/outbound-email-policy.mjs` and the permanent Practice Exam transport
+deny. The Pages release contains `assets/due-diligence-controls.css` and the
+manual Human Examiner handoff interface.
 
-The staging database gate is complete: the Skip/Flag suite passed **27/27** and
-the retired-consent suite passed **6/6**. These tests run in transactions and end
-with `ROLLBACK`, so their synthetic rows were not retained.
+No Practice Exam email was sent in production as a release test. That is
+intentional: the required published behavior is **zero provider traffic** from
+Subject Matter, Bar Feels/model release, and Human Examiner assignment, even
+under hostile enabled configuration. The earlier Gmail self-send proves only
+the connected Gmail account; it is not presented as application-delivery proof.
+Examination Room remains independently enabled in production and retains its
+positive direct/queued boundary tests; no unsolicited live Room message was
+sent for this release.
+
+The staging database gate remains part of the evidence: Skip/Flag passed
+**27/27** and retired consent passed **6/6**. These tests ran in transactions and
+ended with `ROLLBACK`, so their synthetic rows were not retained.
+
+The cloud browser did not share the owner's signed-in Due Diligence session.
+Live public loading, the Subject Matter sign-in boundary, cache-busted asset
+URLs, and exact live/local asset hashes were verified. Authenticated production
+Subject Matter screenshots are therefore not claimed in this record.

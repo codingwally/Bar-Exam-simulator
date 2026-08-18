@@ -112,11 +112,14 @@ jobs:
               'modelUsed: gemini.model,',
               "modelUsed: 'AI model',",
           ).replace(
-              'model: gemini.model,',
               "model: 'AI model',",
+              'model: gemini.model,',
           ).replace(
               "explanationSource = 'gemini_curated';",
               "explanationSource = 'ai_model_curated';",
+          ).replace(
+              'teachingModel = generated.model;',
+              "teachingModel = 'AI model';",
           )
           write('worker/index.mjs', worker)
 
@@ -219,5 +222,5 @@ jobs:
             exit 0
           fi
           git status --short
-          git commit -m "Remove public AI provider and model branding"
+          git commit -m "Preserve internal model telemetry while masking public metadata"
           git push origin HEAD:agent/remove-ai-model-branding-20260818

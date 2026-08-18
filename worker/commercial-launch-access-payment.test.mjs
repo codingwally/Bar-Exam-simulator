@@ -32,7 +32,7 @@ test('normalizes the authoritative Free access response without exposing unknown
     termsRequired: false,
     role: 'student',
     accessMode: 'free',
-    accountLabel: 'Free',
+    accountLabel: 'Free Trial',
     unlimited: false,
     dailyLimit: 5,
     completedToday: 2,
@@ -51,9 +51,13 @@ test('normalizes the authoritative Free access response without exposing unknown
     allowed: true,
     basis: 'daily_free',
     termsRequired: false,
+    profileCompleted: true,
+    choiceRequired: false,
+    paymentRequired: false,
+    planSelectionRequired: false,
     role: 'student',
     accessMode: 'free',
-    accountLabel: 'Free',
+    accountLabel: 'Free Trial',
     unlimited: false,
     dailyLimit: 5,
     completedToday: 2,
@@ -66,10 +70,13 @@ test('normalizes the authoritative Free access response without exposing unknown
     entitlementEndsAt: null,
     paymentState: null,
     commercialLaunchEnabled: true,
+    mandatoryAccessChoiceEnabled: false,
+    trialAvailable: false,
+    trialEndsAt: null,
     globalBeta: { enabled: false, eligible: false, active: false, expiresAt: null },
-    trial: { startedAt: null, expiresAt: null, active: false },
+    trial: { startedAt: null, expiresAt: null, active: false, program: null },
     freeGrades: { limit: 5, used: 2, remaining: 2 },
-    freeBeta: { enabled: false, expiresAt: null, active: false },
+    freeBeta: { enabled: false, expiresAt: null, active: false, program: null },
     subscription: null,
   });
   assert.equal('internalSecret' in normalized, false);
@@ -118,7 +125,7 @@ test('closed checkout never invents a replacement price or entitlement expiry', 
     allowed: true,
     basis: 'daily_free',
     accessMode: 'free',
-    accountLabel: 'Free',
+    accountLabel: 'Free Trial',
     dailyLimit: 5,
     completedToday: 0,
     reservedToday: 0,
@@ -177,7 +184,7 @@ test('legal acceptance remains a higher-priority denial than daily exhaustion', 
     dailyLimit: 5,
   });
   assert.equal(error.code, 'LEGAL_ACCEPTANCE_REQUIRED');
-  assert.match(error.message, /Terms and Privacy Notice/i);
+  assert.match(error.message, /Terms of Use and Privacy Policy/i);
 });
 
 function validPayment(overrides = {}) {

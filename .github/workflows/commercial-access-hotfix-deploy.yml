@@ -1,0 +1,108 @@
+name: Commercial access hotfix deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/commercial-access-hotfix-deploy.yml'
+      - 'assets/phase4-experience.js'
+      - 'worker/access-core.mjs'
+      - 'worker/commercial-hotfix-wrapper.mjs'
+      - 'worker/wrangler.toml'
+      - 'worker/wrangler.staging.toml'
+      - 'scripts/test-commercial-access-choice-hotfix.mjs'
+      - 'supabase/migrations/20260818113000_require_access_choice_and_payment_notifications.sql'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commercial-access-hotfix-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify mandatory access and payment notification contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Verify syntax and focused contracts
+        run: |
+          node --check worker/commercial-hotfix-wrapper.mjs
+          node --check worker/access-core.mjs
+          node --check assets/phase4-experience.js
+          node --test scripts/test-commercial-access-choice-hotfix.mjs
+          node --test worker/phase4-access.test.mjs
+          node scripts/test-commercial-launch-migration.mjs
+          node scripts/test-phase2-contract.mjs
+          node scripts/test-private-beta-landing.mjs
+      - name: Build and verify sanitized Pages artifact
+        run: |
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+      - name: Secret-shaped value and verifier-PII scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            worker/commercial-hotfix-wrapper.mjs
+            worker/access-core.mjs
+            assets/phase4-experience.js
+            supabase/migrations/20260818113000_require_access_choice_and_payment_notifications.sql
+            scripts/test-commercial-access-choice-hotfix.mjs
+          )
+          ! grep -nE '(re_[A-Za-z0-9_-]{20,}|sk_live_[A-Za-z0-9]{16,}|SUPABASE_SERVICE_ROLE_KEY[[:space:]]*=)' "${files[@]}"
+          ! grep -nEi '@gmail\.com' "${files[@]}"
+
+  deploy-worker:
+    name: Deploy production Worker
+    needs: verify
+    environment: production-worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Deploy Worker wrapper
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: '4.114.0'
+          command: deploy
+
+  deploy-pages:
+    name: Deploy production Pages
+    needs: verify
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build and verify sanitized Pages artifact
+        run: |
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.pages-dist'
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

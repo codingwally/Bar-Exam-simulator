@@ -217,5 +217,7 @@
     },
   });
 
+  loadScript('assets/free-trial-five-daily.js?v=free-trial-five-daily-20260818-1')
+    .catch((error) => console.error('Free Trial access copy could not be loaded.', error));
   installPageRouterGuard();
 }(window));

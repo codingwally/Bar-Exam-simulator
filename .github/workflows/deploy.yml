@@ -1,12 +1,6 @@
 name: Deploy static content to Pages
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'assets/phase4-experience.js'
-      - 'supabase/migrations/20260818123000_require_early_access.sql'
   workflow_dispatch:
     inputs:
       confirm_production:
@@ -33,7 +27,6 @@ jobs:
     steps:
       - name: Enforce main branch and explicit confirmation
         env:
-          EVENT_NAME: ${{ github.event_name }}
           CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
           APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
         run: |
@@ -41,10 +34,6 @@ jobs:
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
             echo "Production releases may only run from main." >&2
             exit 1
-          fi
-          if [[ "$EVENT_NAME" == "push" ]]; then
-            echo "Owner-approved payment-gate hotfix release: owner-approved-early-access-payment-gate-20260818"
-            exit 0
           fi
           if [[ "$CONFIRM_PRODUCTION" != "true" ]]; then
             echo "Explicit production confirmation is required." >&2

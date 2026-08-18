@@ -75,7 +75,7 @@ for (const label of [
   'Learning Performance',
   'Question Bank',
   'Grading Health',
-  'Subscriptions',
+  'Access',
   'Payments',
   'Refunds',
   'Support',
@@ -89,7 +89,7 @@ for (const label of [
 assert.match(admin, /executive: 'Overview'/);
 assert.match(admin, /acquisition: 'Sign-ups'/);
 assert.match(admin, /learning: 'Learning Performance'/);
-assert.match(admin, /subscriptions: 'Subscriptions'/);
+assert.match(admin, /subscriptions: 'Access'/);
 assert.match(admin, /support: 'Support'/);
 assert.match(admin, /partnerships: 'Partnerships'/);
 assert.match(admin, /security: 'Security & Activity Log'/);

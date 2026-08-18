@@ -321,7 +321,7 @@ try {
   }, student.token);
   assert.ok(['Affirmed!', 'Affirmed with modification', 'Denied'].includes(barGrade.body.result.label));
   assert.equal(JSON.stringify(barGrade.body).includes(answerCanary), false);
-  assert.match(barGrade.body.notice, /AI-prepared beta/i);
+  assert.match(barGrade.body.notice, /Verify the coaching explanation against current law/i);
 
   const doctrineAnswer = `${payloadById.get(doctrineId).canonical_meaning}\n\n${answerCanary}`;
   const doctrineGrade = await workerJson('/dd2026/doctrines/grade', {
@@ -393,7 +393,7 @@ try {
   }, student.token);
   assert.equal(published.body.item.id, syntheticContentId);
 
-  console.log('DD2026_STAGING: Verdict PDF ownership, selection, and premium flag');
+  console.log('DD2026_STAGING: Verdict PDF ownership and selection');
   await rememberAndSetFlag('VERDICT_PDF_PREMIUM_REQUIRED', false);
   const verdict = await createVerdictFixture(student.id);
   const fullPdf = await workerPdf({
@@ -413,31 +413,13 @@ try {
   }, student.token);
   assert.equal(Buffer.from(selectedPdf.bytes.subarray(0, 5)).toString('ascii'), '%PDF-');
 
-  await rememberAndSetFlag('VERDICT_PDF_PREMIUM_REQUIRED', true);
-  const deniedPdf = await workerPdf({
+  const repeatedPdf = await workerPdf({
     gradingResultId: verdict.gradingResultId,
     selectionKind: 'entire_result',
     selectedIds: [],
-    requestKey: requestKey('verdict_denied'),
-  }, student.token, [403]);
-  assert.equal(deniedPdf.body.error.code, 'DD2026_PREMIUM_REQUIRED');
-  await serviceWrite('/rest/v1/user_entitlements', 'POST', {
-    user_id: student.id,
-    plan_code: 'premium_staging_test',
-    questions_per_subject_per_day: null,
-    effective_from: new Date(Date.now() - 60_000).toISOString(),
-    effective_until: new Date(Date.now() + 3_600_000).toISOString(),
-    source: 'dd26_staging_verification',
-    status: 'active',
-    updated_by: existingAdminId,
-  });
-  const premiumPdf = await workerPdf({
-    gradingResultId: verdict.gradingResultId,
-    selectionKind: 'entire_result',
-    selectedIds: [],
-    requestKey: requestKey('verdict_premium'),
+    requestKey: requestKey('verdict_repeat'),
   }, student.token);
-  assert.equal(Buffer.from(premiumPdf.bytes.subarray(0, 5)).toString('ascii'), '%PDF-');
+  assert.equal(Buffer.from(repeatedPdf.bytes.subarray(0, 5)).toString('ascii'), '%PDF-');
 
   console.log('DD2026_STAGING: Examination Room Worker authorization boundary');
   const portal = await workerJson('/exam-room/query', { operation: 'portal' }, student.token);

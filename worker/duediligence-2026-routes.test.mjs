@@ -48,6 +48,11 @@ function harness(overrides = {}) {
     processExamRoomQueues: async () => ({ backupProcessed: 0, emailProcessed: 0 }),
     requireAdministrator: async () => ({ id: userId }),
     requireAuthenticatedUser: async () => ({ id: userId }),
+    reserveCommercialSubmission: async () => ({
+      reservationId: '623e4567-e89b-42d3-a456-426614174099',
+      access: { allowed: true, accessMode: 'free', remainingToday: 4 },
+    }),
+    releaseCommercialSubmission: async () => {},
     resolveVerdictQuestion: overrides.resolveVerdictQuestion || (async () => null),
     structuredGemini: overrides.structuredGemini || (async () => ({
       model: 'gemini-test', result: { label: 'Affirmed!', feedback: 'Good.' },
@@ -87,7 +92,7 @@ test('Bar Easy raw answer and model rationale never enter persistence payloads o
     contentId: 'BE-001', answer: canary, requestKey,
   }), {}, '', '');
   const serialized = JSON.stringify(await response.json());
-  const persistence = rpcCalls.find((call) => call.name === 'dd2026_record_bar_easy_completion');
+  const persistence = rpcCalls.find((call) => call.name === 'dd2026_record_bar_easy_completion_commercial');
   assert.equal(JSON.stringify(persistence).includes(canary), false);
   assert.equal(serialized.includes(canary), false);
   assert.equal(serialized.includes('Due process.'), true);
@@ -109,7 +114,7 @@ test('Doctrine persistence contains only mastery result and no answer or rationa
     contentId: 'DOC-001', answer: canary, requestKey,
   }), {}, '', '');
   const body = await response.json();
-  const persistence = rpcCalls.find((call) => call.name === 'dd2026_record_doctrine_mastery');
+  const persistence = rpcCalls.find((call) => call.name === 'dd2026_record_doctrine_mastery_commercial');
   assert.equal(JSON.stringify(persistence).includes(canary), false);
   assert.equal(JSON.stringify(persistence).includes('Captured.'), false);
   assert.match(body.privacy, /answer text is not saved/i);

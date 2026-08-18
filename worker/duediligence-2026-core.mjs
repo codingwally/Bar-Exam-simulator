@@ -27,7 +27,7 @@ export const DD2026_DEFAULT_FLAGS = Object.freeze({
   EXAMINATION_ROOM_ENABLED: true,
   EXAMINATION_ROOM_2_ENABLED: false,
   EXAM_GOOGLE_BACKUP_ENABLED: true,
-  AI_PREPARED_BETA_BADGE: true,
+  AI_PREPARED_BETA_BADGE: false,
   CONTENT_HUMAN_REVIEW_REQUIRED: false,
 });
 
@@ -381,7 +381,7 @@ export function dd2026DatabaseError(error) {
     DD2026_FEATURE_DISABLED: 'This feature is temporarily unavailable.',
     DD2026_CONTENT_NOT_FOUND: 'The requested legal study item could not be found.',
     DD2026_VERDICT_PDF_DISABLED: 'Verdict PDF export is temporarily unavailable.',
-    DD2026_PREMIUM_REQUIRED: 'Verdict PDF export requires an eligible Premium plan.',
+    DD2026_PREMIUM_REQUIRED: 'Verdict PDF export is temporarily unavailable for this account.',
     DD2026_VERDICT_RESULT_NOT_FOUND: 'The requested Verdict result was not found.',
     EXAM_ROOM_ADMIN_REQUIRED: 'Administrator authorization is required.',
     EXAM_ROOM_PROFESSOR_REQUIRED: 'An activated professor account is required.',

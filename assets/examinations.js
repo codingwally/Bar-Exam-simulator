@@ -787,7 +787,7 @@
       <div class="dd-exam-card-head">
         <div><h3>${escapeHtml(item.title)}</h3>
           <p class="dd-exam-description">${escapeHtml(item.subject || 'Curated Philippine law examination')}</p></div>
-        <span class="dd-exam-pill">Premium · Beta access active</span>
+        <span class="dd-exam-pill">Included with access</span>
       </div>
       <div class="dd-exam-meta">
         <div><small>Questions</small><strong>${Number(item.questionCount)}</strong></div>
@@ -811,10 +811,10 @@
         <div>
           <p class="dd-exam-kicker">Mock Bar / Examination Room</p>
           <h1>Bar Feels</h1>
-          <p>Enter one of six Premium Philippine Bar examination blocks. Every block contains
+          <p>Enter one of six Philippine Bar examination blocks. Every block contains
             twenty distinct questions, and no timer begins before you confirm the setup.</p>
         </div>
-        <span class="dd-exam-beta">Premium · Beta access active</span>
+        <span class="dd-exam-beta">Included with access</span>
       </header>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
       <div class="dd-bar-entry-grid">

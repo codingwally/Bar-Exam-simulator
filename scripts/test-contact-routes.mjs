@@ -21,9 +21,13 @@ for (const route of ['/support', '/partnerships']) {
   assert.match(experience, new RegExp(route.replace('/', '\\/')), `${route} must be submitted through the Worker.`);
   assert.match(worker, new RegExp(`pathname === '${route.replace('/', '\\/')}'`), `${route} must be handled by the Worker.`);
 }
-assert.doesNotMatch(experience, /id="dd2-payment-form"|\/payments\/submit/);
-assert.match(experience, /Pricing will be announced after beta testing\./);
-assert.match(experience, /Beta access active/);
+assert.match(experience, /id="dd2-payment-form"/);
+assert.match(experience, /\/payments\/submit/);
+assert.match(experience, /Early Access/);
+assert.match(experience, /₱149/);
+assert.match(experience, /One-time payment\. No automatic renewal\./);
+assert.match(experience, /Next paid-plan pricing will be announced separately\./);
+assert.doesNotMatch(experience, /Pricing will be announced after beta testing\.|Beta access active/);
 
 for (const mailbox of [
   'plansandpricing@duediligence.ph',
@@ -37,4 +41,4 @@ assert.match(experience, /mailto:invest@duediligence\.ph\?subject=Investment%20I
 assert.match(html, /href="#support">Open Support</);
 assert.doesNotMatch(html, /mailto:support@duediligence\.ph/);
 
-console.log('Native support, concealed beta pricing, and partnership route tests passed.');
+console.log('Native support, commercial pricing/payment, and partnership route tests passed.');

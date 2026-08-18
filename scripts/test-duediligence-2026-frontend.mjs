@@ -802,7 +802,7 @@ assert.match(js, /id="dd26-exam-count" type="number" min="1" max="200" step="1"/
 assert.match(js, /attempt\.questions\.length/);
 assert.match(js, /preview\.questions\.length/);
 
-assert.match(js, /Your answer text and Gemini explanation are not saved/);
+assert.match(js, /Your answer text and coaching explanation are not saved/);
 assert.match(js, /Your answer text is not saved\. Only your thumbs-up or thumbs-down mastery result is recorded/);
 assert.match(js, /return `dd:exam-room:grading:/,
   'Professor grading drafts must use a narrowly namespaced local key.');
@@ -814,7 +814,9 @@ assert.doesNotMatch(js, /sessionStorage/);
 assert.match(store, /indexedDB/);
 assert.doesNotMatch(store, /localStorage|sessionStorage/);
 assert.match(js, /snapshot\?\.flags\?\.\[flag\] !== true/);
-assert.match(js, /AI-prepared beta/);
+assert.match(js, /AI-assisted educational content/);
+assert.match(js, /Source-based coaching/);
+assert.doesNotMatch(js, /AI-prepared beta|Gemini coaching|Gemini explanation/);
 
 assert.match(js, /readonly aria-readonly="true"/);
 assert.doesNotMatch(js, /operation: '(?:open_dispute|dispute_view|close_dispute)'/,

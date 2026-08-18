@@ -162,11 +162,33 @@ export function normalizeAccessSnapshot(value) {
       503,
     );
   }
+  const dailyLimit = Math.max(1, Math.min(100, Number(value.dailyLimit) || 5));
+  const completedToday = Math.max(0, Number(value.completedToday) || 0);
+  const reservedToday = Math.max(0, Number(value.reservedToday) || 0);
+  const remainingToday = Math.max(
+    0,
+    Math.min(dailyLimit, Number(value.remainingToday ?? value.freeGrades?.remaining) || 0),
+  );
+  const unlimited = value.unlimited === true;
   return {
     allowed: value.allowed === true,
     basis: clean(value.basis || 'locked'),
     termsRequired: value.termsRequired === true,
     role: clean(value.role || 'student'),
+    accessMode: clean(value.accessMode || (unlimited ? 'unlimited' : 'free')),
+    accountLabel: clean(value.accountLabel || (unlimited ? 'Unlimited' : 'Free')),
+    unlimited,
+    dailyLimit,
+    completedToday,
+    reservedToday,
+    remainingToday,
+    resetAt: value.resetAt || null,
+    checkoutOpen: value.checkoutOpen === true,
+    priceCentavos: Math.max(0, Number(value.priceCentavos) || 0),
+    salesCloseAt: value.salesCloseAt || null,
+    entitlementEndsAt: value.entitlementEndsAt || null,
+    paymentState: clean(value.paymentState) || null,
+    commercialLaunchEnabled: value.commercialLaunchEnabled === true,
     globalBeta: {
       enabled: value.globalBeta?.enabled === true,
       eligible: value.globalBeta?.eligible === true,
@@ -179,9 +201,9 @@ export function normalizeAccessSnapshot(value) {
       active: value.trial?.active === true,
     },
     freeGrades: {
-      limit: 3,
-      used: Math.max(0, Math.min(3, Number(value.freeGrades?.used) || 0)),
-      remaining: Math.max(0, Math.min(3, Number(value.freeGrades?.remaining) || 0)),
+      limit: Math.max(1, Number(value.freeGrades?.limit) || dailyLimit),
+      used: Math.max(0, Number(value.freeGrades?.used) || completedToday),
+      remaining: Math.max(0, Number(value.freeGrades?.remaining) || remainingToday),
     },
     freeBeta: {
       enabled: value.freeBeta?.enabled === true,
@@ -205,13 +227,20 @@ export function accessDeniedError(access) {
   if (access?.termsRequired) {
     return new AccessValidationError(
       'LEGAL_ACCEPTANCE_REQUIRED',
-      'Review and accept the current Beta Terms and Privacy Notice before opening an examination.',
+      'Review and accept the current Terms and Privacy Notice before opening an examination.',
+      403,
+    );
+  }
+  if (access?.accessMode === 'free' || access?.basis === 'daily_limit_reached') {
+    return new AccessValidationError(
+      'DAILY_LIMIT_REACHED',
+      `You have used today’s ${Number(access?.dailyLimit) || 5} free submissions. Your allowance resets at Philippine midnight.`,
       403,
     );
   }
   return new AccessValidationError(
     'ACCESS_REQUIRED',
-    'Your trial and lifetime free grades are exhausted. Choose an active plan to continue.',
+    'Choose an available access option to continue.',
     403,
   );
 }

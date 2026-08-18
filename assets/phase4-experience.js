@@ -45,34 +45,22 @@
 
   function accessMessage(access) {
     if (access?.termsRequired) {
-      return 'Review and accept the current Beta Terms and Privacy Notice before opening an examination.';
+      return 'Review and accept the current Terms of Use and Privacy Policy before opening an examination.';
     }
-    return 'Beta All Access is not currently available for this account. Review your access status or contact Support.';
+    if (!access?.unlimited && Number(access?.remainingToday) <= 0) {
+      return 'Your five successful submissions for today are complete. Your Free allowance resets at Philippine midnight.';
+    }
+    return 'Access is not currently available for this account. Review The Docket or contact Support.';
   }
 
   function syncAccessUi() {
     const access = state.access;
     const badge = document.getElementById('dd2-guest-badge');
     if (badge) {
-      const globalBetaActive = access?.globalBeta?.active === true;
-      const visibleBasis = globalBetaActive
-        || ['trial', 'free_beta', 'paid_subscription'].includes(access?.basis);
-      badge.classList.toggle('is-visible', visibleBasis);
+      badge.classList.toggle('is-visible', Boolean(access?.accountLabel));
       if (!access) badge.textContent = '';
-      else if (globalBetaActive) {
-        badge.textContent = 'Beta All Access';
-      } else if (access.basis === 'trial' && access.trial?.expiresAt) {
-        const remainingMs = Math.max(0, new Date(access.trial.expiresAt).getTime() - Date.now());
-        const hours = Math.floor(remainingMs / 3_600_000);
-        const minutes = Math.floor((remainingMs % 3_600_000) / 60_000);
-        badge.textContent = `Trial ${hours}h ${minutes}m remaining`;
-      } else if (access.basis === 'free_beta') {
-        badge.textContent = 'Free Beta Access';
-      } else if (access.basis === 'paid_subscription') {
-        badge.textContent = 'Active Retainer';
-      } else {
-        badge.textContent = '';
-      }
+      else if (access.unlimited) badge.textContent = `${access.accountLabel || 'Early Access'} · Unlimited`;
+      else badge.textContent = `${access.accountLabel || 'Free'} · ${Math.max(0, Number(access.remainingToday) || 0)}/${Math.max(0, Number(access.dailyLimit) || 5)} left`;
     }
     global.dispatchEvent(new CustomEvent('duediligence:access', {
       detail: access,
@@ -222,9 +210,9 @@
       legacy.openSignIn?.();
       return true;
     }
-    if (['ACCESS_REQUIRED', 'LEGAL_ACCEPTANCE_REQUIRED'].includes(error?.code)) {
+    if (['ACCESS_REQUIRED', 'LEGAL_ACCEPTANCE_REQUIRED', 'DAILY_LIMIT_REACHED'].includes(error?.code)) {
       global.toast?.(error.message, 'warn');
-      if (error.code === 'ACCESS_REQUIRED') legacy.openView?.('pricing');
+      if (['ACCESS_REQUIRED', 'DAILY_LIMIT_REACHED'].includes(error.code)) legacy.openView?.('pricing');
       return true;
     }
     return false;

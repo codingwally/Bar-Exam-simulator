@@ -566,6 +566,7 @@ async function examinationRpc(env, functionName, body) {
     'examination_admin',
     'examination_register_upload',
     'examination_store_ai_assessment',
+    'examination_store_ai_assessment_commercial',
     'examination_fail_ai_job',
     'examination_record_delivery',
     'examination_authorize_access',
@@ -2013,6 +2014,11 @@ async function requirePrivateBetaAdmission(request, env) {
 }
 
 async function privateBetaCapabilityExempt(request, pathname) {
+  // Retainer pricing is intentionally public. Authentication is still required
+  // for checkout and every entitlement-changing operation.
+  if (pathname === '/plans') {
+    return true;
+  }
   // Administrator authorization is enforced again by every /admin handler.
   // Keep the protected Admin console reachable even when a Founder disables
   // the learner-wide beta policy; otherwise the console could be unable to
@@ -2033,41 +2039,6 @@ async function privateBetaCapabilityExempt(request, pathname) {
     ]).has(payload?.operation);
   }
   return false;
-}
-
-function publicPricingEnabled(env) {
-  return String(env.PUBLIC_PRICING_ENABLED).toLowerCase() === 'true';
-}
-
-function concealedSubscriptionState(value) {
-  const subscription = value?.subscription && typeof value.subscription === 'object'
-    ? {
-        status: value.subscription.status || null,
-        startsAt: value.subscription.startsAt || null,
-        expiresAt: value.subscription.expiresAt || null,
-        betaAccessActive: value.subscription.status === 'active',
-      }
-    : null;
-  const pendingPayment = value?.pendingPayment && typeof value.pendingPayment === 'object'
-    ? {
-        status: value.pendingPayment.status || null,
-        submittedAt: value.pendingPayment.submittedAt || null,
-      }
-    : null;
-  return {
-    globalBeta: value?.globalBeta && typeof value.globalBeta === 'object'
-      ? {
-          enabled: value.globalBeta.enabled === true,
-          active: value.globalBeta.active === true,
-          expiresAt: value.globalBeta.expiresAt || null,
-        }
-      : null,
-    subscription,
-    pendingPayment,
-    examinationBeta: value?.examinationBeta || null,
-    pricingHidden: true,
-    message: 'Pricing will be announced after beta testing.',
-  };
 }
 
 async function requireAuthenticatedUser(request, env) {
@@ -2114,6 +2085,7 @@ async function reserveGradeAccess(request, env, gradingRequest, verifiedUser = n
       p_user_id: authenticatedUser.id,
       p_request_key: requestId,
       p_question_bank_id: gradingRequest.questionId,
+      p_examination_track: 'bar_practice',
     });
     if (reservation?.reason === 'duplicate_active'
         || reservation?.reason === 'duplicate_completed'
@@ -2263,10 +2235,11 @@ async function finalizeGradeAccess(access, env, completion = null) {
       p_assessment: completion.assessment,
       p_provider_model: completion.model,
     });
+    const finalizedAccess = normalizeAccessSnapshot(result);
     return {
-      limit: 3,
-      used: Math.max(0, Math.min(3, Number(result?.used) || 0)),
-      remaining: Math.max(0, Math.min(3, Number(result?.remaining) || 0)),
+      limit: finalizedAccess.dailyLimit,
+      used: finalizedAccess.completedToday,
+      remaining: finalizedAccess.remainingToday,
     };
   }
   if (access.signedIn || access.legacy) return null;
@@ -3561,7 +3534,7 @@ Return one complete schema-valid JSON assessment. Preserve the stored legal subs
   };
 }
 
-async function processExaminationAiJob(env, user, gradingPackage) {
+async function processExaminationAiJob(env, user, gradingPackage, commercialReservation = null) {
   const questions = Array.isArray(gradingPackage?.questions)
     ? gradingPackage.questions
     : [];
@@ -3591,7 +3564,10 @@ async function processExaminationAiJob(env, user, gradingPackage) {
     let finalState = null;
     const question = questions[0];
     const { assessment, model } = await gradeExaminationQuestion(env, question);
-    finalState = await examinationRpc(env, 'examination_store_ai_assessment', {
+    const persistenceOperation = commercialReservation?.reservationId
+      ? 'examination_store_ai_assessment_commercial'
+      : 'examination_store_ai_assessment';
+    finalState = await examinationRpc(env, persistenceOperation, {
       p_user_id: user.id,
       p_job_id: gradingPackage.jobId,
       p_question_id: question.questionId,
@@ -3599,6 +3575,9 @@ async function processExaminationAiJob(env, user, gradingPackage) {
       p_assessment: assessment,
       p_grader_model: model,
       p_model_answer_hash: question.modelAnswerHash,
+      ...(commercialReservation?.reservationId
+        ? { p_reservation_id: commercialReservation.reservationId }
+        : {}),
     });
     if (finalState?.modelsReleased) {
       const delivery = {
@@ -3717,6 +3696,7 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
   const user = tokenOperations.has(command.operation)
     ? null
     : await requireAuthenticatedUser(request, env);
+  let authorizedAccess = null;
   if (user) {
     if (command.operation === 'start_attempt') {
       await authorizeExaminationAccess(
@@ -3732,7 +3712,7 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
         allowHistorical: true,
       });
     } else if (command.attemptId && command.operation !== 'subject_reveal_review') {
-      await authorizeExaminationAccess(env, user.id, {
+      authorizedAccess = await authorizeExaminationAccess(env, user.id, {
         attemptId: command.attemptId,
         allowHistorical: ['request_ai_grading', 'release_model_answers', 'subject_reveal_review'].includes(
           command.operation,
@@ -3821,7 +3801,28 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
   });
 
   if (command.operation === 'request_ai_grading') {
-    const state = await processExaminationAiJob(env, user, result);
+    const pendingQuestion = Array.isArray(result?.questions) ? result.questions[0] : null;
+    let reservation = null;
+    if (pendingQuestion?.questionId) {
+      const commercialTrack = authorizedAccess?.track === 'bar_feels'
+        ? 'bar_feels'
+        : 'subject_matter';
+      reservation = await reserveCommercialSubmission(
+        request,
+        env,
+        user,
+        commercialTrack,
+        pendingQuestion.questionId,
+        command.requestKey,
+      );
+    }
+    let state;
+    try {
+      state = await processExaminationAiJob(env, user, result, reservation);
+    } catch (error) {
+      await releaseCommercialSubmission(env, reservation, 'grading_failed');
+      throw error;
+    }
     return jsonResponse({
       ok: true,
       data: {
@@ -3832,6 +3833,7 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
         questionCount: state?.questionCount || 0,
         modelsReleased: state?.modelsReleased === true,
         modelAnswerEmailStatus: state?.modelAnswerEmailStatus || null,
+        access: state?.access || reservation?.access || null,
       },
     }, 200, origin, allowedOrigin);
   }
@@ -4299,18 +4301,6 @@ async function handleAccess(request, env, origin, allowedOrigin) {
     subscription: access.subscription,
     pendingPayment: null,
   };
-  if (!publicPricingEnabled(env)) {
-    access.subscription = access.subscription
-      ? {
-          status: access.subscription.status || null,
-          startsAt: access.subscription.startsAt || null,
-          expiresAt: access.subscription.expiresAt || null,
-        }
-      : null;
-    access.subscriptionState = concealedSubscriptionState(access.subscriptionState);
-    access.pricingHidden = true;
-    access.pricingMessage = 'Pricing will be announced after beta testing.';
-  }
   return jsonResponse({ ok: true, access }, 200, origin, allowedOrigin);
 }
 
@@ -5240,27 +5230,72 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
 }
 
 async function handlePlans(request, env, origin, allowedOrigin) {
-  if (!publicPricingEnabled(env)) {
-    return jsonResponse({
-      ok: true,
-      plans: [],
-      betaAccessActive: true,
-      pricingHidden: true,
-      message: 'Pricing will be announced after beta testing.',
-    }, 200, origin, allowedOrigin);
-  }
   const plans = await phase4Rpc(env, 'phase4_plan_catalog', {});
-  return jsonResponse({ ok: true, plans: Array.isArray(plans) ? plans : [] }, 200, origin, allowedOrigin);
+  const publicPlans = Array.isArray(plans)
+    ? plans.filter((plan) => ['free', 'early_access_beta'].includes(String(plan?.planCode || '')))
+    : [];
+  return jsonResponse({ ok: true, plans: publicPlans }, 200, origin, allowedOrigin);
+}
+
+async function reserveCommercialSubmission(
+  request,
+  env,
+  user,
+  track,
+  resourceId,
+  suppliedRequestKey = null,
+) {
+  const requestId = normalizeRequestKey(
+    suppliedRequestKey || request.headers.get('X-Request-ID'),
+  );
+  const reservation = await phase4Rpc(env, 'phase4_reserve_grade_v2', {
+    p_user_id: user.id,
+    p_request_key: requestId,
+    p_question_bank_id: String(resourceId || '').slice(0, 100),
+    p_examination_track: track,
+  });
+  if (['duplicate_active', 'duplicate_completed', 'duplicate_closed'].includes(reservation?.reason)) {
+    throw new AccessValidationError(
+      'DUPLICATE_SUBMISSION',
+      reservation.reason === 'duplicate_completed'
+        ? 'This submission has already been completed.'
+        : 'This submission is already being processed. Please wait for the result.',
+      409,
+    );
+  }
+  const access = normalizeAccessSnapshot(reservation);
+  if (!access.allowed) throw accessDeniedError(access);
+  if (!reservation?.reservationId) {
+    throw new AccessValidationError(
+      'ACCESS_UNAVAILABLE',
+      'Your submission could not be reserved. Please try again.',
+      503,
+    );
+  }
+  return {
+    userId: user.id,
+    requestId,
+    reservationId: String(reservation.reservationId),
+    access,
+  };
+}
+
+async function releaseCommercialSubmission(env, reservation, reason = 'grading_failed') {
+  if (!reservation?.reservationId) return;
+  try {
+    await phase4Rpc(env, 'phase4_release_grade', {
+      p_user_id: reservation.userId,
+      p_reservation_id: reservation.reservationId,
+      p_reason: reason,
+    });
+  } catch (error) {
+    console.error('Commercial submission reservation release failed', {
+      code: error?.code || 'UNKNOWN',
+    });
+  }
 }
 
 async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
-  if (!publicPricingEnabled(env)) {
-    throw new PaymentValidationError(
-      'BETA_PRICING_NOT_PUBLISHED',
-      'Pricing will be announced after beta testing.',
-      403,
-    );
-  }
   await enforcePaymentRateLimit(request, env);
   const user = await requireAuthenticatedUser(request, env);
   const contentLength = Number(request.headers.get('Content-Length') || 0);
@@ -5325,14 +5360,16 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
   }
   if (result?.replayed) await deletePrivateProof(env, objectPath);
   await sendSecureNotification(env, {
-    mailbox: 'plansandpricing@duediligence.ph',
+    mailbox: 'premium@duediligence.ph',
     subject: 'Due Diligence payment verification request',
     adminPath: `/admin/payments?request=${encodeURIComponent(result.id)}`,
   });
   return jsonResponse({
     ok: true,
     payment: result,
-    message: 'Payment proof submitted for Founder verification. Access begins only after approval.',
+    message: result?.provisionalAccessExpiresAt
+      ? 'Payment proof submitted. Your one-time 24-hour provisional Early Access is active while verification is pending.'
+      : 'Payment proof submitted for verification. A prior provisional grant cannot be extended or renewed.',
   }, 201, origin, allowedOrigin);
 }
 
@@ -5341,23 +5378,10 @@ async function handleBillingStatus(request, env, origin, allowedOrigin) {
   const result = await commerceRpc(env, 'phase4_student_billing_snapshot', {
     p_user_id: user.id,
   });
-  if (!publicPricingEnabled(env)) {
-    return jsonResponse({
-      ok: true,
-      billing: concealedSubscriptionState(result),
-    }, 200, origin, allowedOrigin);
-  }
   return jsonResponse({ ok: true, billing: result }, 200, origin, allowedOrigin);
 }
 
 async function handleRefundSubmit(request, env, origin, allowedOrigin) {
-  if (!publicPricingEnabled(env)) {
-    throw new PaymentValidationError(
-      'BETA_PRICING_NOT_PUBLISHED',
-      'Account assistance remains available through Support during beta testing.',
-      403,
-    );
-  }
   await enforcePaymentRateLimit(request, env);
   const user = await requireAuthenticatedUser(request, env);
   const input = normalizeRefundRequest(await parseBoundedJson(request, 8_000));
@@ -5369,7 +5393,7 @@ async function handleRefundSubmit(request, env, origin, allowedOrigin) {
     p_request_key: requestKey,
   });
   await sendSecureNotification(env, {
-    mailbox: 'plansandpricing@duediligence.ph',
+    mailbox: 'premium@duediligence.ph',
     subject: 'Due Diligence refund review request',
     adminPath: `/admin/refunds?request=${encodeURIComponent(result.id)}`,
   });
@@ -5544,6 +5568,8 @@ const dd2026Handlers = createDD2026Handlers({
   processExamRoomQueues,
   requireAdministrator,
   requireAuthenticatedUser,
+  reserveCommercialSubmission,
+  releaseCommercialSubmission,
   resolveVerdictQuestion,
   sendExamRoomEmail: (env, message) => sendExaminationEmail(env, {
     ...message,

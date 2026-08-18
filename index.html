@@ -1004,7 +1004,7 @@
             aria-label="Show BarBound features"><span aria-hidden="true">▾</span></button>
         </div>
         <div class="pb-chamber-dropdown" id="pb-barbound-menu" role="menu" aria-label="BarBound" hidden>
-          <button class="btn-angel" id="spa-bar-feels" type="button" role="menuitem" data-public-feature="bar-feels" aria-label="Bar Feels — Premium only.">Bar Feels</button>
+          <button class="btn-angel" id="spa-bar-feels" type="button" role="menuitem" data-public-feature="bar-feels" aria-label="Open Bar Feels">Bar Feels</button>
           <button class="btn-angel" id="spa-chairs-case" type="button" role="menuitem" data-public-feature="chair-cases">2026 Bar Chair&rsquo;s Cases</button>
           <button class="btn-angel" id="spa-jurisprudence" type="button" role="menuitem" data-public-feature="doctrines">Doctrines</button>
           <button class="btn-angel" id="spa-case-digest" type="button" role="menuitem" data-public-feature="anchor-cases">Anchor Case Digests</button>
@@ -1085,7 +1085,7 @@
           <a class="pb-ledger-route" href="#chamber/barbound" data-pb-chamber-link="barbound">Practice in BarBound <span aria-hidden="true">&rarr;</span></a>
         </div>
         <div class="pb-ledger-previews pb-ledger-previews-four" aria-label="BarBound feature previews">
-          <button type="button" data-public-feature="bar-feels" aria-label="Open Bar Feels — Premium only">
+          <button type="button" data-public-feature="bar-feels" aria-label="Open Bar Feels">
             <img src="assets/feature-previews/bar-feels.png" width="1440" height="900" loading="lazy" decoding="async" alt="Bar Feels multi-question examination workspace">
             <span>Bar Feels</span>
           </button>
@@ -1139,10 +1139,10 @@
   <div class="pb-dialog-shell">
     <header class="pb-dialog-header">
       <div>
-        <p class="pb-dialog-kicker">Private Beta Admission</p>
+        <p class="pb-dialog-kicker">Secure Access</p>
         <h2 id="pb-dialog-title">Enter Due Diligence</h2>
       </div>
-      <button class="pb-dialog-close" id="pb-dialog-close" type="button" aria-label="Close private beta admission">×</button>
+      <button class="pb-dialog-close" id="pb-dialog-close" type="button" aria-label="Close secure access dialog">×</button>
     </header>
     <div class="pb-dialog-progress" aria-label="Admission progress">
       <span data-pb-progress>1 · Disclosure</span>
@@ -1152,27 +1152,25 @@
     </div>
     <div class="pb-dialog-body">
       <section class="pb-stage" data-pb-stage="disclosure">
-        <h3 tabindex="-1">Beta Disclosure</h3>
+        <h3 tabindex="-1">Platform Disclosure</h3>
         <p class="pb-stage-intro">Please read this entire disclosure before continuing.</p>
-        <div class="pb-disclosure-scroll" id="pb-disclosure-scroll" tabindex="0" aria-label="Complete Beta Disclosure">
+        <div class="pb-disclosure-scroll" id="pb-disclosure-scroll" tabindex="0" aria-label="Complete Platform Disclosure">
           <p>Due Diligence is a law-school learning companion and essay-practice platform. Its primary purpose is to provide students with a reliable environment in which to practice identifying issues, organizing legal reasoning, applying rules to facts, and writing clear conclusions.</p>
           <p>Due Diligence is not a law firm, legal-advice service, law school, or official Bar authority. The platform does not provide legal advice, and using it does not create an attorney-client or other professional relationship. It is not a substitute for instruction from professors, assigned materials, independent legal research, or advice from a qualified lawyer.</p>
           <p>Questions, suggested answers, citations, scores, explanations, and feedback may be prepared or assisted by one or more artificial-intelligence models. These materials are educational aids. They may be incomplete, outdated, inconsistent, or incorrect. Suggested answers are not infallible and may not represent the only legally defensible answer. AI-generated scores may differ from those given by a professor, examiner, lawyer, or court. Always verify legal rules and authorities using current official primary sources.</p>
           <p>No score, feedback, suggested answer, or activity on Due Diligence guarantees or predicts a user’s academic grades, Bar examination performance, admission to practice, employment, or professional success.</p>
-          <p>This is an early-access beta. Features may change, malfunction, become temporarily unavailable, or fail to preserve drafts and results. Keep an independent copy of important work. Do not submit confidential, privileged, case-sensitive, or third-party personal information.</p>
-          <p>Please test the available features and report bugs, inaccurate questions or answers, questionable citations, grading concerns, accessibility problems, unclear instructions, and other inconveniences. Good-faith reports help us improve the platform. Reports and permitted beta activity may be reviewed and used to evaluate or improve our AI-assisted systems, but only as described in the applicable Beta Terms and Privacy Notice.</p>
-          <p>At our sole discretion, we may invite a limited number of consistently active beta participants who provide useful, good-faith feedback to receive complimentary premium access after public launch. Participation, platform usage, and submitted reports do not guarantee selection, premium access, compensation, or any other benefit.</p>
-          <p>Exceptional participation may also bring a beta tester to the attention of the founding team for possible future opportunities. Beta participation is not a job application, employment offer, promise of work, or guarantee of consideration. Any recruitment process would occur separately and under its own written terms.</p>
-          <p class="pb-disclosure-end" id="pb-disclosure-end" tabindex="0">End of Beta Disclosure</p>
+          <p>Digital services may change, become temporarily unavailable, or fail to preserve drafts and results. Keep an independent copy of important work. Do not submit confidential, privileged, case-sensitive, or third-party personal information.</p>
+          <p>Please report inaccurate questions or answers, questionable citations, grading concerns, accessibility problems, unclear instructions, and technical issues through Support. Good-faith reports help improve the platform and are handled only as described in the current Terms of Use and Privacy Policy.</p>
+          <p class="pb-disclosure-end" id="pb-disclosure-end" tabindex="0">End of Platform Disclosure</p>
         </div>
         <div class="pb-disclosure-tools">
           <span class="pb-disclosure-state" id="pb-disclosure-state" role="status">Continue to the end of the disclosure.</span>
           <button class="pb-text-button" id="pb-disclosure-jump" type="button">Move to disclosure end</button>
         </div>
         <div class="pb-acknowledgements" aria-label="Provisional acknowledgments">
-          <label class="pb-check"><input id="pb-pre-ai-limitations" type="checkbox"><span>I have read the entire Beta Disclosure and understand the limitations of AI-generated feedback, scores, citations, and suggested answers.</span></label>
+          <label class="pb-check"><input id="pb-pre-ai-limitations" type="checkbox"><span>I have read the entire Platform Disclosure and understand the limitations of AI-generated feedback, scores, citations, and suggested answers.</span></label>
           <label class="pb-check"><input id="pb-pre-educational-only" type="checkbox"><span>I understand that Due Diligence is an educational practice platform, does not provide legal advice, and does not guarantee academic, Bar examination, or professional outcomes.</span></label>
-          <label class="pb-check"><input id="pb-pre-terms-privacy" type="checkbox"><span>I agree to the Beta Terms and Privacy Notice, including the uses of my submissions, account activity, feedback, and reports described in those documents.</span></label>
+          <label class="pb-check"><input id="pb-pre-terms-privacy" type="checkbox"><span>I agree to the Terms of Use and Privacy Policy, including the uses of my submissions, account activity, feedback, and reports described in those documents.</span></label>
         </div>
         <p class="pb-dialog-status" id="pb-disclosure-status" role="status" aria-live="polite"></p>
         <div class="pb-dialog-actions">
@@ -1182,11 +1180,11 @@
       </section>
 
       <section class="pb-stage" data-pb-stage="code" hidden>
-        <h3 tabindex="-1">Private beta access</h3>
+        <h3 tabindex="-1">Controlled access</h3>
         <p>Enter the owner-issued access code. Verification occurs securely on the server.</p>
         <form id="pb-code-form" novalidate>
           <div class="pb-form-field">
-            <label for="pb-access-code">Private beta access code</label>
+            <label for="pb-access-code">Access code</label>
             <input id="pb-access-code" name="private-beta-access-code" type="password" required maxlength="128" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="pb-code-hint pb-code-status">
             <p class="pb-form-hint" id="pb-code-hint">The Civil Code provision on acting with justice, honesty, and good faith. Format: ARTICLE + number + code initials.</p>
           </div>
@@ -1200,7 +1198,7 @@
 
       <section class="pb-stage" data-pb-stage="google-intro" hidden>
         <h3 tabindex="-1">Access code verified</h3>
-        <p>Continue to Google sign-in so Due Diligence can bind the current disclosure version to your verified account and resolve your authorized beta role.</p>
+        <p>Continue to Google sign-in so Due Diligence can bind the current disclosure version to your verified account and resolve your authorized access.</p>
         <p class="pb-final-note">Access has not yet been granted. Google sign-in and final authenticated acceptance are still required.</p>
         <div class="pb-dialog-actions">
           <button class="pb-dialog-secondary" id="pb-google-intro-back" type="button">Back</button>
@@ -1220,16 +1218,16 @@
 
       <section class="pb-stage" data-pb-stage="final" hidden>
         <h3 tabindex="-1">Final authenticated acceptance</h3>
-        <p>Confirm the current disclosure as the signed-in user. No beta access is granted until the server accepts this final step.</p>
+        <p>Confirm the current disclosure as the signed-in user. Access is not granted until the server accepts this final step.</p>
         <div class="pb-acknowledgements" aria-label="Final authenticated acknowledgments">
-          <label class="pb-check"><input id="pb-final-ai-limitations" type="checkbox"><span>I have read the entire Beta Disclosure and understand the limitations of AI-generated feedback, scores, citations, and suggested answers.</span></label>
+          <label class="pb-check"><input id="pb-final-ai-limitations" type="checkbox"><span>I have read the entire Platform Disclosure and understand the limitations of AI-generated feedback, scores, citations, and suggested answers.</span></label>
           <label class="pb-check"><input id="pb-final-educational-only" type="checkbox"><span>I understand that Due Diligence is an educational practice platform, does not provide legal advice, and does not guarantee academic, Bar examination, or professional outcomes.</span></label>
-          <label class="pb-check"><input id="pb-final-terms-privacy" type="checkbox"><span>I agree to the Beta Terms and Privacy Notice, including the uses of my submissions, account activity, feedback, and reports described in those documents.</span></label>
+          <label class="pb-check"><input id="pb-final-terms-privacy" type="checkbox"><span>I agree to the Terms of Use and Privacy Policy, including the uses of my submissions, account activity, feedback, and reports described in those documents.</span></label>
         </div>
         <p class="pb-dialog-status" id="pb-final-status" role="status" aria-live="polite"></p>
         <div class="pb-dialog-actions">
           <button class="pb-dialog-secondary" id="pb-final-back" type="button">Back</button>
-          <button class="pb-dialog-primary" id="pb-final-continue" type="button" disabled>I agree — enter private beta</button>
+          <button class="pb-dialog-primary" id="pb-final-continue" type="button" disabled>I agree — continue</button>
         </div>
       </section>
     </div>
@@ -1547,7 +1545,6 @@
     <div class="footer-links">
       <a href="#support" data-dd2-view="support">Support</a>
       <a href="#pricing" data-dd2-view="pricing">Retainer</a>
-      <a href="#beta-disclosure" data-pb-open-disclosure>Beta Disclosure</a>
       <a href="#terms" data-dd2-view="terms">Terms</a>
       <a href="#privacy" data-dd2-view="privacy">Privacy</a>
       <a href="#partnership" data-dd2-view="partnership" aria-label="Quid Pro Quo — Partnerships">Quid Pro Quo</a>
@@ -2600,19 +2597,8 @@ async function openPremiumBarFeels(options = {}) {
   const accessController = window.DueDiligencePhase4;
   if (!accessController?.requireAuthentication?.()) return;
   try {
-    const access = await accessController.refreshAccess();
+    await accessController.refreshAccess();
     if (!isPremiumNavigationIntentCurrent(navigationIntent)) return;
-    const hasPremiumAccess = access?.subscription?.planCode === 'premium'
-      && access.subscription.status === 'active';
-    const hasOverrideAccess = access?.globalBeta?.active === true
-      || access?.subscriptionState?.globalBeta?.active === true
-      || ['super_admin', 'founder_admin'].includes(access?.role)
-      || access?.subscriptionState?.examinationBeta?.active === true;
-    if (!hasPremiumAccess && !hasOverrideAccess) {
-      toast('Bar Feels is available only with an active Premium plan.', 'warn');
-      accessController.openView?.('pricing');
-      return { status: 'denied' };
-    }
     if (options.restoreActive === true) {
       const outcome = await window.DueDiligenceExaminations?.restoreRoute?.('bar_feels', {
         isCurrent: options.isCurrent,
@@ -2631,8 +2617,7 @@ async function openPremiumBarFeels(options = {}) {
     return { status: 'catalog' };
   } catch (error) {
     if (!isPremiumNavigationIntentCurrent(navigationIntent)) return;
-    toast(error?.message || 'Premium access could not be verified.', 'warn');
-    accessController?.openView?.('pricing');
+    toast(error?.message || 'Your access could not be verified. Please try again.', 'warn');
     return { status: 'retryable_error' };
   }
 }
@@ -2797,7 +2782,7 @@ function legacyRenderMainWrite() {
       <div class="row">
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation (Beta)">Dictate<span class="beta-tag">BETA</span></button>
+          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation">Dictate<span class="beta-tag">VOICE</span></button>
           <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${!currentText.trim() ? 'disabled' : ''}>Evaluate and grade essay</button>
         </div>
       </div>
@@ -2930,7 +2915,7 @@ function renderMainWrite() {
       <div class="row">
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation (Beta)" ${workspaceLocked ? 'disabled' : ''}>Dictate<span class="beta-tag">BETA</span></button>
+          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation" ${workspaceLocked ? 'disabled' : ''}>Dictate<span class="beta-tag">VOICE</span></button>
           <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${workspaceLocked || !currentText.trim() ? 'disabled' : ''}>Evaluate and grade essay</button>
         </div>
       </div>
@@ -3240,7 +3225,7 @@ function renderResultHTML(key) {
           <div>
             <div class="assessment-kicker">12-minute Practice Ended</div>
             <h3 class="assessment-title">Unanswered attempt recorded</h3>
-            <p class="assessment-rationale">The twelve-minute period expired with a blank answer. Gemini was not called, and no lifetime AI grade was consumed.</p>
+            <p class="assessment-rationale">The twelve-minute period expired with a blank answer. No grading request was made, and no daily submission allowance was consumed.</p>
             <div class="assessment-badges">
               <span class="assessment-badge">Unanswered</span>
               <span class="assessment-badge">12:00 elapsed</span>
@@ -4291,7 +4276,7 @@ function startDictation() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const box = document.getElementById('answer-box');
   if (!box) return;
-  if (!SR) { toast('Voice dictation needs a Chromium browser (Chrome/Edge). Beta.', 'warn'); return; }
+  if (!SR) { toast('Voice dictation needs a Chromium browser such as Chrome or Edge.', 'warn'); return; }
   try {
     const rec = new SR();
     rec.lang = 'en-PH'; rec.interimResults = false; rec.continuous = true;
@@ -4337,12 +4322,12 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase2-config.js?v=email-marketing-retired-20260817-1"></script>
 <script src="assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
-<script src="assets/phase2-experience.js?v=email-marketing-retired-20260817-1"></script>
-<script src="assets/phase4-experience.js?v=auth-persistence-20260812-1"></script>
+<script src="assets/phase2-experience.js?v=commercial-launch-20260818-1"></script>
+<script src="assets/phase4-experience.js?v=commercial-launch-20260818-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
 <script src="assets/feature-loader.js?v=exam-room-ux-20260814-1&amp;release=subject-matter-gil-fixes-20260817-4"></script>
-<script src="assets/private-beta-landing.js?v=exam-room-ux-20260814-2&amp;release=verdict-export-p1-20260815-1-homepage-feature-ledger-20260815-1"></script>
+<script src="assets/private-beta-landing.js?v=commercial-launch-20260818-1"></script>
 
 </body>
 </html>

@@ -16,7 +16,10 @@ const expected = Object.freeze({
   productionWorkerHost: 'duediligence-gemini-examiner.wallyesteban1993.workers.dev',
 });
 const suites = Object.freeze({
-  'complete-beta': ['scripts/test-complete-beta-staging.mjs'],
+  'complete-beta': [
+    'scripts/test-complete-beta-staging.mjs',
+    'scripts/test-commercial-launch-staging.mjs',
+  ],
   'duediligence-2026': ['scripts/test-duediligence-2026-staging.mjs'],
   examinations: [
     'scripts/test-examinations-staging.mjs',

@@ -11,7 +11,7 @@
     learning: 'Learning Performance',
     subjects: 'Question Bank',
     reliability: 'Grading Health',
-    subscriptions: 'Subscriptions',
+    subscriptions: 'Access',
     payments: 'Payments',
     refunds: 'Refunds',
     support: 'Support',
@@ -76,6 +76,51 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
   }[character]));
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const EARLY_ACCESS_PLAN = Object.freeze({
+    id: 'early_access_beta',
+    name: 'Early Access',
+    pricePhp: 149,
+    expiresAt: '2026-10-01T23:59:59+08:00',
+    salesCloseAt: '2026-09-01T23:59:59+08:00',
+  });
+
+  function commercialPlanLabel(planCode) {
+    const code = String(planCode || '').trim().toLowerCase();
+    if (code === 'early_access_beta') return 'Early Access';
+    if (code === 'free') return 'Free';
+    if (['standard', 'premium'].includes(code)) return 'Legacy paid plan';
+    return code ? humanizeAuditValue(code) : 'Free';
+  }
+
+  function commercialAccountLabel(account = {}) {
+    const now = Date.now();
+    const expiry = new Date(account.subscription_expires_at || 0).getTime();
+    const plan = String(account.subscription_plan || '').toLowerCase();
+    const status = String(account.subscription_status || '').toLowerCase();
+    const effective = String(account.effective_access || '').toLowerCase();
+    if (account.free_beta_enabled
+        && (!account.free_beta_expires_at || new Date(account.free_beta_expires_at).getTime() > now)) {
+      return 'Founding Beta';
+    }
+    if (plan === 'early_access_beta') {
+      if (['expired', 'cancelled', 'canceled'].includes(status) || (expiry && expiry <= now)) return 'Expired';
+      if (status === 'active') return 'Early Access — verified';
+      if (status === 'rejected') return 'Early Access — rejected';
+      return 'Early Access — pending';
+    }
+    if (effective.includes('pending')) return 'Early Access — pending';
+    if (effective.includes('rejected')) return 'Early Access — rejected';
+    if (effective.includes('expired')) return 'Expired';
+    return 'Free';
+  }
+
+  function commercialPaymentLabel(status) {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'approved') return 'Early Access — verified';
+    if (normalized === 'rejected') return 'Early Access — rejected';
+    if (normalized === 'expired') return 'Expired';
+    return 'Early Access — pending';
+  }
 
   function maskOperationalIdentifier(value, prefix = '') {
     const text = String(value || '').trim();
@@ -498,7 +543,7 @@
     const betaEnabled = betaAllAccess.enabled === true;
     const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
     return `
-      ${heading('Overview', 'The people, answers, access, and service facts needed to manage the beta.')}
+      ${heading('Overview', 'The people, answers, commercial access, and service facts needed to manage Due Diligence.')}
       <div class="metric-strip executive-metrics">
         ${metric('Recent signed-in activity', engagement.activeSignedInLast5Minutes, null, number, {
           section: 'realtime', subtext: 'Last 5 minutes · approximate', cue: 'Review activity totals',
@@ -520,27 +565,27 @@
         })}
       </div>
       <section class="panel">
-        <h3>Beta All Access</h3>
+        <h3>Launch safety access</h3>
         <div class="notice ${betaKnown && !betaEnabled ? 'danger' : ''}">
-          <strong>${!betaKnown ? 'Status could not be confirmed.' : betaEnabled ? 'Enabled for all current and future signed-in users.' : 'Disabled — older per-account access rules are active.'}</strong>
+          <strong>${!betaKnown ? 'Status could not be confirmed.' : betaEnabled ? 'Temporary safety access is enabled.' : 'Commercial access rules are active.'}</strong>
           ${!betaKnown
             ? ' Refresh before making any access decision.'
             : betaEnabled
-            ? ' Access has no automatic per-user expiration while this protected setting remains enabled.'
-            : ' Re-enable only after reviewing the effect on every user.'}
+            ? ' All signed-in accounts temporarily bypass commercial limits while this protected rollback setting remains enabled.'
+            : ' Free, Founding Beta, provisional, and verified Early Access rules determine access.'}
         </div>
         <dl class="definition-list">
-          <dt>Who has access</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'All current and future signed-in users who accepted the current terms' : 'Older per-account rules apply'}</dd>
-          <dt>Automatic expiry</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'None' : 'Older rules apply'}</dd>
-          <dt>Accounts with Beta All Access</dt><dd>${escapeHtml(!betaKnown ? 'Not confirmed' : betaEnabled ? number(betaAllAccess.signedInAccountCount ?? engagement.signedInAccounts) : '0')}</dd>
-          <dt>Required before access</dt><dd>Users must accept the current Beta Terms and Privacy Notice.</dd>
-          <dt>Access setting</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'Remains active until an authorized founder turns it off.' : 'Currently off.'}</dd>
-          <dt>Public beta terms</dt><dd>Free through at least August 15, 2026 and may continue while the developers determine that beta testing is still needed.</dd>
+          <dt>Who has access</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'All signed-in users who accepted the current terms' : 'Server-resolved commercial entitlements apply'}</dd>
+          <dt>Free allowance</dt><dd>Five successful submissions per Philippine calendar day.</dd>
+          <dt>Temporary safety access accounts</dt><dd>${escapeHtml(!betaKnown ? 'Not confirmed' : betaEnabled ? number(betaAllAccess.signedInAccountCount ?? engagement.signedInAccounts) : '0')}</dd>
+          <dt>Required before access</dt><dd>Users must accept the current Terms of Use and Privacy Policy.</dd>
+          <dt>Access setting</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'Protected rollback mode remains on until an authorized founder disables it.' : 'Commercial enforcement is active.'}</dd>
+          <dt>Early Access offer</dt><dd>₱149 one-time through September 1, 2026; access ends October 1, 2026 at 11:59 PM Philippine time.</dd>
           <dt>Last changed</dt><dd>${escapeHtml(dateTime(betaAllAccess.updatedAt))}</dd>
         </dl>
         ${founderAuthorized && betaKnown ? `<div class="dialog-actions">
           ${actionButton(
-            betaEnabled ? 'Disable Beta All Access' : 'Enable Beta All Access',
+            betaEnabled ? 'Activate commercial enforcement' : 'Enable temporary safety access',
             'global_beta_change',
             'global_beta_all_access',
             { currentEnabled: betaEnabled, enabled: !betaEnabled },
@@ -692,8 +737,8 @@
     const rows = (data.items || []).map((user) => [
       user.display_name || 'Not provided',
       user.email,
-      user.subscription_category || 'Regular',
-      user.effective_access || 'Not available',
+      user.commercial_category ? humanizeAuditValue(user.commercial_category) : 'User',
+      commercialAccountLabel(user),
       dateTime(user.last_sign_in_at),
       number(user.answered_question_count),
       `${number(user.practice_answered_count)} practice · ${number(user.examination_answered_count)} formal`,
@@ -724,7 +769,7 @@
     return `
       ${heading('Users', 'Search exact names and email addresses, review access and answer activity, or download the current user list for Google Sheets.')}
       <div class="table-tools"><input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, school, or email" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="user-directory-export" type="button">Download user list</button></div>
-      ${table(['Name', 'Email', 'Subscription', 'Access', 'Last sign-in', 'Questions answered', 'Answer types', 'Score', 'Actions'], rows)}
+      ${table(['Name', 'Email', 'Category', 'Access', 'Last sign-in', 'Questions answered', 'Answer types', 'Score', 'Actions'], rows)}
       <div class="pagination-bar">
         <p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(data.total)} matching account(s).</p>
         <div class="row-actions">
@@ -761,7 +806,7 @@
     const rows = filteredItems.map((item) => [
       item.userDisplayName || 'Not provided',
       item.userEmail || 'Not available',
-      item.subscriptionCategory || 'Not available',
+      commercialPlanLabel(item.subscriptionCategory),
       item.recordSource === 'formal_exam' ? 'Formal exam' : 'Practice',
       item.subject || item.examTitle || 'Not available',
       detailCell(item.questionText, 'View question'),
@@ -792,7 +837,7 @@
           <button class="secondary-button" id="answer-filter-button" type="button">Apply filter</button>
         </div>
         <p class="panel-note">Formal-exam content comes from the version saved with that exam. Practice content is matched by question ID to the current published Question Bank. Reference links shown with a saved result are listed first when available.</p>
-        ${table(['Name', 'Email', 'Subscription', 'Type', 'Subject or exam', 'Question', 'Student answer', 'Score', 'Suggested answer', 'Model answer', 'Reference links', 'Submitted'], rows)}
+        ${table(['Name', 'Email', 'Access record', 'Type', 'Subject or exam', 'Question', 'Student answer', 'Score', 'Suggested answer', 'Model answer', 'Reference links', 'Submitted'], rows)}
         <div class="pagination-bar">
           <p class="panel-note">Up to 100 records per page.</p>
           <div class="row-actions">
@@ -837,10 +882,10 @@
         ${metric('Users with grades', engagement.usersWithAnswers)}
       </div>
       ${table(
-        ['Name', 'Email', 'Subscription', 'Average score', 'Questions answered', 'Latest score', 'Last sign-in'],
+        ['Name', 'Email', 'Access', 'Average score', 'Questions answered', 'Latest score', 'Last sign-in'],
         studentRows.map((row) => [
           row.display_name || 'Not provided', row.email || 'Not available',
-          row.subscription_category || 'Regular',
+          commercialAccountLabel(row),
           row.average_score == null ? 'Not available' : `${number(row.average_score, 1)} / 5`,
           number(row.answered_question_count),
           row.latest_score == null ? 'Not available' : `${number(row.latest_score, 1)} / 5`,
@@ -908,6 +953,11 @@
       || {};
     state.subscriptionRows.clear();
     const accounts = directory.items || [];
+    const commercialLabels = accounts.map((account) => commercialAccountLabel(account));
+    const commercialCounts = commercialLabels.reduce((totals, label) => {
+      totals[label] = (totals[label] || 0) + 1;
+      return totals;
+    }, {});
     state.subscriptionExportRows = accounts;
     const rows = accounts.map((account) => {
       const actionRow = Object.freeze({
@@ -927,13 +977,13 @@
       return [
         account.display_name || 'Not provided',
         account.email || 'Not available',
-        account.subscription_category || 'Regular',
-        account.subscription_plan ? humanizeAuditValue(account.subscription_plan) : 'None',
-        account.subscription_status ? humanizeAuditValue(account.subscription_status) : 'None',
-        globalBetaEnabled ? 'Beta All Access' : account.effective_access || 'No active subscription',
+        account.subscription_category || 'User',
+        commercialPlanLabel(account.subscription_plan),
+        account.subscription_status ? humanizeAuditValue(account.subscription_status) : 'No paid record',
+        globalBetaEnabled ? 'Temporary safety access' : commercialAccountLabel(account),
         dateTime(account.last_sign_in_at),
         number(account.answered_question_count),
-        globalBetaEnabled ? 'No automatic expiry' : dateTime(account.subscription_expires_at),
+        globalBetaEnabled ? 'Temporary override' : (account.subscription_expires_at ? dateTime(account.subscription_expires_at) : 'Daily reset'),
         {
           html: true,
           value: `<div class="row-actions" data-subscription-actions-for="${escapeHtml(account.id)}" aria-label="Subscription actions for ${escapeHtml(account.display_name || account.email || account.id)}"></div>`,
@@ -945,24 +995,27 @@
     const canGoBack = state.subscriptionOffset > 0;
     const canGoForward = pageEnd < Number(directory.total || 0);
     return `
-      ${heading('Subscriptions', 'See every account’s access and plan in plain language. Subscription changes require a reason and are recorded.')}
-      <div class="notice ${globalBetaKnown && !globalBetaEnabled ? 'danger' : ''}"><strong>Beta All Access is ${!globalBetaKnown ? 'not confirmed' : globalBetaEnabled ? 'enabled' : 'disabled'}.</strong> ${!globalBetaKnown
+      ${heading('Access', 'See every account’s commercial access state in plain language. Access changes require a reason and are recorded.')}
+      <div class="notice ${globalBetaKnown && globalBetaEnabled ? 'danger' : ''}"><strong>Launch safety access is ${!globalBetaKnown ? 'not confirmed' : globalBetaEnabled ? 'enabled' : 'disabled'}.</strong> ${!globalBetaKnown
         ? 'Refresh before making any access decision.'
         : globalBetaEnabled
-        ? 'Every current and future signed-in user can use all beta features with no automatic per-user expiry while this setting remains on.'
-        : 'Per-user subscription and fallback access records currently determine access.'}</div>
+        ? 'Every signed-in user temporarily bypasses commercial limits until an authorized founder activates commercial enforcement.'
+        : 'Free, Founding Beta, provisional, and verified Early Access records determine access.'}</div>
       <div class="metric-strip">
         ${summaryMetric('Admin & Staff', number(subscriptionCounts['Admin & Staff'] || 0))}
-        ${summaryMetric('Beta Tester', number(subscriptionCounts['Beta Tester'] || 0))}
-        ${summaryMetric('Regular', number(subscriptionCounts.Regular || 0))}
-        ${summaryMetric('Premium', number(subscriptionCounts.Premium || 0))}
+        ${summaryMetric('Founding Beta', number(commercialCounts['Founding Beta'] || 0))}
+        ${summaryMetric('Free', number(commercialCounts.Free || 0))}
+        ${summaryMetric('Early Access — pending', number(commercialCounts['Early Access — pending'] || 0))}
+        ${summaryMetric('Early Access — verified', number(commercialCounts['Early Access — verified'] || 0))}
+        ${summaryMetric('Early Access — rejected', number(commercialCounts['Early Access — rejected'] || 0))}
+        ${summaryMetric('Expired', number(commercialCounts.Expired || 0))}
       </div>
       <div class="table-tools">
         <input id="subscription-search" type="search" value="${escapeHtml(state.subscriptionSearch)}" placeholder="Search name, school, or email" aria-label="Search subscriptions">
         <button class="secondary-button" id="subscription-search-button" type="button">Search</button>
         <button class="secondary-button" id="download-subscriptions" type="button">Download subscriptions</button>
       </div>
-      ${table(['Name', 'Email', 'Category', 'Plan', 'Status', 'Current access', 'Last sign-in', 'Questions answered', 'Expires', 'Actions'], rows)}
+      ${table(['Name', 'Email', 'Category', 'Plan record', 'Record status', 'Current access', 'Last sign-in', 'Questions answered', 'Resets or expires', 'Actions'], rows)}
       <div class="pagination-bar">
         <p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(directory.total)} matching account(s).</p>
         <div class="row-actions">
@@ -971,41 +1024,41 @@
         </div>
       </div>
       <details class="panel record-detail">
-        <summary>Show older access records</summary>
-        <p class="panel-note">These older trial and per-user beta records are kept so access can be restored safely if Beta All Access is turned off.</p>
+        <summary>Show legacy access records</summary>
+        <p class="panel-note">Historical trial and plan records remain preserved for audit and recovery. They are not offered for new purchase.</p>
         ${table(
-          ['Name', 'Older trial end date', 'Per-user beta', 'Source', 'Older subscription status'],
+          ['Name', 'Historical trial end', 'Founding-program record', 'Source', 'Historical status'],
           accounts.map((account) => [
             account.display_name || 'Not provided',
             dateTime(account.trial_expires_at),
-            account.free_beta_enabled ? `Enabled${account.free_beta_expires_at ? ` until ${dateTime(account.free_beta_expires_at)}` : ''}` : 'Disabled',
+            account.free_beta_enabled ? `Enabled${account.free_beta_expires_at ? ` until ${dateTime(account.free_beta_expires_at)}` : ''}` : 'Not enabled',
             account.subscription_source || 'Not available',
             account.subscription_status ? humanizeAuditValue(account.subscription_status) : 'None',
           ]),
         )}
       </details>
       <section class="panel">
-        <h3>Available plans</h3>
-        ${table(['Plan', 'Planning price', 'Status'], config.plans.items.map((plan) => [
-          plan.name, `₱${number(plan.pricePhp, 2)}`,
-          plan.previewStatus === 'disabled' ? 'Unavailable' : 'Active · manual verification',
-        ]))}
+        <h3>Commercial access options</h3>
+        ${table(['Access', 'Price', 'Availability'], [
+          ['Free', '₱0.00', 'Five successful submissions daily'],
+          ['Early Access', '₱149.00 one-time', 'Purchasable through September 1, 2026 · access through October 1, 2026'],
+        ])}
       </section>
-      <section class="panel"><h3>Refund policy</h3><p class="panel-note">Five-calendar-day cancellations suggest an 80% refund. Later requests use unused time and documented consumption. A verified 20-day continuous outage supports a prorated refund or equivalent extension. Founder documentation is required.</p></section>`;
+      <section class="panel"><h3>Refund policy</h3><p class="panel-note">Eligible Early Access requests must be filed within seven calendar days of first provisional or paid access. The server calculates the unused-time amount through October 1, capped at ₱149; administrator review and manual payment confirmation are required.</p></section>`;
   }
 
   async function renderPayments() {
     const data = await loadPhase4Operational('payments');
     return `
-      ${heading('Payments', 'Review GCash and MariBank requests. Private proofs open for five minutes, and every view is recorded in the activity log.')}
-      <div class="notice danger"><strong>Money and access warning.</strong> Approval activates the exact selected plan. Premium requires an explicit expiration. Confirm channel, amount, reference, date, proof, and access end date before proceeding.</div>
+      ${heading('Payments', 'Review ₱149 Early Access requests. Private proofs open for five minutes, and every view is recorded in the activity log.')}
+      <div class="notice danger"><strong>Money and access warning.</strong> Approval verifies Early Access through October 1, 2026 at 11:59 PM Philippine time. Confirm channel, amount, reference, date, and proof before proceeding.</div>
       ${table(
-        ['Student', 'Plan', 'Amount', 'Channel', 'Date', 'Reference', 'Status', 'Submitted', 'Actions'],
+        ['Student', 'Access', 'Amount', 'Channel', 'Date', 'Reference', 'Verification', 'Submitted', 'Actions'],
         (data.items || []).map((row) => [
-          row.display_name || 'Not provided', humanizeAuditValue(row.plan_code),
+          row.display_name || 'Not provided', commercialPlanLabel(row.plan_code),
           `₱${number(row.trusted_amount_php,2)}`, row.payment_method,
           row.payment_date, row.transaction_reference,
-          { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(humanizeAuditValue(row.status))}</span>` },
+          { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(commercialPaymentLabel(row.status))}</span>` },
           dateTime(row.submitted_at),
           {
             html: true,
@@ -1554,7 +1607,7 @@
             <label class="check-row"><input name="enabled" type="checkbox" checked> Enable examination beta</label>
             <label>Expires at (optional)<input name="expiresAt" type="datetime-local"></label>
             <label>Reason for this change<textarea name="reason" minlength="5" maxlength="1000" required></textarea></label>
-            <button class="primary-button" type="submit">Update beta access</button>
+            <button class="primary-button" type="submit">Update examination access</button>
           </form>
           <hr>
           <form class="exam-admin-form" data-exam-admin-form="set_participant">
@@ -1953,7 +2006,7 @@
         <label>School<input name="schoolName" minlength="2" maxlength="300" autocomplete="organization" required></label>
         <label>Academic term<input name="academicTerm" minlength="1" maxlength="160" placeholder="First Semester, A.Y. 2026–2027" required></label>
         <label>Key expires<input name="expiresAt" type="datetime-local" required><small>The key may remain open for up to seven days.</small></label>
-        <label class="wide">Reason<input name="reason" minlength="5" maxlength="1000" value="Professor Examination Room for beta testing" required></label>
+        <label class="wide">Reason<input name="reason" minlength="5" maxlength="1000" value="Professor Examination Room release testing" required></label>
         <div class="exam-room-professor-key-actions wide">
           <button class="primary-button" type="submit" data-exam-room-issue-activation ${data.available ? '' : 'disabled aria-disabled="true"'}>${data.available ? 'Create one-room key' : 'Key creation unavailable'}</button>
           <p>The full key is shown once after creation. If it is lost, cancel it and create a new key. This page keeps the record and who used it, but never keeps a readable copy of the key. The same Professor may receive separate keys for separate rooms.</p>
@@ -2812,13 +2865,13 @@
   }
 
   function planDisplayName(planCode) {
-    return config.plans.items.find((plan) => plan.id === planCode)?.name || planCode || 'No plan';
+    return commercialPlanLabel(planCode);
   }
 
   function proposedAccessDescription(action, payload) {
     const operation = payload.operation;
     if (action === 'free_beta_change') {
-      return payload.enabled ? 'Enable Free Beta access' : 'Disable Free Beta access';
+      return payload.enabled ? 'Enable Founding Beta access' : 'Disable Founding Beta access';
     }
     if (action === 'discount_assign') {
       const code = $('#action-discount-code')?.value?.trim().toUpperCase();
@@ -2826,14 +2879,11 @@
     }
     if (action === 'subscription_audit_view') return 'View this student’s recorded access history';
     if (['activate', 'complimentary', 'replace_plan'].includes(operation)) {
-      const plan = selectedPlan() || payload.planCode || 'standard';
+      const plan = selectedPlan() || payload.planCode || EARLY_ACCESS_PLAN.id;
       const verb = operation === 'activate' ? 'Activate'
         : operation === 'complimentary' ? 'Grant complimentary'
           : 'Change plan to';
-      return `${verb} ${planDisplayName(plan)}`
-        + `${plan === 'premium'
-          ? ` · expires ${$('#action-expires')?.value || 'on the required selected date'}`
-          : ' · trusted 30-day catalog terms'}`;
+      return `${verb} ${planDisplayName(plan)} · expires ${$('#action-expires')?.value || 'October 1, 2026 at 11:59 PM Philippine time'}`;
     }
     if (operation === 'pause') return 'Suspend the active Subscription';
     if (operation === 'resume') return 'Resume the suspended Subscription';
@@ -2869,9 +2919,14 @@
     const legend = document.createElement('legend');
     legend.textContent = 'Select the trusted plan';
     fieldset.append(legend);
-    const plans = subscriptionActions?.availablePlans(config.plans) || [];
-    const preferred = plans.some((plan) => plan.id === payload.planCode && !plan.disabled)
-      ? payload.planCode : 'standard';
+    const plans = [{
+      ...EARLY_ACCESS_PLAN,
+      disabled: false,
+      durationDays: null,
+      statusLabel: 'Active',
+      note: 'One-time launch access',
+    }];
+    const preferred = EARLY_ACCESS_PLAN.id;
     for (const plan of plans) {
       const label = document.createElement('label');
       label.className = `plan-option${plan.disabled ? ' disabled' : ''}`;
@@ -2885,11 +2940,7 @@
       const name = document.createElement('strong');
       name.textContent = plan.name;
       const details = document.createElement('small');
-      details.textContent = plan.disabled
-        ? `${plan.statusLabel}. ${plan.note}`
-        : plan.durationDays
-          ? `${plan.durationDays} days · catalog-controlled access`
-          : 'Explicit expiration required · Bar Feels included';
+      details.textContent = 'One-time access through October 1, 2026 · all examination tracks';
       copy.append(name, details);
       const price = document.createElement('strong');
       price.className = 'plan-price';
@@ -2909,13 +2960,15 @@
         appendPlanOptions(container, payload);
         const input = appendInputField(
           container,
-          'Expiration for Premium (required when Premium is selected)',
+          'Early Access expiration (fixed commercial term)',
           'action-expires',
           {
             type: 'datetime-local',
-            value: localDateTimeValue(payload.expiresAt),
+            value: localDateTimeValue(EARLY_ACCESS_PLAN.expiresAt),
+            required: true,
           },
         );
+        input.readOnly = true;
         input.addEventListener('input', updateActionContext);
       } else if (payload.operation === 'extend') {
         const input = appendInputField(container, 'Extension in calendar days', 'action-days', {
@@ -2936,7 +2989,7 @@
     } else if (action === 'free_beta_change') {
       payload.enabled = payload.operation === 'enable';
       if (payload.enabled) {
-        appendInputField(container, 'Optional Free Beta expiration', 'action-expires', {
+        appendInputField(container, 'Founding Beta expiration', 'action-expires', {
           type: 'datetime-local', value: localDateTimeValue(payload.freeBetaExpiresAt),
         }).addEventListener('input', updateActionContext);
       }
@@ -2958,7 +3011,7 @@
         copy: `${entry.planCode || 'No plan'} · ${entry.status || 'unknown'} · ${entry.reason || 'No reason recorded'}`,
       })),
       ...(result?.freeBetaHistory || []).map((entry) => ({
-        title: `Free Beta · ${entry.enabled ? 'enabled' : 'disabled'}`,
+        title: `Founding Beta · ${entry.enabled ? 'enabled' : 'disabled'}`,
         time: entry.occurredAt,
         copy: entry.reason || 'No reason recorded',
       })),
@@ -3074,15 +3127,10 @@
       title = 'Review manual payment';
       fields = `<label class="field">Decision<select id="action-status">
         <option value="needs_information">Needs information</option>
-        <option value="approved">Approve and activate selected plan</option>
+        <option value="approved">Approve Early Access</option>
         <option value="rejected">Reject</option>
-      </select></label>
-      ${payload.planCode === 'premium'
-        ? actionField('Premium expiration date and time', 'action-expires', '', 'datetime-local')
-        : ''}`;
-      warning = payload.planCode === 'premium'
-        ? 'Approval is immediate and requires an explicit Premium expiration. Verify amount, channel, reference, date, private proof, and end date before confirming.'
-        : 'Approval is immediate: it activates the exact selected plan for its trusted catalog duration. Verify amount, channel, reference, date, and private proof before confirming.';
+      </select></label>`;
+      warning = 'Approval immediately verifies Early Access through October 1, 2026 at 11:59 PM Philippine time. Verify the ₱149 amount, channel, reference, date, and private proof before confirming.';
     } else if (action === 'view_payment_proof') {
       title = 'Open private payment proof';
       warning = 'Opening this private proof is recorded. The secure link lasts five minutes. Do not download or share it unless necessary.';
@@ -3117,8 +3165,8 @@
         ? 'This immediately grants access without recording a payment. Confirm the student, trusted plan, and reason.'
         : 'This immediately changes access. Confirm the student, current status, proposed value, and reason before continuing.';
     } else if (action === 'free_beta_change') {
-      title = payload.operation === 'enable' ? 'Enable Free Beta access' : 'Disable Free Beta access';
-      warning = 'Free Beta unlocks all current digital features without payment. It creates no coaching or future Premium rights.';
+      title = payload.operation === 'enable' ? 'Enable Founding Beta access' : 'Disable Founding Beta access';
+      warning = 'Founding Beta is complimentary unlimited access only through September 1, 2026. Confirm the approved account and fixed expiration.';
     } else if (action === 'discount_assign') {
       title = 'Apply verified discount';
       warning = 'Only an active server-verified code can be assigned. The browser cannot choose a discount value or trusted plan price.';
@@ -3158,10 +3206,10 @@
       title = 'Download private questions and answers';
       warning = 'This founder-only download contains private student work. Use it only for an approved purpose, store it securely, and do not redistribute it. The reason and file scope are recorded.';
     } else if (action === 'global_beta_change') {
-      title = payload.enabled ? 'Enable Beta All Access' : 'Disable Beta All Access';
+      title = payload.enabled ? 'Enable temporary safety access' : 'Activate commercial enforcement';
       warning = payload.enabled
-        ? 'This immediately gives all current and future signed-in users access to every current beta feature, subject to current legal acceptance and security restrictions.'
-        : 'This immediately removes Beta All Access from every user and restores the older per-user access rules. Confirm the effect before continuing.';
+        ? 'This immediately lets all signed-in users bypass commercial limits as a temporary rollback safeguard, subject to legal acceptance and security restrictions.'
+        : 'This immediately ends the temporary override so Free, Founding Beta, provisional, and verified Early Access rules apply. Confirm the effect before continuing.';
     } else if (action.startsWith('quorum_')) {
       const quorumAction = action.slice('quorum_'.length);
       const quorumTitles = {
@@ -3235,7 +3283,7 @@
     $('#action-context').hidden = !isAccessAction;
     $('#action-confirmation').hidden = !(isAccessAction || isForumAction || isHighRiskPayment || isSensitiveExport || isGlobalBetaAction);
     $('#action-confirmation-copy').textContent = isGlobalBetaAction
-      ? `I understand this will ${payload.enabled ? 'grant Beta All Access to' : 'remove Beta All Access from'} all current and future signed-in users and that the immediate change is recorded.`
+      ? `I understand this will ${payload.enabled ? 'enable temporary safety access for' : 'activate commercial enforcement for'} all signed-in users and that the immediate change is recorded.`
       : isSensitiveExport
       ? 'I am authorized to access this student work and will handle the downloaded file securely. I understand this download is recorded.'
       : isForumAction
@@ -3302,13 +3350,6 @@
           : payload.status === 'expired' ? 'expire' : 'adjust';
     } else if (action === 'payment_review') {
       payload.status = $('#action-status').value;
-      if (payload.status === 'approved' && payload.planCode === 'premium') {
-        payload.expiresAt = isoFromLocalInput($('#action-expires')?.value);
-        if (!payload.expiresAt) {
-          toast('Select a future Premium expiration before approval.');
-          return;
-        }
-      }
     } else if (action === 'refund_review') {
       payload.status = $('#action-status').value;
       payload.approvedRefundPhp = Number($('#action-refund-amount').value);
@@ -3319,14 +3360,10 @@
           toast('Select an available plan.');
           return;
         }
-        if (payload.planCode === 'premium') {
-          payload.expiresAt = isoFromLocalInput($('#action-expires')?.value);
-          if (!payload.expiresAt) {
-            toast('Select a future Premium expiration.');
-            return;
-          }
-        } else {
-          payload.expiresAt = null;
+        payload.expiresAt = EARLY_ACCESS_PLAN.expiresAt;
+        if (payload.planCode !== EARLY_ACCESS_PLAN.id) {
+          toast('Only the current Early Access plan may be assigned.');
+          return;
         }
       }
       if (payload.operation === 'extend') {
@@ -3434,7 +3471,9 @@
           confirmed: true,
         });
         state.report = null;
-        toast(`Beta All Access ${payload.enabled ? 'enabled' : 'disabled'} for all signed-in users.`);
+        toast(payload.enabled
+          ? 'Temporary safety access enabled for all signed-in users.'
+          : 'Commercial access enforcement activated.');
       } else if (action === 'view_payment_proof') {
         const response = await api('/admin/payment-proof', {
           paymentRequestId: state.action.targetId,

@@ -294,7 +294,7 @@ test('an authenticated zero-credit user is denied before question-bank, attempt,
     const payload = await response.json();
 
     assert.equal(response.status, 403);
-    assert.equal(payload.error.code, 'ACCESS_REQUIRED');
+    assert.equal(payload.error.code, 'DAILY_LIMIT_REACHED');
     assert.equal(reservationCalls, 1);
     assert.equal(questionBankCalls, 0);
     assert.equal(attemptCalls, 0);

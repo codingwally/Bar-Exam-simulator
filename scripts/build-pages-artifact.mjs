@@ -88,17 +88,14 @@ const publicFiles = Object.freeze([
   'assets/duediligence-2026.js',
   'assets/lex-forum.css',
   'assets/lex-forum.js',
-  'assets/payments/gcash.png',
-  'assets/payments/maribank.png',
+  'assets/payments/bpi-instapay-149.png',
   'offline.html',
   'service-worker.js',
 ]);
 
 const qrHashes = Object.freeze({
-  'assets/payments/gcash.png':
-    'E750530C71EB0445FD8F801B70DE25B338504C63CEB55881B311B3AA48FA2D7F',
-  'assets/payments/maribank.png':
-    '1F6269F117AC35BB0B7D45636605413D610903732347211E1591399905972CD1',
+  'assets/payments/bpi-instapay-149.png':
+    '599DED503B037139002F6A4BCF1B3EF9B8013F9E0254C02E8F86AFEA2D3F1F7B',
 });
 
 function sha256(buffer) {

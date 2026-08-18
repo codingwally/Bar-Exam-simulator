@@ -33,24 +33,26 @@ function text(value, maximum, label, minimum = 1) {
 
 export function normalizePaymentFields(fields) {
   const planCode = text(fields?.planCode, 64, 'Plan', 3).toLowerCase();
-  if (!['early_access_beta', 'standard', 'premium'].includes(planCode)) {
+  if (planCode !== 'early_access_beta') {
     throw new PaymentValidationError(
       'PLAN_UNAVAILABLE',
-      'Select an available Early Access Beta, Standard, or Premium plan.',
+      'Only the Early Access plan is available for new checkout.',
     );
   }
   const paymentMethod = text(fields?.paymentMethod, 24, 'Payment method', 3).toLowerCase();
-  if (!['gcash', 'maribank'].includes(paymentMethod)) {
+  if (paymentMethod !== 'bpi_instapay') {
     throw new PaymentValidationError(
       'INVALID_PAYMENT_METHOD',
-      'Select GCash or MariBank.',
+      'Select the BPI InstaPay payment channel shown at checkout.',
     );
   }
   const amountPhp = Number(fields?.amountPhp);
-  if (!Number.isFinite(amountPhp) || amountPhp <= 0 || Math.round(amountPhp * 100) !== amountPhp * 100) {
+  if (!Number.isFinite(amountPhp)
+      || Math.round(amountPhp * 100) !== 14900
+      || Math.round(amountPhp * 100) !== amountPhp * 100) {
     throw new PaymentValidationError(
       'INVALID_PAYMENT_AMOUNT',
-      'Enter a valid Philippine peso amount with no more than two decimal places.',
+      'Early Access requires the exact one-time payment of ₱149.00.',
     );
   }
   const paymentDate = text(fields?.paymentDate, 10, 'Payment date', 10);

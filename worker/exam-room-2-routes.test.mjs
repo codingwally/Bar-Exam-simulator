@@ -542,7 +542,10 @@ test('v2 exam, preflight, Beadle, and incident queries use scoped database RPCs'
   for (const [operation, expectedRpc] of cases) {
     const { handlers, calls, rateModes } = harness();
     await handlers.examQuery(request({ operation, examId }), {}, '', '');
-    assert.equal(calls.at(-1).name, expectedRpc);
+    assert.ok(calls.some((call) => call.name === expectedRpc), `${operation} must call ${expectedRpc}`);
+    if (['preflight', 'beadle_student_entry'].includes(operation)) {
+      assert.ok(calls.some((call) => call.name === 'phase4_exam_room_allowance_preview'));
+    }
     assert.equal(rateModes.at(-1), 'read');
   }
   const deviceInstanceHash = 'f'.repeat(64);
@@ -553,10 +556,12 @@ test('v2 exam, preflight, Beadle, and incident queries use scoped database RPCs'
     deviceInstanceHash,
     studentKey: 'student-exam-code-secret',
   }), {}, '', '');
-  assert.equal(calls.at(-1).body.p_device_instance_hash, deviceInstanceHash);
-  assert.match(calls.at(-1).body.p_student_key_hash, /^[0-9a-f]{64}$/);
-  assert.match(calls.at(-1).body.p_rate_key_hash, /^[0-9a-f]{64}$/);
-  assert.equal(JSON.stringify(calls.at(-1)).includes('student-exam-code-secret'), false);
+  const preflight = calls.find((call) => call.name === 'exam_room_student_waiting_room_v4');
+  assert.ok(preflight);
+  assert.equal(preflight.body.p_device_instance_hash, deviceInstanceHash);
+  assert.match(preflight.body.p_student_key_hash, /^[0-9a-f]{64}$/);
+  assert.match(preflight.body.p_rate_key_hash, /^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(preflight).includes('student-exam-code-secret'), false);
 });
 
 test('assigned Beadle student handoff uses server authorization without a browser class code', async () => {
@@ -567,20 +572,22 @@ test('assigned Beadle student handoff uses server authorization without a browse
     examId,
     deviceInstanceHash,
   }), {}, '', '');
-  assert.equal(flow.calls.at(-1).name, 'exam_room_beadle_student_waiting_room_v1');
-  assert.deepEqual(flow.calls.at(-1).body, {
+  const waitingRoom = flow.calls.find((call) => call.name === 'exam_room_beadle_student_waiting_room_v1');
+  assert.ok(waitingRoom);
+  assert.deepEqual(waitingRoom.body, {
     p_user_id: userId,
     p_exam_public_id: examId,
-    p_rate_key_hash: flow.calls.at(-1).body.p_rate_key_hash,
+    p_rate_key_hash: waitingRoom.body.p_rate_key_hash,
     p_device_instance_hash: deviceInstanceHash,
   });
-  assert.match(flow.calls.at(-1).body.p_rate_key_hash, /^[0-9a-f]{64}$/);
+  assert.match(waitingRoom.body.p_rate_key_hash, /^[0-9a-f]{64}$/);
+  assert.ok(flow.calls.some((call) => call.name === 'phase4_exam_room_allowance_preview'));
 
   await flow.handlers.examCommand(request({
     operation: 'start_beadle_attempt',
     examId,
   }), {}, '', '', {});
-  assert.equal(flow.calls.at(-1).name, 'exam_room_start_beadle_student_attempt_v1');
+  assert.equal(flow.calls.at(-1).name, 'exam_room_start_beadle_attempt_commercial_v1');
   assert.equal(flow.calls.at(-1).body.p_user_id, userId);
   assert.equal(flow.calls.at(-1).body.p_exam_public_id, examId);
   assert.match(flow.calls.at(-1).body.p_rate_key_hash, /^[0-9a-f]{64}$/);
@@ -2059,9 +2066,9 @@ test('optional student access uses an unreturnable schedule placeholder and no s
   assert.match(calls[0].body.p_grading_key_hash, /^[0-9a-f]{64}$/);
   assert.equal(calls[1].name, 'exam_room_publish_exam_v2');
   assert.equal(calls[1].body.p_student_key_hash, null);
-  assert.equal(calls[2].name, 'exam_room_start_attempt_v4');
+  assert.equal(calls[2].name, 'exam_room_start_attempt_commercial_v1');
   assert.equal(calls[2].body.p_student_key_hash, null);
-  assert.equal(calls[3].name, 'exam_room_start_attempt_v4');
+  assert.equal(calls[3].name, 'exam_room_start_attempt_commercial_v1');
   assert.match(calls[3].body.p_student_key_hash, /^[0-9a-f]{64}$/);
   assert.equal(JSON.stringify(calls).includes(studentKey), false);
   assert.equal(JSON.stringify(calls).includes(gradingKey), false);

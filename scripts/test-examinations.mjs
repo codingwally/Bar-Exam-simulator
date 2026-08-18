@@ -51,10 +51,15 @@ assert.doesNotMatch(html, /id=["']welcome-state["']|Prepare with purpose\.|id=["
 assert.match(html, /DueDiligenceExaminations\?\.openPerSubject/);
 assert.match(html, /DueDiligenceExaminations\?\.openBarFeels/);
 assert.match(html, /id="spa-mock"[\s\S]*id="spa-subject-matter"[\s\S]*id="spa-progress"[\s\S]*id="spa-bar-feels"/);
-assert.match(html, /id="spa-bar-feels"[^>]*aria-label="Bar Feels — Premium only\."/);
+assert.match(html, /id="spa-bar-feels"[^>]*aria-label="Open Bar Feels"/);
 assert.doesNotMatch(html, /menu-premium-badge/);
 assert.match(html, /function openSubjectMatterMenu\(\)[\s\S]*openPerSubject\(\)/);
-assert.match(html, /function openPremiumBarFeels\(options = \{\}\)[\s\S]*planCode === 'premium'[\s\S]*subscription\.status === 'active'[\s\S]*openView\?\.\('pricing'\)[\s\S]*restoreRoute\?\.\('bar_feels'[\s\S]*openBarFeels\(\)/);
+assert.match(html, /function openPremiumBarFeels\(options = \{\}\)[\s\S]*refreshAccess\(\)[\s\S]*restoreRoute\?\.\('bar_feels'[\s\S]*openBarFeels\(\)/);
+assert.doesNotMatch(
+  html.match(/async function openPremiumBarFeels\(options = \{\}\) \{[\s\S]*?\n\}/)?.[0] || '',
+  /planCode === 'premium'|subscription\.status === 'active'|openView\?\.\('pricing'\)/,
+  'Bar Feels must use the shared commercial-access path without a retired Premium-only gate.',
+);
 assert.doesNotMatch(
   featureLoader,
   /global\.openPremiumBarFeels\s*=/,

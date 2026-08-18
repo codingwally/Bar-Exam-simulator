@@ -124,9 +124,8 @@ assert.match(script, /globalBetaEnabled/);
 assert.match(script, /privateBetaApi\(\)\?\.policy/);
 assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
 assert.match(html, /#private-beta-dialog\[open\]/);
-assert.match(html, /assets\/private-beta-landing\.js\?v=exam-room-ux-20260814-2/);
-assert.match(html, /assets\/private-beta-landing\.js\?v=exam-room-ux-20260814-2&amp;release=verdict-export-p1-20260815-1-homepage-feature-ledger-20260815-1/,
-  'The combined Verdict and homepage release must use a fresh browser cache key.');
+assert.match(html, /assets\/private-beta-landing\.js\?v=commercial-launch-20260818-1/,
+  'The commercial launch must use a fresh browser cache key.');
 assert.match(html, /assets\/private-beta-landing\.css\?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4/);
 assert.match(css, /\.pb-chamber-nav\s*\{/);
 assert.match(css, /\.pb-chamber-pill\s*\{/);

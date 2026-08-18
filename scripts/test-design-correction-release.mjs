@@ -283,7 +283,7 @@ assert.match(html, /assets\/phase2\.css\?release=subject-matter-gil-fixes-202608
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-20260817-subject-matter-controls-4/);
+assert.match(serviceWorker, /duediligence-shell-20260818-commercial-launch-1/);
 assert.match(serviceWorker, /due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(serviceWorker, /private-beta-landing\.css[^'\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(serviceWorker, /study-workspace\.css[^'\n]*subject-matter-gil-fixes-20260817-4/);

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-20260817-subject-matter-controls-4';
+const CACHE_VERSION = 'duediligence-shell-20260818-commercial-launch-1';
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',

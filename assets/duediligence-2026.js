@@ -489,7 +489,7 @@
   }
 
   function loading(title) {
-    app().innerHTML = `<div class="dd26-shell"><header class="dd26-header"><div><div class="dd26-kicker">Due Diligence 2026</div><h1>${escapeHtml(title)}</h1></div><span class="dd26-beta">AI-prepared beta</span></header><div class="dd26-loading" role="status">Loading protected study material…</div></div>`;
+    app().innerHTML = `<div class="dd26-shell"><header class="dd26-header"><div><div class="dd26-kicker">Due Diligence 2026</div><h1>${escapeHtml(title)}</h1></div><span class="dd26-beta">Source-based study</span></header><div class="dd26-loading" role="status">Loading protected study material…</div></div>`;
   }
 
   function showError(error, retry) {
@@ -597,7 +597,7 @@
   }
 
   function betaNotice() {
-    return '<div class="dd26-notice">AI-prepared beta content. Verify every proposition independently against current law and the linked primary authority.</div>';
+    return '<div class="dd26-notice">AI-assisted educational content. Verify every proposition independently against current law and the linked primary authority.</div>';
   }
 
   function renderContent() {
@@ -615,7 +615,7 @@
     const index = items.findIndex((entry) => entry.id === item?.id);
     const payload = item?.payload || {};
     app().innerHTML = `<div class="dd26-shell">
-      <header class="dd26-header"><div><div class="dd26-kicker">The Commons / Guided Practice</div><h1>Bar Easy</h1><p>Try legal reasoning in plain language. No law-school jargon is required.</p></div><span class="dd26-beta">AI-prepared beta</span></header>
+      <header class="dd26-header"><div><div class="dd26-kicker">The Commons / Guided Practice</div><h1>Bar Easy</h1><p>Try legal reasoning in plain language. No law-school jargon is required.</p></div><span class="dd26-beta">Source-based study</span></header>
       ${subjectChips(items)}
       <div class="dd26-grid">
         <section class="dd26-pane" aria-labelledby="dd26-easy-question">
@@ -623,7 +623,7 @@
           <h2 class="dd26-prompt" id="dd26-easy-question">${escapeHtml(payload.prompt || '')}</h2>
           <label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea" id="dd26-easy-answer" maxlength="5000" placeholder="Explain the rule in your own words."></textarea><small class="dd26-counter" id="dd26-easy-count">0 / 5,000</small></label>
           <div class="dd26-actions"><button class="dd26-button primary" id="dd26-easy-submit" type="button">Submit answer</button><button class="dd26-button" id="dd26-easy-next" type="button">Next question</button></div>
-          <div class="dd26-privacy">Your answer text and Gemini explanation are not saved. Only the completion count is recorded.</div>${betaNotice()}
+          <div class="dd26-privacy">Your answer text and coaching explanation are not saved. Only the completion count is recorded.</div>${betaNotice()}
         </section>
         <aside class="dd26-pane" id="dd26-easy-result"><div class="dd26-empty">Your coaching result, suggested answer, and primary source will appear here after submission.</div></aside>
       </div>
@@ -647,7 +647,7 @@
       const payload = await api('/dd2026/bar-easy/grade', { contentId: item.id, answer: answer.value, requestKey: randomKey('easy') });
       const result = payload.result || {};
       const study = payload.study || {};
-      document.getElementById('dd26-easy-result').innerHTML = `<div class="dd26-result"><div class="dd26-kicker">Gemini coaching</div><h2 class="dd26-result-title">${escapeHtml(result.label)}</h2><section class="dd26-section"><h3>Coaching feedback</h3><p>${escapeHtml(result.feedback)}</p></section><section class="dd26-section"><h3>Suggested answer</h3><p>${escapeHtml(study.suggestedAnswer)}</p></section><section class="dd26-section"><h3>Why this works</h3><p>${escapeHtml(study.explanation)}</p></section><section class="dd26-section"><h3>Primary source</h3><p>${escapeHtml([study.primarySource?.title, study.primarySource?.citation].filter(Boolean).join(' · '))}</p>${safeSourceLink(study.primarySource?.url)}</section>${betaNotice()}</div>`;
+      document.getElementById('dd26-easy-result').innerHTML = `<div class="dd26-result"><div class="dd26-kicker">Source-based coaching</div><h2 class="dd26-result-title">${escapeHtml(result.label)}</h2><section class="dd26-section"><h3>Coaching feedback</h3><p>${escapeHtml(result.feedback)}</p></section><section class="dd26-section"><h3>Suggested answer</h3><p>${escapeHtml(study.suggestedAnswer)}</p></section><section class="dd26-section"><h3>Why this works</h3><p>${escapeHtml(study.explanation)}</p></section><section class="dd26-section"><h3>Primary source</h3><p>${escapeHtml([study.primarySource?.title, study.primarySource?.citation].filter(Boolean).join(' · '))}</p>${safeSourceLink(study.primarySource?.url)}</section>${betaNotice()}</div>`;
       answer.value = '';
       answer.dispatchEvent(new Event('input'));
     } catch (error) { global.toast?.(error.message, 'warn'); }
@@ -666,7 +666,7 @@
     const item = selectedItem();
     const payload = item?.payload || {};
     app().innerHTML = `<div class="dd26-shell">
-      <header class="dd26-header"><div><div class="dd26-kicker">Recall / Explain / Verify</div><h1>Doctrines</h1><p>Explain the doctrine in your own words, then compare your understanding with its canonical meaning and limits.</p></div><span class="dd26-beta">AI-prepared beta</span></header>
+      <header class="dd26-header"><div><div class="dd26-kicker">Recall / Explain / Verify</div><h1>Doctrines</h1><p>Explain the doctrine in your own words, then compare your understanding with its canonical meaning and limits.</p></div><span class="dd26-beta">Source-based study</span></header>
       ${subjectChips(items)}
       <div class="dd26-grid">
         <section class="dd26-pane"><div class="dd26-label">Selected doctrine</div><h2 class="dd26-prompt">${escapeHtml(item?.title || payload.doctrine_title || '')}</h2><p class="dd26-help">${escapeHtml(payload.syllabus_topic || '')}</p><label class="dd26-field"><span>Explain in your own words</span><textarea class="dd26-textarea" id="dd26-doctrine-answer" maxlength="3000" placeholder="State the meaning, required elements, and any important limit."></textarea><small class="dd26-counter" id="dd26-doctrine-count">0 / 3,000</small></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-doctrine-submit" type="button">Check mastery</button><button class="dd26-button" id="dd26-doctrine-next" type="button">Next doctrine</button></div><div class="dd26-privacy">Your answer text is not saved. Only your thumbs-up or thumbs-down mastery result is recorded.</div>${betaNotice()}</section>
@@ -710,7 +710,7 @@
     const detailHash = item && !chairs ? item.id : null;
     if (detailHash) activatePage('anchor_case', document.getElementById('spa-case-digest'), { replace: true, detailId: detailHash });
     app().innerHTML = `<div class="dd26-shell">
-      <header class="dd26-header"><div><div class="dd26-kicker">${chairs ? 'Justice Samuel H. Gaerlan / 2026' : 'Core jurisprudence / 2026'}</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div><span class="dd26-beta">AI-prepared beta</span></header>
+      <header class="dd26-header"><div><div class="dd26-kicker">${chairs ? 'Justice Samuel H. Gaerlan / 2026' : 'Core jurisprudence / 2026'}</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div><span class="dd26-beta">Source-based study</span></header>
       <label class="dd26-field dd26-search"><span>Search cases</span><input class="dd26-input" id="dd26-case-search" type="search" value="${escapeHtml(state.search)}" placeholder="Search case, topic, doctrine, or citation"></label>
       ${subjectChips(items)}
       <div class="dd26-grid">
@@ -2144,6 +2144,7 @@
       DEADLINE_REACHED: 'Your examination deadline has been reached. Open the Student workspace to review the recorded status.',
       ATTEMPT_ALREADY_SUBMITTED: 'This examination was already submitted. Open the saved receipt instead.',
       EXAM_NOT_PUBLISHED: 'The Professor has not published this examination yet.',
+      EXAM_ROOM_INSUFFICIENT_DAILY_ALLOWANCE: 'This examination contains more questions than remain in your Free allowance today. Open The Docket for your reset time or Early Access.',
       ADMISSION_REQUIRED: 'The examination requires a separate admission decision before entry.',
       ADMISSION_BLOCKED: 'Entry for this student account was blocked by the examination admission record.',
       IDENTITY_VERIFICATION_BLOCKED: 'The saved identity check must be resolved before entry.',
@@ -4844,6 +4845,7 @@
       LATE_ADMISSION_CLOSED: `Student entry closed ${formatDate(server.entryClosesAt || server.hardClosesAt)}.`,
       EXAM_CLOSED: 'This examination is closed.',
       ADMISSION_REQUIRED: 'The Beadle must allow this student to enter.',
+      EXAM_ROOM_INSUFFICIENT_DAILY_ALLOWANCE: `This examination needs ${Number(server.commercialAllowance?.requiredCount) || 'more'} successful submissions, but only ${Number(server.commercialAllowance?.remainingToday) || 0} remain today. Your Free allowance resets ${formatDate(server.commercialAllowance?.resetAt)}.`,
     };
     return {
       reported,
@@ -5218,11 +5220,22 @@
     const accessCodeValidated = accessCodeState.accepted;
     const startReadiness = studentStartReadiness(server);
     const entryTiming = studentEntryTiming(server);
+    const allowance = server.commercialAllowance || {};
+    const allowanceSufficient = allowance.available !== true
+      || allowance.sufficient === true;
+    const allowanceCopy = allowance.available !== true
+      ? 'Allowance will be verified again before the examination opens.'
+      : allowance.unlimited === true
+        ? `${allowance.accountLabel || 'Unlimited access'} covers all ${Number(allowance.requiredCount) || 0} questions.`
+        : allowanceSufficient
+          ? `${Number(allowance.requiredCount) || 0} questions will be held from today’s ${Number(allowance.dailyLimit) || 5}-submission Free allowance before entry.`
+          : `This examination needs ${Number(allowance.requiredCount) || 0} submissions, but only ${Number(allowance.remainingToday) || 0} remain today. Reset: ${formatDate(allowance.resetAt)}.`;
     const passing = check.storage.available && check.deviceSupported && eligible
-      && !sessionConflict && accessCodeReady && accessCodeValidated && startReadiness.canStart;
+      && !sessionConflict && accessCodeReady && accessCodeValidated
+      && allowanceSufficient && startReadiness.canStart;
     const accessCodePolicyCopy = accessCodeState.copy;
     const accessCodeClass = accessCodeState.className;
-    openDialog(`<div class="dd26-label">Student exam check</div><h2>Check before starting</h2><p>This check confirms that you are signed in, on the class list, and opening the correct exam. The official exam clock comes from Due Diligence.</p><ul class="dd26-check-list"><li class="${check.deviceSupported ? 'is-pass' : 'is-fail'}"><strong>Device</strong><span>${check.deviceSupported ? 'Desktop or tablet is ready' : 'This phone-size screen is not supported for a formal beta exam'}</span></li><li class="${check.storage.available ? 'is-pass' : 'is-fail'}"><strong>Answer saving</strong><span>${escapeHtml(check.storage.message || check.storage.code)}</span></li><li class="${check.persistent ? 'is-pass' : 'is-warn'}"><strong>Keep answers on this device</strong><span>${check.persistent ? 'Allowed by this browser' : 'The browser may remove local data; keep the exam page open'}</span></li><li class="is-pass"><strong>Connection</strong><span>Due Diligence responded in ${escapeHtml(check.reachabilityMs)} ms · official time ${escapeHtml(formatDate(server.serverNow || server.checks?.serverNow))}</span></li><li class="${eligible ? 'is-pass' : 'is-fail'}"><strong>Class list and entry</strong><span>${eligible ? 'This signed-in student is on the class list' : escapeHtml(server.message || 'This signed-in account cannot start this examination')}</span></li><li class="${accessCodeClass}"><strong>Student exam code</strong><span>${escapeHtml(accessCodePolicyCopy)}</span></li><li class="${startReadiness.canStart ? 'is-pass' : 'is-fail'}"><strong>Opening and entry time</strong><span>${escapeHtml(startReadiness.copy)}</span></li><li class="${sessionConflict ? 'is-fail' : 'is-pass'}"><strong>Open exam session</strong><span>${sessionConflict ? 'Another open session must be resolved with the Beadle' : 'No other open session was found'}</span></li><li class="${integrity.recordingEnabled ? 'is-pass' : 'is-warn'}"><strong>Exam integrity</strong><span>${integrity.recordingEnabled ? `${integrity.clipboardBlocked ? 'Copy, cut, paste, and right-click are blocked. ' : 'Exam-menu restrictions are off for an approved arrangement. '}Leaving the exam tab or window is recorded for the Professor to review. It is not automatic proof and does not automatically fail or lock the exam.` : 'Tab recording and exam-menu restrictions are off for this exam or an approved accommodation.'}</span></li></ul><details open class="dd26-rules-summary"><summary>Instructions and exam rules</summary>${studentInstructionsHtml(server.instructions)}<dl><div><dt>Exam time</dt><dd>${escapeHtml(formatDate(server.opensAt))} to ${escapeHtml(formatDate(server.serverDeadline || server.hardClosesAt))}</dd></div><div><dt>Allowed materials</dt><dd>${escapeHtml(rules.allowedMaterials || 'See the Professor’s instructions')}</dd></div><div><dt>Questions</dt><dd>${escapeHtml(rules.navigationMode === 'one_way' ? 'Move forward only' : 'You may move between questions')}</dd></div><div><dt>Leaving the exam tab</dt><dd>${escapeHtml(integrity.recordingEnabled ? 'Recorded for Professor review' : 'Not recorded for this exam or accommodation')}</dd></div><div><dt>Full screen</dt><dd>${escapeHtml(rules.fullscreenPolicy === 'off' ? 'Not requested' : 'Requested when the exam starts')}</dd></div><div><dt>Entry</dt><dd>${escapeHtml(rules.admissionMode === 'beadle_approval' ? 'Beadle confirms entry' : 'Automatic after all checks pass')}</dd></div></dl></details><label class="dd26-choice"><input id="dd26-preflight-ack" type="checkbox" ${passing ? '' : 'disabled'}><span><strong>I reviewed the instructions and exam rules</strong><small>I understand that the exam is submitted only after Due Diligence shows a receipt.</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-preflight-start" type="button" disabled>Start examination</button><button class="dd26-button" data-dd26-close-dialog type="button">Return</button></div><div class="dd26-privacy">No camera permission is requested.</div>`);
+    openDialog(`<div class="dd26-label">Student exam check</div><h2>Check before starting</h2><p>This check confirms that you are signed in, on the class list, and opening the correct exam. The official exam clock comes from Due Diligence.</p><ul class="dd26-check-list"><li class="${check.deviceSupported ? 'is-pass' : 'is-fail'}"><strong>Device</strong><span>${check.deviceSupported ? 'Desktop or tablet is ready' : 'This phone-size screen is not supported for a formal beta exam'}</span></li><li class="${check.storage.available ? 'is-pass' : 'is-fail'}"><strong>Answer saving</strong><span>${escapeHtml(check.storage.message || check.storage.code)}</span></li><li class="${check.persistent ? 'is-pass' : 'is-warn'}"><strong>Keep answers on this device</strong><span>${check.persistent ? 'Allowed by this browser' : 'The browser may remove local data; keep the exam page open'}</span></li><li class="is-pass"><strong>Connection</strong><span>Due Diligence responded in ${escapeHtml(check.reachabilityMs)} ms · official time ${escapeHtml(formatDate(server.serverNow || server.checks?.serverNow))}</span></li><li class="${allowanceSufficient ? 'is-pass' : 'is-fail'}"><strong>Daily submission allowance</strong><span>${escapeHtml(allowanceCopy)}</span></li><li class="${eligible ? 'is-pass' : 'is-fail'}"><strong>Class list and entry</strong><span>${eligible ? 'This signed-in student is on the class list' : escapeHtml(server.message || 'This signed-in account cannot start this examination')}</span></li><li class="${accessCodeClass}"><strong>Student exam code</strong><span>${escapeHtml(accessCodePolicyCopy)}</span></li><li class="${startReadiness.canStart ? 'is-pass' : 'is-fail'}"><strong>Opening and entry time</strong><span>${escapeHtml(startReadiness.copy)}</span></li><li class="${sessionConflict ? 'is-fail' : 'is-pass'}"><strong>Open exam session</strong><span>${sessionConflict ? 'Another open session must be resolved with the Beadle' : 'No other open session was found'}</span></li><li class="${integrity.recordingEnabled ? 'is-pass' : 'is-warn'}"><strong>Exam integrity</strong><span>${integrity.recordingEnabled ? `${integrity.clipboardBlocked ? 'Copy, cut, paste, and right-click are blocked. ' : 'Exam-menu restrictions are off for an approved arrangement. '}Leaving the exam tab or window is recorded for the Professor to review. It is not automatic proof and does not automatically fail or lock the exam.` : 'Tab recording and exam-menu restrictions are off for this exam or an approved accommodation.'}</span></li></ul><details open class="dd26-rules-summary"><summary>Instructions and exam rules</summary>${studentInstructionsHtml(server.instructions)}<dl><div><dt>Exam time</dt><dd>${escapeHtml(formatDate(server.opensAt))} to ${escapeHtml(formatDate(server.serverDeadline || server.hardClosesAt))}</dd></div><div><dt>Allowed materials</dt><dd>${escapeHtml(rules.allowedMaterials || 'See the Professor’s instructions')}</dd></div><div><dt>Questions</dt><dd>${escapeHtml(rules.navigationMode === 'one_way' ? 'Move forward only' : 'You may move between questions')}</dd></div><div><dt>Leaving the exam tab</dt><dd>${escapeHtml(integrity.recordingEnabled ? 'Recorded for Professor review' : 'Not recorded for this exam or accommodation')}</dd></div><div><dt>Full screen</dt><dd>${escapeHtml(rules.fullscreenPolicy === 'off' ? 'Not requested' : 'Requested when the exam starts')}</dd></div><div><dt>Entry</dt><dd>${escapeHtml(rules.admissionMode === 'beadle_approval' ? 'Beadle confirms entry' : 'Automatic after all checks pass')}</dd></div></dl></details><label class="dd26-choice"><input id="dd26-preflight-ack" type="checkbox" ${passing ? '' : 'disabled'}><span><strong>I reviewed the instructions and exam rules</strong><small>I understand that the exam is submitted only after Due Diligence shows a receipt.</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-preflight-start" type="button" disabled>Start examination</button><button class="dd26-button" data-dd26-close-dialog type="button">Return</button></div><div class="dd26-privacy">No camera permission is requested.</div>`);
     const openingRow = [...document.querySelectorAll('.dd26-check-list li')]
       .find((row) => row.querySelector('strong')?.textContent === 'Opening and entry time');
     if (openingRow) {

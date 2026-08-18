@@ -50,6 +50,12 @@ function preserveQuestionText(value) {
   return String(value ?? '');
 }
 
+function boundedNumber(value, fallback, minimum, maximum) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(minimum, Math.min(maximum, numeric));
+}
+
 export function normalizeRequestKey(value) {
   const requestKey = clean(value);
   if (!REQUEST_KEY_PATTERN.test(requestKey)) {
@@ -162,21 +168,61 @@ export function normalizeAccessSnapshot(value) {
       503,
     );
   }
-  const dailyLimit = Math.max(1, Math.min(100, Number(value.dailyLimit) || 5));
-  const completedToday = Math.max(0, Number(value.completedToday) || 0);
-  const reservedToday = Math.max(0, Number(value.reservedToday) || 0);
-  const remainingToday = Math.max(
-    0,
-    Math.min(dailyLimit, Number(value.remainingToday ?? value.freeGrades?.remaining) || 0),
-  );
+
+  const commercialLaunchEnabled = value.commercialLaunchEnabled === true;
   const unlimited = value.unlimited === true;
+  const dailyLimit = boundedNumber(
+    value.dailyLimit,
+    commercialLaunchEnabled ? 0 : 5,
+    0,
+    100,
+  );
+  const completedToday = boundedNumber(value.completedToday, 0, 0, 100_000);
+  const reservedToday = boundedNumber(value.reservedToday, 0, 0, 100_000);
+  const rawRemaining = boundedNumber(
+    value.remainingToday ?? value.freeGrades?.remaining,
+    0,
+    0,
+    100_000,
+  );
+  const remainingToday = dailyLimit > 0
+    ? Math.min(dailyLimit, rawRemaining)
+    : 0;
+  const freeLimit = boundedNumber(
+    value.freeGrades?.limit,
+    dailyLimit,
+    0,
+    100,
+  );
+  const freeUsed = boundedNumber(
+    value.freeGrades?.used,
+    completedToday,
+    0,
+    100_000,
+  );
+  const freeRemaining = boundedNumber(
+    value.freeGrades?.remaining,
+    remainingToday,
+    0,
+    100_000,
+  );
+  const basis = clean(value.basis || 'locked');
+  const choiceRequired = value.choiceRequired === true
+    || value.planSelectionRequired === true
+    || ['plan_selection_required', 'trial_expired', 'payment_required'].includes(basis);
+
   return {
     allowed: value.allowed === true,
-    basis: clean(value.basis || 'locked'),
+    basis,
     termsRequired: value.termsRequired === true,
+    profileCompleted: value.profileCompleted === true,
+    choiceRequired,
+    paymentRequired: value.paymentRequired === true || basis === 'payment_required',
+    planSelectionRequired: value.planSelectionRequired === true
+      || ['plan_selection_required', 'trial_expired'].includes(basis),
     role: clean(value.role || 'student'),
-    accessMode: clean(value.accessMode || (unlimited ? 'unlimited' : 'free')),
-    accountLabel: clean(value.accountLabel || (unlimited ? 'Unlimited' : 'Free')),
+    accessMode: clean(value.accessMode || (unlimited ? 'unlimited' : 'locked')),
+    accountLabel: clean(value.accountLabel || (unlimited ? 'Unlimited' : 'Access required')),
     unlimited,
     dailyLimit,
     completedToday,
@@ -184,11 +230,14 @@ export function normalizeAccessSnapshot(value) {
     remainingToday,
     resetAt: value.resetAt || null,
     checkoutOpen: value.checkoutOpen === true,
-    priceCentavos: Math.max(0, Number(value.priceCentavos) || 0),
+    priceCentavos: boundedNumber(value.priceCentavos, 0, 0, 10_000_000),
     salesCloseAt: value.salesCloseAt || null,
     entitlementEndsAt: value.entitlementEndsAt || null,
     paymentState: clean(value.paymentState) || null,
-    commercialLaunchEnabled: value.commercialLaunchEnabled === true,
+    commercialLaunchEnabled,
+    mandatoryAccessChoiceEnabled: value.mandatoryAccessChoiceEnabled === true,
+    trialAvailable: value.trialAvailable === true,
+    trialEndsAt: value.trialEndsAt || null,
     globalBeta: {
       enabled: value.globalBeta?.enabled === true,
       eligible: value.globalBeta?.eligible === true,
@@ -199,16 +248,18 @@ export function normalizeAccessSnapshot(value) {
       startedAt: value.trial?.startedAt || null,
       expiresAt: value.trial?.expiresAt || null,
       active: value.trial?.active === true,
+      program: clean(value.trial?.program) || null,
     },
     freeGrades: {
-      limit: Math.max(1, Number(value.freeGrades?.limit) || dailyLimit),
-      used: Math.max(0, Number(value.freeGrades?.used) || completedToday),
-      remaining: Math.max(0, Number(value.freeGrades?.remaining) || remainingToday),
+      limit: freeLimit,
+      used: freeUsed,
+      remaining: freeRemaining,
     },
     freeBeta: {
       enabled: value.freeBeta?.enabled === true,
       expiresAt: value.freeBeta?.expiresAt || null,
       active: value.freeBeta?.active === true,
+      program: clean(value.freeBeta?.program) || null,
     },
     subscription: value.subscription && typeof value.subscription === 'object'
       ? {
@@ -227,10 +278,32 @@ export function accessDeniedError(access) {
   if (access?.termsRequired) {
     return new AccessValidationError(
       'LEGAL_ACCEPTANCE_REQUIRED',
-      'Review and accept the current Terms and Privacy Notice before opening an examination.',
+      'Accept the current Terms of Use and Privacy Policy before choosing access.',
       403,
     );
   }
+
+  if (access?.basis === 'profile_required' || access?.profileCompleted === false) {
+    return new AccessValidationError(
+      'PROFILE_COMPLETION_REQUIRED',
+      'Complete your profile before choosing Free Trial or Early Access.',
+      403,
+    );
+  }
+
+  if (
+    access?.choiceRequired
+    || ['plan_selection_required', 'trial_expired', 'payment_required'].includes(access?.basis)
+  ) {
+    return new AccessValidationError(
+      'ACCESS_CHOICE_REQUIRED',
+      access?.basis === 'trial_expired'
+        ? 'Your Free Trial has ended. Choose ₱149 Early Access to continue.'
+        : 'Choose Free Trial or ₱149 Early Access before continuing.',
+      403,
+    );
+  }
+
   if (access?.accessMode === 'free' || access?.basis === 'daily_limit_reached') {
     return new AccessValidationError(
       'DAILY_LIMIT_REACHED',
@@ -238,6 +311,7 @@ export function accessDeniedError(access) {
       403,
     );
   }
+
   return new AccessValidationError(
     'ACCESS_REQUIRED',
     'Choose an available access option to continue.',

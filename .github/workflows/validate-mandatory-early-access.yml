@@ -6,12 +6,16 @@ on:
       - main
     paths:
       - 'assets/phase4-experience.js'
+      - 'worker/access-core.mjs'
       - 'worker/commercial-entry.mjs'
       - 'worker/commercial-access-gate.test.mjs'
+      - 'worker/access-choice-flow.test.mjs'
       - 'worker/wrangler.toml'
       - 'scripts/test-lifetime-grade-ui.mjs'
+      - 'scripts/test-two-option-access-choice.mjs'
       - 'supabase/migrations/20260818123000_require_early_access.sql'
       - 'supabase/migrations/20260818123100_private_payment_verifiers.sql'
+      - 'supabase/migrations/20260818133000_restore_two_option_access_choice.sql'
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/deploy.yml'
       - '.github/workflows/validate-mandatory-early-access.yml'
@@ -36,8 +40,10 @@ jobs:
       - name: Verify mandatory access and payment-notification contracts
         run: |
           node --check assets/phase4-experience.js
+          node --check worker/access-core.mjs
           node --check worker/commercial-entry.mjs
           node --test worker/*.test.mjs
+          node scripts/test-two-option-access-choice.mjs
           node scripts/test-private-beta-admission.mjs
           node scripts/test-private-beta-frontend.mjs
           node scripts/test-private-beta-landing.mjs

@@ -18,8 +18,8 @@ test('ordinary commercial accounts preserve the required two-option state', () =
     accessMode: 'locked',
     accountLabel: 'Choose access',
     unlimited: false,
-    dailyLimit: 0,
-    completedToday: 5,
+    dailyLimit: 5,
+    completedToday: 0,
     reservedToday: 0,
     remainingToday: 0,
     checkoutOpen: true,
@@ -40,7 +40,7 @@ test('ordinary commercial accounts preserve the required two-option state', () =
   assert.equal(access.allowed, false);
   assert.equal(access.choiceRequired, true);
   assert.equal(access.trialAvailable, true);
-  assert.equal(access.dailyLimit, 0);
+  assert.equal(access.dailyLimit, 5);
   assert.equal(access.freeGrades.limit, 0);
   assert.equal(access.remainingToday, 0);
 
@@ -54,19 +54,21 @@ test('ordinary commercial accounts preserve the required two-option state', () =
   );
 });
 
-test('an active launch trial is unlimited and no longer requires a choice', () => {
+test('an explicitly selected Free Trial receives five daily questions', () => {
   const access = normalizeAccessSnapshot({
     allowed: true,
-    basis: 'launch_trial',
+    basis: 'daily_free',
     termsRequired: false,
     profileCompleted: true,
     choiceRequired: false,
     role: 'student',
-    accessMode: 'trial',
+    accessMode: 'free',
     accountLabel: 'Free Trial',
-    unlimited: true,
-    dailyLimit: 0,
-    remainingToday: 0,
+    unlimited: false,
+    dailyLimit: 5,
+    completedToday: 0,
+    reservedToday: 0,
+    remainingToday: 5,
     commercialLaunchEnabled: true,
     mandatoryAccessChoiceEnabled: true,
     trialAvailable: false,
@@ -77,17 +79,19 @@ test('an active launch trial is unlimited and no longer requires a choice', () =
       startedAt: '2026-08-18T00:00:00Z',
       expiresAt: '2026-09-01T15:59:59Z',
     },
-    freeGrades: { limit: 0, used: 0, remaining: 0 },
+    freeGrades: { limit: 5, used: 0, remaining: 5 },
   });
 
   assert.equal(access.allowed, true);
-  assert.equal(access.unlimited, true);
+  assert.equal(access.unlimited, false);
   assert.equal(access.choiceRequired, false);
+  assert.equal(access.dailyLimit, 5);
+  assert.equal(access.remainingToday, 5);
   assert.equal(access.trial.active, true);
   assert.equal(access.trial.program, 'commercial_launch_2026');
 });
 
-test('the authenticated access-choice endpoint starts the Free Trial', async () => {
+test('the authenticated access-choice endpoint starts the five-daily Free Trial', async () => {
   const originalFetch = globalThis.fetch;
   const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const origin = 'https://duediligence.ph';
@@ -113,16 +117,18 @@ test('the authenticated access-choice endpoint starts the Free Trial', async () 
       });
       return Response.json({
         allowed: true,
-        basis: 'launch_trial',
+        basis: 'daily_free',
         termsRequired: false,
         profileCompleted: true,
         choiceRequired: false,
         role: 'student',
-        accessMode: 'trial',
+        accessMode: 'free',
         accountLabel: 'Free Trial',
-        unlimited: true,
-        dailyLimit: 0,
-        remainingToday: 0,
+        unlimited: false,
+        dailyLimit: 5,
+        completedToday: 0,
+        reservedToday: 0,
+        remainingToday: 5,
         commercialLaunchEnabled: true,
         mandatoryAccessChoiceEnabled: true,
         trialAvailable: false,
@@ -132,6 +138,7 @@ test('the authenticated access-choice endpoint starts the Free Trial', async () 
           program: 'commercial_launch_2026',
           expiresAt: '2026-09-01T15:59:59Z',
         },
+        freeGrades: { limit: 5, used: 0, remaining: 5 },
       });
     }
 
@@ -161,7 +168,10 @@ test('the authenticated access-choice endpoint starts the Free Trial', async () 
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
     assert.equal(payload.choice, 'free_trial');
-    assert.equal(payload.access.basis, 'launch_trial');
+    assert.equal(payload.access.basis, 'daily_free');
+    assert.equal(payload.access.dailyLimit, 5);
+    assert.equal(payload.access.remainingToday, 5);
+    assert.equal(payload.access.unlimited, false);
     assert.equal(calls.length, 2);
   } finally {
     globalThis.fetch = originalFetch;

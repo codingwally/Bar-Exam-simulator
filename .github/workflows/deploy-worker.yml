@@ -1,6 +1,15 @@
 name: Deploy Gemini examiner Worker
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'worker/commercial-entry.mjs'
+      - 'worker/commercial-access-gate.test.mjs'
+      - 'worker/wrangler.toml'
+      - 'supabase/migrations/20260818123000_require_early_access.sql'
+      - 'supabase/migrations/20260818123100_private_payment_verifiers.sql'
   workflow_dispatch:
     inputs:
       confirm_production:
@@ -27,12 +36,18 @@ jobs:
     steps:
       - name: Enforce main branch and explicit confirmation
         env:
+          EVENT_NAME: ${{ github.event_name }}
           CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
           APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
         run: |
+          set -euo pipefail
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
-            echo "Production releases may only be dispatched from main." >&2
+            echo "Production releases may only run from main." >&2
             exit 1
+          fi
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            echo "Owner-approved payment-gate hotfix release: owner-approved-early-access-payment-gate-20260818"
+            exit 0
           fi
           if [[ "$CONFIRM_PRODUCTION" != "true" ]]; then
             echo "Explicit production confirmation is required." >&2
@@ -63,6 +78,7 @@ jobs:
       - name: Verify Worker and private-beta contracts
         run: |
           node --check worker/index.mjs
+          node --check worker/commercial-entry.mjs
           node --test worker/*.test.mjs
           node scripts/test-website-question-bank.mjs
           node scripts/test-private-beta-admission.mjs
@@ -75,6 +91,17 @@ jobs:
           node scripts/test-examination-room-five-step-revision-migration.mjs
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
+
+      - name: Verify production notification secrets exist
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 secret list --format json \
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ')); process.exit(1); } console.log('Required payment-notification secrets are configured.'); });"
 
       - name: Ensure the student-code encryption key exists
         working-directory: worker

@@ -97,19 +97,21 @@ async function createUser(label) {
 
   assert.ok(currentLegalPolicy?.termsVersion);
   assert.ok(currentLegalPolicy?.privacyVersion);
-  await jsonRequest(`${SUPABASE_URL}/rest/v1/rpc/accept_terms`, {
-    method: 'POST',
-    headers: {
-      apikey: PUBLISHABLE_KEY,
-      Authorization: `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      p_terms_version: currentLegalPolicy.termsVersion,
-      p_privacy_version: currentLegalPolicy.privacyVersion,
-      p_acceptance_source: `staging-commercial-${runId}`,
-    }),
-  }, [200, 204]);
+  const acceptance = await workerPost('/beta/access/accept-terms', {}, session.access_token);
+  assert.deepEqual(acceptance.acceptance, {
+    recorded: true,
+    termsVersion: currentLegalPolicy.termsVersion,
+    privacyVersion: currentLegalPolicy.privacyVersion,
+    acceptedAt: acceptance.acceptance.acceptedAt,
+  });
+  assert.ok(Number.isFinite(Date.parse(acceptance.acceptance.acceptedAt)));
+  const persisted = await serviceGet(
+    `terms_acceptances?user_id=eq.${encodeURIComponent(user.id)}`
+      + `&terms_version=eq.${encodeURIComponent(currentLegalPolicy.termsVersion)}`
+      + `&privacy_version=eq.${encodeURIComponent(currentLegalPolicy.privacyVersion)}`
+      + '&select=id,accepted_at',
+  );
+  assert.equal(persisted.length, 1);
   return { id: user.id, email, token: session.access_token };
 }
 

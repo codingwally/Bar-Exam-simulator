@@ -4269,6 +4269,36 @@ async function handleGlobalBetaPublicPolicy(env, origin, allowedOrigin) {
   }, 200, origin, allowedOrigin);
 }
 
+async function handleCurrentLegalAcceptance(request, env, origin, allowedOrigin) {
+  const user = await verifiedAuthenticatedUser(request, env);
+  if (!user) {
+    throw new GuestAccessError('SIGN_IN_REQUIRED', 'Sign-in is required.', 401);
+  }
+  const result = await phase4Rpc(env, 'phase4_accept_current_terms_for_user', {
+    p_user_id: user.id,
+    p_acceptance_source: 'web_authenticated_acceptance',
+  });
+  const termsVersion = String(result?.termsVersion || '').trim();
+  const privacyVersion = String(result?.privacyVersion || '').trim();
+  const acceptedAt = String(result?.acceptedAt || '').trim();
+  if (result?.recorded !== true || !termsVersion || !privacyVersion || !acceptedAt) {
+    throw new ExaminerError(
+      'LEGAL_ACCEPTANCE_UNAVAILABLE',
+      'Your acceptance could not be verified. Please try again.',
+      503,
+    );
+  }
+  return jsonResponse({
+    ok: true,
+    acceptance: {
+      recorded: true,
+      termsVersion,
+      privacyVersion,
+      acceptedAt,
+    },
+  }, 200, origin, allowedOrigin);
+}
+
 async function handleAdminGlobalBetaStatus(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
@@ -5622,6 +5652,9 @@ export default {
       }
       if (pathname === '/beta/access/policy') {
         return await handleGlobalBetaPublicPolicy(env, origin, allowedOrigin);
+      }
+      if (pathname === '/beta/access/accept-terms') {
+        return await handleCurrentLegalAcceptance(request, env, origin, allowedOrigin);
       }
       if (pathname === '/auth/sign-in-notification') {
         return await handleSignInNotification(request, env, origin, allowedOrigin);

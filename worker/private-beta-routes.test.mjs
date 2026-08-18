@@ -271,6 +271,62 @@ test('global Beta All Access bypasses expiring admission tokens for permanent us
   assert.equal(privateSnapshots.every((entry) => entry.p_access_jti_hash === null), true);
 });
 
+test('current legal acceptance is user-bound, server-versioned, and verified before success', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const acceptanceCalls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const target = String(input);
+    if (target.endsWith('/auth/v1/user')) {
+      return Response.json({ id: userId, email: 'acceptance@example.invalid' });
+    }
+    if (target.endsWith('/rest/v1/rpc/phase4_accept_current_terms_for_user')) {
+      acceptanceCalls.push(JSON.parse(String(init.body || '{}')));
+      return Response.json({
+        recorded: true,
+        termsVersion: 'terms-commercial-v1-2026-08-18',
+        privacyVersion: 'privacy-commercial-v1-2026-08-18',
+        acceptedAt: '2026-08-18T07:00:00.000Z',
+      });
+    }
+    throw new Error(`Unexpected test fetch: ${target}`);
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const env = {
+    ALLOWED_ORIGIN: origin,
+    PRIVATE_BETA_GATE_ENABLED: 'true',
+    GUEST_USAGE_HMAC_KEY: 'test-private-beta-rate-key-with-at-least-32-bytes',
+    SUPABASE_URL: supabaseUrl,
+    SUPABASE_SERVICE_ROLE_KEY: serviceRolePlaceholder,
+  };
+
+  const denied = await responseJson(await worker.fetch(request(
+    '/beta/access/accept-terms',
+    {},
+  ), env, {}));
+  assert.equal(denied.status, 401);
+  assert.equal(acceptanceCalls.length, 0);
+
+  const accepted = await responseJson(await worker.fetch(request(
+    '/beta/access/accept-terms',
+    {},
+    { Authorization: 'Bearer valid-supabase-session' },
+  ), env, {}));
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(accepted.body.acceptance, {
+    recorded: true,
+    termsVersion: 'terms-commercial-v1-2026-08-18',
+    privacyVersion: 'privacy-commercial-v1-2026-08-18',
+    acceptedAt: '2026-08-18T07:00:00.000Z',
+  });
+  assert.deepEqual(acceptanceCalls, [{
+    p_user_id: userId,
+    p_acceptance_source: 'web_authenticated_acceptance',
+  }]);
+  assert.equal(JSON.stringify(acceptanceCalls).includes('terms-commercial'), false);
+});
+
 test('invalid access code returns a generic response without echoing input', async (t) => {
   const originalFetch = globalThis.fetch;
   const rateSubjects = [];

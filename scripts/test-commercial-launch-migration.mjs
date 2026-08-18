@@ -10,6 +10,10 @@ const legalPolicyMigration = readFileSync(new URL(
   '../supabase/migrations/20260818062500_current_legal_policy_contract.sql',
   import.meta.url,
 ), 'utf8');
+const legalAcceptanceMigration = readFileSync(new URL(
+  '../supabase/migrations/20260818070000_authenticated_legal_acceptance_bridge.sql',
+  import.meta.url,
+), 'utf8');
 
 function functionBlock(name, occurrence = 0) {
   const marker = `create or replace function public.${name}`;
@@ -59,6 +63,25 @@ test('current legal policy is server-authoritative, non-sensitive, and least pri
   assert.match(
     legalPolicyMigration,
     /grant execute on function public\.phase4_global_beta_public_policy\(\)[\s\S]*to service_role/,
+  );
+});
+
+test('current legal acceptance is backend-only, user-bound, idempotent, and server-versioned', () => {
+  assert.equal((legalAcceptanceMigration.match(/^begin;$/gmi) || []).length, 1);
+  assert.equal((legalAcceptanceMigration.match(/^commit;$/gmi) || []).length, 1);
+  assert.doesNotMatch(legalAcceptanceMigration, /^\s*(?:drop|truncate|delete|update)\b/gmi);
+  assert.match(legalAcceptanceMigration, /auth\.role\(\) <> 'service_role'/);
+  assert.match(legalAcceptanceMigration, /where u\.id = p_user_id/);
+  assert.match(legalAcceptanceMigration, /s\.current_terms_version/);
+  assert.match(legalAcceptanceMigration, /s\.current_privacy_version/);
+  assert.match(legalAcceptanceMigration, /on conflict \(user_id, terms_version, privacy_version\) do nothing/);
+  assert.match(
+    legalAcceptanceMigration,
+    /revoke all on function public\.phase4_accept_current_terms_for_user\(uuid, text\)[\s\S]*from public, anon, authenticated/,
+  );
+  assert.match(
+    legalAcceptanceMigration,
+    /grant execute on function public\.phase4_accept_current_terms_for_user\(uuid, text\)[\s\S]*to service_role/,
   );
 });
 

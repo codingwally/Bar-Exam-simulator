@@ -1,0 +1,104 @@
+name: Temporary AI model branding audit
+
+on:
+  push:
+    branches:
+      - agent/remove-ai-model-branding-20260818
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Scan deployable and supporting text files
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import csv
+          import re
+          from pathlib import Path
+
+          root = Path('.')
+          report = Path('ai-model-branding-audit.tsv')
+
+          text_suffixes = {
+              '.html', '.htm', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx',
+              '.json', '.md', '.txt', '.xml', '.yml', '.yaml', '.toml', '.ini',
+              '.css', '.scss', '.sql', '.py', '.sh', '.ps1', '.properties',
+              '.webmanifest', '.svg', '.csv', '.env', '.example'
+          }
+          always_text_names = {
+              'Dockerfile', 'Procfile', 'CNAME', 'robots.txt', '.gitignore'
+          }
+          excluded_dirs = {
+              '.git', 'node_modules', 'vendor', 'dist', 'build', 'coverage',
+              '.next', '.cache', '__pycache__'
+          }
+
+          patterns = [
+              ('gemini', re.compile(r'(?i)\bgemini(?:[-_.\s][a-z0-9][a-z0-9_.-]*)*\b')),
+              ('gemini_env_or_identifier', re.compile(r'(?i)\b[A-Z0-9_]*GEMINI[A-Z0-9_]*\b')),
+              ('google_generative_api', re.compile(r'(?i)generativelanguage\.googleapis\.com|@google/generative-ai|google\.generativeai')),
+              ('flash_model_wording', re.compile(r'(?i)\b(?:gemini[-_.\s]*)?flash(?:[-_.\s]*(?:lite|pro|preview|thinking|\d+(?:\.\d+)*))?\b')),
+              ('openai_or_gpt', re.compile(r'(?i)\b(?:openai|gpt(?:[-_.\s]*\d[a-z0-9_.-]*)?)\b')),
+              ('anthropic_or_claude', re.compile(r'(?i)\b(?:anthropic|claude(?:[-_.\s]*\d[a-z0-9_.-]*)?)\b')),
+              ('other_named_models', re.compile(r'(?i)\b(?:llama(?:[-_.\s]*\d[a-z0-9_.-]*)?|mistral|deepseek|grok)\b')),
+          ]
+
+          deployable_roots = {
+              'index.html', 'offline.html', 'service-worker.js', 'manifest.webmanifest',
+              'admin', 'assets', 'content', 'worker', 'supabase'
+          }
+
+          rows: list[tuple[str, str, int, str, str]] = []
+          files_scanned = 0
+
+          for path in sorted(root.rglob('*')):
+              if not path.is_file():
+                  continue
+              if any(part in excluded_dirs for part in path.parts):
+                  continue
+              if path == report:
+                  continue
+              if path.suffix.lower() not in text_suffixes and path.name not in always_text_names:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              files_scanned += 1
+              top = path.parts[0] if path.parts else path.name
+              scope = 'DEPLOYABLE' if top in deployable_roots else 'SUPPORTING'
+              for line_no, line in enumerate(text.splitlines(), start=1):
+                  for label, pattern in patterns:
+                      if pattern.search(line):
+                          rows.append((scope, path.as_posix(), line_no, label, line.strip()[:1000]))
+
+          with report.open('w', encoding='utf-8', newline='') as handle:
+              writer = csv.writer(handle, delimiter='\t')
+              writer.writerow(['scope', 'path', 'line', 'match_type', 'text'])
+              writer.writerows(rows)
+
+          print(f'Files scanned: {files_scanned}')
+          print(f'Matching lines: {len(rows)}')
+          print(f'Deployable matching lines: {sum(1 for row in rows if row[0] == "DEPLOYABLE")}')
+          print(f'Supporting matching lines: {sum(1 for row in rows if row[0] == "SUPPORTING")}')
+          for row in rows[:300]:
+              print('\t'.join(map(str, row)))
+          if len(rows) > 300:
+              print(f'... {len(rows) - 300} additional matching lines are in the artifact.')
+          PY
+
+      - name: Upload complete audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-model-branding-audit
+          path: ai-model-branding-audit.tsv
+          if-no-files-found: error

@@ -212,57 +212,63 @@ export async function sendPaymentVerificationEmail(env, context) {
   const proofBytes = new Uint8Array(await context.proof.arrayBuffer());
   const proofHash = await sha256Hex(proofBytes);
   const subjectName = context.user?.displayName || context.user?.email || 'subscriber';
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'Idempotency-Key': `payment-verification-${context.payment.id}`,
-    },
-    body: JSON.stringify({
-      from,
-      to: [recipients[0]],
-      bcc: recipients.slice(1),
-      subject: `Due Diligence ₱149 payment proof — ${cleanSingleLine(subjectName, 120)}`,
-      text: paymentEmailText({
-        payment: context.payment,
-        fields: context.fields,
-        user: context.user,
-        proof: context.proof,
-        proofHash,
-      }),
-      ...(context.user?.email ? { reply_to: context.user.email } : {}),
-      attachments: [{
-        filename: safeAttachmentName(context.proof),
-        content: bytesToBase64(proofBytes),
-      }],
+  const message = {
+    from,
+    to: [recipients[0]],
+    bcc: recipients.slice(1),
+    subject: `Due Diligence ₱149 payment proof — ${cleanSingleLine(subjectName, 120)}`,
+    text: paymentEmailText({
+      payment: context.payment,
+      fields: context.fields,
+      user: context.user,
+      proof: context.proof,
+      proofHash,
     }),
-  });
+    ...(context.user?.email ? { reply_to: context.user.email } : {}),
+    attachments: [{
+      filename: safeAttachmentName(context.proof),
+      content: bytesToBase64(proofBytes),
+    }],
+  };
 
-  const result = await response.json().catch(() => null);
-  if (!response.ok || !result?.id) {
-    console.error('Payment-verification email dispatch failed', {
-      status: response.status,
-      paymentRequestId: context.payment.id,
+  let lastStatus = 0;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `payment-verification-${context.payment.id}`,
+      },
+      body: JSON.stringify(message),
     });
-    return {
-      status: 'failed',
-      providerId: null,
-      recipientCount: recipients.length,
-    };
+    lastStatus = response.status;
+    const result = await response.json().catch(() => null);
+    if (response.ok && result?.id) {
+      return {
+        status: 'sent',
+        providerId: String(result.id).slice(0, 180),
+        recipientCount: recipients.length,
+      };
+    }
+    const retryable = response.status === 429 || response.status >= 500;
+    if (!retryable) break;
   }
+
+  console.error('Payment-verification email dispatch failed', {
+    status: lastStatus,
+    paymentRequestId: context.payment.id,
+  });
   return {
-    status: 'sent',
-    providerId: String(result.id).slice(0, 180),
+    status: 'failed',
+    providerId: null,
     recipientCount: recipients.length,
   };
 }
 
 async function notifyPaymentSubmission(request, response, env) {
   const payload = await response.clone().json().catch(() => null);
-  if (!payload?.ok || !payload?.payment?.id || payload.payment.replayed === true) {
-    return response;
-  }
+  if (!payload?.ok || !payload?.payment?.id) return response;
 
   let notification = {
     status: 'failed',
@@ -297,12 +303,29 @@ async function notifyPaymentSubmission(request, response, env) {
 
   const headers = new Headers(response.headers);
   headers.delete('content-length');
+  const verifierNotification = {
+    status: notification.status,
+    recipientCount: notification.recipientCount,
+  };
+  if (['failed', 'not_configured'].includes(notification.status)) {
+    return new Response(JSON.stringify({
+      ok: false,
+      payment: payload.payment,
+      paymentSaved: true,
+      verifierNotification,
+      error: {
+        code: 'PAYMENT_NOTIFICATION_FAILED',
+        message: 'Your payment proof was saved, but delivery to the verification team could not be confirmed. Submit the same proof again to retry the notification; no second provisional grant will be created.',
+      },
+    }), {
+      status: 503,
+      headers,
+    });
+  }
+
   return new Response(JSON.stringify({
     ...payload,
-    verifierNotification: {
-      status: notification.status,
-      recipientCount: notification.recipientCount,
-    },
+    verifierNotification,
   }), {
     status: response.status,
     headers,

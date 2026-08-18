@@ -19,6 +19,7 @@ const createdUsers = [];
 const createdInviteHashes = [];
 const createdNotificationIds = [];
 let originalSettings = null;
+let currentLegalPolicy = null;
 
 const serviceHeaders = {
   apikey: SERVICE_ROLE_KEY,
@@ -94,12 +95,21 @@ async function createUser(label) {
   })).body;
   assert.ok(session.access_token);
 
-  await serviceWrite('terms_acceptances', 'POST', {
-    user_id: user.id,
-    terms_version: 'terms-commercial-v1-2026-08-18',
-    privacy_version: 'privacy-commercial-v1-2026-08-18',
-    acceptance_source: `staging-commercial-${runId}`,
-  });
+  assert.ok(currentLegalPolicy?.termsVersion);
+  assert.ok(currentLegalPolicy?.privacyVersion);
+  await jsonRequest(`${SUPABASE_URL}/rest/v1/rpc/accept_terms`, {
+    method: 'POST',
+    headers: {
+      apikey: PUBLISHABLE_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      p_terms_version: currentLegalPolicy.termsVersion,
+      p_privacy_version: currentLegalPolicy.privacyVersion,
+      p_acceptance_source: `staging-commercial-${runId}`,
+    }),
+  }, [200, 204]);
   return { id: user.id, email, token: session.access_token };
 }
 
@@ -163,6 +173,15 @@ let outcome;
 try {
   console.log('STAGING_GATE: enabling isolated commercial policy verification');
   await activateCommercialStaging();
+
+  const legalPolicyResponse = await workerPost('/beta/access/policy', {});
+  assert.equal(legalPolicyResponse.ok, true);
+  assert.equal(legalPolicyResponse.policy.commercialLaunchEnabled, true);
+  currentLegalPolicy = legalPolicyResponse.policy.legal;
+  assert.deepEqual(currentLegalPolicy, {
+    termsVersion: 'terms-commercial-v1-2026-08-18',
+    privacyVersion: 'privacy-commercial-v1-2026-08-18',
+  });
 
   const freeUser = await createUser('free');
   const retryUser = await createUser('retry');

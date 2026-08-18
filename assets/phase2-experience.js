@@ -37,9 +37,9 @@
   });
 
   const originalContinueAsGuest = global.continueAsGuest;
-  const commercialLegal = Object.freeze({
-    termsVersion: 'terms-commercial-v1-2026-08-18',
-    privacyVersion: 'privacy-commercial-v1-2026-08-18',
+  let commercialLegal = Object.freeze({
+    termsVersion: config.legal.termsVersion,
+    privacyVersion: config.legal.privacyVersion,
   });
   const legalReviewNotice = 'Commercial launch document — prepared for independent legal review.';
   const lawSchools = Object.freeze([
@@ -188,6 +188,26 @@
         <path d="M7.5 24c1.8 3.2 7.2 3.2 9 0M31.5 24c1.8 3.2 7.2 3.2 9 0M18 37h12"
           stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
       </svg>`;
+  }
+
+  function validLegalVersion(value, prefix) {
+    const normalized = String(value || '').trim();
+    return normalized.startsWith(prefix)
+      && normalized.length >= prefix.length + 3
+      && normalized.length <= 120
+      ? normalized
+      : '';
+  }
+
+  async function refreshLegalPolicy() {
+    const payload = await publicWorkerRequest('/beta/access/policy');
+    const termsVersion = validLegalVersion(payload?.policy?.legal?.termsVersion, 'terms-');
+    const privacyVersion = validLegalVersion(payload?.policy?.legal?.privacyVersion, 'privacy-');
+    if (!termsVersion || !privacyVersion) {
+      throw new Error('The current Terms and Privacy policy could not be verified.');
+    }
+    commercialLegal = Object.freeze({ termsVersion, privacyVersion });
+    return commercialLegal;
   }
 
   function schoolOptionsMarkup(selected = '') {
@@ -935,6 +955,7 @@
     if (button) button.disabled = true;
     setStatus('dd2-auth-status', 'Recording your acceptance securely…');
     try {
+      await refreshLegalPolicy();
       const { error } = await state.client.rpc('accept_terms', {
         p_terms_version: commercialLegal.termsVersion,
         p_privacy_version: commercialLegal.privacyVersion,
@@ -973,6 +994,19 @@
   }
 
   async function loadUserStateFor(userId) {
+    try {
+      await refreshLegalPolicy();
+    } catch {
+      showEntry({
+        mode: 'consent',
+        allowDismiss: true,
+        routeBound: true,
+        title: 'Terms and Privacy temporarily unavailable',
+        copy: 'The current documents could not be verified. Please retry in a moment.',
+      });
+      setStatus('dd2-auth-status', 'Current policy verification failed. No acceptance was recorded.', 'error');
+      return;
+    }
     const [{ data: profile }, { data: terms }] = await Promise.all([
       state.client
         .from('profiles')
@@ -1083,6 +1117,7 @@
     if (button) button.disabled = true;
     setStatus('dd2-onboarding-status', 'Saving your chamber…');
     try {
+      await refreshLegalPolicy();
       const { error: termsError } = await state.client.rpc('accept_terms', {
         p_terms_version: commercialLegal.termsVersion,
         p_privacy_version: commercialLegal.privacyVersion,
@@ -1812,6 +1847,7 @@
     }
     setStatus('dd2-account-status', 'Saving…');
     try {
+      await refreshLegalPolicy();
       const { error: profileError } = await state.client.rpc('complete_commercial_profile_onboarding', {
         p_display_name: values.displayName,
         p_law_school_id: values.schoolId,

@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
-const migration = readFileSync(new URL(
-  '../supabase/migrations/20260818133000_require_explicit_retainer_choice.sql',
-  import.meta.url,
-), 'utf8');
+const migration = [
+  '20260818133000_retainer_choice_schema.sql',
+  '20260818133100_retainer_choice_resolver.sql',
+  '20260818133200_retainer_choice_command.sql',
+  '20260818133300_retainer_choice_activate.sql',
+].map((name) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'))
+  .join('\n');
 const gate = readFileSync(new URL('../assets/access-choice-gate.js', import.meta.url), 'utf8');
 const config = readFileSync(new URL('../assets/phase2-config.js', import.meta.url), 'utf8');
 const builder = readFileSync(new URL('../scripts/build-pages-artifact.mjs', import.meta.url), 'utf8');

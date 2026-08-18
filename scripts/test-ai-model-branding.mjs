@@ -82,6 +82,15 @@ assert.match(config, /workerUrl:\s*'https:\/\/api\.duediligence\.ph'/);
 assert.doesNotMatch(`${index}\n${config}`, /workers\.dev|duediligence-gemini-examiner/i);
 assert.match(worker, /modelUsed:\s*'AI model'/);
 assert.doesNotMatch(worker, /modelUsed:\s*[A-Za-z_$][\w$]*\.model/);
+assert.match(worker, /teachingModel\s*=\s*'AI model'/);
+assert.doesNotMatch(worker, /teachingModel\s*=\s*generated\.model/);
+assert.match(worker, /explanationSource\s*=\s*'ai_model_curated'/);
+assert.doesNotMatch(worker, /explanationSource\s*=\s*'gemini_curated'/);
+assert.equal(
+  (worker.match(/model:\s*gemini\.model,/g) || []).length,
+  2,
+  'Internal model telemetry must remain intact while public response fields stay generic.',
+);
 assert.match(wrangler, /workers_dev\s*=\s*false/);
 assert.match(wrangler, /pattern\s*=\s*"api\.duediligence\.ph"[\s\S]*custom_domain\s*=\s*true/);
 console.log('PASS 4/5: verified the neutral endpoint and generic public API model metadata.');

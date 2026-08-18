@@ -1,5 +1,5 @@
 name = "duediligence-examinations-staging"
-main = "index.mjs"
+main = "commercial-hotfix-wrapper.mjs"
 compatibility_date = "2026-07-26"
 preview_urls = true
 
@@ -18,6 +18,8 @@ REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
 OUTBOUND_EMAIL_MODE = "suppressed"
 EXAMINATION_ROOM_EMAIL_MODE = "suppressed"
 EXAMINATION_EMAIL_FROM = "Due Diligence Examinations <examinations@duediligence.ph>"
+PAYMENT_NOTIFICATION_EMAIL_MODE = "suppressed"
+PAYMENT_NOTIFICATION_EMAIL_FROM = "Due Diligence Payments <support@duediligence.ph>"
 ADMIN_DIRECTORY_EMAIL_MODE = "suppressed"
 ADMIN_DIRECTORY_EMAIL_FROM = "Due Diligence Administration <support@duediligence.ph>"
 SUPPORT_NOTIFICATION_EMAIL_MODE = "suppressed"

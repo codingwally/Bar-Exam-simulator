@@ -162,7 +162,11 @@ export function normalizeAccessSnapshot(value) {
       503,
     );
   }
-  const dailyLimit = Math.max(1, Math.min(100, Number(value.dailyLimit) || 5));
+  const rawDailyLimit = Number(value.dailyLimit);
+  const dailyLimit = Math.max(
+    0,
+    Math.min(100, Number.isFinite(rawDailyLimit) ? rawDailyLimit : 5),
+  );
   const completedToday = Math.max(0, Number(value.completedToday) || 0);
   const reservedToday = Math.max(0, Number(value.reservedToday) || 0);
   const remainingToday = Math.max(
@@ -170,13 +174,20 @@ export function normalizeAccessSnapshot(value) {
     Math.min(dailyLimit, Number(value.remainingToday ?? value.freeGrades?.remaining) || 0),
   );
   const unlimited = value.unlimited === true;
+  const rawFreeLimit = Number(value.freeGrades?.limit);
+  const freeLimit = Math.max(
+    0,
+    Math.min(100, Number.isFinite(rawFreeLimit) ? rawFreeLimit : dailyLimit),
+  );
   return {
     allowed: value.allowed === true,
     basis: clean(value.basis || 'locked'),
     termsRequired: value.termsRequired === true,
+    profileCompleted: value.profileCompleted === true,
+    choiceRequired: value.choiceRequired === true,
     role: clean(value.role || 'student'),
-    accessMode: clean(value.accessMode || (unlimited ? 'unlimited' : 'free')),
-    accountLabel: clean(value.accountLabel || (unlimited ? 'Unlimited' : 'Free')),
+    accessMode: clean(value.accessMode || (unlimited ? 'unlimited' : 'locked')),
+    accountLabel: clean(value.accountLabel || (unlimited ? 'Unlimited' : 'Access required')),
     unlimited,
     dailyLimit,
     completedToday,
@@ -189,6 +200,9 @@ export function normalizeAccessSnapshot(value) {
     entitlementEndsAt: value.entitlementEndsAt || null,
     paymentState: clean(value.paymentState) || null,
     commercialLaunchEnabled: value.commercialLaunchEnabled === true,
+    mandatoryAccessChoiceEnabled: value.mandatoryAccessChoiceEnabled === true,
+    trialAvailable: value.trialAvailable === true,
+    trialEndsAt: value.trialEndsAt || null,
     globalBeta: {
       enabled: value.globalBeta?.enabled === true,
       eligible: value.globalBeta?.eligible === true,
@@ -199,16 +213,21 @@ export function normalizeAccessSnapshot(value) {
       startedAt: value.trial?.startedAt || null,
       expiresAt: value.trial?.expiresAt || null,
       active: value.trial?.active === true,
+      program: clean(value.trial?.program) || null,
     },
     freeGrades: {
-      limit: Math.max(1, Number(value.freeGrades?.limit) || dailyLimit),
+      limit: freeLimit,
       used: Math.max(0, Number(value.freeGrades?.used) || completedToday),
-      remaining: Math.max(0, Number(value.freeGrades?.remaining) || remainingToday),
+      remaining: Math.max(
+        0,
+        Math.min(freeLimit, Number(value.freeGrades?.remaining) || remainingToday),
+      ),
     },
     freeBeta: {
       enabled: value.freeBeta?.enabled === true,
       expiresAt: value.freeBeta?.expiresAt || null,
       active: value.freeBeta?.active === true,
+      program: clean(value.freeBeta?.program) || null,
     },
     subscription: value.subscription && typeof value.subscription === 'object'
       ? {
@@ -231,7 +250,32 @@ export function accessDeniedError(access) {
       403,
     );
   }
-  if (access?.accessMode === 'free' || access?.basis === 'daily_limit_reached') {
+  if (access?.basis === 'profile_required' || access?.profileCompleted === false) {
+    return new AccessValidationError(
+      'PROFILE_REQUIRED',
+      'Complete your required profile before opening an examination.',
+      403,
+    );
+  }
+  if (access?.basis === 'plan_selection_required' || access?.choiceRequired === true) {
+    return new AccessValidationError(
+      'PLAN_SELECTION_REQUIRED',
+      'Choose ₱149 Early Access or the temporary launch trial before continuing.',
+      403,
+    );
+  }
+  if (access?.basis === 'trial_expired') {
+    return new AccessValidationError(
+      'TRIAL_EXPIRED',
+      'Your temporary launch trial has ended. Choose Early Access to continue.',
+      403,
+    );
+  }
+  if (access?.accessMode === 'free'
+      || access?.basis === 'daily_limit_reached'
+      || (Number(access?.freeGrades?.limit) > 0
+        && Number(access?.freeGrades?.remaining) <= 0
+        && access?.choiceRequired !== true)) {
     return new AccessValidationError(
       'DAILY_LIMIT_REACHED',
       `You have used today’s ${Number(access?.dailyLimit) || 5} free submissions. Your allowance resets at Philippine midnight.`,

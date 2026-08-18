@@ -433,9 +433,11 @@
   #atmosphere{position:fixed;inset:0;z-index:-2;overflow:hidden;background:#04101f;}
   #atmosphere:before{
     content:"";position:absolute;inset:-4%;
-    background:url("assets/phase2-law-library.jpg") center/cover no-repeat;
-    opacity:.16;filter:saturate(.72) contrast(1.06);
-    animation:ambient-library-drift 32s ease-in-out infinite alternate;
+    background:
+      radial-gradient(ellipse at 22% 10%,rgba(197,160,89,.16),transparent 34%),
+      radial-gradient(ellipse at 78% 22%,rgba(42,91,138,.17),transparent 38%),
+      linear-gradient(135deg,#071a31 0%,#03101f 56%,#020a14 100%);
+    opacity:.76;
   }
   #atmosphere .marble{
     position:absolute;inset:0;
@@ -447,10 +449,6 @@
   }
   #atmosphere .glass{position:absolute;inset:0;background:rgba(0,33,71,.85);backdrop-filter:blur(8px);}
   @keyframes drift{from{transform:scale(1.05) translateX(-1%);}to{transform:scale(1.12) translateX(1%);}}
-  @keyframes ambient-library-drift{
-    from{transform:scale(1.03) translate3d(-.5%,0,0);}
-    to{transform:scale(1.08) translate3d(.5%,-.4%,0);}
-  }
 
   /* ---- Top bar (SPA) ---- */
   .beta-notice{
@@ -861,9 +859,10 @@
   .welcome-card{
     max-width:1120px;min-height:570px;padding:70px 46px 0;display:flex;flex-direction:column;justify-content:space-between;
     background:
-      linear-gradient(90deg,rgba(3,20,39,.98) 0%,rgba(4,25,48,.92) 44%,rgba(4,24,45,.52) 72%,rgba(4,20,37,.36) 100%),
-      linear-gradient(0deg,rgba(3,18,34,.96) 0%,transparent 54%),
-      url("assets/phase2-law-library.jpg") 68% center/cover no-repeat,
+      radial-gradient(ellipse at 82% 25%,rgba(197,160,89,.16),transparent 31%),
+      radial-gradient(ellipse at 76% 72%,rgba(28,78,124,.2),transparent 34%),
+      linear-gradient(90deg,rgba(3,20,39,.99) 0%,rgba(4,25,48,.96) 54%,rgba(4,24,45,.88) 100%),
+      linear-gradient(0deg,rgba(3,18,34,.98) 0%,transparent 54%),
       #06172b;
     border-color:rgba(197,160,89,.58);border-radius:18px;
   }
@@ -944,7 +943,7 @@
     .exam-clock-copy,.exam-clock.no-digits .exam-clock-copy{text-align:left;}
   }
 </style>
-<link rel="stylesheet" href="assets/phase2.css?release=subject-matter-gil-fixes-20260817-4">
+<link rel="stylesheet" href="assets/phase2.css?release=commercial-school-visual-safety-20260818-1">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
 <script src="assets/exam-session-controller.js"></script>
@@ -4322,7 +4321,7 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase2-config.js?v=email-marketing-retired-20260817-1"></script>
 <script src="assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
-<script src="assets/phase2-experience.js?v=commercial-launch-20260818-4"></script>
+<script src="assets/phase2-experience.js?v=commercial-launch-20260818-5"></script>
 <script src="assets/phase4-experience.js?v=commercial-launch-20260818-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>

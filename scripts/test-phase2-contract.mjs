@@ -84,14 +84,20 @@ for (const requiredHook of [
   assert.ok(index.includes(requiredHook), `index must use ${requiredHook}`);
 }
 
-assert.ok(index.includes('assets/phase2-law-library.jpg') || read('assets/phase2.css').includes('phase2-law-library.jpg'));
+assert.doesNotMatch(`${index}\n${experience}\n${read('assets/phase2.css')}`, /phase2-law-library\.jpg|assets\/private-beta\/.+\.(?:avif|webp|jpe?g)/i);
+assert.ok(experience.includes("['philippine-law-school', 'Philippine Law School']"));
+assert.ok(experience.includes("['pampanga-state-university', 'Pampanga State University']"));
+assert.match(experience, /id="dd2-school" list="dd2-school-suggestions"/);
+assert.match(experience, /Suggestions are optional\. You may type and save any school name\./);
+assert.match(experience, /p_law_school_id: school\.schoolId/);
+assert.match(experience, /p_law_school_other: school\.schoolOther/);
 assert.ok(index.includes('supabase-js@2.49.8'));
 assert.ok(index.includes('data-dd2-view="terms"'));
 assert.ok(index.includes('data-dd2-view="privacy"'));
 assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
-assert.ok(index.includes('assets/phase2-experience.js?v=commercial-launch-20260818-4'));
+assert.ok(index.includes('assets/phase2-experience.js?v=commercial-launch-20260818-5'));
 
 for (const table of [
   'guest_grading_usage',

@@ -281,11 +281,12 @@ assert.match(examCss, /@media \(max-width: 900px\)[\s\S]*?\.dd-subject-editorial
   'The balanced split must stack review below writing on smaller screens.');
 assert.match(examCss, /\.dd-study-disclosures details\s*\{[\s\S]*?border-top:/);
 
-assert.match(html, /assets\/phase2\.css\?release=subject-matter-gil-fixes-20260817-4/);
+assert.match(html, /assets\/phase2\.css\?release=commercial-school-visual-safety-20260818-1/);
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-20260818-commercial-launch-1/);
+assert.match(serviceWorker, /duediligence-shell-20260818-commercial-launch-2/);
+assert.match(serviceWorker, /phase2\.css\?release=commercial-school-visual-safety-20260818-1/);
 assert.match(serviceWorker, /due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(serviceWorker, /private-beta-landing\.css[^'\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(serviceWorker, /study-workspace\.css[^'\n]*subject-matter-gil-fixes-20260817-4/);

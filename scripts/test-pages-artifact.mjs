@@ -38,7 +38,6 @@ for (const required of [
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
   'assets/private-workspace.js',
-  'assets/private-beta/library-student-1440.avif',
   'assets/feature-previews/mock-bar.png',
   'assets/feature-previews/subject-matter.png',
   'assets/feature-previews/verdict.png',
@@ -64,6 +63,8 @@ for (const required of [
 assert.ok(files.includes('.nojekyll'));
 assert.ok(files.every((file) => !/(^|\/)(content|worker|supabase|scripts|docs)(\/|$)/i.test(file)));
 assert.ok(files.every((file) => !/\.(json|sql|mjs|csv)$/i.test(file)));
+assert.ok(files.every((file) => !/^assets\/private-beta\/.+\.(?:avif|webp|jpe?g)$/i.test(file)));
+assert.ok(!files.includes('assets/phase2-law-library.jpg'));
 
 const index = await readFile(path.join(output, 'index.html'), 'utf8');
 const examinations = await readFile(path.join(output, 'assets/examinations.js'), 'utf8');

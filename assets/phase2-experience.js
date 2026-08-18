@@ -44,14 +44,20 @@
   const legalReviewNotice = 'Commercial launch document — prepared for independent legal review.';
   const lawSchools = Object.freeze([
     ['adamson-university', 'Adamson University'],
+    ['aemilianum-college', 'Aemilianum College'],
+    ['aklan-catholic-college', 'Aklan Catholic College'],
+    ['andres-bonifacio-college', 'Andres Bonifacio College'],
     ['angeles-university-foundation', 'Angeles University Foundation'],
+    ['araullo-university', 'Araullo University'],
     ['arellano-university', 'Arellano University'],
     ['ateneo-de-davao-university', 'Ateneo de Davao University'],
     ['ateneo-de-manila-university', 'Ateneo de Manila University'],
     ['ateneo-de-naga-university', 'Ateneo de Naga University'],
     ['ateneo-de-zamboanga-university', 'Ateneo de Zamboanga University'],
     ['batangas-state-university', 'Batangas State University'],
+    ['bicol-college', 'Bicol College'],
     ['bicol-university', 'Bicol University'],
+    ['bit-international-college', 'BIT International College'],
     ['bukidnon-state-university', 'Bukidnon State University'],
     ['bulacan-state-university', 'Bulacan State University'],
     ['cagayan-state-university', 'Cagayan State University'],
@@ -60,46 +66,90 @@
     ['central-philippine-university', 'Central Philippine University'],
     ['centro-escolar-university', 'Centro Escolar University'],
     ['city-university-of-pasay', 'City University of Pasay'],
+    ['colegio-de-la-purisima-concepcion', 'Colegio de la Purisima Concepcion'],
+    ['cor-jesu-college', 'Cor Jesu College'],
     ['cotabato-state-university', 'Cotabato State University'],
     ['de-la-salle-lipa', 'De La Salle Lipa'],
     ['de-la-salle-university', 'De La Salle University'],
     ['de-la-salle-university-dasmarinas', 'De La Salle University – Dasmariñas'],
+    ['dmc-college-foundation', 'DMC College Foundation'],
+    ['don-mariano-marcos-memorial-state-university', 'Don Mariano Marcos Memorial State University'],
+    ['dr-v-orestes-romualdez-educational-foundation', 'Dr. V. Orestes Romualdez Educational Foundation'],
+    ['eastern-samar-state-university', 'Eastern Samar State University'],
     ['far-eastern-university', 'Far Eastern University'],
     ['father-saturnino-urios-university', 'Father Saturnino Urios University'],
     ['foundation-university', 'Foundation University'],
     ['holy-name-university', 'Holy Name University'],
+    ['isabela-state-university-cauayan', 'Isabela State University – Cauayan Campus'],
+    ['jose-rizal-memorial-state-university', 'Jose Rizal Memorial State University'],
     ['jose-rizal-university', 'Jose Rizal University'],
+    ['josefina-h-cerilles-state-college', 'Josefina H. Cerilles State College – Pagadian Campus'],
+    ['kalinga-state-university', 'Kalinga State University'],
+    ['laguna-state-polytechnic-university', 'Laguna State Polytechnic University – Santa Cruz Campus'],
+    ['leyte-colleges', 'Leyte Colleges'],
     ['liceo-de-cagayan-university', 'Liceo de Cagayan University'],
     ['lyceum-of-the-philippines-university', 'Lyceum of the Philippines University'],
+    ['lyceum-northwestern-university', 'Lyceum Northwestern University'],
+    ['manila-law-college', 'Manila Law College'],
     ['manuel-l-quezon-university', 'Manuel L. Quezon University'],
+    ['manuel-s-enverga-university-foundation', 'Manuel S. Enverga University Foundation'],
     ['mariano-marcos-state-university', 'Mariano Marcos State University'],
+    ['mindanao-state-university', 'Mindanao State University'],
+    ['misamis-university', 'Misamis University'],
     ['new-era-university', 'New Era University'],
+    ['northeastern-college', 'Northeastern College'],
     ['notre-dame-university', 'Notre Dame University'],
+    ['northwestern-university', 'Northwestern University'],
     ['palawan-state-university', 'Palawan State University'],
     ['pamantasan-ng-lungsod-ng-maynila', 'Pamantasan ng Lungsod ng Maynila'],
+    ['pampanga-state-university', 'Pampanga State University'],
+    ['panpacific-university', 'Panpacific University'],
     ['philippine-christian-university', 'Philippine Christian University'],
+    ['philippine-law-school', 'Philippine Law School'],
     ['polytechnic-university-of-the-philippines', 'Polytechnic University of the Philippines'],
     ['saint-louis-university', 'Saint Louis University'],
+    ['saint-louis-college', 'Saint Louis College'],
+    ['saint-marys-university', 'Saint Mary’s University'],
+    ['saint-pauls-school-of-professional-studies', 'Saint Paul’s School of Professional Studies'],
     ['san-beda-university', 'San Beda University'],
     ['san-beda-college-alabang', 'San Beda College Alabang'],
+    ['san-pablo-colleges', 'San Pablo Colleges'],
     ['san-sebastian-college-recoletos', 'San Sebastian College-Recoletos'],
     ['silliman-university', 'Silliman University'],
+    ['st-dominic-savio-college', 'St. Dominic Savio College'],
+    ['st-marys-college-of-tagum', 'St. Mary’s College of Tagum'],
+    ['st-thomas-more-school-of-law-and-business', 'St. Thomas More School of Law and Business'],
+    ['sultan-kudarat-state-university', 'Sultan Kudarat State University'],
+    ['tarlac-state-university', 'Tarlac State University'],
+    ['the-college-of-maasin', 'The College of Maasin'],
+    ['universidad-de-manila', 'Universidad de Manila'],
+    ['university-of-baguio', 'University of Baguio'],
     ['university-of-batangas', 'University of Batangas'],
+    ['university-of-bohol', 'University of Bohol'],
     ['university-of-cagayan-valley', 'University of Cagayan Valley'],
     ['university-of-cebu', 'University of Cebu'],
     ['university-of-eastern-philippines', 'University of Eastern Philippines'],
+    ['university-of-iloilo', 'University of Iloilo'],
+    ['university-of-la-salette', 'University of La Salette'],
     ['university-of-makati', 'University of Makati'],
     ['university-of-mindanao', 'University of Mindanao'],
     ['university-of-negros-occidental-recoletos', 'University of Negros Occidental-Recoletos'],
+    ['university-of-nueva-caceres', 'University of Nueva Caceres'],
     ['university-of-northern-philippines', 'University of Northern Philippines'],
     ['university-of-perpetual-help-system', 'University of Perpetual Help System'],
+    ['university-of-pangasinan', 'University of Pangasinan'],
+    ['university-of-saint-la-salle', 'University of Saint La Salle'],
     ['university-of-san-agustin', 'University of San Agustin'],
     ['university-of-san-carlos', 'University of San Carlos'],
+    ['university-of-san-jose-recoletos', 'University of San Jose-Recoletos'],
     ['university-of-santo-tomas', 'University of Santo Tomas'],
     ['university-of-the-cordilleras', 'University of the Cordilleras'],
     ['university-of-the-east', 'University of the East'],
     ['university-of-the-philippines', 'University of the Philippines'],
     ['university-of-the-visayas', 'University of the Visayas'],
+    ['urdaneta-city-university', 'Urdaneta City University'],
+    ['virgen-milagrosa-university-foundation', 'Virgen Milagrosa University Foundation'],
+    ['western-mindanao-state-university', 'Western Mindanao State University'],
     ['xavier-university-ateneo-de-cagayan', 'Xavier University – Ateneo de Cagayan'],
   ]);
   const authReturnStorageKey = 'duediligence.auth.return.v1';
@@ -181,13 +231,7 @@
   }
 
   function crestMarkup() {
-    return `
-      <svg viewBox="0 0 48 48" width="32" height="32" fill="none" aria-hidden="true">
-        <path d="M24 8v27M11 15h26M12 15 7.5 24h9L12 15Zm24 0-4.5 9h9L36 15Z"
-          stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M7.5 24c1.8 3.2 7.2 3.2 9 0M31.5 24c1.8 3.2 7.2 3.2 9 0M18 37h12"
-          stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-      </svg>`;
+    return '<img src="assets/brand/icon-192.png" width="42" height="42" alt="" aria-hidden="true">';
   }
 
   function validLegalVersion(value, prefix) {
@@ -210,11 +254,33 @@
     return commercialLegal;
   }
 
-  function schoolOptionsMarkup(selected = '') {
-    const normalized = String(selected || '').toLowerCase();
+  function schoolSuggestionsMarkup() {
     return lawSchools
-      .map(([value, label]) => `<option value="${escapeHtml(value)}"${normalized === value ? ' selected' : ''}>${escapeHtml(label)}</option>`)
+      .map(([, label]) => `<option value="${escapeHtml(label)}"></option>`)
       .join('');
+  }
+
+  function schoolDisplayName(profile = state.profile) {
+    const schoolId = String(profile?.law_school_id || '').trim().toLowerCase();
+    const savedOther = String(profile?.law_school_other || '').trim();
+    const legacySchool = String(profile?.school || '').trim();
+    if (schoolId === 'other' && savedOther) return savedOther;
+    const lookup = schoolId || legacySchool.toLocaleLowerCase('en-PH');
+    const known = lawSchools.find(([value, label]) => (
+      value === lookup || label.toLocaleLowerCase('en-PH') === lookup
+    ));
+    return known?.[1] || savedOther || legacySchool || schoolId;
+  }
+
+  function normalizeSchoolInput(value) {
+    const schoolName = String(value || '').trim().replace(/\s+/g, ' ');
+    const normalized = schoolName.toLocaleLowerCase('en-PH');
+    const known = lawSchools.find(([schoolId, label]) => (
+      schoolId === normalized || label.toLocaleLowerCase('en-PH') === normalized
+    ));
+    return known
+      ? { schoolId: known[0], schoolOther: null, schoolName: known[1] }
+      : { schoolId: 'other', schoolOther: schoolName, schoolName };
   }
 
   function injectShell() {
@@ -224,13 +290,9 @@
         aria-labelledby="dd2-entry-title" aria-describedby="dd2-entry-copy" aria-hidden="true">
         <section class="dd2-entry" tabindex="-1">
           <div class="dd2-entry-story">
-            <picture class="dd2-entry-media" aria-hidden="true">
-              <source type="image/avif" media="(max-width: 820px)" srcset="assets/private-beta/library-student-720.avif">
-              <source type="image/webp" media="(max-width: 820px)" srcset="assets/private-beta/library-student-720.webp">
-              <source type="image/avif" srcset="assets/private-beta/library-student-1440.avif">
-              <source type="image/webp" srcset="assets/private-beta/library-student-1440.webp">
-              <img src="assets/private-beta/library-student-1440.jpg" alt="" width="1440" height="1800" decoding="async">
-            </picture>
+            <div class="dd2-entry-brandmark" aria-hidden="true">
+              <img src="assets/brand/icon-512.png" width="512" height="512" alt="">
+            </div>
             <div class="dd2-entry-kicker">Philippine Bar Essay Preparation</div>
             <h2>Prepare with conviction.</h2>
             <p>Serious essay practice, disciplined ALAC structure, and source-based feedback in a chamber built for future lawyers.</p>
@@ -293,14 +355,10 @@
                 <input class="dd2-field" id="dd2-display-name" maxlength="120" autocomplete="name" required>
               </label>
               <label class="dd2-label dd2-wide">Law school
-                <select class="dd2-field" id="dd2-school" required>
-                  <option value="">Select your law school</option>
-                  ${schoolOptionsMarkup()}
-                  <option value="other">Other LEB-recognized school</option>
-                </select>
-              </label>
-              <label class="dd2-label dd2-wide" id="dd2-school-other-wrap" hidden>Other law school
-                <input class="dd2-field" id="dd2-school-other" maxlength="180" autocomplete="organization" placeholder="Enter the complete school name">
+                <input class="dd2-field" id="dd2-school" list="dd2-school-suggestions" maxlength="180"
+                  autocomplete="organization" placeholder="Type your law school" required>
+                <datalist id="dd2-school-suggestions">${schoolSuggestionsMarkup()}</datalist>
+                <span class="dd2-field-help">Suggestions are optional. You may type and save any school name.</span>
               </label>
               <label class="dd2-label dd2-wide">Year or category
                 <select class="dd2-field" id="dd2-year-level" required>
@@ -1065,11 +1123,9 @@
     if (deferOnboardingForPrivateBeta()) return;
     const displayName = document.getElementById('dd2-display-name');
     const school = document.getElementById('dd2-school');
-    const schoolOther = document.getElementById('dd2-school-other');
     const year = document.getElementById('dd2-year-level');
     if (displayName) displayName.value = state.profile?.display_name || state.user?.user_metadata?.full_name || '';
-    if (school) school.value = state.profile?.law_school_id || '';
-    if (schoolOther) schoolOther.value = state.profile?.law_school_other || '';
+    if (school) school.value = schoolDisplayName();
     if (year) year.value = state.profile?.commercial_category || '';
     const legal = document.getElementById('dd2-legal-acceptance');
     if (legal) legal.checked = false;
@@ -1079,14 +1135,9 @@
   }
 
   function updateEnrollmentFields() {
-    const schoolOther = document.getElementById('dd2-school-other');
-    const schoolOtherWrap = document.getElementById('dd2-school-other-wrap');
     const professorLicense = document.getElementById('dd2-professor-license');
     const professorWrap = document.getElementById('dd2-professor-license-wrap');
-    const otherSelected = document.getElementById('dd2-school')?.value === 'other';
     const professorSelected = document.getElementById('dd2-year-level')?.value === 'professor';
-    if (schoolOtherWrap) schoolOtherWrap.hidden = !otherSelected;
-    if (schoolOther) schoolOther.required = otherSelected;
     if (professorWrap) professorWrap.hidden = !professorSelected;
     if (professorLicense) professorLicense.required = professorSelected;
   }
@@ -1095,8 +1146,7 @@
     event.preventDefault();
     if (state.onboardingBusy || !state.client || !state.user) return;
     const displayName = document.getElementById('dd2-display-name').value.trim();
-    const schoolId = document.getElementById('dd2-school').value;
-    const schoolOther = document.getElementById('dd2-school-other').value.trim();
+    const school = normalizeSchoolInput(document.getElementById('dd2-school').value);
     const category = document.getElementById('dd2-year-level').value;
     const professorLicense = document.getElementById('dd2-professor-license').value.trim();
     const accepted = document.getElementById('dd2-legal-acceptance').checked;
@@ -1109,8 +1159,8 @@
       setStatus('dd2-onboarding-status', 'Accept the Terms of Use and acknowledge the Privacy Policy to continue.', 'error');
       return;
     }
-    if (!schoolId || !category || (schoolId === 'other' && schoolOther.length < 2)) {
-      setStatus('dd2-onboarding-status', 'Select your law school and year or category.', 'error');
+    if (school.schoolName.length < 2 || !category) {
+      setStatus('dd2-onboarding-status', 'Enter your law school and select your year or category.', 'error');
       return;
     }
     if (category === 'professor' && professorLicense.length < 3) {
@@ -1131,8 +1181,8 @@
       if (aiConsentError) throw aiConsentError;
       const { error: profileError } = await state.client.rpc('complete_commercial_profile_onboarding', {
         p_display_name: displayName,
-        p_law_school_id: schoolId,
-        p_law_school_other: schoolOther || null,
+        p_law_school_id: school.schoolId,
+        p_law_school_other: school.schoolOther,
         p_category: category,
         p_professor_license_number: professorLicense || null,
         p_terms_version: commercialLegal.termsVersion,
@@ -1142,11 +1192,11 @@
       state.profile = {
         ...(state.profile || {}),
         display_name: displayName,
-        school: schoolId === 'other' ? schoolOther : schoolId,
+        school: school.schoolName,
         enrollment_status: 'enrolled',
         year_level: category,
-        law_school_id: schoolId,
-        law_school_other: schoolId === 'other' ? schoolOther : null,
+        law_school_id: school.schoolId,
+        law_school_other: school.schoolOther,
         commercial_category: category,
         commercial_onboarding_completed_at: new Date().toISOString(),
         profile_completed_at: new Date().toISOString(),
@@ -1288,10 +1338,7 @@
         </div>`;
     }
     const name = state.profile?.display_name || state.user.user_metadata?.full_name || 'Due Diligence student';
-    const schoolId = state.profile?.law_school_id
-      || (state.profile?.school ? 'other' : '');
-    const schoolOther = state.profile?.law_school_other
-      || (schoolId === 'other' ? state.profile?.school || '' : '');
+    const schoolName = schoolDisplayName();
     const category = state.profile?.commercial_category
       || ({ '1': 'first_year', '2': 'second_year', '3': 'third_year', '4': 'fourth_year' }[state.profile?.year_level]
         || (state.profile?.year_level === 'review' ? 'review' : ''));
@@ -1305,14 +1352,11 @@
           <input class="dd2-field" id="dd2-account-name" value="${escapeHtml(state.profile?.display_name || '')}" maxlength="120" required>
         </label>
         <label class="dd2-label">Law school
-          <select class="dd2-field" id="dd2-account-school" required>
-            <option value="">Select your law school</option>
-            ${schoolOptionsMarkup(schoolId)}
-            <option value="other"${schoolId === 'other' ? ' selected' : ''}>Other LEB-recognized school</option>
-          </select>
-        </label>
-        <label class="dd2-label" id="dd2-account-school-other-wrap"${schoolId === 'other' ? '' : ' hidden'}>Other law school
-          <input class="dd2-field" id="dd2-account-school-other" value="${escapeHtml(schoolOther)}" maxlength="180">
+          <input class="dd2-field" id="dd2-account-school" list="dd2-account-school-suggestions"
+            value="${escapeHtml(schoolName)}" maxlength="180" autocomplete="organization"
+            placeholder="Type your law school" required>
+          <datalist id="dd2-account-school-suggestions">${schoolSuggestionsMarkup()}</datalist>
+          <span class="dd2-field-help">Choose a suggestion or save any school name you enter.</span>
         </label>
         <label class="dd2-label">Year or category
           <select class="dd2-field" id="dd2-account-year" required>
@@ -1847,17 +1891,16 @@
   async function submitAccount(event) {
     event.preventDefault();
     if (!state.client || !state.user) return;
+    const school = normalizeSchoolInput(document.getElementById('dd2-account-school').value);
     const values = {
       displayName: document.getElementById('dd2-account-name').value.trim(),
-      schoolId: document.getElementById('dd2-account-school').value,
-      schoolOther: document.getElementById('dd2-account-school-other').value.trim(),
+      school,
       category: document.getElementById('dd2-account-year').value,
       professorLicense: document.getElementById('dd2-account-professor-license').value.trim(),
     };
     if (values.displayName.length < 2
-      || !values.schoolId
+      || values.school.schoolName.length < 2
       || !values.category
-      || (values.schoolId === 'other' && values.schoolOther.length < 2)
       || (values.category === 'professor' && values.professorLicense.length < 3)) {
       setStatus('dd2-account-status', 'Complete the required profile fields.', 'error');
       return;
@@ -1867,8 +1910,8 @@
       await refreshLegalPolicy();
       const { error: profileError } = await state.client.rpc('complete_commercial_profile_onboarding', {
         p_display_name: values.displayName,
-        p_law_school_id: values.schoolId,
-        p_law_school_other: values.schoolOther || null,
+        p_law_school_id: values.school.schoolId,
+        p_law_school_other: values.school.schoolOther,
         p_category: values.category,
         p_professor_license_number: values.professorLicense || null,
         p_terms_version: commercialLegal.termsVersion,
@@ -1879,10 +1922,10 @@
         ...state.profile,
         display_name: values.displayName,
         enrollment_status: 'enrolled',
-        school: values.schoolId === 'other' ? values.schoolOther : values.schoolId,
+        school: values.school.schoolName,
         year_level: values.category,
-        law_school_id: values.schoolId,
-        law_school_other: values.schoolId === 'other' ? values.schoolOther : null,
+        law_school_id: values.school.schoolId,
+        law_school_other: values.school.schoolOther,
         commercial_category: values.category,
         commercial_onboarding_completed_at: new Date().toISOString(),
       };
@@ -1926,18 +1969,12 @@
     });
     if (view === 'account') {
       const syncFields = () => {
-        const schoolOther = document.getElementById('dd2-account-school-other');
-        const schoolOtherWrap = document.getElementById('dd2-account-school-other-wrap');
         const professor = document.getElementById('dd2-account-professor-license');
         const professorWrap = document.getElementById('dd2-account-professor-wrap');
-        const otherSelected = document.getElementById('dd2-account-school')?.value === 'other';
         const professorSelected = document.getElementById('dd2-account-year')?.value === 'professor';
-        if (schoolOtherWrap) schoolOtherWrap.hidden = !otherSelected;
-        if (schoolOther) schoolOther.required = otherSelected;
         if (professorWrap) professorWrap.hidden = !professorSelected;
         if (professor) professor.required = professorSelected;
       };
-      document.getElementById('dd2-account-school')?.addEventListener('change', syncFields);
       document.getElementById('dd2-account-year')?.addEventListener('change', syncFields);
       syncFields();
     }
@@ -2173,7 +2210,6 @@
       }
     });
     document.getElementById('dd2-onboarding-form')?.addEventListener('submit', submitOnboarding);
-    document.getElementById('dd2-school')?.addEventListener('change', updateEnrollmentFields);
     document.getElementById('dd2-year-level')?.addEventListener('change', updateEnrollmentFields);
     document.getElementById('dd2-onboarding-close')?.addEventListener('click', returnFromOnboarding);
     document.getElementById('dd2-onboarding-back')?.addEventListener('click', returnFromOnboarding);

@@ -18,16 +18,6 @@ if (path.dirname(outputRoot) !== repositoryRoot || path.basename(outputRoot) !==
   throw new Error('Refusing to build outside the repository .pages-dist directory.');
 }
 
-const privateBetaImageFiles = Object.freeze([
-  'campus-students',
-  'library-community',
-  'library-student',
-  'writing-exam',
-  'writing-notes',
-].flatMap((name) => [720, 1440].flatMap((width) => ['avif', 'webp', 'jpg'].map(
-  (extension) => `assets/private-beta/${name}-${width}.${extension}`,
-))));
-
 const featurePreviewFiles = Object.freeze([
   'anchor-cases.png',
   'bar-easy.png',
@@ -64,10 +54,8 @@ const publicFiles = Object.freeze([
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
   'assets/private-workspace.js',
-  ...privateBetaImageFiles,
   ...featurePreviewFiles,
   'assets/phase2-experience.js',
-  'assets/phase2-law-library.jpg',
   'assets/phase2.css',
   'assets/phase3-analytics.js',
   'assets/phase4-experience.js',

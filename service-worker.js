@@ -1,8 +1,8 @@
-const CACHE_VERSION = 'duediligence-shell-20260818-commercial-launch-1';
+const CACHE_VERSION = 'duediligence-shell-20260818-commercial-launch-2';
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',
-  '/assets/phase2.css?release=subject-matter-gil-fixes-20260817-4',
+  '/assets/phase2.css?release=commercial-school-visual-safety-20260818-1',
   '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
   '/assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',

@@ -29,6 +29,7 @@ const email = `dd-ui-${runId.slice(3)}@example.com`;
 const password = `Dd!${randomBytes(30).toString('base64url')}`;
 const serviceHeaders = Object.freeze({ apikey: SERVICE_ROLE_KEY });
 let userId = null;
+let originalLegalVersions = null;
 
 async function jsonRequest(url, options = {}, expected = [200]) {
   const response = await fetch(url, options);
@@ -71,6 +72,41 @@ async function createDisposableUser() {
       assigned_by: userId,
       updated_at: new Date().toISOString(),
     }),
+  }, [200, 204]);
+}
+
+async function enableCommercialLegalVersions() {
+  const settings = await jsonRequest(
+    `${SUPABASE_URL}/rest/v1/platform_access_settings`
+      + '?singleton=eq.true&select=current_terms_version,current_privacy_version',
+    { headers: serviceHeaders },
+  );
+  assert.equal(settings.length, 1);
+  originalLegalVersions = settings[0];
+  await jsonRequest(`${SUPABASE_URL}/rest/v1/platform_access_settings?singleton=eq.true`, {
+    method: 'PATCH',
+    headers: {
+      ...serviceHeaders,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
+      current_terms_version: 'terms-commercial-v1-2026-08-18',
+      current_privacy_version: 'privacy-commercial-v1-2026-08-18',
+    }),
+  }, [200, 204]);
+}
+
+async function restoreLegalVersions() {
+  if (!originalLegalVersions) return;
+  await jsonRequest(`${SUPABASE_URL}/rest/v1/platform_access_settings?singleton=eq.true`, {
+    method: 'PATCH',
+    headers: {
+      ...serviceHeaders,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(originalLegalVersions),
   }, [200, 204]);
 }
 
@@ -182,6 +218,7 @@ async function deleteDisposableUser() {
 let verifier = null;
 let verifierFailure = null;
 try {
+  await enableCommercialLegalVersions();
   await createDisposableUser();
   verifier = await runVerifier();
   if (verifier.code !== 0) {
@@ -200,6 +237,7 @@ try {
   }
   await deleteSyntheticUserRecords().catch((error) => cleanupErrors.push(error));
   await deleteDisposableUser().catch((error) => cleanupErrors.push(error));
+  await restoreLegalVersions().catch((error) => cleanupErrors.push(error));
   if (cleanupErrors.length) {
     throw new AggregateError(cleanupErrors, 'Disposable staging UI cleanup failed.');
   }

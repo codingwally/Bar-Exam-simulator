@@ -2307,6 +2307,13 @@ begin
 end;
 $$;
 
+-- The commercial access resolver may claim a pre-approved Founding Beta grant.
+-- PostgreSQL therefore must not execute read-only Subject Matter wrappers as
+-- STABLE functions: PostgREST runs STABLE RPCs in a read-only transaction and
+-- would reject that legitimate claim with SQLSTATE 25006.
+alter function public.subject_matter_catalog(uuid) volatile;
+alter function public.subject_matter_performance(uuid, text, integer) volatile;
+
 -- Backend-only tables and functions.  Profile onboarding itself runs as the
 -- authenticated user but cannot assign any application role.
 do $$

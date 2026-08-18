@@ -141,6 +141,14 @@ test('commercial access precedence is deterministic and server-authoritative', (
   assert.match(snapshot, /greatest\(0, v_settings\.free_daily_grade_limit - v_completed - v_reserved\)/);
 });
 
+test('Subject Matter read wrappers permit the commercial resolver to claim Founding Beta access', () => {
+  assert.match(migration, /alter function public\.subject_matter_catalog\(uuid\) volatile;/);
+  assert.match(
+    migration,
+    /alter function public\.subject_matter_performance\(uuid, text, integer\) volatile;/,
+  );
+});
+
 test('Founding Beta matching stores only hashes and grants no client access', () => {
   assert.match(migration, /create table if not exists public\.founding_beta_invites/);
   assert.match(migration, /email_hash text primary key check \(email_hash ~ '\^\[0-9a-f\]\{64\}\$'\)/);

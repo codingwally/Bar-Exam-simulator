@@ -149,7 +149,7 @@ test('anonymous visitors cannot read a protected examination question', async ()
   assert.equal(payload.error.code, 'AUTHENTICATION_REQUIRED');
 });
 
-test('authenticated exam opening activates access and returns only one protected prompt', async () => {
+test('authenticated entitled exam opening never implicitly starts a trial and returns one protected prompt', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
     const target = String(url);
@@ -157,8 +157,8 @@ test('authenticated exam opening activates access and returns only one protected
     if (target.endsWith('/rest/v1/rpc/phase4_access_snapshot')) {
       const body = JSON.parse(init.body);
       assert.equal(body.p_user_id, userId);
-      assert.equal(body.p_activate_trial, true);
-      assert.equal(body.p_request_key, 'request_1234567890');
+      assert.equal(body.p_activate_trial, false);
+      assert.equal(body.p_request_key, null);
       return Response.json(accessSnapshot());
     }
     throw new Error(`Unexpected request: ${target}`);

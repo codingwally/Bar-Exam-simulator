@@ -4250,9 +4250,22 @@ async function handlePrivateBetaStatus(request, env, origin, allowedOrigin) {
 
 async function handleGlobalBetaPublicPolicy(env, origin, allowedOrigin) {
   const policy = await phase4Rpc(env, 'phase4_global_beta_public_policy', {});
+  const termsVersion = String(policy?.legal?.termsVersion || '').trim();
+  const privacyVersion = String(policy?.legal?.privacyVersion || '').trim();
+  if (!termsVersion || !privacyVersion) {
+    throw new ExaminerError(
+      'LEGAL_POLICY_UNAVAILABLE',
+      'The current Terms and Privacy policy is temporarily unavailable.',
+      503,
+    );
+  }
   return jsonResponse({
     ok: true,
-    policy: { enabled: policy?.enabled === true },
+    policy: {
+      enabled: policy?.enabled === true,
+      commercialLaunchEnabled: policy?.commercialLaunchEnabled === true,
+      legal: { termsVersion, privacyVersion },
+    },
   }, 200, origin, allowedOrigin);
 }
 

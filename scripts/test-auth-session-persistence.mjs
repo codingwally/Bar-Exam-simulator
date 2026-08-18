@@ -339,6 +339,10 @@ const loadUserStateFor = vm.runInNewContext(
       termsVersion: 'terms-commercial-v1-2026-08-18',
       privacyVersion: 'privacy-commercial-v1-2026-08-18',
     },
+    refreshLegalPolicy: async () => ({
+      termsVersion: 'terms-commercial-v1-2026-08-18',
+      privacyVersion: 'privacy-commercial-v1-2026-08-18',
+    }),
     global: {
       toast(message, tone) {
         welcomeMessages.push({ message, tone });

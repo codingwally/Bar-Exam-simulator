@@ -183,7 +183,14 @@ test('global Beta All Access bypasses expiring admission tokens for permanent us
       return Response.json({ id: userId, email: 'permanent@example.invalid' });
     }
     if (target.endsWith('/rest/v1/rpc/phase4_global_beta_public_policy')) {
-      return Response.json({ enabled: true });
+      return Response.json({
+        enabled: true,
+        commercialLaunchEnabled: false,
+        legal: {
+          termsVersion: 'terms-beta-v2-2026-07-28',
+          privacyVersion: 'privacy-beta-v2-2026-07-28',
+        },
+      });
     }
     if (target.endsWith('/rest/v1/rpc/private_beta_access_snapshot')) {
       const payload = JSON.parse(String(init.body || '{}'));
@@ -234,7 +241,14 @@ test('global Beta All Access bypasses expiring admission tokens for permanent us
     {},
   ), env, {}));
   assert.equal(policy.status, 200);
-  assert.deepEqual(policy.body.policy, { enabled: true });
+  assert.deepEqual(policy.body.policy, {
+    enabled: true,
+    commercialLaunchEnabled: false,
+    legal: {
+      termsVersion: 'terms-beta-v2-2026-07-28',
+      privacyVersion: 'privacy-beta-v2-2026-07-28',
+    },
+  });
 
   const status = await responseJson(await worker.fetch(request(
     '/beta/access/status',

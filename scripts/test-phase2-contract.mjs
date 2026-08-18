@@ -11,6 +11,7 @@ const index = read('index.html');
 const experience = read('assets/phase2-experience.js');
 const configSource = read('assets/phase2-config.js');
 const migration = read('supabase/migrations/20260728_003_phase2_guest_access_support.sql');
+const legalPolicyMigration = read('supabase/migrations/20260818062500_current_legal_policy_contract.sql');
 const worker = read('worker/index.mjs');
 const wrangler = read('worker/wrangler.toml');
 
@@ -43,10 +44,10 @@ for (const expected of [
   'You have completed your 3 guest questions.',
   'accept_terms',
   'complete_commercial_profile_onboarding',
-  'terms-commercial-v1-2026-08-18',
-  'privacy-commercial-v1-2026-08-18',
   'Free and Early Access',
   'five successful question submissions per Philippine calendar day',
+  "publicWorkerRequest('/beta/access/policy')",
+  'await refreshLegalPolicy();',
 ]) {
   assert.ok(experience.includes(expected), `Phase 2 experience must include: ${expected}`);
 }
@@ -83,7 +84,7 @@ assert.ok(index.includes('data-dd2-view="privacy"'));
 assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
-assert.ok(index.includes('assets/phase2-experience.js?v=commercial-launch-20260818-1'));
+assert.ok(index.includes('assets/phase2-experience.js?v=commercial-launch-20260818-2'));
 
 for (const table of [
   'guest_grading_usage',
@@ -114,6 +115,22 @@ assert.match(
   'the committed Worker configuration must end in strict guest enforcement',
 );
 assert.ok(experience.includes('trapOverlayFocus'), 'Phase 2 dialogs must trap keyboard focus');
+assert.equal(
+  experience.includes('terms-commercial-v1-2026-08-18'),
+  false,
+  'The browser must not hard-code the current commercial Terms version.',
+);
+assert.equal(
+  experience.includes('privacy-commercial-v1-2026-08-18'),
+  false,
+  'The browser must not hard-code the current commercial Privacy version.',
+);
+assert.match(legalPolicyMigration, /'termsVersion', s\.current_terms_version/);
+assert.match(legalPolicyMigration, /'privacyVersion', s\.current_privacy_version/);
+assert.match(
+  legalPolicyMigration,
+  /revoke all on function public\.phase4_global_beta_public_policy\(\)[\s\S]*from public, anon, authenticated/,
+);
 
 for (const forbidden of [
   /service_role\s*[:=]\s*['"][A-Za-z0-9._-]{20,}/i,

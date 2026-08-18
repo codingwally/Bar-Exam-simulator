@@ -6,6 +6,10 @@ const migration = readFileSync(new URL(
   '../supabase/migrations/20260818024644_commercial_launch_access.sql',
   import.meta.url,
 ), 'utf8');
+const legalPolicyMigration = readFileSync(new URL(
+  '../supabase/migrations/20260818062500_current_legal_policy_contract.sql',
+  import.meta.url,
+), 'utf8');
 
 function functionBlock(name, occurrence = 0) {
   const marker = `create or replace function public.${name}`;
@@ -39,6 +43,23 @@ test('commercial migration is transactional, additive, and installs disabled', (
   assert.match(migration, /public_pricing_enabled boolean not null default false/);
   assert.match(migration, /free_daily_grade_limit integer not null default 5/);
   assert.match(migration, /quota_timezone text not null default 'Asia\/Manila'/);
+});
+
+test('current legal policy is server-authoritative, non-sensitive, and least privilege', () => {
+  assert.equal((legalPolicyMigration.match(/^begin;$/gmi) || []).length, 1);
+  assert.equal((legalPolicyMigration.match(/^commit;$/gmi) || []).length, 1);
+  assert.doesNotMatch(legalPolicyMigration, /^\s*(?:drop|truncate|delete|update|insert)\b/gmi);
+  assert.match(legalPolicyMigration, /'termsVersion', s\.current_terms_version/);
+  assert.match(legalPolicyMigration, /'privacyVersion', s\.current_privacy_version/);
+  assert.match(legalPolicyMigration, /'commercialLaunchEnabled', s\.commercial_launch_enabled/);
+  assert.match(
+    legalPolicyMigration,
+    /revoke all on function public\.phase4_global_beta_public_policy\(\)[\s\S]*from public, anon, authenticated/,
+  );
+  assert.match(
+    legalPolicyMigration,
+    /grant execute on function public\.phase4_global_beta_public_policy\(\)[\s\S]*to service_role/,
+  );
 });
 
 test('launch dates, price, and legal versions are fixed to the approved policy', () => {

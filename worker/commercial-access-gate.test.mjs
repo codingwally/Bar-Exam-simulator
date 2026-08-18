@@ -85,6 +85,83 @@ test('binary proof attachment encoding is stable', () => {
   assert.equal(bytesToBase64(new Uint8Array([0, 1, 2, 253, 254, 255])), 'AAEC/f7/');
 });
 
+test('enabled payment email sends one To, four BCCs, and the original proof', async () => {
+  const originalFetch = globalThis.fetch;
+  let dispatched = null;
+  globalThis.fetch = async (url, options) => {
+    dispatched = {
+      url: String(url),
+      headers: options.headers,
+      body: JSON.parse(options.body),
+    };
+    return new Response(JSON.stringify({ id: 'email_test_123' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  const proof = new Blob(['sample-proof'], { type: 'image/png' });
+  Object.defineProperty(proof, 'name', { value: 'receipt.png' });
+  try {
+    const result = await sendPaymentVerificationEmail({
+      PAYMENT_NOTIFICATION_EMAIL_MODE: 'enabled',
+      PAYMENT_NOTIFICATION_EMAIL_FROM: 'Payments <payments@example.test>',
+      RESEND_API_KEY: 'test-only-key',
+    }, {
+      recipients: [
+        'first@example.test',
+        'second@example.test',
+        'third@example.test',
+        'fourth@example.test',
+        'fifth@example.test',
+      ],
+      user: {
+        id: '00000000-0000-4000-8000-000000000001',
+        email: 'subscriber@example.test',
+        displayName: 'Test Subscriber',
+      },
+      payment: {
+        id: '00000000-0000-4000-8000-000000000002',
+        status: 'pending',
+        submittedAt: '2026-08-18T12:00:00.000Z',
+        provisionalAccessExpiresAt: '2026-08-19T12:00:00.000Z',
+      },
+      fields: {
+        paymentDate: '2026-08-18',
+        transactionReference: 'TEST-REFERENCE-123',
+        note: 'Automated contract test',
+      },
+      proof,
+    });
+
+    assert.deepEqual(result, {
+      status: 'sent',
+      providerId: 'email_test_123',
+      recipientCount: 5,
+    });
+    assert.equal(dispatched.url, 'https://api.resend.com/emails');
+    assert.deepEqual(dispatched.body.to, ['first@example.test']);
+    assert.deepEqual(dispatched.body.bcc, [
+      'second@example.test',
+      'third@example.test',
+      'fourth@example.test',
+      'fifth@example.test',
+    ]);
+    assert.equal(dispatched.body.reply_to, 'subscriber@example.test');
+    assert.equal(dispatched.body.attachments.length, 1);
+    assert.equal(dispatched.body.attachments[0].filename, 'receipt.png');
+    assert.equal(
+      dispatched.body.attachments[0].content,
+      bytesToBase64(new TextEncoder().encode('sample-proof')),
+    );
+    assert.match(dispatched.body.text, /Test Subscriber/);
+    assert.match(dispatched.body.text, /TEST-REFERENCE-123/);
+    assert.match(dispatched.body.text, /Attached proof SHA-256:/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('payment email remains suppressed unless its dedicated mode is enabled', async () => {
   const result = await sendPaymentVerificationEmail(
     { PAYMENT_NOTIFICATION_EMAIL_MODE: 'suppressed' },

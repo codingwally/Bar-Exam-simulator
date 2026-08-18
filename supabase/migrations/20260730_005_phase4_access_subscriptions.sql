@@ -4,7 +4,7 @@
 --
 -- Apply only after the Phase 4 production preflight passes. This migration is
 -- backward compatible with the Phase 1-3 schema and does not alter questions,
--- answers, Gemini grading, or existing Super Admin records.
+-- answers, AI model grading, or existing Super Admin records.
 
 begin;
 

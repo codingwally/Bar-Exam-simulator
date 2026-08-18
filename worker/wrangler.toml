@@ -2,6 +2,11 @@ name = "duediligence-gemini-examiner"
 main = "index.mjs"
 compatibility_date = "2026-07-26"
 preview_urls = false
+workers_dev = false
+
+[[routes]]
+pattern = "api.duediligence.ph"
+custom_domain = true
 
 [placement]
 region = "gcp:us-east4"
@@ -48,7 +53,7 @@ enabled = true
 [triggers]
 crons = ["*/2 * * * *"]
 
-# GEMINI_API_KEY and SUPABASE_SERVICE_ROLE_KEY must remain Cloudflare secrets.
+# The AI model API key and SUPABASE_SERVICE_ROLE_KEY must remain Cloudflare secrets.
 # PRIVATE_BETA_ACCESS_CODE_VERIFIER, PRIVATE_BETA_ACCESS_CODE_PEPPER, and
 # PRIVATE_BETA_FLOW_SIGNING_KEY must also remain Cloudflare secrets.
 # EXAM_ROOM_STUDENT_CODE_KEY_V1 must remain a Cloudflare secret containing

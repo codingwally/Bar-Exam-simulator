@@ -3,7 +3,7 @@
 --
 -- This migration is additive except for tightening direct analytics/audit
 -- browser grants and extending existing queue status constraints. It does not
--- alter Gemini grading, the 0-5 rubric, questions, answers, timers, payments,
+-- alter AI model grading, the 0-5 rubric, questions, answers, timers, payments,
 -- or the sole existing Super Admin.
 
 -- ---------------------------------------------------------------------------

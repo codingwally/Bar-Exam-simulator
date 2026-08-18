@@ -3,7 +3,7 @@
 ## Decision
 
 The static GitHub Pages frontend calls the existing Cloudflare Worker at
-`https://duediligence-gemini-examiner.wallyesteban1993.workers.dev`. Only the
+`https://api.duediligence.ph`. Only the
 Worker can access `GEMINI_API_KEY`; the frontend and Pages workflow never
 receive it.
 

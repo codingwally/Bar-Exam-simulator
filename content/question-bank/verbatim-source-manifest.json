@@ -4,7 +4,7 @@
   "policy": {
     "sourcePriority": "Official Supreme Court questionnaire; Lawphil questionnaire archive for 2018–2019.",
     "questionRule": "The official question body is immutable. Preserve it word-for-word; omit only visual PDF line wrapping and a standalone item number already rendered by the UI.",
-    "answerRule": "Change answer-side fields only for an independently identified prompt-answer mismatch, using disclosed suggested-answer cross-checks and controlling Philippine primary authorities. Never change Gemini grading logic in this content release.",
+    "answerRule": "Change answer-side fields only for an independently identified prompt-answer mismatch, using disclosed suggested-answer cross-checks and controlling Philippine primary authorities. Never change AI model grading logic in this content release.",
     "unresolvedRule": "Never invent or split question wording when the official source and the current two-row schema conflict."
   },
   "summary": {

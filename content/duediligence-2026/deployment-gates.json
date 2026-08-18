@@ -23,7 +23,7 @@
       "gate_name": "Architecture compatibility",
       "must_pass": "Yes",
       "owner": "Codex implementer",
-      "required_evidence": "Auth, database, Gemini, Sheets, email, PDF, analytics, routes, deployment map",
+      "required_evidence": "Auth, database, AI model, Sheets, email, PDF, analytics, routes, deployment map",
       "hard_stop_condition": "Existing features or Website Upload contract would break",
       "beta_rule": "Not bypassable",
       "status": "PLANNED"
@@ -80,12 +80,12 @@
     },
     {
       "gate_id": "G7",
-      "gate_name": "Gemini grading",
+      "gate_name": "AI model grading",
       "must_pass": "Yes",
       "owner": "AI integration owner",
       "required_evidence": "Structured schemas, enums, calibration, injection, malformed/timeout tests",
       "hard_stop_condition": "Unvalidated output, unfair label behavior, or prompt injection succeeds",
-      "beta_rule": "Gemini remains grader",
+      "beta_rule": "AI model remains grader",
       "status": "PLANNED"
     },
     {

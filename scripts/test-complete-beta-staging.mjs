@@ -132,12 +132,16 @@ async function workerPost(path, payload, token, expected = [200]) {
 }
 
 async function examinationQuery(user, operation, payload = {}, expected = [200]) {
-  return workerPost(
-    '/examinations/query',
-    { operation, ...payload },
-    user?.token || null,
-    expected,
-  );
+  try {
+    return await workerPost(
+      '/examinations/query',
+      { operation, ...payload },
+      user?.token || null,
+      expected,
+    );
+  } catch (error) {
+    throw new Error(`Examination query ${operation} failed: ${error.message}`, { cause: error });
+  }
 }
 
 async function examinationCommand(user, operation, payload = {}, expected = [200]) {

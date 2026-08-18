@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   AccessValidationError,
@@ -13,6 +14,16 @@ import {
 
 const resetAt = '2026-08-19T00:00:00+08:00';
 const salesCloseAt = '2026-09-01T23:59:59+08:00';
+
+test('commercial study completion RPCs are allowed through the Worker storage boundary', async () => {
+  const worker = await readFile(new URL('./index.mjs', import.meta.url), 'utf8');
+  for (const operation of [
+    'dd2026_record_bar_easy_completion_commercial',
+    'dd2026_record_doctrine_mastery_commercial',
+  ]) {
+    assert.match(worker, new RegExp(`'${operation}'`));
+  }
+});
 
 test('normalizes the authoritative Free access response without exposing unknown fields', () => {
   const normalized = normalizeAccessSnapshot({

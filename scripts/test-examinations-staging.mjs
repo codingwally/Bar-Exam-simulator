@@ -650,8 +650,10 @@ try {
   });
   assert.ok(Array.isArray(directDashboard.definitions));
 
-  const denied = await query(secondStudent.token, 'catalog', { track: 'per_subject' }, [403]);
-  assert.equal(denied.body.error.code, 'EXAM_ACCESS_REQUIRED');
+  const globalBetaCatalog = await query(secondStudent.token, 'catalog', {
+    track: 'per_subject',
+  });
+  assert.equal(globalBetaCatalog.body.ok, true);
 
   const cycles = [];
   cycles.push(await cycleStrictHuman(admin, firstStudent));

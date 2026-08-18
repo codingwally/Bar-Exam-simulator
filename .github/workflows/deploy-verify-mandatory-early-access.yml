@@ -154,17 +154,7 @@ jobs:
               -H 'Content-Type: application/json' \
               -H "X-Request-ID: liveEarlyAccess${GITHUB_RUN_ID}${attempt}" \
               --data '{}' > "${plans_file}" \
-              && node - "${plans_file}" <<'NODE'
-          const fs = require('node:fs');
-          const file = process.argv[2];
-          const payload = JSON.parse(fs.readFileSync(file, 'utf8'));
-          if (payload?.ok !== true) process.exit(1);
-          if (!Array.isArray(payload.plans) || payload.plans.length !== 1) process.exit(1);
-          const plan = payload.plans[0];
-          if (plan.planCode !== 'early_access_beta') process.exit(1);
-          if (Number(plan.priceCentavos) !== 14900) process.exit(1);
-          if (plan.checkoutEnabled !== true) process.exit(1);
-NODE
+              && node -e "const fs=require('node:fs'); const payload=JSON.parse(fs.readFileSync(process.argv[1],'utf8')); const plans=payload?.plans; if(payload?.ok!==true || !Array.isArray(plans) || plans.length!==1 || plans[0]?.planCode!=='early_access_beta' || Number(plans[0]?.priceCentavos)!==14900 || plans[0]?.checkoutEnabled!==true) process.exit(1);" "${plans_file}"
             then
               break
             fi

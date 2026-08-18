@@ -26,7 +26,7 @@ export function normalizePaymentVerificationRecipients(rows) {
     : [];
 
   for (const row of ordered) {
-    const email = validEmail(row?.email);
+    const email = validEmail(typeof row === 'string' ? row : row?.email);
     if (!email || seen.has(email)) continue;
     seen.add(email);
     normalized.push(email);

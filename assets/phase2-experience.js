@@ -940,7 +940,7 @@
   }
 
   async function submitEntryConsent(event) {
-    event.preventDefault();
+    event?.preventDefault();
     if (!state.client || !state.user || !state.session?.access_token) {
       setEntryMode('signin');
       setStatus('dd2-auth-status', 'Sign in with Google before accepting the documents.', 'error');
@@ -2163,6 +2163,7 @@
     bindNavigation();
     document.getElementById('dd2-google-signin')?.addEventListener('click', signInWithGoogle);
     document.getElementById('dd2-entry-consent')?.addEventListener('submit', submitEntryConsent);
+    document.getElementById('dd2-entry-consent-submit')?.addEventListener('click', submitEntryConsent);
     document.getElementById('dd2-guest-continue')?.addEventListener('click', continueGuestFromEntry);
     document.getElementById('dd2-entry-close')?.addEventListener('click', returnFromEntry);
     document.getElementById('dd2-entry-back')?.addEventListener('click', returnFromEntry);

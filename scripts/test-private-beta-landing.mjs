@@ -141,23 +141,11 @@ assert.doesNotMatch(css, /\.pb-pillar-card/);
 assert.doesNotMatch(css, /pb-slide-left|pb-slide-right|\.pb-rail/);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 
-const imageStems = [
-  'campus-students',
-  'library-community',
-  'library-student',
-  'writing-exam',
-  'writing-notes',
-];
-for (const stem of imageStems) {
-  for (const width of [720, 1440]) {
-    for (const extension of ['avif', 'webp', 'jpg']) {
-      const relative = `assets/private-beta/${stem}-${width}.${extension}`;
-      const details = await stat(path.join(root, relative));
-      assert.ok(details.isFile() && details.size > 5_000, `${relative} must be a non-empty optimized image`);
-      assert.ok(build.includes(`assets/private-beta/`), 'the Pages allowlist must ship private-beta images');
-    }
-  }
-}
+assert.doesNotMatch(
+  build,
+  /privateBetaImageFiles|assets\/private-beta\/.+\.(?:avif|webp|jpe?g)/i,
+  'Internet-sourced private-beta photography must not ship in the Pages artifact.',
+);
 
 const featurePreviewNames = [
   'anchor-cases.png',

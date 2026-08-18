@@ -45,7 +45,7 @@ assert.match(
 );
 assert.match(index, /id="btn-signin"[^>]*>The Docket<\/button>[\s\S]*<\/nav>/);
 assert.match(index, /id="page-community" class="page"/);
-assert.match(index, /assets\/phase2-law-library\.jpg/);
+assert.doesNotMatch(index, /assets\/phase2-law-library\.jpg|assets\/private-beta\/.+\.(?:avif|webp|jpe?g)/i);
 assert.match(index, /@media\(prefers-reduced-motion:reduce\)/);
 assert.doesNotMatch(index, /assets\/atmosphere\.mp4/);
 assert.doesNotMatch(index, /Continue to Next Item|subject-choice:after|→|↗|⤓/);

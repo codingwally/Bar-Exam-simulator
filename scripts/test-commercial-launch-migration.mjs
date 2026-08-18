@@ -248,6 +248,9 @@ test('commercial onboarding cannot grant a role or administrator authority', () 
   const onboarding = functionBlock('complete_commercial_profile_onboarding');
   assert.match(onboarding, /auth\.uid\(\)/);
   assert.match(onboarding, /'first_year','second_year','third_year','fourth_year','fifth_year','review','professor'/);
+  assert.match(onboarding, /if v_school_id = 'other'[\s\S]*p_law_school_other[\s\S]*not between 2 and 180/);
+  assert.match(onboarding, /law_school_id = v_school_id[\s\S]*law_school_other = case when v_school_id = 'other'/);
+  assert.doesNotMatch(onboarding, /v_school_id\s+not\s+in/i);
   assert.match(onboarding, /if v_category = 'professor'[\s\S]*Professor license declaration is required/);
   assert.match(onboarding, /insert into public\.professor_license_declarations/);
   assert.doesNotMatch(onboarding, /user_roles|founder_admin|super_admin|insert\s+into\s+public\.subscriptions/i);

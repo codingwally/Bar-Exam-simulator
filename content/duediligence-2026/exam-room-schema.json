@@ -946,7 +946,7 @@
       "system_of_record": "Protected database",
       "retention_or_exposure": "Aggregate analytics only",
       "google_backup_tab": "None",
-      "implementation_note": "Do not store prompt answer or Gemini response"
+      "implementation_note": "Do not store prompt answer or AI model response"
     },
     {
       "entity": "bar_easy_usage",
@@ -1006,7 +1006,7 @@
       "system_of_record": "Protected database",
       "retention_or_exposure": "User mastery only",
       "google_backup_tab": "None",
-      "implementation_note": "No answer body or Gemini rationale"
+      "implementation_note": "No answer body or AI model rationale"
     },
     {
       "entity": "class_enrollments",

@@ -51,11 +51,11 @@ await replaceIn('assets/phase2-config.js', [
   ['https://hbllomlijfznnuudpdvr.supabase.co', stagingSupabaseUrl],
   ['sb_publishable_lQRSlxJPTDkKQIiT0hTfdg_ANVRUzym', stagingPublishableKey],
   ['https://duediligence.ph/?auth=callback', `${stagingPublicUrl}/?auth=callback`],
-  ['https://duediligence-gemini-examiner.wallyesteban1993.workers.dev', stagingWorkerUrl],
+  ['https://api.duediligence.ph', stagingWorkerUrl],
 ]);
 
 await replaceIn('index.html', [
-  ['https://duediligence-gemini-examiner.wallyesteban1993.workers.dev', stagingWorkerUrl],
+  ['https://api.duediligence.ph', stagingWorkerUrl],
 ]);
 
 const stagedConfig = await readFile(
@@ -65,8 +65,8 @@ const stagedConfig = await readFile(
 const stagedIndex = await readFile(path.join(stagingRoot, 'index.html'), 'utf8');
 if (
   stagedConfig.includes('hbllomlijfznnuudpdvr')
-  || stagedConfig.includes('duediligence-gemini-examiner.wallyesteban1993.workers.dev')
-  || stagedIndex.includes('duediligence-gemini-examiner.wallyesteban1993.workers.dev')
+  || stagedConfig.includes('api.duediligence.ph')
+  || stagedIndex.includes('api.duediligence.ph')
 ) {
   throw new Error('Production backend configuration leaked into the staging artifact.');
 }

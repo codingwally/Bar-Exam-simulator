@@ -299,7 +299,7 @@ try {
     'a legally grounded narrative with meaningful application must not be penalized for omitting ALAC headings',
   );
   assert.equal(responseBody.assessment.maxScore, 5);
-  assert.equal(responseBody.assessment.modelUsed, 'gemini-3.6-flash');
+  assert.equal(responseBody.assessment.modelUsed, 'AI model');
   assert.equal(responseBody.assessment.questionAuthority, 'server_question_bank');
   assert.ok(responseBody.assessment.sources.length >= 2);
   assert.equal(geminiCalls, 2);

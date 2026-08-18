@@ -409,7 +409,7 @@ export function validateExaminerResult(raw, policy, supplementalSources = []) {
     throw new ExaminerError('MALFORMED_MODEL_RESPONSE', 'The examiner returned an incomplete ALAC model answer.', 502);
   }
 
-  // URLs must come from stored question-bank fields or Gemini grounding
+  // URLs must come from stored question-bank fields or AI model grounding
   // metadata. Model-authored URLs are untrusted and may be fabricated.
   const sources = sanitizeSources(supplementalSources);
   let assessmentType = ALLOWED_ASSESSMENT_TYPES.has(raw.assessmentType) ? raw.assessmentType : policy.assessmentType;

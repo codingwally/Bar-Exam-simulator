@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const WORKER_URL = 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev';
+const WORKER_URL = 'https://api.duediligence.ph';
 const SITE_ORIGIN = 'https://duediligence.ph';
 const SUPABASE_URL = 'https://hbllomlijfznnuudpdvr.supabase.co';
 const CONCURRENCY_LEVELS = [1, 2, 4, 8, 16];

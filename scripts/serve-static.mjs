@@ -4,7 +4,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const port = Number(process.env.DD_PREVIEW_PORT || 4173);
-const workerEndpoint = 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev';
+const workerEndpoint = 'https://api.duediligence.ph';
 const useWorkerProxy = process.env.DD_WORKER_PROXY === '1' || process.argv.includes('--worker-proxy');
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',

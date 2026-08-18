@@ -1,5 +1,5 @@
 {
-  "name": "duediligence-gemini-examiner-worker",
+  "name": "duediligence-ai-model-worker",
   "private": true,
   "type": "module",
   "engines": {

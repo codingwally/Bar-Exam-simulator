@@ -2554,7 +2554,7 @@ async function callGemini(env, prompt, groundingEnabled) {
         } catch (error) {
           providerFailureSeen = true;
           timeoutSeen ||= error?.name === 'AbortError';
-          console.warn('Gemini request failed before a response was received', {
+          console.warn('AI model request failed before a response was received', {
             model,
             grounding: useGrounding,
             attempt: requestAttempt + 1,
@@ -2570,7 +2570,7 @@ async function callGemini(env, prompt, groundingEnabled) {
         }
 
         if (!response.ok) {
-          console.warn('Gemini request rejected', {
+          console.warn('AI model request rejected', {
             model,
             status: response.status,
             grounding: useGrounding,
@@ -2644,7 +2644,7 @@ async function callGemini(env, prompt, groundingEnabled) {
   }
   throw new ExaminerError(
     'UNSUPPORTED_MODEL',
-    `No supported Gemini examiner model is currently available${lastUnsupported ? '.' : '.'}`,
+    `No supported AI model is currently available${lastUnsupported ? '.' : '.'}`,
     503,
   );
 }
@@ -2895,14 +2895,14 @@ Rewrite the entire JSON response once. Preserve the stored legal substance, retu
     const finalizedUsage = await finalizeGradeAccess(gradeAccess, env, {
       attemptId,
       assessment,
-      model: gemini.model,
+      model: 'AI model',
     });
     return jsonResponse({
       ok: true,
       attemptId,
       assessment: {
         ...assessment,
-        modelUsed: gemini.model,
+        modelUsed: 'AI model',
         workerVersion: env.WORKER_RELEASE || 'phase3-admin-analytics',
         gradedAt: new Date().toISOString(),
         questionAuthority: context.authority,
@@ -3532,7 +3532,7 @@ Return one complete schema-valid JSON assessment. Preserve the stored legal subs
   }
   return {
     assessment,
-    model: gemini.model,
+    model: 'AI model',
   };
 }
 
@@ -3766,7 +3766,7 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
         (value) => validateSubjectMatterTeachingExplanation(value, material),
       );
       explanation = generated.result;
-      explanationSource = 'gemini_curated';
+      explanationSource = 'ai_model_curated';
       teachingModel = generated.model;
     } catch (error) {
       console.warn('Subject Matter teaching explanation used curated fallback', {

@@ -1,6 +1,6 @@
 -- Founder-only, audited answer-history export across every persisted answer store.
 -- This is an additive administrator data layer. It does not change questions,
--- model answers, grading, Gemini, entitlements, or learner-facing behavior.
+-- model answers, grading, AI model, entitlements, or learner-facing behavior.
 
 begin;
 

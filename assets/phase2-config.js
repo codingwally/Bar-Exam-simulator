@@ -8,7 +8,7 @@
       publishableKey: 'sb_publishable_lQRSlxJPTDkKQIiT0hTfdg_ANVRUzym',
       oauthRedirectUrl: 'https://duediligence.ph/?auth=callback',
     }),
-    workerUrl: 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev',
+    workerUrl: 'https://api.duediligence.ph',
     guest: Object.freeze({
       gradeLimit: 3,
       deviceStorageKey: 'duediligence.guest.device.v1',

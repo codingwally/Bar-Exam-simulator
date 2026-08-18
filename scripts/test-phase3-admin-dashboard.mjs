@@ -33,7 +33,7 @@ const sectionLabels = [
   ['forum', 'Quorum'],
   ['support', 'Support'],
   ['corrections', 'Answer Corrections'],
-  ['subscriptions', 'Subscriptions'],
+  ['subscriptions', 'Access'],
   ['payments', 'Payments'],
   ['refunds', 'Refunds'],
   ['partnerships', 'Partnerships'],
@@ -113,14 +113,14 @@ assert.doesNotMatch(js, /'Lifetime grades'/);
 assert.match(js, /Download all answer records/);
 assert.match(js, /Suggested answer/);
 assert.match(js, /Model answer/);
-assert.match(js, /all current and future signed-in users/i);
+assert.match(js, /all signed-in users bypass commercial limits/i);
 assert.match(js, /api\('\/admin\/live-activity'/);
 assert.match(js, /api\('\/admin\/answer-history'/);
 assert.match(js, /api\('\/admin\/quorum\/posts'/);
 assert.match(js, /'Measure', 'Value', 'Meaning', 'Generated at'/);
 assert.match(js, /identity|Exact online names are withheld/i);
 assert.match(js, /'Answer type', 'Subject', 'Exam', 'Question',[\s\S]*'Student answer'/);
-assert.match(js, /'Category', 'Plan', 'Status', 'Current access',[\s\S]*'Questions answered'/);
+assert.match(js, /'Category', 'Plan record', 'Record status', 'Current access',[\s\S]*'Questions answered'/);
 assert.match(js, /'Posted', 'Name', 'Email', 'Type', 'Topic', 'Post', 'Status', 'Comments', 'Reports'/);
 assert.match(js, /\^\[\\s\\u0000-\\u001f\\u007f-\\u009f\]\*\[=\+\\-@\]/);
 

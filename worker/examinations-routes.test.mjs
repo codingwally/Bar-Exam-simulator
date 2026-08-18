@@ -374,12 +374,28 @@ test(`${track} AI completion suppresses email without calling a provider or fail
         }],
       });
     }
+    if (target === `${supabaseUrl}/rest/v1/rpc/phase4_reserve_grade_v2`) {
+      return Response.json({
+        allowed: true,
+        basis: 'free',
+        accessMode: 'free',
+        accountLabel: 'Free',
+        unlimited: false,
+        dailyLimit: 5,
+        completedToday: 0,
+        reservedToday: 1,
+        remainingToday: 4,
+        reservationId: '66666666-6666-4666-8666-666666666666',
+      });
+    }
     if (target.includes('generativelanguage.googleapis.com')) {
       return Response.json({
         candidates: [{ content: { parts: [{ text: JSON.stringify(examinationAssessment()) }] } }],
       });
     }
-    if (target === `${supabaseUrl}/rest/v1/rpc/examination_store_ai_assessment`) {
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_store_ai_assessment_commercial`) {
+      const payload = JSON.parse(options.body);
+      assert.equal(payload.p_reservation_id, '66666666-6666-4666-8666-666666666666');
       return Response.json({
         jobId,
         attemptId,
@@ -387,6 +403,7 @@ test(`${track} AI completion suppresses email without calling a provider or fail
         completedQuestions: 1,
         questionCount: 1,
         modelsReleased: true,
+        access: { allowed: true, accessMode: 'free', remainingToday: 4 },
       });
     }
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_record_delivery`) {

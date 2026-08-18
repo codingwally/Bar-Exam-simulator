@@ -67,6 +67,7 @@ jobs:
           node scripts/test-website-question-bank.mjs
           node scripts/test-private-beta-admission.mjs
           node scripts/test-duediligence-2026-migrations.mjs
+          node scripts/test-commercial-launch-migration.mjs
           node scripts/test-examination-room-2-migration.mjs
           node scripts/test-examination-room-past-exam-removal.mjs
           node scripts/test-examination-room-professor-virtual-room.mjs

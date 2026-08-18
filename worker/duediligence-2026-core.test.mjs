@@ -31,7 +31,7 @@ const examId = '123e4567-e89b-42d3-a456-426614174000';
 
 test('safe default feature flags preserve the human-review publication gate', () => {
   assert.equal(DD2026_DEFAULT_FLAGS.CONTENT_HUMAN_REVIEW_REQUIRED, false);
-  assert.equal(DD2026_DEFAULT_FLAGS.AI_PREPARED_BETA_BADGE, true);
+  assert.equal(DD2026_DEFAULT_FLAGS.AI_PREPARED_BETA_BADGE, false);
   assert.equal(DD2026_DEFAULT_FLAGS.EXAMINATION_ROOM_2_ENABLED, false);
 });
 

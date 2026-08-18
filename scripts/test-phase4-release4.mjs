@@ -7,6 +7,7 @@ const text = (relative) => read(relative).toString('utf8');
 const accessMigration = text('supabase/migrations/20260730_005_phase4_access_subscriptions.sql');
 const migration = text('supabase/migrations/20260730_008_phase4_payments_partnerships.sql');
 const premiumMigration = text('supabase/migrations/20260804_014_premium_499_entitlements.sql');
+const commercialMigration = text('supabase/migrations/20260818024644_commercial_launch_access.sql');
 const preflight = text('supabase/review/phase4_production_preflight.sql');
 const worker = text('worker/index.mjs');
 const paymentCore = text('worker/payment-core.mjs');
@@ -81,17 +82,23 @@ assert.match(paymentCore, /image\/jpeg/);
 assert.match(paymentCore, /application\/pdf/);
 assert.match(paymentCore, /6 \* 1024 \* 1024/);
 assert.match(paymentCore, /PLAN_UNAVAILABLE/);
-assert.match(paymentCore, /\['early_access_beta', 'standard', 'premium'\]\.includes\(planCode\)/);
+assert.match(paymentCore, /planCode !== 'early_access_beta'/);
+assert.match(paymentCore, /paymentMethod !== 'bpi_instapay'/);
+assert.match(paymentCore, /Math\.round\(amountPhp \* 100\) !== 14900/);
 assert.doesNotMatch(frontend, /assets\/payments\/gcash\.png|assets\/payments\/maribank\.png/);
-assert.doesNotMatch(frontend, /async function submitPayment\(|id="dd2-payment-form"/);
-assert.match(frontend, /Pricing will be announced after beta testing\./);
-assert.match(frontend, /Beta access active/);
+assert.match(frontend, /assets\/payments\/bpi-instapay-149\.png/);
+assert.match(frontend, /id="dd2-payment-form"/);
+assert.match(frontend, /async function submitCommercialPayment\(event\)/);
+assert.match(frontend, /Free and Early Access/);
+assert.match(frontend, /One-time payment\. No automatic renewal\./);
+assert.match(frontend, /Next paid-plan pricing will be announced separately\./);
+assert.doesNotMatch(frontend, /Beta access active/);
 assert.match(
   frontend,
   /async function submitPartnership\(event\) \{\s*event\.preventDefault\(\);\s*const form = event\.currentTarget;[\s\S]*?form\.reset\(\);/,
   'Partnership success must reset the captured form after awaiting the Worker.',
 );
-assert.match(frontend, /Premium-only Bar Feels/);
+assert.doesNotMatch(frontend, /Premium-only Bar Feels/);
 assert.doesNotMatch(frontend, /Explicit expiration set during Founder payment verification/);
 assert.match(frontend, /Partnerships/);
 assert.doesNotMatch(frontend, /plansandpricing@duediligence\.ph|Founder verifies the payment/);
@@ -111,8 +118,8 @@ assert.match(
   admin,
   /actionButton\('View private proof', 'view_payment_proof', row\.id, \{\}\)\.value/,
 );
-assert.match(publicPage, /assets\/phase2-experience\.js\?v=email-marketing-retired-20260817-1/);
-assert.match(publicPage, /assets\/phase4-experience\.js\?v=auth-persistence-20260812-1/);
+assert.match(publicPage, /assets\/phase2-experience\.js\?v=commercial-launch-20260818-1/);
+assert.match(publicPage, /assets\/phase4-experience\.js\?v=commercial-launch-20260818-1/);
 assert.match(adminPage, /admin\.css\?v=[a-z0-9-]+/i);
 assert.match(adminPage, /subscription-actions-core\.js\?v=[a-z0-9-]+/i);
 assert.match(adminPage, /admin\.js\?v=[a-z0-9-]+/i);
@@ -137,14 +144,19 @@ assert.match(productionBundleBuilder, /omitLedger \? 'omitted' : 'included'/);
 assert.doesNotMatch(productionBundleBuilder, /db push|service.role|access.token/i);
 
 for (const [relative, expected] of Object.entries({
-  'assets/payments/gcash.png':
-    'E750530C71EB0445FD8F801B70DE25B338504C63CEB55881B311B3AA48FA2D7F',
-  'assets/payments/maribank.png':
-    '1F6269F117AC35BB0B7D45636605413D610903732347211E1591399905972CD1',
+  'assets/payments/bpi-instapay-149.png':
+    '599DED503B037139002F6A4BCF1B3EF9B8013F9E0254C02E8F86AFEA2D3F1F7B',
 })) {
   const actual = createHash('sha256').update(read(relative)).digest('hex').toUpperCase();
   assert.equal(actual, expected, `${relative} must preserve the approved QR pixels`);
 }
+
+assert.match(commercialMigration, /payment_method in \('gcash', 'maribank', 'bpi_instapay'\)/);
+assert.match(commercialMigration, /if p_payment_method <> 'bpi_instapay'/);
+assert.match(commercialMigration, /'planCode', 'free'/);
+assert.match(commercialMigration, /'planCode', 'early_access_beta'/);
+assert.match(commercialMigration, /'pricePhp', 149/);
+assert.match(commercialMigration, /'dailyLimit', v_settings\.free_daily_grade_limit/);
 
 assert.match(preflight, /PHASE4_PREFLIGHT_PASSED_READ_ONLY/);
 assert.doesNotMatch(preflight, /\b(insert|update|delete|alter|create|drop|truncate|grant|revoke)\b/i);

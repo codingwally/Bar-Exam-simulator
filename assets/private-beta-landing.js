@@ -454,7 +454,7 @@
     const submit = document.getElementById('pb-code-submit');
     const api = privateBetaApi();
     if (!api) {
-      setStatus('pb-code-status', 'Private-beta access is temporarily unavailable. Please try again shortly.', 'error');
+      setStatus('pb-code-status', 'Controlled access is temporarily unavailable. Please try again shortly.', 'error');
       return;
     }
     state.busy = true;
@@ -472,7 +472,7 @@
     } catch (error) {
       const isRateLimited = error?.status === 429;
       setStatus('pb-code-status', isRateLimited
-        ? 'Private-beta access could not be verified. Wait before trying again.'
+        ? 'Controlled access could not be verified. Wait before trying again.'
         : 'That access code isn’t recognized. Review the hint and try again.', 'error');
       input?.focus?.();
     } finally {
@@ -518,20 +518,20 @@
     const button = document.getElementById('pb-final-continue');
     state.busy = true;
     if (button) button.disabled = true;
-    setStatus('pb-final-status', 'Confirming private-beta access…');
+    setStatus('pb-final-status', 'Confirming access…');
     try {
       const result = await api.completeAdmission({
         authAccessToken: session.access_token,
         disclosureEndReached: true,
         acknowledgements: checkboxValues('pb-final'),
       });
-      if (result.allowed !== true) throw new Error('Private-beta access was not granted.');
-      setStatus('pb-final-status', 'Private-beta access confirmed.', 'success');
+      if (result.allowed !== true) throw new Error('Access was not granted.');
+      setStatus('pb-final-status', 'Access confirmed.', 'success');
       showApplication();
     } catch (error) {
       const message = error?.code === 'PRIVATE_BETA_PENDING_REQUIRED'
         ? 'Your access-code verification expired. Verify the access code again.'
-        : 'Private-beta access could not be completed. Please try again.';
+        : 'Access could not be completed. Please try again.';
       setStatus('pb-final-status', message, 'error');
       if (error?.code === 'PRIVATE_BETA_PENDING_REQUIRED') showStage('code');
     } finally {
@@ -562,7 +562,7 @@
       if (api?.getPending?.()) {
         setStatus(
           'pb-google-status',
-          'Your access code is still verified. Continue with Google to resume private-beta admission.',
+          'Your access code is still verified. Continue with Google to resume secure access.',
         );
         openAdmission('google');
       } else if (new URLSearchParams(location.search).has('code')
@@ -599,14 +599,14 @@
     if (state.globalBetaEnabled) {
       setStatus(
         'pb-google-status',
-        'Your signed-in account could not be verified for Beta All Access. Please try again.',
+        'Your signed-in account could not be verified for access. Please try again.',
         'error',
       );
       openAdmission('google');
     } else {
       setStatus(
         'pb-disclosure-status',
-        'Google sign-in succeeded, but this browser could not restore the private-beta admission checkpoint. Review the disclosure and verify the access code again; you will not need to sign in to Google a second time.',
+        'Google sign-in succeeded, but this browser could not restore the secure-access checkpoint. Review the disclosure and verify the access code again; you will not need to sign in to Google a second time.',
         'error',
       );
       openAdmission('disclosure');
@@ -811,7 +811,7 @@
     document.querySelectorAll("input[id^='pb-final-']").forEach((input) => input.addEventListener('change', updateFinalAction));
     document.getElementById('pb-disclosure-continue')?.addEventListener('click', () => {
       if (!state.disclosureEndReached) {
-        setStatus('pb-disclosure-status', 'Please scroll through and read the complete Beta Disclosure before agreeing.', 'error');
+        setStatus('pb-disclosure-status', 'Please scroll through and read the complete Platform Disclosure before agreeing.', 'error');
         return;
       }
       if (!allAcknowledged('pb-pre')) {

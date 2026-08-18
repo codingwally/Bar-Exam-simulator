@@ -1334,35 +1334,25 @@ test('correction endpoint fails generically when storage configuration is absent
   }
 });
 
-test('payment field validation accepts trusted-plan shaped GCash and MariBank submissions', () => {
-  for (const paymentMethod of ['gcash', 'maribank']) {
-    const value = normalizePaymentFields({
-      planCode: 'standard',
-      amountPhp: '249.00',
-      paymentMethod,
-      paymentDate: '2026-07-28',
-      transactionReference: 'REF-2026-0001',
-      note: 'Paid through the selected channel.',
-    });
-    assert.equal(value.planCode, 'standard');
-    assert.equal(value.paymentMethod, paymentMethod);
-    assert.equal(value.amountPhp, 249);
-  }
+test('payment field validation accepts only the approved ₱149 BPI InstaPay checkout', () => {
+  const value = normalizePaymentFields({
+    planCode: 'early_access_beta',
+    amountPhp: '149.00',
+    paymentMethod: 'bpi_instapay',
+    paymentDate: '2026-08-18',
+    transactionReference: 'BPI-2026-0001',
+    note: 'Paid through the displayed BPI InstaPay QR.',
+  });
+  assert.equal(value.planCode, 'early_access_beta');
+  assert.equal(value.paymentMethod, 'bpi_instapay');
+  assert.equal(value.amountPhp, 149);
 });
 
-test('payment validation accepts Premium and rejects unsupported channels and malformed references', () => {
-  const premium = normalizePaymentFields({
-    planCode: 'premium',
-    amountPhp: 499,
-    paymentMethod: 'gcash',
-    paymentDate: '2026-07-28',
-    transactionReference: 'PREMIUM-REF-1',
-  });
-  assert.equal(premium.planCode, 'premium');
-  assert.equal(premium.amountPhp, 499);
+test('payment validation rejects retired plans, unapproved channels, and malformed references', () => {
   for (const input of [
-    { planCode: 'standard', amountPhp: 249, paymentMethod: 'maya', paymentDate: '2026-07-28', transactionReference: 'REF-1' },
-    { planCode: 'standard', amountPhp: 249, paymentMethod: 'gcash', paymentDate: '2026-07-28', transactionReference: '<script>' },
+    { planCode: 'premium', amountPhp: 499, paymentMethod: 'bpi_instapay', paymentDate: '2026-08-18', transactionReference: 'REF-1' },
+    { planCode: 'early_access_beta', amountPhp: 149, paymentMethod: 'gcash', paymentDate: '2026-08-18', transactionReference: 'REF-1' },
+    { planCode: 'early_access_beta', amountPhp: 149, paymentMethod: 'bpi_instapay', paymentDate: '2026-08-18', transactionReference: '<script>' },
   ]) {
     assert.throws(() => normalizePaymentFields(input), PaymentValidationError);
   }
@@ -1419,12 +1409,16 @@ test('refund and partnership validation require strong identifiers, contact, mes
   }), PaymentValidationError);
 });
 
-test('plans endpoint conceals commercial values throughout public beta by default', async () => {
+test('plans endpoint exposes only Free and the approved one-time Early Access offer', async () => {
   const originalFetch = globalThis.fetch;
-  let storageCalled = false;
-  globalThis.fetch = async () => {
-    storageCalled = true;
-    throw new Error('Public beta plan requests must not query commercial storage.');
+  globalThis.fetch = async (url) => {
+    if (String(url).endsWith('/rest/v1/rpc/phase4_plan_catalog')) {
+      return Response.json([
+        { planCode: 'free', pricePhp: 0, checkoutEnabled: false },
+        { planCode: 'early_access_beta', pricePhp: 149, checkoutEnabled: true },
+      ]);
+    }
+    throw new Error(`Unexpected plans fetch: ${url}`);
   };
   try {
     const response = await worker.fetch(new Request('https://worker.example/plans', {
@@ -1434,22 +1428,18 @@ test('plans endpoint conceals commercial values throughout public beta by defaul
       ALLOWED_ORIGIN: reliabilityOrigin,
       SUPABASE_URL: 'https://test.supabase.co',
       SUPABASE_SERVICE_ROLE_KEY: 'test-only-service-role',
+      PRIVATE_BETA_GATE_ENABLED: 'true',
     });
-    const raw = await response.text();
-    const payload = JSON.parse(raw);
+    const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.pricingHidden, true);
-    assert.equal(payload.betaAccessActive, true);
-    assert.deepEqual(payload.plans, []);
-    assert.equal(payload.message, 'Pricing will be announced after beta testing.');
-    assert.equal(storageCalled, false);
-    assert.doesNotMatch(raw, /price|amount|paymentMethod|gcash|maribank/i);
+    assert.deepEqual(payload.plans.map((plan) => plan.planCode), ['free', 'early_access_beta']);
+    assert.equal(payload.plans[1].pricePhp, 149);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test('plans endpoint returns database-configured plans including active Premium', async () => {
+test('plans endpoint defensively removes retired Standard and Premium rows', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     if (String(url).endsWith('/rest/v1/rpc/phase4_plan_catalog')) {
@@ -1473,8 +1463,7 @@ test('plans endpoint returns database-configured plans including active Premium'
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.plans.length, 3);
-    assert.equal(payload.plans[2].checkoutEnabled, true);
+    assert.deepEqual(payload.plans.map((plan) => plan.planCode), ['early_access_beta']);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1497,16 +1486,16 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
     if (target.endsWith('/rest/v1/rpc/phase4_create_payment_request')) {
       const body = JSON.parse(init.body);
       assert.equal(body.p_user_id, '11111111-1111-4111-8111-111111111111');
-      assert.equal(body.p_plan_code, 'standard');
-      assert.equal(body.p_payment_method, 'gcash');
-      assert.equal(body.p_amount_php, 249);
+      assert.equal(body.p_plan_code, 'early_access_beta');
+      assert.equal(body.p_payment_method, 'bpi_instapay');
+      assert.equal(body.p_amount_php, 149);
       assert.match(body.p_proof_object_path, /^11111111-1111-4111-8111-111111111111\/[0-9a-f-]+\.png$/);
       assert.match(body.p_proof_sha256, /^[0-9a-f]{64}$/);
       return Response.json({
         id: '22222222-2222-4222-8222-222222222222',
         status: 'pending',
-        planCode: 'standard',
-        amountPhp: 249,
+        planCode: 'early_access_beta',
+        amountPhp: 149,
         replayed: false,
       });
     }
@@ -1514,11 +1503,11 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
   };
   try {
     const form = new FormData();
-    form.set('planCode', 'standard');
-    form.set('amountPhp', '249');
-    form.set('paymentMethod', 'gcash');
-    form.set('paymentDate', '2026-07-28');
-    form.set('transactionReference', 'GCASH-TEST-001');
+    form.set('planCode', 'early_access_beta');
+    form.set('amountPhp', '149');
+    form.set('paymentMethod', 'bpi_instapay');
+    form.set('paymentDate', '2026-08-18');
+    form.set('transactionReference', 'BPI-TEST-001');
     form.set('note', 'Synthetic Worker test');
     form.set(
       'proof',
@@ -1565,11 +1554,11 @@ test('unsafe payment proof fails before any private upload or database call', as
   };
   try {
     const form = new FormData();
-    form.set('planCode', 'standard');
-    form.set('amountPhp', '249');
-    form.set('paymentMethod', 'maribank');
-    form.set('paymentDate', '2026-07-28');
-    form.set('transactionReference', 'MARIBANK-TEST-001');
+    form.set('planCode', 'early_access_beta');
+    form.set('amountPhp', '149');
+    form.set('paymentMethod', 'bpi_instapay');
+    form.set('paymentDate', '2026-08-18');
+    form.set('transactionReference', 'BPI-TEST-UNSAFE-001');
     form.set('proof', new File(['<html>unsafe</html>'], 'proof.png', { type: 'image/png' }));
     const response = await worker.fetch(new Request('https://worker.example/payments/submit', {
       method: 'POST',

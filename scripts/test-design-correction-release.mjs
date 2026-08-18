@@ -115,6 +115,8 @@ assert.match(examJs, /registerReset\?\.\([\s\S]*resetForIdentityChange\(\);[\s\S
   'User-scoped Subject Matter preferences must reload after initial sign-in and identity changes.');
 assert.match(examCss, /\.dd-subject-selection-callout\s*\{[\s\S]*?width:\s*min\(760px, 100%\);[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;[\s\S]*?align-items:\s*center;[\s\S]*?margin:\s*clamp\([^;]+\) auto 0;[\s\S]*?text-align:\s*center/,
   'The first-time selector must be a genuinely centered one-column onboarding stack.');
+assert.match(examCss, /\.dd-subject-selection-callout > \.dd-exam-kicker\s*\{[\s\S]*?color:\s*#e6bd59/,
+  'The Subject Matter chooser kicker must retain WCAG AA contrast on its navy surface.');
 assert.match(perSubject, /<p class="dd-subject-selection-summary">[\s\S]*?<button class="dd-control dd-exam-button is-primary dd-subject-selection-button"[^>]*data-subject-selector-open[^>]*>[\s\S]*?Browse courses[\s\S]*?<\/button>/,
   'Browse courses must sit below the study prompt and use the shared primary control.');
 assert.match(examCss, /\.dd-subject-year > summary,[\s\S]*?\.dd-subject-term > summary\s*\{[\s\S]*?min-height:\s*44px/,
@@ -283,7 +285,7 @@ assert.match(html, /assets\/phase2\.css\?release=subject-matter-gil-fixes-202608
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-20260817-subject-matter-controls-4/);
+assert.match(serviceWorker, /duediligence-shell-20260818-commercial-launch-1/);
 assert.match(serviceWorker, /due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(serviceWorker, /private-beta-landing\.css[^'\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(serviceWorker, /study-workspace\.css[^'\n]*subject-matter-gil-fixes-20260817-4/);

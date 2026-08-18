@@ -39,27 +39,24 @@
   font: 700 26px/1.2 var(--serif, Georgia, serif);
 }
 
-.dd2-payment-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.dd2-payment-channel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   margin: 22px 0 14px;
-}
-
-.dd2-payment-tab {
-  min-height: 44px;
-  color: var(--dd2-navy);
-  background: #fff;
-  border: 1px solid var(--dd2-line);
-  border-radius: 4px;
-  font: 750 13px/1 var(--sans, sans-serif);
-  cursor: pointer;
-}
-
-.dd2-payment-tab.is-active {
+  padding: 13px 15px;
   color: #fff;
   background: var(--dd2-navy);
-  border-color: var(--dd2-navy);
+  border: 1px solid var(--dd2-gold);
+  border-radius: 4px;
+  font: 750 13px/1.3 var(--sans, sans-serif);
+}
+
+.dd2-payment-channel strong {
+  color: #f7d978;
+  font-size: 12px;
+  letter-spacing: .03em;
 }
 
 .dd2-qr-frame {
@@ -110,6 +107,23 @@
   grid-column: 1 / -1;
   margin: 0;
   color: var(--dd2-muted);
+}
+
+.dd2-qr-frame picture {
+  display: block;
+}
+
+@media (max-width: 480px) {
+  .dd2-payment-channel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.dd2-record .dd2-button {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: 8px;
 }
 
 .dd2-record-status {
@@ -182,30 +196,38 @@
   box-shadow: var(--dd2-shadow);
 }
 
-.dd2-entry::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -2;
-  background:
-    linear-gradient(90deg, rgba(4, 16, 35, .28) 0%, rgba(4, 16, 35, .48) 51%, rgba(4, 16, 35, .92) 100%),
-    url("phase2-law-library.jpg") center/cover no-repeat;
-}
-
-.dd2-entry::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(180deg, rgba(7, 24, 47, .05), rgba(7, 24, 47, .52));
-  pointer-events: none;
-}
-
 .dd2-entry-story {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  overflow: hidden;
   padding: 54px;
+}
+
+.dd2-entry-media,
+.dd2-entry-media::after {
+  position: absolute;
+  inset: 0;
+}
+
+.dd2-entry-media {
+  z-index: -2;
+  display: block;
+}
+
+.dd2-entry-media::after {
+  content: "";
+  background: linear-gradient(180deg, rgba(4, 16, 35, .12), rgba(4, 16, 35, .88));
+}
+
+.dd2-entry-media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: 58% center;
 }
 
 .dd2-entry-kicker,
@@ -518,10 +540,13 @@ textarea.dd2-field {
 
 .dd2-plan-grid {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
 .dd2-plan {
+  display: flex;
+  flex-direction: column;
   padding: 22px;
   background: var(--dd2-paper);
   border: 1px solid rgba(15, 39, 68, .15);
@@ -529,6 +554,35 @@ textarea.dd2-field {
   border-radius: 4px;
   box-shadow: 0 10px 30px rgba(7, 24, 47, .06);
 }
+
+.dd2-plan-featured {
+  border-color: rgba(184, 147, 79, .55);
+  background: linear-gradient(145deg, #fffdf8 0%, #f7eed8 100%);
+  box-shadow: 0 16px 38px rgba(77, 55, 16, .12);
+}
+
+.dd2-plan > p { margin: 14px 0 0; }
+.dd2-plan ul { flex: 1; }
+
+.dd2-plan-date,
+.dd2-plan-note {
+  color: var(--dd2-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.dd2-plan-date strong { color: var(--dd2-navy); }
+
+.dd2-loading-line {
+  grid-column: 1 / -1;
+  padding: 28px;
+  text-align: center;
+  color: var(--dd2-muted);
+  border: 1px solid var(--dd2-line);
+  background: rgba(255,255,255,.62);
+}
+
+.dd2-pricing-intro { margin-bottom: 22px; }
 
 .dd2-plan-head {
   display: flex;
@@ -556,6 +610,19 @@ textarea.dd2-field {
   text-align: right;
   text-transform: uppercase;
   letter-spacing: .09em;
+}
+
+.dd2-badge {
+  display: inline-flex;
+  margin-top: 7px;
+  padding: 5px 7px;
+  color: #735217;
+  background: rgba(184, 147, 79, .12);
+  border: 1px solid rgba(184, 147, 79, .3);
+  border-radius: 999px;
+  font: 750 9px/1 var(--mono, monospace);
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 
 .dd2-plan ul {
@@ -673,6 +740,13 @@ textarea.dd2-field {
 
 .dd2-onboarding-grid .dd2-wide { grid-column: 1 / -1; }
 
+.dd2-field-help {
+  display: block;
+  margin-top: 7px;
+  color: var(--dd2-muted);
+  font: 500 11px/1.5 var(--sans, sans-serif);
+}
+
 body.dd2-locked {
   overflow: hidden;
 }
@@ -690,11 +764,7 @@ body.dd2-locked {
     max-height: 96vh;
     overflow: auto;
   }
-  .dd2-entry::before {
-    background:
-      linear-gradient(180deg, rgba(4, 16, 35, .3), rgba(4, 16, 35, .84)),
-      url("phase2-law-library.jpg") 30% center/cover no-repeat;
-  }
+  .dd2-entry-media img { object-position: 58% 35%; }
   .dd2-entry-story {
     min-height: 245px;
     padding: 32px 26px 24px;
@@ -714,6 +784,7 @@ body.dd2-locked {
   }
   .dd2-onboarding-grid { grid-template-columns: 1fr; }
   .dd2-onboarding-grid .dd2-wide { grid-column: auto; }
+  .dd2-plan-grid { grid-template-columns: 1fr; }
   .dd2-reminder-actions { flex-direction: column-reverse; }
   .dd2-button { width: 100%; }
 }

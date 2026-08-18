@@ -305,7 +305,11 @@ const welcomeState = {
         select() { return query; },
         eq() { return query; },
         maybeSingle() {
-          return Promise.resolve({ data: { id: welcomeState.user.id, display_name: 'Esteban' } });
+          return Promise.resolve({ data: {
+            id: welcomeState.user.id,
+            display_name: 'Esteban',
+            profile_completed_at: '2026-08-13T00:00:00Z',
+          } });
         },
         limit() {
           return Promise.resolve({
@@ -330,6 +334,10 @@ const loadUserStateFor = vm.runInNewContext(
       legal: { termsVersion: 'terms-test', privacyVersion: 'privacy-test' },
       features: { adminDashboard: false },
       workerUrl: 'https://worker.invalid',
+    },
+    commercialLegal: {
+      termsVersion: 'terms-commercial-v1-2026-08-18',
+      privacyVersion: 'privacy-commercial-v1-2026-08-18',
     },
     global: {
       toast(message, tone) {

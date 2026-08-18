@@ -42,7 +42,11 @@ for (const expected of [
   'Guest access includes 3 graded questions across all subjects.',
   'You have completed your 3 guest questions.',
   'accept_terms',
-  'complete_profile_onboarding',
+  'complete_commercial_profile_onboarding',
+  'terms-commercial-v1-2026-08-18',
+  'privacy-commercial-v1-2026-08-18',
+  'Free and Early Access',
+  'five successful question submissions per Philippine calendar day',
 ]) {
   assert.ok(experience.includes(expected), `Phase 2 experience must include: ${expected}`);
 }
@@ -79,7 +83,7 @@ assert.ok(index.includes('data-dd2-view="privacy"'));
 assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
-assert.ok(index.includes('assets/phase2-experience.js?v=email-marketing-retired-20260817-1'));
+assert.ok(index.includes('assets/phase2-experience.js?v=commercial-launch-20260818-1'));
 
 for (const table of [
   'guest_grading_usage',
@@ -119,4 +123,4 @@ for (const forbidden of [
   assert.doesNotMatch(`${index}\n${experience}\n${configSource}\n${migration}\n${worker}`, forbidden);
 }
 
-console.log('Phase 2 authentication, guest-limit, support, and concealed beta pricing contract tests passed.');
+console.log('Phase 2 authentication, commercial onboarding, support, and access contract tests passed.');

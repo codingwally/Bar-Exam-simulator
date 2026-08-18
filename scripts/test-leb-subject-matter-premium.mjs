@@ -164,23 +164,21 @@ assert.match(phase2Config, /id: 'premium'[\s\S]*pricingHidden: true/);
 assert.match(phase2Config, /id: 'premium'[\s\S]*previewStatus: 'beta'/);
 assert.match(phase2Config, /Pricing will be announced after beta testing\./);
 assert.doesNotMatch(phase2Config, /pricePhp|priceCentavos|amountPhp|₱/);
-assert.match(phase2Experience, /Premium-only Bar Feels/);
-assert.match(phase2Experience, /Beta access active/);
-assert.match(phase2Experience, /Pricing will be announced after beta testing\./);
-assert.doesNotMatch(
-  phase2Experience,
-  /Payment awaiting review|submitPayment\(|dd2-payment-form|pricePhp|amountPhp|₱/i,
-);
+assert.doesNotMatch(phase2Experience, /Premium-only Bar Feels|Beta access active/);
+assert.match(phase2Experience, /Free and Early Access/);
+assert.match(phase2Experience, /₱149/);
+assert.match(phase2Experience, /id="dd2-payment-form"/);
+assert.match(phase2Experience, /Next paid-plan pricing will be announced separately\./);
 
 assert.match(adminActions, /'Suspend'/);
 assert.match(adminActions, /'Expire now'/);
 assert.match(adminActions, /'Revoke'/);
 assert.match(adminActions, /'Restore'/);
-assert.match(admin, /Beta All Access/);
 assert.match(admin, /Admin & Staff/);
-assert.match(admin, /Beta Tester/);
+assert.match(admin, /Founding Beta/);
+assert.match(admin, /Early Access — verified/);
 assert.match(admin, /subscription-search/);
-assert.match(admin, /Select a future Premium expiration/);
+assert.doesNotMatch(admin, /Select a future Premium expiration/);
 
 assert.match(worker, /examination_authorize_access/);
 assert.match(worker, /phase4_admin_manage_subscription/);
@@ -189,7 +187,7 @@ assert.match(worker, /phase4_admin_premium_access/);
 assert.match(paymentCore, /\['early_access_beta', 'standard', 'premium'\]/);
 assert.match(
   publicPage,
-  /hasOverrideAccess = access\?\.globalBeta\?\.active === true[\s\S]*examinationBeta\?\.active/,
+  /async function openPremiumBarFeels[\s\S]*refreshAccess\(\)[\s\S]*openBarFeels\(\)/,
 );
 assert.match(examinationCore, /EXAM_PREMIUM_REQUIRED/);
 assert.match(examinationCore, /'quiz'/);
@@ -210,7 +208,8 @@ for (const timerLabel of ['12-minute practice', 'Stopwatch', 'Untimed practice']
 }
 assert.match(examinations, /preferredTimerMode: 'selfPaced'/,
   'Subject Matter must default to Stopwatch without a mandatory timing interruption.');
-assert.match(examinations, /Questions appear in a random, no-repeat cycle/);
+assert.match(examinations, /Selecting a new question from your no-repeat cycle/);
+assert.match(examinations, /resetCycle: options\.resetCycle === true/);
 assert.match(
   examinations,
   /async function openVerdict\(attemptId\) \{\s*const track = state\.active\?\.examination\?\.track \|\| state\.track;\s*state\.screen = 'verdict';/,
@@ -236,4 +235,4 @@ const digest = createHash('sha256').update(JSON.stringify({
 })).digest('hex');
 assert.match(contentMigration, new RegExp(`Source digest: ${digest}`));
 
-console.log('LEB Subject Matter and Premium ₱499 release contract checks passed.');
+console.log('LEB Subject Matter historical-entitlement and commercial-retirement contract checks passed.');

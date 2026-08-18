@@ -13,8 +13,10 @@ for (const source of [phase2, phase4, admin]) {
 assert.match(phase2, /guest grades left/);
 assert.doesNotMatch(phase2, /three lifetime AI grades/);
 assert.doesNotMatch(phase4, /three lifetime free grades are exhausted/);
-assert.match(phase2, /Beta All Access/);
-assert.match(phase4, /Beta All Access/);
+assert.match(phase2, /five successful question submissions per Philippine calendar day/);
+assert.match(phase4, /five successful submissions for today/);
+assert.doesNotMatch(phase2, /Beta All Access/);
+assert.doesNotMatch(phase4, /Beta All Access/);
 assert.doesNotMatch(admin, /'Lifetime grades'/);
 
-console.log('Lifetime-grade counters are hidden while entitlement and guest-preview copy remain intact.');
+console.log('Lifetime-grade counters are retired while commercial daily-access copy remains intact.');

@@ -12,11 +12,23 @@ import {
 } from '../worker/release-content-core.mjs';
 
 const fetchCsv = async (url) => {
-  const response = await fetch(url, { headers: { Accept: 'text/csv' } });
-  assert.equal(response.ok, true, `Published source failed: ${response.status}`);
-  const csv = await response.text();
-  assert.ok(csv.length > 10_000, 'Published source was unexpectedly small.');
-  return csv;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const response = await fetch(url, {
+      headers: { Accept: 'text/csv' },
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (response.ok) {
+      const csv = await response.text();
+      assert.ok(csv.length > 10_000, 'Published source was unexpectedly small.');
+      return csv;
+    }
+    const retryable = response.status === 409 || response.status === 429 || response.status >= 500;
+    if (!retryable || attempt === 3) {
+      assert.fail(`Published source failed: ${response.status}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+  }
+  assert.fail('Published source could not be loaded.');
 };
 
 const [
@@ -118,9 +130,11 @@ for (const featureId of ['spa-mock', 'spa-subject-matter', 'spa-progress', 'spa-
   assert.match(html, new RegExp(`id="${featureId}"`));
 }
 assert.doesNotMatch(html, /Co-Counsel|Joint Venture/);
-assert.doesNotMatch(experience, /Co-Counsel|Joint Venture|amountPhp|pricePhp|₱/);
-assert.match(experience, /Pricing will be announced after beta testing\./);
-assert.match(experience, /Beta access active\./);
+assert.doesNotMatch(experience, /Co-Counsel|Joint Venture/);
+assert.match(experience, /Early Access is a one-time ₱149 offer available through September 1, 2026/);
+assert.match(experience, /planCode: 'free', name: 'Free', pricePhp: 0/);
+assert.match(experience, /assets\/payments\/bpi-instapay-149\.png/);
+assert.doesNotMatch(experience, /Pricing will be announced after beta testing\.|Beta access active\./);
 
 assert.match(examinations, /operation: 'subject_catalog'/);
 assert.match(examinations, /operation: 'subject_next'/);
@@ -134,7 +148,8 @@ assert.match(forum, /affirm_roster/);
 assert.match(worker, /\/admin\/content\/sync/);
 assert.match(worker, /release_stage_subject_matter_v2/);
 assert.match(worker, /release_finalize_all_content_v2/);
-assert.match(worker, /PUBLIC_PRICING_ENABLED/);
+assert.match(worker, /phase4_plan_catalog/);
+assert.match(worker, /\['free', 'early_access_beta'\]\.includes/);
 assert.match(migration, /alter table public\.forum_posts force row level security;/);
 assert.match(
   migration,

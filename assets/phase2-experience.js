@@ -37,7 +37,71 @@
   });
 
   const originalContinueAsGuest = global.continueAsGuest;
-  const legalReviewNotice = 'Beta document — prepared for independent legal review.';
+  const commercialLegal = Object.freeze({
+    termsVersion: 'terms-commercial-v1-2026-08-18',
+    privacyVersion: 'privacy-commercial-v1-2026-08-18',
+  });
+  const legalReviewNotice = 'Commercial launch document — prepared for independent legal review.';
+  const lawSchools = Object.freeze([
+    ['adamson-university', 'Adamson University'],
+    ['angeles-university-foundation', 'Angeles University Foundation'],
+    ['arellano-university', 'Arellano University'],
+    ['ateneo-de-davao-university', 'Ateneo de Davao University'],
+    ['ateneo-de-manila-university', 'Ateneo de Manila University'],
+    ['ateneo-de-naga-university', 'Ateneo de Naga University'],
+    ['ateneo-de-zamboanga-university', 'Ateneo de Zamboanga University'],
+    ['batangas-state-university', 'Batangas State University'],
+    ['bicol-university', 'Bicol University'],
+    ['bukidnon-state-university', 'Bukidnon State University'],
+    ['bulacan-state-university', 'Bulacan State University'],
+    ['cagayan-state-university', 'Cagayan State University'],
+    ['cainta-catholic-college', 'Cainta Catholic College'],
+    ['catanduanes-state-university', 'Catanduanes State University'],
+    ['central-philippine-university', 'Central Philippine University'],
+    ['centro-escolar-university', 'Centro Escolar University'],
+    ['city-university-of-pasay', 'City University of Pasay'],
+    ['cotabato-state-university', 'Cotabato State University'],
+    ['de-la-salle-lipa', 'De La Salle Lipa'],
+    ['de-la-salle-university', 'De La Salle University'],
+    ['de-la-salle-university-dasmarinas', 'De La Salle University – Dasmariñas'],
+    ['far-eastern-university', 'Far Eastern University'],
+    ['father-saturnino-urios-university', 'Father Saturnino Urios University'],
+    ['foundation-university', 'Foundation University'],
+    ['holy-name-university', 'Holy Name University'],
+    ['jose-rizal-university', 'Jose Rizal University'],
+    ['liceo-de-cagayan-university', 'Liceo de Cagayan University'],
+    ['lyceum-of-the-philippines-university', 'Lyceum of the Philippines University'],
+    ['manuel-l-quezon-university', 'Manuel L. Quezon University'],
+    ['mariano-marcos-state-university', 'Mariano Marcos State University'],
+    ['new-era-university', 'New Era University'],
+    ['notre-dame-university', 'Notre Dame University'],
+    ['palawan-state-university', 'Palawan State University'],
+    ['pamantasan-ng-lungsod-ng-maynila', 'Pamantasan ng Lungsod ng Maynila'],
+    ['philippine-christian-university', 'Philippine Christian University'],
+    ['polytechnic-university-of-the-philippines', 'Polytechnic University of the Philippines'],
+    ['saint-louis-university', 'Saint Louis University'],
+    ['san-beda-university', 'San Beda University'],
+    ['san-beda-college-alabang', 'San Beda College Alabang'],
+    ['san-sebastian-college-recoletos', 'San Sebastian College-Recoletos'],
+    ['silliman-university', 'Silliman University'],
+    ['university-of-batangas', 'University of Batangas'],
+    ['university-of-cagayan-valley', 'University of Cagayan Valley'],
+    ['university-of-cebu', 'University of Cebu'],
+    ['university-of-eastern-philippines', 'University of Eastern Philippines'],
+    ['university-of-makati', 'University of Makati'],
+    ['university-of-mindanao', 'University of Mindanao'],
+    ['university-of-negros-occidental-recoletos', 'University of Negros Occidental-Recoletos'],
+    ['university-of-northern-philippines', 'University of Northern Philippines'],
+    ['university-of-perpetual-help-system', 'University of Perpetual Help System'],
+    ['university-of-san-agustin', 'University of San Agustin'],
+    ['university-of-san-carlos', 'University of San Carlos'],
+    ['university-of-santo-tomas', 'University of Santo Tomas'],
+    ['university-of-the-cordilleras', 'University of the Cordilleras'],
+    ['university-of-the-east', 'University of the East'],
+    ['university-of-the-philippines', 'University of the Philippines'],
+    ['university-of-the-visayas', 'University of the Visayas'],
+    ['xavier-university-ateneo-de-cagayan', 'Xavier University – Ateneo de Cagayan'],
+  ]);
   const authReturnStorageKey = 'duediligence.auth.return.v1';
   const authAttemptStorageKey = 'duediligence.auth.attempt.v1';
   const pendingSubmissionStorageKey = 'duediligence.pending-submission.v1';
@@ -126,6 +190,13 @@
       </svg>`;
   }
 
+  function schoolOptionsMarkup(selected = '') {
+    const normalized = String(selected || '').toLowerCase();
+    return lawSchools
+      .map(([value, label]) => `<option value="${escapeHtml(value)}"${normalized === value ? ' selected' : ''}>${escapeHtml(label)}</option>`)
+      .join('');
+  }
+
   function injectShell() {
     if (document.getElementById('dd2-entry-overlay')) return;
     document.body.insertAdjacentHTML('beforeend', `
@@ -133,9 +204,16 @@
         aria-labelledby="dd2-entry-title" aria-describedby="dd2-entry-copy" aria-hidden="true">
         <section class="dd2-entry" tabindex="-1">
           <div class="dd2-entry-story">
+            <picture class="dd2-entry-media" aria-hidden="true">
+              <source type="image/avif" media="(max-width: 820px)" srcset="assets/private-beta/library-student-720.avif">
+              <source type="image/webp" media="(max-width: 820px)" srcset="assets/private-beta/library-student-720.webp">
+              <source type="image/avif" srcset="assets/private-beta/library-student-1440.avif">
+              <source type="image/webp" srcset="assets/private-beta/library-student-1440.webp">
+              <img src="assets/private-beta/library-student-1440.jpg" alt="" width="1440" height="1800" decoding="async">
+            </picture>
             <div class="dd2-entry-kicker">Philippine Bar Essay Preparation</div>
             <h2>Prepare with conviction.</h2>
-            <p>Serious essay practice, disciplined ALAC structure, and source-based feedback in a private chamber built for future lawyers.</p>
+            <p>Serious essay practice, disciplined ALAC structure, and source-based feedback in a chamber built for future lawyers.</p>
           </div>
           <div class="dd2-entry-panel">
             <button type="button" class="dd2-close dd2-entry-close" id="dd2-entry-close"
@@ -188,36 +266,43 @@
           <button type="button" class="dd2-close dd2-card-close" id="dd2-onboarding-close" aria-label="Close setup and return to the homepage">×</button>
           <div class="dd2-view-kicker">First-time setup</div>
           <h2 id="dd2-onboarding-title">Make this chamber yours.</h2>
-          <p>Tell us where you are in your legal studies. Your school and year level are optional if you are not yet enrolled.</p>
+          <p>Tell us where you are in your legal studies. This information personalizes your Docket and does not grant an administrative or teaching role.</p>
           <form class="dd2-form" id="dd2-onboarding-form">
             <div class="dd2-onboarding-grid">
               <label class="dd2-label dd2-wide">Display name
                 <input class="dd2-field" id="dd2-display-name" maxlength="120" autocomplete="name" required>
               </label>
-              <label class="dd2-label">Enrollment status
-                <select class="dd2-field" id="dd2-enrollment-status" required>
-                  <option value="enrolled">Currently enrolled</option>
-                  <option value="not_yet_enrolled">Not yet enrolled</option>
-                </select>
-              </label>
-              <label class="dd2-label">Year level
-                <select class="dd2-field" id="dd2-year-level">
-                  <option value="">Select year level</option>
-                  <option value="1">First year</option>
-                  <option value="2">Second year</option>
-                  <option value="3">Third year</option>
-                  <option value="4">Fourth year</option>
-                  <option value="review">Graduate / Bar review</option>
-                </select>
-              </label>
               <label class="dd2-label dd2-wide">Law school
-                <input class="dd2-field" id="dd2-school" maxlength="180" autocomplete="organization">
+                <select class="dd2-field" id="dd2-school" required>
+                  <option value="">Select your law school</option>
+                  ${schoolOptionsMarkup()}
+                  <option value="other">Other LEB-recognized school</option>
+                </select>
+              </label>
+              <label class="dd2-label dd2-wide" id="dd2-school-other-wrap" hidden>Other law school
+                <input class="dd2-field" id="dd2-school-other" maxlength="180" autocomplete="organization" placeholder="Enter the complete school name">
+              </label>
+              <label class="dd2-label dd2-wide">Year or category
+                <select class="dd2-field" id="dd2-year-level" required>
+                  <option value="">Select year or category</option>
+                  <option value="first_year">First Year</option>
+                  <option value="second_year">Second Year</option>
+                  <option value="third_year">Third Year</option>
+                  <option value="fourth_year">Fourth Year</option>
+                  <option value="fifth_year">Fifth Year</option>
+                  <option value="review">Review / Bar Candidate</option>
+                  <option value="professor">Professor</option>
+                </select>
+              </label>
+              <label class="dd2-label dd2-wide" id="dd2-professor-license-wrap" hidden>Professor license declaration
+                <input class="dd2-field" id="dd2-professor-license" maxlength="80" autocomplete="off" placeholder="IBP or professional license number">
+                <span class="dd2-field-help">A declaration is stored privately for verification. It does not grant Professor or administrator authority.</span>
               </label>
             </div>
             <label class="dd2-check">
               <input type="checkbox" id="dd2-legal-acceptance" required>
-              <span>I accept the <button class="link-button" type="button" data-dd2-view="terms">Beta Terms</button>
-                and acknowledge the <button class="link-button" type="button" data-dd2-view="privacy">Beta Privacy Notice</button>.</span>
+              <span>I accept the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>
+                and acknowledge the <button class="link-button" type="button" data-dd2-view="privacy">Privacy Policy</button>.</span>
             </label>
             <label class="dd2-check">
               <input type="checkbox" id="dd2-ai-improvement-consent">
@@ -851,15 +936,15 @@
     setStatus('dd2-auth-status', 'Recording your acceptance securely…');
     try {
       const { error } = await state.client.rpc('accept_terms', {
-        p_terms_version: config.legal.termsVersion,
-        p_privacy_version: config.legal.privacyVersion,
+        p_terms_version: commercialLegal.termsVersion,
+        p_privacy_version: commercialLegal.privacyVersion,
         p_acceptance_source: 'protected_feature_sign_in',
       });
       if (error) throw error;
       closeEntry();
       setStatus('dd2-auth-status', '');
       global.toast?.('Terms and Privacy acceptance recorded.', 'ok');
-      restoreAuthDestination();
+      await loadUserState();
     } catch {
       setStatus('dd2-auth-status', 'Acceptance could not be recorded. Check your connection and try again.', 'error');
     } finally {
@@ -891,14 +976,14 @@
     const [{ data: profile }, { data: terms }] = await Promise.all([
       state.client
         .from('profiles')
-        .select('id,display_name,school,enrollment_status,year_level,profile_completed_at,subscription_tier,subscription_status')
+        .select('id,display_name,school,enrollment_status,year_level,profile_completed_at,subscription_tier,subscription_status,law_school_id,law_school_other,commercial_category,commercial_onboarding_completed_at')
         .eq('id', userId)
         .maybeSingle(),
       state.client
         .from('terms_acceptances')
         .select('accepted_at')
-        .eq('terms_version', config.legal.termsVersion)
-        .eq('privacy_version', config.legal.privacyVersion)
+        .eq('terms_version', commercialLegal.termsVersion)
+        .eq('privacy_version', commercialLegal.privacyVersion)
         .limit(1),
     ]);
     if (state.user?.id !== userId) return;
@@ -924,6 +1009,8 @@
     syncAuthUi();
     if (!terms?.length) {
       openTermsAcceptance();
+    } else if (!profile?.profile_completed_at) {
+      openOnboarding();
     } else {
       closeEntry();
       setOverlay(false, 'dd2-onboarding-overlay');
@@ -939,12 +1026,12 @@
     if (deferOnboardingForPrivateBeta()) return;
     const displayName = document.getElementById('dd2-display-name');
     const school = document.getElementById('dd2-school');
-    const enrollment = document.getElementById('dd2-enrollment-status');
+    const schoolOther = document.getElementById('dd2-school-other');
     const year = document.getElementById('dd2-year-level');
     if (displayName) displayName.value = state.profile?.display_name || state.user?.user_metadata?.full_name || '';
-    if (school) school.value = state.profile?.school || '';
-    if (enrollment) enrollment.value = state.profile?.enrollment_status || 'enrolled';
-    if (year) year.value = state.profile?.year_level || '';
+    if (school) school.value = state.profile?.law_school_id || '';
+    if (schoolOther) schoolOther.value = state.profile?.law_school_other || '';
+    if (year) year.value = state.profile?.commercial_category || '';
     const legal = document.getElementById('dd2-legal-acceptance');
     if (legal) legal.checked = false;
     updateEnrollmentFields();
@@ -953,20 +1040,26 @@
   }
 
   function updateEnrollmentFields() {
-    const enrolled = document.getElementById('dd2-enrollment-status')?.value === 'enrolled';
-    const school = document.getElementById('dd2-school');
-    const year = document.getElementById('dd2-year-level');
-    if (school) school.required = enrolled;
-    if (year) year.required = enrolled;
+    const schoolOther = document.getElementById('dd2-school-other');
+    const schoolOtherWrap = document.getElementById('dd2-school-other-wrap');
+    const professorLicense = document.getElementById('dd2-professor-license');
+    const professorWrap = document.getElementById('dd2-professor-license-wrap');
+    const otherSelected = document.getElementById('dd2-school')?.value === 'other';
+    const professorSelected = document.getElementById('dd2-year-level')?.value === 'professor';
+    if (schoolOtherWrap) schoolOtherWrap.hidden = !otherSelected;
+    if (schoolOther) schoolOther.required = otherSelected;
+    if (professorWrap) professorWrap.hidden = !professorSelected;
+    if (professorLicense) professorLicense.required = professorSelected;
   }
 
   async function submitOnboarding(event) {
     event.preventDefault();
     if (state.onboardingBusy || !state.client || !state.user) return;
     const displayName = document.getElementById('dd2-display-name').value.trim();
-    const school = document.getElementById('dd2-school').value.trim();
-    const enrollmentStatus = document.getElementById('dd2-enrollment-status').value;
-    const yearLevel = document.getElementById('dd2-year-level').value;
+    const schoolId = document.getElementById('dd2-school').value;
+    const schoolOther = document.getElementById('dd2-school-other').value.trim();
+    const category = document.getElementById('dd2-year-level').value;
+    const professorLicense = document.getElementById('dd2-professor-license').value.trim();
     const accepted = document.getElementById('dd2-legal-acceptance').checked;
     const aiImprovementOptIn = document.getElementById('dd2-ai-improvement-consent').checked;
     if (displayName.length < 2) {
@@ -974,11 +1067,15 @@
       return;
     }
     if (!accepted) {
-      setStatus('dd2-onboarding-status', 'Accept the Beta Terms and acknowledge the Privacy Notice to continue.', 'error');
+      setStatus('dd2-onboarding-status', 'Accept the Terms of Use and acknowledge the Privacy Policy to continue.', 'error');
       return;
     }
-    if (enrollmentStatus === 'enrolled' && (!school || !yearLevel)) {
-      setStatus('dd2-onboarding-status', 'School and year level are required for enrolled students.', 'error');
+    if (!schoolId || !category || (schoolId === 'other' && schoolOther.length < 2)) {
+      setStatus('dd2-onboarding-status', 'Select your law school and year or category.', 'error');
+      return;
+    }
+    if (category === 'professor' && professorLicense.length < 3) {
+      setStatus('dd2-onboarding-status', 'Enter the Professor license declaration.', 'error');
       return;
     }
     state.onboardingBusy = true;
@@ -987,8 +1084,8 @@
     setStatus('dd2-onboarding-status', 'Saving your chamber…');
     try {
       const { error: termsError } = await state.client.rpc('accept_terms', {
-        p_terms_version: config.legal.termsVersion,
-        p_privacy_version: config.legal.privacyVersion,
+        p_terms_version: commercialLegal.termsVersion,
+        p_privacy_version: commercialLegal.privacyVersion,
         p_acceptance_source: 'web_onboarding',
       });
       if (termsError) throw termsError;
@@ -998,21 +1095,26 @@
         p_source: 'web_onboarding',
       });
       if (aiConsentError) throw aiConsentError;
-      const { error: profileError } = await state.client.rpc('complete_profile_onboarding', {
+      const { error: profileError } = await state.client.rpc('complete_commercial_profile_onboarding', {
         p_display_name: displayName,
-        p_school: school || null,
-        p_enrollment_status: enrollmentStatus,
-        p_year_level: yearLevel || null,
-        p_terms_version: config.legal.termsVersion,
-        p_privacy_version: config.legal.privacyVersion,
+        p_law_school_id: schoolId,
+        p_law_school_other: schoolOther || null,
+        p_category: category,
+        p_professor_license_number: professorLicense || null,
+        p_terms_version: commercialLegal.termsVersion,
+        p_privacy_version: commercialLegal.privacyVersion,
       });
       if (profileError) throw profileError;
       state.profile = {
         ...(state.profile || {}),
         display_name: displayName,
-        school: school || null,
-        enrollment_status: enrollmentStatus,
-        year_level: yearLevel || null,
+        school: schoolId === 'other' ? schoolOther : schoolId,
+        enrollment_status: 'enrolled',
+        year_level: category,
+        law_school_id: schoolId,
+        law_school_other: schoolId === 'other' ? schoolOther : null,
+        commercial_category: category,
+        commercial_onboarding_completed_at: new Date().toISOString(),
         profile_completed_at: new Date().toISOString(),
       };
       setStatus('dd2-onboarding-status', 'Profile saved.', 'success');
@@ -1042,19 +1144,19 @@
   function termsContent() {
     return `
       <div class="dd2-copy">
-        <p><strong>Version:</strong> ${escapeHtml(config.legal.termsVersion)}<br>${legalReviewNotice}</p>
+        <p><strong>Version:</strong> ${escapeHtml(commercialLegal.termsVersion)}<br>${legalReviewNotice}</p>
         <h3>Educational service</h3>
         <p>Due Diligence is an independent Philippine Bar Examination study platform. It is not affiliated with, certified by, or endorsed by the Supreme Court of the Philippines or any government agency.</p>
         <h3>No legal advice or guaranteed result</h3>
         <p>Questions, suggested answers, scores, AI assessments, and explanations are for education only. They do not constitute legal advice, an official Bar grade, or a guarantee of examination performance. Verify authorities against official sources.</p>
         <h3>AI limitations</h3>
-        <p>Gemini helps assess and explain answers using curated platform context. AI output may be incomplete or inaccurate. Use the correction workflow when material appears wrong.</p>
+        <p>AI-assisted systems assess and explain answers using curated platform context. Output may be incomplete or inaccurate. Use the correction workflow when material appears wrong.</p>
         <h3>AI, grading, and authority limitations</h3>
         <p>AI-generated grading and suggested answers may be incomplete or inaccurate. They are not official Supreme Court or Bar Examiner grades. A “Human Verified” label appears only after a genuine editorial review record exists. Provider capacity may temporarily interrupt grading; no grade or authority will be fabricated.</p>
-        <h3>Retainer and access</h3>
-        <p>During the current beta, every authenticated account that has accepted the current Beta Terms and Privacy Notice receives Beta All Access while the platform-wide beta setting remains enabled. Beta access is free through at least August 15, 2026 and may continue until the developers determine that beta testing is sufficient. There is no automatic per-user beta expiration while this setting is enabled. Authorized founders may later change the platform-wide setting in the protected Admin dashboard. Security, legal, and acceptable-use restrictions continue to apply.</p>
+        <h3>Free and Early Access</h3>
+        <p>Free accounts receive five successful question submissions per Philippine calendar day across the available examination tracks. A failed grading operation does not consume an allowance. Early Access is a one-time ₱149 offer available through September 1, 2026 and provides unlimited access through October 1, 2026. Founding Beta access is complimentary only for separately approved accounts through September 1, 2026.</p>
         <h3>Payments, cancellation, and refunds</h3>
-        <p>Commercial terms and payment instructions are not published during beta testing. Any future offer will present its applicable terms before a student is asked to decide.</p>
+        <p>Early Access has no automatic renewal. A payment-proof submission creates one non-renewable 24-hour provisional entitlement while it is reviewed. A verified entitlement ends on October 1, 2026. Eligible refund requests must be filed within seven calendar days of the first provisional or paid access start and are reviewed using the published unused-time formula, without limiting statutory consumer rights.</p>
         <h3>Your submissions</h3>
         <p>You remain responsible for submitted content. Do not submit confidential, privileged, unlawful, or third-party personal information. Service processing of an answer is necessary to provide grading. Separate optional consent governs retention of de-identified answer content for internal quality improvement.</p>
         <h3>Acceptable use</h3>
@@ -1062,24 +1164,24 @@
         <h3>Ownership and lawful use</h3>
         <p>Due Diligence owns its original software, branding, interface, and proprietary curation. It does not claim ownership over Philippine laws, jurisprudence, government works, or official Bar materials. Unauthorized commercial reproduction and unlawful access may be pursued, while lawful fair use, criticism, reporting, and statutory rights remain respected.</p>
         <h3>Governing law and complaints</h3>
-        <p>These Beta Terms are governed by Philippine law. Submit a complaint through Support; we will document and review it before taking further internal action where practicable.</p>
+        <p>These Terms are governed by Philippine law. Submit a complaint through Support; we will document and review it before taking further internal action where practicable.</p>
       </div>`;
   }
 
   function privacyContent() {
     return `
       <div class="dd2-copy">
-        <p><strong>Version:</strong> ${escapeHtml(config.legal.privacyVersion)}<br>${legalReviewNotice}</p>
+        <p><strong>Version:</strong> ${escapeHtml(commercialLegal.privacyVersion)}<br>${legalReviewNotice}</p>
         <h3>What the platform handles</h3>
         <p>For signed-in users, Supabase stores account identity, approved profile fields, legal-document acceptance, roles, and future account records. Historical marketing-consent records may remain for audit, but Due Diligence does not currently operate an email-marketing program or collect a new marketing preference. Google processes the secure sign-in consent flow.</p>
         <h3>Essay assessment</h3>
-        <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to Gemini for assessment. Do not place client secrets or confidential case information in practice answers.</p>
+        <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to the configured assessment provider. Do not place client secrets or confidential case information in practice answers.</p>
         <h3>Access records</h3>
-        <p>Protected examinations require authentication. Supabase UUIDs anchor Beta All Access eligibility, legal acceptance, subscriptions, progress, and history so refreshes or device changes do not reset access. Legacy trial and per-account access records remain available only as a fallback if the platform-wide beta setting is later disabled.</p>
+        <p>Protected examinations require authentication. Supabase UUIDs anchor daily allowances, approved Founding Beta eligibility, Early Access entitlements, legal acceptance, progress, and history so refreshes or device changes do not reset access.</p>
         <h3>Support and corrections</h3>
         <p>Support stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Support. Correction submissions store only the reviewed correction fields described in that form.</p>
         <h3>Payments and infrastructure</h3>
-        <p>Payment amount, channel, date, reference, status, and proof are processed for manual verification. Proofs are private and available only through short-lived authorized review. Supabase, Cloudflare, GitHub Pages, Google authentication, and Gemini process data only as needed for their platform roles.</p>
+        <p>Payment amount, channel, date, reference, status, and proof are processed for manual verification. Proofs are private and available only through short-lived authorized review. Supabase, Cloudflare, GitHub Pages, Google authentication, and the configured assessment provider process data only as needed for their platform roles.</p>
         <h3>Purpose and legal basis</h3>
         <p>We process account and answer data to perform the requested educational service, secure the platform, prevent fraud, maintain records, and meet legal obligations. Optional AI-improvement processing relies on separate consent that may be withdrawn. No email-marketing program is active.</p>
         <h3>Retention and security</h3>
@@ -1092,30 +1194,14 @@
   }
 
   function pricingContent() {
-    const features = [
-      'All published Subject Matter practice categories',
-      'Premium-only Bar Feels',
-      'Private examination uploads',
-      'Automated and Human Examiner review routes',
-    ];
     return `
       <div class="dd2-copy">
-        <p><strong>Pricing will be announced after beta testing.</strong></p>
-        <div class="dd2-plan-grid">
-          <article class="dd2-plan">
-            <div class="dd2-plan-head">
-              <div><h3>Premium</h3><span class="dd2-badge">Beta access active</span></div>
-              <div class="dd2-price dd2-price-placeholder" aria-hidden="true">
-                <span>000</span><small> beta preview</small>
-              </div>
-            </div>
-            <ul>${features.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>
-            <button class="dd2-button dd2-button-secondary" type="button" disabled>
-              Pricing available after beta
-            </button>
-          </article>
+        <p class="dd2-pricing-intro"><strong>Choose one clear access option.</strong> Free remains available. Early Access is a one-time launch offer with no automatic renewal.</p>
+        <div class="dd2-plan-grid" id="dd2-pricing-plans" aria-live="polite">
+          <div class="dd2-loading-line">Loading current access options…</div>
         </div>
-        <p>Premium remains clearly identified while commercial details stay private during beta testing.</p>
+        <div id="dd2-payment-host"></div>
+        <p class="dd2-form-note">After the Early Access sale closes, later paid-plan pricing will remain unannounced until separately approved.</p>
       </div>`;
   }
 
@@ -1154,7 +1240,7 @@
         </form>
         <h3>Frequently asked</h3>
         <p><strong>How is an answer scored?</strong><br>Each answer receives an independent 0–5 ALAC assessment. It is not an official Bar grade.</p>
-        <p><strong>How does free access work?</strong><br>Every authenticated student who accepts the current Beta Terms and Privacy Notice receives Beta All Access while the platform-wide setting is enabled. It is free through at least August 15, 2026 and may continue until the developers determine that beta testing is sufficient. There is no automatic per-user expiration during that period.</p>
+        <p><strong>How does Free access work?</strong><br>Every authenticated user receives five successful question submissions per Philippine calendar day. Failed grading does not consume an allowance, and the allowance resets at Philippine midnight.</p>
         <p><strong>Where should I report a model-answer issue?</strong><br>Use “Suggest a Correction/Better Answer” beneath the assessment so the editorial context stays attached.</p>
       </div>`;
   }
@@ -1168,6 +1254,13 @@
         </div>`;
     }
     const name = state.profile?.display_name || state.user.user_metadata?.full_name || 'Due Diligence student';
+    const schoolId = state.profile?.law_school_id
+      || (state.profile?.school ? 'other' : '');
+    const schoolOther = state.profile?.law_school_other
+      || (schoolId === 'other' ? state.profile?.school || '' : '');
+    const category = state.profile?.commercial_category
+      || ({ '1': 'first_year', '2': 'second_year', '3': 'third_year', '4': 'fourth_year' }[state.profile?.year_level]
+        || (state.profile?.year_level === 'review' ? 'review' : ''));
     return `
       <div class="dd2-account-summary">
         <div class="dd2-account-avatar">${escapeHtml(initials())}</div>
@@ -1177,20 +1270,30 @@
         <label class="dd2-label">Display name
           <input class="dd2-field" id="dd2-account-name" value="${escapeHtml(state.profile?.display_name || '')}" maxlength="120" required>
         </label>
-        <label class="dd2-label">Enrollment status
-          <select class="dd2-field" id="dd2-account-enrollment">
-            <option value="enrolled"${state.profile?.enrollment_status === 'enrolled' ? ' selected' : ''}>Currently enrolled</option>
-            <option value="not_yet_enrolled"${state.profile?.enrollment_status === 'not_yet_enrolled' ? ' selected' : ''}>Not yet enrolled</option>
-          </select>
-        </label>
         <label class="dd2-label">Law school
-          <input class="dd2-field" id="dd2-account-school" value="${escapeHtml(state.profile?.school || '')}" maxlength="180">
-        </label>
-        <label class="dd2-label">Year level
-          <select class="dd2-field" id="dd2-account-year">
-            <option value="">Select year level</option>
-            ${['1', '2', '3', '4', 'review'].map((value) => `<option value="${value}"${state.profile?.year_level === value ? ' selected' : ''}>${value === 'review' ? 'Graduate / Bar review' : `${value}${value === '1' ? 'st' : value === '2' ? 'nd' : value === '3' ? 'rd' : 'th'} year`}</option>`).join('')}
+          <select class="dd2-field" id="dd2-account-school" required>
+            <option value="">Select your law school</option>
+            ${schoolOptionsMarkup(schoolId)}
+            <option value="other"${schoolId === 'other' ? ' selected' : ''}>Other LEB-recognized school</option>
           </select>
+        </label>
+        <label class="dd2-label" id="dd2-account-school-other-wrap"${schoolId === 'other' ? '' : ' hidden'}>Other law school
+          <input class="dd2-field" id="dd2-account-school-other" value="${escapeHtml(schoolOther)}" maxlength="180">
+        </label>
+        <label class="dd2-label">Year or category
+          <select class="dd2-field" id="dd2-account-year" required>
+            <option value="">Select year or category</option>
+            ${[
+              ['first_year', 'First Year'], ['second_year', 'Second Year'],
+              ['third_year', 'Third Year'], ['fourth_year', 'Fourth Year'],
+              ['fifth_year', 'Fifth Year'], ['review', 'Review / Bar Candidate'],
+              ['professor', 'Professor'],
+            ].map(([value, label]) => `<option value="${value}"${category === value ? ' selected' : ''}>${label}</option>`).join('')}
+          </select>
+        </label>
+        <label class="dd2-label" id="dd2-account-professor-wrap"${category === 'professor' ? '' : ' hidden'}>Professor license declaration
+          <input class="dd2-field" id="dd2-account-professor-license" maxlength="80" autocomplete="off" placeholder="Re-enter to verify profile changes">
+          <span class="dd2-field-help">Stored privately. This declaration does not grant Professor or administrator authority.</span>
         </label>
         <div class="dd2-status" id="dd2-account-status" role="status" aria-live="polite"></div>
         <button class="dd2-button dd2-button-primary" type="submit">Save approved profile fields</button>
@@ -1207,8 +1310,7 @@
         <p>Direct public email changes and account transfers are not available. Choose Docket Recovery in Support so identity verification can be documented safely.</p>
         <h3>Retainer and access</h3>
         <div id="dd2-account-access"><p>Loading verified access status…</p></div>
-        <h3>Premium beta</h3>
-        <p><strong>Beta access active.</strong> Pricing will be announced after beta testing.</p>
+        <div id="dd2-account-billing"></div>
         <p class="dd2-form-note">Initial response target: 24 hours. Ordinary internal resolution: seven calendar days; complex review may take up to 14 days without waiving statutory remedies.</p>
       </div>`;
   }
@@ -1262,8 +1364,8 @@
     const definitions = {
       support: ['Member assistance', 'Support', supportContent],
       pricing: ['Access options', 'Retainer', pricingContent],
-      terms: ['Legal', 'Beta Terms', termsContent],
-      privacy: ['Legal', 'Beta Privacy Notice', privacyContent],
+      terms: ['Legal', 'Terms of Use', termsContent],
+      privacy: ['Legal', 'Privacy Policy', privacyContent],
       account: ['Your chamber', 'The Docket', accountContent],
       partnership: ['Collaborate', 'Partnerships', partnershipContent],
     };
@@ -1383,27 +1485,277 @@
     return payload;
   }
 
+  async function publicWorkerRequest(path) {
+    const response = await fetch(`${config.workerUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Request-ID': randomId(18),
+        ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+      },
+      body: '{}',
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      throw new Error(payload?.error?.message || 'Current access options could not be loaded.');
+    }
+    return payload;
+  }
+
+  function manilaDate(value, options = {}) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    return new Intl.DateTimeFormat('en-PH', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: options.short ? 'short' : 'long',
+      day: 'numeric',
+      ...(options.includeTime ? { hour: 'numeric', minute: '2-digit' } : {}),
+    }).format(date);
+  }
+
+  function manilaTodayInput() {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date());
+    const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${byType.year}-${byType.month}-${byType.day}`;
+  }
+
+  function normalizedCommercialPlans(plans) {
+    return (Array.isArray(plans) ? plans : [])
+      .filter((plan) => ['free', 'early_access_beta'].includes(plan?.planCode))
+      .sort((a, b) => Number(a.displayOrder || 0) - Number(b.displayOrder || 0));
+  }
+
+  function renderCommercialPlanCards(plans, access = null) {
+    const host = document.getElementById('dd2-pricing-plans');
+    if (!host) return;
+    const safePlans = normalizedCommercialPlans(plans);
+    const free = safePlans.find((plan) => plan.planCode === 'free') || {
+      planCode: 'free', name: 'Free', pricePhp: 0,
+      description: 'Five successful question submissions per Philippine calendar day.',
+      features: ['Five successful submissions daily', 'All examination tracks', 'Resets at Philippine midnight'],
+    };
+    const early = safePlans.find((plan) => plan.planCode === 'early_access_beta') || null;
+    const freeFeatures = Array.isArray(free.features) ? free.features : [];
+    const earlyFeatures = Array.isArray(early?.features) ? early.features : [];
+    const earlyOpen = early?.checkoutEnabled === true && access?.checkoutOpen !== false;
+    const alreadyUnlimited = access?.unlimited === true;
+    const paidAction = alreadyUnlimited
+      ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Unlimited access active</button>'
+      : earlyOpen
+        ? `<button class="dd2-button dd2-button-primary" id="dd2-open-payment" type="button">${state.user ? 'Get Early Access' : 'Sign in to get Early Access'}</button>`
+        : '<button class="dd2-button dd2-button-secondary" type="button" disabled>Early Access offer closed</button>';
+    host.innerHTML = `
+      <article class="dd2-plan">
+        <div class="dd2-plan-head"><div><h3>${escapeHtml(free.name || 'Free')}</h3><span class="dd2-badge">Always available</span></div><div class="dd2-price">₱0<small>no payment</small></div></div>
+        <p>${escapeHtml(free.description || '')}</p>
+        <ul>${freeFeatures.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>
+        <button class="dd2-button dd2-button-secondary" type="button" disabled>${access?.accessMode === 'free' ? 'Your current access' : 'Included for every account'}</button>
+      </article>
+      <article class="dd2-plan dd2-plan-featured${earlyOpen ? '' : ' is-disabled'}">
+        <div class="dd2-plan-head"><div><h3>Early Access</h3><span class="dd2-badge">One-time launch offer</span></div><div class="dd2-price">₱149<small>one time</small></div></div>
+        <p>${escapeHtml(early?.description || 'Next paid-plan pricing will be announced separately.')}</p>
+        <ul>${earlyFeatures.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>
+        ${early?.salesCloseAt ? `<p class="dd2-plan-date"><strong>Purchase by:</strong> ${escapeHtml(manilaDate(early.salesCloseAt, { includeTime: true }))} Philippine time</p>` : ''}
+        ${early?.entitlementEndsAt ? `<p class="dd2-plan-date"><strong>Access through:</strong> ${escapeHtml(manilaDate(early.entitlementEndsAt, { includeTime: true }))}</p>` : ''}
+        <p class="dd2-plan-note">One-time payment. No automatic renewal.</p>
+        ${paidAction}
+      </article>`;
+    document.getElementById('dd2-open-payment')?.addEventListener('click', () => {
+      if (!state.session?.access_token) {
+        hideNativeView();
+        showEntry({ allowDismiss: true, routeBound: true, returnHash: '#pricing' });
+        return;
+      }
+      renderPaymentForm();
+    });
+  }
+
+  function renderPaymentForm() {
+    const host = document.getElementById('dd2-payment-host');
+    if (!host) return;
+    const today = manilaTodayInput();
+    host.innerHTML = `
+      <section class="dd2-payment-panel" aria-labelledby="dd2-payment-title">
+        <div class="dd2-view-kicker">Secure manual verification</div>
+        <h3 id="dd2-payment-title">Submit ₱149 Early Access proof</h3>
+        <p>Your one non-renewable 24-hour provisional access begins when this proof is accepted by the server. Verification fixes access through October 1, 2026.</p>
+        <div class="dd2-payment-channel" aria-label="Approved payment channel">
+          <span>BPI InstaPay</span>
+          <strong>Exact amount: ₱149.00</strong>
+        </div>
+        <figure class="dd2-qr-frame">
+          <picture><img id="dd2-payment-qr" src="assets/payments/bpi-instapay-149.png" alt="BPI InstaPay QR code for the ₱149 Due Diligence Early Access payment" width="1290" height="1471"></picture>
+          <figcaption>Scan with an InstaPay-compatible banking or e-wallet app. Pay exactly ₱149.00, then upload the resulting receipt below.</figcaption>
+        </figure>
+        <form class="dd2-form" id="dd2-payment-form">
+          <input type="hidden" id="dd2-payment-method" value="bpi_instapay">
+          <label class="dd2-label">Payment date
+            <input class="dd2-field" id="dd2-payment-date" type="date" value="${today}" max="${today}" required>
+          </label>
+          <label class="dd2-label">Transaction reference
+            <input class="dd2-field" id="dd2-payment-reference" minlength="4" maxlength="100" autocomplete="off" required>
+          </label>
+          <label class="dd2-label">Payment proof
+            <input class="dd2-field" id="dd2-payment-proof" type="file" accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf" required>
+            <span class="dd2-field-help">PNG, JPEG, or PDF only. The proof is private and subject to file-signature validation.</span>
+          </label>
+          <label class="dd2-label">Note (optional)
+            <textarea class="dd2-field" id="dd2-payment-note" maxlength="2000" placeholder="Add only information needed to match your payment."></textarea>
+          </label>
+          <div class="dd2-status" id="dd2-payment-status" role="status" aria-live="polite"></div>
+          <button class="dd2-button dd2-button-primary" id="dd2-payment-submit" type="submit">Submit proof securely</button>
+        </form>
+      </section>`;
+    host.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    document.getElementById('dd2-payment-form')?.addEventListener('submit', submitCommercialPayment);
+  }
+
+  async function submitCommercialPayment(event) {
+    event.preventDefault();
+    const submit = document.getElementById('dd2-payment-submit');
+    const proof = document.getElementById('dd2-payment-proof')?.files?.[0];
+    if (!proof) {
+      setStatus('dd2-payment-status', 'Choose a PNG, JPEG, or PDF payment proof.', 'error');
+      return;
+    }
+    const form = new FormData();
+    form.set('planCode', 'early_access_beta');
+    form.set('amountPhp', '149');
+    form.set('paymentMethod', document.getElementById('dd2-payment-method').value);
+    form.set('paymentDate', document.getElementById('dd2-payment-date').value);
+    form.set('transactionReference', document.getElementById('dd2-payment-reference').value.trim());
+    form.set('note', document.getElementById('dd2-payment-note').value.trim());
+    form.set('proof', proof);
+    submit.disabled = true;
+    setStatus('dd2-payment-status', 'Validating and storing your proof securely…');
+    try {
+      const result = await nativeWorkerRequest('/payments/submit', {
+        body: form,
+        submissionView: 'payment',
+        submissionDraft: { planCode: 'early_access_beta' },
+      });
+      setStatus('dd2-payment-status', result.message || 'Proof received. Provisional access is active while verification is pending.', 'success');
+      global.DueDiligencePhase4?.refreshAccess?.().catch(() => {});
+      global.toast?.('Early Access proof received securely.', 'ok');
+    } catch (error) {
+      setStatus('dd2-payment-status', error.message || 'The proof could not be submitted. No access change was made.', 'error');
+      submit.disabled = false;
+    }
+  }
+
+  async function loadCommercialPricing() {
+    const host = document.getElementById('dd2-pricing-plans');
+    if (!host) return;
+    try {
+      const [plansPayload, accessPayload] = await Promise.all([
+        publicWorkerRequest('/plans'),
+        state.session?.access_token
+          ? nativeWorkerRequest('/access', { requestId: randomId(18) })
+          : Promise.resolve({ access: null }),
+      ]);
+      renderCommercialPlanCards(plansPayload.plans, accessPayload.access);
+    } catch (error) {
+      host.innerHTML = `<div class="dd2-status is-error">${escapeHtml(error.message || 'Current access options could not be loaded. Please retry.')}</div>`;
+    }
+  }
+
+  function accessSummaryMarkup(access) {
+    const label = access?.accountLabel || 'Free';
+    const remaining = Math.max(0, Number(access?.remainingToday) || 0);
+    const limit = Math.max(0, Number(access?.dailyLimit) || 5);
+    const quota = access?.unlimited
+      ? 'Unlimited successful submissions while this entitlement is active.'
+      : `${remaining} of ${limit} successful submissions remain today.`;
+    return `
+      <div class="dd2-access-summary">
+        <strong>${escapeHtml(label)}</strong>
+        <span>${escapeHtml(quota)}</span>
+        ${access?.resetAt && !access?.unlimited ? `<span>Allowance resets ${escapeHtml(manilaDate(access.resetAt, { includeTime: true }))} Philippine time.</span>` : ''}
+        ${access?.entitlementEndsAt ? `<span>Access ends ${escapeHtml(manilaDate(access.entitlementEndsAt, { includeTime: true }))} Philippine time.</span>` : ''}
+        ${access?.paymentState ? `<span>Payment verification: ${escapeHtml(String(access.paymentState).replaceAll('_', ' '))}.</span>` : ''}
+      </div>`;
+  }
+
+  function billingMarkup(billing) {
+    const payments = Array.isArray(billing?.payments) ? billing.payments : [];
+    const refunds = Array.isArray(billing?.refunds) ? billing.refunds : [];
+    if (!payments.length) return '<h3>Payments</h3><p>No payment proof has been submitted from this account.</p>';
+    const refundedPaymentIds = new Set(refunds.map((refund) => refund.paymentRequestId));
+    return `
+      <h3>Payments and refunds</h3>
+      <div class="dd2-record-list">${payments.map((payment) => `
+        <article class="dd2-record">
+          <strong>Early Access · ₱${escapeHtml(Number(payment.amountPhp || 149).toFixed(2))}</strong>
+          <span class="dd2-record-status">${escapeHtml(String(payment.status || 'pending').replaceAll('_', ' '))}</span>
+          <small>Submitted ${escapeHtml(manilaDate(payment.submittedAt, { includeTime: true }))} · ${escapeHtml(payment.method || '')}</small>
+          ${payment.reviewReason ? `<p>${escapeHtml(payment.reviewReason)}</p>` : ''}
+          ${payment.status === 'approved' && !refundedPaymentIds.has(payment.id)
+            ? `<button class="dd2-button dd2-button-secondary" data-refund-payment="${escapeHtml(payment.id)}" type="button">Request eligible refund review</button>` : ''}
+        </article>`).join('')}</div>
+      ${refunds.length ? `<h3>Refund requests</h3><div class="dd2-record-list">${refunds.map((refund) => `
+        <article class="dd2-record"><strong>Refund review</strong><span class="dd2-record-status">${escapeHtml(String(refund.status || 'pending').replaceAll('_', ' '))}</span><small>Submitted ${escapeHtml(manilaDate(refund.submittedAt, { includeTime: true }))}</small><p>${escapeHtml(refund.calculationNote || 'Awaiting review.')}</p></article>`).join('')}</div>` : ''}
+      <div id="dd2-refund-host"></div>`;
+  }
+
+  function openRefundForm(paymentRequestId) {
+    const host = document.getElementById('dd2-refund-host');
+    if (!host) return;
+    host.innerHTML = `
+      <form class="dd2-payment-panel dd2-form" id="dd2-refund-form">
+        <h3>Request refund review</h3>
+        <p>Eligible requests must be filed within seven calendar days of the first provisional or paid access start. The server calculates the unused-time amount and an administrator confirms any payment.</p>
+        <input id="dd2-refund-payment-id" type="hidden" value="${escapeHtml(paymentRequestId)}">
+        <label class="dd2-label">Reason
+          <textarea class="dd2-field" id="dd2-refund-reason" minlength="10" maxlength="2000" required></textarea>
+        </label>
+        <div class="dd2-status" id="dd2-refund-status" role="status" aria-live="polite"></div>
+        <button class="dd2-button dd2-button-primary" id="dd2-refund-submit" type="submit">Submit refund request</button>
+      </form>`;
+    document.getElementById('dd2-refund-form')?.addEventListener('submit', submitRefundRequest);
+    document.getElementById('dd2-refund-reason')?.focus();
+  }
+
+  async function submitRefundRequest(event) {
+    event.preventDefault();
+    const submit = document.getElementById('dd2-refund-submit');
+    const payload = {
+      paymentRequestId: document.getElementById('dd2-refund-payment-id').value,
+      reason: document.getElementById('dd2-refund-reason').value.trim(),
+    };
+    submit.disabled = true;
+    setStatus('dd2-refund-status', 'Submitting for review…');
+    try {
+      const result = await nativeWorkerRequest('/refunds/submit', {
+        body: payload, submissionView: 'refund', submissionDraft: payload,
+      });
+      setStatus('dd2-refund-status', result.message || 'Refund request received.', 'success');
+      await loadBillingAndAccess();
+    } catch (error) {
+      setStatus('dd2-refund-status', error.message || 'The refund request could not be submitted.', 'error');
+      submit.disabled = false;
+    }
+  }
+
   async function loadBillingAndAccess() {
     if (!state.session?.access_token) return;
     try {
-      const accessPayload = await nativeWorkerRequest('/access', { requestId: randomId(18) });
+      const [accessPayload, billingPayload] = await Promise.all([
+        nativeWorkerRequest('/access', { requestId: randomId(18) }),
+        nativeWorkerRequest('/payments/status', { requestId: randomId(18) }),
+      ]);
       const access = accessPayload.access || {};
       const accountAccess = document.getElementById('dd2-account-access');
-      if (accountAccess) {
-        const globalBetaActive = access.globalBeta?.active === true;
-        const trial = access.trial?.expiresAt
-          ? `Trial expires ${new Date(access.trial.expiresAt).toLocaleString()}.`
-          : 'Trial begins only when you open your first protected examination.';
-        accountAccess.innerHTML = `
-          <div class="dd2-access-summary">
-            <strong>${globalBetaActive ? 'Beta All Access' : access.premium ? 'Premium beta access' : 'Beta access'}</strong>
-            <span>${globalBetaActive
-              ? 'All current beta features are available at no charge while the platform-wide Admin setting remains enabled.'
-              : 'Pricing will be announced after beta testing.'}</span>
-            <span>${globalBetaActive
-              ? 'Free through at least August 15, 2026 and may continue until developers determine beta testing is sufficient.'
-              : escapeHtml(trial)}</span>
-          </div>`;
+      if (accountAccess) accountAccess.innerHTML = accessSummaryMarkup(access);
+      const billingHost = document.getElementById('dd2-account-billing');
+      if (billingHost) {
+        billingHost.innerHTML = billingMarkup(billingPayload.billing || {});
+        billingHost.querySelectorAll('[data-refund-payment]').forEach((button) => {
+          button.addEventListener('click', () => openRefundForm(button.dataset.refundPayment));
+        });
       }
     } catch (error) {
       const element = document.getElementById('dd2-account-access');
@@ -1445,32 +1797,41 @@
     if (!state.client || !state.user) return;
     const values = {
       displayName: document.getElementById('dd2-account-name').value.trim(),
-      enrollmentStatus: document.getElementById('dd2-account-enrollment').value,
-      school: document.getElementById('dd2-account-school').value.trim(),
-      yearLevel: document.getElementById('dd2-account-year').value,
+      schoolId: document.getElementById('dd2-account-school').value,
+      schoolOther: document.getElementById('dd2-account-school-other').value.trim(),
+      category: document.getElementById('dd2-account-year').value,
+      professorLicense: document.getElementById('dd2-account-professor-license').value.trim(),
     };
     if (values.displayName.length < 2
-      || (values.enrollmentStatus === 'enrolled' && (!values.school || !values.yearLevel))) {
+      || !values.schoolId
+      || !values.category
+      || (values.schoolId === 'other' && values.schoolOther.length < 2)
+      || (values.category === 'professor' && values.professorLicense.length < 3)) {
       setStatus('dd2-account-status', 'Complete the required profile fields.', 'error');
       return;
     }
     setStatus('dd2-account-status', 'Saving…');
     try {
-      const { error: profileError } = await state.client.rpc('complete_profile_onboarding', {
+      const { error: profileError } = await state.client.rpc('complete_commercial_profile_onboarding', {
         p_display_name: values.displayName,
-        p_school: values.school || null,
-        p_enrollment_status: values.enrollmentStatus,
-        p_year_level: values.yearLevel || null,
-        p_terms_version: config.legal.termsVersion,
-        p_privacy_version: config.legal.privacyVersion,
+        p_law_school_id: values.schoolId,
+        p_law_school_other: values.schoolOther || null,
+        p_category: values.category,
+        p_professor_license_number: values.professorLicense || null,
+        p_terms_version: commercialLegal.termsVersion,
+        p_privacy_version: commercialLegal.privacyVersion,
       });
       if (profileError) throw profileError;
       state.profile = {
         ...state.profile,
         display_name: values.displayName,
-        enrollment_status: values.enrollmentStatus,
-        school: values.school || null,
-        year_level: values.yearLevel || null,
+        enrollment_status: 'enrolled',
+        school: values.schoolId === 'other' ? values.schoolOther : values.schoolId,
+        year_level: values.category,
+        law_school_id: values.schoolId,
+        law_school_other: values.schoolId === 'other' ? values.schoolOther : null,
+        commercial_category: values.category,
+        commercial_onboarding_completed_at: new Date().toISOString(),
       };
       syncAuthUi();
       setStatus('dd2-account-status', 'Docket preferences saved.', 'success');
@@ -1511,15 +1872,24 @@
       requireSubmissionAuthentication('partnership');
     });
     if (view === 'account') {
-      document.getElementById('dd2-account-enrollment')?.addEventListener('change', () => {
-        const enrolled = document.getElementById('dd2-account-enrollment').value === 'enrolled';
-        document.getElementById('dd2-account-school').required = enrolled;
-        document.getElementById('dd2-account-year').required = enrolled;
-      });
+      const syncFields = () => {
+        const schoolOther = document.getElementById('dd2-account-school-other');
+        const schoolOtherWrap = document.getElementById('dd2-account-school-other-wrap');
+        const professor = document.getElementById('dd2-account-professor-license');
+        const professorWrap = document.getElementById('dd2-account-professor-wrap');
+        const otherSelected = document.getElementById('dd2-account-school')?.value === 'other';
+        const professorSelected = document.getElementById('dd2-account-year')?.value === 'professor';
+        if (schoolOtherWrap) schoolOtherWrap.hidden = !otherSelected;
+        if (schoolOther) schoolOther.required = otherSelected;
+        if (professorWrap) professorWrap.hidden = !professorSelected;
+        if (professor) professor.required = professorSelected;
+      };
+      document.getElementById('dd2-account-school')?.addEventListener('change', syncFields);
+      document.getElementById('dd2-account-year')?.addEventListener('change', syncFields);
+      syncFields();
     }
-    if (['pricing','account'].includes(view) && state.user) {
-      loadBillingAndAccess();
-    }
+    if (view === 'pricing') loadCommercialPricing();
+    if (view === 'account' && state.user) loadBillingAndAccess();
   }
 
   function bindNavigation() {
@@ -1749,7 +2119,8 @@
       }
     });
     document.getElementById('dd2-onboarding-form')?.addEventListener('submit', submitOnboarding);
-    document.getElementById('dd2-enrollment-status')?.addEventListener('change', updateEnrollmentFields);
+    document.getElementById('dd2-school')?.addEventListener('change', updateEnrollmentFields);
+    document.getElementById('dd2-year-level')?.addEventListener('change', updateEnrollmentFields);
     document.getElementById('dd2-onboarding-close')?.addEventListener('click', returnFromOnboarding);
     document.getElementById('dd2-onboarding-back')?.addEventListener('click', returnFromOnboarding);
     document.getElementById('dd2-native-close')?.addEventListener('click', closeNativeView);
@@ -1912,7 +2283,7 @@
   };
   global.mockAuth = (provider) => {
     if (provider === 'Google') signInWithGoogle();
-    else global.toast?.(`${provider} sign-in is not active in this Beta.`, 'warn');
+    else global.toast?.(`${provider} sign-in is not available. Continue with Google.`, 'warn');
   };
 
   if (document.readyState === 'loading') {

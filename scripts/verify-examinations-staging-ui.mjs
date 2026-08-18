@@ -95,7 +95,8 @@ async function completeOnboardingIfShown(page) {
   const onboarding = page.locator('#dd2-onboarding-overlay.is-open');
   if (!await onboarding.isVisible().catch(() => false)) return;
   await page.locator('#dd2-display-name').fill('Synthetic Staging Examinee');
-  await page.locator('#dd2-enrollment-status').selectOption('not_yet_enrolled');
+  await page.locator('#dd2-school').selectOption({ index: 1 });
+  await page.locator('#dd2-year-level').selectOption('review');
   await page.locator('#dd2-legal-acceptance').check();
   await page.locator('#dd2-onboarding-submit').click();
   await onboarding.waitFor({ state: 'hidden', timeout: 20_000 });

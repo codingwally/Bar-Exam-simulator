@@ -59,6 +59,26 @@ async function serviceGet(path) {
   return response.json();
 }
 
+async function acceptCurrentTerms(user) {
+  const settings = await serviceGet(
+    '/rest/v1/platform_access_settings?singleton=eq.true&select=current_terms_version,current_privacy_version',
+  );
+  assert.equal(settings.length, 1);
+  await request(`${SUPABASE_URL}/rest/v1/rpc/accept_terms`, {
+    method: 'POST',
+    headers: {
+      apikey: PUBLISHABLE_KEY,
+      Authorization: `Bearer ${user.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      p_terms_version: settings[0].current_terms_version,
+      p_privacy_version: settings[0].current_privacy_version,
+      p_acceptance_source: 'protected_staging_e2e',
+    }),
+  }, [200, 204]);
+}
+
 async function serviceWrite(path, method, body, { expected = [200, 201, 204], representation = false } = {}) {
   const response = await request(`${SUPABASE_URL}${path}`, {
     method,
@@ -104,7 +124,9 @@ async function createUser(label) {
   });
   const session = await sessionResponse.json();
   assert.ok(session.access_token);
-  return { id: user.id, email, token: session.access_token };
+  const created = { id: user.id, email, token: session.access_token };
+  await acceptCurrentTerms(created);
+  return created;
 }
 
 async function workerJson(path, payload, token, expected = [200]) {
@@ -321,7 +343,7 @@ try {
   }, student.token);
   assert.ok(['Affirmed!', 'Affirmed with modification', 'Denied'].includes(barGrade.body.result.label));
   assert.equal(JSON.stringify(barGrade.body).includes(answerCanary), false);
-  assert.match(barGrade.body.notice, /AI-prepared beta/i);
+  assert.match(barGrade.body.notice, /Verify the coaching explanation against current law/i);
 
   const doctrineAnswer = `${payloadById.get(doctrineId).canonical_meaning}\n\n${answerCanary}`;
   const doctrineGrade = await workerJson('/dd2026/doctrines/grade', {
@@ -393,7 +415,7 @@ try {
   }, student.token);
   assert.equal(published.body.item.id, syntheticContentId);
 
-  console.log('DD2026_STAGING: Verdict PDF ownership, selection, and premium flag');
+  console.log('DD2026_STAGING: Verdict PDF ownership and selection');
   await rememberAndSetFlag('VERDICT_PDF_PREMIUM_REQUIRED', false);
   const verdict = await createVerdictFixture(student.id);
   const fullPdf = await workerPdf({
@@ -413,31 +435,13 @@ try {
   }, student.token);
   assert.equal(Buffer.from(selectedPdf.bytes.subarray(0, 5)).toString('ascii'), '%PDF-');
 
-  await rememberAndSetFlag('VERDICT_PDF_PREMIUM_REQUIRED', true);
-  const deniedPdf = await workerPdf({
+  const repeatedPdf = await workerPdf({
     gradingResultId: verdict.gradingResultId,
     selectionKind: 'entire_result',
     selectedIds: [],
-    requestKey: requestKey('verdict_denied'),
-  }, student.token, [403]);
-  assert.equal(deniedPdf.body.error.code, 'DD2026_PREMIUM_REQUIRED');
-  await serviceWrite('/rest/v1/user_entitlements', 'POST', {
-    user_id: student.id,
-    plan_code: 'premium_staging_test',
-    questions_per_subject_per_day: null,
-    effective_from: new Date(Date.now() - 60_000).toISOString(),
-    effective_until: new Date(Date.now() + 3_600_000).toISOString(),
-    source: 'dd26_staging_verification',
-    status: 'active',
-    updated_by: existingAdminId,
-  });
-  const premiumPdf = await workerPdf({
-    gradingResultId: verdict.gradingResultId,
-    selectionKind: 'entire_result',
-    selectedIds: [],
-    requestKey: requestKey('verdict_premium'),
+    requestKey: requestKey('verdict_repeat'),
   }, student.token);
-  assert.equal(Buffer.from(premiumPdf.bytes.subarray(0, 5)).toString('ascii'), '%PDF-');
+  assert.equal(Buffer.from(repeatedPdf.bytes.subarray(0, 5)).toString('ascii'), '%PDF-');
 
   console.log('DD2026_STAGING: Examination Room Worker authorization boundary');
   const portal = await workerJson('/exam-room/query', { operation: 'portal' }, student.token);

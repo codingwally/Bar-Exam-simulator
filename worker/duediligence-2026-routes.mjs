@@ -813,6 +813,8 @@ export function createDD2026Handlers(deps) {
     processExamRoomQueues,
     requireAdministrator,
     requireAuthenticatedUser,
+    reserveCommercialSubmission,
+    releaseCommercialSubmission,
     resolveVerdictQuestion,
     sendExamRoomEmail,
     signExamRoomPaymentProof,
@@ -916,24 +918,36 @@ export function createDD2026Handlers(deps) {
       p_content_type: 'bar_easy',
       p_content_id: input.contentId,
     });
-    const coached = await structuredGemini(
-      env,
-      buildBarEasyPrompt(content, input.answer),
-      BAR_EASY_RESPONSE_SCHEMA,
-      validateBarEasyResult,
+    const reservation = await reserveCommercialSubmission(
+      request, env, user, 'quiz', content.id, input.requestKey,
     );
-    const completion = await dd2026Rpc(
-      env,
-      'dd2026_record_bar_easy_completion',
-      barEasyPersistencePayload(user.id, content.id, input, coached.model),
-    );
-    return jsonResponse({
-      ok: true,
-      result: coached.result,
-      study: barEasyReveal(content),
-      completion,
-      notice: 'AI-prepared beta. Verify independently against current law and the linked primary source.',
-    }, 200, origin, allowedOrigin);
+    try {
+      const coached = await structuredGemini(
+        env,
+        buildBarEasyPrompt(content, input.answer),
+        BAR_EASY_RESPONSE_SCHEMA,
+        validateBarEasyResult,
+      );
+      const completion = await dd2026Rpc(
+        env,
+        'dd2026_record_bar_easy_completion_commercial',
+        {
+          ...barEasyPersistencePayload(user.id, content.id, input, coached.model),
+          p_reservation_id: reservation.reservationId,
+        },
+      );
+      return jsonResponse({
+        ok: true,
+        result: coached.result,
+        study: barEasyReveal(content),
+        completion,
+        access: completion?.access || reservation.access,
+        notice: 'Verify the coaching explanation against current law and the linked primary source.',
+      }, 200, origin, allowedOrigin);
+    } catch (error) {
+      await releaseCommercialSubmission(env, reservation, 'grading_failed');
+      throw error;
+    }
   }
 
   async function doctrineGrade(request, env, origin, allowedOrigin) {
@@ -945,25 +959,37 @@ export function createDD2026Handlers(deps) {
       p_content_type: 'doctrine',
       p_content_id: input.contentId,
     });
-    const coached = await structuredGemini(
-      env,
-      buildDoctrinePrompt(content, input.answer),
-      DOCTRINE_RESPONSE_SCHEMA,
-      validateDoctrineResult,
+    const reservation = await reserveCommercialSubmission(
+      request, env, user, 'doctrine_review', content.id, input.requestKey,
     );
-    const completion = await dd2026Rpc(
-      env,
-      'dd2026_record_doctrine_mastery',
-      doctrinePersistencePayload(user.id, content.id, input, coached.result, coached.model),
-    );
-    return jsonResponse({
-      ok: true,
-      result: coached.result,
-      study: doctrineReveal(content),
-      completion,
-      privacy: 'Your answer text is not saved. Only your mastery result is recorded.',
-      notice: 'AI-prepared beta. Verify independently against current law and the linked primary source.',
-    }, 200, origin, allowedOrigin);
+    try {
+      const coached = await structuredGemini(
+        env,
+        buildDoctrinePrompt(content, input.answer),
+        DOCTRINE_RESPONSE_SCHEMA,
+        validateDoctrineResult,
+      );
+      const completion = await dd2026Rpc(
+        env,
+        'dd2026_record_doctrine_mastery_commercial',
+        {
+          ...doctrinePersistencePayload(user.id, content.id, input, coached.result, coached.model),
+          p_reservation_id: reservation.reservationId,
+        },
+      );
+      return jsonResponse({
+        ok: true,
+        result: coached.result,
+        study: doctrineReveal(content),
+        completion,
+        access: completion?.access || reservation.access,
+        privacy: 'Your answer text is not saved. Only your mastery result is recorded.',
+        notice: 'Verify the coaching explanation against current law and the linked primary source.',
+      }, 200, origin, allowedOrigin);
+    } catch (error) {
+      await releaseCommercialSubmission(env, reservation, 'grading_failed');
+      throw error;
+    }
   }
 
   async function verdictPdf(request, env, origin, allowedOrigin) {
@@ -1382,7 +1408,29 @@ export function createDD2026Handlers(deps) {
         'This Examination Room query is not supported.',
       );
     }
-    const result = await examRoomRpc(env, functionName, body);
+    let result = await examRoomRpc(env, functionName, body);
+    if (['preflight', 'student_entry', 'beadle_student_entry'].includes(input.operation)) {
+      const examId = result?.examId || input.examId || null;
+      if (examId) {
+        const allowance = await examRoomRpc(
+          env,
+          'phase4_exam_room_allowance_preview',
+          { p_user_id: user.id, p_exam_public_id: examId },
+        );
+        result = {
+          ...(result || {}),
+          commercialAllowance: allowance,
+          ...(allowance?.available === true && allowance?.sufficient === false
+            ? {
+              canStart: false,
+              startBlocker: 'EXAM_ROOM_INSUFFICIENT_DAILY_ALLOWANCE',
+              startBlockerCode: 'EXAM_ROOM_INSUFFICIENT_DAILY_ALLOWANCE',
+              message: 'This examination contains more questions than remain in today\'s Free allowance.',
+            }
+            : {}),
+        };
+      }
+    }
     if (input.operation === 'activation_ledger') {
       return jsonResponse({
         ok: true,
@@ -2128,14 +2176,14 @@ export function createDD2026Handlers(deps) {
         p_candidate_number: input.candidateNumber, p_accommodation: input.accommodation,
         p_reason: input.reason, p_request_key: input.requestKey,
       } }),
-      start_attempt: async () => ({ functionName: 'exam_room_start_attempt_v4', body: {
+      start_attempt: async () => ({ functionName: 'exam_room_start_attempt_commercial_v1', body: {
         p_student_user_id: userId, p_exam_public_id: input.examId,
         p_student_key_hash: input.studentKey ? await h(input.studentKey) : null,
         p_rate_key_hash: rateHash,
       } }),
       start_attempt_by_code: async () => {
         const studentKeyHash = await h(input.studentKey);
-        return { functionName: 'exam_room_start_attempt_by_code_v1', body: {
+        return { functionName: 'exam_room_start_attempt_by_code_commercial_v1', body: {
           p_student_user_id: userId,
           p_student_key_hash: studentKeyHash,
           p_rate_key_hash: rateHash,
@@ -2143,7 +2191,7 @@ export function createDD2026Handlers(deps) {
         } };
       },
       start_beadle_attempt: async () => ({
-        functionName: 'exam_room_start_beadle_student_attempt_v1',
+        functionName: 'exam_room_start_beadle_attempt_commercial_v1',
         body: {
           p_user_id: userId,
           p_exam_public_id: input.examId,

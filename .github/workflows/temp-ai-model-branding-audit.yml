@@ -1,107 +1,252 @@
-name: Temporary AI model branding audit
+name: Apply provider-neutral AI model branding
 
 on:
   push:
     branches:
       - agent/remove-ai-model-branding-20260818
-  pull_request:
-    branches:
-      - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  apply-and-verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Check out the implementation branch
         uses: actions/checkout@v4
+        with:
+          ref: agent/remove-ai-model-branding-20260818
+          fetch-depth: 0
+          persist-credentials: true
 
-      - name: Scan deployable and supporting text files
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply the narrowly scoped branding cleanup
         shell: bash
         run: |
           python - <<'PY'
           from __future__ import annotations
 
-          import csv
           import re
           from pathlib import Path
 
           root = Path('.')
-          report = Path('ai-model-branding-audit.tsv')
 
+          def read(relative: str) -> str:
+              return (root / relative).read_text(encoding='utf-8')
+
+          def write(relative: str, value: str) -> None:
+              (root / relative).write_text(value, encoding='utf-8')
+
+          def replace_exact(relative: str, old: str, new: str, expected: int | None = 1) -> None:
+              value = read(relative)
+              count = value.count(old)
+              if expected is not None and count != expected:
+                  raise RuntimeError(f'{relative}: expected {expected} occurrence(s) of {old!r}, found {count}')
+              if count:
+                  write(relative, value.replace(old, new))
+
+          old_url = 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev'
+          new_url = 'https://api.duediligence.ph'
+          old_host = 'duediligence-gemini-examiner.wallyesteban1993.workers.dev'
+          new_host = 'api.duediligence.ph'
           text_suffixes = {
               '.html', '.htm', '.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx',
               '.json', '.md', '.txt', '.xml', '.yml', '.yaml', '.toml', '.ini',
               '.css', '.scss', '.sql', '.py', '.sh', '.ps1', '.properties',
-              '.webmanifest', '.svg', '.csv', '.env', '.example'
+              '.webmanifest', '.svg', '.csv', '.example',
           }
-          always_text_names = {
-              'Dockerfile', 'Procfile', 'CNAME', 'robots.txt', '.gitignore'
-          }
-          excluded_dirs = {
-              '.git', 'node_modules', 'vendor', 'dist', 'build', 'coverage',
-              '.next', '.cache', '__pycache__'
-          }
-
-          patterns = [
-              ('gemini', re.compile(r'(?i)\bgemini(?:[-_.\s][a-z0-9][a-z0-9_.-]*)*\b')),
-              ('gemini_env_or_identifier', re.compile(r'(?i)\b[A-Z0-9_]*GEMINI[A-Z0-9_]*\b')),
-              ('google_generative_api', re.compile(r'(?i)generativelanguage\.googleapis\.com|@google/generative-ai|google\.generativeai')),
-              ('flash_model_wording', re.compile(r'(?i)\b(?:gemini[-_.\s]*)?flash(?:[-_.\s]*(?:lite|pro|preview|thinking|\d+(?:\.\d+)*))?\b')),
-              ('openai_or_gpt', re.compile(r'(?i)\b(?:openai|gpt(?:[-_.\s]*\d[a-z0-9_.-]*)?)\b')),
-              ('anthropic_or_claude', re.compile(r'(?i)\b(?:anthropic|claude(?:[-_.\s]*\d[a-z0-9_.-]*)?)\b')),
-              ('other_named_models', re.compile(r'(?i)\b(?:llama(?:[-_.\s]*\d[a-z0-9_.-]*)?|mistral|deepseek|grok)\b')),
-          ]
-
-          deployable_roots = {
-              'index.html', 'offline.html', 'service-worker.js', 'manifest.webmanifest',
-              'admin', 'assets', 'content', 'worker', 'supabase'
-          }
-
-          rows: list[tuple[str, str, int, str, str]] = []
-          files_scanned = 0
-
+          excluded_dirs = {'.git', 'node_modules', 'dist', 'build', 'coverage', '.next', '.cache'}
+          endpoint_replacements = 0
           for path in sorted(root.rglob('*')):
-              if not path.is_file():
+              if not path.is_file() or any(part in excluded_dirs for part in path.parts):
                   continue
-              if any(part in excluded_dirs for part in path.parts):
-                  continue
-              if path == report:
-                  continue
-              if path.suffix.lower() not in text_suffixes and path.name not in always_text_names:
+              if path.suffix.lower() not in text_suffixes and path.name not in {'CNAME', 'Dockerfile', 'Procfile', '.gitignore'}:
                   continue
               try:
-                  text = path.read_text(encoding='utf-8')
+                  value = path.read_text(encoding='utf-8')
               except UnicodeDecodeError:
                   continue
-              files_scanned += 1
-              top = path.parts[0] if path.parts else path.name
-              scope = 'DEPLOYABLE' if top in deployable_roots else 'SUPPORTING'
-              for line_no, line in enumerate(text.splitlines(), start=1):
-                  for label, pattern in patterns:
-                      if pattern.search(line):
-                          rows.append((scope, path.as_posix(), line_no, label, line.strip()[:1000]))
+              updated = value.replace(old_url, new_url).replace(old_host, new_host)
+              if updated != value:
+                  endpoint_replacements += value.count(old_url) + value.count(old_host)
+                  path.write_text(updated, encoding='utf-8')
+          if endpoint_replacements < 10:
+              raise RuntimeError(f'Expected the endpoint migration to update at least 10 references; updated {endpoint_replacements}.')
 
-          with report.open('w', encoding='utf-8', newline='') as handle:
-              writer = csv.writer(handle, delimiter='\t')
-              writer.writerow(['scope', 'path', 'line', 'match_type', 'text'])
-              writer.writerows(rows)
+          replace_exact(
+              'index.html',
+              '<!-- Gemini examiner progress / controlled error modal -->',
+              '<!-- AI model examiner progress / controlled error modal -->',
+          )
 
-          print(f'Files scanned: {files_scanned}')
-          print(f'Matching lines: {len(rows)}')
-          print(f'Deployable matching lines: {sum(1 for row in rows if row[0] == "DEPLOYABLE")}')
-          print(f'Supporting matching lines: {sum(1 for row in rows if row[0] == "SUPPORTING")}')
-          for row in rows[:300]:
-              print('\t'.join(map(str, row)))
-          if len(rows) > 300:
-              print(f'... {len(rows) - 300} additional matching lines are in the artifact.')
+          for relative in [
+              'content/duediligence-2026/deployment-gates.json',
+              'content/duediligence-2026/exam-room-schema.json',
+              'content/question-bank/verbatim-source-manifest.json',
+              'supabase/migrations/20260729_004_phase3_admin_analytics.sql',
+              'supabase/migrations/20260730_005_phase4_access_subscriptions.sql',
+              'supabase/migrations/20260810002200_admin_answer_history_export.sql',
+          ]:
+              value = read(relative)
+              write(relative, value.replace('Gemini', 'AI model'))
+
+          replace_exact(
+              'worker/examiner-core.mjs',
+              '// URLs must come from stored question-bank fields or Gemini grounding',
+              '// URLs must come from stored question-bank fields or AI model grounding',
+          )
+
+          worker = read('worker/index.mjs')
+          required_worker_replacements = {
+              "console.warn('Gemini request failed before a response was received'": "console.warn('AI model request failed before a response was received'",
+              "console.warn('Gemini request rejected'": "console.warn('AI model request rejected'",
+              '`No supported Gemini examiner model is currently available${lastUnsupported ? \'.\' : \'.\'}`': '`No supported AI model is currently available${lastUnsupported ? \'.\' : \'.\'}`',
+              'modelUsed: gemini.model,': "modelUsed: 'AI model',",
+              "explanationSource = 'gemini_curated';": "explanationSource = 'ai_model_curated';",
+          }
+          for old, new in required_worker_replacements.items():
+              count = worker.count(old)
+              if count != 1:
+                  raise RuntimeError(f'worker/index.mjs: expected one occurrence of {old!r}, found {count}')
+              worker = worker.replace(old, new)
+          model_storage_count = worker.count('model: gemini.model,')
+          if model_storage_count != 2:
+              raise RuntimeError(f'worker/index.mjs: expected two model storage fields, found {model_storage_count}')
+          worker = worker.replace('model: gemini.model,', "model: 'AI model',")
+          write('worker/index.mjs', worker)
+
+          for relative in [
+              'scripts/test-gemini-examiner.mjs',
+              'worker/index.test.mjs',
+              'worker/phase4-quality.test.mjs',
+              'worker/examinations-routes.test.mjs',
+          ]:
+              value = read(relative)
+              value = re.sub(
+                  r"(assessment\.modelUsed\s*,\s*)'gemini[^']*'",
+                  r"\1'AI model'",
+                  value,
+                  flags=re.IGNORECASE,
+              )
+              value = re.sub(
+                  r"(modelUsed\s*:\s*)[A-Za-z_$][\w$]*\.model",
+                  r"\1'AI model'",
+                  value,
+              )
+              write(relative, value)
+
+          replace_exact(
+              'worker/package.json',
+              '"name": "duediligence-gemini-examiner-worker"',
+              '"name": "duediligence-ai-model-worker"',
+          )
+          package_lock = read('worker/package-lock.json')
+          package_lock_count = package_lock.count('"name": "duediligence-gemini-examiner-worker"')
+          if package_lock_count != 2:
+              raise RuntimeError(f'worker/package-lock.json: expected two package names, found {package_lock_count}')
+          write(
+              'worker/package-lock.json',
+              package_lock.replace(
+                  '"name": "duediligence-gemini-examiner-worker"',
+                  '"name": "duediligence-ai-model-worker"',
+              ),
+          )
+
+          wrangler = read('worker/wrangler.toml')
+          if 'pattern = "api.duediligence.ph"' not in wrangler:
+              marker = 'preview_urls = false\n'
+              if wrangler.count(marker) != 1:
+                  raise RuntimeError('worker/wrangler.toml: preview URL marker was not unique')
+              wrangler = wrangler.replace(
+                  marker,
+                  marker
+                  + 'workers_dev = false\n\n'
+                  + '[[routes]]\n'
+                  + 'pattern = "api.duediligence.ph"\n'
+                  + 'custom_domain = true\n',
+              )
+          wrangler = wrangler.replace(
+              '# GEMINI_API_KEY and SUPABASE_SERVICE_ROLE_KEY must remain Cloudflare secrets.',
+              '# The AI model API key and SUPABASE_SERVICE_ROLE_KEY must remain Cloudflare secrets.',
+          )
+          write('worker/wrangler.toml', wrangler)
+
+          deploy_worker = read('.github/workflows/deploy-worker.yml')
+          deploy_worker = deploy_worker.replace(
+              'name: Deploy Gemini examiner Worker',
+              'name: Deploy AI model examiner Worker',
+          ).replace(
+              'group: "production-gemini-examiner-worker"',
+              'group: "production-ai-model-examiner-worker"',
+          )
+          branding_test = '          node scripts/test-ai-model-branding.mjs\n'
+          if branding_test not in deploy_worker:
+              marker = '          node scripts/validate-duediligence-2026-content.mjs\n'
+              if deploy_worker.count(marker) != 1:
+                  raise RuntimeError('deploy-worker.yml: validation marker was not unique')
+              deploy_worker = deploy_worker.replace(marker, marker + branding_test)
+          write('.github/workflows/deploy-worker.yml', deploy_worker)
+
+          deploy_pages = read('.github/workflows/deploy.yml')
+          if 'node scripts/test-ai-model-branding.mjs' not in deploy_pages:
+              marker = '      - name: Verify sanitized Pages artifact\n        run: node scripts/test-pages-artifact.mjs\n'
+              replacement = marker + '\n      - name: Verify provider-neutral AI model branding\n        run: node scripts/test-ai-model-branding.mjs\n'
+              if deploy_pages.count(marker) != 1:
+                  raise RuntimeError('deploy.yml: artifact verification marker was not unique')
+              deploy_pages = deploy_pages.replace(marker, replacement)
+          write('.github/workflows/deploy.yml', deploy_pages)
+
+          temp_workflow = root / '.github/workflows/temp-ai-model-branding-audit.yml'
+          if temp_workflow.exists():
+              temp_workflow.unlink()
+
+          print(f'Migrated {endpoint_replacements} production endpoint references to {new_url}.')
+          print('Applied generic public response metadata, neutral wording, and custom-domain routing.')
           PY
 
-      - name: Upload complete audit report
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-model-branding-audit
-          path: ai-model-branding-audit.tsv
-          if-no-files-found: error
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify Worker behavior
+        run: |
+          node --check worker/index.mjs
+          node --test worker/*.test.mjs
+
+      - name: Verify the public application and five-pass audit
+        run: |
+          node scripts/test-private-beta-frontend.mjs
+          node scripts/test-auth-session-persistence.mjs
+          node scripts/test-phase2-contract.mjs
+          node scripts/test-dialog-exit-controls.mjs
+          node scripts/test-auth-route-overlay.mjs
+          node scripts/test-onboarding-flow.mjs
+          node scripts/test-post-grade-controls.mjs
+          node scripts/test-subject-matter-consolidation.mjs
+          node scripts/test-examinations.mjs
+          node scripts/test-duediligence-2026-frontend.mjs
+          node scripts/test-examination-room-2-frontend.mjs
+          node scripts/test-pages-artifact.mjs
+          node scripts/test-ai-model-branding.mjs
+
+      - name: Validate the Worker bundle without deployment
+        working-directory: worker
+        run: npx --yes wrangler@4.114.0 deploy --dry-run --outdir ../.worker-dry-run
+
+      - name: Commit the verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "OpenAI"
+          git config user.email "noreply@openai.com"
+          git status --short
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No implementation changes were produced." >&2
+            exit 1
+          fi
+          git commit -m "Remove public AI provider and model branding"
+          git push origin HEAD:agent/remove-ai-model-branding-20260818

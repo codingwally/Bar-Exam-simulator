@@ -10,6 +10,10 @@ const accessChoice = readFileSync(new URL(
   '../supabase/migrations/20260818133000_restore_two_option_access_choice.sql',
   import.meta.url,
 ), 'utf8');
+const dailyChoice = readFileSync(new URL(
+  '../supabase/migrations/20260818143000_free_trial_five_daily_choice.sql',
+  import.meta.url,
+), 'utf8');
 const legalPolicyMigration = readFileSync(new URL(
   '../supabase/migrations/20260818062500_current_legal_policy_contract.sql',
   import.meta.url,
@@ -54,7 +58,7 @@ test('commercial foundation remains additive, transactional, and installs disabl
   assert.match(foundation, /quota_timezone text not null default 'Asia\/Manila'/);
 });
 
-test('two-option corrective migration is transactional and installs its gate disabled', () => {
+test('two-option migration installs its gate disabled for a safe rolling release', () => {
   assertTransactional(accessChoice, 'two-option correction');
   assert.match(accessChoice, /mandatory_access_choice_enabled boolean not null default false/);
   assert.match(accessChoice, /set mandatory_access_choice_enabled = false/);
@@ -63,6 +67,15 @@ test('two-option corrective migration is transactional and installs its gate dis
     /launch_trial_ends_at[\s\S]*'2026-09-01 23:59:59\+08'/,
   );
   assert.doesNotMatch(accessChoice, /^\s*drop\s+table\b/gmi);
+});
+
+test('five-daily correction is transactional and preserves existing choices', () => {
+  assertTransactional(dailyChoice, 'five-daily correction');
+  assert.match(dailyChoice, /free_daily_grade_limit = 5/);
+  assert.match(dailyChoice, /commercial_access_choices/);
+  assert.match(dailyChoice, /trial_program = 'commercial_launch_2026'/);
+  assert.match(dailyChoice, /phase4_access_snapshot_pre_five_daily_choice/);
+  assert.doesNotMatch(dailyChoice, /^\s*drop\s+table\b/gmi);
 });
 
 test('current legal policy is server-authoritative and least privilege', () => {
@@ -101,13 +114,14 @@ test('approved dates, price, and commercial legal versions remain fixed', () => 
   assert.match(foundation, /One-time payment\. No automatic renewal/);
 });
 
-test('public catalog exposes Free Trial and ₱149 Early Access', () => {
-  const catalog = sectionBetween(accessChoice, 'phase4_plan_catalog');
+test('public catalog exposes five-daily Free Trial and ₱149 Early Access', () => {
+  const catalog = sectionBetween(dailyChoice, 'phase4_plan_catalog');
   assert.match(catalog, /'planCode', 'free'/);
   assert.match(catalog, /'name', 'Free Trial'/);
   assert.match(catalog, /'priceCentavos', 0/);
-  assert.match(catalog, /'billing', 'fixed_launch_trial'/);
-  assert.match(catalog, /September 1, 2026 at 11:59 PM Philippine time/);
+  assert.match(catalog, /'billing', 'daily_free_trial'/);
+  assert.match(catalog, /five protected question submissions per Philippine calendar day/i);
+  assert.match(catalog, /Allowance resets at midnight in Asia\/Manila/);
   assert.match(catalog, /'planCode', 'early_access_beta'/);
   assert.match(catalog, /'priceCentavos', 14900/);
   assert.match(catalog, /'billing', 'one_time'/);
@@ -115,34 +129,33 @@ test('public catalog exposes Free Trial and ₱149 Early Access', () => {
   assert.doesNotMatch(catalog, /'planCode',\s*'(?:standard|premium)'/);
 });
 
-test('ordinary commercial precedence ends in explicit choice, not daily free', () => {
+test('ordinary commercial access requires choice before daily Free Trial', () => {
   const snapshot = sectionBetween(
-    accessChoice,
+    dailyChoice,
     'phase4_access_snapshot',
     'phase4_plan_catalog',
   );
+  assert.match(snapshot, /v_trial_selected/);
+  assert.match(snapshot, /v_trial_active/);
+  assert.match(snapshot, /v_settings\.free_daily_grade_limit - v_used/);
   assertInOrder(snapshot, [
-    "v_role = 'super_admin'",
-    "v_role = 'founder_admin'",
-    'v_settings.global_beta_all_access_enabled',
-    'v_settings.commercial_launch_enabled',
-  ], 'top-level access precedence');
-  assertInOrder(snapshot, [
-    "v_beta.access_program = 'founding_beta_2026'",
-    'v_subscription.id is not null',
-    'v_payment.id is not null',
-    'v_settings.mandatory_access_choice_enabled',
-    "v_basis := 'launch_trial'",
-    "v_basis := 'trial_expired'",
-    "v_basis := 'plan_selection_required'",
-  ], 'commercial access precedence');
+    "if v_trial_active then",
+    "when v_remaining > 0 then 'daily_free'",
+    "else 'daily_limit_reached'",
+    "if v_trial_selected then",
+    "'basis', 'trial_expired'",
+    "'basis', 'plan_selection_required'",
+  ], 'explicit Free Trial precedence');
   assert.match(snapshot, /'choiceRequired'/);
   assert.match(snapshot, /'trialAvailable'/);
   assert.match(snapshot, /'mandatoryAccessChoiceEnabled'/);
-  assert.match(snapshot, /'dailyLimit'[\s\S]*when v_settings\.commercial_launch_enabled then 0/);
-  assert.match(snapshot, /'remainingToday'[\s\S]*when v_settings\.commercial_launch_enabled then 0/);
-  assert.doesNotMatch(snapshot, /v_basis\s*:=\s*'daily_free'/);
-  assert.doesNotMatch(snapshot, /daily_limit_reached/);
+  assert.match(snapshot, /'dailyLimit', v_settings\.free_daily_grade_limit/);
+  assert.match(snapshot, /'remainingToday', v_remaining/);
+  assert.match(snapshot, /'unlimited', false/);
+  assert.doesNotMatch(
+    snapshot,
+    /if v_trial_active then[\s\S]*'unlimited', true/,
+  );
 });
 
 test('Free Trial starts only through the explicit trusted choice function', () => {
@@ -278,20 +291,28 @@ test('Examination Room still reserves immutable question count before entry', ()
 });
 
 test('new access-choice functions remain least privilege', () => {
+  assert.match(
+    accessChoice,
+    /revoke all on function public\.phase4_choose_launch_trial\(uuid, text\)[\s\S]*from public, anon, authenticated/,
+  );
+  assert.match(
+    accessChoice,
+    /grant execute on function public\.phase4_choose_launch_trial\(uuid, text\)[\s\S]*to service_role/,
+  );
   for (const signature of [
-    'phase4_choose_launch_trial\\(uuid, text\\)',
+    'phase4_access_snapshot_pre_five_daily_choice\\(uuid, boolean, text\\)',
     'phase4_access_snapshot\\(uuid, boolean, text\\)',
     'phase4_plan_catalog\\(\\)',
   ]) {
     assert.match(
-      accessChoice,
+      dailyChoice,
       new RegExp(`revoke all on function public\\.${signature}[\\s\\S]*from public, anon, authenticated`),
     );
     assert.match(
-      accessChoice,
+      dailyChoice,
       new RegExp(`grant execute on function public\\.${signature}[\\s\\S]*to service_role`),
     );
   }
 });
 
-console.log('Commercial launch and two-option access migration contract checks passed.');
+console.log('Commercial launch and five-daily access-choice migration contract checks passed.');

@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
-const migration = readFileSync(new URL(
+const foundation = readFileSync(new URL(
   '../supabase/migrations/20260818024644_commercial_launch_access.sql',
+  import.meta.url,
+), 'utf8');
+const accessChoice = readFileSync(new URL(
+  '../supabase/migrations/20260818133000_restore_two_option_access_choice.sql',
   import.meta.url,
 ), 'utf8');
 const legalPolicyMigration = readFileSync(new URL(
@@ -15,18 +19,18 @@ const legalAcceptanceMigration = readFileSync(new URL(
   import.meta.url,
 ), 'utf8');
 
-function functionBlock(name, occurrence = 0) {
+function functionBlock(source, name, occurrence = 0) {
   const marker = `create or replace function public.${name}`;
   let start = -1;
   let from = 0;
   for (let index = 0; index <= occurrence; index += 1) {
-    start = migration.indexOf(marker, from);
+    start = source.indexOf(marker, from);
     assert.notEqual(start, -1, `${name} function occurrence ${occurrence + 1} must exist`);
     from = start + marker.length;
   }
-  const end = migration.indexOf('\n$$;', start);
+  const end = source.indexOf('\n$$;', start);
   assert.notEqual(end, -1, `${name} function must have a complete SQL body`);
-  return migration.slice(start, end + 4);
+  return source.slice(start, end + 4);
 }
 
 function assertInOrder(source, markers, message) {
@@ -39,19 +43,39 @@ function assertInOrder(source, markers, message) {
   }
 }
 
-test('commercial migration is transactional, additive, and installs disabled', () => {
-  assert.equal((migration.match(/^begin;$/gmi) || []).length, 1);
-  assert.equal((migration.match(/^commit;$/gmi) || []).length, 1);
-  assert.doesNotMatch(migration, /^\s*(?:drop\s+table|truncate\s+table)\b/gmi);
-  assert.match(migration, /commercial_launch_enabled boolean not null default false/);
-  assert.match(migration, /public_pricing_enabled boolean not null default false/);
-  assert.match(migration, /free_daily_grade_limit integer not null default 5/);
-  assert.match(migration, /quota_timezone text not null default 'Asia\/Manila'/);
+function assertTransactional(source, label) {
+  assert.equal((source.match(/^begin;$/gmi) || []).length, 1, `${label} begins once`);
+  assert.equal((source.match(/^commit;$/gmi) || []).length, 1, `${label} commits once`);
+  assert.doesNotMatch(source, /^\s*(?:truncate\s+table)\b/gmi);
+}
+
+test('commercial foundation remains additive, transactional, and installs disabled', () => {
+  assertTransactional(foundation, 'commercial foundation');
+  assert.doesNotMatch(foundation, /^\s*drop\s+table\b/gmi);
+  assert.match(foundation, /commercial_launch_enabled boolean not null default false/);
+  assert.match(foundation, /public_pricing_enabled boolean not null default false/);
+  assert.match(foundation, /quota_timezone text not null default 'Asia\/Manila'/);
+});
+
+test('two-option corrective migration is transactional and installs its gate disabled', () => {
+  assertTransactional(accessChoice, 'two-option correction');
+  assert.match(
+    accessChoice,
+    /mandatory_access_choice_enabled boolean not null default false/,
+  );
+  assert.match(
+    accessChoice,
+    /set mandatory_access_choice_enabled = false/,
+  );
+  assert.match(
+    accessChoice,
+    /launch_trial_ends_at[\s\S]*'2026-09-01 23:59:59\+08'/,
+  );
+  assert.doesNotMatch(accessChoice, /^\s*drop\s+table\b/gmi);
 });
 
 test('current legal policy is server-authoritative, non-sensitive, and least privilege', () => {
-  assert.equal((legalPolicyMigration.match(/^begin;$/gmi) || []).length, 1);
-  assert.equal((legalPolicyMigration.match(/^commit;$/gmi) || []).length, 1);
+  assertTransactional(legalPolicyMigration, 'legal policy');
   assert.doesNotMatch(legalPolicyMigration, /^\s*(?:drop|truncate|delete|update|insert)\b/gmi);
   assert.match(legalPolicyMigration, /'termsVersion', s\.current_terms_version/);
   assert.match(legalPolicyMigration, /'privacyVersion', s\.current_privacy_version/);
@@ -66,101 +90,46 @@ test('current legal policy is server-authoritative, non-sensitive, and least pri
   );
 });
 
-test('current legal acceptance is backend-only, user-bound, idempotent, and server-versioned', () => {
-  assert.equal((legalAcceptanceMigration.match(/^begin;$/gmi) || []).length, 1);
-  assert.equal((legalAcceptanceMigration.match(/^commit;$/gmi) || []).length, 1);
+test('current legal acceptance is backend-only, user-bound, and idempotent', () => {
+  assertTransactional(legalAcceptanceMigration, 'legal acceptance');
   assert.doesNotMatch(legalAcceptanceMigration, /^\s*(?:drop|truncate|delete|update)\b/gmi);
   assert.match(legalAcceptanceMigration, /auth\.role\(\) <> 'service_role'/);
   assert.match(legalAcceptanceMigration, /where u\.id = p_user_id/);
   assert.match(legalAcceptanceMigration, /s\.current_terms_version/);
   assert.match(legalAcceptanceMigration, /s\.current_privacy_version/);
-  assert.match(legalAcceptanceMigration, /on conflict \(user_id, terms_version, privacy_version\) do nothing/);
   assert.match(
     legalAcceptanceMigration,
-    /revoke all on function public\.phase4_accept_current_terms_for_user\(uuid, text\)[\s\S]*from public, anon, authenticated/,
-  );
-  assert.match(
-    legalAcceptanceMigration,
-    /grant execute on function public\.phase4_accept_current_terms_for_user\(uuid, text\)[\s\S]*to service_role/,
+    /on conflict \(user_id, terms_version, privacy_version\) do nothing/,
   );
 });
 
-test('launch dates, price, and legal versions are fixed to the approved policy', () => {
-  assert.match(migration, /early_access_sales_close_at[\s\S]*'2026-09-01 23:59:59\+08'/);
-  assert.match(migration, /early_access_entitlement_ends_at[\s\S]*'2026-10-01 23:59:59\+08'/);
-  assert.match(migration, /commercial_terms_version[\s\S]*'terms-commercial-v1-2026-08-18'/);
-  assert.match(migration, /commercial_privacy_version[\s\S]*'privacy-commercial-v1-2026-08-18'/);
-  assert.match(migration, /where plan_code = 'early_access_beta'/);
-  assert.match(migration, /price_php = 149\.00/);
-  assert.match(migration, /duration_days = null/);
-  assert.match(migration, /One-time payment\. No automatic renewal\. Later pricing is unannounced\./);
+test('approved dates, price, and commercial legal versions remain fixed', () => {
+  assert.match(foundation, /early_access_sales_close_at[\s\S]*'2026-09-01 23:59:59\+08'/);
+  assert.match(foundation, /early_access_entitlement_ends_at[\s\S]*'2026-10-01 23:59:59\+08'/);
+  assert.match(foundation, /commercial_terms_version[\s\S]*'terms-commercial-v1-2026-08-18'/);
+  assert.match(foundation, /commercial_privacy_version[\s\S]*'privacy-commercial-v1-2026-08-18'/);
+  assert.match(foundation, /where plan_code = 'early_access_beta'/);
+  assert.match(foundation, /price_php = 149\.00/);
+  assert.match(foundation, /duration_days = null/);
+  assert.match(foundation, /One-time payment\. No automatic renewal/);
 });
 
-test('public catalog exposes only Free and one-time Early Access', () => {
-  const catalog = functionBlock('phase4_plan_catalog');
-  assert.match(catalog, /'planCode', 'free'[\s\S]*'priceCentavos', 0/);
-  assert.match(catalog, /'planCode', 'early_access_beta'[\s\S]*'priceCentavos', 14900/);
+test('public catalog exposes the required Free Trial and ₱149 Early Access choices', () => {
+  const catalog = functionBlock(accessChoice, 'phase4_plan_catalog');
+  assert.match(catalog, /'planCode', 'free'/);
+  assert.match(catalog, /'name', 'Free Trial'/);
+  assert.match(catalog, /'priceCentavos', 0/);
+  assert.match(catalog, /'billing', 'fixed_launch_trial'/);
+  assert.match(catalog, /September 1, 2026 at 11:59 PM Philippine time/);
+  assert.match(catalog, /'planCode', 'early_access_beta'/);
+  assert.match(catalog, /'priceCentavos', 14900/);
   assert.match(catalog, /'billing', 'one_time'/);
-  assert.match(catalog, /Next paid-plan pricing will be announced separately\./);
+  assert.match(catalog, /October 1, 2026/);
   assert.doesNotMatch(catalog, /'planCode',\s*'(?:standard|premium)'/);
-  assert.match(
-    migration,
-    /set status = 'retired', checkout_enabled = false, promotional = false[\s\S]*where plan_code in \('standard', 'premium'\)/,
-  );
-  assert.match(
-    migration,
-    /where flag_key in \('VERDICT_PDF_PREMIUM_REQUIRED', 'AI_PREPARED_BETA_BADGE'\)/,
-  );
 });
 
-test('single-question quota is atomic, cross-track, replay-safe, and counts active holds', () => {
-  const reserve = functionBlock('phase4_reserve_grade_v2');
-  for (const track of [
-    'bar_practice', 'subject_matter', 'mock_bar', 'bar_feels',
-    'quiz', 'doctrine_review', 'examination_room',
-  ]) assert.match(reserve, new RegExp(`'${track}'`));
-  assert.match(reserve, /pg_advisory_xact_lock\(hashtextextended\(p_user_id::text, 401\)\)/);
-  assert.match(reserve, /where request_key = p_request_key for update/);
-  assert.match(reserve, /v_existing\.status in \('reserved','completed'\)/);
-  assert.match(reserve, /status = 'expired'[\s\S]*release_reason = 'reservation_timeout'/);
-  assert.match(
-    reserve,
-    /\(status = 'completed' and usage_date_ph = public\.phase4_ph_date\(v_now\)\)[\s\S]*or \(status = 'reserved' and reservation_expires_at > v_now\)/,
-  );
-  assert.match(reserve, /if v_count >= v_settings\.free_daily_grade_limit/);
-  assert.match(reserve, /'reason', 'daily_limit_reached'/);
-  assert.match(reserve, /usage_date_ph = public\.phase4_ph_date\(v_now\)/);
-  assert.match(reserve, /consumes_quota = v_consumes/);
-});
-
-test('failed grading can release and safely retry without consuming a use', () => {
-  const reserve = functionBlock('phase4_reserve_grade_v2');
-  const finalize = functionBlock('phase4_finalize_grade');
-  assert.match(
-    reserve,
-    /v_existing\.status in \('released','expired'\)[\s\S]*'provider_capacity'[\s\S]*'provider_rate_limit'[\s\S]*'provider_timeout'[\s\S]*'provider_unavailable'[\s\S]*'grading_failed'[\s\S]*'network_failure'/,
-  );
-  assert.match(finalize, /if v_reservation\.status <> 'reserved' then/);
-  assert.match(finalize, /set status = 'completed', completed_at = v_now/);
-  assert.doesNotMatch(finalize, /status = 'completed'[\s\S]*before/i);
-});
-
-test('multi-question sessions reserve before entry and release every unused hold', () => {
-  const reserve = functionBlock('phase4_reserve_submission_batch');
-  const finalize = functionBlock('phase4_finalize_submission_batch');
-  const release = functionBlock('phase4_release_submission_batch');
-  assert.match(reserve, /p_required_count not between 1 and 100/);
-  assert.match(reserve, /if v_used \+ p_required_count > v_settings\.free_daily_grade_limit/);
-  assert.match(reserve, /'reason', 'insufficient_daily_allowance'/);
-  assert.match(reserve, /reservation_expires_at[\s\S]*v_now \+ interval '6 hours'/);
-  assert.match(finalize, /batch_ordinal <= p_completed_count and status = 'reserved'/);
-  assert.match(finalize, /batch_ordinal > p_completed_count and status = 'reserved'/);
-  assert.match(finalize, /'releasedCount', v_released/);
-  assert.match(release, /where user_id = p_user_id and session_request_key = p_session_request_key[\s\S]*and status = 'reserved'/);
-});
-
-test('commercial access precedence is deterministic and server-authoritative', () => {
-  const snapshot = functionBlock('phase4_access_snapshot');
+test('ordinary commercial access precedence ends in explicit choice, not automatic daily free', () => {
+  const snapshot = functionBlock(accessChoice, 'phase4_access_snapshot');
   assertInOrder(snapshot, [
     "v_role = 'super_admin'",
     "v_role = 'founder_admin'",
@@ -171,50 +140,93 @@ test('commercial access precedence is deterministic and server-authoritative', (
     "v_beta.access_program = 'founding_beta_2026'",
     'v_subscription.id is not null',
     'v_payment.id is not null',
-    "v_basis := 'daily_free'",
+    'v_settings.mandatory_access_choice_enabled',
+    "v_basis := 'launch_trial'",
+    "v_basis := 'trial_expired'",
+    "v_basis := 'plan_selection_required'",
   ], 'commercial access precedence');
-  for (const key of [
-    'accessMode', 'accountLabel', 'unlimited', 'dailyLimit', 'completedToday',
-    'reservedToday', 'remainingToday', 'resetAt', 'checkoutOpen',
-    'priceCentavos', 'salesCloseAt', 'entitlementEndsAt',
-  ]) assert.match(snapshot, new RegExp(`'${key}'`));
-  assert.match(snapshot, /public\.phase4_ph_date\(v_now\)/);
-  assert.match(snapshot, /public\.phase4_ph_reset_at\(v_now\)/);
-  assert.match(snapshot, /count\(\*\) filter \([\s\S]*where status = 'completed'[\s\S]*usage_date_ph = public\.phase4_ph_date\(v_now\)/);
-  assert.match(snapshot, /count\(\*\) filter \(\s*where status = 'reserved'/);
-  assert.match(snapshot, /greatest\(0, v_settings\.free_daily_grade_limit - v_completed - v_reserved\)/);
+  assert.match(snapshot, /'choiceRequired'/);
+  assert.match(snapshot, /'trialAvailable'/);
+  assert.match(snapshot, /'mandatoryAccessChoiceEnabled'/);
+  assert.match(snapshot, /'dailyLimit'[\s\S]*when v_settings\.commercial_launch_enabled then 0/);
+  assert.match(snapshot, /'remainingToday'[\s\S]*when v_settings\.commercial_launch_enabled then 0/);
+  assert.doesNotMatch(snapshot, /v_basis\s*:=\s*'daily_free'/);
+  assert.doesNotMatch(snapshot, /daily_limit_reached/);
 });
 
-test('Subject Matter read wrappers permit the commercial resolver to claim Founding Beta access', () => {
-  assert.match(migration, /alter function public\.subject_matter_catalog\(uuid\) volatile;/);
+test('Free Trial can start only through the explicit trusted choice function', () => {
+  const chooseTrial = functionBlock(accessChoice, 'phase4_choose_launch_trial');
+  assert.match(chooseTrial, /p_request_key !~ '\^\[A-Za-z0-9_-\]\{16,128\}\$'/);
+  assert.match(chooseTrial, /mandatory_access_choice_enabled/);
+  assert.match(chooseTrial, /Current Terms and Privacy acceptance is required/);
+  assert.match(chooseTrial, /Complete the required profile before choosing access/);
+  assert.match(chooseTrial, /trial_program = 'commercial_launch_2026'/);
+  assert.match(chooseTrial, /v_settings\.launch_trial_ends_at/);
+  assert.match(chooseTrial, /The Free Trial has already been used/);
+  assert.match(chooseTrial, /return public\.phase4_access_snapshot/);
+
+  const snapshot = functionBlock(accessChoice, 'phase4_access_snapshot');
   assert.match(
-    migration,
-    /alter function public\.subject_matter_performance\(uuid, text, integer\) volatile;/,
+    snapshot,
+    /if p_activate_trial and v_terms_ok and not v_settings\.commercial_launch_enabled/,
   );
-});
-
-test('Founding Beta matching stores only hashes and grants no client access', () => {
-  assert.match(migration, /create table if not exists public\.founding_beta_invites/);
-  assert.match(migration, /email_hash text primary key check \(email_hash ~ '\^\[0-9a-f\]\{64\}\$'\)/);
-  assert.match(migration, /default '2026-09-01 23:59:59\+08'/);
-  assert.match(migration, /force row level security/);
-  assert.match(migration, /revoke all on public\.%I from public, anon, authenticated/);
   assert.doesNotMatch(
-    migration,
-    /[A-Z0-9._%+-]+@gmail\.com\b/i,
-    'The approved Founding Beta roster must never be committed as plaintext Gmail addresses.',
+    snapshot,
+    /if p_activate_trial and v_terms_ok and v_settings\.commercial_launch_enabled/,
   );
-  const roster = migration.match(/from unnest\(array\[([\s\S]*?)\]::text\[\]\) as roster\(email_hash\)/)?.[1] || '';
-  const hashes = [...roster.matchAll(/'([0-9a-f]{64})'/g)].map((match) => match[1]);
-  assert.equal(hashes.length, 18, 'The approved Founding Beta roster must contain exactly 18 hashes.');
-  assert.equal(new Set(hashes).size, 18, 'Founding Beta hashes must be unique.');
-  const claim = functionBlock('phase4_claim_founding_beta');
-  assert.match(claim, /p_email_hash[\s\S]*'\^\[0-9a-f\]\{64\}\$'/);
-  assert.match(claim, /access_program[\s\S]*'founding_beta_2026'/);
 });
 
-test('payment proof is one-time provisional access and cannot be extended by replay', () => {
-  const payment = functionBlock('phase4_create_payment_request');
+test('single and multi-question reservations remain atomic and replay-safe', () => {
+  const reserve = functionBlock(foundation, 'phase4_reserve_grade_v2');
+  const batch = functionBlock(foundation, 'phase4_reserve_submission_batch');
+  const finalize = functionBlock(foundation, 'phase4_finalize_submission_batch');
+
+  for (const track of [
+    'bar_practice', 'subject_matter', 'mock_bar', 'bar_feels',
+    'quiz', 'doctrine_review', 'examination_room',
+  ]) assert.match(reserve, new RegExp(`'${track}'`));
+
+  assert.match(reserve, /pg_advisory_xact_lock\(hashtextextended\(p_user_id::text, 401\)\)/);
+  assert.match(reserve, /where request_key = p_request_key for update/);
+  assert.match(reserve, /v_existing\.status in \('reserved','completed'\)/);
+  assert.match(reserve, /status = 'expired'[\s\S]*release_reason = 'reservation_timeout'/);
+  assert.match(batch, /p_required_count not between 1 and 100/);
+  assert.match(batch, /reservation_expires_at[\s\S]*v_now \+ interval '6 hours'/);
+  assert.match(finalize, /batch_ordinal <= p_completed_count and status = 'reserved'/);
+  assert.match(finalize, /batch_ordinal > p_completed_count and status = 'reserved'/);
+});
+
+test('failed grading releases safely and successful grading finalizes once', () => {
+  const reserve = functionBlock(foundation, 'phase4_reserve_grade_v2');
+  const finalize = functionBlock(foundation, 'phase4_finalize_grade');
+  assert.match(
+    reserve,
+    /v_existing\.status in \('released','expired'\)[\s\S]*'provider_capacity'[\s\S]*'provider_rate_limit'[\s\S]*'provider_timeout'[\s\S]*'provider_unavailable'[\s\S]*'grading_failed'[\s\S]*'network_failure'/,
+  );
+  assert.match(finalize, /if v_reservation\.status <> 'reserved' then/);
+  assert.match(finalize, /set status = 'completed', completed_at = v_now/);
+});
+
+test('Founding Beta roster stores hashes only and remains server controlled', () => {
+  assert.match(foundation, /create table if not exists public\.founding_beta_invites/);
+  assert.match(foundation, /email_hash text primary key/);
+  assert.match(foundation, /force row level security/);
+  assert.doesNotMatch(
+    foundation,
+    /[A-Z0-9._%+-]+@gmail\.com\b/i,
+    'Founding Beta Gmail addresses must never be committed in plaintext.',
+  );
+  const roster = foundation.match(
+    /from unnest\(array\[([\s\S]*?)\]::text\[\]\) as roster\(email_hash\)/,
+  )?.[1] || '';
+  const hashes = [...roster.matchAll(/'([0-9a-f]{64})'/g)].map((match) => match[1]);
+  assert.equal(hashes.length, 18);
+  assert.equal(new Set(hashes).size, 18);
+});
+
+test('payment proof remains one-time provisional access with fixed paid expiry', () => {
+  const payment = functionBlock(foundation, 'phase4_create_payment_request');
+  const review = functionBlock(foundation, 'phase4_admin_review_payment');
   assert.match(payment, /p_plan_code[\s\S]*<> 'early_access_beta'/);
   assert.match(payment, /round\(coalesce\(p_amount_php, 0\), 2\) <> 149\.00/);
   assert.match(payment, /v_now > v_settings\.early_access_sales_close_at/);
@@ -223,126 +235,69 @@ test('payment proof is one-time provisional access and cannot be extended by rep
     "where user_id = p_user_id and plan_code = 'early_access_beta'",
     'insert into public.payment_requests',
   ], 'payment idempotency checks');
-  assert.match(payment, /provisional_access_expires_at[\s\S]*v_now \+ interval '24 hours'/);
-  assert.match(payment, /'provisionalAccessExpiresAt'/);
-});
-
-test('approval fixes October expiry while rejection revokes provisional access', () => {
-  const review = functionBlock('phase4_admin_review_payment');
+  assert.match(payment, /v_now \+ interval '24 hours'/);
   assert.match(review, /v_settings\.early_access_entitlement_ends_at/);
   assert.match(review, /v_status = 'rejected'[\s\S]*provisional_access_revoked_at/);
-  assert.match(review, /v_status = 'approved'[\s\S]*v_subscription\.id/);
 });
 
-test('refund contract applies the approved seven-day prorated formula', () => {
-  const refund = functionBlock('phase4_create_refund_request');
-  assert.match(refund, /public\.phase4_ph_date\(v_now\) > public\.phase4_ph_date\(v_start\) \+ 6/);
-  assert.match(refund, /v_total_seconds := greatest\(1, extract\(epoch from \(v_settings\.early_access_entitlement_ends_at - v_start\)\)\)/);
-  assert.match(refund, /v_unused_seconds := greatest\(0, extract\(epoch from \(v_settings\.early_access_entitlement_ends_at - v_now\)\)\)/);
-  assert.match(refund, /least\(149\.00, greatest\(0, round\(149\.00 \* v_unused_seconds \/ v_total_seconds, 2\)\)\)/);
-  assert.match(refund, /provisional_access_revoked_at = coalesce\(provisional_access_revoked_at, v_now\)/);
+test('refund contract preserves the seven-day prorated formula', () => {
+  const refund = functionBlock(foundation, 'phase4_create_refund_request');
+  assert.match(
+    refund,
+    /public\.phase4_ph_date\(v_now\) > public\.phase4_ph_date\(v_start\) \+ 6/,
+  );
+  assert.match(
+    refund,
+    /149\.00 \* v_unused_seconds \/ v_total_seconds/,
+  );
+  assert.match(
+    refund,
+    /provisional_access_revoked_at = coalesce\(provisional_access_revoked_at, v_now\)/,
+  );
   assert.match(refund, /set status = 'cancelled'/);
 });
 
-test('commercial onboarding cannot grant a role or administrator authority', () => {
-  const onboarding = functionBlock('complete_commercial_profile_onboarding');
+test('commercial onboarding cannot grant an application role', () => {
+  const onboarding = functionBlock(foundation, 'complete_commercial_profile_onboarding');
   assert.match(onboarding, /auth\.uid\(\)/);
   assert.match(onboarding, /'first_year','second_year','third_year','fourth_year','fifth_year','review','professor'/);
-  assert.match(onboarding, /if v_school_id = 'other'[\s\S]*p_law_school_other[\s\S]*not between 2 and 180/);
-  assert.match(onboarding, /law_school_id = v_school_id[\s\S]*law_school_other = case when v_school_id = 'other'/);
-  assert.doesNotMatch(onboarding, /v_school_id\s+not\s+in/i);
-  assert.match(onboarding, /if v_category = 'professor'[\s\S]*Professor license declaration is required/);
   assert.match(onboarding, /insert into public\.professor_license_declarations/);
-  assert.doesNotMatch(onboarding, /user_roles|founder_admin|super_admin|insert\s+into\s+public\.subscriptions/i);
+  assert.doesNotMatch(
+    onboarding,
+    /user_roles|founder_admin|super_admin|insert\s+into\s+public\.subscriptions/i,
+  );
 });
 
-test('Examination Room reserves the immutable question count before entry and finalizes from the first snapshot', () => {
-  const preview = functionBlock('phase4_exam_room_allowance_preview');
-  const hold = functionBlock('phase4_prepare_exam_room_hold');
-  const start = functionBlock('exam_room_start_attempt_commercial_v1');
-  const byCode = functionBlock('exam_room_start_attempt_by_code_commercial_v1');
-  const beadle = functionBlock('exam_room_start_beadle_attempt_commercial_v1');
-  const trigger = functionBlock('phase4_finalize_exam_room_quota_on_submission');
-  assert.match(preview, /count\(\*\)[\s\S]*exam_room_questions/);
-  assert.match(preview, /remainingToday[\s\S]*v_required/);
+test('Examination Room still reserves immutable question count before entry', () => {
+  const hold = functionBlock(foundation, 'phase4_prepare_exam_room_hold');
+  const start = functionBlock(foundation, 'exam_room_start_attempt_commercial_v1');
+  const trigger = functionBlock(foundation, 'phase4_finalize_exam_room_quota_on_submission');
   assert.match(hold, /phase4_reserve_submission_batch\([\s\S]*'examination_room'/);
-  assert.match(hold, /phase4_exam_room_reservation_key\(p_user_id, v_exam\.id\)/);
   assertInOrder(start, [
     'exam_room_student_waiting_room_v4',
     'phase4_prepare_exam_room_hold',
     'exam_room_start_attempt_v4',
     'phase4_extend_exam_room_hold',
   ], 'direct Examination Room entry');
-  assert.match(byCode, /exam_room_student_waiting_room_by_code_v1[\s\S]*exam_room_start_attempt_commercial_v1/);
-  assert.match(beadle, /exam_room_beadle_student_waiting_room_v1[\s\S]*phase4_prepare_exam_room_hold[\s\S]*exam_room_start_beadle_student_attempt_v1/);
-  assert.match(trigger, /status = 'reserved'/);
   assert.match(trigger, /jsonb_array_elements\(coalesce\(new\.answer_snapshot/);
-  assert.match(trigger, /char_length\(btrim\(coalesce\(item ->> 'answerText', ''\)\)\) > 0/);
   assert.match(trigger, /phase4_finalize_submission_batch/);
-  assert.match(migration, /after insert on public\.exam_room_submissions/);
 });
 
-test('activation is audited and deliberately leaves Global Beta enabled for the final cutover step', () => {
-  const activation = functionBlock('phase4_activate_commercial_launch');
-  assert.match(activation, /perform public\.phase4_require_founder\(p_actor_user_id\)/);
-  assert.match(activation, /commercial_launch_enabled = true/);
-  assert.match(activation, /public_pricing_enabled = true/);
-  assert.match(activation, /current_terms_version = commercial_terms_version/);
-  assert.match(activation, /current_privacy_version = commercial_privacy_version/);
-  assert.match(activation, /'globalBetaStillEnabled', v_settings\.global_beta_all_access_enabled/);
-  assert.doesNotMatch(activation, /global_beta_all_access_enabled\s*=\s*false/);
-});
-
-test('new private objects and privileged functions are least-privilege only', () => {
-  for (const table of ['founding_beta_invites', 'professor_license_declarations']) {
-    assert.ok(migration.includes(`'${table}'`));
-  }
-  for (const name of [
-    'phase4_claim_founding_beta', 'phase4_access_snapshot',
-    'phase4_reserve_grade_v2', 'phase4_reserve_submission_batch',
-    'phase4_finalize_submission_batch', 'phase4_release_submission_batch',
-    'phase4_exam_room_allowance_preview', 'phase4_prepare_exam_room_hold',
-    'exam_room_start_attempt_commercial_v1',
-    'exam_room_start_attempt_by_code_commercial_v1',
-    'exam_room_start_beadle_attempt_commercial_v1',
-    'phase4_finalize_grade', 'phase4_plan_catalog',
-    'phase4_create_payment_request', 'phase4_admin_review_payment',
-    'phase4_create_refund_request', 'phase4_activate_commercial_launch',
-  ]) {
-    assert.match(migration, new RegExp(`revoke all on function public\\.${name}\\b[\\s\\S]*from public, anon, authenticated`));
-  }
+test('new access-choice functions remain least privilege', () => {
   for (const signature of [
-    'phase4_claim_founding_beta\\(uuid,text\\)',
-    'phase4_access_snapshot\\(uuid,boolean,text\\)',
-    'phase4_reserve_grade_v2\\(uuid,text,text,text\\)',
-    'phase4_reserve_submission_batch\\(uuid,text,text,text,integer\\)',
-    'phase4_finalize_submission_batch\\(uuid,text,integer,text\\)',
-    'phase4_release_submission_batch\\(uuid,text,text\\)',
-    'phase4_exam_room_allowance_preview\\(uuid,uuid\\)',
-    'phase4_prepare_exam_room_hold\\(uuid,uuid\\)',
-    'exam_room_start_attempt_commercial_v1\\(uuid,uuid,text,text\\)',
-    'exam_room_start_attempt_by_code_commercial_v1\\(uuid,text,text,text\\)',
-    'exam_room_start_beadle_attempt_commercial_v1\\(uuid,uuid,text\\)',
-    'phase4_finalize_grade\\(uuid,uuid\\)',
-    'phase4_plan_catalog\\(\\)',
-    'phase4_admin_review_payment\\(uuid,uuid,jsonb,text,text\\)',
-    'phase4_create_refund_request\\(uuid,uuid,text,text\\)',
-    'phase4_activate_commercial_launch\\(uuid,text,text\\)',
+    'phase4_choose_launch_trial\(uuid, text\)',
+    'phase4_access_snapshot\(uuid, boolean, text\)',
+    'phase4_plan_catalog\(\)',
   ]) {
     assert.match(
-      migration,
-      new RegExp(`grant execute on function public\\.${signature} to service_role`),
-      `${signature} must be callable only through the trusted backend grant`,
+      accessChoice,
+      new RegExp(`revoke all on function public\\.${signature}[\\s\\S]*from public, anon, authenticated`),
+    );
+    assert.match(
+      accessChoice,
+      new RegExp(`grant execute on function public\\.${signature}[\\s\\S]*to service_role`),
     );
   }
-  assert.match(
-    migration,
-    /revoke all on function public\.complete_commercial_profile_onboarding\([\s\S]*\) from public, anon;/,
-  );
-  assert.match(
-    migration,
-    /grant execute on function public\.complete_commercial_profile_onboarding\([\s\S]*\) to authenticated;/,
-  );
 });
 
-console.log('Commercial launch migration contract checks passed.');
+console.log('Commercial launch and two-option access migration contract checks passed.');

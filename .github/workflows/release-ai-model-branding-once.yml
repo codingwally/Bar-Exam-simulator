@@ -1,0 +1,165 @@
+name: One-time release — generic AI model branding
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - index.html
+      - assets/phase2-config.js
+      - worker/index.mjs
+      - worker/examiner-core.mjs
+      - worker/wrangler.toml
+      - scripts/test-ai-model-branding.mjs
+      - scripts/test-live-ai-model-branding.mjs
+      - .github/workflows/release-ai-model-branding-once.yml
+
+concurrency:
+  group: production-ai-model-branding-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify unchanged behavior and five-pass branding audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout approved main release
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify Worker syntax and regression suite
+        run: |
+          node --check worker/index.mjs
+          node --test worker/*.test.mjs
+
+      - name: Verify public application contracts
+        run: |
+          node scripts/test-private-beta-frontend.mjs
+          node scripts/test-auth-session-persistence.mjs
+          node scripts/test-phase2-contract.mjs
+          node scripts/test-dialog-exit-controls.mjs
+          node scripts/test-auth-route-overlay.mjs
+          node scripts/test-onboarding-flow.mjs
+          node scripts/test-post-grade-controls.mjs
+          node scripts/test-subject-matter-consolidation.mjs
+          node scripts/test-examinations.mjs
+          node scripts/test-duediligence-2026-frontend.mjs
+          node scripts/test-examination-room-2-frontend.mjs
+
+      - name: Build and verify sanitized Pages artifact
+        run: |
+          node scripts/test-pages-artifact.mjs
+          node scripts/test-ai-model-branding.mjs
+
+      - name: Validate Worker deployment bundle without publishing
+        working-directory: worker
+        run: npx --yes wrangler@4.114.0 deploy --dry-run --outdir ../.worker-dry-run
+
+  deploy-worker:
+    name: Publish existing Worker on neutral custom domain
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: production-worker
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout approved main release
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Confirm the existing student-code encryption key
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 secret list --format json \
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const secrets = JSON.parse(value); process.exit(secrets.some(item => item.name === 'EXAM_ROOM_STUDENT_CODE_KEY_V1') ? 0 : 1); });"
+
+      - name: Deploy Worker without changing its application logic
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy
+
+  deploy-pages:
+    name: Publish provider-neutral Pages artifact
+    needs:
+      - verify
+      - deploy-worker
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Checkout approved main release
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build sanitized Pages artifact
+        run: node scripts/build-pages-artifact.mjs
+
+      - name: Run five-pass artifact audit
+        run: node scripts/test-ai-model-branding.mjs
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  verify-live:
+    name: Run five-pass audit against duediligence.ph
+    needs:
+      - deploy-worker
+      - deploy-pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout release verification script
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify the complete live site and neutral API endpoint
+        run: node scripts/test-live-ai-model-branding.mjs

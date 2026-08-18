@@ -49,3 +49,16 @@
     }),
   });
 })(window);
+
+(function loadExplicitRetainerChoice(global) {
+  'use strict';
+
+  if (global.__ddExplicitRetainerChoiceLoader === true) return;
+  global.__ddExplicitRetainerChoiceLoader = true;
+
+  const script = document.createElement('script');
+  script.src = 'assets/access-choice-gate.js?v=explicit-retainer-choice-20260818-1';
+  script.async = false;
+  script.dataset.ddExplicitRetainerChoice = 'true';
+  document.head.appendChild(script);
+})(window);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const phase4 = readFileSync(new URL('../assets/phase4-experience.js', import.meta.url), 'utf8');
+const featureLoader = readFileSync(new URL('../assets/feature-loader.js', import.meta.url), 'utf8');
 const worker = readFileSync(new URL('../worker/commercial-entry.mjs', import.meta.url), 'utf8');
 const accessCore = readFileSync(new URL('../worker/access-core.mjs', import.meta.url), 'utf8');
 const migration = readFileSync(
@@ -17,6 +18,11 @@ assert.match(phase4, /MutationObserver/);
 assert.match(phase4, /ensureProtectedAccess/);
 assert.match(phase4, /subject-matter/);
 assert.match(phase4, /mock-bar/);
+assert.match(featureLoader, /installPageRouterGuard/);
+assert.match(featureLoader, /mock:\s*'#mock-bar'/);
+assert.match(featureLoader, /midterms:\s*'#subject-matter'/);
+assert.match(featureLoader, /loadForFeature\('subject-matter'\)/);
+assert.match(featureLoader, /options\?\.accessVerified/);
 assert.match(worker, /phase4_choose_launch_trial/);
 assert.match(worker, /FREE_TRIAL_ALREADY_USED/);
 assert.match(accessCore, /ACCESS_CHOICE_REQUIRED/);
@@ -26,4 +32,4 @@ assert.match(migration, /'name', 'Free Trial'/);
 assert.match(migration, /plan_selection_required/);
 assert.doesNotMatch(migration, /five successful question submissions per Philippine calendar day/i);
 
-console.log('Two-option access-choice contracts passed.');
+console.log('Two-option access-choice and protected-route contracts passed.');

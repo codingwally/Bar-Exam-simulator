@@ -215,14 +215,14 @@ export function normalizeAccessSnapshot(value) {
     allowed: value.allowed === true,
     basis,
     termsRequired: value.termsRequired === true,
-    profileCompleted: value.profileCompleted === true,
+    profileCompleted: value.profileCompleted !== false,
     choiceRequired,
     paymentRequired: value.paymentRequired === true || basis === 'payment_required',
     planSelectionRequired: value.planSelectionRequired === true
       || ['plan_selection_required', 'trial_expired'].includes(basis),
     role: clean(value.role || 'student'),
-    accessMode: clean(value.accessMode || (unlimited ? 'unlimited' : 'locked')),
-    accountLabel: clean(value.accountLabel || (unlimited ? 'Unlimited' : 'Access required')),
+    accessMode: clean(value.accessMode || (unlimited ? 'unlimited' : 'free')),
+    accountLabel: clean(value.accountLabel || (unlimited ? 'Unlimited' : 'Free')),
     unlimited,
     dailyLimit,
     completedToday,
@@ -283,7 +283,7 @@ export function accessDeniedError(access) {
     );
   }
 
-  if (access?.basis === 'profile_required' || access?.profileCompleted === false) {
+  if (access?.basis === 'profile_required') {
     return new AccessValidationError(
       'PROFILE_COMPLETION_REQUIRED',
       'Complete your profile before choosing Free Trial or Early Access.',

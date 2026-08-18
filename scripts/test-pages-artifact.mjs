@@ -38,6 +38,7 @@ for (const required of [
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
   'assets/private-workspace.js',
+  'assets/access-choice-gate.js',
   'assets/feature-previews/mock-bar.png',
   'assets/feature-previews/subject-matter.png',
   'assets/feature-previews/verdict.png',
@@ -68,6 +69,7 @@ assert.ok(!files.includes('assets/phase2-law-library.jpg'));
 
 const index = await readFile(path.join(output, 'index.html'), 'utf8');
 const examinations = await readFile(path.join(output, 'assets/examinations.js'), 'utf8');
+const accessChoiceGate = await readFile(path.join(output, 'assets/access-choice-gate.js'), 'utf8');
 const robots = await readFile(path.join(output, 'robots.txt'), 'utf8');
 const sitemap = await readFile(path.join(output, 'sitemap.xml'), 'utf8');
 assert.doesNotMatch(index, /content\/question-bank|website-upload\.json|DueDiligenceWebsiteQuestionBank/i);
@@ -91,6 +93,9 @@ assert.match(examinations, /const isBarFeels = state\.setup\.track === 'bar_feel
 assert.match(examinations, /function subjectWritingGuide\(/);
 assert.match(examinations, /Improved model response/);
 assert.doesNotMatch(examinations, /id="dd-upload-timer"/);
+assert.match(accessChoiceGate, /phase4_choose_access/);
+assert.match(accessChoiceGate, /Choose Free Trial or Early Access/);
+assert.match(accessChoiceGate, /data-dd2-plan-choice="launch_trial"/);
 assert.match(robots, /Disallow: \/admin\//);
 assert.match(robots, /Sitemap: https:\/\/duediligence\.ph\/sitemap\.xml/);
 assert.match(sitemap, /<loc>https:\/\/duediligence\.ph\/<\/loc>/);

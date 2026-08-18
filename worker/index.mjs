@@ -2895,7 +2895,7 @@ Rewrite the entire JSON response once. Preserve the stored legal substance, retu
     const finalizedUsage = await finalizeGradeAccess(gradeAccess, env, {
       attemptId,
       assessment,
-      model: 'AI model',
+      model: gemini.model,
     });
     return jsonResponse({
       ok: true,
@@ -3532,7 +3532,7 @@ Return one complete schema-valid JSON assessment. Preserve the stored legal subs
   }
   return {
     assessment,
-    model: 'AI model',
+    model: gemini.model,
   };
 }
 
@@ -3767,7 +3767,7 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
       );
       explanation = generated.result;
       explanationSource = 'ai_model_curated';
-      teachingModel = generated.model;
+      teachingModel = 'AI model';
     } catch (error) {
       console.warn('Subject Matter teaching explanation used curated fallback', {
         code: String(error?.code || 'validation_failed').slice(0, 48),

@@ -43,6 +43,28 @@ async function jsonRequest(url, options, expected = [200]) {
   return { response, body };
 }
 
+async function acceptCurrentTerms(user) {
+  const { body: settings } = await jsonRequest(
+    `${SUPABASE_URL}/rest/v1/platform_access_settings`
+      + '?singleton=eq.true&select=current_terms_version,current_privacy_version',
+    { headers: serviceHeaders },
+  );
+  assert.equal(settings.length, 1);
+  await jsonRequest(`${SUPABASE_URL}/rest/v1/rpc/accept_terms`, {
+    method: 'POST',
+    headers: {
+      apikey: PUBLISHABLE_KEY,
+      Authorization: `Bearer ${user.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      p_terms_version: settings[0].current_terms_version,
+      p_privacy_version: settings[0].current_privacy_version,
+      p_acceptance_source: 'protected_staging_e2e',
+    }),
+  }, [200, 204]);
+}
+
 async function createUser(label) {
   const email = `dd-exam-${label}-${runId}@example.com`;
   const password = `Dd!${randomBytes(24).toString('base64url')}`;
@@ -71,7 +93,9 @@ async function createUser(label) {
     body: JSON.stringify({ email, password }),
   });
   assert.ok(session.body.access_token);
-  return { id: body.id, email, token: session.body.access_token };
+  const created = { id: body.id, email, token: session.body.access_token };
+  await acceptCurrentTerms(created);
+  return created;
 }
 
 async function deleteUser(userId) {

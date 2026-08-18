@@ -59,6 +59,26 @@ async function serviceGet(path) {
   return response.json();
 }
 
+async function acceptCurrentTerms(user) {
+  const settings = await serviceGet(
+    '/rest/v1/platform_access_settings?singleton=eq.true&select=current_terms_version,current_privacy_version',
+  );
+  assert.equal(settings.length, 1);
+  await request(`${SUPABASE_URL}/rest/v1/rpc/accept_terms`, {
+    method: 'POST',
+    headers: {
+      apikey: PUBLISHABLE_KEY,
+      Authorization: `Bearer ${user.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      p_terms_version: settings[0].current_terms_version,
+      p_privacy_version: settings[0].current_privacy_version,
+      p_acceptance_source: 'protected_staging_e2e',
+    }),
+  }, [200, 204]);
+}
+
 async function serviceWrite(path, method, body, { expected = [200, 201, 204], representation = false } = {}) {
   const response = await request(`${SUPABASE_URL}${path}`, {
     method,
@@ -104,7 +124,9 @@ async function createUser(label) {
   });
   const session = await sessionResponse.json();
   assert.ok(session.access_token);
-  return { id: user.id, email, token: session.access_token };
+  const created = { id: user.id, email, token: session.access_token };
+  await acceptCurrentTerms(created);
+  return created;
 }
 
 async function workerJson(path, payload, token, expected = [200]) {

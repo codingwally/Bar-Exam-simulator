@@ -1,0 +1,59 @@
+name: Validate mandatory Early Access release
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'assets/phase4-experience.js'
+      - 'worker/commercial-entry.mjs'
+      - 'worker/commercial-access-gate.test.mjs'
+      - 'worker/wrangler.toml'
+      - 'scripts/test-lifetime-grade-ui.mjs'
+      - 'supabase/migrations/20260818123000_require_early_access.sql'
+      - 'supabase/migrations/20260818123100_private_payment_verifiers.sql'
+      - '.github/workflows/deploy-worker.yml'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/validate-mandatory-early-access.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify mandatory access and payment-notification contracts
+        run: |
+          node --check assets/phase4-experience.js
+          node --check worker/commercial-entry.mjs
+          node --test worker/*.test.mjs
+          node scripts/test-private-beta-admission.mjs
+          node scripts/test-private-beta-frontend.mjs
+          node scripts/test-private-beta-landing.mjs
+          node scripts/test-auth-session-persistence.mjs
+          node scripts/test-phase2-contract.mjs
+          node scripts/test-auth-route-overlay.mjs
+          node scripts/test-onboarding-flow.mjs
+          node scripts/test-lifetime-grade-ui.mjs
+          node scripts/test-commercial-launch-migration.mjs
+          node scripts/test-complete-beta-release.mjs
+          node scripts/test-duediligence-2026-frontend.mjs
+          node scripts/test-examinations.mjs
+          node scripts/test-examination-room-2-frontend.mjs
+          node scripts/test-pages-artifact.mjs
+
+      - name: Build and verify sanitized Pages artifact
+        run: |
+          node scripts/build-pages-artifact.mjs
+          node scripts/test-pages-artifact.mjs

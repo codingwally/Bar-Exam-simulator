@@ -34,7 +34,7 @@ jobs:
           test "$REPOSITORY_NAME" = "codingwally/Bar-Exam-simulator"
           test "$RELEASE_ACTOR" != "dependabot[bot]"
           case "$RELEASE_REF" in
-            refs/heads/main|refs/heads/agent/master-experience-release-20260813|refs/heads/agent/header-subject-review-correction-20260814|refs/heads/agent/exam-room-ux-completion-20260814|refs/heads/agent/subject-matter-split-review-20260814|refs/heads/agent/high-value-subject-review-20260815|refs/heads/agent/homepage-feature-ledger-20260815|refs/heads/agent/commercial-launch-20260818|refs/heads/agent/commercial-terms-acceptance-hotfix-20260818) ;;
+            refs/heads/main|refs/heads/agent/master-experience-release-20260813|refs/heads/agent/header-subject-review-correction-20260814|refs/heads/agent/exam-room-ux-completion-20260814|refs/heads/agent/subject-matter-split-review-20260814|refs/heads/agent/high-value-subject-review-20260815|refs/heads/agent/homepage-feature-ledger-20260815|refs/heads/agent/commercial-launch-20260818|refs/heads/agent/commercial-terms-acceptance-hotfix-20260818|refs/heads/agent/commercial-terms-worker-persistence-20260818) ;;
             *)
               echo "The staging gate may run only from an explicitly trusted release branch." >&2
               exit 1

@@ -42,7 +42,7 @@ for (const expected of [
   'Guided Subject Matter practice',
   'Guest access includes 3 graded questions across all subjects.',
   'You have completed your 3 guest questions.',
-  'accept_terms',
+  '/beta/access/accept-terms',
   'complete_commercial_profile_onboarding',
   'Free and Early Access',
   'five successful question submissions per Philippine calendar day',
@@ -51,6 +51,12 @@ for (const expected of [
 ]) {
   assert.ok(experience.includes(expected), `Phase 2 experience must include: ${expected}`);
 }
+
+assert.doesNotMatch(
+  experience,
+  /state\.client\.rpc\('accept_terms'/,
+  'The browser must not directly write legal acceptance without Worker verification.',
+);
 
 for (const removedMarketingSurface of [
   'record_marketing_consent',
@@ -84,7 +90,7 @@ assert.ok(index.includes('data-dd2-view="privacy"'));
 assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
-assert.ok(index.includes('assets/phase2-experience.js?v=commercial-launch-20260818-2'));
+assert.ok(index.includes('assets/phase2-experience.js?v=commercial-launch-20260818-3'));
 
 for (const table of [
   'guest_grading_usage',

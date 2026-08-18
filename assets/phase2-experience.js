@@ -955,17 +955,22 @@
     if (button) button.disabled = true;
     setStatus('dd2-auth-status', 'Recording your acceptance securely…');
     try {
-      await refreshLegalPolicy();
-      const { error } = await state.client.rpc('accept_terms', {
-        p_terms_version: commercialLegal.termsVersion,
-        p_privacy_version: commercialLegal.privacyVersion,
-        p_acceptance_source: 'protected_feature_sign_in',
-      });
-      if (error) throw error;
-      closeEntry();
+      const acceptance = await recordCurrentTermsAcceptance();
+      const { data: confirmed, error: confirmationError } = await state.client
+        .from('terms_acceptances')
+        .select('accepted_at')
+        .eq('user_id', state.user.id)
+        .eq('terms_version', acceptance.termsVersion)
+        .eq('privacy_version', acceptance.privacyVersion)
+        .maybeSingle();
+      if (confirmationError || !confirmed?.accepted_at) {
+        throw new Error('Acceptance persistence could not be confirmed.');
+      }
+      state.userStatePromise = null;
+      state.userStateUserId = null;
+      await loadUserStateFor(state.user.id);
       setStatus('dd2-auth-status', '');
       global.toast?.('Terms and Privacy acceptance recorded.', 'ok');
-      await loadUserState();
     } catch {
       setStatus('dd2-auth-status', 'Acceptance could not be recorded. Check your connection and try again.', 'error');
     } finally {
@@ -1117,13 +1122,7 @@
     if (button) button.disabled = true;
     setStatus('dd2-onboarding-status', 'Saving your chamber…');
     try {
-      await refreshLegalPolicy();
-      const { error: termsError } = await state.client.rpc('accept_terms', {
-        p_terms_version: commercialLegal.termsVersion,
-        p_privacy_version: commercialLegal.privacyVersion,
-        p_acceptance_source: 'web_onboarding',
-      });
-      if (termsError) throw termsError;
+      await recordCurrentTermsAcceptance();
       const { error: aiConsentError } = await state.client.rpc('record_ai_improvement_consent', {
         p_opted_in: aiImprovementOptIn,
         p_consent_version: config.legal.aiImprovementConsentVersion,
@@ -1518,6 +1517,24 @@
       throw error;
     }
     return payload;
+  }
+
+  async function recordCurrentTermsAcceptance() {
+    const payload = await nativeWorkerRequest('/beta/access/accept-terms', {
+      body: {},
+      submissionView: 'account',
+      submissionDraft: {},
+    });
+    const termsVersion = validLegalVersion(payload?.acceptance?.termsVersion, 'terms-');
+    const privacyVersion = validLegalVersion(payload?.acceptance?.privacyVersion, 'privacy-');
+    if (payload?.acceptance?.recorded !== true
+        || !termsVersion
+        || !privacyVersion
+        || !String(payload?.acceptance?.acceptedAt || '').trim()) {
+      throw new Error('Acceptance persistence could not be confirmed.');
+    }
+    commercialLegal = Object.freeze({ termsVersion, privacyVersion });
+    return payload.acceptance;
   }
 
   async function publicWorkerRequest(path) {

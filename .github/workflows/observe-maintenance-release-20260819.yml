@@ -1,0 +1,44 @@
+name: Observe maintenance release completion
+
+on:
+  workflow_run:
+    workflows:
+      - One-time maintenance password release
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  publish:
+    if: github.repository == 'codingwally/Bar-Exam-simulator'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_RUN_ID: ${{ github.event.workflow_run.id }}
+      RELEASE_STATUS: ${{ github.event.workflow_run.status }}
+      RELEASE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      RELEASE_URL: ${{ github.event.workflow_run.html_url }}
+      RELEASE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Publish release conclusion
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/release-conclusion.md" <<COMMENT
+          ## Maintenance release completion
+
+          - Run: $RELEASE_URL
+          - Status: **$RELEASE_STATUS**
+          - Conclusion: **$RELEASE_CONCLUSION**
+          - Head: \`$RELEASE_HEAD_SHA\`
+
+          $([ "$RELEASE_CONCLUSION" = "success" ] \
+            && printf '%s' 'The maintenance password gate, Worker API lock, and live release verification completed successfully.' \
+            || printf '%s' 'The maintenance release requires inspection before it may be treated as complete.')
+          COMMENT
+          gh pr comment 153 --body-file "$RUNNER_TEMP/release-conclusion.md"

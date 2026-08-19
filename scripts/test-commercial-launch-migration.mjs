@@ -300,9 +300,9 @@ test('new access-choice functions remain least privilege', () => {
     /grant execute on function public\.phase4_choose_launch_trial\(uuid, text\)[\s\S]*to service_role/,
   );
   for (const signature of [
-    'phase4_access_snapshot_pre_five_daily_choice\\(uuid, boolean, text\\)',
-    'phase4_access_snapshot\\(uuid, boolean, text\\)',
-    'phase4_plan_catalog\\(\\)',
+    'phase4_access_snapshot_pre_five_daily_choice\\s*\\(\\s*uuid\\s*,\\s*boolean\\s*,\\s*text\\s*\\)',
+    'phase4_access_snapshot\\s*\\(\\s*uuid\\s*,\\s*boolean\\s*,\\s*text\\s*\\)',
+    'phase4_plan_catalog\\s*\\(\\s*\\)',
   ]) {
     assert.match(
       dailyChoice,

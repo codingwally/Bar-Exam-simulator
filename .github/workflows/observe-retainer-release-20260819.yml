@@ -1,4 +1,4 @@
-name: Observe one-time Retainer release
+name: Observe one-time Pages runtime release
 
 on:
   push:
@@ -23,21 +23,21 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Publish current release-run status
+      - name: Publish current Pages runtime release status
         shell: bash
         run: |
           set -euo pipefail
           runs="$(gh run list \
-            --workflow release-retainer-subject-payment-20260819.yml \
+            --workflow release-pages-runtime-20260819.yml \
             --branch main \
             --limit 5 \
             --json databaseId,status,conclusion,headSha,createdAt,url)"
           RUNS_JSON="$runs" node <<'NODE' > "$RUNNER_TEMP/observer-comment.md"
           const runs = JSON.parse(process.env.RUNS_JSON || '[]');
-          console.log('## Retainer production release observer');
+          console.log('## Pages runtime production release observer');
           console.log('');
           if (!runs.length) {
-            console.log('No orchestration run was found for the one-time release workflow.');
+            console.log('No orchestration run was found for the one-time Pages runtime workflow.');
             process.exit(0);
           }
           for (const run of runs) {
@@ -46,4 +46,4 @@ jobs:
             console.log(`  - Created: ${run.createdAt}`);
           }
           NODE
-          gh pr comment 151 --body-file "$RUNNER_TEMP/observer-comment.md"
+          gh pr comment 152 --body-file "$RUNNER_TEMP/observer-comment.md"

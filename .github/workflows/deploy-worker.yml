@@ -61,11 +61,13 @@ jobs:
       - name: Install reviewed Worker dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
-      - name: Verify Worker and private-beta contracts
+      - name: Verify Worker, maintenance, and private-beta contracts
         run: |
           node --check worker/index.mjs
           node --check worker/commercial-entry.mjs
+          node --check worker/maintenance-entry.mjs
           node --test worker/*.test.mjs
+          node scripts/test-maintenance-lock.mjs
           node scripts/test-website-question-bank.mjs
           node scripts/test-private-beta-admission.mjs
           node scripts/test-duediligence-2026-migrations.mjs
@@ -88,6 +90,26 @@ jobs:
           set -euo pipefail
           npx --yes wrangler@4.114.0 secret list --format json \
             | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ')); process.exit(1); } console.log('Required payment-notification secrets are configured.'); });"
+
+      - name: Ensure the maintenance signing key exists
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npx --yes wrangler@4.114.0 secret list --format json \
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const secrets = JSON.parse(value); process.exit(secrets.some(item => item.name === 'MAINTENANCE_SIGNING_KEY') ? 0 : 1); });"
+          then
+            echo "Maintenance signing key is already configured."
+          else
+            maintenance_signing_key="$(node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))")"
+            printf '%s' "$maintenance_signing_key" \
+              | npx --yes wrangler@4.114.0 secret put MAINTENANCE_SIGNING_KEY
+            unset maintenance_signing_key
+            echo "Maintenance signing key was created without printing its value."
+          fi
 
       - name: Ensure the student-code encryption key exists
         working-directory: worker

@@ -1,5 +1,5 @@
 name = "duediligence-gemini-examiner"
-main = "commercial-entry.mjs"
+main = "maintenance-entry.mjs"
 compatibility_date = "2026-07-26"
 preview_urls = false
 
@@ -10,6 +10,9 @@ region = "gcp:us-east4"
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMINI_GROUNDING_ENABLED = "false"
 ALLOWED_ORIGIN = "https://duediligence.ph"
+MAINTENANCE_MODE = "true"
+MAINTENANCE_PASSWORD_HASH = "47774b9663224515a9e6a10a81c45e30655bcfa3a1073175e0e46798de2aa672"
+MAINTENANCE_TOKEN_TTL_SECONDS = "604800"
 ALLOW_LEGACY_GUESTS = "false"
 PHASE4_ACCESS_ENFORCEMENT = "true"
 PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
@@ -50,9 +53,12 @@ enabled = true
 [triggers]
 crons = ["*/2 * * * *"]
 
-# GEMINI_API_KEY, RESEND_API_KEY, and SUPABASE_SERVICE_ROLE_KEY must remain
-# Cloudflare secrets. Payment-verification email is enabled only in production
-# and uses the existing Resend secret without exposing it to the browser.
+# GEMINI_API_KEY, RESEND_API_KEY, SUPABASE_SERVICE_ROLE_KEY, and
+# MAINTENANCE_SIGNING_KEY must remain Cloudflare secrets. The signing key is
+# generated automatically by the approved deployment workflow and is never
+# exposed to the browser or committed to this repository.
+# Payment-verification email is enabled only in production and uses the existing
+# Resend secret without exposing it to the browser.
 # PRIVATE_BETA_ACCESS_CODE_VERIFIER, PRIVATE_BETA_ACCESS_CODE_PEPPER, and
 # PRIVATE_BETA_FLOW_SIGNING_KEY must also remain Cloudflare secrets.
 # EXAM_ROOM_STUDENT_CODE_KEY_V1 must remain a Cloudflare secret containing

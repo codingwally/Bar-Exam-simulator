@@ -28,6 +28,7 @@ const frontend = readFileSync(new URL('../assets/phase4-experience.js', import.m
 const dailyCopy = readFileSync(new URL('../assets/free-trial-five-daily.js', import.meta.url), 'utf8');
 const featureLoader = readFileSync(new URL('../assets/feature-loader.js', import.meta.url), 'utf8');
 const productionWrangler = readFileSync(new URL('./wrangler.toml', import.meta.url), 'utf8');
+const maintenanceEntry = readFileSync(new URL('./maintenance-entry.mjs', import.meta.url), 'utf8');
 
 test('ordinary commercial accounts are locked until an explicit access choice', () => {
   assert.match(paywallMigration, /v_basis := 'payment_required'/);
@@ -195,8 +196,10 @@ test('payment email remains suppressed unless its dedicated mode is enabled', as
   });
 });
 
-test('production worker uses the secure notification wrapper', () => {
-  assert.match(productionWrangler, /^main = "commercial-entry\.mjs"$/m);
+test('production Worker keeps the secure payment wrapper behind maintenance', () => {
+  assert.match(productionWrangler, /^main = "maintenance-entry\.mjs"$/m);
+  assert.match(maintenanceEntry, /import applicationWorker from '\.\/commercial-entry\.mjs'/);
+  assert.match(maintenanceEntry, /return applicationWorker\.fetch/);
   assert.match(productionWrangler, /^PAYMENT_NOTIFICATION_EMAIL_MODE = "enabled"$/m);
   assert.match(
     productionWrangler,

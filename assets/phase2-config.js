@@ -61,7 +61,8 @@
 (function loadMaintenancePasswordGate(global) {
   'use strict';
 
-  const maintenance = global.DueDiligencePhase2Config?.maintenance;
+  const config = global.DueDiligencePhase2Config;
+  const maintenance = config?.maintenance;
   if (!maintenance?.enabled || !global.document || global.__ddMaintenanceGateLoader) return;
   global.__ddMaintenanceGateLoader = true;
 
@@ -80,6 +81,41 @@
       '}',
     ].join('');
     global.document.head.appendChild(style);
+  }
+
+  if (
+    typeof global.fetch === 'function'
+    && typeof global.Headers === 'function'
+    && typeof global.Request === 'function'
+    && global.fetch.__ddMaintenanceAware !== true
+  ) {
+    const nativeFetch = global.fetch.bind(global);
+    const workerBase = String(config.workerUrl || '').replace(/\/+$/, '');
+    const maintenanceFetch = function maintenanceAwareFetch(input, init = {}) {
+      const rawUrl = typeof input === 'string'
+        ? input
+        : (input && typeof input.url === 'string' ? input.url : '');
+      const isWorkerRequest = rawUrl === workerBase || rawUrl.startsWith(`${workerBase}/`);
+      if (!isWorkerRequest) return nativeFetch(input, init);
+
+      const isRequest = input instanceof global.Request;
+      const headers = new global.Headers(isRequest ? input.headers : undefined);
+      new global.Headers(init.headers || {}).forEach((value, key) => headers.set(key, value));
+      let token = '';
+      try {
+        token = global.localStorage?.getItem(maintenance.tokenStorageKey) || '';
+      } catch {
+        token = '';
+      }
+      if (token) headers.set(maintenance.headerName, token);
+
+      if (isRequest) {
+        return nativeFetch(new global.Request(input, { ...init, headers }));
+      }
+      return nativeFetch(input, { ...init, headers });
+    };
+    Object.defineProperty(maintenanceFetch, '__ddMaintenanceAware', { value: true });
+    global.fetch = maintenanceFetch;
   }
 
   if (global.document.querySelector('script[data-dd-maintenance-gate="true"]')) return;

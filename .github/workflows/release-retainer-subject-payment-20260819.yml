@@ -1,0 +1,184 @@
+name: One-time approved Retainer release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/release-triggers/retainer-subject-payment-20260819.txt'
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: one-time-retainer-subject-payment-20260819
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'release: dispatch retainer subject matter payment fix'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APPROVAL_REFERENCE: owner-approved-2026-08-19-retainer-subject-matter-payment-fix
+      APPROVED_MERGE_SHA: a1bfe0e6561329fc74b8268f7a986e7ce5701836
+      WORKER_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
+      SITE_URL: https://duediligence.ph
+    steps:
+      - name: Checkout approved main release
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify one-time owner approval and release ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat .github/release-triggers/retainer-subject-payment-20260819.txt)" = "$APPROVAL_REFERENCE"
+          git merge-base --is-ancestor "$APPROVED_MERGE_SHA" HEAD
+          test "$(git branch --show-current)" = "main"
+
+      - name: Install failure evidence hook
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/release-failure.sh" <<'EOF'
+          #!/usr/bin/env bash
+          set +e
+          cat > "$RUNNER_TEMP/release-comment.md" <<COMMENT
+          ## Production release did not complete
+
+          The one-time Retainer / Subject Matter / payment release orchestrator stopped before completing both approved deployment workflows.
+
+          - Approval: \`$APPROVAL_REFERENCE\`
+          - Orchestrator run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Source commit: \`$GITHUB_SHA\`
+
+          No success claim should be made until the failed run is inspected and the normal production gates pass.
+          COMMENT
+          gh pr comment 151 --body-file "$RUNNER_TEMP/release-comment.md" || true
+          EOF
+          chmod +x "$RUNNER_TEMP/release-failure.sh"
+
+      - name: Dispatch and verify production Worker
+        id: worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap '"$RUNNER_TEMP/release-failure.sh"' ERR
+          gh workflow run deploy-worker.yml \
+            --ref main \
+            -f confirm_production=true \
+            -f approval_reference="$APPROVAL_REFERENCE"
+
+          worker_run_id=""
+          for attempt in $(seq 1 60); do
+            worker_run_id="$(
+              gh run list \
+                --workflow deploy-worker.yml \
+                --branch main \
+                --event workflow_dispatch \
+                --limit 20 \
+                --json databaseId,headSha \
+                --jq ".[] | select(.headSha == \"$GITHUB_SHA\") | .databaseId" \
+                | head -n 1
+            )"
+            [ -n "$worker_run_id" ] && break
+            sleep 2
+          done
+          test -n "$worker_run_id"
+          echo "run_id=$worker_run_id" >> "$GITHUB_OUTPUT"
+          gh run watch "$worker_run_id" --exit-status
+
+      - name: Dispatch and verify production Pages
+        id: pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap '"$RUNNER_TEMP/release-failure.sh"' ERR
+          gh workflow run deploy.yml \
+            --ref main \
+            -f confirm_production=true \
+            -f approval_reference="$APPROVAL_REFERENCE"
+
+          pages_run_id=""
+          for attempt in $(seq 1 60); do
+            pages_run_id="$(
+              gh run list \
+                --workflow deploy.yml \
+                --branch main \
+                --event workflow_dispatch \
+                --limit 20 \
+                --json databaseId,headSha \
+                --jq ".[] | select(.headSha == \"$GITHUB_SHA\") | .databaseId" \
+                | head -n 1
+            )"
+            [ -n "$pages_run_id" ] && break
+            sleep 2
+          done
+          test -n "$pages_run_id"
+          echo "run_id=$pages_run_id" >> "$GITHUB_OUTPUT"
+          gh run watch "$pages_run_id" --exit-status
+
+      - name: Verify deployed Retainer, Subject Matter gate, and plan catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap '"$RUNNER_TEMP/release-failure.sh"' ERR
+
+          verified="false"
+          for attempt in $(seq 1 36); do
+            phase4="$(curl -fsS "$SITE_URL/assets/phase4-experience.js?release=$GITHUB_SHA" || true)"
+            loader="$(curl -fsS "$SITE_URL/assets/feature-loader.js?release=$GITHUB_SHA" || true)"
+            daily="$(curl -fsS "$SITE_URL/assets/free-trial-five-daily.js?release=$GITHUB_SHA" || true)"
+            if grep -q 'ensureProtectedAccess' <<<"$phase4" \
+              && grep -q "'subject-matter'" <<<"$loader" \
+              && grep -q '5 protected question submissions' <<<"$daily"; then
+              verified="true"
+              break
+            fi
+            sleep 5
+          done
+          test "$verified" = "true"
+
+          plans="$(
+            curl -fsS -X POST \
+              -H 'Origin: https://duediligence.ph' \
+              -H 'Content-Type: application/json' \
+              -H 'X-Request-ID: release_verify_20260819' \
+              --data '{}' \
+              "$WORKER_URL/plans"
+          )"
+          PLANS_JSON="$plans" node <<'NODE'
+          const payload = JSON.parse(process.env.PLANS_JSON || '{}');
+          if (payload.ok !== true || !Array.isArray(payload.plans)) process.exit(1);
+          const free = payload.plans.find((plan) => plan.planCode === 'free');
+          const early = payload.plans.find((plan) => plan.planCode === 'early_access_beta');
+          if (!free || free.billing !== 'daily_free_trial' || Number(free.priceCentavos) !== 0) process.exit(1);
+          if (!early || Number(early.priceCentavos) !== 14900) process.exit(1);
+          NODE
+
+      - name: Publish successful production evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/release-comment.md" <<COMMENT
+          ## Production release completed
+
+          The owner-approved Retainer / Subject Matter / payment fix passed the normal production workflows and live verification.
+
+          - Approval: \`$APPROVAL_REFERENCE\`
+          - Source commit: \`$GITHUB_SHA\`
+          - Worker workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/${{ steps.worker.outputs.run_id }}
+          - Pages workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/${{ steps.pages.outputs.run_id }}
+          - Live verification: Retainer access guard, Subject Matter protected-route gate, five-question Free Trial asset, and the two-plan Worker catalog all matched the approved release.
+
+          The payment destination was not changed to an unverified bank account. The existing exact-amount payment-proof and authorized-verifier workflow remains intact.
+          COMMENT
+          gh pr comment 151 --body-file "$RUNNER_TEMP/release-comment.md"

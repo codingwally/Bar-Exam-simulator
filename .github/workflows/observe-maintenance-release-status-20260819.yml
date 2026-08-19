@@ -1,0 +1,48 @@
+name: Observe maintenance release status
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/release-triggers/observe-maintenance-release-20260819.txt'
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  observe:
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'ci: report maintenance release status'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Publish current release status
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/release-maintenance-password-20260819.yml/runs?branch=main&per_page=5")"
+          RUNS_JSON="$response" node <<'NODE' > "$RUNNER_TEMP/status.md"
+          const payload = JSON.parse(process.env.RUNS_JSON || '{}');
+          const runs = Array.isArray(payload.workflow_runs) ? payload.workflow_runs : [];
+          console.log('## Maintenance release status observer');
+          console.log('');
+          if (!runs.length) {
+            console.log('No run was found for the one-time maintenance release workflow.');
+            process.exit(0);
+          }
+          for (const run of runs) {
+            console.log(`- Run ${run.id}: **${run.status}**${run.conclusion ? ` / **${run.conclusion}**` : ''} — ${run.html_url}`);
+            console.log(`  - Head: \`${run.head_sha}\``);
+            console.log(`  - Created: ${run.created_at}`);
+          }
+          NODE
+          gh pr comment 153 --body-file "$RUNNER_TEMP/status.md"

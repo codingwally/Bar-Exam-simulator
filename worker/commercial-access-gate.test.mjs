@@ -8,8 +8,16 @@ import {
   sendPaymentVerificationEmail,
 } from './commercial-entry.mjs';
 
-const migration = readFileSync(new URL(
+const paywallMigration = readFileSync(new URL(
   '../supabase/migrations/20260818123000_require_early_access.sql',
+  import.meta.url,
+), 'utf8');
+const choiceMigration = readFileSync(new URL(
+  '../supabase/migrations/20260818133000_restore_two_option_access_choice.sql',
+  import.meta.url,
+), 'utf8');
+const dailyMigration = readFileSync(new URL(
+  '../supabase/migrations/20260818143000_free_trial_five_daily_choice.sql',
   import.meta.url,
 ), 'utf8');
 const verifierMigration = readFileSync(new URL(
@@ -17,34 +25,47 @@ const verifierMigration = readFileSync(new URL(
   import.meta.url,
 ), 'utf8');
 const frontend = readFileSync(new URL('../assets/phase4-experience.js', import.meta.url), 'utf8');
+const dailyCopy = readFileSync(new URL('../assets/free-trial-five-daily.js', import.meta.url), 'utf8');
+const featureLoader = readFileSync(new URL('../assets/feature-loader.js', import.meta.url), 'utf8');
 const productionWrangler = readFileSync(new URL('./wrangler.toml', import.meta.url), 'utf8');
 
-test('commercial access no longer grants automatic daily-free access', () => {
-  assert.match(migration, /v_basis := 'payment_required'/);
-  assert.match(migration, /v_allowed := false;[\s\S]*v_access_mode := 'locked'/);
-  assert.match(migration, /'paymentRequired', v_basis = 'payment_required'/);
+test('ordinary commercial accounts are locked until an explicit access choice', () => {
+  assert.match(paywallMigration, /v_basis := 'payment_required'/);
+  assert.match(choiceMigration, /plan_selection_required/);
+  assert.match(choiceMigration, /create or replace function public\.phase4_choose_launch_trial/);
+  assert.match(dailyMigration, /v_trial_active/);
+  assert.match(dailyMigration, /when v_remaining > 0 then 'daily_free'/);
+  assert.match(dailyMigration, /else 'daily_limit_reached'/);
+  assert.match(dailyMigration, /'basis', 'plan_selection_required'/);
+  assert.match(dailyMigration, /'choiceRequired', true/);
   assert.doesNotMatch(
-    migration,
-    /elsif v_remaining > 0 then\s+v_allowed := true;\s+v_unlimited := false;\s+v_basis := 'daily_free'/,
+    dailyMigration,
+    /if v_trial_active then[\s\S]*'unlimited', true/,
   );
 });
 
-test('public catalog exposes only the approved Early Access offer', () => {
-  const catalogStart = migration.indexOf('create or replace function public.phase4_plan_catalog');
-  assert.notEqual(catalogStart, -1);
-  const catalog = migration.slice(catalogStart);
-  assert.match(catalog, /'planCode', 'early_access_beta'/);
-  assert.match(catalog, /'priceCentavos', 14900/);
-  assert.doesNotMatch(catalog, /'planCode', 'free'/);
+test('public catalog exposes five-per-day Free Trial and ₱149 Early Access', () => {
+  assert.match(dailyMigration, /'planCode', 'free'/);
+  assert.match(dailyMigration, /'name', 'Free Trial'/);
+  assert.match(dailyMigration, /'billing', 'daily_free_trial'/);
+  assert.match(dailyMigration, /Five protected question submissions per Philippine day/);
+  assert.match(dailyMigration, /Allowance resets at midnight in Asia\/Manila/);
+  assert.match(dailyMigration, /'planCode', 'early_access_beta'/);
+  assert.match(dailyMigration, /'priceCentavos', 14900/);
+  assert.doesNotMatch(dailyMigration, /'planCode',\s*'(?:standard|premium)'/);
 });
 
-test('browser opens and preserves the mandatory payment gate', () => {
-  assert.match(frontend, /basis === 'payment_required'/);
+test('browser preserves the mandatory two-choice Retainer gate', () => {
+  assert.match(frontend, /plan_selection_required/);
+  assert.match(frontend, /dd2-start-free-trial/);
+  assert.match(frontend, /access\/choose/);
   assert.match(frontend, /legacy\.openView\?\.\('pricing'\)/);
-  assert.match(frontend, /Early Access required · ₱149/);
   assert.match(frontend, /data-dd2-early-access-card/);
   assert.match(frontend, /dd2-native-close, #dd2-native-back/);
-  assert.doesNotMatch(frontend, /five successful submissions for today/i);
+  assert.match(dailyCopy, /5 protected question submissions per Philippine day/);
+  assert.match(dailyCopy, /Free Trial · \$\{remaining\} of \$\{limit\} remaining today/);
+  assert.match(dailyCopy, /used all 5 Free Trial questions for today/);
+  assert.match(featureLoader, /assets\/free-trial-five-daily\.js/);
 });
 
 test('payment verifier directory is private and contains no committed addresses', () => {

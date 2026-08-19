@@ -51,6 +51,36 @@
     'examination-room': 'examinationRoom',
   });
 
+  const protectedFeatureRoutes = Object.freeze({
+    'subject-matter': '#subject-matter',
+    'bar-feels': '#bar-feels',
+    'bar-easy': '#bar-easy',
+    verdict: '#verdict',
+    doctrines: '#doctrines',
+  });
+
+  const protectedPageRoutes = Object.freeze({
+    mock: '#mock-bar',
+    'mock-bar': '#mock-bar',
+    midterms: '#subject-matter',
+    'subject-matter': '#subject-matter',
+    'bar-feels': '#bar-feels',
+    'bar-easy': '#bar-easy',
+    doctrines: '#doctrines',
+    verdict: '#verdict',
+  });
+
+  async function ensureProtectedAccess(routeHash) {
+    const phase4 = global.DueDiligencePhase4;
+    if (!routeHash || typeof phase4?.ensureProtectedAccess !== 'function') return true;
+    try {
+      return await phase4.ensureProtectedAccess(routeHash);
+    } catch (error) {
+      global.toast?.(error?.message || 'Your access could not be verified.', 'warn');
+      return false;
+    }
+  }
+
   function loadStyle(href) {
     if (loadedStyles.has(href)) return loadedStyles.get(href);
     const existing = [...document.styleSheets]
@@ -105,20 +135,63 @@
     }
   }
 
-  function loadForFeature(feature) {
-    return loadGroup(featureGroups[feature] || feature);
+  async function loadForFeature(feature, options = {}) {
+    const routeHash = protectedFeatureRoutes[feature];
+    if (routeHash && options.skipAccessCheck !== true) {
+      const allowed = await ensureProtectedAccess(routeHash);
+      if (!allowed) return false;
+    }
+    await loadGroup(featureGroups[feature] || feature);
+    return true;
   }
 
   function deferredFunction(feature, globalName) {
     return async (...args) => {
       const placeholder = global[globalName];
-      await loadForFeature(feature);
+      if (!await loadForFeature(feature)) return null;
       const implementation = global[globalName];
       if (typeof implementation !== 'function' || implementation === placeholder) {
         throw new Error('This feature could not be opened. Please refresh and try again.');
       }
       return implementation(...args);
     };
+  }
+
+  function installPageRouterGuard() {
+    const originalShowPage = global.showPage;
+    if (typeof originalShowPage !== 'function' || originalShowPage.__ddAccessGuarded === true) return;
+
+    const guardedShowPage = function guardedShowPage(page, element, options = {}) {
+      const routeHash = protectedPageRoutes[String(page || '').trim().toLowerCase()];
+      if (!routeHash || options?.accessVerified === true) {
+        return originalShowPage.call(this, page, element, options);
+      }
+
+      const access = global.DueDiligencePhase4?.getAccess?.();
+      if (access?.allowed === true) {
+        return originalShowPage.call(this, page, element, {
+          ...options,
+          accessVerified: true,
+        });
+      }
+
+      ensureProtectedAccess(routeHash).then((allowed) => {
+        if (!allowed) return;
+        originalShowPage.call(global, page, element, {
+          ...options,
+          accessVerified: true,
+        });
+      }).catch(() => {});
+      return false;
+    };
+
+    Object.defineProperty(guardedShowPage, '__ddAccessGuarded', {
+      value: true,
+      configurable: false,
+      enumerable: false,
+      writable: false,
+    });
+    global.showPage = guardedShowPage;
   }
 
   global.DueDiligenceFeatureLoader = Object.freeze({ loadForFeature, loadGroup });
@@ -138,9 +211,13 @@
   global.DueDiligenceExaminations = Object.freeze({
     openPerSubject: async (...args) => {
       const placeholder = global.DueDiligenceExaminations;
-      await loadForFeature('subject-matter');
+      if (!await loadForFeature('subject-matter')) return null;
       if (global.DueDiligenceExaminations === placeholder) throw new Error('Subject Matter could not be opened.');
       return global.DueDiligenceExaminations.openPerSubject(...args);
     },
   });
+
+  loadScript('assets/free-trial-five-daily.js?v=free-trial-five-daily-20260818-1')
+    .catch((error) => console.error('Free Trial access copy could not be loaded.', error));
+  installPageRouterGuard();
 }(window));

@@ -87,7 +87,21 @@ assert.doesNotMatch(
 );
 assert.match(phase2, /dispatchEvent\(new CustomEvent\('duediligence:session'/);
 assert.match(phase4, /addEventListener\('duediligence:session'/);
-assert.match(phase4, /refreshAccess\(\)\.catch/);
+assert.match(
+  phase4,
+  /refreshAccess\(\{\s*enforce:\s*true,\s*force:\s*true\s*\}\)\.catch/,
+  'Authenticated session recovery must enforce the Retainer choice instead of silently granting access.',
+);
+assert.match(
+  phase4,
+  /state\.lastOverlayOpen === true[\s\S]*nowOpen === false[\s\S]*schedulePostOnboardingRefresh\(80\)/,
+  'Closing legal acceptance or profile onboarding must immediately re-check access and direct an unselected account to Retainer.',
+);
+assert.match(
+  phase4,
+  /PROTECTED_ROUTES[\s\S]*'subject-matter'[\s\S]*ensureProtectedAccess/,
+  'Subject Matter must pass through the same server-authoritative access gate before its feature loader opens.',
+);
 assert.match(html, /setQuestionControlsDisabled\(true\)/, 'The submitted question must lock while its assessment is under review.');
 
 const inlineScripts = Array.from(html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi))

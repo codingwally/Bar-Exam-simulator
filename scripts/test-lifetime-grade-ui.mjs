@@ -10,14 +10,24 @@ const [phase2, phase4, admin] = await Promise.all([
 for (const source of [phase2, phase4, admin]) {
   assert.doesNotMatch(source, /lifetime(?: AI)? grades? remaining/i);
 }
+
 assert.match(phase2, /guest grades left/);
 assert.doesNotMatch(phase2, /three lifetime AI grades/);
 assert.doesNotMatch(phase4, /three lifetime free grades are exhausted/);
-assert.match(phase4, /Early Access is required/);
-assert.match(phase4, /Subscribe — ₱149 Early Access/);
-assert.doesNotMatch(phase4, /five successful submissions for today/i);
+
+// Internal access snapshots may retain compatibility fields such as
+// `dailyLimit`, but the production interface must not advertise or render the
+// retired automatic daily-free entitlement.
+assert.doesNotMatch(
+  phase4,
+  /five successful submissions|free allowance resets|\b\d+\/\d+ left|daily free submissions?/i,
+);
+assert.match(phase4, /Choose Free Trial or ₱149 Early Access/);
+assert.match(phase4, /Start Free Trial/);
+assert.match(phase4, /Choose ₱149 Early Access/);
+
 assert.doesNotMatch(phase2, /Beta All Access/);
 assert.doesNotMatch(phase4, /Beta All Access/);
 assert.doesNotMatch(admin, /'Lifetime grades'/);
 
-console.log('Lifetime-grade counters and automatic daily-free access are retired while mandatory Early Access copy remains intact.');
+console.log('Retired lifetime and daily-free copy is absent; the required Free Trial or ₱149 Early Access choice is present.');

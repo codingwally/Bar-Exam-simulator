@@ -149,7 +149,7 @@ test('anonymous visitors cannot read a protected examination question', async ()
   assert.equal(payload.error.code, 'AUTHENTICATION_REQUIRED');
 });
 
-test('authenticated exam opening activates access and returns only one protected prompt', async () => {
+test('authenticated entitled exam opening never creates an explicit commercial choice', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, init = {}) => {
     const target = String(url);
@@ -157,6 +157,8 @@ test('authenticated exam opening activates access and returns only one protected
     if (target.endsWith('/rest/v1/rpc/phase4_access_snapshot')) {
       const body = JSON.parse(init.body);
       assert.equal(body.p_user_id, userId);
+      // The legacy question route retains its historical activation hint. The
+      // commercial resolver ignores it; only /access/choose records Free Trial.
       assert.equal(body.p_activate_trial, true);
       assert.equal(body.p_request_key, 'request_1234567890');
       return Response.json(accessSnapshot());
@@ -202,6 +204,7 @@ test('authenticated access endpoint does not start a trial', async () => {
     if (target.endsWith('/auth/v1/user')) return Response.json({ id: userId });
     if (target.endsWith('/rest/v1/rpc/phase4_access_snapshot')) {
       const body = JSON.parse(init.body);
+      assert.equal(body.p_user_id, userId);
       assert.equal(body.p_activate_trial, false);
       assert.equal(body.p_request_key, null);
       return Response.json(accessSnapshot());
@@ -244,13 +247,19 @@ test('an authenticated zero-credit user is denied before question-bank, attempt,
       assert.equal(body.p_question_bank_id, 'LAB-001');
       return Response.json(accessSnapshot({
         allowed: false,
-        basis: 'none',
+        basis: 'daily_limit_reached',
+        accessMode: 'free',
+        dailyLimit: 5,
+        completedToday: 5,
+        reservedToday: 0,
+        remainingToday: 0,
         trial: {
-          startedAt: '2026-07-01T00:00:00Z',
-          expiresAt: '2026-07-02T00:00:00Z',
-          active: false,
+          startedAt: '2026-08-01T00:00:00Z',
+          expiresAt: '2026-09-01T15:59:59Z',
+          active: true,
+          program: 'commercial_launch_2026',
         },
-        freeGrades: { limit: 3, used: 3, remaining: 0 },
+        freeGrades: { limit: 5, used: 5, remaining: 0 },
       }));
     }
     if (target.includes('/content/question-bank/') || target.includes('output=csv')) {

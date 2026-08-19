@@ -53,6 +53,74 @@ function configuredSupabaseUrl(env) {
   }
 }
 
+function allowedOrigin(env) {
+  return String(env?.ALLOWED_ORIGIN || 'https://duediligence.ph').trim();
+}
+
+function corsHeaders(origin, env) {
+  const approved = allowedOrigin(env);
+  return {
+    'Access-Control-Allow-Origin': origin === approved ? origin : approved,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': [
+      'Content-Type',
+      'Authorization',
+      'X-Request-ID',
+      'X-DD-Beta-Access',
+      'X-DD-Beta-Flow-ID',
+    ].join(', '),
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin',
+  };
+}
+
+function jsonResponse(body, status, origin, env) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders(origin, env),
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
+
+async function serviceRoleRpc(env, functionName, body) {
+  const supabaseUrl = configuredSupabaseUrl(env);
+  const serviceRoleKey = String(env?.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  if (!supabaseUrl || !serviceRoleKey) {
+    return {
+      ok: false,
+      status: 503,
+      message: 'Secure access selection is temporarily unavailable.',
+    };
+  }
+
+  const response = await fetch(
+    new URL(`/rest/v1/rpc/${encodeURIComponent(functionName)}`, supabaseUrl),
+    {
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  const payload = await response.json().catch(() => null);
+  return {
+    ok: response.ok,
+    status: response.status,
+    payload,
+    message: cleanSingleLine(
+      payload?.message || payload?.details || payload?.hint,
+      500,
+    ),
+  };
+}
+
 async function paymentVerificationRecipients(env) {
   const supabaseUrl = configuredSupabaseUrl(env);
   const serviceRoleKey = String(env?.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -106,6 +174,110 @@ async function verifiedPaymentUser(request, env) {
       120,
     ) || null,
   };
+}
+
+async function handleAccessChoice(request, env) {
+  const origin = String(request.headers.get('Origin') || '');
+  if (origin !== allowedOrigin(env)) {
+    return jsonResponse({
+      ok: false,
+      error: {
+        code: 'ORIGIN_NOT_ALLOWED',
+        message: 'This access request did not come from the approved Due Diligence site.',
+      },
+    }, 403, origin, env);
+  }
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(origin, env),
+    });
+  }
+
+  if (request.method !== 'POST') {
+    return jsonResponse({
+      ok: false,
+      error: {
+        code: 'METHOD_NOT_ALLOWED',
+        message: 'Only POST requests are accepted.',
+      },
+    }, 405, origin, env);
+  }
+
+  const user = await verifiedPaymentUser(request, env);
+  if (!user) {
+    return jsonResponse({
+      ok: false,
+      error: {
+        code: 'AUTHENTICATION_REQUIRED',
+        message: 'Sign in with Google before choosing access.',
+      },
+    }, 401, origin, env);
+  }
+
+  const requestKey = cleanSingleLine(request.headers.get('X-Request-ID'), 128);
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {
+    return jsonResponse({
+      ok: false,
+      error: {
+        code: 'REQUEST_ID_REQUIRED',
+        message: 'The access choice could not be verified. Please try again.',
+      },
+    }, 400, origin, env);
+  }
+
+  const body = await request.json().catch(() => null);
+  const choice = cleanSingleLine(body?.choice, 40).toLowerCase();
+  if (!['free_trial', 'launch_trial'].includes(choice)) {
+    return jsonResponse({
+      ok: false,
+      error: {
+        code: 'INVALID_ACCESS_CHOICE',
+        message: 'Choose Free Trial or Early Access.',
+      },
+    }, 400, origin, env);
+  }
+
+  const result = await serviceRoleRpc(env, 'phase4_choose_launch_trial', {
+    p_user_id: user.id,
+    p_request_key: requestKey,
+  });
+  if (!result.ok) {
+    const message = result.message.toLowerCase();
+    let code = 'ACCESS_CHOICE_UNAVAILABLE';
+    let status = result.status >= 500 ? 503 : 400;
+    let publicMessage = 'The Free Trial could not be started. Please try again.';
+
+    if (message.includes('terms') || message.includes('privacy')) {
+      code = 'LEGAL_ACCEPTANCE_REQUIRED';
+      status = 403;
+      publicMessage = 'Accept the current Terms of Use and Privacy Policy before choosing access.';
+    } else if (message.includes('profile')) {
+      code = 'PROFILE_COMPLETION_REQUIRED';
+      status = 403;
+      publicMessage = 'Complete your profile before choosing access.';
+    } else if (message.includes('already been used')) {
+      code = 'FREE_TRIAL_ALREADY_USED';
+      status = 409;
+      publicMessage = 'This account has already used the Free Trial. Choose ₱149 Early Access to continue.';
+    } else if (message.includes('closed') || message.includes('not available')) {
+      code = 'FREE_TRIAL_UNAVAILABLE';
+      status = 409;
+      publicMessage = 'The Free Trial is no longer available. Choose ₱149 Early Access to continue.';
+    }
+
+    return jsonResponse({
+      ok: false,
+      error: { code, message: publicMessage },
+    }, status, origin, env);
+  }
+
+  return jsonResponse({
+    ok: true,
+    choice: 'free_trial',
+    access: result.payload,
+  }, 200, origin, env);
 }
 
 export function bytesToBase64(value) {
@@ -334,6 +506,11 @@ async function notifyPaymentSubmission(request, response, env) {
 
 async function fetchWithCommercialNotifications(request, env, ctx) {
   const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
+
+  if (pathname === '/access/choose') {
+    return handleAccessChoice(request, env);
+  }
+
   const paymentRequest = request.method === 'POST' && pathname === '/payments/submit'
     ? request.clone()
     : null;

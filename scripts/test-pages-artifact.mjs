@@ -37,6 +37,7 @@ for (const required of [
   'assets/due-diligence-controls.css',
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
+  'assets/free-trial-five-daily.js',
   'assets/private-workspace.js',
   'assets/feature-previews/mock-bar.png',
   'assets/feature-previews/subject-matter.png',
@@ -68,6 +69,8 @@ assert.ok(!files.includes('assets/phase2-law-library.jpg'));
 
 const index = await readFile(path.join(output, 'index.html'), 'utf8');
 const examinations = await readFile(path.join(output, 'assets/examinations.js'), 'utf8');
+const featureLoader = await readFile(path.join(output, 'assets/feature-loader.js'), 'utf8');
+const freeTrialRuntime = await readFile(path.join(output, 'assets/free-trial-five-daily.js'), 'utf8');
 const robots = await readFile(path.join(output, 'robots.txt'), 'utf8');
 const sitemap = await readFile(path.join(output, 'sitemap.xml'), 'utf8');
 assert.doesNotMatch(index, /content\/question-bank|website-upload\.json|DueDiligenceWebsiteQuestionBank/i);
@@ -91,6 +94,10 @@ assert.match(examinations, /const isBarFeels = state\.setup\.track === 'bar_feel
 assert.match(examinations, /function subjectWritingGuide\(/);
 assert.match(examinations, /Improved model response/);
 assert.doesNotMatch(examinations, /id="dd-upload-timer"/);
+assert.match(featureLoader, /assets\/free-trial-five-daily\.js/);
+assert.match(featureLoader, /'subject-matter': '#subject-matter'/);
+assert.match(freeTrialRuntime, /5 protected question submissions per Philippine day/);
+assert.match(freeTrialRuntime, /daily_limit_reached/);
 assert.match(robots, /Disallow: \/admin\//);
 assert.match(robots, /Sitemap: https:\/\/duediligence\.ph\/sitemap\.xml/);
 assert.match(sitemap, /<loc>https:\/\/duediligence\.ph\/<\/loc>/);

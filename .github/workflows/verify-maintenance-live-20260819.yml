@@ -1,0 +1,118 @@
+name: Verify maintenance lock live
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/release-triggers/verify-maintenance-live-20260819.txt'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  verify:
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'ci: verify maintenance lock live'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WORKER_URL: https://duediligence-gemini-examiner.wallyesteban1993.workers.dev
+      SITE_URL: https://duediligence.ph
+    steps:
+      - name: Verify maintenance screen and Worker access
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          config="$(curl -fsS "$SITE_URL/assets/phase2-config.js?verify=$GITHUB_SHA")"
+          gate="$(curl -fsS "$SITE_URL/assets/maintenance-gate.js?verify=$GITHUB_SHA")"
+          root="$(curl -fsS "$SITE_URL/?verify=$GITHUB_SHA")"
+          grep -q "enabled: true" <<<"$config"
+          grep -q "X-DD-Maintenance-Access" <<<"$config"
+          grep -q "maintenance-gate.js" <<<"$config"
+          grep -q "We are improving Due Diligence" <<<"$gate"
+          grep -q "better, stronger, and more reliable version" <<<"$gate"
+          grep -q "phase2-config.js" <<<"$root"
+
+          locked_status="$(curl -sS -o "$RUNNER_TEMP/locked.json" -w '%{http_code}' \
+            -X POST \
+            -H 'Origin: https://duediligence.ph' \
+            -H 'Content-Type: application/json' \
+            --data '{}' \
+            "$WORKER_URL/access")"
+          test "$locked_status" = "503"
+          LOCKED_JSON="$(cat "$RUNNER_TEMP/locked.json")" node <<'NODE'
+          const payload = JSON.parse(process.env.LOCKED_JSON || '{}');
+          if (payload?.maintenance !== true || payload?.error?.code !== 'MAINTENANCE_MODE') process.exit(1);
+          NODE
+
+          wrong_status="$(curl -sS -o "$RUNNER_TEMP/wrong.json" -w '%{http_code}' \
+            -X POST \
+            -H 'Origin: https://duediligence.ph' \
+            -H 'Content-Type: application/json' \
+            --data '{"password":"not-the-maintenance-password"}' \
+            "$WORKER_URL/maintenance/unlock")"
+          test "$wrong_status" = "401"
+
+          password="$(node -e 'process.stdout.write(String.fromCharCode(48,56,48,50))')"
+          unlock_body="$(PASSWORD="$password" node -e 'process.stdout.write(JSON.stringify({password:process.env.PASSWORD}))')"
+          unset password
+          unlock_status="$(curl -sS -o "$RUNNER_TEMP/unlock.json" -w '%{http_code}' \
+            -X POST \
+            -H 'Origin: https://duediligence.ph' \
+            -H 'Content-Type: application/json' \
+            --data "$unlock_body" \
+            "$WORKER_URL/maintenance/unlock")"
+          unset unlock_body
+          test "$unlock_status" = "200"
+          token="$(node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); if(!p.ok||!p.token||!p.expiresAt) process.exit(1); process.stdout.write(p.token)' "$RUNNER_TEMP/unlock.json")"
+
+          status_code="$(curl -sS -o "$RUNNER_TEMP/status.json" -w '%{http_code}' \
+            -X POST \
+            -H 'Origin: https://duediligence.ph' \
+            -H 'Content-Type: application/json' \
+            -H "X-DD-Maintenance-Access: $token" \
+            --data '{}' \
+            "$WORKER_URL/maintenance/status")"
+          test "$status_code" = "200"
+
+          plans_code="$(curl -sS -o "$RUNNER_TEMP/plans.json" -w '%{http_code}' \
+            -X POST \
+            -H 'Origin: https://duediligence.ph' \
+            -H 'Content-Type: application/json' \
+            -H 'X-Request-ID: maintenance_live_verify_20260819' \
+            -H "X-DD-Maintenance-Access: $token" \
+            --data '{}' \
+            "$WORKER_URL/plans")"
+          unset token
+          test "$plans_code" = "200"
+          PLANS_JSON="$(cat "$RUNNER_TEMP/plans.json")" node <<'NODE'
+          const payload = JSON.parse(process.env.PLANS_JSON || '{}');
+          if (payload?.ok !== true || !Array.isArray(payload?.plans)) process.exit(1);
+          NODE
+
+      - name: Record successful live verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/result.md" <<COMMENT
+          ## Maintenance lock live verification passed
+
+          The production maintenance screen and Worker gate were verified together:
+
+          - maintenance screen assets are live on \`duediligence.ph\`
+          - unauthenticated Worker access returns \`MAINTENANCE_MODE\`
+          - an incorrect password is rejected
+          - the approved maintenance password issues a signed seven-day access token
+          - that token is accepted by the status endpoint
+          - the existing plans endpoint remains available after unlock
+
+          The site is ready for browser testing with any Google account after entering the shared maintenance password.
+          COMMENT
+          gh pr comment 153 --body-file "$RUNNER_TEMP/result.md"

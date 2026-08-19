@@ -13,6 +13,8 @@ on:
       - 'worker/commercial-access-gate.test.mjs'
       - 'worker/access-choice-flow.test.mjs'
       - 'worker/wrangler.toml'
+      - 'scripts/build-pages-artifact.mjs'
+      - 'scripts/test-pages-artifact.mjs'
       - 'scripts/test-lifetime-grade-ui.mjs'
       - 'scripts/test-two-option-access-choice.mjs'
       - 'supabase/migrations/20260818123000_require_early_access.sql'

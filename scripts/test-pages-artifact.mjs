@@ -38,6 +38,7 @@ for (const required of [
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
   'assets/free-trial-five-daily.js',
+  'assets/maintenance-gate.js',
   'assets/private-workspace.js',
   'assets/feature-previews/mock-bar.png',
   'assets/feature-previews/subject-matter.png',
@@ -71,6 +72,7 @@ const index = await readFile(path.join(output, 'index.html'), 'utf8');
 const examinations = await readFile(path.join(output, 'assets/examinations.js'), 'utf8');
 const featureLoader = await readFile(path.join(output, 'assets/feature-loader.js'), 'utf8');
 const freeTrialRuntime = await readFile(path.join(output, 'assets/free-trial-five-daily.js'), 'utf8');
+const maintenanceGate = await readFile(path.join(output, 'assets/maintenance-gate.js'), 'utf8');
 const robots = await readFile(path.join(output, 'robots.txt'), 'utf8');
 const sitemap = await readFile(path.join(output, 'sitemap.xml'), 'utf8');
 assert.doesNotMatch(index, /content\/question-bank|website-upload\.json|DueDiligenceWebsiteQuestionBank/i);
@@ -98,6 +100,10 @@ assert.match(featureLoader, /assets\/free-trial-five-daily\.js/);
 assert.match(featureLoader, /'subject-matter': '#subject-matter'/);
 assert.match(freeTrialRuntime, /5 protected question submissions per Philippine day/);
 assert.match(freeTrialRuntime, /daily_limit_reached/);
+assert.match(maintenanceGate, /We are improving Due Diligence\./);
+assert.match(maintenanceGate, /maintenance\/unlock/);
+assert.match(maintenanceGate, /maintenance\/status/);
+assert.doesNotMatch(maintenanceGate, /\b0802\b/);
 assert.match(robots, /Disallow: \/admin\//);
 assert.match(robots, /Sitemap: https:\/\/duediligence\.ph\/sitemap\.xml/);
 assert.match(sitemap, /<loc>https:\/\/duediligence\.ph\/<\/loc>/);

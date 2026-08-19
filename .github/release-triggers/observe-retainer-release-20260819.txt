@@ -1,1 +1,1 @@
-observe
+observe-pages-runtime

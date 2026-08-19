@@ -1,0 +1,49 @@
+name: Observe one-time Retainer release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/release-triggers/observe-retainer-release-20260819.txt'
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  observe:
+    if: >-
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.head_commit.message == 'ci: observe retainer release status'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Publish current release-run status
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs="$(gh run list \
+            --workflow release-retainer-subject-payment-20260819.yml \
+            --branch main \
+            --limit 5 \
+            --json databaseId,status,conclusion,headSha,createdAt,url)"
+          RUNS_JSON="$runs" node <<'NODE' > "$RUNNER_TEMP/observer-comment.md"
+          const runs = JSON.parse(process.env.RUNS_JSON || '[]');
+          console.log('## Retainer production release observer');
+          console.log('');
+          if (!runs.length) {
+            console.log('No orchestration run was found for the one-time release workflow.');
+            process.exit(0);
+          }
+          for (const run of runs) {
+            console.log(`- Run ${run.databaseId}: **${run.status}**${run.conclusion ? ` / **${run.conclusion}**` : ''} — ${run.url}`);
+            console.log(`  - Head: \`${run.headSha}\``);
+            console.log(`  - Created: ${run.createdAt}`);
+          }
+          NODE
+          gh pr comment 151 --body-file "$RUNNER_TEMP/observer-comment.md"

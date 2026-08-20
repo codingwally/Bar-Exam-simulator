@@ -382,6 +382,7 @@ async function publishFixture(page, {
 
 async function openCatalog(page, track) {
   const triggerId = track === 'bar_feels' ? 'spa-bar-feels' : 'spa-subject-matter';
+  const expectedPageId = track === 'bar_feels' ? 'page-bar-feels' : 'page-midterms';
   await page.evaluate((id) => {
     const trigger = document.getElementById(id);
     if (!trigger) throw new Error(`The public navigation control ${id} is unavailable.`);
@@ -389,18 +390,30 @@ async function openCatalog(page, track) {
   }, triggerId);
   try {
     await page.waitForFunction(
-      (selectedTrack) => (
+      ({ selectedTrack, pageId }) => (
         window.DueDiligenceExaminations?.getState?.().screen === 'catalog'
         && window.DueDiligenceExaminations?.getState?.().track === selectedTrack
+        && document.getElementById('authenticated-app-shell')?.hidden === false
+        && document.getElementById(pageId)?.classList.contains('active') === true
       ),
-      track,
-      { timeout: 15_000 },
+      { selectedTrack: track, pageId: expectedPageId },
+      { timeout: 30_000 },
     );
   } catch (error) {
     const safeNavigationState = await page.evaluate(() => ({
       activePage: document.querySelector('.page.active')?.id || null,
+      appShellHidden: document.getElementById('authenticated-app-shell')?.hidden ?? null,
       hash: location.hash,
       state: window.DueDiligenceExaminations?.getState?.() || null,
+      access: (() => {
+        const access = window.DueDiligencePhase4?.getAccess?.();
+        return access ? {
+          allowed: access.allowed === true,
+          basis: String(access.basis || ''),
+          choiceRequired: access.choiceRequired === true,
+          profileCompleted: access.profileCompleted === true,
+        } : null;
+      })(),
     }));
     throw new Error(
       `Public navigation did not open ${track}: ${JSON.stringify(safeNavigationState)}`,

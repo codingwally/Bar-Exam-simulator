@@ -462,9 +462,15 @@ async function verifySubjectChooserGeometry(page) {
         };
       };
       const browseStyle = getComputedStyle(browse);
+      const originalScrollX = scrollX;
+      const maxScrollX = Math.max(0, document.documentElement.scrollWidth - innerWidth);
+      scrollTo(maxScrollX, scrollY);
+      const horizontalScrollReach = Math.abs(scrollX - originalScrollX);
+      scrollTo(originalScrollX, scrollY);
+      const sectionBounds = rect(section);
       return {
         shell: rect(shell),
-        section: rect(section),
+        section: sectionBounds,
         heading: rect(heading),
         summary: rect(summary),
         browse: rect(browse),
@@ -472,7 +478,11 @@ async function verifySubjectChooserGeometry(page) {
         sectionAlignItems: getComputedStyle(section).alignItems,
         browseBackgroundImage: browseStyle.backgroundImage,
         browseClasses: [...browse.classList],
-        overflow: document.documentElement.scrollWidth > innerWidth,
+        documentOverflowPixels: maxScrollX,
+        horizontalScrollReach,
+        overflow: horizontalScrollReach > 1
+          || sectionBounds.left < -1
+          || sectionBounds.right > innerWidth + 1,
       };
     });
     const label = `subject-chooser-${viewport.width}x${viewport.height}`;

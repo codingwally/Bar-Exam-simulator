@@ -91,6 +91,17 @@ async function prepareDisposableCommercialProfile() {
     body: JSON.stringify({ email, password }),
   });
   assert.ok(session.access_token, 'The disposable staging session was not created.');
+  const acceptance = await jsonRequest(`${WORKER_URL}/beta/access/accept-terms`, {
+    method: 'POST',
+    headers: {
+      Origin: WORKER_URL,
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  });
+  assert.equal(acceptance?.acceptance?.termsVersion, 'terms-commercial-v1-2026-08-18');
+  assert.equal(acceptance?.acceptance?.privacyVersion, 'privacy-commercial-v1-2026-08-18');
   await completeMandatoryCommercialProfile({
     supabaseUrl: SUPABASE_URL,
     publishableKey: PUBLISHABLE_KEY,

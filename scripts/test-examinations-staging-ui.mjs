@@ -73,6 +73,11 @@ async function createDisposableUser() {
       updated_at: new Date().toISOString(),
     }),
   }, [200, 204]);
+  const assignedRoles = await jsonRequest(
+    `${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}&select=role`,
+    { headers: serviceHeaders },
+  );
+  assert.deepEqual(assignedRoles, [{ role: 'super_admin' }]);
 }
 
 async function enableCommercialLegalVersions() {

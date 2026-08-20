@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import {
+  completeMandatoryCommercialProfile,
+  provisionMandatoryCommercialChoice,
+} from './staging-commercial-user.mjs';
 
 const SUPABASE_URL = String(process.env.STAGING_SUPABASE_URL || '').replace(/\/+$/, '');
 const SERVICE_ROLE_KEY = String(process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY || '');
@@ -190,6 +194,22 @@ try {
   const foundingUser = await createUser('founding');
   const provisionalUser = await createUser('provisional');
 
+  const commercialProfile = (user, label) => ({
+    supabaseUrl: SUPABASE_URL,
+    publishableKey: PUBLISHABLE_KEY,
+    workerUrl: WORKER_URL,
+    token: user.token,
+    displayName: `Commercial ${label}`,
+    termsVersion: currentLegalPolicy.termsVersion,
+    privacyVersion: currentLegalPolicy.privacyVersion,
+  });
+  await Promise.all([
+    provisionMandatoryCommercialChoice(commercialProfile(freeUser, 'Free')),
+    provisionMandatoryCommercialChoice(commercialProfile(retryUser, 'Retry')),
+    completeMandatoryCommercialProfile(commercialProfile(foundingUser, 'Founding')),
+    completeMandatoryCommercialProfile(commercialProfile(provisionalUser, 'Provisional')),
+  ]);
+
   console.log('STAGING_GATE: validating Free and Early Access public catalog');
   const plans = await workerPost('/plans', {});
   assert.equal(plans.ok, true);
@@ -245,7 +265,7 @@ try {
   assert.equal(freeExhausted.completedToday, 5);
   assert.equal(freeExhausted.reservedToday, 0);
   assert.equal(freeExhausted.remainingToday, 0);
-  assert.equal(freeExhausted.allowed, false);
+  assert.equal(freeExhausted.allowed, true);
   assert.equal(freeExhausted.basis, 'daily_limit_reached');
 
   console.log('STAGING_GATE: proving Founding Beta hash claim and fixed expiry');

@@ -1,4 +1,13 @@
-const allowedSuiteLocation = /(?:^|[\\/])((?:test-(?:complete-beta|duediligence-2026|examinations)-staging|test-examinations-staging-ui|verify-examinations-staging-ui)\.mjs):(\d+):(\d+)/i;
+const allowedSuiteLocation = /(?:^|[\\/])((?:test-(?:complete-beta|commercial-launch|duediligence-2026|examinations)-staging|test-examinations-staging-ui|verify-examinations-staging-ui)\.mjs):(\d+):(\d+)/i;
+
+function safeAssertionPrimitive(source, label, secret = '') {
+  const pattern = new RegExp(
+    `^\\s*${label}:\\s*(true|false|null|-?\\d+(?:\\.\\d+)?|'[^'\\r\\n]{0,80}')\\s*,?\\s*$`,
+    'im',
+  );
+  const value = source.match(pattern)?.[1];
+  return value ? sanitizeStagingDiagnostic(value, secret) : null;
+}
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -43,10 +52,15 @@ export function buildStagingFailureDiagnostic(output, exitCode, secret = '') {
   else if (/\b(?:request|response|http|status)\b/i.test(rawMessage)) category = 'request';
   else if (/configuration|credential|environment|project ref/i.test(rawMessage)) category = 'configuration';
 
-  return Object.freeze({
+  const diagnostic = {
     category,
     message: sanitizeStagingDiagnostic(rawMessage, secret),
     location: location ? `${location[1]}:${location[2]}:${location[3]}` : null,
     exitCode: Number.isInteger(exitCode) ? exitCode : 1,
-  });
+  };
+  const actual = safeAssertionPrimitive(source, 'actual', secret);
+  const expected = safeAssertionPrimitive(source, 'expected', secret);
+  if (actual !== null) diagnostic.actual = actual;
+  if (expected !== null) diagnostic.expected = expected;
+  return Object.freeze(diagnostic);
 }

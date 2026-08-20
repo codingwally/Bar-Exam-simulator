@@ -72,4 +72,13 @@ assert.deepEqual(diagnostic, {
 });
 assert.equal(sanitizeStagingDiagnostic(`token=${syntheticSecret}`, syntheticSecret).includes(syntheticSecret), false);
 
+const primitiveDiagnostic = buildStagingFailureDiagnostic(
+  'AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n6 !== 5\n\n    at file:///C:/repo/scripts/test-commercial-launch-staging.mjs:252:10\n  generatedMessage: true,\n  code: \'ERR_ASSERTION\',\n  actual: 6,\n  expected: 5,\n  operator: \'strictEqual\'',
+  1,
+  syntheticSecret,
+);
+assert.equal(primitiveDiagnostic.location, 'test-commercial-launch-staging.mjs:252:10');
+assert.equal(primitiveDiagnostic.actual, '6');
+assert.equal(primitiveDiagnostic.expected, '5');
+
 console.log('Trusted staging E2E workflow contract checks passed.');

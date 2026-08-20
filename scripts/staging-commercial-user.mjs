@@ -19,7 +19,7 @@ async function jsonResponse(url, options = {}) {
   return body;
 }
 
-export async function provisionMandatoryCommercialChoice({
+export async function completeMandatoryCommercialProfile({
   supabaseUrl,
   publishableKey,
   workerUrl,
@@ -53,6 +53,15 @@ export async function provisionMandatoryCommercialChoice({
       p_privacy_version: privacyVersion,
     }),
   });
+}
+
+export async function provisionMandatoryCommercialChoice(options) {
+  await completeMandatoryCommercialProfile(options);
+
+  const {
+    workerUrl,
+    token,
+  } = options;
 
   const choice = await jsonResponse(`${workerUrl}/access/choose`, {
     method: 'POST',

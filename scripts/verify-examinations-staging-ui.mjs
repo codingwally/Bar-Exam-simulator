@@ -274,6 +274,24 @@ async function authenticate(page) {
   );
   await completeOnboardingIfShown(page);
   await completeTermsAcceptanceIfShown(page);
+  const access = await page.evaluate(async () => {
+    const result = await window.DueDiligencePhase4.refreshAccess({
+      enforce: false,
+      force: true,
+    });
+    return {
+      allowed: result?.allowed === true,
+      basis: String(result?.basis || ''),
+      choiceRequired: result?.choiceRequired === true,
+      profileCompleted: result?.profileCompleted === true,
+    };
+  });
+  assert.deepEqual(access, {
+    allowed: true,
+    basis: 'super_admin',
+    choiceRequired: false,
+    profileCompleted: true,
+  });
   await page.evaluate(() => localStorage.removeItem('duediligence.examinations.recovery.v1'));
 }
 

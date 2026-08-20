@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 
 const APPROVED_STAGING_SUPABASE = 'https://hlzqmreeoghbldnhlybr.supabase.co';
 const APPROVED_STAGING_WORKER = 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev';
@@ -59,6 +60,7 @@ export async function provisionMandatoryCommercialChoice({
       Origin: workerUrl,
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
+      'X-Request-ID': `staging_access_${randomUUID().replaceAll('-', '')}`,
     },
     body: JSON.stringify({ choice: 'free' }),
   });

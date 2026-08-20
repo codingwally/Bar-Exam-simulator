@@ -98,9 +98,18 @@ body.qfs-drawer-open {
 }
 
 #site-header.qfs-shell .qfs-menu-toggle {
-  min-width: 68px;
+  width: 44px;
+  min-width: 44px;
+  flex: 0 0 44px;
+  padding: 0;
   color: var(--qfs-cream);
   background: transparent;
+}
+
+#site-header.qfs-shell .site-menu-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
 }
 
 #site-header.qfs-shell .qfs-menu-toggle:hover,
@@ -112,7 +121,7 @@ body.qfs-drawer-open {
 
 #site-header.qfs-shell #spa-nav.qfs-drawer {
   position: fixed;
-  inset: 0 0 0 auto;
+  inset: 0 auto 0 0;
   z-index: 1130;
   width: min(390px, calc(100vw - 24px));
   max-width: 100vw;
@@ -126,12 +135,12 @@ body.qfs-drawer-open {
   gap: 0;
   overflow-y: auto;
   border: 0;
-  border-left: 1px solid rgba(197, 160, 89, .36);
+  border-right: 1px solid rgba(197, 160, 89, .36);
   background: var(--qfs-navy);
-  box-shadow: -20px 0 54px rgba(0, 7, 20, .44);
+  box-shadow: 20px 0 54px rgba(0, 7, 20, .44);
   opacity: 0;
   visibility: hidden;
-  transform: translateX(100%);
+  transform: translateX(-100%);
   transition: transform .22s ease, opacity .18s ease, visibility .22s;
 }
 
@@ -211,6 +220,14 @@ body.qfs-drawer-open {
   border: 1px solid rgba(197, 160, 89, .3);
   border-radius: 8px;
   overflow: clip;
+}
+
+#site-header.qfs-shell .quorum-home-tools {
+  display: none;
+}
+
+body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
+  display: block;
 }
 
 #site-header.qfs-shell .quorum-practice-menu summary {
@@ -376,7 +393,7 @@ body.qfs-drawer-open {
   }
 
   #site-header.qfs-shell .brand {
-    max-width: calc(100% - 82px);
+    max-width: calc(100% - 56px);
   }
 
   #site-header.qfs-shell .crest {
@@ -424,8 +441,9 @@ body.qfs-drawer-open {
   }
 
   #site-header.qfs-shell .qfs-menu-toggle {
-    min-width: 62px;
-    padding-inline: 11px;
+    width: 42px;
+    min-width: 42px;
+    flex-basis: 42px;
   }
 }
 

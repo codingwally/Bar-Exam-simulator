@@ -32,11 +32,12 @@ const [
 ]);
 
 assert.match(html, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
-assert.match(html, /<h2>Home<\/h2>/);
-assert.match(
-  html,
-  /Ask the community, continue your preparation, and see what needs attention\./,
-);
+assert.doesNotMatch(html, /quorum-community-banner/);
+assert.doesNotMatch(html, /community-home-stats/);
+assert.doesNotMatch(html, /id="quorum-menu-open"/);
+assert.doesNotMatch(html, /quorum-practice-card-mobile/);
+assert.equal((html.match(/class="quorum-practice-card/g) || []).length, 1);
+assert.match(html, /class="quorum-practice-menu quorum-home-tools"[\s\S]*My Posts[\s\S]*Saved[\s\S]*Study Circles[\s\S]*Notifications/);
 assert.match(html, /Latest member discussions/);
 assert.match(html, /Saved/);
 assert.match(html, /Study Circles/);

@@ -2130,97 +2130,6 @@
   padding: 32px 20px 64px;
 }
 
-#page-community .lex-page-head {
-  position: relative;
-  width: 100%;
-  height: auto;
-  margin: 0 0 22px;
-  padding: clamp(24px, 4vw, 40px);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 22px 36px;
-  overflow: hidden;
-  clip: auto;
-  clip-path: none;
-  white-space: normal;
-  border: 1px solid rgba(197, 160, 89, .5);
-  border-top: 3px solid #c5a059;
-  border-radius: 14px;
-  color: #f8fafc;
-  background:
-    radial-gradient(circle at 86% 20%, rgba(197, 160, 89, .18), transparent 30%),
-    linear-gradient(135deg, #071a33, #0b2b4e);
-  box-shadow: 0 18px 44px rgba(7, 26, 51, .12);
-}
-
-#page-community .community-home-copy {
-  min-width: 0;
-}
-
-#page-community .lex-page-head .eyebrow {
-  color: #efd17d;
-}
-
-#page-community .lex-page-head .lex-title-row h2 {
-  color: #fff;
-  font-size: clamp(42px, 5vw, 64px);
-}
-
-#page-community .lex-page-head .lex-beta-badge {
-  border-color: rgba(239, 209, 125, .58);
-  color: #f8e5a7;
-  background: rgba(255, 255, 255, .07);
-}
-
-#page-community .lex-page-head .quorum-motto {
-  max-width: 680px;
-  color: #d5dfeb;
-  font-size: 15px;
-}
-
-.community-home-actions {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.community-home-actions .lex-button {
-  min-height: 46px;
-}
-
-.community-home-actions .lex-button-quiet {
-  border-color: rgba(239, 209, 125, .5);
-  color: #fff;
-  background: rgba(255, 255, 255, .06);
-}
-
-.community-home-stats {
-  grid-column: 1 / -1;
-  margin: 2px 0 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 1px solid rgba(239, 209, 125, .22);
-}
-
-.community-home-stats > div {
-  padding: 18px 18px 0 0;
-}
-
-.community-home-stats dt {
-  color: #efd17d;
-  font: 700 24px/1 "Playfair Display", Georgia, serif;
-}
-
-.community-home-stats dd {
-  margin: 6px 0 0;
-  color: #bfcbd8;
-  font: 700 11px/1.35 Inter, sans-serif;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-}
-
 #page-community .lex-layout {
   width: 100%;
   margin: 0;
@@ -2452,36 +2361,12 @@
     padding: 18px 12px 48px;
   }
 
-  #page-community .lex-page-head {
-    grid-template-columns: 1fr;
-    padding: 24px 20px;
-  }
-
-  .community-home-actions {
-    justify-content: flex-start;
-  }
-
-  .community-home-stats {
-    grid-template-columns: 1fr;
-  }
-
-  .community-home-stats > div {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    padding-top: 12px;
-  }
-
-  .community-home-stats dd {
-    margin: 0;
-  }
-
   #page-community .lex-secondary {
     grid-template-columns: 1fr;
   }
 
   #page-community .quorum-practice-card-desktop {
-    display: none;
+    display: block;
   }
 
   .community-sample-heading {
@@ -2495,11 +2380,6 @@
 }
 
 @media (max-width: 380px) {
-  .community-home-actions,
-  .community-home-actions .lex-button {
-    width: 100%;
-  }
-
   .community-sample-card > header,
   .community-sample-card > footer {
     align-items: flex-start;
@@ -2516,15 +2396,6 @@
   grid-template-columns: minmax(0, 1fr) minmax(280px, 345px);
   max-width: 1110px;
   margin: 0 auto;
-}
-
-#page-community .quorum-menu-open {
-  display: inline-flex;
-  align-items: center;
-  margin: 16px max(18px, calc((100% - 1110px) / 2)) 12px;
-  border-color: rgba(197, 160, 89, .62);
-  color: #f8e8b6;
-  background: rgba(6, 27, 53, .84);
 }
 
 #page-community .quorum-navigation {

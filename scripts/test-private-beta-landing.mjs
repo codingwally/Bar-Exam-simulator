@@ -31,7 +31,7 @@ assert.equal((html.match(/id="site-header"/g) || []).length, 1,
 assert.match(sharedHeader, /class="brand pb-brand"[^>]*data-public-home/,
   'The brand must remain the authenticated Home control.');
 assert.match(sharedHeader, /data-public-feature="examination-room"[^>]*>Examination Room<\/button>/);
-assert.match(sharedHeader, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"[^>]*>Menu<\/button>/);
+assert.match(sharedHeader, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"[^>]*aria-label="Open navigation menu"[\s\S]*assets\/icons\/menu\.svg[\s\S]*<\/button>/);
 assert.match(sharedHeader, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
 assert.match(sharedHeader, /<summary>Practice Exam<\/summary>[\s\S]*Guided Practice[\s\S]*Doctrine Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation/);
 assert.match(sharedHeader, /data-public-action="docket"[^>]*aria-label="Sign in or open your profile"[^>]*>Profile<\/button>/);

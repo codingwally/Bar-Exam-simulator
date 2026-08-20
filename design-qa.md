@@ -1,3 +1,41 @@
+# Home Left-Navigation Cleanup Design QA — 2026-08-21
+
+## Scope and reference
+
+- Owner-marked reference: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-f4fd1549-f536-40b9-b640-99904c27af90.png`.
+- Comparison viewport: `1905 × 861`, matching the reference dimensions.
+- Responsive viewports: `375 × 812` and `320 × 760`.
+- Scope: shared header navigation and the authenticated Home composition only. Authentication, examination flows, data, grading, and backend behavior were not changed.
+
+## Verified corrections
+
+1. The right-side text `Menu` control is removed.
+2. One 44-pixel, three-line navigation control sits at the far left before the Due Diligence crest and wordmark.
+3. Navigation opens as a left-edge drawer and closes with its × control or Escape; focus returns to the hamburger and `aria-expanded` returns to `false`.
+4. The empty wide navy Home banner and its detached Community/Explore pill are absent.
+5. The duplicate lower Practice Exam promotion is absent. Exactly one Practice Exam card remains in the supporting column and stacks normally on mobile.
+6. My Posts, Saved, Study Circles, and Notifications remain available through the Home tools group in the global drawer.
+7. The brand descriptor remains `Philippine Bar Exam Simulator`; no retired Amicus tagline was restored.
+
+## Browser evidence
+
+- Desktop drawer rectangle: left `0px`, right `390px`, width `390px`.
+- Desktop menu icon intrinsic size: `24 × 24`; interactive target: `44 × 44`.
+- `375px` viewport: document width `365px`; no horizontal overflow; one Practice Exam card remains visible.
+- `320px` viewport: drawer left `0px`, right `320px`, width `320px`; no horizontal overflow.
+- Menu open state updates the accessible label from `Open navigation menu` to `Close navigation menu`.
+- Escape and the visible × control both close the drawer and restore the toggle state.
+
+## Intentional differences from the marked screenshot
+
+- The surviving Practice Exam card remains in the right supporting column as explicitly requested; its duplicate in the main feed is the card that was removed.
+- Home utilities are consolidated inside the drawer instead of being discarded, preserving existing functions while reducing page clutter.
+- The examination-room shortcut remains unchanged because it was not marked for removal.
+
+## Final QA result
+
+final result: passed
+
 # Subject Matter Scoped Design QA — 2026-08-17
 
 ## Scope and visual source

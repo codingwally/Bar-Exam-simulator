@@ -799,6 +799,13 @@
   }
 
   async function initialize() {
+    if (
+      config?.maintenance?.enabled === true
+      && document.documentElement.dataset.ddMaintenance !== 'open'
+    ) {
+      global.addEventListener('duediligence:maintenance-unlocked', initialize, { once: true });
+      return;
+    }
     await global.DueDiligencePhase2?.whenAuthReady?.();
     if (!gateEnabled) {
       bindEvents();

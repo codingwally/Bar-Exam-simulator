@@ -107,7 +107,7 @@ assert.match(freeTrialRuntime, /dailyLimit:\s*5/);
 assert.match(phase2Config, /maintenance:\s*Object\.freeze\(\{/);
 assert.match(phase2Config, /unlockPath:\s*'\/maintenance\/unlock'/);
 assert.match(phase2Config, /statusPath:\s*'\/maintenance\/status'/);
-assert.match(phase2Config, /assets\/maintenance-gate\.js\?v=maintenance-lock-20260819-1/);
+assert.match(phase2Config, /assets\/maintenance-gate\.js\?v=maintenance-lock-20260820-2/);
 assert.match(maintenanceGate, /We are improving Due Diligence\./);
 assert.match(maintenanceGate, /maintenance\.unlockPath/);
 assert.match(maintenanceGate, /maintenance\.statusPath/);

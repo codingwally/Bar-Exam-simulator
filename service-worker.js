@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-20260820-quorum-first-1';
+const CACHE_VERSION = 'duediligence-shell-20260820-quorum-first-2';
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',

@@ -76,6 +76,7 @@ const publicFiles = Object.freeze([
   'assets/brand/icon-512.png',
   'assets/brand/logo1-master.png',
   'assets/brand/social-card-1200x630.png',
+  'assets/brand/signin-intro.mp4',
   'assets/duediligence-2026.css',
   'assets/duediligence-2026.js',
   'assets/lex-forum.css',

@@ -59,6 +59,7 @@ for (const required of [
   'assets/brand/icon-512.png',
   'assets/brand/logo1-master.png',
   'assets/brand/social-card-1200x630.png',
+  'assets/brand/signin-intro.mp4',
   'assets/payments/bpi-instapay-149.png',
 ]) {
   assert.ok(files.includes(required), `${required} must ship in the Pages artifact`);

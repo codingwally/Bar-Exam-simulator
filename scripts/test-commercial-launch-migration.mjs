@@ -22,6 +22,10 @@ const legalAcceptanceMigration = readFileSync(new URL(
   '../supabase/migrations/20260818070000_authenticated_legal_acceptance_bridge.sql',
   import.meta.url,
 ), 'utf8');
+const goTymePaymentMigration = readFileSync(new URL(
+  '../supabase/migrations/20260820174602_add_gotyme_payment_channel.sql',
+  import.meta.url,
+), 'utf8');
 
 function sectionBetween(source, startName, nextName = null) {
   const startMarker = `create or replace function public.${startName}`;
@@ -251,6 +255,28 @@ test('payment proof remains one-time provisional access with fixed paid expiry',
     foundation,
     /create or replace function public\.phase4_admin_review_payment[\s\S]*v_settings\.early_access_entitlement_ends_at/,
   );
+});
+
+test('GoTyme checkout migration is transactional, backward compatible, and least privilege', () => {
+  assertTransactional(goTymePaymentMigration, 'GoTyme payment channel');
+  assert.match(
+    goTymePaymentMigration,
+    /payment_method in \('gcash', 'maribank', 'bpi_instapay', 'gotyme_instapay'\)/,
+  );
+  assert.match(
+    goTymePaymentMigration,
+    /p_payment_method not in \('bpi_instapay', 'gotyme_instapay'\)/,
+  );
+  assert.match(goTymePaymentMigration, /validate constraint payment_requests_payment_method_gotyme_check/);
+  assert.match(
+    goTymePaymentMigration,
+    /revoke all on function public\.phase4_create_payment_request\([\s\S]*from public, anon, authenticated/,
+  );
+  assert.match(
+    goTymePaymentMigration,
+    /grant execute on function public\.phase4_create_payment_request\([\s\S]*to service_role/,
+  );
+  assert.doesNotMatch(goTymePaymentMigration, /^\s*drop\s+table\b/gmi);
 });
 
 test('refund contract preserves the seven-day prorated formula', () => {

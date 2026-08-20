@@ -1,4 +1,4 @@
-# Quorum-first renovation visual QA
+# Due Diligence Home renovation visual QA
 
 ## Binding reference
 
@@ -8,11 +8,13 @@
 
 ## Captured prototype states
 
-- Desktop authenticated Quorum home at 1270 × 710: `prototype-desktop-1270x710.png`
-- Mobile authenticated Quorum home in a 390 × 844 frame: `prototype-mobile-1270x710.png`
+- Desktop authenticated Home at 1270 × 710: `prototype-desktop-1270x710.png`
+- Mobile authenticated Home in a 390 × 844 frame: `prototype-mobile-1270x710.png`
 - Mobile full-height navigation drawer: `prototype-mobile-drawer-1270x710.png`
+- Signed-out entry verified at 1366 × 768 and 1440 × 900.
+- Narrow mobile entry verified at 320 × 700 and 375 × 812.
 
-The reference and prototype were placed together in one comparison input and reviewed at matching desktop and mobile states. The final prototype preserves the established navy, alabaster, and judicial-gold system while matching the selected structure: compact header, Quorum feed as home, Practice Exam promotion beside the composer on desktop and immediately beneath it on mobile, and a full-height responsive drawer.
+The reference and prototype were placed together in one comparison input and reviewed at matching desktop and mobile states. The final prototype preserves the established navy, alabaster, and judicial-gold system while matching the selected structure: compact header, community feed as Home, Practice Exam promotion beside the composer on desktop and immediately beneath it on mobile, and a full-height responsive drawer.
 
 ## Visible-difference review
 
@@ -24,9 +26,11 @@ The reference and prototype were placed together in one comparison input and rev
 
 ## Functional and release evidence
 
-- GitHub Pages release contract: all 40 checks/scripts passed, including syntax checks and sanitized artifact verification.
+- Repository regression sweep: 75/75 non-staging script suites passed, including syntax checks and sanitized Pages-artifact verification.
 - Worker regression suite: 479/479 tests passed.
-- Subject Matter guidance removal, Quorum navigation, session persistence, plan gate, dialog exits, grading UI, question-bank validation, Examination Room regressions, and maintenance lock contracts passed.
-- The private maintenance gate remains enabled; the redesign does not remove or weaken the `0802` owner access path.
+- Subject Matter guidance removal, Home navigation, session persistence, plan gate, dialog exits, grading UI, question-bank validation, Examination Room regressions, and maintenance-lock contracts passed.
+- The signed-out entry, menu, and sign-in gate were browser-verified at desktop and mobile breakpoints. No visible control crossed the viewport and horizontal shifting remained blocked.
+- The payment asset was cropped to the QR and ₱149.00 only. It contains no recipient name, account digits, bank header, app controls, or transfer-fee copy; the sanitized Pages artifact ships no retired payment image.
+- The private maintenance gate remains enabled; the redesign does not remove or weaken the owner access path.
 
 final result: passed

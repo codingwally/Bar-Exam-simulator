@@ -25,7 +25,7 @@ const sharedHeader = html.slice(
   html.indexOf('<div class="pb-landing" id="private-beta-landing">'),
 );
 
-assert.match(html, /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/);
+assert.match(html, /<title>Due Diligence — Philippine Bar Exam Simulator<\/title>/);
 assert.equal((html.match(/id="site-header"/g) || []).length, 1,
   'One canonical header must serve signed-out and authenticated ordinary pages.');
 assert.match(sharedHeader, /class="brand pb-brand"[^>]*data-public-home/,
@@ -39,7 +39,7 @@ assert.match(sharedHeader, /Plans &amp; Pricing[\s\S]*>Support<[\s\S]*Examinatio
 assert.doesNotMatch(sharedHeader, />The Academy<|>The Commons<|>BarBound<|>The Docket/,
   'Retired chamber brands must not remain user-facing.');
 
-assert.match(publicLanding, /<h1 id="pb-pillars-title">Your legal study community\.<\/h1>/);
+assert.match(publicLanding, /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 assert.match(publicLanding, /Continue with Google/);
 assert.match(publicLanding, /data-signin-intro-video[\s\S]*data-src="assets\/brand\/signin-intro\.mp4"[\s\S]*autoplay muted playsinline/,
   'The first-visit sign-in screen must contain the muted inline intro video.');

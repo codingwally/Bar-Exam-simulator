@@ -40,10 +40,10 @@ export function normalizePaymentFields(fields) {
     );
   }
   const paymentMethod = text(fields?.paymentMethod, 24, 'Payment method', 3).toLowerCase();
-  if (paymentMethod !== 'bpi_instapay') {
+  if (!['gotyme_instapay', 'bpi_instapay'].includes(paymentMethod)) {
     throw new PaymentValidationError(
       'INVALID_PAYMENT_METHOD',
-      'Select the BPI InstaPay payment channel shown at checkout.',
+      'Select the InstaPay payment channel shown at checkout.',
     );
   }
   const amountPhp = Number(fields?.amountPhp);

@@ -32,17 +32,17 @@ const [
 ]);
 
 assert.match(html, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
-assert.match(html, /<h2>Quorum<\/h2>/);
+assert.match(html, /<h2>Home<\/h2>/);
 assert.match(
   html,
-  /Ask, share, and learn with the Philippine law-school community\./,
+  /Ask the community, continue your preparation, and see what needs attention\./,
 );
-assert.match(html, /Quorum Feed/);
+assert.match(html, /Latest member discussions/);
 assert.match(html, /Saved/);
 assert.match(html, /Study Circles/);
-assert.match(html, /Trending in Quorum/);
+assert.match(html, /Trending discussions/);
 assert.match(html, /Questions Needing Answers/);
-assert.match(html, /id="quorum-menu-close"[\s\S]*aria-label="Close Quorum menu"/);
+assert.match(html, /id="quorum-menu-close"[\s\S]*aria-label="Close Home menu"/);
 assert.match(html, /id="quorum-menu-back"[\s\S]*>Back<\/button>/);
 assert.match(client, /\$\('#quorum-menu-back'\)\?\.addEventListener\('click',[\s\S]*closeQuorumDrawer\(\)/);
 assert.match(css, /\.quorum-drawer-actions[\s\S]*justify-content:\s*flex-end/);

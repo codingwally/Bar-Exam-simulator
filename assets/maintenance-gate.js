@@ -211,10 +211,12 @@
     global.dispatchEvent(new CustomEvent('duediligence:maintenance-unlocked'));
   }
 
-  async function maintenanceRequest(path, body = {}) {
+  async function maintenanceRequest(path, body = {}, explicitToken = '') {
+    const headers = { 'Content-Type': 'application/json' };
+    if (explicitToken) headers[maintenance.headerName] = explicitToken;
     const response = await global.fetch(`${config.workerUrl}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body),
       cache: 'no-store',
     });
@@ -234,7 +236,7 @@
     if (!token) return false;
     setStatus('Verifying saved maintenance access…', 'checking');
     try {
-      await maintenanceRequest(maintenance.statusPath);
+      await maintenanceRequest(maintenance.statusPath, {}, token);
       unlockPage();
       return true;
     } catch {
@@ -263,8 +265,9 @@
     try {
       const payload = await maintenanceRequest(maintenance.unlockPath, { password });
       saveToken(payload.token);
+      await maintenanceRequest(maintenance.statusPath, {}, payload.token);
       setStatus('Access granted. Opening Due Diligence…', 'checking');
-      global.location.reload();
+      unlockPage();
     } catch (error) {
       setStatus(error.message || 'The password is incorrect.');
       if (input) {

@@ -311,6 +311,12 @@ function philippineDateTime(value) {
   }).format(safeDate);
 }
 
+function paymentChannelLabel(value) {
+  return String(value || '').trim().toLowerCase() === 'gotyme_instapay'
+    ? 'GoTyme InstaPay'
+    : 'BPI InstaPay';
+}
+
 function paymentEmailText({ payment, fields, user, proof, proofHash }) {
   const submittedAt = payment?.submittedAt || new Date().toISOString();
   return [
@@ -324,7 +330,7 @@ function paymentEmailText({ payment, fields, user, proof, proofHash }) {
     'PAYMENT INFORMATION',
     'Plan: Early Access',
     'Amount to verify: ₱149.00',
-    'Payment channel: BPI InstaPay',
+    `Payment channel: ${paymentChannelLabel(fields.paymentMethod)}`,
     `Payment date declared by subscriber: ${cleanSingleLine(fields.paymentDate, 10) || 'Not provided'}`,
     `Proof submitted in the Philippines: ${philippineDateTime(submittedAt)}`,
     `Proof submitted in UTC: ${new Date(submittedAt).toISOString()}`,

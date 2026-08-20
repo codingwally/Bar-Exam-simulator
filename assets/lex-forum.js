@@ -97,6 +97,10 @@
     draftOwnerId: null,
     drawerOpen: false,
     drawerReturnFocus: null,
+    sampleItems: [],
+    sampleVisibleCount: 6,
+    sampleLoaded: false,
+    sampleCommentsOpen: new Set(),
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -167,8 +171,9 @@
     if (app) app.hidden = !authenticated;
     if (guard) {
       guard.hidden = authenticated;
-      guard.textContent = message || 'Quorum is available only to signed-in Due Diligence members.';
+      guard.textContent = message || 'The community is available only to signed-in Due Diligence members.';
     }
+    syncSampleLane();
   }
 
   function clearPrivateView() {
@@ -179,19 +184,24 @@
     state.bootstrap = null;
     state.comments.clear();
     state.commentsOpen.clear();
+    state.sampleItems = [];
+    state.sampleVisibleCount = 6;
+    state.sampleLoaded = false;
+    state.sampleCommentsOpen.clear();
     $('#lex-feed')?.replaceChildren();
+    $('#community-sample-feed')?.replaceChildren();
     setAuthView(false);
   }
 
   function askForSignIn() {
     rememberDestination();
     global.showPage?.('community', state.trigger || $('#spa-community'), { history: false });
-    setAuthView(false, 'Sign in to enter Quorum. No guest community access is available.');
+    setAuthView(false, 'Sign in to enter the community. Guest access is unavailable.');
     global.DueDiligencePhase2?.openSignIn?.({
       allowGuest: false,
       allowDismiss: true,
-      title: 'Enter Quorum',
-      copy: 'Quorum is free for signed-in Due Diligence members.',
+      title: 'Enter the community',
+      copy: 'Community access is included for signed-in Due Diligence members.',
       message: 'Use your existing Due Diligence account. You will return here after authentication.',
     });
   }
@@ -250,7 +260,7 @@
   async function api(path, body = {}, options = {}) {
     const currentSession = session();
     if (!currentSession?.access_token) {
-      const error = new Error('Sign in to use Quorum.');
+      const error = new Error('Sign in to use the community.');
       error.code = 'AUTHENTICATION_REQUIRED';
       throw error;
     }
@@ -272,7 +282,7 @@
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
-      const error = new Error(payload?.error?.message || 'Quorum is temporarily unavailable.');
+      const error = new Error(payload?.error?.message || 'The community is temporarily unavailable.');
       error.code = payload?.error?.code || 'QUORUM_UNAVAILABLE';
       error.status = response.status;
       throw error;
@@ -336,7 +346,7 @@
       return;
     }
     if (error?.name === 'AbortError') return;
-    const message = error?.message || 'The Quorum action could not be completed.';
+    const message = error?.message || 'The community action could not be completed.';
     if (target) {
       target.textContent = message;
       target.classList.add('is-error');
@@ -419,6 +429,109 @@
     }).format(date);
   }
 
+  function syncSampleLane() {
+    const lane = $('#community-sample-lane');
+    if (!lane) return;
+    lane.hidden = !(state.authenticated && state.view === 'home' && state.sampleItems.length);
+  }
+
+  function renderSampleDiscussions() {
+    const feed = $('#community-sample-feed');
+    const more = $('#community-sample-more');
+    if (!feed || !more) return;
+    feed.replaceChildren();
+    const visible = state.sampleItems.slice(0, state.sampleVisibleCount);
+    visible.forEach((item) => {
+      const article = document.createElement('article');
+      article.className = 'community-sample-card';
+      article.dataset.sampleEntryId = item.entryId;
+
+      const header = document.createElement('header');
+      const identity = document.createElement('div');
+      identity.className = 'community-sample-identity';
+      identity.append(
+        textElement('span', 'community-sample-avatar', initials(item.author?.displayName)),
+        textElement('strong', '', item.author?.displayName || 'Anonymous law student'),
+        textElement('span', 'community-sample-anonymous', 'Anonymous'),
+      );
+      header.append(identity, textElement('time', '', relativeTime(item.createdAt)));
+
+      const title = textElement('h4', '', item.title);
+      const body = textElement('p', 'community-sample-body', item.body);
+      const metadata = document.createElement('div');
+      metadata.className = 'community-sample-meta';
+      [item.subject, item.lawSchoolYear, entryTypes.get(item.entryType)]
+        .filter(Boolean)
+        .forEach((value) => metadata.append(textElement('span', '', value)));
+
+      const footer = document.createElement('footer');
+      const replyCount = Number(item.comments?.length || 0);
+      footer.append(textElement('span', 'community-sample-support', `${Number(item.counts?.helpful || 0)} found this useful`));
+      const replies = button(
+        state.sampleCommentsOpen.has(item.entryId) ? 'Hide replies' : `View ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`,
+        'community-sample-replies-button',
+        () => {
+          if (state.sampleCommentsOpen.has(item.entryId)) state.sampleCommentsOpen.delete(item.entryId);
+          else state.sampleCommentsOpen.add(item.entryId);
+          renderSampleDiscussions();
+          document.querySelector(`[data-sample-entry-id="${item.entryId}"] .community-sample-replies-button`)?.focus();
+        },
+      );
+      replies.setAttribute('aria-expanded', String(state.sampleCommentsOpen.has(item.entryId)));
+      footer.append(replies);
+      article.append(header, title, body, metadata, footer);
+
+      if (state.sampleCommentsOpen.has(item.entryId)) {
+        const comments = document.createElement('div');
+        comments.className = 'community-sample-comments';
+        comments.setAttribute('aria-label', `Replies to ${item.title}`);
+        (item.comments || []).forEach((comment) => {
+          const commentNode = document.createElement('div');
+          commentNode.className = `community-sample-comment${comment.parentCommentId ? ' is-reply' : ''}`;
+          commentNode.append(
+            textElement('strong', '', comment.author?.displayName || 'Anonymous law student'),
+            textElement('span', 'community-sample-anonymous', 'Anonymous'),
+            textElement('p', '', comment.body),
+          );
+          comments.append(commentNode);
+        });
+        article.append(comments);
+      }
+      feed.append(article);
+    });
+    more.hidden = state.sampleVisibleCount >= state.sampleItems.length;
+    more.textContent = `Show more discussions (${state.sampleItems.length - state.sampleVisibleCount} remaining)`;
+    syncSampleLane();
+  }
+
+  async function loadSampleDiscussions() {
+    if (state.sampleLoaded) {
+      renderSampleDiscussions();
+      return;
+    }
+    try {
+      const payload = await query('sample_feed');
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      const comments = items.reduce((sum, item) => sum + Number(item.comments?.length || 0), 0);
+      const valid = payload?.sample === true
+        && payload?.readOnly === true
+        && items.length === 23
+        && comments === 32
+        && items.every((item) => item?.sample === true
+          && item?.readOnly === true
+          && /^sample_post_\d{3}$/.test(String(item.entryId || ''))
+          && (item.comments || []).every((comment) => comment?.sample === true && comment?.readOnly === true));
+      if (!valid) throw new Error('Sample discussion contract mismatch.');
+      state.sampleItems = items;
+      state.sampleLoaded = true;
+      renderSampleDiscussions();
+    } catch {
+      state.sampleItems = [];
+      state.sampleLoaded = false;
+      syncSampleLane();
+    }
+  }
+
   function sourceLink(sourceUrl) {
     if (!sourceUrl) return null;
     try {
@@ -451,7 +564,7 @@
       document.execCommand('copy');
       field.remove();
     }
-    toast('Stable Quorum post link copied.');
+    toast('Stable community post link copied.');
   }
 
   function ensureDialog() {
@@ -465,7 +578,7 @@
     header.className = 'lex-dialog-header';
     const heading = document.createElement('div');
     heading.append(
-      textElement('span', 'lex-kicker', 'Quorum'),
+      textElement('span', 'lex-kicker', 'Community'),
       textElement('h2', '', 'Dialog'),
     );
     heading.querySelector('h2').id = 'lex-dialog-title';
@@ -679,7 +792,7 @@
         image.className = 'quorum-entry-image';
         image.src = entryImage.imageUrl;
         image.alt = entryImage.imageAlt
-          || `Image attached to the Quorum post by ${item.author?.displayName || 'a member'}`;
+          || `Image attached to the community post by ${item.author?.displayName || 'a member'}`;
         image.loading = 'lazy';
         image.decoding = 'async';
         gallery.append(image);
@@ -782,7 +895,7 @@
       'lex-action',
       () => openCitationDialog(item),
     );
-    disseminate.title = 'Disseminate inside Quorum, copy a stable link, or use your device share sheet.';
+    disseminate.title = 'Share inside the community, copy a stable link, or use your device share sheet.';
     const save = button(
       item.viewerSaved ? 'Saved' : 'Save',
       `lex-action${item.viewerSaved ? ' is-active' : ''}`,
@@ -835,7 +948,7 @@
           ? 'No saved authorities yet.'
           : state.view === 'unanswered'
             ? 'No unanswered questions match these filters.'
-            : 'No Quorum posts match this view.'),
+            : 'No community posts match this view.'),
         textElement('p', '', state.view === 'saved'
           ? 'Save a useful post to build your private authority list.'
           : 'Clear filters, refresh, or contribute a focused post.'),
@@ -872,7 +985,7 @@
     state.loading = true;
     const feed = $('#lex-feed');
     feed?.setAttribute('aria-busy', 'true');
-    setFeedStatus(append ? 'Loading more posts…' : 'Loading Quorum posts…');
+    setFeedStatus(append ? 'Loading more posts…' : 'Loading community posts…');
     if (!append && feed) {
       feed.replaceChildren(
         Object.assign(document.createElement('div'), { className: 'lex-skeleton' }),
@@ -905,7 +1018,7 @@
     state.view = 'entry';
     state.directEntryId = entryId;
     state.legacyPostId = null;
-    setViewLabels('Quorum post', 'Stable community link');
+    setViewLabels('Community post', 'Stable community link');
     syncViewButtons();
     if (options.route !== false) {
       setStableLocation(entryId, { replace: options.push !== true });
@@ -932,7 +1045,7 @@
   async function openLegacyEntry(legacyPostId) {
     state.view = 'entry';
     $('#lex-composer').hidden = true;
-    setViewLabels('Quorum post', 'Opening a legacy stable link');
+    setViewLabels('Community post', 'Opening a legacy stable link');
     setFeedStatus('Opening post…');
     try {
       const payload = await query('entry', { legacyPostId });
@@ -1127,7 +1240,7 @@
     const field = document.createElement('textarea');
     field.maxLength = commentLimit;
     field.rows = 3;
-    field.placeholder = 'Add a focused comment. Keep personal information out of Quorum.';
+    field.placeholder = 'Add a focused comment. Keep personal information out of the community.';
     field.setAttribute('aria-label', 'Comment');
     const draft = readCommentDraft(item.entryId);
     field.value = draft.body;
@@ -1174,7 +1287,7 @@
 
   function openCommentDialog(item, parent) {
     openDialog('Reply to comment', (body) => {
-      body.append(textElement('p', 'lex-dialog-copy', `Replying to ${parent.author?.displayName || 'a Quorum member'}.`));
+      body.append(textElement('p', 'lex-dialog-copy', `Replying to ${parent.author?.displayName || 'a community member'}.`));
       const field = document.createElement('textarea');
       field.maxLength = commentLimit;
       field.rows = 5;
@@ -1250,7 +1363,7 @@
   function removeComment(item, comment) {
     confirmDialog({
       title: 'Remove comment',
-      copy: 'This comment will no longer appear in Quorum.',
+      copy: 'This comment will no longer appear in the community.',
       warning: 'Only your own comment or reply will be removed.',
       confirmLabel: 'Remove comment',
       onConfirm: async () => {
@@ -1265,11 +1378,11 @@
 
   function openCitationDialog(item) {
     openDialog('Disseminate', (body) => {
-      body.append(textElement('p', 'lex-dialog-copy', 'Disseminate this post inside Quorum, copy its stable link, or use your device share sheet. Opening or cancelling this dialog does not change dissemination counts.'));
+      body.append(textElement('p', 'lex-dialog-copy', 'Share this post inside the community, copy its stable link, or use your device share sheet. Opening or cancelling this dialog does not change share counts.'));
       const field = document.createElement('textarea');
       field.maxLength = citationLimit;
       field.rows = 4;
-      field.placeholder = 'Optional commentary for your Quorum dissemination.';
+      field.placeholder = 'Optional commentary for your community share.';
       const counter = textElement('span', 'lex-edit-counter', `0 / ${citationLimit.toLocaleString()}`);
       field.addEventListener('input', () => {
         counter.textContent = `${field.value.length.toLocaleString()} / ${citationLimit.toLocaleString()}`;
@@ -1283,13 +1396,13 @@
           return;
         }
         try {
-          await navigator.share({ title: 'Quorum post', url: stableEntryUrl(item.entryId) });
+          await navigator.share({ title: 'Community post', url: stableEntryUrl(item.entryId) });
         } catch (failure) {
           if (failure?.name !== 'AbortError') error.textContent = 'The device share action could not be completed.';
         }
       });
       if (!navigator.share) nativeShare.hidden = true;
-      const disseminate = button('Disseminate in Quorum', 'lex-button lex-button-primary', async () => {
+      const disseminate = button('Share in the community', 'lex-button lex-button-primary', async () => {
         if (disseminate.disabled) return;
         disseminate.disabled = true;
         try {
@@ -1297,7 +1410,7 @@
           item.counts.citations = Number(result.count || item.counts.citations || 0);
           closeDialog();
           await refreshFeed();
-          toast('Post disseminated in Quorum.');
+          toast('Post shared in the community.');
         } catch (failure) {
           disseminate.disabled = false;
           error.textContent = failure?.message || 'The dissemination could not be published.';
@@ -1316,7 +1429,7 @@
   function removeCitation(citationId) {
     confirmDialog({
       title: 'Remove dissemination',
-      copy: 'Your Quorum dissemination will be removed. The original post remains.',
+      copy: 'Your community share will be removed. The original post remains.',
       confirmLabel: 'Remove dissemination',
       onConfirm: async () => {
         await command('delete_repost', { citationId });
@@ -1327,7 +1440,7 @@
   }
 
   function openReportDialog(targetType, targetId) {
-    openDialog('Report to Quorum moderation', (body) => {
+    openDialog('Report to community moderation', (body) => {
       body.append(textElement('p', 'lex-dialog-copy', 'Reports are private. Ordinary members never see the reporter’s identity.'));
       const categoryLabel = document.createElement('label');
       categoryLabel.textContent = 'Reason';
@@ -1353,7 +1466,7 @@
             explanation: field.value,
           });
           closeDialog();
-          toast('Report submitted privately to Quorum moderation.');
+          toast('Report submitted privately to community moderation.');
         } catch (failure) {
           submit.disabled = false;
           error.textContent = failure?.message || 'The report could not be submitted.';
@@ -1456,6 +1569,7 @@
     const kickerNode = $('#quorum-feed-kicker');
     if (titleNode) titleNode.textContent = title;
     if (kickerNode) kickerNode.textContent = kicker;
+    syncSampleLane();
   }
 
   function syncViewButtons() {
@@ -1486,6 +1600,7 @@
       return;
     }
     state.view = view;
+    syncSampleLane();
     state.directEntryId = null;
     state.legacyPostId = null;
     if (options.route !== false) {
@@ -1506,7 +1621,7 @@
       state.circleDetail = null;
       const circleSelect = $('#quorum-entry-circle');
       if (circleSelect) circleSelect.value = '';
-      setViewLabels('Quorum Feed', 'Academic community');
+      setViewLabels('Latest member discussions', 'Academic community');
       await refreshFeed();
     } else if (view === 'saved') {
       setViewLabels('My Authorities', 'Private saved posts');
@@ -1521,10 +1636,10 @@
       setViewLabels('Notifications', 'Activity relevant to you');
       await renderNotificationsView();
     } else if (view === 'my-posts') {
-      setViewLabels('My Posts', 'Your Quorum contributions');
+      setViewLabels('My Posts', 'Your community contributions');
       await renderProfileView();
     } else if (view === 'profile') {
-      setViewLabels('Quorum profile', 'Your public academic identity');
+      setViewLabels('Community profile', 'Your public academic identity');
       await renderProfileView();
     }
   }
@@ -1806,8 +1921,8 @@
           node.className = `quorum-notification${notification.read ? '' : ' is-unread'}`;
           const copy = document.createElement('div');
           copy.append(
-            textElement('strong', '', notification.actor?.displayName || 'Quorum moderation'),
-            textElement('p', 'quorum-panel-copy', `${notificationLabels[notification.type] || 'sent a Quorum update'} · ${relativeTime(notification.createdAt)}`),
+            textElement('strong', '', notification.actor?.displayName || 'Community moderation'),
+            textElement('p', 'quorum-panel-copy', `${notificationLabels[notification.type] || 'sent a community update'} · ${relativeTime(notification.createdAt)}`),
           );
           const open = button(notification.targetAvailable ? 'Open' : 'Unavailable', 'lex-button lex-button-quiet', async () => {
             if (!notification.read) {
@@ -1850,7 +1965,7 @@
     const panel = document.createElement('section');
     panel.className = 'quorum-panel';
     panel.append(
-      textElement('span', 'lex-kicker', profile.verifiedAcademicIdentity ? 'Verified Academic Identity' : 'Quorum member'),
+      textElement('span', 'lex-kicker', profile.verifiedAcademicIdentity ? 'Verified Academic Identity' : 'Community member'),
       textElement('h3', '', profile.displayName || 'Due Diligence Member'),
       textElement('p', 'quorum-panel-copy', [profile.school, profile.yearLevel].filter(Boolean).join(' · ') || 'Academic details are private.'),
     );
@@ -1870,7 +1985,7 @@
       preview.className = 'quorum-profile-photo-preview';
       if (profile.avatarUrl) {
         preview.src = profile.avatarUrl;
-        preview.alt = 'Your current Quorum profile photo';
+        preview.alt = 'Your current community profile photo';
       } else {
         preview.textContent = initials(profile.displayName);
         preview.setAttribute('aria-label', 'No profile photo selected');
@@ -1891,7 +2006,7 @@
         try {
           const image = await optimizedProfilePhoto(file);
           await profilePhotoCommand(image);
-          toast('Your Quorum profile photo was updated.', 'ok');
+          toast('Your community profile photo was updated.', 'ok');
           await renderProfileView();
         } catch (error) {
           choosePhoto.disabled = false;
@@ -1906,7 +2021,7 @@
         showSchool: true,
         showYear: true,
       };
-      const profilePublic = checkbox('Public Quorum profile', settings.profilePublic);
+      const profilePublic = checkbox('Public community profile', settings.profilePublic);
       const showSchool = checkbox('Show school', settings.showSchool);
       const showYear = checkbox('Show year level', settings.showYear);
       const form = document.createElement('div');
@@ -1920,7 +2035,7 @@
             showSchool: showSchool.input.checked,
             showYear: showYear.input.checked,
           });
-          toast('Quorum privacy settings updated.');
+          toast('Community privacy settings updated.');
           await renderProfileView();
         } catch (error) {
           save.disabled = false;
@@ -1937,8 +2052,8 @@
         confirmDialog({
           title: alreadyBlocked ? 'Unblock member' : 'Block member',
           copy: alreadyBlocked
-            ? `Restore mutual Quorum visibility with ${profile.displayName || 'this member'}?`
-            : `Hide mutual Quorum posts, comments, notifications, circle activity, and direct links involving ${profile.displayName || 'this member'}?`,
+            ? `Restore mutual community visibility with ${profile.displayName || 'this member'}?`
+            : `Hide mutual community posts, comments, notifications, circle activity, and direct links involving ${profile.displayName || 'this member'}?`,
           confirmLabel: alreadyBlocked ? 'Unblock' : 'Block',
           onConfirm: async () => {
             await command('set_block', { memberId: profile.memberId, enabled: !alreadyBlocked });
@@ -1965,7 +2080,7 @@
     state.view = 'profile';
     syncViewButtons();
     $('#lex-composer').hidden = true;
-    setViewLabels('Academic profile', 'Quorum member');
+    setViewLabels('Academic profile', 'Community member');
     await renderProfileView(memberId);
   }
 
@@ -1974,7 +2089,7 @@
       const blocked = await query('blocks');
       openDialog('Blocked members', (body) => {
         if (!blocked.length) {
-          body.append(textElement('p', 'lex-dialog-copy', 'You have not blocked any Quorum members.'));
+          body.append(textElement('p', 'lex-dialog-copy', 'You have not blocked any community members.'));
         } else {
           blocked.forEach((member) => {
             const row = document.createElement('div');
@@ -2004,7 +2119,7 @@
   async function searchQuorum(queryText, options = {}) {
     const value = String(queryText || '').trim();
     if (value.length < 2) {
-      toast('Enter at least two characters to search Quorum.');
+      toast('Enter at least two characters to search the community.');
       return;
     }
     const append = options.append === true;
@@ -2023,13 +2138,13 @@
     updateActiveFilters();
     $('#lex-composer').hidden = true;
     $('#quorum-search-clear').hidden = false;
-    setViewLabels('Search results', 'Authenticated Quorum search');
+    setViewLabels('Search results', 'Member community search');
     const feed = $('#lex-feed');
     if (!append) {
       feed.replaceChildren(Object.assign(document.createElement('div'), { className: 'lex-skeleton' }));
       $('#lex-load-more').hidden = true;
     }
-    setFeedStatus('Searching Quorum…');
+    setFeedStatus('Searching the community…');
     try {
       const result = await query('search', {
         query: value,
@@ -2053,7 +2168,7 @@
       state.hasMore = Boolean(result.entries?.hasMore);
       const panel = document.createElement('section');
       panel.className = 'quorum-panel';
-      panel.append(textElement('span', 'lex-kicker', 'Real Quorum records'), textElement('h3', '', `Results for “${value}”`));
+      panel.append(textElement('span', 'lex-kicker', 'Member discussions'), textElement('h3', '', `Results for “${value}”`));
       const entries = result.entries?.items || [];
       const groups = document.createElement('div');
       groups.className = 'quorum-search-groups';
@@ -2191,7 +2306,7 @@
       const preview = document.createElement('div');
       preview.className = 'quorum-dialog-preview';
       preview.append(
-        textElement('strong', '', entryTypes.get(payload.entryType) || 'Quorum post'),
+        textElement('strong', '', entryTypes.get(payload.entryType) || 'Community post'),
         textElement('p', '', payload.body),
       );
       if (payload.caseTitle) preview.prepend(textElement('h3', 'quorum-entry-heading', payload.caseTitle));
@@ -2228,7 +2343,7 @@
     }
     confirmDialog({
       title: 'Discard post draft',
-      copy: 'Clear this unfinished Quorum post?',
+      copy: 'Clear this unfinished community post?',
       confirmLabel: 'Discard draft',
       onConfirm: async () => clearComposer({ announce: true }),
     });
@@ -2322,7 +2437,7 @@
       if (result.publicationStatus === 'pending') {
         toast('Announcement submitted for moderator approval.');
       } else {
-        toast('Post published in Quorum.');
+        toast('Post published in the community.');
         await setView('home');
         if (result.entryId) await openEntry(result.entryId, { push: true });
       }
@@ -2562,10 +2677,10 @@
     if (!select) return;
     try {
       const result = await query('circles', { joinedOnly: true, limit: 20 });
-      select.replaceChildren(option('', 'Public Quorum Feed'));
+      select.replaceChildren(option('', 'Public community feed'));
       (result.items || []).filter((circle) => circle.status === 'active').forEach((circle) => select.append(option(circle.circleId, circle.name)));
     } catch {
-      select.replaceChildren(option('', 'Public Quorum Feed'));
+      select.replaceChildren(option('', 'Public community feed'));
     }
   }
 
@@ -2593,7 +2708,7 @@
     state.active = true;
     setAuthView(true);
     try {
-      await Promise.all([loadBootstrap(), populateJoinedCircles()]);
+      await Promise.all([loadBootstrap(), populateJoinedCircles(), loadSampleDiscussions()]);
       loadSidebar();
       telemetry('quorum_opened');
       await restoreRoute({ loadChrome: false });
@@ -2612,7 +2727,7 @@
     }
     setAuthView(true);
     if (options.loadChrome !== false) {
-      await Promise.all([loadBootstrap(), populateJoinedCircles()]);
+      await Promise.all([loadBootstrap(), populateJoinedCircles(), loadSampleDiscussions()]);
       loadSidebar();
     }
 
@@ -2757,6 +2872,16 @@
       searchQuorum($('#quorum-search-input')?.value, { push: true });
     });
     $('#quorum-search-clear')?.addEventListener('click', clearSearch);
+    $('#community-compose-jump')?.addEventListener('click', () => {
+      const composer = $('#lex-composer');
+      composer?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      $('#lex-post-body')?.focus({ preventScroll: true });
+    });
+    $('#community-sample-more')?.addEventListener('click', () => {
+      state.sampleVisibleCount = Math.min(state.sampleItems.length, state.sampleVisibleCount + 6);
+      renderSampleDiscussions();
+      $('#community-sample-more')?.focus({ preventScroll: true });
+    });
     $$('[data-quorum-view]').forEach((control) => {
       control.addEventListener('click', () => {
         closeQuorumDrawer({ restoreFocus: false });

@@ -194,7 +194,7 @@ function validPayment(overrides = {}) {
   return {
     planCode: 'early_access_beta',
     amountPhp: 149,
-    paymentMethod: 'bpi_instapay',
+    paymentMethod: 'gotyme_instapay',
     paymentDate: '2026-08-18',
     transactionReference: 'COMMERCIAL-REF-0001',
     note: 'One-time Early Access payment proof.',
@@ -207,7 +207,7 @@ test('accepts only the approved ₱149 one-time Early Access payment', () => {
   assert.deepEqual(normalized, {
     planCode: 'early_access_beta',
     amountPhp: 149,
-    paymentMethod: 'bpi_instapay',
+    paymentMethod: 'gotyme_instapay',
     paymentDate: '2026-08-18',
     transactionReference: 'COMMERCIAL-REF-0001',
     note: 'One-time Early Access payment proof.',

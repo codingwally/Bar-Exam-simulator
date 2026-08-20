@@ -139,9 +139,9 @@ for (const phrase of [
 
 assert.match(
   html,
-  /<form class="lex-composer" id="lex-composer"[^>]*aria-label="Share with Quorum">[\s\S]*The floor is yours/,
+  /<form class="lex-composer" id="lex-composer"[^>]*aria-label="Share with the community">[\s\S]*The floor is yours/,
 );
-assert.match(html, /<h1 id="pb-pillars-title">Your legal study community\.<\/h1>/);
+assert.match(html, /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 for (const featureId of ['spa-mock', 'spa-subject-matter', 'spa-progress', 'spa-bar-easy', 'spa-community', 'spa-pricing', 'spa-bar-feels', 'spa-chairs-case', 'spa-jurisprudence', 'spa-case-digest']) {
   assert.match(html, new RegExp(`id="${featureId}"`));
 }
@@ -149,7 +149,8 @@ assert.doesNotMatch(html, /Co-Counsel|Joint Venture/);
 assert.doesNotMatch(experience, /Co-Counsel|Joint Venture/);
 assert.match(experience, /Early Access is a one-time ₱149 offer available through September 1, 2026/);
 assert.match(experience, /planCode: 'free', name: 'Free', pricePhp: 0/);
-assert.match(experience, /assets\/payments\/bpi-instapay-149\.png/);
+assert.match(experience, /assets\/payments\/gotyme-instapay-149\.png/);
+assert.doesNotMatch(experience, /assets\/payments\/bpi-instapay-149\.png/);
 assert.doesNotMatch(experience, /Pricing will be announced after beta testing\.|Beta access active\./);
 
 assert.match(examinations, /operation: 'subject_catalog'/);

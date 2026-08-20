@@ -15,7 +15,7 @@
       headerName: 'X-DD-Maintenance-Access',
       unlockPath: '/maintenance/unlock',
       statusPath: '/maintenance/status',
-      gateScriptUrl: '/assets/maintenance-gate.js?v=maintenance-lock-20260820-2',
+      gateScriptUrl: '/assets/maintenance-gate.js?v=maintenance-lock-20260821-3',
     }),
     guest: Object.freeze({
       enabled: false,

@@ -8,6 +8,7 @@ const accessMigration = text('supabase/migrations/20260730_005_phase4_access_sub
 const migration = text('supabase/migrations/20260730_008_phase4_payments_partnerships.sql');
 const premiumMigration = text('supabase/migrations/20260804_014_premium_499_entitlements.sql');
 const commercialMigration = text('supabase/migrations/20260818024644_commercial_launch_access.sql');
+const goTymeMigration = text('supabase/migrations/20260820174602_add_gotyme_payment_channel.sql');
 const preflight = text('supabase/review/phase4_production_preflight.sql');
 const worker = text('worker/index.mjs');
 const paymentCore = text('worker/payment-core.mjs');
@@ -83,10 +84,11 @@ assert.match(paymentCore, /application\/pdf/);
 assert.match(paymentCore, /6 \* 1024 \* 1024/);
 assert.match(paymentCore, /PLAN_UNAVAILABLE/);
 assert.match(paymentCore, /planCode !== 'early_access_beta'/);
-assert.match(paymentCore, /paymentMethod !== 'bpi_instapay'/);
+assert.match(paymentCore, /\['gotyme_instapay', 'bpi_instapay'\]\.includes\(paymentMethod\)/);
 assert.match(paymentCore, /Math\.round\(amountPhp \* 100\) !== 14900/);
 assert.doesNotMatch(frontend, /assets\/payments\/gcash\.png|assets\/payments\/maribank\.png/);
-assert.match(frontend, /assets\/payments\/bpi-instapay-149\.png/);
+assert.match(frontend, /assets\/payments\/gotyme-instapay-149\.png/);
+assert.doesNotMatch(frontend, /assets\/payments\/bpi-instapay-149\.png/);
 assert.match(frontend, /id="dd2-payment-form"/);
 assert.match(frontend, /async function submitCommercialPayment\(event\)/);
 assert.match(frontend, /Free and Early Access/);
@@ -118,7 +120,7 @@ assert.match(
   admin,
   /actionButton\('View private proof', 'view_payment_proof', row\.id, \{\}\)\.value/,
 );
-assert.match(publicPage, /assets\/phase2-experience\.js\?v=commercial-launch-20260818-5/);
+assert.match(publicPage, /assets\/phase2-experience\.js\?v=commercial-launch-20260821-6/);
 assert.match(publicPage, /assets\/phase4-experience\.js\?v=commercial-launch-20260818-1/);
 assert.match(adminPage, /admin\.css\?v=[a-z0-9-]+/i);
 assert.match(adminPage, /subscription-actions-core\.js\?v=[a-z0-9-]+/i);
@@ -144,8 +146,8 @@ assert.match(productionBundleBuilder, /omitLedger \? 'omitted' : 'included'/);
 assert.doesNotMatch(productionBundleBuilder, /db push|service.role|access.token/i);
 
 for (const [relative, expected] of Object.entries({
-  'assets/payments/bpi-instapay-149.png':
-    '599DED503B037139002F6A4BCF1B3EF9B8013F9E0254C02E8F86AFEA2D3F1F7B',
+  'assets/payments/gotyme-instapay-149.png':
+    '85D7CCA8CF8A2C3FF7BCEE35F09C682E8CCECD6E7623F128B67AFD43ECE303C1',
 })) {
   const actual = createHash('sha256').update(read(relative)).digest('hex').toUpperCase();
   assert.equal(actual, expected, `${relative} must preserve the approved QR pixels`);
@@ -153,6 +155,10 @@ for (const [relative, expected] of Object.entries({
 
 assert.match(commercialMigration, /payment_method in \('gcash', 'maribank', 'bpi_instapay'\)/);
 assert.match(commercialMigration, /if p_payment_method <> 'bpi_instapay'/);
+assert.match(goTymeMigration, /payment_method in \('gcash', 'maribank', 'bpi_instapay', 'gotyme_instapay'\)/);
+assert.match(goTymeMigration, /p_payment_method not in \('bpi_instapay', 'gotyme_instapay'\)/);
+assert.match(goTymeMigration, /validate constraint payment_requests_payment_method_gotyme_check/);
+assert.match(goTymeMigration, /to payment_requests_payment_method_check/);
 assert.match(commercialMigration, /'planCode', 'free'/);
 assert.match(commercialMigration, /'planCode', 'early_access_beta'/);
 assert.match(commercialMigration, /'pricePhp', 149/);

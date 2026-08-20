@@ -1334,25 +1334,25 @@ test('correction endpoint fails generically when storage configuration is absent
   }
 });
 
-test('payment field validation accepts only the approved ₱149 BPI InstaPay checkout', () => {
+test('payment field validation accepts the approved ₱149 GoTyme InstaPay checkout', () => {
   const value = normalizePaymentFields({
     planCode: 'early_access_beta',
     amountPhp: '149.00',
-    paymentMethod: 'bpi_instapay',
+    paymentMethod: 'gotyme_instapay',
     paymentDate: '2026-08-18',
-    transactionReference: 'BPI-2026-0001',
-    note: 'Paid through the displayed BPI InstaPay QR.',
+    transactionReference: 'GOTYME-2026-0001',
+    note: 'Paid through the displayed GoTyme InstaPay QR.',
   });
   assert.equal(value.planCode, 'early_access_beta');
-  assert.equal(value.paymentMethod, 'bpi_instapay');
+  assert.equal(value.paymentMethod, 'gotyme_instapay');
   assert.equal(value.amountPhp, 149);
 });
 
 test('payment validation rejects retired plans, unapproved channels, and malformed references', () => {
   for (const input of [
-    { planCode: 'premium', amountPhp: 499, paymentMethod: 'bpi_instapay', paymentDate: '2026-08-18', transactionReference: 'REF-1' },
+    { planCode: 'premium', amountPhp: 499, paymentMethod: 'gotyme_instapay', paymentDate: '2026-08-18', transactionReference: 'REF-1' },
     { planCode: 'early_access_beta', amountPhp: 149, paymentMethod: 'gcash', paymentDate: '2026-08-18', transactionReference: 'REF-1' },
-    { planCode: 'early_access_beta', amountPhp: 149, paymentMethod: 'bpi_instapay', paymentDate: '2026-08-18', transactionReference: '<script>' },
+    { planCode: 'early_access_beta', amountPhp: 149, paymentMethod: 'gotyme_instapay', paymentDate: '2026-08-18', transactionReference: '<script>' },
   ]) {
     assert.throws(() => normalizePaymentFields(input), PaymentValidationError);
   }
@@ -1487,7 +1487,7 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
       const body = JSON.parse(init.body);
       assert.equal(body.p_user_id, '11111111-1111-4111-8111-111111111111');
       assert.equal(body.p_plan_code, 'early_access_beta');
-      assert.equal(body.p_payment_method, 'bpi_instapay');
+      assert.equal(body.p_payment_method, 'gotyme_instapay');
       assert.equal(body.p_amount_php, 149);
       assert.match(body.p_proof_object_path, /^11111111-1111-4111-8111-111111111111\/[0-9a-f-]+\.png$/);
       assert.match(body.p_proof_sha256, /^[0-9a-f]{64}$/);
@@ -1505,9 +1505,9 @@ test('payment endpoint authenticates, verifies file bytes, uploads privately, an
     const form = new FormData();
     form.set('planCode', 'early_access_beta');
     form.set('amountPhp', '149');
-    form.set('paymentMethod', 'bpi_instapay');
+    form.set('paymentMethod', 'gotyme_instapay');
     form.set('paymentDate', '2026-08-18');
-    form.set('transactionReference', 'BPI-TEST-001');
+    form.set('transactionReference', 'GOTYME-TEST-001');
     form.set('note', 'Synthetic Worker test');
     form.set(
       'proof',
@@ -1556,9 +1556,9 @@ test('unsafe payment proof fails before any private upload or database call', as
     const form = new FormData();
     form.set('planCode', 'early_access_beta');
     form.set('amountPhp', '149');
-    form.set('paymentMethod', 'bpi_instapay');
+    form.set('paymentMethod', 'gotyme_instapay');
     form.set('paymentDate', '2026-08-18');
-    form.set('transactionReference', 'BPI-TEST-UNSAFE-001');
+    form.set('transactionReference', 'GOTYME-TEST-UNSAFE-001');
     form.set('proof', new File(['<html>unsafe</html>'], 'proof.png', { type: 'image/png' }));
     const response = await worker.fetch(new Request('https://worker.example/payments/submit', {
       method: 'POST',

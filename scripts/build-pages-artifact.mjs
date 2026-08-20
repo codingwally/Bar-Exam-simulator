@@ -81,14 +81,14 @@ const publicFiles = Object.freeze([
   'assets/duediligence-2026.js',
   'assets/lex-forum.css',
   'assets/lex-forum.js',
-  'assets/payments/bpi-instapay-149.png',
+  'assets/payments/gotyme-instapay-149.png',
   'offline.html',
   'service-worker.js',
 ]);
 
 const qrHashes = Object.freeze({
-  'assets/payments/bpi-instapay-149.png':
-    '599DED503B037139002F6A4BCF1B3EF9B8013F9E0254C02E8F86AFEA2D3F1F7B',
+  'assets/payments/gotyme-instapay-149.png':
+    '85D7CCA8CF8A2C3FF7BCEE35F09C682E8CCECD6E7623F128B67AFD43ECE303C1',
 });
 
 function sha256(buffer) {

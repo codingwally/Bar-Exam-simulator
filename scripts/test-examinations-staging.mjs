@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
+import { provisionMandatoryCommercialChoice } from './staging-commercial-user.mjs';
 
 const SUPABASE_URL = String(process.env.STAGING_SUPABASE_URL || '').replace(/\/+$/, '');
 const SERVICE_ROLE_KEY = String(process.env.STAGING_SUPABASE_SERVICE_ROLE_KEY || '');
@@ -95,6 +96,13 @@ async function createUser(label) {
   assert.ok(session.body.access_token);
   const created = { id: body.id, email, token: session.body.access_token };
   await acceptCurrentTerms(created);
+  await provisionMandatoryCommercialChoice({
+    supabaseUrl: SUPABASE_URL,
+    publishableKey: PUBLISHABLE_KEY,
+    workerUrl: WORKER_URL,
+    token: created.token,
+    displayName: `Synthetic ${label}`,
+  });
   return created;
 }
 

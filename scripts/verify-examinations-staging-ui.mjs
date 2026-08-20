@@ -528,8 +528,19 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
       )].filter((element) => getComputedStyle(element).display !== 'none');
       const writingRect = writing?.getBoundingClientRect();
       const reviewRect = review?.getBoundingClientRect();
+      const gridRect = grid?.getBoundingClientRect();
+      const originalScrollX = scrollX;
+      const maxScrollX = Math.max(0, document.documentElement.scrollWidth - innerWidth);
+      scrollTo(maxScrollX, scrollY);
+      const horizontalScrollReach = Math.abs(scrollX - originalScrollX);
+      scrollTo(originalScrollX, scrollY);
+      const workspaceOutsideViewport = [gridRect, writingRect, reviewRect]
+        .filter(Boolean)
+        .some((bounds) => bounds.left < -1 || bounds.right > innerWidth + 1);
       return {
-        overflow: document.documentElement.scrollWidth > innerWidth,
+        documentOverflowPixels: maxScrollX,
+        horizontalScrollReach,
+        overflow: horizontalScrollReach > 1 || workspaceOutsideViewport,
         writingLeft: writingRect?.left ?? null,
         writingTop: writingRect?.top ?? null,
         reviewLeft: reviewRect?.left ?? null,
@@ -891,11 +902,20 @@ try {
     for (const catalog of catalogChecks) {
       await openCatalog(page, catalog.track);
       const label = `${catalog.label}-${viewport.width}`;
-      const layout = await page.evaluate(() => ({
-        overflow: document.documentElement.scrollWidth > innerWidth,
-        innerWidth,
-        scrollWidth: document.documentElement.scrollWidth,
-        offenders: [...document.querySelectorAll('body *')]
+      const layout = await page.evaluate(() => {
+        const originalScrollX = scrollX;
+        const maxScrollX = Math.max(0, document.documentElement.scrollWidth - innerWidth);
+        scrollTo(maxScrollX, scrollY);
+        const horizontalScrollReach = Math.abs(scrollX - originalScrollX);
+        scrollTo(originalScrollX, scrollY);
+        const offenders = [...document.querySelectorAll('body *')]
+          .filter((element) => {
+            const style = getComputedStyle(element);
+            return style.display !== 'none'
+              && style.visibility !== 'hidden'
+              && Number.parseFloat(style.opacity || '1') > 0
+              && !element.closest('[hidden], [inert], [aria-hidden="true"]');
+          })
           .map((element) => {
             const rect = element.getBoundingClientRect();
             return {
@@ -905,11 +925,20 @@ try {
               left: Math.round(rect.left),
               right: Math.round(rect.right),
               width: Math.round(rect.width),
+              height: Math.round(rect.height),
             };
           })
-          .filter((item) => item.right > innerWidth + 1 || item.left < -1)
-          .slice(0, 12),
-      }));
+          .filter((item) => item.width > 0 && item.height > 0
+            && (item.right > innerWidth + 1 || item.left < -1))
+          .slice(0, 12);
+        return {
+          overflow: horizontalScrollReach > 1 || offenders.length > 0,
+          innerWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          horizontalScrollReach,
+          offenders,
+        };
+      });
       const activeRoot = page.locator(
         catalog.track === 'bar_feels' ? '#dd-bar-feels-app' : '#dd-per-subject-app',
       );

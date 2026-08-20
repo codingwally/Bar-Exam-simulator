@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Quorum-first mobile visual frame</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { min-height: 100vh; margin: 0; padding: 12px 0; display: grid; place-items: start center; background: #e9e7e1; }
+    iframe { width: 390px; height: 844px; border: 1px solid #b8bec8; border-radius: 22px; background: #f4f3ef; box-shadow: 0 24px 70px rgba(7,26,51,.2); }
+  </style>
+</head>
+<body data-qa-fixture="quorum-first-mobile-frame">
+  <iframe src="quorum-first-authenticated-fixture.html" title="Quorum-first mobile layout"></iframe>
+  <script>
+    if (new URLSearchParams(window.location.search).get('drawer') === 'open') {
+      document.querySelector('iframe').src = 'quorum-first-authenticated-fixture.html?drawer=open';
+    }
+  </script>
+</body>
+</html>

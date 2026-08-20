@@ -126,7 +126,8 @@ assert.match(examinationsUi, /data-subject-search-input/);
 assert.match(examinationsUi, /SUBJECT_CATALOG_STATE_KEY/);
 assert.match(examinationsUi, /id="dd-subject-selector-dialog"/);
 assert.match(examinationsUi, /data-subject-selector-close aria-label="Close course chooser"/);
-assert.match(examinationsUi, /function subjectWritingGuide\(/);
+assert.doesNotMatch(examinationsUi, /function subjectWritingGuide\(|Writing approach|Take a clear position on the legal issue/i,
+  'Subject Matter must not restore the removed generic writing guide.');
 assert.match(examinationsUi, /Improved model response/);
 assert.match(examinationsUi, /Improved Answer — ALAC Method/);
 assert.match(examinationsUi, /data-assessment-rating="up"/);

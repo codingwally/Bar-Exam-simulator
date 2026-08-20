@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [html, landingCss, landingJs, examCss, examJs, sharedControlsCss, loader, serviceWorker,
+const [html, landingCss, landingJs, shellCss, shellJs, examCss, examJs, sharedControlsCss, loader, serviceWorker,
   subjectQaFixture, subjectMobileFixture] = await Promise.all([
   readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../assets/private-beta-landing.css', import.meta.url), 'utf8'),
   readFile(new URL('../assets/private-beta-landing.js', import.meta.url), 'utf8'),
+  readFile(new URL('../assets/quorum-first-shell.css', import.meta.url), 'utf8'),
+  readFile(new URL('../assets/quorum-first-shell.js', import.meta.url), 'utf8'),
   readFile(new URL('../assets/examinations.css', import.meta.url), 'utf8'),
   readFile(new URL('../assets/examinations.js', import.meta.url), 'utf8'),
   readFile(new URL('../assets/due-diligence-controls.css', import.meta.url), 'utf8'),
@@ -48,48 +50,25 @@ const subjectResult = examJs.slice(
   examJs.indexOf('function assessmentCard'),
 );
 
-assert.match(publicLanding, /class="pb-feature-ledger"/);
-assert.match(publicLanding, /feature-previews\/mock-bar\.png[\s\S]*feature-previews\/subject-matter\.png[\s\S]*feature-previews\/verdict\.png/,
-  'The Academy must present real product previews instead of the retired stock-photo composition.');
-assert.doesNotMatch(publicLanding, /class="pb-platform-composition"|class="pb-welcome-note"/);
-assert.doesNotMatch(publicLanding, /class="pb-chamber-index"/);
-assert.doesNotMatch(publicLanding, /pb-pillar-card|pb-pillar-grid/);
+assert.match(publicLanding, /id="public-platform"[\s\S]*Your legal study community\.[\s\S]*Continue with Google/);
+assert.doesNotMatch(publicLanding, /pb-feature-ledger|class="pb-platform-composition"|class="pb-welcome-note"|class="pb-chamber-index"|pb-pillar-card|pb-pillar-grid|feature-previews\//,
+  'The signed-out entry must remain concise and must not restore the retired chamber landing.');
 assert.equal((html.match(/id="site-header"/g) || []).length, 1,
   'Public and authenticated ordinary pages must share one canonical header.');
 assert.ok(html.indexOf('id="site-header"') < html.indexOf('id="private-beta-landing"'));
 assert.ok(html.indexOf('id="site-header"') < html.indexOf('id="authenticated-app-shell"'));
-assert.match(sharedHeader, /id="header-account-control"[^>]*data-public-action="docket"/);
-
-for (const [slug, visible, accessible] of [
-  ['academy', 'The Academy', 'Academy'],
-  ['commons', 'The Commons', 'Commons'],
-  ['barbound', 'BarBound', 'BarBound'],
-]) {
-  assert.match(sharedHeader, new RegExp(
-    `<a class="pb-chamber-link" href="#chamber/${slug}"[^>]*>${visible}<\\/a>`,
-  ));
-  assert.match(sharedHeader, new RegExp(
-    `class="pb-chamber-toggle"[\\s\\S]{0,240}data-pb-menu-trigger="${slug}"[\\s\\S]{0,240}aria-label="Show ${accessible} features"`,
-  ));
-}
+assert.match(sharedHeader, /id="header-account-control"[^>]*data-public-action="docket"[^>]*>Profile<\/button>/);
+assert.match(sharedHeader, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
+assert.match(sharedHeader, /<summary>Practice Exam<\/summary>[\s\S]*Guided Practice[\s\S]*Doctrine Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation/);
 assert.match(sharedHeader, /data-public-feature="examination-room"[^>]*>\s*Examination Room/);
-assert.match(landingJs, /const chamberLink = event\.target\.closest\?\.\('\[data-pb-chamber-link\]'\)/);
-assert.match(landingJs, /global\.addEventListener\('popstate'[\s\S]*closePublicMenus\(\)/);
-assert.match(landingJs, /global\.addEventListener\('hashchange'[\s\S]*closePublicMenus\(\)/);
-const chamberLinkHandler = landingJs.match(/const chamberLink[\s\S]*?const trigger/)?.[0] || '';
-assert.ok(chamberLinkHandler, 'Primary public chamber navigation handler must exist.');
-assert.doesNotMatch(chamberLinkHandler, /scrollIntoView/,
-  'Primary public chamber navigation must not use scrolling.');
-
-assert.match(landingJs, /class="pb-chamber-feature-index"/);
-assert.match(publicLanding, />01<\/span>[\s\S]*>02<\/span>[\s\S]*>03<\/span>[\s\S]*>04<\/span>/,
-  'The selected editorial feature ledger must preserve its ordered four-part sequence.');
-assert.doesNotMatch(landingJs, /pb-chamber-feature-number|0\$\{index \+ 1\}/,
-  'Public chamber introductions must not number their features.');
-assert.match(landingJs, /\$\{firstFeature\.action\}/);
-assert.match(landingJs, /class="pb-chamber-feature-eyebrow"/);
-assert.match(landingCss, /\.pb-chamber-feature\s*\{[\s\S]*?border-top:/);
-assert.doesNotMatch(landingCss, /\.pb-pillar-card/);
+assert.doesNotMatch(sharedHeader, />The Academy<|>The Commons<|>BarBound<|>The Docket/);
+assert.match(landingJs, /function openQuorumHome\(trigger = null\)[\s\S]*openProtectedFeature\('quorum', trigger\)/);
+assert.match(landingJs, /global\.addEventListener\('popstate'[\s\S]*openQuorumHome\(\)/);
+assert.match(landingJs, /global\.addEventListener\('hashchange'[\s\S]*openQuorumHome\(\)/);
+assert.match(shellJs, /event\.key !== 'Escape'[\s\S]*setDrawer\(refs, false, \{ restoreFocus: true \}\)/);
+assert.match(shellJs, /document\.getElementById\('spa-mock'\)\?\.click\(\)/);
+assert.match(shellCss, /#site-header\.qfs-shell #spa-nav\.qfs-drawer[\s\S]*position:\s*fixed[\s\S]*height:\s*100dvh/);
+assert.match(shellCss, /@media \(prefers-reduced-motion: reduce\)/);
 
 assert.match(perSubject, /class="dd-subject-study-start"/);
 assert.match(perSubject, /id="dd-subject-course-selection-heading"/);
@@ -129,12 +108,8 @@ assert.match(subjectRoom, /class="dd-subject-editorial-pane is-reading is-review
 assert.match(subjectRoom, /class="dd-subject-editorial-pane is-writing dd-subject-practice-answer"/);
 assert.match(subjectRoom, /<h3 id="dd-subject-answer-title">Write your answer<\/h3>/);
 assert.match(subjectRoom, /Your practice question/);
-assert.match(subjectRoom, /<section class="dd-subject-approach"/);
-assert.ok(
-  subjectRoom.indexOf('<section class="dd-subject-approach"')
-    < subjectRoom.indexOf('<div class="dd-subject-answer-heading">'),
-  'Writing Approach must be visible before the answer workspace and reveal choice.',
-);
+assert.doesNotMatch(subjectRoom, /dd-subject-approach|Writing approach|Take a clear position on the legal issue/i,
+  'Generic writing instructions must not crowd the question and answer workspace.');
 assert.ok(
   subjectRoom.indexOf('class="dd-subject-editorial-pane is-writing dd-subject-practice-answer"')
     < subjectRoom.indexOf('class="dd-subject-editorial-pane is-reading is-review-panel"'),
@@ -285,7 +260,9 @@ assert.match(html, /assets\/phase2\.css\?release=commercial-school-visual-safety
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-20260818-commercial-launch-2/);
+assert.match(serviceWorker, /duediligence-shell-20260820-quorum-first-1/);
+assert.match(serviceWorker, /quorum-first-shell\.css\?v=quorum-first-renovation-20260820-1/);
+assert.match(serviceWorker, /quorum-first-shell\.js\?v=quorum-first-renovation-20260820-1/);
 assert.match(serviceWorker, /phase2\.css\?release=commercial-school-visual-safety-20260818-1/);
 assert.match(serviceWorker, /due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(serviceWorker, /private-beta-landing\.css[^'\n]*subject-matter-gil-fixes-20260817-4/);

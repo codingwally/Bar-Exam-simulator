@@ -1,18 +1,21 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative) => readFile(path.join(root, relative), 'utf8');
-const [html, css, script, config, build] = await Promise.all([
+const [html, landingCss, landingJs, shellCss, shellJs, config, build] = await Promise.all([
   read('index.html'),
   read('assets/private-beta-landing.css'),
   read('assets/private-beta-landing.js'),
+  read('assets/quorum-first-shell.css'),
+  read('assets/quorum-first-shell.js'),
   read('assets/phase2-config.js'),
   read('scripts/build-pages-artifact.mjs'),
 ]);
+
 const publicLanding = html.slice(
   html.indexOf('<div class="pb-landing" id="private-beta-landing">'),
   html.indexOf('<dialog class="pb-dialog" id="private-beta-dialog"'),
@@ -23,163 +26,74 @@ const sharedHeader = html.slice(
 );
 
 assert.match(html, /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/);
-assert.match(html, /id="private-beta-landing"/);
-assert.match(html, /id="authenticated-app-shell" hidden inert aria-hidden="true"/);
-assert.match(sharedHeader, /class="brand pb-brand"[^>]*data-public-home/,
-  'The public logo must return to the canonical homepage without discarding authentication.');
-assert.match(
-  sharedHeader,
-  /class="spa-nav pb-chamber-nav"[\s\S]*data-pb-chamber-link="academy"[\s\S]*data-pb-menu-trigger="academy"[\s\S]*data-pb-chamber-link="commons"[\s\S]*data-pb-menu-trigger="commons"[\s\S]*data-pb-chamber-link="barbound"[\s\S]*data-pb-menu-trigger="barbound"[\s\S]*data-public-feature="examination-room"/,
-  'The public header must expose all four chamber pills.',
-);
-for (const [chamber, label] of [
-  ['academy', 'Academy'], ['commons', 'Commons'], ['barbound', 'BarBound'],
-]) {
-  assert.match(sharedHeader, new RegExp(
-    `<a class="pb-chamber-link" href="#chamber/${chamber}"[^>]*>${label === 'BarBound' ? 'BarBound' : `The ${label}`}<\\/a>`
-    + `[\\s\\S]*?<button class="pb-chamber-toggle"[^>]*data-pb-menu-trigger="${chamber}"[\\s\\S]*?aria-label="Show ${label} features"`,
-  ), `${label} must use separate navigation and feature-menu controls.`);
-}
 assert.equal((html.match(/id="site-header"/g) || []).length, 1,
-  'One shared header must serve public and authenticated ordinary pages.');
-assert.ok(html.indexOf('id="site-header"') < html.indexOf('id="private-beta-landing"'));
-assert.ok(html.indexOf('id="site-header"') < html.indexOf('id="authenticated-app-shell"'));
-assert.doesNotMatch(html, /id="welcome-state"|Prepare with purpose\.|id="start-practice"/,
-  'The retired authenticated landing must not ship.');
-assert.ok(html.indexOf('id="site-header"') < html.indexOf('class="pb-pillars"'),
-  'The preparation chooser must follow the shared header.');
-assert.match(publicLanding, /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
-assert.match(publicLanding, /Philippine legal education/i);
-assert.doesNotMatch(publicLanding, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
-assert.match(publicLanding, /class="pb-feature-ledger"/);
-for (const chamberClass of ['academy', 'commons', 'barbound', 'examination-room']) {
-  assert.match(publicLanding, new RegExp(`class="pb-ledger-entry pb-ledger-${chamberClass}"`),
-    `The ${chamberClass} ledger entry must remain visible on the homepage.`);
-}
-assert.doesNotMatch(publicLanding, /class="pb-chamber-index"/);
-assert.doesNotMatch(publicLanding, /class="pb-pillar-card"/,
-  'The homepage must not regress to four generic boxed cards.');
-assert.match(publicLanding, />01<\/span>[\s\S]*>02<\/span>[\s\S]*>03<\/span>[\s\S]*>04<\/span>/,
-  'The editorial feature ledger must retain its ordered chamber sequence.');
-assert.doesNotMatch(publicLanding, /A platform to express|Practice the reasoning\. Refine the writing\.|Explore Due Diligence|Learn How It Works|Pause Motion/i);
-assert.doesNotMatch(`${publicLanding}\n${script}`, /campus-students|library-community|library-student|writing-notes/,
-  'Retired stock photography must not appear in the homepage or chamber rendering paths.');
-assert.match(publicLanding, /feature-previews\/mock-bar\.png[\s\S]*feature-previews\/subject-matter\.png[\s\S]*feature-previews\/verdict\.png/,
-  'The Academy ledger must show the real Mock Bar, Subject Matter, and Verdict interfaces.');
-assert.match(publicLanding, /feature-previews\/examination-room\.png/,
-  'The Examination Room ledger must show its real role-entry interface.');
-assert.match(publicLanding, /id="pb-chamber-view"/);
-assert.match(script, /academy:[\s\S]*commons:[\s\S]*barbound:/);
-for (const taxonomy of [
-  /Mock Bar[\s\S]*Subject Matter[\s\S]*The Verdict/,
-  /Bar Easy[\s\S]*Quorum[\s\S]*Plans & Pricing/,
-  /Bar Feels[\s\S]*2026 Bar Chair(?:&rsquo;|’|')s Cases[\s\S]*Doctrines[\s\S]*Anchor Case Digests/,
-]) assert.match(script, taxonomy, `missing chamber taxonomy: ${taxonomy}`);
-assert.doesNotMatch(publicLanding, /EARLY ACCESS BETA|Enter the Beta|Private beta access code/i,
-  'The public homepage must not expose the retired admission gate.');
+  'One canonical header must serve signed-out and authenticated ordinary pages.');
+assert.match(sharedHeader, /class="brand pb-brand"[^>]*data-public-home/,
+  'The brand must remain the authenticated Home control.');
+assert.match(sharedHeader, /data-public-feature="examination-room"[^>]*>Examination Room<\/button>/);
+assert.match(sharedHeader, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"[^>]*>Menu<\/button>/);
+assert.match(sharedHeader, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
+assert.match(sharedHeader, /<summary>Practice Exam<\/summary>[\s\S]*Guided Practice[\s\S]*Doctrine Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation/);
+assert.match(sharedHeader, /data-public-action="docket"[^>]*aria-label="Sign in or open your profile"[^>]*>Profile<\/button>/);
+assert.match(sharedHeader, /Plans &amp; Pricing[\s\S]*>Support<[\s\S]*Examination Room/);
+assert.doesNotMatch(sharedHeader, />The Academy<|>The Commons<|>BarBound<|>The Docket/,
+  'Retired chamber brands must not remain user-facing.');
 
-assert.doesNotMatch(`${html}\n${css}\n${script}\n${config}\n${build}`, /ARTICLE[0-9]+NCC/i);
-assert.match(script, /privateBetaGate === true/);
+assert.match(publicLanding, /<h1 id="pb-pillars-title">Your legal study community\.<\/h1>/);
+assert.match(publicLanding, /Continue with Google/);
+assert.doesNotMatch(publicLanding, /pb-feature-ledger|pb-chamber-index|pb-pillar-card|feature-previews\//,
+  'The signed-out entry must stay concise and must not recreate the retired chamber landing.');
+assert.doesNotMatch(`${publicLanding}\n${landingJs}`, /campus-students|library-community|library-student|writing-notes/,
+  'No internet-sourced photography may ship in the landing or routing paths.');
+
+assert.match(shellJs, /refs\.brand\.setAttribute\('href', '#quorum'\)/);
+assert.match(shellJs, /refs\.brand\.setAttribute\('aria-label', 'Due Diligence — Home'\)/);
+assert.match(shellJs, /focusInside[\s\S]*restoreFocus[\s\S]*event\.key !== 'Escape'/,
+  'The drawer must manage entry focus, Escape, and focus restoration.');
+assert.match(shellJs, /document\.getElementById\('spa-mock'\)\?\.click\(\)/,
+  'The Quorum practice promotion must reuse the existing practice route.');
+assert.match(shellCss, /#site-header\.qfs-shell #spa-nav\.qfs-drawer[\s\S]*position:\s*fixed[\s\S]*height:\s*100dvh/,
+  'The compact menu must use the approved full-height drawer.');
+assert.match(shellCss, /@media \(max-width: 760px\)[\s\S]*\.quorum-entry/,
+  'The signed-out entry must have an explicit mobile treatment.');
+assert.match(shellCss, /@media \(prefers-reduced-motion: reduce\)/);
+
+assert.match(landingJs, /function openQuorumHome\(trigger = null\)[\s\S]*openProtectedFeature\('quorum', trigger\)/,
+  'Authenticated Home must resolve through the protected Quorum route.');
+assert.match(landingJs, /if \(!gateEnabled\)[\s\S]*else if \(authenticated\) await openQuorumHome\(\)/,
+  'Signed-in root restoration must open Quorum rather than a retired landing.');
+assert.match(landingJs, /popstate[\s\S]*openQuorumHome\(\)[\s\S]*hashchange[\s\S]*openQuorumHome\(\)/,
+  'Back and hash restoration must retain the Quorum-first home.');
+assert.match(landingJs, /global\.DueDiligencePublicHome = Object\.freeze/);
+assert.match(landingJs, /route === 'subject-matter'[\s\S]*restoreRoute\('per_subject'/);
+assert.match(landingJs, /feature === 'verdict'[\s\S]*global\.openVerdictDashboard\?\.\(\)/);
+assert.match(html, /window\.openVerdictDashboard = openAnalytics;/);
+
 assert.match(config, /privateBetaGate: false/);
-assert.match(script, /if \(!gateEnabled\)[\s\S]*applicationRouteRequested\(\)[\s\S]*showApplication\(\)[\s\S]*showLanding\(\{ accessAllowed: true \}\)/,
-  'The disabled admission gate must retain the public homepage at root and open only explicit application routes.');
-assert.match(
-  script,
-  /async function initialize\(\)[\s\S]*if \(!gateEnabled\)[\s\S]*requestedApplicationRoute\(\) === 'examination-room'[\s\S]*await openProtectedFeature\('examination-room'\)/,
-  'Initial signed-out Examination Room deep links must open the protected sign-in flow when the retired admission gate is disabled.',
-);
-assert.match(script, /global\.DueDiligencePublicHome = Object\.freeze/);
-assert.match(script, /mock: '#mock-bar'/, 'Mock Bar sign-in returns must use the canonical route.');
-assert.match(script, /verdict: '#verdict'/,
-  'The Verdict sign-in return must use its own canonical route instead of opening Mock Bar.');
-assert.match(
-  script,
-  /\['mock', 'mock-bar', 'subject-matter', 'bar-feels', 'verdict', 'examination-room'\]/,
-  'Application restoration must recognize both examination tracks, The Verdict, and Examination Room routes.',
-);
-assert.match(
-  script,
-  /route === 'subject-matter'[\s\S]*restoreRoute\('per_subject'[\s\S]*route === 'bar-feels'[\s\S]*openPremiumBarFeels\?\.\(\{ restoreActive: true, isCurrent \}\)/,
-  'Subject Matter must restore directly while Bar Feels restores only through its Premium access controller.',
-);
-assert.match(script, /routeActivationVersion[\s\S]*const isCurrent = \(\) =>/,
-  'Asynchronous route restoration must reject stale hash or identity responses.');
-assert.match(script, /route === 'verdict'[\s\S]*global\.openVerdictDashboard\(\)/,
-  'Direct Verdict routes must restore the existing private Verdict dashboard.');
-assert.match(script, /feature === 'verdict'[\s\S]*dueDiligenceRoute: 'verdict'[\s\S]*global\.openVerdictDashboard\?\.\(\)/,
-  'The Verdict button must open the private dashboard directly without launching Mock Bar.');
-assert.doesNotMatch(script, /feature === 'verdict'[\s\S]{0,240}tab-history/,
-  'The Verdict button must not fall back to the legacy Mock Bar history tab.');
-assert.match(html, /window\.openVerdictDashboard = openAnalytics;/,
-  'The existing private Verdict dashboard must expose a narrow navigation entrypoint.');
-assert.match(html, /id === 'analytics-modal' && location\.hash === '#verdict'[\s\S]*DueDiligencePublicHome\?\.show/,
-  'Closing the routed Verdict dashboard must return to the public homepage instead of a blank application shell.');
-assert.match(script, /addEventListener\('popstate'[\s\S]*!applicationRouteRequested\(\)[\s\S]*showLanding/,
-  'Browser Back must restore the public homepage for root and public chamber anchors.');
-assert.match(script, /IntersectionObserver/);
-assert.match(script, /prefers-reduced-motion: reduce/);
-assert.match(script, /completeAdmission/);
-assert.match(script, /api\.status/);
-assert.match(script, /globalBetaEnabled/);
-assert.match(script, /privateBetaApi\(\)\?\.policy/);
-assert.match(script, /global\.syncModalIsolation\?\.\(\)/);
-assert.match(html, /#private-beta-dialog\[open\]/);
-assert.match(html, /assets\/private-beta-landing\.js\?v=commercial-launch-20260818-1/,
-  'The commercial launch must use a fresh browser cache key.');
-assert.match(html, /assets\/private-beta-landing\.css\?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4/);
-assert.match(css, /\.pb-chamber-nav\s*\{/);
-assert.match(css, /\.pb-chamber-pill\s*\{/);
-assert.match(css, /\.pb-chamber-link\s*,[\s\S]*?\.pb-chamber-toggle\s*\{/);
-assert.match(css, /@media \(max-width: 900px\)[\s\S]*?#site-header #spa-nav\s*\{[\s\S]*?display:\s*none/);
-assert.match(css, /#site-header #spa-nav\.is-open\s*\{[\s\S]*?display:\s*grid/);
-assert.match(css, /\.pb-feature-ledger\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,/);
-assert.match(css, /@media \(max-width: 1120px\)[\s\S]*?\.pb-feature-ledger\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
-assert.match(css, /\.pb-chamber-feature\s*\{[\s\S]*?grid-template-columns:[\s\S]*?border-top:/);
-assert.match(css, /\.pb-chamber-feature:nth-child\(even\) \.pb-chamber-feature-preview/);
-assert.doesNotMatch(script, /pb-chamber-feature-number|0\$\{index \+ 1\}/);
-assert.doesNotMatch(css, /\.pb-pillar-card/);
-assert.doesNotMatch(css, /pb-slide-left|pb-slide-right|\.pb-rail/);
-assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
-
-assert.doesNotMatch(
-  build,
-  /privateBetaImageFiles|assets\/private-beta\/.+\.(?:avif|webp|jpe?g)/i,
-  'Internet-sourced private-beta photography must not ship in the Pages artifact.',
-);
-
-const featurePreviewNames = [
-  'anchor-cases.png',
-  'bar-easy.png',
-  'bar-feels.png',
-  'chairs-cases.png',
-  'doctrines.png',
-  'examination-room.png',
-  'mock-bar.png',
-  'quorum.png',
-  'retainer.png',
-  'subject-matter.png',
-  'verdict.png',
-];
-for (const name of featurePreviewNames) {
-  const relative = `assets/feature-previews/${name}`;
-  const details = await stat(path.join(root, relative));
-  assert.ok(details.isFile() && details.size > 20_000, `${relative} must be a non-empty real product screenshot`);
-  assert.ok(build.includes('...featurePreviewFiles'), 'the Pages allowlist must ship all feature previews');
-}
+assert.match(config, /maintenance:\s*Object\.freeze\(\{[\s\S]*enabled:\s*true/,
+  'The redesign must remain protected by the temporary maintenance lock.');
+assert.doesNotMatch(`${html}\n${landingCss}\n${landingJs}\n${shellCss}\n${shellJs}\n${config}\n${build}`, /ARTICLE[0-9]+NCC/i);
+assert.doesNotMatch(build, /privateBetaImageFiles|assets\/private-beta\/.+\.(?:avif|webp|jpe?g)/i,
+  'Internet-sourced private-beta photography must not enter the Pages allowlist.');
+assert.match(build, /assets\/quorum-first-shell\.css/);
+assert.match(build, /assets\/quorum-first-shell\.js/);
 
 const approvedReference = await readFile(path.join(
   root,
-  'docs/visual-references/private-beta/Due_Diligence_Private_Beta_Landing_Approved_Reference.png',
+  'docs/visual-references/renovation-20260820/approved-quorum-first-target.png',
 ));
 assert.equal(
   createHash('sha256').update(approvedReference).digest('hex').toUpperCase(),
-  'DD56E1526845086D11EF0F9FA1FB6819EFDBEA2941CA5D029237BC37C6A7BE4C',
-  'approved landing reference checksum changed',
+  '4CD5CB5DCACA0BBB665FED643CEFCCFCDC775AE6624A07490672BA43407CB9AE',
+  'approved Quorum-first design target checksum changed',
 );
 
 const sessionPosition = html.indexOf('assets/private-beta-session.js');
 const phase2Position = html.indexOf('assets/phase2-experience.js');
+const shellPosition = html.indexOf('assets/quorum-first-shell.js');
 const landingPosition = html.indexOf('assets/private-beta-landing.js');
-assert.ok(sessionPosition > -1 && phase2Position > sessionPosition && landingPosition > phase2Position);
+assert.ok(sessionPosition > -1 && phase2Position > sessionPosition);
+assert.ok(shellPosition > phase2Position && landingPosition > shellPosition,
+  'The accessibility shell must initialize after shared controls and before public routing.');
 
-console.log('Private-beta landing contract checks passed.');
+console.log('Quorum-first landing contract checks passed.');

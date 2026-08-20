@@ -14,11 +14,11 @@ const serviceWorker = read('service-worker.js');
 const offline = read('offline.html');
 const migration = read('supabase/migrations/20260813151040_master_experience_privacy_offline_foundation_20260813.sql');
 
-assert.match(index, /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
+assert.match(index, /<h1 id="pb-pillars-title">Your legal study community\.<\/h1>/);
 assert.match(index, /data-public-home/);
-assert.match(index, /data-pb-menu-trigger="academy"/);
-assert.match(index, /data-pb-menu-trigger="commons"/);
-assert.match(index, /data-pb-menu-trigger="barbound"/);
+assert.match(index, /id="spa-community"[^>]*data-public-feature="quorum"/);
+assert.match(index, /<summary>Practice Exam<\/summary>/);
+assert.match(index, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.match(index, /assets\/private-workspace\.js\?v=master-experience-20260813-1/);
 assert.match(index, /assets\/feature-loader\.js\?v=exam-room-ux-20260814-1/);
 assert.doesNotMatch(index, /<script[^>]+src="assets\/(?:lex-forum|examinations|duediligence-2026)\.js/);

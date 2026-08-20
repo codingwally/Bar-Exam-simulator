@@ -39,6 +39,8 @@ for (const required of [
   'assets/feature-loader.js',
   'assets/free-trial-five-daily.js',
   'assets/maintenance-gate.js',
+  'assets/quorum-first-shell.css',
+  'assets/quorum-first-shell.js',
   'assets/private-workspace.js',
   'assets/feature-previews/mock-bar.png',
   'assets/feature-previews/subject-matter.png',
@@ -82,9 +84,10 @@ assert.doesNotMatch(index, /PH Bar Essay Trainer|Advanced Pro Repository|PH Bar 
 assert.match(index, /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/);
 assert.match(index, /<html lang="en-PH">/);
 assert.match(index, /id="private-beta-landing"/);
-assert.match(index, /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
+assert.match(index, /<h1 id="pb-pillars-title">Your legal study community\.<\/h1>/);
 assert.equal((index.match(/id="site-header"/g) || []).length, 1);
-assert.match(index, /id="site-header"[\s\S]*The Academy[\s\S]*The Commons[\s\S]*BarBound[\s\S]*Examination Room[\s\S]*class="pb-feature-ledger"[\s\S]*feature-previews\/mock-bar\.png/);
+assert.match(index, /id="site-header"[\s\S]*id="site-menu-toggle"[\s\S]*Examination Room[\s\S]*>Home<[\s\S]*>Practice Exam<[\s\S]*Guided Practice[\s\S]*Doctrine Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*>Profile<[\s\S]*Plans &amp; Pricing[\s\S]*>Support/);
+assert.doesNotMatch(index, />The Academy<|>The Commons<|>BarBound<|>The Docket</);
 assert.doesNotMatch(index, /class="pb-chamber-index"/);
 assert.doesNotMatch(index, /class="pb-pillar-grid"|class="pb-pillar-card"/);
 assert.doesNotMatch(index, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
@@ -94,7 +97,7 @@ assert.match(index, /loadProtectedQuestion/);
 assert.match(index, /Authentication is required before an examination question is displayed/);
 assert.match(examinations, /data-exam-setup=[\s\S]*Review &amp; Begin/);
 assert.match(examinations, /const isBarFeels = state\.setup\.track === 'bar_feels';[\s\S]*\? 'strict'/);
-assert.match(examinations, /function subjectWritingGuide\(/);
+assert.doesNotMatch(examinations, /function subjectWritingGuide\(|Writing approach|Take a clear position on the legal issue/i);
 assert.match(examinations, /Improved model response/);
 assert.doesNotMatch(examinations, /id="dd-upload-timer"/);
 assert.doesNotMatch(featureLoader, /assets\/free-trial-five-daily\.js/);

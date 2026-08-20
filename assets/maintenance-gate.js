@@ -208,6 +208,7 @@
   function unlockPage() {
     document.documentElement.dataset.ddMaintenance = 'open';
     document.getElementById('dd-maintenance-gate')?.remove();
+    global.dispatchEvent(new CustomEvent('duediligence:maintenance-unlocked'));
   }
 
   async function maintenanceRequest(path, body = {}) {

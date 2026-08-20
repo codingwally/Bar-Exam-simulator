@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const config = readFileSync(new URL('../assets/phase2-config.js', import.meta.url), 'utf8');
 const frontend = readFileSync(new URL('../assets/maintenance-gate.js', import.meta.url), 'utf8');
+const publicLanding = readFileSync(new URL('../assets/private-beta-landing.js', import.meta.url), 'utf8');
 const worker = readFileSync(new URL('../worker/maintenance-entry.mjs', import.meta.url), 'utf8');
 const wrangler = readFileSync(new URL('../worker/wrangler.toml', import.meta.url), 'utf8');
 const pagesBuilder = readFileSync(new URL('../scripts/build-pages-artifact.mjs', import.meta.url), 'utf8');
@@ -15,7 +16,7 @@ assert.match(config, /\/maintenance\/unlock/);
 assert.match(config, /\/maintenance\/status/);
 assert.match(config, /X-DD-Maintenance-Access/);
 assert.match(config, /duediligence\.maintenance\.access\.v1/);
-assert.match(config, /\/assets\/maintenance-gate\.js\?v=maintenance-lock-20260819-1/);
+assert.match(config, /\/assets\/maintenance-gate\.js\?v=maintenance-lock-20260820-2/);
 assert.match(config, /global\.document\.documentElement\.dataset\.ddMaintenance = 'locked'/);
 assert.match(config, /maintenanceAwareFetch/);
 assert.match(config, /global\.localStorage\?\.getItem\(maintenance\.tokenStorageKey\)/);
@@ -26,7 +27,10 @@ assert.match(frontend, /better, stronger, and more reliable version/);
 assert.match(frontend, /global\.location\.reload\(\)/);
 assert.match(frontend, /Verifying saved maintenance access/);
 assert.match(frontend, /Authorized testing access is remembered in this browser for seven days/);
+assert.match(frontend, /duediligence:maintenance-unlocked/);
 assert.doesNotMatch(frontend, /\b0802\b/, 'The maintenance password must not be embedded in browser JavaScript.');
+assert.match(publicLanding, /document\.documentElement\.dataset\.ddMaintenance !== 'open'/);
+assert.match(publicLanding, /global\.addEventListener\('duediligence:maintenance-unlocked', initialize, \{ once: true \}\)/);
 assert.match(pagesBuilder, /assets\/maintenance-gate\.js/);
 
 assert.match(worker, /import applicationWorker from '\.\/commercial-entry\.mjs'/);

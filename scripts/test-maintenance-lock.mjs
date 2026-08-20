@@ -10,7 +10,7 @@ const workerDeploy = readFileSync(new URL('../.github/workflows/deploy-worker.ym
 const pagesDeploy = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
 
 assert.match(config, /maintenance:\s*Object\.freeze\(\{/);
-assert.match(config, /enabled:\s*false/);
+assert.match(config, /enabled:\s*true/);
 assert.match(config, /\/maintenance\/unlock/);
 assert.match(config, /\/maintenance\/status/);
 assert.match(config, /X-DD-Maintenance-Access/);
@@ -41,7 +41,7 @@ assert.match(worker, /applicationWorker\.scheduled/);
 assert.doesNotMatch(worker, /['"]0802['"]/, 'Worker source should store only the password verifier, not the plain password.');
 
 assert.match(wrangler, /main = "maintenance-entry\.mjs"/);
-assert.match(wrangler, /MAINTENANCE_MODE = "false"/);
+assert.match(wrangler, /MAINTENANCE_MODE = "true"/);
 assert.match(wrangler, /MAINTENANCE_PASSWORD_HASH = "[0-9a-f]{64}"/);
 assert.match(wrangler, /MAINTENANCE_TOKEN_TTL_SECONDS = "604800"/);
 assert.match(workerDeploy, /MAINTENANCE_SIGNING_KEY/);
@@ -49,4 +49,4 @@ assert.match(workerDeploy, /randomBytes\(32\)\.toString\('base64url'\)/);
 assert.match(workerDeploy, /node scripts\/test-maintenance-lock\.mjs/);
 assert.match(pagesDeploy, /node scripts\/test-maintenance-lock\.mjs/);
 
-console.log('Dormant maintenance rollback gate contracts passed.');
+console.log('Active private maintenance gate contracts passed.');

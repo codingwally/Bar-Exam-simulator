@@ -2354,3 +2354,159 @@ body.quorum-drawer-open { overflow: hidden; }
     transition: none;
   }
 }
+
+/* Quorum-first renovation: the community feed is the product home. */
+#page-community {
+  background: #f4f3ef;
+}
+
+#page-community .lex-page-wrap {
+  padding-bottom: 48px;
+}
+
+#page-community .lex-page-head {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  background: transparent;
+}
+
+#page-community .lex-title-row {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  white-space: normal;
+}
+
+#page-community .lex-title-row h2 {
+  margin: 0;
+  color: #071a33;
+  font: 700 clamp(34px, 4.2vw, 48px)/1.04 "Playfair Display", Georgia, serif;
+  letter-spacing: -.025em;
+}
+
+#page-community .quorum-motto {
+  max-width: 700px;
+  margin: 8px 0 0;
+  color: #536276;
+  font: 500 14px/1.55 Inter, sans-serif;
+}
+
+#page-community .lex-beta-badge {
+  border-color: rgba(197, 160, 89, .62);
+  color: #715613;
+  background: #fff9e9;
+}
+
+#page-community .quorum-menu-open {
+  display: none !important;
+}
+
+#page-community .lex-layout {
+  width: min(100%, 1110px);
+  margin: 0 auto;
+  padding-inline: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 310px);
+  gap: 18px;
+  min-height: calc(100vh - 98px);
+}
+
+#page-community .lex-primary {
+  padding-top: 0;
+}
+
+#page-community .lex-secondary {
+  position: sticky;
+  top: 84px;
+  display: grid;
+  grid-column: auto;
+  padding: 0;
+}
+
+#page-community .lex-secondary > :not(.quorum-practice-card) {
+  display: none;
+}
+
+#page-community .lex-composer,
+#page-community .quorum-search,
+#page-community .lex-feed-toolbar,
+#page-community .lex-entry,
+#page-community .lex-guidance-card,
+#page-community .quorum-practice-card {
+  border-color: #d8dde5;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(7, 26, 51, .055);
+}
+
+#page-community .quorum-practice-card {
+  border-top: 3px solid #c5a059;
+  background: #071a33;
+}
+
+#page-community .quorum-practice-card h3,
+#page-community .quorum-practice-card p {
+  color: #f8f5ec;
+}
+
+#page-community .quorum-practice-card .lex-kicker {
+  color: #efd17d;
+}
+
+#page-community .quorum-practice-benefits {
+  margin: 4px 0 18px;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+  color: #f8f5ec;
+  font: 600 12px/1.35 Inter, sans-serif;
+  list-style: none;
+}
+
+#page-community .quorum-practice-benefits li::before {
+  content: '\2713';
+  margin-right: 9px;
+  color: #efd17d;
+  font-weight: 900;
+}
+
+#page-community .quorum-practice-card-mobile {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  #page-community .lex-page-head {
+    padding: 24px 14px 14px;
+  }
+
+  #page-community .lex-layout {
+    padding-inline: 10px;
+  }
+
+  #page-community .lex-secondary {
+    padding-inline: 0;
+  }
+
+  #page-community .quorum-practice-card-mobile {
+    display: block;
+    margin: 12px 0 16px;
+  }
+
+  #page-community .quorum-practice-card-desktop {
+    display: none;
+  }
+}

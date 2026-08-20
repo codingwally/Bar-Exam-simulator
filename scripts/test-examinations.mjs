@@ -50,8 +50,8 @@ assert.doesNotMatch(html, /id=["']welcome-state["']|Prepare with purpose\.|id=["
   'The retired authenticated landing must not remain in the application shell.');
 assert.match(html, /DueDiligenceExaminations\?\.openPerSubject/);
 assert.match(html, /DueDiligenceExaminations\?\.openBarFeels/);
-assert.match(html, /id="spa-mock"[\s\S]*id="spa-subject-matter"[\s\S]*id="spa-progress"[\s\S]*id="spa-bar-feels"/);
-assert.match(html, /id="spa-bar-feels"[^>]*aria-label="Open Bar Feels"/);
+assert.match(html, /id="spa-community"[\s\S]*<summary>Practice Exam<\/summary>[\s\S]*id="spa-mock"[\s\S]*id="spa-bar-feels"[\s\S]*id="header-account-control"/);
+assert.match(html, /id="spa-bar-feels"[^>]*data-public-feature="bar-feels"[^>]*>Bar Exam Simulation<\/button>/);
 assert.doesNotMatch(html, /menu-premium-badge/);
 assert.match(html, /function openSubjectMatterMenu\(\)[\s\S]*openPerSubject\(\)/);
 assert.match(html, /function openPremiumBarFeels\(options = \{\}\)[\s\S]*refreshAccess\(\)[\s\S]*restoreRoute\?\.\('bar_feels'[\s\S]*openBarFeels\(\)/);
@@ -65,10 +65,8 @@ assert.doesNotMatch(
   /global\.openPremiumBarFeels\s*=/,
   'The lazy loader must not overwrite the premium access controller defined by the application shell.',
 );
-assert.equal((html.match(/class="[^"]*\bbtn-angel\b[^"]*"/g) || []).length, 4);
-assert.match(html, /\.btn-angel\{[\s\S]*linear-gradient\(120deg,#B8860B,#F5E28C 45%,#D4AF37 60%,#B8860B\)[\s\S]*animation:sheen 3\.2s linear infinite/);
-assert.match(html, /@keyframes sheen\{0%\{background-position:200% 0;\}100%\{background-position:-40% 0;\}\}/);
-assert.match(html, /\.btn-angel:hover,\.btn-angel\.active\{[^}]*filter:brightness\(1\.06\);transform:translateY\(-1px\);/);
+assert.match(html, /id="spa-examination-room"[^>]*data-public-feature="examination-room"/);
+assert.match(html, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
 assert.match(html, /assets\/feature-loader\.js\?v=exam-room-ux-20260814-1/);
 assert.match(html, /Mock Bar/);

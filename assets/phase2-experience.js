@@ -943,17 +943,16 @@
     const signedIn = Boolean(state.session?.access_token && state.user);
     const signInButton = document.getElementById('btn-signin');
     if (signInButton) {
-      signInButton.textContent = 'The Docket';
+      signInButton.textContent = 'Profile';
       signInButton.title = signedIn
         ? 'Manage your profile, preferences, and activity.'
-        : 'Open The Docket to sign in.';
-      signInButton.hidden = false;
+        : 'Sign in to open your profile.';
     }
     const headerAccount = document.getElementById('header-account-control');
     if (headerAccount) {
-      headerAccount.textContent = signedIn ? 'Account' : 'Sign in';
+      headerAccount.textContent = signedIn ? 'Profile' : 'Sign in';
       headerAccount.title = signedIn
-        ? 'Open your account controls in The Docket.'
+        ? 'Open your profile and account controls.'
         : 'Sign in to Due Diligence.';
       headerAccount.setAttribute(
         'aria-label',
@@ -1305,8 +1304,8 @@
           <label class="dd2-label">Category
             <select class="dd2-field" id="dd2-support-category" required>
               <option value="technical">Technical issue</option>
-              <option value="account">The Docket</option>
-              <option value="account_recovery">Docket Recovery</option>
+              <option value="account">Profile</option>
+              <option value="account_recovery">Profile recovery</option>
               <option value="content">Content or source</option>
               <option value="accessibility">Accessibility</option>
               <option value="other">Other</option>
@@ -1444,7 +1443,7 @@
       pricing: ['Access options', 'Plans & Pricing', pricingContent],
       terms: ['Legal', 'Terms of Use', termsContent],
       privacy: ['Legal', 'Privacy Policy', privacyContent],
-      account: ['Your chamber', 'The Docket', accountContent],
+      account: ['Your account', 'Profile', accountContent],
       partnership: ['Collaborate', 'Partnerships', partnershipContent],
     };
     return definitions[view] || null;

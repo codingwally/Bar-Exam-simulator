@@ -946,6 +946,7 @@
 <link rel="stylesheet" href="assets/phase2.css?release=commercial-school-visual-safety-20260818-1">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
+<link rel="stylesheet" href="assets/quorum-first-shell.css?v=quorum-first-renovation-20260820-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body class="private-beta-public">
@@ -960,165 +961,50 @@
       </span>
       <span class="brand-meaning" id="brand-subtitle-meaning" role="tooltip">A friend on the journey of law.</span>
     </a>
-    <button class="site-menu-toggle" id="site-menu-toggle" type="button"
-      aria-controls="spa-nav" aria-expanded="false">Menu</button>
-    <div class="topbar-actions">
-      <button class="pb-account-control" id="header-account-control" type="button"
-        data-public-action="docket" aria-label="Sign in or open account controls">Sign in</button>
+    <div class="topbar-actions quorum-header-actions">
+      <button class="site-menu-toggle" id="site-menu-toggle" type="button"
+        aria-controls="spa-nav" aria-expanded="false">Menu</button>
+      <button class="quorum-room-shortcut" id="spa-examination-room" type="button"
+        data-public-feature="examination-room">Examination Room</button>
       <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>00:00:00</div>
     </div>
-    <nav class="spa-nav pb-chamber-nav" id="spa-nav" aria-label="Primary navigation">
-      <div class="nav-audience-cluster" role="group" aria-label="Preparation chambers">
-      <div class="pb-chamber-menu pb-chamber-academy">
-        <div class="pb-chamber-split">
-          <a class="pb-chamber-link" href="#chamber/academy" id="chamber-academy" data-pb-chamber-link="academy">The Academy</a>
-          <button class="pb-chamber-toggle" type="button" aria-haspopup="menu"
-            aria-expanded="false" aria-controls="pb-academy-menu" data-pb-menu-trigger="academy"
-            aria-label="Show Academy features"><span aria-hidden="true">▾</span></button>
-        </div>
-        <div class="pb-chamber-dropdown" id="pb-academy-menu" role="menu" aria-label="The Academy" hidden>
-          <button id="spa-mock" type="button" role="menuitem" data-public-feature="mock">Mock Bar</button>
-          <button id="spa-subject-matter" type="button" role="menuitem" data-public-feature="subject-matter">Subject Matter</button>
-          <button id="spa-progress" type="button" role="menuitem" data-public-feature="verdict">The Verdict</button>
-        </div>
+    <nav class="spa-nav quorum-primary-nav" id="spa-nav" aria-label="Primary navigation">
+      <div class="quorum-nav-heading">
+        <p>Menu</p>
+        <button class="quorum-nav-close" type="button" data-shell-menu-close aria-label="Close menu">&times;</button>
       </div>
-      <div class="pb-chamber-menu pb-chamber-commons">
-        <div class="pb-chamber-split">
-          <a class="pb-chamber-link" href="#chamber/commons" id="chamber-commons" data-pb-chamber-link="commons">The Commons</a>
-          <button class="pb-chamber-toggle" type="button" aria-haspopup="menu"
-            aria-expanded="false" aria-controls="pb-commons-menu" data-pb-menu-trigger="commons"
-            aria-label="Show Commons features"><span aria-hidden="true">▾</span></button>
+      <button class="quorum-nav-link" id="spa-community" type="button" data-public-feature="quorum">Home</button>
+      <details class="quorum-practice-menu" id="quorum-practice-menu">
+        <summary>Practice Exam</summary>
+        <div class="quorum-practice-links">
+          <button id="spa-bar-easy" type="button" data-public-feature="bar-easy">Guided Practice</button>
+          <button id="spa-jurisprudence" type="button" data-public-feature="doctrines">Doctrine Review</button>
+          <button id="spa-mock" type="button" data-public-feature="mock">Bar Question Practice</button>
+          <button id="spa-bar-feels" type="button" data-public-feature="bar-feels">Bar Exam Simulation</button>
         </div>
-        <div class="pb-chamber-dropdown" id="pb-commons-menu" role="menu" aria-label="The Commons" hidden>
-          <button id="spa-bar-easy" type="button" role="menuitem" data-public-feature="bar-easy">Bar Easy</button>
-          <button id="spa-community" type="button" role="menuitem" data-public-feature="quorum">Quorum</button>
-          <button id="spa-pricing" type="button" role="menuitem" data-public-feature="retainer">Plans &amp; Pricing</button>
-        </div>
-      </div>
-      <div class="pb-chamber-menu pb-chamber-barbound">
-        <div class="pb-chamber-split">
-          <a class="pb-chamber-link" href="#chamber/barbound" id="chamber-barbound" data-pb-chamber-link="barbound">BarBound</a>
-          <button class="pb-chamber-toggle" type="button" aria-haspopup="menu"
-            aria-expanded="false" aria-controls="pb-barbound-menu" data-pb-menu-trigger="barbound"
-            aria-label="Show BarBound features"><span aria-hidden="true">▾</span></button>
-        </div>
-        <div class="pb-chamber-dropdown" id="pb-barbound-menu" role="menu" aria-label="BarBound" hidden>
-          <button class="btn-angel" id="spa-bar-feels" type="button" role="menuitem" data-public-feature="bar-feels" aria-label="Open Bar Feels">Bar Feels</button>
-          <button class="btn-angel" id="spa-chairs-case" type="button" role="menuitem" data-public-feature="chair-cases">2026 Bar Chair&rsquo;s Cases</button>
-          <button class="btn-angel" id="spa-jurisprudence" type="button" role="menuitem" data-public-feature="doctrines">Doctrines</button>
-          <button class="btn-angel" id="spa-case-digest" type="button" role="menuitem" data-public-feature="anchor-cases">Anchor Case Digests</button>
-        </div>
-      </div>
-      </div>
-      <div class="nav-utilities pb-header-utilities" role="group" aria-label="Website utilities">
-        <button class="pb-chamber-pill pb-chamber-room" id="spa-examination-room" type="button"
-          data-public-feature="examination-room">Examination Room</button>
-        <button id="spa-support" type="button" data-pb-legal="support">Support</button>
-        <button class="account-tab" id="btn-signin" type="button">The Docket</button>
+      </details>
+      <button class="quorum-nav-link" id="header-account-control" type="button"
+        data-public-action="docket" aria-label="Sign in or open your profile">Profile</button>
+      <button class="quorum-nav-link" id="spa-pricing" type="button" data-public-feature="retainer">Plans &amp; Pricing</button>
+      <button class="quorum-nav-link" id="spa-support" type="button" data-pb-legal="support">Support</button>
+      <button class="quorum-nav-link quorum-drawer-room" type="button" data-public-feature="examination-room">Examination Room</button>
+      <div class="quorum-shell-compat" hidden aria-hidden="true">
+        <button id="spa-subject-matter" type="button" data-public-feature="subject-matter" tabindex="-1">Subject Matter</button>
+        <button id="spa-progress" type="button" data-public-feature="verdict" tabindex="-1">The Verdict</button>
+        <button id="spa-chairs-case" type="button" data-public-feature="chair-cases" tabindex="-1">2026 Bar Chair&rsquo;s Cases</button>
+        <button id="spa-case-digest" type="button" data-public-feature="anchor-cases" tabindex="-1">Anchor Case Digests</button>
+        <button id="btn-signin" type="button" tabindex="-1">Profile</button>
       </div>
     </nav>
   </header>
 
 <div class="pb-landing" id="private-beta-landing">
-  <section class="pb-pillars" id="public-platform" aria-labelledby="pb-pillars-title">
-    <div class="pb-pillars-heading">
-      <p class="pb-eyebrow">Philippine legal education</p>
-      <h1 id="pb-pillars-title">Choose how you want to prepare.</h1>
-      <p>Review the law, strengthen your legal reasoning, and prepare for the work ahead through the part of Due Diligence made for that purpose.</p>
-    </div>
-    <div class="pb-feature-ledger" aria-label="Due Diligence preparation chambers">
-      <article class="pb-ledger-entry pb-ledger-academy">
-        <div class="pb-ledger-copy">
-          <span class="pb-ledger-number" aria-hidden="true">01</span>
-          <h2><a href="#chamber/academy" data-pb-chamber-link="academy">The Academy</a></h2>
-          <p class="pb-ledger-kicker">Build your doctrinal foundation.</p>
-          <p>Move from realistic Bar essays to focused subject review, then return to your private learning record.</p>
-          <a class="pb-ledger-route" href="#chamber/academy" data-pb-chamber-link="academy">Enter The Academy <span aria-hidden="true">&rarr;</span></a>
-        </div>
-        <div class="pb-ledger-previews pb-ledger-previews-three" aria-label="Academy feature previews">
-          <button type="button" data-public-feature="mock" aria-label="Open Mock Bar">
-            <img src="assets/feature-previews/mock-bar.png" width="1440" height="900" loading="eager" decoding="async" fetchpriority="high" alt="Mock Bar subject selection inside Due Diligence">
-            <span>Mock Bar</span>
-          </button>
-          <button type="button" data-public-feature="subject-matter" aria-label="Open Subject Matter">
-            <img src="assets/feature-previews/subject-matter.png" width="1440" height="900" loading="eager" decoding="async" alt="Subject Matter question and legal writing workspace">
-            <span>Subject Matter</span>
-          </button>
-          <button type="button" data-public-feature="verdict" aria-label="Open The Verdict">
-            <img src="assets/feature-previews/verdict.png" width="1440" height="900" loading="eager" decoding="async" alt="Private Verdict assessment and coaching record">
-            <span>The Verdict</span>
-          </button>
-        </div>
-      </article>
-
-      <article class="pb-ledger-entry pb-ledger-commons">
-        <div class="pb-ledger-copy">
-          <span class="pb-ledger-number" aria-hidden="true">02</span>
-          <h2><a href="#chamber/commons" data-pb-chamber-link="commons">The Commons</a></h2>
-          <p class="pb-ledger-kicker">Learn out loud.</p>
-          <p>Clarify difficult legal ideas, learn with peers, and manage the access that supports your study.</p>
-          <a class="pb-ledger-route" href="#chamber/commons" data-pb-chamber-link="commons">Explore The Commons <span aria-hidden="true">&rarr;</span></a>
-        </div>
-        <div class="pb-ledger-previews pb-ledger-previews-three" aria-label="Commons feature previews">
-          <button type="button" data-public-feature="bar-easy" aria-label="Open Bar Easy">
-            <img src="assets/feature-previews/bar-easy.png" width="1440" height="900" loading="lazy" decoding="async" alt="Bar Easy guided legal reasoning interface">
-            <span>Bar Easy</span>
-          </button>
-          <button type="button" data-public-feature="quorum" aria-label="Open Quorum">
-            <img src="assets/feature-previews/quorum.png" width="1440" height="900" loading="lazy" decoding="async" alt="Quorum academic community feed">
-            <span>Quorum</span>
-          </button>
-          <button type="button" data-public-feature="retainer" aria-label="Open Plans and Pricing">
-            <img src="assets/feature-previews/retainer.png" width="1440" height="900" loading="lazy" decoding="async" alt="Free and Early Access plan options">
-            <span>Plans &amp; Pricing</span>
-          </button>
-        </div>
-      </article>
-
-      <article class="pb-ledger-entry pb-ledger-barbound">
-        <div class="pb-ledger-copy">
-          <span class="pb-ledger-number" aria-hidden="true">03</span>
-          <h2><a href="#chamber/barbound" data-pb-chamber-link="barbound">BarBound</a></h2>
-          <p class="pb-ledger-kicker">Practice with purpose.</p>
-          <p>Train under pressure, master the controlling doctrines, and study the decisions that anchor the Bar syllabus.</p>
-          <a class="pb-ledger-route" href="#chamber/barbound" data-pb-chamber-link="barbound">Practice in BarBound <span aria-hidden="true">&rarr;</span></a>
-        </div>
-        <div class="pb-ledger-previews pb-ledger-previews-four" aria-label="BarBound feature previews">
-          <button type="button" data-public-feature="bar-feels" aria-label="Open Bar Feels">
-            <img src="assets/feature-previews/bar-feels.png" width="1440" height="900" loading="lazy" decoding="async" alt="Bar Feels multi-question examination workspace">
-            <span>Bar Feels</span>
-          </button>
-          <button type="button" data-public-feature="chair-cases" aria-label="Open 2026 Bar Chair's Cases">
-            <img src="assets/feature-previews/chairs-cases.png" width="1440" height="900" loading="lazy" decoding="async" alt="2026 Bar Chair's Cases study interface">
-            <span>Chair&rsquo;s Cases</span>
-          </button>
-          <button type="button" data-public-feature="doctrines" aria-label="Open Doctrines">
-            <img src="assets/feature-previews/doctrines.png" width="1440" height="900" loading="lazy" decoding="async" alt="Doctrines recall and verification interface">
-            <span>Doctrines</span>
-          </button>
-          <button type="button" data-public-feature="anchor-cases" aria-label="Open Anchor Case Digests">
-            <img src="assets/feature-previews/anchor-cases.png" width="1440" height="900" loading="lazy" decoding="async" alt="Anchor Case Digests research interface">
-            <span>Anchor Cases</span>
-          </button>
-        </div>
-      </article>
-
-      <article class="pb-ledger-entry pb-ledger-examination-room">
-        <div class="pb-ledger-copy">
-          <span class="pb-ledger-number" aria-hidden="true">04</span>
-          <h2><button type="button" data-public-feature="examination-room">Examination Room</button></h2>
-          <p class="pb-ledger-kicker">Examine under real conditions.</p>
-          <p>Run role-based class examinations with secure access, saved answers, live monitoring, and auditable results.</p>
-          <button class="pb-ledger-route" type="button" data-public-feature="examination-room">Enter the Examination Room <span aria-hidden="true">&rarr;</span></button>
-        </div>
-        <div class="pb-ledger-previews pb-ledger-previews-single" aria-label="Examination Room preview">
-          <button type="button" data-public-feature="examination-room" aria-label="Open Examination Room">
-            <img src="assets/feature-previews/examination-room.png" width="1440" height="900" loading="lazy" decoding="async" alt="Examination Room role selection interface">
-            <span>Professor &middot; Beadle &middot; Student</span>
-          </button>
-        </div>
-      </article>
-    </div>
+  <section class="quorum-entry" id="public-platform" aria-labelledby="pb-pillars-title">
+    <img src="assets/brand/icon-192.png" width="84" height="84" alt="" aria-hidden="true">
+    <p class="pb-eyebrow">Philippine legal education</p>
+    <h1 id="pb-pillars-title">Your legal study community.</h1>
+    <p>Sign in to continue to Quorum and your practice workspace.</p>
+    <button class="quorum-entry-action" type="button" data-pb-open-admission>Continue with Google</button>
   </section>
   <section class="pb-chamber-view" id="pb-chamber-view" aria-live="polite" hidden></section>
 
@@ -1284,12 +1170,12 @@
 <section id="page-community" class="page">
   <div class="page-wrap lex-page-wrap">
     <header class="page-head lex-page-head quorum-community-banner">
-      <div class="eyebrow">Due Diligence Academic Community</div>
+      <div class="eyebrow">Due Diligence Community</div>
       <div class="lex-title-row">
         <h2>Quorum</h2>
         <span class="lex-beta-badge">Members only</span>
       </div>
-      <p class="quorum-motto">The floor is yours—speak your mind, ask questions, share your law school journey, and learn together.</p>
+      <p class="quorum-motto">Ask, share, and learn with the Philippine law-school community.</p>
     </header>
 
     <div class="lex-auth-state" id="lex-auth-state" role="status" aria-live="polite">
@@ -1298,7 +1184,7 @@
 
     <div id="lex-forum-app" hidden>
       <button class="lex-button quorum-menu-open" id="quorum-menu-open" type="button"
-        aria-controls="quorum-navigation" aria-expanded="false">Open Quorum menu</button>
+        aria-controls="quorum-navigation" aria-expanded="false">Community</button>
       <div class="lex-layout">
         <aside class="quorum-navigation" id="quorum-navigation" aria-label="Quorum navigation"
           aria-hidden="true" tabindex="-1">
@@ -1428,6 +1314,18 @@
             </div>
           </form>
 
+          <section class="quorum-practice-card quorum-practice-card-mobile" aria-label="Practice Exam">
+            <span class="lex-kicker">Practice Exam</span>
+            <h3>Ace the Bar with confidence.</h3>
+            <p>Build exam readiness through focused Philippine Bar-style practice.</p>
+            <ul class="quorum-practice-benefits">
+              <li>Real Bar-style questions</li>
+              <li>Source-grounded coaching</li>
+              <li>Private progress tracking</li>
+            </ul>
+            <button class="lex-button lex-button-primary" type="button" data-public-feature="mock">Try Practice Exam</button>
+          </section>
+
           <div class="lex-feed-toolbar">
             <div>
               <span class="lex-kicker" id="quorum-feed-kicker">Academic community</span>
@@ -1487,11 +1385,16 @@
             <strong>Educational discussion only</strong>
             <p>Quorum is an educational discussion space for the Due Diligence community. User-generated posts do not constitute legal advice. Verify statutes and jurisprudence through official sources.</p>
           </section>
-          <section class="quorum-practice-card">
-            <span class="lex-kicker">Mock Bar</span>
-            <h3>Turn discussion into deliberate practice.</h3>
-            <p>Apply a genuine Quorum issue mapping to a Philippine Bar-style essay when one is available.</p>
-            <button class="lex-button lex-button-primary" type="button" onclick="showPage('mock', document.getElementById('spa-mock'))">Open Mock Bar</button>
+          <section class="quorum-practice-card quorum-practice-card-desktop">
+            <span class="lex-kicker">Practice Exam</span>
+            <h3>Ace the Bar with confidence.</h3>
+            <p>Build exam readiness through focused Philippine Bar-style practice.</p>
+            <ul class="quorum-practice-benefits">
+              <li>Real Bar-style questions</li>
+              <li>Source-grounded coaching</li>
+              <li>Private progress tracking</li>
+            </ul>
+            <button class="lex-button lex-button-primary" type="button" data-public-feature="mock">Try Practice Exam</button>
           </section>
         </aside>
       </div>
@@ -4326,6 +4229,7 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
 <script src="assets/feature-loader.js?v=exam-room-ux-20260814-1&amp;release=subject-matter-gil-fixes-20260817-4&amp;perf=protected-navigation-20260820-1"></script>
+<script src="assets/quorum-first-shell.js?v=quorum-first-renovation-20260820-1"></script>
 <script src="assets/private-beta-landing.js?v=commercial-launch-20260818-1"></script>
 
 </body>

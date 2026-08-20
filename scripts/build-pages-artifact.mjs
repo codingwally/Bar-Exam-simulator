@@ -52,6 +52,8 @@ const publicFiles = Object.freeze([
   'assets/private-beta-session.js',
   'assets/private-beta-landing.css',
   'assets/due-diligence-controls.css',
+  'assets/quorum-first-shell.css',
+  'assets/quorum-first-shell.js',
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
   'assets/free-trial-five-daily.js',

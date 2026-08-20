@@ -124,23 +124,24 @@ assert.equal(assignments.length, 120);
 assert.equal(new Set(assignments.map((row) => row.questionId)).size, 120);
 
 for (const phrase of [
-  'Mock Bar',
+  'Home',
+  'Practice Exam',
+  'Guided Practice',
+  'Doctrine Review',
+  'Bar Question Practice',
+  'Bar Exam Simulation',
   'Subject Matter',
-  'Bar Feels',
-  'The Verdict',
   'Plans &amp; Pricing',
-  'Quorum',
-  'Recent Jurisprudence',
+  'Profile',
   'Support',
-  'Partnerships',
-  'The Docket',
+  'Examination Room',
 ]) assert.match(html, new RegExp(phrase));
 
 assert.match(
   html,
-  /The floor is yours—speak your mind, ask questions, share your law school journey, and learn together\./,
+  /<form class="lex-composer" id="lex-composer"[^>]*aria-label="Share with Quorum">[\s\S]*The floor is yours/,
 );
-assert.match(html, /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/);
+assert.match(html, /<h1 id="pb-pillars-title">Your legal study community\.<\/h1>/);
 for (const featureId of ['spa-mock', 'spa-subject-matter', 'spa-progress', 'spa-bar-easy', 'spa-community', 'spa-pricing', 'spa-bar-feels', 'spa-chairs-case', 'spa-jurisprudence', 'spa-case-digest']) {
   assert.match(html, new RegExp(`id="${featureId}"`));
 }

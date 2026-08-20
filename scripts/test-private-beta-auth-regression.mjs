@@ -180,6 +180,9 @@ async function runAuthenticatedSync({
     async openProtectedFeature(feature) {
       calls.push(['openProtectedFeature', feature]);
     },
+    async openQuorumHome() {
+      calls.push(['openQuorumHome']);
+    },
     showLanding() {
       calls.push(['showLanding']);
     },
@@ -215,6 +218,7 @@ async function runUnauthenticatedSync({ gateEnabled = true, route = '' } = {}) {
     showLanding(options) { calls.push(['showLanding', options]); },
     showApplication() { calls.push(['showApplication']); },
     async openProtectedFeature(feature) { calls.push(['openProtectedFeature', feature]); },
+    async openQuorumHome() { calls.push(['openQuorumHome']); },
     openAdmission(stage) { calls.push(['openAdmission', stage]); },
     setStatus() {},
     URLSearchParams,
@@ -230,13 +234,13 @@ async function runUnauthenticatedSync({ gateEnabled = true, route = '' } = {}) {
   return calls;
 }
 
-// An authenticated visitor at the canonical root must see the new four-chamber
-// homepage even when the retired admission gate is disabled.
+// An authenticated visitor at the canonical root must enter Quorum even when
+// the retired admission gate is disabled.
 {
   const result = await runAuthenticatedSync({ pending: null, gateEnabled: false });
   assert.ok(
-    result.calls.some(([name]) => name === 'showLanding'),
-    'A signed-in user at root must remain on the new homepage.',
+    result.calls.some(([name]) => name === 'openQuorumHome'),
+    'A signed-in user at root must enter the protected Quorum home.',
   );
   assert.equal(
     result.calls.some(([name]) => name === 'openAdmission'),
@@ -278,7 +282,7 @@ async function runUnauthenticatedSync({ gateEnabled = true, route = '' } = {}) {
 
 // With the protected global policy enabled, an authenticated account no longer
 // depends on a browser-stored admission token. At root it remains on the new
-// homepage after the server confirms eligibility.
+// Quorum home after the server confirms eligibility.
 {
   const result = await runAuthenticatedSync({
     pending: null,
@@ -286,8 +290,8 @@ async function runUnauthenticatedSync({ gateEnabled = true, route = '' } = {}) {
     allowed: true,
   });
   assert.ok(
-    result.calls.some(([name]) => name === 'showLanding'),
-    'An eligible signed-in account at root must see the new homepage.',
+    result.calls.some(([name]) => name === 'openQuorumHome'),
+    'An eligible signed-in account at root must enter Quorum.',
   );
   assert.equal(
     result.calls.some(([name]) => name === 'openAdmission'),

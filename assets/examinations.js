@@ -1261,74 +1261,7 @@
     return 'problem';
   }
 
-  function subjectWritingGuide(question = {}) {
-    const type = inferSubjectQuestionType(question);
-    const guides = {
-      problem: {
-        label: 'Fact-based legal problem',
-        focus: ['Direct position', 'Governing rule', 'Material facts', 'Clear result'],
-        approach: 'Take a clear position on the legal issue, identify the controlling rule, and connect only the material facts to that rule before stating the result. Address a competing argument only when the facts genuinely raise one.',
-        placeholder: 'Answer the precise legal issue. State the governing rule, apply the material facts, and give a clear result. Use the structure that best fits your analysis.',
-      },
-      definition: {
-        label: 'Definition',
-        focus: ['Precise meaning', 'Governing authority', 'Elements or scope', 'Qualifications'],
-        approach: 'Give the precise legal meaning first. Then identify the essential elements, scope, and any qualification the question actually calls for. Do not turn a definition question into an invented factual problem.',
-        placeholder: 'Give the precise legal definition requested. Explain its essential elements, scope, and material qualifications without inventing facts.',
-      },
-      explanation: {
-        label: 'Legal explanation',
-        focus: ['Core proposition', 'Governing authority', 'Complete explanation', 'Limits or exceptions'],
-        approach: 'State the core proposition directly, explain how the rule operates, and add only the limits or exceptions needed to make the explanation legally complete. Keep the response centered on the concept named in the question.',
-        placeholder: 'Explain the requested concept completely. State the controlling rule or doctrine, develop the reasoning, and address material limits or exceptions.',
-      },
-      enumeration: {
-        label: 'Enumeration',
-        focus: ['Complete list', 'Governing source', 'Brief explanation', 'Qualifications'],
-        approach: 'List every item requested, then briefly explain each one. For this kind of question, completeness and accuracy matter more than a long factual application. Cite the governing source if you know it.',
-        placeholder: 'Provide the complete enumeration requested. Identify the governing source and briefly explain each material item or qualification.',
-      },
-      distinction: {
-        label: 'Distinction',
-        focus: ['Point of comparison', 'First concept', 'Second concept', 'Legal effect'],
-        approach: 'Compare the concepts using the same legally relevant points: their rule, elements, operation, and legal effect. A paired comparison is usually clearer than two unrelated definitions.',
-        placeholder: 'Distinguish the concepts using the legally relevant points of comparison, their governing rules, and the practical legal effect of each difference.',
-      },
-      procedure: {
-        label: 'Procedure or remedy',
-        focus: ['Proper remedy', 'Governing rule', 'Required steps', 'Timing and effect'],
-        approach: 'Identify the proper remedy or procedural step first. Then explain who may use it, when it is available, the required sequence, and the consequence of following or missing the rule.',
-        placeholder: 'Identify the proper procedure or remedy. Explain the controlling rule, required steps, timing, and legal effect.',
-      },
-      practical: {
-        label: 'Practical legal task',
-        focus: ['Requested action', 'Legal requirements', 'Tailored execution', 'Safeguards'],
-        approach: 'Produce the exact legal work requested. Check each formal and substantive requirement against the facts given, and include the safeguards needed to make the work usable and accurate.',
-        placeholder: 'Perform the requested practical task. Follow the governing legal requirements and tailor the response to the circumstances stated.',
-      },
-      doctrine: {
-        label: 'Doctrine',
-        focus: ['Doctrine', 'Authority', 'Scope and operation', 'Limits or exceptions'],
-        approach: 'State the doctrine accurately, explain when it operates, and identify its material limits or exceptions. Use the authority to support the doctrine, not as a substitute for explaining it.',
-        placeholder: 'State the doctrine accurately, identify its authority, and explain its scope, operation, and material limits or exceptions.',
-      },
-      mixed: {
-        label: 'Multi-part question',
-        focus: ['Every subpart', 'Governing rules', 'Complete analysis', 'Clear dispositions'],
-        approach: 'Separate the response by task so no subpart is missed. Give each subpart its own controlling rule and analysis, then state a clear result wherever the question requires one.',
-        placeholder: 'Answer every subpart separately and completely. Use the appropriate rule and analysis for each task, then give a clear disposition where required.',
-      },
-      other: {
-        label: 'Legal response',
-        focus: ['Precise task', 'Governing law', 'Complete reasoning', 'Clear response'],
-        approach: 'Identify the exact legal task before writing. Respond directly, ground the explanation in the governing law, and use the structure that makes the requested answer easiest to verify.',
-        placeholder: 'Respond directly to the task asked. State the governing law and develop a complete, clear legal explanation.',
-      },
-    };
-    return { type, ...(guides[type] || guides.other) };
-  }
-
-  function subjectPracticeRoomMarkup({ question, timerMode, writingGuide }) {
+  function subjectPracticeRoomMarkup({ question, timerMode }) {
     const course = state.active.examination.subject || state.selectedSubject || 'Selected course';
     const answerText = question.answerText || '';
     const attemptId = state.active.attempt.attemptId;
@@ -1338,7 +1271,7 @@
       <header class="dd-subject-editorial-header">
         <div>
           <p class="dd-exam-kicker">Review and retention</p>
-          <p class="dd-subject-breadcrumb"><span>The Academy</span><b aria-hidden="true">/</b> Subject Matter</p>
+          <p class="dd-subject-breadcrumb"><span>Practice Exam</span><b aria-hidden="true">/</b> Subject Matter</p>
           <h1>Subject Matter</h1>
         </div>
         <div class="dd-subject-course-picker">
@@ -1362,10 +1295,6 @@
             <p class="dd-subject-task-label">Your practice question</p>
             <h2 class="dd-question-prompt" id="dd-subject-question-title" tabindex="-1">${escapeHtml(question.prompt)}</h2>
           </div>
-          <section class="dd-subject-approach" aria-labelledby="dd-subject-writing-approach-title">
-            <h3 id="dd-subject-writing-approach-title">Writing approach</h3>
-            <p>${escapeHtml(writingGuide.approach)}</p>
-          </section>
           <div class="dd-subject-answer-heading">
             <div><p class="dd-exam-kicker">Your response</p><h3 id="dd-subject-answer-title">Write your answer</h3></div>
           </div>
@@ -1375,8 +1304,7 @@
           </div>` : ''}
           <section class="dd-answer-card">
             <label class="sr-only" for="dd-answer-editor">Your answer</label>
-            <textarea class="dd-answer-editor" id="dd-answer-editor" maxlength="20000"
-              placeholder="${escapeAttribute(writingGuide.placeholder)}">${escapeHtml(answerText)}</textarea>
+            <textarea class="dd-answer-editor" id="dd-answer-editor" maxlength="20000">${escapeHtml(answerText)}</textarea>
             <footer class="dd-answer-footer">
               <span id="dd-word-count">${wordCount(answerText)} words</span>
               <span class="dd-save-state is-saved" id="dd-save-state">${Number(question.revision) > 0 ? 'Saved' : 'Ready to save'}</span>
@@ -1430,12 +1358,11 @@
       && state.active.questions.length === 1;
     const subjectPractice = state.active.examination.track === 'per_subject';
     const richWriting = state.active.examination.track === 'bar_feels';
-    const writingGuide = subjectPractice ? subjectWritingGuide(question) : null;
     const safeAnswerHtml = richWriting
       ? sanitizeRichHtml(question.answerHtml || richHtmlFromText(question.answerText || ''))
       : '';
     if (subjectPractice) {
-      root.innerHTML = subjectPracticeRoomMarkup({ question, timerMode, writingGuide });
+      root.innerHTML = subjectPracticeRoomMarkup({ question, timerMode });
       bindRoom(root);
       restoreRevealedSubjectReview(root);
       updateClockNode();
@@ -1481,11 +1408,7 @@
             <button class="dd-exam-button" type="button" data-use-local-draft>Restore local draft</button>
           </div>` : ''}
           <section class="dd-answer-card">
-            ${subjectPractice ? `<div class="dd-writing-guide" aria-label="Suggested focus for this ${escapeAttribute(writingGuide.label.toLowerCase())}">
-              <strong>${escapeHtml(writingGuide.label)}</strong>
-              <span>Suggested focus — adapt it to the question:</span>
-              ${writingGuide.focus.map((item) => `<span>${escapeHtml(item)}</span>`).join('')}
-            </div>` : `<div class="dd-alac-guide">
+            ${subjectPractice ? '' : `<div class="dd-alac-guide">
               <span>I. Answer</span><span>II. Legal Basis</span>
               <span>III. Application</span><span>IV. Conclusion</span>
             </div>`}
@@ -1496,7 +1419,7 @@
               aria-label="Your ALAC answer" data-placeholder="I. ANSWER — State your direct answer.&#10;&#10;II. LEGAL BASIS — Cite the governing provision or doctrine.&#10;&#10;III. APPLICATION — Apply the exact facts to the law.&#10;&#10;IV. CONCLUSION — Reaffirm your position.">${safeAnswerHtml}</div>
             <textarea id="dd-answer-editor" class="dd-answer-editor-backup" maxlength="20000"
               aria-hidden="true" tabindex="-1">${escapeHtml(question.answerText || '')}</textarea>` : `<textarea class="dd-answer-editor" id="dd-answer-editor" maxlength="20000"
-              placeholder="${escapeAttribute(writingGuide.placeholder)}">${escapeHtml(question.answerText || '')}</textarea>`}
+              ${subjectPractice ? '' : `placeholder="${escapeAttribute(writingGuide.placeholder)}"`}>${escapeHtml(question.answerText || '')}</textarea>`}
             <footer class="dd-answer-footer">
               <span id="dd-word-count">${wordCount(question.answerText)} words</span>
               <span class="dd-save-state is-saved" id="dd-save-state">Server revision ${Number(question.revision) || 0}</span>
@@ -2771,7 +2694,7 @@
       <header class="dd-subject-editorial-header">
         <div>
           <p class="dd-exam-kicker">Review and retention</p>
-          <p class="dd-subject-breadcrumb"><span>The Academy</span><b aria-hidden="true">/</b> Subject Matter</p>
+          <p class="dd-subject-breadcrumb"><span>Practice Exam</span><b aria-hidden="true">/</b> Subject Matter</p>
           <h1 data-subject-result-heading tabindex="-1">Subject Matter</h1>
         </div>
         <div class="dd-subject-course-picker">

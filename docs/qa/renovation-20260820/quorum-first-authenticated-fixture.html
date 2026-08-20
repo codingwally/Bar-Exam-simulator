@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en-PH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Quorum-first authenticated visual fixture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&amp;family=Inter:wght@400;500;600;700;800&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../../assets/phase2.css">
+  <link rel="stylesheet" href="../../../assets/private-beta-landing.css">
+  <link rel="stylesheet" href="../../../assets/lex-forum.css">
+  <link rel="stylesheet" href="../../../assets/quorum-first-shell.css">
+  <style>
+    :root {
+      --sans: Inter, sans-serif;
+      --serif-display: "Playfair Display", Georgia, serif;
+      --mono: "IBM Plex Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body { color: #14213a; background: #f4f3ef; font-family: var(--sans); }
+    button, input, textarea, select { font: inherit; }
+    [hidden] { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  </style>
+</head>
+<body data-qa-fixture="quorum-first-authenticated">
+  <header class="topbar pb-header pb-shared-header qfs-shell" id="site-header">
+    <a class="brand pb-brand" href="#quorum" data-public-home aria-label="Due Diligence — Home">
+      <img class="crest pb-crest" src="../../../assets/brand/icon-192.png" width="50" height="50" alt="">
+      <span>
+        <span class="brand-name pb-brand-name">Due Diligence</span>
+        <span class="brand-sub pb-brand-sub">Amicus in Itinere Iuris</span>
+      </span>
+    </a>
+    <div class="topbar-actions quorum-header-actions">
+      <button class="site-menu-toggle qfs-menu-toggle" id="site-menu-toggle" type="button" aria-controls="spa-nav" aria-expanded="false">Menu</button>
+      <button class="quorum-room-shortcut" id="spa-examination-room" type="button" data-public-feature="examination-room">Examination Room</button>
+    </div>
+    <nav class="spa-nav quorum-primary-nav qfs-drawer" id="spa-nav" aria-label="Primary navigation">
+      <div class="quorum-nav-heading"><p>Menu</p><button class="quorum-nav-close" type="button" data-shell-menu-close aria-label="Close menu">&times;</button></div>
+      <button class="quorum-nav-link" id="spa-community" type="button" data-public-feature="quorum">Home</button>
+      <details class="quorum-practice-menu" id="quorum-practice-menu">
+        <summary>Practice Exam</summary>
+        <div class="quorum-practice-links">
+          <button id="spa-bar-easy" type="button" data-public-feature="bar-easy">Guided Practice</button>
+          <button id="spa-jurisprudence" type="button" data-public-feature="doctrines">Doctrine Review</button>
+          <button id="spa-mock" type="button" data-public-feature="mock">Bar Question Practice</button>
+          <button id="spa-bar-feels" type="button" data-public-feature="bar-feels">Bar Exam Simulation</button>
+        </div>
+      </details>
+      <button class="quorum-nav-link" id="header-account-control" type="button" data-public-action="docket">Profile</button>
+      <button class="quorum-nav-link" id="spa-pricing" type="button" data-public-feature="retainer">Plans &amp; Pricing</button>
+      <button class="quorum-nav-link" id="spa-support" type="button" data-pb-legal="support">Support</button>
+      <button class="quorum-nav-link quorum-drawer-room" type="button" data-public-feature="examination-room">Examination Room</button>
+    </nav>
+  </header>
+
+  <section id="page-community" class="page">
+    <div class="page-wrap lex-page-wrap">
+      <header class="page-head lex-page-head"><div class="lex-title-row"><h2>Quorum</h2></div></header>
+      <div id="lex-forum-app">
+        <button class="lex-button quorum-menu-open" id="quorum-menu-open" type="button">Community</button>
+        <div class="lex-layout">
+          <aside class="quorum-navigation" id="quorum-navigation" aria-label="Quorum navigation" aria-hidden="true">
+            <div class="quorum-drawer-head"><strong>Quorum menu</strong><button class="quorum-drawer-close" type="button" aria-label="Close Quorum menu">×</button></div>
+          </aside>
+          <button class="quorum-drawer-scrim" type="button" aria-label="Close Quorum menu" tabindex="-1"></button>
+          <main class="lex-primary" aria-label="Quorum Feed">
+            <form class="quorum-search" role="search">
+              <label class="sr-only" for="qa-quorum-search">Search Quorum</label>
+              <input id="qa-quorum-search" type="search" placeholder="Search posts, authorities, circles, or members">
+              <button class="lex-button lex-button-primary" type="submit">Search</button>
+            </form>
+            <form class="lex-composer" aria-label="Share with Quorum">
+              <div class="lex-composer-heading"><div><span class="lex-kicker">The floor is yours</span></div><span class="lex-member-mark" aria-hidden="true">DD</span></div>
+              <label class="sr-only" for="qa-post">Share with Quorum</label>
+              <textarea id="qa-post" maxlength="4000" rows="2" placeholder="What do you want to ask or share about law school?"></textarea>
+              <div class="lex-composer-meta">
+                <div class="quorum-image-control"><button class="quorum-composer-tool" type="button">Photo</button><span>Up to 12 JPEG, PNG, or WebP images · 3 MB each</span></div>
+                <details class="quorum-add-details"><summary>Add details</summary></details>
+                <div class="lex-composer-actions"><span>0 / 4,000</span><button class="lex-button lex-button-quiet" type="button">Preview</button><button class="lex-button lex-button-quiet" type="button">Cancel</button><button class="lex-button lex-button-primary" type="submit">Post</button></div>
+              </div>
+            </form>
+            <section class="quorum-practice-card quorum-practice-card-mobile" aria-label="Practice Exam">
+              <span class="lex-kicker">Practice Exam</span><h3>Ace the Bar with confidence.</h3><p>Build exam readiness through focused Philippine Bar-style practice.</p>
+              <ul class="quorum-practice-benefits"><li>Real Bar-style questions</li><li>Source-grounded coaching</li><li>Private progress tracking</li></ul>
+              <button class="lex-button lex-button-primary" type="button" data-public-feature="mock">Try Practice Exam</button>
+            </section>
+            <div class="lex-feed-toolbar"><div><span class="lex-kicker">Academic community</span><h3>Quorum Feed</h3></div><div class="quorum-toolbar-actions"><select aria-label="Sort posts"><option>Latest first</option></select><button class="lex-button lex-button-quiet" type="button">Refresh</button></div></div>
+            <article class="lex-post-card"><header class="lex-post-header"><div><span class="lex-member-mark">ML</span><strong>Mara L.</strong></div><time>Today</time></header><p>Which case helped you understand the distinction between jurisdiction over the subject matter and jurisdiction over the person?</p></article>
+          </main>
+          <aside class="lex-secondary" aria-label="Quorum supporting information">
+            <section class="quorum-practice-card quorum-practice-card-desktop">
+              <span class="lex-kicker">Practice Exam</span>
+              <h3>Ace the Bar with confidence.</h3>
+              <p>Build exam readiness through focused Philippine Bar-style practice.</p>
+              <ul class="quorum-practice-benefits"><li>Real Bar-style questions</li><li>Source-grounded coaching</li><li>Private progress tracking</li></ul>
+              <button class="lex-button lex-button-primary" type="button" data-public-feature="mock">Try Practice Exam</button>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </section>
+  <script>
+    window.setSiteMenuOpen = (open) => {
+      document.getElementById('spa-nav')?.classList.toggle('is-open', Boolean(open));
+    };
+    document.getElementById('site-menu-toggle')?.addEventListener('click', () => {
+      const nav = document.getElementById('spa-nav');
+      window.setSiteMenuOpen(!nav?.classList.contains('is-open'));
+    });
+  </script>
+  <script src="../../../assets/quorum-first-shell.js"></script>
+  <script>
+    if (new URLSearchParams(window.location.search).get('drawer') === 'open') {
+      document.getElementById('site-menu-toggle')?.click();
+    }
+  </script>
+</body>
+</html>

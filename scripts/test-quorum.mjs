@@ -31,11 +31,11 @@ const [
   fs.readFile(new URL('../supabase/migrations/20260805120000_complete_beta_release_foundation.sql', import.meta.url), 'utf8'),
 ]);
 
-assert.match(html, /id="spa-community"[\s\S]*?>Quorum<\/button>/);
+assert.match(html, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
 assert.match(html, /<h2>Quorum<\/h2>/);
 assert.match(
   html,
-  /The floor is yours—speak your mind, ask questions, share your law school journey, and learn together\./,
+  /Ask, share, and learn with the Philippine law-school community\./,
 );
 assert.match(html, /Quorum Feed/);
 assert.match(html, /Saved/);

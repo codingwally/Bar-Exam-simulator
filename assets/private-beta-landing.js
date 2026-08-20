@@ -22,55 +22,6 @@
     'chamber/commons',
     'chamber/barbound',
   ]);
-  const chamberViews = Object.freeze({
-    academy: Object.freeze({
-      kicker: 'The Academy',
-      title: 'Practice the work. Understand the law. See your progress.',
-      copy: 'The Academy brings focused legal writing, course-based review, and your private learning record into one deliberate study path. Begin with the kind of practice you need today, then return to see how your reasoning develops.',
-      features: Object.freeze([
-        Object.freeze({ id: 'mock', title: 'Mock Bar', eyebrow: 'Bar-style essay practice', action: 'Try Mock Bar', copy: 'Work through realistic Philippine Bar-style essays across eight subjects. Receive candid, source-backed coaching on the approved 0–5 practice scale—never a prediction of an official Bar result.' }),
-        Object.freeze({ id: 'subject-matter', title: 'Subject Matter', eyebrow: 'Review and retention', action: 'Review a subject', copy: 'Choose a law-school course, review one focused question, and reveal its vetted legal basis, explanation, and official sources when you are ready. Writing from memory remains available beside the review.' }),
-        Object.freeze({ id: 'verdict', title: 'The Verdict', eyebrow: 'Your private learning record', action: 'View The Verdict', copy: 'Return to your own attempts, answers, coaching, and study exports. Use the record to revisit difficult questions and notice how your legal reasoning changes over time.' }),
-      ]),
-      access: 'Sign in when you begin an examination or open your personal record.',
-    }),
-    commons: Object.freeze({
-      kicker: 'The Commons',
-      title: 'Make the law clearer—and learning less solitary.',
-      copy: 'The Commons is where plain-language practice meets academic community. Work through a legal idea in your own words, exchange questions and resources with fellow learners, and manage the access that supports your study.',
-      features: Object.freeze([
-        Object.freeze({ id: 'bar-easy', title: 'Bar Easy', eyebrow: 'Legal reasoning in plain language', action: 'Open Bar Easy', copy: 'Explain a legal idea in words that make sense to you before viewing coaching and verified legal material. It is a calmer way to turn understanding into a usable legal explanation.' }),
-        Object.freeze({ id: 'quorum', title: 'Quorum', eyebrow: 'Academic community', action: 'Enter Quorum', copy: 'Ask questions, exchange case notes, share study help and resources, and find study circles within the signed-in Due Diligence community.' }),
-        Object.freeze({ id: 'retainer', title: 'Plans & Pricing', eyebrow: 'Choose your access', action: 'View Plans', copy: 'Choose Free with five successful submissions per Philippine day, or ₱149 one-time Early Access through October 1, 2026.' }),
-      ]),
-      access: 'Reading the introduction is public. Community participation and personal access details require sign-in.',
-    }),
-    barbound: Object.freeze({
-      kicker: 'BarBound',
-      title: 'Move beyond recall. Prepare to perform.',
-      copy: 'BarBound gathers the deeper work of Bar preparation: sustained writing under exam conditions, disciplined doctrine recall, the Chair’s Cases, and the decisions that anchor the syllabus.',
-      features: Object.freeze([
-        Object.freeze({ id: 'bar-feels', title: 'Bar Feels', eyebrow: 'Full examination simulation', action: 'Start Bar Feels', copy: 'Enter a curated multi-question Bar simulation with timed writing, question navigation, review, and submission. The approved coaching and grading experience follows your completed attempt.' }),
-        Object.freeze({ id: 'chair-cases', title: '2026 Bar Chair’s Cases', eyebrow: 'Decisions shaping the 2026 Bar', action: 'Study Chair’s Cases', copy: 'Study selected decisions through their Bar relevance, facts, issue, ruling, controlling doctrine, and disposition, with a path to the official full text.' }),
-        Object.freeze({ id: 'doctrines', title: 'Doctrines', eyebrow: 'Recall, explain, verify', action: 'Practice Doctrines', copy: 'Retrieve a doctrine before reading it, explain it in your own words, then verify its meaning, limits, exceptions, and authority.' }),
-        Object.freeze({ id: 'anchor-cases', title: 'Anchor Case Digests', eyebrow: 'Foundational decisions', action: 'Browse Anchor Cases', copy: 'Search foundational decisions and review their facts, issue, ruling, doctrine, disposition, and practical use, with official sources available for deeper reading.' }),
-      ]),
-      access: 'Protected BarBound features open only when your current account has the required access.',
-    }),
-  });
-  const featurePreviews = Object.freeze({
-    mock: Object.freeze({ file: 'mock-bar.png', alt: 'Mock Bar subject selection inside Due Diligence' }),
-    'subject-matter': Object.freeze({ file: 'subject-matter.png', alt: 'Subject Matter question and legal writing workspace' }),
-    verdict: Object.freeze({ file: 'verdict.png', alt: 'Private Verdict assessment and coaching record' }),
-    'bar-easy': Object.freeze({ file: 'bar-easy.png', alt: 'Bar Easy guided legal reasoning interface' }),
-    quorum: Object.freeze({ file: 'quorum.png', alt: 'Quorum academic community feed' }),
-    retainer: Object.freeze({ file: 'retainer.png', alt: 'Free and Early Access plan options' }),
-    'bar-feels': Object.freeze({ file: 'bar-feels.png', alt: 'Bar Feels multi-question examination workspace' }),
-    'chair-cases': Object.freeze({ file: 'chairs-cases.png', alt: '2026 Bar Chair\u2019s Cases study interface' }),
-    doctrines: Object.freeze({ file: 'doctrines.png', alt: 'Doctrines recall and verification interface' }),
-    'anchor-cases': Object.freeze({ file: 'anchor-cases.png', alt: 'Anchor Case Digests research interface' }),
-    'examination-room': Object.freeze({ file: 'examination-room.png', alt: 'Examination Room role selection interface' }),
-  });
   const state = {
     stage: 'disclosure',
     disclosureEndReached: false,
@@ -82,6 +33,7 @@
     policyPromise: null,
     lastActivatedHash: '',
     routeActivationVersion: 0,
+    quorumHomePromise: null,
   };
 
   function privateBetaApi() {
@@ -129,64 +81,14 @@
   }
 
   function renderPublicRoute({ focus = false } = {}) {
-    const route = normalizedHash();
-    const chamber = route.startsWith('chamber/') ? route.slice('chamber/'.length) : '';
-    const definition = chamberViews[chamber];
     const home = document.getElementById('public-platform');
     const view = document.getElementById('pb-chamber-view');
     if (!home || !view) return;
-    if (!definition) {
-      setHidden(home, false);
-      setHidden(view, true);
-      view.replaceChildren();
-      global.activatePrimaryMenuItem?.('');
-      return;
-    }
-    global.activatePrimaryMenuItem?.(`chamber-${chamber}`);
-    const featureMarkup = definition.features.map((feature) => {
-      const preview = featurePreviews[feature.id];
-      return `<article class="pb-chamber-feature">
-        <button class="pb-chamber-feature-preview" type="button" data-public-feature="${feature.id}" aria-label="Open ${feature.title}">
-          <img src="assets/feature-previews/${preview.file}" width="1440" height="900" loading="lazy" decoding="async" alt="${preview.alt}">
-        </button>
-        <div class="pb-chamber-feature-copy"><p class="pb-chamber-feature-eyebrow">${feature.eyebrow}</p><h3>${feature.title}</h3><p>${feature.copy}</p>
-          <button class="pb-chamber-feature-action" type="button" data-public-feature="${feature.id}">${feature.action}</button>
-        </div>
-      </article>`;
-    }).join('');
-    const firstFeature = definition.features[0];
-    const introPreviews = definition.features.slice(0, 3).map((feature) => {
-      const preview = featurePreviews[feature.id];
-      return `<button class="pb-chamber-intro-preview" type="button" data-public-feature="${feature.id}" aria-label="Open ${feature.title}">
-        <img src="assets/feature-previews/${preview.file}" width="1440" height="900" loading="eager" decoding="async" alt="${preview.alt}">
-        <span>${feature.title}</span>
-      </button>`;
-    }).join('');
-    view.innerHTML = `<article class="pb-chamber-page">
-      <section class="pb-chamber-intro">
-        <div class="pb-chamber-intro-copy">
-          <p class="pb-chamber-kicker">${definition.kicker}</p>
-          <h1 tabindex="-1">${definition.title}</h1>
-          <p>${definition.copy}</p>
-          <div class="pb-chamber-intro-actions">
-            <button class="pb-chamber-primary" type="button" data-public-feature="${firstFeature.id}">${firstFeature.action}</button>
-            <button class="pb-chamber-back" type="button" data-public-home>Back to all chambers</button>
-          </div>
-        </div>
-        <div class="pb-chamber-intro-visual" aria-label="${definition.kicker} feature previews">${introPreviews}</div>
-      </section>
-      <section class="pb-chamber-feature-index" aria-labelledby="pb-chamber-feature-title">
-        <header>
-          <p class="pb-eyebrow">Inside ${definition.kicker}</p>
-          <h2 id="pb-chamber-feature-title">What you can do here.</h2>
-        </header>
-        <div class="pb-chamber-feature-list">${featureMarkup}</div>
-        <p class="pb-final-note">${definition.access}</p>
-      </section>
-    </article>`;
-    setHidden(home, true);
-    setHidden(view, false);
-    if (focus) requestAnimationFrame(() => view.querySelector('h1')?.focus?.({ preventScroll: true }));
+    setHidden(home, false);
+    setHidden(view, true);
+    view.replaceChildren();
+    global.activatePrimaryMenuItem?.('');
+    if (focus) requestAnimationFrame(() => home.querySelector('h1')?.focus?.({ preventScroll: true }));
   }
 
   function showLanding(options = {}) {
@@ -267,9 +169,20 @@
     requestAnimationFrame(() => siteHeader.querySelector('.brand')?.focus?.({ preventScroll: true }));
   }
 
-  function showPublicHomepage(options = {}) {
+  function openQuorumHome(trigger = null) {
+    if (state.quorumHomePromise) return state.quorumHomePromise;
+    state.quorumHomePromise = openProtectedFeature('quorum', trigger)
+      .finally(() => { state.quorumHomePromise = null; });
+    return state.quorumHomePromise;
+  }
+
+  async function showPublicHomepage(options = {}) {
     if (dialog.open) dialog.close();
     state.lastActivatedHash = '';
+    if (currentSession()?.access_token) {
+      await openQuorumHome(siteHeader.querySelector('.brand'));
+      return;
+    }
     showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
     if (options.history !== false) {
       const url = new URL(location.href);
@@ -544,6 +457,7 @@
     const authenticated = detail.authenticated === true || Boolean(currentSession()?.access_token);
     if (!gateEnabled) {
       if (authenticated && applicationRouteRequested()) showApplication();
+      else if (authenticated) await openQuorumHome();
       else {
         showLanding({ accessAllowed: true });
         if (!authenticated && requestedApplicationRoute() === 'examination-room') {
@@ -585,7 +499,7 @@
       const access = await api.status(currentSession().access_token);
       if (access?.allowed === true) {
         if (applicationRouteRequested()) showApplication();
-        else showLanding({ accessAllowed: true });
+        else await openQuorumHome();
         return;
       }
     } catch {
@@ -846,8 +760,12 @@
     global.addEventListener('popstate', () => {
       closePublicMenus();
       if (!applicationRouteRequested()) {
-        showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
-        renderPublicRoute({ focus: true });
+        if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
+          openQuorumHome();
+        } else {
+          showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
+          renderPublicRoute({ focus: true });
+        }
         return;
       }
       if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
@@ -859,8 +777,12 @@
     global.addEventListener('hashchange', () => {
       closePublicMenus();
       if (!applicationRouteRequested()) {
-        showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
-        renderPublicRoute({ focus: true });
+        if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
+          openQuorumHome();
+        } else {
+          showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
+          renderPublicRoute({ focus: true });
+        }
       } else if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
         showApplication();
       } else if (!currentSession()?.access_token && requestedApplicationRoute() === 'examination-room') {
@@ -881,6 +803,7 @@
     if (!gateEnabled) {
       bindEvents();
       if (currentSession()?.access_token && applicationRouteRequested()) showApplication();
+      else if (currentSession()?.access_token) await openQuorumHome();
       else {
         showLanding({ accessAllowed: true });
         renderPublicRoute({ focus: normalizedHash().startsWith('chamber/') });

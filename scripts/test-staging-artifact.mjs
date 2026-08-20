@@ -37,6 +37,11 @@ const index = await readFile(path.join(output, 'index.html'), 'utf8');
 assert.match(config, /hlzqmreeoghbldnhlybr/);
 assert.equal(config.includes(stagingPublishableKey), true);
 assert.match(config, /duediligence-examinations-staging\.wallyesteban1993\.workers\.dev/);
+assert.match(
+  config,
+  /maintenance:\s*Object\.freeze\(\{\s*enabled:\s*false/,
+  'The isolated staging artifact must not invoke the production-only maintenance wrapper.',
+);
 assert.match(index, /duediligence-examinations-staging\.wallyesteban1993\.workers\.dev/);
 assert.doesNotMatch(config, /hbllomlijfznnuudpdvr/);
 assert.doesNotMatch(config, /duediligence-gemini-examiner\.wallyesteban1993\.workers\.dev/);

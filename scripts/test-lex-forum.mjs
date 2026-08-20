@@ -31,17 +31,15 @@ const preflight = files['supabase/review/lex_forum_production_preflight.sql'];
 
 assert.match(page, />Home<\/button>/);
 assert.match(page, /aria-label="Home navigation"/);
-assert.match(
-  page,
-  /<h2>Home<\/h2>[\s\S]*Ask the community, continue your preparation, and see what needs attention\./,
-);
+assert.doesNotMatch(page, /quorum-community-banner|community-home-stats|id="quorum-menu-open"/);
+assert.match(page, /quorum-home-tools[\s\S]*My Posts[\s\S]*Saved[\s\S]*Study Circles[\s\S]*Notifications/);
 assert.match(page, /id="lex-forum-app" hidden/);
 assert.match(page, /Community posts do not constitute legal advice/);
 assert.doesNotMatch(page, /Lex Forum|Under Construction/i);
 assert.match(page, /id="community-sample-lane"/);
 assert.match(page, /Fictional · anonymized · read-only/);
 assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
-assert.match(featureLoader, /assets\/lex-forum\.css\?v=home-renovation-20260821-1/);
+assert.match(featureLoader, /assets\/lex-forum\.css\?v=home-menu-cleanup-20260821-1/);
 assert.match(featureLoader, /assets\/lex-forum\.js\?v=home-renovation-20260821-1/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);

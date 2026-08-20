@@ -947,12 +947,17 @@
 <link rel="stylesheet" href="assets/phase2.css?release=commercial-school-visual-safety-20260818-1">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
-<link rel="stylesheet" href="assets/quorum-first-shell.css?v=signin-intro-20260821-2">
+<link rel="stylesheet" href="assets/quorum-first-shell.css?v=home-menu-cleanup-20260821-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body class="private-beta-public">
 
 <header class="topbar pb-header pb-shared-header" id="site-header">
+    <button class="site-menu-toggle" id="site-menu-toggle" type="button"
+      aria-controls="spa-nav" aria-expanded="false" aria-label="Open navigation menu">
+      <img class="site-menu-icon" src="assets/icons/menu.svg" width="24" height="24" alt="" aria-hidden="true">
+      <span class="sr-only">Open navigation menu</span>
+    </button>
     <a class="brand pb-brand" href="/" data-public-home aria-label="Due Diligence — Philippine Bar Exam Simulator">
       <img class="crest pb-crest" src="assets/brand/icon-192.png" width="50" height="50"
         alt="" aria-hidden="true">
@@ -963,8 +968,6 @@
       <span class="brand-meaning" id="brand-subtitle-meaning" role="tooltip">Philippine Bar Exam Simulator</span>
     </a>
     <div class="topbar-actions quorum-header-actions">
-      <button class="site-menu-toggle" id="site-menu-toggle" type="button"
-        aria-controls="spa-nav" aria-expanded="false">Menu</button>
       <button class="quorum-room-shortcut" id="spa-examination-room" type="button"
         data-public-feature="examination-room">Examination Room</button>
       <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>00:00:00</div>
@@ -975,6 +978,15 @@
         <button class="quorum-nav-close" type="button" data-shell-menu-close aria-label="Close menu">&times;</button>
       </div>
       <button class="quorum-nav-link" id="spa-community" type="button" data-public-feature="quorum">Home</button>
+      <details class="quorum-practice-menu quorum-home-tools" id="quorum-home-tools-menu">
+        <summary>Home tools</summary>
+        <div class="quorum-practice-links">
+          <button type="button" data-quorum-view="my-posts">My Posts</button>
+          <button type="button" data-quorum-view="saved">Saved</button>
+          <button type="button" data-quorum-view="circles">Study Circles</button>
+          <button type="button" data-quorum-view="notifications">Notifications</button>
+        </div>
+      </details>
       <details class="quorum-practice-menu" id="quorum-practice-menu">
         <summary>Practice Exam</summary>
         <div class="quorum-practice-links">
@@ -1189,37 +1201,11 @@
 
 <section id="page-community" class="page">
   <div class="page-wrap lex-page-wrap">
-    <header class="page-head lex-page-head quorum-community-banner">
-      <div class="community-home-copy">
-        <div class="eyebrow">Your study desk</div>
-        <div class="lex-title-row">
-          <h2>Home</h2>
-          <span class="lex-beta-badge">Members only</span>
-        </div>
-        <p class="quorum-motto">Ask the community, continue your preparation, and see what needs attention.</p>
-      </div>
-      <div class="community-home-actions">
-        <button class="lex-button lex-button-primary" id="community-compose-jump" type="button">Start a discussion</button>
-        <button class="lex-button lex-button-quiet" type="button" data-public-feature="mock">Start practice</button>
-      </div>
-      <dl class="community-home-stats" aria-label="Community preview">
-        <div><dt>23</dt><dd>Starter discussions</dd></div>
-        <div><dt>32</dt><dd>Peer replies</dd></div>
-        <div><dt>8</dt><dd>Bar subjects</dd></div>
-      </dl>
-      <div class="lex-title-row community-title-fallback" hidden>
-        <h2>Home</h2>
-        <span class="lex-beta-badge">Members only</span>
-      </div>
-    </header>
-
     <div class="lex-auth-state" id="lex-auth-state" role="status" aria-live="polite">
       Verifying your signed-in member session&hellip;
     </div>
 
     <div id="lex-forum-app" hidden>
-      <button class="lex-button quorum-menu-open" id="quorum-menu-open" type="button"
-        aria-controls="quorum-navigation" aria-expanded="false">Explore</button>
       <div class="lex-layout">
         <aside class="quorum-navigation" id="quorum-navigation" aria-label="Home navigation"
           aria-hidden="true" tabindex="-1">
@@ -1348,18 +1334,6 @@
               </div>
             </div>
           </form>
-
-          <section class="quorum-practice-card quorum-practice-card-mobile" aria-label="Practice Exam">
-            <span class="lex-kicker">Practice Exam</span>
-            <h3>Ace the Bar with confidence.</h3>
-            <p>Build exam readiness through focused Philippine Bar-style practice.</p>
-            <ul class="quorum-practice-benefits">
-              <li>Real Bar-style questions</li>
-              <li>Source-grounded coaching</li>
-              <li>Private progress tracking</li>
-            </ul>
-            <button class="lex-button lex-button-primary" type="button" data-public-feature="mock">Try Practice Exam</button>
-          </section>
 
           <section class="community-sample-lane" id="community-sample-lane" aria-labelledby="community-sample-title" hidden>
             <div class="community-sample-heading">
@@ -4266,7 +4240,7 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
 <script src="assets/feature-loader.js?v=exam-room-ux-20260814-1&amp;release=subject-matter-gil-fixes-20260817-4&amp;perf=protected-navigation-20260820-1"></script>
-<script src="assets/quorum-first-shell.js?v=quorum-first-renovation-20260820-1"></script>
+<script src="assets/quorum-first-shell.js?v=home-menu-cleanup-20260821-1"></script>
 <script src="assets/private-beta-landing.js?v=signin-intro-20260821-1"></script>
 
 </body>

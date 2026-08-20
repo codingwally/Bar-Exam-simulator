@@ -31,7 +31,7 @@
     document.documentElement.classList.toggle('qfs-drawer-open', open);
     document.body.classList.toggle('qfs-drawer-open', open);
     refs.toggle.setAttribute('aria-expanded', String(open));
-    refs.toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    refs.toggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
     refs.nav.setAttribute('aria-hidden', String(!open));
     refs.nav.inert = !open;
     refs.scrim.hidden = !open;
@@ -78,7 +78,7 @@
     refs.close.addEventListener('click', () => setDrawer(refs, false, { restoreFocus: true }));
     refs.scrim.addEventListener('click', () => setDrawer(refs, false, { restoreFocus: true }));
     refs.nav.addEventListener('click', (event) => {
-      if (event.target.closest('[data-public-feature], [data-pb-legal], [data-public-action]')) {
+      if (event.target.closest('[data-public-feature], [data-pb-legal], [data-public-action], [data-quorum-view]')) {
         queueMicrotask(() => setDrawer(refs, false));
       }
     });

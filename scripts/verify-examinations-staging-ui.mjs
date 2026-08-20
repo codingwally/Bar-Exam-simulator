@@ -526,14 +526,20 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
       const controls = [...document.querySelectorAll(
         '.dd-subject-editorial button:not([hidden]), .dd-subject-editorial a:not([hidden]), .dd-subject-editorial summary',
       )].filter((element) => getComputedStyle(element).display !== 'none');
+      const root = document.documentElement;
+      const previousScrollBehavior = root.style.scrollBehavior;
+      const verticalScroll = scrollY;
+      root.style.scrollBehavior = 'auto';
+      scrollTo(0, verticalScroll);
       const writingRect = writing?.getBoundingClientRect();
       const reviewRect = review?.getBoundingClientRect();
       const gridRect = grid?.getBoundingClientRect();
-      const originalScrollX = scrollX;
+      const baselineScrollX = scrollX;
       const maxScrollX = Math.max(0, document.documentElement.scrollWidth - innerWidth);
-      scrollTo(maxScrollX, scrollY);
-      const horizontalScrollReach = Math.abs(scrollX - originalScrollX);
-      scrollTo(originalScrollX, scrollY);
+      scrollTo(maxScrollX, verticalScroll);
+      const horizontalScrollReach = Math.abs(scrollX - baselineScrollX);
+      scrollTo(0, verticalScroll);
+      root.style.scrollBehavior = previousScrollBehavior;
       const workspaceOutsideViewport = [gridRect, writingRect, reviewRect]
         .filter(Boolean)
         .some((bounds) => bounds.left < -1 || bounds.right > innerWidth + 1);

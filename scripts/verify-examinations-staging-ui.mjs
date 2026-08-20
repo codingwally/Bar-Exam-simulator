@@ -537,10 +537,31 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
       const workspaceOutsideViewport = [gridRect, writingRect, reviewRect]
         .filter(Boolean)
         .some((bounds) => bounds.left < -1 || bounds.right > innerWidth + 1);
+      const overflowOffenders = [...document.querySelectorAll('body *')]
+        .filter((element) => {
+          const style = getComputedStyle(element);
+          if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+          if (element.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
+          const bounds = element.getBoundingClientRect();
+          return bounds.width > 1 && (bounds.left < -1 || bounds.right > innerWidth + 1);
+        })
+        .slice(0, 12)
+        .map((element) => {
+          const bounds = element.getBoundingClientRect();
+          return {
+            tag: element.tagName.toLowerCase(),
+            id: element.id || null,
+            className: typeof element.className === 'string' ? element.className.slice(0, 120) : null,
+            left: Math.round(bounds.left),
+            right: Math.round(bounds.right),
+            width: Math.round(bounds.width),
+          };
+        });
       return {
         documentOverflowPixels: maxScrollX,
         horizontalScrollReach,
         overflow: horizontalScrollReach > 1 || workspaceOutsideViewport,
+        overflowOffenders,
         writingLeft: writingRect?.left ?? null,
         writingTop: writingRect?.top ?? null,
         reviewLeft: reviewRect?.left ?? null,
@@ -558,7 +579,17 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
     });
     const label = `${stateLabel}-${viewport.width}x${viewport.height}`;
     results.responsive[label] = layout;
-    assert.equal(layout.overflow, false, `${label} must not overflow horizontally.`);
+    assert.equal(
+      layout.overflow,
+      false,
+      `${label} must not overflow horizontally. Diagnostics: ${JSON.stringify({
+        documentOverflowPixels: layout.documentOverflowPixels,
+        horizontalScrollReach: layout.horizontalScrollReach,
+        writingLeft: layout.writingLeft,
+        reviewLeft: layout.reviewLeft,
+        overflowOffenders: layout.overflowOffenders,
+      })}`,
+    );
     assert.deepEqual(layout.shortControls, [], `${label} must retain 44px touch targets.`);
     assert.deepEqual(layout.unsharedActions, [], `${label} must use shared Subject Matter action controls.`);
     if (viewport.width > 900) {

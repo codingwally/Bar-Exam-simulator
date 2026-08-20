@@ -12,23 +12,30 @@ import {
 } from '../worker/release-content-core.mjs';
 
 const fetchCsv = async (url) => {
+  let lastError = null;
   for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const response = await fetch(url, {
-      headers: { Accept: 'text/csv' },
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (response.ok) {
-      const csv = await response.text();
-      assert.ok(csv.length > 10_000, 'Published source was unexpectedly small.');
-      return csv;
-    }
-    const retryable = response.status === 409 || response.status === 429 || response.status >= 500;
-    if (!retryable || attempt === 3) {
-      assert.fail(`Published source failed: ${response.status}`);
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'text/csv' },
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (response.ok) {
+        const csv = await response.text();
+        assert.ok(csv.length > 10_000, 'Published source was unexpectedly small.');
+        return csv;
+      }
+      const retryable = response.status === 409 || response.status === 429 || response.status >= 500;
+      if (!retryable || attempt === 3) {
+        assert.fail(`Published source failed: ${response.status}`);
+      }
+      lastError = new Error(`Published source failed: ${response.status}`);
+    } catch (error) {
+      lastError = error;
+      if (attempt === 3) throw error;
     }
     await new Promise((resolve) => setTimeout(resolve, attempt * 750));
   }
-  assert.fail('Published source could not be loaded.');
+  throw lastError || new Error('Published source could not be loaded.');
 };
 
 const [
@@ -113,7 +120,7 @@ for (const phrase of [
   'Subject Matter',
   'Bar Feels',
   'The Verdict',
-  'Retainer',
+  'Plans &amp; Pricing',
   'Quorum',
   'Recent Jurisprudence',
   'Support',

@@ -18,14 +18,15 @@
       gateScriptUrl: '/assets/maintenance-gate.js?v=maintenance-lock-20260819-1',
     }),
     guest: Object.freeze({
+      enabled: false,
       gradeLimit: 3,
       deviceStorageKey: 'duediligence.guest.device.v1',
       deviceCookieName: 'dd_guest_device',
       reminderStorageKey: 'duediligence.guest.reminder.v1',
     }),
     legal: Object.freeze({
-      termsVersion: 'terms-beta-v2-2026-07-28',
-      privacyVersion: 'privacy-beta-v2-2026-07-28',
+      termsVersion: 'terms-commercial-v1-2026-08-18',
+      privacyVersion: 'privacy-commercial-v1-2026-08-18',
       aiImprovementConsentVersion: 'ai-improvement-beta-v1-2026-07-28',
     }),
     features: Object.freeze({
@@ -38,19 +39,27 @@
       examinationRoom2: true,
     }),
     plans: Object.freeze({
-      catalogVersion: 'beta-pricing-concealed-2026-07-30',
-      notice: 'Pricing will be announced after beta testing.',
+      catalogVersion: 'commercial-two-plan-2026-08-20',
+      notice: 'Choose Free or the one-time Early Access offer.',
       items: Object.freeze([
         Object.freeze({
-          id: 'premium',
-          name: 'Premium',
-          pricingHidden: true,
-          previewStatus: 'beta',
+          id: 'free',
+          name: 'Free',
+          pricingHidden: false,
+          previewStatus: 'active',
           featurePlaceholders: Object.freeze([
-            'All published Subject Matter practice categories',
-            'Premium-only Bar Feels',
-            'Private TXT and DOCX examination uploads',
-            'Automated and Human Examiner review routes',
+            'Five successful submissions per Philippine day',
+            'One shared allowance across examination tracks',
+          ]),
+        }),
+        Object.freeze({
+          id: 'early_access_beta',
+          name: 'Early Access',
+          pricingHidden: false,
+          previewStatus: 'active',
+          featurePlaceholders: Object.freeze([
+            'Unlimited access through October 1, 2026',
+            'One-time payment with no automatic renewal',
           ]),
         }),
       ]),

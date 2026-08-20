@@ -41,7 +41,7 @@
       features: Object.freeze([
         Object.freeze({ id: 'bar-easy', title: 'Bar Easy', eyebrow: 'Legal reasoning in plain language', action: 'Open Bar Easy', copy: 'Explain a legal idea in words that make sense to you before viewing coaching and verified legal material. It is a calmer way to turn understanding into a usable legal explanation.' }),
         Object.freeze({ id: 'quorum', title: 'Quorum', eyebrow: 'Academic community', action: 'Enter Quorum', copy: 'Ask questions, exchange case notes, share study help and resources, and find study circles within the signed-in Due Diligence community.' }),
-        Object.freeze({ id: 'retainer', title: 'Retainer', eyebrow: 'Membership and access', action: 'View Retainer', copy: 'Review the membership and access options currently available to your account. Only the plans and benefits configured in the live platform are shown.' }),
+        Object.freeze({ id: 'retainer', title: 'Plans & Pricing', eyebrow: 'Choose your access', action: 'View Plans', copy: 'Choose Free with five successful submissions per Philippine day, or ₱149 one-time Early Access through October 1, 2026.' }),
       ]),
       access: 'Reading the introduction is public. Community participation and personal access details require sign-in.',
     }),
@@ -64,7 +64,7 @@
     verdict: Object.freeze({ file: 'verdict.png', alt: 'Private Verdict assessment and coaching record' }),
     'bar-easy': Object.freeze({ file: 'bar-easy.png', alt: 'Bar Easy guided legal reasoning interface' }),
     quorum: Object.freeze({ file: 'quorum.png', alt: 'Quorum academic community feed' }),
-    retainer: Object.freeze({ file: 'retainer.png', alt: 'Retainer membership and access options' }),
+    retainer: Object.freeze({ file: 'retainer.png', alt: 'Free and Early Access plan options' }),
     'bar-feels': Object.freeze({ file: 'bar-feels.png', alt: 'Bar Feels multi-question examination workspace' }),
     'chair-cases': Object.freeze({ file: 'chairs-cases.png', alt: '2026 Bar Chair\u2019s Cases study interface' }),
     doctrines: Object.freeze({ file: 'doctrines.png', alt: 'Doctrines recall and verification interface' }),
@@ -645,8 +645,8 @@
 
   async function loadFeature(feature) {
     const loader = global.DueDiligenceFeatureLoader;
-    if (!loader?.loadForFeature) return;
-    await loader.loadForFeature(feature);
+    if (!loader?.loadForFeature) return false;
+    return await loader.loadForFeature(feature);
   }
 
   async function openProtectedFeature(feature, trigger = null) {
@@ -677,7 +677,14 @@
       });
       return;
     }
-    await loadFeature(feature);
+    if (feature !== 'retainer') {
+      const allowed = await global.DueDiligencePhase4?.ensureProtectedAccess?.(returnHash);
+      if (allowed !== true) return;
+    }
+    const loaded = feature === 'mock' || feature === 'retainer'
+      ? true
+      : await loadFeature(feature);
+    if (loaded === false) return;
     showApplication({ activateRoute: false });
     requestAnimationFrame(() => {
       if (feature === 'mock') {

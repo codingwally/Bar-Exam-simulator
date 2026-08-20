@@ -1,5 +1,5 @@
 name = "duediligence-examinations-staging"
-main = "index.mjs"
+main = "commercial-entry.mjs"
 compatibility_date = "2026-07-26"
 preview_urls = true
 

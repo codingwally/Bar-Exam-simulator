@@ -199,8 +199,8 @@ assert.match(
 );
 assert.match(
   extractNamedFunction(phase2, 'restoreAuthDestination'),
-  /if \(!state\.authReturnPending\) return;[\s\S]*state\.authReturnPending = false;[\s\S]*safeSessionRemove\(authReturnStorageKey\)[\s\S]*DueDiligencePublicHome\?\.show\?\.\(\{[\s\S]*replace:\s*true/,
-  'Only a genuine completed authentication return may send the user to the homepage.',
+  /if \(!state\.authReturnPending\) return;[\s\S]*state\.authReturnPending = false;[\s\S]*safeSessionRemove\(authReturnStorageKey\)[\s\S]*history\.replaceState\([\s\S]*dueDiligenceRoute:\s*'quorum'[\s\S]*#quorum[\s\S]*PopStateEvent\('popstate'/,
+  'Only a genuine completed authentication return may send the user to Quorum.',
 );
 assert.match(
   phase2,

@@ -228,13 +228,16 @@ async function handleAccessChoice(request, env) {
   }
 
   const body = await request.json().catch(() => null);
-  const choice = cleanSingleLine(body?.choice, 40).toLowerCase();
-  if (!['free_trial', 'launch_trial'].includes(choice)) {
+  const requestedChoice = cleanSingleLine(body?.choice, 40).toLowerCase();
+  const choice = ['free', 'free_trial', 'launch_trial'].includes(requestedChoice)
+    ? 'free'
+    : requestedChoice;
+  if (choice !== 'free') {
     return jsonResponse({
       ok: false,
       error: {
         code: 'INVALID_ACCESS_CHOICE',
-        message: 'Choose Free Trial or Early Access.',
+        message: 'Choose Free or Early Access.',
       },
     }, 400, origin, env);
   }
@@ -247,7 +250,7 @@ async function handleAccessChoice(request, env) {
     const message = result.message.toLowerCase();
     let code = 'ACCESS_CHOICE_UNAVAILABLE';
     let status = result.status >= 500 ? 503 : 400;
-    let publicMessage = 'The Free Trial could not be started. Please try again.';
+    let publicMessage = 'Free access could not be selected. Please try again.';
 
     if (message.includes('terms') || message.includes('privacy')) {
       code = 'LEGAL_ACCEPTANCE_REQUIRED';
@@ -257,14 +260,10 @@ async function handleAccessChoice(request, env) {
       code = 'PROFILE_COMPLETION_REQUIRED';
       status = 403;
       publicMessage = 'Complete your profile before choosing access.';
-    } else if (message.includes('already been used')) {
-      code = 'FREE_TRIAL_ALREADY_USED';
-      status = 409;
-      publicMessage = 'This account has already used the Free Trial. Choose ₱149 Early Access to continue.';
     } else if (message.includes('closed') || message.includes('not available')) {
-      code = 'FREE_TRIAL_UNAVAILABLE';
+      code = 'FREE_ACCESS_UNAVAILABLE';
       status = 409;
-      publicMessage = 'The Free Trial is no longer available. Choose ₱149 Early Access to continue.';
+      publicMessage = 'Free access is temporarily unavailable. Please try again.';
     }
 
     return jsonResponse({
@@ -275,7 +274,7 @@ async function handleAccessChoice(request, env) {
 
   return jsonResponse({
     ok: true,
-    choice: 'free_trial',
+    choice: 'free',
     access: result.payload,
   }, 200, origin, env);
 }

@@ -21,7 +21,8 @@ const [
 
 // Sign-in entry points must tell the truth: protected examination access is
 // authenticated, while any future guest path must be an explicit opt-in.
-assert.match(phase2, /const allowGuest = options\.allowGuest === true && !completed;/);
+assert.match(phase2, /const allowGuest = config\.guest\?\.enabled === true && options\.allowGuest === true && !completed;/);
+assert.match(phase2, /config\.guest\?\.enabled !== true[\s\S]*signInWithGoogle\(\)/);
 assert.match(phase2, /showEntry\(\{\s*allowDismiss:\s*true\s*\}\)/);
 
 // Published controls must work now or be rendered honestly as non-controls.

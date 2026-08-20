@@ -160,9 +160,9 @@ assert.match(premiumMigration, /to service_role/);
 assert.doesNotMatch(premiumMigration, /grant\s+execute[\s\S]*to\s+(?:anon|authenticated)/i);
 assert.doesNotMatch(premiumMigration, /\bdrop table\b|\btruncate\b|\bdelete from\b/i);
 
-assert.match(phase2Config, /id: 'premium'[\s\S]*pricingHidden: true/);
-assert.match(phase2Config, /id: 'premium'[\s\S]*previewStatus: 'beta'/);
-assert.match(phase2Config, /Pricing will be announced after beta testing\./);
+assert.match(phase2Config, /id: 'free'[\s\S]*name: 'Free'[\s\S]*id: 'early_access_beta'[\s\S]*name: 'Early Access'/);
+assert.doesNotMatch(phase2Config, /id: 'premium'/);
+assert.match(phase2Config, /Choose Free or the one-time Early Access offer\./);
 assert.doesNotMatch(phase2Config, /pricePhp|priceCentavos|amountPhp|₱/);
 assert.doesNotMatch(phase2Experience, /Premium-only Bar Feels|Beta access active/);
 assert.match(phase2Experience, /Free and Early Access/);

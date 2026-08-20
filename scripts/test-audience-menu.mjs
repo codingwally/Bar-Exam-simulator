@@ -44,7 +44,7 @@ for (const [markup, slug, visible, accessible, menuId] of [
 }
 
 assertOrder(academy, ['The Academy', 'Mock Bar', 'Subject Matter', 'The Verdict']);
-assertOrder(commons, ['The Commons', 'Bar Easy', 'Quorum', 'Retainer']);
+assertOrder(commons, ['The Commons', 'Bar Easy', 'Quorum', 'Plans &amp; Pricing']);
 assertOrder(premium, ['BarBound', 'Bar Feels', '2026 Bar Chair', 'Doctrines', 'Anchor Case Digests']);
 assertOrder(utilities, ['Examination Room', 'Support', 'The Docket']);
 

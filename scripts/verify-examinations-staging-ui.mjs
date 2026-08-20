@@ -537,21 +537,31 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
       const workspaceOutsideViewport = [gridRect, writingRect, reviewRect]
         .filter(Boolean)
         .some((bounds) => bounds.left < -1 || bounds.right > innerWidth + 1);
-      const overflowOffenders = [...document.querySelectorAll('body *')]
+      const overflowCandidates = [...document.querySelectorAll('body *')]
         .filter((element) => {
           const style = getComputedStyle(element);
           if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
           if (element.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
           const bounds = element.getBoundingClientRect();
           return bounds.width > 1 && (bounds.left < -1 || bounds.right > innerWidth + 1);
+        });
+      const overflowCandidateSet = new Set(overflowCandidates);
+      const overflowOffenders = overflowCandidates
+        .filter((element) => ![...element.querySelectorAll('*')]
+          .some((descendant) => overflowCandidateSet.has(descendant)))
+        .sort((leftElement, rightElement) => {
+          const leftBounds = leftElement.getBoundingClientRect();
+          const rightBounds = rightElement.getBoundingClientRect();
+          return Math.max(rightBounds.right - innerWidth, -rightBounds.left)
+            - Math.max(leftBounds.right - innerWidth, -leftBounds.left);
         })
-        .slice(0, 12)
+        .slice(0, 6)
         .map((element) => {
           const bounds = element.getBoundingClientRect();
           return {
             tag: element.tagName.toLowerCase(),
             id: element.id || null,
-            className: typeof element.className === 'string' ? element.className.slice(0, 120) : null,
+            className: typeof element.className === 'string' ? element.className.slice(0, 64) : null,
             left: Math.round(bounds.left),
             right: Math.round(bounds.right),
             width: Math.round(bounds.width),
@@ -582,13 +592,9 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
     assert.equal(
       layout.overflow,
       false,
-      `${label} must not overflow horizontally. Diagnostics: ${JSON.stringify({
-        documentOverflowPixels: layout.documentOverflowPixels,
-        horizontalScrollReach: layout.horizontalScrollReach,
-        writingLeft: layout.writingLeft,
-        reviewLeft: layout.reviewLeft,
-        overflowOffenders: layout.overflowOffenders,
-      })}`,
+      `${label} must not overflow horizontally. Offenders: ${layout.overflowOffenders
+        .map((entry) => `${entry.tag}${entry.id ? `#${entry.id}` : ''}${entry.className ? `.${entry.className.replace(/\s+/g, '.')}` : ''}[${entry.left},${entry.right},${entry.width}]`)
+        .join('|') || 'none'}; reach=${layout.horizontalScrollReach}; document=${layout.documentOverflowPixels}; panes=${layout.writingLeft}/${layout.reviewLeft}`,
     );
     assert.deepEqual(layout.shortControls, [], `${label} must retain 44px touch targets.`);
     assert.deepEqual(layout.unsharedActions, [], `${label} must use shared Subject Matter action controls.`);

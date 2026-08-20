@@ -10,7 +10,7 @@
     }),
     workerUrl: 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev',
     maintenance: Object.freeze({
-      enabled: false,
+      enabled: true,
       tokenStorageKey: 'duediligence.maintenance.access.v1',
       headerName: 'X-DD-Maintenance-Access',
       unlockPath: '/maintenance/unlock',

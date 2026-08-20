@@ -378,6 +378,9 @@ test('Quorum queries validate opaque identifiers and bound pagination', () => {
   assert.equal(normalized.operation, 'feed');
   assert.equal(normalized.payload.limit, 20);
   assert.equal(normalized.payload.cursorId, entryA);
+  const sample = normalizeQuorumQueryRequest({ operation: 'sample_feed', payload: {} });
+  assert.equal(sample.operation, 'sample_feed');
+  assert.deepEqual(sample.payload, {});
   assert.throws(
     () => normalizeQuorumQueryRequest({
       operation: 'entry',

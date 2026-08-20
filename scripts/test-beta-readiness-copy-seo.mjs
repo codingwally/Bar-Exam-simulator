@@ -15,15 +15,15 @@ const sitemap = await readFile(path.join(root, 'sitemap.xml'), 'utf8');
 assert.match(index, /<html lang="en-PH">/);
 assert.match(
   index,
-  /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/,
+  /<title>Due Diligence — Philippine Bar Exam Simulator<\/title>/,
 );
 assert.match(
   index,
-  /<meta name="description" content="A Philippine legal-education platform for Bar-style essay practice, course-based study, academic community, and controlled examinations\.">/,
+  /<meta name="description" content="A Philippine Bar Exam Simulator for source-grounded essay practice, focused legal study, community discussion, and controlled examinations\.">/,
 );
 assert.match(index, /<link rel="canonical" href="https:\/\/duediligence\.ph\/">/);
 assert.match(index, /<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">/);
-assert.match(index, /<meta property="og:title" content="Due Diligence — A Friend on Your Journey Through the Study of Law">/);
+assert.match(index, /<meta property="og:title" content="Due Diligence — Philippine Bar Exam Simulator">/);
 assert.match(index, /<meta property="og:url" content="https:\/\/duediligence\.ph\/">/);
 assert.match(index, /<meta property="og:locale" content="en_PH">/);
 assert.match(index, /<meta property="og:image" content="https:\/\/duediligence\.ph\/assets\/brand\/social-card-1200x630\.png">/);
@@ -40,19 +40,19 @@ assert.doesNotThrow(() => JSON.parse(schemaSource), 'Structured data must be val
 
 assert.doesNotMatch(index, /PH Bar Essay Trainer/);
 assert.doesNotMatch(index, /Advanced Pro Repository/);
-assert.doesNotMatch(index, /PH Bar Exam Simulator/);
+assert.match(index, /Philippine Bar Exam Simulator/);
 
 assert.match(
   index,
-  /<span class="brand-sub pb-brand-sub" id="brand-subtitle">Amicus in Itinere Iuris<\/span>/,
+  /<span class="brand-sub pb-brand-sub" id="brand-subtitle">Philippine Bar Exam Simulator<\/span>/,
 );
 assert.match(
   index,
-  /<span class="brand-meaning" id="brand-subtitle-meaning" role="tooltip">A friend on the journey of law\.<\/span>/,
+  /<span class="brand-meaning" id="brand-subtitle-meaning" role="tooltip">Philippine Bar Exam Simulator<\/span>/,
 );
 assert.match(
   index,
-  /<a class="brand pb-brand" href="\/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">/,
+  /<a class="brand pb-brand" href="\/" data-public-home aria-label="Due Diligence — Philippine Bar Exam Simulator">/,
 );
 assert.match(index, /\.brand:hover:not\(\[data-meaning-dismissed="true"\]\) \.brand-meaning/);
 assert.match(index, /\.brand:focus-visible:not\(\[data-meaning-dismissed="true"\]\) \.brand-meaning/);
@@ -68,7 +68,7 @@ assert.doesNotMatch(
   index,
   /<h3>What do you want to ask or share about law school\?<\/h3>/,
 );
-assert.match(index, /<label class="sr-only" for="lex-post-body">Share with Quorum<\/label>/);
+assert.match(index, /<label class="sr-only" for="lex-post-body">Share with the community<\/label>/);
 assert.match(index, /placeholder="What do you want to ask or share about law school\?"/);
 
 assert.match(

@@ -119,6 +119,7 @@ import {
   normalizeForumReportRequest,
   normalizeForumRepostRequest,
 } from './forum-core.mjs';
+import { buildCommunitySampleContent } from './community-sample-content.mjs';
 import {
   EXAMINATION_LIMITS,
   ExaminationValidationError,
@@ -3225,7 +3226,9 @@ async function handleQuorumQuery(request, env, origin, allowedOrigin) {
     await parseBoundedJson(request, FORUM_LIMITS.requestBytes),
   );
   let result;
-  if (query.operation === 'insights') {
+  if (query.operation === 'sample_feed') {
+    result = buildCommunitySampleContent();
+  } else if (query.operation === 'insights') {
     result = await forumRpc(env, 'forum_quorum_insights', {
       p_user_id: user.id,
     });

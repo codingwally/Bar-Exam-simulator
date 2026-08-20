@@ -46,7 +46,7 @@ for (const id of [
 ]) {
   assert.match(html, new RegExp(`id=["']${id}["']`), `index must retain/add #${id}`);
 }
-assert.doesNotMatch(html, /id=["']welcome-state["']|Prepare with purpose\.|id=["']start-practice["']/,
+assert.doesNotMatch(html, /id=["']welcome-state["']|id=["']start-practice["']/,
   'The retired authenticated landing must not remain in the application shell.');
 assert.match(html, /DueDiligenceExaminations\?\.openPerSubject/);
 assert.match(html, /DueDiligenceExaminations\?\.openBarFeels/);

@@ -97,7 +97,7 @@ assert.ok(index.includes('data-dd2-view="privacy"'));
 assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
-assert.ok(index.includes('assets/phase2-experience.js?v=commercial-launch-20260818-5'));
+assert.ok(index.includes('assets/phase2-experience.js?v=commercial-launch-20260821-6'));
 
 for (const table of [
   'guest_grading_usage',

@@ -33,13 +33,13 @@ assert.match(
 );
 assert.match(
   featureLoader,
-  /assets\/lex-forum\.css\?v=master-experience-20260813-1/,
-  'The Quorum accessibility fix must ship behind a fresh stylesheet cache key.',
+  /assets\/lex-forum\.css\?v=home-renovation-20260821-1/,
+  'The Home accessibility fix must ship behind the current stylesheet cache key.',
 );
 assert.match(
   featureLoader,
-  /assets\/lex-forum\.js\?v=master-experience-20260813-1/,
-  'The Quorum navigation fix must ship behind a fresh script cache key.',
+  /assets\/lex-forum\.js\?v=home-renovation-20260821-1/,
+  'The Home navigation fix must ship behind the current script cache key.',
 );
 assert.match(
   source,
@@ -179,22 +179,22 @@ assert.match(
 assert.match(
   styles,
   /#page-community \.lex-title-row \{[\s\S]*?position:\s*absolute;[\s\S]*?clip-path:\s*inset\(50%\);/,
-  'The Quorum title must remain available to assistive technology without changing the visual design.',
+  'The Home title must remain available to assistive technology without changing the visual design.',
 );
 assert.doesNotMatch(
   styles,
   /#page-community \.lex-page-head \.eyebrow,\s*#page-community \.lex-title-row\s*\{\s*display:\s*none;/,
-  'The Quorum title must not be removed from the accessibility tree.',
+  'The Home title must not be removed from the accessibility tree.',
 );
 assert.match(
   styles,
   /#page-community \.lex-status \{\s*color:\s*#5b687b;/,
-  'Quorum feed-status text must retain its accessible contrast.',
+  'Home feed-status text must retain its accessible contrast.',
 );
 assert.match(
   styles,
   /#page-community \.quorum-chip \{[\s\S]*?color:\s*#55657a;[\s\S]*?background:\s*#f4f5f7;/,
-  'Quorum metadata chips must retain their accessible contrast pair.',
+  'Home metadata chips must retain their accessible contrast pair.',
 );
 assert.match(
   styles,
@@ -206,4 +206,4 @@ assert.ok(contrastRatio('#55657a', '#f4f5f7') >= 4.5);
 assert.ok(contrastRatio('#59697f', '#ffffff') >= 4.5);
 assert.ok(contrastRatio('#f0cf76', '#071a33') >= 4.5);
 
-console.log('Quorum navigation and focused accessibility regressions passed.');
+console.log('Home navigation and focused accessibility regressions passed.');

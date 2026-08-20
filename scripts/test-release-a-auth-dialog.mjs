@@ -69,7 +69,7 @@ assert.doesNotMatch(
 );
 assert.match(
   phase2,
-  /function closeNativeView\(\)\s*\{[\s\S]{0,180}hideNativeView\(\);[\s\S]{0,100}history\.back\(\)/,
+  /function closeNativeView\(\)\s*\{[\s\S]{0,420}hideNativeView\(\);[\s\S]{0,100}history\.back\(\)/,
   'Closing a native view must hide it immediately before asynchronous history navigation.',
 );
 assert.match(

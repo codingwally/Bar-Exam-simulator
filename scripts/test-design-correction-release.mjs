@@ -50,7 +50,7 @@ const subjectResult = examJs.slice(
   examJs.indexOf('function assessmentCard'),
 );
 
-assert.match(publicLanding, /id="public-platform"[\s\S]*Your legal study community\.[\s\S]*Continue with Google/);
+assert.match(publicLanding, /id="public-platform"[\s\S]*Prepare with purpose\.[\s\S]*Continue with Google/);
 assert.doesNotMatch(publicLanding, /pb-feature-ledger|class="pb-platform-composition"|class="pb-welcome-note"|class="pb-chamber-index"|pb-pillar-card|pb-pillar-grid|feature-previews\//,
   'The signed-out entry must remain concise and must not restore the retired chamber landing.');
 assert.equal((html.match(/id="site-header"/g) || []).length, 1,
@@ -260,8 +260,8 @@ assert.match(html, /assets\/phase2\.css\?release=commercial-school-visual-safety
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-20260820-quorum-first-2/);
-assert.match(serviceWorker, /quorum-first-shell\.css\?v=quorum-first-renovation-20260820-1/);
+assert.match(serviceWorker, /duediligence-shell-20260821-home-renovation-2/);
+assert.match(serviceWorker, /quorum-first-shell\.css\?v=signin-intro-20260821-2/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=quorum-first-renovation-20260820-1/);
 assert.match(serviceWorker, /phase2\.css\?release=commercial-school-visual-safety-20260818-1/);
 assert.match(serviceWorker, /due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);

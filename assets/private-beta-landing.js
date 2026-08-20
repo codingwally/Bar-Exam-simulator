@@ -34,7 +34,82 @@
     lastActivatedHash: '',
     routeActivationVersion: 0,
     quorumHomePromise: null,
+    signInIntroInitialized: false,
   };
+
+  const signInIntroSeenKey = 'duediligence.signin.intro.seen.v1';
+
+  function signInIntroWasSeen() {
+    try {
+      return global.localStorage?.getItem(signInIntroSeenKey) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function rememberSignInIntro() {
+    try {
+      global.localStorage?.setItem(signInIntroSeenKey, '1');
+    } catch {
+      // Storage can be unavailable in hardened/private browsing. The still image remains usable.
+    }
+  }
+
+  function initializeSignInIntro() {
+    if (state.signInIntroInitialized || currentSession()?.access_token) return;
+    state.signInIntroInitialized = true;
+    const frame = document.querySelector('[data-signin-intro]');
+    const video = frame?.querySelector('[data-signin-intro-video]');
+    if (!frame || !video) return;
+
+    let watchdog = 0;
+    let finished = false;
+    const showStill = ({ remember = true } = {}) => {
+      if (finished) return;
+      finished = true;
+      if (watchdog) global.clearTimeout(watchdog);
+      frame.classList.remove('is-playing', 'is-finishing');
+      frame.classList.add('is-still');
+      video.pause();
+      if (remember) rememberSignInIntro();
+    };
+    const beginFinish = () => {
+      if (finished || frame.classList.contains('is-finishing')) return;
+      frame.classList.remove('is-playing', 'is-still');
+      frame.classList.add('is-finishing');
+    };
+
+    if (state.reducedMotion || signInIntroWasSeen()) {
+      showStill({ remember: state.reducedMotion });
+      return;
+    }
+
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.addEventListener('playing', () => {
+      if (finished) return;
+      frame.classList.remove('is-still', 'is-finishing');
+      frame.classList.add('is-playing');
+      watchdog = global.setTimeout(() => showStill(), 12000);
+    }, { once: true });
+    video.addEventListener('timeupdate', () => {
+      if (Number.isFinite(video.duration) && video.duration - video.currentTime <= .5) beginFinish();
+    });
+    video.addEventListener('ended', () => showStill(), { once: true });
+    video.addEventListener('error', () => showStill(), { once: true });
+
+    const source = String(video.dataset.src || '').trim();
+    if (!source) {
+      showStill();
+      return;
+    }
+    video.src = source;
+    video.preload = 'auto';
+    video.load();
+    const playback = video.play();
+    if (playback?.catch) playback.catch(() => showStill());
+  }
 
   function privateBetaApi() {
     return global.DueDiligencePrivateBeta || null;
@@ -100,6 +175,7 @@
       || state.accessAllowed === true;
     publishAccessState(accessAllowed);
     renderPublicRoute();
+    initializeSignInIntro();
   }
 
   async function activateApplicationRoute(hash) {

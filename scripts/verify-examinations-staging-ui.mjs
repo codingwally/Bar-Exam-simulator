@@ -462,9 +462,15 @@ async function verifySubjectChooserGeometry(page) {
         };
       };
       const browseStyle = getComputedStyle(browse);
+      const originalScrollX = scrollX;
+      const maxScrollX = Math.max(0, document.documentElement.scrollWidth - innerWidth);
+      scrollTo(maxScrollX, scrollY);
+      const horizontalScrollReach = Math.abs(scrollX - originalScrollX);
+      scrollTo(originalScrollX, scrollY);
+      const sectionBounds = rect(section);
       return {
         shell: rect(shell),
-        section: rect(section),
+        section: sectionBounds,
         heading: rect(heading),
         summary: rect(summary),
         browse: rect(browse),
@@ -472,7 +478,11 @@ async function verifySubjectChooserGeometry(page) {
         sectionAlignItems: getComputedStyle(section).alignItems,
         browseBackgroundImage: browseStyle.backgroundImage,
         browseClasses: [...browse.classList],
-        overflow: document.documentElement.scrollWidth > innerWidth,
+        documentOverflowPixels: maxScrollX,
+        horizontalScrollReach,
+        overflow: horizontalScrollReach > 1
+          || sectionBounds.left < -1
+          || sectionBounds.right > innerWidth + 1,
       };
     });
     const label = `subject-chooser-${viewport.width}x${viewport.height}`;
@@ -516,10 +526,58 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
       const controls = [...document.querySelectorAll(
         '.dd-subject-editorial button:not([hidden]), .dd-subject-editorial a:not([hidden]), .dd-subject-editorial summary',
       )].filter((element) => getComputedStyle(element).display !== 'none');
+      const root = document.documentElement;
+      const previousScrollBehavior = root.style.scrollBehavior;
+      const verticalScroll = scrollY;
+      root.style.scrollBehavior = 'auto';
+      scrollTo(0, verticalScroll);
       const writingRect = writing?.getBoundingClientRect();
       const reviewRect = review?.getBoundingClientRect();
+      const gridRect = grid?.getBoundingClientRect();
+      const baselineScrollX = scrollX;
+      const maxScrollX = Math.max(0, document.documentElement.scrollWidth - innerWidth);
+      scrollTo(maxScrollX, verticalScroll);
+      const horizontalScrollReach = Math.abs(scrollX - baselineScrollX);
+      scrollTo(0, verticalScroll);
+      root.style.scrollBehavior = previousScrollBehavior;
+      const workspaceOutsideViewport = [gridRect, writingRect, reviewRect]
+        .filter(Boolean)
+        .some((bounds) => bounds.left < -1 || bounds.right > innerWidth + 1);
+      const overflowCandidates = [...document.querySelectorAll('body *')]
+        .filter((element) => {
+          const style = getComputedStyle(element);
+          if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+          if (element.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
+          const bounds = element.getBoundingClientRect();
+          return bounds.width > 1 && (bounds.left < -1 || bounds.right > innerWidth + 1);
+        });
+      const overflowCandidateSet = new Set(overflowCandidates);
+      const overflowOffenders = overflowCandidates
+        .filter((element) => ![...element.querySelectorAll('*')]
+          .some((descendant) => overflowCandidateSet.has(descendant)))
+        .sort((leftElement, rightElement) => {
+          const leftBounds = leftElement.getBoundingClientRect();
+          const rightBounds = rightElement.getBoundingClientRect();
+          return Math.max(rightBounds.right - innerWidth, -rightBounds.left)
+            - Math.max(leftBounds.right - innerWidth, -leftBounds.left);
+        })
+        .slice(0, 6)
+        .map((element) => {
+          const bounds = element.getBoundingClientRect();
+          return {
+            tag: element.tagName.toLowerCase(),
+            id: element.id || null,
+            className: typeof element.className === 'string' ? element.className.slice(0, 64) : null,
+            left: Math.round(bounds.left),
+            right: Math.round(bounds.right),
+            width: Math.round(bounds.width),
+          };
+        });
       return {
-        overflow: document.documentElement.scrollWidth > innerWidth,
+        documentOverflowPixels: maxScrollX,
+        horizontalScrollReach,
+        overflow: horizontalScrollReach > 1 || workspaceOutsideViewport,
+        overflowOffenders,
         writingLeft: writingRect?.left ?? null,
         writingTop: writingRect?.top ?? null,
         reviewLeft: reviewRect?.left ?? null,
@@ -537,7 +595,13 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
     });
     const label = `${stateLabel}-${viewport.width}x${viewport.height}`;
     results.responsive[label] = layout;
-    assert.equal(layout.overflow, false, `${label} must not overflow horizontally.`);
+    assert.equal(
+      layout.overflow,
+      false,
+      `${label} must not overflow horizontally. Offenders: ${layout.overflowOffenders
+        .map((entry) => `${entry.tag}${entry.id ? `#${entry.id}` : ''}${entry.className ? `.${entry.className.replace(/\s+/g, '.')}` : ''}[${entry.left},${entry.right},${entry.width}]`)
+        .join('|') || 'none'}; reach=${layout.horizontalScrollReach}; document=${layout.documentOverflowPixels}; panes=${layout.writingLeft}/${layout.reviewLeft}`,
+    );
     assert.deepEqual(layout.shortControls, [], `${label} must retain 44px touch targets.`);
     assert.deepEqual(layout.unsharedActions, [], `${label} must use shared Subject Matter action controls.`);
     if (viewport.width > 900) {
@@ -881,11 +945,20 @@ try {
     for (const catalog of catalogChecks) {
       await openCatalog(page, catalog.track);
       const label = `${catalog.label}-${viewport.width}`;
-      const layout = await page.evaluate(() => ({
-        overflow: document.documentElement.scrollWidth > innerWidth,
-        innerWidth,
-        scrollWidth: document.documentElement.scrollWidth,
-        offenders: [...document.querySelectorAll('body *')]
+      const layout = await page.evaluate(() => {
+        const originalScrollX = scrollX;
+        const maxScrollX = Math.max(0, document.documentElement.scrollWidth - innerWidth);
+        scrollTo(maxScrollX, scrollY);
+        const horizontalScrollReach = Math.abs(scrollX - originalScrollX);
+        scrollTo(originalScrollX, scrollY);
+        const offenders = [...document.querySelectorAll('body *')]
+          .filter((element) => {
+            const style = getComputedStyle(element);
+            return style.display !== 'none'
+              && style.visibility !== 'hidden'
+              && Number.parseFloat(style.opacity || '1') > 0
+              && !element.closest('[hidden], [inert], [aria-hidden="true"]');
+          })
           .map((element) => {
             const rect = element.getBoundingClientRect();
             return {
@@ -895,11 +968,20 @@ try {
               left: Math.round(rect.left),
               right: Math.round(rect.right),
               width: Math.round(rect.width),
+              height: Math.round(rect.height),
             };
           })
-          .filter((item) => item.right > innerWidth + 1 || item.left < -1)
-          .slice(0, 12),
-      }));
+          .filter((item) => item.width > 0 && item.height > 0
+            && (item.right > innerWidth + 1 || item.left < -1))
+          .slice(0, 12);
+        return {
+          overflow: horizontalScrollReach > 1 || offenders.length > 0,
+          innerWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          horizontalScrollReach,
+          offenders,
+        };
+      });
       const activeRoot = page.locator(
         catalog.track === 'bar_feels' ? '#dd-bar-feels-app' : '#dd-per-subject-app',
       );

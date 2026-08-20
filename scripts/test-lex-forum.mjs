@@ -29,18 +29,20 @@ const build = files['scripts/build-pages-artifact.mjs'];
 const migration = files['supabase/migrations/20260802_011_lex_forum_social_beta.sql'];
 const preflight = files['supabase/review/lex_forum_production_preflight.sql'];
 
-assert.match(page, />Quorum<\/button>/);
-assert.match(page, />Open Quorum menu<\/button>/);
+assert.match(page, />Home<\/button>/);
+assert.match(page, /aria-label="Home navigation"/);
 assert.match(
   page,
-  /<h2>Quorum<\/h2>[\s\S]*The floor is yours—speak your mind, ask questions, share your law school journey, and learn together\./,
+  /<h2>Home<\/h2>[\s\S]*Ask the community, continue your preparation, and see what needs attention\./,
 );
 assert.match(page, /id="lex-forum-app" hidden/);
-assert.match(page, /Quorum is an educational discussion space/);
-assert.doesNotMatch(page, /Lex Forum|Under Construction|Read-only/i);
+assert.match(page, /Community posts do not constitute legal advice/);
+assert.doesNotMatch(page, /Lex Forum|Under Construction/i);
+assert.match(page, /id="community-sample-lane"/);
+assert.match(page, /Fictional · anonymized · read-only/);
 assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
-assert.match(featureLoader, /assets\/lex-forum\.css\?v=master-experience-20260813-1/);
-assert.match(featureLoader, /assets\/lex-forum\.js\?v=master-experience-20260813-1/);
+assert.match(featureLoader, /assets\/lex-forum\.css\?v=home-renovation-20260821-1/);
+assert.match(featureLoader, /assets\/lex-forum\.js\?v=home-renovation-20260821-1/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);
@@ -54,6 +56,9 @@ assert.match(forum, /rel = 'noopener noreferrer ugc'/);
 assert.match(forum, /textContent = String\(value/);
 assert.doesNotMatch(forum, /\.innerHTML\s*=/);
 assert.match(forum, /navigator\.onLine/);
+assert.match(forum, /query\('sample_feed'\)/);
+assert.match(forum, /sampleVisibleCount/);
+assert.match(forum, /View \$\{replyCount\}/);
 assert.match(forum, /payload\.cursorAt = state\.cursor\.createdAt/);
 assert.match(forum, /payload\.cursorId = state\.cursor\.id/);
 assert.match(forum, /state\.items = append \? state\.items\.concat/);
@@ -145,4 +150,4 @@ assert.doesNotMatch(preflight, /\b(?:insert|update|delete|alter|create|drop|gran
 assert.match(build, /'assets\/lex-forum\.css'/);
 assert.match(build, /'assets\/lex-forum\.js'/);
 
-console.log('Quorum frontend, Worker, admin, migration, and safety contracts passed.');
+console.log('Home community frontend, Worker, admin, migration, and safety contracts passed.');

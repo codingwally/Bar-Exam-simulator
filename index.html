@@ -8,8 +8,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Due Diligence — A Friend on Your Journey Through the Study of Law</title>
-<meta name="description" content="A Philippine legal-education platform for Bar-style essay practice, course-based study, academic community, and controlled examinations.">
+<title>Due Diligence — Philippine Bar Exam Simulator</title>
+<meta name="description" content="A Philippine Bar Exam Simulator for source-grounded essay practice, focused legal study, community discussion, and controlled examinations.">
 <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
 <meta name="application-name" content="Due Diligence">
 <meta name="theme-color" content="#081225">
@@ -17,16 +17,16 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Due Diligence">
 <meta property="og:locale" content="en_PH">
-<meta property="og:title" content="Due Diligence — A Friend on Your Journey Through the Study of Law">
-<meta property="og:description" content="Bar-style essay practice, course-based study, community learning, and controlled examinations for Philippine law students.">
+<meta property="og:title" content="Due Diligence — Philippine Bar Exam Simulator">
+<meta property="og:description" content="Source-grounded Bar-style essay practice, focused legal study, community discussion, and controlled examinations for Philippine law students.">
 <meta property="og:url" content="https://duediligence.ph/">
 <meta property="og:image" content="https://duediligence.ph/assets/brand/social-card-1200x630.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Official Due Diligence Lady Justice mark in judicial navy and gold">
+<meta property="og:image:alt" content="Due Diligence — Philippine Bar Exam Simulator">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Due Diligence — A Friend on Your Journey Through the Study of Law">
-<meta name="twitter:description" content="Bar-style essay practice, course-based study, community learning, and controlled examinations for Philippine law students.">
+<meta name="twitter:title" content="Due Diligence — Philippine Bar Exam Simulator">
+<meta name="twitter:description" content="Source-grounded Bar-style essay practice, focused legal study, community discussion, and controlled examinations for Philippine law students.">
 <meta name="twitter:image" content="https://duediligence.ph/assets/brand/social-card-1200x630.png">
 <script type="application/ld+json">
 {
@@ -34,7 +34,7 @@
   "@type": "EducationalApplication",
   "name": "Due Diligence",
   "url": "https://duediligence.ph/",
-  "description": "A Philippine legal-education platform for Bar-style essay practice, course-based study, academic community, and controlled examinations.",
+  "description": "A Philippine Bar Exam Simulator for source-grounded essay practice, focused legal study, community discussion, and controlled examinations.",
   "applicationCategory": "EducationalApplication",
   "operatingSystem": "Web",
   "inLanguage": "en-PH",
@@ -55,7 +55,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   /* ==========================================================================
-     Due Diligence — A Friend on Your Journey Through the Study of Law
+     Due Diligence — Philippine Bar Exam Simulator
      Visual system: Supreme Court legal motif — regal navy, judicial gold,
      royal violet, alabaster. Type: Cinzel / Playfair Display / Inter / IBM Plex Mono.
      NOTE: All class names, element IDs and CSS custom-property names are preserved
@@ -102,11 +102,12 @@
   }
 
   *{box-sizing:border-box;}
-  html{scroll-behavior:smooth;}
+  html{scroll-behavior:smooth;overflow-x:clip;}
 
   body{
     margin:0;
     min-height:100vh;
+    overflow-x:clip;
     color:var(--charcoal);
     font-family:var(--sans);
     font-size:15px;
@@ -946,20 +947,20 @@
 <link rel="stylesheet" href="assets/phase2.css?release=commercial-school-visual-safety-20260818-1">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
-<link rel="stylesheet" href="assets/quorum-first-shell.css?v=quorum-first-renovation-20260820-1">
+<link rel="stylesheet" href="assets/quorum-first-shell.css?v=signin-intro-20260821-2">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body class="private-beta-public">
 
 <header class="topbar pb-header pb-shared-header" id="site-header">
-    <a class="brand pb-brand" href="/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">
+    <a class="brand pb-brand" href="/" data-public-home aria-label="Due Diligence — Philippine Bar Exam Simulator">
       <img class="crest pb-crest" src="assets/brand/icon-192.png" width="50" height="50"
         alt="" aria-hidden="true">
       <span>
         <span class="brand-name pb-brand-name">Due Diligence</span>
-        <span class="brand-sub pb-brand-sub" id="brand-subtitle">Amicus in Itinere Iuris</span>
+        <span class="brand-sub pb-brand-sub" id="brand-subtitle">Philippine Bar Exam Simulator</span>
       </span>
-      <span class="brand-meaning" id="brand-subtitle-meaning" role="tooltip">A friend on the journey of law.</span>
+      <span class="brand-meaning" id="brand-subtitle-meaning" role="tooltip">Philippine Bar Exam Simulator</span>
     </a>
     <div class="topbar-actions quorum-header-actions">
       <button class="site-menu-toggle" id="site-menu-toggle" type="button"
@@ -1000,11 +1001,30 @@
 
 <div class="pb-landing" id="private-beta-landing">
   <section class="quorum-entry" id="public-platform" aria-labelledby="pb-pillars-title">
-    <img src="assets/brand/icon-192.png" width="84" height="84" alt="" aria-hidden="true">
-    <p class="pb-eyebrow">Philippine legal education</p>
-    <h1 id="pb-pillars-title">Your legal study community.</h1>
-    <p>Sign in to continue to Quorum and your practice workspace.</p>
-    <button class="quorum-entry-action" type="button" data-pb-open-admission>Continue with Google</button>
+    <div class="quorum-entry-copy">
+      <p class="pb-eyebrow">Philippine Bar Exam Simulator</p>
+      <h1 id="pb-pillars-title">Prepare with purpose.</h1>
+      <p>Practice Bar answers, discuss difficult questions, and track your progress in one focused workspace.</p>
+      <button class="quorum-entry-action" type="button" data-pb-open-admission>Continue with Google</button>
+      <ul class="quorum-entry-points" aria-label="Due Diligence workspace">
+        <li>Community</li>
+        <li>Practice</li>
+        <li>Progress</li>
+      </ul>
+    </div>
+    <div class="quorum-entry-visual" aria-label="Due Diligence visual introduction">
+      <div class="quorum-signin-intro is-still" data-signin-intro>
+        <img class="quorum-signin-intro-still" src="assets/brand/icon-192.png" width="84" height="84" alt="" aria-hidden="true">
+        <video class="quorum-signin-intro-video" data-signin-intro-video
+          data-src="assets/brand/signin-intro.mp4" autoplay muted playsinline preload="none"
+          tabindex="-1" aria-hidden="true" disablepictureinpicture
+          controlslist="nodownload nofullscreen noplaybackrate"></video>
+      </div>
+      <div class="quorum-entry-visual-note">
+        <strong>Due Diligence</strong>
+        <span>Built for serious Philippine legal study.</span>
+      </div>
+    </div>
   </section>
   <section class="pb-chamber-view" id="pb-chamber-view" aria-live="polite" hidden></section>
 
@@ -1170,12 +1190,27 @@
 <section id="page-community" class="page">
   <div class="page-wrap lex-page-wrap">
     <header class="page-head lex-page-head quorum-community-banner">
-      <div class="eyebrow">Due Diligence Community</div>
-      <div class="lex-title-row">
-        <h2>Quorum</h2>
+      <div class="community-home-copy">
+        <div class="eyebrow">Your study desk</div>
+        <div class="lex-title-row">
+          <h2>Home</h2>
+          <span class="lex-beta-badge">Members only</span>
+        </div>
+        <p class="quorum-motto">Ask the community, continue your preparation, and see what needs attention.</p>
+      </div>
+      <div class="community-home-actions">
+        <button class="lex-button lex-button-primary" id="community-compose-jump" type="button">Start a discussion</button>
+        <button class="lex-button lex-button-quiet" type="button" data-public-feature="mock">Start practice</button>
+      </div>
+      <dl class="community-home-stats" aria-label="Community preview">
+        <div><dt>23</dt><dd>Starter discussions</dd></div>
+        <div><dt>32</dt><dd>Peer replies</dd></div>
+        <div><dt>8</dt><dd>Bar subjects</dd></div>
+      </dl>
+      <div class="lex-title-row community-title-fallback" hidden>
+        <h2>Home</h2>
         <span class="lex-beta-badge">Members only</span>
       </div>
-      <p class="quorum-motto">Ask, share, and learn with the Philippine law-school community.</p>
     </header>
 
     <div class="lex-auth-state" id="lex-auth-state" role="status" aria-live="polite">
@@ -1184,18 +1219,18 @@
 
     <div id="lex-forum-app" hidden>
       <button class="lex-button quorum-menu-open" id="quorum-menu-open" type="button"
-        aria-controls="quorum-navigation" aria-expanded="false">Community</button>
+        aria-controls="quorum-navigation" aria-expanded="false">Explore</button>
       <div class="lex-layout">
-        <aside class="quorum-navigation" id="quorum-navigation" aria-label="Quorum navigation"
+        <aside class="quorum-navigation" id="quorum-navigation" aria-label="Home navigation"
           aria-hidden="true" tabindex="-1">
           <div class="quorum-drawer-head">
-            <strong>Quorum menu</strong>
+            <strong>Home menu</strong>
             <button class="quorum-drawer-close" id="quorum-menu-close" type="button"
-              aria-label="Close Quorum menu">&times;</button>
+              aria-label="Close Home menu">&times;</button>
           </div>
           <nav class="quorum-side-nav">
             <button class="quorum-side-link is-active" type="button" data-quorum-view="home">
-              Quorum Home
+              Home
             </button>
             <button class="quorum-side-link" type="button" data-quorum-view="my-posts">
               My Posts
@@ -1229,25 +1264,25 @@
           </div>
         </aside>
         <button class="quorum-drawer-scrim" id="quorum-menu-scrim" type="button"
-          aria-label="Close Quorum menu" tabindex="-1"></button>
+          aria-label="Close Home menu" tabindex="-1"></button>
 
-        <main class="lex-primary" aria-label="Quorum Feed">
+        <main class="lex-primary" aria-label="Community feed">
           <form class="quorum-search" id="quorum-search-form" role="search">
-            <label class="sr-only" for="quorum-search-input">Search Quorum</label>
+            <label class="sr-only" for="quorum-search-input">Search the community</label>
             <input id="quorum-search-input" type="search" maxlength="120"
               placeholder="Search posts, authorities, circles, or members">
             <button class="lex-button lex-button-primary" type="submit">Search</button>
             <button class="lex-button lex-button-quiet" id="quorum-search-clear" type="button" hidden>Clear</button>
           </form>
 
-          <form class="lex-composer" id="lex-composer" aria-label="Share with Quorum">
+          <form class="lex-composer" id="lex-composer" aria-label="Share with the community">
             <div class="lex-composer-heading">
               <div>
                 <span class="lex-kicker">The floor is yours</span>
               </div>
               <span class="lex-member-mark" aria-hidden="true">DD</span>
             </div>
-            <label class="sr-only" for="lex-post-body">Share with Quorum</label>
+            <label class="sr-only" for="lex-post-body">Share with the community</label>
             <textarea id="lex-post-body" maxlength="4000" rows="2"
               placeholder="What do you want to ask or share about law school?"
               required></textarea>
@@ -1285,7 +1320,7 @@
                   <label class="lex-source-field" for="quorum-entry-circle">
                     <span>Study Circle <em>optional</em></span>
                     <select id="quorum-entry-circle">
-                      <option value="">Public Quorum Feed</option>
+                      <option value="">Public community feed</option>
                     </select>
                   </label>
                   <label class="lex-source-field" for="lex-post-source">
@@ -1326,10 +1361,22 @@
             <button class="lex-button lex-button-primary" type="button" data-public-feature="mock">Try Practice Exam</button>
           </section>
 
+          <section class="community-sample-lane" id="community-sample-lane" aria-labelledby="community-sample-title" hidden>
+            <div class="community-sample-heading">
+              <div>
+                <span class="lex-kicker">Community preview</span>
+                <h3 id="community-sample-title">Starter discussions</h3>
+              </div>
+              <span class="community-sample-disclosure">Fictional · anonymized · read-only</span>
+            </div>
+            <div class="community-sample-grid" id="community-sample-feed"></div>
+            <button class="lex-button lex-button-quiet community-sample-more" id="community-sample-more" type="button" hidden>Show more discussions</button>
+          </section>
+
           <div class="lex-feed-toolbar">
             <div>
               <span class="lex-kicker" id="quorum-feed-kicker">Academic community</span>
-              <h3 id="quorum-feed-title">Quorum Feed</h3>
+              <h3 id="quorum-feed-title">Latest member discussions</h3>
             </div>
             <div class="quorum-toolbar-actions">
               <label class="sr-only" for="quorum-feed-sort">Sort posts</label>
@@ -1346,13 +1393,13 @@
           <button class="lex-button lex-load-more" id="lex-load-more" type="button" hidden>Load more posts</button>
         </main>
 
-        <aside class="lex-secondary" aria-label="Quorum supporting information">
+        <aside class="lex-secondary" aria-label="Community supporting information">
           <section class="lex-guidance-card">
             <div class="quorum-card-head">
               <span class="lex-kicker">Community pulse</span>
               <button class="quorum-text-button" id="quorum-active-refresh" type="button">Refresh</button>
             </div>
-            <h3>Trending in Quorum</h3>
+            <h3>Trending discussions</h3>
             <div id="quorum-active-issues" class="quorum-compact-list"></div>
           </section>
           <section class="lex-guidance-card">
@@ -1371,19 +1418,9 @@
             <h3>Study Circles</h3>
             <div id="quorum-recommended-circles" class="quorum-compact-list"></div>
           </section>
-          <section class="lex-guidance-card">
-            <span class="lex-kicker">Community standard</span>
-            <h3>Contribute with professional care.</h3>
-            <ul>
-              <li>Discuss doctrine and legal study respectfully.</li>
-              <li>Link official authorities when a proposition depends on them.</li>
-              <li>Do not publish private, identifying, or examination-answer data.</li>
-              <li>Report unsafe links, harassment, spam, or material legal misinformation.</li>
-            </ul>
-          </section>
           <section class="lex-notice-card">
             <strong>Educational discussion only</strong>
-            <p>Quorum is an educational discussion space for the Due Diligence community. User-generated posts do not constitute legal advice. Verify statutes and jurisprudence through official sources.</p>
+            <p>Community posts do not constitute legal advice. Verify statutes and jurisprudence through official sources.</p>
           </section>
           <section class="quorum-practice-card quorum-practice-card-desktop">
             <span class="lex-kicker">Practice Exam</span>
@@ -4224,13 +4261,13 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase2-config.js?v=private-maintenance-20260820-2"></script>
 <script src="assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
-<script src="assets/phase2-experience.js?v=commercial-launch-20260818-5"></script>
+<script src="assets/phase2-experience.js?v=commercial-launch-20260821-6"></script>
 <script src="assets/phase4-experience.js?v=commercial-launch-20260818-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
 <script src="assets/feature-loader.js?v=exam-room-ux-20260814-1&amp;release=subject-matter-gil-fixes-20260817-4&amp;perf=protected-navigation-20260820-1"></script>
 <script src="assets/quorum-first-shell.js?v=quorum-first-renovation-20260820-1"></script>
-<script src="assets/private-beta-landing.js?v=commercial-launch-20260818-1"></script>
+<script src="assets/private-beta-landing.js?v=signin-intro-20260821-1"></script>
 
 </body>
 </html>

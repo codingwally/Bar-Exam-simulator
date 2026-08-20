@@ -13,6 +13,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const EMAIL_PATTERN = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
 const PUBLIC_ID_PATTERN = /^(qe|qc|qr|qm|qs|qn|qf|qx)_[a-f0-9]{20}$/;
 const QUORUM_QUERY_OPERATIONS = new Set([
+  'sample_feed',
   'bootstrap',
   'feed',
   'saved',
@@ -258,7 +259,7 @@ export function normalizeQuorumQueryRequest(input = {}) {
   const request = quorumObject(input);
   const operation = String(request.operation || '').trim().toLowerCase();
   if (!QUORUM_QUERY_OPERATIONS.has(operation)) {
-    throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'Choose a valid Quorum view.');
+    throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'Choose a valid community view.');
   }
   const payload = safePayloadCopy(request.payload || {});
   if (payload.limit !== undefined) {

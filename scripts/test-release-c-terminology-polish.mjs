@@ -16,15 +16,15 @@ const publicLanding = index.slice(
 );
 
 for (const label of [
-  'Mock Bar',
-  'The Verdict',
+  'Home',
+  'Practice Exam',
+  'Guided Practice',
+  'Doctrine Review',
+  'Bar Question Practice',
+  'Bar Exam Simulation',
+  'Profile',
   'Plans &amp; Pricing',
-  'Quorum',
-  'Recent Jurisprudence',
   'Support',
-  'Quid Pro Quo',
-  'Partnerships',
-  'The Docket',
   'Examination Room',
 ]) {
   assert.ok(index.includes(label), `Public experience must include “${label}”.`);
@@ -32,18 +32,18 @@ for (const label of [
 
 assert.match(
   publicLanding,
-  /<h1 id="pb-pillars-title">Choose how you want to prepare\.<\/h1>/,
+  /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/,
 );
-for (const chamberId of ['chamber-academy', 'chamber-commons', 'chamber-barbound', 'spa-examination-room']) {
+for (const chamberId of ['spa-community', 'spa-bar-easy', 'spa-jurisprudence', 'spa-mock', 'spa-bar-feels', 'spa-examination-room']) {
   assert.match(index, new RegExp(`id="${chamberId}"`));
 }
 assert.doesNotMatch(publicLanding, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);
 assert.doesNotMatch(publicLanding, /Early Access Beta|Enter the Beta|Beta Access Active/i);
 assert.match(
   index,
-  /<a class="brand pb-brand" href="\/" data-public-home aria-label="Due Diligence homepage" aria-describedby="brand-subtitle-meaning">/,
+  /<a class="brand pb-brand" href="\/" data-public-home aria-label="Due Diligence — Philippine Bar Exam Simulator">/,
 );
-assert.match(index, /id="btn-signin"[^>]*>The Docket<\/button>[\s\S]*<\/nav>/);
+assert.match(index, /id="btn-signin"[^>]*>Profile<\/button>[\s\S]*<\/nav>/);
 assert.match(index, /id="page-community" class="page"/);
 assert.doesNotMatch(index, /assets\/phase2-law-library\.jpg|assets\/private-beta\/.+\.(?:avif|webp|jpe?g)/i);
 assert.match(index, /@media\(prefers-reduced-motion:reduce\)/);
@@ -60,10 +60,10 @@ for (const oldNavLabel of [
   assert.ok(!index.includes(oldNavLabel), `Old navigation label remains: ${oldNavLabel}`);
 }
 
-assert.match(experience, /signInButton\.textContent = 'The Docket';/);
+assert.match(experience, /signInButton\.textContent = 'Profile';/);
 assert.match(experience, /support: \['Member assistance', 'Support'/);
 assert.match(experience, /pricing: \['Access options', 'Plans & Pricing'/);
-assert.match(experience, /account: \['Your chamber', 'The Docket'/);
+assert.match(experience, /account: \['Your account', 'Profile'/);
 assert.match(experience, /partnership: \['Collaborate', 'Partnerships'/);
 
 for (const label of [

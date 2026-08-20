@@ -296,10 +296,44 @@ body.qfs-drawer-open {
   text-align: center;
 }
 
-.quorum-entry img {
+.quorum-signin-intro {
+  position: relative;
+  width: min(100%, 320px);
+  aspect-ratio: 16 / 9;
+  margin-bottom: 18px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(197, 160, 89, .42);
+  border-radius: 14px;
+  background: rgba(4, 18, 38, .76);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, .24);
+}
+
+.quorum-signin-intro-still {
   width: 78px;
   height: 78px;
-  margin-bottom: 18px;
+  object-fit: contain;
+}
+
+.quorum-signin-intro-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 260ms ease;
+}
+
+.quorum-signin-intro.is-playing .quorum-signin-intro-video {
+  opacity: 1;
+}
+
+.quorum-signin-intro.is-finishing .quorum-signin-intro-video,
+.quorum-signin-intro.is-still .quorum-signin-intro-video {
+  opacity: 0;
 }
 
 #private-beta-landing .quorum-entry h1 {
@@ -378,6 +412,10 @@ body.qfs-drawer-open {
     min-height: calc(100vh - 130px);
     padding: 48px 18px;
   }
+
+  .quorum-signin-intro {
+    width: min(100%, 286px);
+  }
 }
 
 @media (max-width: 360px) {
@@ -395,6 +433,11 @@ body.qfs-drawer-open {
   #site-header.qfs-shell #spa-nav.qfs-drawer {
     transition: none;
   }
+
+  .quorum-signin-intro-video {
+    display: none;
+    transition: none;
+  }
 }
 
 @media print {
@@ -402,5 +445,180 @@ body.qfs-drawer-open {
   #site-header.qfs-shell .qfs-menu-scrim,
   #site-header.qfs-shell .qfs-menu-toggle {
     display: none !important;
+  }
+}
+
+/* Renovated sign-in: one focused action, grounded in the existing navy-and-gold system. */
+#private-beta-landing .quorum-entry {
+  width: min(calc(100% - 40px), 1120px);
+  min-height: calc(100svh - 96px);
+  padding: clamp(32px, 6vw, 76px) 0;
+  display: grid;
+  grid-template-columns: minmax(0, .92fr) minmax(360px, 1.08fr);
+  align-items: center;
+  gap: clamp(36px, 7vw, 88px);
+  text-align: left;
+}
+
+.quorum-entry-copy {
+  max-width: 540px;
+}
+
+#private-beta-landing .quorum-entry-copy h1 {
+  max-width: 620px;
+  margin: 10px 0 18px;
+  color: #fff;
+  font: 700 clamp(46px, 6vw, 78px)/.98 "Playfair Display", Georgia, serif;
+  letter-spacing: -.045em;
+}
+
+#private-beta-landing .quorum-entry-copy > p:not(.pb-eyebrow) {
+  max-width: 520px;
+  margin: 0 0 28px;
+  color: #dbe4ee;
+  font: 500 clamp(16px, 1.8vw, 19px)/1.65 Inter, sans-serif;
+}
+
+#private-beta-landing .quorum-entry-copy .pb-eyebrow {
+  margin: 0;
+  color: #efd17d;
+  font: 800 11px/1.2 "IBM Plex Mono", monospace;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+.quorum-entry-action {
+  min-height: 52px;
+  padding: 14px 24px;
+  border: 1px solid #f0cf69;
+  border-radius: 8px;
+  box-shadow: 0 12px 34px rgba(197, 160, 89, .2);
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.quorum-entry-action:hover {
+  transform: translateY(-1px);
+  background: #efd071;
+  box-shadow: 0 16px 38px rgba(197, 160, 89, .28);
+}
+
+.quorum-entry-points {
+  margin: 24px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  list-style: none;
+}
+
+.quorum-entry-points li {
+  padding: 7px 11px;
+  border: 1px solid rgba(197, 160, 89, .32);
+  border-radius: 999px;
+  color: #dce4ed;
+  background: rgba(255, 255, 255, .035);
+  font: 700 11px/1 Inter, sans-serif;
+}
+
+.quorum-entry-visual {
+  position: relative;
+  min-width: 0;
+  padding: clamp(18px, 3vw, 30px);
+  border: 1px solid rgba(197, 160, 89, .4);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .015)),
+    rgba(4, 18, 38, .66);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .26);
+}
+
+.quorum-signin-intro {
+  width: 100%;
+  margin: 0;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.quorum-signin-intro::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  inset: auto 0 0;
+  height: 23%;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(4, 18, 38, 0), #041226 52%);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.quorum-signin-intro.is-playing::after {
+  opacity: 1;
+}
+
+.quorum-entry-visual-note {
+  margin-top: 18px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.quorum-entry-visual-note strong {
+  color: #fff;
+  font: 700 20px/1.2 "Playfair Display", Georgia, serif;
+}
+
+.quorum-entry-visual-note span {
+  color: #aebccd;
+  font: 600 12px/1.45 Inter, sans-serif;
+  text-align: right;
+}
+
+@media (max-width: 820px) {
+  #private-beta-landing .quorum-entry {
+    grid-template-columns: 1fr;
+    gap: 34px;
+    padding-block: 40px 56px;
+  }
+
+  .quorum-entry-copy {
+    max-width: 680px;
+  }
+
+  .quorum-entry-visual {
+    width: min(100%, 620px);
+  }
+}
+
+@media (max-width: 520px) {
+  #private-beta-landing .quorum-entry {
+    width: min(calc(100% - 28px), 1120px);
+    padding-block: 30px 42px;
+  }
+
+  #private-beta-landing .quorum-entry-copy h1 {
+    font-size: clamp(40px, 13vw, 56px);
+  }
+
+  .quorum-entry-visual {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .quorum-entry-visual-note {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .quorum-entry-visual-note span {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quorum-entry-action,
+  .quorum-signin-intro::after {
+    transition: none;
   }
 }

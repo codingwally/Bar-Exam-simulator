@@ -199,7 +199,11 @@ assert.match(examinations, /aria-expanded="\$\{yearOpen \? 'true' : 'false'\}"/)
 assert.match(examinations, /aria-controls="\$\{escapeAttribute\(yearPanelId\)\}"/);
 assert.match(examinations, /data-subject-search-input/);
 assert.match(examinations, /id="dd-subject-selector-dialog"/);
-assert.match(examinations, /function subjectWritingGuide\(question = \{\}\)/);
+assert.doesNotMatch(
+  examinations,
+  /function subjectWritingGuide\(question = \{\}\)|Writing approach/,
+  'Subject Matter must not add generic writing instructions above the answer workspace.',
+);
 assert.match(examinations, /Improved model response/);
 assert.match(examinations, /Review and retain\./);
 assert.match(examinations, /Subject Matter/);

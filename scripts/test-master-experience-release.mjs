@@ -14,7 +14,7 @@ const serviceWorker = read('service-worker.js');
 const offline = read('offline.html');
 const migration = read('supabase/migrations/20260813151040_master_experience_privacy_offline_foundation_20260813.sql');
 
-assert.match(index, /<h1 id="pb-pillars-title">Your legal study community\.<\/h1>/);
+assert.match(index, /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 assert.match(index, /data-public-home/);
 assert.match(index, /id="spa-community"[^>]*data-public-feature="quorum"/);
 assert.match(index, /<summary>Practice Exam<\/summary>/);

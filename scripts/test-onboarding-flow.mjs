@@ -7,10 +7,10 @@ const phase2 = await fs.readFile(new URL('../assets/phase2-experience.js', impor
 const phase4 = await fs.readFile(new URL('../assets/phase4-experience.js', import.meta.url), 'utf8');
 
 assert.match(html, /id="private-beta-landing"/);
-assert.match(html, /id="pb-pillars-title">Your legal study community\.<\/h1>/);
+assert.match(html, /id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 assert.match(html, /id="site-header"[\s\S]*class="spa-nav quorum-primary-nav"[\s\S]*Home[\s\S]*Practice Exam[\s\S]*Profile[\s\S]*Plans &amp; Pricing[\s\S]*Examination Room/);
 assert.equal((html.match(/id="site-header"/g) || []).length, 1);
-assert.doesNotMatch(html, /id="welcome-state"|Prepare with purpose\.|id="start-practice"/,
+assert.doesNotMatch(html, /id="welcome-state"|id="start-practice"/,
   'The retired authenticated landing must be removed.');
 assert.match(html, /<meta name="viewport" content="width=device-width, initial-scale=1">/, 'Mobile layouts require an explicit viewport declaration.');
 assert.match(html, /let currentSubj = null;/, 'A new visitor must not silently start in Civil Law.');

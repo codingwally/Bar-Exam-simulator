@@ -39,10 +39,13 @@ async function replaceIn(relativePath, replacements) {
   const filePath = path.join(stagingRoot, relativePath);
   let source = await readFile(filePath, 'utf8');
   for (const [search, replacement] of replacements) {
-    if (!source.includes(search)) {
+    const markerExists = search instanceof RegExp ? search.test(source) : source.includes(search);
+    if (!markerExists) {
       throw new Error(`${relativePath} is missing the expected staging replacement marker.`);
     }
-    source = source.replaceAll(search, replacement);
+    source = search instanceof RegExp
+      ? source.replace(search, replacement)
+      : source.replaceAll(search, replacement);
   }
   await writeFile(filePath, source, 'utf8');
 }
@@ -52,6 +55,10 @@ await replaceIn('assets/phase2-config.js', [
   ['sb_publishable_lQRSlxJPTDkKQIiT0hTfdg_ANVRUzym', stagingPublishableKey],
   ['https://duediligence.ph/?auth=callback', `${stagingPublicUrl}/?auth=callback`],
   ['https://duediligence-gemini-examiner.wallyesteban1993.workers.dev', stagingWorkerUrl],
+  [
+    /maintenance: Object\.freeze\(\{(\r?\n\s*)enabled: true,/,
+    'maintenance: Object.freeze({$1enabled: false,',
+  ],
 ]);
 
 await replaceIn('index.html', [

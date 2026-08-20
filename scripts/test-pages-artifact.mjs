@@ -59,7 +59,8 @@ for (const required of [
   'assets/brand/icon-512.png',
   'assets/brand/logo1-master.png',
   'assets/brand/social-card-1200x630.png',
-  'assets/payments/bpi-instapay-149.png',
+  'assets/brand/signin-intro.mp4',
+  'assets/payments/gotyme-instapay-149.png',
 ]) {
   assert.ok(files.includes(required), `${required} must ship in the Pages artifact`);
 }
@@ -80,11 +81,11 @@ const robots = await readFile(path.join(output, 'robots.txt'), 'utf8');
 const sitemap = await readFile(path.join(output, 'sitemap.xml'), 'utf8');
 assert.doesNotMatch(index, /content\/question-bank|website-upload\.json|DueDiligenceWebsiteQuestionBank/i);
 assert.doesNotMatch(index, /const BAR_QUESTIONS\s*=\s*\{/);
-assert.doesNotMatch(index, /PH Bar Essay Trainer|Advanced Pro Repository|PH Bar Exam Simulator/);
-assert.match(index, /<title>Due Diligence — A Friend on Your Journey Through the Study of Law<\/title>/);
+assert.doesNotMatch(index, /PH Bar Essay Trainer|Advanced Pro Repository/);
+assert.match(index, /<title>Due Diligence — Philippine Bar Exam Simulator<\/title>/);
 assert.match(index, /<html lang="en-PH">/);
 assert.match(index, /id="private-beta-landing"/);
-assert.match(index, /<h1 id="pb-pillars-title">Your legal study community\.<\/h1>/);
+assert.match(index, /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 assert.equal((index.match(/id="site-header"/g) || []).length, 1);
 assert.match(index, /id="site-header"[\s\S]*id="site-menu-toggle"[\s\S]*Examination Room[\s\S]*>Home<[\s\S]*>Practice Exam<[\s\S]*Guided Practice[\s\S]*Doctrine Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*>Profile<[\s\S]*Plans &amp; Pricing[\s\S]*>Support/);
 assert.doesNotMatch(index, />The Academy<|>The Commons<|>BarBound<|>The Docket</);
@@ -107,7 +108,7 @@ assert.match(freeTrialRuntime, /dailyLimit:\s*5/);
 assert.match(phase2Config, /maintenance:\s*Object\.freeze\(\{/);
 assert.match(phase2Config, /unlockPath:\s*'\/maintenance\/unlock'/);
 assert.match(phase2Config, /statusPath:\s*'\/maintenance\/status'/);
-assert.match(phase2Config, /assets\/maintenance-gate\.js\?v=maintenance-lock-20260820-2/);
+assert.match(phase2Config, /assets\/maintenance-gate\.js\?v=maintenance-lock-20260821-3/);
 assert.match(maintenanceGate, /We are improving Due Diligence\./);
 assert.match(maintenanceGate, /maintenance\.unlockPath/);
 assert.match(maintenanceGate, /maintenance\.statusPath/);

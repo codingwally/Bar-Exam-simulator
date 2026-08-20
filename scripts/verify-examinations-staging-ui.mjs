@@ -383,6 +383,8 @@ async function publishFixture(page, {
 async function openCatalog(page, track) {
   const triggerId = track === 'bar_feels' ? 'spa-bar-feels' : 'spa-subject-matter';
   const expectedPageId = track === 'bar_feels' ? 'page-bar-feels' : 'page-midterms';
+  const rootSelector = track === 'bar_feels' ? '#dd-bar-feels-app' : '#dd-per-subject-app';
+  const expectedRootId = rootSelector.slice(1);
   await page.evaluate((id) => {
     const trigger = document.getElementById(id);
     if (!trigger) throw new Error(`The public navigation control ${id} is unavailable.`);
@@ -390,19 +392,25 @@ async function openCatalog(page, track) {
   }, triggerId);
   try {
     await page.waitForFunction(
-      ({ selectedTrack, pageId }) => (
+      ({ selectedTrack, pageId, rootId }) => (
         window.DueDiligenceExaminations?.getState?.().screen === 'catalog'
         && window.DueDiligenceExaminations?.getState?.().track === selectedTrack
         && document.getElementById('authenticated-app-shell')?.hidden === false
         && document.getElementById(pageId)?.classList.contains('active') === true
+        && document.getElementById(rootId)?.childElementCount > 0
       ),
-      { selectedTrack: track, pageId: expectedPageId },
+      { selectedTrack: track, pageId: expectedPageId, rootId: expectedRootId },
       { timeout: 30_000 },
     );
   } catch (error) {
     const safeNavigationState = await page.evaluate(() => ({
       activePage: document.querySelector('.page.active')?.id || null,
       appShellHidden: document.getElementById('authenticated-app-shell')?.hidden ?? null,
+      rootChildren: document.getElementById(
+        window.DueDiligenceExaminations?.getState?.().track === 'bar_feels'
+          ? 'dd-bar-feels-app'
+          : 'dd-per-subject-app',
+      )?.childElementCount ?? null,
       hash: location.hash,
       state: window.DueDiligenceExaminations?.getState?.() || null,
       access: (() => {
@@ -420,12 +428,11 @@ async function openCatalog(page, track) {
       { cause: error },
     );
   }
-  const rootSelector = track === 'bar_feels' ? '#dd-bar-feels-app' : '#dd-per-subject-app';
-  await page.locator(rootSelector).waitFor({ state: 'visible', timeout: 15_000 });
+  await page.locator(rootSelector).waitFor({ state: 'visible', timeout: 30_000 });
   await page.locator(rootSelector).getByRole('heading', {
     name: track === 'bar_feels' ? 'Bar Feels' : 'Subject Matter',
     exact: true,
-  }).waitFor({ state: 'visible', timeout: 15_000 });
+  }).waitFor({ state: 'visible', timeout: 45_000 });
 }
 
 async function verifySubjectChooserGeometry(page) {

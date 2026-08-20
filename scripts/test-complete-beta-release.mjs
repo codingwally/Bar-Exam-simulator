@@ -12,8 +12,9 @@ import {
 } from '../worker/release-content-core.mjs';
 
 const fetchCsv = async (url) => {
+  const maxAttempts = 5;
   let lastError = null;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       const response = await fetch(url, {
         headers: { Accept: 'text/csv' },
@@ -25,22 +26,31 @@ const fetchCsv = async (url) => {
         return csv;
       }
       const retryable = response.status === 409 || response.status === 429 || response.status >= 500;
-      if (!retryable || attempt === 3) {
+      if (!retryable || attempt === maxAttempts) {
         assert.fail(`Published source failed: ${response.status}`);
       }
       lastError = new Error(`Published source failed: ${response.status}`);
+      const retryAfterSeconds = Number(response.headers.get('retry-after'));
+      const delayMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? Math.min(retryAfterSeconds * 1_000, 10_000)
+        : Math.min(attempt * 1_000, 4_000);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     } catch (error) {
       lastError = error;
-      if (attempt === 3) throw error;
+      if (attempt === maxAttempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(attempt * 1_000, 4_000)));
     }
-    await new Promise((resolve) => setTimeout(resolve, attempt * 750));
   }
   throw lastError || new Error('Published source could not be loaded.');
 };
 
+// Google Sheets can return 409 while generating two CSV exports concurrently.
+// Validate the two authoritative tabs serially so the release gate remains strict
+// without creating an avoidable export race.
+const subjectCsv = await fetchCsv(SUBJECT_MATTER_CSV_URL);
+const mockBarCsv = await fetchCsv(WEBSITE_UPLOAD_CSV_URL);
+
 const [
-  subjectCsv,
-  mockBarCsv,
   html,
   examinations,
   forum,
@@ -52,8 +62,6 @@ const [
   preflight,
 ] =
   await Promise.all([
-    fetchCsv(SUBJECT_MATTER_CSV_URL),
-    fetchCsv(WEBSITE_UPLOAD_CSV_URL),
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
     readFile(new URL('../assets/examinations.js', import.meta.url), 'utf8'),
     readFile(new URL('../assets/lex-forum.js', import.meta.url), 'utf8'),

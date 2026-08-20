@@ -6,12 +6,14 @@
   if (!legacy || !config) return;
 
   const PROTECTED_ROUTES = new Set([
+    'quorum',
     'bar-easy',
     'doctrines',
     'mock-bar',
     'subject-matter',
     'bar-feels',
     'verdict',
+    'examination-room',
   ]);
 
   const state = {
@@ -102,15 +104,15 @@
       return 'Accept the current Terms of Use and Privacy Policy before choosing access.';
     }
     if (profileRequired(access)) {
-      return 'Complete your profile before choosing Free Trial or Early Access.';
+      return 'Complete your profile before choosing Free or Early Access.';
     }
     if (access?.basis === 'trial_expired') {
-      return 'Your Free Trial has ended. Choose ₱149 Early Access to continue.';
+      return 'Choose Free or ₱149 Early Access to continue.';
     }
     if (choiceRequired(access)) {
-      return 'Choose Free Trial or ₱149 Early Access before continuing.';
+      return 'Choose Free or ₱149 Early Access before continuing.';
     }
-    return 'Access is not currently available for this account. Review Retainer or contact Support.';
+    return 'Access is not currently available for this account. Review your access or contact Support.';
   }
 
   function overlayOpen(id) {
@@ -135,135 +137,10 @@
     }
     const view = document.getElementById('dd2-native-view');
     if (view) view.toggleAttribute('data-access-choice-required', required);
-  }
-
-  function replaceFollowingParagraph(heading, copy) {
-    const paragraph = heading?.nextElementSibling;
-    if (paragraph?.tagName === 'P' && paragraph.textContent !== copy) {
-      paragraph.textContent = copy;
-    }
-  }
-
-  function trialButtonState(card) {
-    if (!card) return;
-    const existing = card.querySelector('button');
-    if (!existing) return;
-
-    existing.id = 'dd2-start-free-trial';
-    existing.type = 'button';
-    existing.className = 'dd2-button dd2-button-secondary';
-
-    const active = state.access?.trial?.active === true
-      && state.access?.trial?.program === 'commercial_launch_2026';
-    const available = state.access?.trialAvailable === true;
-
-    if (active) {
-      existing.disabled = true;
-      existing.textContent = 'Free Trial active';
-      card.removeAttribute('data-dd2-free-trial-card');
-      card.removeAttribute('tabindex');
-      card.removeAttribute('role');
-      card.style.cursor = '';
-      return;
-    }
-
-    if (!available) {
-      existing.disabled = true;
-      existing.textContent = state.access?.basis === 'trial_expired'
-        ? 'Free Trial already used'
-        : 'Free Trial unavailable';
-      card.removeAttribute('data-dd2-free-trial-card');
-      card.removeAttribute('tabindex');
-      card.removeAttribute('role');
-      card.style.cursor = '';
-      return;
-    }
-
-    existing.disabled = false;
-    existing.textContent = 'Start Free Trial';
-    card.dataset.dd2FreeTrialCard = 'true';
-    card.tabIndex = 0;
-    card.setAttribute('role', 'button');
-    card.setAttribute('aria-label', 'Start the complimentary Free Trial');
-    card.style.cursor = 'pointer';
-  }
-
-  function paidButtonState(card) {
-    const button = document.getElementById('dd2-open-payment');
-    if (!card || !button) return;
-    if (button.disabled) {
-      card.removeAttribute('data-dd2-early-access-card');
-      card.removeAttribute('tabindex');
-      card.removeAttribute('role');
-      card.style.cursor = '';
-      return;
-    }
-    button.textContent = 'Choose ₱149 Early Access';
-    card.dataset.dd2EarlyAccessCard = 'true';
-    card.tabIndex = 0;
-    card.setAttribute('role', 'button');
-    card.setAttribute('aria-label', 'Choose the ₱149 Early Access offer');
-    card.style.cursor = 'pointer';
+    document.documentElement?.classList?.toggle?.('dd-access-gate-open', required);
   }
 
   function patchCommercialCopy() {
-    const body = document.getElementById('dd2-native-body');
-    if (!body) return;
-
-    const pricingHost = document.getElementById('dd2-pricing-plans');
-    if (pricingHost) {
-      const intro = body.querySelector('.dd2-pricing-intro');
-      if (intro) {
-        intro.innerHTML = '<strong>Choose your access before continuing.</strong> Start the complimentary Free Trial through September 1, 2026, or choose ₱149 Early Access for unlimited access through October 1, 2026. Neither option renews automatically.';
-      }
-
-      const cards = Array.from(body.querySelectorAll('.dd2-plan'));
-      const trialCard = cards.find((card) => {
-        const title = card.querySelector('h3')?.textContent?.trim().toLowerCase();
-        return title === 'free' || title === 'launch trial' || title === 'free trial';
-      });
-      const paidCard = cards.find((card) => card.classList.contains('dd2-plan-featured'));
-
-      if (trialCard) {
-        const heading = trialCard.querySelector('h3');
-        if (heading) heading.textContent = 'Free Trial';
-        const badge = trialCard.querySelector('.dd2-badge');
-        if (badge) badge.textContent = 'No payment';
-        const priceNote = trialCard.querySelector('.dd2-price small');
-        if (priceNote) priceNote.textContent = 'through September 1';
-        trialButtonState(trialCard);
-      }
-
-      if (paidCard) paidButtonState(paidCard);
-      pricingHost.style.gridTemplateColumns = cards.length > 1
-        ? 'repeat(2, minmax(0, 1fr))'
-        : 'minmax(0, 1fr)';
-    }
-
-    body.querySelectorAll('h3').forEach((heading) => {
-      const title = heading.textContent?.trim();
-      if (title === 'Free and Early Access' || title === 'Early Access') {
-        heading.textContent = 'Free Trial and Early Access';
-        replaceFollowingParagraph(
-          heading,
-          'Every ordinary account must choose one access option. The complimentary Free Trial provides full practice access through September 1, 2026. The one-time ₱149 Early Access offer provides unlimited access through October 1, 2026. Administrator and approved Founding Beta accounts keep their existing access.',
-        );
-      }
-      if (title === 'Access records') {
-        replaceFollowingParagraph(
-          heading,
-          'Protected examinations require authentication. Supabase UUIDs anchor the selected Free Trial, approved Founding Beta eligibility, Early Access entitlements, legal acceptance, progress, and history so refreshes or device changes do not reset access.',
-        );
-      }
-    });
-
-    body.querySelectorAll('p').forEach((paragraph) => {
-      if (paragraph.textContent?.includes('How does Free access work?')
-          || paragraph.textContent?.includes('How does Early Access work?')) {
-        paragraph.innerHTML = '<strong>How do the two access options work?</strong><br>The Free Trial starts immediately when selected and ends September 1, 2026 at 11:59 PM Philippine time. Early Access is a one-time ₱149 payment for unlimited access through October 1, 2026. A submitted payment proof receives one non-renewable 24-hour provisional period while verification is pending.';
-      }
-    });
-
     if (state.mandatoryChoice) mandatoryControlState(true);
   }
 
@@ -275,7 +152,7 @@
       routeBound: true,
       returnHash: state.pendingRoute || location.hash,
       title: 'Accept the current Terms and Privacy Policy',
-      copy: 'Acceptance is required before you choose Free Trial or Early Access.',
+      copy: 'Acceptance is required before you choose Free or Early Access.',
     });
   }
 
@@ -305,7 +182,7 @@
     requestAnimationFrame(() => {
       patchCommercialCopy();
       mandatoryControlState(true);
-      const focusTarget = document.getElementById('dd2-start-free-trial')
+      const focusTarget = document.getElementById('dd2-choose-free')
         || document.getElementById('dd2-open-payment');
       focusTarget?.focus?.({ preventScroll: true });
     });
@@ -323,7 +200,7 @@
     state.gateNoticeShown = false;
     mandatoryControlState(false);
 
-    const destination = normalizedRouteHash(options.destination || state.pendingRoute);
+    const destination = '#quorum';
     state.pendingRoute = '';
 
     const close = document.getElementById('dd2-native-close');
@@ -347,14 +224,13 @@
     if (badge) {
       badge.classList.toggle('is-visible', Boolean(access?.accountLabel));
       if (!access) badge.textContent = '';
-      else if (choiceRequired(access)) badge.textContent = 'Choose access · Free Trial or ₱149';
+      else if (choiceRequired(access)) badge.textContent = 'Choose access · Free or ₱149';
       else if (access.unlimited) badge.textContent = `${access.accountLabel || 'Unlimited'} · Unlimited`;
       else badge.textContent = access.accountLabel || 'Access unavailable';
     }
 
-    if (access?.allowed === true && state.mandatoryChoice) {
-      const delay = ['launch_trial', 'provisional_payment'].includes(access.basis) ? 450 : 0;
-      setTimeout(() => releaseMandatoryChoice(), delay);
+    if (access?.allowed === true && !choiceRequired(access) && state.mandatoryChoice) {
+      releaseMandatoryChoice();
     } else if (!choiceRequired(access)) {
       state.mandatoryChoice = false;
       state.gateNoticeShown = false;
@@ -464,6 +340,10 @@
       force: true,
       routeHash,
     });
+    if (choiceRequired(access)) {
+      openMandatoryChoice(access, routeHash);
+      return false;
+    }
     if (access?.allowed === true) return true;
     if (legalRequired(access)) showRequiredLegalAcceptance(access);
     else openMandatoryChoice(access, routeHash);
@@ -472,28 +352,28 @@
 
   async function chooseFreeTrial() {
     if (!requireAuthentication()) return;
-    const button = document.getElementById('dd2-start-free-trial');
+    const button = document.getElementById('dd2-choose-free');
     if (button) {
       button.disabled = true;
-      button.textContent = 'Starting Free Trial…';
+      button.textContent = 'Setting up Free…';
     }
 
     try {
       const payload = await request('/access/choose', {
-        body: { choice: 'free_trial' },
+        body: { choice: 'free' },
         requestIdValue: randomId(18),
         recoverAccess: false,
       });
       state.access = payload.access || null;
       syncAccessUi();
       await refreshAccess({ enforce: false, force: true });
-      global.toast?.('Free Trial started. Full practice access is active through September 1, 2026.', 'ok');
+      global.toast?.('Free access is ready. You have five successful submissions each Philippine day.', 'ok');
       releaseMandatoryChoice();
     } catch (error) {
       if (error.code === 'LEGAL_ACCEPTANCE_REQUIRED') {
         await refreshAccess({ enforce: true, force: true }).catch(() => {});
       } else {
-        global.toast?.(error.message || 'The Free Trial could not be started.', 'warn');
+        global.toast?.(error.message || 'Free access could not be selected.', 'warn');
       }
       patchCommercialCopy();
     }
@@ -615,56 +495,29 @@
 
   function installCommercialUiGuards() {
     if (state.observer || !document.body) return;
-
+    state.observer = { installed: true };
     state.lastOverlayOpen = onboardingOrSignInOpen();
-    state.observer = new MutationObserver(() => {
-      patchCommercialCopy();
-      if (state.mandatoryChoice) mandatoryControlState(true);
-
-      const nowOpen = onboardingOrSignInOpen();
-      if (state.lastOverlayOpen === true && nowOpen === false && session()?.access_token) {
-        schedulePostOnboardingRefresh(80);
-      }
-      state.lastOverlayOpen = nowOpen;
-    });
-    state.observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ['class', 'aria-hidden'],
-    });
 
     document.addEventListener('click', (event) => {
       if (state.mandatoryChoice
           && event.target.closest('#dd2-native-close, #dd2-native-back')) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        global.toast?.('Choose Free Trial or ₱149 Early Access before continuing.', 'warn');
+        global.toast?.('Choose Free or ₱149 Early Access before continuing.', 'warn');
         return;
       }
 
-      const trialButton = event.target.closest('#dd2-start-free-trial');
-      const trialCard = event.target.closest('[data-dd2-free-trial-card="true"]');
-      if (trialButton || (
-        trialCard
-        && !event.target.closest('button, a, input, select, textarea, label')
-      )) {
+      const freeButton = event.target.closest('#dd2-choose-free');
+      if (freeButton) {
         event.preventDefault();
         event.stopImmediatePropagation();
         chooseFreeTrial();
         return;
       }
 
-      const paidCard = event.target.closest('[data-dd2-early-access-card="true"]');
-      if (paidCard
-          && !event.target.closest('button, a, input, select, textarea, label')) {
-        event.preventDefault();
-        paidCard.querySelector('#dd2-open-payment:not([disabled])')?.click();
-        return;
-      }
-
       const targetHash = clickedHash(event.target);
-      if (!targetHash || !session()?.access_token || state.access?.allowed === true) return;
+      if (!targetHash || !session()?.access_token) return;
+      if (state.access?.allowed === true && !choiceRequired(state.access)) return;
 
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -680,19 +533,8 @@
           && overlayOpen('dd2-native-view')) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        global.toast?.('Choose Free Trial or ₱149 Early Access before continuing.', 'warn');
+        global.toast?.('Choose Free or ₱149 Early Access before continuing.', 'warn');
         return;
-      }
-
-      if (!['Enter', ' '].includes(event.key)) return;
-      const trialCard = event.target.closest?.('[data-dd2-free-trial-card="true"]');
-      const paidCard = event.target.closest?.('[data-dd2-early-access-card="true"]');
-      if (trialCard) {
-        event.preventDefault();
-        chooseFreeTrial();
-      } else if (paidCard) {
-        event.preventDefault();
-        paidCard.querySelector('#dd2-open-payment:not([disabled])')?.click();
       }
     }, true);
 
@@ -728,6 +570,7 @@
     refreshAccess,
     ensureProtectedAccess,
     chooseFreeTrial,
+    chooseFreeAccess: chooseFreeTrial,
     requireAuthentication,
     getAccess: () => state.access,
     request,
@@ -750,6 +593,15 @@
     state.pendingRoute = '';
     mandatoryControlState(false);
     syncAccessUi();
+  });
+
+  global.addEventListener('duediligence:profile-completed', () => {
+    if (!session()?.access_token) return;
+    refreshAccess({
+      enforce: true,
+      force: true,
+      routeHash: '#quorum',
+    }).catch(() => {});
   });
 
   global.addEventListener('load', () => {

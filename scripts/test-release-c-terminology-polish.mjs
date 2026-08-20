@@ -18,7 +18,7 @@ const publicLanding = index.slice(
 for (const label of [
   'Mock Bar',
   'The Verdict',
-  'Retainer',
+  'Plans &amp; Pricing',
   'Quorum',
   'Recent Jurisprudence',
   'Support',
@@ -62,7 +62,7 @@ for (const oldNavLabel of [
 
 assert.match(experience, /signInButton\.textContent = 'The Docket';/);
 assert.match(experience, /support: \['Member assistance', 'Support'/);
-assert.match(experience, /pricing: \['Access options', 'Retainer'/);
+assert.match(experience, /pricing: \['Access options', 'Plans & Pricing'/);
 assert.match(experience, /account: \['Your chamber', 'The Docket'/);
 assert.match(experience, /partnership: \['Collaborate', 'Partnerships'/);
 

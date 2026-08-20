@@ -51,8 +51,8 @@ assert.match(
 );
 assert.match(phase2, /\['mock-bar', 'subject-matter', 'bar-feels', 'quorum', 'examination-room'\]/,
   'The canonical Mock Bar route must remain protected before sign-in.');
-assert.match(phase2, /function restoreAuthDestination\(\)[\s\S]*if \(!state\.authReturnPending\) return;[\s\S]*DueDiligencePublicHome\?\.show\?\.\(\{[\s\S]*replace:\s*true/,
-  'OAuth return must open the canonical homepage once while routine session recovery preserves the active route.');
+assert.match(phase2, /function restoreAuthDestination\(\)[\s\S]*if \(!state\.authReturnPending\) return;[\s\S]*history\.replaceState\([\s\S]*dueDiligenceRoute:\s*'quorum'[\s\S]*#quorum[\s\S]*PopStateEvent\('popstate'/,
+  'OAuth return must open Quorum once while routine session recovery preserves the active route.');
 assert.match(
   html,
   /function showSubjectSelection\(\) \{[\s\S]*window\.scrollTo\(\{ top: 0, behavior: 'auto' \}\);[\s\S]*close\?\.focus\(\{ preventScroll: true \}\);[\s\S]*\}/,
@@ -90,12 +90,12 @@ assert.match(phase4, /addEventListener\('duediligence:session'/);
 assert.match(
   phase4,
   /refreshAccess\(\{\s*enforce:\s*true,\s*force:\s*true\s*\}\)\.catch/,
-  'Authenticated session recovery must enforce the Retainer choice instead of silently granting access.',
+  'Authenticated session recovery must enforce the access choice instead of silently granting access.',
 );
 assert.match(
   phase4,
-  /state\.lastOverlayOpen === true[\s\S]*nowOpen === false[\s\S]*schedulePostOnboardingRefresh\(80\)/,
-  'Closing legal acceptance or profile onboarding must immediately re-check access and direct an unselected account to Retainer.',
+  /addEventListener\('duediligence:profile-completed'[\s\S]*refreshAccess\(\{[\s\S]*enforce:\s*true,[\s\S]*force:\s*true,[\s\S]*routeHash:\s*'#quorum'/,
+  'Completing profile onboarding must immediately re-check access and direct an unselected account to the mandatory plan gate.',
 );
 assert.match(
   phase4,

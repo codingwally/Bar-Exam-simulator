@@ -19,15 +19,15 @@ const sandbox = { window: {} };
 vm.runInNewContext(configSource, sandbox);
 const config = sandbox.window.DueDiligencePhase2Config;
 
-assert.equal(config.guest.gradeLimit, 3);
-assert.equal(config.legal.termsVersion, 'terms-beta-v2-2026-07-28');
-assert.equal(config.legal.privacyVersion, 'privacy-beta-v2-2026-07-28');
+assert.equal(config.guest.enabled, false);
+assert.equal(config.legal.termsVersion, 'terms-commercial-v1-2026-08-18');
+assert.equal(config.legal.privacyVersion, 'privacy-commercial-v1-2026-08-18');
 assert.equal('marketingConsentVersion' in config.legal, false);
 assert.deepEqual(Array.from(config.plans.items, (plan) => [
   plan.id,
   plan.pricingHidden,
-]), [['premium', true]]);
-assert.equal(config.plans.notice, 'Pricing will be announced after beta testing.');
+]), [['free', false], ['early_access_beta', false]]);
+assert.equal(config.plans.notice, 'Choose Free or the one-time Early Access offer.');
 assert.equal(config.features.payments, false);
 assert.equal(config.features.subscriptionEnforcement, true);
 assert.equal(config.features.coachingBooking, false);
@@ -36,12 +36,9 @@ for (const expected of [
   'Welcome to Due Diligence',
   'Your chamber for serious Bar preparation.',
   'Continue with Google',
-  'Continue as Guest',
   'Save progress',
   'Personal analytics',
   'Guided Subject Matter practice',
-  'Guest access includes 3 graded questions across all subjects.',
-  'You have completed your 3 guest questions.',
   '/beta/access/accept-terms',
   'complete_commercial_profile_onboarding',
   'Free and Early Access',
@@ -52,6 +49,9 @@ for (const expected of [
 ]) {
   assert.ok(experience.includes(expected), `Phase 2 experience must include: ${expected}`);
 }
+
+assert.match(experience, /id="dd2-guest-continue" hidden/);
+assert.match(experience, /config\.guest\?\.enabled !== true[\s\S]*signInWithGoogle\(\)/);
 
 assert.doesNotMatch(
   experience,

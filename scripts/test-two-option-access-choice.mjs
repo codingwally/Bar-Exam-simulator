@@ -14,26 +14,29 @@ const dailyMigration = readFileSync(
   new URL('../supabase/migrations/20260818143000_free_trial_five_daily_choice.sql', import.meta.url),
   'utf8',
 );
+const commercialMigration = readFileSync(
+  new URL('../supabase/migrations/20260820113549_permanent_free_commercial_access.sql', import.meta.url),
+  'utf8',
+);
 
-assert.match(phase4, /Choose Free Trial or ₱149 Early Access/);
-assert.match(phase4, /dd2-start-free-trial/);
+assert.match(phase4, /Choose Free or ₱149 Early Access/);
+assert.match(phase4, /dd2-choose-free/);
 assert.match(phase4, /access\/choose/);
 assert.match(phase4, /plan_selection_required/);
-assert.match(phase4, /MutationObserver/);
+assert.doesNotMatch(phase4, /MutationObserver/);
 assert.match(phase4, /ensureProtectedAccess/);
 assert.match(phase4, /subject-matter/);
 assert.match(phase4, /mock-bar/);
-assert.match(dailyCopy, /5 protected question submissions per Philippine day/);
-assert.match(dailyCopy, /Free Trial · \$\{remaining\} of \$\{limit\} remaining today/);
-assert.match(dailyCopy, /Philippine midnight/);
+assert.match(dailyCopy, /DueDiligencePermanentFree/);
+assert.match(dailyCopy, /dailyLimit:\s*5/);
 assert.match(featureLoader, /installPageRouterGuard/);
 assert.match(featureLoader, /mock:\s*'#mock-bar'/);
 assert.match(featureLoader, /midterms:\s*'#subject-matter'/);
 assert.match(featureLoader, /loadForFeature\('subject-matter'\)/);
 assert.match(featureLoader, /options\?\.accessVerified/);
-assert.match(featureLoader, /free-trial-five-daily\.js/);
+assert.doesNotMatch(featureLoader, /free-trial-five-daily\.js/);
 assert.match(worker, /phase4_choose_launch_trial/);
-assert.match(worker, /FREE_TRIAL_ALREADY_USED/);
+assert.match(worker, /\['free', 'free_trial', 'launch_trial'\]/);
 assert.match(accessCore, /ACCESS_CHOICE_REQUIRED/);
 assert.match(choiceMigration, /mandatory_access_choice_enabled = false/);
 assert.match(choiceMigration, /create or replace function public\.phase4_choose_launch_trial/);
@@ -47,5 +50,11 @@ assert.doesNotMatch(
   dailyMigration,
   /if v_trial_active then[\s\S]*'unlimited', true/,
 );
+assert.match(commercialMigration, /choice in \('free', 'early_access'\)/);
+assert.match(commercialMigration, /'name', 'Free'/);
+assert.match(commercialMigration, /free_daily_grade_limit = 5/);
+assert.match(commercialMigration, /mandatory_access_choice_enabled = true/);
+assert.match(commercialMigration, /global_beta_all_access_enabled = false/);
+assert.match(commercialMigration, /grant execute on function public\.phase4_choose_launch_trial\(uuid, text\)[\s\S]*to service_role/);
 
 console.log('Two-option five-daily access-choice and protected-route contracts passed.');

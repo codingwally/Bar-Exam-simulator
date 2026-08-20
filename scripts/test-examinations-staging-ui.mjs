@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sanitizeStagingDiagnostic } from './staging-e2e-diagnostics.mjs';
+import { completeMandatoryCommercialProfile } from './staging-commercial-user.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SUPABASE_URL = String(process.env.STAGING_SUPABASE_URL || '').replace(/\/+$/, '');
@@ -73,6 +74,43 @@ async function createDisposableUser() {
       updated_at: new Date().toISOString(),
     }),
   }, [200, 204]);
+  const assignedRoles = await jsonRequest(
+    `${SUPABASE_URL}/rest/v1/user_roles?user_id=eq.${userId}&select=role`,
+    { headers: serviceHeaders },
+  );
+  assert.deepEqual(assignedRoles, [{ role: 'super_admin' }]);
+}
+
+async function prepareDisposableCommercialProfile() {
+  const session = await jsonRequest(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      apikey: PUBLISHABLE_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+  assert.ok(session.access_token, 'The disposable staging session was not created.');
+  const acceptance = await jsonRequest(`${WORKER_URL}/beta/access/accept-terms`, {
+    method: 'POST',
+    headers: {
+      Origin: WORKER_URL,
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  });
+  assert.equal(acceptance?.acceptance?.termsVersion, 'terms-commercial-v1-2026-08-18');
+  assert.equal(acceptance?.acceptance?.privacyVersion, 'privacy-commercial-v1-2026-08-18');
+  await completeMandatoryCommercialProfile({
+    supabaseUrl: SUPABASE_URL,
+    publishableKey: PUBLISHABLE_KEY,
+    workerUrl: WORKER_URL,
+    token: session.access_token,
+    displayName: 'Synthetic Staging UI Examinee',
+    termsVersion: 'terms-commercial-v1-2026-08-18',
+    privacyVersion: 'privacy-commercial-v1-2026-08-18',
+  });
 }
 
 async function enableCommercialLegalVersions() {
@@ -220,6 +258,7 @@ let verifierFailure = null;
 try {
   await enableCommercialLegalVersions();
   await createDisposableUser();
+  await prepareDisposableCommercialProfile();
   verifier = await runVerifier();
   if (verifier.code !== 0) {
     verifierFailure = sanitizeStagingDiagnostic(verifier.output, SERVICE_ROLE_KEY)

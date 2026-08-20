@@ -97,10 +97,10 @@ assert.match(examinations, /const isBarFeels = state\.setup\.track === 'bar_feel
 assert.match(examinations, /function subjectWritingGuide\(/);
 assert.match(examinations, /Improved model response/);
 assert.doesNotMatch(examinations, /id="dd-upload-timer"/);
-assert.match(featureLoader, /assets\/free-trial-five-daily\.js/);
+assert.doesNotMatch(featureLoader, /assets\/free-trial-five-daily\.js/);
 assert.match(featureLoader, /'subject-matter': '#subject-matter'/);
-assert.match(freeTrialRuntime, /5 protected question submissions per Philippine day/);
-assert.match(freeTrialRuntime, /daily_limit_reached/);
+assert.match(freeTrialRuntime, /DueDiligencePermanentFree/);
+assert.match(freeTrialRuntime, /dailyLimit:\s*5/);
 assert.match(phase2Config, /maintenance:\s*Object\.freeze\(\{/);
 assert.match(phase2Config, /unlockPath:\s*'\/maintenance\/unlock'/);
 assert.match(phase2Config, /statusPath:\s*'\/maintenance\/status'/);

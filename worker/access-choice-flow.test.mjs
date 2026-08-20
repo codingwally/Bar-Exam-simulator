@@ -26,20 +26,13 @@ test('ordinary commercial accounts preserve the required two-option state', () =
     priceCentavos: 14900,
     commercialLaunchEnabled: true,
     mandatoryAccessChoiceEnabled: true,
-    trialAvailable: true,
-    trialEndsAt: '2026-09-01T15:59:59Z',
-    trial: {
-      active: false,
-      program: null,
-      startedAt: null,
-      expiresAt: null,
-    },
+    freeChoiceAvailable: true,
     freeGrades: { limit: 0, used: 0, remaining: 0 },
   });
 
   assert.equal(access.allowed, false);
   assert.equal(access.choiceRequired, true);
-  assert.equal(access.trialAvailable, true);
+  assert.equal(access.freeChoiceAvailable, true);
   assert.equal(access.dailyLimit, 5);
   assert.equal(access.freeGrades.limit, 0);
   assert.equal(access.remainingToday, 0);
@@ -49,12 +42,12 @@ test('ordinary commercial accounts preserve the required two-option state', () =
     (error) => (
       error instanceof AccessValidationError
       && error.code === 'ACCESS_CHOICE_REQUIRED'
-      && /Free Trial or ₱149 Early Access/.test(error.message)
+      && /Free or ₱149 Early Access/.test(error.message)
     ),
   );
 });
 
-test('an explicitly selected Free Trial receives five daily questions', () => {
+test('an explicitly selected Free account receives five daily submissions', () => {
   const access = normalizeAccessSnapshot({
     allowed: true,
     basis: 'daily_free',
@@ -63,7 +56,7 @@ test('an explicitly selected Free Trial receives five daily questions', () => {
     choiceRequired: false,
     role: 'student',
     accessMode: 'free',
-    accountLabel: 'Free Trial',
+    accountLabel: 'Free',
     unlimited: false,
     dailyLimit: 5,
     completedToday: 0,
@@ -71,14 +64,8 @@ test('an explicitly selected Free Trial receives five daily questions', () => {
     remainingToday: 5,
     commercialLaunchEnabled: true,
     mandatoryAccessChoiceEnabled: true,
-    trialAvailable: false,
-    trialEndsAt: '2026-09-01T15:59:59Z',
-    trial: {
-      active: true,
-      program: 'commercial_launch_2026',
-      startedAt: '2026-08-18T00:00:00Z',
-      expiresAt: '2026-09-01T15:59:59Z',
-    },
+    freeChoiceAvailable: false,
+    selectedChoice: 'free',
     freeGrades: { limit: 5, used: 0, remaining: 5 },
   });
 
@@ -87,11 +74,10 @@ test('an explicitly selected Free Trial receives five daily questions', () => {
   assert.equal(access.choiceRequired, false);
   assert.equal(access.dailyLimit, 5);
   assert.equal(access.remainingToday, 5);
-  assert.equal(access.trial.active, true);
-  assert.equal(access.trial.program, 'commercial_launch_2026');
+  assert.equal(access.selectedChoice, 'free');
 });
 
-test('the authenticated access-choice endpoint starts the five-daily Free Trial', async () => {
+test('the authenticated access-choice endpoint records permanent five-daily Free access', async () => {
   const originalFetch = globalThis.fetch;
   const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const origin = 'https://duediligence.ph';
@@ -123,7 +109,7 @@ test('the authenticated access-choice endpoint starts the five-daily Free Trial'
         choiceRequired: false,
         role: 'student',
         accessMode: 'free',
-        accountLabel: 'Free Trial',
+        accountLabel: 'Free',
         unlimited: false,
         dailyLimit: 5,
         completedToday: 0,
@@ -131,13 +117,8 @@ test('the authenticated access-choice endpoint starts the five-daily Free Trial'
         remainingToday: 5,
         commercialLaunchEnabled: true,
         mandatoryAccessChoiceEnabled: true,
-        trialAvailable: false,
-        trialEndsAt: '2026-09-01T15:59:59Z',
-        trial: {
-          active: true,
-          program: 'commercial_launch_2026',
-          expiresAt: '2026-09-01T15:59:59Z',
-        },
+        freeChoiceAvailable: false,
+        selectedChoice: 'free',
         freeGrades: { limit: 5, used: 0, remaining: 5 },
       });
     }
@@ -156,7 +137,7 @@ test('the authenticated access-choice endpoint starts the five-daily Free Trial'
           'Content-Type': 'application/json',
           'X-Request-ID': 'choice_request_20260818',
         },
-        body: JSON.stringify({ choice: 'free_trial' }),
+        body: JSON.stringify({ choice: 'free' }),
       },
     ), {
       ALLOWED_ORIGIN: origin,
@@ -167,7 +148,7 @@ test('the authenticated access-choice endpoint starts the five-daily Free Trial'
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
-    assert.equal(payload.choice, 'free_trial');
+    assert.equal(payload.choice, 'free');
     assert.equal(payload.access.basis, 'daily_free');
     assert.equal(payload.access.dailyLimit, 5);
     assert.equal(payload.access.remainingToday, 5);

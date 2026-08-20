@@ -72,7 +72,7 @@ assert.match(publicLanding, /id="pb-chamber-view"/);
 assert.match(script, /academy:[\s\S]*commons:[\s\S]*barbound:/);
 for (const taxonomy of [
   /Mock Bar[\s\S]*Subject Matter[\s\S]*The Verdict/,
-  /Bar Easy[\s\S]*Quorum[\s\S]*Retainer/,
+  /Bar Easy[\s\S]*Quorum[\s\S]*Plans & Pricing/,
   /Bar Feels[\s\S]*2026 Bar Chair(?:&rsquo;|’|')s Cases[\s\S]*Doctrines[\s\S]*Anchor Case Digests/,
 ]) assert.match(script, taxonomy, `missing chamber taxonomy: ${taxonomy}`);
 assert.doesNotMatch(publicLanding, /EARLY ACCESS BETA|Enter the Beta|Private beta access code/i,

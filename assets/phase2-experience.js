@@ -766,7 +766,7 @@
   function showEntry(options = {}) {
     const completed = Boolean(options.completed);
     hideNativeView();
-    const allowGuest = options.allowGuest === true && !completed;
+    const allowGuest = config.guest?.enabled === true && options.allowGuest === true && !completed;
     const allowDismiss = options.allowDismiss === true;
     const routeBound = options.routeBound === true;
     rememberAuthReturn(options.returnHash);
@@ -915,6 +915,10 @@
   }
 
   function continueGuestFromEntry() {
+    if (config.guest?.enabled !== true) {
+      signInWithGoogle();
+      return;
+    }
     closeEntry();
     if (typeof originalContinueAsGuest === 'function'
       && typeof onboardingStage !== 'undefined'
@@ -972,18 +976,13 @@
   function restoreAuthDestination() {
     if (!state.authReturnPending) return;
     state.authReturnPending = false;
-    const destination = safeReturnHash(safeSessionRead(authReturnStorageKey));
     safeSessionRemove(authReturnStorageKey);
-    if (destination) {
-      history.replaceState(history.state, '', `${location.pathname}${destination}`);
-      global.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
-      return;
-    }
-    global.DueDiligencePublicHome?.show?.({
-      history: true,
-      replace: true,
-      focus: true,
-    });
+    history.replaceState(
+      { ...(history.state || {}), dueDiligenceRoute: 'quorum' },
+      '',
+      `${location.pathname}${location.search}#quorum`,
+    );
+    global.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
   }
 
   function openTermsAcceptance() {
@@ -1209,6 +1208,7 @@
       }
       global.toast?.(`Welcome, ${displayName}.`, 'ok');
       global.DueDiligenceAnalytics?.track('onboarding_completed');
+      global.dispatchEvent(new CustomEvent('duediligence:profile-completed'));
       resumePendingSubmission();
     } catch (error) {
       const unavailable = /network|fetch|offline/i.test(String(error?.message || ''));
@@ -1238,7 +1238,7 @@
         <h3>AI, grading, and authority limitations</h3>
         <p>AI-generated grading and suggested answers may be incomplete or inaccurate. They are not official Supreme Court or Bar Examiner grades. A “Human Verified” label appears only after a genuine editorial review record exists. Provider capacity may temporarily interrupt grading; no grade or authority will be fabricated.</p>
         <h3>Free and Early Access</h3>
-        <p>Free accounts receive five successful question submissions per Philippine calendar day across the available examination tracks. A failed grading operation does not consume an allowance. Early Access is a one-time ₱149 offer available through September 1, 2026 and provides unlimited access through October 1, 2026. Founding Beta access is complimentary only for separately approved accounts through September 1, 2026.</p>
+        <p>Free accounts receive five successful question submissions per Philippine calendar day across the available examination tracks. A failed grading operation does not consume an allowance. Early Access is a one-time ₱149 offer available through September 1, 2026 and provides unlimited access through October 1, 2026. Approved Founding Members receive complimentary access through September 1, 2026.</p>
         <h3>Payments, cancellation, and refunds</h3>
         <p>Early Access has no automatic renewal. A payment-proof submission creates one non-renewable 24-hour provisional entitlement while it is reviewed. A verified entitlement ends on October 1, 2026. Eligible refund requests must be filed within seven calendar days of the first provisional or paid access start and are reviewed using the published unused-time formula, without limiting statutory consumer rights.</p>
         <h3>Your submissions</h3>
@@ -1261,7 +1261,7 @@
         <h3>Essay assessment</h3>
         <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to the configured assessment provider. Do not place client secrets or confidential case information in practice answers.</p>
         <h3>Access records</h3>
-        <p>Protected examinations require authentication. Supabase UUIDs anchor daily allowances, approved Founding Beta eligibility, Early Access entitlements, legal acceptance, progress, and history so refreshes or device changes do not reset access.</p>
+        <p>Protected examinations require authentication. Supabase UUIDs anchor daily allowances, approved Founding Member eligibility, Early Access entitlements, legal acceptance, progress, and history so refreshes or device changes do not reset access.</p>
         <h3>Support and corrections</h3>
         <p>Support stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Support. Correction submissions store only the reviewed correction fields described in that form.</p>
         <h3>Payments and infrastructure</h3>
@@ -1386,7 +1386,7 @@
         <h3>Docket recovery</h3>
         <p>Contact Support. We respond within 24 hours.</p>
         <p>Direct public email changes and account transfers are not available. Choose Docket Recovery in Support so identity verification can be documented safely.</p>
-        <h3>Retainer and access</h3>
+        <h3>Plan and access</h3>
         <div id="dd2-account-access"><p>Loading verified access status…</p></div>
         <div id="dd2-account-billing"></div>
         <p class="dd2-form-note">Initial response target: 24 hours. Ordinary internal resolution: seven calendar days; complex review may take up to 14 days without waiving statutory remedies.</p>
@@ -1441,7 +1441,7 @@
   function nativeDefinition(view) {
     const definitions = {
       support: ['Member assistance', 'Support', supportContent],
-      pricing: ['Access options', 'Retainer', pricingContent],
+      pricing: ['Access options', 'Plans & Pricing', pricingContent],
       terms: ['Legal', 'Terms of Use', termsContent],
       privacy: ['Legal', 'Privacy Policy', privacyContent],
       account: ['Your chamber', 'The Docket', accountContent],
@@ -1473,7 +1473,27 @@
     setOverlay(false, 'dd2-native-view');
   }
 
+  function mandatoryAccessChoiceOpen() {
+    return document.getElementById('dd2-native-view')
+      ?.hasAttribute('data-access-choice-required') === true;
+  }
+
+  function refuseMandatoryAccessChoiceDismissal() {
+    global.toast?.('Choose Free or ₱149 Early Access before continuing.', 'warn');
+    if (location.hash !== '#pricing') {
+      history.replaceState(
+        { ...(history.state || {}), dd2View: 'pricing' },
+        '',
+        '#pricing',
+      );
+    }
+  }
+
   function closeNativeView() {
+    if (mandatoryAccessChoiceOpen()) {
+      refuseMandatoryAccessChoiceDismissal();
+      return;
+    }
     const shouldRewindHistory = Boolean(history.state?.dd2View);
     hideNativeView();
     if (shouldRewindHistory) history.back();
@@ -1639,6 +1659,15 @@
     const earlyFeatures = Array.isArray(early?.features) ? early.features : [];
     const earlyOpen = early?.checkoutEnabled === true && access?.checkoutOpen !== false;
     const alreadyUnlimited = access?.unlimited === true;
+    const choiceRequired = access?.choiceRequired === true
+      || access?.planSelectionRequired === true
+      || ['plan_selection_required', 'payment_required'].includes(String(access?.basis || ''));
+    const freeSelected = access?.accessMode === 'free' && !choiceRequired;
+    const freeAction = alreadyUnlimited
+      ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Account access active</button>'
+      : freeSelected
+        ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Free selected</button>'
+        : `<button class="dd2-button dd2-button-secondary" id="dd2-choose-free" type="button">${state.user ? 'Choose Free' : 'Sign in to choose Free'}</button>`;
     const paidAction = alreadyUnlimited
       ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Unlimited access active</button>'
       : earlyOpen
@@ -1649,7 +1678,7 @@
         <div class="dd2-plan-head"><div><h3>${escapeHtml(free.name || 'Free')}</h3><span class="dd2-badge">Always available</span></div><div class="dd2-price">₱0<small>no payment</small></div></div>
         <p>${escapeHtml(free.description || '')}</p>
         <ul>${freeFeatures.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>
-        <button class="dd2-button dd2-button-secondary" type="button" disabled>${access?.accessMode === 'free' ? 'Your current access' : 'Included for every account'}</button>
+        ${freeAction}
       </article>
       <article class="dd2-plan dd2-plan-featured${earlyOpen ? '' : ' is-disabled'}">
         <div class="dd2-plan-head"><div><h3>Early Access</h3><span class="dd2-badge">One-time launch offer</span></div><div class="dd2-price">₱149<small>one time</small></div></div>
@@ -1660,6 +1689,14 @@
         <p class="dd2-plan-note">One-time payment. No automatic renewal.</p>
         ${paidAction}
       </article>`;
+    document.getElementById('dd2-choose-free')?.addEventListener('click', () => {
+      if (!state.session?.access_token) {
+        hideNativeView();
+        showEntry({ allowDismiss: true, routeBound: true, returnHash: '#pricing' });
+        return;
+      }
+      global.DueDiligencePhase4?.chooseFreeAccess?.();
+    });
     document.getElementById('dd2-open-payment')?.addEventListener('click', () => {
       if (!state.session?.access_token) {
         hideNativeView();
@@ -2260,6 +2297,11 @@
     global.addEventListener('popstate', () => {
       syncEntryWithHistoryRoute();
       const hashView = location.hash.replace(/^#/, '');
+      if (mandatoryAccessChoiceOpen()) {
+        refuseMandatoryAccessChoiceDismissal();
+        renderNativeView('pricing', { push: false });
+        return;
+      }
       if (nativeDefinition(hashView)) renderNativeView(hashView, { push: false });
       else hideNativeView();
     });

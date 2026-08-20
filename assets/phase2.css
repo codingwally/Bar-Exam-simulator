@@ -427,6 +427,42 @@
   box-shadow: -24px 0 72px rgba(2, 12, 35, .24);
 }
 
+html.dd-access-gate-open,
+html.dd-access-gate-open body {
+  overflow: hidden;
+}
+
+.dd2-native-view[data-access-choice-required] {
+  align-items: center;
+  justify-content: center;
+  padding: clamp(18px, 4vw, 56px);
+  background: rgba(3, 14, 31, .94);
+  backdrop-filter: blur(10px);
+}
+
+.dd2-native-view[data-access-choice-required] .dd2-native-card {
+  width: min(1040px, 100%);
+  height: auto;
+  max-height: calc(100dvh - clamp(36px, 8vw, 112px));
+  padding: clamp(28px, 4vw, 54px);
+  border: 1px solid rgba(213, 181, 111, .72);
+  border-top: 3px solid var(--dd2-gold);
+  border-radius: 8px;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, .46);
+}
+
+.dd2-native-view[data-access-choice-required] .dd2-native-header {
+  justify-content: center;
+  text-align: center;
+}
+
+.dd2-native-view[data-access-choice-required] .dd2-pricing-intro {
+  max-width: 720px;
+  margin-right: auto;
+  margin-left: auto;
+  text-align: center;
+}
+
 .dd2-native-card .dd2-view-kicker {
   color: #87651f;
 }
@@ -792,6 +828,18 @@ body.dd2-locked {
   .dd2-onboarding-grid { grid-template-columns: 1fr; }
   .dd2-onboarding-grid .dd2-wide { grid-column: auto; }
   .dd2-plan-grid { grid-template-columns: 1fr; }
+  .dd2-native-view[data-access-choice-required] {
+    align-items: stretch;
+    padding: 0;
+  }
+  .dd2-native-view[data-access-choice-required] .dd2-native-card {
+    width: 100%;
+    max-height: 100dvh;
+    min-height: 100dvh;
+    border: 0;
+    border-top: 3px solid var(--dd2-gold);
+    border-radius: 0;
+  }
   .dd2-reminder-actions { flex-direction: column-reverse; }
   .dd2-button { width: 100%; }
 }

@@ -210,6 +210,10 @@ export function normalizeAccessSnapshot(value) {
   const choiceRequired = value.choiceRequired === true
     || value.planSelectionRequired === true
     || ['plan_selection_required', 'trial_expired', 'payment_required'].includes(basis);
+  const accessMode = clean(value.accessMode || (unlimited ? 'unlimited' : 'free'));
+  const accountLabel = accessMode === 'free'
+    ? 'Free'
+    : clean(value.accountLabel || (unlimited ? 'Unlimited' : 'Free'));
 
   return {
     allowed: value.allowed === true,
@@ -221,8 +225,8 @@ export function normalizeAccessSnapshot(value) {
     planSelectionRequired: value.planSelectionRequired === true
       || ['plan_selection_required', 'trial_expired'].includes(basis),
     role: clean(value.role || 'student'),
-    accessMode: clean(value.accessMode || (unlimited ? 'unlimited' : 'free')),
-    accountLabel: clean(value.accountLabel || (unlimited ? 'Unlimited' : 'Free')),
+    accessMode,
+    accountLabel,
     unlimited,
     dailyLimit,
     completedToday,
@@ -236,6 +240,9 @@ export function normalizeAccessSnapshot(value) {
     paymentState: clean(value.paymentState) || null,
     commercialLaunchEnabled,
     mandatoryAccessChoiceEnabled: value.mandatoryAccessChoiceEnabled === true,
+    freeChoiceAvailable: value.freeChoiceAvailable === true,
+    selectedChoice: clean(value.selectedChoice) || null,
+    choiceRecordedAt: value.choiceRecordedAt || null,
     trialAvailable: value.trialAvailable === true,
     trialEndsAt: value.trialEndsAt || null,
     globalBeta: {
@@ -286,7 +293,7 @@ export function accessDeniedError(access) {
   if (access?.basis === 'profile_required') {
     return new AccessValidationError(
       'PROFILE_COMPLETION_REQUIRED',
-      'Complete your profile before choosing Free Trial or Early Access.',
+      'Complete your profile before choosing Free or Early Access.',
       403,
     );
   }
@@ -297,9 +304,7 @@ export function accessDeniedError(access) {
   ) {
     return new AccessValidationError(
       'ACCESS_CHOICE_REQUIRED',
-      access?.basis === 'trial_expired'
-        ? 'Your Free Trial has ended. Choose ₱149 Early Access to continue.'
-        : 'Choose Free Trial or ₱149 Early Access before continuing.',
+      'Choose Free or ₱149 Early Access before continuing.',
       403,
     );
   }

@@ -81,7 +81,7 @@
       || !Number.isFinite(expiresAtMs)
       || expiresAtMs <= Date.now() + EXPIRY_SKEW_MS
     ) {
-      throw new Error('Private-beta access could not be saved.');
+      throw new Error('Secure access could not be saved.');
     }
     if (!sessionWrite(key, JSON.stringify({
       token: record.token,
@@ -89,7 +89,7 @@
       disclosureVersion: String(record.disclosureVersion || ''),
       admissionKind: record.admissionKind || null,
     }))) {
-      throw new Error('Private-beta access requires session storage in this browser.');
+      throw new Error('Secure access requires session storage in this browser.');
     }
   }
 
@@ -98,7 +98,7 @@
     if (/^[A-Za-z0-9_-]{22,128}$/.test(existing)) return existing;
     const created = randomId();
     if (!sessionWrite(STORAGE_KEYS.flowId, created)) {
-      throw new Error('Private-beta access requires session storage in this browser.');
+      throw new Error('Secure access requires session storage in this browser.');
     }
     return created;
   }
@@ -115,7 +115,7 @@
   function controlledError(payload, status) {
     const error = new Error(
       payload?.error?.message
-      || 'Private-beta access could not be verified. Please try again.',
+      || 'Secure access could not be verified. Please try again.',
     );
     error.code = payload?.error?.code || 'PRIVATE_BETA_REQUEST_FAILED';
     error.status = status;
@@ -168,7 +168,7 @@
   } = {}) {
     const pending = readExpiringRecord(STORAGE_KEYS.pending);
     if (!pending) {
-      const error = new Error('Verify the private-beta access code again.');
+      const error = new Error('Verify the secure access code again.');
       error.code = 'PRIVATE_BETA_PENDING_REQUIRED';
       throw error;
     }

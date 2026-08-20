@@ -52,14 +52,17 @@
   });
 
   const protectedFeatureRoutes = Object.freeze({
+    quorum: '#quorum',
     'subject-matter': '#subject-matter',
     'bar-feels': '#bar-feels',
     'bar-easy': '#bar-easy',
     verdict: '#verdict',
     doctrines: '#doctrines',
+    'examination-room': '#examination-room',
   });
 
   const protectedPageRoutes = Object.freeze({
+    quorum: '#quorum',
     mock: '#mock-bar',
     'mock-bar': '#mock-bar',
     midterms: '#subject-matter',
@@ -68,11 +71,16 @@
     'bar-easy': '#bar-easy',
     doctrines: '#doctrines',
     verdict: '#verdict',
+    'examination-room': '#examination-room',
   });
 
   async function ensureProtectedAccess(routeHash) {
     const phase4 = global.DueDiligencePhase4;
-    if (!routeHash || typeof phase4?.ensureProtectedAccess !== 'function') return true;
+    if (!routeHash) return true;
+    if (typeof phase4?.ensureProtectedAccess !== 'function') {
+      global.toast?.('Access verification is still loading. Please try again.', 'warn');
+      return false;
+    }
     try {
       return await phase4.ensureProtectedAccess(routeHash);
     } catch (error) {
@@ -168,7 +176,12 @@
       }
 
       const access = global.DueDiligencePhase4?.getAccess?.();
-      if (access?.allowed === true) {
+      const unresolvedChoice = access?.choiceRequired === true
+        || access?.planSelectionRequired === true
+        || ['plan_selection_required', 'trial_expired', 'payment_required'].includes(
+          String(access?.basis || ''),
+        );
+      if (access?.allowed === true && !unresolvedChoice) {
         return originalShowPage.call(this, page, element, {
           ...options,
           accessVerified: true,
@@ -203,7 +216,7 @@
   global.DueDiligenceQuorum = Object.freeze({
     open: async (...args) => {
       const placeholder = global.DueDiligenceQuorum;
-      await loadForFeature('quorum');
+      if (!await loadForFeature('quorum')) return null;
       if (global.DueDiligenceQuorum === placeholder) throw new Error('Quorum could not be opened.');
       return global.DueDiligenceQuorum.open(...args);
     },
@@ -217,7 +230,5 @@
     },
   });
 
-  loadScript('assets/free-trial-five-daily.js?v=free-trial-five-daily-20260818-1')
-    .catch((error) => console.error('Free Trial access copy could not be loaded.', error));
   installPageRouterGuard();
 }(window));

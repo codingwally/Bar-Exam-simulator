@@ -74,6 +74,20 @@
     'examination-room': '#examination-room',
   });
 
+  function hasResolvedAllowedAccess(access) {
+    const unresolvedChoice = access?.choiceRequired === true
+      || access?.planSelectionRequired === true
+      || ['plan_selection_required', 'trial_expired', 'payment_required'].includes(
+        String(access?.basis || ''),
+      );
+    const unresolvedProfile = access?.basis === 'profile_required'
+      || (access?.commercialLaunchEnabled === true && access?.profileCompleted === false);
+    return access?.allowed === true
+      && !unresolvedChoice
+      && access?.termsRequired !== true
+      && !unresolvedProfile;
+  }
+
   async function ensureProtectedAccess(routeHash) {
     const phase4 = global.DueDiligencePhase4;
     if (!routeHash) return true;
@@ -81,6 +95,7 @@
       global.toast?.('Access verification is still loading. Please try again.', 'warn');
       return false;
     }
+    if (hasResolvedAllowedAccess(phase4.getAccess?.())) return true;
     try {
       return await phase4.ensureProtectedAccess(routeHash);
     } catch (error) {
@@ -176,12 +191,7 @@
       }
 
       const access = global.DueDiligencePhase4?.getAccess?.();
-      const unresolvedChoice = access?.choiceRequired === true
-        || access?.planSelectionRequired === true
-        || ['plan_selection_required', 'trial_expired', 'payment_required'].includes(
-          String(access?.basis || ''),
-        );
-      if (access?.allowed === true && !unresolvedChoice) {
+      if (hasResolvedAllowedAccess(access)) {
         return originalShowPage.call(this, page, element, {
           ...options,
           accessVerified: true,

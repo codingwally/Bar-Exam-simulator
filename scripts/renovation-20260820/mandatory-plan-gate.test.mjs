@@ -304,3 +304,53 @@ test('protected feature assets are not loaded until the access gate succeeds', a
     'protected scripts and styles must remain unloaded behind the plan gate',
   );
 });
+
+test('protected feature navigation reuses an already-resolved allowed access snapshot', async () => {
+  const harness = featureLoaderHarness({
+    access: {
+      allowed: true,
+      basis: 'daily_free',
+      choiceRequired: false,
+      planSelectionRequired: false,
+      commercialLaunchEnabled: true,
+      profileCompleted: true,
+      termsRequired: false,
+    },
+    ensureResult: true,
+  });
+
+  const loaded = await harness.loader.loadForFeature('subject-matter');
+
+  assert.equal(loaded, true);
+  assert.deepEqual(
+    harness.ensureCalls,
+    [],
+    'a resolved allowed snapshot must not trigger a duplicate access request during navigation',
+  );
+  assert.ok(harness.appendedAssets.length > 0, 'the protected feature assets must still load');
+});
+
+test('legal or profile requirements cannot reuse a contradictory allowed snapshot', async () => {
+  for (const access of [
+    {
+      allowed: true,
+      basis: 'daily_free',
+      choiceRequired: false,
+      commercialLaunchEnabled: true,
+      profileCompleted: true,
+      termsRequired: true,
+    },
+    {
+      allowed: true,
+      basis: 'profile_required',
+      choiceRequired: false,
+      commercialLaunchEnabled: true,
+      profileCompleted: false,
+      termsRequired: false,
+    },
+  ]) {
+    const harness = featureLoaderHarness({ access, ensureResult: false });
+    assert.equal(await harness.loader.loadForFeature('subject-matter'), false);
+    assert.deepEqual(harness.ensureCalls, ['#subject-matter']);
+  }
+});

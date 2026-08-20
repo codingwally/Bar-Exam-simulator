@@ -78,6 +78,7 @@ async function acceptCurrentTerms(user) {
       p_acceptance_source: 'protected_staging_e2e',
     }),
   }, [200, 204]);
+  return settings[0];
 }
 
 async function serviceWrite(path, method, body, { expected = [200, 201, 204], representation = false } = {}) {
@@ -126,13 +127,15 @@ async function createUser(label) {
   const session = await sessionResponse.json();
   assert.ok(session.access_token);
   const created = { id: user.id, email, token: session.access_token };
-  await acceptCurrentTerms(created);
+  const legalVersions = await acceptCurrentTerms(created);
   await provisionMandatoryCommercialChoice({
     supabaseUrl: SUPABASE_URL,
     publishableKey: PUBLISHABLE_KEY,
     workerUrl: WORKER_URL,
     token: created.token,
     displayName: `DD26 ${label}`,
+    termsVersion: legalVersions.current_terms_version,
+    privacyVersion: legalVersions.current_privacy_version,
   });
   return created;
 }

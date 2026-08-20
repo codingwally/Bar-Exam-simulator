@@ -64,6 +64,7 @@ async function acceptCurrentTerms(user) {
       p_acceptance_source: 'protected_staging_e2e',
     }),
   }, [200, 204]);
+  return settings[0];
 }
 
 async function createUser(label) {
@@ -95,13 +96,15 @@ async function createUser(label) {
   });
   assert.ok(session.body.access_token);
   const created = { id: body.id, email, token: session.body.access_token };
-  await acceptCurrentTerms(created);
+  const legalVersions = await acceptCurrentTerms(created);
   await provisionMandatoryCommercialChoice({
     supabaseUrl: SUPABASE_URL,
     publishableKey: PUBLISHABLE_KEY,
     workerUrl: WORKER_URL,
     token: created.token,
     displayName: `Synthetic ${label}`,
+    termsVersion: legalVersions.current_terms_version,
+    privacyVersion: legalVersions.current_privacy_version,
   });
   return created;
 }

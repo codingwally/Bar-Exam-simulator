@@ -24,24 +24,21 @@ export async function provisionMandatoryCommercialChoice({
   workerUrl,
   token,
   displayName,
+  termsVersion,
+  privacyVersion,
 }) {
   assert.equal(supabaseUrl, APPROVED_STAGING_SUPABASE);
   assert.equal(workerUrl, APPROVED_STAGING_WORKER);
   assert.match(publishableKey, /^sb_publishable_[A-Za-z0-9_-]{20,}$/);
   assert.ok(typeof token === 'string' && token.length > 40, 'A staging user session is required.');
+  assert.ok(typeof termsVersion === 'string' && termsVersion.length > 5);
+  assert.ok(typeof privacyVersion === 'string' && privacyVersion.length > 5);
 
   const authHeaders = {
     apikey: publishableKey,
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   };
-  const settings = await jsonResponse(
-    `${supabaseUrl}/rest/v1/platform_access_settings`
-      + '?singleton=eq.true&select=current_terms_version,current_privacy_version',
-    { headers: authHeaders },
-  );
-  assert.equal(settings.length, 1);
-
   await jsonResponse(`${supabaseUrl}/rest/v1/rpc/complete_commercial_profile_onboarding`, {
     method: 'POST',
     headers: authHeaders,
@@ -51,8 +48,8 @@ export async function provisionMandatoryCommercialChoice({
       p_law_school_other: 'Synthetic Staging Law School',
       p_category: 'review',
       p_professor_license_number: null,
-      p_terms_version: settings[0].current_terms_version,
-      p_privacy_version: settings[0].current_privacy_version,
+      p_terms_version: termsVersion,
+      p_privacy_version: privacyVersion,
     }),
   });
 

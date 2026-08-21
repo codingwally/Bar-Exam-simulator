@@ -60,18 +60,46 @@
     state.signInIntroInitialized = true;
     const frame = document.querySelector('[data-signin-intro]');
     const video = frame?.querySelector('[data-signin-intro-video]');
+    const backdrop = frame?.querySelector('[data-signin-intro-backdrop]');
     if (!frame || !video) return;
 
     let watchdog = 0;
+    let replayTimer = 0;
     let finished = false;
-    const showStill = ({ remember = true } = {}) => {
+    const stillHoldMs = 30 * 60 * 1000;
+    const media = [backdrop, video].filter(Boolean);
+    const stopTimers = () => {
+      if (watchdog) global.clearTimeout(watchdog);
+      if (replayTimer) global.clearTimeout(replayTimer);
+      watchdog = 0;
+      replayTimer = 0;
+    };
+    const showStill = ({ remember = true, replay = true } = {}) => {
       if (finished) return;
       finished = true;
-      if (watchdog) global.clearTimeout(watchdog);
+      stopTimers();
       frame.classList.remove('is-playing', 'is-finishing');
       frame.classList.add('is-still');
-      video.pause();
+      media.forEach((element) => element.pause());
       if (remember) rememberSignInIntro();
+      if (replay && !state.reducedMotion) {
+        replayTimer = global.setTimeout(() => {
+          if (document.hidden) {
+            finished = false;
+            showStill({ remember: false });
+            return;
+          }
+          finished = false;
+          frame.classList.remove('is-still', 'is-finishing');
+          frame.classList.add('is-playing');
+          for (const element of media) element.currentTime = 0;
+          const playback = media.map((element) => element.play());
+          Promise.allSettled(playback).then((results) => {
+            if (results.some((result) => result.status === 'rejected')) showStill({ remember: false, replay: false });
+          });
+          watchdog = global.setTimeout(() => showStill(), 45000);
+        }, stillHoldMs);
+      }
     };
     const beginFinish = () => {
       if (finished || frame.classList.contains('is-finishing')) return;
@@ -80,35 +108,42 @@
     };
 
     if (state.reducedMotion || signInIntroWasSeen()) {
-      showStill({ remember: state.reducedMotion });
+      showStill({ remember: state.reducedMotion, replay: false });
       return;
     }
 
-    video.muted = true;
-    video.defaultMuted = true;
-    video.playsInline = true;
+    media.forEach((element) => {
+      element.muted = true;
+      element.defaultMuted = true;
+      element.playsInline = true;
+    });
     video.addEventListener('playing', () => {
       if (finished) return;
       frame.classList.remove('is-still', 'is-finishing');
       frame.classList.add('is-playing');
-      watchdog = global.setTimeout(() => showStill(), 12000);
-    }, { once: true });
+      if (watchdog) global.clearTimeout(watchdog);
+      watchdog = global.setTimeout(() => showStill(), 45000);
+    });
     video.addEventListener('timeupdate', () => {
       if (Number.isFinite(video.duration) && video.duration - video.currentTime <= .5) beginFinish();
     });
-    video.addEventListener('ended', () => showStill(), { once: true });
-    video.addEventListener('error', () => showStill(), { once: true });
+    video.addEventListener('ended', () => showStill());
+    video.addEventListener('error', () => showStill({ replay: false }), { once: true });
 
     const source = String(video.dataset.src || '').trim();
     if (!source) {
-      showStill();
+      showStill({ replay: false });
       return;
     }
-    video.src = source;
-    video.preload = 'auto';
-    video.load();
-    const playback = video.play();
-    if (playback?.catch) playback.catch(() => showStill());
+    for (const element of media) {
+      element.src = String(element.dataset.src || source).trim();
+      element.preload = 'auto';
+      element.load();
+    }
+    const playback = media.map((element) => element.play());
+    Promise.allSettled(playback).then((results) => {
+      if (results.some((result) => result.status === 'rejected')) showStill({ replay: false });
+    });
   }
 
   function privateBetaApi() {

@@ -84,6 +84,7 @@ jobs:
           node scripts/test-beta-readiness-copy-seo.mjs
           node scripts/test-lifetime-grade-ui.mjs
           node scripts/test-audience-menu.mjs
+          node scripts/test-approved-renovation-shell.mjs
           node scripts/test-design-correction-release.mjs
           node scripts/test-subject-matter-consolidation.mjs
           node scripts/test-subject-matter-skip-flag.mjs

@@ -13,9 +13,10 @@
     const toggle = document.getElementById('site-menu-toggle');
     const close = nav?.querySelector('[data-shell-menu-close]');
     const brand = header?.querySelector('[data-public-home]');
+    const rail = document.getElementById('qfs-practice-rail');
     const promos = [...document.querySelectorAll('#page-community .quorum-practice-card')];
-    if (!header || !nav || !toggle || !close || !brand || !promos.length) return null;
-    return { brand, close, header, nav, promos, toggle };
+    if (!header || !nav || !toggle || !close || !brand || !rail || !promos.length) return null;
+    return { brand, close, header, nav, promos, rail, toggle };
   }
 
   function focusable(nav) {
@@ -115,6 +116,55 @@
     }
   }
 
+  function synchronizePracticeRail(refs, preferredFeature = '') {
+    const sourceControls = Object.freeze({
+      quorum: 'spa-community',
+      'bar-easy': 'spa-bar-easy',
+      doctrines: 'spa-jurisprudence',
+      mock: 'spa-mock',
+      'bar-feels': 'spa-bar-feels',
+      verdict: 'spa-progress',
+    });
+    const current = preferredFeature || Object.entries(sourceControls).find(([, id]) => {
+      const control = document.getElementById(id);
+      return control?.classList.contains('active') || control?.getAttribute('aria-current') === 'page';
+    })?.[0] || '';
+
+    for (const control of refs.rail.querySelectorAll('[data-public-feature]')) {
+      const active = control.dataset.publicFeature === current;
+      control.classList.toggle('active', active);
+      if (active) control.setAttribute('aria-current', 'page');
+      else control.removeAttribute('aria-current');
+    }
+  }
+
+  function bindPracticeRail(refs) {
+    refs.rail.addEventListener('click', (event) => {
+      const control = event.target.closest('[data-public-feature]');
+      if (!control) return;
+      synchronizePracticeRail(refs, control.dataset.publicFeature);
+      queueMicrotask(() => synchronizePracticeRail(refs));
+    });
+
+    const sourceIds = [
+      'spa-community',
+      'spa-bar-easy',
+      'spa-jurisprudence',
+      'spa-mock',
+      'spa-bar-feels',
+      'spa-progress',
+    ];
+    const observer = new MutationObserver(() => synchronizePracticeRail(refs));
+    for (const id of sourceIds) {
+      const control = document.getElementById(id);
+      if (control) observer.observe(control, {
+        attributes: true,
+        attributeFilter: ['class', 'aria-current'],
+      });
+    }
+    synchronizePracticeRail(refs, 'quorum');
+  }
+
   function enforceVisibleLabels() {
     const labels = Object.freeze({
       'spa-community': 'Home',
@@ -144,6 +194,7 @@
     refs.brand.setAttribute('aria-label', 'Due Diligence — Home');
     enforceVisibleLabels();
     bindDrawer(refs);
+    bindPracticeRail(refs);
     bindPracticePromo(refs);
     synchronizeDrawer(refs);
     global.dispatchEvent(new CustomEvent('duediligence:quorum-first-shell-ready'));

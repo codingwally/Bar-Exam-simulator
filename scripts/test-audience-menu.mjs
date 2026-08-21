@@ -20,7 +20,7 @@ const navigation = header.match(/<nav class="spa-nav quorum-primary-nav" id="spa
 assert.ok(navigation, 'The Quorum-first primary drawer must remain present.');
 assert.match(header, /id="site-menu-toggle"[\s\S]*class="brand pb-brand"[\s\S]*id="spa-examination-room"/);
 assert.match(header, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"[^>]*aria-expanded="false"[^>]*aria-label="Open navigation menu"/);
-assert.match(header, /assets\/icons\/menu\.svg/);
+assert.match(header, /class="site-menu-icon"[\s\S]*<span><\/span><span><\/span><span><\/span>/);
 assert.doesNotMatch(header, /aria-expanded="false">Menu<\/button>/);
 
 const assertOrder = (markup, labels) => {
@@ -68,7 +68,7 @@ assert.match(shellCss, /#site-header\.qfs-shell #spa-nav\.qfs-drawer/);
 assert.match(shellCss, /#site-header\.qfs-shell #spa-nav\.qfs-drawer\.is-open/);
 assert.match(shellCss, /inset:\s*0 auto 0 0/);
 assert.match(shellCss, /transform:\s*translateX\(-100%\)/);
-assert.match(shellCss, /@media \(max-width: 760px\)/);
+assert.match(shellCss, /@media \(max-width: 900px\)/);
 assert.match(shellCss, /:focus-visible/);
 assert.match(shellCss, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(shellJs, /event\.key !== 'Tab'/);

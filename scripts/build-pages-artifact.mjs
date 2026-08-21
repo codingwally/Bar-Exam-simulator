@@ -54,7 +54,6 @@ const publicFiles = Object.freeze([
   'assets/due-diligence-controls.css',
   'assets/quorum-first-shell.css',
   'assets/quorum-first-shell.js',
-  'assets/icons/menu.svg',
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
   'assets/private-workspace.js',

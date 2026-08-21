@@ -1,4 +1,21 @@
-/* Quorum-first global shell. Loaded after the existing navigation styles. */
+/* Approved Due Diligence renovation shell — 2026-08-21.
+   The approved walkthrough is the visual source of truth for this surface. */
+
+:root {
+  --qfs-navy-950: #051326;
+  --qfs-navy-900: #081a31;
+  --qfs-navy-800: #0d2948;
+  --qfs-gold-500: #c5a059;
+  --qfs-gold-400: #ddb85f;
+  --qfs-gold-300: #efd17d;
+  --qfs-cream: #faf8f3;
+  --qfs-paper: #fffdfa;
+  --qfs-ink: #13243b;
+  --qfs-muted: #637187;
+  --qfs-line: #d8dee8;
+  --qfs-header-height: 68px;
+  --qfs-rail-height: 50px;
+}
 
 html.qfs-drawer-open,
 body.qfs-drawer-open {
@@ -6,34 +23,94 @@ body.qfs-drawer-open {
   overscroll-behavior: none;
 }
 
+/* The approved sign-in is intentionally full-screen and distraction-free. */
+body.private-beta-public #site-header.qfs-shell,
+body.private-beta-public #private-beta-landing .pb-public-footer {
+  display: none !important;
+}
+
 #site-header.qfs-shell {
-  --qfs-navy: #071426;
-  --qfs-navy-soft: #0c213b;
-  --qfs-cream: #faf9f6;
-  --qfs-gold: #c5a059;
-  --qfs-gold-light: #efd17d;
   position: sticky;
   top: 0;
   z-index: 1100;
   width: 100%;
-  min-height: 66px;
-  padding: 9px clamp(14px, 2.5vw, 32px);
-  display: flex;
-  grid-template-columns: none;
+  min-height: calc(var(--qfs-header-height) + var(--qfs-rail-height));
+  padding: 0 26px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: var(--qfs-header-height) var(--qfs-rail-height);
   align-items: center;
-  gap: 12px;
+  gap: 0 14px;
   border-bottom: 1px solid rgba(197, 160, 89, .32);
-  background: var(--qfs-navy);
+  background: var(--qfs-navy-950);
   box-shadow: 0 8px 24px rgba(0, 8, 24, .2);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#site-header.qfs-shell .qfs-menu-toggle {
+  grid-column: 1;
+  grid-row: 1;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(239, 209, 125, .68);
+  border-radius: 8px;
+  color: #fff;
+  background: transparent;
+  cursor: pointer;
+}
+
+#site-header.qfs-shell .site-menu-icon {
+  display: grid;
+  gap: 5px;
+  width: 24px;
+  height: 24px;
+  align-content: center;
+}
+
+#site-header.qfs-shell .site-menu-icon span {
+  width: 24px;
+  height: 2px;
+  display: block;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+#site-header.qfs-shell .sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+#site-header.qfs-shell .qfs-menu-toggle:hover,
+#site-header.qfs-shell .qfs-menu-toggle[aria-expanded="true"] {
+  border-color: var(--qfs-gold-300);
+  color: var(--qfs-gold-300);
+  background: rgba(255, 255, 255, .06);
 }
 
 #site-header.qfs-shell .brand {
+  grid-column: 2;
+  grid-row: 1;
   width: auto;
   min-width: 0;
   max-width: min(60vw, 390px);
   margin: 0;
   display: inline-flex;
   align-items: center;
+  justify-self: start;
   gap: 10px;
 }
 
@@ -46,88 +123,98 @@ body.qfs-drawer-open {
 
 #site-header.qfs-shell .brand-name {
   display: block;
-  color: var(--qfs-cream);
-  font-size: 15px;
+  color: #fff;
+  font-family: "Fraunces", "Playfair Display", Georgia, serif;
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1.05;
-  letter-spacing: .12em;
+  letter-spacing: .055em;
   white-space: nowrap;
 }
 
-#site-header.qfs-shell .brand-sub {
-  display: block;
-  max-width: 240px;
-  margin-top: 3px;
-  overflow: hidden;
-  color: var(--qfs-gold-light);
-  font-size: 8px;
-  line-height: 1.2;
-  letter-spacing: .09em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+#site-header.qfs-shell .brand-sub,
+#site-header.qfs-shell .brand-meaning {
+  display: none !important;
 }
 
 #site-header.qfs-shell .topbar-actions {
+  grid-column: 3;
+  grid-row: 1;
   width: auto;
   max-width: none;
-  margin-left: auto;
+  margin: 0;
   display: flex;
   align-items: center;
+  justify-self: end;
   gap: 8px;
 }
 
-#site-header.qfs-shell .quorum-room-shortcut,
-#site-header.qfs-shell .qfs-menu-toggle {
-  min-height: 42px;
+#site-header.qfs-shell .quorum-room-shortcut {
+  min-width: 154px;
+  min-height: 44px;
   margin: 0;
-  padding: 9px 15px;
+  padding: 11px 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(239, 209, 125, .62);
-  border-radius: 7px;
-  font-family: Inter, sans-serif;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1;
+  border: 1px solid #bc8c2b;
+  border-radius: 8px;
+  color: var(--qfs-navy-950);
+  background: linear-gradient(180deg, var(--qfs-gold-300), var(--qfs-gold-400));
+  box-shadow: 0 8px 22px rgba(197, 160, 89, .25);
+  font: 700 12px/1.2 Inter, sans-serif;
   cursor: pointer;
 }
 
-#site-header.qfs-shell .quorum-room-shortcut {
-  color: #261a04;
-  background: var(--qfs-gold-light);
+#site-header.qfs-shell .qfs-practice-rail {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  align-self: stretch;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 24px;
+  overflow-x: auto;
+  border-top: 1px solid rgba(197, 160, 89, .18);
+  scrollbar-width: none;
 }
 
-#site-header.qfs-shell .qfs-menu-toggle {
-  width: 44px;
-  min-width: 44px;
-  flex: 0 0 44px;
-  padding: 0;
-  color: var(--qfs-cream);
+#site-header.qfs-shell .qfs-practice-rail::-webkit-scrollbar {
+  display: none;
+}
+
+#site-header.qfs-shell .qfs-practice-rail button {
+  height: 34px;
+  padding: 0 15px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  color: #f5f1e8;
   background: transparent;
+  font: 600 13px/1 Inter, sans-serif;
+  cursor: pointer;
 }
 
-#site-header.qfs-shell .site-menu-icon {
-  display: block;
-  width: 24px;
-  height: 24px;
+#site-header.qfs-shell .qfs-practice-rail button:hover,
+#site-header.qfs-shell .qfs-practice-rail button.active,
+#site-header.qfs-shell .qfs-practice-rail button[aria-current="page"] {
+  border-color: rgba(197, 160, 89, .72);
+  color: var(--qfs-gold-300);
+  background: rgba(197, 160, 89, .13);
 }
 
-#site-header.qfs-shell .qfs-menu-toggle:hover,
-#site-header.qfs-shell .qfs-menu-toggle[aria-expanded="true"] {
-  border-color: var(--qfs-gold-light);
-  color: var(--qfs-gold-light);
-  background: rgba(255, 255, 255, .06);
-}
-
+/* Existing navigation remains the accessible mobile/overflow drawer. */
 #site-header.qfs-shell #spa-nav.qfs-drawer {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 1130;
-  width: min(390px, calc(100vw - 24px));
+  width: min(360px, calc(100vw - 24px));
   max-width: 100vw;
   height: 100dvh;
   margin: 0;
-  padding: 0;
+  padding: 24px;
   display: flex !important;
   flex-direction: column;
   align-items: stretch;
@@ -136,7 +223,8 @@ body.qfs-drawer-open {
   overflow-y: auto;
   border: 0;
   border-right: 1px solid rgba(197, 160, 89, .36);
-  background: var(--qfs-navy);
+  color: #fff;
+  background: var(--qfs-navy-950);
   box-shadow: 20px 0 54px rgba(0, 7, 20, .44);
   opacity: 0;
   visibility: hidden;
@@ -151,72 +239,69 @@ body.qfs-drawer-open {
 }
 
 #site-header.qfs-shell .quorum-nav-heading {
-  min-height: 76px;
-  padding: max(16px, env(safe-area-inset-top)) 18px 14px;
+  min-height: 66px;
+  padding: 0 0 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
   border-bottom: 1px solid rgba(197, 160, 89, .3);
-  background: var(--qfs-navy-soft);
 }
 
 #site-header.qfs-shell .quorum-nav-heading p {
   margin: 0;
-  color: var(--qfs-cream);
-  font: 700 24px/1.1 "Playfair Display", Georgia, serif;
+  color: #fff;
+  font: 700 28px/1.1 "Fraunces", "Playfair Display", Georgia, serif;
 }
 
 #site-header.qfs-shell .quorum-nav-close {
-  min-height: 42px;
-  padding: 8px 12px;
-  border: 1px solid rgba(239, 209, 125, .48);
-  border-radius: 7px;
-  color: var(--qfs-cream);
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid rgba(239, 209, 125, .58);
+  border-radius: 8px;
+  color: #fff;
   background: transparent;
-  font: 800 11px/1 Inter, sans-serif;
+  font: 400 27px/1 Inter, sans-serif;
   cursor: pointer;
-}
-
-#site-header.qfs-shell #spa-nav.qfs-drawer > :not(.quorum-nav-heading):not(.quorum-shell-compat) {
-  margin-inline: 16px;
-}
-
-#site-header.qfs-shell #spa-nav.qfs-drawer > .quorum-nav-link:first-of-type {
-  margin-top: 16px;
 }
 
 #site-header.qfs-shell .quorum-nav-link,
 #site-header.qfs-shell .quorum-practice-links button {
-  width: calc(100% - 32px);
+  width: 100%;
   min-height: 46px;
   padding: 10px 12px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  color: var(--qfs-cream);
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 0;
+  color: #fff;
   background: transparent;
   box-shadow: none;
-  font: 700 13px/1.25 Inter, sans-serif;
+  font: 600 13px/1.25 Inter, sans-serif;
   text-align: left;
   text-transform: none;
   cursor: pointer;
+}
+
+#site-header.qfs-shell .quorum-nav-link:first-of-type {
+  margin-top: 14px;
 }
 
 #site-header.qfs-shell .quorum-nav-link:hover,
 #site-header.qfs-shell .quorum-practice-links button:hover,
 #site-header.qfs-shell .quorum-nav-link.active,
 #site-header.qfs-shell .quorum-practice-links button.active {
-  border-color: rgba(197, 160, 89, .38);
-  color: var(--qfs-gold-light);
-  background: rgba(255, 255, 255, .05);
+  color: var(--qfs-gold-300);
+  background: rgba(197, 160, 89, .1);
 }
 
 #site-header.qfs-shell .quorum-practice-menu {
-  width: calc(100% - 32px);
-  margin-top: 5px;
+  width: 100%;
+  margin-top: 10px;
   border: 1px solid rgba(197, 160, 89, .3);
   border-radius: 8px;
   overflow: clip;
@@ -235,14 +320,14 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   padding: 11px 12px;
   display: flex;
   align-items: center;
-  color: var(--qfs-cream);
-  font: 800 13px/1.2 Inter, sans-serif;
+  color: #fff;
+  font: 700 13px/1.2 Inter, sans-serif;
   list-style-position: inside;
   cursor: pointer;
 }
 
 #site-header.qfs-shell .quorum-practice-menu[open] summary {
-  color: var(--qfs-gold-light);
+  color: var(--qfs-gold-300);
   background: rgba(197, 160, 89, .08);
 }
 
@@ -254,17 +339,19 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
 }
 
 #site-header.qfs-shell .quorum-practice-links button {
-  width: 100%;
   min-height: 42px;
+  border-bottom: 0;
   font-size: 12px;
 }
 
 #site-header.qfs-shell .quorum-drawer-room {
-  margin-top: 12px;
-  margin-bottom: max(22px, env(safe-area-inset-bottom));
-  border-color: var(--qfs-gold-light);
-  color: #261a04;
-  background: var(--qfs-gold-light);
+  margin-top: 18px;
+  border: 1px solid #bc8c2b;
+  border-radius: 7px;
+  color: var(--qfs-navy-950);
+  background: linear-gradient(180deg, var(--qfs-gold-300), var(--qfs-gold-400));
+  text-align: center;
+  justify-content: center;
 }
 
 #site-header.qfs-shell .quorum-shell-compat[hidden] {
@@ -295,369 +382,370 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   .quorum-nav-close,
   .quorum-nav-link,
   .quorum-practice-menu summary,
-  .quorum-practice-links button
+  .quorum-practice-links button,
+  .qfs-practice-rail button
 ):focus-visible {
   outline: 3px solid #f5dc86;
   outline-offset: 3px;
 }
 
-.quorum-entry {
-  width: min(100% - 32px, 620px);
-  min-height: calc(100vh - 170px);
-  margin: 0 auto;
-  padding: 72px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
+/* Full-height sign-in composition from the approved walkthrough. */
+#private-beta-landing {
+  min-height: 100svh;
+  background: var(--qfs-navy-950);
 }
 
-.quorum-signin-intro {
-  position: relative;
-  width: min(100%, 320px);
-  aspect-ratio: 16 / 9;
-  margin-bottom: 18px;
+#private-beta-landing .quorum-entry {
+  width: 100%;
+  min-height: 100svh;
+  margin: 0;
+  padding: 0;
   display: grid;
-  place-items: center;
+  grid-template-columns: minmax(0, 1.12fr) minmax(440px, .88fr);
+  align-items: stretch;
+  gap: 0;
+  text-align: left;
+}
+
+#private-beta-landing .quorum-entry-visual {
+  position: relative;
+  order: 1;
+  min-width: 0;
+  min-height: 100svh;
+  padding: 0;
   overflow: hidden;
-  border: 1px solid rgba(197, 160, 89, .42);
-  border-radius: 14px;
-  background: rgba(4, 18, 38, .76);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, .24);
+  border: 0;
+  border-radius: 0;
+  background: #020d1b;
+  box-shadow: none;
 }
 
-.quorum-signin-intro-still {
-  width: 78px;
-  height: 78px;
-  object-fit: contain;
-}
-
-.quorum-signin-intro-video {
+#private-beta-landing .quorum-signin-intro {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 260ms ease;
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #020d1b;
+  box-shadow: none;
 }
 
-.quorum-signin-intro.is-playing .quorum-signin-intro-video {
+#private-beta-landing .quorum-signin-intro::after {
+  display: none;
+}
+
+#private-beta-landing .quorum-signin-intro-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .8s ease;
+}
+
+#private-beta-landing .quorum-signin-intro-backdrop {
+  object-fit: cover;
+  filter: blur(24px) brightness(.34) saturate(.72);
+  transform: scale(1.1);
+}
+
+#private-beta-landing .quorum-signin-intro-main {
+  z-index: 1;
+  object-fit: contain;
+}
+
+#private-beta-landing .quorum-signin-intro.is-playing .quorum-signin-intro-video {
   opacity: 1;
 }
 
-.quorum-signin-intro.is-finishing .quorum-signin-intro-video,
-.quorum-signin-intro.is-still .quorum-signin-intro-video {
+#private-beta-landing .quorum-signin-intro-still {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: clamp(42px, 7vw, 108px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  color: #fff;
+  background: linear-gradient(180deg, rgba(5, 19, 38, .08), rgba(5, 19, 38, .88));
   opacity: 0;
+  pointer-events: none;
+  transition: opacity .8s ease;
 }
 
-#private-beta-landing .quorum-entry h1 {
-  margin: 6px 0 12px;
-  color: #faf9f6;
-  font: 700 clamp(36px, 6vw, 62px)/1.02 "Playfair Display", Georgia, serif;
-  letter-spacing: -.03em;
+#private-beta-landing .quorum-signin-intro.is-still .quorum-signin-intro-still,
+#private-beta-landing .quorum-signin-intro.is-finishing .quorum-signin-intro-still {
+  opacity: 1;
 }
 
-#private-beta-landing .quorum-entry > p:not(.pb-eyebrow) {
-  max-width: 460px;
-  margin: 0 0 24px;
-  color: #cbd5e1;
-  font: 500 15px/1.6 Inter, sans-serif;
+#private-beta-landing .quorum-signin-intro-still img {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  width: min(240px, 32%);
+  height: auto;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 18px 34px rgba(0, 0, 0, .38));
 }
 
-#private-beta-landing .quorum-entry .pb-eyebrow {
-  color: #efd17d;
+#private-beta-landing .quorum-signin-intro-still p {
+  margin: 0 0 15px;
+  color: var(--qfs-gold-300);
+  font: 700 12px/1.25 Inter, sans-serif;
+  letter-spacing: .2em;
+  text-transform: uppercase;
 }
 
-.quorum-entry-action {
+#private-beta-landing .quorum-signin-intro-still h1 {
+  margin: 0;
+  color: #fff;
+  font: 700 clamp(54px, 6.3vw, 96px)/.94 "Fraunces", "Playfair Display", Georgia, serif;
+  letter-spacing: -.045em;
+}
+
+#private-beta-landing .quorum-entry-copy {
+  order: 2;
+  min-width: 0;
+  max-width: none;
+  min-height: 100svh;
+  padding: 48px clamp(36px, 5vw, 84px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: var(--qfs-ink);
+  background: var(--qfs-cream);
+}
+
+#private-beta-landing .quorum-entry-copy > * {
+  width: min(590px, 100%);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+#private-beta-landing .quorum-entry-brand {
+  margin-bottom: 38px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--qfs-navy-950);
+  font: 700 16px/1 "Fraunces", "Playfair Display", Georgia, serif;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+#private-beta-landing .quorum-entry-brand img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+#private-beta-landing .quorum-entry-copy .pb-eyebrow {
+  margin: 0 auto 12px;
+  color: #946d1b;
+  font: 700 11px/1.25 Inter, sans-serif;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+#private-beta-landing .quorum-entry-copy h2 {
+  margin: 0 auto;
+  color: var(--qfs-navy-950);
+  font: 700 clamp(42px, 4vw, 66px)/1 "Fraunces", "Playfair Display", Georgia, serif;
+  letter-spacing: -.045em;
+}
+
+#private-beta-landing .quorum-entry-lede {
+  margin-top: 18px;
+  margin-bottom: 30px;
+  color: var(--qfs-muted);
+  font: 400 16px/1.65 Inter, sans-serif;
+}
+
+#private-beta-landing .quorum-entry-feature-list {
+  margin-bottom: 30px;
+  border-top: 1px solid var(--qfs-line);
+}
+
+#private-beta-landing .quorum-entry-feature-list > div {
+  padding: 16px 0;
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 18px;
+  border-bottom: 1px solid var(--qfs-line);
+}
+
+#private-beta-landing .quorum-entry-feature-list strong {
+  color: var(--qfs-navy-950);
+  font: 700 14px/1.45 Inter, sans-serif;
+}
+
+#private-beta-landing .quorum-entry-feature-list span {
+  color: var(--qfs-muted);
+  font: 400 13px/1.45 Inter, sans-serif;
+}
+
+#private-beta-landing .quorum-entry-action {
+  width: min(590px, 100%);
   min-height: 48px;
   padding: 12px 22px;
-  border: 1px solid #9d792c;
-  border-radius: 7px;
-  color: #071a33;
-  background: #d9b65d;
-  font: 800 12px/1 Inter, sans-serif;
+  border: 1px solid #bc8c2b;
+  border-radius: 8px;
+  color: var(--qfs-navy-950);
+  background: linear-gradient(180deg, var(--qfs-gold-300), var(--qfs-gold-400));
+  box-shadow: 0 8px 22px rgba(197, 160, 89, .25);
+  font: 700 13px/1.2 Inter, sans-serif;
   cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+#private-beta-landing .quorum-entry-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 13px 28px rgba(197, 160, 89, .3);
+}
+
+#private-beta-landing .quorum-entry-legal {
+  margin-top: 15px;
+  margin-bottom: 0;
+  color: var(--qfs-muted);
+  font: 400 12px/1.55 Inter, sans-serif;
+  text-align: center;
+}
+
+#private-beta-landing .quorum-entry-legal a {
+  color: #765613;
+  text-underline-offset: 3px;
 }
 
 #page-community .quorum-practice-card.qfs-practice-promo {
-  border-top: 3px solid #c5a059;
+  border-top: 3px solid var(--qfs-gold-500);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1100px) {
+  #site-header.qfs-shell .qfs-practice-rail {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 900px) {
   #site-header.qfs-shell {
     min-height: 60px;
-    padding: 8px 12px;
+    padding: 0 14px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: 60px;
   }
 
-  #site-header.qfs-shell .brand {
-    max-width: calc(100% - 56px);
+  #site-header.qfs-shell .qfs-practice-rail {
+    display: none;
   }
 
   #site-header.qfs-shell .crest {
-    width: 35px;
-    height: 35px;
-    flex-basis: 35px;
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
   }
 
   #site-header.qfs-shell .brand-name {
-    font-size: 13px;
+    font-size: 16px;
   }
 
-  #site-header.qfs-shell .brand-sub {
-    max-width: 165px;
-    font-size: 7px;
+  #private-beta-landing .quorum-entry {
+    grid-template-columns: 1fr;
+  }
+
+  #private-beta-landing .quorum-entry-visual,
+  #private-beta-landing .quorum-entry-copy {
+    min-height: auto;
+  }
+
+  #private-beta-landing .quorum-entry-visual {
+    min-height: 48svh;
+  }
+
+  #private-beta-landing .quorum-entry-copy {
+    padding-block: 44px 56px;
+  }
+}
+
+@media (max-width: 560px) {
+  #site-header.qfs-shell .brand {
+    gap: 8px;
+  }
+
+  #site-header.qfs-shell .brand-name {
+    font-size: 14px;
   }
 
   #site-header.qfs-shell .quorum-room-shortcut {
     display: none;
   }
 
-  #site-header.qfs-shell .topbar-actions {
-    margin-left: auto;
-  }
-
   #site-header.qfs-shell #spa-nav.qfs-drawer {
     width: 100vw;
     max-width: none;
-    border-left: 0;
+    padding: 20px;
+    border-right: 0;
   }
 
-  .quorum-entry {
-    min-height: calc(100vh - 130px);
-    padding: 48px 18px;
+  #private-beta-landing .quorum-entry-visual {
+    min-height: 42svh;
   }
 
-  .quorum-signin-intro {
-    width: min(100%, 286px);
+  #private-beta-landing .quorum-entry-copy {
+    padding: 34px 22px 46px;
+  }
+
+  #private-beta-landing .quorum-entry-copy h2 {
+    font-size: clamp(38px, 12vw, 52px);
+  }
+
+  #private-beta-landing .quorum-entry-feature-list > div {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  #private-beta-landing .quorum-signin-intro-still {
+    padding: 24px;
+  }
+
+  #private-beta-landing .quorum-signin-intro-still h1 {
+    font-size: clamp(42px, 14vw, 64px);
   }
 }
 
 @media (max-width: 400px) {
   #site-header.qfs-shell {
-    flex-wrap: wrap;
-  }
-
-  #site-header.qfs-shell .brand {
-    flex: 1 1 calc(100% - 56px);
-    max-width: calc(100% - 56px);
-  }
-
-  #site-header.qfs-shell .topbar-actions {
-    order: 3;
-    width: 100%;
-    margin: 0;
-    flex: 0 0 100%;
-  }
-
-  #site-header.qfs-shell .topbar-actions .dd2-guest-badge.is-visible {
-    width: 100%;
-    justify-content: center;
-  }
-
-  #site-header.qfs-shell .brand-sub {
-    display: none;
+    flex-wrap: nowrap;
   }
 
   #site-header.qfs-shell .qfs-menu-toggle {
     width: 42px;
     min-width: 42px;
-    flex-basis: 42px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #site-header.qfs-shell #spa-nav.qfs-drawer {
+  #site-header.qfs-shell #spa-nav.qfs-drawer,
+  #private-beta-landing .quorum-signin-intro-video,
+  #private-beta-landing .quorum-signin-intro-still,
+  #private-beta-landing .quorum-entry-action {
     transition: none;
   }
 
-  .quorum-signin-intro-video {
+  #private-beta-landing .quorum-signin-intro-video {
     display: none;
-    transition: none;
   }
 }
 
 @media print {
   #site-header.qfs-shell #spa-nav.qfs-drawer,
   #site-header.qfs-shell .qfs-menu-scrim,
-  #site-header.qfs-shell .qfs-menu-toggle {
+  #site-header.qfs-shell .qfs-menu-toggle,
+  #site-header.qfs-shell .qfs-practice-rail {
     display: none !important;
-  }
-}
-
-/* Renovated sign-in: one focused action, grounded in the existing navy-and-gold system. */
-#private-beta-landing .quorum-entry {
-  width: min(calc(100% - 40px), 1120px);
-  min-height: calc(100svh - 96px);
-  padding: clamp(32px, 6vw, 76px) 0;
-  display: grid;
-  grid-template-columns: minmax(0, .92fr) minmax(360px, 1.08fr);
-  align-items: center;
-  gap: clamp(36px, 7vw, 88px);
-  text-align: left;
-}
-
-.quorum-entry-copy {
-  max-width: 540px;
-}
-
-#private-beta-landing .quorum-entry-copy h1 {
-  max-width: 620px;
-  margin: 10px 0 18px;
-  color: #fff;
-  font: 700 clamp(46px, 6vw, 78px)/.98 "Playfair Display", Georgia, serif;
-  letter-spacing: -.045em;
-}
-
-#private-beta-landing .quorum-entry-copy > p:not(.pb-eyebrow) {
-  max-width: 520px;
-  margin: 0 0 28px;
-  color: #dbe4ee;
-  font: 500 clamp(16px, 1.8vw, 19px)/1.65 Inter, sans-serif;
-}
-
-#private-beta-landing .quorum-entry-copy .pb-eyebrow {
-  margin: 0;
-  color: #efd17d;
-  font: 800 11px/1.2 "IBM Plex Mono", monospace;
-  letter-spacing: .2em;
-  text-transform: uppercase;
-}
-
-.quorum-entry-action {
-  min-height: 52px;
-  padding: 14px 24px;
-  border: 1px solid #f0cf69;
-  border-radius: 8px;
-  box-shadow: 0 12px 34px rgba(197, 160, 89, .2);
-  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
-}
-
-.quorum-entry-action:hover {
-  transform: translateY(-1px);
-  background: #efd071;
-  box-shadow: 0 16px 38px rgba(197, 160, 89, .28);
-}
-
-.quorum-entry-points {
-  margin: 24px 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  list-style: none;
-}
-
-.quorum-entry-points li {
-  padding: 7px 11px;
-  border: 1px solid rgba(197, 160, 89, .32);
-  border-radius: 999px;
-  color: #dce4ed;
-  background: rgba(255, 255, 255, .035);
-  font: 700 11px/1 Inter, sans-serif;
-}
-
-.quorum-entry-visual {
-  position: relative;
-  min-width: 0;
-  padding: clamp(18px, 3vw, 30px);
-  border: 1px solid rgba(197, 160, 89, .4);
-  border-radius: 20px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .015)),
-    rgba(4, 18, 38, .66);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, .26);
-}
-
-.quorum-signin-intro {
-  width: 100%;
-  margin: 0;
-  border-radius: 12px;
-  box-shadow: none;
-}
-
-.quorum-signin-intro::after {
-  content: '';
-  position: absolute;
-  z-index: 2;
-  inset: auto 0 0;
-  height: 23%;
-  pointer-events: none;
-  background: linear-gradient(to bottom, rgba(4, 18, 38, 0), #041226 52%);
-  opacity: 0;
-  transition: opacity 180ms ease;
-}
-
-.quorum-signin-intro.is-playing::after {
-  opacity: 1;
-}
-
-.quorum-entry-visual-note {
-  margin-top: 18px;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.quorum-entry-visual-note strong {
-  color: #fff;
-  font: 700 20px/1.2 "Playfair Display", Georgia, serif;
-}
-
-.quorum-entry-visual-note span {
-  color: #aebccd;
-  font: 600 12px/1.45 Inter, sans-serif;
-  text-align: right;
-}
-
-@media (max-width: 820px) {
-  #private-beta-landing .quorum-entry {
-    grid-template-columns: 1fr;
-    gap: 34px;
-    padding-block: 40px 56px;
-  }
-
-  .quorum-entry-copy {
-    max-width: 680px;
-  }
-
-  .quorum-entry-visual {
-    width: min(100%, 620px);
-  }
-}
-
-@media (max-width: 520px) {
-  #private-beta-landing .quorum-entry {
-    width: min(calc(100% - 28px), 1120px);
-    padding-block: 30px 42px;
-  }
-
-  #private-beta-landing .quorum-entry-copy h1 {
-    font-size: clamp(40px, 13vw, 56px);
-  }
-
-  .quorum-entry-visual {
-    padding: 12px;
-    border-radius: 14px;
-  }
-
-  .quorum-entry-visual-note {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .quorum-entry-visual-note span {
-    text-align: left;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .quorum-entry-action,
-  .quorum-signin-intro::after {
-    transition: none;
   }
 }

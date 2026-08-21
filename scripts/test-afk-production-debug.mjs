@@ -66,11 +66,11 @@ assert.match(quorum, /document\.createElement\('details'\)/);
 assert.match(quorum, /overflow\.className = 'quorum-overflow'/);
 assert.match(
   quorumStyles,
-  /#page-community \.lex-composer-actions\s*\{\s*display:\s*grid;\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+  /#page-community \.lex-composer-actions\s*\{\s*grid-column:\s*2;\s*display:\s*flex;/,
 );
 assert.match(
   quorumStyles,
-  /#page-community #lex-post-submit\s*\{[\s\S]*?min-width:\s*0;/,
+  /#page-community #lex-post-submit\s*\{[\s\S]*?min-width:\s*96px;/,
 );
 assert.match(
   quorumStyles,
@@ -88,10 +88,7 @@ assert.match(
   quorumStyles,
   /#page-community \.quorum-side-link\s*\{[\s\S]*?width:\s*auto;[\s\S]*?min-width:\s*132px;/,
 );
-assert.match(
-  quorumStyles,
-  /#page-community #lex-post-counter\s*\{\s*grid-column:\s*1\s*\/\s*-1;/,
-);
+assert.doesNotMatch(quorumStyles, /#page-community #lex-post-counter/);
 for (const retiredCopy of [
   'Search entries',
   'Sort entries',

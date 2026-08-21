@@ -13,6 +13,7 @@ const files = Object.fromEntries(await Promise.all([
   'admin/admin.js',
   'scripts/build-pages-artifact.mjs',
   'supabase/migrations/20260802_011_lex_forum_social_beta.sql',
+  'supabase/migrations/20260821022828_home_taglish_starter_discussions.sql',
   'supabase/review/lex_forum_production_preflight.sql',
 ].map(async (path) => [path, await readFile(path, 'utf8')])));
 
@@ -27,6 +28,7 @@ const adminPage = files['admin/index.html'];
 const admin = files['admin/admin.js'];
 const build = files['scripts/build-pages-artifact.mjs'];
 const migration = files['supabase/migrations/20260802_011_lex_forum_social_beta.sql'];
+const starterMigration = files['supabase/migrations/20260821022828_home_taglish_starter_discussions.sql'];
 const preflight = files['supabase/review/lex_forum_production_preflight.sql'];
 
 assert.match(page, />Home<\/button>/);
@@ -36,11 +38,22 @@ assert.match(page, /quorum-home-tools[\s\S]*My Posts[\s\S]*Saved[\s\S]*Study Cir
 assert.match(page, /id="lex-forum-app" hidden/);
 assert.match(page, /Community posts do not constitute legal advice/);
 assert.doesNotMatch(page, /Lex Forum|Under Construction/i);
-assert.match(page, /id="community-sample-lane"/);
-assert.match(page, /Fictional · anonymized · read-only/);
+assert.match(page, /id="quorum-entry-image"/);
+assert.match(page, /id="lex-post-submit"[^>]*>Post</);
+for (const removedComposerCopy of [
+  /Up to 12 JPEG, PNG, or WebP images/,
+  />Add details</,
+  />Preview</,
+  />Cancel</,
+  /Fictional · anonymized · read-only/,
+  /Community preview/,
+  /Starter discussions/,
+]) {
+  assert.doesNotMatch(page, removedComposerCopy);
+}
 assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
-assert.match(featureLoader, /assets\/lex-forum\.css\?v=home-menu-cleanup-20260821-1/);
-assert.match(featureLoader, /assets\/lex-forum\.js\?v=home-renovation-20260821-1/);
+assert.match(featureLoader, /assets\/lex-forum\.css\?v=home-comments-taglish-20260821-1/);
+assert.match(featureLoader, /assets\/lex-forum\.js\?v=home-comments-taglish-20260821-1/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);
@@ -54,9 +67,9 @@ assert.match(forum, /rel = 'noopener noreferrer ugc'/);
 assert.match(forum, /textContent = String\(value/);
 assert.doesNotMatch(forum, /\.innerHTML\s*=/);
 assert.match(forum, /navigator\.onLine/);
-assert.match(forum, /query\('sample_feed'\)/);
-assert.match(forum, /sampleVisibleCount/);
-assert.match(forum, /View \$\{replyCount\}/);
+assert.doesNotMatch(forum, /query\('sample_feed'\)|sampleVisibleCount|community-sample/);
+assert.match(forum, /command\('create_entry'/);
+assert.match(forum, /'create_comment'/);
 assert.match(forum, /payload\.cursorAt = state\.cursor\.createdAt/);
 assert.match(forum, /payload\.cursorId = state\.cursor\.id/);
 assert.match(forum, /state\.items = append \? state\.items\.concat/);
@@ -139,6 +152,21 @@ assert.match(migration, /perform public\.phase4_require_founder/);
 assert.match(migration, /insert into public\.admin_audit_log/);
 assert.match(migration, /'content_management_action'/);
 assert.match(migration, /begin;[\s\S]*commit;/);
+
+const starterPostKeys = new Set(
+  [...starterMigration.matchAll(/home-20260821-post-\d{3}/g)].map((match) => match[0]),
+);
+const starterCommentKeys = new Set(
+  [...starterMigration.matchAll(/home-20260821-(?:comment|reply)-\d{3}/g)].map((match) => match[0]),
+);
+assert.equal(starterPostKeys.size, 23);
+assert.equal(starterCommentKeys.size, 32);
+assert.match(starterMigration, /is_anonymous[\s\S]*true/);
+assert.match(starterMigration, /forum_ensure_anonymous_alias/);
+assert.match(starterMigration, /role in \('admin', 'super_admin'\)/);
+assert.match(starterMigration, /on conflict \(starter_content_key\)/);
+assert.match(starterMigration, /Paano|niyo|pero|ako|yung/);
+assert.doesNotMatch(starterMigration, /gmail\.com|@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/i);
 
 assert.match(preflight, /READ-ONLY/);
 assert.match(preflight, /forum tables already exist/);

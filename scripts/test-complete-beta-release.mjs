@@ -139,7 +139,7 @@ for (const phrase of [
 
 assert.match(
   html,
-  /<form class="lex-composer" id="lex-composer"[^>]*aria-label="Share with the community">[\s\S]*The floor is yours/,
+  /<form class="lex-composer" id="lex-composer"[^>]*aria-label="Share with the community">[\s\S]*What do you want to ask or share about law school\?/,
 );
 assert.match(html, /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 for (const featureId of ['spa-mock', 'spa-subject-matter', 'spa-progress', 'spa-bar-easy', 'spa-community', 'spa-pricing', 'spa-bar-feels', 'spa-chairs-case', 'spa-jurisprudence', 'spa-case-digest']) {

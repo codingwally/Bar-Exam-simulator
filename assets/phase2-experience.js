@@ -33,6 +33,9 @@
     entryMediaFinished: true,
     entryMediaMode: '',
     entryMediaWatchdog: 0,
+    onboardingRequired: false,
+    tokenDisclosureVersion: '',
+    nativeViewReturnToQuorum: false,
   };
 
   let resolveAuthReady;
@@ -490,6 +493,17 @@
               <span>I accept the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>
                 and acknowledge the <button class="link-button" type="button" data-dd2-view="privacy">Privacy Policy</button>.</span>
             </label>
+            <aside class="dd2-token-disclosure" aria-labelledby="dd2-token-disclosure-title">
+              <div class="dd2-token-counter" aria-hidden="true"><strong>5</strong><span>practice tokens</span></div>
+              <div>
+                <h3 id="dd2-token-disclosure-title">Your five introductory practice tokens</h3>
+                <p>These five tokens are granted once to this account. One token is used only after a successful graded submission. They do not reset by date, browser, device, sign-out, or account update. Failed grading and duplicate retries do not use a token.</p>
+              </div>
+            </aside>
+            <label class="dd2-check dd2-token-acknowledgement">
+              <input type="checkbox" id="dd2-token-acknowledgement" required>
+              <span>I understand that this account receives one lifetime allowance of five practice tokens and that used tokens do not reset.</span>
+            </label>
             <label class="dd2-check">
               <input type="checkbox" id="dd2-ai-improvement-consent">
               <span>Optionally allow de-identified answer content to improve internal rubrics and quality. I can withdraw this without losing simulator access.</span>
@@ -926,6 +940,11 @@
 
   function returnFromOnboarding() {
     if (state.onboardingBusy) return;
+    if (state.onboardingRequired) {
+      global.toast?.('Confirm your profile and five-token access to continue.', 'warn');
+      document.getElementById('dd2-display-name')?.focus?.();
+      return;
+    }
     setOverlay(false, 'dd2-onboarding-overlay');
     syncAuthUi();
     global.DueDiligencePublicHome?.show?.();
@@ -1208,11 +1227,16 @@
     syncAuthUi();
     if (!terms?.length) {
       openTermsAcceptance();
-    } else if (!profile?.profile_completed_at) {
-      openOnboarding();
     } else {
       closeEntry();
-      setOverlay(false, 'dd2-onboarding-overlay');
+      if (global.DueDiligencePhase4?.refreshAccess) {
+        const access = await global.DueDiligencePhase4.refreshAccess({
+          enforce: true,
+          force: true,
+          routeHash: location.hash,
+        }).catch(() => null);
+        if (!access?.allowed) return;
+      }
       if (state.welcomedUserId !== userId) {
         state.welcomedUserId = userId;
         global.toast?.(`Welcome back, ${profile?.display_name || state.user?.user_metadata?.full_name || 'future counsel'}.`, 'ok');
@@ -1221,8 +1245,26 @@
     }
   }
 
-  function openOnboarding() {
+  function openOnboarding(options = {}) {
     if (deferOnboardingForPrivateBeta()) return;
+    state.onboardingRequired = options.required === true;
+    state.tokenDisclosureVersion = String(
+      options.tokenDisclosureVersion
+        || global.DueDiligencePhase4?.getAccess?.()?.tokenDisclosureVersion
+        || '',
+    ).trim();
+    const overlay = document.getElementById('dd2-onboarding-overlay');
+    if (overlay) overlay.dataset.dismissible = state.onboardingRequired ? 'false' : 'true';
+    for (const id of ['dd2-onboarding-close', 'dd2-onboarding-back']) {
+      const control = document.getElementById(id);
+      if (!control) continue;
+      control.hidden = state.onboardingRequired;
+      control.disabled = state.onboardingRequired;
+    }
+    const title = document.getElementById('dd2-onboarding-title');
+    if (title) title.textContent = state.onboardingRequired
+      ? 'Confirm your profile and token access.'
+      : 'Make this chamber yours.';
     const displayName = document.getElementById('dd2-display-name');
     const school = document.getElementById('dd2-school');
     const year = document.getElementById('dd2-year-level');
@@ -1231,6 +1273,8 @@
     if (year) year.value = state.profile?.commercial_category || '';
     const legal = document.getElementById('dd2-legal-acceptance');
     if (legal) legal.checked = false;
+    const tokenAcknowledgement = document.getElementById('dd2-token-acknowledgement');
+    if (tokenAcknowledgement) tokenAcknowledgement.checked = false;
     updateEnrollmentFields();
     closeEntry();
     setOverlay(true, 'dd2-onboarding-overlay');
@@ -1252,6 +1296,7 @@
     const category = document.getElementById('dd2-year-level').value;
     const professorLicense = document.getElementById('dd2-professor-license').value.trim();
     const accepted = document.getElementById('dd2-legal-acceptance').checked;
+    const tokenAcknowledged = document.getElementById('dd2-token-acknowledgement').checked;
     const aiImprovementOptIn = document.getElementById('dd2-ai-improvement-consent').checked;
     if (displayName.length < 2) {
       setStatus('dd2-onboarding-status', 'Enter the name you want shown in Due Diligence.', 'error');
@@ -1259,6 +1304,10 @@
     }
     if (!accepted) {
       setStatus('dd2-onboarding-status', 'Accept the Terms of Use and acknowledge the Privacy Policy to continue.', 'error');
+      return;
+    }
+    if (!tokenAcknowledged || !state.tokenDisclosureVersion) {
+      setStatus('dd2-onboarding-status', 'Acknowledge the one-time five-token allowance to continue.', 'error');
       return;
     }
     if (school.schoolName.length < 2 || !category) {
@@ -1281,7 +1330,7 @@
         p_source: 'web_onboarding',
       });
       if (aiConsentError) throw aiConsentError;
-      const { error: profileError } = await state.client.rpc('complete_commercial_profile_onboarding', {
+      const { error: profileError } = await state.client.rpc('complete_commercial_profile_onboarding_v2', {
         p_display_name: displayName,
         p_law_school_id: school.schoolId,
         p_law_school_other: school.schoolOther,
@@ -1289,6 +1338,8 @@
         p_professor_license_number: professorLicense || null,
         p_terms_version: commercialLegal.termsVersion,
         p_privacy_version: commercialLegal.privacyVersion,
+        p_trial_disclosure_version: state.tokenDisclosureVersion,
+        p_trial_acknowledged: true,
       });
       if (profileError) throw profileError;
       state.profile = {
@@ -1304,6 +1355,7 @@
         profile_completed_at: new Date().toISOString(),
       };
       setStatus('dd2-onboarding-status', 'Profile saved.', 'success');
+      state.onboardingRequired = false;
       setOverlay(false, 'dd2-onboarding-overlay');
       syncAuthUi();
       if (typeof onboardingStage !== 'undefined' && onboardingStage === 'signIn') {
@@ -1340,10 +1392,10 @@
         <p>AI-assisted systems assess and explain answers using curated platform context. Output may be incomplete or inaccurate. Use the correction workflow when material appears wrong.</p>
         <h3>AI, grading, and authority limitations</h3>
         <p>AI-generated grading and suggested answers may be incomplete or inaccurate. They are not official Supreme Court or Bar Examiner grades. A “Human Verified” label appears only after a genuine editorial review record exists. Provider capacity may temporarily interrupt grading; no grade or authority will be fabricated.</p>
-        <h3>Free and Early Access</h3>
-        <p>Free accounts receive five successful question submissions per Philippine calendar day across the available examination tracks. A failed grading operation does not consume an allowance. Early Access is a one-time ₱149 offer available through September 1, 2026 and provides unlimited access through October 1, 2026. Approved Founding Members receive complimentary access through September 1, 2026.</p>
+        <h3>Introductory tokens and Early Access</h3>
+        <p>Each ordinary account receives one lifetime allowance of five practice tokens. A token is consumed only after a successful graded submission. Failed grading and duplicate retries do not consume a token, and used tokens do not reset by date, browser, device, sign-out, or account update. Early Access is available at the current promotional price of ₱149; the regular manual-renewal price is ₱199.</p>
         <h3>Payments, cancellation, and refunds</h3>
-        <p>Early Access has no automatic renewal. A payment-proof submission creates one non-renewable 24-hour provisional entitlement while it is reviewed. A verified entitlement ends on October 1, 2026. Eligible refund requests must be filed within seven calendar days of the first provisional or paid access start and are reviewed using the published unused-time formula, without limiting statutory consumer rights.</p>
+        <p>Early Access has no automatic charge or automatic renewal. The next manual renewal date is October 1, 2026. A valid payment-proof submission creates one non-renewable 24-hour provisional entitlement while it is reviewed. Eligible refund requests must be filed within seven calendar days of the first provisional or paid access start and are reviewed using the published unused-time formula, without limiting statutory consumer rights.</p>
         <h3>Your submissions</h3>
         <p>You remain responsible for submitted content. Do not submit confidential, privileged, unlawful, or third-party personal information. Service processing of an answer is necessary to provide grading. Separate optional consent governs retention of de-identified answer content for internal quality improvement.</p>
         <h3>Acceptable use</h3>
@@ -1364,7 +1416,7 @@
         <h3>Essay assessment</h3>
         <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to the configured assessment provider. Do not place client secrets or confidential case information in practice answers.</p>
         <h3>Access records</h3>
-        <p>Protected examinations require authentication. Supabase UUIDs anchor daily allowances, approved Founding Member eligibility, Early Access entitlements, legal acceptance, progress, and history so refreshes or device changes do not reset access.</p>
+        <p>Protected examinations require authentication. Supabase UUIDs anchor the one-time token allowance, approved Founding Beta eligibility, Early Access entitlements, legal acceptance, progress, and history so refreshes or device changes cannot recreate spent tokens.</p>
         <h3>Support and corrections</h3>
         <p>Support stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Support. Correction submissions store only the reviewed correction fields described in that form.</p>
         <h3>Payments and infrastructure</h3>
@@ -1383,12 +1435,11 @@
   function pricingContent() {
     return `
       <div class="dd2-copy">
-        <p class="dd2-pricing-intro"><strong>Choose one clear access option.</strong> Free remains available. Early Access is a one-time launch offer with no automatic renewal.</p>
+        <p class="dd2-pricing-intro"><strong>Continue without practice limits.</strong> Every ordinary account already receives five one-time practice tokens. Early Access removes that limit during the promotional access period.</p>
         <div class="dd2-plan-grid" id="dd2-pricing-plans" aria-live="polite">
           <div class="dd2-loading-line">Loading current access options…</div>
         </div>
         <div id="dd2-payment-host"></div>
-        <p class="dd2-form-note">After the Early Access sale closes, later paid-plan pricing will remain unannounced until separately approved.</p>
       </div>`;
   }
 
@@ -1427,7 +1478,7 @@
         </form>
         <h3>Frequently asked</h3>
         <p><strong>How is an answer scored?</strong><br>Each answer receives an independent 0–5 ALAC assessment. It is not an official Bar grade.</p>
-        <p><strong>How does Free access work?</strong><br>Every authenticated user receives five successful question submissions per Philippine calendar day. Failed grading does not consume an allowance, and the allowance resets at Philippine midnight.</p>
+        <p><strong>How do introductory tokens work?</strong><br>Every ordinary account receives five practice tokens once. A token is used only after successful grading. Failed requests and duplicate retries do not consume a token, and used tokens do not reset.</p>
         <p><strong>Where should I report a model-answer issue?</strong><br>Use “Suggest a Correction/Better Answer” beneath the assessment so the editorial context stays attached.</p>
       </div>`;
   }
@@ -1560,6 +1611,7 @@
       return;
     }
     state.nativeView = view;
+    state.nativeViewReturnToQuorum = options.returnToQuorum === true;
     document.getElementById('dd2-native-kicker').textContent = definition[0];
     document.getElementById('dd2-native-title').textContent = definition[1];
     document.getElementById('dd2-native-body').innerHTML = definition[2]();
@@ -1573,33 +1625,18 @@
 
   function hideNativeView() {
     state.nativeView = null;
+    state.nativeViewReturnToQuorum = false;
     setOverlay(false, 'dd2-native-view');
   }
 
-  function mandatoryAccessChoiceOpen() {
-    return document.getElementById('dd2-native-view')
-      ?.hasAttribute('data-access-choice-required') === true;
-  }
-
-  function refuseMandatoryAccessChoiceDismissal() {
-    global.toast?.('Choose Free or ₱149 Early Access before continuing.', 'warn');
-    if (location.hash !== '#pricing') {
-      history.replaceState(
-        { ...(history.state || {}), dd2View: 'pricing' },
-        '',
-        '#pricing',
-      );
-    }
-  }
-
   function closeNativeView() {
-    if (mandatoryAccessChoiceOpen()) {
-      refuseMandatoryAccessChoiceDismissal();
-      return;
-    }
-    const shouldRewindHistory = Boolean(history.state?.dd2View);
+    const returnToQuorum = state.nativeViewReturnToQuorum;
+    const shouldRewindHistory = Boolean(history.state?.dd2View) && !returnToQuorum;
     hideNativeView();
-    if (shouldRewindHistory) history.back();
+    if (returnToQuorum) {
+      history.replaceState({}, '', `${location.pathname}${location.search}#quorum`);
+      global.DueDiligencePublicHome?.show?.();
+    } else if (shouldRewindHistory) history.back();
   }
 
   async function submitSupport(event) {
@@ -1744,7 +1781,7 @@
 
   function normalizedCommercialPlans(plans) {
     return (Array.isArray(plans) ? plans : [])
-      .filter((plan) => ['free', 'early_access_beta'].includes(plan?.planCode))
+      .filter((plan) => plan?.planCode === 'early_access_beta')
       .sort((a, b) => Number(a.displayOrder || 0) - Number(b.displayOrder || 0));
   }
 
@@ -1752,54 +1789,37 @@
     const host = document.getElementById('dd2-pricing-plans');
     if (!host) return;
     const safePlans = normalizedCommercialPlans(plans);
-    const free = safePlans.find((plan) => plan.planCode === 'free') || {
-      planCode: 'free', name: 'Free', pricePhp: 0,
-      description: 'Five successful question submissions per Philippine calendar day.',
-      features: ['Five successful submissions daily', 'All examination tracks', 'Resets at Philippine midnight'],
+    const early = safePlans.find((plan) => plan.planCode === 'early_access_beta') || {
+      planCode: 'early_access_beta',
+      name: 'Early Access',
+      pricePhp: 149,
+      description: 'Unlimited eligible practice submissions during the promotional access period.',
+      features: [
+        'Unlimited eligible practice submissions',
+        'All Due Diligence study tracks',
+        'Saved progress and source-based coaching',
+        '24-hour provisional access while proof is reviewed',
+      ],
     };
-    const early = safePlans.find((plan) => plan.planCode === 'early_access_beta') || null;
-    const freeFeatures = Array.isArray(free.features) ? free.features : [];
     const earlyFeatures = Array.isArray(early?.features) ? early.features : [];
-    const earlyOpen = early?.checkoutEnabled === true && access?.checkoutOpen !== false;
+    const earlyOpen = access?.checkoutOpen === true && early?.checkoutEnabled !== false;
     const alreadyUnlimited = access?.unlimited === true;
-    const choiceRequired = access?.choiceRequired === true
-      || access?.planSelectionRequired === true
-      || ['plan_selection_required', 'payment_required'].includes(String(access?.basis || ''));
-    const freeSelected = access?.accessMode === 'free' && !choiceRequired;
-    const freeAction = alreadyUnlimited
-      ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Account access active</button>'
-      : freeSelected
-        ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Free selected</button>'
-        : `<button class="dd2-button dd2-button-secondary" id="dd2-choose-free" type="button">${state.user ? 'Choose Free' : 'Sign in to choose Free'}</button>`;
     const paidAction = alreadyUnlimited
       ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Unlimited access active</button>'
       : earlyOpen
         ? `<button class="dd2-button dd2-button-primary" id="dd2-open-payment" type="button">${state.user ? 'Get Early Access' : 'Sign in to get Early Access'}</button>`
         : '<button class="dd2-button dd2-button-secondary" type="button" disabled>Early Access offer closed</button>';
+    const regularPrice = Math.max(14900, Number(access?.regularPriceCentavos) || 19900) / 100;
     host.innerHTML = `
-      <article class="dd2-plan">
-        <div class="dd2-plan-head"><div><h3>${escapeHtml(free.name || 'Free')}</h3><span class="dd2-badge">Always available</span></div><div class="dd2-price">₱0<small>no payment</small></div></div>
-        <p>${escapeHtml(free.description || '')}</p>
-        <ul>${freeFeatures.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>
-        ${freeAction}
-      </article>
-      <article class="dd2-plan dd2-plan-featured${earlyOpen ? '' : ' is-disabled'}">
-        <div class="dd2-plan-head"><div><h3>Early Access</h3><span class="dd2-badge">One-time launch offer</span></div><div class="dd2-price">₱149<small>one time</small></div></div>
-        <p>${escapeHtml(early?.description || 'Next paid-plan pricing will be announced separately.')}</p>
+      <article class="dd2-plan dd2-plan-featured dd2-plan-single${earlyOpen ? '' : ' is-disabled'}">
+        <div class="dd2-plan-head"><div><h3>Early Access</h3><span class="dd2-badge">Promotional access</span></div><div class="dd2-price"><del>₱${escapeHtml(regularPrice.toFixed(0))}</del> ₱149<small>current promotional price</small></div></div>
+        <p>${escapeHtml(early?.description || 'Unlimited eligible practice submissions during the promotional access period.')}</p>
         <ul>${earlyFeatures.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}</ul>
-        ${early?.salesCloseAt ? `<p class="dd2-plan-date"><strong>Purchase by:</strong> ${escapeHtml(manilaDate(early.salesCloseAt, { includeTime: true }))} Philippine time</p>` : ''}
         ${early?.entitlementEndsAt ? `<p class="dd2-plan-date"><strong>Access through:</strong> ${escapeHtml(manilaDate(early.entitlementEndsAt, { includeTime: true }))}</p>` : ''}
-        <p class="dd2-plan-note">One-time payment. No automatic renewal.</p>
+        ${access?.renewalAt ? `<p class="dd2-plan-date"><strong>Next manual renewal date:</strong> ${escapeHtml(manilaDate(access.renewalAt))}</p>` : ''}
+        <p class="dd2-plan-note">Manual payment only. No automatic charge or automatic renewal.</p>
         ${paidAction}
       </article>`;
-    document.getElementById('dd2-choose-free')?.addEventListener('click', () => {
-      if (!state.session?.access_token) {
-        hideNativeView();
-        showEntry({ allowDismiss: true, routeBound: true, returnHash: '#pricing' });
-        return;
-      }
-      global.DueDiligencePhase4?.chooseFreeAccess?.();
-    });
     document.getElementById('dd2-open-payment')?.addEventListener('click', () => {
       if (!state.session?.access_token) {
         hideNativeView();
@@ -1837,25 +1857,76 @@
           </label>
           <label class="dd2-label">Payment proof
             <input class="dd2-field" id="dd2-payment-proof" type="file" accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf" required>
-            <span class="dd2-field-help">PNG, JPEG, or PDF only. The proof is private and subject to file-signature validation.</span>
+            <span class="dd2-field-help">PNG, JPEG, or PDF only, up to 6 MiB. The proof is private and validated by file signature.</span>
           </label>
+          <div class="dd2-proof-preview" id="dd2-proof-preview" hidden></div>
           <label class="dd2-label">Note (optional)
             <textarea class="dd2-field" id="dd2-payment-note" maxlength="2000" placeholder="Add only information needed to match your payment."></textarea>
           </label>
           <div class="dd2-status" id="dd2-payment-status" role="status" aria-live="polite"></div>
+          <div class="dd2-upload-progress" id="dd2-upload-progress" role="progressbar" aria-label="Payment proof upload progress" hidden><span></span></div>
           <button class="dd2-button dd2-button-primary" id="dd2-payment-submit" type="submit">Submit proof securely</button>
         </form>
       </section>`;
     host.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
     document.getElementById('dd2-payment-form')?.addEventListener('submit', submitCommercialPayment);
+    document.getElementById('dd2-payment-proof')?.addEventListener('change', previewCommercialPaymentProof);
+  }
+
+  function validCommercialProof(file) {
+    if (!file) return 'Choose a PNG, JPEG, or PDF payment proof.';
+    if (file.size < 1 || file.size > 6 * 1024 * 1024) return 'Payment proof must be no larger than 6 MiB.';
+    if (!['image/png', 'image/jpeg', 'application/pdf'].includes(file.type)) {
+      return 'Payment proof must be a PNG, JPEG, or PDF file.';
+    }
+    return '';
+  }
+
+  function previewCommercialPaymentProof(event) {
+    const file = event.currentTarget?.files?.[0];
+    const host = document.getElementById('dd2-proof-preview');
+    if (!host) return;
+    const validation = validCommercialProof(file);
+    if (validation) {
+      host.hidden = true;
+      host.replaceChildren();
+      if (file) setStatus('dd2-payment-status', validation, 'error');
+      return;
+    }
+    host.replaceChildren();
+    const summary = document.createElement('div');
+    summary.className = 'dd2-proof-summary';
+    const title = document.createElement('strong');
+    title.textContent = file.type === 'application/pdf' ? 'PDF proof selected' : 'Image proof selected';
+    const details = document.createElement('span');
+    details.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MiB`;
+    summary.append(title, details);
+    host.append(summary);
+    if (file.type.startsWith('image/')) {
+      const image = document.createElement('img');
+      const objectUrl = URL.createObjectURL(file);
+      image.src = objectUrl;
+      image.alt = 'Selected payment proof preview';
+      image.addEventListener('load', () => URL.revokeObjectURL(objectUrl), { once: true });
+      host.prepend(image);
+    }
+    const replace = document.createElement('button');
+    replace.type = 'button';
+    replace.className = 'dd2-button dd2-button-secondary';
+    replace.textContent = 'Replace proof';
+    replace.addEventListener('click', () => document.getElementById('dd2-payment-proof')?.click());
+    host.append(replace);
+    host.hidden = false;
+    setStatus('dd2-payment-status', 'Proof ready for secure submission.', 'success');
   }
 
   async function submitCommercialPayment(event) {
     event.preventDefault();
     const submit = document.getElementById('dd2-payment-submit');
     const proof = document.getElementById('dd2-payment-proof')?.files?.[0];
-    if (!proof) {
-      setStatus('dd2-payment-status', 'Choose a PNG, JPEG, or PDF payment proof.', 'error');
+    const proofValidation = validCommercialProof(proof);
+    if (proofValidation) {
+      setStatus('dd2-payment-status', proofValidation, 'error');
       return;
     }
     const form = new FormData();
@@ -1867,6 +1938,9 @@
     form.set('note', document.getElementById('dd2-payment-note').value.trim());
     form.set('proof', proof);
     submit.disabled = true;
+    submit.textContent = 'Submitting securely…';
+    const progress = document.getElementById('dd2-upload-progress');
+    if (progress) progress.hidden = false;
     setStatus('dd2-payment-status', 'Validating and storing your proof securely…');
     try {
       const result = await nativeWorkerRequest('/payments/submit', {
@@ -1874,12 +1948,28 @@
         submissionView: 'payment',
         submissionDraft: { planCode: 'early_access_beta' },
       });
-      setStatus('dd2-payment-status', result.message || 'Proof received. Provisional access is active while verification is pending.', 'success');
-      global.DueDiligencePhase4?.refreshAccess?.().catch(() => {});
+      const access = await global.DueDiligencePhase4?.refreshAccess?.({ force: true, enforce: false }).catch(() => null);
+      const host = document.getElementById('dd2-payment-host');
+      if (host) host.innerHTML = `
+        <section class="dd2-payment-success" role="status" aria-live="polite">
+          <div class="dd2-view-kicker">Proof received</div>
+          <h3>Verification is pending.</h3>
+          <p>${escapeHtml(result.message || 'Your proof was stored securely. Provisional access is active while the payment is reviewed.')}</p>
+          ${access?.entitlementEndsAt ? `<p><strong>Provisional access through:</strong> ${escapeHtml(manilaDate(access.entitlementEndsAt, { includeTime: true }))} Philippine time</p>` : ''}
+          <p>You can review the verification state in your Profile.</p>
+          <button class="dd2-button dd2-button-primary" id="dd2-payment-continue" type="button">Continue to Home</button>
+        </section>`;
+      document.getElementById('dd2-payment-continue')?.addEventListener('click', () => {
+        hideNativeView();
+        history.replaceState({}, '', `${location.pathname}${location.search}#quorum`);
+        global.DueDiligencePublicHome?.show?.();
+      });
       global.toast?.('Early Access proof received securely.', 'ok');
     } catch (error) {
       setStatus('dd2-payment-status', error.message || 'The proof could not be submitted. No access change was made.', 'error');
       submit.disabled = false;
+      submit.textContent = 'Submit proof securely';
+      if (progress) progress.hidden = true;
     }
   }
 
@@ -1900,18 +1990,19 @@
   }
 
   function accessSummaryMarkup(access) {
-    const label = access?.accountLabel || 'Free';
-    const remaining = Math.max(0, Number(access?.remainingToday) || 0);
-    const limit = Math.max(0, Number(access?.dailyLimit) || 5);
+    const label = access?.accountLabel || 'Introductory access';
+    const remaining = Math.max(0, Number(access?.tokensRemaining ?? access?.remainingToday) || 0);
+    const limit = Math.max(0, Number(access?.tokenLimit ?? access?.dailyLimit) || 5);
     const quota = access?.unlimited
       ? 'Unlimited successful submissions while this entitlement is active.'
-      : `${remaining} of ${limit} successful submissions remain today.`;
+      : `${remaining} of ${limit} one-time practice tokens remain.`;
     return `
       <div class="dd2-access-summary">
         <strong>${escapeHtml(label)}</strong>
         <span>${escapeHtml(quota)}</span>
-        ${access?.resetAt && !access?.unlimited ? `<span>Allowance resets ${escapeHtml(manilaDate(access.resetAt, { includeTime: true }))} Philippine time.</span>` : ''}
+        ${!access?.unlimited ? '<span>Used tokens never reset. Failed grading and duplicate retries do not use a token.</span>' : ''}
         ${access?.entitlementEndsAt ? `<span>Access ends ${escapeHtml(manilaDate(access.entitlementEndsAt, { includeTime: true }))} Philippine time.</span>` : ''}
+        ${access?.renewalAt && access?.unlimited ? `<span>Next manual renewal date: ${escapeHtml(manilaDate(access.renewalAt))}. No automatic charge.</span>` : ''}
         ${access?.paymentState ? `<span>Payment verification: ${escapeHtml(String(access.paymentState).replaceAll('_', ' '))}.</span>` : ''}
       </div>`;
   }
@@ -2388,7 +2479,7 @@
       if (event.key === 'Escape'
           && document.getElementById('dd2-onboarding-overlay')?.getAttribute('aria-hidden') === 'false') {
         event.preventDefault();
-        returnFromOnboarding();
+        if (!state.onboardingRequired) returnFromOnboarding();
         return;
       }
       if (event.key === 'Escape'
@@ -2400,11 +2491,6 @@
     global.addEventListener('popstate', () => {
       syncEntryWithHistoryRoute();
       const hashView = location.hash.replace(/^#/, '');
-      if (mandatoryAccessChoiceOpen()) {
-        refuseMandatoryAccessChoiceDismissal();
-        renderNativeView('pricing', { push: false });
-        return;
-      }
       if (nativeDefinition(hashView)) renderNativeView(hashView, { push: false });
       else hideNativeView();
     });
@@ -2505,6 +2591,7 @@
     handleGradeError,
     openView: renderNativeView,
     openSignIn: showEntry,
+    openOnboarding,
     requireSubmissionAuthentication,
     handleSubmissionUnauthorized,
     refreshSession: refreshAuthenticatedSession,

@@ -435,7 +435,28 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 400px) {
+  #site-header.qfs-shell {
+    flex-wrap: wrap;
+  }
+
+  #site-header.qfs-shell .brand {
+    flex: 1 1 calc(100% - 56px);
+    max-width: calc(100% - 56px);
+  }
+
+  #site-header.qfs-shell .topbar-actions {
+    order: 3;
+    width: 100%;
+    margin: 0;
+    flex: 0 0 100%;
+  }
+
+  #site-header.qfs-shell .topbar-actions .dd2-guest-badge.is-visible {
+    width: 100%;
+    justify-content: center;
+  }
+
   #site-header.qfs-shell .brand-sub {
     display: none;
   }

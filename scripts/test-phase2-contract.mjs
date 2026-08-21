@@ -21,15 +21,18 @@ vm.runInNewContext(configSource, sandbox);
 const config = sandbox.window.DueDiligencePhase2Config;
 
 assert.equal(config.guest.enabled, false);
-assert.equal(config.legal.termsVersion, 'terms-commercial-v1-2026-08-18');
-assert.equal(config.legal.privacyVersion, 'privacy-commercial-v1-2026-08-18');
+assert.equal(config.legal.termsVersion, 'terms-soft-launch-v1-2026-08-21');
+assert.equal(config.legal.privacyVersion, 'privacy-soft-launch-v1-2026-08-21');
 assert.equal('marketingConsentVersion' in config.legal, false);
 assert.deepEqual(Array.from(config.plans.items, (plan) => [
   plan.id,
   plan.pricingHidden,
-]), [['free', false], ['early_access_beta', false]]);
-assert.equal(config.plans.notice, 'Choose Free or the one-time Early Access offer.');
-assert.equal(config.features.payments, false);
+]), [['early_access_beta', false]]);
+assert.equal(
+  config.plans.notice,
+  'Five one-time practice tokens are included automatically. Early Access removes the practice limit.',
+);
+assert.equal(config.features.payments, true);
 assert.equal(config.features.subscriptionEnforcement, true);
 assert.equal(config.features.coachingBooking, false);
 
@@ -41,9 +44,9 @@ for (const expected of [
   'Personal analytics',
   'Guided Subject Matter practice',
   '/beta/access/accept-terms',
-  'complete_commercial_profile_onboarding',
-  'Free and Early Access',
-  'five successful question submissions per Philippine calendar day',
+  'complete_commercial_profile_onboarding_v2',
+  'Introductory tokens and Early Access',
+  'one lifetime allowance of five practice tokens',
   "publicWorkerRequest('/beta/access/policy')",
   'await refreshLegalPolicy();',
   "document.getElementById('dd2-entry-consent-submit')?.addEventListener('click', submitEntryConsent);",

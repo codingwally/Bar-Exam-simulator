@@ -158,7 +158,7 @@ test('authenticated entitled exam opening never creates an explicit commercial c
       const body = JSON.parse(init.body);
       assert.equal(body.p_user_id, userId);
       // The legacy question route retains its historical activation hint. The
-      // commercial resolver ignores it; only /access/choose records Free Trial.
+      // soft-launch resolver ignores it because introductory tokens are seeded server-side.
       assert.equal(body.p_activate_trial, true);
       assert.equal(body.p_request_key, 'request_1234567890');
       return Response.json(accessSnapshot());
@@ -247,12 +247,12 @@ test('an authenticated zero-credit user is denied before question-bank, attempt,
       assert.equal(body.p_question_bank_id, 'LAB-001');
       return Response.json(accessSnapshot({
         allowed: false,
-        basis: 'daily_limit_reached',
-        accessMode: 'free',
-        dailyLimit: 5,
-        completedToday: 5,
-        reservedToday: 0,
-        remainingToday: 0,
+        basis: 'trial_tokens_exhausted',
+        accessMode: 'introductory',
+        tokenLimit: 5,
+        tokensUsed: 5,
+        tokensReserved: 0,
+        tokensRemaining: 0,
         trial: {
           startedAt: '2026-08-01T00:00:00Z',
           expiresAt: '2026-09-01T15:59:59Z',
@@ -303,7 +303,7 @@ test('an authenticated zero-credit user is denied before question-bank, attempt,
     const payload = await response.json();
 
     assert.equal(response.status, 403);
-    assert.equal(payload.error.code, 'DAILY_LIMIT_REACHED');
+    assert.equal(payload.error.code, 'INTRODUCTORY_TOKENS_EXHAUSTED');
     assert.equal(reservationCalls, 1);
     assert.equal(questionBankCalls, 0);
     assert.equal(attemptCalls, 0);

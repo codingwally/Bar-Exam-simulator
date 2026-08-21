@@ -12,8 +12,7 @@ import {
   normalizeRefundRequest,
 } from './payment-core.mjs';
 
-const resetAt = '2026-08-19T00:00:00+08:00';
-const salesCloseAt = '2026-09-01T23:59:59+08:00';
+const salesCloseAt = '2026-10-01T00:00:00+08:00';
 
 test('commercial study completion RPCs are allowed through the Worker storage boundary', async () => {
   const worker = await readFile(new URL('./index.mjs', import.meta.url), 'utf8');
@@ -25,63 +24,48 @@ test('commercial study completion RPCs are allowed through the Worker storage bo
   }
 });
 
-test('normalizes the authoritative Free access response without exposing unknown fields', () => {
+test('normalizes the authoritative introductory-token response without exposing unknown fields', () => {
   const normalized = normalizeAccessSnapshot({
     allowed: true,
-    basis: 'daily_free',
+    basis: 'introductory_tokens',
     termsRequired: false,
     role: 'student',
-    accessMode: 'free',
-    accountLabel: 'Free Trial',
+    accessMode: 'introductory',
+    accountLabel: 'Introductory access',
     unlimited: false,
-    dailyLimit: 5,
-    completedToday: 2,
-    reservedToday: 1,
-    remainingToday: 2,
-    resetAt,
+    tokenLimit: 5,
+    tokensUsed: 2,
+    tokensReserved: 1,
+    tokensRemaining: 2,
+    tokenGrantAt: '2026-08-21T00:00:00+08:00',
+    tokenDisclosureVersion: 'trial-tokens-v1-2026-08-21',
     checkoutOpen: true,
     priceCentavos: 14900,
+    regularPriceCentavos: 19900,
+    renewalAt: '2026-10-01T00:00:00+08:00',
+    manualRenewal: true,
+    automaticRenewal: false,
     salesCloseAt,
     entitlementEndsAt: null,
     commercialLaunchEnabled: true,
     internalSecret: 'must-not-pass-through',
   });
 
-  assert.deepEqual(normalized, {
-    allowed: true,
-    basis: 'daily_free',
-    termsRequired: false,
-    profileCompleted: true,
-    choiceRequired: false,
-    paymentRequired: false,
-    planSelectionRequired: false,
-    role: 'student',
-    accessMode: 'free',
-    accountLabel: 'Free',
-    unlimited: false,
-    dailyLimit: 5,
-    completedToday: 2,
-    reservedToday: 1,
-    remainingToday: 2,
-    resetAt,
-    checkoutOpen: true,
-    priceCentavos: 14900,
-    salesCloseAt,
-    entitlementEndsAt: null,
-    paymentState: null,
-    commercialLaunchEnabled: true,
-    mandatoryAccessChoiceEnabled: false,
-    freeChoiceAvailable: false,
-    selectedChoice: null,
-    choiceRecordedAt: null,
-    trialAvailable: false,
-    trialEndsAt: null,
-    globalBeta: { enabled: false, eligible: false, active: false, expiresAt: null },
-    trial: { startedAt: null, expiresAt: null, active: false, program: null },
-    freeGrades: { limit: 5, used: 2, remaining: 2 },
-    freeBeta: { enabled: false, expiresAt: null, active: false, program: null },
-    subscription: null,
-  });
+  assert.equal(normalized.allowed, true);
+  assert.equal(normalized.basis, 'introductory_tokens');
+  assert.equal(normalized.accessMode, 'introductory');
+  assert.equal(normalized.accountLabel, 'Introductory access');
+  assert.equal(normalized.tokenLimit, 5);
+  assert.equal(normalized.tokensUsed, 2);
+  assert.equal(normalized.tokensReserved, 1);
+  assert.equal(normalized.tokensRemaining, 2);
+  assert.equal(normalized.resetAt, null);
+  assert.equal(normalized.priceCentavos, 14900);
+  assert.equal(normalized.regularPriceCentavos, 19900);
+  assert.equal(normalized.renewalAt, '2026-10-01T00:00:00+08:00');
+  assert.equal(normalized.manualRenewal, true);
+  assert.equal(normalized.automaticRenewal, false);
+  assert.deepEqual(normalized.freeGrades, { limit: 5, used: 2, remaining: 2 });
   assert.equal('internalSecret' in normalized, false);
 });
 
@@ -93,11 +77,10 @@ test('normalizes unlimited Early Access with fixed entitlement metadata', () => 
     accessMode: 'early_access',
     accountLabel: 'Early Access',
     unlimited: true,
-    dailyLimit: 5,
-    completedToday: 5,
-    reservedToday: 3,
-    remainingToday: 0,
-    resetAt,
+    tokenLimit: 5,
+    tokensUsed: 5,
+    tokensReserved: 3,
+    tokensRemaining: 0,
     checkoutOpen: false,
     priceCentavos: 14900,
     salesCloseAt,
@@ -126,14 +109,13 @@ test('normalizes unlimited Early Access with fixed entitlement metadata', () => 
 test('closed checkout never invents a replacement price or entitlement expiry', () => {
   const normalized = normalizeAccessSnapshot({
     allowed: true,
-    basis: 'daily_free',
-    accessMode: 'free',
-    accountLabel: 'Free Trial',
-    dailyLimit: 5,
-    completedToday: 0,
-    reservedToday: 0,
-    remainingToday: 5,
-    resetAt,
+    basis: 'introductory_tokens',
+    accessMode: 'introductory',
+    accountLabel: 'Introductory access',
+    tokenLimit: 5,
+    tokensUsed: 0,
+    tokensReserved: 0,
+    tokensRemaining: 5,
     checkoutOpen: false,
     priceCentavos: null,
     salesCloseAt,
@@ -165,26 +147,25 @@ test('rejects absent access responses and clamps invalid quota counters', () => 
   assert.equal(normalized.remainingToday, 5);
 });
 
-test('daily exhaustion produces the commercial reset error, not a generic paywall error', () => {
+test('introductory exhaustion produces the permanent-token error, not a reset promise', () => {
   const error = accessDeniedError({
-    accessMode: 'free',
-    basis: 'daily_limit_reached',
-    dailyLimit: 5,
-    remainingToday: 0,
-    resetAt,
+    accessMode: 'introductory',
+    basis: 'trial_tokens_exhausted',
+    tokenLimit: 5,
+    tokensRemaining: 0,
   });
-  assert.equal(error.code, 'DAILY_LIMIT_REACHED');
+  assert.equal(error.code, 'INTRODUCTORY_TOKENS_EXHAUSTED');
   assert.equal(error.status, 403);
-  assert.match(error.message, /five|5/i);
-  assert.match(error.message, /Philippine midnight/i);
+  assert.match(error.message, /five one-time practice tokens/i);
+  assert.doesNotMatch(error.message, /midnight|daily|reset/i);
 });
 
-test('legal acceptance remains a higher-priority denial than daily exhaustion', () => {
+test('legal acceptance remains a higher-priority denial than introductory exhaustion', () => {
   const error = accessDeniedError({
     termsRequired: true,
-    accessMode: 'free',
-    basis: 'daily_limit_reached',
-    dailyLimit: 5,
+    accessMode: 'introductory',
+    basis: 'trial_tokens_exhausted',
+    tokenLimit: 5,
   });
   assert.equal(error.code, 'LEGAL_ACCEPTANCE_REQUIRED');
   assert.match(error.message, /Terms of Use and Privacy Policy/i);

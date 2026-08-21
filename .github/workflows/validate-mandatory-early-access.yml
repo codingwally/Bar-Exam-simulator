@@ -1,4 +1,4 @@
-name: Validate mandatory Early Access release
+name: Validate soft-launch five-token release
 
 on:
   pull_request:
@@ -6,12 +6,17 @@ on:
       - main
     paths:
       - 'assets/phase2-config.js'
+      - 'assets/phase2-experience.js'
+      - 'assets/phase2.css'
       - 'assets/maintenance-gate.js'
       - 'assets/phase4-experience.js'
-      - 'assets/free-trial-five-daily.js'
       - 'assets/feature-loader.js'
+      - 'admin/admin.js'
       - 'worker/access-core.mjs'
       - 'worker/commercial-entry.mjs'
+      - 'worker/duediligence-2026-routes.mjs'
+      - 'worker/index.mjs'
+      - 'worker/payment-core.mjs'
       - 'worker/maintenance-entry.mjs'
       - 'worker/commercial-access-gate.test.mjs'
       - 'worker/access-choice-flow.test.mjs'
@@ -21,6 +26,9 @@ on:
       - 'scripts/test-maintenance-lock.mjs'
       - 'scripts/test-lifetime-grade-ui.mjs'
       - 'scripts/test-two-option-access-choice.mjs'
+      - 'scripts/test-commercial-launch-staging.mjs'
+      - 'scripts/staging-commercial-user.mjs'
+      - 'supabase/migrations/20260821120000_soft_launch_five_token_trial.sql'
       - 'supabase/migrations/20260818123000_require_early_access.sql'
       - 'supabase/migrations/20260818123100_private_payment_verifiers.sql'
       - 'supabase/migrations/20260818133000_restore_two_option_access_choice.sql'
@@ -46,15 +54,19 @@ jobs:
       - name: Install reviewed Worker dependencies
         run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
-      - name: Verify maintenance, access, and payment-notification contracts
+      - name: Verify maintenance, token access, and payment-notification contracts
         run: |
           node --check assets/phase2-config.js
+          node --check assets/phase2-experience.js
           node --check assets/maintenance-gate.js
           node --check assets/phase4-experience.js
-          node --check assets/free-trial-five-daily.js
           node --check assets/feature-loader.js
+          node --check admin/admin.js
           node --check worker/access-core.mjs
           node --check worker/commercial-entry.mjs
+          node --check worker/duediligence-2026-routes.mjs
+          node --check worker/index.mjs
+          node --check worker/payment-core.mjs
           node --check worker/maintenance-entry.mjs
           node --test worker/*.test.mjs
           node scripts/test-maintenance-lock.mjs

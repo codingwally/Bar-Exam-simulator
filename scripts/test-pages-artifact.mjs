@@ -37,7 +37,6 @@ for (const required of [
   'assets/due-diligence-controls.css',
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
-  'assets/free-trial-five-daily.js',
   'assets/maintenance-gate.js',
   'assets/quorum-first-shell.css',
   'assets/quorum-first-shell.js',
@@ -75,7 +74,6 @@ assert.ok(!files.includes('assets/phase2-law-library.jpg'));
 const index = await readFile(path.join(output, 'index.html'), 'utf8');
 const examinations = await readFile(path.join(output, 'assets/examinations.js'), 'utf8');
 const featureLoader = await readFile(path.join(output, 'assets/feature-loader.js'), 'utf8');
-const freeTrialRuntime = await readFile(path.join(output, 'assets/free-trial-five-daily.js'), 'utf8');
 const phase2Config = await readFile(path.join(output, 'assets/phase2-config.js'), 'utf8');
 const maintenanceGate = await readFile(path.join(output, 'assets/maintenance-gate.js'), 'utf8');
 const robots = await readFile(path.join(output, 'robots.txt'), 'utf8');
@@ -104,8 +102,7 @@ assert.match(examinations, /Improved model response/);
 assert.doesNotMatch(examinations, /id="dd-upload-timer"/);
 assert.doesNotMatch(featureLoader, /assets\/free-trial-five-daily\.js/);
 assert.match(featureLoader, /'subject-matter': '#subject-matter'/);
-assert.match(freeTrialRuntime, /DueDiligencePermanentFree/);
-assert.match(freeTrialRuntime, /dailyLimit:\s*5/);
+assert.ok(!files.includes('assets/free-trial-five-daily.js'));
 assert.match(phase2Config, /maintenance:\s*Object\.freeze\(\{/);
 assert.match(phase2Config, /unlockPath:\s*'\/maintenance\/unlock'/);
 assert.match(phase2Config, /statusPath:\s*'\/maintenance\/status'/);

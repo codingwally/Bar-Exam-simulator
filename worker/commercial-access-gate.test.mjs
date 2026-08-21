@@ -9,7 +9,7 @@ import {
 } from './commercial-entry.mjs';
 
 const commercialMigration = readFileSync(new URL(
-  '../supabase/migrations/20260820113549_permanent_free_commercial_access.sql',
+  '../supabase/migrations/20260821120000_soft_launch_five_token_trial.sql',
   import.meta.url,
 ), 'utf8');
 const verifierMigration = readFileSync(new URL(
@@ -22,65 +22,57 @@ const phase2Css = readFileSync(new URL('../assets/phase2.css', import.meta.url),
 const productionWrangler = readFileSync(new URL('./wrangler.toml', import.meta.url), 'utf8');
 const maintenanceEntry = readFileSync(new URL('./maintenance-entry.mjs', import.meta.url), 'utf8');
 
-test('ordinary commercial accounts are locked until an explicit access choice', () => {
-  assert.match(commercialMigration, /create table if not exists public\.commercial_access_choices/);
-  assert.match(commercialMigration, /create or replace function public\.phase4_choose_launch_trial/);
-  assert.match(commercialMigration, /when v_remaining > 0 then 'daily_free'/);
-  assert.match(commercialMigration, /else 'daily_limit_reached'/);
-  assert.match(commercialMigration, /'basis', 'plan_selection_required'/);
-  assert.match(commercialMigration, /'choiceRequired', true/);
-  assert.match(commercialMigration, /mandatory_access_choice_enabled = true/);
+test('ordinary commercial accounts receive five one-time tokens without a plan choice', () => {
+  assert.match(commercialMigration, /create table if not exists public\.introductory_token_grants/);
+  assert.match(commercialMigration, /create table if not exists public\.introductory_token_ledger/);
+  assert.match(commercialMigration, /token_limit integer not null default 5 check \(token_limit = 5\)/);
+  assert.match(commercialMigration, /v_basis := 'introductory_tokens'/);
+  assert.match(commercialMigration, /mandatory_access_choice_enabled = false/);
   assert.match(commercialMigration, /global_beta_all_access_enabled = false/);
+  assert.doesNotMatch(commercialMigration, /create or replace function public\.phase4_choose_launch_trial/);
 });
 
-test('an exhausted Free allowance blocks another submission without locking the platform', () => {
-  assert.match(
-    commercialMigration,
-    /if v_choice\.choice = 'free' then[\s\S]*'allowed', true,[\s\S]*else 'daily_limit_reached'/,
-  );
+test('an exhausted introductory allowance cannot reset or over-reserve', () => {
+  assert.match(commercialMigration, /raise exception 'INTRODUCTORY_TOKENS_EXHAUSTED'/);
+  assert.match(commercialMigration, /'reason', 'insufficient_introductory_tokens'/);
+  assert.match(commercialMigration, /introductory_token_ledger_one_consumption_uidx/);
+  assert.doesNotMatch(commercialMigration, /Philippine midnight|calendar day|daily reset/i);
 });
 
-test('commercial choice storage is backend-only and migration replay is safe', () => {
+test('introductory token storage is backend-only and migration replay is safe', () => {
   assert.match(
     commercialMigration,
-    /revoke all on table public\.commercial_access_choices\s+from public, anon, authenticated/,
+    /revoke all on table public\.introductory_token_grants from public, anon, authenticated/,
   );
   assert.match(
     commercialMigration,
-    /grant select, insert, update, delete on table public\.commercial_access_choices\s+to service_role/,
+    /grant select, insert, update, delete on table public\.introductory_token_grants to service_role/,
   );
-  assert.match(
-    commercialMigration,
-    /drop constraint if exists commercial_access_choices_choice_check/,
-  );
-  assert.match(
-    commercialMigration,
-    /check \(choice in \('free', 'early_access'\)\)/,
-  );
-  assert.match(commercialMigration, /terms-commercial-v1-2026-08-18/);
-  assert.match(commercialMigration, /privacy-commercial-v1-2026-08-18/);
+  assert.match(commercialMigration, /on conflict \(user_id\) do nothing/);
+  assert.match(commercialMigration, /terms-soft-launch-v1-2026-08-21/);
+  assert.match(commercialMigration, /privacy-soft-launch-v1-2026-08-21/);
 });
 
-test('public catalog exposes five-per-day Free and ₱149 Early Access', () => {
-  assert.match(commercialMigration, /'planCode', 'free'/);
-  assert.match(commercialMigration, /'name', 'Free'/);
-  assert.match(commercialMigration, /'billing', 'free'/);
-  assert.match(commercialMigration, /Five successful question submissions per Philippine calendar day/);
-  assert.match(commercialMigration, /Allowance resets at Philippine midnight/);
+test('public catalog exposes only ₱149 Early Access with ₱199 manual renewal', () => {
   assert.match(commercialMigration, /'planCode', 'early_access_beta'/);
   assert.match(commercialMigration, /'priceCentavos', 14900/);
+  assert.match(commercialMigration, /'regularPriceCentavos', v_settings\.early_access_regular_price_centavos/);
+  assert.match(commercialMigration, /'billing', 'manual_renewal'/);
+  assert.match(commercialMigration, /'manualRenewal', true/);
+  assert.match(commercialMigration, /'automaticRenewal', false/);
+  assert.doesNotMatch(commercialMigration, /'planCode',\s*'free'/);
   assert.doesNotMatch(commercialMigration, /'planCode',\s*'(?:standard|premium)'/);
 });
 
-test('browser preserves the mandatory two-choice plan gate', () => {
-  assert.match(frontend, /plan_selection_required/);
-  assert.match(frontend, /dd2-choose-free/);
-  assert.match(frontend, /access\/choose/);
-  assert.match(frontend, /legacy\.openView\?\.\('pricing'\)/);
-  assert.match(frontend, /dd2-native-close, #dd2-native-back/);
-  assert.match(phase2Css, /data-access-choice-required/);
+test('browser presents token access and a single Early Access checkout', () => {
+  assert.match(frontend, /five one-time practice tokens/i);
+  assert.match(frontend, /Early Access/);
+  assert.doesNotMatch(frontend, /dd2-choose-free/);
+  assert.doesNotMatch(frontend, /access\/choose/);
+  assert.doesNotMatch(frontend, /plan_selection_required/);
   assert.doesNotMatch(frontend, /new MutationObserver/);
   assert.doesNotMatch(featureLoader, /assets\/free-trial-five-daily\.js/);
+  assert.doesNotMatch(phase2Css, /Five successful question submissions per Philippine calendar day/);
 });
 
 test('payment verifier directory is private and contains no committed addresses', () => {

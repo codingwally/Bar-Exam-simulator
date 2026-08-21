@@ -52,7 +52,6 @@
   });
 
   const protectedFeatureRoutes = Object.freeze({
-    quorum: '#quorum',
     'subject-matter': '#subject-matter',
     'bar-feels': '#bar-feels',
     'bar-easy': '#bar-easy',
@@ -62,7 +61,6 @@
   });
 
   const protectedPageRoutes = Object.freeze({
-    quorum: '#quorum',
     mock: '#mock-bar',
     'mock-bar': '#mock-bar',
     midterms: '#subject-matter',
@@ -75,16 +73,11 @@
   });
 
   function hasResolvedAllowedAccess(access) {
-    const unresolvedChoice = access?.choiceRequired === true
-      || access?.planSelectionRequired === true
-      || ['plan_selection_required', 'trial_expired', 'payment_required'].includes(
-        String(access?.basis || ''),
-      );
     const unresolvedProfile = access?.basis === 'profile_required'
       || (access?.commercialLaunchEnabled === true && access?.profileCompleted === false);
     return access?.allowed === true
-      && !unresolvedChoice
       && access?.termsRequired !== true
+      && access?.reauthenticationRequired !== true
       && !unresolvedProfile;
   }
 
@@ -226,7 +219,7 @@
   global.DueDiligenceQuorum = Object.freeze({
     open: async (...args) => {
       const placeholder = global.DueDiligenceQuorum;
-      if (!await loadForFeature('quorum')) return null;
+      if (!await loadForFeature('quorum', { skipAccessCheck: true })) return null;
       if (global.DueDiligenceQuorum === placeholder) throw new Error('Quorum could not be opened.');
       return global.DueDiligenceQuorum.open(...args);
     },

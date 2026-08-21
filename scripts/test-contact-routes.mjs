@@ -25,8 +25,8 @@ assert.match(experience, /id="dd2-payment-form"/);
 assert.match(experience, /\/payments\/submit/);
 assert.match(experience, /Early Access/);
 assert.match(experience, /₱149/);
-assert.match(experience, /One-time payment\. No automatic renewal\./);
-assert.match(experience, /Next paid-plan pricing will be announced separately\./);
+assert.match(experience, /Manual payment only\. No automatic charge or automatic renewal\./);
+assert.match(experience, /next manual renewal date is October 1, 2026/i);
 assert.doesNotMatch(experience, /Pricing will be announced after beta testing\.|Beta access active/);
 
 for (const mailbox of [

@@ -133,6 +133,21 @@ export function validateProofSignature(bytes, mimeType) {
       415,
     );
   }
+  if (mimeType === 'application/pdf') {
+    const inspectableNames = new TextDecoder('latin1')
+      .decode(data)
+      .replace(/#([0-9a-f]{2})/gi, (_match, encoded) => (
+        String.fromCharCode(Number.parseInt(encoded, 16))
+      ));
+    if (/\/(?:Encrypt|JavaScript|JS|OpenAction|AA|Launch|RichMedia|EmbeddedFile|SubmitForm|ImportData)\b/i
+      .test(inspectableNames)) {
+      throw new PaymentValidationError(
+        'UNSAFE_PROOF_FILE',
+        'Upload an unencrypted, inactive PDF payment proof.',
+        415,
+      );
+    }
+  }
   return data;
 }
 

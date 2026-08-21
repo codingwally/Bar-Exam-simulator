@@ -1409,12 +1409,11 @@ test('refund and partnership validation require strong identifiers, contact, mes
   }), PaymentValidationError);
 });
 
-test('plans endpoint exposes only Free and the approved one-time Early Access offer', async () => {
+test('plans endpoint exposes only the approved Early Access offer', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     if (String(url).endsWith('/rest/v1/rpc/phase4_plan_catalog')) {
       return Response.json([
-        { planCode: 'free', pricePhp: 0, checkoutEnabled: false },
         { planCode: 'early_access_beta', pricePhp: 149, checkoutEnabled: true },
       ]);
     }
@@ -1432,8 +1431,8 @@ test('plans endpoint exposes only Free and the approved one-time Early Access of
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.deepEqual(payload.plans.map((plan) => plan.planCode), ['free', 'early_access_beta']);
-    assert.equal(payload.plans[1].pricePhp, 149);
+    assert.deepEqual(payload.plans.map((plan) => plan.planCode), ['early_access_beta']);
+    assert.equal(payload.plans[0].pricePhp, 149);
   } finally {
     globalThis.fetch = originalFetch;
   }

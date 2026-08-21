@@ -48,6 +48,12 @@ function harness(overrides = {}) {
     processExamRoomQueues: async () => ({ backupProcessed: 0, emailProcessed: 0 }),
     requireAdministrator: async () => ({ id: userId }),
     requireAuthenticatedUser: async () => ({ id: userId }),
+    requireCommercialAccess: async () => ({
+      allowed: true,
+      basis: 'introductory_tokens',
+      accessMode: 'introductory',
+      tokensRemaining: 5,
+    }),
     reserveCommercialSubmission: async () => ({
       reservationId: '623e4567-e89b-42d3-a456-426614174099',
       access: { allowed: true, accessMode: 'free', remainingToday: 4 },

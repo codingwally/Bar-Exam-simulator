@@ -3401,11 +3401,17 @@ const modalResumeStates = new Map();
 let decisionResolve = null;
 
 function syncModalIsolation() {
+  const maintenanceGate = document.documentElement.dataset.ddMaintenance === 'locked'
+    ? document.getElementById('dd-maintenance-gate')
+    : null;
   const admissionDialog = document.querySelector('#private-beta-dialog[open]');
   const openOverlays = Array.from(document.querySelectorAll(
     '.modal-overlay.open, .dd2-overlay.is-open',
   )).filter((overlay) => overlay.getAttribute('aria-hidden') !== 'true');
-  const topOverlay = admissionDialog || openOverlays[openOverlays.length - 1] || null;
+  const topOverlay = maintenanceGate
+    || admissionDialog
+    || openOverlays[openOverlays.length - 1]
+    || null;
 
   Array.from(document.body.children).forEach((child) => {
     const containsTopOverlay = topOverlay && (child === topOverlay || child.contains(topOverlay));

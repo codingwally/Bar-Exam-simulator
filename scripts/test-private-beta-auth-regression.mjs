@@ -72,7 +72,9 @@ function fakeNode(id, { tagName = 'DIV', open = false, display = 'block' } = {})
   const hiddenOnboarding = fakeNode('dd2-onboarding-overlay', { display: 'none' });
   const bodyChildren = [landing, admissionDialog, appShell, hiddenOnboarding];
   const document = {
+    documentElement: { dataset: {} },
     body: { children: bodyChildren },
+    getElementById() { return null; },
     querySelector(selector) {
       return selector.includes('dialog[open]') ? admissionDialog : null;
     },
@@ -115,6 +117,40 @@ function fakeNode(id, { tagName = 'DIV', open = false, display = 'block' } = {})
   );
   assert.equal(landing.inert, true, 'Background landing content must remain isolated.');
   assert.equal(appShell.inert, true, 'Background application content must remain isolated.');
+}
+
+// Commercial plan and onboarding overlays may initialize behind the private
+// maintenance lock. They must never make the password gate inert.
+{
+  const maintenanceGate = fakeNode('dd-maintenance-gate');
+  const entryOverlay = fakeNode('dd2-entry-overlay');
+  const appShell = fakeNode('authenticated-app-shell');
+  const bodyChildren = [appShell, entryOverlay, maintenanceGate];
+  const document = {
+    documentElement: { dataset: { ddMaintenance: 'locked' } },
+    body: { children: bodyChildren },
+    getElementById(id) {
+      return id === maintenanceGate.id ? maintenanceGate : null;
+    },
+    querySelector() { return null; },
+    querySelectorAll() { return [entryOverlay]; },
+  };
+  const context = { document };
+  const isolationSource = between(
+    html,
+    'function syncModalIsolation()',
+    'window.syncModalIsolation = syncModalIsolation;',
+  );
+  vm.runInNewContext(`${isolationSource}\nsyncModalIsolation();`, context);
+
+  assert.equal(maintenanceGate.inert, false, 'The maintenance password gate must remain interactive.');
+  assert.equal(
+    maintenanceGate.dataset.ddModalInert,
+    undefined,
+    'The maintenance password gate must never be marked inert.',
+  );
+  assert.equal(entryOverlay.inert, true, 'A hidden plan-entry overlay must remain isolated behind maintenance.');
+  assert.equal(appShell.inert, true, 'Application content must remain isolated behind maintenance.');
 }
 
 // A first-time account has incomplete profile data immediately after Google

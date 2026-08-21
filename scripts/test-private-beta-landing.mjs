@@ -60,6 +60,8 @@ assert.match(shellJs, /document\.getElementById\('spa-mock'\)\?\.click\(\)/,
   'The Quorum practice promotion must reuse the existing practice route.');
 assert.match(shellCss, /#site-header\.qfs-shell #spa-nav\.qfs-drawer[\s\S]*position:\s*fixed[\s\S]*height:\s*100dvh/,
   'The compact menu must use the approved full-height drawer.');
+assert.match(shellCss, /@media \(max-width: 360px\)[\s\S]*#site-header\.qfs-shell \{[\s\S]*flex-wrap:\s*wrap[\s\S]*\.topbar-actions \{[\s\S]*flex:\s*0 0 100%/,
+  'The compact token counter must wrap below the 320px header instead of overflowing.');
 assert.match(shellCss, /@media \(max-width: 760px\)[\s\S]*\.quorum-entry/,
   'The signed-out entry must have an explicit mobile treatment.');
 assert.match(shellCss, /@media \(prefers-reduced-motion: reduce\)/);

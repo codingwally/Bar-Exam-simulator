@@ -608,7 +608,11 @@ begin
 
   v_access := public.phase4_access_snapshot(p_user_id, false, null);
   if not coalesce((v_access->>'allowed')::boolean, false) then
-    return v_access || jsonb_build_object('reservationId', null, 'replayed', false);
+    return v_access || jsonb_build_object(
+      'reason', coalesce(v_access->>'basis', 'access_denied'),
+      'reservationId', null,
+      'replayed', false
+    );
   end if;
   v_basis := v_access->>'basis';
   v_consumes := v_settings.soft_launch_enabled
@@ -746,7 +750,11 @@ begin
 
   v_access := public.phase4_access_snapshot(p_user_id, false, null);
   if not coalesce((v_access->>'allowed')::boolean, false) then
-    return v_access || jsonb_build_object('heldCount', 0, 'replayed', v_existing > 0);
+    return v_access || jsonb_build_object(
+      'reason', coalesce(v_access->>'basis', 'access_denied'),
+      'heldCount', 0,
+      'replayed', v_existing > 0
+    );
   end if;
   v_basis := v_access->>'basis';
   v_consumes := v_settings.soft_launch_enabled

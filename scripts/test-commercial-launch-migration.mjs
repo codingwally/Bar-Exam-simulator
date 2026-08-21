@@ -127,11 +127,13 @@ test('single and batch reservations are atomic, idempotent, and track-aware', ()
   assert.match(single, /if v_existing\.status in \('reserved','completed'\)/);
   assert.match(single, /v_used \+ v_reserved >= v_grant\.token_limit/);
   assert.match(single, /'reason', 'trial_tokens_exhausted'/);
+  assert.match(single, /'reason', coalesce\(v_access->>'basis', 'access_denied'\)/);
 
   const batch = sectionBetween(softLaunch, 'phase4_reserve_submission_batch');
   assert.match(batch, /pg_advisory_xact_lock\(hashtextextended\(p_user_id::text, 401\)\)/);
   assert.match(batch, /v_used \+ v_reserved \+ p_required_count > v_grant\.token_limit/);
   assert.match(batch, /'reason', 'insufficient_introductory_tokens'/);
+  assert.match(batch, /'reason', coalesce\(v_access->>'basis', 'access_denied'\)/);
   assert.match(batch, /v_now \+ interval '6 hours'/);
 });
 

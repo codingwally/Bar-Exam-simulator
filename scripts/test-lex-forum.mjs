@@ -39,7 +39,17 @@ assert.match(page, /id="lex-forum-app" hidden/);
 assert.match(page, /Community posts do not constitute legal advice/);
 assert.doesNotMatch(page, /Lex Forum|Under Construction/i);
 assert.match(page, /id="quorum-entry-image"/);
-assert.match(page, /id="lex-post-submit"[^>]*>Post</);
+assert.match(page, /id="quorum-entry-anonymous"/);
+assert.match(page, /Post anonymously/);
+assert.match(page, /id="lex-post-submit"[^>]*aria-label="Post"/);
+assert.ok(
+  page.indexOf('quorum-practice-card-desktop') < page.indexOf('Community pulse'),
+  'Practice Exam must be the first supporting item on Home',
+);
+assert.ok(
+  page.lastIndexOf('Educational discussion only') > page.indexOf('Study Circles'),
+  'The educational disclaimer must remain the last supporting item',
+);
 for (const removedComposerCopy of [
   /Up to 12 JPEG, PNG, or WebP images/,
   />Add details</,
@@ -52,8 +62,8 @@ for (const removedComposerCopy of [
   assert.doesNotMatch(page, removedComposerCopy);
 }
 assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
-assert.match(featureLoader, /assets\/lex-forum\.css\?v=home-comments-taglish-20260821-1/);
-assert.match(featureLoader, /assets\/lex-forum\.js\?v=home-comments-taglish-20260821-1/);
+assert.match(featureLoader, /assets\/lex-forum\.css\?v=home-modern-icons-20260821-1/);
+assert.match(featureLoader, /assets\/lex-forum\.js\?v=home-modern-icons-20260821-1/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);
@@ -69,6 +79,9 @@ assert.doesNotMatch(forum, /\.innerHTML\s*=/);
 assert.match(forum, /navigator\.onLine/);
 assert.doesNotMatch(forum, /query\('sample_feed'\)|sampleVisibleCount|community-sample/);
 assert.match(forum, /command\('create_entry'/);
+assert.match(forum, /isAnonymous:\s*\$\('#quorum-entry-anonymous'\)\?\.checked === true/);
+assert.match(forum, /iconButton\([\s\S]*?'comment'[\s\S]*?'share'[\s\S]*?'save'/);
+assert.doesNotMatch(forum, /lex-edit-counter[^\n]*commentLimit/);
 assert.match(forum, /'create_comment'/);
 assert.match(forum, /payload\.cursorAt = state\.cursor\.createdAt/);
 assert.match(forum, /payload\.cursorId = state\.cursor\.id/);
@@ -76,6 +89,9 @@ assert.match(forum, /state\.items = append \? state\.items\.concat/);
 assert.match(css, /@media \(max-width: 640px\)/);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(css, /outline: 3px solid/);
+assert.match(css, /quorum-icon-affirm[\s\S]*thumbs-up\.svg/);
+assert.match(css, /--home-navy:\s*var\(--qfs-navy-950/);
+assert.match(css, /lex-post-card:last-child[\s\S]*border-bottom:\s*0/);
 
 for (const route of [
   '/forum/feed',

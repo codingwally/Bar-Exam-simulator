@@ -50,6 +50,12 @@ assert.match(css, /grid-template-rows:\s*var\(--qfs-header-height\) var\(--qfs-r
 assert.match(css, /#site-header\.qfs-shell\s*\{[\s\S]*backdrop-filter:\s*none/,
   'The viewport drawer requires a header without a backdrop-filter containing block.');
 assert.match(css, /\.qfs-practice-rail\s*\{[\s\S]*grid-row:\s*2/);
+assert.match(css, /#site-header\.qfs-shell \.dd2-guest-badge,[\s\S]*#site-header\.qfs-shell #session-clock\s*\{[\s\S]*display:\s*none\s*!important/,
+  'The signed-in header must not show role/access or elapsed-time pills.');
+assert.match(css, /#site-header\.qfs-shell \.brand-name\s*\{[\s\S]*font-family:\s*var\(--serif-display,[\s\S]*letter-spacing:\s*2px[\s\S]*text-transform:\s*uppercase/,
+  'The Due Diligence wordmark must use the established Cinzel display treatment.');
+assert.match(css, /#site-header\.qfs-shell \.brand:focus-visible\s*\{[\s\S]*outline:\s*0/,
+  'The unwanted gold wordmark outline must remain removed.');
 assert.match(css, /\.quorum-entry\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1\.12fr\) minmax\(440px, \.88fr\)/);
 assert.match(css, /\.quorum-signin-intro-main\s*\{[\s\S]*object-fit:\s*contain/);
 assert.match(css, /\.quorum-signin-intro-backdrop\s*\{[\s\S]*object-fit:\s*cover[\s\S]*filter:\s*blur/);
@@ -65,8 +71,8 @@ assert.match(shell, /'#quorum':\s*'quorum'[\s\S]*'#verdict':\s*'verdict'/);
 assert.match(shell, /addEventListener\('hashchange',[\s\S]*synchronizePracticeRail/);
 assert.match(landing, /const stillHoldMs = 30 \* 60 \* 1000/);
 assert.match(landing, /Promise\.allSettled\(playback\)/);
-assert.match(serviceWorker, /duediligence-shell-20260821-approved-renovation-2/);
-assert.match(serviceWorker, /quorum-first-shell\.css\?v=approved-renovation-20260821-1/);
+assert.match(serviceWorker, /duediligence-shell-20260821-approved-renovation-3/);
+assert.match(serviceWorker, /quorum-first-shell\.css\?v=approved-renovation-20260821-2/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=approved-renovation-20260821-2/);
 
 console.log('Approved renovation shell contract checks passed.');

@@ -37,24 +37,6 @@
     signInIntroInitialized: false,
   };
 
-  const signInIntroSeenKey = 'duediligence.signin.intro.seen.v1';
-
-  function signInIntroWasSeen() {
-    try {
-      return global.localStorage?.getItem(signInIntroSeenKey) === '1';
-    } catch {
-      return false;
-    }
-  }
-
-  function rememberSignInIntro() {
-    try {
-      global.localStorage?.setItem(signInIntroSeenKey, '1');
-    } catch {
-      // Storage can be unavailable in hardened/private browsing. The still image remains usable.
-    }
-  }
-
   function initializeSignInIntro() {
     if (state.signInIntroInitialized || currentSession()?.access_token) return;
     state.signInIntroInitialized = true;
@@ -74,19 +56,18 @@
       watchdog = 0;
       replayTimer = 0;
     };
-    const showStill = ({ remember = true, replay = true } = {}) => {
+    const showStill = ({ replay = true } = {}) => {
       if (finished) return;
       finished = true;
       stopTimers();
       frame.classList.remove('is-playing', 'is-finishing');
       frame.classList.add('is-still');
       media.forEach((element) => element.pause());
-      if (remember) rememberSignInIntro();
       if (replay && !state.reducedMotion) {
         replayTimer = global.setTimeout(() => {
           if (document.hidden) {
             finished = false;
-            showStill({ remember: false });
+            showStill();
             return;
           }
           finished = false;
@@ -95,7 +76,7 @@
           for (const element of media) element.currentTime = 0;
           const playback = media.map((element) => element.play());
           Promise.allSettled(playback).then((results) => {
-            if (results.some((result) => result.status === 'rejected')) showStill({ remember: false, replay: false });
+            if (results.some((result) => result.status === 'rejected')) showStill({ replay: false });
           });
           watchdog = global.setTimeout(() => showStill(), 45000);
         }, stillHoldMs);
@@ -107,8 +88,8 @@
       frame.classList.add('is-finishing');
     };
 
-    if (state.reducedMotion || signInIntroWasSeen()) {
-      showStill({ remember: state.reducedMotion, replay: false });
+    if (state.reducedMotion) {
+      showStill({ replay: false });
       return;
     }
 

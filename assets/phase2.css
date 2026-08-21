@@ -451,6 +451,25 @@
   box-shadow: -24px 0 72px rgba(2, 12, 35, .24);
 }
 
+.dd2-native-view[data-native-view="pricing"] {
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 4vw, 48px);
+  background: rgba(3, 14, 31, .72);
+  backdrop-filter: blur(10px);
+}
+
+.dd2-native-view[data-native-view="pricing"] .dd2-native-card {
+  width: min(900px, 100%);
+  height: auto;
+  max-height: calc(100dvh - clamp(32px, 8vw, 96px));
+  padding: clamp(28px, 4vw, 48px);
+  border: 1px solid rgba(213, 181, 111, .72);
+  border-top: 3px solid var(--dd2-gold);
+  border-radius: 14px;
+  box-shadow: 0 28px 90px rgba(2, 12, 35, .38);
+}
+
 .dd2-native-card .dd2-view-kicker {
   color: #87651f;
 }
@@ -948,6 +967,17 @@ body.dd2-locked {
     padding: 30px 20px 54px;
     border-left: 0;
     border-top: 3px solid var(--dd2-gold);
+  }
+  .dd2-native-view[data-native-view="pricing"] {
+    padding: 10px;
+  }
+  .dd2-native-view[data-native-view="pricing"] .dd2-native-card {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    padding: 26px 20px 34px;
+    border: 1px solid rgba(213, 181, 111, .72);
+    border-top: 3px solid var(--dd2-gold);
+    border-radius: 10px;
   }
   .dd2-onboarding-grid { grid-template-columns: 1fr; }
   .dd2-onboarding-grid .dd2-wide { grid-column: auto; }

@@ -1057,7 +1057,15 @@
   }
 
   async function renderPayments() {
-    const data = await loadPhase4Operational('payments');
+    const [data, proofAudit] = await Promise.all([
+      loadPhase4Operational('payments'),
+      loadOperational('security', true).then((security) => (
+        (security.items || [])
+          .filter((row) => row.action_type === 'sensitive_data_viewed'
+            && row.target_resource_type === 'payment_proof')
+          .slice(0, 20)
+      )).catch(() => []),
+    ]);
     return `
       ${heading('Payments', 'Review ₱149 Early Access requests. Private proofs open for five minutes, and every view is recorded in the activity log.')}
       <div class="notice danger"><strong>Money and access warning.</strong> Approval verifies the current Early Access term. The next manual renewal date is October 1, 2026 at ₱199. Confirm the student, amount, channel, reference, date, and private proof before proceeding.</div>
@@ -1084,12 +1092,36 @@
                   status: row.status,
                   planCode: row.plan_code,
                 }).value}
-                ${actionButton('View private proof', 'view_payment_proof', row.id, {}).value}
+                ${actionButton('View private proof', 'view_payment_proof', row.id, {
+                  studentName: row.display_name || 'Not provided',
+                  studentEmail: row.email || 'Not available',
+                  amountPhp: row.trusted_amount_php,
+                  paymentMethod: row.payment_method || 'Not provided',
+                  paymentDate: row.payment_date || 'Not provided',
+                  transactionReference: row.transaction_reference || 'Not provided',
+                  proofOriginalName: row.proof_original_name || 'Not available',
+                  proofMimeType: row.proof_mime_type || 'Not available',
+                  proofSizeBytes: row.proof_size_bytes || null,
+                  submittedAt: row.submitted_at || null,
+                }).value}
               </div>`,
             },
           ];
         }),
-      )}`;
+      )}
+      <section class="panel">
+        <h3>Private proof access log</h3>
+        <p class="panel-note">Every private-proof view is recorded here and in Security &amp; Activity Log. Payment history also keeps the same reason.</p>
+        ${table(
+          ['Viewed', 'Administrator', 'Payment request', 'Reason'],
+          proofAudit.map((row) => [
+            dateTime(row.occurred_at),
+            row.actor_user_id ? maskOperationalIdentifier(row.actor_user_id, 'Administrator') : 'System',
+            row.target_resource_id || 'Not available',
+            row.reason || 'Not provided',
+          ]),
+        )}
+      </section>`;
   }
 
   async function renderRefunds() {
@@ -2733,7 +2765,7 @@
   async function renderSection(section) {
     if (!sectionAllowed(section)) {
       toast('Your administrator role does not have access to that section.');
-      return;
+      return false;
     }
     state.section = section;
     $('#section-title').textContent = titles[section];
@@ -2749,7 +2781,11 @@
     $('#dashboard-view').setAttribute('aria-busy', 'true');
     $('#dashboard-view').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
     try {
-      const report = await loadReport();
+      const reportSections = new Set([
+        'executive', 'realtime', 'acquisition', 'learning', 'subjects',
+        'reliability', 'subscriptions', 'forum', 'answer_exports',
+      ]);
+      const report = reportSections.has(section) ? await loadReport() : {};
       let html;
       if (section === 'executive') html = renderExecutive(report);
       else if (section === 'realtime') html = await renderRealtime(report);
@@ -2774,9 +2810,11 @@
       bindDynamic();
       if (section === 'examinations') bindExaminationAdmin();
       if (section === 'examination_room') bindExaminationRoomAdmin();
+      return true;
     } catch (error) {
       $('#dashboard-view').innerHTML = heading('Admin dashboard unavailable', error.message || 'Admin data could not be loaded.')
         + empty('Nothing was changed. Refresh after the connection or account permission is restored.');
+      return false;
     } finally {
       $('#dashboard-view').removeAttribute('aria-busy');
     }
@@ -3114,14 +3152,92 @@
     dialog.close('cancel');
     state.action = null;
     state.actionInFlight = false;
+    dialog.classList.remove('payment-proof-open');
+    const reasonField = $('#action-reason')?.closest('label');
+    if (reasonField) reasonField.hidden = false;
+    const warning = $('#action-warning');
+    if (warning) warning.hidden = false;
     const confirm = $('#action-confirm');
+    if (confirm) confirm.hidden = false;
+    const cancel = $('#action-dialog-cancel');
+    if (cancel) cancel.textContent = 'Back';
     if (confirm) confirm.disabled = false;
     if (consumeHistory && historyArmed) history.back();
+  }
+
+  function authorizedPrivateProofUrl(value) {
+    const signed = new URL(String(value || ''));
+    const supabase = new URL(config.supabase.url);
+    if (signed.protocol !== 'https:'
+        || signed.origin !== supabase.origin
+        || !signed.pathname.startsWith('/storage/v1/object/sign/payment-proofs/')) {
+      throw new Error('The secure proof link was invalid. Nothing was opened.');
+    }
+    return signed.href;
+  }
+
+  function privateProofDetail(label, value) {
+    return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || 'Not available')}</dd></div>`;
+  }
+
+  function renderPrivatePaymentProof(response, reason) {
+    const proof = response?.proof || {};
+    const audit = response?.audit || {};
+    const payload = state.action?.payload || {};
+    const secureUrl = authorizedPrivateProofUrl(proof.url);
+    const mimeType = String(proof.mimeType || payload.proofMimeType || '').toLowerCase();
+    const size = Number(proof.sizeBytes ?? payload.proofSizeBytes);
+    const sizeLabel = Number.isFinite(size) && size > 0
+      ? `${Math.ceil(size / 1024).toLocaleString('en-PH')} KiB`
+      : 'Not available';
+    const preview = mimeType.startsWith('image/')
+      ? `<img class="private-proof-image" src="${escapeHtml(secureUrl)}" alt="Private payment proof submitted by ${escapeHtml(payload.studentName || 'the student')}" referrerpolicy="no-referrer">`
+      : mimeType === 'application/pdf'
+        ? `<iframe class="private-proof-pdf" src="${escapeHtml(secureUrl)}" title="Private payment proof PDF" referrerpolicy="no-referrer"></iframe>`
+        : '<p class="panel-note">This file type cannot be previewed safely in the dashboard.</p>';
+    $('#action-title').textContent = 'Private payment proof';
+    $('#action-fields').innerHTML = `
+      <section class="private-proof-layout" aria-label="Private payment proof review">
+        <div class="private-proof-preview">${preview}</div>
+        <div class="private-proof-summary">
+          <p class="eyebrow">Payment details</p>
+          <dl class="private-proof-details">
+            ${privateProofDetail('Student', payload.studentName)}
+            ${privateProofDetail('Email', payload.studentEmail)}
+            ${privateProofDetail('Amount', Number.isFinite(Number(payload.amountPhp)) ? `₱${number(payload.amountPhp, 2)}` : 'Not available')}
+            ${privateProofDetail('Method', humanizeAuditValue(payload.paymentMethod))}
+            ${privateProofDetail('Payment date', payload.paymentDate)}
+            ${privateProofDetail('Reference', payload.transactionReference)}
+            ${privateProofDetail('Submitted', dateTime(payload.submittedAt))}
+            ${privateProofDetail('File', payload.proofOriginalName)}
+            ${privateProofDetail('Type and size', [mimeType || payload.proofMimeType, sizeLabel].filter(Boolean).join(' · '))}
+          </dl>
+          <div class="private-proof-audit" role="status">
+            <strong>Private access recorded</strong>
+            <span>${escapeHtml(dateTime(audit.recordedAt))}</span>
+            <p><b>Reason:</b> ${escapeHtml(audit.reason || reason)}</p>
+            <small>This reason is stored in Payment history and Admin activity. The authorized proof link expires in five minutes.</small>
+          </div>
+          <a class="secondary-button private-proof-open" href="${escapeHtml(secureUrl)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open full-size proof</a>
+        </div>
+      </section>`;
+    $('#action-dialog').classList.add('payment-proof-open');
+    const reasonField = $('#action-reason')?.closest('label');
+    if (reasonField) reasonField.hidden = true;
+    $('#action-warning').textContent = 'Review the image and payment details together before making a separate approval or rejection decision.';
+    $('#action-confirm').hidden = true;
+    $('#action-dialog-cancel').textContent = 'Done';
   }
 
   function openAction(action, targetId, payload) {
     state.action = { action, targetId: targetId || null, payload: { ...(payload || {}) } };
     state.actionInFlight = false;
+    $('#action-dialog').classList.remove('payment-proof-open');
+    const reasonField = $('#action-reason')?.closest('label');
+    if (reasonField) reasonField.hidden = false;
+    $('#action-warning').hidden = false;
+    $('#action-confirm').hidden = false;
+    $('#action-dialog-cancel').textContent = 'Back';
     let fields = '';
     let title = 'Confirm action';
     let warning = 'This change requires a reason and will be recorded in Admin activity.';
@@ -3150,8 +3266,9 @@
       </select></label>`;
       warning = 'Approval immediately verifies the current Early Access term. The next renewal is a separate manual ₱199 payment on October 1, 2026; no automatic charge is made. Verify the ₱149 amount, channel, reference, date, and private proof before confirming.';
     } else if (action === 'view_payment_proof') {
-      title = 'Open private payment proof';
-      warning = 'Opening this private proof is recorded. The secure link lasts five minutes. Do not download or share it unless necessary.';
+      title = 'View private payment proof';
+      fields = `<div class="notice"><strong>Review context</strong><br>${escapeHtml(payload.studentName || 'Not provided')} · ${escapeHtml(payload.transactionReference || 'No reference')} · ${Number.isFinite(Number(payload.amountPhp)) ? `₱${number(payload.amountPhp, 2)}` : 'Amount unavailable'}</div>`;
+      warning = 'Enter why access is necessary. The reason is written to Payment history and Admin activity before the private image is displayed.';
     } else if (action === 'refund_review') {
       title = 'Review refund request';
       fields = `<label class="field">Decision<select id="action-status">
@@ -3428,15 +3545,6 @@
     state.action.requestKey ||= uuidKey();
     state.actionInFlight = true;
     $('#action-confirm').disabled = true;
-    let proofWindow = null;
-    if (action === 'view_payment_proof') {
-      proofWindow = window.open('about:blank', '_blank');
-      if (proofWindow) {
-        proofWindow.opener = null;
-        proofWindow.document.title = 'Opening private payment proof…';
-        proofWindow.document.body.textContent = 'Opening the authorized payment proof…';
-      }
-    }
     try {
       if (action === 'reveal_email') {
         const response = await api('/admin/reveal-email', {
@@ -3506,12 +3614,9 @@
           paymentRequestId: state.action.targetId,
           reason,
         });
-        if (proofWindow && !proofWindow.closed) {
-          proofWindow.location.replace(response.proof.url);
-        } else {
-          window.location.assign(response.proof.url);
-        }
-        toast('Private proof opened in a five-minute authorized view.');
+        renderPrivatePaymentProof(response, reason);
+        toast('Private proof loaded. The access reason was recorded.');
+        return;
       } else if (action.startsWith('quorum_')) {
         const quorumAction = action.slice('quorum_'.length);
         const actionPayload = {
@@ -3581,7 +3686,6 @@
       }
       await renderSection(state.section);
     } catch (error) {
-      if (proofWindow && !proofWindow.closed) proofWindow.close();
       toast(error.message || 'Action failed without changing production data.');
     } finally {
       state.actionInFlight = false;
@@ -3996,8 +4100,13 @@
     $('#admin-gate').hidden = true;
     $('#admin-shell').hidden = false;
     applyNavigationAuthorization();
-    await loadReport(true);
-    await renderSection('executive');
+    const overviewReady = await renderSection('executive');
+    if (!overviewReady && sectionAllowed('payments')) {
+      const paymentsReady = await renderSection('payments');
+      if (paymentsReady) {
+        toast('Overview is temporarily unavailable. Payments remains available.');
+      }
+    }
   }
 
   $('#admin-nav')?.addEventListener('click', (event) => {

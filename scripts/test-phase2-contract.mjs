@@ -138,8 +138,12 @@ assert.ok(index.includes('data-dd2-view="privacy"'));
 assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
-assert.ok(index.includes('assets/phase2-experience.js?v=policy-media-gate-20260821-1'));
-assert.ok(index.includes('assets/phase2.css?release=policy-media-gate-20260821-1'));
+assert.ok(index.includes('assets/phase2-experience.js?v=payment-admin-hotfix-20260821-1'));
+assert.ok(index.includes('assets/phase2.css?release=payment-admin-hotfix-20260821-1'));
+assert.match(experience, /nativeOverlay\.dataset\.nativeView = view/,
+  'Native views must expose their active view so pricing can use the approved centered presentation.');
+assert.match(experienceCss, /data-native-view="pricing"[\s\S]*align-items:\s*center;[\s\S]*justify-content:\s*center;/,
+  'Plans and Pricing must render as a centered modal rather than the generic side sheet.');
 
 for (const table of [
   'guest_grading_usage',

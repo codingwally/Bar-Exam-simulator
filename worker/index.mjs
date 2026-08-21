@@ -172,7 +172,7 @@ import {
 } from './outbound-email-policy.mjs';
 import embeddedWebsiteQuestionBank from '../content/question-bank/website-upload.json' with { type: 'json' };
 
-export { outboundEmailMode };
+export { absoluteSupabaseStorageUrl, outboundEmailMode };
 
 const WINDOW_MS = 10 * 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 12;
@@ -1376,7 +1376,7 @@ async function signedPrivateProofUrl(env, objectPath) {
       503,
     );
   }
-  return new URL(result.signedURL, baseUrl).href;
+  return absoluteSupabaseStorageUrl(baseUrl, result.signedURL);
 }
 
 async function sha256Hex(bytes) {
@@ -5579,6 +5579,11 @@ async function handleAdminPaymentProof(request, env, origin, allowedOrigin) {
       mimeType: context.mimeType,
       sizeBytes: context.sizeBytes,
       expiresInSeconds: 300,
+    },
+    audit: {
+      action: 'proof_viewed',
+      reason,
+      recordedAt: new Date().toISOString(),
     },
   }, 200, origin, allowedOrigin);
 }

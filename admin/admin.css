@@ -156,6 +156,21 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
 #action-fields { display: grid; gap: .8rem; margin-bottom: .8rem; }
 #action-reason { min-height: 90px; resize: vertical; }
 .action-warning { color: var(--warning); background: #fff9ec; padding: .7rem; font-size: .72rem; line-height: 1.5; }
+.payment-proof-open { width: min(1120px, calc(100% - 2rem)); }
+.private-proof-layout { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(280px, .82fr); gap: 1rem; align-items: start; }
+.private-proof-preview { min-height: 420px; display: grid; place-items: center; overflow: auto; border: 1px solid var(--line); background: #eef2f6; }
+.private-proof-image { display: block; width: 100%; max-height: 68vh; object-fit: contain; background: #fff; }
+.private-proof-pdf { width: 100%; min-height: 68vh; border: 0; background: #fff; }
+.private-proof-summary { min-width: 0; }
+.private-proof-details { display: grid; gap: 0; margin: 0; border-top: 1px solid var(--line); }
+.private-proof-details div { display: grid; grid-template-columns: minmax(92px, .72fr) minmax(0, 1.28fr); gap: .75rem; padding: .55rem 0; border-bottom: 1px solid var(--line); }
+.private-proof-details dt { color: var(--muted); font-size: .62rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.private-proof-details dd { margin: 0; color: var(--navy); font-size: .74rem; line-height: 1.45; overflow-wrap: anywhere; }
+.private-proof-audit { margin-top: 1rem; padding: .8rem; border-left: 3px solid var(--gold); background: #fff9ec; color: var(--navy); }
+.private-proof-audit strong, .private-proof-audit span { display: block; }
+.private-proof-audit span, .private-proof-audit small { color: var(--muted); font-size: .68rem; }
+.private-proof-audit p { margin: .65rem 0; font-size: .74rem; line-height: 1.5; overflow-wrap: anywhere; }
+.private-proof-open.secondary-button { display: inline-flex; width: 100%; margin-top: .8rem; align-items: center; justify-content: center; text-decoration: none; }
 .action-context { display: grid; grid-template-columns: repeat(3, 1fr); gap: .55rem; margin: 0 0 1rem; }
 .action-context[hidden], .action-confirmation[hidden] { display: none; }
 .action-context div { min-width: 0; border: 1px solid var(--line); background: #f8fafc; padding: .65rem; }
@@ -443,6 +458,10 @@ dialog h2 { margin: 0 0 .8rem; color: var(--navy); }
   .definition-list dd { padding-top: 0; }
   dialog { width: calc(100% - 1rem); max-height: calc(100dvh - 1rem); overflow: auto; }
   .action-context { grid-template-columns: 1fr; }
+  .private-proof-layout { grid-template-columns: 1fr; }
+  .private-proof-preview { min-height: 260px; }
+  .private-proof-image { max-height: 52vh; }
+  .private-proof-pdf { min-height: 52vh; }
   .plan-option { grid-template-columns: auto 1fr; }
   .plan-option .plan-price { grid-column: 2; }
   .dialog-actions { align-items: stretch; flex-direction: column-reverse; }

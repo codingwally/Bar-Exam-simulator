@@ -75,9 +75,12 @@ assert.match(landingJs, /if \(!gateEnabled\)[\s\S]*else if \(authenticated\) awa
 assert.match(landingJs, /popstate[\s\S]*openQuorumHome\(\)[\s\S]*hashchange[\s\S]*openQuorumHome\(\)/,
   'Back and hash restoration must retain the Quorum-first home.');
 assert.match(landingJs, /global\.DueDiligencePublicHome = Object\.freeze/);
-assert.match(landingJs, /duediligence\.signin\.intro\.seen\.v1/);
-assert.match(landingJs, /function initializeSignInIntro\(\)[\s\S]*state\.reducedMotion[\s\S]*signInIntroWasSeen\(\)/,
-  'The intro must play only once per device and respect reduced-motion preferences.');
+assert.doesNotMatch(landingJs, /duediligence\.signin\.intro\.seen\.v1|signInIntroWasSeen|rememberSignInIntro/,
+  'The approved sign-in video must not be suppressed by a previous-view browser flag.');
+assert.match(landingJs, /const stillHoldMs = 30 \* 60 \* 1000/,
+  'The completed video must hold the approved Prepare with purpose still for thirty minutes.');
+assert.match(landingJs, /function initializeSignInIntro\(\)[\s\S]*state\.reducedMotion[\s\S]*media\.map\(\(element\) => element\.play\(\)\)/,
+  'The intro must play on each signed-out page initialization while respecting reduced-motion preferences.');
 assert.match(landingJs, /video\.addEventListener\('ended',[\s\S]*showStill/,
   'The intro must always resolve to the existing crest when playback ends.');
 assert.match(landingJs, /Promise\.allSettled\(playback\)[\s\S]*showStill/,

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const config = readFileSync(new URL('../assets/phase2-config.js', import.meta.url), 'utf8');
 const frontend = readFileSync(new URL('../assets/maintenance-gate.js', import.meta.url), 'utf8');
+const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const publicLanding = readFileSync(new URL('../assets/private-beta-landing.js', import.meta.url), 'utf8');
 const worker = readFileSync(new URL('../worker/maintenance-entry.mjs', import.meta.url), 'utf8');
 const wrangler = readFileSync(new URL('../worker/wrangler.toml', import.meta.url), 'utf8');
@@ -31,6 +32,8 @@ assert.match(frontend, /duediligence:maintenance-unlocked/);
 assert.match(frontend, /maintenanceRequest\(maintenance\.statusPath, \{\}, payload\.token\)/);
 assert.match(frontend, /saveToken\(payload\.token\);[\s\S]*unlockPage\(\);/);
 assert.doesNotMatch(frontend, /\b0802\b/, 'The maintenance password must not be embedded in browser JavaScript.');
+assert.match(index, /const maintenanceGate = document\.documentElement\.dataset\.ddMaintenance === 'locked'/);
+assert.match(index, /const topOverlay = maintenanceGate[\s\S]*\|\| admissionDialog/);
 assert.match(publicLanding, /document\.documentElement\.dataset\.ddMaintenance !== 'open'/);
 assert.match(publicLanding, /global\.addEventListener\('duediligence:maintenance-unlocked', initialize, \{ once: true \}\)/);
 assert.match(pagesBuilder, /assets\/maintenance-gate\.js/);

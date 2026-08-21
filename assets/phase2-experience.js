@@ -457,60 +457,89 @@
         aria-labelledby="dd2-onboarding-title" aria-hidden="true">
         <section class="dd2-onboarding-card" tabindex="-1">
           <button type="button" class="dd2-close dd2-card-close" id="dd2-onboarding-close" aria-label="Close setup and return to the homepage">×</button>
-          <div class="dd2-view-kicker">First-time setup</div>
-          <h2 id="dd2-onboarding-title">Make this chamber yours.</h2>
-          <p>Tell us where you are in your legal studies. This information personalizes your Docket and does not grant an administrative or teaching role.</p>
+          <header class="dd2-onboarding-intro">
+            <div class="dd2-view-kicker">Account setup</div>
+            <h2 id="dd2-onboarding-title">Set up your Due Diligence account.</h2>
+            <p>Add your name, school, and year. You can update these details later from your Profile.</p>
+          </header>
           <form class="dd2-form" id="dd2-onboarding-form">
-            <div class="dd2-onboarding-grid">
-              <label class="dd2-label dd2-wide">Display name
-                <input class="dd2-field" id="dd2-display-name" maxlength="120" autocomplete="name" required>
-              </label>
-              <label class="dd2-label dd2-wide">Law school
-                <input class="dd2-field" id="dd2-school" list="dd2-school-suggestions" maxlength="180"
-                  autocomplete="organization" placeholder="Type your law school" required>
-                <datalist id="dd2-school-suggestions">${schoolSuggestionsMarkup()}</datalist>
-                <span class="dd2-field-help">Suggestions are optional. You may type and save any school name.</span>
-              </label>
-              <label class="dd2-label dd2-wide">Year or category
-                <select class="dd2-field" id="dd2-year-level" required>
-                  <option value="">Select year or category</option>
-                  <option value="first_year">First Year</option>
-                  <option value="second_year">Second Year</option>
-                  <option value="third_year">Third Year</option>
-                  <option value="fourth_year">Fourth Year</option>
-                  <option value="fifth_year">Fifth Year</option>
-                  <option value="review">Review / Bar Candidate</option>
-                  <option value="professor">Professor</option>
-                </select>
-              </label>
-              <label class="dd2-label dd2-wide" id="dd2-professor-license-wrap" hidden>Professor license declaration
-                <input class="dd2-field" id="dd2-professor-license" maxlength="80" autocomplete="off" placeholder="IBP or professional license number">
-                <span class="dd2-field-help">A declaration is stored privately for verification. It does not grant Professor or administrator authority.</span>
-              </label>
+            <div class="dd2-onboarding-layout">
+              <section class="dd2-onboarding-section" aria-labelledby="dd2-profile-section-title">
+                <div class="dd2-section-heading">
+                  <span class="dd2-section-number" aria-hidden="true">1</span>
+                  <div>
+                    <h3 id="dd2-profile-section-title">Your profile</h3>
+                    <p>Use the details you want shown in Due Diligence.</p>
+                  </div>
+                </div>
+                <div class="dd2-onboarding-grid">
+                  <label class="dd2-label dd2-wide"><span class="dd2-label-text">Display name</span>
+                    <input class="dd2-field" id="dd2-display-name" maxlength="120" autocomplete="name" required>
+                  </label>
+                  <label class="dd2-label dd2-wide"><span class="dd2-label-text">Law school</span>
+                    <input class="dd2-field" id="dd2-school" list="dd2-school-suggestions" maxlength="180"
+                      autocomplete="organization" placeholder="Type your law school" required>
+                    <datalist id="dd2-school-suggestions">${schoolSuggestionsMarkup()}</datalist>
+                    <span class="dd2-field-help">Suggestions are optional. You may type and save any school name.</span>
+                  </label>
+                  <label class="dd2-label dd2-wide"><span class="dd2-label-text">Year or category</span>
+                    <select class="dd2-field" id="dd2-year-level" required>
+                      <option value="">Select year or category</option>
+                      <option value="first_year">First Year</option>
+                      <option value="second_year">Second Year</option>
+                      <option value="third_year">Third Year</option>
+                      <option value="fourth_year">Fourth Year</option>
+                      <option value="fifth_year">Fifth Year</option>
+                      <option value="review">Review / Bar Candidate</option>
+                      <option value="professor">Professor</option>
+                    </select>
+                  </label>
+                  <label class="dd2-label dd2-wide" id="dd2-professor-license-wrap" hidden><span class="dd2-label-text">Professor license declaration</span>
+                    <input class="dd2-field" id="dd2-professor-license" maxlength="80" autocomplete="off" placeholder="IBP or professional license number">
+                    <span class="dd2-field-help">Stored privately for verification. This does not grant Professor or administrator authority.</span>
+                  </label>
+                </div>
+                <label class="dd2-check dd2-consent-row dd2-consent-required">
+                  <input type="checkbox" id="dd2-legal-acceptance" required>
+                  <span>I agree to the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>
+                    and acknowledge the <button class="link-button" type="button" data-dd2-view="privacy">Privacy Policy</button>.</span>
+                </label>
+              </section>
+
+              <section class="dd2-onboarding-section dd2-access-section" aria-labelledby="dd2-access-section-title">
+                <div class="dd2-section-heading">
+                  <span class="dd2-section-number" aria-hidden="true">2</span>
+                  <div>
+                    <h3 id="dd2-access-section-title">Practice access</h3>
+                    <p>Your starting allowance is ready.</p>
+                  </div>
+                </div>
+                <aside class="dd2-token-disclosure" aria-labelledby="dd2-token-disclosure-title">
+                  <div class="dd2-token-counter" aria-hidden="true"><strong>5</strong><span>tokens included</span></div>
+                  <div>
+                    <h3 id="dd2-token-disclosure-title">Five practice tokens included</h3>
+                    <p>One token is used only after grading succeeds. Failed grading and duplicate retries do not use a token. This one-time allowance does not reset.</p>
+                  </div>
+                </aside>
+                <div class="dd2-consent-stack">
+                  <label class="dd2-check dd2-consent-row dd2-token-acknowledgement">
+                    <input type="checkbox" id="dd2-token-acknowledgement" required>
+                    <span>I understand these five practice tokens are a one-time allowance and do not reset.</span>
+                  </label>
+                  <label class="dd2-check dd2-consent-row dd2-consent-optional">
+                    <input type="checkbox" id="dd2-ai-improvement-consent">
+                    <span><strong>Optional</strong> — Allow de-identified answer content to improve internal rubrics and quality. You can withdraw this later without losing access.</span>
+                  </label>
+                </div>
+              </section>
             </div>
-            <label class="dd2-check">
-              <input type="checkbox" id="dd2-legal-acceptance" required>
-              <span>I accept the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>
-                and acknowledge the <button class="link-button" type="button" data-dd2-view="privacy">Privacy Policy</button>.</span>
-            </label>
-            <aside class="dd2-token-disclosure" aria-labelledby="dd2-token-disclosure-title">
-              <div class="dd2-token-counter" aria-hidden="true"><strong>5</strong><span>practice tokens</span></div>
-              <div>
-                <h3 id="dd2-token-disclosure-title">Your five introductory practice tokens</h3>
-                <p>These five tokens are granted once to this account. One token is used only after a successful graded submission. They do not reset by date, browser, device, sign-out, or account update. Failed grading and duplicate retries do not use a token.</p>
+            <footer class="dd2-onboarding-actions">
+              <div class="dd2-status" id="dd2-onboarding-status" role="status" aria-live="polite"></div>
+              <div class="dd2-onboarding-buttons">
+                <button type="button" class="dd2-button dd2-button-secondary dd2-dialog-back" id="dd2-onboarding-back">Back</button>
+                <button class="dd2-button dd2-button-primary" id="dd2-onboarding-submit" type="submit">Save and continue</button>
               </div>
-            </aside>
-            <label class="dd2-check dd2-token-acknowledgement">
-              <input type="checkbox" id="dd2-token-acknowledgement" required>
-              <span>I understand that this account receives one lifetime allowance of five practice tokens and that used tokens do not reset.</span>
-            </label>
-            <label class="dd2-check">
-              <input type="checkbox" id="dd2-ai-improvement-consent">
-              <span>Optionally allow de-identified answer content to improve internal rubrics and quality. I can withdraw this without losing simulator access.</span>
-            </label>
-            <div class="dd2-status" id="dd2-onboarding-status" role="status" aria-live="polite"></div>
-            <button class="dd2-button dd2-button-primary" id="dd2-onboarding-submit" type="submit">Enter Due Diligence</button>
-            <div class="dd2-dialog-footer"><button type="button" class="dd2-button dd2-button-secondary dd2-dialog-back" id="dd2-onboarding-back">Back</button></div>
+            </footer>
           </form>
         </section>
       </div>
@@ -1263,8 +1292,8 @@
     }
     const title = document.getElementById('dd2-onboarding-title');
     if (title) title.textContent = state.onboardingRequired
-      ? 'Confirm your profile and token access.'
-      : 'Make this chamber yours.';
+      ? 'Set up your Due Diligence account.'
+      : 'Update your profile.';
     const displayName = document.getElementById('dd2-display-name');
     const school = document.getElementById('dd2-school');
     const year = document.getElementById('dd2-year-level');

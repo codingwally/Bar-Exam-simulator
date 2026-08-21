@@ -42,6 +42,65 @@ final result: passed
 
 ---
 
+# Account Setup Modernization Design QA — 2026-08-21
+
+## Scope and visual evidence
+
+- Owner reference: `docs/qa/onboarding-modernization-20260821/owner-reference-1141x856.png`.
+- Source SHA-256: `25A269DFC29246F8C72122F58B0C501CFF3CD1F516D622AA35B13EB7CEB05C1F`.
+- Source-matched implementation: `docs/qa/onboarding-modernization-20260821/desktop-source-matched-1141x856.png`.
+- Short-laptop implementation: `docs/qa/onboarding-modernization-20260821/desktop-compact-1142x636.png`.
+- Mobile implementation: `docs/qa/onboarding-modernization-20260821/mobile-375x812-full.png`.
+- Side-by-side comparison: `docs/qa/onboarding-modernization-20260821/comparison-source-vs-redesign.png`.
+- Scope is limited to the existing account setup dialog. Account creation, profile fields, legal acceptance,
+  token acknowledgement, optional consent, role safety, authentication, and token rules are unchanged.
+
+## Visible corrections
+
+1. Replaced the narrow, vertically dense form with a balanced profile/access layout using the existing
+   navy, brass-gold, alabaster, Fraunces, and Inter system.
+2. Made all fields at least 52 pixels high with persistent labels, readable helper text, generous spacing,
+   clear hover/focus treatment, and native autocomplete behavior.
+3. Reframed the token terms as one concise, high-contrast access summary instead of a dense instruction block.
+4. Grouped required and optional acknowledgements into distinct modern consent rows without changing their
+   identifiers or validation requirements.
+5. Added a fixed action footer so `Save and continue` stays visible while the dialog body scrolls independently.
+6. Preserved every established HTML identifier and the existing upper-right close and lower action-control logic.
+
+## Responsive and interaction verification
+
+- Browser-tested at `1440×900`, `1366×768`, `1142×636`, `375×812`, and `320×760`.
+- Horizontal overflow measured `0px` at every tested width.
+- The primary action remained inside the viewport at every tested size and measured 50 pixels high.
+- The short-laptop layout scrolls only its content area; the title and action footer remain stationary.
+- Professor selection revealed the existing private license declaration; returning to Review hid it again.
+- Terms and Privacy opened their established native views; both close and Back returned correctly.
+- Required legal and token acknowledgements remained mandatory; the optional quality consent remained optional.
+- The existing focus-visible rule remains present for fields, buttons, and close controls.
+
+## Regression evidence
+
+- `node --check assets/phase2-experience.js` — passed.
+- `node scripts/test-phase2-contract.mjs` — passed.
+- `node scripts/test-onboarding-flow.mjs` — passed.
+- `node scripts/test-dialog-exit-controls.mjs` — passed.
+- `node scripts/test-private-beta-auth-regression.mjs` — passed.
+- `node scripts/test-private-beta-admission.mjs` — passed.
+- `node scripts/test-auth-session-persistence.mjs` — passed.
+- `node scripts/test-commercial-launch-migration.mjs` — 10/10 passed.
+- `node scripts/test-pages-artifact.mjs` — passed.
+- `git diff --check` — passed.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+
+final result: passed
+
+---
+
 # Bar Question Practice Workspace Cleanup — 2026-08-21
 
 ## Scope and source truth

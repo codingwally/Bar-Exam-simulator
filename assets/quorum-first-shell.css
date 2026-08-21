@@ -112,6 +112,16 @@ body.private-beta-public #private-beta-landing .pb-public-footer {
   align-items: center;
   justify-self: start;
   gap: 10px;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+
+#site-header.qfs-shell .brand:focus,
+#site-header.qfs-shell .brand:focus-visible {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
 }
 
 #site-header.qfs-shell .crest {
@@ -124,11 +134,12 @@ body.private-beta-public #private-beta-landing .pb-public-footer {
 #site-header.qfs-shell .brand-name {
   display: block;
   color: #fff;
-  font-family: "Fraunces", "Playfair Display", Georgia, serif;
+  font-family: var(--serif-display, "Cinzel", Georgia, serif);
   font-size: 18px;
   font-weight: 700;
-  line-height: 1.05;
-  letter-spacing: .055em;
+  line-height: 1;
+  letter-spacing: 2px;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -147,6 +158,11 @@ body.private-beta-public #private-beta-landing .pb-public-footer {
   align-items: center;
   justify-self: end;
   gap: 8px;
+}
+
+#site-header.qfs-shell .dd2-guest-badge,
+#site-header.qfs-shell #session-clock {
+  display: none !important;
 }
 
 #site-header.qfs-shell .quorum-room-shortcut {

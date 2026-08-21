@@ -9,6 +9,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 const index = read('index.html');
 const experience = read('assets/phase2-experience.js');
+const experienceCss = read('assets/phase2.css');
 const configSource = read('assets/phase2-config.js');
 const migration = read('supabase/migrations/20260728_003_phase2_guest_access_support.sql');
 const legalPolicyMigration = read('supabase/migrations/20260818062500_current_legal_policy_contract.sql');
@@ -46,12 +47,49 @@ for (const expected of [
   "publicWorkerRequest('/beta/access/policy')",
   'await refreshLegalPolicy();',
   "document.getElementById('dd2-entry-consent-submit')?.addEventListener('click', submitEntryConsent);",
+  'await waitForMaintenanceAccess();',
+  'data-dd2-entry-video',
+  'data-src="assets/brand/signin-intro.mp4"',
+  'playEntryBrandMedia(entryMode);',
 ]) {
   assert.ok(experience.includes(expected), `Phase 2 experience must include: ${expected}`);
 }
 
 assert.match(experience, /id="dd2-guest-continue" hidden/);
 assert.match(experience, /config\.guest\?\.enabled !== true[\s\S]*signInWithGoogle\(\)/);
+assert.doesNotMatch(
+  experience,
+  /Current policy verification failed\. No acceptance was recorded\./,
+  'The policy gate must not expose an internal verification failure to the user.',
+);
+assert.match(
+  experience,
+  /function waitForMaintenanceAccess\(\)[\s\S]*duediligence:maintenance-unlocked[\s\S]*await waitForMaintenanceAccess\(\);[\s\S]*await initializeAuth\(\);/,
+  'Authentication and policy loading must wait until maintenance access is verified.',
+);
+assert.match(
+  experience,
+  /catch \{[\s\S]*configuredLegalPolicy\(\)[\s\S]*commercialLegal = Object\.freeze\(configuredPolicy\)/,
+  'A matching release-config policy must keep the legal gate recoverable during a transient policy-read failure.',
+);
+assert.match(
+  experience,
+  /data-dd2-entry-video[\s\S]*autoplay muted playsinline[\s\S]*controlslist="nodownload nofullscreen noplaybackrate"/,
+  'The legal/sign-in panel must use the approved silent, control-free intro video.',
+);
+assert.match(
+  experience,
+  /video\.addEventListener\('ended', finishEntryBrandMedia\)[\s\S]*frame\.classList\.add\('is-still'\)/,
+  'The legal/sign-in video must resolve to the existing static brand image.',
+);
+assert.doesNotMatch(experience, /<video[^>]*\scontrols(?:\s|=|>)/,
+  'The decorative legal/sign-in video must not expose playback controls.');
+assert.match(experienceCss, /\.dd2-entry-brandmark-video[\s\S]*mask-image:[\s\S]*transition: opacity 360ms ease/,
+  'The approved intro must blend into the existing navy composition and cross-fade smoothly.');
+assert.match(experienceCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.dd2-entry-brandmark-video \{ transition: none; \}/,
+  'Reduced-motion users must receive the static, non-animated presentation.');
+assert.match(experienceCss, /\.dd2-entry-close \{[\s\S]*top: 18px;[\s\S]*right: 18px;/,
+  'The entry dialog close control must remain anchored in the upper-right corner.');
 
 assert.doesNotMatch(
   experience,
@@ -97,7 +135,8 @@ assert.ok(index.includes('data-dd2-view="privacy"'));
 assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
-assert.ok(index.includes('assets/phase2-experience.js?v=commercial-launch-20260821-6'));
+assert.ok(index.includes('assets/phase2-experience.js?v=policy-media-gate-20260821-1'));
+assert.ok(index.includes('assets/phase2.css?release=policy-media-gate-20260821-1'));
 
 for (const table of [
   'guest_grading_usage',

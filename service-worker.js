@@ -1,8 +1,8 @@
-const CACHE_VERSION = 'duediligence-shell-20260821-home-menu-cleanup-1';
+const CACHE_VERSION = 'duediligence-shell-20260821-policy-media-gate-1';
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',
-  '/assets/phase2.css?release=commercial-school-visual-safety-20260818-1',
+  '/assets/phase2.css?release=policy-media-gate-20260821-1',
   '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
   '/assets/quorum-first-shell.css?v=home-menu-cleanup-20260821-1',

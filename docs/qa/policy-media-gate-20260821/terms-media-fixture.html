@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terms media QA fixture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../../assets/phase2.css">
+  <style>
+    :root {
+      --paper: #faf9f6;
+      --ink: #002147;
+      --ink-soft: #475569;
+      --gold: #c5a059;
+      --dd2-navy: #002147;
+      --dd2-gold: #c5a059;
+      --dd2-gold-bright: #d4af37;
+      --dd2-charcoal: #0f172a;
+      --dd2-muted: #64748b;
+      --dd2-shadow: 0 28px 80px rgba(0, 0, 0, .34);
+      --serif: Fraunces, Georgia, serif;
+      --sans: Inter, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--dd2-charcoal);
+      font-family: var(--sans);
+      background: linear-gradient(180deg, #0a1930 0 64px, #384354 64px 100%);
+    }
+    .fixture-header {
+      height: 64px;
+      display: flex;
+      align-items: center;
+      padding: 0 28px;
+      color: #fff;
+      font: 700 19px/1 var(--serif);
+      letter-spacing: .08em;
+    }
+    .dd2-overlay { display: flex; }
+    .dd2-status { min-height: 0; }
+  </style>
+</head>
+<body>
+  <header class="fixture-header">DUE DILIGENCE</header>
+  <div class="dd2-overlay is-open" role="dialog" aria-modal="true" aria-labelledby="fixture-title">
+    <section class="dd2-entry" tabindex="-1">
+      <div class="dd2-entry-story">
+        <div class="dd2-entry-brandmark is-still" data-dd2-entry-media aria-hidden="true">
+          <img src="../../../assets/brand/icon-512.png" width="512" height="512" alt="">
+          <video class="dd2-entry-brandmark-video" data-dd2-entry-video
+            src="../../../assets/brand/signin-intro.mp4" autoplay muted playsinline preload="auto"
+            tabindex="-1" aria-hidden="true" disablepictureinpicture
+            controlslist="nodownload nofullscreen noplaybackrate"></video>
+        </div>
+        <div class="dd2-entry-kicker">Philippine Bar Essay Preparation</div>
+        <h2>Prepare with conviction.</h2>
+        <p>Serious essay practice, disciplined ALAC structure, and source-based feedback in a chamber built for future lawyers.</p>
+      </div>
+      <div class="dd2-entry-panel">
+        <button type="button" class="dd2-close dd2-entry-close" aria-label="Close sign-in and return">×</button>
+        <div class="dd2-mark"><img src="../../../assets/brand/icon-192.png" width="42" height="42" alt="" aria-hidden="true"></div>
+        <h3 id="fixture-title">Review the current Terms and Privacy Policy</h3>
+        <p>One acknowledgment is required before your first protected activity.</p>
+        <ul class="dd2-benefits">
+          <li>Save progress</li>
+          <li>Personal analytics</li>
+          <li>Guided Subject Matter practice</li>
+        </ul>
+        <form class="dd2-entry-consent">
+          <label class="dd2-check">
+            <input type="checkbox" checked>
+            <span>I accept the <button class="link-button" type="button">Terms of Use</button> and acknowledge the <button class="link-button" type="button">Privacy Policy</button>.</span>
+          </label>
+          <button type="button" class="dd2-button dd2-button-primary">Accept &amp; Continue</button>
+        </form>
+        <div class="dd2-status" role="status" aria-live="polite"></div>
+        <p class="dd2-entry-note">Acceptance is recorded with the current document versions and timestamp.</p>
+        <div class="dd2-dialog-footer"><button type="button" class="dd2-button dd2-button-secondary dd2-dialog-back">Back</button></div>
+      </div>
+    </section>
+  </div>
+  <script>
+    const frame = document.querySelector('[data-dd2-entry-media]');
+    const video = frame.querySelector('[data-dd2-entry-video]');
+    let finished = false;
+    const showStill = () => {
+      if (finished) return;
+      finished = true;
+      frame.classList.remove('is-playing', 'is-finishing');
+      frame.classList.add('is-still');
+      video.pause();
+    };
+    video.addEventListener('playing', () => {
+      frame.classList.remove('is-still', 'is-finishing');
+      frame.classList.add('is-playing');
+    });
+    video.addEventListener('timeupdate', () => {
+      if (Number.isFinite(video.duration) && video.duration - video.currentTime <= .55) {
+        frame.classList.remove('is-playing', 'is-still');
+        frame.classList.add('is-finishing');
+      }
+    });
+    video.addEventListener('ended', showStill, { once: true });
+    video.addEventListener('error', showStill, { once: true });
+    video.play().catch(showStill);
+  </script>
+</body>
+</html>

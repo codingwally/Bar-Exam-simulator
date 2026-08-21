@@ -42,6 +42,102 @@ final result: passed
 
 ---
 
+# Account Setup Modernization Design QA — 2026-08-21
+
+## Scope and visual evidence
+
+- Owner reference: `docs/qa/onboarding-modernization-20260821/owner-reference-1141x856.png`.
+- Source SHA-256: `25A269DFC29246F8C72122F58B0C501CFF3CD1F516D622AA35B13EB7CEB05C1F`.
+- Source-matched implementation: `docs/qa/onboarding-modernization-20260821/desktop-source-matched-1141x856.png`.
+- Short-laptop implementation: `docs/qa/onboarding-modernization-20260821/desktop-compact-1142x636.png`.
+- Mobile implementation: `docs/qa/onboarding-modernization-20260821/mobile-375x812-full.png`.
+- Side-by-side comparison: `docs/qa/onboarding-modernization-20260821/comparison-source-vs-redesign.png`.
+- Scope is limited to the existing account setup dialog. Account creation, profile fields, legal acceptance,
+  token acknowledgement, optional consent, role safety, authentication, and token rules are unchanged.
+
+## Visible corrections
+
+1. Replaced the narrow, vertically dense form with a balanced profile/access layout using the existing
+   navy, brass-gold, alabaster, Fraunces, and Inter system.
+2. Made all fields at least 52 pixels high with persistent labels, readable helper text, generous spacing,
+   clear hover/focus treatment, and native autocomplete behavior.
+3. Reframed the token terms as one concise, high-contrast access summary instead of a dense instruction block.
+4. Grouped required and optional acknowledgements into distinct modern consent rows without changing their
+   identifiers or validation requirements.
+5. Added a fixed action footer so `Save and continue` stays visible while the dialog body scrolls independently.
+6. Preserved every established HTML identifier and the existing upper-right close and lower action-control logic.
+
+## Responsive and interaction verification
+
+- Browser-tested at `1440×900`, `1366×768`, `1142×636`, `375×812`, and `320×760`.
+- Horizontal overflow measured `0px` at every tested width.
+- The primary action remained inside the viewport at every tested size and measured 50 pixels high.
+- The short-laptop layout scrolls only its content area; the title and action footer remain stationary.
+- Professor selection revealed the existing private license declaration; returning to Review hid it again.
+- Terms and Privacy opened their established native views; both close and Back returned correctly.
+- Required legal and token acknowledgements remained mandatory; the optional quality consent remained optional.
+- The existing focus-visible rule remains present for fields, buttons, and close controls.
+
+## Regression evidence
+
+- `node --check assets/phase2-experience.js` — passed.
+- `node scripts/test-phase2-contract.mjs` — passed.
+- `node scripts/test-onboarding-flow.mjs` — passed.
+- `node scripts/test-dialog-exit-controls.mjs` — passed.
+- `node scripts/test-private-beta-auth-regression.mjs` — passed.
+- `node scripts/test-private-beta-admission.mjs` — passed.
+- `node scripts/test-auth-session-persistence.mjs` — passed.
+- `node scripts/test-commercial-launch-migration.mjs` — 10/10 passed.
+- `node scripts/test-pages-artifact.mjs` — passed.
+- `git diff --check` — passed.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+
+final result: passed
+
+---
+
+# Bar Question Practice Workspace Cleanup — 2026-08-21
+
+## Scope and source truth
+
+- Owner reference: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-f301d42e-5f2a-451d-8447-e4f0475e4d6e.png` (`1383 × 863`).
+- Local implementation capture: `docs/qa/renovation-20260821/bar-question-practice-cleanup-1383x863.png`.
+- Inspected browser viewport: `1383 × 863`; the in-app browser exported a `1373 × 772` visible-frame capture.
+- Scope was limited to Bar Question Practice navigation and answer-workspace controls. Question content, timers, answer persistence, grading, score rules, routes, and Examination Room were not changed.
+
+## Verified corrections
+
+1. The duplicate subject rail is removed from the visual and accessibility trees while its existing DOM identifier remains available for compatibility.
+2. `Change Subject` remains visible and continues to call the existing subject-selection flow.
+3. The redundant `Answer & Review` control is absent.
+4. The former `The Verdict` workspace action is now `Analytics` and opens the existing Analytics dashboard.
+5. The non-functional Dictate control and its dead browser-speech implementation are removed.
+6. The existing answer textarea, word count, submit control, timer modes, Next action, and Exit Practice action remain in their established positions.
+
+## Browser interaction evidence
+
+- The Analytics control opened the `analytics-modal`; its visible heading and close label both read `Analytics`.
+- Closing Analytics returned to the same answer workspace without replacing or pausing it.
+- The subject rail computed to `display: none` and remained `hidden`/`aria-hidden`.
+- No Dictate or Answer & Review control existed in the rendered workspace.
+- Entering an answer enabled the unchanged `Evaluate and grade essay` submission control.
+- The inspected desktop workspace retained the existing navy, brass-gold, alabaster, serif, sans, spacing, and control system.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+
+final result: passed
+
+---
+
 # Home Modern Icon and Anonymous-Post QA — 2026-08-21
 
 ## Scope and reference

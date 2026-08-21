@@ -48,6 +48,25 @@ const communityIconFiles = Object.freeze([
   'LICENSE.txt',
 ].map((name) => `assets/icons/community/${name}`));
 
+const navigationIconFiles = Object.freeze([
+  'house.svg',
+  'layout-grid.svg',
+  'file-text.svg',
+  'bookmark.svg',
+  'users.svg',
+  'bell.svg',
+  'book-open.svg',
+  'compass.svg',
+  'book-open-check.svg',
+  'pen-line.svg',
+  'timer.svg',
+  'circle-user-round.svg',
+  'tag.svg',
+  'headphones.svg',
+  'door-open.svg',
+  'LICENSE.txt',
+].map((name) => `assets/icons/navigation/${name}`));
+
 const publicFiles = Object.freeze([
   'index.html',
   'CNAME',
@@ -75,6 +94,7 @@ const publicFiles = Object.freeze([
   'assets/private-workspace.js',
   ...featurePreviewFiles,
   ...communityIconFiles,
+  ...navigationIconFiles,
   'assets/phase2-experience.js',
   'assets/phase2.css',
   'assets/phase3-analytics.js',

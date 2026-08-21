@@ -210,6 +210,7 @@
     color:var(--navy);font-weight:700;
     box-shadow:inset 3px 0 0 var(--gold);
   }
+  .index-tabs[hidden]{display:none!important;}
 
   .main{flex:1;min-width:0;}
 
@@ -765,11 +766,6 @@
   .btn-next:active{border-color:#c79d45;background:#c79d45;box-shadow:none;transform:translateY(0);}
   .btn-next:focus-visible{outline:0;box-shadow:0 0 0 3px rgba(212,175,55,.28);}
 
-  /* ---- Voice mic ---- */
-  .btn-tool.mic{border-color:var(--border-gold);color:var(--maroon);}
-  .btn-tool.mic:hover{background:var(--maroon);color:#fff;border-color:var(--maroon);}
-  .beta-tag{font-family:var(--mono);font-size:8px;letter-spacing:.5px;background:var(--maroon);color:#fff;border-radius:4px;padding:1px 4px;margin-left:5px;vertical-align:middle;}
-
   /* ---- Toasts ---- */
   #toast-container{position:fixed;right:20px;bottom:20px;z-index:12000;display:flex;flex-direction:column;gap:10px;max-width:360px;}
   .toast{font-family:var(--sans);font-size:13.5px;line-height:1.45;color:#fff;background:linear-gradient(135deg,#0b2547,#08182f);border:1px solid rgba(197,160,89,.4);border-left:4px solid var(--gold);border-radius:12px;padding:13px 16px;box-shadow:var(--shadow-lg);opacity:0;transform:translateY(12px);transition:all .3s cubic-bezier(.22,.61,.36,1);}
@@ -1011,7 +1007,7 @@
       <button class="quorum-nav-link quorum-drawer-room" type="button" data-public-feature="examination-room">Examination Room</button>
       <div class="quorum-shell-compat" hidden aria-hidden="true">
         <button id="spa-subject-matter" type="button" data-public-feature="subject-matter" tabindex="-1">Subject Matter</button>
-        <button id="spa-progress" type="button" data-public-feature="verdict" tabindex="-1">The Verdict</button>
+        <button id="spa-progress" type="button" data-public-feature="verdict" tabindex="-1">Analytics</button>
         <button id="spa-chairs-case" type="button" data-public-feature="chair-cases" tabindex="-1">2026 Bar Chair&rsquo;s Cases</button>
         <button id="spa-case-digest" type="button" data-public-feature="anchor-cases" tabindex="-1">Anchor Case Digests</button>
         <button id="btn-signin" type="button" tabindex="-1">Profile</button>
@@ -1204,13 +1200,12 @@
     </div>
 
     <div class="exam-subnav">
-      <button class="tabbtn active" id="tab-write">Answer &amp; Review</button>
-      <button class="tabbtn" id="tab-history">The Verdict</button>
+      <button class="tabbtn" id="tab-history">Analytics</button>
       <button class="tabbtn feedback-btn" id="btn-open-feedback">Support</button>
     </div>
 
     <div class="layout">
-      <div class="index-tabs" id="subject-tabs"></div>
+      <div class="index-tabs" id="subject-tabs" hidden aria-hidden="true"></div>
       <div class="main" id="main"></div>
     </div>
 
@@ -1537,12 +1532,12 @@
 <!-- Analytics dashboard modal -->
 <div class="modal-overlay" id="analytics-modal" role="dialog" aria-modal="true" aria-labelledby="analytics-title">
   <div class="modal-card xl">
-    <button type="button" class="modal-close" aria-label="Close The Verdict" onclick="returnFromModal('analytics-modal')">&times;</button>
-    <h3 class="modal-title" id="analytics-title">The Verdict</h3>
+    <button type="button" class="modal-close" aria-label="Close Analytics" onclick="returnFromModal('analytics-modal')">&times;</button>
+    <h3 class="modal-title" id="analytics-title">Analytics</h3>
     <div class="modal-sub">Your Bar-prep drill history &amp; ALAC record</div>
     <div id="analytics-body"></div>
     <div class="modal-actions" style="margin-top:18px;">
-      <p class="mock-note" role="note">Private Verdict PDF export is available for completed, signed-in assessment records.</p>
+      <p class="mock-note" role="note">Private PDF export is available for completed, signed-in assessment records.</p>
       <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('analytics-modal')">Back</button>
     </div>
   </div>
@@ -1654,7 +1649,6 @@ let onboardingStage = "welcome";
 let examStage = "idle";
 let selectedSessionMode = null;
 let pendingSubjectSelection = null;
-let historyPausedStage = null;
 let questionStartTs = null;
 let examMode = "none";
 let elapsed = 0;
@@ -2543,26 +2537,8 @@ function setupEventListeners() {
   window.addEventListener('resize', () => {
     if (window.innerWidth > 900) setSiteMenuOpen(false);
   });
-  document.getElementById("tab-write").addEventListener("click", () => {
-    document.getElementById("tab-write").classList.add("active");
-    document.getElementById("tab-history").classList.remove("active");
-    if (historyPausedStage === 'answering') {
-      examStage = 'answering';
-      historyPausedStage = null;
-      renderMainWrite();
-      sessionController.resume();
-      return;
-    }
-    historyPausedStage = null;
-    renderMainWrite();
-  });
-
-  document.getElementById("tab-history").addEventListener("click", () => {
-    historyPausedStage = examStage;
-    if (examStage === 'answering') sessionController.pause();
-    document.getElementById("tab-history").classList.add("active");
-    document.getElementById("tab-write").classList.remove("active");
-    renderMainHistory();
+  document.getElementById("tab-history")?.addEventListener("click", () => {
+    openAnalytics();
   });
 
   document.getElementById("btn-open-feedback").addEventListener("click", () => {
@@ -2686,7 +2662,6 @@ function legacyRenderMainWrite() {
       <div class="row">
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation">Dictate<span class="beta-tag">VOICE</span></button>
           <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${!currentText.trim() ? 'disabled' : ''}>Evaluate and grade essay</button>
         </div>
       </div>
@@ -2819,7 +2794,6 @@ function renderMainWrite() {
       <div class="row">
         <span class="wc" id="word-count">${countWords(currentText)} words</span>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="btn-tool mic" onclick="startDictation()" title="Voice-to-Text Essay Dictation" ${workspaceLocked ? 'disabled' : ''}>Dictate<span class="beta-tag">VOICE</span></button>
           <button class="btn-primary" id="submit-btn" onclick="evaluateAnswer()" ${workspaceLocked || !currentText.trim() ? 'disabled' : ''}>Evaluate and grade essay</button>
         </div>
       </div>
@@ -3215,7 +3189,7 @@ function renderResultHTML(key) {
           <button class="dd-control is-tertiary is-on-light fb-btn suggest" type="button" onclick="openSuggest()">Suggest a correction</button>
         </div>
         <div class="review-actions">
-          ${res.id ? `<button class="btn-tool" onclick="window.DueDiligence2026?.openVerdictExport('${escapeHtml(res.id)}','${escapeHtml(res.qId || '')}')">Export Verdict PDF</button>` : ''}
+          ${res.id ? `<button class="btn-tool" onclick="window.DueDiligence2026?.openVerdictExport('${escapeHtml(res.id)}','${escapeHtml(res.qId || '')}')">Export PDF</button>` : ''}
           <button class="btn-next" onclick="proceedAfterReview()">Next</button>
         </div>
       </div>
@@ -3249,7 +3223,7 @@ function renderMainHistory() {
   if (historyLog.length === 0) {
     main.innerHTML = `
       <div class="panel-title on-navy" style="margin-bottom:16px;">Examinee Performance Archive</div>
-      <div class="empty on-navy">No essays evaluated yet. Complete a Mock Bar scenario under “Answer & Review” to generate your performance audit trail.</div>
+      <div class="empty on-navy">No essays evaluated yet. Complete a Bar Question Practice essay to build your analytics history.</div>
     `;
     return;
   }
@@ -3593,7 +3567,7 @@ function openAnalyticsLegacy() {
   const list = loadAttempts();
   const body = document.getElementById('analytics-body');
   if (!list.length) {
-    body.innerHTML = '<div class="empty">No drills logged yet. Grade an essay in Mock Bar to build The Verdict history.</div>';
+    body.innerHTML = '<div class="empty">No drills logged yet. Grade an essay in Bar Question Practice to build your analytics history.</div>';
     openModal('analytics-modal');
     return;
   }
@@ -3628,7 +3602,7 @@ function openAnalyticsLegacy() {
     <div class="panel-title">Attempt Log</div>
     <div class="table-scroll">
       <table class="attempt-table">
-        <thead><tr><th>Score</th><th>Subject</th><th>Item</th><th>Time</th><th>When</th><th>Verdict</th></tr></thead>
+        <thead><tr><th>Score</th><th>Subject</th><th>Item</th><th>Time</th><th>When</th><th>Review</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -3646,7 +3620,7 @@ const verdictDashboard = {
 async function verdictRequest(path, payload) {
   const session = window.DueDiligencePhase2?.getSession?.();
   const workerUrl = window.DueDiligencePhase2Config?.workerUrl;
-  if (!session?.access_token || !workerUrl) throw new Error('Sign in to open your complete private Verdict history.');
+  if (!session?.access_token || !workerUrl) throw new Error('Sign in to open your complete private analytics history.');
   const response = await fetch(`${workerUrl}${path}`, {
     method: 'POST',
     headers: {
@@ -3657,7 +3631,7 @@ async function verdictRequest(path, payload) {
     body: JSON.stringify(payload),
   });
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.error?.message || 'The Verdict is temporarily unavailable.');
+  if (!response.ok) throw new Error(data?.error?.message || 'Analytics is temporarily unavailable.');
   return data?.result || data?.data || data;
 }
 
@@ -3768,11 +3742,11 @@ async function withVerdictExportApi(callback) {
     await window.DueDiligenceFeatureLoader?.loadForFeature?.('verdict');
     const api = window.DueDiligence2026;
     if (typeof api?.openVerdictExport !== 'function' || typeof api?.exportVerdict !== 'function') {
-      throw new Error('The Verdict export could not be loaded. Please refresh and try again.');
+      throw new Error('The analytics export could not be loaded. Please refresh and try again.');
     }
     return await callback(api);
   } catch (error) {
-    toast(error?.message || 'The Verdict export could not be loaded. Please try again.', 'warn');
+    toast(error?.message || 'The analytics export could not be loaded. Please try again.', 'warn');
     return false;
   }
 }
@@ -3818,7 +3792,7 @@ function bindVerdictDashboard() {
   (archiveButton || restoreButton)?.addEventListener('click', async () => {
     const rows = filteredVerdictRecords().filter((record) => verdictDashboard.selected.has(`${record.sourceType}:${record.id}`) && !record.localOnly);
     if (!rows.length) return;
-    if (archiveButton && !confirm(`Remove ${rows.length} selected attempt${rows.length === 1 ? '' : 's'} from your active Verdict? You can restore them for 30 days. This does not restore used credits.`)) return;
+    if (archiveButton && !confirm(`Remove ${rows.length} selected attempt${rows.length === 1 ? '' : 's'} from your active analytics history? You can restore them for 30 days. This does not restore used credits.`)) return;
     try {
       await verdictRequest('/dd2026/verdict/archive', {
         action: archiveButton ? 'archive' : 'restore',
@@ -3833,7 +3807,7 @@ function bindVerdictDashboard() {
 
 async function loadVerdictDashboard() {
   const body = document.getElementById('analytics-body');
-  if (body) body.innerHTML = '<div class="loading">Opening your private Verdict history…</div>';
+  if (body) body.innerHTML = '<div class="loading">Opening your private analytics history…</div>';
   try {
     const [active, deleted] = await Promise.all([
       verdictRequest('/dd2026/verdict/records', { includeDeleted: false, limit: 500 }),
@@ -3934,7 +3908,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script>
 /* =====================================================================
-   SESSION CLOCK, TOAST, SUPPORT FEEDBACK, AND VOICE DICTATION
+   SESSION CLOCK, TOAST, AND SUPPORT FEEDBACK
    ===================================================================== */
 
 const SUPPORT_EMAIL = 'support@duediligence.ph';
@@ -4180,27 +4154,6 @@ globalThis.addEventListener?.('duediligence:submission-resume', (event) => {
   }
   openSuggestWithDraft(pending.draft || null, q);
 });
-
-/* ---------- Voice-to-text dictation (real, with fallback) ---------- */
-function startDictation() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const box = document.getElementById('answer-box');
-  if (!box) return;
-  if (!SR) { toast('Voice dictation needs a Chromium browser such as Chrome or Edge.', 'warn'); return; }
-  try {
-    const rec = new SR();
-    rec.lang = 'en-PH'; rec.interimResults = false; rec.continuous = true;
-    toast('Listening — dictate your answer. Click Dictate again to stop.', 'ok');
-    rec.onresult = e => {
-      let txt = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) txt += e.results[i][0].transcript;
-      box.value += (box.value ? ' ' : '') + txt.trim();
-      handleInput(box);
-    };
-    rec.onerror = () => toast('Voice capture stopped.', 'warn');
-    rec.start();
-  } catch (e) { toast('Voice dictation could not start.', 'warn'); }
-}
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && examStage === 'answering') sessionController.tick();

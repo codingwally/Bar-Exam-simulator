@@ -8,7 +8,7 @@ import {
   normalizeQuorumQueryRequest,
 } from './forum-core.mjs';
 
-test('Home sample feed contains exactly 23 fictional posts and 32 read-only comments', () => {
+test('legacy Home sample compatibility feed contains 23 posts and 32 comments', () => {
   const sample = buildCommunitySampleContent(Date.UTC(2026, 7, 21, 8));
   assert.equal(sample.sample, true);
   assert.equal(sample.readOnly, true);
@@ -38,6 +38,8 @@ test('Home sample copy contains no contact details, links, or copied-member iden
   assert.doesNotMatch(serialized, /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/);
   assert.doesNotMatch(serialized, /https?:\/\/|www\./i);
   assert.doesNotMatch(serialized, /facebook\.com|memberId":"[^"]+|studentNumber/i);
+  assert.match(serialized, /Paano|niyo|pero|ako|yung/);
+  assert.doesNotMatch(serialized, /What practical factors helped you compare|What preparation routine helped you/i);
 });
 
 test('sample feed is queryable but sample IDs cannot enter real mutation commands', () => {

@@ -15,6 +15,7 @@ const [
   behavioral,
   phase2,
   releaseMigration,
+  starterMigration,
 ] = await Promise.all([
   fs.readFile(new URL('../index.html', import.meta.url), 'utf8'),
   fs.readFile(new URL('../assets/lex-forum.js', import.meta.url), 'utf8'),
@@ -29,6 +30,7 @@ const [
   fs.readFile(new URL('../supabase/tests/20260803_014_quorum_behavioral_security_test.sql', import.meta.url), 'utf8'),
   fs.readFile(new URL('../assets/phase2-experience.js', import.meta.url), 'utf8'),
   fs.readFile(new URL('../supabase/migrations/20260805120000_complete_beta_release_foundation.sql', import.meta.url), 'utf8'),
+  fs.readFile(new URL('../supabase/migrations/20260821022828_home_taglish_starter_discussions.sql', import.meta.url), 'utf8'),
 ]);
 
 assert.match(html, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
@@ -75,12 +77,7 @@ for (const id of [
   'lex-post-submit',
   'lex-feed',
   'quorum-search-form',
-  'quorum-entry-type',
-  'quorum-entry-category',
-  'quorum-entry-subject',
   'quorum-entry-image',
-  'quorum-entry-preview',
-  'quorum-entry-cancel',
   'quorum-feed-sort',
   'quorum-active-issues',
   'quorum-unanswered',
@@ -88,6 +85,21 @@ for (const id of [
 ]) {
   assert.match(html, new RegExp(`id="${id}"`), `${id} must be rendered.`);
 }
+
+const composerHtml = html.match(/<form class="lex-composer"[\s\S]*?<\/form>/)?.[0] || '';
+assert.ok(composerHtml, 'The Home composer must render.');
+assert.match(composerHtml, /id="quorum-entry-image"/);
+assert.match(composerHtml, /id="lex-post-submit"[^>]*>Post</);
+for (const removedControl of [
+  'quorum-entry-type',
+  'quorum-entry-category',
+  'quorum-entry-subject',
+  'quorum-entry-preview',
+  'quorum-entry-cancel',
+]) {
+  assert.doesNotMatch(composerHtml, new RegExp(`id="${removedControl}"`));
+}
+assert.doesNotMatch(html, /Fictional · anonymized · read-only|Community preview|Starter discussions/);
 
 for (const operation of [
   'update_entry',
@@ -219,5 +231,11 @@ for (const source of [
 assert.match(css, /grid-template-columns:\s*minmax\(190px,\s*220px\)[\s\S]*minmax\(0,\s*720px\)/);
 assert.match(css, /@media \(max-width: 640px\)/);
 assert.match(css, /prefers-reduced-motion/);
+
+assert.equal(new Set([...starterMigration.matchAll(/home-20260821-post-\d{3}/g)].map((match) => match[0])).size, 23);
+assert.equal(new Set([...starterMigration.matchAll(/home-20260821-(?:comment|reply)-\d{3}/g)].map((match) => match[0])).size, 32);
+assert.match(starterMigration, /forum_ensure_anonymous_alias/);
+assert.match(starterMigration, /on conflict \(starter_content_key\)/);
+assert.match(starterMigration, /Paano|niyo|pero|ako|yung/);
 
 console.log('Quorum static architecture, control, security, and naming tests passed.');

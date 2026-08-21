@@ -1263,9 +1263,6 @@
 
           <form class="lex-composer" id="lex-composer" aria-label="Share with the community">
             <div class="lex-composer-heading">
-              <div>
-                <span class="lex-kicker">The floor is yours</span>
-              </div>
               <span class="lex-member-mark" aria-hidden="true">DD</span>
             </div>
             <label class="sr-only" for="lex-post-body">Share with the community</label>
@@ -1274,78 +1271,17 @@
               required></textarea>
             <div class="lex-composer-meta">
               <div class="quorum-image-control">
-                <label class="quorum-composer-tool" for="quorum-entry-image">Photo</label>
+                <label class="quorum-composer-tool" for="quorum-entry-image">Add photo</label>
                 <input id="quorum-entry-image" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
-                <span id="quorum-image-status">Up to 12 JPEG, PNG, or WebP images · 3 MB each</span>
+                <span id="quorum-image-status" role="status" aria-live="polite"></span>
                 <button class="lex-button lex-button-quiet" id="quorum-image-remove" type="button" hidden>Remove all images</button>
                 <div class="quorum-image-list" id="quorum-image-list" aria-live="polite"></div>
               </div>
-              <details class="quorum-add-details">
-                <summary>Add details</summary>
-                <div class="quorum-composer-grid">
-                  <label class="lex-source-field" for="quorum-entry-type">
-                    <span>Purpose</span>
-                    <select id="quorum-entry-type" required></select>
-                  </label>
-                  <label class="lex-source-field" for="quorum-entry-category">
-                    <span>Category</span>
-                    <select id="quorum-entry-category" required></select>
-                  </label>
-                  <label class="lex-source-field" for="quorum-entry-subject">
-                    <span>Bar subject <em>when relevant</em></span>
-                    <select id="quorum-entry-subject"></select>
-                  </label>
-                  <label class="lex-source-field" for="quorum-entry-year">
-                    <span>Law-school year <em>optional</em></span>
-                    <input id="quorum-entry-year" maxlength="80" placeholder="e.g., 3L">
-                  </label>
-                  <label class="lex-source-field quorum-case-title" for="quorum-case-title" hidden>
-                    <span>Case title</span>
-                    <input id="quorum-case-title" maxlength="300" placeholder="Case title and citation">
-                  </label>
-                  <label class="lex-source-field" for="quorum-entry-circle">
-                    <span>Study Circle <em>optional</em></span>
-                    <select id="quorum-entry-circle">
-                      <option value="">Public community feed</option>
-                    </select>
-                  </label>
-                  <label class="lex-source-field" for="lex-post-source">
-                    <span>Official or reliable source URL <em>optional</em></span>
-                    <input id="lex-post-source" type="url" maxlength="2000"
-                      inputmode="url" placeholder="https://elibrary.judiciary.gov.ph/…">
-                  </label>
-                  <label class="quorum-opinion-control">
-                    <input id="quorum-opinion-only" type="checkbox">
-                    <span>Mark as Opinion Only</span>
-                  </label>
-                  <fieldset class="quorum-identity-choice">
-                    <legend>Post identity</legend>
-                    <label><input type="radio" name="quorum-post-identity" value="profile" checked> Post with my profile</label>
-                    <label><input type="radio" name="quorum-post-identity" value="anonymous"> Post anonymously</label>
-                    <small>Your identity is visible only to authorized moderators when required for safety, legal compliance, or community enforcement.</small>
-                  </fieldset>
-                </div>
-              </details>
               <div class="lex-composer-actions">
-                <span id="lex-post-counter" aria-live="polite">0 / 4,000</span>
-                <button class="lex-button lex-button-quiet" id="quorum-entry-preview" type="button">Preview</button>
-                <button class="lex-button lex-button-quiet" id="quorum-entry-cancel" type="button">Cancel</button>
                 <button class="lex-button lex-button-primary" id="lex-post-submit" type="submit">Post</button>
               </div>
             </div>
           </form>
-
-          <section class="community-sample-lane" id="community-sample-lane" aria-labelledby="community-sample-title" hidden>
-            <div class="community-sample-heading">
-              <div>
-                <span class="lex-kicker">Community preview</span>
-                <h3 id="community-sample-title">Starter discussions</h3>
-              </div>
-              <span class="community-sample-disclosure">Fictional · anonymized · read-only</span>
-            </div>
-            <div class="community-sample-grid" id="community-sample-feed"></div>
-            <button class="lex-button lex-button-quiet community-sample-more" id="community-sample-more" type="button" hidden>Show more discussions</button>
-          </section>
 
           <div class="lex-feed-toolbar">
             <div>

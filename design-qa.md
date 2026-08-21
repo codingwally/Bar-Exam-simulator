@@ -36,6 +36,37 @@
 
 final result: passed
 
+# Home Comments and Taglish Community QA — 2026-08-21
+
+## Scope and comparison evidence
+
+- Owner reference: `docs/qa/renovation-20260820/home-comments-taglish-owner-reference-1880x900.png`.
+- Owner reference SHA-256: `D77784DE0F556AD97ECE734A1A83D23706781ACAB153E704FC2466F4AE8AB7F7`.
+- Authenticated implementation fixture: `docs/qa/renovation-20260820/quorum-first-authenticated-fixture.html`.
+- Desktop implementation: `docs/qa/renovation-20260820/home-comments-taglish-desktop-1880x900.png`.
+- Same-input side-by-side review: `docs/qa/renovation-20260820/home-comments-taglish-reference-comparison.png` and its reproducible HTML harness.
+- Responsive captures: `375 × 812` and `320 × 760`.
+
+## Verified results
+
+1. The composer retains only its writing field, `Add photo`, image-selection status when relevant, and `Post`.
+2. `Up to 12 JPEG, PNG, or WebP images`, `Add details`, `Preview`, and `Cancel` are absent.
+3. `Fictional · anonymized · read-only`, `Community preview`, and `Starter discussions` are absent.
+4. The feed uses ordinary published discussions. The pictured sample state uses natural Taglish and no legal-advice or AI persona claim.
+5. Comments and nested replies are visible and the `Comment 2` control opens and closes the thread while updating `aria-expanded`.
+6. The comment editor, anonymous-comment option, and `Post comment` action remain visible and keyboard-addressable.
+7. The surviving Practice Exam card remains only in the supporting column on desktop; no duplicate promotion appears in the main feed.
+8. The 375-pixel and 320-pixel layouts have no page-level horizontal overflow. The composer actions stack cleanly on mobile.
+9. Existing navy, brass, alabaster, serif, mono, border, radius, and focus treatments are preserved.
+
+## Intentional differences from the owner reference
+
+- The reference still shows controls that the owner explicitly requested to remove; the implementation therefore has a shorter, clearer composer.
+- The fixture shows an open comment thread so the now-enabled comment experience is visible in the acceptance evidence.
+- Feed naming uses `Latest member discussions` rather than the expressly retired `Starter discussions` label.
+
+final result: passed
+
 # Subject Matter Scoped Design QA — 2026-08-17
 
 ## Scope and visual source

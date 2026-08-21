@@ -97,10 +97,6 @@
     draftOwnerId: null,
     drawerOpen: false,
     drawerReturnFocus: null,
-    sampleItems: [],
-    sampleVisibleCount: 6,
-    sampleLoaded: false,
-    sampleCommentsOpen: new Set(),
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -173,7 +169,6 @@
       guard.hidden = authenticated;
       guard.textContent = message || 'The community is available only to signed-in Due Diligence members.';
     }
-    syncSampleLane();
   }
 
   function clearPrivateView() {
@@ -184,12 +179,7 @@
     state.bootstrap = null;
     state.comments.clear();
     state.commentsOpen.clear();
-    state.sampleItems = [];
-    state.sampleVisibleCount = 6;
-    state.sampleLoaded = false;
-    state.sampleCommentsOpen.clear();
     $('#lex-feed')?.replaceChildren();
-    $('#community-sample-feed')?.replaceChildren();
     setAuthView(false);
   }
 
@@ -427,109 +417,6 @@
       dateStyle: 'medium',
       timeZone: 'Asia/Manila',
     }).format(date);
-  }
-
-  function syncSampleLane() {
-    const lane = $('#community-sample-lane');
-    if (!lane) return;
-    lane.hidden = !(state.authenticated && state.view === 'home' && state.sampleItems.length);
-  }
-
-  function renderSampleDiscussions() {
-    const feed = $('#community-sample-feed');
-    const more = $('#community-sample-more');
-    if (!feed || !more) return;
-    feed.replaceChildren();
-    const visible = state.sampleItems.slice(0, state.sampleVisibleCount);
-    visible.forEach((item) => {
-      const article = document.createElement('article');
-      article.className = 'community-sample-card';
-      article.dataset.sampleEntryId = item.entryId;
-
-      const header = document.createElement('header');
-      const identity = document.createElement('div');
-      identity.className = 'community-sample-identity';
-      identity.append(
-        textElement('span', 'community-sample-avatar', initials(item.author?.displayName)),
-        textElement('strong', '', item.author?.displayName || 'Anonymous law student'),
-        textElement('span', 'community-sample-anonymous', 'Anonymous'),
-      );
-      header.append(identity, textElement('time', '', relativeTime(item.createdAt)));
-
-      const title = textElement('h4', '', item.title);
-      const body = textElement('p', 'community-sample-body', item.body);
-      const metadata = document.createElement('div');
-      metadata.className = 'community-sample-meta';
-      [item.subject, item.lawSchoolYear, entryTypes.get(item.entryType)]
-        .filter(Boolean)
-        .forEach((value) => metadata.append(textElement('span', '', value)));
-
-      const footer = document.createElement('footer');
-      const replyCount = Number(item.comments?.length || 0);
-      footer.append(textElement('span', 'community-sample-support', `${Number(item.counts?.helpful || 0)} found this useful`));
-      const replies = button(
-        state.sampleCommentsOpen.has(item.entryId) ? 'Hide replies' : `View ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`,
-        'community-sample-replies-button',
-        () => {
-          if (state.sampleCommentsOpen.has(item.entryId)) state.sampleCommentsOpen.delete(item.entryId);
-          else state.sampleCommentsOpen.add(item.entryId);
-          renderSampleDiscussions();
-          document.querySelector(`[data-sample-entry-id="${item.entryId}"] .community-sample-replies-button`)?.focus();
-        },
-      );
-      replies.setAttribute('aria-expanded', String(state.sampleCommentsOpen.has(item.entryId)));
-      footer.append(replies);
-      article.append(header, title, body, metadata, footer);
-
-      if (state.sampleCommentsOpen.has(item.entryId)) {
-        const comments = document.createElement('div');
-        comments.className = 'community-sample-comments';
-        comments.setAttribute('aria-label', `Replies to ${item.title}`);
-        (item.comments || []).forEach((comment) => {
-          const commentNode = document.createElement('div');
-          commentNode.className = `community-sample-comment${comment.parentCommentId ? ' is-reply' : ''}`;
-          commentNode.append(
-            textElement('strong', '', comment.author?.displayName || 'Anonymous law student'),
-            textElement('span', 'community-sample-anonymous', 'Anonymous'),
-            textElement('p', '', comment.body),
-          );
-          comments.append(commentNode);
-        });
-        article.append(comments);
-      }
-      feed.append(article);
-    });
-    more.hidden = state.sampleVisibleCount >= state.sampleItems.length;
-    more.textContent = `Show more discussions (${state.sampleItems.length - state.sampleVisibleCount} remaining)`;
-    syncSampleLane();
-  }
-
-  async function loadSampleDiscussions() {
-    if (state.sampleLoaded) {
-      renderSampleDiscussions();
-      return;
-    }
-    try {
-      const payload = await query('sample_feed');
-      const items = Array.isArray(payload?.items) ? payload.items : [];
-      const comments = items.reduce((sum, item) => sum + Number(item.comments?.length || 0), 0);
-      const valid = payload?.sample === true
-        && payload?.readOnly === true
-        && items.length === 23
-        && comments === 32
-        && items.every((item) => item?.sample === true
-          && item?.readOnly === true
-          && /^sample_post_\d{3}$/.test(String(item.entryId || ''))
-          && (item.comments || []).every((comment) => comment?.sample === true && comment?.readOnly === true));
-      if (!valid) throw new Error('Sample discussion contract mismatch.');
-      state.sampleItems = items;
-      state.sampleLoaded = true;
-      renderSampleDiscussions();
-    } catch {
-      state.sampleItems = [];
-      state.sampleLoaded = false;
-      syncSampleLane();
-    }
   }
 
   function sourceLink(sourceUrl) {
@@ -1569,7 +1456,6 @@
     const kickerNode = $('#quorum-feed-kicker');
     if (titleNode) titleNode.textContent = title;
     if (kickerNode) kickerNode.textContent = kicker;
-    syncSampleLane();
   }
 
   function syncViewButtons() {
@@ -1600,7 +1486,6 @@
       return;
     }
     state.view = view;
-    syncSampleLane();
     state.directEntryId = null;
     state.legacyPostId = null;
     if (options.route !== false) {
@@ -1619,8 +1504,6 @@
     if (view === 'home') {
       state.activeCircleId = null;
       state.circleDetail = null;
-      const circleSelect = $('#quorum-entry-circle');
-      if (circleSelect) circleSelect.value = '';
       setViewLabels('Latest member discussions', 'Academic community');
       await refreshFeed();
     } else if (view === 'saved') {
@@ -1831,11 +1714,6 @@
       const circle = await query('circle', { circleId });
       state.circleDetail = circle;
       $('#lex-composer').hidden = !(circle.viewerJoined || circle.viewerOwns) || circle.status !== 'active';
-      const circleSelect = $('#quorum-entry-circle');
-      if (circleSelect && (circle.viewerJoined || circle.viewerOwns)) {
-        if (!$(`option[value="${circleId}"]`, circleSelect)) circleSelect.append(option(circleId, circle.name));
-        circleSelect.value = circleId;
-      }
       await refreshFeed();
     } catch (error) {
       handleError(error);
@@ -2213,17 +2091,10 @@
   function composerPayload() {
     return {
       body: $('#lex-post-body')?.value || '',
-      kind: $('#quorum-entry-type')?.value === 'ask_community' ? 'question' : 'discussion',
+      kind: 'discussion',
       imageAlts: $$('[data-quorum-image-alt]').map((field) => field.value || ''),
-      sourceUrl: $('#lex-post-source')?.value || '',
-      entryType: $('#quorum-entry-type')?.value || '',
-      subject: $('#quorum-entry-subject')?.value || null,
-      category: $('#quorum-entry-category')?.value || '',
-      lawSchoolYear: $('#quorum-entry-year')?.value || '',
-      caseTitle: $('#quorum-case-title')?.value || '',
-      opinionOnly: Boolean($('#quorum-opinion-only')?.checked),
-      circleId: $('#quorum-entry-circle')?.value || null,
-      isAnonymous: $('input[name="quorum-post-identity"]:checked')?.value === 'anonymous',
+      circleId: state.activeCircleId || null,
+      isAnonymous: false,
     };
   }
 
@@ -2231,7 +2102,7 @@
     const key = draftKey();
     if (!key) return;
     const payload = composerPayload();
-    if (!payload.body && !payload.sourceUrl && !state.selectedImages.length) {
+    if (!payload.body && !state.selectedImages.length) {
       safeStorage(localStorage, 'remove', key);
       return;
     }
@@ -2250,22 +2121,12 @@
     try {
       const draft = JSON.parse(raw);
       if (!draft || Date.now() - Number(draft.savedAt || 0) > 7 * 24 * 60 * 60 * 1000) return;
-      $('#lex-post-body').value = draft.body || '';
-      $('#lex-post-source').value = draft.sourceUrl || '';
-      $('#quorum-entry-type').value = entryTypes.has(draft.entryType)
-        ? draft.entryType
-        : draft.kind === 'question' ? 'ask_community' : 'student_support';
-      $('#quorum-entry-category').value = categories.has(draft.category) ? draft.category : 'philippine_legal_education';
-      $('#quorum-entry-subject').value = subjects.includes(draft.subject) ? draft.subject : '';
-      $('#quorum-entry-year').value = draft.lawSchoolYear || '';
-      $('#quorum-case-title').value = draft.caseTitle || '';
-      $('#quorum-opinion-only').checked = Boolean(draft.opinionOnly);
-      const identity = $(`input[name="quorum-post-identity"][value="${draft.isAnonymous ? 'anonymous' : 'profile'}"]`);
-      if (identity) identity.checked = true;
+      const body = $('#lex-post-body');
+      if (body) body.value = draft.body || '';
       if (Number(draft.imageCount || (draft.hasImage ? 1 : 0))) {
-        $('#quorum-image-status').textContent = 'For privacy, select the images again before publishing.';
+        const status = $('#quorum-image-status');
+        if (status) status.textContent = 'Select the images again before posting.';
       }
-      syncCaseTitle();
       updateComposerCounter();
     } catch {
       safeStorage(localStorage, 'remove', key);
@@ -2276,14 +2137,9 @@
     $('#lex-composer')?.reset();
     state.selectedImage = null;
     state.selectedImages = [];
-    if ($('#quorum-entry-type')) $('#quorum-entry-type').value = 'student_support';
-    if ($('#quorum-entry-category')) $('#quorum-entry-category').value = 'law_school_life';
     $('#quorum-image-list')?.replaceChildren();
-    if ($('#quorum-image-status')) {
-      $('#quorum-image-status').textContent = 'Up to 12 JPEG, PNG, or WebP images · 3 MB each';
-    }
+    if ($('#quorum-image-status')) $('#quorum-image-status').textContent = '';
     if ($('#quorum-image-remove')) $('#quorum-image-remove').hidden = true;
-    syncCaseTitle();
     updateComposerCounter({ persist: false });
     state.draftOwnerId = currentUserId() || null;
   }
@@ -2293,60 +2149,6 @@
     resetComposerForSession();
     if (key) safeStorage(localStorage, 'remove', key);
     if (announce) toast('Post draft cleared.');
-  }
-
-  function previewEntry() {
-    const payload = composerPayload();
-    if (!payload.body.trim()) {
-      toast('Write a post before opening the preview.');
-      $('#lex-post-body')?.focus();
-      return;
-    }
-    openDialog('Post preview', (body, dialog) => {
-      const preview = document.createElement('div');
-      preview.className = 'quorum-dialog-preview';
-      preview.append(
-        textElement('strong', '', entryTypes.get(payload.entryType) || 'Community post'),
-        textElement('p', '', payload.body),
-      );
-      if (payload.caseTitle) preview.prepend(textElement('h3', 'quorum-entry-heading', payload.caseTitle));
-      const source = sourceLink(payload.sourceUrl);
-      if (source) preview.append(source);
-      const objectUrls = [];
-      if (state.selectedImages.length) {
-        const gallery = document.createElement('div');
-        gallery.className = 'quorum-entry-images';
-        state.selectedImages.forEach((file, index) => {
-          const objectUrl = URL.createObjectURL(file);
-          objectUrls.push(objectUrl);
-          const image = document.createElement('img');
-          image.className = 'quorum-entry-image';
-          image.src = objectUrl;
-          image.alt = payload.imageAlts[index] || `Selected image ${index + 1}`;
-          gallery.append(image);
-        });
-        preview.append(gallery);
-        dialog.addEventListener('close', () => objectUrls.forEach((url) => URL.revokeObjectURL(url)), { once: true });
-      }
-      const actions = document.createElement('div');
-      actions.className = 'lex-dialog-actions';
-      actions.append(button('Back', 'lex-button', closeDialog));
-      body.append(preview, actions);
-    });
-  }
-
-  function cancelComposer() {
-    const payload = composerPayload();
-    if (!payload.body.trim() && !payload.sourceUrl && !state.selectedImages.length) {
-      clearComposer();
-      return;
-    }
-    confirmDialog({
-      title: 'Discard post draft',
-      copy: 'Clear this unfinished community post?',
-      confirmLabel: 'Discard draft',
-      onConfirm: async () => clearComposer({ announce: true }),
-    });
   }
 
   async function imageToPayload(file) {
@@ -2422,13 +2224,13 @@
       const images = await Promise.all(state.selectedImages.map(imageToPayload));
       const result = await command('create_entry', {
         body: payload.body,
-        entryType: payload.entryType,
-        subject: payload.subject,
-        category: payload.category,
-        lawSchoolYear: payload.lawSchoolYear,
-        caseTitle: payload.caseTitle,
-        opinionOnly: payload.opinionOnly,
-        sourceUrl: payload.sourceUrl,
+        entryType: 'student_support',
+        subject: null,
+        category: 'law_school_life',
+        lawSchoolYear: '',
+        caseTitle: '',
+        opinionOnly: false,
+        sourceUrl: '',
         circleId: payload.circleId,
         imageAlts: payload.imageAlts,
         isAnonymous: payload.isAnonymous,
@@ -2451,49 +2253,7 @@
   }
 
   function updateComposerCounter(options = {}) {
-    const field = $('#lex-post-body');
-    const counter = $('#lex-post-counter');
-    if (field && counter) counter.textContent = `${field.value.length.toLocaleString()} / ${entryLimit.toLocaleString()}`;
     if (options.persist !== false) saveDraft();
-  }
-
-  function syncCaseTitle() {
-    const wrapper = $('.quorum-case-title');
-    const field = $('#quorum-case-title');
-    const isCaseNote = $('#quorum-entry-type')?.value === 'share_case_note';
-    if (wrapper) wrapper.hidden = !isCaseNote;
-    if (field) field.required = isCaseNote;
-  }
-
-  function handleImageSelection() {
-    const field = $('#quorum-entry-image');
-    const file = field?.files?.[0] || null;
-    if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > imageLimit) {
-      field.value = '';
-      state.selectedImage = null;
-      toast('Use one JPEG, PNG, or WebP image no larger than 3 MB.');
-      return;
-    }
-    state.selectedImage = file;
-    $('#quorum-image-status').textContent = `${file.name} · ${(file.size / 1024).toFixed(0)} KB`;
-    $('#quorum-image-remove').hidden = false;
-    if ($('#quorum-image-alt')) $('#quorum-image-alt').required = true;
-    $('.quorum-add-details')?.setAttribute('open', '');
-    saveDraft();
-  }
-
-  function removeSelectedImage() {
-    state.selectedImage = null;
-    const field = $('#quorum-entry-image');
-    if (field) field.value = '';
-    $('#quorum-image-status').textContent = 'JPEG, PNG, or WebP · 3 MB maximum';
-    $('#quorum-image-remove').hidden = true;
-    if ($('#quorum-image-alt')) {
-      $('#quorum-image-alt').required = false;
-      $('#quorum-image-alt').value = '';
-    }
-    saveDraft();
   }
 
   function renderSelectedImages() {
@@ -2540,7 +2300,6 @@
     $('#quorum-image-status').textContent = `${files.length} image${files.length === 1 ? '' : 's'} selected · ${(total / 1024 / 1024).toFixed(1)} MB total`;
     $('#quorum-image-remove').hidden = false;
     renderSelectedImages();
-    $('.quorum-add-details')?.setAttribute('open', '');
     saveDraft();
   }
 
@@ -2549,7 +2308,7 @@
     state.selectedImages = [];
     const field = $('#quorum-entry-image');
     if (field) field.value = '';
-    if ($('#quorum-image-status')) $('#quorum-image-status').textContent = 'Up to 12 JPEG, PNG, or WebP images · 3 MB each';
+    if ($('#quorum-image-status')) $('#quorum-image-status').textContent = '';
     if ($('#quorum-image-remove')) $('#quorum-image-remove').hidden = true;
     $('#quorum-image-list')?.replaceChildren();
     saveDraft();
@@ -2644,22 +2403,6 @@
   }
 
   function populateControls() {
-    const type = $('#quorum-entry-type');
-    const category = $('#quorum-entry-category');
-    const subject = $('#quorum-entry-subject');
-    if (type) {
-      type.replaceChildren(
-        option('student_support', 'Discussion'),
-        option('ask_community', 'Question'),
-      );
-    }
-    if (category) {
-      category.replaceChildren(option('law_school_life', 'Law-school life'));
-    }
-    if (subject) {
-      subject.replaceChildren(option('', 'Not subject-specific'));
-      subjects.forEach((value) => subject.append(option(value, value)));
-    }
     const subjectLinks = $('#quorum-subject-links');
     if (subjectLinks) {
       subjectLinks.replaceChildren(button('All subjects', 'quorum-filter-link is-active', () => applySubjectFilter('')));
@@ -2669,18 +2412,6 @@
     if (typeLinks) {
       typeLinks.replaceChildren(button('All purposes', 'quorum-filter-link is-active', () => applyTypeFilter('')));
       entryTypes.forEach((label, value) => typeLinks.append(button(label, 'quorum-filter-link', () => applyTypeFilter(value))));
-    }
-  }
-
-  async function populateJoinedCircles() {
-    const select = $('#quorum-entry-circle');
-    if (!select) return;
-    try {
-      const result = await query('circles', { joinedOnly: true, limit: 20 });
-      select.replaceChildren(option('', 'Public community feed'));
-      (result.items || []).filter((circle) => circle.status === 'active').forEach((circle) => select.append(option(circle.circleId, circle.name)));
-    } catch {
-      select.replaceChildren(option('', 'Public community feed'));
     }
   }
 
@@ -2708,7 +2439,7 @@
     state.active = true;
     setAuthView(true);
     try {
-      await Promise.all([loadBootstrap(), populateJoinedCircles(), loadSampleDiscussions()]);
+      await loadBootstrap();
       loadSidebar();
       telemetry('quorum_opened');
       await restoreRoute({ loadChrome: false });
@@ -2727,7 +2458,7 @@
     }
     setAuthView(true);
     if (options.loadChrome !== false) {
-      await Promise.all([loadBootstrap(), populateJoinedCircles(), loadSampleDiscussions()]);
+      await loadBootstrap();
       loadSidebar();
     }
 
@@ -2832,18 +2563,8 @@
   function bind() {
     $('#lex-composer')?.addEventListener('submit', publishEntry);
     $('#lex-post-body')?.addEventListener('input', updateComposerCounter);
-    $('#lex-post-source')?.addEventListener('input', saveDraft);
-    $('#quorum-entry-type')?.addEventListener('change', () => {
-      syncCaseTitle();
-      saveDraft();
-    });
-    ['quorum-entry-category', 'quorum-entry-subject', 'quorum-entry-year', 'quorum-case-title', 'quorum-entry-circle', 'quorum-opinion-only']
-      .forEach((id) => $(`#${id}`)?.addEventListener('change', saveDraft));
-    $$('input[name="quorum-post-identity"]').forEach((control) => control.addEventListener('change', saveDraft));
     $('#quorum-entry-image')?.addEventListener('change', handleImagesSelection);
     $('#quorum-image-remove')?.addEventListener('click', removeSelectedImages);
-    $('#quorum-entry-preview')?.addEventListener('click', previewEntry);
-    $('#quorum-entry-cancel')?.addEventListener('click', cancelComposer);
     $('#quorum-menu-open')?.addEventListener('click', (event) => openQuorumDrawer(event.currentTarget));
     $('#quorum-menu-close')?.addEventListener('click', () => closeQuorumDrawer());
     $('#quorum-menu-back')?.addEventListener('click', () => closeQuorumDrawer());
@@ -2876,11 +2597,6 @@
       const composer = $('#lex-composer');
       composer?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       $('#lex-post-body')?.focus({ preventScroll: true });
-    });
-    $('#community-sample-more')?.addEventListener('click', () => {
-      state.sampleVisibleCount = Math.min(state.sampleItems.length, state.sampleVisibleCount + 6);
-      renderSampleDiscussions();
-      $('#community-sample-more')?.focus({ preventScroll: true });
     });
     $$('[data-quorum-view]').forEach((control) => {
       control.addEventListener('click', () => {

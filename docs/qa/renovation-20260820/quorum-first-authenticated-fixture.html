@@ -26,15 +26,17 @@
 </head>
 <body data-qa-fixture="quorum-first-authenticated">
   <header class="topbar pb-header pb-shared-header qfs-shell" id="site-header">
+    <button class="site-menu-toggle qfs-menu-toggle" id="site-menu-toggle" type="button" aria-controls="spa-nav" aria-expanded="false" aria-label="Open navigation menu">
+      <img src="../../../assets/icons/menu.svg" width="24" height="24" alt="" aria-hidden="true">
+    </button>
     <a class="brand pb-brand" href="#quorum" data-public-home aria-label="Due Diligence — Home">
       <img class="crest pb-crest" src="../../../assets/brand/icon-192.png" width="50" height="50" alt="">
       <span>
         <span class="brand-name pb-brand-name">Due Diligence</span>
-        <span class="brand-sub pb-brand-sub">Amicus in Itinere Iuris</span>
+        <span class="brand-sub pb-brand-sub">Philippine Bar Exam Simulator</span>
       </span>
     </a>
     <div class="topbar-actions quorum-header-actions">
-      <button class="site-menu-toggle qfs-menu-toggle" id="site-menu-toggle" type="button" aria-controls="spa-nav" aria-expanded="false">Menu</button>
       <button class="quorum-room-shortcut" id="spa-examination-room" type="button" data-public-feature="examination-room">Examination Room</button>
     </div>
     <nav class="spa-nav quorum-primary-nav qfs-drawer" id="spa-nav" aria-label="Primary navigation">
@@ -58,9 +60,7 @@
 
   <section id="page-community" class="page">
     <div class="page-wrap lex-page-wrap">
-      <header class="page-head lex-page-head"><div class="lex-title-row"><h2>Quorum</h2></div></header>
       <div id="lex-forum-app">
-        <button class="lex-button quorum-menu-open" id="quorum-menu-open" type="button">Community</button>
         <div class="lex-layout">
           <aside class="quorum-navigation" id="quorum-navigation" aria-label="Quorum navigation" aria-hidden="true">
             <div class="quorum-drawer-head"><strong>Quorum menu</strong><button class="quorum-drawer-close" type="button" aria-label="Close Quorum menu">×</button></div>
@@ -73,24 +73,47 @@
               <button class="lex-button lex-button-primary" type="submit">Search</button>
             </form>
             <form class="lex-composer" aria-label="Share with Quorum">
-              <div class="lex-composer-heading"><div><span class="lex-kicker">The floor is yours</span></div><span class="lex-member-mark" aria-hidden="true">DD</span></div>
+              <div class="lex-composer-heading"><span class="lex-member-mark" aria-hidden="true">DD</span></div>
               <label class="sr-only" for="qa-post">Share with Quorum</label>
               <textarea id="qa-post" maxlength="4000" rows="2" placeholder="What do you want to ask or share about law school?"></textarea>
               <div class="lex-composer-meta">
-                <div class="quorum-image-control"><button class="quorum-composer-tool" type="button">Photo</button><span>Up to 12 JPEG, PNG, or WebP images · 3 MB each</span></div>
-                <details class="quorum-add-details"><summary>Add details</summary></details>
-                <div class="lex-composer-actions"><span>0 / 4,000</span><button class="lex-button lex-button-quiet" type="button">Preview</button><button class="lex-button lex-button-quiet" type="button">Cancel</button><button class="lex-button lex-button-primary" type="submit">Post</button></div>
+                <div class="quorum-image-control"><label class="quorum-composer-tool" for="qa-image">Add photo</label><input id="qa-image" type="file" accept="image/jpeg,image/png,image/webp" hidden><span id="qa-image-status" role="status"></span></div>
+                <div class="lex-composer-actions"><button class="lex-button lex-button-primary" type="submit">Post</button></div>
               </div>
             </form>
-            <section class="quorum-practice-card quorum-practice-card-mobile" aria-label="Practice Exam">
-              <span class="lex-kicker">Practice Exam</span><h3>Ace the Bar with confidence.</h3><p>Build exam readiness through focused Philippine Bar-style practice.</p>
-              <ul class="quorum-practice-benefits"><li>Real Bar-style questions</li><li>Source-grounded coaching</li><li>Private progress tracking</li></ul>
-              <button class="lex-button lex-button-primary" type="button" data-public-feature="mock">Try Practice Exam</button>
-            </section>
-            <div class="lex-feed-toolbar"><div><span class="lex-kicker">Academic community</span><h3>Quorum Feed</h3></div><div class="quorum-toolbar-actions"><select aria-label="Sort posts"><option>Latest first</option></select><button class="lex-button lex-button-quiet" type="button">Refresh</button></div></div>
-            <article class="lex-post-card"><header class="lex-post-header"><div><span class="lex-member-mark">ML</span><strong>Mara L.</strong></div><time>Today</time></header><p>Which case helped you understand the distinction between jurisdiction over the subject matter and jurisdiction over the person?</p></article>
+            <div class="lex-feed-toolbar"><div><span class="lex-kicker">Academic community</span><h3>Latest member discussions</h3></div><div class="quorum-toolbar-actions"><select aria-label="Sort posts"><option>Latest first</option></select><button class="lex-button lex-button-quiet" type="button">Refresh</button></div></div>
+            <article class="lex-post-card" id="qa-post-card">
+              <div class="lex-post-inner">
+                <header class="lex-post-header"><button class="lex-author" type="button" disabled><span class="lex-author-avatar">QQ</span><span class="lex-author-copy"><strong>Quiet Quill</strong><span class="lex-anonymous-badge">Anonymous</span></span></button><time class="lex-post-time">2 hours ago</time></header>
+                <h3 class="quorum-entry-heading">Working student abroad, kaya ba talaga?</h3>
+                <p>Nasa abroad ako ngayon and iniisip kong mag-law school habang may full-time work. Sa mga naka-try na, ano yung hindi obvious na dapat i-check—class hours, attendance, recit setup, or time-zone difference?</p>
+                <div class="lex-post-actions"><button class="lex-action" type="button">I Hear 2</button><button class="lex-action" id="qa-comment-toggle" type="button" aria-expanded="true" aria-controls="qa-comments">Comment 2</button><button class="lex-action" type="button">Disseminate 0</button><button class="lex-action" type="button">Save</button></div>
+              </div>
+              <section class="lex-comments" id="qa-comments" aria-label="Comments and replies">
+                <div class="lex-comments-list">
+                  <article class="lex-comment"><header class="lex-comment-header"><button class="lex-author" type="button" disabled><span class="lex-author-avatar">CC</span><span class="lex-author-copy"><strong>Codal Compass</strong><span class="lex-anonymous-badge">Anonymous</span></span></button><span>1 hour ago</span></header><p class="lex-comment-body">Same concern ko dati. Gumawa ako ng sample week kasama work hours, commute, at recit prep—not just class schedule. Doon ko nakita kung realistic talaga.</p><div class="lex-comment-actions"><button class="lex-menu-button" type="button">Reply</button><button class="lex-menu-button" type="button">Report</button></div></article>
+                  <article class="lex-comment is-reply"><header class="lex-comment-header"><button class="lex-author" type="button" disabled><span class="lex-author-avatar">BR</span><span class="lex-author-copy"><strong>Brief Reader</strong><span class="lex-anonymous-badge">Anonymous</span></span></button><span>Just now</span></header><p class="lex-comment-body">Good point yung commute or connection buffer. On paper workable yung schedule until idagdag yung ordinary delays.</p><div class="lex-comment-actions"><button class="lex-menu-button" type="button">Report</button></div></article>
+                </div>
+                <form class="lex-comment-form"><textarea rows="3" aria-label="Comment" placeholder="Add a focused comment. Keep personal information out of the community."></textarea><label class="quorum-comment-anonymous"><input type="checkbox"> Comment anonymously</label><div class="lex-form-actions"><span class="lex-edit-counter">0 / 2,000</span><button class="lex-button lex-button-primary" type="button">Post comment</button></div></form>
+              </section>
+            </article>
           </main>
           <aside class="lex-secondary" aria-label="Quorum supporting information">
+            <section class="lex-guidance-card">
+              <div class="quorum-card-head"><span class="lex-kicker">Community pulse</span><button class="quorum-text-button" type="button">Refresh</button></div>
+              <h3>Trending discussions</h3>
+              <div class="quorum-compact-list"><div class="quorum-ranked-item"><strong class="quorum-rank">1</strong><span>Law School Life</span><small>8 posts</small></div><div class="quorum-ranked-item"><strong class="quorum-rank">2</strong><span>Remedial Law</span><small>5 posts</small></div></div>
+            </section>
+            <section class="lex-guidance-card">
+              <div class="quorum-card-head"><span class="lex-kicker">Needs a response</span><button class="quorum-text-button" type="button">View all</button></div>
+              <h3>Questions Needing Answers</h3>
+              <div class="quorum-compact-list"><button class="quorum-question-item" type="button">Help re: judicial notice<small>1 answer · 6 days ago</small></button></div>
+            </section>
+            <section class="lex-guidance-card">
+              <div class="quorum-card-head"><span class="lex-kicker">Study together</span><button class="quorum-text-button" type="button">Browse</button></div>
+              <h3>Study Circles</h3><div class="quorum-compact-list"><p>No data yet.</p></div>
+            </section>
+            <section class="lex-notice-card"><strong>Educational discussion only</strong><p>Community posts do not constitute legal advice. Verify statutes and jurisprudence through official sources.</p></section>
             <section class="quorum-practice-card quorum-practice-card-desktop">
               <span class="lex-kicker">Practice Exam</span>
               <h3>Ace the Bar with confidence.</h3>
@@ -110,6 +133,14 @@
     document.getElementById('site-menu-toggle')?.addEventListener('click', () => {
       const nav = document.getElementById('spa-nav');
       window.setSiteMenuOpen(!nav?.classList.contains('is-open'));
+    });
+    document.getElementById('qa-image')?.addEventListener('change', (event) => {
+      document.getElementById('qa-image-status').textContent = event.target.files?.length ? '1 photo selected' : '';
+    });
+    document.getElementById('qa-comment-toggle')?.addEventListener('click', (event) => {
+      const comments = document.getElementById('qa-comments');
+      comments.hidden = !comments.hidden;
+      event.currentTarget.setAttribute('aria-expanded', String(!comments.hidden));
     });
   </script>
   <script src="../../../assets/quorum-first-shell.js"></script>

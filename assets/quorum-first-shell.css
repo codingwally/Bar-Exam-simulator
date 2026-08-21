@@ -435,7 +435,7 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 400px) {
   #site-header.qfs-shell {
     flex-wrap: wrap;
   }

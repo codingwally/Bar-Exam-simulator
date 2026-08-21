@@ -2400,3 +2400,471 @@ body.quorum-drawer-open { overflow: hidden; }
     transition: none;
   }
 }
+
+/* Home-only modern community refinement: judicial navy, brass gold, and warm paper. */
+#page-community {
+  --home-navy: var(--qfs-navy-950, #051326);
+  --home-navy-soft: var(--qfs-navy-800, #0d2948);
+  --home-gold: var(--qfs-gold-500, #c5a059);
+  --home-gold-bright: var(--qfs-gold-300, #efd17d);
+  --home-paper: var(--qfs-paper, #fffdfa);
+  --home-cream: var(--qfs-cream, #faf8f3);
+  --home-ink: var(--qfs-ink, #13243b);
+  --home-muted: var(--qfs-muted, #637187);
+  --home-line: color-mix(in srgb, var(--home-navy) 14%, transparent);
+  background:
+    radial-gradient(circle at 14% 8%, rgba(197, 160, 89, .08), transparent 30%),
+    var(--home-cream);
+}
+
+#page-community .lex-page-wrap {
+  width: min(100%, 1180px);
+  padding: 34px 22px 72px;
+}
+
+#page-community .lex-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(276px, 316px);
+  gap: clamp(24px, 3vw, 38px);
+}
+
+#page-community .lex-primary {
+  padding-top: 0;
+}
+
+#page-community .quorum-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px auto;
+  gap: 10px;
+  margin: 0 0 12px;
+  opacity: 1;
+}
+
+#page-community .quorum-search input {
+  min-height: 48px;
+  padding-inline: 16px;
+  border: 1px solid var(--home-line);
+  border-radius: 14px;
+  color: var(--home-ink);
+  background: rgba(255, 253, 250, .86);
+  box-shadow: 0 10px 32px rgba(5, 19, 38, .05);
+}
+
+#page-community .quorum-search input:focus {
+  border-color: var(--home-gold);
+  outline: 3px solid rgba(197, 160, 89, .18);
+}
+
+#page-community .quorum-icon {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  background: currentColor;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+}
+
+#page-community .quorum-icon-affirm { -webkit-mask-image: url("./icons/community/thumbs-up.svg"); mask-image: url("./icons/community/thumbs-up.svg"); }
+#page-community .quorum-icon-comment { -webkit-mask-image: url("./icons/community/chat-circle.svg"); mask-image: url("./icons/community/chat-circle.svg"); }
+#page-community .quorum-icon-share { -webkit-mask-image: url("./icons/community/share-fat.svg"); mask-image: url("./icons/community/share-fat.svg"); }
+#page-community .quorum-icon-save { -webkit-mask-image: url("./icons/community/bookmark-simple.svg"); mask-image: url("./icons/community/bookmark-simple.svg"); }
+#page-community .quorum-icon-camera { -webkit-mask-image: url("./icons/community/camera.svg"); mask-image: url("./icons/community/camera.svg"); }
+#page-community .quorum-icon-send { -webkit-mask-image: url("./icons/community/paper-plane-tilt.svg"); mask-image: url("./icons/community/paper-plane-tilt.svg"); }
+#page-community .quorum-icon-search { -webkit-mask-image: url("./icons/community/magnifying-glass.svg"); mask-image: url("./icons/community/magnifying-glass.svg"); }
+#page-community .quorum-icon-refresh { -webkit-mask-image: url("./icons/community/arrows-clockwise.svg"); mask-image: url("./icons/community/arrows-clockwise.svg"); }
+#page-community .quorum-icon-private { -webkit-mask-image: url("./icons/community/eye-slash.svg"); mask-image: url("./icons/community/eye-slash.svg"); }
+#page-community .quorum-icon-next { -webkit-mask-image: url("./icons/community/caret-right.svg"); mask-image: url("./icons/community/caret-right.svg"); }
+#page-community .quorum-icon-close { -webkit-mask-image: url("./icons/community/x.svg"); mask-image: url("./icons/community/x.svg"); }
+#page-community .quorum-icon-more { -webkit-mask-image: url("./icons/community/dots-three.svg"); mask-image: url("./icons/community/dots-three.svg"); }
+
+#page-community .quorum-icon-button {
+  display: inline-flex;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--home-navy);
+  background: transparent;
+}
+
+#page-community .quorum-icon-button:hover:not(:disabled) {
+  border-color: rgba(197, 160, 89, .34);
+  color: var(--home-navy);
+  background: rgba(197, 160, 89, .10);
+  transform: translateY(-1px);
+}
+
+#page-community .quorum-icon-button:focus-visible,
+#page-community .quorum-post-privacy input:focus-visible + .quorum-post-privacy-switch {
+  outline: 3px solid rgba(197, 160, 89, .42);
+  outline-offset: 2px;
+}
+
+#page-community .quorum-search .lex-button-primary,
+#page-community #lex-post-submit {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  color: var(--home-navy);
+  background: linear-gradient(145deg, var(--home-gold-bright), var(--home-gold));
+  box-shadow: 0 10px 22px rgba(125, 88, 21, .18);
+}
+
+#page-community .lex-composer {
+  grid-template-columns: 54px minmax(0, 1fr);
+  padding: 18px 20px 14px;
+  border: 0;
+  border-radius: 18px;
+  background: rgba(255, 253, 250, .92);
+  box-shadow: 0 18px 45px rgba(5, 19, 38, .08);
+}
+
+#page-community .lex-member-mark {
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(197, 160, 89, .72);
+  background: var(--home-navy);
+}
+
+#page-community .lex-composer-heading h3 {
+  margin-top: 4px;
+  color: var(--home-muted);
+  font-size: 16px;
+}
+
+#page-community #lex-post-body {
+  min-height: 54px;
+  border-bottom-color: var(--home-line);
+  color: var(--home-ink);
+}
+
+#page-community .lex-composer-meta {
+  margin-top: 8px;
+}
+
+#page-community .quorum-image-control {
+  min-height: 48px;
+}
+
+#page-community .quorum-composer-tool {
+  color: var(--home-navy-soft);
+}
+
+#page-community .quorum-post-privacy {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  color: var(--home-ink);
+  cursor: pointer;
+  font: 700 12px/1.2 Inter, sans-serif;
+  white-space: nowrap;
+}
+
+#page-community .quorum-post-privacy input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+#page-community .quorum-post-privacy-switch {
+  display: inline-grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(5, 19, 38, .14);
+  border-radius: 12px;
+  color: var(--home-muted);
+  background: var(--home-paper);
+  transition: color .16s ease, background .16s ease, border-color .16s ease;
+}
+
+#page-community .quorum-post-privacy input:checked + .quorum-post-privacy-switch {
+  border-color: var(--home-gold);
+  color: var(--home-gold-bright);
+  background: var(--home-navy);
+}
+
+#page-community .lex-feed-toolbar {
+  margin: 20px 0 6px;
+  border-bottom: 1px solid var(--home-line);
+}
+
+#page-community .lex-feed-toolbar h3 {
+  font-family: var(--serif-display);
+  font-size: 19px;
+}
+
+#page-community .lex-feed-toolbar select {
+  min-height: 40px;
+  border-color: var(--home-line);
+  border-radius: 10px;
+  background: transparent;
+}
+
+#page-community .lex-feed {
+  gap: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  background: rgba(255, 253, 250, .72);
+}
+
+#page-community .lex-post-card {
+  border: 0;
+  border-bottom: 1px solid var(--home-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#page-community .lex-post-card:last-child {
+  border-bottom: 0;
+}
+
+#page-community .lex-post-inner {
+  padding: 20px 22px 0;
+}
+
+#page-community .lex-post-actions {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 7px 14px;
+  border-top-color: var(--home-line);
+}
+
+#page-community .lex-action.quorum-icon-button {
+  width: auto;
+  min-width: 52px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: var(--home-muted);
+}
+
+#page-community .lex-action.quorum-icon-button.is-active,
+#page-community .lex-action.quorum-icon-button[aria-pressed="true"] {
+  color: var(--home-gold-bright);
+  background: var(--home-navy);
+}
+
+#page-community .quorum-action-count,
+#page-community .quorum-affirm-count {
+  min-width: auto;
+  min-height: auto;
+  padding: 0;
+  color: currentColor;
+  font: 750 12px/1 Inter, sans-serif;
+}
+
+#page-community .quorum-affirm-control {
+  gap: 2px;
+}
+
+#page-community .quorum-affirm-trigger {
+  min-width: 42px !important;
+  padding-right: 7px !important;
+  padding-left: 12px !important;
+}
+
+#page-community .quorum-affirm-count {
+  width: 28px;
+  height: 42px;
+  cursor: pointer;
+}
+
+#page-community .quorum-overflow-trigger {
+  display: grid;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  place-items: center;
+  padding: 0;
+  border-radius: 12px;
+  color: var(--home-muted);
+  background: transparent;
+}
+
+#page-community .lex-comments {
+  border-top: 1px solid var(--home-line);
+  background: rgba(5, 19, 38, .025);
+}
+
+#page-community .lex-form-actions {
+  align-items: center;
+}
+
+#page-community .lex-secondary {
+  top: 88px;
+  gap: 0;
+  padding: 0;
+}
+
+#page-community .quorum-practice-card {
+  margin: 0 0 22px;
+  padding: 24px;
+  border: 1px solid rgba(197, 160, 89, .56);
+  border-radius: 18px;
+  color: #f5f7fb;
+  background:
+    radial-gradient(circle at 88% 10%, rgba(239, 209, 125, .18), transparent 38%),
+    linear-gradient(150deg, var(--home-navy), var(--home-navy-soft));
+  box-shadow: 0 20px 44px rgba(5, 19, 38, .18);
+}
+
+#page-community .quorum-practice-card h3 {
+  margin: 7px 0 8px;
+  color: #fff;
+  font-size: 22px;
+}
+
+#page-community .quorum-practice-card p,
+#page-community .quorum-practice-benefits {
+  color: #dce5ef;
+}
+
+#page-community .quorum-practice-benefits li::marker,
+#page-community .quorum-practice-card .lex-kicker {
+  color: var(--home-gold-bright);
+}
+
+#page-community .quorum-practice-card .lex-button-primary {
+  margin-top: 8px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--home-navy);
+  background: linear-gradient(145deg, var(--home-gold-bright), var(--home-gold));
+  box-shadow: 0 12px 24px rgba(0, 0, 0, .18);
+}
+
+#page-community .lex-guidance-card,
+#page-community .lex-notice-card {
+  margin: 0;
+  padding: 18px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--home-line);
+  border-radius: 0;
+  color: var(--home-ink);
+  background: transparent;
+  box-shadow: none;
+}
+
+#page-community .lex-guidance-card h3 {
+  color: var(--home-navy);
+}
+
+#page-community .quorum-card-head .quorum-icon-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  color: var(--home-gold);
+}
+
+#page-community .lex-notice-card.quorum-disclaimer {
+  margin-top: 2px;
+  padding: 18px 16px;
+  border: 0;
+  border-bottom: 0;
+  border-radius: 14px;
+  color: var(--home-ink);
+  background: rgba(197, 160, 89, .12);
+}
+
+#page-community .lex-notice-card.quorum-disclaimer strong {
+  color: var(--home-navy);
+}
+
+#page-community .lex-notice-card.quorum-disclaimer p {
+  margin-bottom: 0;
+  color: #405069;
+}
+
+@media (max-width: 980px) {
+  #page-community .lex-layout {
+    grid-template-columns: 1fr;
+  }
+
+  #page-community .lex-secondary {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 24px;
+  }
+
+  #page-community .quorum-practice-card,
+  #page-community .quorum-disclaimer {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  #page-community .lex-page-wrap {
+    padding: 18px 12px 48px;
+  }
+
+  #page-community .quorum-search {
+    grid-template-columns: minmax(0, 1fr) 46px auto;
+  }
+
+  #page-community .lex-composer {
+    grid-template-columns: 42px minmax(0, 1fr);
+    padding: 14px;
+    border-radius: 15px;
+  }
+
+  #page-community .lex-composer-actions {
+    justify-content: space-between;
+  }
+
+  #page-community .quorum-post-privacy {
+    font-size: 11px;
+  }
+
+  #page-community #lex-post-submit {
+    width: 46px;
+    min-width: 46px;
+  }
+
+  #page-community .lex-post-inner {
+    padding-inline: 15px;
+  }
+
+  #page-community .lex-post-actions {
+    margin-inline: -15px;
+    padding-inline: 5px;
+  }
+
+  #page-community .lex-action.quorum-icon-button {
+    min-width: 46px;
+    padding-inline: 9px;
+  }
+
+  #page-community .lex-secondary {
+    grid-template-columns: 1fr;
+  }
+
+  #page-community .quorum-practice-card,
+  #page-community .quorum-disclaimer {
+    grid-column: auto;
+  }
+}

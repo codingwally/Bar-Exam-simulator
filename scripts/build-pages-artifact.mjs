@@ -32,6 +32,22 @@ const featurePreviewFiles = Object.freeze([
   'verdict.png',
 ].map((name) => `assets/feature-previews/${name}`));
 
+const communityIconFiles = Object.freeze([
+  'thumbs-up.svg',
+  'chat-circle.svg',
+  'share-fat.svg',
+  'bookmark-simple.svg',
+  'camera.svg',
+  'paper-plane-tilt.svg',
+  'magnifying-glass.svg',
+  'arrows-clockwise.svg',
+  'eye-slash.svg',
+  'caret-right.svg',
+  'x.svg',
+  'dots-three.svg',
+  'LICENSE.txt',
+].map((name) => `assets/icons/community/${name}`));
+
 const publicFiles = Object.freeze([
   'index.html',
   'CNAME',
@@ -58,6 +74,7 @@ const publicFiles = Object.freeze([
   'assets/feature-loader.js',
   'assets/private-workspace.js',
   ...featurePreviewFiles,
+  ...communityIconFiles,
   'assets/phase2-experience.js',
   'assets/phase2.css',
   'assets/phase3-analytics.js',

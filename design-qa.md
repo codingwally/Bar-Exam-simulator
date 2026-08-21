@@ -42,6 +42,51 @@ final result: passed
 
 ---
 
+# Home Modern Icon and Anonymous-Post QA — 2026-08-21
+
+## Scope and reference
+
+- Owner reference: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-d64e6be8-6142-4ed5-98f1-68a51270ee2e.png`.
+- Production-CSS fixture: `docs/qa/home-modern-20260821-fixture.html`.
+- Scope is limited to the authenticated Home community. Examination Room, grading, access, payments,
+  question content, and other product pages are unchanged.
+
+## Visual comparison
+
+- Preserved the controlling navy (`#051326`), brass gold (`#c5a059`), warm paper (`#fffdfa`),
+  and cream (`#faf8f3`) tokens instead of introducing another hue family.
+- Replaced primitive bordered sidebar boxes with a single navy Practice Exam feature panel followed by
+  lightweight separated information groups. The educational disclaimer remains the final group and uses
+  an explicit warm-gold surface with high-contrast navy text.
+- Replaced visible Search, Add photo, Post, Refresh, View all, Browse, Affirm, Comment, Disseminate,
+  Save, More, and Post comment words with locally vendored Phosphor icons where an icon is unambiguous.
+  Accessible labels and native focus behavior remain intact.
+- Added a modern Post anonymously control beside the composer action and retained the existing anonymous
+  comment option.
+- Removed the visible comment character counter while preserving native maximum-length enforcement.
+- Reduced visual chrome on member posts to paper surfaces and separators rather than nested bordered cards.
+
+## Browser verification
+
+- Desktop `1292 × 772`: Practice Exam is the first side item; the legal disclaimer is the last; all 13
+  community icon instances render; post actions expose only counts visually (`2`, `2`, `0`).
+- Mobile `375 × 812`: layout width equals viewport width with no horizontal overflow; anonymous posting
+  can be checked and remains keyboard-labelled.
+- Narrow mobile `320 × 760`: document width equals viewport width with no horizontal overflow; composer
+  remains within the available column; all five action controls retain descriptive accessible names.
+- The anonymous-post checkbox was toggled successfully in the browser and its checked state was confirmed.
+
+## Contract verification
+
+- The existing Worker already accepts `isAnonymous`; the Home composer now sends the selected value and
+  preserves it in the existing local draft payload.
+- The sanitized Pages artifact contains the local icon assets and MIT license.
+- Home forum contract tests, Pages artifact tests, JavaScript syntax checks, and `git diff --check` passed.
+
+final result: passed
+
+---
+
 # Home Left-Navigation Cleanup Design QA — 2026-08-21
 
 ## Scope and reference

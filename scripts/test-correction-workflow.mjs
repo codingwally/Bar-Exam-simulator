@@ -32,7 +32,7 @@ assert.doesNotMatch(html, /ORIGINAL MODEL ANSWER/);
 assert.doesNotMatch(html, /Submitter email/);
 
 const functionSource = html.match(
-  /let activeSuggestionQuestion = null;[\s\S]*?(?=\/\* ---------- Voice-to-text dictation \(real, with fallback\) ---------- \*\/)/,
+  /let activeSuggestionQuestion = null;[\s\S]*?(?=document\.addEventListener\('visibilitychange')/,
 )?.[0];
 assert.ok(functionSource, 'Correction workflow functions must be extractable for behavioral tests.');
 

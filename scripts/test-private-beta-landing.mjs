@@ -67,9 +67,17 @@ assert.match(shellCss, /@media \(max-width: 900px\)[\s\S]*\.quorum-entry/,
 assert.match(shellCss, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(shellCss, /\.quorum-signin-intro\.is-playing[\s\S]*opacity:\s*1/);
 assert.match(shellCss, /\.quorum-signin-intro\.is-finishing \.quorum-signin-intro-still[\s\S]*opacity:\s*1/);
+assert.match(shellCss, /#spa-community[\s\S]*icons\/navigation\/house\.svg/,
+  'The Home drawer entry must include a real navigation icon.');
+assert.match(shellCss, /#quorum-practice-menu > summary[\s\S]*icons\/navigation\/book-open\.svg/,
+  'The Practice Exam drawer group must include a real navigation icon.');
+assert.match(shellCss, /#header-account-control[\s\S]*icons\/navigation\/circle-user-round\.svg/,
+  'The Profile drawer entry must include a real navigation icon.');
 
 assert.match(landingJs, /function openQuorumHome\(trigger = null\)[\s\S]*openProtectedFeature\('quorum', trigger\)/,
   'Authenticated Home must resolve through the protected Quorum route.');
+assert.match(landingJs, /const publicHomepageHashes = new Set\(\[[\s\S]*'quorum'[\s\S]*'lex-forum'/,
+  'Both canonical and legacy Home hashes must initialize Quorum instead of stalling in route verification.');
 assert.match(landingJs, /if \(!gateEnabled\)[\s\S]*else if \(authenticated\) await openQuorumHome\(\)/,
   'Signed-in root restoration must open Quorum rather than a retired landing.');
 assert.match(landingJs, /popstate[\s\S]*openQuorumHome\(\)[\s\S]*hashchange[\s\S]*openQuorumHome\(\)/,

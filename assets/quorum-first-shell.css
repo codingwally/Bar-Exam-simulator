@@ -290,6 +290,7 @@ body.private-beta-public #private-beta-landing .pb-public-footer {
   padding: 10px 12px;
   display: flex;
   align-items: center;
+  gap: 12px;
   justify-content: flex-start;
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, .08);
@@ -301,6 +302,84 @@ body.private-beta-public #private-beta-landing .pb-public-footer {
   text-align: left;
   text-transform: none;
   cursor: pointer;
+}
+
+#site-header.qfs-shell .quorum-nav-link::before,
+#site-header.qfs-shell .quorum-practice-menu summary::before,
+#site-header.qfs-shell .quorum-practice-links button::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  background: currentColor;
+  -webkit-mask-image: var(--qfs-nav-icon);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-image: var(--qfs-nav-icon);
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+}
+
+#site-header.qfs-shell #spa-community {
+  --qfs-nav-icon: url("icons/navigation/house.svg");
+}
+
+#site-header.qfs-shell #quorum-home-tools-menu > summary {
+  --qfs-nav-icon: url("icons/navigation/layout-grid.svg");
+}
+
+#site-header.qfs-shell [data-quorum-view="my-posts"] {
+  --qfs-nav-icon: url("icons/navigation/file-text.svg");
+}
+
+#site-header.qfs-shell [data-quorum-view="saved"] {
+  --qfs-nav-icon: url("icons/navigation/bookmark.svg");
+}
+
+#site-header.qfs-shell [data-quorum-view="circles"] {
+  --qfs-nav-icon: url("icons/navigation/users.svg");
+}
+
+#site-header.qfs-shell [data-quorum-view="notifications"] {
+  --qfs-nav-icon: url("icons/navigation/bell.svg");
+}
+
+#site-header.qfs-shell #quorum-practice-menu > summary {
+  --qfs-nav-icon: url("icons/navigation/book-open.svg");
+}
+
+#site-header.qfs-shell #spa-bar-easy {
+  --qfs-nav-icon: url("icons/navigation/compass.svg");
+}
+
+#site-header.qfs-shell #spa-jurisprudence {
+  --qfs-nav-icon: url("icons/navigation/book-open-check.svg");
+}
+
+#site-header.qfs-shell #spa-mock {
+  --qfs-nav-icon: url("icons/navigation/pen-line.svg");
+}
+
+#site-header.qfs-shell #spa-bar-feels {
+  --qfs-nav-icon: url("icons/navigation/timer.svg");
+}
+
+#site-header.qfs-shell #header-account-control {
+  --qfs-nav-icon: url("icons/navigation/circle-user-round.svg");
+}
+
+#site-header.qfs-shell #spa-pricing {
+  --qfs-nav-icon: url("icons/navigation/tag.svg");
+}
+
+#site-header.qfs-shell #spa-support {
+  --qfs-nav-icon: url("icons/navigation/headphones.svg");
+}
+
+#site-header.qfs-shell .quorum-drawer-room {
+  --qfs-nav-icon: url("icons/navigation/door-open.svg");
 }
 
 #site-header.qfs-shell .quorum-nav-link:first-of-type {
@@ -336,10 +415,15 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   padding: 11px 12px;
   display: flex;
   align-items: center;
+  gap: 12px;
   color: #fff;
   font: 700 13px/1.2 Inter, sans-serif;
-  list-style-position: inside;
+  list-style: none;
   cursor: pointer;
+}
+
+#site-header.qfs-shell .quorum-practice-menu summary::-webkit-details-marker {
+  display: none;
 }
 
 #site-header.qfs-shell .quorum-practice-menu[open] summary {

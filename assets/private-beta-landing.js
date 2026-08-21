@@ -18,6 +18,8 @@
   const publicHomepageHashes = new Set([
     '',
     'public-platform',
+    'quorum',
+    'lex-forum',
     'chamber/academy',
     'chamber/commons',
     'chamber/barbound',

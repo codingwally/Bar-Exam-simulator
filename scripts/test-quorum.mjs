@@ -89,7 +89,8 @@ for (const id of [
 const composerHtml = html.match(/<form class="lex-composer"[\s\S]*?<\/form>/)?.[0] || '';
 assert.ok(composerHtml, 'The Home composer must render.');
 assert.match(composerHtml, /id="quorum-entry-image"/);
-assert.match(composerHtml, /id="lex-post-submit"[^>]*>Post</);
+assert.match(composerHtml, /id="lex-post-submit"[^>]*aria-label="Post"/);
+assert.match(composerHtml, /id="quorum-entry-anonymous"/);
 for (const removedControl of [
   'quorum-entry-type',
   'quorum-entry-category',

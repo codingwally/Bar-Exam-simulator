@@ -42,6 +42,43 @@ final result: passed
 
 ---
 
+# Bar Question Practice Workspace Cleanup — 2026-08-21
+
+## Scope and source truth
+
+- Owner reference: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-f301d42e-5f2a-451d-8447-e4f0475e4d6e.png` (`1383 × 863`).
+- Local implementation capture: `docs/qa/renovation-20260821/bar-question-practice-cleanup-1383x863.png`.
+- Inspected browser viewport: `1383 × 863`; the in-app browser exported a `1373 × 772` visible-frame capture.
+- Scope was limited to Bar Question Practice navigation and answer-workspace controls. Question content, timers, answer persistence, grading, score rules, routes, and Examination Room were not changed.
+
+## Verified corrections
+
+1. The duplicate subject rail is removed from the visual and accessibility trees while its existing DOM identifier remains available for compatibility.
+2. `Change Subject` remains visible and continues to call the existing subject-selection flow.
+3. The redundant `Answer & Review` control is absent.
+4. The former `The Verdict` workspace action is now `Analytics` and opens the existing Analytics dashboard.
+5. The non-functional Dictate control and its dead browser-speech implementation are removed.
+6. The existing answer textarea, word count, submit control, timer modes, Next action, and Exit Practice action remain in their established positions.
+
+## Browser interaction evidence
+
+- The Analytics control opened the `analytics-modal`; its visible heading and close label both read `Analytics`.
+- Closing Analytics returned to the same answer workspace without replacing or pausing it.
+- The subject rail computed to `display: none` and remained `hidden`/`aria-hidden`.
+- No Dictate or Answer & Review control existed in the rendered workspace.
+- Entering an answer enabled the unchanged `Evaluate and grade essay` submission control.
+- The inspected desktop workspace retained the existing navy, brass-gold, alabaster, serif, sans, spacing, and control system.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+
+final result: passed
+
+---
+
 # Home Modern Icon and Anonymous-Post QA — 2026-08-21
 
 ## Scope and reference

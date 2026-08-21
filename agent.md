@@ -31,6 +31,17 @@ If a proposed solution does not improve the product, do not implement it.
 
 This section supersedes every conflicting visual instruction. It is a release gate, not an optional cosmetic preference.
 
+## Approved renovation reference — 2026-08-21
+
+For ordinary Due Diligence product surfaces, the approved renovation contract in
+`docs/visual-references/approved-renovation-20260821.md` is the controlling visual reference.
+Implementations must preserve at least a 90% visual match to that reference. When a literal match is
+not technically safe, resolve design decisions in this order: modern, legal, professional. Never replace
+the approved composition with a generic dashboard, speculative feature, or unrelated template.
+
+The Examination Room is intentionally outside this renovation scope. Its internal design and behavior
+must not be changed under this reference without a separate, explicit instruction.
+
 ## Master design goal
 
 Every redesigned or repaired surface must visibly belong to the same Due Diligence product family already established by the strongest existing interfaces—particularly:

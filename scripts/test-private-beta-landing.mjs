@@ -31,7 +31,7 @@ assert.equal((html.match(/id="site-header"/g) || []).length, 1,
 assert.match(sharedHeader, /class="brand pb-brand"[^>]*data-public-home/,
   'The brand must remain the authenticated Home control.');
 assert.match(sharedHeader, /data-public-feature="examination-room"[^>]*>Examination Room<\/button>/);
-assert.match(sharedHeader, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"[^>]*aria-label="Open navigation menu"[\s\S]*assets\/icons\/menu\.svg[\s\S]*<\/button>/);
+assert.match(sharedHeader, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"[^>]*aria-label="Open navigation menu"[\s\S]*class="site-menu-icon"[\s\S]*<span><\/span><span><\/span><span><\/span>[\s\S]*<\/button>/);
 assert.match(sharedHeader, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
 assert.match(sharedHeader, /<summary>Practice Exam<\/summary>[\s\S]*Guided Practice[\s\S]*Doctrine Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation/);
 assert.match(sharedHeader, /data-public-action="docket"[^>]*aria-label="Sign in or open your profile"[^>]*>Profile<\/button>/);
@@ -45,8 +45,8 @@ assert.match(publicLanding, /data-signin-intro-video[\s\S]*data-src="assets\/bra
   'The first-visit sign-in screen must contain the muted inline intro video.');
 assert.doesNotMatch(publicLanding, /<video[^>]*\scontrols(?:\s|=|>)/,
   'The decorative sign-in video must not expose playback controls.');
-assert.match(publicLanding, /class="quorum-signin-intro-still"[\s\S]*assets\/brand\/icon-192\.png/,
-  'The existing crest must remain as the seamless fallback and end state.');
+assert.match(publicLanding, /class="quorum-signin-intro-still"[\s\S]*assets\/brand\/logo1-master\.png/,
+  'The approved full-resolution justice mark must remain as the seamless fallback and end state.');
 assert.doesNotMatch(publicLanding, /pb-feature-ledger|pb-chamber-index|pb-pillar-card|feature-previews\//,
   'The signed-out entry must stay concise and must not recreate the retired chamber landing.');
 assert.doesNotMatch(`${publicLanding}\n${landingJs}`, /campus-students|library-community|library-student|writing-notes/,
@@ -60,13 +60,13 @@ assert.match(shellJs, /document\.getElementById\('spa-mock'\)\?\.click\(\)/,
   'The Quorum practice promotion must reuse the existing practice route.');
 assert.match(shellCss, /#site-header\.qfs-shell #spa-nav\.qfs-drawer[\s\S]*position:\s*fixed[\s\S]*height:\s*100dvh/,
   'The compact menu must use the approved full-height drawer.');
-assert.match(shellCss, /@media \(max-width: 400px\)[\s\S]*#site-header\.qfs-shell \{[\s\S]*flex-wrap:\s*wrap[\s\S]*\.topbar-actions \{[\s\S]*flex:\s*0 0 100%/,
-  'The compact token counter must wrap below 320px and 375px headers instead of overflowing.');
-assert.match(shellCss, /@media \(max-width: 760px\)[\s\S]*\.quorum-entry/,
+assert.match(shellCss, /@media \(max-width: 400px\)[\s\S]*#site-header\.qfs-shell \{[\s\S]*flex-wrap:\s*nowrap/,
+  'The approved compact header must remain one clean row at 320px and 375px without overflowing.');
+assert.match(shellCss, /@media \(max-width: 900px\)[\s\S]*\.quorum-entry/,
   'The signed-out entry must have an explicit mobile treatment.');
 assert.match(shellCss, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(shellCss, /\.quorum-signin-intro\.is-playing[\s\S]*opacity:\s*1/);
-assert.match(shellCss, /\.quorum-signin-intro\.is-finishing[\s\S]*opacity:\s*0/);
+assert.match(shellCss, /\.quorum-signin-intro\.is-finishing \.quorum-signin-intro-still[\s\S]*opacity:\s*1/);
 
 assert.match(landingJs, /function openQuorumHome\(trigger = null\)[\s\S]*openProtectedFeature\('quorum', trigger\)/,
   'Authenticated Home must resolve through the protected Quorum route.');
@@ -80,8 +80,8 @@ assert.match(landingJs, /function initializeSignInIntro\(\)[\s\S]*state\.reduced
   'The intro must play only once per device and respect reduced-motion preferences.');
 assert.match(landingJs, /video\.addEventListener\('ended',[\s\S]*showStill/,
   'The intro must always resolve to the existing crest when playback ends.');
-assert.match(landingJs, /playback\?\.catch[\s\S]*showStill/,
-  'Autoplay rejection must fail open to the existing crest.');
+assert.match(landingJs, /Promise\.allSettled\(playback\)[\s\S]*showStill/,
+  'Autoplay rejection must fail open to the approved still state.');
 assert.match(landingJs, /route === 'subject-matter'[\s\S]*restoreRoute\('per_subject'/);
 assert.match(landingJs, /feature === 'verdict'[\s\S]*global\.openVerdictDashboard\?\.\(\)/);
 assert.match(html, /window\.openVerdictDashboard = openAnalytics;/);

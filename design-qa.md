@@ -1,3 +1,47 @@
+# Approved Renovation Shell Design QA — 2026-08-21
+
+## Controlling target
+
+- Contract: `docs/visual-references/approved-renovation-20260821.md`.
+- Approved walkthrough: `duediligence-design-walkthrough-20260821` (owner-reviewed prototype).
+- Required match: 90% or better; fallback hierarchy is modern, legal, professional.
+- Scope: shared shell and signed-out entry. Examination Room internals are unchanged.
+
+## Implemented match
+
+- Added the approved two-row desktop shell with Home immediately before Guided Practice.
+- Preserved all existing real feature handlers through `data-public-feature` routes.
+- Kept the icon-free accessible left drawer for mobile and overflow navigation.
+- Rebuilt sign-in as a full-height split: uncropped silent video over a same-video blurred backdrop on
+  the left; restrained cream admission panel and real product features on the right.
+- Added the approved still transition and 30-minute replay interval without playback controls or sound.
+- Preserved the canonical navy, cream, brass-gold, Fraunces, and Inter system.
+
+## Automated gates
+
+- `scripts/test-approved-renovation-shell.mjs` validates shell order, route bindings, sign-in composition,
+  responsive stacking, focus treatment, reduced motion, video behavior, and cache versions.
+- Existing authentication, onboarding, public-shell, navigation, and complete-beta contracts remain in
+  the deployment gate.
+
+## Current result
+
+- Desktop sign-in (`1440 × 900`): the split fills the viewport, the video remains uncropped with
+  `object-fit: contain`, and page-level horizontal overflow is `0px`.
+- Mobile sign-in (`375 × 812`): the layout resolves to one `375px` column with `0px` horizontal overflow.
+- Desktop shell (`1440 × 900`): the visible route order is exactly Home, Guided Practice, Doctrine
+  Review, Bar Question Practice, Bar Exam Simulation, Analytics.
+- Mobile drawer (`375 × 812`): the open drawer rectangle is exactly `x=0`, `y=0`, `375 × 812`; it
+  covers the viewport without clipping or overflow.
+- The complete GitHub Pages deployment test inventory passed, including authentication, onboarding,
+  navigation, Subject Matter, commercial access, Quorum, Verdict, Examination Room regression,
+  content validation, sanitized artifact build, and artifact verification.
+- No Examination Room implementation file was changed.
+
+final result: passed
+
+---
+
 # Home Left-Navigation Cleanup Design QA — 2026-08-21
 
 ## Scope and reference

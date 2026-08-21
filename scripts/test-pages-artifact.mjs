@@ -40,7 +40,6 @@ for (const required of [
   'assets/maintenance-gate.js',
   'assets/quorum-first-shell.css',
   'assets/quorum-first-shell.js',
-  'assets/icons/menu.svg',
   'assets/private-workspace.js',
   'assets/feature-previews/mock-bar.png',
   'assets/feature-previews/subject-matter.png',

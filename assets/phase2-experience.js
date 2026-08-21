@@ -1612,6 +1612,8 @@
     }
     state.nativeView = view;
     state.nativeViewReturnToQuorum = options.returnToQuorum === true;
+    const nativeOverlay = document.getElementById('dd2-native-view');
+    if (nativeOverlay) nativeOverlay.dataset.nativeView = view;
     document.getElementById('dd2-native-kicker').textContent = definition[0];
     document.getElementById('dd2-native-title').textContent = definition[1];
     document.getElementById('dd2-native-body').innerHTML = definition[2]();
@@ -1626,6 +1628,8 @@
   function hideNativeView() {
     state.nativeView = null;
     state.nativeViewReturnToQuorum = false;
+    const nativeOverlay = document.getElementById('dd2-native-view');
+    if (nativeOverlay) delete nativeOverlay.dataset.nativeView;
     setOverlay(false, 'dd2-native-view');
   }
 

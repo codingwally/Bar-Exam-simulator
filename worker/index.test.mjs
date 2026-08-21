@@ -3,12 +3,14 @@ import test from 'node:test';
 import worker, {
   EXAM_ROOM_2026_RPC_FUNCTIONS,
   EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS,
+  absoluteSupabaseStorageUrl,
   examRoom2026DatabaseError,
   examinationEmailMode,
   outboundEmailMode,
   sendExaminationEmail,
   sendSecureNotification,
 } from './index.mjs';
+
 import {
   RUBRIC_VERSION,
   applyDeterministicScoreCap,
@@ -41,6 +43,23 @@ import {
   proofExtension,
   validateProofSignature,
 } from './payment-core.mjs';
+
+test('Supabase private object signing paths retain the storage API prefix', () => {
+  assert.equal(
+    absoluteSupabaseStorageUrl(
+      'https://test.supabase.co',
+      '/object/sign/payment-proofs/user/proof.jpg?token=opaque',
+    ),
+    'https://test.supabase.co/storage/v1/object/sign/payment-proofs/user/proof.jpg?token=opaque',
+  );
+  assert.equal(
+    absoluteSupabaseStorageUrl(
+      'https://test.supabase.co',
+      '/storage/v1/object/sign/payment-proofs/user/proof.jpg?token=opaque',
+    ),
+    'https://test.supabase.co/storage/v1/object/sign/payment-proofs/user/proof.jpg?token=opaque',
+  );
+});
 
 async function signedDeliveryWebhook(event, {
   eventId = 'msg_worker_webhook_001',

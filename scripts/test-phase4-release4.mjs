@@ -120,7 +120,7 @@ assert.match(
   admin,
   /actionButton\('View private proof', 'view_payment_proof', row\.id, \{\}\)\.value/,
 );
-assert.match(publicPage, /assets\/phase2-experience\.js\?v=commercial-launch-20260821-6/);
+assert.match(publicPage, /assets\/phase2-experience\.js\?v=policy-media-gate-20260821-1/);
 assert.match(publicPage, /assets\/phase4-experience\.js\?v=commercial-launch-20260818-1/);
 assert.match(adminPage, /admin\.css\?v=[a-z0-9-]+/i);
 assert.match(adminPage, /subscription-actions-core\.js\?v=[a-z0-9-]+/i);

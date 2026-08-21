@@ -36,6 +36,44 @@
 
 final result: passed
 
+# Policy Gate and Entry Media Repair — 2026-08-21
+
+## Root cause and correction
+
+- The maintenance gate correctly blocked protected Worker calls until access was verified, but authentication initialization could request `/beta/access/policy` first. That race produced HTTP 503 and surfaced the internal message “Current policy verification failed. No acceptance was recorded.”
+- Authentication and legal-policy initialization now wait for the existing `duediligence:maintenance-unlocked` event before making protected requests.
+- A validated release-config policy keeps the consent view recoverable during a transient public-policy read failure. The Worker remains authoritative when acceptance is recorded and confirms the current versions and timestamp.
+- The internal failure message and “temporarily unavailable” presentation are no longer rendered.
+
+## Approved reference and media treatment
+
+- Owner reference: `docs/qa/policy-media-gate-20260821/owner-reference-1881x887.png`
+- Owner-reference SHA-256: `38D9485BE14C0818103766FF07DD69002C411FCB067937B51D1055B246412DEE`
+- Playing-state capture: `docs/qa/policy-media-gate-20260821/implementation-video-playing-1881x887.png`
+- Static-end capture: `docs/qa/policy-media-gate-20260821/implementation-static-end-1881x887.png`
+- Side-by-side comparison: `docs/qa/policy-media-gate-20260821/owner-reference-vs-fixed-1881x887.png`
+- The approved local `assets/brand/signin-intro.mp4` autoplays muted, inline, without controls or picture-in-picture, then cross-fades to the existing `assets/brand/icon-512.png` image.
+- Video errors, blocked autoplay, or the 12-second watchdog resolve safely to the static image. Reduced-motion users receive a non-animated presentation.
+
+## Responsive and accessibility verification
+
+- Browser-tested at 1881×887, 1366×768, 375×812, and 320×760.
+- The upper-right close control remains labelled and anchored correctly; the lower-right Back action remains present.
+- The desktop dialog remains a balanced navy/alabaster split composition. Mobile stacks into one scrollable dialog without horizontal overflow or trapped content.
+- Terms and Privacy remain keyboard-operable buttons, the acknowledgment remains a labelled native checkbox, and the primary action retains visible contrast.
+- Browser console inspection returned no relevant errors in desktop or mobile fixture verification.
+
+## Regression evidence
+
+- Phase 2 contract, maintenance lock, admission, auth-session persistence, route-overlay, onboarding, dialog-exit, and private-beta frontend tests passed.
+- Approved GitHub Pages release command inventory passed after cache-key contracts were updated.
+- Subject Matter, examination, commercial access, correction, Quorum, Verdict, and Examination Room regressions passed without changing their runtime logic.
+- Worker maintenance-entry tests passed: 4/4.
+- Sanitized Pages artifact build and verification passed.
+- `git diff --check` passed.
+
+final result: passed
+
 # Home Comments and Taglish Community QA — 2026-08-21
 
 ## Scope and comparison evidence

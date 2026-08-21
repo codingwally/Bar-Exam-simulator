@@ -29,6 +29,10 @@
     lastSessionEventUserId: null,
     lastSessionEventAccessToken: null,
     authReturnPending: isAuthenticationReturn(),
+    entryMediaInitialized: false,
+    entryMediaFinished: true,
+    entryMediaMode: '',
+    entryMediaWatchdog: 0,
   };
 
   let resolveAuthReady;
@@ -234,6 +238,106 @@
     return '<img src="assets/brand/icon-192.png" width="42" height="42" alt="" aria-hidden="true">';
   }
 
+  function maintenanceAccessLocked() {
+    return config.maintenance?.enabled === true
+      && document.documentElement.dataset.ddMaintenance === 'locked';
+  }
+
+  function waitForMaintenanceAccess() {
+    if (!maintenanceAccessLocked()) return Promise.resolve();
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        global.removeEventListener('duediligence:maintenance-unlocked', finish);
+        resolve();
+      };
+      global.addEventListener('duediligence:maintenance-unlocked', finish, { once: true });
+      queueMicrotask(() => {
+        if (!maintenanceAccessLocked()) finish();
+      });
+    });
+  }
+
+  function configuredLegalPolicy() {
+    const termsVersion = validLegalVersion(config.legal?.termsVersion, 'terms-');
+    const privacyVersion = validLegalVersion(config.legal?.privacyVersion, 'privacy-');
+    return termsVersion && privacyVersion ? { termsVersion, privacyVersion } : null;
+  }
+
+  function finishEntryBrandMedia() {
+    const frame = document.querySelector('[data-dd2-entry-media]');
+    const video = frame?.querySelector('[data-dd2-entry-video]');
+    if (!frame || !video || state.entryMediaFinished) return;
+    state.entryMediaFinished = true;
+    if (state.entryMediaWatchdog) global.clearTimeout(state.entryMediaWatchdog);
+    state.entryMediaWatchdog = 0;
+    frame.classList.remove('is-playing', 'is-finishing');
+    frame.classList.add('is-still');
+    video.pause();
+  }
+
+  function initializeEntryBrandMedia() {
+    if (state.entryMediaInitialized) return;
+    const frame = document.querySelector('[data-dd2-entry-media]');
+    const video = frame?.querySelector('[data-dd2-entry-video]');
+    if (!frame || !video) return;
+    state.entryMediaInitialized = true;
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.addEventListener('playing', () => {
+      if (state.entryMediaFinished) return;
+      frame.classList.remove('is-still', 'is-finishing');
+      frame.classList.add('is-playing');
+      if (state.entryMediaWatchdog) global.clearTimeout(state.entryMediaWatchdog);
+      state.entryMediaWatchdog = global.setTimeout(finishEntryBrandMedia, 12_000);
+    });
+    video.addEventListener('timeupdate', () => {
+      if (state.entryMediaFinished || !Number.isFinite(video.duration)) return;
+      if (video.duration - video.currentTime <= .55) {
+        frame.classList.remove('is-playing', 'is-still');
+        frame.classList.add('is-finishing');
+      }
+    });
+    video.addEventListener('ended', finishEntryBrandMedia);
+    video.addEventListener('error', finishEntryBrandMedia);
+    const source = String(video.dataset.src || '').trim();
+    if (source) {
+      video.src = source;
+      video.preload = 'auto';
+      video.load();
+    }
+  }
+
+  function playEntryBrandMedia(mode) {
+    const normalizedMode = mode === 'consent' ? 'consent' : 'signin';
+    if (state.entryMediaMode === normalizedMode) return;
+    state.entryMediaMode = normalizedMode;
+    initializeEntryBrandMedia();
+    const frame = document.querySelector('[data-dd2-entry-media]');
+    const video = frame?.querySelector('[data-dd2-entry-video]');
+    if (!frame || !video) return;
+    if (global.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true) {
+      state.entryMediaFinished = false;
+      finishEntryBrandMedia();
+      return;
+    }
+    state.entryMediaFinished = false;
+    if (state.entryMediaWatchdog) global.clearTimeout(state.entryMediaWatchdog);
+    state.entryMediaWatchdog = 0;
+    frame.classList.remove('is-playing', 'is-finishing');
+    frame.classList.add('is-still');
+    try {
+      video.currentTime = 0;
+    } catch {
+      // The first playable frame will still replace the existing static image.
+    }
+    const playback = video.play();
+    if (playback?.catch) playback.catch(finishEntryBrandMedia);
+  }
+
   function validLegalVersion(value, prefix) {
     const normalized = String(value || '').trim();
     return normalized.startsWith(prefix)
@@ -290,8 +394,12 @@
         aria-labelledby="dd2-entry-title" aria-describedby="dd2-entry-copy" aria-hidden="true">
         <section class="dd2-entry" tabindex="-1">
           <div class="dd2-entry-story">
-            <div class="dd2-entry-brandmark" aria-hidden="true">
+            <div class="dd2-entry-brandmark is-still" data-dd2-entry-media aria-hidden="true">
               <img src="assets/brand/icon-512.png" width="512" height="512" alt="">
+              <video class="dd2-entry-brandmark-video" data-dd2-entry-video
+                data-src="assets/brand/signin-intro.mp4" autoplay muted playsinline preload="none"
+                tabindex="-1" aria-hidden="true" disablepictureinpicture
+                controlslist="nodownload nofullscreen noplaybackrate"></video>
             </div>
             <div class="dd2-entry-kicker">Philippine Bar Essay Preparation</div>
             <h2>Prepare with conviction.</h2>
@@ -770,7 +878,8 @@
     const allowDismiss = options.allowDismiss === true;
     const routeBound = options.routeBound === true;
     rememberAuthReturn(options.returnHash);
-    setEntryMode(options.mode || 'signin');
+    const entryMode = options.mode || 'signin';
+    setEntryMode(entryMode);
     const overlay = document.getElementById('dd2-entry-overlay');
     const title = document.getElementById('dd2-entry-title');
     const copy = document.getElementById('dd2-entry-copy');
@@ -788,6 +897,7 @@
     }
     setStatus('dd2-auth-status', options.message || '');
     setOverlay(true, 'dd2-entry-overlay');
+    playEntryBrandMedia(entryMode);
   }
 
   function closeEntry() {
@@ -1058,15 +1168,9 @@
     try {
       await refreshLegalPolicy();
     } catch {
-      showEntry({
-        mode: 'consent',
-        allowDismiss: true,
-        routeBound: true,
-        title: 'Terms and Privacy temporarily unavailable',
-        copy: 'The current documents could not be verified. Please retry in a moment.',
-      });
-      setStatus('dd2-auth-status', 'Current policy verification failed. No acceptance was recorded.', 'error');
-      return;
+      const configuredPolicy = configuredLegalPolicy();
+      if (!configuredPolicy) return;
+      commercialLegal = Object.freeze(configuredPolicy);
     }
     const [{ data: profile }, { data: terms }] = await Promise.all([
       state.client
@@ -2326,6 +2430,7 @@
       }
     });
     try {
+      await waitForMaintenanceAccess();
       await initializeAuth();
     } finally {
       resolveAuthReady?.();

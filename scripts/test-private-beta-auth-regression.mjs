@@ -164,7 +164,7 @@ function fakeNode(id, { tagName = 'DIV', open = false, display = 'block' } = {})
   );
   const openOnboardingSource = between(
     phase2,
-    'function openOnboarding()',
+    'function openOnboarding(options = {})',
     'function updateEnrollmentFields()',
   );
   assert.match(

@@ -125,7 +125,16 @@
       'bar-feels': 'spa-bar-feels',
       verdict: 'spa-progress',
     });
-    const current = preferredFeature || Object.entries(sourceControls).find(([, id]) => {
+    const hashFeatures = Object.freeze({
+      '#quorum': 'quorum',
+      '#bar-easy': 'bar-easy',
+      '#doctrines': 'doctrines',
+      '#mock-bar': 'mock',
+      '#bar-feels': 'bar-feels',
+      '#verdict': 'verdict',
+    });
+    const current = preferredFeature || hashFeatures[String(location.hash || '').toLowerCase()]
+      || Object.entries(sourceControls).find(([, id]) => {
       const control = document.getElementById(id);
       return control?.classList.contains('active') || control?.getAttribute('aria-current') === 'page';
     })?.[0] || '';
@@ -143,8 +152,10 @@
       const control = event.target.closest('[data-public-feature]');
       if (!control) return;
       synchronizePracticeRail(refs, control.dataset.publicFeature);
-      queueMicrotask(() => synchronizePracticeRail(refs));
     });
+
+    window.addEventListener('hashchange', () => synchronizePracticeRail(refs));
+    window.addEventListener('popstate', () => synchronizePracticeRail(refs));
 
     const sourceIds = [
       'spa-community',

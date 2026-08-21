@@ -61,10 +61,12 @@ assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(shell, /function synchronizePracticeRail/);
 assert.match(shell, /synchronizePracticeRail\(refs, 'quorum'\)/);
 assert.match(shell, /'spa-community'[\s\S]*'spa-bar-easy'[\s\S]*'spa-jurisprudence'[\s\S]*'spa-mock'[\s\S]*'spa-bar-feels'[\s\S]*'spa-progress'/);
+assert.match(shell, /'#quorum':\s*'quorum'[\s\S]*'#verdict':\s*'verdict'/);
+assert.match(shell, /addEventListener\('hashchange',[\s\S]*synchronizePracticeRail/);
 assert.match(landing, /const stillHoldMs = 30 \* 60 \* 1000/);
 assert.match(landing, /Promise\.allSettled\(playback\)/);
-assert.match(serviceWorker, /duediligence-shell-20260821-approved-renovation-1/);
+assert.match(serviceWorker, /duediligence-shell-20260821-approved-renovation-2/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=approved-renovation-20260821-1/);
-assert.match(serviceWorker, /quorum-first-shell\.js\?v=approved-renovation-20260821-1/);
+assert.match(serviceWorker, /quorum-first-shell\.js\?v=approved-renovation-20260821-2/);
 
 console.log('Approved renovation shell contract checks passed.');

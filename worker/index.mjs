@@ -5280,7 +5280,7 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
 async function handlePlans(request, env, origin, allowedOrigin) {
   const plans = await phase4Rpc(env, 'phase4_plan_catalog', {});
   const publicPlans = Array.isArray(plans)
-    ? plans.filter((plan) => ['free', 'early_access_beta'].includes(String(plan?.planCode || '')))
+    ? plans.filter((plan) => String(plan?.planCode || '') === 'early_access_beta')
     : [];
   return jsonResponse({ ok: true, plans: publicPlans }, 200, origin, allowedOrigin);
 }
@@ -5407,11 +5407,6 @@ async function handlePaymentSubmit(request, env, origin, allowedOrigin) {
     throw error;
   }
   if (result?.replayed) await deletePrivateProof(env, objectPath);
-  await sendSecureNotification(env, {
-    mailbox: 'premium@duediligence.ph',
-    subject: 'Due Diligence payment verification request',
-    adminPath: `/admin/payments?request=${encodeURIComponent(result.id)}`,
-  });
   return jsonResponse({
     ok: true,
     payment: result,
@@ -5616,6 +5611,11 @@ const dd2026Handlers = createDD2026Handlers({
   processExamRoomQueues,
   requireAdministrator,
   requireAuthenticatedUser,
+  requireCommercialAccess: async (_request, env, user) => {
+    const access = await phase4AccessForUser(env, user.id);
+    if (!access.allowed) throw accessDeniedError(access);
+    return access;
+  },
   reserveCommercialSubmission,
   releaseCommercialSubmission,
   resolveVerdictQuestion,

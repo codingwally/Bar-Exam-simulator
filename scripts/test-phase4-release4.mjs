@@ -8,6 +8,7 @@ const accessMigration = text('supabase/migrations/20260730_005_phase4_access_sub
 const migration = text('supabase/migrations/20260730_008_phase4_payments_partnerships.sql');
 const premiumMigration = text('supabase/migrations/20260804_014_premium_499_entitlements.sql');
 const commercialMigration = text('supabase/migrations/20260818024644_commercial_launch_access.sql');
+const softLaunchMigration = text('supabase/migrations/20260821120000_soft_launch_five_token_trial.sql');
 const goTymeMigration = text('supabase/migrations/20260820174602_add_gotyme_payment_channel.sql');
 const preflight = text('supabase/review/phase4_production_preflight.sql');
 const worker = text('worker/index.mjs');
@@ -91,9 +92,9 @@ assert.match(frontend, /assets\/payments\/gotyme-instapay-149\.png/);
 assert.doesNotMatch(frontend, /assets\/payments\/bpi-instapay-149\.png/);
 assert.match(frontend, /id="dd2-payment-form"/);
 assert.match(frontend, /async function submitCommercialPayment\(event\)/);
-assert.match(frontend, /Free and Early Access/);
-assert.match(frontend, /One-time payment\. No automatic renewal\./);
-assert.match(frontend, /Next paid-plan pricing will be announced separately\./);
+assert.match(frontend, /Introductory tokens and Early Access/);
+assert.match(frontend, /no automatic charge or automatic renewal/i);
+assert.match(frontend, /regular manual-renewal price is ₱199/i);
 assert.doesNotMatch(frontend, /Beta access active/);
 assert.match(
   frontend,
@@ -159,10 +160,13 @@ assert.match(goTymeMigration, /payment_method in \('gcash', 'maribank', 'bpi_ins
 assert.match(goTymeMigration, /p_payment_method not in \('bpi_instapay', 'gotyme_instapay'\)/);
 assert.match(goTymeMigration, /validate constraint payment_requests_payment_method_gotyme_check/);
 assert.match(goTymeMigration, /to payment_requests_payment_method_check/);
-assert.match(commercialMigration, /'planCode', 'free'/);
-assert.match(commercialMigration, /'planCode', 'early_access_beta'/);
-assert.match(commercialMigration, /'pricePhp', 149/);
-assert.match(commercialMigration, /'dailyLimit', v_settings\.free_daily_grade_limit/);
+assert.match(softLaunchMigration, /'planCode', 'early_access_beta'/);
+assert.match(softLaunchMigration, /'pricePhp', 149/);
+assert.match(softLaunchMigration, /'regularPricePhp', 199/);
+assert.match(softLaunchMigration, /'manualRenewal', true/);
+assert.match(softLaunchMigration, /'automaticRenewal', false/);
+assert.match(softLaunchMigration, /'tokenLimit', v_grant\.token_limit/);
+assert.doesNotMatch(softLaunchMigration, /'planCode',\s*'free'/);
 
 assert.match(preflight, /PHASE4_PREFLIGHT_PASSED_READ_ONLY/);
 assert.doesNotMatch(preflight, /\b(insert|update|delete|alter|create|drop|truncate|grant|revoke)\b/i);

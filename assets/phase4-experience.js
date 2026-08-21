@@ -6,7 +6,6 @@
   if (!legacy || !config) return;
 
   const PROTECTED_ROUTES = new Set([
-    'quorum',
     'bar-easy',
     'doctrines',
     'mock-bar',
@@ -19,13 +18,15 @@
   const state = {
     access: null,
     accessPromise: null,
-    mandatoryChoice: false,
+    setupGate: false,
+    paymentGate: false,
     gateNoticeShown: false,
     observer: null,
     refreshTimer: null,
     pendingRoute: '',
     lastOverlayOpen: null,
     releasingGate: false,
+    lastRefreshAt: 0,
   };
 
   function randomId(byteLength = 20) {
@@ -79,38 +80,61 @@
     return isProtectedRoute(hash) ? hash : '';
   }
 
-  function choiceRequired(access = state.access) {
-    return access?.choiceRequired === true
-      || access?.planSelectionRequired === true
-      || ['plan_selection_required', 'trial_expired', 'payment_required'].includes(
-        String(access?.basis || ''),
-      );
-  }
-
   function legalRequired(access = state.access) {
     return access?.termsRequired === true;
   }
 
+  function setupExempt(access = state.access) {
+    const role = String(access?.role || '').trim().toLowerCase();
+    const basis = String(access?.basis || '').trim().toLowerCase();
+    return ['super_admin', 'founder_admin'].includes(role)
+      || ['super_admin', 'founder_admin', 'founding_beta'].includes(basis)
+      || access?.freeBeta?.active === true;
+  }
+
+  function reauthenticationRequired(access = state.access) {
+    return !setupExempt(access) && (
+      access?.reauthenticationRequired === true
+      || access?.basis === 'reauthentication_required'
+    );
+  }
+
   function profileRequired(access = state.access) {
-    return access?.basis === 'profile_required'
+    return !setupExempt(access) && (
+      access?.basis === 'profile_required'
+      || access?.tokenAcknowledgementRequired === true
       || (
         access?.commercialLaunchEnabled === true
         && access?.profileCompleted === false
+      )
+    );
+  }
+
+  function paymentRequired(access = state.access) {
+    return access?.paymentRequired === true
+      || ['trial_tokens_exhausted', 'insufficient_introductory_tokens'].includes(
+        String(access?.basis || ''),
       );
+  }
+
+  function setupRequired(access = state.access) {
+    return legalRequired(access)
+      || reauthenticationRequired(access)
+      || profileRequired(access);
   }
 
   function accessMessage(access) {
     if (legalRequired(access)) {
-      return 'Accept the current Terms of Use and Privacy Policy before choosing access.';
+      return 'Accept the current Terms of Use and Privacy Policy to continue.';
+    }
+    if (reauthenticationRequired(access)) {
+      return 'Sign in with Google again to confirm this account securely.';
     }
     if (profileRequired(access)) {
-      return 'Complete your profile before choosing Free or Early Access.';
+      return 'Confirm your profile and acknowledge the five one-time practice tokens.';
     }
-    if (access?.basis === 'trial_expired') {
-      return 'Choose Free or ₱149 Early Access to continue.';
-    }
-    if (choiceRequired(access)) {
-      return 'Choose Free or ₱149 Early Access before continuing.';
+    if (paymentRequired(access)) {
+      return 'Your five one-time practice tokens have been used. Early Access is required for more graded practice.';
     }
     return 'Access is not currently available for this account. Review your access or contact Support.';
   }
@@ -126,95 +150,57 @@
     return overlayOpen('dd2-onboarding-overlay') || overlayOpen('dd2-entry-overlay');
   }
 
-  function mandatoryControlState(required) {
-    for (const id of ['dd2-native-close', 'dd2-native-back']) {
-      const control = document.getElementById(id);
-      if (!control) continue;
-      control.hidden = required;
-      control.disabled = required;
-      if (required) control.setAttribute('aria-hidden', 'true');
-      else control.removeAttribute('aria-hidden');
-    }
-    const view = document.getElementById('dd2-native-view');
-    if (view) view.toggleAttribute('data-access-choice-required', required);
-    document.documentElement?.classList?.toggle?.('dd-access-gate-open', required);
-  }
-
-  function patchCommercialCopy() {
-    if (state.mandatoryChoice) mandatoryControlState(true);
-  }
-
-  function showRequiredLegalAcceptance(access) {
-    if (!legalRequired(access) || onboardingOrSignInOpen()) return;
-    legacy.openSignIn?.({
-      mode: 'consent',
-      allowDismiss: false,
-      routeBound: true,
-      returnHash: state.pendingRoute || location.hash,
-      title: 'Accept the current Terms and Privacy Policy',
-      copy: 'Acceptance is required before you choose Free or Early Access.',
-    });
-  }
-
-  function openMandatoryChoice(access, routeHash = '') {
+  function openRequiredSetup(access, routeHash = '') {
     if (routeHash) state.pendingRoute = normalizedRouteHash(routeHash);
-
+    state.setupGate = setupRequired(access);
+    document.documentElement?.classList?.toggle?.('dd-access-gate-open', state.setupGate);
+    if (!state.setupGate) return;
     if (legalRequired(access)) {
-      state.mandatoryChoice = false;
-      mandatoryControlState(false);
-      showRequiredLegalAcceptance(access);
+      legacy.openSignIn?.({
+        mode: 'consent',
+        allowDismiss: false,
+        routeBound: true,
+        returnHash: state.pendingRoute || location.hash,
+        title: 'Accept the current Terms and Privacy Policy',
+        copy: 'Review and accept the current documents to continue securely.',
+      });
       return;
     }
-
-    if (profileRequired(access) || !choiceRequired(access)) {
-      if (!choiceRequired(access)) {
-        state.mandatoryChoice = false;
-        mandatoryControlState(false);
-      }
+    if (reauthenticationRequired(access)) {
+      legacy.openSignIn?.({
+        mode: 'signin',
+        allowDismiss: false,
+        routeBound: true,
+        returnHash: state.pendingRoute || location.hash,
+        title: 'Confirm your Google account',
+        copy: 'Sign in again once to secure your soft-launch access. Your existing account and saved work remain intact.',
+      });
       return;
     }
-
-    state.mandatoryChoice = true;
-    mandatoryControlState(true);
-    if (onboardingOrSignInOpen()) return;
-
-    legacy.openView?.('pricing');
-    requestAnimationFrame(() => {
-      patchCommercialCopy();
-      mandatoryControlState(true);
-      const focusTarget = document.getElementById('dd2-choose-free')
-        || document.getElementById('dd2-open-payment');
-      focusTarget?.focus?.({ preventScroll: true });
-    });
-
+    if (profileRequired(access)) {
+      legacy.openOnboarding?.({
+        required: true,
+        tokenDisclosureVersion: access?.tokenDisclosureVersion,
+      });
+    }
     if (!state.gateNoticeShown) {
       state.gateNoticeShown = true;
       global.toast?.(accessMessage(access), 'warn');
     }
   }
 
-  function releaseMandatoryChoice(options = {}) {
-    if (state.releasingGate) return;
-    state.releasingGate = true;
-    state.mandatoryChoice = false;
-    state.gateNoticeShown = false;
-    mandatoryControlState(false);
-
-    const destination = '#quorum';
-    state.pendingRoute = '';
-
-    const close = document.getElementById('dd2-native-close');
-    if (overlayOpen('dd2-native-view') && close) {
-      close.click();
+  function openPaymentGate(access, routeHash = '') {
+    if (routeHash) state.pendingRoute = normalizedRouteHash(routeHash);
+    state.paymentGate = true;
+    if (!overlayOpen('dd2-native-view')) {
+      legacy.openView?.('pricing', { returnToQuorum: true });
+      requestAnimationFrame(() => {
+        document.getElementById('dd2-open-payment')?.focus?.({ preventScroll: true });
+      });
     }
-
-    if (destination) {
-      setTimeout(() => {
-        if (location.hash !== destination) location.hash = destination;
-        state.releasingGate = false;
-      }, 50);
-    } else {
-      state.releasingGate = false;
+    if (!state.gateNoticeShown) {
+      state.gateNoticeShown = true;
+      global.toast?.(accessMessage(access), 'warn');
     }
   }
 
@@ -224,17 +210,20 @@
     if (badge) {
       badge.classList.toggle('is-visible', Boolean(access?.accountLabel));
       if (!access) badge.textContent = '';
-      else if (choiceRequired(access)) badge.textContent = 'Choose access · Free or ₱149';
+      else if (setupRequired(access)) badge.textContent = 'Account setup required';
       else if (access.unlimited) badge.textContent = `${access.accountLabel || 'Unlimited'} · Unlimited`;
-      else badge.textContent = access.accountLabel || 'Access unavailable';
+      else badge.textContent = `${Math.max(0, Number(access.tokensRemaining) || 0)} of ${Math.max(0, Number(access.tokenLimit) || 5)} tokens`;
     }
 
-    if (access?.allowed === true && !choiceRequired(access) && state.mandatoryChoice) {
-      releaseMandatoryChoice();
-    } else if (!choiceRequired(access)) {
-      state.mandatoryChoice = false;
+    if (!setupRequired(access)) {
+      state.setupGate = false;
+      document.documentElement?.classList?.remove?.('dd-access-gate-open');
+    }
+    if (!paymentRequired(access)) {
+      state.paymentGate = false;
+    }
+    if (access?.allowed === true) {
       state.gateNoticeShown = false;
-      mandatoryControlState(false);
     }
 
     global.dispatchEvent(new CustomEvent('duediligence:access', {
@@ -285,8 +274,14 @@
           if (legalRequired(access)) {
             error.code = 'LEGAL_ACCEPTANCE_REQUIRED';
             error.message = accessMessage(access);
-          } else if (choiceRequired(access)) {
-            error.code = 'ACCESS_CHOICE_REQUIRED';
+          } else if (reauthenticationRequired(access)) {
+            error.code = 'REAUTHENTICATION_REQUIRED';
+            error.message = accessMessage(access);
+          } else if (profileRequired(access)) {
+            error.code = 'PROFILE_COMPLETION_REQUIRED';
+            error.message = accessMessage(access);
+          } else if (paymentRequired(access)) {
+            error.code = 'INTRODUCTORY_TOKENS_EXHAUSTED';
             error.message = accessMessage(access);
           }
         } catch {
@@ -317,11 +312,15 @@
     })
       .then((payload) => {
         state.access = payload.access;
+        state.lastRefreshAt = Date.now();
         syncAccessUi();
 
         if (options.enforce !== false) {
-          if (legalRequired(state.access)) showRequiredLegalAcceptance(state.access);
-          else openMandatoryChoice(state.access, options.routeHash || '');
+          if (setupRequired(state.access)) {
+            openRequiredSetup(state.access, options.routeHash || '');
+          } else if (paymentRequired(state.access) && isProtectedRoute(options.routeHash || location.hash)) {
+            openPaymentGate(state.access, options.routeHash || '');
+          }
         }
         return state.access;
       })
@@ -340,48 +339,57 @@
       force: true,
       routeHash,
     });
-    if (choiceRequired(access)) {
-      openMandatoryChoice(access, routeHash);
+    if (setupRequired(access)) {
+      openRequiredSetup(access, routeHash);
       return false;
     }
     if (access?.allowed === true) return true;
-    if (legalRequired(access)) showRequiredLegalAcceptance(access);
-    else openMandatoryChoice(access, routeHash);
+    if (paymentRequired(access)) openPaymentGate(access, routeHash);
+    else global.toast?.(accessMessage(access), 'warn');
     return false;
   }
 
-  async function chooseFreeTrial() {
-    if (!requireAuthentication()) return;
-    const button = document.getElementById('dd2-choose-free');
-    if (button) {
-      button.disabled = true;
-      button.textContent = 'Setting up Free…';
-    }
-
-    try {
-      const payload = await request('/access/choose', {
-        body: { choice: 'free' },
-        requestIdValue: randomId(18),
-        recoverAccess: false,
+  function confirmFinalToken() {
+    return new Promise((resolve) => {
+      document.getElementById('dd-final-token-modal')?.remove();
+      document.body.insertAdjacentHTML('beforeend', `
+        <div class="dd2-overlay is-open" id="dd-final-token-modal" role="dialog" aria-modal="true"
+          aria-labelledby="dd-final-token-title" aria-hidden="false">
+          <section class="dd2-reminder-card dd-final-token-card" tabindex="-1">
+            <button type="button" class="dd2-close dd2-card-close" data-final-token-cancel aria-label="Close final-token warning">×</button>
+            <div class="dd2-view-kicker">Final introductory token</div>
+            <h3 id="dd-final-token-title">This submission will use your last practice token.</h3>
+            <p>The token is used only if grading succeeds. Failed grading and duplicate retries do not consume it.</p>
+            <div class="dd2-reminder-actions">
+              <button type="button" class="dd2-button dd2-button-secondary" data-final-token-cancel>Back</button>
+              <button type="button" class="dd2-button dd2-button-primary" data-final-token-confirm>Submit final token</button>
+            </div>
+          </section>
+        </div>`);
+      const modal = document.getElementById('dd-final-token-modal');
+      const finish = (decision) => {
+        modal?.remove();
+        resolve(decision);
+      };
+      modal?.querySelectorAll('[data-final-token-cancel]').forEach((button) => {
+        button.addEventListener('click', () => finish(false), { once: true });
       });
-      state.access = payload.access || null;
-      syncAccessUi();
-      await refreshAccess({ enforce: false, force: true });
-      global.toast?.('Free access is ready. You have five successful submissions each Philippine day.', 'ok');
-      releaseMandatoryChoice();
-    } catch (error) {
-      if (error.code === 'LEGAL_ACCEPTANCE_REQUIRED') {
-        await refreshAccess({ enforce: true, force: true }).catch(() => {});
-      } else {
-        global.toast?.(error.message || 'Free access could not be selected.', 'warn');
-      }
-      patchCommercialCopy();
-    }
+      modal?.querySelector('[data-final-token-confirm]')?.addEventListener('click', () => finish(true), { once: true });
+      modal?.addEventListener('click', (event) => {
+        if (event.target === modal) finish(false);
+      });
+      modal?.querySelector('[data-final-token-confirm]')?.focus?.();
+    });
   }
 
   async function beforeGrade() {
     try {
-      return await ensureProtectedAccess(location.hash || '#mock-bar');
+      const allowed = await ensureProtectedAccess(location.hash || '#mock-bar');
+      if (!allowed) return false;
+      if (!state.access?.unlimited && Number(state.access?.tokensRemaining) === 1) {
+        return confirmFinalToken();
+      }
+      return true;
     } catch (error) {
       if (['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(error.code)) {
         legacy.openSignIn?.({ routeBound: true, returnHash: location.hash });
@@ -456,11 +464,12 @@
 
     if ([
       'ACCESS_REQUIRED',
-      'ACCESS_CHOICE_REQUIRED',
       'PAYMENT_REQUIRED',
       'LEGAL_ACCEPTANCE_REQUIRED',
+      'REAUTHENTICATION_REQUIRED',
       'PROFILE_COMPLETION_REQUIRED',
-      'DAILY_LIMIT_REACHED',
+      'INTRODUCTORY_TOKENS_EXHAUSTED',
+      'INSUFFICIENT_INTRODUCTORY_TOKENS',
     ].includes(error?.code)) {
       global.toast?.(error.message, 'warn');
       refreshAccess({
@@ -499,25 +508,17 @@
     state.lastOverlayOpen = onboardingOrSignInOpen();
 
     document.addEventListener('click', (event) => {
-      if (state.mandatoryChoice
-          && event.target.closest('#dd2-native-close, #dd2-native-back')) {
+      if (state.setupGate
+          && event.target.closest('#dd2-entry-close, #dd2-entry-back, #dd2-onboarding-close, #dd2-onboarding-back')) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        global.toast?.('Choose Free or ₱149 Early Access before continuing.', 'warn');
-        return;
-      }
-
-      const freeButton = event.target.closest('#dd2-choose-free');
-      if (freeButton) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        chooseFreeTrial();
+        global.toast?.(accessMessage(state.access), 'warn');
         return;
       }
 
       const targetHash = clickedHash(event.target);
       if (!targetHash || !session()?.access_token) return;
-      if (state.access?.allowed === true && !choiceRequired(state.access)) return;
+      if (state.access?.allowed === true && !setupRequired(state.access)) return;
 
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -528,12 +529,12 @@
     }, true);
 
     document.addEventListener('keydown', (event) => {
-      if (state.mandatoryChoice
+      if (state.setupGate
           && event.key === 'Escape'
-          && overlayOpen('dd2-native-view')) {
+          && onboardingOrSignInOpen()) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        global.toast?.('Choose Free or ₱149 Early Access before continuing.', 'warn');
+        global.toast?.(accessMessage(state.access), 'warn');
         return;
       }
     }, true);
@@ -546,14 +547,16 @@
     });
 
     global.addEventListener('pageshow', () => {
-      if (session()?.access_token) {
-        refreshAccess({ enforce: true, force: true }).catch(() => {});
+      if (session()?.access_token && Date.now() - state.lastRefreshAt > 15_000) {
+        refreshAccess({ enforce: true }).catch(() => {});
       }
     });
 
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && session()?.access_token) {
-        refreshAccess({ enforce: true, force: true }).catch(() => {});
+      if (document.visibilityState === 'visible'
+          && session()?.access_token
+          && Date.now() - state.lastRefreshAt > 30_000) {
+        refreshAccess({ enforce: true }).catch(() => {});
       }
     });
   }
@@ -569,8 +572,7 @@
     loadHistory,
     refreshAccess,
     ensureProtectedAccess,
-    chooseFreeTrial,
-    chooseFreeAccess: chooseFreeTrial,
+    chooseFreeAccess: () => refreshAccess({ enforce: true, force: true }),
     requireAuthentication,
     getAccess: () => state.access,
     request,
@@ -588,10 +590,11 @@
     }
 
     state.access = null;
-    state.mandatoryChoice = false;
+    state.setupGate = false;
+    state.paymentGate = false;
     state.gateNoticeShown = false;
     state.pendingRoute = '';
-    mandatoryControlState(false);
+    document.documentElement?.classList?.remove?.('dd-access-gate-open');
     syncAccessUi();
   });
 
@@ -606,7 +609,6 @@
 
   global.addEventListener('load', () => {
     installCommercialUiGuards();
-    patchCommercialCopy();
 
     if (session()?.access_token) {
       if (isProtectedRoute()) state.pendingRoute = location.hash;

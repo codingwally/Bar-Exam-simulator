@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 
 const APPROVED_STAGING_SUPABASE = 'https://hlzqmreeoghbldnhlybr.supabase.co';
 const APPROVED_STAGING_WORKER = 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev';
@@ -40,7 +39,19 @@ export async function completeMandatoryCommercialProfile({
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   };
-  await jsonResponse(`${supabaseUrl}/rest/v1/rpc/complete_commercial_profile_onboarding`, {
+  const accessBefore = await jsonResponse(`${workerUrl}/access`, {
+    method: 'POST',
+    headers: {
+      Origin: workerUrl,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  });
+  const disclosureVersion = String(accessBefore.access?.tokenDisclosureVersion || '');
+  assert.ok(disclosureVersion.length > 8, 'The server token-disclosure version is required.');
+
+  await jsonResponse(`${supabaseUrl}/rest/v1/rpc/complete_commercial_profile_onboarding_v2`, {
     method: 'POST',
     headers: authHeaders,
     body: JSON.stringify({
@@ -51,6 +62,8 @@ export async function completeMandatoryCommercialProfile({
       p_professor_license_number: null,
       p_terms_version: termsVersion,
       p_privacy_version: privacyVersion,
+      p_trial_disclosure_version: disclosureVersion,
+      p_trial_acknowledged: true,
     }),
   });
 }
@@ -63,19 +76,18 @@ export async function provisionMandatoryCommercialChoice(options) {
     token,
   } = options;
 
-  const choice = await jsonResponse(`${workerUrl}/access/choose`, {
+  const snapshot = await jsonResponse(`${workerUrl}/access`, {
     method: 'POST',
     headers: {
       Origin: workerUrl,
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-      'X-Request-ID': `staging_access_${randomUUID().replaceAll('-', '')}`,
     },
-    body: JSON.stringify({ choice: 'free' }),
+    body: '{}',
   });
-  assert.equal(choice.ok, true);
-  assert.equal(choice.choice, 'free');
-  assert.equal(choice.access?.allowed, true);
-  assert.equal(choice.access?.accessMode, 'free');
-  assert.equal(choice.access?.choiceRequired, false);
+  assert.equal(snapshot.ok, true);
+  assert.equal(snapshot.access?.allowed, true);
+  assert.equal(snapshot.access?.accessMode, 'introductory');
+  assert.equal(snapshot.access?.choiceRequired, false);
+  assert.equal(snapshot.access?.tokensRemaining, 5);
 }

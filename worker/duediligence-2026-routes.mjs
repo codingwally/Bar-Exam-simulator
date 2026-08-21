@@ -813,6 +813,7 @@ export function createDD2026Handlers(deps) {
     processExamRoomQueues,
     requireAdministrator,
     requireAuthenticatedUser,
+    requireCommercialAccess,
     reserveCommercialSubmission,
     releaseCommercialSubmission,
     resolveVerdictQuestion,
@@ -881,6 +882,7 @@ export function createDD2026Handlers(deps) {
   async function contentQuery(request, env, origin, allowedOrigin) {
     await enforceDD2026RateLimit(request, env);
     const user = await requireAuthenticatedUser(request, env);
+    const access = await requireCommercialAccess(request, env, user);
     const input = normalizeContentQuery(await parseBoundedJson(request, 25_000));
     const result = await dd2026Rpc(env, 'dd2026_content_list', {
       p_user_id: user.id,
@@ -892,6 +894,7 @@ export function createDD2026Handlers(deps) {
     });
     return jsonResponse({
       ok: true,
+      access,
       ...result,
       items: Array.isArray(result?.items) ? result.items.map(publicContentItem) : [],
     }, 200, origin, allowedOrigin);
@@ -900,13 +903,14 @@ export function createDD2026Handlers(deps) {
   async function contentItem(request, env, origin, allowedOrigin) {
     await enforceDD2026RateLimit(request, env);
     const user = await requireAuthenticatedUser(request, env);
+    const access = await requireCommercialAccess(request, env, user);
     const input = normalizeContentItemRequest(await parseBoundedJson(request, 10_000));
     const result = await dd2026Rpc(env, 'dd2026_content_get', {
       p_user_id: user.id,
       p_content_type: input.contentType,
       p_content_id: input.contentId,
     });
-    return jsonResponse({ ok: true, item: publicContentItem(result) }, 200, origin, allowedOrigin);
+    return jsonResponse({ ok: true, access, item: publicContentItem(result) }, 200, origin, allowedOrigin);
   }
 
   async function barEasyGrade(request, env, origin, allowedOrigin) {

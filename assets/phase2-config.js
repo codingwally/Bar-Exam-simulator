@@ -2,7 +2,7 @@
   'use strict';
 
   global.DueDiligencePhase2Config = Object.freeze({
-    version: 'phase4-beta-2026-07-28',
+    version: 'soft-launch-five-token-2026-08-21',
     supabase: Object.freeze({
       url: 'https://hbllomlijfznnuudpdvr.supabase.co',
       publishableKey: 'sb_publishable_lQRSlxJPTDkKQIiT0hTfdg_ANVRUzym',
@@ -25,13 +25,13 @@
       reminderStorageKey: 'duediligence.guest.reminder.v1',
     }),
     legal: Object.freeze({
-      termsVersion: 'terms-commercial-v1-2026-08-18',
-      privacyVersion: 'privacy-commercial-v1-2026-08-18',
+      termsVersion: 'terms-soft-launch-v1-2026-08-21',
+      privacyVersion: 'privacy-soft-launch-v1-2026-08-21',
       aiImprovementConsentVersion: 'ai-improvement-beta-v1-2026-07-28',
     }),
     features: Object.freeze({
       privateBetaGate: false,
-      payments: false,
+      payments: true,
       subscriptionEnforcement: true,
       coachingBooking: false,
       emailSignIn: false,
@@ -39,19 +39,9 @@
       examinationRoom2: true,
     }),
     plans: Object.freeze({
-      catalogVersion: 'commercial-two-plan-2026-08-20',
-      notice: 'Choose Free or the one-time Early Access offer.',
+      catalogVersion: 'soft-launch-early-access-2026-08-21',
+      notice: 'Five one-time practice tokens are included automatically. Early Access removes the practice limit.',
       items: Object.freeze([
-        Object.freeze({
-          id: 'free',
-          name: 'Free',
-          pricingHidden: false,
-          previewStatus: 'active',
-          featurePlaceholders: Object.freeze([
-            'Five successful submissions per Philippine day',
-            'One shared allowance across examination tracks',
-          ]),
-        }),
         Object.freeze({
           id: 'early_access_beta',
           name: 'Early Access',

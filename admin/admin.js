@@ -81,15 +81,15 @@
     name: 'Early Access',
     pricePhp: 149,
     expiresAt: '2026-10-01T23:59:59+08:00',
-    salesCloseAt: '2026-09-01T23:59:59+08:00',
+    salesCloseAt: '2026-10-01T00:00:00+08:00',
   });
 
   function commercialPlanLabel(planCode) {
     const code = String(planCode || '').trim().toLowerCase();
     if (code === 'early_access_beta') return 'Early Access';
-    if (code === 'free') return 'Free';
+    if (code === 'free') return 'Introductory access';
     if (['standard', 'premium'].includes(code)) return 'Legacy paid plan';
-    return code ? humanizeAuditValue(code) : 'Free';
+    return code ? humanizeAuditValue(code) : 'Introductory access';
   }
 
   function commercialAccountLabel(account = {}) {
@@ -111,7 +111,7 @@
     if (effective.includes('pending')) return 'Early Access — pending';
     if (effective.includes('rejected')) return 'Early Access — rejected';
     if (effective.includes('expired')) return 'Expired';
-    return 'Free';
+    return 'Introductory access';
   }
 
   function commercialPaymentLabel(status) {
@@ -120,6 +120,16 @@
     if (normalized === 'rejected') return 'Early Access — rejected';
     if (normalized === 'expired') return 'Expired';
     return 'Early Access — pending';
+  }
+
+  function paymentNotificationLabel(row = {}) {
+    const status = String(row.verification_email_status || '').toLowerCase();
+    const attempts = Number(row.verification_email_attempts || 0);
+    if (status === 'sent') return { className: 'ok', text: 'Sent to 5 verifiers' };
+    if (status === 'sending') return { className: 'warn', text: `Sending${attempts ? ` · attempt ${attempts}` : ''}` };
+    if (status === 'failed') return { className: 'danger', text: `Retry queued${attempts ? ` · attempt ${attempts}` : ''}` };
+    if (status === 'suppressed') return { className: 'muted', text: 'Historical · not queued' };
+    return { className: 'warn', text: 'Queued' };
   }
 
   function maskOperationalIdentifier(value, prefix = '') {
@@ -572,15 +582,15 @@
             ? ' Refresh before making any access decision.'
             : betaEnabled
             ? ' All signed-in accounts temporarily bypass commercial limits while this protected rollback setting remains enabled.'
-            : ' Free, Founding Beta, provisional, and verified Early Access rules determine access.'}
+            : ' Introductory tokens, Founding Beta, provisional, and verified Early Access rules determine access.'}
         </div>
         <dl class="definition-list">
           <dt>Who has access</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'All signed-in users who accepted the current terms' : 'Server-resolved commercial entitlements apply'}</dd>
-          <dt>Free allowance</dt><dd>Five successful submissions per Philippine calendar day.</dd>
+          <dt>Introductory allowance</dt><dd>Five one-time lifetime practice tokens. They never reset or renew.</dd>
           <dt>Temporary safety access accounts</dt><dd>${escapeHtml(!betaKnown ? 'Not confirmed' : betaEnabled ? number(betaAllAccess.signedInAccountCount ?? engagement.signedInAccounts) : '0')}</dd>
           <dt>Required before access</dt><dd>Users must accept the current Terms of Use and Privacy Policy.</dd>
           <dt>Access setting</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'Protected rollback mode remains on until an authorized founder disables it.' : 'Commercial enforcement is active.'}</dd>
-          <dt>Early Access offer</dt><dd>₱149 one-time through September 1, 2026; access ends October 1, 2026 at 11:59 PM Philippine time.</dd>
+          <dt>Early Access offer</dt><dd>₱149 promotional access. The next manual renewal date is October 1, 2026 at ₱199; no automatic charge is made.</dd>
           <dt>Last changed</dt><dd>${escapeHtml(dateTime(betaAllAccess.updatedAt))}</dd>
         </dl>
         ${founderAuthorized && betaKnown ? `<div class="dialog-actions">
@@ -1000,11 +1010,11 @@
         ? 'Refresh before making any access decision.'
         : globalBetaEnabled
         ? 'Every signed-in user temporarily bypasses commercial limits until an authorized founder activates commercial enforcement.'
-        : 'Free, Founding Beta, provisional, and verified Early Access records determine access.'}</div>
+        : 'Introductory-token, Founding Beta, provisional, and verified Early Access records determine access.'}</div>
       <div class="metric-strip">
         ${summaryMetric('Admin & Staff', number(subscriptionCounts['Admin & Staff'] || 0))}
         ${summaryMetric('Founding Beta', number(commercialCounts['Founding Beta'] || 0))}
-        ${summaryMetric('Free', number(commercialCounts.Free || 0))}
+        ${summaryMetric('Introductory access', number(commercialCounts['Introductory access'] || commercialCounts.Free || 0))}
         ${summaryMetric('Early Access — pending', number(commercialCounts['Early Access — pending'] || 0))}
         ${summaryMetric('Early Access — verified', number(commercialCounts['Early Access — verified'] || 0))}
         ${summaryMetric('Early Access — rejected', number(commercialCounts['Early Access — rejected'] || 0))}
@@ -1040,8 +1050,7 @@
       <section class="panel">
         <h3>Commercial access options</h3>
         ${table(['Access', 'Price', 'Availability'], [
-          ['Free', '₱0.00', 'Five successful submissions daily'],
-          ['Early Access', '₱149.00 one-time', 'Purchasable through September 1, 2026 · access through October 1, 2026'],
+          ['Early Access', '₱149 promotional', 'Next manual renewal: October 1, 2026 at ₱199 · no automatic charge'],
         ])}
       </section>
       <section class="panel"><h3>Refund policy</h3><p class="panel-note">Eligible Early Access requests must be filed within seven calendar days of first provisional or paid access. The server calculates the unused-time amount through October 1, capped at ₱149; administrator review and manual payment confirmation are required.</p></section>`;
@@ -1051,26 +1060,35 @@
     const data = await loadPhase4Operational('payments');
     return `
       ${heading('Payments', 'Review ₱149 Early Access requests. Private proofs open for five minutes, and every view is recorded in the activity log.')}
-      <div class="notice danger"><strong>Money and access warning.</strong> Approval verifies Early Access through October 1, 2026 at 11:59 PM Philippine time. Confirm channel, amount, reference, date, and proof before proceeding.</div>
+      <div class="notice danger"><strong>Money and access warning.</strong> Approval verifies the current Early Access term. The next manual renewal date is October 1, 2026 at ₱199. Confirm the student, amount, channel, reference, date, and private proof before proceeding.</div>
       ${table(
-        ['Student', 'Access', 'Amount', 'Channel', 'Date', 'Reference', 'Verification', 'Submitted', 'Actions'],
-        (data.items || []).map((row) => [
-          row.display_name || 'Not provided', commercialPlanLabel(row.plan_code),
-          `₱${number(row.trusted_amount_php,2)}`, row.payment_method,
-          row.payment_date, row.transaction_reference,
-          { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(commercialPaymentLabel(row.status))}</span>` },
-          dateTime(row.submitted_at),
-          {
-            html: true,
-            value: `<div class="row-actions">
-              ${actionButton('Review', 'payment_review', row.id, {
-                status: row.status,
-                planCode: row.plan_code,
-              }).value}
-              ${actionButton('View private proof', 'view_payment_proof', row.id, {}).value}
-            </div>`,
-          },
-        ]),
+        ['Student', 'Amount & channel', 'Reference', 'Verification', 'Verifier email', 'Proof', 'Submitted', 'Actions'],
+        (data.items || []).map((row) => {
+          const notification = paymentNotificationLabel(row);
+          const studentDetails = [row.email, row.school, row.year_level].filter(Boolean);
+          const proofDetails = [row.proof_original_name, row.proof_mime_type,
+            row.proof_size_bytes ? `${Math.ceil(Number(row.proof_size_bytes) / 1024)} KiB` : '']
+            .filter(Boolean);
+          return [
+            { html: true, value: `<strong>${escapeHtml(row.display_name || 'Not provided')}</strong>${studentDetails.length ? `<br><small>${escapeHtml(studentDetails.join(' · '))}</small>` : ''}` },
+            { html: true, value: `<strong>₱${number(row.trusted_amount_php,2)}</strong><br><small>${escapeHtml(row.payment_method || 'Not provided')} · ${escapeHtml(row.payment_date || 'No date')}</small>` },
+            row.transaction_reference,
+            { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(commercialPaymentLabel(row.status))}</span>${row.provisional_access_expires_at ? `<br><small>Provisional until ${escapeHtml(dateTime(row.provisional_access_expires_at))}</small>` : ''}` },
+            { html: true, value: `<span class="status ${notification.className}">${escapeHtml(notification.text)}</span>${row.verification_email_last_attempt_at ? `<br><small>${escapeHtml(dateTime(row.verification_email_last_attempt_at))}</small>` : ''}` },
+            proofDetails.join(' · ') || 'Not available',
+            dateTime(row.submitted_at),
+            {
+              html: true,
+              value: `<div class="row-actions">
+                ${actionButton('Review', 'payment_review', row.id, {
+                  status: row.status,
+                  planCode: row.plan_code,
+                }).value}
+                ${actionButton('View private proof', 'view_payment_proof', row.id, {}).value}
+              </div>`,
+            },
+          ];
+        }),
       )}`;
   }
 
@@ -3130,7 +3148,7 @@
         <option value="approved">Approve Early Access</option>
         <option value="rejected">Reject</option>
       </select></label>`;
-      warning = 'Approval immediately verifies Early Access through October 1, 2026 at 11:59 PM Philippine time. Verify the ₱149 amount, channel, reference, date, and private proof before confirming.';
+      warning = 'Approval immediately verifies the current Early Access term. The next renewal is a separate manual ₱199 payment on October 1, 2026; no automatic charge is made. Verify the ₱149 amount, channel, reference, date, and private proof before confirming.';
     } else if (action === 'view_payment_proof') {
       title = 'Open private payment proof';
       warning = 'Opening this private proof is recorded. The secure link lasts five minutes. Do not download or share it unless necessary.';
@@ -3209,7 +3227,7 @@
       title = payload.enabled ? 'Enable temporary safety access' : 'Activate commercial enforcement';
       warning = payload.enabled
         ? 'This immediately lets all signed-in users bypass commercial limits as a temporary rollback safeguard, subject to legal acceptance and security restrictions.'
-        : 'This immediately ends the temporary override so Free, Founding Beta, provisional, and verified Early Access rules apply. Confirm the effect before continuing.';
+        : 'This immediately ends the temporary override so introductory-token, Founding Beta, provisional, and verified Early Access rules apply. Confirm the effect before continuing.';
     } else if (action.startsWith('quorum_')) {
       const quorumAction = action.slice('quorum_'.length);
       const quorumTitles = {
@@ -3410,6 +3428,15 @@
     state.action.requestKey ||= uuidKey();
     state.actionInFlight = true;
     $('#action-confirm').disabled = true;
+    let proofWindow = null;
+    if (action === 'view_payment_proof') {
+      proofWindow = window.open('about:blank', '_blank');
+      if (proofWindow) {
+        proofWindow.opener = null;
+        proofWindow.document.title = 'Opening private payment proof…';
+        proofWindow.document.body.textContent = 'Opening the authorized payment proof…';
+      }
+    }
     try {
       if (action === 'reveal_email') {
         const response = await api('/admin/reveal-email', {
@@ -3479,11 +3506,11 @@
           paymentRequestId: state.action.targetId,
           reason,
         });
-        const link = document.createElement('a');
-        link.href = response.proof.url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.click();
+        if (proofWindow && !proofWindow.closed) {
+          proofWindow.location.replace(response.proof.url);
+        } else {
+          window.location.assign(response.proof.url);
+        }
         toast('Private proof opened in a five-minute authorized view.');
       } else if (action.startsWith('quorum_')) {
         const quorumAction = action.slice('quorum_'.length);
@@ -3554,6 +3581,7 @@
       }
       await renderSection(state.section);
     } catch (error) {
+      if (proofWindow && !proofWindow.closed) proofWindow.close();
       toast(error.message || 'Action failed without changing production data.');
     } finally {
       state.actionInFlight = false;

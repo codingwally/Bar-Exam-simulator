@@ -160,15 +160,16 @@ assert.match(premiumMigration, /to service_role/);
 assert.doesNotMatch(premiumMigration, /grant\s+execute[\s\S]*to\s+(?:anon|authenticated)/i);
 assert.doesNotMatch(premiumMigration, /\bdrop table\b|\btruncate\b|\bdelete from\b/i);
 
-assert.match(phase2Config, /id: 'free'[\s\S]*name: 'Free'[\s\S]*id: 'early_access_beta'[\s\S]*name: 'Early Access'/);
+assert.match(phase2Config, /id: 'early_access_beta'[\s\S]*name: 'Early Access'/);
+assert.doesNotMatch(phase2Config, /id: 'free'[\s\S]*name: 'Free'/);
 assert.doesNotMatch(phase2Config, /id: 'premium'/);
-assert.match(phase2Config, /Choose Free or the one-time Early Access offer\./);
+assert.match(phase2Config, /Five one-time practice tokens are included automatically/);
 assert.doesNotMatch(phase2Config, /pricePhp|priceCentavos|amountPhp|₱/);
 assert.doesNotMatch(phase2Experience, /Premium-only Bar Feels|Beta access active/);
-assert.match(phase2Experience, /Free and Early Access/);
+assert.match(phase2Experience, /Introductory tokens and Early Access/);
 assert.match(phase2Experience, /₱149/);
 assert.match(phase2Experience, /id="dd2-payment-form"/);
-assert.match(phase2Experience, /Next paid-plan pricing will be announced separately\./);
+assert.match(phase2Experience, /regular manual-renewal price is ₱199/i);
 
 assert.match(adminActions, /'Suspend'/);
 assert.match(adminActions, /'Expire now'/);

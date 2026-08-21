@@ -53,39 +53,6 @@ function configuredSupabaseUrl(env) {
   }
 }
 
-function allowedOrigin(env) {
-  return String(env?.ALLOWED_ORIGIN || 'https://duediligence.ph').trim();
-}
-
-function corsHeaders(origin, env) {
-  const approved = allowedOrigin(env);
-  return {
-    'Access-Control-Allow-Origin': origin === approved ? origin : approved,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': [
-      'Content-Type',
-      'Authorization',
-      'X-Request-ID',
-      'X-DD-Beta-Access',
-      'X-DD-Beta-Flow-ID',
-    ].join(', '),
-    'Access-Control-Max-Age': '86400',
-    Vary: 'Origin',
-  };
-}
-
-function jsonResponse(body, status, origin, env) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders(origin, env),
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
-}
-
 async function serviceRoleRpc(env, functionName, body) {
   const supabaseUrl = configuredSupabaseUrl(env);
   const serviceRoleKey = String(env?.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -150,135 +117,6 @@ async function paymentVerificationRecipients(env) {
   );
 }
 
-async function verifiedPaymentUser(request, env) {
-  const authorization = String(request.headers.get('Authorization') || '').trim();
-  const supabaseUrl = configuredSupabaseUrl(env);
-  const serviceRoleKey = String(env?.SUPABASE_SERVICE_ROLE_KEY || '').trim();
-  if (!/^Bearer\s+\S+$/i.test(authorization) || !supabaseUrl || !serviceRoleKey) {
-    return null;
-  }
-  const response = await fetch(new URL('/auth/v1/user', supabaseUrl), {
-    headers: {
-      apikey: serviceRoleKey,
-      Authorization: authorization,
-    },
-  });
-  if (!response.ok) return null;
-  const user = await response.json().catch(() => null);
-  if (!user?.id) return null;
-  return {
-    id: String(user.id),
-    email: validEmail(user.email),
-    displayName: cleanSingleLine(
-      user.user_metadata?.full_name || user.user_metadata?.name,
-      120,
-    ) || null,
-  };
-}
-
-async function handleAccessChoice(request, env) {
-  const origin = String(request.headers.get('Origin') || '');
-  if (origin !== allowedOrigin(env)) {
-    return jsonResponse({
-      ok: false,
-      error: {
-        code: 'ORIGIN_NOT_ALLOWED',
-        message: 'This access request did not come from the approved Due Diligence site.',
-      },
-    }, 403, origin, env);
-  }
-
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders(origin, env),
-    });
-  }
-
-  if (request.method !== 'POST') {
-    return jsonResponse({
-      ok: false,
-      error: {
-        code: 'METHOD_NOT_ALLOWED',
-        message: 'Only POST requests are accepted.',
-      },
-    }, 405, origin, env);
-  }
-
-  const user = await verifiedPaymentUser(request, env);
-  if (!user) {
-    return jsonResponse({
-      ok: false,
-      error: {
-        code: 'AUTHENTICATION_REQUIRED',
-        message: 'Sign in with Google before choosing access.',
-      },
-    }, 401, origin, env);
-  }
-
-  const requestKey = cleanSingleLine(request.headers.get('X-Request-ID'), 128);
-  if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {
-    return jsonResponse({
-      ok: false,
-      error: {
-        code: 'REQUEST_ID_REQUIRED',
-        message: 'The access choice could not be verified. Please try again.',
-      },
-    }, 400, origin, env);
-  }
-
-  const body = await request.json().catch(() => null);
-  const requestedChoice = cleanSingleLine(body?.choice, 40).toLowerCase();
-  const choice = ['free', 'free_trial', 'launch_trial'].includes(requestedChoice)
-    ? 'free'
-    : requestedChoice;
-  if (choice !== 'free') {
-    return jsonResponse({
-      ok: false,
-      error: {
-        code: 'INVALID_ACCESS_CHOICE',
-        message: 'Choose Free or Early Access.',
-      },
-    }, 400, origin, env);
-  }
-
-  const result = await serviceRoleRpc(env, 'phase4_choose_launch_trial', {
-    p_user_id: user.id,
-    p_request_key: requestKey,
-  });
-  if (!result.ok) {
-    const message = result.message.toLowerCase();
-    let code = 'ACCESS_CHOICE_UNAVAILABLE';
-    let status = result.status >= 500 ? 503 : 400;
-    let publicMessage = 'Free access could not be selected. Please try again.';
-
-    if (message.includes('terms') || message.includes('privacy')) {
-      code = 'LEGAL_ACCEPTANCE_REQUIRED';
-      status = 403;
-      publicMessage = 'Accept the current Terms of Use and Privacy Policy before choosing access.';
-    } else if (message.includes('profile')) {
-      code = 'PROFILE_COMPLETION_REQUIRED';
-      status = 403;
-      publicMessage = 'Complete your profile before choosing access.';
-    } else if (message.includes('closed') || message.includes('not available')) {
-      code = 'FREE_ACCESS_UNAVAILABLE';
-      status = 409;
-      publicMessage = 'Free access is temporarily unavailable. Please try again.';
-    }
-
-    return jsonResponse({
-      ok: false,
-      error: { code, message: publicMessage },
-    }, status, origin, env);
-  }
-
-  return jsonResponse({
-    ok: true,
-    choice: 'free',
-    access: result.payload,
-  }, 200, origin, env);
-}
-
 export function bytesToBase64(value) {
   const bytes = value instanceof Uint8Array ? value : new Uint8Array(value || []);
   let binary = '';
@@ -299,6 +137,50 @@ function safeAttachmentName(file) {
   const original = cleanSingleLine(file?.name, 160) || 'payment-proof';
   const safe = original.replace(/[^A-Za-z0-9._ -]+/g, '_').replace(/\s+/g, ' ').trim();
   return safe || 'payment-proof';
+}
+
+function encodedStoragePath(value) {
+  return String(value || '')
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+}
+
+async function canonicalPaymentProof(env, context) {
+  const supabaseUrl = configuredSupabaseUrl(env);
+  const serviceRoleKey = String(env?.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  const objectPath = cleanSingleLine(context?.proofObjectPath, 500);
+  if (!supabaseUrl || !serviceRoleKey || !objectPath) {
+    throw new Error('Canonical payment proof is unavailable.');
+  }
+  const response = await fetch(new URL(
+    `/storage/v1/object/payment-proofs/${encodedStoragePath(objectPath)}`,
+    supabaseUrl,
+  ), {
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Canonical payment proof could not be read (${response.status}).`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const expectedSize = Number(context?.proofSizeBytes || 0);
+  if (!bytes.length || (expectedSize > 0 && bytes.length !== expectedSize)) {
+    throw new Error('Canonical payment proof size verification failed.');
+  }
+  const hash = await sha256Hex(bytes);
+  if (context?.proofSha256 && hash !== String(context.proofSha256).toLowerCase()) {
+    throw new Error('Canonical payment proof integrity verification failed.');
+  }
+  return {
+    name: cleanSingleLine(context?.proofOriginalName, 180) || 'payment-proof',
+    type: cleanSingleLine(context?.proofMimeType, 100) || 'application/octet-stream',
+    size: bytes.length,
+    bytes,
+    hash,
+  };
 }
 
 function philippineDateTime(value) {
@@ -386,8 +268,10 @@ export async function sendPaymentVerificationEmail(env, context) {
     };
   }
 
-  const proofBytes = new Uint8Array(await context.proof.arrayBuffer());
-  const proofHash = await sha256Hex(proofBytes);
+  const proofBytes = context.proof?.bytes instanceof Uint8Array
+    ? context.proof.bytes
+    : new Uint8Array(await context.proof.arrayBuffer());
+  const proofHash = context.proof?.hash || await sha256Hex(proofBytes);
   const subjectName = context.user?.displayName || context.user?.email || 'subscriber';
   const message = {
     from,
@@ -443,66 +327,91 @@ export async function sendPaymentVerificationEmail(env, context) {
   };
 }
 
-async function notifyPaymentSubmission(request, response, env) {
-  const payload = await response.clone().json().catch(() => null);
-  if (!payload?.ok || !payload?.payment?.id) return response;
+export async function dispatchQueuedPaymentNotification(env, paymentRequestId = null) {
+  const claim = await serviceRoleRpc(env, 'phase4_claim_payment_notification', {
+    p_payment_request_id: paymentRequestId,
+  });
+  if (!claim.ok) {
+    console.error('Payment-verification queue claim failed', { status: claim.status });
+    return { status: 'failed', recipientCount: 0 };
+  }
+  const payment = claim.payload;
+  if (!payment?.id) return { status: 'idle', recipientCount: 0 };
 
-  let notification = {
-    status: 'failed',
-    providerId: null,
-    recipientCount: 0,
-  };
+  let notification = { status: 'failed', providerId: null, recipientCount: 0 };
+  let errorCode = 'delivery_failed';
   try {
-    const [form, user] = await Promise.all([
-      request.formData(),
-      verifiedPaymentUser(request, env),
-    ]);
-    const proof = form.get('proof');
-    if (!proof || typeof proof.arrayBuffer !== 'function') {
-      throw new Error('Payment proof was unavailable to the notification layer.');
-    }
+    const proof = await canonicalPaymentProof(env, payment);
     notification = await sendPaymentVerificationEmail(env, {
-      payment: payload.payment,
-      user,
+      payment,
+      user: payment.user,
       proof,
       fields: {
-        paymentDate: form.get('paymentDate'),
-        transactionReference: form.get('transactionReference'),
-        note: form.get('note'),
+        paymentMethod: payment.paymentMethod,
+        paymentDate: payment.paymentDate,
+        transactionReference: payment.transactionReference,
+        note: payment.note,
       },
     });
+    errorCode = notification.status === 'not_configured'
+      ? 'notification_not_configured'
+      : 'delivery_failed';
   } catch (error) {
+    errorCode = cleanSingleLine(error?.message || error?.name || 'delivery_failed', 500);
     console.error('Payment-verification notification processing failed', {
-      paymentRequestId: payload.payment.id,
+      paymentRequestId: payment.id,
       code: cleanSingleLine(error?.name || 'notification_error', 80),
     });
   }
 
-  const headers = new Headers(response.headers);
-  headers.delete('content-length');
-  const verifierNotification = {
-    status: notification.status,
-    recipientCount: notification.recipientCount,
-  };
-  if (['failed', 'not_configured'].includes(notification.status)) {
-    return new Response(JSON.stringify({
-      ok: false,
-      payment: payload.payment,
-      paymentSaved: true,
-      verifierNotification,
-      error: {
-        code: 'PAYMENT_NOTIFICATION_FAILED',
-        message: 'Your payment proof was saved, but delivery to the verification team could not be confirmed. Submit the same proof again to retry the notification; no second provisional grant will be created.',
-      },
-    }), {
-      status: 503,
-      headers,
+  const terminalStatus = notification.status === 'sent'
+    ? 'sent'
+    : notification.status === 'suppressed'
+      ? 'suppressed'
+      : 'failed';
+  const completion = await serviceRoleRpc(env, 'phase4_complete_payment_notification', {
+    p_payment_request_id: payment.id,
+    p_status: terminalStatus,
+    p_provider_id: notification.providerId,
+    p_error: terminalStatus === 'failed' ? errorCode : null,
+  });
+  if (!completion.ok) {
+    console.error('Payment-verification queue completion failed', {
+      status: completion.status,
+      paymentRequestId: payment.id,
     });
   }
+  return {
+    status: terminalStatus,
+    recipientCount: notification.recipientCount,
+    paymentRequestId: payment.id,
+  };
+}
+
+export async function drainPaymentNotificationQueue(env, limit = 5) {
+  const results = [];
+  const boundedLimit = Math.max(1, Math.min(10, Number(limit) || 5));
+  for (let index = 0; index < boundedLimit; index += 1) {
+    const result = await dispatchQueuedPaymentNotification(env);
+    if (result.status === 'idle') break;
+    results.push(result);
+  }
+  return results;
+}
+
+async function notifyPaymentSubmission(response, env, ctx) {
+  const payload = await response.clone().json().catch(() => null);
+  if (!payload?.ok || !payload?.payment?.id) return response;
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  const delivery = dispatchQueuedPaymentNotification(env, payload.payment.id);
+  if (ctx?.waitUntil) ctx.waitUntil(delivery);
+  else await delivery;
 
   return new Response(JSON.stringify({
     ...payload,
-    verifierNotification,
+    paymentSaved: true,
+    verifierNotification: { status: 'queued' },
   }), {
     status: response.status,
     headers,
@@ -512,21 +421,17 @@ async function notifyPaymentSubmission(request, response, env) {
 async function fetchWithCommercialNotifications(request, env, ctx) {
   const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
 
-  if (pathname === '/access/choose') {
-    return handleAccessChoice(request, env);
-  }
-
-  const paymentRequest = request.method === 'POST' && pathname === '/payments/submit'
-    ? request.clone()
-    : null;
+  const paymentRequest = request.method === 'POST' && pathname === '/payments/submit';
   const response = await coreWorker.fetch(request, env, ctx);
   if (!paymentRequest || response.status !== 201) return response;
-  return notifyPaymentSubmission(paymentRequest, response, env);
+  return notifyPaymentSubmission(response, env, ctx);
 }
 
 export default {
   fetch: fetchWithCommercialNotifications,
   scheduled(controller, env, ctx) {
+    const notificationDrain = drainPaymentNotificationQueue(env, 5);
+    ctx?.waitUntil?.(notificationDrain);
     return coreWorker.scheduled?.(controller, env, ctx);
   },
 };

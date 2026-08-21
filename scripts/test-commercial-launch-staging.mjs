@@ -22,7 +22,6 @@ const runId = `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
 const createdUsers = [];
 const createdInviteHashes = [];
 const createdNotificationIds = [];
-let originalSettings = null;
 let currentLegalPolicy = null;
 
 const serviceHeaders = {
@@ -155,38 +154,35 @@ async function reserve(userId, key, question, track = 'bar_practice') {
   });
 }
 
-async function activateCommercialStaging() {
+async function verifySoftLaunchStaging() {
   const rows = await serviceGet(
-    'platform_access_settings?singleton=eq.true&select=commercial_launch_enabled,public_pricing_enabled,global_beta_all_access_enabled,current_terms_version,current_privacy_version',
+    'platform_access_settings?singleton=eq.true&select=soft_launch_enabled,commercial_launch_enabled,public_pricing_enabled,global_beta_all_access_enabled,current_terms_version,current_privacy_version,introductory_token_limit,introductory_token_disclosure_version,early_access_regular_price_centavos,early_access_manual_renewal_at',
   );
   assert.equal(rows.length, 1);
-  originalSettings = rows[0];
-  await serviceWrite('platform_access_settings?singleton=eq.true', 'PATCH', {
-    commercial_launch_enabled: true,
-    public_pricing_enabled: true,
-    global_beta_all_access_enabled: false,
-    current_terms_version: 'terms-commercial-v1-2026-08-18',
-    current_privacy_version: 'privacy-commercial-v1-2026-08-18',
-  });
-}
-
-async function restoreStagingSettings() {
-  if (!originalSettings) return;
-  await serviceWrite('platform_access_settings?singleton=eq.true', 'PATCH', originalSettings);
+  assert.equal(rows[0].soft_launch_enabled, true);
+  assert.equal(rows[0].commercial_launch_enabled, true);
+  assert.equal(rows[0].public_pricing_enabled, true);
+  assert.equal(rows[0].global_beta_all_access_enabled, false);
+  assert.equal(rows[0].current_terms_version, 'terms-soft-launch-v1-2026-08-21');
+  assert.equal(rows[0].current_privacy_version, 'privacy-soft-launch-v1-2026-08-21');
+  assert.equal(rows[0].introductory_token_limit, 5);
+  assert.equal(rows[0].early_access_regular_price_centavos, 19900);
+  assert.ok(rows[0].introductory_token_disclosure_version);
+  assert.ok(rows[0].early_access_manual_renewal_at);
 }
 
 let outcome;
 try {
-  console.log('STAGING_GATE: enabling isolated commercial policy verification');
-  await activateCommercialStaging();
+  console.log('STAGING_GATE: verifying isolated soft-launch policy');
+  await verifySoftLaunchStaging();
 
   const legalPolicyResponse = await workerPost('/beta/access/policy', {});
   assert.equal(legalPolicyResponse.ok, true);
   assert.equal(legalPolicyResponse.policy.commercialLaunchEnabled, true);
   currentLegalPolicy = legalPolicyResponse.policy.legal;
   assert.deepEqual(currentLegalPolicy, {
-    termsVersion: 'terms-commercial-v1-2026-08-18',
-    privacyVersion: 'privacy-commercial-v1-2026-08-18',
+    termsVersion: 'terms-soft-launch-v1-2026-08-21',
+    privacyVersion: 'privacy-soft-launch-v1-2026-08-21',
   });
 
   const freeUser = await createUser('free');
@@ -210,22 +206,24 @@ try {
     completeMandatoryCommercialProfile(commercialProfile(provisionalUser, 'Provisional')),
   ]);
 
-  console.log('STAGING_GATE: validating Free and Early Access public catalog');
+  console.log('STAGING_GATE: validating the single Early Access public catalog');
   const plans = await workerPost('/plans', {});
   assert.equal(plans.ok, true);
-  assert.deepEqual(plans.plans.map((plan) => plan.planCode), ['free', 'early_access_beta']);
-  assert.equal(plans.plans[0].priceCentavos, 0);
-  assert.equal(plans.plans[1].priceCentavos, 14900);
-  assert.equal(plans.plans[1].billing, 'one_time');
-  assert.equal(plans.plans[1].checkoutEnabled, true);
+  assert.deepEqual(plans.plans.map((plan) => plan.planCode), ['early_access_beta']);
+  assert.equal(plans.plans[0].priceCentavos, 14900);
+  assert.equal(plans.plans[0].regularPriceCentavos, 19900);
+  assert.equal(plans.plans[0].billing, 'manual_renewal');
+  assert.equal(plans.plans[0].manualRenewal, true);
+  assert.equal(plans.plans[0].automaticRenewal, false);
+  assert.equal(plans.plans[0].checkoutEnabled, true);
 
   const freeInitial = await accessSnapshot(freeUser.id);
-  assert.equal(freeInitial.accessMode, 'free');
-  assert.equal(freeInitial.accountLabel, 'Free');
+  assert.equal(freeInitial.accessMode, 'introductory');
+  assert.equal(freeInitial.accountLabel, 'Introductory access');
   assert.equal(freeInitial.unlimited, false);
-  assert.equal(freeInitial.dailyLimit, 5);
-  assert.equal(freeInitial.remainingToday, 5);
-  assert.match(freeInitial.resetAt, /T00:00:00\+08:00$/);
+  assert.equal(freeInitial.tokenLimit, 5);
+  assert.equal(freeInitial.tokensRemaining, 5);
+  assert.equal(freeInitial.resetAt, null);
 
   console.log('STAGING_GATE: proving idempotent retry and failed-grade release');
   const retryKey = requestKey('commercial_retry');
@@ -241,9 +239,9 @@ try {
     p_reason: 'grading_failed',
   });
   const retryReleased = await accessSnapshot(retryUser.id);
-  assert.equal(retryReleased.completedToday, 0);
-  assert.equal(retryReleased.reservedToday, 0);
-  assert.equal(retryReleased.remainingToday, 5);
+  assert.equal(retryReleased.tokensUsed, 0);
+  assert.equal(retryReleased.tokensReserved, 0);
+  assert.equal(retryReleased.tokensRemaining, 5);
 
   console.log('STAGING_GATE: proving six concurrent requests cannot exceed five');
   const concurrent = await Promise.all(Array.from({ length: 6 }, (_, index) => reserve(
@@ -256,17 +254,18 @@ try {
   const denied = concurrent.filter((item) => item.allowed !== true);
   assert.equal(accepted.length, 5);
   assert.equal(denied.length, 1);
-  assert.equal(denied[0].basis, 'daily_limit_reached');
+  assert.equal(denied[0].basis, 'trial_tokens_exhausted');
+  assert.equal(denied[0].reason, 'trial_tokens_exhausted');
   await Promise.all(accepted.map((item) => serviceRpc('phase4_finalize_grade', {
     p_user_id: freeUser.id,
     p_reservation_id: item.reservationId,
   })));
   const freeExhausted = await accessSnapshot(freeUser.id);
-  assert.equal(freeExhausted.completedToday, 5);
-  assert.equal(freeExhausted.reservedToday, 0);
-  assert.equal(freeExhausted.remainingToday, 0);
-  assert.equal(freeExhausted.allowed, true);
-  assert.equal(freeExhausted.basis, 'daily_limit_reached');
+  assert.equal(freeExhausted.tokensUsed, 5);
+  assert.equal(freeExhausted.tokensReserved, 0);
+  assert.equal(freeExhausted.tokensRemaining, 0);
+  assert.equal(freeExhausted.allowed, false);
+  assert.equal(freeExhausted.basis, 'trial_tokens_exhausted');
 
   console.log('STAGING_GATE: proving Founding Beta hash claim and fixed expiry');
   const foundingHash = createHash('sha256')
@@ -333,16 +332,15 @@ try {
   outcome = {
     ok: true,
     runId,
-    publicCatalog: ['free', 'early_access_beta'],
-    freeQuota: { limit: 5, concurrentAccepted: 5, concurrentDenied: 1 },
+    publicCatalog: ['early_access_beta'],
+    introductoryTokens: { limit: 5, concurrentAccepted: 5, concurrentDenied: 1 },
     failedGradeReleased: true,
     foundingBeta: { claimedByHash: true, unlimited: true },
     provisionalPayment: { oneTimeWindow: true, amountCentavos: 14900 },
   };
 } finally {
-  console.log('STAGING_GATE: restoring policy and cleaning commercial records');
+  console.log('STAGING_GATE: cleaning exact synthetic commercial records');
   const cleanupErrors = [];
-  await restoreStagingSettings().catch((error) => cleanupErrors.push(error));
   for (const notificationId of createdNotificationIds.reverse()) {
     await serviceWrite(
       `outbound_notifications?id=eq.${encodeURIComponent(notificationId)}`,

@@ -171,38 +171,48 @@ export function normalizeAccessSnapshot(value) {
 
   const commercialLaunchEnabled = value.commercialLaunchEnabled === true;
   const unlimited = value.unlimited === true;
-  const dailyLimit = boundedNumber(
-    value.dailyLimit,
+  const tokenLimit = boundedNumber(
+    value.tokenLimit ?? value.dailyLimit,
     commercialLaunchEnabled ? 0 : 5,
     0,
     100,
   );
-  const completedToday = boundedNumber(value.completedToday, 0, 0, 100_000);
-  const reservedToday = boundedNumber(value.reservedToday, 0, 0, 100_000);
-  const rawRemaining = boundedNumber(
-    value.remainingToday ?? value.freeGrades?.remaining,
+  const tokensUsed = boundedNumber(
+    value.tokensUsed ?? value.completedToday,
     0,
     0,
     100_000,
   );
-  const remainingToday = dailyLimit > 0
-    ? Math.min(dailyLimit, rawRemaining)
+  const tokensReserved = boundedNumber(
+    value.tokensReserved ?? value.reservedToday,
+    0,
+    0,
+    100_000,
+  );
+  const rawRemaining = boundedNumber(
+    value.tokensRemaining ?? value.remainingToday ?? value.freeGrades?.remaining,
+    0,
+    0,
+    100_000,
+  );
+  const tokensRemaining = tokenLimit > 0
+    ? Math.min(tokenLimit, rawRemaining)
     : 0;
   const freeLimit = boundedNumber(
     value.freeGrades?.limit,
-    dailyLimit,
+    tokenLimit,
     0,
     100,
   );
   const freeUsed = boundedNumber(
     value.freeGrades?.used,
-    completedToday,
+    tokensUsed,
     0,
     100_000,
   );
   const freeRemaining = boundedNumber(
     value.freeGrades?.remaining,
-    remainingToday,
+    tokensRemaining,
     0,
     100_000,
   );
@@ -210,16 +220,18 @@ export function normalizeAccessSnapshot(value) {
   const choiceRequired = value.choiceRequired === true
     || value.planSelectionRequired === true
     || ['plan_selection_required', 'trial_expired', 'payment_required'].includes(basis);
-  const accessMode = clean(value.accessMode || (unlimited ? 'unlimited' : 'free'));
-  const accountLabel = accessMode === 'free'
-    ? 'Free'
-    : clean(value.accountLabel || (unlimited ? 'Unlimited' : 'Free'));
+  const accessMode = clean(value.accessMode || (unlimited ? 'unlimited' : 'introductory'));
+  const accountLabel = clean(
+    value.accountLabel || (unlimited ? 'Unlimited' : 'Introductory access'),
+  );
 
   return {
     allowed: value.allowed === true,
     basis,
     termsRequired: value.termsRequired === true,
+    reauthenticationRequired: value.reauthenticationRequired === true,
     profileCompleted: value.profileCompleted !== false,
+    tokenAcknowledgementRequired: value.tokenAcknowledgementRequired === true,
     choiceRequired,
     paymentRequired: value.paymentRequired === true || basis === 'payment_required',
     planSelectionRequired: value.planSelectionRequired === true
@@ -228,13 +240,30 @@ export function normalizeAccessSnapshot(value) {
     accessMode,
     accountLabel,
     unlimited,
-    dailyLimit,
-    completedToday,
-    reservedToday,
-    remainingToday,
+    tokenLimit,
+    tokensUsed,
+    tokensReserved,
+    tokensRemaining,
+    tokenGrantAt: value.tokenGrantAt || null,
+    tokenAcknowledgedAt: value.tokenAcknowledgedAt || null,
+    tokenDisclosureVersion: clean(value.tokenDisclosureVersion) || null,
+    // Compatibility aliases retained while older examination clients roll forward.
+    dailyLimit: tokenLimit,
+    completedToday: tokensUsed,
+    reservedToday: tokensReserved,
+    remainingToday: tokensRemaining,
     resetAt: value.resetAt || null,
     checkoutOpen: value.checkoutOpen === true,
     priceCentavos: boundedNumber(value.priceCentavos, 0, 0, 10_000_000),
+    regularPriceCentavos: boundedNumber(
+      value.regularPriceCentavos,
+      19900,
+      0,
+      10_000_000,
+    ),
+    renewalAt: value.renewalAt || null,
+    manualRenewal: value.manualRenewal === true,
+    automaticRenewal: value.automaticRenewal === true,
     salesCloseAt: value.salesCloseAt || null,
     entitlementEndsAt: value.entitlementEndsAt || null,
     paymentState: clean(value.paymentState) || null,
@@ -290,10 +319,18 @@ export function accessDeniedError(access) {
     );
   }
 
+  if (access?.reauthenticationRequired || access?.basis === 'reauthentication_required') {
+    return new AccessValidationError(
+      'REAUTHENTICATION_REQUIRED',
+      'Sign in with Google again to continue securely.',
+      401,
+    );
+  }
+
   if (access?.basis === 'profile_required') {
     return new AccessValidationError(
       'PROFILE_COMPLETION_REQUIRED',
-      'Complete your profile before choosing Free or Early Access.',
+      'Confirm your profile and one-time token acknowledgement before continuing.',
       403,
     );
   }
@@ -304,15 +341,19 @@ export function accessDeniedError(access) {
   ) {
     return new AccessValidationError(
       'ACCESS_CHOICE_REQUIRED',
-      'Choose Free or ₱149 Early Access before continuing.',
+      'Complete account setup before continuing.',
       403,
     );
   }
 
-  if (access?.accessMode === 'free' || access?.basis === 'daily_limit_reached') {
+  if (
+    access?.basis === 'trial_tokens_exhausted'
+    || access?.basis === 'insufficient_introductory_tokens'
+    || access?.tokensRemaining === 0
+  ) {
     return new AccessValidationError(
-      'DAILY_LIMIT_REACHED',
-      `You have used today’s ${Number(access?.dailyLimit) || 5} free submissions. Your allowance resets at Philippine midnight.`,
+      'INTRODUCTORY_TOKENS_EXHAUSTED',
+      'Your five one-time practice tokens have been used. Early Access is required to continue.',
       403,
     );
   }

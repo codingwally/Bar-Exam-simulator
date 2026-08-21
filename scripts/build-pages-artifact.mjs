@@ -57,7 +57,6 @@ const publicFiles = Object.freeze([
   'assets/icons/menu.svg',
   'assets/private-beta-landing.js',
   'assets/feature-loader.js',
-  'assets/free-trial-five-daily.js',
   'assets/private-workspace.js',
   ...featurePreviewFiles,
   'assets/phase2-experience.js',

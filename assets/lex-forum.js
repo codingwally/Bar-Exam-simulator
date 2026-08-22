@@ -872,7 +872,9 @@
             : 'No community posts match this view.'),
         textElement('p', '', state.view === 'saved'
           ? 'Save a useful post to build your private authority list.'
-          : 'Clear filters, refresh, or contribute a focused post.'),
+          : state.view === 'my-posts'
+            ? 'Your published community posts will appear here.'
+            : 'Clear filters, refresh, or contribute a focused post.'),
         button('Refresh', 'lex-button lex-button-quiet', () => refreshFeed()),
       );
       feed.append(empty);
@@ -893,6 +895,9 @@
     if (state.filters.category) payload.category = state.filters.category;
     if (state.filters.query) payload.query = state.filters.query;
     if (state.view === 'circle' && state.activeCircleId) payload.circleId = state.activeCircleId;
+    if (state.view === 'my-posts' && state.bootstrap?.profile?.memberId) {
+      payload.authorMemberId = state.bootstrap.profile.memberId;
+    }
     if (append && state.cursor) {
       payload.cursorAt = state.cursor.createdAt;
       payload.cursorId = state.cursor.id;
@@ -1569,7 +1574,7 @@
       await renderNotificationsView();
     } else if (view === 'my-posts') {
       setViewLabels('My Posts', 'Your community contributions');
-      await renderProfileView();
+      await refreshFeed();
     } else if (view === 'profile') {
       setViewLabels('Community profile', 'Your public academic identity');
       await renderProfileView();
@@ -2473,7 +2478,7 @@
     });
     updateActiveFilters();
     if (state.view === 'search') searchQuorum(state.filters.query);
-    else setView(state.view === 'saved' ? 'saved' : state.view === 'unanswered' ? 'unanswered' : 'home', { keepQuery: true });
+    else setView(['saved', 'unanswered', 'my-posts'].includes(state.view) ? state.view : 'home', { keepQuery: true });
   }
 
   function applyTypeFilter(entryType) {
@@ -2483,7 +2488,7 @@
     });
     updateActiveFilters();
     if (state.view === 'search') searchQuorum(state.filters.query);
-    else setView(state.view === 'saved' ? 'saved' : state.view === 'unanswered' ? 'unanswered' : 'home', { keepQuery: true });
+    else setView(['saved', 'unanswered', 'my-posts'].includes(state.view) ? state.view : 'home', { keepQuery: true });
   }
 
   async function activate() {
@@ -2630,7 +2635,8 @@
       if (state.view === 'entry') setView('home');
       else if (state.view === 'circles') renderCirclesView();
       else if (state.view === 'notifications') renderNotificationsView();
-      else if (['my-posts', 'profile'].includes(state.view)) renderProfileView();
+      else if (state.view === 'my-posts') refreshFeed();
+      else if (state.view === 'profile') renderProfileView();
       else if (state.view === 'search') searchQuorum(state.filters.query);
       else refreshFeed();
       loadSidebar();

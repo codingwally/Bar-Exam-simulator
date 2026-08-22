@@ -1226,7 +1226,27 @@
       if (!configuredPolicy) return;
       commercialLegal = Object.freeze(configuredPolicy);
     }
-    const [{ data: profile }, { data: terms }] = await Promise.all([
+    const accessToken = state.session?.access_token || '';
+    const adminSession = accessToken && config.features.adminDashboard
+      ? (async () => {
+        try {
+          const response = await fetch(`${config.workerUrl}/admin/session`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+              ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
+            },
+            body: '{}',
+          });
+          const admin = await response.json().catch(() => null);
+          return response.ok && admin?.authorized ? admin : null;
+        } catch {
+          return null;
+        }
+      })()
+      : Promise.resolve(null);
+    const [{ data: profile }, { data: terms }, admin] = await Promise.all([
       state.client
         .from('profiles')
         .select('id,display_name,school,enrollment_status,year_level,profile_completed_at,subscription_tier,subscription_status,law_school_id,law_school_other,commercial_category,commercial_onboarding_completed_at')
@@ -1238,27 +1258,11 @@
         .eq('terms_version', commercialLegal.termsVersion)
         .eq('privacy_version', commercialLegal.privacyVersion)
         .limit(1),
+      adminSession,
     ]);
     if (state.user?.id !== userId) return;
     state.profile = profile || null;
-    state.admin = null;
-    if (state.session?.access_token && config.features.adminDashboard) {
-      try {
-        const response = await fetch(`${config.workerUrl}/admin/session`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${state.session.access_token}`,
-            ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
-          },
-          body: '{}',
-        });
-        const admin = await response.json().catch(() => null);
-        if (response.ok && admin?.authorized) state.admin = admin;
-      } catch {
-        state.admin = null;
-      }
-    }
+    state.admin = admin;
     syncAuthUi();
     if (!terms?.length) {
       try {
@@ -1634,6 +1638,12 @@
       partnership: ['Collaborate', 'Partnerships', partnershipContent],
     };
     return definitions[view] || null;
+  }
+
+  function syncNativeViewWithHash() {
+    const hashView = location.hash.replace(/^#/, '').split(/[/?]/, 1)[0];
+    if (nativeDefinition(hashView)) renderNativeView(hashView, { push: false });
+    else hideNativeView();
   }
 
   function renderNativeView(view, options = {}) {
@@ -2528,10 +2538,9 @@
     });
     global.addEventListener('popstate', () => {
       syncEntryWithHistoryRoute();
-      const hashView = location.hash.replace(/^#/, '');
-      if (nativeDefinition(hashView)) renderNativeView(hashView, { push: false });
-      else hideNativeView();
+      syncNativeViewWithHash();
     });
+    global.addEventListener('hashchange', syncNativeViewWithHash);
     global.addEventListener('pageshow', recoverAuthAfterNavigation);
     global.addEventListener('duediligence:private-beta-access', (event) => {
       state.privateBetaAllowed = config.features?.privateBetaGate !== true
@@ -2560,6 +2569,7 @@
       resolveAuthReady?.();
       resolveAuthReady = null;
     }
+    syncNativeViewWithHash();
     if (!state.user) syncAuthUi();
   }
 

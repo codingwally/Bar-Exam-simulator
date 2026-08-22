@@ -62,8 +62,8 @@ for (const removedComposerCopy of [
   assert.doesNotMatch(page, removedComposerCopy);
 }
 assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
-assert.match(featureLoader, /assets\/lex-forum\.css\?v=home-actions-20260822-1/);
-assert.match(featureLoader, /assets\/lex-forum\.js\?v=home-actions-20260822-1/);
+assert.match(featureLoader, /assets\/lex-forum\.css\?v=non-exam-sweep-20260822-1/);
+assert.match(featureLoader, /assets\/lex-forum\.js\?v=non-exam-sweep-20260822-1/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);
@@ -94,6 +94,10 @@ assert.doesNotMatch(forum, /lex-edit-counter[^\n]*commentLimit/);
 assert.match(forum, /'create_comment'/);
 assert.match(forum, /payload\.cursorAt = state\.cursor\.createdAt/);
 assert.match(forum, /payload\.cursorId = state\.cursor\.id/);
+assert.match(forum, /state\.view === 'my-posts'[\s\S]*payload\.authorMemberId = state\.bootstrap\.profile\.memberId/,
+  'My Posts must query the signed-in member’s posts rather than opening Profile.');
+assert.match(forum, /view === 'my-posts'[\s\S]{0,180}await refreshFeed\(\)/,
+  'My Posts must render its filtered feed.');
 assert.match(forum, /state\.items = append \? state\.items\.concat/);
 assert.match(css, /@media \(max-width: 640px\)/);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);

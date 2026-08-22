@@ -82,3 +82,15 @@ test('preflight permits the maintenance token header', async () => {
     /X-DD-Maintenance-Access/,
   );
 });
+
+test('public launch bypasses maintenance without requiring a password token', async () => {
+  const response = await maintenanceWorker.fetch(
+    request('/not-a-real-route'),
+    { ...env, MAINTENANCE_MODE: 'false' },
+    {},
+  );
+  assert.equal(response.status, 404);
+  const payload = await json(response);
+  assert.equal(payload?.error?.code, 'NOT_FOUND');
+  assert.notEqual(payload?.maintenance, true);
+});

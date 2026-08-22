@@ -27,7 +27,6 @@ assert.match(phase2, /showEntry\(\{\s*allowDismiss:\s*true\s*\}\)/);
 
 // Published controls must work now or be rendered honestly as non-controls.
 assert.doesNotMatch(html, /exportProgressPDF/);
-assert.match(html, /Private Verdict PDF export is available/);
 assert.match(html, /openVerdictExport/);
 
 // Browser shortcuts remain available outside the answer editor.
@@ -36,13 +35,17 @@ assert.doesNotMatch(html, /\benableSecurity\(\);/);
 assert.match(html, /box\.addEventListener\('paste'/);
 
 // Static dialogs expose semantics and complete keyboard focus sets.
-for (const dialogId of ['feedback-modal', 'analytics-modal', 'suggest-modal']) {
+for (const dialogId of ['feedback-modal', 'suggest-modal']) {
   assert.match(
     html,
     new RegExp(`id="${dialogId}"[^>]*role="dialog"[^>]*aria-modal="true"`),
     `${dialogId} must identify itself as a modal dialog.`,
   );
 }
+assert.match(html, /id="page-analytics"[^>]*class="page"/,
+  'Analytics must be a routed page rather than a modal dialog.');
+assert.doesNotMatch(html, /id="analytics-modal"/,
+  'The retired Analytics modal must not remain in the shell.');
 assert.match(html, /select:not\(\[disabled\]\)/);
 assert.match(html, /id="checking-card"[^>]*tabindex="-1"/);
 

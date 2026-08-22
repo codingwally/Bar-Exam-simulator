@@ -753,7 +753,7 @@
   function openVerdictExport(resultId, questionId = '') {
     if (!requireAuthentication()) return false;
     const canSelectQuestion = Boolean(String(questionId || '').trim());
-    openDialog(`<button class="dd26-verdict-close" data-dd26-close-dialog type="button" aria-label="Close private Verdict export">&times;</button><div class="dd26-label">The Verdict / Private PDF</div><h2>Choose what to export</h2><p>Every included question contains the complete prompt, suggested answer, your answer, and coaching feedback.</p><label class="dd26-choice"><input type="radio" name="dd26-verdict-scope" value="entire_result" checked><span><strong>Entire result</strong><small>Export every available question and section.</small></span></label><label class="dd26-choice"><input type="radio" name="dd26-verdict-scope" value="questions" ${canSelectQuestion ? '' : 'disabled'}><span><strong>This question only</strong><small>${canSelectQuestion ? escapeHtml(questionId) : 'No individual question identifier is available for this legacy result.'}</small></span></label><div class="dd26-actions"><button class="dd26-button" data-dd26-close-dialog type="button">Back</button><button class="dd26-button primary" id="dd26-confirm-verdict-export" type="button">Generate private PDF</button></div>`);
+    openDialog(`<button class="dd26-verdict-close" data-dd26-close-dialog type="button" aria-label="Close private Analytics export">&times;</button><div class="dd26-label">Analytics / Private PDF</div><h2>Choose what to export</h2><p>Every included question contains the complete prompt, suggested answer, your answer, and coaching feedback.</p><label class="dd26-choice"><input type="radio" name="dd26-verdict-scope" value="entire_result" checked><span><strong>Entire result</strong><small>Export every available question and section.</small></span></label><label class="dd26-choice"><input type="radio" name="dd26-verdict-scope" value="questions" ${canSelectQuestion ? '' : 'disabled'}><span><strong>This question only</strong><small>${canSelectQuestion ? escapeHtml(questionId) : 'No individual question identifier is available for this legacy result.'}</small></span></label><div class="dd26-actions"><button class="dd26-button" data-dd26-close-dialog type="button">Back</button><button class="dd26-button primary" id="dd26-confirm-verdict-export" type="button">Generate private PDF</button></div>`);
     document.getElementById('dd26-confirm-verdict-export')?.addEventListener('click', async () => {
       const scope = document.querySelector('input[name="dd26-verdict-scope"]:checked')?.value || 'entire_result';
       const ok = await exportVerdict(resultId, scope, scope === 'questions' ? [questionId] : []);
@@ -785,10 +785,10 @@
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
-        throw new Error(payload?.error?.message || 'The Verdict PDF could not be generated.');
+        throw new Error(payload?.error?.message || 'The Analytics PDF could not be generated.');
       }
       const blob = await response.blob();
-      if (blob.type !== 'application/pdf' || !blob.size || blob.size > 25 * 1024 * 1024) throw new Error('The Verdict PDF response was invalid.');
+      if (blob.type !== 'application/pdf' || !blob.size || blob.size > 25 * 1024 * 1024) throw new Error('The Analytics PDF response was invalid.');
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -797,7 +797,7 @@
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
-      global.toast?.('Your private Verdict PDF is ready.', 'ok');
+      global.toast?.('Your private Analytics PDF is ready.', 'ok');
       return true;
     } catch (error) {
       global.toast?.(error.message, 'warn');

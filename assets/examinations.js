@@ -2025,7 +2025,7 @@
       <div class="dd-exam-actions">
         ${['ai', 'either'].includes(grading) ? '<button class="dd-exam-button is-primary" type="button" data-request-ai>Request AI Assessment</button>' : ''}
         ${['human', 'either', 'provisional'].includes(grading) ? '<button class="dd-exam-button is-gold" type="button" data-request-human>Human Examiner Review</button>' : ''}
-        <button class="dd-exam-button" type="button" data-exam-verdict="${escapeHtml(receipt.attemptId || state.active?.attempt?.attemptId)}">Open The Verdict</button>
+        <button class="dd-exam-button" type="button" data-exam-verdict="${escapeHtml(receipt.attemptId || state.active?.attempt?.attemptId)}">Open assessment</button>
         <button class="dd-exam-button" type="button" data-return-catalog>Return to Mock Bar Hub</button>
       </div>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
@@ -2825,7 +2825,7 @@
     showTrackPage(track);
     const root = pageRoot(track);
     root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen" role="status" aria-live="polite">
-      <p class="dd-exam-kicker">The Verdict</p><h1 tabindex="-1">Loading individual assessments…</h1>
+        <p class="dd-exam-kicker">Assessment</p><h1 tabindex="-1">Loading individual assessments…</h1>
     </section></div>`;
     try {
       const verdict = await api('/examinations/query', {
@@ -2854,7 +2854,7 @@
         return;
       }
       root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-review-page' : ''}"><section class="dd-verdict-screen">
-        <p class="dd-exam-kicker">${track === 'per_subject' ? 'Subject Matter' : 'The Verdict / Multi-Question Examination'}</p>
+        <p class="dd-exam-kicker">${track === 'per_subject' ? 'Subject Matter' : 'Multi-question assessment'}</p>
         <h1>${track === 'per_subject' ? 'Review and retain.' : 'Individual ALAC assessments.'}</h1>
         <p class="dd-exam-description">${track === 'per_subject'
           ? 'Understand the evaluation, then reveal the legal basis, discussion, suggested answer, and verified sources at your own pace.'
@@ -2888,7 +2888,7 @@
           </div>
         </section></div>`
         : `<div class="dd-exam-page"><section class="dd-verdict-screen" role="alert" tabindex="-1">
-          <p class="dd-exam-kicker">The Verdict</p><h1>Assessment unavailable.</h1>
+          <p class="dd-exam-kicker">Assessment</p><h1>Assessment unavailable.</h1>
           <div class="dd-exam-status is-error">${escapeHtml(error.message)}</div>
         </section></div>`;
       focusRendered(root, '[role="alert"]');

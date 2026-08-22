@@ -236,7 +236,7 @@
     }
     if (route === 'verdict') {
       if (typeof global.openVerdictDashboard !== 'function') {
-        throw new Error('The Verdict could not be opened. Please refresh and try again.');
+        throw new Error('Analytics could not be opened. Please refresh and try again.');
       }
       state.lastActivatedHash = route;
       global.openVerdictDashboard();

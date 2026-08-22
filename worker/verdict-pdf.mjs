@@ -279,7 +279,7 @@ export async function buildVerdictPdf({ result, selectionKind = 'entire_result',
     });
   });
 
-  pdf.setTitle('Due Diligence — The Verdict');
+  pdf.setTitle('Due Diligence — Analytics');
   pdf.setAuthor('Due Diligence');
   pdf.setSubject('Personal Philippine Bar Examination review result');
   pdf.setProducer('Due Diligence secure Worker');

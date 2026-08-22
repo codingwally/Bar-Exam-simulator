@@ -179,13 +179,13 @@ export function normalizeVerdictPdfRequest(input) {
   const payload = object(input);
   const selectionKind = String(payload.selectionKind || 'entire_result');
   if (!['entire_result', 'sections', 'questions'].includes(selectionKind)) {
-    throw new DD2026ValidationError('INVALID_PDF_SELECTION', 'Select an available Verdict export option.');
+    throw new DD2026ValidationError('INVALID_PDF_SELECTION', 'Select an available Analytics export option.');
   }
   const selectedIds = Array.isArray(payload.selectedIds)
     ? payload.selectedIds.map((id) => boundedText(id, 'Selection identifier', 120, { minimum: 1 }))
     : [];
   if (selectedIds.length > 200 || new Set(selectedIds).size !== selectedIds.length) {
-    throw new DD2026ValidationError('INVALID_PDF_SELECTION', 'The Verdict selection is invalid.');
+    throw new DD2026ValidationError('INVALID_PDF_SELECTION', 'The Analytics export selection is invalid.');
   }
   const rawIds = Array.isArray(payload.gradingResultIds)
     ? payload.gradingResultIds
@@ -228,7 +228,7 @@ export function normalizeVerdictArchiveRequest(input) {
     if (!allowed.has(sourceType)) {
       throw new DD2026ValidationError('INVALID_VERDICT_ARCHIVE', 'One selected attempt has an invalid record type.');
     }
-    return { id: uuid(record?.id, 'Verdict record'), sourceType };
+    return { id: uuid(record?.id, 'Analytics record'), sourceType };
   });
   const keys = records.map((record) => `${record.sourceType}:${record.id}`);
   if (new Set(keys).size !== keys.length) {
@@ -380,9 +380,9 @@ export function dd2026DatabaseError(error) {
     DD2026_AUTH_REQUIRED: 'Sign in to continue.',
     DD2026_FEATURE_DISABLED: 'This feature is temporarily unavailable.',
     DD2026_CONTENT_NOT_FOUND: 'The requested legal study item could not be found.',
-    DD2026_VERDICT_PDF_DISABLED: 'Verdict PDF export is temporarily unavailable.',
-    DD2026_PREMIUM_REQUIRED: 'Verdict PDF export is temporarily unavailable for this account.',
-    DD2026_VERDICT_RESULT_NOT_FOUND: 'The requested Verdict result was not found.',
+    DD2026_VERDICT_PDF_DISABLED: 'Analytics PDF export is temporarily unavailable.',
+    DD2026_PREMIUM_REQUIRED: 'Analytics PDF export is temporarily unavailable for this account.',
+    DD2026_VERDICT_RESULT_NOT_FOUND: 'The requested Analytics result was not found.',
     EXAM_ROOM_ADMIN_REQUIRED: 'Administrator authorization is required.',
     EXAM_ROOM_PROFESSOR_REQUIRED: 'An activated professor account is required.',
     EXAM_ROOM_CLASS_NOT_FOUND: 'The classroom could not be found.',

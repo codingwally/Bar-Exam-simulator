@@ -244,7 +244,7 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/feature-loader\.js\?v=post-casing-20260823-1/,
+  /assets\/feature-loader\.js\?v=post-body-only-20260823-1/,
   'Protected routes must use the release-scoped lazy feature loader.',
 );
 assert.match(

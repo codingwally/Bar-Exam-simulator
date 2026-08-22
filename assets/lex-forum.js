@@ -673,7 +673,6 @@
     if (item.circle?.name) chips.append(chip(`Study Circle: ${item.circle.name}`));
     if (chips.childElementCount) inner.append(chips);
 
-    if (item.caseTitle) inner.append(textElement('h3', 'quorum-entry-heading', item.caseTitle));
     inner.append(textElement('p', 'lex-post-body', item.body));
 
     const indicators = document.createElement('div');

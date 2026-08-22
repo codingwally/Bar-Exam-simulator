@@ -9,7 +9,7 @@
   const manifests = Object.freeze({
     quorum: Object.freeze({
       styles: ['assets/lex-forum.css?v=non-exam-sweep-20260822-1'],
-      scripts: ['assets/lex-forum.js?v=non-exam-sweep-20260822-1'],
+      scripts: ['assets/lex-forum.js?v=non-exam-sweep-20260822-2'],
     }),
     examinations: Object.freeze({
       styles: [

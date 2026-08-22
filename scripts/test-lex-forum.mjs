@@ -63,7 +63,7 @@ for (const removedComposerCopy of [
 }
 assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
 assert.match(featureLoader, /assets\/lex-forum\.css\?v=non-exam-sweep-20260822-1/);
-assert.match(featureLoader, /assets\/lex-forum\.js\?v=non-exam-sweep-20260822-1/);
+assert.match(featureLoader, /assets\/lex-forum\.js\?v=non-exam-sweep-20260822-2/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);
@@ -84,6 +84,8 @@ assert.match(forum, /iconButton\([\s\S]*?'comment'[\s\S]*?'share'[\s\S]*?'save'/
 assert.match(forum, /if \(item\.viewerOwns\)[\s\S]{0,260}'Remove your post'/);
 assert.match(forum, /if \(comment\.viewerOwns\)[\s\S]{0,260}button\('Edit'[\s\S]{0,180}button\('Remove'/);
 assert.match(forum, /'Reply to this comment'[\s\S]{0,100}'comment'[\s\S]{0,100}'lex-comment-action'/);
+assert.match(forum, /function arrangeVisibleComments\(comments\)/);
+assert.match(forum, /!comment\.parentCommentId \|\| !visibleIds\.has\(comment\.parentCommentId\)/);
 assert.doesNotMatch(forum, /wrapper\.disabled = true/);
 assert.match(
   forum,

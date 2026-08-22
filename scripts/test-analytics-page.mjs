@@ -3,13 +3,14 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
 const read = (relative) => readFile(new URL(relative, root), 'utf8');
-const [html, migration, frontend, landing, core, pdf] = await Promise.all([
+const [html, migration, frontend, landing, core, pdf, workerIndex] = await Promise.all([
   read('index.html'),
   read('supabase/migrations/20260822130000_analytics_measurement_fields.sql'),
   read('assets/duediligence-2026.js'),
   read('assets/private-beta-landing.js'),
   read('worker/duediligence-2026-core.mjs'),
   read('worker/verdict-pdf.mjs'),
+  read('worker/index.mjs'),
 ]);
 
 assert.match(html, /<section id="page-analytics" class="page"/,
@@ -44,6 +45,10 @@ assert.match(migration, /a\.assessment->'rubricBreakdown'/);
 assert.match(migration, /s\.word_count::integer/);
 assert.match(migration, /revoke all on function public\.dd2026_verdict_records[\s\S]*from public, anon, authenticated/);
 assert.match(migration, /grant execute on function public\.dd2026_verdict_records[\s\S]*to service_role/);
+assert.match(workerIndex, /'dd2026_verdict_records'/,
+  'The production Worker RPC allowlist must permit Analytics history reads.');
+assert.match(workerIndex, /'dd2026_verdict_archive'/,
+  'The production Worker RPC allowlist must permit recoverable Analytics removal and reset.');
 
 assert.doesNotMatch(`${html}\n${frontend}\n${landing}\n${core}`, />The Verdict<|Close The Verdict|The Verdict is temporarily unavailable|requested Verdict|available Verdict export/,
   'Visible legacy Verdict naming must be replaced with Analytics.');

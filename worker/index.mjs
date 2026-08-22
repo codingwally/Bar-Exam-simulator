@@ -633,6 +633,8 @@ async function dd2026Rpc(env, functionName, body) {
     'dd2026_record_doctrine_mastery_commercial',
     'dd2026_verdict_result',
     'dd2026_record_verdict_export',
+    'dd2026_verdict_records',
+    'dd2026_verdict_archive',
     'dd2026_service_flag_enabled',
   ]);
   if (!allowedFunctions.has(functionName)) {

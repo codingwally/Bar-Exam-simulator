@@ -2,7 +2,7 @@
   'use strict';
 
   global.DueDiligencePhase2Config = Object.freeze({
-    version: 'soft-launch-five-token-2026-08-21',
+    version: 'public-launch-2026-08-22',
     supabase: Object.freeze({
       url: 'https://hbllomlijfznnuudpdvr.supabase.co',
       publishableKey: 'sb_publishable_lQRSlxJPTDkKQIiT0hTfdg_ANVRUzym',
@@ -10,7 +10,7 @@
     }),
     workerUrl: 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev',
     maintenance: Object.freeze({
-      enabled: true,
+      enabled: false,
       tokenStorageKey: 'duediligence.maintenance.access.v1',
       headerName: 'X-DD-Maintenance-Access',
       unlockPath: '/maintenance/unlock',

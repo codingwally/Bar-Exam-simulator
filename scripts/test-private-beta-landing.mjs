@@ -106,8 +106,8 @@ assert.match(html, /function openAnalytics\(\)[\s\S]*showPage\('analytics', docu
   'The compatibility Analytics route must open the full-page experience.');
 
 assert.match(config, /privateBetaGate: false/);
-assert.match(config, /maintenance:\s*Object\.freeze\(\{[\s\S]*enabled:\s*true/,
-  'The redesign must remain protected by the temporary maintenance lock.');
+assert.match(config, /maintenance:\s*Object\.freeze\(\{[\s\S]*enabled:\s*false/,
+  'The public launch must not render the temporary maintenance lock.');
 assert.doesNotMatch(`${html}\n${landingCss}\n${landingJs}\n${shellCss}\n${shellJs}\n${config}\n${build}`, /ARTICLE[0-9]+NCC/i);
 assert.doesNotMatch(build, /privateBetaImageFiles|assets\/private-beta\/.+\.(?:avif|webp|jpe?g)/i,
   'Internet-sourced private-beta photography must not enter the Pages allowlist.');

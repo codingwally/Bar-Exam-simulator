@@ -3,7 +3,7 @@
 
   const config = global.DueDiligencePhase2Config;
   const CONTENT_PATHS = Object.freeze({
-    bar_easy: { hash: 'bar-easy', tab: 'spa-bar-easy', title: 'Bar Easy' },
+    bar_easy: { hash: 'bar-easy', tab: 'spa-bar-easy', title: 'Guided Practice' },
     chair_case: { hash: 'chairs-cases', tab: 'spa-chairs-case', title: '2026 Bar Chair’s Cases' },
     doctrine: { hash: 'doctrines', tab: 'spa-jurisprudence', title: 'Doctrines' },
     anchor_case: { hash: 'anchor-case-digests', tab: 'spa-case-digest', title: 'Anchor Case Digests' },
@@ -17,6 +17,8 @@
     exam_room: 'EXAMINATION_ROOM_2_ENABLED',
   });
   const EXAMINATION_ROOM_BASE_FLAG = 'EXAMINATION_ROOM_ENABLED';
+  const RANDOMIZED_STUDY_VIEWS = new Set(['bar_easy', 'doctrine']);
+  const STUDY_ROTATION_STORAGE_VERSION = 'v2';
   const EXAMINATION_ROOM_PUBLISH_WAIT_MS = 25_000;
   const EXAMINATION_ROOM_REFRESH_WAIT_MS = 8_000;
   const EXAMINATION_ROOM_MIN_HANDOFF_MS = 0;
@@ -159,6 +161,97 @@
     const bytes = new Uint8Array(18);
     crypto.getRandomValues(bytes);
     return `${prefix}_${btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')}`;
+  }
+
+  function stableRotationHash(value) {
+    let hash = 2166136261;
+    for (const character of String(value || '')) {
+      hash ^= character.codePointAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function studyRotationKey(subject = state.subject) {
+    const userPartition = stableRotationHash(authenticatedUserId() || 'signed-out');
+    return `duediligence.study-rotation.${STUDY_ROTATION_STORAGE_VERSION}.${userPartition}.${stableRotationHash(state.view)}.${stableRotationHash(subject)}`;
+  }
+
+  function secureRandomIndex(maximum) {
+    if (!Number.isInteger(maximum) || maximum <= 1) return 0;
+    const ceiling = 0x100000000;
+    const acceptable = ceiling - (ceiling % maximum);
+    const sample = new Uint32Array(1);
+    do crypto.getRandomValues(sample); while (sample[0] >= acceptable);
+    return sample[0] % maximum;
+  }
+
+  function securelyShuffle(values) {
+    const shuffled = [...values];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swapIndex = secureRandomIndex(index + 1);
+      [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    return shuffled;
+  }
+
+  function readStudyRotation(items, subject = state.subject) {
+    const ids = items.map((item) => String(item.id || '')).filter(Boolean);
+    const allowed = new Set(ids);
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(studyRotationKey(subject)) || '{}'); } catch { saved = {}; }
+    const seen = Array.isArray(saved.seen)
+      ? [...new Set(saved.seen.map(String).filter((id) => allowed.has(id)))]
+      : [];
+    const seenSet = new Set(seen);
+    const remaining = Array.isArray(saved.remaining)
+      ? [...new Set(saved.remaining.map(String).filter((id) => allowed.has(id) && !seenSet.has(id)))]
+      : [];
+    const queued = new Set(remaining);
+    const additions = ids.filter((id) => !seenSet.has(id) && !queued.has(id));
+    remaining.push(...securelyShuffle(additions));
+    return { seen, remaining, lastId: allowed.has(String(saved.lastId || '')) ? String(saved.lastId) : '' };
+  }
+
+  function writeStudyRotation(rotation, subject = state.subject) {
+    try {
+      localStorage.setItem(studyRotationKey(subject), JSON.stringify({
+        seen: rotation.seen,
+        remaining: rotation.remaining,
+        lastId: rotation.lastId,
+      }));
+    } catch {
+      // Storage can be unavailable in strict private browsing; the current in-memory selection still works.
+    }
+  }
+
+  function takeRandomStudyItem(items, subject = state.subject) {
+    if (!items.length) return null;
+    const ids = items.map((item) => String(item.id || '')).filter(Boolean);
+    const rotation = readStudyRotation(items, subject);
+    if (!rotation.remaining.length) {
+      rotation.seen = [];
+      rotation.remaining = securelyShuffle(ids);
+      if (rotation.remaining.length > 1 && rotation.remaining[0] === rotation.lastId) {
+        [rotation.remaining[0], rotation.remaining[1]] = [rotation.remaining[1], rotation.remaining[0]];
+      }
+    }
+    const selectedId = rotation.remaining.shift() || null;
+    if (selectedId) {
+      rotation.seen.push(selectedId);
+      rotation.lastId = selectedId;
+      writeStudyRotation(rotation, subject);
+    }
+    return selectedId;
+  }
+
+  function consumeExplicitStudyItem(items, selectedId, subject = state.subject) {
+    if (!selectedId || !items.some((item) => String(item.id) === String(selectedId))) return;
+    const rotation = readStudyRotation(items, subject);
+    rotation.remaining = rotation.remaining.filter((id) => id !== String(selectedId));
+    if (!rotation.seen.includes(String(selectedId))) rotation.seen.push(String(selectedId));
+    rotation.lastId = String(selectedId);
+    writeStudyRotation(rotation, subject);
   }
 
   function formatDate(value) {
@@ -578,7 +671,9 @@
       && (!state.search || JSON.stringify(item).toLowerCase().includes(state.search.toLowerCase()))
     ));
     if (!state.filtered.some((item) => item.id === state.selectedId)) {
-      state.selectedId = state.filtered[0]?.id || null;
+      state.selectedId = RANDOMIZED_STUDY_VIEWS.has(state.view)
+        ? null
+        : state.filtered[0]?.id || null;
     }
   }
 
@@ -586,14 +681,24 @@
     const items = await queryContent(type);
     state.subject = 'All';
     state.search = '';
-    state.selectedId = detailId && items.some((item) => item.id === detailId) ? detailId : items[0]?.id || null;
+    state.selectedId = detailId && items.some((item) => item.id === detailId)
+      ? detailId
+      : RANDOMIZED_STUDY_VIEWS.has(type) ? null : items[0]?.id || null;
     setContentFilter(items);
+    if (RANDOMIZED_STUDY_VIEWS.has(type) && state.selectedId) {
+      consumeExplicitStudyItem(state.filtered, state.selectedId);
+    }
     renderContent();
   }
 
   function subjectChips(items) {
     const subjects = ['All', ...new Set(items.map((item) => item.subject).filter(Boolean))];
     return `<div class="dd26-toolbar" role="group" aria-label="Filter by subject">${subjects.map((subject) => `<button class="dd26-chip${state.subject === subject ? ' is-active' : ''}" type="button" data-dd26-subject="${escapeHtml(subject)}">${escapeHtml(shortSubject(subject))}</button>`).join('')}</div>`;
+  }
+
+  function subjectSelector(items) {
+    const subjects = ['All', ...new Set(items.map((item) => item.subject).filter(Boolean))];
+    return `<label class="dd26-subject-picker" for="dd26-subject-select"><span>Choose a Subject</span><select class="dd26-select" id="dd26-subject-select">${subjects.map((subject) => `<option value="${escapeHtml(subject)}"${state.subject === subject ? ' selected' : ''}>${escapeHtml(subject === 'All' ? 'All subjects' : shortSubject(subject))}</option>`).join('')}</select></label>`;
   }
 
   function betaNotice() {
@@ -603,6 +708,9 @@
   function renderContent() {
     const items = state.items.get(state.view) || [];
     setContentFilter(items);
+    if (RANDOMIZED_STUDY_VIEWS.has(state.view) && !state.selectedId) {
+      state.selectedId = takeRandomStudyItem(state.filtered);
+    }
     if (state.view === 'bar_easy') renderBarEasy(items);
     else if (state.view === 'doctrine') renderDoctrines(items);
     else renderCaseLibrary(items, state.view === 'chair_case');
@@ -612,14 +720,12 @@
 
   function renderBarEasy(items) {
     const item = selectedItem();
-    const index = items.findIndex((entry) => entry.id === item?.id);
     const payload = item?.payload || {};
     app().innerHTML = `<div class="dd26-shell">
-      <header class="dd26-header"><div><div class="dd26-kicker">The Commons / Guided Practice</div><h1>Bar Easy</h1><p>Try legal reasoning in plain language. No law-school jargon is required.</p></div><span class="dd26-beta">Source-based study</span></header>
-      ${subjectChips(items)}
+      <header class="dd26-header"><div><div class="dd26-kicker">Guided Practice</div><h1>Guided Practice</h1><p>Build legal reasoning with focused questions and source-based coaching.</p></div><span class="dd26-beta">Source-based study</span></header>
+      ${subjectSelector(items)}
       <div class="dd26-grid">
         <section class="dd26-pane" aria-labelledby="dd26-easy-question">
-          <div class="dd26-question-meta"><span>${item ? `Question ${index + 1} of ${items.length}` : 'No question'}</span><span class="dd26-status">${escapeHtml(shortSubject(item?.subject || ''))}</span></div>
           <h2 class="dd26-prompt" id="dd26-easy-question">${escapeHtml(payload.prompt || '')}</h2>
           <label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea" id="dd26-easy-answer" maxlength="5000" placeholder="Explain the rule in your own words."></textarea><small class="dd26-counter" id="dd26-easy-count">0 / 5,000</small></label>
           <div class="dd26-actions"><button class="dd26-button primary" id="dd26-easy-submit" type="button">Submit answer</button><button class="dd26-button" id="dd26-easy-next" type="button">Next question</button></div>
@@ -641,7 +747,7 @@
     const answer = document.getElementById('dd26-easy-answer');
     const button = document.getElementById('dd26-easy-submit');
     if (!item || !answer?.value.trim()) { global.toast?.('Write an answer before submitting.', 'warn'); return; }
-    if (codePointLength(answer.value) > 5000) { global.toast?.('Bar Easy answers are limited to 5,000 characters. Nothing was truncated.', 'warn'); return; }
+    if (codePointLength(answer.value) > 5000) { global.toast?.('Guided Practice answers are limited to 5,000 characters. Nothing was truncated.', 'warn'); return; }
     state.busy = true; button.disabled = true; button.textContent = 'Reviewing…';
     try {
       const payload = await api('/dd2026/bar-easy/grade', { contentId: item.id, answer: answer.value, requestKey: randomKey('easy') });
@@ -654,10 +760,9 @@
     finally { state.busy = false; button.disabled = false; button.textContent = 'Submit answer'; }
   }
 
-  function selectNext(items) {
-    if (!items.length) return;
-    const current = items.findIndex((item) => item.id === state.selectedId);
-    state.selectedId = items[(current + 1) % items.length].id;
+  function selectNext() {
+    if (!state.filtered.length) return;
+    state.selectedId = takeRandomStudyItem(state.filtered);
     state.result = null;
     renderContent();
   }
@@ -667,7 +772,7 @@
     const payload = item?.payload || {};
     app().innerHTML = `<div class="dd26-shell">
       <header class="dd26-header"><div><div class="dd26-kicker">Recall / Explain / Verify</div><h1>Doctrines</h1><p>Explain the doctrine in your own words, then compare your understanding with its canonical meaning and limits.</p></div><span class="dd26-beta">Source-based study</span></header>
-      ${subjectChips(items)}
+      ${subjectSelector(items)}
       <div class="dd26-grid">
         <section class="dd26-pane"><div class="dd26-label">Selected doctrine</div><h2 class="dd26-prompt">${escapeHtml(item?.title || payload.doctrine_title || '')}</h2><p class="dd26-help">${escapeHtml(payload.syllabus_topic || '')}</p><label class="dd26-field"><span>Explain in your own words</span><textarea class="dd26-textarea" id="dd26-doctrine-answer" maxlength="3000" placeholder="State the meaning, required elements, and any important limit."></textarea><small class="dd26-counter" id="dd26-doctrine-count">0 / 3,000</small></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-doctrine-submit" type="button">Check mastery</button><button class="dd26-button" id="dd26-doctrine-next" type="button">Next doctrine</button></div><div class="dd26-privacy">Your answer text is not saved. Only your thumbs-up or thumbs-down mastery result is recorded.</div>${betaNotice()}</section>
         <aside class="dd26-pane" id="dd26-doctrine-result"><div class="dd26-empty">The canonical meaning, plain-language explanation, limits, and primary authority will appear after submission.</div></aside>
@@ -743,6 +848,12 @@
   }
 
   function bindContentFilters() {
+    document.getElementById('dd26-subject-select')?.addEventListener('change', (event) => {
+      state.subject = event.currentTarget.value;
+      state.selectedId = null;
+      state.result = null;
+      renderContent();
+    });
     document.querySelectorAll('[data-dd26-subject]').forEach((button) => button.addEventListener('click', () => {
       state.subject = button.dataset.dd26Subject;
       state.selectedId = null;

@@ -239,12 +239,12 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/phase2-experience\.js\?v=onboarding-profile-modernization-20260822-1/,
+  /assets\/phase2-experience\.js\?v=single-signin-entry-20260822-1/,
   'The route-overlay fix must ship behind a fresh browser cache key.',
 );
 assert.match(
   html,
-  /assets\/feature-loader\.js\?v=exam-room-ux-20260814-1/,
+  /assets\/feature-loader\.js\?v=guided-random-access-20260822-1/,
   'Protected routes must use the release-scoped lazy feature loader.',
 );
 assert.match(

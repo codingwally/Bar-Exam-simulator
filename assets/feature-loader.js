@@ -22,19 +22,19 @@
     }),
     content: Object.freeze({
       styles: [
-        'assets/duediligence-2026.css?v=exam-room-ux-20260814-1&release=subject-matter-gil-fixes-20260817-4',
+        'assets/duediligence-2026.css?v=guided-random-access-20260822-1',
         'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
       ],
       scripts: [
         'assets/study-workspace.js?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
-        'assets/duediligence-2026.js?v=exam-room-ux-20260814-1',
+        'assets/duediligence-2026.js?v=guided-random-access-20260822-1',
       ],
     }),
     examinationRoom: Object.freeze({
-      styles: ['assets/duediligence-2026.css?v=exam-room-ux-20260814-1&release=subject-matter-gil-fixes-20260817-4'],
+      styles: ['assets/duediligence-2026.css?v=guided-random-access-20260822-1'],
       scripts: [
         'assets/examination-room-2-store.js?v=exam-room-ux-20260814-1',
-        'assets/duediligence-2026.js?v=exam-room-ux-20260814-1',
+        'assets/duediligence-2026.js?v=guided-random-access-20260822-1',
       ],
     }),
   });

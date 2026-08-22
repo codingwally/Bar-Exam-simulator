@@ -160,9 +160,53 @@ body.private-beta-public #private-beta-landing .pb-public-footer {
   gap: 8px;
 }
 
-#site-header.qfs-shell .dd2-guest-badge,
 #site-header.qfs-shell #session-clock {
   display: none !important;
+}
+
+#site-header.qfs-shell .dd2-guest-badge {
+  position: relative;
+  min-height: 38px;
+  max-width: 190px;
+  margin: 0;
+  padding: 9px 13px 9px 29px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgba(230, 193, 105, .58);
+  border-radius: 999px;
+  color: #f9e8b7;
+  background: linear-gradient(145deg, rgba(31, 54, 80, .96), rgba(8, 24, 45, .96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 8px 22px rgba(0, 0, 0, .2);
+  font: 700 10px/1.2 Inter, sans-serif;
+  letter-spacing: .035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#site-header.qfs-shell .dd2-guest-badge::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--qfs-gold-300);
+  box-shadow: 0 0 0 4px rgba(226, 188, 91, .12);
+}
+
+#site-header.qfs-shell .dd2-guest-badge.is-visible:not([hidden]) {
+  display: inline-flex;
+}
+
+#site-header.qfs-shell .dd2-guest-badge:hover,
+#site-header.qfs-shell .dd2-guest-badge:focus-visible {
+  border-color: var(--qfs-gold-300);
+  color: #fff7df;
+  outline: 2px solid rgba(238, 202, 115, .72);
+  outline-offset: 3px;
+  transform: translateY(-1px);
 }
 
 #site-header.qfs-shell .quorum-room-shortcut {
@@ -708,6 +752,29 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   box-shadow: 0 13px 28px rgba(197, 160, 89, .3);
 }
 
+#private-beta-landing .quorum-entry-action:disabled {
+  cursor: wait;
+  opacity: .72;
+  transform: none;
+}
+
+#private-beta-landing .quorum-entry-status {
+  min-height: 20px;
+  margin: 9px 0 -7px;
+  color: var(--qfs-muted);
+  font: 600 12px/1.45 Inter, sans-serif;
+  text-align: center;
+}
+
+#private-beta-landing .quorum-entry-status:empty {
+  min-height: 0;
+  margin: 0;
+}
+
+#private-beta-landing .quorum-entry-status[data-kind="error"] {
+  color: #9f3131;
+}
+
 #private-beta-landing .quorum-entry-legal {
   margin-top: 15px;
   margin-bottom: 0;
@@ -782,6 +849,19 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
 
   #site-header.qfs-shell .quorum-room-shortcut {
     display: none;
+  }
+
+  #site-header.qfs-shell .dd2-guest-badge {
+    max-width: 116px;
+    min-height: 36px;
+    padding: 8px 10px 8px 25px;
+    font-size: 9px;
+  }
+
+  #site-header.qfs-shell .dd2-guest-badge::before {
+    left: 10px;
+    width: 7px;
+    height: 7px;
   }
 
   #site-header.qfs-shell #spa-nav.qfs-drawer {

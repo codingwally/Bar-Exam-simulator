@@ -208,11 +208,23 @@
     const access = state.access;
     const badge = document.getElementById('dd2-guest-badge');
     if (badge) {
-      badge.classList.toggle('is-visible', Boolean(access?.accountLabel));
-      if (!access) badge.textContent = '';
-      else if (setupRequired(access)) badge.textContent = 'Account setup required';
-      else if (access.unlimited) badge.textContent = `${access.accountLabel || 'Unlimited'} · Unlimited`;
-      else badge.textContent = `${Math.max(0, Number(access.tokensRemaining) || 0)} of ${Math.max(0, Number(access.tokenLimit) || 5)} tokens`;
+      const role = String(access?.role || '').trim().toLowerCase();
+      const basis = String(access?.basis || '').trim().toLowerCase();
+      const accountLabel = String(access?.accountLabel || '').trim().toLowerCase();
+      const identity = `${role} ${basis} ${accountLabel}`;
+      let label = '';
+      if (access) {
+        if (/\badmin(?:istrator)?\b|super_admin|founder_admin/.test(identity)) label = 'Admin';
+        else if (/founding[_\s-]*beta/.test(identity) || access?.freeBeta?.active === true) label = 'Founding Beta';
+        else if (setupRequired(access)) label = 'Complete profile';
+        else if (access.unlimited) label = 'Paid Access';
+        else label = `${Math.max(0, Number(access.tokensRemaining) || 0)} tokens remaining`;
+      }
+      badge.textContent = label;
+      badge.hidden = !label;
+      badge.classList.toggle('is-visible', Boolean(label));
+      badge.setAttribute('aria-label', label ? `${label}. Open account access details.` : 'Open account access details');
+      badge.title = label ? `${label} — open account details` : '';
     }
 
     if (!setupRequired(access)) {
@@ -310,8 +322,19 @@
       requestId: false,
       recoverAccess: false,
     })
-      .then((payload) => {
-        state.access = payload.access;
+      .then(async (payload) => {
+        let access = payload.access;
+        if (legalRequired(access)
+            && !setupExempt(access)
+            && typeof legacy.acceptCurrentTerms === 'function') {
+          await legacy.acceptCurrentTerms();
+          const refreshed = await request('/access', {
+            requestId: false,
+            recoverAccess: false,
+          });
+          access = refreshed.access;
+        }
+        state.access = access;
         state.lastRefreshAt = Date.now();
         syncAccessUi();
 

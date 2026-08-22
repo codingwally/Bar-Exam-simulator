@@ -1122,18 +1122,39 @@
     } else if (!comments.length) {
       list.append(textElement('div', 'lex-status', 'No comments yet. Add the first focused response.'));
     } else {
-      const roots = comments.filter((comment) => !comment.parentCommentId);
-      roots.forEach((comment) => {
-        list.append(renderComment(item, comment));
-        comments
-          .filter((reply) => reply.parentCommentId === comment.commentId)
-          .forEach((reply) => list.append(renderComment(item, reply, true)));
-      });
+      arrangeVisibleComments(comments)
+        .forEach(({ comment, isReply }) => list.append(renderComment(item, comment, isReply)));
     }
     section.append(list);
     if (!item.commentsLocked) section.append(commentForm(item));
     else section.append(textElement('div', 'lex-status', 'Comments are locked by a moderator.'));
     return section;
+  }
+
+  function arrangeVisibleComments(comments) {
+    const visibleIds = new Set(comments.map((comment) => comment.commentId).filter(Boolean));
+    const roots = comments.filter((comment) => (
+      !comment.parentCommentId || !visibleIds.has(comment.parentCommentId)
+    ));
+    const arranged = [];
+    const renderedIds = new Set();
+
+    roots.forEach((comment) => {
+      arranged.push({ comment, isReply: false });
+      renderedIds.add(comment.commentId);
+      comments
+        .filter((reply) => reply.parentCommentId === comment.commentId)
+        .forEach((reply) => {
+          arranged.push({ comment: reply, isReply: true });
+          renderedIds.add(reply.commentId);
+        });
+    });
+
+    comments
+      .filter((comment) => !renderedIds.has(comment.commentId))
+      .forEach((comment) => arranged.push({ comment, isReply: false }));
+
+    return arranged;
   }
 
   function renderComment(item, comment, isReply = false) {

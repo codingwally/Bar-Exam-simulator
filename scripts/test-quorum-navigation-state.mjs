@@ -38,7 +38,7 @@ assert.match(
 );
 assert.match(
   featureLoader,
-  /assets\/lex-forum\.js\?v=non-exam-sweep-20260822-1/,
+  /assets\/lex-forum\.js\?v=non-exam-sweep-20260822-2/,
   'The Home navigation fix must ship behind the current script cache key.',
 );
 assert.match(
@@ -126,6 +126,22 @@ await toggleComments(commentItem, commentArticle, commentControl);
 assert.equal(commentControlAttributes.get('aria-expanded'), 'false');
 assert.equal(commentContext.state.commentsOpen.has(commentItem.entryId), false);
 assert.equal(currentCommentsRegion, null, 'Closing comments must remove the controlled region.');
+
+const arrangeVisibleCommentsSource = source.match(
+  /function arrangeVisibleComments\(comments\) \{[\s\S]*?(?=\r?\n\r?\n  function renderComment)/,
+)?.[0];
+assert.ok(arrangeVisibleCommentsSource, 'Comment ordering must remain available for behavioral regression coverage.');
+const arrangeContext = vm.createContext({ Set });
+vm.runInContext(arrangeVisibleCommentsSource, arrangeContext);
+const arrangeVisibleComments = vm.runInContext('arrangeVisibleComments', arrangeContext);
+const arrangedOrphanComments = arrangeVisibleComments([
+  { commentId: 'reply-visible', parentCommentId: 'parent-unavailable' },
+]);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(arrangedOrphanComments)),
+  [{ comment: { commentId: 'reply-visible', parentCommentId: 'parent-unavailable' }, isReply: false }],
+  'A visible reply whose parent is unavailable must render as a readable top-level comment.',
+);
 
 const syncSource = source.match(
   /function syncViewButtons\(\) \{[\s\S]*?\n  \}/,

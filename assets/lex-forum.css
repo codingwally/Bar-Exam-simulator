@@ -1090,17 +1090,6 @@ button.lex-author {
   background: #fffaf0;
 }
 
-.quorum-entry-heading {
-  margin: 8px 0 4px;
-  color: #071a33;
-  font-family: var(--sans);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 1.35;
-  text-transform: none;
-}
-
 .quorum-entry-image {
   display: block;
   width: 100%;

@@ -62,8 +62,8 @@ for (const removedComposerCopy of [
   assert.doesNotMatch(page, removedComposerCopy);
 }
 assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
-assert.match(featureLoader, /assets\/lex-forum\.css\?v=post-casing-20260823-1/);
-assert.match(featureLoader, /assets\/lex-forum\.js\?v=non-exam-sweep-20260822-2/);
+assert.match(featureLoader, /assets\/lex-forum\.css\?v=post-body-only-20260823-1/);
+assert.match(featureLoader, /assets\/lex-forum\.js\?v=post-body-only-20260823-1/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);
@@ -109,11 +109,12 @@ assert.match(css, /--home-navy:\s*var\(--qfs-navy-950/);
 assert.match(css, /lex-post-card:last-child[\s\S]*border-bottom:\s*0/);
 assert.match(css, /#page-community \.lex-post-actions[\s\S]*justify-content:\s*flex-start/);
 assert.match(css, /#page-community \.lex-post-actions > \.lex-action:last-child[\s\S]*margin-left:\s*auto/);
-assert.match(
-  css,
-  /\.quorum-entry-heading\s*\{[\s\S]*font-family:\s*var\(--sans\)[\s\S]*text-transform:\s*none/,
-  'Home post titles must preserve natural sentence casing in the sans-serif community typography.',
+assert.doesNotMatch(
+  forum,
+  /textElement\('h3',\s*'quorum-entry-heading'/,
+  'Home posts must render as one human-written body without a separate title line.',
 );
+assert.doesNotMatch(css, /\.quorum-entry-heading\s*\{/);
 
 for (const route of [
   '/forum/feed',

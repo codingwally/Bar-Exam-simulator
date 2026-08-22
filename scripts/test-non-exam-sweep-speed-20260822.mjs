@@ -15,6 +15,10 @@ assert.doesNotMatch(html, /<img src="assets\/brand\/logo1-master\.png"/,
   'Signed-in Home must not eagerly download the 2.4 MB signed-out artwork.');
 assert.match(html, /<img data-src="assets\/brand\/logo1-master\.png"/);
 assert.match(landing, /stillImage\.setAttribute\('src'/);
+assert.match(landing, /function resetQuorumHomeLocation\(\)[\s\S]*url\.searchParams\.delete\(parameter\)[\s\S]*dueDiligenceQuorum: \{ view: 'home' \}/,
+  'Home must clear stale community subview parameters before restoring the default feed.');
+assert.match(landing, /feature\.dataset\.publicFeature === 'quorum'[\s\S]{0,100}openQuorumHome\(feature\)/,
+  'Both visible Home controls must use the canonical Home reset path.');
 
 assert.match(loader, /scheduleSignedInPrefetch\(\)/);
 assert.match(loader, /prefetchGroup\('content'\)/);

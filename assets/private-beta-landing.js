@@ -294,8 +294,25 @@
     requestAnimationFrame(() => siteHeader.querySelector('.brand')?.focus?.({ preventScroll: true }));
   }
 
+  function resetQuorumHomeLocation() {
+    const url = new URL(location.href);
+    for (const parameter of ['forumPost', 'quorumEntry', 'quorumView', 'quorumCircle', 'quorumQuery']) {
+      url.searchParams.delete(parameter);
+    }
+    url.hash = 'quorum';
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    if (`${location.pathname}${location.search}${location.hash}` !== nextUrl) {
+      history.pushState({
+        ...(history.state || {}),
+        dueDiligencePage: 'community',
+        dueDiligenceQuorum: { view: 'home' },
+      }, '', nextUrl);
+    }
+  }
+
   function openQuorumHome(trigger = null) {
     if (state.quorumHomePromise) return state.quorumHomePromise;
+    resetQuorumHomeLocation();
     state.quorumHomePromise = openProtectedFeature('quorum', trigger)
       .finally(() => { state.quorumHomePromise = null; });
     return state.quorumHomePromise;
@@ -797,7 +814,8 @@
       if (feature) {
         event.preventDefault();
         closePublicMenus();
-        await openProtectedFeature(feature.dataset.publicFeature, feature);
+        if (feature.dataset.publicFeature === 'quorum') await openQuorumHome(feature);
+        else await openProtectedFeature(feature.dataset.publicFeature, feature);
         return;
       }
       const chamberLink = event.target.closest?.('[data-pb-chamber-link]');

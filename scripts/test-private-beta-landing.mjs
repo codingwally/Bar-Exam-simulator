@@ -116,7 +116,7 @@ assert.match(build, /assets\/quorum-first-shell\.js/);
 assert.match(build, /assets\/brand\/signin-intro\.mp4/);
 assert.match(html, /assets\/quorum-first-shell\.css\?v=commercial-entry-access-20260822-1/,
   'The drawer stylesheet URL must change when its icon presentation changes.');
-assert.match(html, /assets\/private-beta-landing\.js\?v=non-exam-sweep-20260822-1/,
+assert.match(html, /assets\/private-beta-landing\.js\?v=non-exam-sweep-20260822-2/,
   'The signed-in Home router must use the current release URL.');
 
 const signInIntro = await readFile(path.join(root, 'assets/brand/signin-intro.mp4'));

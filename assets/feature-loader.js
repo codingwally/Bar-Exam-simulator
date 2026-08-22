@@ -7,8 +7,8 @@
 
   const manifests = Object.freeze({
     quorum: Object.freeze({
-      styles: ['assets/lex-forum.css?v=home-modern-icons-20260821-1'],
-      scripts: ['assets/lex-forum.js?v=home-modern-icons-20260821-1'],
+      styles: ['assets/lex-forum.css?v=home-actions-20260822-1'],
+      scripts: ['assets/lex-forum.js?v=home-actions-20260822-1'],
     }),
     examinations: Object.freeze({
       styles: [

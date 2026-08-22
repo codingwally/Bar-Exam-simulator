@@ -851,7 +851,7 @@ export function examinationDatabaseError(error) {
   const publicMessages = {
     EXAM_BETA_ACCESS_REQUIRED: 'This examination beta is limited to authorized test accounts.',
     EXAM_ACCESS_REQUIRED: 'Your current access does not include this examination.',
-    EXAM_PREMIUM_REQUIRED: 'Bar Feels requires an active Premium plan.',
+    EXAM_PREMIUM_REQUIRED: 'Your current access does not include Bar Exam Simulation.',
     EXAM_NOT_AVAILABLE: 'This examination is not currently available.',
     EXAM_VERSION_NOT_FOUND: 'The examination version could not be found.',
     EXAM_VERSION_IMMUTABLE: 'A published examination version cannot be changed.',

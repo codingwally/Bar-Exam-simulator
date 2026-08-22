@@ -175,7 +175,7 @@ test('Legacy and current Quorum report routes email only support@duediligence.ph
     assert.equal(emailCalls.length, 2);
     for (const emailCall of emailCalls) {
       assertSupportEmail(emailCall);
-      assert.equal(emailCall.body.subject, 'Due Diligence Quorum report');
+      assert.equal(emailCall.body.subject, 'Due Diligence Community report');
     }
   } finally {
     globalThis.fetch = originalFetch;

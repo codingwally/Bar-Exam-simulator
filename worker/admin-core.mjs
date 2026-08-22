@@ -283,19 +283,19 @@ export function normalizeLiveActivityRequest(payload) {
 
 export function normalizeQuorumPostsRequest(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new AdminValidationError('Quorum post request is invalid.');
+    throw new AdminValidationError('Community post request is invalid.');
   }
   const allowedFields = new Set(['search', 'status', 'limit', 'offset', 'requestKey']);
   if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
-    throw new AdminValidationError('Quorum post request contains an unsupported field.');
+    throw new AdminValidationError('Community post request contains an unsupported field.');
   }
   const search = String(payload.search || '').trim();
   if (search.length > 180) {
-    throw new AdminValidationError('Quorum search exceeds 180 characters.');
+    throw new AdminValidationError('Community search exceeds 180 characters.');
   }
   const status = String(payload.status || 'all').trim().toLowerCase();
   if (!['all', 'visible', 'hidden', 'removed', 'deleted_by_author'].includes(status)) {
-    throw new AdminValidationError('Choose a valid Quorum post status.');
+    throw new AdminValidationError('Choose a valid Community post status.');
   }
   const requestKey = String(payload.requestKey || '').trim();
   if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {

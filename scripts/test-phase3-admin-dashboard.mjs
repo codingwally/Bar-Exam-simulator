@@ -30,7 +30,7 @@ const sectionLabels = [
   ['subjects', 'Question Bank'],
   ['reliability', 'Grading Health'],
   ['examinations', 'Exams'],
-  ['forum', 'Quorum'],
+  ['forum', 'Community'],
   ['support', 'Support'],
   ['corrections', 'Answer Corrections'],
   ['subscriptions', 'Access'],

@@ -170,7 +170,7 @@ export class ForumValidationError extends Error {
   }
 }
 
-function quorumObject(value, label = 'Quorum request') {
+function quorumObject(value, label = 'Community request') {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new ForumValidationError('INVALID_QUORUM_REQUEST', `${label} is invalid.`);
   }
@@ -199,7 +199,7 @@ function quorumBoundedInteger(value, minimum, maximum, fallback) {
   return Math.min(maximum, Math.max(minimum, Math.floor(parsed)));
 }
 
-export function forumPublicId(value, prefixes = null, label = 'Quorum record') {
+export function forumPublicId(value, prefixes = null, label = 'Community record') {
   const normalized = String(value || '').trim().toLowerCase();
   if (!PUBLIC_ID_PATTERN.test(normalized)) {
     throw new ForumValidationError('INVALID_QUORUM_REQUEST', `${label} is invalid.`);
@@ -225,12 +225,12 @@ function quorumDate(value, label) {
 
 function safePayloadCopy(value, depth = 0) {
   if (depth > 4) {
-    throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'The Quorum request is too deeply nested.');
+    throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'The Community request is too deeply nested.');
   }
   if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
   if (typeof value === 'string') {
     if (value.length > 8_000) {
-      throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'A Quorum field is too long.');
+      throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'A Community field is too long.');
     }
     return value
       .replace(/\r\n?/g, '\n')
@@ -238,18 +238,18 @@ function safePayloadCopy(value, depth = 0) {
   }
   if (Array.isArray(value)) {
     if (value.length > 50) {
-      throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'The Quorum request contains too many items.');
+      throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'The Community request contains too many items.');
     }
     return value.map((item) => safePayloadCopy(item, depth + 1));
   }
   const source = quorumObject(value);
   const keys = Object.keys(source);
   if (keys.length > 40) {
-    throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'The Quorum request contains too many fields.');
+    throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'The Community request contains too many fields.');
   }
   return Object.fromEntries(keys.map((key) => {
     if (!/^[A-Za-z][A-Za-z0-9]{0,39}$/.test(key)) {
-      throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'The Quorum request contains an invalid field.');
+      throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'The Community request contains an invalid field.');
     }
     return [key, safePayloadCopy(source[key], depth + 1)];
   }));
@@ -352,7 +352,7 @@ export function normalizeQuorumCommandRequest(input = {}) {
   const request = quorumObject(input);
   const operation = String(request.operation || '').trim().toLowerCase();
   if (!QUORUM_COMMAND_OPERATIONS.has(operation)) {
-    throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'Choose a valid Quorum action.');
+    throw new ForumValidationError('INVALID_QUORUM_REQUEST', 'Choose a valid Community action.');
   }
   const payload = safePayloadCopy(request.payload || {});
   let normalized;
@@ -676,7 +676,7 @@ export function normalizeQuorumAdminRequest(input = {}, requestId = '') {
   const request = quorumObject(input);
   const operation = String(request.operation || '').trim().toLowerCase();
   if (!QUORUM_ADMIN_OPERATIONS.has(operation)) {
-    throw new ForumValidationError('INVALID_QUORUM_ADMIN_REQUEST', 'Choose a valid Quorum admin view.');
+    throw new ForumValidationError('INVALID_QUORUM_ADMIN_REQUEST', 'Choose a valid Community admin view.');
   }
   const payload = safePayloadCopy(request.payload || {});
   if (operation === 'queue') {
@@ -977,28 +977,28 @@ export function normalizeForumAdminAction(payload = {}, requestId = '') {
 export function forumDatabaseError(errorMessage = '') {
   const message = String(errorMessage || '');
   const cases = [
-    [/FORUM_AUTHENTICATION_REQUIRED/i, 'AUTHENTICATION_REQUIRED', 'Sign in to use Quorum.', 401],
+    [/FORUM_AUTHENTICATION_REQUIRED/i, 'AUTHENTICATION_REQUIRED', 'Sign in to use Community.', 401],
     [/Founder administrator authorization required/i, 'ADMIN_FORBIDDEN', 'Founder administrator authorization is required.', 403],
-    [/FORUM_OWNERSHIP_REQUIRED/i, 'FORUM_FORBIDDEN', 'You may change only your own Quorum content.', 403],
+    [/FORUM_OWNERSHIP_REQUIRED/i, 'FORUM_FORBIDDEN', 'You may change only your own Community content.', 403],
     [/FORUM_CIRCLE_MEMBERSHIP_REQUIRED/i, 'FORUM_FORBIDDEN', 'Join this Study Circle before publishing there.', 403],
     [/FORUM_CIRCLE_OWNER_MUST_ARCHIVE/i, 'FORUM_CIRCLE_OWNER_MUST_ARCHIVE', 'Archive this Study Circle before leaving it as owner.', 409],
-    [/FORUM_POSTING_RESTRICTED/i, 'FORUM_POSTING_RESTRICTED', 'Your Quorum publishing access is temporarily restricted.', 403],
+    [/FORUM_POSTING_RESTRICTED/i, 'FORUM_POSTING_RESTRICTED', 'Your Community publishing access is temporarily restricted.', 403],
     [/FORUM_POST_NOT_FOUND_OR_LOCKED/i, 'FORUM_COMMENTS_LOCKED', 'Comments are locked or this entry is unavailable.', 409],
     [/FORUM_ANNOUNCEMENT_NOT_PENDING/i, 'FORUM_REQUEST_CONFLICT', 'This announcement is no longer awaiting review.', 409],
     [/FORUM_PRIVATE_CONTACT/i, 'FORUM_PRIVATE_CONTACT', 'Remove private contact information before publishing.', 400],
-    [/FORUM_RATE_LIMITED/i, 'FORUM_RATE_LIMITED', 'Too many Quorum actions. Please wait and try again.', 429],
+    [/FORUM_RATE_LIMITED/i, 'FORUM_RATE_LIMITED', 'Too many Community actions. Please wait and try again.', 429],
     [/FORUM_ADMIN_REQUEST_KEY_CONFLICT/i, 'FORUM_REQUEST_CONFLICT', 'This moderation request conflicts with an earlier action.', 409],
     [/FORUM_DUPLICATE_REPORT/i, 'FORUM_DUPLICATE_REPORT', 'You have already reported this content.', 409],
     [/FORUM_DUPLICATE_(POST|COMMENT|REPOST)/i, 'FORUM_DUPLICATE_CONTENT', 'This content was just submitted.', 409],
-    [/FORUM_(POST|COMMENT|REPOST|REPORT|RESTRICTION|TARGET|CIRCLE|MEMBER|NOTIFICATION|ATTACHMENT)_NOT_FOUND/i, 'FORUM_NOT_FOUND', 'The Quorum record is no longer available.', 404],
-    [/FORUM_.*_(INVALID|REQUIRED|NOT_EDITABLE)/i, 'INVALID_FORUM_REQUEST', 'The Quorum request did not pass validation.', 400],
+    [/FORUM_(POST|COMMENT|REPOST|REPORT|RESTRICTION|TARGET|CIRCLE|MEMBER|NOTIFICATION|ATTACHMENT)_NOT_FOUND/i, 'FORUM_NOT_FOUND', 'The Community record is no longer available.', 404],
+    [/FORUM_.*_(INVALID|REQUIRED|NOT_EDITABLE)/i, 'INVALID_FORUM_REQUEST', 'The Community request did not pass validation.', 400],
   ];
   const match = cases.find(([pattern]) => pattern.test(message));
   return match
     ? new ForumValidationError(match[1], match[2], match[3])
     : new ForumValidationError(
       'FORUM_UNAVAILABLE',
-      'Quorum is temporarily unavailable. Please try again.',
+      'Community is temporarily unavailable. Please try again.',
       503,
     );
 }

@@ -76,7 +76,7 @@
       disabled: plan.previewStatus === 'disabled',
       statusLabel: plan.previewStatus === 'disabled' ? 'Unavailable' : 'Available',
       note: plan.id === 'premium'
-        ? 'Explicit expiration required. Bar Feels included.'
+        ? 'Explicit expiration required. Bar Exam Simulation included.'
         : '',
     }));
   }

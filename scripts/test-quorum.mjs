@@ -50,8 +50,8 @@ assert.match(html, /id="quorum-menu-back"[\s\S]*>Back<\/button>/);
 assert.match(client, /\$\('#quorum-menu-back'\)\?\.addEventListener\('click',[\s\S]*closeQuorumDrawer\(\)/);
 assert.match(css, /\.quorum-drawer-actions[\s\S]*justify-content:\s*flex-end/);
 assert.match(client, /Practice this issue/);
-assert.match(adminHtml, /data-section="forum">Quorum<\/button>/);
-assert.match(adminClient, /forum: 'Quorum'/);
+assert.match(adminHtml, /data-section="forum">Community<\/button>/);
+assert.match(adminClient, /forum: 'Community'/);
 
 for (const obsolete of [
   /Lex Forum/,
@@ -133,7 +133,7 @@ for (const route of ['/quorum/query', '/quorum/command', '/admin/quorum', '/admi
 assert.match(client, /api\('\/quorum\/query'/);
 assert.match(client, /api\('\/quorum\/command'/);
 assert.match(adminClient, /api\('\/admin\/quorum\/posts'/);
-assert.match(adminClient, /All Quorum posts/);
+assert.match(adminClient, /All Community posts/);
 assert.match(adminClient, /Download all matching posts/);
 assert.match(adminClient, /row\.author_email/);
 assert.doesNotMatch(

@@ -518,7 +518,7 @@ async function cycleSelfPaced(admin, student) {
 
 async function cycleCuratedBarFeels(admin, student) {
   const exam = await publishControlledExam(admin, {
-    title: `[SYNTHETIC ${runId}] Curated Bar Feels`,
+    title: `[SYNTHETIC ${runId}] Curated Bar Exam Simulation`,
     subject: 'Criminal Law I',
     track: 'bar_feels',
     assessmentKind: 'curated',
@@ -604,7 +604,7 @@ async function cyclePrivateUpload(admin, student) {
     fileName: `synthetic-${runId}.txt`,
     mimeType: 'text/plain',
     base64: Buffer.from(source, 'utf8').toString('base64'),
-    title: `[SYNTHETIC ${runId}] Private Bar Feels`,
+    title: `[SYNTHETIC ${runId}] Private Bar Exam Simulation`,
     timerMode: 'none',
     durationSeconds: 3600,
     gradingRoute: 'human',
@@ -615,7 +615,7 @@ async function cyclePrivateUpload(admin, student) {
 
   const confirmed = await command(student.token, 'confirm_upload', {
     uploadId: uploaded.body.data.uploadId,
-    title: `[SYNTHETIC ${runId}] Private Bar Feels`,
+    title: `[SYNTHETIC ${runId}] Private Bar Exam Simulation`,
     timerMode: 'none',
     durationSeconds: 3600,
     gradingRoute: 'human',

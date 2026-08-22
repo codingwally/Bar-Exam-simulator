@@ -148,7 +148,7 @@ assert.match(fixture, /operation === 'subject_performance'/);
 assert.match(fixture, /flaggedForLater:/);
 assert.match(fixture, /\['queue', 'queue-open'\]\.includes\(window\.__DD_SUBJECT_QA_STATE\)/);
 assert.match(featureLoader, /assets\/examinations\.css\?v=subject-matter-gil-fixes-20260817-5/);
-assert.match(featureLoader, /assets\/examinations\.js\?v=subject-matter-gil-fixes-20260817-6/);
+assert.match(featureLoader, /assets\/examinations\.js\?v=visible-naming-20260822-1/);
 assert.match(deployWorkflow, /node scripts\/test-subject-matter-skip-flag\.mjs/);
 
 console.log(JSON.stringify({

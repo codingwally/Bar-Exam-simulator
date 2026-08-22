@@ -3171,9 +3171,9 @@ async function handleForumReport(request, env, origin, allowedOrigin) {
     p_explanation: report.explanation,
   });
   await sendSupportNotification(env, {
-    subject: 'Due Diligence Quorum report',
+    subject: 'Due Diligence Community report',
     text: [
-      'A Quorum report was submitted.',
+      'A Community report was submitted.',
       `Reporter: ${user.email || 'Signed-in member'}`,
       `Target: ${report.targetType} ${report.targetId}`,
       `Category: ${report.category}`,
@@ -3379,9 +3379,9 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
 
   if (command.operation === 'create_report') {
     await sendSupportNotification(env, {
-      subject: 'Due Diligence Quorum report',
+      subject: 'Due Diligence Community report',
       text: [
-        'A Quorum report was submitted.',
+        'A Community report was submitted.',
         `Reporter: ${user.email || 'Signed-in member'}`,
         `Target: ${command.payload.targetType} ${command.payload.targetId}`,
         `Category: ${command.payload.category}`,
@@ -3433,7 +3433,7 @@ function retiredForumWriteResponse(origin, allowedOrigin) {
     ok: false,
     error: {
       code: 'FORUM_ROUTE_RETIRED',
-      message: 'Refresh Due Diligence to publish through the current privacy-safe Quorum editor.',
+      message: 'Refresh Due Diligence to publish through the current privacy-safe Community editor.',
     },
   }, 410, origin, allowedOrigin);
 }

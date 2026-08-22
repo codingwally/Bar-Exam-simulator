@@ -17,7 +17,7 @@
       ],
       scripts: [
         'assets/study-workspace.js?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
-        'assets/examinations.js?v=subject-matter-gil-fixes-20260817-6',
+        'assets/examinations.js?v=visible-naming-20260822-1',
       ],
     }),
     content: Object.freeze({
@@ -220,7 +220,7 @@
     open: async (...args) => {
       const placeholder = global.DueDiligenceQuorum;
       if (!await loadForFeature('quorum', { skipAccessCheck: true })) return null;
-      if (global.DueDiligenceQuorum === placeholder) throw new Error('Quorum could not be opened.');
+      if (global.DueDiligenceQuorum === placeholder) throw new Error('Home could not be opened.');
       return global.DueDiligenceQuorum.open(...args);
     },
   });

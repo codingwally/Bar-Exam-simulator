@@ -2368,6 +2368,8 @@
         safeSessionRemove(authAttemptStorageKey);
         resetGoogleSignIn();
         syncAuthUi();
+        dispatchSessionState(data.session, 'navigation-recovery');
+        await loadUserState();
         return;
       }
     } catch {

@@ -81,6 +81,11 @@ assert.doesNotMatch(forum, /query\('sample_feed'\)|sampleVisibleCount|community-
 assert.match(forum, /command\('create_entry'/);
 assert.match(forum, /isAnonymous:\s*\$\('#quorum-entry-anonymous'\)\?\.checked === true/);
 assert.match(forum, /iconButton\([\s\S]*?'comment'[\s\S]*?'share'[\s\S]*?'save'/);
+assert.match(
+  forum,
+  /\^\(back\|cancel\|close\|close preview\)\$/i,
+  'The shared Home dialog helper must reuse an existing Back action instead of inserting a duplicate.',
+);
 assert.doesNotMatch(forum, /lex-edit-counter[^\n]*commentLimit/);
 assert.match(forum, /'create_comment'/);
 assert.match(forum, /payload\.cursorAt = state\.cursor\.createdAt/);

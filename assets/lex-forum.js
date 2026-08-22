@@ -541,7 +541,7 @@
       body.append(actions);
     }
     let back = Array.from(actions.querySelectorAll('button')).find((control) => (
-      /^(cancel|close|close preview)$/i.test(control.textContent.trim())
+      /^(back|cancel|close|close preview)$/i.test(control.textContent.trim())
     ));
     if (back) {
       back.textContent = 'Back';

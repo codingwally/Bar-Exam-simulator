@@ -212,6 +212,11 @@ assert.doesNotMatch(
   /openPremiumBarFeels|openPerSubject|openExaminationRoom|showPage/,
   'A stale protected route must never reopen automatically after sign-in.',
 );
+assert.match(
+  extractNamedFunction(phase2, 'recoverAuthAfterNavigation'),
+  /state\.session = data\.session;[\s\S]*state\.user = data\.session\.user \|\| null;[\s\S]*dispatchSessionState\(data\.session, 'navigation-recovery'\);[\s\S]*await loadUserState\(\);/,
+  'BFCache and app-switch recovery must republish the restored identity and refresh owner-scoped state.',
+);
 
 const dispatchedSessions = [];
 const dispatchContext = {

@@ -428,11 +428,20 @@
 
   async function openPrimaryAdmission(trigger = null) {
     if (!gateEnabled) {
-      global.DueDiligencePhase2?.openSignIn?.({
-        allowDismiss: true,
-        title: 'Welcome to Due Diligence',
-        copy: 'Sign in with Google when you are ready to begin a protected activity.',
-      });
+      const beginGoogleSignIn = global.DueDiligencePhase2?.beginGoogleSignIn;
+      const button = trigger?.matches?.('[data-pb-open-admission]') ? trigger : null;
+      if (button) button.disabled = true;
+      setPublicSignInStatus('Opening Google securely…');
+      const started = typeof beginGoogleSignIn === 'function'
+        ? await beginGoogleSignIn()
+        : Boolean(global.mockAuth?.('Google') ?? true);
+      if (started === false) {
+        const status = document.getElementById('quorum-entry-status');
+        if (!status?.textContent || status.textContent === 'Opening Google securely…') {
+          setPublicSignInStatus('Google sign-in could not start. Please try again.', 'error');
+        }
+        if (button) button.disabled = false;
+      }
       return;
     }
     await resolveGlobalBetaPolicy();
@@ -441,6 +450,13 @@
       return;
     }
     openAdmission('disclosure', trigger);
+  }
+
+  function setPublicSignInStatus(message = '', kind = '') {
+    const status = document.getElementById('quorum-entry-status');
+    if (!status) return;
+    status.textContent = message;
+    status.dataset.kind = kind;
   }
 
   function closeAdmission() {
@@ -799,6 +815,16 @@
     });
     document.querySelectorAll('[data-pb-open-admission]').forEach((button) => {
       button.addEventListener('click', () => { openPrimaryAdmission(button); });
+    });
+    global.addEventListener('duediligence:google-signin-status', (event) => {
+      const message = String(event.detail?.message || '');
+      const kind = String(event.detail?.kind || '');
+      setPublicSignInStatus(message, kind);
+      if (kind === 'error') {
+        document.querySelectorAll('[data-pb-open-admission]').forEach((button) => {
+          button.disabled = false;
+        });
+      }
     });
     document.querySelectorAll('[data-pb-open-disclosure]').forEach((button) => {
       button.addEventListener('click', () => openAdmission('disclosure', button));

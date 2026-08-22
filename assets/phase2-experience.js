@@ -499,11 +499,7 @@
                     <span class="dd2-field-help">Stored privately for verification. This does not grant Professor or administrator authority.</span>
                   </label>
                 </div>
-                <label class="dd2-check dd2-consent-row dd2-consent-required">
-                  <input type="checkbox" id="dd2-legal-acceptance" required>
-                  <span>I agree to the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>
-                    and acknowledge the <button class="link-button" type="button" data-dd2-view="privacy">Privacy Policy</button>.</span>
-                </label>
+                <p class="dd2-entry-note dd2-onboarding-legal">By continuing, you acknowledge the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button> and <button class="link-button" type="button" data-dd2-view="privacy">Privacy Policy</button>.</p>
               </section>
 
               <section class="dd2-onboarding-section dd2-access-section" aria-labelledby="dd2-access-section-title">
@@ -561,10 +557,10 @@
     `);
 
     const topActions = document.querySelector('.topbar-actions');
-    if (topActions) {
+    if (topActions && !document.getElementById('dd2-guest-badge')) {
       topActions.insertAdjacentHTML(
         'afterbegin',
-        '<span class="dd2-guest-badge" id="dd2-guest-badge" aria-live="polite"></span>',
+        '<button class="dd2-guest-badge" id="dd2-guest-badge" type="button" data-public-action="docket" aria-live="polite" aria-label="Open account access details" hidden></button>',
       );
     }
   }
@@ -650,7 +646,14 @@
       button.disabled = false;
       button.textContent = 'Continue with Google';
     }
-    if (message) setStatus('dd2-auth-status', message, kind);
+    if (message) announceGoogleSignInStatus(message, kind);
+  }
+
+  function announceGoogleSignInStatus(message = '', kind = '') {
+    setStatus('dd2-auth-status', message, kind);
+    global.dispatchEvent(new CustomEvent('duediligence:google-signin-status', {
+      detail: { message, kind },
+    }));
   }
 
   function armAuthTimeout() {
@@ -1006,14 +1009,14 @@
   }
 
   async function signInWithGoogle() {
-    if (state.authInFlight) return;
+    if (state.authInFlight) return true;
     if (!state.client) {
-      setStatus('dd2-auth-status', 'Sign-in is temporarily unavailable. Please try again shortly.', 'error');
-      return;
+      announceGoogleSignInStatus('Sign-in is temporarily unavailable. Please try again shortly.', 'error');
+      return false;
     }
     if (!navigator.onLine) {
-      setStatus('dd2-auth-status', 'You appear to be offline. Reconnect and try again.', 'error');
-      return;
+      announceGoogleSignInStatus('You appear to be offline. Reconnect and try again.', 'error');
+      return false;
     }
     const button = document.getElementById('dd2-google-signin');
     state.authInFlight = true;
@@ -1022,7 +1025,7 @@
       button.disabled = true;
       button.textContent = 'Opening Google securely…';
     }
-    setStatus('dd2-auth-status', 'Opening Google securely…');
+    announceGoogleSignInStatus('Opening Google securely…');
     armAuthTimeout();
     try {
       if (!safeSessionRead(authReturnStorageKey)) {
@@ -1037,6 +1040,7 @@
         },
       });
       if (error) throw error;
+      return true;
     } catch {
       resetGoogleSignIn(
         navigator.onLine
@@ -1044,6 +1048,7 @@
           : 'You appear to be offline. Reconnect and try again.',
         'error',
       );
+      return false;
     }
   }
 
@@ -1118,9 +1123,10 @@
       );
     }
     const badge = document.getElementById('dd2-guest-badge');
-    if (badge) {
+    if (badge && !signedIn) {
       badge.classList.toggle('is-visible', !signedIn && Boolean(state.guestUsage));
-      if (state.guestUsage) badge.textContent = `${state.guestUsage.remaining} guest grades left`;
+      badge.hidden = !state.guestUsage;
+      if (state.guestUsage) badge.textContent = `${state.guestUsage.remaining} tokens remaining`;
     }
   }
 
@@ -1255,23 +1261,27 @@
     }
     syncAuthUi();
     if (!terms?.length) {
-      openTermsAcceptance();
-    } else {
-      closeEntry();
-      if (global.DueDiligencePhase4?.refreshAccess) {
-        const access = await global.DueDiligencePhase4.refreshAccess({
-          enforce: true,
-          force: true,
-          routeHash: location.hash,
-        }).catch(() => null);
-        if (!access?.allowed) return;
+      try {
+        await recordCurrentTermsAcceptance();
+      } catch {
+        setStatus('dd2-auth-status', 'Your account setup could not be verified. Check your connection and try again.', 'error');
+        return;
       }
-      if (state.welcomedUserId !== userId) {
-        state.welcomedUserId = userId;
-        global.toast?.(`Welcome back, ${profile?.display_name || state.user?.user_metadata?.full_name || 'future counsel'}.`, 'ok');
-      }
-      restoreAuthDestination();
     }
+    closeEntry();
+    if (global.DueDiligencePhase4?.refreshAccess) {
+      const access = await global.DueDiligencePhase4.refreshAccess({
+        enforce: true,
+        force: true,
+        routeHash: location.hash,
+      }).catch(() => null);
+      if (!access?.allowed) return;
+    }
+    if (state.welcomedUserId !== userId) {
+      state.welcomedUserId = userId;
+      global.toast?.(`Welcome back, ${profile?.display_name || state.user?.user_metadata?.full_name || 'future counsel'}.`, 'ok');
+    }
+    restoreAuthDestination();
   }
 
   function openOnboarding(options = {}) {
@@ -1300,8 +1310,6 @@
     if (displayName) displayName.value = state.profile?.display_name || state.user?.user_metadata?.full_name || '';
     if (school) school.value = schoolDisplayName();
     if (year) year.value = state.profile?.commercial_category || '';
-    const legal = document.getElementById('dd2-legal-acceptance');
-    if (legal) legal.checked = false;
     const tokenAcknowledgement = document.getElementById('dd2-token-acknowledgement');
     if (tokenAcknowledgement) tokenAcknowledgement.checked = false;
     updateEnrollmentFields();
@@ -1324,15 +1332,10 @@
     const school = normalizeSchoolInput(document.getElementById('dd2-school').value);
     const category = document.getElementById('dd2-year-level').value;
     const professorLicense = document.getElementById('dd2-professor-license').value.trim();
-    const accepted = document.getElementById('dd2-legal-acceptance').checked;
     const tokenAcknowledged = document.getElementById('dd2-token-acknowledgement').checked;
     const aiImprovementOptIn = document.getElementById('dd2-ai-improvement-consent').checked;
     if (displayName.length < 2) {
       setStatus('dd2-onboarding-status', 'Enter the name you want shown in Due Diligence.', 'error');
-      return;
-    }
-    if (!accepted) {
-      setStatus('dd2-onboarding-status', 'Accept the Terms of Use and acknowledge the Privacy Policy to continue.', 'error');
       return;
     }
     if (!tokenAcknowledged || !state.tokenDisclosureVersion) {
@@ -2626,6 +2629,8 @@
     handleGradeError,
     openView: renderNativeView,
     openSignIn: showEntry,
+    beginGoogleSignIn: signInWithGoogle,
+    acceptCurrentTerms: recordCurrentTermsAcceptance,
     openOnboarding,
     requireSubmissionAuthentication,
     handleSubmissionUnauthorized,

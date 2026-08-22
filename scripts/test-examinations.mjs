@@ -68,7 +68,7 @@ assert.doesNotMatch(
 assert.match(html, /id="spa-examination-room"[^>]*data-public-feature="examination-room"/);
 assert.match(html, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
-assert.match(html, /assets\/feature-loader\.js\?v=exam-room-ux-20260814-1/);
+assert.match(html, /assets\/feature-loader\.js\?v=guided-random-access-20260822-1/);
 assert.match(html, /Mock Bar/);
 assert.match(frontend, /track === 'per_subject' \? 'Subject Matter' : 'Mock Bar'/);
 assert.doesNotMatch(frontend, /Subject Matter Examinations/);

@@ -68,7 +68,7 @@ assert.equal(plans[2].disabled, false);
 assert.equal(plans[2].statusLabel, 'Available');
 assert.equal(
   plans[2].note,
-  'Explicit expiration required. Bar Feels included.',
+  'Explicit expiration required. Bar Exam Simulation included.',
 );
 
 const [

@@ -218,7 +218,7 @@ export async function buildVerdictPdf({ result, selectionKind = 'entire_result',
   }
 
   createPage();
-  drawHeading('THE VERDICT', { size: 22, gap: 10 });
+  drawHeading('ANALYTICS', { size: 22, gap: 10 });
   drawBody([
     result?.subject,
     result?.gradedAt ? `Graded ${new Date(result.gradedAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}` : '',
@@ -279,7 +279,7 @@ export async function buildVerdictPdf({ result, selectionKind = 'entire_result',
     });
   });
 
-  pdf.setTitle('Due Diligence — The Verdict');
+  pdf.setTitle('Due Diligence — Analytics');
   pdf.setAuthor('Due Diligence');
   pdf.setSubject('Personal Philippine Bar Examination review result');
   pdf.setProducer('Due Diligence secure Worker');
@@ -300,5 +300,5 @@ export function verdictPdfFileName(result) {
     .replace(/[^A-Za-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .toLowerCase() || 'bar-review';
-  return `duediligence-verdict-${subject}.pdf`;
+  return `duediligence-analytics-${subject}.pdf`;
 }

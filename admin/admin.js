@@ -19,7 +19,7 @@
     partnerships: 'Partnerships',
     controls: 'Website Settings',
     security: 'Security & Activity Log',
-    forum: 'Quorum',
+    forum: 'Community',
     examinations: 'Exams',
     examination_room: 'Examination Room',
     answer_exports: 'Answers',
@@ -567,8 +567,8 @@
         ${metric('Questions answered', engagement.questionsAnswered, null, number, {
           section: 'answer_exports', subtext: 'Practice and formal exams', cue: 'See answer records',
         })}
-        ${metric('Open Quorum reports', engagement.openQuorumReports, null, number, {
-          section: 'forum', subtext: 'Needs review', cue: 'Open Quorum',
+        ${metric('Open Community reports', engagement.openQuorumReports, null, number, {
+          section: 'forum', subtext: 'Needs review', cue: 'Open Community',
         })}
         ${metric('Grading success rate', reliability.success_rate, previous.reliability?.success_rate, percentage, {
           section: 'reliability', cue: 'Open grading health',
@@ -1305,8 +1305,8 @@
       actionButton('Remove restriction', 'forum_remove_restriction', row.id),
     ]);
     return `
-      ${heading('Quorum', 'Founder and Super Admin review only. Reports never reveal the reporting member, and post management never changes subscriptions or examination records.')}
-      <div class="notice"><strong>Quorum safeguards:</strong> Plain-text publishing, source-link checks, rate limits, duplicate controls, private reporting, posting restrictions, and recorded moderation are active.</div>
+      ${heading('Community', 'Founder and Super Admin review only. Reports never reveal the reporting member, and post management never changes subscriptions or examination records.')}
+      <div class="notice"><strong>Community safeguards:</strong> Plain-text publishing, source-link checks, rate limits, duplicate controls, private reporting, posting restrictions, and recorded moderation are active.</div>
       <section class="panel">
         <h3>Reported posts and comments</h3>
         ${table(
@@ -1393,7 +1393,7 @@
     const analytics = data.analytics || {};
     const values = analytics.metrics || {};
     const definitions = analytics.definitions || {};
-    const metricSource = `Quorum production records; server-generated ${dateTime(analytics.lastUpdatedAt)}`;
+    const metricSource = `Community production records; server-generated ${dateTime(analytics.lastUpdatedAt)}`;
     const reportRows = (queue.reports || []).map((row) => [
       dateTime(row.createdAt),
       row.targetType,
@@ -1442,12 +1442,12 @@
     const postStart = Number(posts.offset || 0) + (postRows.length ? 1 : 0);
     const postEnd = Number(posts.offset || 0) + postRows.length;
     return `
-      ${heading('Quorum', 'Review every post, see the author’s exact email, and remove content when necessary. A member can still delete their own post.')}
+      ${heading('Community', 'Review every post, see the author’s exact email, and remove content when necessary. A member can still delete their own post.')}
       <section class="panel">
-        <div class="panel-title-row"><div><h3>All Quorum posts</h3><p class="panel-note">Showing ${number(postStart)}–${number(postEnd)} of ${number(posts.total)} post(s). Admin actions are recorded.</p></div><button class="secondary-button" id="download-quorum-posts" type="button">Download all matching posts</button></div>
+        <div class="panel-title-row"><div><h3>All Community posts</h3><p class="panel-note">Showing ${number(postStart)}–${number(postEnd)} of ${number(posts.total)} post(s). Admin actions are recorded.</p></div><button class="secondary-button" id="download-quorum-posts" type="button">Download all matching posts</button></div>
         <div class="table-tools">
-          <input id="quorum-post-search" type="search" value="${escapeHtml(state.quorumPostSearch)}" placeholder="Search post, name, or email" aria-label="Search Quorum posts">
-          <select id="quorum-post-status" aria-label="Filter Quorum posts">
+          <input id="quorum-post-search" type="search" value="${escapeHtml(state.quorumPostSearch)}" placeholder="Search post, name, or email" aria-label="Search Community posts">
+          <select id="quorum-post-status" aria-label="Filter Community posts">
             ${['all', 'visible', 'hidden', 'removed', 'deleted_by_author'].map((status) => `<option value="${status}"${state.quorumPostStatus === status ? ' selected' : ''}>${status === 'all' ? 'All posts' : humanizeAuditValue(status)}</option>`).join('')}
           </select>
           <button class="secondary-button" id="quorum-post-filter" type="button">Apply filter</button>
@@ -1460,7 +1460,7 @@
       </section>
       <div class="notice"><strong>Reporting period:</strong> ${escapeHtml(dateTime(analytics.from))} to ${escapeHtml(dateTime(analytics.to))}. Updated ${escapeHtml(dateTime(analytics.lastUpdatedAt))}.</div>
       <div class="metric-strip">
-        ${metric('Active Quorum users', values.activeUsers, null, number, { copy: definitions.activeUsers, source: metricSource })}
+        ${metric('Active Community users', values.activeUsers, null, number, { copy: definitions.activeUsers, source: metricSource })}
         ${metric('Posts created', values.entries, null, number, { copy: definitions.entries, source: metricSource })}
         ${metric('Comments & replies', values.commentsReplies, null, number, { copy: definitions.commentsReplies, source: metricSource })}
         ${metric('Affirm reactions', values.helpful, null, number, { copy: definitions.helpful, source: metricSource })}
@@ -1471,7 +1471,7 @@
         ${metric('Moderation actions', values.moderationActions, null, number, { copy: definitions.moderationActions, source: metricSource })}
         ${metric('Unanswered questions', values.unansweredQuestions, null, number, { copy: definitions.unansweredQuestions, source: metricSource })}
         ${metric('Practice conversions', values.practiceConversions, null, number, { copy: definitions.practiceConversions, source: metricSource })}
-        ${metric('Quorum loading or posting errors', values.failedRequests, null, number, { copy: definitions.failedRequests, source: metricSource })}
+        ${metric('Community loading or posting errors', values.failedRequests, null, number, { copy: definitions.failedRequests, source: metricSource })}
       </div>
       <div class="work-grid">
         <section class="panel"><h3>Activity by subject</h3>
@@ -1501,7 +1501,7 @@
         ${table(['Member', 'Reason', 'Restricted until', 'Action'], restrictionRows)}
       </section>
       <section class="panel">
-        <h3>Recent Quorum activity</h3>
+        <h3>Recent Community activity</h3>
         ${table(
           ['Time', 'Type', 'Record', 'Activity'],
           (analytics.recentActivity || []).map((row) => [
@@ -1584,7 +1584,7 @@
           <h3>Create exam</h3>
           <form class="exam-admin-form" data-exam-admin-form="create_exam">
             <label>Title<input name="title" minlength="3" maxlength="180" required></label>
-            <label>Area<select name="track"><option value="per_subject">Subject Matter</option><option value="bar_feels">Bar Feels</option></select></label>
+            <label>Area<select name="track"><option value="per_subject">Subject Matter</option><option value="bar_feels">Bar Exam Simulation</option></select></label>
             <label>Exam type<select name="assessmentKind"><option value="midterm">Midterm</option><option value="final">Final</option><option value="curated">Curated</option><option value="system_test">System test</option></select></label>
             <label>Subject<input name="subject" maxlength="120"></label>
             <label>Year level<input name="yearLevel" type="number" min="1" max="4"></label>
@@ -3348,27 +3348,27 @@
     } else if (action.startsWith('quorum_')) {
       const quorumAction = action.slice('quorum_'.length);
       const quorumTitles = {
-        approve_announcement: 'Approve Quorum announcement',
-        reject_announcement: 'Reject Quorum announcement',
-        hide_entry: 'Hide Quorum entry',
-        restore_entry: 'Restore Quorum entry',
-        remove_entry: 'Remove Quorum entry',
-        hide_comment: 'Hide Quorum comment',
-        restore_comment: 'Restore Quorum comment',
-        remove_comment: 'Remove Quorum comment',
+        approve_announcement: 'Approve Community announcement',
+        reject_announcement: 'Reject Community announcement',
+        hide_entry: 'Hide Community entry',
+        restore_entry: 'Restore Community entry',
+        remove_entry: 'Remove Community entry',
+        hide_comment: 'Hide Community comment',
+        restore_comment: 'Restore Community comment',
+        remove_comment: 'Remove Community comment',
         hide_circle: 'Hide Study Circle',
         restore_circle: 'Restore Study Circle',
         remove_circle: 'Remove Study Circle',
         lock_comments: 'Lock comments',
         unlock_comments: 'Unlock comments',
-        dismiss_report: 'Dismiss Quorum report',
-        restrict_user: 'Restrict Quorum publishing',
-        remove_restriction: 'Remove Quorum restriction',
+        dismiss_report: 'Dismiss Community report',
+        restrict_user: 'Restrict Community publishing',
+        remove_restriction: 'Remove Community restriction',
         verify_profile: 'Approve Verified Academic Identity',
         unverify_profile: 'Remove Verified Academic Identity',
         set_indicator: 'Apply credibility indicator',
       };
-      title = quorumTitles[quorumAction] || 'Moderate Quorum';
+      title = quorumTitles[quorumAction] || 'Moderate Community';
       if (quorumAction === 'restrict_user') {
         fields = `<label class="field">Restriction period<select id="action-duration">
           <option value="1">1 hour</option>
@@ -3380,8 +3380,8 @@
         </select></label>`;
       }
       warning = ['restrict_user', 'remove_restriction'].includes(quorumAction)
-        ? 'This changes only the member’s ability to publish in Quorum. Examination, subscription, and payment access remain unchanged.'
-        : 'This Quorum action requires a reason and is recorded in Admin activity.';
+        ? 'This changes only the member’s ability to publish in Community. Examination, subscription, and payment access remain unchanged.'
+        : 'This Community action requires a reason and is recorded in Admin activity.';
     } else if (action.startsWith('forum_')) {
       const forumAction = action.slice('forum_'.length);
       const forumTitles = {
@@ -3405,7 +3405,7 @@
       }
       warning = forumAction === 'restrict_user' || forumAction === 'remove_restriction'
         ? 'This changes only the member’s legacy community publishing state. It does not change examination, subscription, or payment access.'
-        : 'This changes a Quorum post’s visibility or review status and is recorded in Admin activity.';
+        : 'This changes a Community post’s visibility or review status and is recorded in Admin activity.';
     }
     $('#action-title').textContent = title;
     const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
@@ -3644,7 +3644,7 @@
           operation: 'action',
           payload: actionPayload,
         });
-        toast('Quorum moderation action completed and recorded.');
+        toast('Community moderation action completed and recorded.');
       } else if (action.startsWith('forum_')) {
         await api('/admin/forum/action', {
           action: action.slice('forum_'.length),
@@ -3874,7 +3874,7 @@
           hasMore = payload.data?.hasMore === true;
           offset += page.length;
           if (hasMore && (items.length >= 5000 || page.length === 0)) {
-            throw new Error('More than 5,000 Quorum posts match. Narrow the search or status before downloading.');
+            throw new Error('More than 5,000 Community posts match. Narrow the search or status before downloading.');
           }
         }
         const rows = items.map((row) => [
@@ -3891,9 +3891,9 @@
         downloadCsv('due-diligence-quorum-posts.csv', [
           'Posted', 'Name', 'Email', 'Type', 'Topic', 'Post', 'Status', 'Comments', 'Reports',
         ], rows);
-        toast('All matching Quorum posts downloaded for Google Sheets.');
+        toast('All matching Community posts downloaded for Google Sheets.');
       } catch (error) {
-        toast(error.message || 'The Quorum post file could not be created.');
+        toast(error.message || 'The Community post file could not be created.');
       } finally {
         button.disabled = false;
       }

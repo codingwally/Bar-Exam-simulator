@@ -780,7 +780,7 @@
     const items = state.catalog.filter((item) => item.track === 'bar_feels');
     if (!items.length) {
       return `<div class="dd-unavailable">
-        Bar Feels is being prepared for this beta account.
+        Bar Exam Simulation is being prepared for this account.
       </div>`;
     }
     return items.map((item) => `<article class="dd-exam-card">
@@ -810,7 +810,7 @@
       <header class="dd-exam-hero">
         <div>
           <p class="dd-exam-kicker">Mock Bar / Examination Room</p>
-          <h1>Bar Feels</h1>
+          <h1>Bar Exam Simulation</h1>
           <p>Enter one of six Philippine Bar examination blocks. Every block contains
             twenty distinct questions, and no timer begins before you confirm the setup.</p>
         </div>
@@ -983,7 +983,7 @@
       dialog.innerHTML = `<div class="dd-exam-dialog-inner">
         <button class="${compact ? 'dd-icon-control ' : ''}dd-exam-dialog-close" type="button" data-dialog-close
           aria-label="Close time-mode selection">&times;</button>
-        <p class="dd-exam-kicker">${escapeHtml(compact ? 'Subject Matter' : 'Bar Feels')}</p>
+        <p class="dd-exam-kicker">${escapeHtml(compact ? 'Subject Matter' : 'Bar Exam Simulation')}</p>
         <h2 id="dd-exam-setup-title">${escapeHtml(compact ? setup.subject : setup.title)}</h2>
         <p class="dd-exam-description">${compact
           ? 'Choose how you want to time this question. The clock starts only after you begin.'
@@ -1374,7 +1374,7 @@
         <div class="dd-exam-room-title">
           <h1>${escapeHtml(state.active.examination.title)}</h1>
           <span>${state.active.examination.track === 'bar_feels'
-            ? 'BAR FEELS'
+            ? 'BAR EXAM SIMULATION'
             : 'SUBJECT MATTER EXAMINATION'} &middot;
             ${escapeHtml(state.active.examination.subject || 'Curated examination')}</span>
         </div>
@@ -2025,7 +2025,7 @@
       <div class="dd-exam-actions">
         ${['ai', 'either'].includes(grading) ? '<button class="dd-exam-button is-primary" type="button" data-request-ai>Request AI Assessment</button>' : ''}
         ${['human', 'either', 'provisional'].includes(grading) ? '<button class="dd-exam-button is-gold" type="button" data-request-human>Human Examiner Review</button>' : ''}
-        <button class="dd-exam-button" type="button" data-exam-verdict="${escapeHtml(receipt.attemptId || state.active?.attempt?.attemptId)}">Open The Verdict</button>
+        <button class="dd-exam-button" type="button" data-exam-verdict="${escapeHtml(receipt.attemptId || state.active?.attempt?.attemptId)}">Open assessment</button>
         <button class="dd-exam-button" type="button" data-return-catalog>Return to Mock Bar Hub</button>
       </div>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
@@ -2825,7 +2825,7 @@
     showTrackPage(track);
     const root = pageRoot(track);
     root.innerHTML = `<div class="dd-exam-page"><section class="dd-verdict-screen" role="status" aria-live="polite">
-      <p class="dd-exam-kicker">The Verdict</p><h1 tabindex="-1">Loading individual assessments…</h1>
+        <p class="dd-exam-kicker">Assessment</p><h1 tabindex="-1">Loading individual assessments…</h1>
     </section></div>`;
     try {
       const verdict = await api('/examinations/query', {
@@ -2854,7 +2854,7 @@
         return;
       }
       root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-review-page' : ''}"><section class="dd-verdict-screen">
-        <p class="dd-exam-kicker">${track === 'per_subject' ? 'Subject Matter' : 'The Verdict / Multi-Question Examination'}</p>
+        <p class="dd-exam-kicker">${track === 'per_subject' ? 'Subject Matter' : 'Multi-question assessment'}</p>
         <h1>${track === 'per_subject' ? 'Review and retain.' : 'Individual ALAC assessments.'}</h1>
         <p class="dd-exam-description">${track === 'per_subject'
           ? 'Understand the evaluation, then reveal the legal basis, discussion, suggested answer, and verified sources at your own pace.'
@@ -2888,7 +2888,7 @@
           </div>
         </section></div>`
         : `<div class="dd-exam-page"><section class="dd-verdict-screen" role="alert" tabindex="-1">
-          <p class="dd-exam-kicker">The Verdict</p><h1>Assessment unavailable.</h1>
+          <p class="dd-exam-kicker">Assessment</p><h1>Assessment unavailable.</h1>
           <div class="dd-exam-status is-error">${escapeHtml(error.message)}</div>
         </section></div>`;
       focusRendered(root, '[role="alert"]');
@@ -3034,7 +3034,7 @@
       if (isStaleIdentityError(error)) return;
       if (root) root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-study-page' : ''}"><div class="dd-exam-shell">
         <header class="dd-exam-hero"><div><p class="dd-exam-kicker">${track === 'per_subject' ? 'Subject Matter' : 'Mock Bar'}</p>
-          <h1>${track === 'per_subject' ? 'Subject Matter' : 'Bar Feels'}</h1></div></header>
+          <h1>${track === 'per_subject' ? 'Subject Matter' : 'Bar Exam Simulation'}</h1></div></header>
         <div class="dd-exam-status is-error" role="alert" tabindex="-1">${track === 'per_subject'
           ? 'Courses could not be loaded. Your saved course choice and prior work are unchanged.'
           : escapeHtml(error.message)}</div>

@@ -62,8 +62,8 @@ for (const removedComposerCopy of [
   assert.doesNotMatch(page, removedComposerCopy);
 }
 assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
-assert.match(featureLoader, /assets\/lex-forum\.css\?v=home-modern-icons-20260821-1/);
-assert.match(featureLoader, /assets\/lex-forum\.js\?v=home-modern-icons-20260821-1/);
+assert.match(featureLoader, /assets\/lex-forum\.css\?v=home-actions-20260822-1/);
+assert.match(featureLoader, /assets\/lex-forum\.js\?v=home-actions-20260822-1/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);
@@ -81,6 +81,15 @@ assert.doesNotMatch(forum, /query\('sample_feed'\)|sampleVisibleCount|community-
 assert.match(forum, /command\('create_entry'/);
 assert.match(forum, /isAnonymous:\s*\$\('#quorum-entry-anonymous'\)\?\.checked === true/);
 assert.match(forum, /iconButton\([\s\S]*?'comment'[\s\S]*?'share'[\s\S]*?'save'/);
+assert.match(forum, /if \(item\.viewerOwns\)[\s\S]{0,260}'Remove your post'/);
+assert.match(forum, /if \(comment\.viewerOwns\)[\s\S]{0,260}button\('Edit'[\s\S]{0,180}button\('Remove'/);
+assert.match(forum, /'Reply to this comment'[\s\S]{0,100}'comment'[\s\S]{0,100}'lex-comment-action'/);
+assert.doesNotMatch(forum, /wrapper\.disabled = true/);
+assert.match(
+  forum,
+  /\^\(back\|cancel\|close\|close preview\)\$/i,
+  'The shared Home dialog helper must reuse an existing Back action instead of inserting a duplicate.',
+);
 assert.doesNotMatch(forum, /lex-edit-counter[^\n]*commentLimit/);
 assert.match(forum, /'create_comment'/);
 assert.match(forum, /payload\.cursorAt = state\.cursor\.createdAt/);
@@ -92,6 +101,8 @@ assert.match(css, /outline: 3px solid/);
 assert.match(css, /quorum-icon-affirm[\s\S]*thumbs-up\.svg/);
 assert.match(css, /--home-navy:\s*var\(--qfs-navy-950/);
 assert.match(css, /lex-post-card:last-child[\s\S]*border-bottom:\s*0/);
+assert.match(css, /#page-community \.lex-post-actions[\s\S]*justify-content:\s*flex-start/);
+assert.match(css, /#page-community \.lex-post-actions > \.lex-action:last-child[\s\S]*margin-left:\s*auto/);
 
 for (const route of [
   '/forum/feed',
@@ -117,7 +128,7 @@ assert.match(core, /typeof payload\.liked !== 'boolean'/);
 assert.match(core, /https?:/);
 assert.match(core, /FORUM_PRIVATE_CONTACT/);
 
-assert.match(adminPage, />Quorum<\/button>/);
+assert.match(adminPage, />Community<\/button>/);
 assert.match(admin, /\/admin\/quorum/);
 assert.match(admin, /founder_admin.*super_admin|super_admin.*founder_admin/s);
 assert.match(admin, /forum_hide_content/);

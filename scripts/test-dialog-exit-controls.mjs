@@ -36,7 +36,6 @@ for (const id of [
   'signin-prompt-modal',
   'session-choice-modal',
   'feedback-modal',
-  'analytics-modal',
   'coming-soon-modal',
   'suggest-modal',
   'checking-modal',
@@ -111,7 +110,7 @@ assert.match(professorKey, /class="secondary-button" id="professor-room-key-back
 const verdictStart = room.indexOf('function openVerdictExport');
 const verdictEnd = room.indexOf('\n  function ', verdictStart + 30);
 const verdict = room.slice(verdictStart, verdictEnd);
-assert.match(verdict, /class="dd26-verdict-close"[^>]*aria-label="Close private Verdict export"/);
+assert.match(verdict, /class="dd26-verdict-close"[^>]*aria-label="Close private Analytics export"/);
 assert.match(verdict, /data-dd26-close-dialog type="button">Back<\/button>/);
 assert.match(room, /function openDialog\(content, options = \{\}\)[\s\S]*?class="dd26-dialog-close"[\s\S]*?back\.textContent = 'Back'/);
 

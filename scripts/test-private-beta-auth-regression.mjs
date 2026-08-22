@@ -8,6 +8,17 @@ const [html, phase2, privateBetaLanding] = await Promise.all([
   readFile(new URL('../assets/private-beta-landing.js', import.meta.url), 'utf8'),
 ]);
 
+assert.match(
+  privateBetaLanding,
+  /if \(!\['retainer', 'quorum'\]\.includes\(feature\)\)[\s\S]{0,260}ensureProtectedAccess/,
+  'The signed-in Home/community route must not depend on the commercial examination-access gate.',
+);
+assert.match(
+  privateBetaLanding,
+  /if \(feature === 'quorum'\)[\s\S]{0,260}await global\.DueDiligenceQuorum\?\.open\?\./,
+  'Opening Home must await community activation instead of leaving an unresolved verification shell.',
+);
+
 function between(source, start, end) {
   const startIndex = source.indexOf(start);
   const endIndex = source.indexOf(end, startIndex + start.length);

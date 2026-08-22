@@ -25,7 +25,7 @@ test('Verdict PDF is valid, paginated, Unicode-capable, private-export sized, an
   assert.ok(bytes.length < 25 * 1024 * 1024);
   const parsed = await PDFDocument.load(bytes);
   assert.ok(parsed.getPageCount() >= 1);
-  assert.equal(verdictPdfFileName(result), 'duediligence-verdict-labor-law.pdf');
+  assert.equal(verdictPdfFileName(result), 'duediligence-analytics-labor-law.pdf');
 });
 
 test('Verdict PDF paginates long answers without corrupting output', async () => {

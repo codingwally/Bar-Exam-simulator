@@ -500,7 +500,7 @@ export function buildBarFeelsManifest(rows, seed = 'duediligence-bar-feels-20260
       if (assigned.has(row.questionId)) {
         throw new ReleaseContentError(
           'BAR_FEELS_DUPLICATE_ASSIGNMENT',
-          `Bar Feels repeats ${row.questionId}.`,
+          `Bar Exam Simulation repeats ${row.questionId}.`,
         );
       }
       assigned.add(row.questionId);
@@ -514,7 +514,7 @@ export function buildBarFeelsManifest(rows, seed = 'duediligence-bar-feels-20260
   if (assigned.size !== 120 || groups.some((group) => group.rows.length !== 20)) {
     throw new ReleaseContentError(
       'BAR_FEELS_MANIFEST_INVALID',
-      'The Bar Feels manifest must contain six groups of twenty unique questions.',
+      'The Bar Exam Simulation manifest must contain six groups of twenty unique questions.',
     );
   }
   return groups;

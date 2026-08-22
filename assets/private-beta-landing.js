@@ -236,7 +236,7 @@
     }
     if (route === 'verdict') {
       if (typeof global.openVerdictDashboard !== 'function') {
-        throw new Error('The Verdict could not be opened. Please refresh and try again.');
+        throw new Error('Analytics could not be opened. Please refresh and try again.');
       }
       state.lastActivatedHash = route;
       global.openVerdictDashboard();
@@ -685,7 +685,11 @@
       });
       return;
     }
-    if (feature !== 'retainer') {
+    // Home/community is part of the signed-in shell, not a metered examination
+    // feature. Requiring a commercial-access round trip here can strand a valid
+    // session on the initial "Verifying…" state when that unrelated request is
+    // slow or temporarily unavailable.
+    if (!['retainer', 'quorum'].includes(feature)) {
       const allowed = await global.DueDiligencePhase4?.ensureProtectedAccess?.(returnHash);
       if (allowed !== true) return;
     }
@@ -694,6 +698,11 @@
       : await loadFeature(feature);
     if (loaded === false) return;
     showApplication({ activateRoute: false });
+    if (feature === 'quorum') {
+      const opened = await global.DueDiligenceQuorum?.open?.(document.getElementById('spa-community'));
+      if (opened !== true) throw new Error('Home could not be opened. Please refresh and try again.');
+      return true;
+    }
     requestAnimationFrame(() => {
       if (feature === 'mock') {
         state.lastActivatedHash = 'mock-bar';
@@ -711,8 +720,6 @@
         global.openVerdictDashboard?.();
       } else if (feature === 'bar-easy') {
         global.openBarEasy?.();
-      } else if (feature === 'quorum') {
-        global.DueDiligenceQuorum?.open?.(document.getElementById('spa-community'));
       } else if (feature === 'retainer') {
         openLegalView('pricing');
       } else if (feature === 'bar-feels') {

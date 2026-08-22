@@ -96,6 +96,10 @@ assert.match(landingJs, /Promise\.allSettled\(playback\)[\s\S]*showStill/,
 assert.match(landingJs, /route === 'subject-matter'[\s\S]*restoreRoute\('per_subject'/);
 assert.match(landingJs, /feature === 'verdict'[\s\S]*global\.openVerdictDashboard\?\.\(\)/);
 assert.match(html, /window\.openVerdictDashboard = openAnalytics;/);
+assert.match(html, /id="page-analytics"[^>]*class="page"/,
+  'Analytics must render as an application page.');
+assert.match(html, /function openAnalytics\(\)[\s\S]*showPage\('analytics', document\.getElementById\('spa-progress'\)\)/,
+  'The compatibility Analytics route must open the full-page experience.');
 
 assert.match(config, /privateBetaGate: false/);
 assert.match(config, /maintenance:\s*Object\.freeze\(\{[\s\S]*enabled:\s*true/,

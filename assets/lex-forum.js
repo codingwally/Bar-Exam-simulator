@@ -541,7 +541,7 @@
       body.append(actions);
     }
     let back = Array.from(actions.querySelectorAll('button')).find((control) => (
-      /^(cancel|close|close preview)$/i.test(control.textContent.trim())
+      /^(back|cancel|close|close preview)$/i.test(control.textContent.trim())
     ));
     if (back) {
       back.textContent = 'Back';
@@ -589,10 +589,11 @@
   }
 
   function authorBlock(author = {}, viewerOwns = false) {
-    const wrapper = document.createElement('button');
-    wrapper.type = 'button';
+    const canOpenProfile = Boolean(author.memberId);
+    const wrapper = document.createElement(canOpenProfile ? 'button' : 'div');
+    if (canOpenProfile) wrapper.type = 'button';
     wrapper.className = 'lex-author';
-    wrapper.setAttribute('aria-label', `Open ${author.displayName || 'member'} profile`);
+    if (canOpenProfile) wrapper.setAttribute('aria-label', `Open ${author.displayName || 'member'} profile`);
     const avatar = textElement('span', 'lex-author-avatar', initials(author.displayName));
     if (author.avatarUrl && !author.anonymous) {
       const image = document.createElement('img');
@@ -616,8 +617,7 @@
       textElement('span', author.anonymous ? 'lex-anonymous-badge' : '', secondary),
     );
     wrapper.append(copy);
-    if (author.memberId) wrapper.addEventListener('click', () => showMemberProfile(author.memberId));
-    else wrapper.disabled = true;
+    if (canOpenProfile) wrapper.addEventListener('click', () => showMemberProfile(author.memberId));
     return wrapper;
   }
 
@@ -812,7 +812,17 @@
       () => toggleSaved(item, save),
     );
     save.setAttribute('aria-pressed', item.viewerSaved ? 'true' : 'false');
-    actions.append(affirm, comments, disseminate, save);
+    actions.append(affirm, comments, disseminate);
+    if (item.viewerOwns) {
+      const remove = iconButton(
+        'Remove your post',
+        'close',
+        'lex-action lex-action-danger',
+        () => removeEntry(item),
+      );
+      actions.append(remove);
+    }
+    actions.append(save);
     inner.append(actions);
 
     const overflow = document.createElement('details');
@@ -1133,15 +1143,31 @@
     const actions = document.createElement('div');
     actions.className = 'lex-comment-actions';
     if (!isReply && !item.commentsLocked) {
-      actions.append(button('Reply', 'lex-menu-button', () => openCommentDialog(item, comment)));
+      actions.append(iconButton(
+        'Reply to this comment',
+        'comment',
+        'lex-comment-action',
+        () => openCommentDialog(item, comment),
+      ));
     }
-    actions.append(button('Report', 'lex-menu-button', () => openReportDialog('comment', comment.commentId)));
+    const overflow = document.createElement('details');
+    overflow.className = 'quorum-overflow lex-comment-overflow';
+    const overflowSummary = document.createElement('summary');
+    overflowSummary.className = 'quorum-overflow-trigger';
+    overflowSummary.append(iconElement('more'));
+    overflowSummary.setAttribute('aria-label', 'More comment actions');
+    overflowSummary.title = 'More comment actions';
+    const menu = document.createElement('div');
+    menu.className = 'lex-post-owner-actions';
+    menu.append(button('Report', 'lex-menu-button', () => openReportDialog('comment', comment.commentId)));
     if (comment.viewerOwns) {
-      actions.append(
+      menu.append(
         button('Edit', 'lex-menu-button', () => editComment(item, comment)),
         button('Remove', 'lex-menu-button is-danger', () => removeComment(item, comment)),
       );
     }
+    overflow.append(overflowSummary, menu);
+    actions.append(overflow);
     node.append(actions);
     return node;
   }

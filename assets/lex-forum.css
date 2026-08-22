@@ -414,6 +414,16 @@
   gap: 10px;
 }
 
+button.lex-author {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
 .lex-author-avatar {
   display: grid;
   width: 38px;
@@ -2644,21 +2654,34 @@ body.quorum-drawer-open { overflow: hidden; }
 
 #page-community .lex-post-actions {
   display: flex;
-  justify-content: space-around;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 4px;
   margin-top: 14px;
-  padding: 7px 14px;
+  padding: 7px 4px;
   border-top-color: var(--home-line);
 }
 
 #page-community .lex-action.quorum-icon-button {
   width: auto;
-  min-width: 52px;
+  min-width: 44px;
   height: 42px;
   min-height: 42px;
   padding: 0 12px;
   border-radius: 999px;
   color: var(--home-muted);
+}
+
+#page-community .lex-post-actions > .lex-action:last-child {
+  margin-left: auto;
+}
+
+#page-community .lex-action-danger {
+  color: #9f2d35 !important;
+}
+
+#page-community .lex-action-danger:hover,
+#page-community .lex-action-danger:focus-visible {
+  background: rgba(159, 45, 53, .08) !important;
 }
 
 #page-community .lex-action.quorum-icon-button.is-active,
@@ -2703,6 +2726,37 @@ body.quorum-drawer-open { overflow: hidden; }
   border-radius: 12px;
   color: var(--home-muted);
   background: transparent;
+}
+
+#page-community .lex-comment-actions {
+  align-items: center;
+  gap: 4px;
+}
+
+#page-community .lex-comment-action.quorum-icon-button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: var(--home-muted);
+  background: transparent;
+  text-decoration: none;
+}
+
+#page-community .lex-comment-overflow {
+  position: relative;
+  top: auto;
+  right: auto;
+}
+
+#page-community .lex-comment-overflow .quorum-overflow-trigger {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
 }
 
 #page-community .lex-comments {

@@ -65,8 +65,8 @@ assert.match(
   /if \(session && \['SIGNED_IN', 'INITIAL_SESSION', 'TOKEN_REFRESHED'\]\.includes\(event\)\) \{\s*closeEntry\(\);/,
   'Verified auth events must close a stale guest gate.',
 );
-assert.match(config, /terms-commercial-v1-2026-08-18/);
-assert.match(config, /privacy-commercial-v1-2026-08-18/);
+assert.match(config, /terms-soft-launch-v1-2026-08-21/);
+assert.match(config, /privacy-soft-launch-v1-2026-08-21/);
 assert.match(config, /subscriptionEnforcement:\s*true/);
 
 console.log('Phase 4 Release 1 contract checks passed.');

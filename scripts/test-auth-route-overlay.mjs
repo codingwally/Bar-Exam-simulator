@@ -239,14 +239,21 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/phase2-experience\.js\?v=single-signin-entry-20260822-1/,
+  /assets\/phase2-experience\.js\?v=non-exam-sweep-20260822-1/,
   'The route-overlay fix must ship behind a fresh browser cache key.',
 );
 assert.match(
   html,
-  /assets\/feature-loader\.js\?v=guided-random-access-20260822-1/,
+  /assets\/feature-loader\.js\?v=non-exam-sweep-20260822-1/,
   'Protected routes must use the release-scoped lazy feature loader.',
 );
+assert.match(
+  phase2Source,
+  /function syncNativeViewWithHash\(\)[\s\S]*nativeDefinition\(hashView\)[\s\S]*renderNativeView\(hashView, \{ push: false \}\)/,
+  'Direct native routes must render on initial load as well as history navigation.',
+);
+assert.match(phase2Source, /addEventListener\('hashchange', syncNativeViewWithHash\)/,
+  'Native support, pricing, and legal routes must respond to hash navigation.');
 assert.match(
   privateBetaCss,
   /body\.private-beta-public \.dd2-overlay:not\(#dd2-native-view\):not\(\.is-open\)/,

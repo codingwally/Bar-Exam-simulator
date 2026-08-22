@@ -45,6 +45,10 @@
     const frame = document.querySelector('[data-signin-intro]');
     const video = frame?.querySelector('[data-signin-intro-video]');
     const backdrop = frame?.querySelector('[data-signin-intro-backdrop]');
+    const stillImage = frame?.querySelector('.quorum-signin-intro-still img[data-src]');
+    if (stillImage && !stillImage.hasAttribute('src')) {
+      stillImage.setAttribute('src', String(stillImage.dataset.src || '').trim());
+    }
     if (!frame || !video) return;
 
     let watchdog = 0;

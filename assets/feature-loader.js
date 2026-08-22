@@ -4,11 +4,12 @@
   const loadedScripts = new Map();
   const loadedStyles = new Map();
   const featurePromises = new Map();
+  const prefetchedAssets = new Set();
 
   const manifests = Object.freeze({
     quorum: Object.freeze({
-      styles: ['assets/lex-forum.css?v=home-actions-20260822-1'],
-      scripts: ['assets/lex-forum.js?v=home-actions-20260822-1'],
+      styles: ['assets/lex-forum.css?v=non-exam-sweep-20260822-1'],
+      scripts: ['assets/lex-forum.js?v=non-exam-sweep-20260822-1'],
     }),
     examinations: Object.freeze({
       styles: [
@@ -135,6 +136,48 @@
     return pending;
   }
 
+  function prefetchAsset(url, as) {
+    const absolute = new URL(url, location.href).href;
+    if (prefetchedAssets.has(absolute)) return;
+    prefetchedAssets.add(absolute);
+    const link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.as = as;
+    link.href = url;
+    link.dataset.ddFeaturePrefetch = as;
+    link.addEventListener('error', () => prefetchedAssets.delete(absolute), { once: true });
+    document.head.append(link);
+  }
+
+  function prefetchGroup(group) {
+    const manifest = manifests[group];
+    if (!manifest || featurePromises.has(group)) return;
+    manifest.styles.forEach((href) => prefetchAsset(href, 'style'));
+    manifest.scripts.forEach((src) => prefetchAsset(src, 'script'));
+  }
+
+  function scheduleSignedInPrefetch() {
+    const run = async () => {
+      try {
+        await global.DueDiligencePhase2?.whenAuthReady?.();
+        if (!global.DueDiligencePhase2?.getSession?.()?.access_token) return;
+        prefetchGroup('content');
+        global.setTimeout(() => prefetchGroup('examinations'), 800);
+      } catch {
+        // Prefetching is opportunistic and must never block navigation.
+      }
+    };
+    const schedule = () => {
+      if (typeof global.requestIdleCallback === 'function') {
+        global.requestIdleCallback(run, { timeout: 2500 });
+      } else {
+        global.setTimeout(run, 1200);
+      }
+    };
+    if (document.readyState === 'complete') schedule();
+    else global.addEventListener('load', schedule, { once: true });
+  }
+
   async function loadGroup(group) {
     if (!manifests[group]) return;
     if (featurePromises.has(group)) return featurePromises.get(group);
@@ -234,4 +277,5 @@
   });
 
   installPageRouterGuard();
+  scheduleSignedInPrefetch();
 }(window));

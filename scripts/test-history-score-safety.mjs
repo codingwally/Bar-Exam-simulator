@@ -30,8 +30,8 @@ assert.match(html, /Assessment score unavailable/);
 assert.match(html, /\.hist-score\.neutral/);
 assert.match(
   html,
-  /const legacy = list\.filter\(\(attempt\) => !current\.includes\(attempt\)\);/,
-  'Invalid or older records must remain accounted for in the preserved-history metric.',
+  /record\.sourceType === 'legacy_grading_result'/,
+  'Older grading records must remain represented by the current Analytics data model.',
 );
 assert.doesNotMatch(
   html,

@@ -16,6 +16,15 @@ assert.match(html, /<meta name="viewport" content="width=device-width, initial-s
 assert.match(html, /let currentSubj = null;/, 'A new visitor must not silently start in Civil Law.');
 assert.doesNotMatch(html, /requestAnimationFrame\(showInvestorWelcome\)/, 'Patron modal must not auto-open.');
 assert.match(html, /duediligence\.terms\.accepted\.v1/);
+const startPracticeSource = html.slice(
+  html.indexOf('function startPractice()'),
+  html.indexOf('function acceptTerms()'),
+);
+assert.doesNotMatch(
+  startPracticeSource,
+  /TERMS_ACCEPTANCE_KEY/,
+  'Mock Bar must rely on the current server-versioned policy gate instead of repeating a stale local Terms prompt.',
+);
 assert.match(html, /id="terms-modal"[\s\S]*aria-modal="true"/);
 assert.match(html, /id="signin-prompt-modal"[\s\S]*Enter the Mock Bar/);
 assert.match(
@@ -103,6 +112,8 @@ assert.match(
   'Subject Matter must pass through the same server-authoritative access gate before its feature loader opens.',
 );
 assert.match(html, /setQuestionControlsDisabled\(true\)/, 'The submitted question must lock while its assessment is under review.');
+assert.doesNotMatch(html, /onclick="loadLaborFromSheet\(\)"/,
+  'The Labor Law retry button must not call the retired Google Sheet loader.');
 
 const inlineScripts = Array.from(html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi))
   .filter((match) => !/\ssrc=/.test(match[0]) && !/type="application\/ld\+json"/i.test(match[0]))

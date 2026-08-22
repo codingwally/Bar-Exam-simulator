@@ -47,6 +47,8 @@ assert.doesNotMatch(publicLanding, /<video[^>]*\scontrols(?:\s|=|>)/,
   'The decorative sign-in video must not expose playback controls.');
 assert.match(publicLanding, /class="quorum-signin-intro-still"[\s\S]*assets\/brand\/logo1-master\.png/,
   'The approved full-resolution justice mark must remain as the seamless fallback and end state.');
+assert.match(publicLanding, /class="quorum-signin-intro-still"[\s\S]*data-src="assets\/brand\/logo1-master\.png"/,
+  'The large signed-out artwork must be deferred until the sign-in intro is actually displayed.');
 assert.doesNotMatch(publicLanding, /pb-feature-ledger|pb-chamber-index|pb-pillar-card|feature-previews\//,
   'The signed-out entry must stay concise and must not recreate the retired chamber landing.');
 assert.doesNotMatch(`${publicLanding}\n${landingJs}`, /campus-students|library-community|library-student|writing-notes/,
@@ -89,6 +91,8 @@ assert.match(landingJs, /const stillHoldMs = 30 \* 60 \* 1000/,
   'The completed video must hold the approved Prepare with purpose still for thirty minutes.');
 assert.match(landingJs, /function initializeSignInIntro\(\)[\s\S]*state\.reducedMotion[\s\S]*media\.map\(\(element\) => element\.play\(\)\)/,
   'The intro must play on each signed-out page initialization while respecting reduced-motion preferences.');
+assert.match(landingJs, /stillImage\.setAttribute\('src', String\(stillImage\.dataset\.src/,
+  'Signed-out initialization must hydrate the deferred full-resolution still image.');
 assert.match(landingJs, /video\.addEventListener\('ended',[\s\S]*showStill/,
   'The intro must always resolve to the existing crest when playback ends.');
 assert.match(landingJs, /Promise\.allSettled\(playback\)[\s\S]*showStill/,
@@ -112,7 +116,7 @@ assert.match(build, /assets\/quorum-first-shell\.js/);
 assert.match(build, /assets\/brand\/signin-intro\.mp4/);
 assert.match(html, /assets\/quorum-first-shell\.css\?v=commercial-entry-access-20260822-1/,
   'The drawer stylesheet URL must change when its icon presentation changes.');
-assert.match(html, /assets\/private-beta-landing\.js\?v=home-route-restore-20260822-1/,
+assert.match(html, /assets\/private-beta-landing\.js\?v=non-exam-sweep-20260822-1/,
   'The signed-in Home router must use the current release URL.');
 
 const signInIntro = await readFile(path.join(root, 'assets/brand/signin-intro.mp4'));

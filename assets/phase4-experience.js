@@ -306,6 +306,15 @@
     return payload;
   }
 
+  function enforceResolvedAccess(access, options = {}) {
+    if (options.enforce === false) return;
+    if (setupRequired(access)) {
+      openRequiredSetup(access, options.routeHash || '');
+    } else if (paymentRequired(access) && isProtectedRoute(options.routeHash || location.hash)) {
+      openPaymentGate(access, options.routeHash || '');
+    }
+  }
+
   async function refreshAccess(options = {}) {
     if (!session()?.access_token) {
       state.access = null;
@@ -313,9 +322,10 @@
       return null;
     }
 
-    if (state.accessPromise && options.force !== true) return state.accessPromise;
-    if (state.accessPromise && options.force === true) {
-      try { await state.accessPromise; } catch {}
+    if (state.accessPromise) {
+      const access = await state.accessPromise;
+      enforceResolvedAccess(access, options);
+      return access;
     }
 
     const pending = request('/access', {
@@ -338,13 +348,7 @@
         state.lastRefreshAt = Date.now();
         syncAccessUi();
 
-        if (options.enforce !== false) {
-          if (setupRequired(state.access)) {
-            openRequiredSetup(state.access, options.routeHash || '');
-          } else if (paymentRequired(state.access) && isProtectedRoute(options.routeHash || location.hash)) {
-            openPaymentGate(state.access, options.routeHash || '');
-          }
-        }
+        enforceResolvedAccess(state.access, options);
         return state.access;
       })
       .finally(() => {

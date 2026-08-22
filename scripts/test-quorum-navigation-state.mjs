@@ -33,7 +33,7 @@ assert.match(
 );
 assert.match(
   featureLoader,
-  /assets\/lex-forum\.css\?v=non-exam-sweep-20260822-1/,
+  /assets\/lex-forum\.css\?v=post-casing-20260823-1/,
   'The Home accessibility fix must ship behind the current stylesheet cache key.',
 );
 assert.match(

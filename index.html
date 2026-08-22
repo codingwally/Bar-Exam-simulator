@@ -3609,6 +3609,38 @@ const verdictDashboard = {
   },
 };
 
+function analyticsFeatureLabel(value) {
+  const label = String(value || '').trim();
+  return /^bar feels$/i.test(label) ? 'Bar Exam Simulation' : label;
+}
+
+function analyticsSubjectLabel(value) {
+  const label = String(value || '').trim();
+  return /^labor law and social legislations$/i.test(label)
+    ? 'Labor Law and Social Legislation'
+    : label;
+}
+
+function analyticsDisplayRecord(record) {
+  return {
+    ...record,
+    feature: analyticsFeatureLabel(record?.feature),
+    subject: analyticsSubjectLabel(record?.subject),
+  };
+}
+
+function analyticsRecordExportable(record) {
+  if (!record?.id || record.localOnly || verdictDashboard.showDeleted) return false;
+  if (record.sourceType === 'legacy_grading_result') return true;
+  if (record.sourceType === 'phase4_exam_attempt') {
+    return ['completed', 'unanswered'].includes(String(record.status || '').toLowerCase());
+  }
+  if (record.sourceType === 'examination_attempt') {
+    return ['submitted', 'expired'].includes(String(record.status || '').toLowerCase());
+  }
+  return false;
+}
+
 async function verdictRequest(path, payload) {
   const session = window.DueDiligencePhase2?.getSession?.();
   const workerUrl = window.DueDiligencePhase2Config?.workerUrl;
@@ -3628,7 +3660,7 @@ async function verdictRequest(path, payload) {
 }
 
 function verdictLocalRecords() {
-  return loadAttempts().map((item, index) => ({
+  return loadAttempts().map((item, index) => analyticsDisplayRecord({
     id: item.id || `local-${index}`,
     sourceType: item.id ? 'phase4_exam_attempt' : 'local_only',
     feature: 'Mock Bar', subject: item.subject || '', questionId: item.qId || '',
@@ -3863,6 +3895,7 @@ function renderVerdictDashboard() {
       <tbody>${rows.map((record) => {
         const key = `${record.sourceType}:${record.id}`;
         const current = record.sourceType !== 'legacy_grading_result';
+        const exportable = analyticsRecordExportable(record);
         return `<tr>
           <td><input type="checkbox" data-verdict-select="${escapeHtml(key)}" aria-label="Select ${escapeHtml(record.subject || 'attempt')}" ${verdictDashboard.selected.has(key) ? 'checked' : ''}></td>
           <td class="sc">${verdictScore(record)}</td>
@@ -3872,7 +3905,9 @@ function renderVerdictDashboard() {
           <td>${analyticsWpm(record) === null ? '—' : Math.round(analyticsWpm(record))}</td>
           <td>${record.occurredAt ? escapeHtml(new Date(record.occurredAt).toLocaleString('en-PH')) : '—'}</td>
           <td><span class="verdict-record-badge ${current ? 'current' : 'legacy'}">${current ? 'Current' : 'Legacy'}</span></td>
-          <td>${!record.localOnly && !verdictDashboard.showDeleted ? `<button class="btn-tool" type="button" data-verdict-export-one="${escapeHtml(record.id)}">Export PDF</button>` : '—'}</td>
+          <td>${exportable
+            ? `<button class="btn-tool" type="button" data-verdict-export-one="${escapeHtml(record.id)}">Export PDF</button>`
+            : (!record.localOnly && !verdictDashboard.showDeleted ? '<span class="analytics-export-unavailable">Available after submission</span>' : '—')}</td>
         </tr>`;
       }).join('') || '<tr><td colspan="9"><div class="empty">No personal attempts match these filters.</div></td></tr>'}</tbody>
     </table></div>
@@ -3998,14 +4033,16 @@ async function loadVerdictDashboard() {
     verdictRequest('/dd2026/verdict/records', { includeDeleted: true, limit: 500 }),
   ]);
   if (activeResult.status === 'fulfilled') {
-    const remote = Array.isArray(activeResult.value?.items) ? activeResult.value.items : [];
+    const remote = Array.isArray(activeResult.value?.items)
+      ? activeResult.value.items.map(analyticsDisplayRecord)
+      : [];
     const remoteIds = new Set(remote.map((record) => String(record.id || '')));
     const deviceOnly = local
       .filter((record) => record.localOnly || !remoteIds.has(String(record.id || '')))
       .map((record) => ({ ...record, localOnly: true }));
     verdictDashboard.active = [...remote, ...deviceOnly];
     verdictDashboard.deleted = deletedResult.status === 'fulfilled' && Array.isArray(deletedResult.value?.items)
-      ? deletedResult.value.items
+      ? deletedResult.value.items.map(analyticsDisplayRecord)
       : [];
     verdictDashboard.capped = remote.length >= 500;
     verdictDashboard.dataState = deletedResult.status === 'fulfilled' ? 'complete' : 'partial';

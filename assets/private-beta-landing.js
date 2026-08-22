@@ -199,12 +199,39 @@
   async function activateApplicationRoute(hash) {
     const route = requestedApplicationRoute(hash);
     if (state.lastActivatedHash === route && route !== 'examination-room') return;
-    if (!['mock', 'mock-bar', 'subject-matter', 'bar-feels', 'verdict', 'examination-room'].includes(route)) return;
+    const contentRoutes = Object.freeze({
+      'bar-easy': Object.freeze({ feature: 'bar-easy', opener: 'openBarEasy' }),
+      'chairs-cases': Object.freeze({ feature: 'chair-cases', opener: 'openChairCases' }),
+      doctrines: Object.freeze({ feature: 'doctrines', opener: 'openDoctrines' }),
+      'anchor-case-digests': Object.freeze({ feature: 'anchor-cases', opener: 'openAnchorCases' }),
+    });
+    if (![
+      'mock',
+      'mock-bar',
+      'subject-matter',
+      'bar-feels',
+      'verdict',
+      'examination-room',
+      ...Object.keys(contentRoutes),
+    ].includes(route)) return;
     const activationVersion = ++state.routeActivationVersion;
     const ownerUserId = String(currentSession()?.user?.id || '').trim();
     const isCurrent = () => activationVersion === state.routeActivationVersion
       && requestedApplicationRoute() === route
       && String(currentSession()?.user?.id || '').trim() === ownerUserId;
+    const contentRoute = contentRoutes[route];
+    if (contentRoute) {
+      const loaded = await loadFeature(contentRoute.feature);
+      if (loaded === false || !isCurrent()) return;
+      const opener = global[contentRoute.opener];
+      if (typeof opener !== 'function') {
+        throw new Error('This study feature could not be restored. Please refresh and try again.');
+      }
+      const opened = await opener();
+      if (!isCurrent() || opened !== true) return;
+      state.lastActivatedHash = route;
+      return;
+    }
     if (route === 'examination-room') {
       const routeModuleWasLoaded = typeof global.DueDiligence2026?.restoreRoute === 'function';
       await loadFeature('examination-room');

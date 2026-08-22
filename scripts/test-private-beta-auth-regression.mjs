@@ -390,4 +390,63 @@ async function runUnauthenticatedSync({ gateEnabled = true, route = '' } = {}) {
   );
 }
 
+async function runDirectApplicationRoute(route) {
+  const calls = [];
+  const openers = {
+    openBarEasy: 'bar-easy',
+    openChairCases: 'chairs-cases',
+    openDoctrines: 'doctrines',
+    openAnchorCases: 'anchor-case-digests',
+  };
+  const global = {};
+  for (const [opener, routeName] of Object.entries(openers)) {
+    global[opener] = async () => {
+      calls.push(['open', routeName]);
+      return true;
+    };
+  }
+  const context = {
+    global,
+    state: { lastActivatedHash: '', routeActivationVersion: 0 },
+    requestedApplicationRoute() { return route; },
+    currentSession() { return { user: { id: 'route-owner' } }; },
+    async loadFeature(feature) {
+      calls.push(['load', feature]);
+      return true;
+    },
+    document: { getElementById() { return null; } },
+    requestAnimationFrame(callback) { callback(); },
+  };
+  const activationSource = between(
+    privateBetaLanding,
+    'async function activateApplicationRoute(hash)',
+    'function showApplication(options = {})',
+  );
+  vm.runInNewContext(activationSource, context);
+  await context.activateApplicationRoute(`#${route}`);
+  return { calls, state: context.state };
+}
+
+// Every lazy-loaded study route must restore its own feature after a refresh
+// or direct navigation. Previously these hashes left only the shared shell (or
+// the default Mock Bar page) because the startup router ignored them.
+for (const [route, feature] of [
+  ['bar-easy', 'bar-easy'],
+  ['chairs-cases', 'chair-cases'],
+  ['doctrines', 'doctrines'],
+  ['anchor-case-digests', 'anchor-cases'],
+]) {
+  const result = await runDirectApplicationRoute(route);
+  assert.deepEqual(
+    result.calls,
+    [['load', feature], ['open', route]],
+    `${route} must load and open its matching study feature.`,
+  );
+  assert.equal(
+    result.state.lastActivatedHash,
+    route,
+    `${route} must be recorded only after its page opens successfully.`,
+  );
+}
+
 console.log('Private-beta new-user authentication regressions passed.');

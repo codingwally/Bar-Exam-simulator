@@ -38,6 +38,16 @@ assert.match(html, /reset\.disabled[\s\S]*verdictDashboard\.capped/,
   'Reset must stop when the 500-record page cannot prove complete coverage.');
 assert.match(html, /const deviceOnly = local[\s\S]*\.map\(\(record\) => \(\{ \.\.\.record, localOnly: true \}\)\)/,
   'Unsynced device records must never be sent to the server archive endpoint.');
+assert.match(html, /function analyticsFeatureLabel\(value\)[\s\S]*Bar Exam Simulation/,
+  'Historical Bar Feels records must use the current Bar Exam Simulation label.');
+assert.match(html, /function analyticsSubjectLabel\(value\)[\s\S]*Labor Law and Social Legislation/,
+  'Historical subject labels must not retain the incorrect plural form.');
+assert.match(html, /function analyticsRecordExportable\(record\)[\s\S]*phase4_exam_attempt[\s\S]*completed[\s\S]*unanswered[\s\S]*examination_attempt[\s\S]*submitted[\s\S]*expired/,
+  'Analytics must offer PDF export only for record states supported by the Worker.');
+assert.match(html, /const exportable = analyticsRecordExportable\(record\)/,
+  'The Analytics history table must enforce the exportability guard.');
+assert.match(html, /Available after submission/,
+  'Unfinished records must explain when export becomes available instead of calling an unsupported endpoint.');
 
 assert.match(migration, /'wordCount', word_count/);
 assert.match(migration, /'rubricBreakdown', rubric_breakdown/);

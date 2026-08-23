@@ -9,24 +9,44 @@
     acquisition: 'Sign-ups',
     marketing: 'Acquisition',
     users: 'Users',
-    learning: 'Learning Performance',
+    learning: 'Subject Performance',
     subjects: 'Question Bank',
     reliability: 'Grading Health',
     subscriptions: 'Subscriptions',
     payments: 'Payments',
     refunds: 'Refunds',
     support: 'Support',
-    corrections: 'Answer Corrections',
+    corrections: 'Corrections',
     partnerships: 'Partnerships',
-    controls: 'Website Settings',
-    security: 'Security & Activity Log',
-    forum: 'Community',
+    controls: 'Controls',
+    security: 'Audit Log',
+    forum: 'Community Moderation',
     examinations: 'Exams',
     examination_room: 'Examination Room',
     answer_exports: 'Answers',
     business_revenue: 'Revenue',
     business_projections: 'Projections',
     business_comparisons: 'Comparisons',
+  });
+  const sectionSubtitles = Object.freeze({
+    executive: 'Executive command center for the Judicial Observatory.',
+    realtime: 'Current signed-in activity and service demand.',
+    users: 'Account directory, access, and learning engagement.',
+    acquisition: 'Registration funnel and account activation.',
+    marketing: 'Recorded channels and sign-in acquisition.',
+    learning: 'Subject-level performance from completed assessments.',
+    reliability: 'Grading availability and response health.',
+    subscriptions: 'Commercial access and introductory allowances.',
+    payments: 'Private payment-proof review and verification history.',
+    refunds: 'Refund requests and recorded decisions.',
+    support: 'Support cases requiring administrator attention.',
+    corrections: 'Editorial correction submissions and review status.',
+    forum: 'Community reports and moderation controls.',
+    business_revenue: 'Verified commercial records and approved value.',
+    business_projections: 'Transparent planning assumptions and forecasts.',
+    business_comparisons: 'Current and previous operating-period comparison.',
+    security: 'Administrator actions and sensitive-access history.',
+    controls: 'Protected platform controls and feature state.',
   });
   const requirements = Object.freeze({
     realtime: 'learner_analytics_viewer',
@@ -77,7 +97,6 @@
     quorumPostOffset: 0,
     subscriptionExportRows: [],
   };
-
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => ({
@@ -565,11 +584,61 @@
     </button>`;
   }
 
+  const OBSERVATORY_CHART_COLORS = Object.freeze([
+    '#22c6d8', '#36d39b', '#d2aa55', '#a9a7e8', '#5d8fe8', '#f2767e', '#8fa2af',
+  ]);
+
+  function observatoryLegend(segments) {
+    return `<div class="executive-legend">${segments.map((segment) => `
+      <span><i style="--legend-color:${escapeHtml(segment.color)}"></i><b>${escapeHtml(segment.label)}</b><small>${escapeHtml(number(segment.value))}</small></span>
+    `).join('')}</div>`;
+  }
+
+  function commercialAccessBadge(account = {}) {
+    const label = commercialAccountLabel(account);
+    const className = /verified|founding/i.test(label) ? 'ok'
+      : /pending/i.test(label) ? 'warn'
+        : /rejected|expired/i.test(label) ? 'danger' : 'muted';
+    return `<span class="status ${className}">${escapeHtml(label)}</span>`;
+  }
+
+  function accountRemainingAllowance(account = {}) {
+    const label = commercialAccountLabel(account);
+    if (/verified|founding|admin/i.test(label)) return 'Unlimited';
+    if (Number.isFinite(Number(account.free_grades_remaining))) {
+      return `${number(account.free_grades_remaining)} remaining`;
+    }
+    return 'Not available';
+  }
+
+  function executiveSubscriptionSegments(engagement = {}) {
+    return Object.entries(engagement.subscriptionCounts || {})
+      .map(([label, value], index) => ({
+        label,
+        value: Math.max(0, Number(value) || 0),
+        color: OBSERVATORY_CHART_COLORS[index % OBSERVATORY_CHART_COLORS.length],
+      }))
+      .filter((segment) => segment.value > 0)
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 7);
+  }
+
+  function executiveDeviceSegments(report = {}) {
+    return (report.devices || [])
+      .map((row, index) => ({
+        label: humanizeAuditValue(row.category || 'Other'),
+        value: Math.max(0, Number(row.sessions) || 0),
+        color: OBSERVATORY_CHART_COLORS[index % OBSERVATORY_CHART_COLORS.length],
+      }))
+      .filter((segment) => segment.value > 0)
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 7);
+  }
+
   async function renderExecutive(report) {
     const current = report.current || {};
     const previous = report.previous || {};
     const traffic = current.traffic || {};
-    const priorTraffic = previous.traffic || {};
     const funnel = current.funnel || {};
     const learning = current.learning || {};
     const reliability = current.reliability || {};
@@ -578,67 +647,118 @@
     const betaKnown = typeof betaAllAccess.enabled === 'boolean';
     const betaEnabled = betaAllAccess.enabled === true;
     const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
-    const directory = await loadUserDirectory(false, '', 0).catch(() => ({ items: [], total: null }));
+    const [directory, paymentData] = await Promise.all([
+      loadUserDirectory(false, '', 0).catch(() => ({ items: [], total: null })),
+      sectionAllowed('payments')
+        ? loadPhase4Operational('payments').catch(() => ({ items: [] }))
+        : Promise.resolve({ items: [] }),
+    ]);
     const recentAccounts = [...(directory.items || [])]
       .sort((left, right) => new Date(right.last_sign_in_at || 0) - new Date(left.last_sign_in_at || 0))
-      .slice(0, 6);
+      .slice(0, 7);
     const signedInAccounts = engagement.signedInAccounts ?? directory.total;
-    const activeNow = engagement.activeSignedInLast5Minutes;
+    const answeringUsers = engagement.usersWithAnswers;
     const questionsAnswered = engagement.questionsAnswered ?? learning.successful_grades;
     const gradingSuccess = reliability.success_rate;
+    const subscriptionSegments = executiveSubscriptionSegments(engagement);
+    const deviceSegments = executiveDeviceSegments(report);
+    const paymentRows = paymentData.items || [];
+    const approvedRows = paymentRows.filter((row) => String(row.status || '').toLowerCase() === 'approved');
+    const pendingRows = paymentRows.filter((row) => !['approved', 'rejected'].includes(String(row.status || '').toLowerCase()));
+    const approvedValue = approvedRows.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0);
+    const pendingValue = pendingRows.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0);
+    const subjectRows = [...(report.subjects || [])]
+      .map((row) => ({ label: row.subject || 'Unspecified', value: Math.max(0, Number(row.successful_grades) || 0) }))
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 7);
+    const funnelRows = [
+      { label: 'Visitors', value: Number(traffic.unique_visitors) || 0 },
+      { label: 'Sign-in starts', value: Number(funnel.sign_in_started) || 0 },
+      { label: 'Sign-in completed', value: Number(funnel.sign_in_completed) || 0 },
+      { label: 'Registered', value: Number(funnel.registrations) || 0 },
+      { label: 'First answer', value: Number(answeringUsers) || 0 },
+    ];
+    report.executiveVisuals = {
+      activityLabels: ['Previous period', 'Selected period'],
+      activityValues: [Number(previous.learning?.successful_grades) || 0, Number(learning.successful_grades) || 0],
+      subscriptionSegments,
+      deviceSegments,
+      funnelRows,
+      revenueRows: [
+        { label: 'Approved value', value: approvedValue },
+        { label: 'Pending request value', value: pendingValue },
+      ],
+      subjectRows,
+    };
     return `
-      <header class="observatory-hero">
-        <div><p class="eyebrow">Executive command</p><h2>Judicial Observatory</h2><p>Live operational intelligence for people, learning, access, and service health. Every value below comes from Due Diligence records; unavailable data is never estimated.</p></div>
-        <span class="observatory-status"><i class="ph ph-shield-check" aria-hidden="true"></i>${betaKnown ? (betaEnabled ? 'Safety access active' : 'Commercial rules active') : 'Access state unconfirmed'}</span>
-      </header>
       <div class="observatory-kpis">
-        ${observatoryKpi('Signed-in accounts', number(signedInAccounts), 'ph-users-three', 'gold', 'All recorded accounts')}
-        ${observatoryKpi('Recent activity', number(activeNow), 'ph-pulse', 'cyan', 'Approximate · last 5 minutes')}
-        ${observatoryKpi('Questions answered', number(questionsAnswered), 'ph-file-text', 'green', 'All study tracks')}
+        ${observatoryKpi('Signed-in accounts', number(signedInAccounts), 'ph-users-three', 'cyan', 'All recorded accounts')}
+        ${observatoryKpi('Answering users', number(answeringUsers), 'ph-user-focus', 'cyan', 'Accounts with at least one answer')}
+        ${observatoryKpi('Questions answered', number(questionsAnswered), 'ph-chats-circle', 'cyan', 'Practice and formal examinations')}
         ${observatoryKpi('Grading success', percentage(gradingSuccess), 'ph-shield-check', gradingSuccess != null && Number(gradingSuccess) < 0.95 ? 'red' : 'green', 'Selected reporting period')}
       </div>
-      <div class="observatory-grid">
-        <section class="observatory-card">
-          <div class="card-head"><div><h3>Performance comparison</h3><p>Current period against the immediately preceding period.</p></div><span class="status ok">Verified</span></div>
-          <div class="chart-shell"><canvas id="observatory-performance-chart" aria-label="Current and previous performance comparison chart" role="img"></canvas></div>
-          <div class="legend-row"><span class="gold"><i></i>Current</span><span class="cyan"><i></i>Previous</span></div>
+      <div class="executive-chart-grid executive-chart-grid-top">
+        <section class="observatory-card executive-activity-card">
+          <div class="card-head"><div><h3>Activity Trend</h3><p>Successful grades · previous and selected period.</p></div><span class="status ok">Verified</span></div>
+          <div class="chart-shell compact"><canvas id="observatory-activity-chart" aria-label="Successful grading activity comparison chart" role="img"></canvas></div>
+          <div class="legend-row"><span class="cyan"><i></i>Successful answers</span></div>
         </section>
         <section class="observatory-card">
-          <div class="card-head"><div><h3>Device mix</h3><p>Session categories only. Exact device identifiers are not collected.</p></div></div>
-          <div class="chart-shell compact"><canvas id="observatory-device-chart" aria-label="Device category distribution chart" role="img"></canvas></div>
-          <div class="legend-row"><span class="gold"><i></i>Desktop</span><span class="cyan"><i></i>Mobile</span><span class="green"><i></i>Other</span></div>
+          <div class="card-head"><div><h3>User Mix</h3><p>By server-resolved access category.</p></div></div>
+          <div class="donut-layout"><div class="chart-shell compact"><canvas id="observatory-user-mix-chart" aria-label="User access category distribution chart" role="img"></canvas></div>${observatoryLegend(subscriptionSegments)}</div>
         </section>
         <section class="observatory-card">
-          <div class="card-head"><div><h3>Action queue</h3><p>Items that need an administrator decision.</p></div></div>
+          <div class="card-head"><div><h3>Device Mix</h3><p>Session categories; identifiers are not collected.</p></div></div>
+          <div class="donut-layout"><div class="chart-shell compact"><canvas id="observatory-device-chart" aria-label="Device category distribution chart" role="img"></canvas></div>${observatoryLegend(deviceSegments)}</div>
+        </section>
+      </div>
+      <div class="executive-chart-grid executive-chart-grid-bottom">
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Sign-up Funnel</h3><p>Selected reporting period.</p></div></div>
+          <div class="chart-shell compact"><canvas id="observatory-funnel-chart" aria-label="Sign-up funnel chart" role="img"></canvas></div>
+        </section>
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Revenue Record</h3><p>Verified requests; not bank settlement.</p></div><button type="button" class="icon-link" data-admin-section="business_revenue" aria-label="Open revenue records"><i class="ph ph-arrow-up-right" aria-hidden="true"></i></button></div>
+          <div class="chart-shell compact"><canvas id="observatory-revenue-chart" aria-label="Approved and pending payment request value chart" role="img"></canvas></div>
+          <div class="revenue-summary"><span><b>${escapeHtml(`₱${number(approvedValue, 2)}`)}</b>Approved</span><span><b>${escapeHtml(`₱${number(pendingValue, 2)}`)}</b>Pending</span></div>
+        </section>
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Top Subjects by Answers</h3><p>Completed grades in the selected period.</p></div></div>
+          <div class="chart-shell compact"><canvas id="observatory-subject-chart" aria-label="Top subjects by successful answers chart" role="img"></canvas></div>
+        </section>
+      </div>
+      <section class="observatory-card executive-recent-users">
+        <div class="card-head"><div><h3>Recent Users</h3><p>Latest recorded account sign-ins.</p></div><button type="button" class="icon-link" data-admin-section="users" aria-label="Open full user directory"><span>View all users</span><i class="ph ph-caret-right" aria-hidden="true"></i></button></div>
+        ${table(['Name', 'School', 'Last sign-in', 'Region', 'Device', 'Questions', 'Access', 'Remaining'], recentAccounts.map((account) => [
+          account.display_name || 'Not provided', account.school || 'Not provided', dateTime(account.last_sign_in_at),
+          'Not collected', 'Not collected', number(account.answered_question_count),
+          { html: true, value: commercialAccessBadge(account) }, accountRemainingAllowance(account),
+        ]))}
+      </section>
+      <details class="executive-operations observatory-card">
+        <summary><span><i class="ph ph-bell-ringing" aria-hidden="true"></i>Operations &amp; access</span><small>${escapeHtml(number((Number(report.queues?.pending_payments) || 0) + (Number(report.queues?.pending_support) || 0) + (Number(report.queues?.pending_corrections) || 0) + (Number(engagement.openQuorumReports) || 0)))} open items</small></summary>
+        <div class="executive-operations-grid">
           <div class="observatory-actions">
             ${observatoryAction('Payments', 'Proofs awaiting review', report.queues?.pending_payments, 'payments', 'ph-receipt')}
             ${observatoryAction('Support', 'Open cases', report.queues?.pending_support, 'support', 'ph-headset')}
             ${observatoryAction('Corrections', 'Editorial reviews', report.queues?.pending_corrections, 'corrections', 'ph-note-pencil')}
             ${observatoryAction('Community', 'Open reports', engagement.openQuorumReports, 'forum', 'ph-chats-circle')}
           </div>
-        </section>
-        <section class="observatory-card">
-          <div class="card-head"><div><h3>Access posture</h3><p>Server-resolved commercial state.</p></div></div>
-          <dl class="definition-list">
-            <dt>Commercial enforcement</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'Temporarily bypassed' : 'Active'}</dd>
-            <dt>Introductory allowance</dt><dd>Five lifetime practice tokens</dd>
-            <dt>Active manual entitlements</dt><dd>${escapeHtml(number(report.queues?.active_manual_entitlements))}</dd>
-            <dt>Last access change</dt><dd>${escapeHtml(dateTime(betaAllAccess.updatedAt))}</dd>
-          </dl>
-          ${founderAuthorized && betaKnown ? `<div class="dialog-actions">${actionButton(
-            betaEnabled ? 'Activate commercial enforcement' : 'Enable temporary safety access',
-            'global_beta_change', 'global_beta_all_access',
-            { currentEnabled: betaEnabled, enabled: !betaEnabled },
-          ).value}</div>` : ''}
-        </section>
-        <section class="observatory-card wide">
-          <div class="card-head"><div><h3>Recent account activity</h3><p>Location and exact device are shown as unavailable because Due Diligence does not collect them.</p></div><button type="button" class="secondary-button" data-admin-section="users"><i class="ph ph-users-three" aria-hidden="true"></i>Open directory</button></div>
-          ${table(['Name', 'Email', 'School', 'Last sign-in', 'Questions answered', 'Location', 'Device'], recentAccounts.map((account) => [
-            account.display_name || 'Not provided', account.email || 'Not available', account.school || 'Not provided',
-            dateTime(account.last_sign_in_at), number(account.answered_question_count), 'Not collected', 'Not collected',
-          ]))}
-        </section>
-      </div>`;
+          <div>
+            <dl class="definition-list">
+              <dt>Commercial enforcement</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'Temporarily bypassed' : 'Active'}</dd>
+              <dt>Introductory allowance</dt><dd>Five lifetime practice tokens</dd>
+              <dt>Active manual entitlements</dt><dd>${escapeHtml(number(report.queues?.active_manual_entitlements))}</dd>
+              <dt>Last access change</dt><dd>${escapeHtml(dateTime(betaAllAccess.updatedAt))}</dd>
+            </dl>
+            ${founderAuthorized && betaKnown ? `<div class="dialog-actions">${actionButton(
+              betaEnabled ? 'Activate commercial enforcement' : 'Enable temporary safety access',
+              'global_beta_change', 'global_beta_all_access',
+              { currentEnabled: betaEnabled, enabled: !betaEnabled },
+            ).value}</div>` : ''}
+          </div>
+        </div>
+      </details>`;
   }
 
   function barList(rows) {
@@ -2939,7 +3059,7 @@
     });
   }
 
-  function drawDonut(canvas, segments) {
+  function drawDonut(canvas, segments, centerLabel = 'SESSIONS') {
     const prepared = prepareCanvas(canvas);
     if (!prepared) return;
     const { context, width, height } = prepared;
@@ -2973,7 +3093,144 @@
     context.fillText(number(total), centerX, centerY - 6);
     context.fillStyle = '#8fa2af';
     context.font = '10px Inter, sans-serif';
-    context.fillText(total > 0 ? 'SESSIONS' : 'NO DATA', centerX, centerY + 16);
+    context.fillText(total > 0 ? String(centerLabel).toUpperCase() : 'NO DATA', centerX, centerY + 16);
+  }
+
+  function drawLineTrend(canvas, labels, values) {
+    const prepared = prepareCanvas(canvas);
+    if (!prepared) return;
+    const { context, width, height } = prepared;
+    const normalized = values.map((value) => Math.max(0, Number(value) || 0));
+    const maximum = Math.max(1, ...normalized);
+    const left = 38;
+    const right = 18;
+    const top = 18;
+    const bottom = 34;
+    const plotWidth = width - left - right;
+    const plotHeight = height - top - bottom;
+    context.font = '10px Inter, sans-serif';
+    context.textBaseline = 'middle';
+    context.textAlign = 'right';
+    for (let step = 0; step <= 4; step += 1) {
+      const y = top + (plotHeight * step / 4);
+      context.strokeStyle = 'rgba(143,162,175,0.14)';
+      context.beginPath();
+      context.moveTo(left, y);
+      context.lineTo(width - right, y);
+      context.stroke();
+      context.fillStyle = '#718794';
+      context.fillText(number(maximum * (1 - step / 4)), left - 7, y);
+    }
+    const points = normalized.map((value, index) => ({
+      x: labels.length <= 1 ? left + plotWidth / 2 : left + (plotWidth * index / (labels.length - 1)),
+      y: top + plotHeight - (value / maximum) * plotHeight,
+    }));
+    const gradient = context.createLinearGradient(0, top, 0, top + plotHeight);
+    gradient.addColorStop(0, 'rgba(34,198,216,0.34)');
+    gradient.addColorStop(1, 'rgba(34,198,216,0.01)');
+    context.beginPath();
+    context.moveTo(points[0]?.x || left, top + plotHeight);
+    points.forEach((point) => context.lineTo(point.x, point.y));
+    context.lineTo(points.at(-1)?.x || width - right, top + plotHeight);
+    context.closePath();
+    context.fillStyle = gradient;
+    context.fill();
+    context.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) context.moveTo(point.x, point.y);
+      else context.lineTo(point.x, point.y);
+    });
+    context.strokeStyle = '#22c6d8';
+    context.lineWidth = 2.5;
+    context.stroke();
+    points.forEach((point, index) => {
+      context.beginPath();
+      context.arc(point.x, point.y, 4, 0, Math.PI * 2);
+      context.fillStyle = '#071019';
+      context.fill();
+      context.strokeStyle = '#79e7f2';
+      context.lineWidth = 2;
+      context.stroke();
+      context.fillStyle = '#8fa2af';
+      context.textAlign = index === 0 ? 'left' : index === points.length - 1 ? 'right' : 'center';
+      context.textBaseline = 'top';
+      context.fillText(String(labels[index] || ''), point.x, top + plotHeight + 10);
+    });
+  }
+
+  function drawFunnel(canvas, rows) {
+    const prepared = prepareCanvas(canvas);
+    if (!prepared) return;
+    const { context, width, height } = prepared;
+    const normalized = rows.map((row) => ({ label: row.label, value: Math.max(0, Number(row.value) || 0) }));
+    const maximum = Math.max(1, ...normalized.map((row) => row.value));
+    const left = 14;
+    const right = 14;
+    const labelWidth = Math.min(115, width * 0.34);
+    const plotLeft = left;
+    const plotRight = width - right - labelWidth;
+    const center = (plotLeft + plotRight) / 2;
+    const rowHeight = (height - 22) / Math.max(1, normalized.length);
+    normalized.forEach((row, index) => {
+      const ratio = Math.max(0.18, row.value / maximum);
+      const nextRatio = Math.max(0.12, normalized[index + 1] ? normalized[index + 1].value / maximum : ratio * 0.7);
+      const topWidth = (plotRight - plotLeft) * ratio;
+      const bottomWidth = (plotRight - plotLeft) * nextRatio;
+      const y = 8 + index * rowHeight;
+      context.beginPath();
+      context.moveTo(center - topWidth / 2, y);
+      context.lineTo(center + topWidth / 2, y);
+      context.lineTo(center + bottomWidth / 2, y + rowHeight - 3);
+      context.lineTo(center - bottomWidth / 2, y + rowHeight - 3);
+      context.closePath();
+      context.fillStyle = OBSERVATORY_CHART_COLORS[index % 4];
+      context.globalAlpha = 0.88;
+      context.fill();
+      context.globalAlpha = 1;
+      context.fillStyle = '#bbc7cd';
+      context.font = '10px Inter, sans-serif';
+      context.textAlign = 'left';
+      context.textBaseline = 'middle';
+      context.fillText(String(row.label), plotRight + 10, y + rowHeight / 2 - 5);
+      context.fillStyle = '#f3f6f7';
+      context.font = '700 11px Inter, sans-serif';
+      context.fillText(number(row.value), plotRight + 10, y + rowHeight / 2 + 9);
+    });
+  }
+
+  function drawHorizontalBars(canvas, rows, options = {}) {
+    const prepared = prepareCanvas(canvas);
+    if (!prepared) return;
+    const { context, width, height } = prepared;
+    const normalized = rows.map((row) => ({ label: row.label, value: Math.max(0, Number(row.value) || 0) }));
+    const maximum = Math.max(1, ...normalized.map((row) => row.value));
+    const labelWidth = Math.min(130, width * 0.42);
+    const right = 34;
+    const top = 10;
+    const rowHeight = Math.max(20, (height - top * 2) / Math.max(1, normalized.length));
+    normalized.forEach((row, index) => {
+      const y = top + index * rowHeight;
+      context.fillStyle = '#8fa2af';
+      context.font = '10px Inter, sans-serif';
+      context.textAlign = 'left';
+      context.textBaseline = 'middle';
+      const short = String(row.label).length > 22 ? `${String(row.label).slice(0, 20)}…` : String(row.label);
+      context.fillText(short, 4, y + rowHeight / 2);
+      const barX = labelWidth;
+      const barWidth = Math.max(0, (width - labelWidth - right) * row.value / maximum);
+      context.fillStyle = 'rgba(34,198,216,0.12)';
+      context.fillRect(barX, y + rowHeight * 0.25, width - labelWidth - right, rowHeight * 0.5);
+      const gradient = context.createLinearGradient(barX, 0, width - right, 0);
+      gradient.addColorStop(0, options.gold ? '#d2aa55' : '#36b7ca');
+      gradient.addColorStop(1, options.gold ? '#f0cd78' : '#6ddbea');
+      context.fillStyle = gradient;
+      context.fillRect(barX, y + rowHeight * 0.25, barWidth, rowHeight * 0.5);
+      context.fillStyle = '#bbc7cd';
+      context.font = '700 10px Inter, sans-serif';
+      context.textAlign = 'right';
+      const value = options.currency ? `₱${number(row.value, 2)}` : number(row.value);
+      context.fillText(value, width - 3, y + rowHeight / 2);
+    });
   }
 
   function acquisitionSourceRows(report) {
@@ -2997,16 +3254,13 @@
     ];
     requestAnimationFrame(() => {
       if (section === 'executive') {
-        drawGroupedBars($('#observatory-performance-chart'), performanceLabels, currentValues, previousValues);
-        const deviceMap = new Map((report.devices || []).map((row) => [String(row.category || '').toLowerCase(), Number(row.sessions) || 0]));
-        const desktop = deviceMap.get('desktop') || 0;
-        const mobile = deviceMap.get('mobile') || 0;
-        const other = [...deviceMap.entries()].filter(([key]) => !['desktop', 'mobile'].includes(key)).reduce((sum, [, value]) => sum + value, 0);
-        drawDonut($('#observatory-device-chart'), [
-          { label: 'Desktop', value: desktop, color: '#d2aa55' },
-          { label: 'Mobile', value: mobile, color: '#22c6d8' },
-          { label: 'Other', value: other, color: '#36d39b' },
-        ]);
+        const visual = report.executiveVisuals || {};
+        drawLineTrend($('#observatory-activity-chart'), visual.activityLabels || [], visual.activityValues || []);
+        drawDonut($('#observatory-user-mix-chart'), visual.subscriptionSegments || [], 'Users');
+        drawDonut($('#observatory-device-chart'), visual.deviceSegments || [], 'Sessions');
+        drawFunnel($('#observatory-funnel-chart'), visual.funnelRows || []);
+        drawHorizontalBars($('#observatory-revenue-chart'), visual.revenueRows || [], { currency: true, gold: true });
+        drawHorizontalBars($('#observatory-subject-chart'), visual.subjectRows || []);
       } else if (section === 'marketing') {
         const sources = acquisitionSourceRows(report);
         drawGroupedBars($('#observatory-acquisition-chart'), sources.map(([label]) => label), sources.map(([, value]) => value), sources.map(() => 0));
@@ -3022,7 +3276,11 @@
       return false;
     }
     state.section = section;
-    $('#section-title').textContent = titles[section];
+    const title = titles[section] || 'Administration';
+    $('#section-title').innerHTML = `${section === 'executive' ? '<i class="ph ph-wave-sine" aria-hidden="true"></i>' : ''}${escapeHtml(title)}`;
+    if ($('#section-subtitle')) {
+      $('#section-subtitle').textContent = sectionSubtitles[section] || 'Protected Due Diligence administration.';
+    }
     const rangeControl = $('#reporting-range');
     if (rangeControl) {
       rangeControl.hidden = !['executive', 'realtime', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
@@ -3031,9 +3289,11 @@
       'aria-current',
       button.dataset.section === section ? 'page' : 'false',
     ));
+    const additionalTool = $(`.nav-more button[data-section="${section}"]`);
+    if (additionalTool) additionalTool.closest('details').open = true;
     setSidebarOpen(false);
     $('#dashboard-view').setAttribute('aria-busy', 'true');
-    $('#dashboard-view').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+    $('#dashboard-view').innerHTML = '<div class="dashboard-loading" role="status" aria-label="Loading administrator data"><div class="skeleton skeleton-kpis"></div><div class="skeleton skeleton-panels"></div></div>';
     try {
       const reportSections = new Set([
         'executive', 'realtime', 'acquisition', 'marketing', 'learning', 'subjects',
@@ -4364,6 +4624,13 @@
     }
     $('#admin-gate').hidden = true;
     $('#admin-shell').hidden = false;
+    const sessionUser = state.session?.user || {};
+    const accountName = sessionUser.user_metadata?.full_name
+      || sessionUser.user_metadata?.name
+      || sessionUser.email
+      || 'Administrator';
+    if ($('#admin-dock-name')) $('#admin-dock-name').textContent = accountName;
+    if ($('#admin-dock-role')) $('#admin-dock-role').textContent = humanizeAuditValue(state.authorization?.role || 'administrator');
     applyNavigationAuthorization();
     const overviewReady = await renderSection('executive');
     if (!overviewReady && sectionAllowed('payments')) {
@@ -4409,6 +4676,13 @@
   $('#download-current-section')?.addEventListener('click', downloadCurrentSection);
   $('#menu-button')?.addEventListener('click', () => {
     setSidebarOpen(!$('#sidebar').classList.contains('open'));
+  });
+  $('#sidebar-collapse')?.addEventListener('click', () => {
+    const collapsed = document.body.classList.toggle('admin-sidebar-collapsed');
+    const button = $('#sidebar-collapse');
+    button?.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
+    const icon = button?.querySelector('i');
+    if (icon) icon.className = `ph ${collapsed ? 'ph-caret-double-right' : 'ph-caret-double-left'}`;
   });
   $('#sidebar-scrim')?.addEventListener('click', () => setSidebarOpen(false));
   global.matchMedia?.('(max-width: 820px)')?.addEventListener?.('change', () => setSidebarOpen(false));

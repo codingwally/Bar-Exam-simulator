@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
-  <link rel="stylesheet" href="admin.css?v=judicial-observatory-20260823-1">
-  <link rel="stylesheet" href="admin-observatory.css?v=judicial-observatory-20260823-1">
+  <link rel="stylesheet" href="admin.css?v=executive-pulse-20260823-3">
+  <link rel="stylesheet" href="admin-observatory.css?v=executive-pulse-20260823-3">
 </head>
 <body class="observatory">
   <a class="skip-link" href="#admin-main">Skip to admin dashboard</a>
@@ -38,15 +38,8 @@
         <div class="nav-group" role="group" aria-label="Learning">
           <p class="nav-group-label">Learning</p>
           <button data-section="answer_exports"><i class="ph ph-file-text" aria-hidden="true"></i><span>Answers</span></button>
-          <button data-section="learning"><i class="ph ph-chart-line-up" aria-hidden="true"></i><span>Learning Performance</span></button>
+          <button data-section="learning"><i class="ph ph-chart-line-up" aria-hidden="true"></i><span>Subject Performance</span></button>
           <button data-section="reliability"><i class="ph ph-shield-check" aria-hidden="true"></i><span>Grading Health</span></button>
-          <button data-section="subjects"><i class="ph ph-books" aria-hidden="true"></i><span>Question Bank</span></button>
-        </div>
-        <div class="nav-group" role="group" aria-label="Community and support">
-          <p class="nav-group-label">Community &amp; support</p>
-          <button data-section="forum"><i class="ph ph-chats-circle" aria-hidden="true"></i><span>Community</span></button>
-          <button data-section="support"><i class="ph ph-headset" aria-hidden="true"></i><span>Support</span></button>
-          <button data-section="corrections"><i class="ph ph-note-pencil" aria-hidden="true"></i><span>Answer Corrections</span></button>
         </div>
         <div class="nav-group" role="group" aria-label="Commercial">
           <p class="nav-group-label">Commercial</p>
@@ -54,24 +47,41 @@
           <button data-section="payments"><i class="ph ph-receipt" aria-hidden="true"></i><span>Payments</span></button>
           <button data-section="refunds"><i class="ph ph-arrow-u-up-left" aria-hidden="true"></i><span>Refunds</span></button>
         </div>
+        <div class="nav-group" role="group" aria-label="Support and community">
+          <p class="nav-group-label">Support &amp; Community</p>
+          <button data-section="support"><i class="ph ph-headset" aria-hidden="true"></i><span>Support</span></button>
+          <button data-section="corrections"><i class="ph ph-note-pencil" aria-hidden="true"></i><span>Corrections</span></button>
+          <button data-section="forum"><i class="ph ph-chats-circle" aria-hidden="true"></i><span>Community Moderation</span></button>
+        </div>
         <div class="nav-group" role="group" aria-label="Business intelligence">
           <p class="nav-group-label">Business</p>
           <button data-section="business_revenue"><i class="ph ph-currency-circle-dollar" aria-hidden="true"></i><span>Revenue</span></button>
           <button data-section="business_projections"><i class="ph ph-chart-line" aria-hidden="true"></i><span>Projections</span></button>
           <button data-section="business_comparisons"><i class="ph ph-scales" aria-hidden="true"></i><span>Comparisons</span></button>
-          <button data-section="partnerships"><i class="ph ph-handshake" aria-hidden="true"></i><span>Partnerships</span></button>
         </div>
         <div class="nav-group" role="group" aria-label="Administration">
           <p class="nav-group-label">Security &amp; Operations</p>
           <button data-section="security"><i class="ph ph-lock-key" aria-hidden="true"></i><span>Audit Log</span></button>
-          <button data-section="controls"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i><span>Website Settings</span></button>
+          <button data-section="controls"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i><span>Controls</span></button>
+        </div>
+        <details class="nav-more">
+          <summary><i class="ph ph-dots-three-outline" aria-hidden="true"></i><span>Additional tools</span></summary>
+          <button data-section="subjects"><i class="ph ph-books" aria-hidden="true"></i><span>Question Bank</span></button>
+          <button data-section="partnerships"><i class="ph ph-handshake" aria-hidden="true"></i><span>Partnerships</span></button>
           <button data-section="examinations"><i class="ph ph-clipboard-text" aria-hidden="true"></i><span>Exams</span></button>
           <button data-section="examination_room"><i class="ph ph-chalkboard-teacher" aria-hidden="true"></i><span>Examination Room</span></button>
-        </div>
+        </details>
       </nav>
       <div class="sidebar-foot">
-        <a href="../"><i class="ph ph-arrow-square-out" aria-hidden="true"></i><span>Return to simulator</span></a>
-        <button id="admin-signout" type="button"><i class="ph ph-sign-out" aria-hidden="true"></i><span>Sign out</span></button>
+        <div class="admin-dock">
+          <span class="admin-dock-mark"><i class="ph ph-shield-check" aria-hidden="true"></i></span>
+          <span><strong id="admin-dock-name">Admin</strong><small id="admin-dock-role">Authorized account</small></span>
+          <button id="sidebar-collapse" type="button" aria-label="Collapse navigation"><i class="ph ph-caret-double-left" aria-hidden="true"></i></button>
+        </div>
+        <div class="sidebar-utility">
+          <a href="../"><i class="ph ph-arrow-square-out" aria-hidden="true"></i><span>Return to simulator</span></a>
+          <button id="admin-signout" type="button"><i class="ph ph-sign-out" aria-hidden="true"></i><span>Sign out</span></button>
+        </div>
       </div>
     </aside>
     <button class="sidebar-scrim" id="sidebar-scrim" type="button"
@@ -80,9 +90,10 @@
     <main id="admin-main">
       <header class="topbar">
         <button class="menu-button" id="menu-button" type="button" aria-label="Open navigation" aria-expanded="false"><i class="ph ph-list" aria-hidden="true"></i><span class="sr-only">Menu</span></button>
-        <div>
+        <div class="topbar-title">
           <p class="eyebrow">Judicial Observatory</p>
-          <h1 id="section-title">Executive Pulse</h1>
+          <h1 id="section-title"><i class="ph ph-wave-sine" aria-hidden="true"></i>Executive Pulse</h1>
+          <p id="section-subtitle">Executive command center for Due Diligence.</p>
         </div>
         <div class="topbar-tools">
           <label id="reporting-range">Date range
@@ -95,8 +106,8 @@
           <div class="freshness" id="freshness" title="The latest successful dashboard update">
             <span></span><b>Checking freshness…</b>
           </div>
-          <button class="secondary-button topbar-download" id="download-current-section" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i><span>Download</span></button>
           <button class="refresh-button" id="refresh-dashboard" type="button"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i><span>Refresh</span></button>
+          <button class="secondary-button topbar-download" id="download-current-section" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i><span>Export</span><i class="ph ph-caret-down" aria-hidden="true"></i></button>
         </div>
       </header>
 
@@ -221,6 +232,6 @@
   <script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
   <script src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script src="subscription-actions-core.js?v=admin-business-dashboard-20260802-2"></script>
-  <script src="admin.js?v=judicial-observatory-20260823-1"></script>
+  <script src="admin.js?v=executive-pulse-20260823-3"></script>
 </body>
 </html>

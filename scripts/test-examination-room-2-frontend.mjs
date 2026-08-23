@@ -309,7 +309,7 @@ assert.match(frontend, /Allow entry until the exam ends[\s\S]*Your current Profe
   'rescheduling must expose an explicit until-end choice without overwriting an earlier cutoff');
 assert.match(frontend, /entryCutoffReviewHtml\(opensAt, hardClosesAt, lateAdmissionMinutes\)/,
   'final publication review must prominently state the exact student-entry cutoff');
-assert.match(featureLoader, /duediligence-2026\.js\?v=guided-random-access-20260822-1/,
+assert.match(featureLoader, /duediligence-2026\.js\?v=syllabus-review-20260823-1/,
   'the corrected student preflight must retain a release-scoped lazy cache key');
 assert.match(frontend, /None of them replaces student sign-in and the class-list check/);
 assert.match(frontend, /publicationAttempt\.studentKey = null/,
@@ -833,7 +833,7 @@ assert.doesNotMatch(html, /<script[^>]+assets\/examination-room-2-store\.js/);
 assert.match(featureLoader, /assets\/examination-room-2-store\.js\?v=exam-room-ux-20260814-1/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
 assert.match(featureLoader, /duediligence-2026\.css\?v=guided-random-access-20260822-1/);
-assert.match(featureLoader, /duediligence-2026\.js\?v=guided-random-access-20260822-1/);
+assert.match(featureLoader, /duediligence-2026\.js\?v=syllabus-review-20260823-1/);
 
 // Execute the pure disclosure gate: malformed, partial, and stale replacement
 // results must never unlock one-time secret rendering.

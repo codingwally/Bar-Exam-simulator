@@ -17,8 +17,8 @@
         'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
       ],
       scripts: [
-        'assets/study-workspace.js?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
-        'assets/examinations.js?v=visible-naming-20260822-1',
+        'assets/study-workspace.js?v=syllabus-review-20260823-1',
+        'assets/examinations.js?v=syllabus-review-20260823-1',
       ],
     }),
     content: Object.freeze({
@@ -27,15 +27,15 @@
         'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
       ],
       scripts: [
-        'assets/study-workspace.js?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
-        'assets/duediligence-2026.js?v=guided-random-access-20260822-1',
+        'assets/study-workspace.js?v=syllabus-review-20260823-1',
+        'assets/duediligence-2026.js?v=syllabus-review-20260823-1',
       ],
     }),
     examinationRoom: Object.freeze({
       styles: ['assets/duediligence-2026.css?v=guided-random-access-20260822-1'],
       scripts: [
         'assets/examination-room-2-store.js?v=exam-room-ux-20260814-1',
-        'assets/duediligence-2026.js?v=guided-random-access-20260822-1',
+        'assets/duediligence-2026.js?v=syllabus-review-20260823-1',
       ],
     }),
   });
@@ -271,7 +271,7 @@
     openPerSubject: async (...args) => {
       const placeholder = global.DueDiligenceExaminations;
       if (!await loadForFeature('subject-matter')) return null;
-      if (global.DueDiligenceExaminations === placeholder) throw new Error('Subject Matter could not be opened.');
+      if (global.DueDiligenceExaminations === placeholder) throw new Error('Syllabus Base Review could not be opened.');
       return global.DueDiligenceExaminations.openPerSubject(...args);
     },
   });

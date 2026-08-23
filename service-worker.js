@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-20260823-auth-entry-flow-1';
+const CACHE_VERSION = 'duediligence-shell-20260823-syllabus-review-1';
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',
@@ -6,7 +6,7 @@ const SHELL = Object.freeze([
   '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
   '/assets/quorum-first-shell.css?v=auth-entry-flow-20260823-1',
-  '/assets/quorum-first-shell.js?v=approved-renovation-20260821-2',
+  '/assets/quorum-first-shell.js?v=syllabus-review-20260823-1',
   '/assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
 ]);
 

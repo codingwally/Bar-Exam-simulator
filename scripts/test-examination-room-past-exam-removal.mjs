@@ -95,6 +95,6 @@ assert.match(css, /\.dd26-professor-exam-row\.is-selected/);
 assert.match(css, /@media \(max-width:680px\)[\s\S]*\.dd26-professor-exam-row\{grid-template-columns:1fr/);
 
 assert.match(featureLoader, /duediligence-2026\.css\?v=guided-random-access-20260822-1/);
-assert.match(featureLoader, /duediligence-2026\.js\?v=guided-random-access-20260822-1/);
+assert.match(featureLoader, /duediligence-2026\.js\?v=syllabus-review-20260823-1/);
 
 console.log('Examination Room all-state workspace removal and Professor list contracts passed.');

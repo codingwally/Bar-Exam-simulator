@@ -52,9 +52,9 @@ const [html, js, css, build, store, examinations, featureLoader, publicLanding] 
 
 assert.doesNotMatch(html, /<link[^>]+assets\/duediligence-2026\.css/);
 assert.doesNotMatch(html, /<script[^>]+assets\/duediligence-2026\.js/);
-assert.match(html, /assets\/feature-loader\.js\?v=post-body-only-20260823-1/);
+assert.match(html, /assets\/feature-loader\.js\?v=syllabus-review-20260823-1/);
 assert.match(featureLoader, /assets\/duediligence-2026\.css\?v=guided-random-access-20260822-1/);
-assert.match(featureLoader, /assets\/duediligence-2026\.js\?v=guided-random-access-20260822-1/);
+assert.match(featureLoader, /assets\/duediligence-2026\.js\?v=syllabus-review-20260823-1/);
 assert.match(build, /assets\/duediligence-2026\.css/);
 assert.match(build, /assets\/duediligence-2026\.js/);
 assert.doesNotMatch(html, /<script[^>]+assets\/examination-room-2-store\.js/);

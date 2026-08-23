@@ -31,10 +31,10 @@ assert.match(phase2, /await recordCurrentTermsAcceptance\(\)/,
   'The authenticated account must still receive a versioned server-side acceptance record.');
 
 assert.doesNotMatch(content, /<h1>Bar Easy<\/h1>|Question \$\{index \+ 1\} of \$\{items\.length\}/);
-assert.match(content, /bar_easy:\s*\{[^}]*title:\s*'Guided Practice'/);
+assert.match(content, /bar_easy:\s*\{[^}]*title:\s*'Quick Drills'/);
 assert.match(content, /function subjectSelector\(items\)[\s\S]*id="dd26-subject-select"/);
 assert.equal((content.match(/\$\{subjectSelector\(items\)\}/g) || []).length, 2,
-  'Guided Practice and Doctrine Review must each use the single subject selector.');
+  'Quick Drills and Doctrine Review must each use the single subject selector.');
 assert.match(content, /const RANDOMIZED_STUDY_VIEWS = new Set\(\['bar_easy', 'doctrine'\]\)/);
 assert.match(content, /crypto\.getRandomValues\(sample\)/,
   'Question selection must use the browser cryptographic random source.');

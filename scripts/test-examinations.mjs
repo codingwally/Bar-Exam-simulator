@@ -68,9 +68,9 @@ assert.doesNotMatch(
 assert.match(html, /id="spa-examination-room"[^>]*data-public-feature="examination-room"/);
 assert.match(html, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
-assert.match(html, /assets\/feature-loader\.js\?v=post-body-only-20260823-1/);
+assert.match(html, /assets\/feature-loader\.js\?v=syllabus-review-20260823-1/);
 assert.match(html, /Mock Bar/);
-assert.match(frontend, /track === 'per_subject' \? 'Subject Matter' : 'Mock Bar'/);
+assert.match(frontend, /track === 'per_subject' \? 'Syllabus Base Review' : 'Mock Bar'/);
 assert.doesNotMatch(frontend, /Subject Matter Examinations/);
 assert.match(styles, /\.dd-subject-study-page \.dd-subject-study-copy > \.dd-exam-kicker\s*\{[\s\S]*?color:\s*#e6bd59/,
   'The dark Subject Matter course page must keep its session kicker at WCAG AA contrast.');
@@ -116,7 +116,7 @@ assert.match(
 );
 assert.doesNotMatch(frontend, /id="dd-upload-timer"/);
 assert.match(frontend, /operation: 'confirm_upload',[\s\S]*timerMode: 'strict'/);
-assert.match(adminJs, />Subject Matter<\/option>/);
+assert.match(adminJs, />Syllabus Base Review<\/option>/);
 const retiredUserFacingTerms = /Moot Court|Per-Subject Examinations|PER-SUBJECT EXAMINATION/i;
 assert.doesNotMatch(html, retiredUserFacingTerms);
 assert.doesNotMatch(frontend, retiredUserFacingTerms);

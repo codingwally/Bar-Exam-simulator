@@ -42,7 +42,7 @@ for (const expected of [
   'Continue with Google',
   'Save progress',
   'Personal analytics',
-  'Guided Subject Matter practice',
+  'Syllabus Base Review',
   '/beta/access/accept-terms',
   'complete_commercial_profile_onboarding_v2',
   'Introductory tokens and Early Access',
@@ -138,7 +138,7 @@ assert.ok(index.includes('data-dd2-view="privacy"'));
 assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
-assert.ok(index.includes('assets/phase2-experience.js?v=auth-entry-flow-20260823-1'));
+assert.ok(index.includes('assets/phase2-experience.js?v=syllabus-review-20260823-1'));
 assert.ok(index.includes('assets/phase2.css?release=payment-admin-hotfix-20260821-1'));
 assert.match(experience, /nativeOverlay\.dataset\.nativeView = view/,
   'Native views must expose their active view so pricing can use the approved centered presentation.');

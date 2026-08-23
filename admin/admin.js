@@ -3027,7 +3027,7 @@
     const bottom = 42;
     const plotWidth = width - left - right;
     const plotHeight = height - top - bottom;
-    context.font = '11px Inter, sans-serif';
+    context.font = '13px Inter, sans-serif';
     context.textAlign = 'right';
     context.textBaseline = 'middle';
     for (let step = 0; step <= 4; step += 1) {
@@ -3038,7 +3038,7 @@
       context.moveTo(left, y);
       context.lineTo(width - right, y);
       context.stroke();
-      context.fillStyle = '#718794';
+      context.fillStyle = '#b7c5cc';
       context.fillText(number(maximum * (1 - step / 4)), left - 7, y);
     }
     const groupWidth = plotWidth / Math.max(1, labels.length);
@@ -3051,7 +3051,7 @@
       context.fillRect(center - barWidth - 2, top + plotHeight - firstHeight, barWidth, firstHeight);
       context.fillStyle = '#22c6d8';
       context.fillRect(center + 2, top + plotHeight - secondHeight, barWidth, secondHeight);
-      context.fillStyle = '#8fa2af';
+      context.fillStyle = '#c0cdd3';
       context.textAlign = 'center';
       context.textBaseline = 'top';
       const shortLabel = String(label).length > 13 ? `${String(label).slice(0, 11)}…` : String(label);
@@ -3091,8 +3091,8 @@
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.fillText(number(total), centerX, centerY - 6);
-    context.fillStyle = '#8fa2af';
-    context.font = '10px Inter, sans-serif';
+    context.fillStyle = '#c0cdd3';
+    context.font = '12px Inter, sans-serif';
     context.fillText(total > 0 ? String(centerLabel).toUpperCase() : 'NO DATA', centerX, centerY + 16);
   }
 
@@ -3108,7 +3108,7 @@
     const bottom = 34;
     const plotWidth = width - left - right;
     const plotHeight = height - top - bottom;
-    context.font = '10px Inter, sans-serif';
+    context.font = '12px Inter, sans-serif';
     context.textBaseline = 'middle';
     context.textAlign = 'right';
     for (let step = 0; step <= 4; step += 1) {
@@ -3118,7 +3118,7 @@
       context.moveTo(left, y);
       context.lineTo(width - right, y);
       context.stroke();
-      context.fillStyle = '#718794';
+      context.fillStyle = '#b7c5cc';
       context.fillText(number(maximum * (1 - step / 4)), left - 7, y);
     }
     const points = normalized.map((value, index) => ({
@@ -3151,7 +3151,7 @@
       context.strokeStyle = '#79e7f2';
       context.lineWidth = 2;
       context.stroke();
-      context.fillStyle = '#8fa2af';
+      context.fillStyle = '#c0cdd3';
       context.textAlign = index === 0 ? 'left' : index === points.length - 1 ? 'right' : 'center';
       context.textBaseline = 'top';
       context.fillText(String(labels[index] || ''), point.x, top + plotHeight + 10);
@@ -3188,12 +3188,12 @@
       context.fill();
       context.globalAlpha = 1;
       context.fillStyle = '#bbc7cd';
-      context.font = '10px Inter, sans-serif';
+      context.font = '12px Inter, sans-serif';
       context.textAlign = 'left';
       context.textBaseline = 'middle';
       context.fillText(String(row.label), plotRight + 10, y + rowHeight / 2 - 5);
       context.fillStyle = '#f3f6f7';
-      context.font = '700 11px Inter, sans-serif';
+      context.font = '700 13px Inter, sans-serif';
       context.fillText(number(row.value), plotRight + 10, y + rowHeight / 2 + 9);
     });
   }
@@ -3210,8 +3210,8 @@
     const rowHeight = Math.max(20, (height - top * 2) / Math.max(1, normalized.length));
     normalized.forEach((row, index) => {
       const y = top + index * rowHeight;
-      context.fillStyle = '#8fa2af';
-      context.font = '10px Inter, sans-serif';
+      context.fillStyle = '#c0cdd3';
+      context.font = '12px Inter, sans-serif';
       context.textAlign = 'left';
       context.textBaseline = 'middle';
       const short = String(row.label).length > 22 ? `${String(row.label).slice(0, 20)}…` : String(row.label);
@@ -3226,7 +3226,7 @@
       context.fillStyle = gradient;
       context.fillRect(barX, y + rowHeight * 0.25, barWidth, rowHeight * 0.5);
       context.fillStyle = '#bbc7cd';
-      context.font = '700 10px Inter, sans-serif';
+      context.font = '700 12px Inter, sans-serif';
       context.textAlign = 'right';
       const value = options.currency ? `₱${number(row.value, 2)}` : number(row.value);
       context.fillText(value, width - 3, y + rowHeight / 2);

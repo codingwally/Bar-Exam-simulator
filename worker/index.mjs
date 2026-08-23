@@ -1732,12 +1732,47 @@ function summarizeSignInClient(request) {
   return { device, operatingSystem, browser, language };
 }
 
+function signInDeviceCategory(device) {
+  if (device === 'Mobile phone') return 'mobile';
+  if (device === 'Tablet') return 'tablet';
+  if (device === 'Desktop or laptop') return 'desktop';
+  return 'unknown';
+}
+
+function approximateSignInLocationParts(request) {
+  return {
+    region: safeSingleLine(request.cf?.region, 80) || null,
+    countryCode: safeSingleLine(request.cf?.country, 2).toUpperCase() || null,
+  };
+}
+
 function approximateSignInLocation(request) {
-  const parts = [
-    safeSingleLine(request.cf?.region, 80),
-    safeSingleLine(request.cf?.country, 2),
-  ].filter(Boolean);
+  const location = approximateSignInLocationParts(request);
+  const parts = [location.region, location.countryCode].filter(Boolean);
   return parts.length ? parts.join(', ') : 'Not available';
+}
+
+async function recordSignInMonitoringEvent(env, request, user, sessionDigest) {
+  const client = summarizeSignInClient(request);
+  const location = approximateSignInLocationParts(request);
+  try {
+    await protectedSupabaseRpc(env, 'record_user_sign_in_event', {
+      p_user_id: user.id,
+      p_session_digest: sessionDigest,
+      p_device_category: signInDeviceCategory(client.device),
+      p_browser: client.browser,
+      p_operating_system: client.operatingSystem,
+      p_region: location.region,
+      p_country_code: location.countryCode,
+      p_language: client.language,
+    });
+    return true;
+  } catch {
+    // Sign-in monitoring is operational telemetry. A temporary persistence
+    // failure must never invalidate or redirect an otherwise valid session.
+    console.error('Sign-in monitoring persistence failed', { status: 'storage_error' });
+    return false;
+  }
 }
 
 async function sendSignInNotification(env, request, user, sessionDigest) {
@@ -1882,6 +1917,7 @@ async function handleSignInNotification(request, env, origin, allowedOrigin) {
     throw new GuestAccessError('SIGN_IN_REQUIRED', 'Sign-in is required.', 401);
   }
   const sessionDigest = await signInSessionDigest(request, user);
+  await recordSignInMonitoringEvent(env, request, user, sessionDigest);
   const now = Date.now();
   for (const [key, sentAt] of recentSignInNotificationSessions.entries()) {
     if (now - sentAt >= SIGN_IN_NOTIFICATION_DEDUPE_MS) {
@@ -4835,7 +4871,7 @@ async function adminUserDirectoryResult(request, env, accessPurpose) {
     }
     throw error;
   }
-  return protectedSupabaseRpc(env, 'admin_user_engagement_directory', {
+  return protectedSupabaseRpc(env, 'admin_user_monitoring_directory', {
     p_actor_user_id: user.id,
     p_search: query.search,
     p_limit: query.limit,

@@ -41,7 +41,11 @@ assert.match(js, /Signed-in accounts/);
 assert.match(js, /Answering users/);
 assert.match(js, /Questions answered/);
 assert.match(js, /Grading success/);
-assert.match(js, /'Not collected', 'Not collected'/);
+assert.doesNotMatch(js, /'Not collected', 'Not collected'/);
+assert.match(js, /\['Name', 'Email', 'School', 'Last sign-in', 'Region', 'Device'/);
+assert.match(js, /accountRegion\(account\), accountDevice\(account\)/);
+assert.match(js, /stacked:\s*true/);
+assert.match(js, /Available after next sign-in/);
 assert.match(js, /not bank settlement/i);
 assert.doesNotMatch(js, /forecast-guaranteed revenue[^\n]*executiveVisuals/i);
 

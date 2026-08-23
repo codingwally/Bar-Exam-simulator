@@ -53,6 +53,7 @@ test.afterEach(() => {
 
 test('successful sign-in emails only the approved owner with privacy-safe details', async () => {
   const calls = [];
+  const monitoringCalls = [];
   globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
     if (url === 'https://project.supabase.co/auth/v1/user') {
@@ -68,6 +69,10 @@ test('successful sign-in emails only the approved owner with privacy-safe detail
       calls.push({ headers: new Headers(init.headers), body: JSON.parse(init.body) });
       return Response.json({ id: 'email_sign_in_1' });
     }
+    if (url === 'https://project.supabase.co/rest/v1/rpc/record_user_sign_in_event') {
+      monitoringCalls.push(JSON.parse(init.body));
+      return Response.json({ recorded: true, alreadyRecorded: false });
+    }
     throw new Error(`Unexpected request: ${url}`);
   };
 
@@ -78,6 +83,15 @@ test('successful sign-in emails only the approved owner with privacy-safe detail
   );
   assert.equal(response.status, 202);
   assert.equal(calls.length, 1);
+  assert.equal(monitoringCalls.length, 1);
+  assert.equal(monitoringCalls[0].p_user_id, '11111111-1111-4111-8111-111111111111');
+  assert.match(monitoringCalls[0].p_session_digest, /^[0-9a-f]{64}$/);
+  assert.equal(monitoringCalls[0].p_device_category, 'mobile');
+  assert.equal(monitoringCalls[0].p_region, 'Metro Manila');
+  assert.equal(monitoringCalls[0].p_country_code, 'PH');
+  assert.equal(monitoringCalls[0].p_browser, 'Safari 18');
+  assert.equal(monitoringCalls[0].p_operating_system, 'iOS or iPadOS');
+  assert.equal(Object.hasOwn(monitoringCalls[0], 'email'), false);
   assert.deepEqual(calls[0].body.to, ['wallyesteban1993@gmail.com']);
   assert.equal(calls[0].body.subject, 'Due Diligence user sign-in');
   assert.match(calls[0].headers.get('Idempotency-Key'), /^sign-in-[a-f0-9]{64}$/);
@@ -107,6 +121,9 @@ test('one verified authentication session sends at most one notification per Wor
       emailCount += 1;
       return Response.json({ id: 'email_sign_in_deduped' });
     }
+    if (url === 'https://project.supabase.co/rest/v1/rpc/record_user_sign_in_event') {
+      return Response.json({ recorded: true, alreadyRecorded: false });
+    }
     throw new Error(`Unexpected request: ${url}`);
   };
   const sessionId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -130,6 +147,9 @@ test('notification delivery failure never changes the successful sign-in session
     if (url === 'https://api.resend.com/emails') {
       return Response.json({ message: 'temporary failure' }, { status: 503 });
     }
+    if (url === 'https://project.supabase.co/rest/v1/rpc/record_user_sign_in_event') {
+      return Response.json({ recorded: true, alreadyRecorded: false });
+    }
     throw new Error(`Unexpected request: ${url}`);
   };
   const response = await worker.fetch(
@@ -139,6 +159,35 @@ test('notification delivery failure never changes the successful sign-in session
   );
   assert.equal(response.status, 202);
   assert.deepEqual(await response.json(), { ok: true, notification: 'failed' });
+});
+
+test('sign-in monitoring failure never blocks authentication or owner notification', async () => {
+  let emailCount = 0;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url === 'https://project.supabase.co/auth/v1/user') {
+      return Response.json({
+        id: '44444444-4444-4444-8444-444444444444',
+        email: 'student@example.com',
+      });
+    }
+    if (url === 'https://project.supabase.co/rest/v1/rpc/record_user_sign_in_event') {
+      return Response.json({ message: 'temporary failure' }, { status: 503 });
+    }
+    if (url === 'https://api.resend.com/emails') {
+      emailCount += 1;
+      return Response.json({ id: 'email_sign_in_after_monitoring_failure' });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+  const response = await worker.fetch(
+    signInRequest('dddddddd-dddd-4ddd-8ddd-dddddddddddd'),
+    env,
+    {},
+  );
+  assert.equal(response.status, 202);
+  assert.equal(emailCount, 1);
+  assert.deepEqual(await response.json(), { ok: true, notification: 'sent' });
 });
 
 test('browser calls the notification only on an OAuth return and ignores delivery errors', async () => {

@@ -611,6 +611,19 @@
     return 'Not available';
   }
 
+  function accountRegion(account = {}) {
+    return String(account.current_region || '').trim() || 'Available after next sign-in';
+  }
+
+  function accountDevice(account = {}) {
+    const category = String(account.current_device_category || '').trim();
+    const details = [account.current_browser, account.current_operating_system]
+      .map((value) => String(value || '').trim())
+      .filter((value) => value && !/unknown|privacy-masked/i.test(value));
+    const label = category ? humanizeAuditValue(category) : 'Available after next activity';
+    return [label, ...details].join(' · ');
+  }
+
   function executiveSubscriptionSegments(engagement = {}) {
     return Object.entries(engagement.subscriptionCounts || {})
       .map(([label, value], index) => ({
@@ -729,9 +742,9 @@
       </div>
       <section class="observatory-card executive-recent-users">
         <div class="card-head"><div><h3>Recent Users</h3><p>Latest recorded account sign-ins.</p></div><button type="button" class="icon-link" data-admin-section="users" aria-label="Open full user directory"><span>View all users</span><i class="ph ph-caret-right" aria-hidden="true"></i></button></div>
-        ${table(['Name', 'School', 'Last sign-in', 'Region', 'Device', 'Questions', 'Access', 'Remaining'], recentAccounts.map((account) => [
-          account.display_name || 'Not provided', account.school || 'Not provided', dateTime(account.last_sign_in_at),
-          'Not collected', 'Not collected', number(account.answered_question_count),
+        ${table(['Name', 'Email', 'School', 'Last sign-in', 'Region', 'Device', 'Questions', 'Access', 'Remaining'], recentAccounts.map((account) => [
+          account.display_name || 'Not provided', account.email || 'Not provided', account.school || 'Not provided', dateTime(account.last_sign_in_at),
+          accountRegion(account), accountDevice(account), number(account.answered_question_count),
           { html: true, value: commercialAccessBadge(account) }, accountRemainingAllowance(account),
         ]))}
       </section>
@@ -985,6 +998,8 @@
       user.commercial_category ? humanizeAuditValue(user.commercial_category) : 'User',
       commercialAccountLabel(user),
       dateTime(user.last_sign_in_at),
+      accountRegion(user),
+      accountDevice(user),
       number(user.answered_question_count),
       `${number(user.practice_answered_count)} practice · ${number(user.examination_answered_count)} formal`,
       user.average_score == null
@@ -1014,7 +1029,7 @@
     return `
       ${heading('Users', 'Search exact names and email addresses, review access and answer activity, or download the current user list for Google Sheets.')}
       <div class="table-tools"><input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, school, or email" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="user-directory-export" type="button">Download user list</button></div>
-      ${table(['Name', 'Email', 'Category', 'Access', 'Last sign-in', 'Questions answered', 'Answer types', 'Score', 'Actions'], rows)}
+      ${table(['Name', 'Email', 'Category', 'Access', 'Last sign-in', 'Region', 'Device', 'Questions answered', 'Answer types', 'Score', 'Actions'], rows)}
       <div class="pagination-bar">
         <p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(data.total)} matching account(s).</p>
         <div class="row-actions">
@@ -3204,6 +3219,35 @@
     const { context, width, height } = prepared;
     const normalized = rows.map((row) => ({ label: row.label, value: Math.max(0, Number(row.value) || 0) }));
     const maximum = Math.max(1, ...normalized.map((row) => row.value));
+    if (options.stacked) {
+      const inset = 5;
+      const top = 8;
+      const rowHeight = Math.max(44, (height - top * 2) / Math.max(1, normalized.length));
+      normalized.forEach((row, index) => {
+        const y = top + index * rowHeight;
+        const value = options.currency ? `₱${number(row.value, 2)}` : number(row.value);
+        context.fillStyle = '#d5dfe3';
+        context.font = '600 13px Inter, sans-serif';
+        context.textAlign = 'left';
+        context.textBaseline = 'middle';
+        context.fillText(String(row.label), inset, y + 10);
+        context.fillStyle = '#f3f6f7';
+        context.font = '700 14px Inter, sans-serif';
+        context.textAlign = 'right';
+        context.fillText(value, width - inset, y + 10);
+        const barY = y + 24;
+        const trackWidth = width - inset * 2;
+        const barWidth = trackWidth * row.value / maximum;
+        context.fillStyle = 'rgba(210,170,85,0.13)';
+        context.fillRect(inset, barY, trackWidth, Math.max(10, rowHeight * 0.28));
+        const gradient = context.createLinearGradient(inset, 0, width - inset, 0);
+        gradient.addColorStop(0, options.gold ? '#d2aa55' : '#36b7ca');
+        gradient.addColorStop(1, options.gold ? '#f0cd78' : '#6ddbea');
+        context.fillStyle = gradient;
+        context.fillRect(inset, barY, barWidth, Math.max(10, rowHeight * 0.28));
+      });
+      return;
+    }
     const labelWidth = Math.min(130, width * 0.42);
     const right = 34;
     const top = 10;
@@ -3259,7 +3303,7 @@
         drawDonut($('#observatory-user-mix-chart'), visual.subscriptionSegments || [], 'Users');
         drawDonut($('#observatory-device-chart'), visual.deviceSegments || [], 'Sessions');
         drawFunnel($('#observatory-funnel-chart'), visual.funnelRows || []);
-        drawHorizontalBars($('#observatory-revenue-chart'), visual.revenueRows || [], { currency: true, gold: true });
+        drawHorizontalBars($('#observatory-revenue-chart'), visual.revenueRows || [], { currency: true, gold: true, stacked: true });
         drawHorizontalBars($('#observatory-subject-chart'), visual.subjectRows || []);
       } else if (section === 'marketing') {
         const sources = acquisitionSourceRows(report);

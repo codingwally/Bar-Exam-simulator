@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 const [
   html, css, js, analytics, worker, migration, directoryMigration,
   engagementMigration, globalBetaMigration, answerHistoryMigration,
-  businessDetailsMigration, preflight,
+  businessDetailsMigration, monitoringMigration, preflight,
 ] = await Promise.all([
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.css', import.meta.url), 'utf8'),
@@ -17,6 +17,7 @@ const [
   readFile(new URL('../supabase/migrations/20260810002100_global_beta_all_access.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260810002200_admin_answer_history_export.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260810002300_admin_business_dashboard_details.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260823080651_admin_sign_in_monitoring.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/review/phase3_production_preflight.sql', import.meta.url), 'utf8'),
 ]);
 
@@ -170,6 +171,27 @@ assert.match(businessDetailsMigration, /grant execute on function public\.admin_
 assert.match(businessDetailsMigration, /external_question_bank_not_persisted/);
 assert.match(businessDetailsMigration, /immutable_exam_snapshot/);
 assert.doesNotMatch(businessDetailsMigration, /grant execute[\s\S]*to authenticated/);
+
+assert.match(monitoringMigration, /create table if not exists public\.user_sign_in_events/);
+assert.match(monitoringMigration, /alter table public\.user_sign_in_events enable row level security/);
+assert.match(monitoringMigration, /revoke all on public\.user_sign_in_events from public, anon, authenticated/);
+assert.match(monitoringMigration, /grant select, insert on public\.user_sign_in_events to service_role/);
+assert.match(monitoringMigration, /create or replace function public\.record_user_sign_in_event/);
+assert.match(monitoringMigration, /create or replace function public\.admin_user_monitoring_directory/);
+assert.match(monitoringMigration, /public\.admin_user_engagement_directory/);
+assert.match(monitoringMigration, /from public\.usage_sessions/);
+assert.match(monitoringMigration, /set search_path = ''/);
+assert.match(monitoringMigration, /on conflict \(session_digest\) do nothing/);
+assert.match(monitoringMigration, /revoke all on function public\.record_user_sign_in_event[\s\S]*from public, anon, authenticated/);
+assert.match(monitoringMigration, /grant execute on function public\.record_user_sign_in_event[\s\S]*to service_role/);
+assert.match(monitoringMigration, /revoke all on function public\.admin_user_monitoring_directory[\s\S]*from public, anon, authenticated/);
+assert.match(monitoringMigration, /grant execute on function public\.admin_user_monitoring_directory[\s\S]*to service_role/);
+assert.doesNotMatch(
+  monitoringMigration,
+  /\b(?:ip_address|raw_ip|user_agent|authorization|access_token|refresh_token|answer_text)\s+(?:text|inet|jsonb?)\b/i,
+);
+assert.match(worker, /record_user_sign_in_event/);
+assert.match(worker, /admin_user_monitoring_directory/);
 
 for (const capability of [
   'analytics_viewer',

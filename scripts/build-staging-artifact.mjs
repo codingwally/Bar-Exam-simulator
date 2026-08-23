@@ -56,7 +56,7 @@ await replaceIn('assets/phase2-config.js', [
   ['https://duediligence.ph/?auth=callback', `${stagingPublicUrl}/?auth=callback`],
   ['https://duediligence-gemini-examiner.wallyesteban1993.workers.dev', stagingWorkerUrl],
   [
-    /maintenance: Object\.freeze\(\{(\r?\n\s*)enabled: true,/,
+    /maintenance: Object\.freeze\(\{(\r?\n\s*)enabled: (?:true|false),/,
     'maintenance: Object.freeze({$1enabled: false,',
   ],
 ]);

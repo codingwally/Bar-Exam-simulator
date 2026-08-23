@@ -1058,12 +1058,15 @@
   }
 
   async function notifyOwnerOfSuccessfulSignIn(session) {
-    if (state.signInNotificationAttempted || !isAuthenticationReturn()) return;
+    if (state.signInNotificationAttempted) return;
     const accessToken = String(session?.access_token || '');
     if (!accessToken) return;
     state.signInNotificationAttempted = true;
+    const endpoint = isAuthenticationReturn()
+      ? '/auth/sign-in-notification'
+      : '/auth/session-monitoring';
     try {
-      await fetch(`${config.workerUrl}/auth/sign-in-notification`, {
+      await fetch(`${config.workerUrl}${endpoint}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -1073,7 +1076,8 @@
         keepalive: true,
       });
     } catch {
-      // Owner notification is best-effort and must never interrupt user authentication.
+      // Sign-in monitoring and owner notification are best-effort and must
+      // never interrupt authentication or an existing restored session.
     }
   }
 

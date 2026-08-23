@@ -1934,6 +1934,19 @@ async function handleSignInNotification(request, env, origin, allowedOrigin) {
   return jsonResponse({ ok: true, notification: delivery.status }, 202, origin, allowedOrigin);
 }
 
+async function handleSessionMonitoring(request, env, origin, allowedOrigin) {
+  const user = await verifiedAuthenticatedUser(request, env);
+  if (!user) {
+    throw new GuestAccessError('SIGN_IN_REQUIRED', 'Sign-in is required.', 401);
+  }
+  const sessionDigest = await signInSessionDigest(request, user);
+  const recorded = await recordSignInMonitoringEvent(env, request, user, sessionDigest);
+  return jsonResponse({
+    ok: true,
+    monitoring: recorded ? 'recorded' : 'temporarily_unavailable',
+  }, 202, origin, allowedOrigin);
+}
+
 function phase4AccessEnforced(env) {
   return String(env.PHASE4_ACCESS_ENFORCEMENT).toLowerCase() === 'true';
 }
@@ -5704,6 +5717,9 @@ export default {
       }
       if (pathname === '/auth/sign-in-notification') {
         return await handleSignInNotification(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/auth/session-monitoring') {
+        return await handleSessionMonitoring(request, env, origin, allowedOrigin);
       }
       if (privateBetaGateEnabled(env) && pathname === '/beta/access/verify') {
         return await handlePrivateBetaCodeVerification(

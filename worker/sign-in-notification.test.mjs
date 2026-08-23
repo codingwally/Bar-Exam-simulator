@@ -33,6 +33,15 @@ function signInRequest(sessionId) {
   return request;
 }
 
+function sessionMonitoringRequest(sessionId) {
+  const request = signInRequest(sessionId);
+  const monitoringRequest = new Request('https://worker.example/auth/session-monitoring', request);
+  Object.defineProperty(monitoringRequest, 'cf', {
+    value: request.cf,
+  });
+  return monitoringRequest;
+}
+
 const env = {
   ALLOWED_ORIGIN: 'https://duediligence.ph',
   OUTBOUND_EMAIL_MODE: 'enabled',
@@ -190,12 +199,46 @@ test('sign-in monitoring failure never blocks authentication or owner notificati
   assert.deepEqual(await response.json(), { ok: true, notification: 'sent' });
 });
 
-test('browser calls the notification only on an OAuth return and ignores delivery errors', async () => {
+test('restored session monitoring records metadata without sending an owner email', async () => {
+  let emailCount = 0;
+  const monitoringCalls = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    if (url === 'https://project.supabase.co/auth/v1/user') {
+      return Response.json({
+        id: '55555555-5555-4555-8555-555555555555',
+        email: 'restored@example.com',
+      });
+    }
+    if (url === 'https://project.supabase.co/rest/v1/rpc/record_user_sign_in_event') {
+      monitoringCalls.push(JSON.parse(init.body));
+      return Response.json({ recorded: true, alreadyRecorded: false });
+    }
+    if (url === 'https://api.resend.com/emails') {
+      emailCount += 1;
+      return Response.json({ id: 'unexpected_email' });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  const response = await worker.fetch(
+    sessionMonitoringRequest('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'),
+    env,
+    {},
+  );
+  assert.equal(response.status, 202);
+  assert.deepEqual(await response.json(), { ok: true, monitoring: 'recorded' });
+  assert.equal(monitoringCalls.length, 1);
+  assert.equal(emailCount, 0);
+});
+
+test('browser records restored sessions and limits owner email to OAuth returns', async () => {
   const source = await readFile(new URL('../assets/phase2-experience.js', import.meta.url), 'utf8');
   assert.match(source, /query\.get\('auth'\) === 'callback' \|\| query\.has\('code'\)/);
   assert.match(source, /\/auth\/sign-in-notification/);
+  assert.match(source, /\/auth\/session-monitoring/);
+  assert.match(source, /const endpoint = isAuthenticationReturn\(\)/);
   assert.match(source, /state\.signInNotificationAttempted = true/);
   assert.match(source, /keepalive: true/);
-  assert.match(source, /must never interrupt user authentication/);
-  assert.match(source, /catch \{\s*\/\/ Owner notification is best-effort and must never interrupt user authentication\./);
+  assert.match(source, /never interrupt authentication or an existing restored session/);
 });

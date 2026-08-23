@@ -125,6 +125,8 @@
     const plan = String(account.subscription_plan || '').toLowerCase();
     const status = String(account.subscription_status || '').toLowerCase();
     const effective = String(account.effective_access || '').toLowerCase();
+    const role = String(account.role || '').toLowerCase();
+    if (['admin', 'founder_admin', 'super_admin'].includes(role)) return 'Administrator';
     if (account.free_beta_enabled
         && (!account.free_beta_expires_at || new Date(account.free_beta_expires_at).getTime() > now)) {
       return 'Founding Beta';
@@ -365,6 +367,17 @@
       search: normalizedSearch,
       limit: 100,
       offset: normalizedOffset,
+      requestKey: uuidKey(),
+    });
+    state.operational.set(key, payload.data);
+    return payload.data;
+  }
+
+  async function loadRecentSignIns(force = false) {
+    const key = 'recent-sign-ins';
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const payload = await api('/admin/recent-sign-ins', {
+      limit: 7,
       requestKey: uuidKey(),
     });
     state.operational.set(key, payload.data);
@@ -660,14 +673,19 @@
     const betaKnown = typeof betaAllAccess.enabled === 'boolean';
     const betaEnabled = betaAllAccess.enabled === true;
     const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
-    const [directory, paymentData] = await Promise.all([
+    const [directory, recentSignIns, paymentData] = await Promise.all([
       loadUserDirectory(false, '', 0).catch(() => ({ items: [], total: null })),
+      loadRecentSignIns(false).catch(() => ({ items: [] })),
       sectionAllowed('payments')
         ? loadPhase4Operational('payments').catch(() => ({ items: [] }))
         : Promise.resolve({ items: [] }),
     ]);
-    const recentAccounts = [...(directory.items || [])]
-      .sort((left, right) => new Date(right.last_sign_in_at || 0) - new Date(left.last_sign_in_at || 0))
+    const recentAccounts = [...(
+      recentSignIns.items?.length ? recentSignIns.items : directory.items || []
+    )]
+      .sort((left, right) => new Date(
+        right.monitoring_recorded_at || right.last_sign_in_at || 0,
+      ) - new Date(left.monitoring_recorded_at || left.last_sign_in_at || 0))
       .slice(0, 7);
     const signedInAccounts = engagement.signedInAccounts ?? directory.total;
     const answeringUsers = engagement.usersWithAnswers;

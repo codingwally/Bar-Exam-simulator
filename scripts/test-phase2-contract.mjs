@@ -42,7 +42,7 @@ for (const expected of [
   'Continue with Google',
   'Save progress',
   'Personal analytics',
-  'Syllabus Base Review',
+  'Syllabus-Based Review',
   '/beta/access/accept-terms',
   'complete_commercial_profile_onboarding_v2',
   'Introductory tokens and Early Access',

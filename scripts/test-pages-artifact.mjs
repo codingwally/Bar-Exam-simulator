@@ -90,7 +90,7 @@ assert.match(index, /<html lang="en-PH">/);
 assert.match(index, /id="private-beta-landing"/);
 assert.match(index, /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 assert.equal((index.match(/id="site-header"/g) || []).length, 1);
-assert.match(index, /id="site-header"[\s\S]*id="site-menu-toggle"[\s\S]*Examination Room[\s\S]*>Home<[\s\S]*>Practice Exam<[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus Base Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics[\s\S]*>Profile<[\s\S]*Plans &amp; Pricing[\s\S]*>Support/);
+assert.match(index, /id="site-header"[\s\S]*id="site-menu-toggle"[\s\S]*Examination Room[\s\S]*>Home<[\s\S]*>Practice Exam<[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics[\s\S]*>Profile<[\s\S]*Plans &amp; Pricing[\s\S]*>Support/);
 assert.doesNotMatch(index, />The Academy<|>The Commons<|>BarBound<|>The Docket</);
 assert.doesNotMatch(index, /class="pb-chamber-index"/);
 assert.doesNotMatch(index, /class="pb-pillar-grid"|class="pb-pillar-card"/);

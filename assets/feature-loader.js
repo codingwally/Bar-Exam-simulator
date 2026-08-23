@@ -271,7 +271,7 @@
     openPerSubject: async (...args) => {
       const placeholder = global.DueDiligenceExaminations;
       if (!await loadForFeature('subject-matter')) return null;
-      if (global.DueDiligenceExaminations === placeholder) throw new Error('Syllabus Base Review could not be opened.');
+      if (global.DueDiligenceExaminations === placeholder) throw new Error('Syllabus-Based Review could not be opened.');
       return global.DueDiligenceExaminations.openPerSubject(...args);
     },
   });

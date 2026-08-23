@@ -323,7 +323,7 @@
   function discover() {
     document.querySelectorAll('[data-study-resource-type][data-study-resource-id]').forEach((root) => mount({
       root, type: root.dataset.studyResourceType, id: root.dataset.studyResourceId,
-      title: root.querySelector('.dd-question-prompt, h2, h3')?.textContent || 'Syllabus Base Review study item',
+      title: root.querySelector('.dd-question-prompt, h2, h3')?.textContent || 'Syllabus-Based Review study item',
     }));
     const page = String(location.hash || '');
     if (page.includes('chair') || page.includes('anchor')) {

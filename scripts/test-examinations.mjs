@@ -70,8 +70,8 @@ assert.match(html, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
 assert.match(html, /assets\/feature-loader\.js\?v=syllabus-review-20260823-1/);
 assert.match(html, /Mock Bar/);
-assert.match(frontend, /track === 'per_subject' \? 'Syllabus Base Review' : 'Mock Bar'/);
-assert.match(frontend, /'SYLLABUS BASE REVIEW'/);
+assert.match(frontend, /track === 'per_subject' \? 'Syllabus-Based Review' : 'Mock Bar'/);
+assert.match(frontend, /'SYLLABUS-BASED REVIEW'/);
 assert.doesNotMatch(frontend, /SUBJECT MATTER EXAMINATION/);
 assert.doesNotMatch(frontend, /Subject Matter Examinations/);
 assert.match(styles, /\.dd-subject-study-page \.dd-subject-study-copy > \.dd-exam-kicker\s*\{[\s\S]*?color:\s*#e6bd59/,
@@ -118,7 +118,7 @@ assert.match(
 );
 assert.doesNotMatch(frontend, /id="dd-upload-timer"/);
 assert.match(frontend, /operation: 'confirm_upload',[\s\S]*timerMode: 'strict'/);
-assert.match(adminJs, />Syllabus Base Review<\/option>/);
+assert.match(adminJs, />Syllabus-Based Review<\/option>/);
 const retiredUserFacingTerms = /Moot Court|Per-Subject Examinations|PER-SUBJECT EXAMINATION/i;
 assert.doesNotMatch(html, retiredUserFacingTerms);
 assert.doesNotMatch(frontend, retiredUserFacingTerms);

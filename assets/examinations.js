@@ -669,7 +669,7 @@
         <button class="dd-icon-control dd-exam-dialog-close dd-subject-drawer-close" type="button"
           data-subject-selector-close aria-label="Close course chooser">&times;</button>
         <header>
-          <p class="dd-exam-kicker">Syllabus Base Review</p>
+          <p class="dd-exam-kicker">Syllabus-Based Review</p>
           <h2 id="dd-subject-selector-title">Choose a course</h2>
           <label class="dd-subject-search-label" for="dd-subject-search-mobile">Find a course</label>
           <input class="dd-subject-search" id="dd-subject-search-mobile" data-subject-search-input
@@ -681,7 +681,7 @@
         <div class="dd-subject-list" data-subject-tree>${hierarchy}</div>
         <p class="dd-subject-empty" data-subject-empty hidden>No matching course was found.</p>
         <footer><button class="dd-control dd-exam-button" type="button" data-subject-selector-close
-          aria-label="Close course chooser and return to Syllabus Base Review">Back</button></footer>
+          aria-label="Close course chooser and return to Syllabus-Based Review">Back</button></footer>
       </div>
     </dialog>`;
   }
@@ -694,8 +694,8 @@
       if (!state.catalog.length) {
         root.innerHTML = `<div class="dd-exam-page dd-subject-study-page"><div class="dd-exam-shell">
           <header class="dd-exam-hero"><div><p class="dd-exam-kicker">Review and retention</p>
-            <h1>Syllabus Base Review</h1></div></header>
-          <div class="dd-exam-status is-error" role="alert">No Syllabus Base Review courses are available right now.</div>
+            <h1>Syllabus-Based Review</h1></div></header>
+          <div class="dd-exam-status is-error" role="alert">No Syllabus-Based Review courses are available right now.</div>
           <button class="dd-control dd-exam-button is-primary" type="button"
             data-retry-catalog="per_subject">Retry loading courses</button>
         </div></div>`;
@@ -705,7 +705,7 @@
         <header class="dd-exam-hero dd-subject-study-hero">
           <div>
             <p class="dd-exam-kicker">Review and retention</p>
-            <h1>Syllabus Base Review</h1>
+            <h1>Syllabus-Based Review</h1>
             <p>Open the governing law when you are ready.</p>
           </div>
         </header>
@@ -732,7 +732,7 @@
       <header class="dd-exam-hero dd-subject-study-hero">
         <div>
           <p class="dd-exam-kicker">Review and retention</p>
-          <h1>Syllabus Base Review</h1>
+          <h1>Syllabus-Based Review</h1>
         </div>
       </header>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
@@ -930,7 +930,7 @@
     dialog.innerHTML = `<div class="dd-exam-dialog-inner">
       <button class="dd-icon-control dd-exam-dialog-close" type="button" data-dialog-close
         aria-label="Close timer settings">&times;</button>
-      <p class="dd-exam-kicker">Syllabus Base Review</p>
+      <p class="dd-exam-kicker">Syllabus-Based Review</p>
       <h2 id="dd-exam-setup-title">Timer settings</h2>
       <p class="dd-exam-description">Choose how you want to practice. Stopwatch is the default, and no clock starts until you select Start.</p>
       <fieldset class="dd-timer-options">
@@ -983,7 +983,7 @@
       dialog.innerHTML = `<div class="dd-exam-dialog-inner">
         <button class="${compact ? 'dd-icon-control ' : ''}dd-exam-dialog-close" type="button" data-dialog-close
           aria-label="Close time-mode selection">&times;</button>
-        <p class="dd-exam-kicker">${escapeHtml(compact ? 'Syllabus Base Review' : 'Bar Exam Simulation')}</p>
+        <p class="dd-exam-kicker">${escapeHtml(compact ? 'Syllabus-Based Review' : 'Bar Exam Simulation')}</p>
         <h2 id="dd-exam-setup-title">${escapeHtml(compact ? setup.subject : setup.title)}</h2>
         <p class="dd-exam-description">${compact
           ? 'Choose how you want to time this question. The clock starts only after you begin.'
@@ -1271,8 +1271,8 @@
       <header class="dd-subject-editorial-header">
         <div>
           <p class="dd-exam-kicker">Review and retention</p>
-          <p class="dd-subject-breadcrumb"><span>Practice Exam</span><b aria-hidden="true">/</b> Syllabus Base Review</p>
-          <h1>Syllabus Base Review</h1>
+          <p class="dd-subject-breadcrumb"><span>Practice Exam</span><b aria-hidden="true">/</b> Syllabus-Based Review</p>
+          <h1>Syllabus-Based Review</h1>
         </div>
         <div class="dd-subject-course-picker">
           <p>Current course</p>
@@ -1318,7 +1318,7 @@
               )}</strong>
             </div>
           </div>
-          <nav class="dd-subject-practice-actions" aria-label="Syllabus Base Review practice actions">
+          <nav class="dd-subject-practice-actions" aria-label="Syllabus-Based Review practice actions">
             <button class="dd-control dd-exam-button is-primary" data-submit-current type="button"
               ${answerText.trim() && !reviewConfirmationPending ? '' : 'disabled'}>Submit for coaching</button>
             <button class="dd-control dd-exam-button" id="dd-subject-flag-button" type="button"
@@ -1375,7 +1375,7 @@
           <h1>${escapeHtml(state.active.examination.title)}</h1>
           <span>${state.active.examination.track === 'bar_feels'
             ? 'BAR EXAM SIMULATION'
-            : 'SYLLABUS BASE REVIEW'} &middot;
+            : 'SYLLABUS-BASED REVIEW'} &middot;
             ${escapeHtml(state.active.examination.subject || 'Curated examination')}</span>
         </div>
         <div class="dd-room-clock ${timerMode === 'none' ? 'is-hidden' : ''}" id="dd-room-clock">
@@ -2694,8 +2694,8 @@
       <header class="dd-subject-editorial-header">
         <div>
           <p class="dd-exam-kicker">Review and retention</p>
-          <p class="dd-subject-breadcrumb"><span>Practice Exam</span><b aria-hidden="true">/</b> Syllabus Base Review</p>
-          <h1 data-subject-result-heading tabindex="-1">Syllabus Base Review</h1>
+          <p class="dd-subject-breadcrumb"><span>Practice Exam</span><b aria-hidden="true">/</b> Syllabus-Based Review</p>
+          <h1 data-subject-result-heading tabindex="-1">Syllabus-Based Review</h1>
         </div>
         <div class="dd-subject-course-picker">
           <p>Current course</p>
@@ -2725,7 +2725,7 @@
           <section class="dd-subject-result-assessment" aria-label="Score and examiner feedback">
             ${assessmentCard(result, { track: 'per_subject', compactSubject: true })}
           </section>
-          <nav class="dd-subject-practice-actions" aria-label="Syllabus Base Review review actions">
+          <nav class="dd-subject-practice-actions" aria-label="Syllabus-Based Review review actions">
             <button class="dd-control dd-exam-button is-primary" type="button" data-subject-next>Next question</button>
             <button class="dd-control dd-exam-button" type="button"
               data-subject-performance="${escapeAttribute(course)}">Review my work</button>
@@ -2762,7 +2762,7 @@
     const sourceWarning = assessment.reviewRequired === true || assessment.sourceStatus === 'conflict'
       ? '<div class="assessment-warning"><strong>Review required.</strong> Verify the cited primary authorities before relying on this assessment.</div>'
       : '';
-    return `<article class="assessment-card dd-subject-assessment ${isSubjectMatter ? 'dd-subject-review-card' : ''}" aria-label="${isSubjectMatter ? 'Syllabus Base Review review and retention assessment' : 'Individual Philippine Bar essay assessment'}"
+    return `<article class="assessment-card dd-subject-assessment ${isSubjectMatter ? 'dd-subject-review-card' : ''}" aria-label="${isSubjectMatter ? 'Syllabus-Based Review review and retention assessment' : 'Individual Philippine Bar essay assessment'}"
       ${isSubjectMatter && questionId ? `data-study-resource-type="subject_matter" data-study-resource-id="${escapeAttribute(questionId)}"` : ''}>
       <div class="assessment-hero">
         ${score != null ? `<div class="score-medallion"><div><strong>${Number(score).toFixed(1)} / 5</strong><span>Points earned</span></div></div>` : ''}
@@ -2843,7 +2843,7 @@
         root.innerHTML = result
           ? subjectMatterResultMarkup(result, attemptId)
           : `<div class="dd-subject-editorial"><section class="dd-subject-result-unavailable">
-            <p class="dd-exam-kicker">Syllabus Base Review</p>
+            <p class="dd-exam-kicker">Syllabus-Based Review</p>
             <h1>Review unavailable.</h1>
             <p>Your submitted answer is preserved, but no released assessment record is available yet.</p>
             <button class="dd-control dd-exam-button is-primary" type="button" data-exam-verdict="${escapeAttribute(attemptId)}">Retry assessment</button>
@@ -2854,7 +2854,7 @@
         return;
       }
       root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-review-page' : ''}"><section class="dd-verdict-screen">
-        <p class="dd-exam-kicker">${track === 'per_subject' ? 'Syllabus Base Review' : 'Multi-question assessment'}</p>
+        <p class="dd-exam-kicker">${track === 'per_subject' ? 'Syllabus-Based Review' : 'Multi-question assessment'}</p>
         <h1>${track === 'per_subject' ? 'Review and retain.' : 'Individual ALAC assessments.'}</h1>
         <p class="dd-exam-description">${track === 'per_subject'
           ? 'Understand the evaluation, then reveal the legal basis, discussion, suggested answer, and verified sources at your own pace.'
@@ -2880,7 +2880,7 @@
       if (isStaleIdentityError(error)) return;
       root.innerHTML = track === 'per_subject'
         ? `<div class="dd-subject-editorial"><section class="dd-subject-result-unavailable" role="alert" tabindex="-1">
-          <p class="dd-exam-kicker">Syllabus Base Review</p><h1>Assessment unavailable.</h1>
+          <p class="dd-exam-kicker">Syllabus-Based Review</p><h1>Assessment unavailable.</h1>
           <p>Your submitted answer remains saved. Due Diligence could not load the coaching assessment right now.</p>
           <div class="dd-exam-actions">
             <button class="dd-control dd-exam-button is-primary" type="button" data-exam-verdict="${escapeAttribute(attemptId)}">Retry assessment</button>
@@ -2899,7 +2899,7 @@
     const root = pageRoot('per_subject');
     if (!root) return;
     root.innerHTML = `<div class="dd-subject-editorial dd-subject-performance-page"><section class="dd-verdict-screen">
-      <p class="dd-exam-kicker">Syllabus Base Review</p><h1>Loading your performance…</h1>
+      <p class="dd-exam-kicker">Syllabus-Based Review</p><h1>Loading your performance…</h1>
     </section></div>`;
     try {
       const performance = await api('/examinations/query', {
@@ -2926,7 +2926,7 @@
           ${flaggedForLater.map((item) => `<article class="dd-subject-flagged-row">
             <div>
               <p class="dd-question-label">${escapeHtml(item.topic || 'Practice question')} · ${escapeHtml(item.resumable === true ? 'Open draft' : 'Skipped without a score')} · ${escapeHtml(formatDate(item.queuedAt || item.skippedAt))}</p>
-              <h3>${escapeHtml(item.prompt || 'Flagged Syllabus Base Review question')}</h3>
+              <h3>${escapeHtml(item.prompt || 'Flagged Syllabus-Based Review question')}</h3>
               ${String(item.answerText || '').trim() ? `<details class="dd-subject-flagged-draft">
                 <summary>Saved draft</summary>
                 <div>${escapeHtml(item.answerText)}</div>
@@ -3033,8 +3033,8 @@
     } catch (error) {
       if (isStaleIdentityError(error)) return;
       if (root) root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-study-page' : ''}"><div class="dd-exam-shell">
-        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">${track === 'per_subject' ? 'Syllabus Base Review' : 'Mock Bar'}</p>
-          <h1>${track === 'per_subject' ? 'Syllabus Base Review' : 'Bar Exam Simulation'}</h1></div></header>
+        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">${track === 'per_subject' ? 'Syllabus-Based Review' : 'Mock Bar'}</p>
+          <h1>${track === 'per_subject' ? 'Syllabus-Based Review' : 'Bar Exam Simulation'}</h1></div></header>
         <div class="dd-exam-status is-error" role="alert" tabindex="-1">${track === 'per_subject'
           ? 'Courses could not be loaded. Your saved course choice and prior work are unchanged.'
           : escapeHtml(error.message)}</div>

@@ -35,7 +35,7 @@ assert.doesNotMatch(
 assert.match(admin, /document\.createElement\('details'\)/);
 assert.match(admin, /menu\.className = 'action-menu'/);
 assert.match(admin, /setAttribute\('aria-busy', 'true'\)/);
-assert.match(admin, /button\.textContent = 'Refreshing…'/);
+assert.match(admin, /button\.innerHTML = '[^']*Refreshing…[^']*'/);
 
 assert.match(adminCss, /@media \(max-width: 820px\)[\s\S]*\.table-wrap td::before/);
 assert.match(adminCss, /@media \(max-width: 560px\)[\s\S]*\.exam-admin-form \{ grid-template-columns: minmax\(0, 1fr\); \}/);

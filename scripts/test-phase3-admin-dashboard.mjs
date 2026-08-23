@@ -21,10 +21,11 @@ const [
 ]);
 
 const sectionLabels = [
-  ['executive', 'Overview'],
+  ['executive', 'Executive Pulse'],
   ['realtime', 'Live Activity'],
   ['users', 'Users'],
   ['acquisition', 'Sign-ups'],
+  ['marketing', 'Acquisition'],
   ['answer_exports', 'Answers'],
   ['learning', 'Learning Performance'],
   ['subjects', 'Question Bank'],
@@ -33,15 +34,21 @@ const sectionLabels = [
   ['forum', 'Community'],
   ['support', 'Support'],
   ['corrections', 'Answer Corrections'],
-  ['subscriptions', 'Access'],
+  ['subscriptions', 'Subscriptions'],
   ['payments', 'Payments'],
   ['refunds', 'Refunds'],
   ['partnerships', 'Partnerships'],
+  ['business_revenue', 'Revenue'],
+  ['business_projections', 'Projections'],
+  ['business_comparisons', 'Comparisons'],
   ['controls', 'Website Settings'],
-  ['security', 'Security &amp; Activity Log'],
+  ['security', 'Audit Log'],
 ];
 for (const [section, label] of sectionLabels) {
-  assert.match(html, new RegExp(`<button data-section="${section}"[^>]*>${label}<\\/button>`));
+  assert.match(
+    html,
+    new RegExp(`<button data-section="${section}"[^>]*>[\\s\\S]*?<span>${label}<\\/span>[\\s\\S]*?<\\/button>`),
+  );
 }
 for (const obsolete of [
   /Chambers/,
@@ -60,8 +67,8 @@ assert.match(css, /prefers-reduced-motion/);
 assert.match(css, /@media \(max-width: 560px\)/);
 assert.match(css, /@media print/);
 
-assert.match(js, /Paid subscribers: Not connected/);
-assert.match(js, /Scenario only — not actual performance/);
+assert.match(js, /operational records, not bank settlement or accounting statements/i);
+assert.match(js, /Planning estimate only:[\s\S]*not actual or forecast-guaranteed revenue/i);
 assert.match(js, /Final account transfer is disabled/);
 assert.match(js, /Contact Support\. We respond within 24 hours\./);
 assert.match(js, /Nothing was changed/);

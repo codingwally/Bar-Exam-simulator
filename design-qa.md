@@ -581,3 +581,29 @@ The implementation preserves the live navy, gold, cream, serif, and mono design 
 - `git diff --check` — passed.
 
 final result: passed
+
+# Judicial Observatory Design QA — 2026-08-23
+
+## Selected visual target
+
+- Reference: `exec-8990621e-35ac-4c68-ad84-acec462a25f7.png` (Option 1 — Judicial Observatory).
+- Production implementation: `admin/index.html`, `admin/admin-observatory.css`, and the Executive Pulse rendering in `admin/admin.js`.
+- Comparison viewport: 1440 × 900.
+- Comparison method: the selected reference and rendered implementation were placed side by side in the same visual review frame.
+
+## Fidelity checks
+
+- Midnight/graphite shell, compact left navigation, judicial gold, cyan, and green accents: passed.
+- Executive hierarchy, KPI cards, chart density, action queue, and access posture: passed.
+- Due Diligence brand retained without diluting the selected observatory direction: passed.
+- Real-data labeling: passed. Device and location detail are not fabricated where the current backend does not collect them.
+- Responsive rules: passed by stylesheet and contract inspection for 1180 px, 920 px, 680 px, and 430 px breakpoints, including the mobile drawer and stacked content.
+- Reduced-motion handling and focus-visible controls: passed.
+- No test-only reference, comparison, or preview artifact is included in the release.
+
+## Intentional production differences
+
+- The live dashboard uses Due Diligence operational labels and available server data instead of the illustrative labels and sample figures in the visual reference.
+- The dashboard exposes payment, subscription, support, learning, and audit operations already supported by the product rather than inventing unavailable data sources.
+
+final result: passed

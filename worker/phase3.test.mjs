@@ -176,6 +176,10 @@ test('user directory CSV includes full identity and remains spreadsheet-safe', (
     active_in_last_30_minutes: true,
     current_page_area: 'mock_bar',
     current_device_category: 'mobile',
+    current_region: 'Metro Manila, PH',
+    current_browser: 'Chrome 140',
+    current_operating_system: 'Android',
+    monitoring_recorded_at: '2026-08-01T00:01:30Z',
     session_count: 2,
     answered_question_count: 5,
     practice_answered_count: 3,
@@ -192,7 +196,9 @@ test('user directory CSV includes full identity and remains spreadsheet-safe', (
     'User record ID', 'Name', 'Email', 'School', 'Enrollment status',
     'Year level', 'Admin access', 'Subscription category', 'Subscription plan',
     'Subscription status', 'Beta All Access', 'Effective access', 'Joined at',
-    'Profile completed at', 'Last signed in', 'Questions answered', 'Practice questions answered',
+    'Profile completed at', 'Last signed in', 'Latest region', 'Latest device',
+    'Latest browser', 'Latest operating system', 'Monitoring recorded at',
+    'Questions answered', 'Practice questions answered',
     'Examination questions answered', 'Last answered at', 'Graded answers',
     'Average score', 'Latest score', 'Last graded at', 'Marketing consent',
   ].map((value) => `"${value}"`).join(','));
@@ -200,6 +206,9 @@ test('user directory CSV includes full identity and remains spreadsheet-safe', (
   assert.match(csv, /"'=HYPERLINK/);
   assert.match(csv, /"'\t=IMPORTDATA/);
   assert.match(csv, /"'\+Beta Tester"/);
+  assert.match(csv, /"Metro Manila, PH"/);
+  assert.match(csv, /"mobile"/);
+  assert.match(csv, /"Chrome 140"/);
 });
 
 test('subscription CSV is decision-ready, minimized, and spreadsheet-safe', () => {
@@ -535,7 +544,7 @@ test('authorized Students directory returns full emails through the protected RP
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_user_engagement_directory')) {
+    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 1,
@@ -587,7 +596,7 @@ test('authorized Students CSV is complete, private, BOM-prefixed, and spreadshee
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_user_engagement_directory')) {
+    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 1,
@@ -640,7 +649,7 @@ test('Subscriptions CSV uses the protected directory and exports only subscripti
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_user_engagement_directory')) {
+    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 1,
@@ -707,7 +716,7 @@ test('Students CSV refuses to silently truncate more than 5,000 matches', async 
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_user_engagement_directory')) {
+    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory')) {
       return Response.json({
         total: 5001,
         limit: 5000,
@@ -844,7 +853,7 @@ test('founder user-response export enriches saved answer evidence without broad 
     assert.match(csv, /A was constructively dismissed/);
     assert.match(csv, /elibrary\.judiciary\.gov\.ph/);
     assert.equal(calls.some((url) => url === 'https://bank.example/website-bank.json'), true);
-    assert.equal(calls.some((url) => url.includes('admin_user_engagement_directory')), false);
+    assert.equal(calls.some((url) => url.includes('admin_user_monitoring_directory')), false);
     assert.equal(calls.some((url) => url.includes('admin_user_directory')), false);
   } finally {
     globalThis.fetch = originalFetch;
@@ -1315,7 +1324,7 @@ test('founder answer-history export includes approved practice context and sourc
     assert.match(csv, /current_published_question_bank/);
     assert.match(csv, /extremely talented digital artist/);
     assert.match(csv, /elibrary\.judiciary\.gov\.ph/);
-    assert.equal(calls.some((url) => url.includes('admin_user_engagement_directory')), false);
+    assert.equal(calls.some((url) => url.includes('admin_user_monitoring_directory')), false);
     assert.equal(calls.some((url) => url.includes('admin_user_directory')), false);
     assert.equal(calls.some((url) => url.includes('question-bank')), false);
   } finally {

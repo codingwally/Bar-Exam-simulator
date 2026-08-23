@@ -1375,7 +1375,7 @@
           <h1>${escapeHtml(state.active.examination.title)}</h1>
           <span>${state.active.examination.track === 'bar_feels'
             ? 'BAR EXAM SIMULATION'
-            : 'SUBJECT MATTER EXAMINATION'} &middot;
+            : 'SYLLABUS BASE REVIEW'} &middot;
             ${escapeHtml(state.active.examination.subject || 'Curated examination')}</span>
         </div>
         <div class="dd-room-clock ${timerMode === 'none' ? 'is-hidden' : ''}" id="dd-room-clock">

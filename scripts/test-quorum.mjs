@@ -51,7 +51,7 @@ assert.match(client, /\$\('#quorum-menu-back'\)\?\.addEventListener\('click',[\s
 assert.match(css, /\.quorum-drawer-actions[\s\S]*justify-content:\s*flex-end/);
 assert.match(client, /Practice this issue/);
 assert.match(adminHtml, /<button[^>]*data-section="forum"[^>]*>[\s\S]*?Community[\s\S]*?<\/button>/);
-assert.match(adminClient, /forum: 'Community'/);
+assert.match(adminClient, /forum: 'Community Moderation'/);
 
 for (const obsolete of [
   /Lex Forum/,

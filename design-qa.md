@@ -607,3 +607,29 @@ final result: passed
 - The dashboard exposes payment, subscription, support, learning, and audit operations already supported by the product rather than inventing unavailable data sources.
 
 final result: passed
+
+## Executive Pulse visual-parity addendum — 2026-08-23
+
+### Scope
+
+Admin dashboard only. The production simulator, Examination Room, grading, payments, authentication, and database contracts are unchanged.
+
+### Same-viewport evidence
+
+- Supplied target: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-d6d0d123-0689-48c8-9343-21e1eac674a3.png`
+- QA viewport: 1280 × 720 CSS pixels at 1.25 device scale.
+- Local evidence (kept outside the release commit): `admin-qa-evidence-20260823\admin-executive-pulse-comparison-v2.png`
+
+### Findings resolved
+
+- **P0:** Replaced the bright blank loading block with a dark loading state that preserves page geometry.
+- **P1:** Reorganized navigation into the supplied executive groups.
+- **P1:** Added four source-backed KPIs, six source-backed visualizations, a recent-users ledger, and a collapsed operations panel.
+- **P1:** Corrected desktop/mobile header ownership so the mobile menu cannot displace desktop controls.
+- **P1:** Kept unavailable location/device data explicit and labeled revenue as an operational record; no synthetic production metric is presented as fact.
+- **P2:** Moved secondary tools into an accessible disclosure and added a collapsible desktop rail.
+- **P2:** Added reduced-motion behavior and chart accessibility labels.
+
+### Result
+
+**PASS — local visual parity and responsive structure.** Production acceptance remains gated on automated regression tests and authenticated live verification after deployment.

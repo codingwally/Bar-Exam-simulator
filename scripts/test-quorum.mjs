@@ -50,7 +50,7 @@ assert.match(html, /id="quorum-menu-back"[\s\S]*>Back<\/button>/);
 assert.match(client, /\$\('#quorum-menu-back'\)\?\.addEventListener\('click',[\s\S]*closeQuorumDrawer\(\)/);
 assert.match(css, /\.quorum-drawer-actions[\s\S]*justify-content:\s*flex-end/);
 assert.match(client, /Practice this issue/);
-assert.match(adminHtml, /data-section="forum">Community<\/button>/);
+assert.match(adminHtml, /<button[^>]*data-section="forum"[^>]*>[\s\S]*?Community[\s\S]*?<\/button>/);
 assert.match(adminClient, /forum: 'Community'/);
 
 for (const obsolete of [

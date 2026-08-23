@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - .github/workflows/temp-promotional-video-media-transfer-main.yml
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read

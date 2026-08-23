@@ -52,7 +52,7 @@ for (const expected of [
   "document.getElementById('dd2-entry-consent-submit')?.addEventListener('click', submitEntryConsent);",
   'await waitForMaintenanceAccess();',
   'data-dd2-entry-video',
-  'data-src="assets/brand/signin-intro.mp4"',
+  'data-src="assets/brand/signin-intro.mp4?v=cropped-20260823-1"',
   'playEntryBrandMedia(entryMode);',
 ]) {
   assert.ok(experience.includes(expected), `Phase 2 experience must include: ${expected}`);
@@ -138,7 +138,7 @@ assert.ok(index.includes('data-dd2-view="privacy"'));
 assert.ok(experience.includes('Review the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button>'));
 assert.ok(experience.includes('data-dd2-view="privacy">Privacy Policy</button> before continuing.'));
 assert.ok(experience.includes("note.innerHTML = 'Google opens its secure consent screen."));
-assert.ok(index.includes('assets/phase2-experience.js?v=non-exam-sweep-20260822-1'));
+assert.ok(index.includes('assets/phase2-experience.js?v=auth-entry-flow-20260823-1'));
 assert.ok(index.includes('assets/phase2.css?release=payment-admin-hotfix-20260821-1'));
 assert.match(experience, /nativeOverlay\.dataset\.nativeView = view/,
   'Native views must expose their active view so pricing can use the approved centered presentation.');

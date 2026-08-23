@@ -400,7 +400,7 @@
             <div class="dd2-entry-brandmark is-still" data-dd2-entry-media aria-hidden="true">
               <img src="assets/brand/icon-512.png" width="512" height="512" alt="">
               <video class="dd2-entry-brandmark-video" data-dd2-entry-video
-                data-src="assets/brand/signin-intro.mp4" autoplay muted playsinline preload="none"
+                data-src="assets/brand/signin-intro.mp4?v=cropped-20260823-1" autoplay muted playsinline preload="none"
                 tabindex="-1" aria-hidden="true" disablepictureinpicture
                 controlslist="nodownload nofullscreen noplaybackrate"></video>
             </div>
@@ -1285,7 +1285,7 @@
       }).catch(() => null);
       if (!access?.allowed) return;
     }
-    if (state.welcomedUserId !== userId) {
+    if (state.authReturnPending && state.welcomedUserId !== userId) {
       state.welcomedUserId = userId;
       global.toast?.(`Welcome back, ${profile?.display_name || state.user?.user_metadata?.full_name || 'future counsel'}.`, 'ok');
     }

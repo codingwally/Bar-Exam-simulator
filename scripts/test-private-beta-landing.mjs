@@ -41,7 +41,13 @@ assert.doesNotMatch(sharedHeader, />The Academy<|>The Commons<|>BarBound<|>The D
 
 assert.match(publicLanding, /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 assert.match(publicLanding, /Continue with Google/);
-assert.match(publicLanding, /data-signin-intro-video[\s\S]*data-src="assets\/brand\/signin-intro\.mp4"[\s\S]*autoplay muted playsinline/,
+assert.match(html, /<body class="private-beta-public dd-auth-pending">[\s\S]*id="dd-auth-bootstrap"[\s\S]*Restoring your session/,
+  'Entry must remain neutral while the durable browser session is restored.');
+assert.match(shellCss, /body\.dd-auth-pending #private-beta-landing[\s\S]*display:\s*none\s*!important[\s\S]*body\.dd-auth-pending \.dd-auth-bootstrap[\s\S]*display:\s*grid/,
+  'The sign-in page must not paint before the authentication decision completes.');
+assert.match(landingJs, /function finishAuthEntryResolution\(\)[\s\S]*classList\.remove\('dd-auth-pending'\)[\s\S]*setHidden\(authBootstrap, true\)/,
+  'Every resolved entry state must remove the neutral bootstrap screen.');
+assert.match(publicLanding, /data-signin-intro-video[\s\S]*data-src="assets\/brand\/signin-intro\.mp4\?v=cropped-20260823-1"[\s\S]*autoplay muted playsinline/,
   'The first-visit sign-in screen must contain the muted inline intro video.');
 assert.doesNotMatch(publicLanding, /<video[^>]*\scontrols(?:\s|=|>)/,
   'The decorative sign-in video must not expose playback controls.');
@@ -114,15 +120,15 @@ assert.doesNotMatch(build, /privateBetaImageFiles|assets\/private-beta\/.+\.(?:a
 assert.match(build, /assets\/quorum-first-shell\.css/);
 assert.match(build, /assets\/quorum-first-shell\.js/);
 assert.match(build, /assets\/brand\/signin-intro\.mp4/);
-assert.match(html, /assets\/quorum-first-shell\.css\?v=commercial-entry-access-20260822-1/,
+assert.match(html, /assets\/quorum-first-shell\.css\?v=auth-entry-flow-20260823-1/,
   'The drawer stylesheet URL must change when its icon presentation changes.');
-assert.match(html, /assets\/private-beta-landing\.js\?v=non-exam-sweep-20260822-2/,
+assert.match(html, /assets\/private-beta-landing\.js\?v=auth-entry-flow-20260823-1/,
   'The signed-in Home router must use the current release URL.');
 
 const signInIntro = await readFile(path.join(root, 'assets/brand/signin-intro.mp4'));
 assert.equal(
   createHash('sha256').update(signInIntro).digest('hex').toUpperCase(),
-  '37AE9D8CD9CDFE533FFF4A01A426E002AAFC5644C4C9552DF3664B0360E68827',
+  '6418474766FF74AF8A51FE081AD09A3CC15FF6C163C69A244DC20EA2F3F75429',
   'approved sign-in intro video checksum changed',
 );
 

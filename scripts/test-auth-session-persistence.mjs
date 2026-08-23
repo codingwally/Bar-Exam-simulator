@@ -194,8 +194,8 @@ assert.match(
 );
 assert.match(
   phase2,
-  /if \(state\.welcomedUserId !== userId\)[\s\S]*Welcome back/,
-  'A restored account must receive only one welcome notification per page lifecycle.',
+  /if \(state\.authReturnPending && state\.welcomedUserId !== userId\)[\s\S]*Welcome back/,
+  'Only an interactive authentication return may emit a welcome notification.',
 );
 assert.match(
   extractNamedFunction(phase2, 'restoreAuthDestination'),
@@ -330,6 +330,7 @@ const welcomeState = {
   profile: null,
   admin: null,
   welcomedUserId: null,
+  authReturnPending: false,
 };
 const loadUserStateFor = vm.runInNewContext(
   `(${extractNamedFunction(phase2, 'loadUserStateFor')})`,
@@ -369,9 +370,18 @@ await loadUserStateFor('restored-user');
 await loadUserStateFor('restored-user');
 assert.deepEqual(
   welcomeMessages,
-  [{ message: 'Welcome back, Esteban.', tone: 'ok' }],
-  'Repeated restoration for the same signed-in user must emit exactly one welcome toast.',
+  [],
+  'Passive same-device session restoration must not emit a redundant welcome toast.',
 );
-assert.equal(restoredDestinations, 2, 'Deduplicating the toast must not suppress destination restoration.');
+welcomeState.authReturnPending = true;
+welcomeState.welcomedUserId = null;
+await loadUserStateFor('restored-user');
+await loadUserStateFor('restored-user');
+assert.deepEqual(
+  welcomeMessages,
+  [{ message: 'Welcome back, Esteban.', tone: 'ok' }],
+  'A completed Google return must emit exactly one welcome toast.',
+);
+assert.equal(restoredDestinations, 4, 'Toast suppression must not suppress destination restoration.');
 
 console.log('Durable authentication session checks passed.');

@@ -73,8 +73,8 @@ assert.match(shell, /'#quorum':\s*'quorum'[\s\S]*'#verdict':\s*'verdict'/);
 assert.match(shell, /addEventListener\('hashchange',[\s\S]*synchronizePracticeRail/);
 assert.match(landing, /const stillHoldMs = 30 \* 60 \* 1000/);
 assert.match(landing, /Promise\.allSettled\(playback\)/);
-assert.match(serviceWorker, /duediligence-shell-20260822-commercial-entry-access-1/);
-assert.match(serviceWorker, /quorum-first-shell\.css\?v=commercial-entry-access-20260822-1/);
+assert.match(serviceWorker, /duediligence-shell-20260823-auth-entry-flow-1/);
+assert.match(serviceWorker, /quorum-first-shell\.css\?v=auth-entry-flow-20260823-1/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=approved-renovation-20260821-2/);
 
 console.log('Approved renovation shell contract checks passed.');

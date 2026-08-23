@@ -978,10 +978,10 @@
 <link rel="stylesheet" href="assets/phase2.css?release=payment-admin-hotfix-20260821-1">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
-<link rel="stylesheet" href="assets/quorum-first-shell.css?v=commercial-entry-access-20260822-1">
+<link rel="stylesheet" href="assets/quorum-first-shell.css?v=auth-entry-flow-20260823-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
-<body class="private-beta-public">
+<body class="private-beta-public dd-auth-pending">
 
 <header class="topbar pb-header pb-shared-header" id="site-header">
     <button class="site-menu-toggle" id="site-menu-toggle" type="button"
@@ -1050,18 +1050,23 @@
         <button id="btn-signin" type="button" tabindex="-1">Profile</button>
       </div>
     </nav>
-  </header>
+</header>
+
+<div class="dd-auth-bootstrap" id="dd-auth-bootstrap" role="status" aria-live="polite">
+  <img src="assets/brand/icon-192.png" width="48" height="48" alt="">
+  <span>Restoring your session&hellip;</span>
+</div>
 
 <div class="pb-landing" id="private-beta-landing">
   <section class="quorum-entry" id="public-platform" aria-labelledby="pb-pillars-title">
     <div class="quorum-entry-visual" aria-label="Due Diligence visual introduction">
       <div class="quorum-signin-intro is-still" data-signin-intro>
         <video class="quorum-signin-intro-video quorum-signin-intro-backdrop" data-signin-intro-backdrop
-          data-src="assets/brand/signin-intro.mp4" autoplay muted playsinline preload="none"
+          data-src="assets/brand/signin-intro.mp4?v=cropped-20260823-1" autoplay muted playsinline preload="none"
           tabindex="-1" aria-hidden="true" disablepictureinpicture
           controlslist="nodownload nofullscreen noplaybackrate"></video>
         <video class="quorum-signin-intro-video quorum-signin-intro-main" data-signin-intro-video
-          data-src="assets/brand/signin-intro.mp4" autoplay muted playsinline preload="none"
+          data-src="assets/brand/signin-intro.mp4?v=cropped-20260823-1" autoplay muted playsinline preload="none"
           tabindex="-1" aria-hidden="true" disablepictureinpicture
           controlslist="nodownload nofullscreen noplaybackrate"></video>
         <div class="quorum-signin-intro-still" aria-hidden="true">
@@ -4422,13 +4427,13 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase2-config.js?v=private-maintenance-20260820-2"></script>
 <script src="assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
-<script src="assets/phase2-experience.js?v=non-exam-sweep-20260822-1"></script>
+<script src="assets/phase2-experience.js?v=auth-entry-flow-20260823-1"></script>
 <script src="assets/phase4-experience.js?v=non-exam-sweep-20260822-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
 <script src="assets/feature-loader.js?v=post-body-only-20260823-1"></script>
 <script src="assets/quorum-first-shell.js?v=approved-renovation-20260821-2"></script>
-<script src="assets/private-beta-landing.js?v=non-exam-sweep-20260822-2"></script>
+<script src="assets/private-beta-landing.js?v=auth-entry-flow-20260823-1"></script>
 
 </body>
 </html>

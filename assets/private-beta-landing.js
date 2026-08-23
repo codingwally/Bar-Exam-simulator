@@ -3,6 +3,7 @@
 
   const config = global.DueDiligencePhase2Config;
   const landing = document.getElementById('private-beta-landing');
+  const authBootstrap = document.getElementById('dd-auth-bootstrap');
   const siteHeader = document.getElementById('site-header');
   const appShell = document.getElementById('authenticated-app-shell');
   const dialog = document.getElementById('private-beta-dialog');
@@ -153,6 +154,11 @@
     }
   }
 
+  function finishAuthEntryResolution() {
+    document.body.classList.remove('dd-auth-pending');
+    setHidden(authBootstrap, true);
+  }
+
   function publishAccessState(allowed) {
     if (state.accessAllowed === allowed) return;
     state.accessAllowed = allowed;
@@ -198,6 +204,7 @@
     publishAccessState(accessAllowed);
     renderPublicRoute();
     initializeSignInIntro();
+    finishAuthEntryResolution();
   }
 
   async function activateApplicationRoute(hash) {
@@ -282,6 +289,7 @@
     document.body.classList.remove('private-beta-public');
     setHidden(landing, true);
     setHidden(appShell, false);
+    finishAuthEntryResolution();
     global.syncModalIsolation?.();
     publishAccessState(true);
     const returnHash = safeReturnHash();

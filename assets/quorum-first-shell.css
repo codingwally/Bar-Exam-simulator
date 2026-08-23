@@ -29,6 +29,36 @@ body.private-beta-public #private-beta-landing .pb-public-footer {
   display: none !important;
 }
 
+.dd-auth-bootstrap {
+  min-height: 100svh;
+  padding: 32px;
+  display: none;
+  place-items: center;
+  align-content: center;
+  gap: 18px;
+  color: #f8f5ed;
+  background: var(--qfs-navy-950);
+  font: 600 15px/1.5 Inter, system-ui, sans-serif;
+  letter-spacing: .02em;
+  text-align: center;
+}
+
+.dd-auth-bootstrap img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+body.dd-auth-pending #site-header,
+body.dd-auth-pending #private-beta-landing,
+body.dd-auth-pending #authenticated-app-shell {
+  display: none !important;
+}
+
+body.dd-auth-pending .dd-auth-bootstrap {
+  display: grid;
+}
+
 #site-header.qfs-shell {
   position: sticky;
   top: 0;

@@ -4900,6 +4900,26 @@ async function handleAdminUserDirectory(request, env, origin, allowedOrigin) {
   return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
 }
 
+async function handleAdminRecentSignIns(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let query;
+  try {
+    query = normalizeLiveActivityRequest(await parseBoundedJson(request, 2_000));
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_recent_sign_in_directory', {
+    p_actor_user_id: user.id,
+    p_limit: Math.min(query.limit, 25),
+    p_request_key: query.requestKey,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
 async function handleAdminUserDirectoryExport(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const result = await adminUserDirectoryResult(request, env, 'csv_export');
@@ -5932,6 +5952,9 @@ export default {
       }
       if (pathname === '/admin/user-directory') {
         return await handleAdminUserDirectory(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/recent-sign-ins') {
+        return await handleAdminRecentSignIns(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/user-directory/export') {
         return await handleAdminUserDirectoryExport(request, env, origin, allowedOrigin);

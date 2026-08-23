@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [html, css, js] = await Promise.all([
+const [html, css, js, recentSignInMigration] = await Promise.all([
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin-observatory.css', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.js', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260823173000_admin_recent_sign_in_directory.sql', import.meta.url), 'utf8'),
 ]);
 
 for (const group of [
@@ -44,6 +45,9 @@ assert.match(js, /Grading success/);
 assert.doesNotMatch(js, /'Not collected', 'Not collected'/);
 assert.match(js, /\['Name', 'Email', 'School', 'Last sign-in', 'Region', 'Device'/);
 assert.match(js, /accountRegion\(account\), accountDevice\(account\)/);
+assert.match(js, /\/admin\/recent-sign-ins/);
+assert.match(js, /monitoring_recorded_at\s*\|\|\s*right\.last_sign_in_at/);
+assert.match(js, /return 'Administrator'/);
 assert.match(js, /stacked:\s*true/);
 assert.match(js, /Available after next sign-in/);
 assert.match(js, /not bank settlement/i);
@@ -59,5 +63,12 @@ assert.match(css, /prefers-reduced-motion/);
 
 assert.match(html, /private-beta-session\.js/);
 assert.doesNotMatch(js, /visualPreview|installVisualPreviewFixture|local-preview-only/);
+
+assert.match(recentSignInMigration, /create or replace function public\.admin_recent_sign_in_directory/);
+assert.match(recentSignInMigration, /from public\.user_sign_in_events/);
+assert.match(recentSignInMigration, /order by e\.signed_in_at desc, e\.id desc/);
+assert.match(recentSignInMigration, /u\.email/);
+assert.match(recentSignInMigration, /revoke all on function public\.admin_recent_sign_in_directory[\s\S]*from public, anon, authenticated/);
+assert.match(recentSignInMigration, /grant execute on function public\.admin_recent_sign_in_directory[\s\S]*to service_role/);
 
 console.log('Executive Pulse structure, real-data labels, responsive layout, and navigation contracts passed.');

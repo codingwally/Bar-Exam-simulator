@@ -376,6 +376,46 @@ body.observatory::before {
 }
 .observatory td { border-color: var(--obs-line-soft); }
 .observatory tbody tr:hover { background: rgba(34, 198, 216, 0.035); }
+.observatory .table-wrap td .record-detail {
+  min-width: 132px;
+  overflow: hidden;
+  background: rgba(8, 19, 29, 0.96);
+  border-color: rgba(143, 162, 175, 0.42);
+  border-radius: 7px;
+  box-shadow: none;
+}
+.observatory .table-wrap td .record-detail > summary {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  color: var(--obs-text);
+  background: rgba(18, 39, 55, 0.94);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.observatory .table-wrap td .record-detail > summary::marker {
+  color: var(--obs-gold-bright);
+}
+.observatory .table-wrap td .record-detail > summary:hover,
+.observatory .table-wrap td .record-detail > summary:focus-visible {
+  color: #ffffff;
+  background: rgba(26, 58, 79, 0.98);
+}
+.observatory .table-wrap td .record-detail[open] > summary {
+  color: var(--obs-gold-bright);
+  border-bottom: 1px solid var(--obs-line);
+}
+.observatory .table-wrap td .record-detail > div,
+.observatory .table-wrap td .record-source-links {
+  color: var(--obs-text);
+  padding: 10px;
+}
+.observatory .table-wrap td .record-source-links a {
+  color: var(--obs-cyan);
+}
 .observatory .notice { color: var(--obs-muted-bright); border-left: 3px solid var(--obs-gold); box-shadow: none; }
 .observatory .notice.danger { border-left-color: var(--obs-red); }
 .observatory .notice.ok { border-left-color: var(--obs-green); }

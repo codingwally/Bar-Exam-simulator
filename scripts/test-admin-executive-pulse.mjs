@@ -60,6 +60,9 @@ assert.match(css, /dashboard-loading/);
 assert.match(css, /@media \(max-width: 920px\)/);
 assert.match(css, /@media \(min-width: 921px\)[\s\S]*\.menu-button \{ display: none !important; \}/);
 assert.match(css, /prefers-reduced-motion/);
+assert.match(css, /\.table-wrap td \.record-detail > summary[\s\S]*color:\s*var\(--obs-text\)/);
+assert.match(css, /\.table-wrap td \.record-detail\[open\] > summary[\s\S]*color:\s*var\(--obs-gold-bright\)/);
+assert.match(css, /\.table-wrap td \.record-source-links a[\s\S]*color:\s*var\(--obs-cyan\)/);
 
 assert.match(html, /private-beta-session\.js/);
 assert.doesNotMatch(js, /visualPreview|installVisualPreviewFixture|local-preview-only/);

@@ -3,7 +3,7 @@
 
   const config = global.DueDiligencePhase2Config;
   const CONTENT_PATHS = Object.freeze({
-    bar_easy: { hash: 'bar-easy', tab: 'spa-bar-easy', title: 'Guided Practice' },
+    bar_easy: { hash: 'bar-easy', tab: 'spa-bar-easy', title: 'Quick Drills' },
     chair_case: { hash: 'chairs-cases', tab: 'spa-chairs-case', title: '2026 Bar Chair’s Cases' },
     doctrine: { hash: 'doctrines', tab: 'spa-jurisprudence', title: 'Doctrines' },
     anchor_case: { hash: 'anchor-case-digests', tab: 'spa-case-digest', title: 'Anchor Case Digests' },
@@ -722,7 +722,7 @@
     const item = selectedItem();
     const payload = item?.payload || {};
     app().innerHTML = `<div class="dd26-shell">
-      <header class="dd26-header"><div><div class="dd26-kicker">Guided Practice</div><h1>Guided Practice</h1><p>Build legal reasoning with focused questions and source-based coaching.</p></div><span class="dd26-beta">Source-based study</span></header>
+      <header class="dd26-header"><div><div class="dd26-kicker">Quick Drills</div><h1>Quick Drills</h1><p>Build legal reasoning with focused questions and source-based coaching.</p></div><span class="dd26-beta">Source-based study</span></header>
       ${subjectSelector(items)}
       <div class="dd26-grid">
         <section class="dd26-pane" aria-labelledby="dd26-easy-question">
@@ -747,7 +747,7 @@
     const answer = document.getElementById('dd26-easy-answer');
     const button = document.getElementById('dd26-easy-submit');
     if (!item || !answer?.value.trim()) { global.toast?.('Write an answer before submitting.', 'warn'); return; }
-    if (codePointLength(answer.value) > 5000) { global.toast?.('Guided Practice answers are limited to 5,000 characters. Nothing was truncated.', 'warn'); return; }
+    if (codePointLength(answer.value) > 5000) { global.toast?.('Quick Drills answers are limited to 5,000 characters. Nothing was truncated.', 'warn'); return; }
     state.busy = true; button.disabled = true; button.textContent = 'Reviewing…';
     try {
       const payload = await api('/dd2026/bar-easy/grade', { contentId: item.id, answer: answer.value, requestKey: randomKey('easy') });

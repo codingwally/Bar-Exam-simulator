@@ -417,7 +417,7 @@
             <ul class="dd2-benefits">
               <li>Save progress</li>
               <li>Personal analytics</li>
-              <li>Guided Subject Matter practice</li>
+              <li>Syllabus Base Review</li>
             </ul>
             <div class="dd2-entry-actions">
               <button type="button" class="dd2-button dd2-button-primary" id="dd2-google-signin">Continue with Google</button>

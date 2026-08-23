@@ -323,7 +323,7 @@
   function discover() {
     document.querySelectorAll('[data-study-resource-type][data-study-resource-id]').forEach((root) => mount({
       root, type: root.dataset.studyResourceType, id: root.dataset.studyResourceId,
-      title: root.querySelector('.dd-question-prompt, h2, h3')?.textContent || 'Subject Matter study item',
+      title: root.querySelector('.dd-question-prompt, h2, h3')?.textContent || 'Syllabus Base Review study item',
     }));
     const page = String(location.hash || '');
     if (page.includes('chair') || page.includes('anchor')) {
@@ -371,7 +371,7 @@
       if (previousUserId) purgeOwner(previousUserId).catch(() => {});
     });
     if ('serviceWorker' in navigator && location.protocol === 'https:') {
-      navigator.serviceWorker.register('/service-worker.js?v=home-routing-menu-icons-20260822-1').catch(() => {});
+      navigator.serviceWorker.register('/service-worker.js?v=syllabus-review-20260823-1').catch(() => {});
     }
   }
 

@@ -1857,7 +1857,7 @@
           <h3>Create exam</h3>
           <form class="exam-admin-form" data-exam-admin-form="create_exam">
             <label>Title<input name="title" minlength="3" maxlength="180" required></label>
-            <label>Area<select name="track"><option value="per_subject">Subject Matter</option><option value="bar_feels">Bar Exam Simulation</option></select></label>
+            <label>Area<select name="track"><option value="per_subject">Syllabus Base Review</option><option value="bar_feels">Bar Exam Simulation</option></select></label>
             <label>Exam type<select name="assessmentKind"><option value="midterm">Midterm</option><option value="final">Final</option><option value="curated">Curated</option><option value="system_test">System test</option></select></label>
             <label>Subject<input name="subject" maxlength="120"></label>
             <label>Year level<input name="yearLevel" type="number" min="1" max="4"></label>

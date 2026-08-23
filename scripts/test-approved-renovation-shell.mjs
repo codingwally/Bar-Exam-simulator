@@ -20,8 +20,9 @@ const signIn = html.slice(
 assert.ok(rail, 'The approved desktop practice rail must ship in the canonical header.');
 const expectedRail = [
   'Home',
-  'Guided Practice',
+  'Quick Drills',
   'Doctrine Review',
+  'Syllabus Base Review',
   'Bar Question Practice',
   'Bar Exam Simulation',
   'Analytics',
@@ -32,8 +33,8 @@ for (const label of expectedRail) {
   assert.ok(position > lastPosition, `${label} must remain in the approved header order.`);
   lastPosition = position;
 }
-assert.ok(rail.indexOf('>Home<') < rail.indexOf('>Guided Practice<'),
-  'Home must remain immediately before Guided Practice.');
+assert.ok(rail.indexOf('>Home<') < rail.indexOf('>Quick Drills<'),
+  'Home must remain immediately before Quick Drills.');
 assert.equal((rail.match(/data-public-feature=/g) || []).length, expectedRail.length);
 assert.doesNotMatch(rail, /<img|<svg|role="img"/, 'The practice rail must remain icon-free.');
 
@@ -41,7 +42,7 @@ assert.match(signIn, /data-signin-intro-backdrop[\s\S]*data-signin-intro-video/)
 assert.match(signIn, /assets\/brand\/signin-intro\.mp4/g);
 assert.match(signIn, /assets\/brand\/logo1-master\.png/);
 assert.match(signIn, /Prepare with purpose\./);
-for (const feature of ['Previous Bar Questions', 'High-Yield Questions', 'Doctrine Mastery', 'Guided Questions']) {
+for (const feature of ['Previous Bar Questions', 'High-Yield Questions', 'Doctrine Mastery', 'Quick Drills']) {
   assert.match(signIn, new RegExp(feature));
 }
 assert.match(signIn, /data-pb-open-admission>Continue with Google<\/button>/);
@@ -73,8 +74,8 @@ assert.match(shell, /'#quorum':\s*'quorum'[\s\S]*'#verdict':\s*'verdict'/);
 assert.match(shell, /addEventListener\('hashchange',[\s\S]*synchronizePracticeRail/);
 assert.match(landing, /const stillHoldMs = 30 \* 60 \* 1000/);
 assert.match(landing, /Promise\.allSettled\(playback\)/);
-assert.match(serviceWorker, /duediligence-shell-20260823-auth-entry-flow-1/);
+assert.match(serviceWorker, /duediligence-shell-20260823-syllabus-review-1/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=auth-entry-flow-20260823-1/);
-assert.match(serviceWorker, /quorum-first-shell\.js\?v=approved-renovation-20260821-2/);
+assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
 
 console.log('Approved renovation shell contract checks passed.');

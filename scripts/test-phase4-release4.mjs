@@ -88,8 +88,8 @@ assert.match(paymentCore, /planCode !== 'early_access_beta'/);
 assert.match(paymentCore, /\['gotyme_instapay', 'bpi_instapay'\]\.includes\(paymentMethod\)/);
 assert.match(paymentCore, /Math\.round\(amountPhp \* 100\) !== 14900/);
 assert.doesNotMatch(frontend, /assets\/payments\/gcash\.png|assets\/payments\/maribank\.png/);
-assert.match(frontend, /assets\/payments\/gotyme-instapay-149\.png/);
-assert.doesNotMatch(frontend, /assets\/payments\/bpi-instapay-149\.png/);
+assert.match(frontend, /assets\/payments\/bpi-instapay-149\.png/);
+assert.doesNotMatch(frontend, /assets\/payments\/gotyme-instapay-149\.png/);
 assert.match(frontend, /id="dd2-payment-form"/);
 assert.match(frontend, /async function submitCommercialPayment\(event\)/);
 assert.match(frontend, /Introductory tokens and Early Access/);
@@ -110,9 +110,22 @@ assert.match(
   /function showEntry\(options = \{\}\) \{\s*const completed = Boolean\(options\.completed\);\s*hideNativeView\(\);/,
   'Authentication must replace, not stack behind, a native commerce view.',
 );
-assert.match(adminPage, />Payments<\/button>/);
-assert.match(adminPage, />Refunds<\/button>/);
-assert.match(adminPage, />Partnerships<\/button>/);
+assert.match(adminPage, /data-section="payments"[\s\S]*?<span>Payments<\/span>[\s\S]*?<\/button>/);
+assert.match(adminPage, /data-section="refunds"[\s\S]*?<span>Refunds<\/span>[\s\S]*?<\/button>/);
+assert.match(adminPage, /data-section="partnerships"[\s\S]*?<span>Partnerships<\/span>[\s\S]*?<\/button>/);
+assert.match(adminPage, /admin-observatory\.css\?v=judicial-observatory-/);
+assert.match(adminPage, /Judicial Observatory/);
+assert.match(adminPage, /data-section="business_revenue"/);
+assert.match(adminPage, /data-section="business_projections"/);
+assert.match(adminPage, /data-section="business_comparisons"/);
+assert.match(admin, /loadPhase4Operational\('introductory_access'/);
+assert.match(admin, /introductory_tokens_remaining/);
+assert.match(paymentCore, /'introductory_access'/);
+assert.match(
+  worker,
+  /query\.section === 'introductory_access' \? 'access' : query\.section/,
+  'The introductory-token directory must use the existing least-privilege access report without changing legacy access behavior.',
+);
 assert.match(
   admin,
   /actionButton\('Review', 'payment_review', row\.id, \{[\s\S]*planCode: row\.plan_code/,
@@ -155,8 +168,8 @@ assert.match(productionBundleBuilder, /omitLedger \? 'omitted' : 'included'/);
 assert.doesNotMatch(productionBundleBuilder, /db push|service.role|access.token/i);
 
 for (const [relative, expected] of Object.entries({
-  'assets/payments/gotyme-instapay-149.png':
-    '85D7CCA8CF8A2C3FF7BCEE35F09C682E8CCECD6E7623F128B67AFD43ECE303C1',
+  'assets/payments/bpi-instapay-149.png':
+    '00DF8567B0068B980D2135BCC74DD2963E8398AE472209E9C84F89F6B0F3C1B9',
 })) {
   const actual = createHash('sha256').update(read(relative)).digest('hex').toUpperCase();
   assert.equal(actual, expected, `${relative} must preserve the approved QR pixels`);

@@ -4,62 +4,74 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="theme-color" content="#071a33">
+  <meta name="theme-color" content="#050b12">
   <title>Admin Dashboard — Due Diligence</title>
   <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
   <link rel="icon" href="../assets/brand/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=payment-proof-hotfix-20260821-1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
+  <link rel="stylesheet" href="admin.css?v=judicial-observatory-20260823-1">
+  <link rel="stylesheet" href="admin-observatory.css?v=judicial-observatory-20260823-1">
 </head>
-<body>
+<body class="observatory">
   <a class="skip-link" href="#admin-main">Skip to admin dashboard</a>
   <div class="admin-shell" id="admin-shell" hidden>
     <aside class="sidebar" id="sidebar">
       <a class="brand" href="../" aria-label="Due Diligence home">
         <img src="../assets/brand/icon-192.png" width="38" height="38" alt="" aria-hidden="true">
-        <span><strong>Due Diligence</strong><small>Admin dashboard</small></span>
+        <span><strong>Due Diligence</strong><small>Judicial Observatory</small></span>
       </a>
       <nav aria-label="Admin sections" id="admin-nav">
-        <div class="nav-group" role="group" aria-label="At a glance">
-          <p class="nav-group-label">At a glance</p>
-          <button data-section="executive" aria-current="page">Overview</button>
-          <button data-section="realtime">Live Activity</button>
+        <div class="nav-group" role="group" aria-label="Overview">
+          <p class="nav-group-label">Overview</p>
+          <button data-section="executive" aria-current="page"><i class="ph ph-squares-four" aria-hidden="true"></i><span>Executive Pulse</span></button>
+          <button data-section="realtime"><i class="ph ph-pulse" aria-hidden="true"></i><span>Live Activity</span></button>
         </div>
-        <div class="nav-group" role="group" aria-label="People and learning">
-          <p class="nav-group-label">People &amp; learning</p>
-          <button data-section="users">Users</button>
-          <button data-section="acquisition">Sign-ups</button>
-          <button data-section="answer_exports">Answers</button>
-          <button data-section="learning">Learning Performance</button>
-          <button data-section="subjects">Question Bank</button>
-          <button data-section="reliability">Grading Health</button>
-          <button data-section="examinations">Exams</button>
-          <button data-section="examination_room">Examination Room</button>
+        <div class="nav-group" role="group" aria-label="People and marketing">
+          <p class="nav-group-label">People &amp; Marketing</p>
+          <button data-section="users"><i class="ph ph-users-three" aria-hidden="true"></i><span>Users</span></button>
+          <button data-section="acquisition"><i class="ph ph-user-plus" aria-hidden="true"></i><span>Sign-ups</span></button>
+          <button data-section="marketing"><i class="ph ph-megaphone" aria-hidden="true"></i><span>Acquisition</span></button>
+        </div>
+        <div class="nav-group" role="group" aria-label="Learning">
+          <p class="nav-group-label">Learning</p>
+          <button data-section="answer_exports"><i class="ph ph-file-text" aria-hidden="true"></i><span>Answers</span></button>
+          <button data-section="learning"><i class="ph ph-chart-line-up" aria-hidden="true"></i><span>Learning Performance</span></button>
+          <button data-section="reliability"><i class="ph ph-shield-check" aria-hidden="true"></i><span>Grading Health</span></button>
+          <button data-section="subjects"><i class="ph ph-books" aria-hidden="true"></i><span>Question Bank</span></button>
         </div>
         <div class="nav-group" role="group" aria-label="Community and support">
           <p class="nav-group-label">Community &amp; support</p>
-          <button data-section="forum">Community</button>
-          <button data-section="support">Support</button>
-          <button data-section="corrections">Answer Corrections</button>
+          <button data-section="forum"><i class="ph ph-chats-circle" aria-hidden="true"></i><span>Community</span></button>
+          <button data-section="support"><i class="ph ph-headset" aria-hidden="true"></i><span>Support</span></button>
+          <button data-section="corrections"><i class="ph ph-note-pencil" aria-hidden="true"></i><span>Answer Corrections</span></button>
         </div>
-        <div class="nav-group" role="group" aria-label="Business">
+        <div class="nav-group" role="group" aria-label="Commercial">
+          <p class="nav-group-label">Commercial</p>
+          <button data-section="subscriptions"><i class="ph ph-identification-card" aria-hidden="true"></i><span>Subscriptions</span></button>
+          <button data-section="payments"><i class="ph ph-receipt" aria-hidden="true"></i><span>Payments</span></button>
+          <button data-section="refunds"><i class="ph ph-arrow-u-up-left" aria-hidden="true"></i><span>Refunds</span></button>
+        </div>
+        <div class="nav-group" role="group" aria-label="Business intelligence">
           <p class="nav-group-label">Business</p>
-          <button data-section="subscriptions">Access</button>
-          <button data-section="payments">Payments</button>
-          <button data-section="refunds">Refunds</button>
-          <button data-section="partnerships">Partnerships</button>
+          <button data-section="business_revenue"><i class="ph ph-currency-circle-dollar" aria-hidden="true"></i><span>Revenue</span></button>
+          <button data-section="business_projections"><i class="ph ph-chart-line" aria-hidden="true"></i><span>Projections</span></button>
+          <button data-section="business_comparisons"><i class="ph ph-scales" aria-hidden="true"></i><span>Comparisons</span></button>
+          <button data-section="partnerships"><i class="ph ph-handshake" aria-hidden="true"></i><span>Partnerships</span></button>
         </div>
         <div class="nav-group" role="group" aria-label="Administration">
-          <p class="nav-group-label">Administration</p>
-          <button data-section="controls">Website Settings</button>
-          <button data-section="security">Security &amp; Activity Log</button>
+          <p class="nav-group-label">Security &amp; Operations</p>
+          <button data-section="security"><i class="ph ph-lock-key" aria-hidden="true"></i><span>Audit Log</span></button>
+          <button data-section="controls"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i><span>Website Settings</span></button>
+          <button data-section="examinations"><i class="ph ph-clipboard-text" aria-hidden="true"></i><span>Exams</span></button>
+          <button data-section="examination_room"><i class="ph ph-chalkboard-teacher" aria-hidden="true"></i><span>Examination Room</span></button>
         </div>
       </nav>
       <div class="sidebar-foot">
-        <a href="../">Return to simulator</a>
-        <button id="admin-signout" type="button">Sign out</button>
+        <a href="../"><i class="ph ph-arrow-square-out" aria-hidden="true"></i><span>Return to simulator</span></a>
+        <button id="admin-signout" type="button"><i class="ph ph-sign-out" aria-hidden="true"></i><span>Sign out</span></button>
       </div>
     </aside>
     <button class="sidebar-scrim" id="sidebar-scrim" type="button"
@@ -67,10 +79,10 @@
 
     <main id="admin-main">
       <header class="topbar">
-        <button class="menu-button" id="menu-button" type="button" aria-label="Open navigation" aria-expanded="false">Menu</button>
+        <button class="menu-button" id="menu-button" type="button" aria-label="Open navigation" aria-expanded="false"><i class="ph ph-list" aria-hidden="true"></i><span class="sr-only">Menu</span></button>
         <div>
-          <p class="eyebrow">Admin dashboard</p>
-          <h1 id="section-title">Overview</h1>
+          <p class="eyebrow">Judicial Observatory</p>
+          <h1 id="section-title">Executive Pulse</h1>
         </div>
         <div class="topbar-tools">
           <label id="reporting-range">Date range
@@ -83,8 +95,8 @@
           <div class="freshness" id="freshness" title="The latest successful dashboard update">
             <span></span><b>Checking freshness…</b>
           </div>
-          <button class="secondary-button topbar-download" id="download-current-section" type="button">Download page data</button>
-          <button class="refresh-button" id="refresh-dashboard" type="button">Refresh</button>
+          <button class="secondary-button topbar-download" id="download-current-section" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i><span>Download</span></button>
+          <button class="refresh-button" id="refresh-dashboard" type="button"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i><span>Refresh</span></button>
         </div>
       </header>
 
@@ -209,6 +221,6 @@
   <script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
   <script src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script src="subscription-actions-core.js?v=admin-business-dashboard-20260802-2"></script>
-  <script src="admin.js?v=visible-naming-20260822-1"></script>
+  <script src="admin.js?v=judicial-observatory-20260823-1"></script>
 </body>
 </html>

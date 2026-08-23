@@ -76,6 +76,7 @@ const publicFiles = Object.freeze([
   'sitemap.xml',
   'admin/index.html',
   'admin/admin.css',
+  'admin/admin-observatory.css',
   'admin/admin.js',
   'admin/subscription-actions-core.js',
   'assets/exam-session-controller.js',
@@ -113,18 +114,19 @@ const publicFiles = Object.freeze([
   'assets/brand/logo1-master.png',
   'assets/brand/social-card-1200x630.png',
   'assets/brand/signin-intro.mp4',
+  'assets/admin/judicial-observatory-bg.png',
   'assets/duediligence-2026.css',
   'assets/duediligence-2026.js',
   'assets/lex-forum.css',
   'assets/lex-forum.js',
-  'assets/payments/gotyme-instapay-149.png',
+  'assets/payments/bpi-instapay-149.png',
   'offline.html',
   'service-worker.js',
 ]);
 
 const qrHashes = Object.freeze({
-  'assets/payments/gotyme-instapay-149.png':
-    '85D7CCA8CF8A2C3FF7BCEE35F09C682E8CCECD6E7623F128B67AFD43ECE303C1',
+  'assets/payments/bpi-instapay-149.png':
+    '00DF8567B0068B980D2135BCC74DD2963E8398AE472209E9C84F89F6B0F3C1B9',
 });
 
 function sha256(buffer) {

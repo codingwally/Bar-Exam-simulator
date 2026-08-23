@@ -1886,15 +1886,15 @@
         <h3 id="dd2-payment-title">Submit ₱149 Early Access proof</h3>
         <p>Your one non-renewable 24-hour provisional access begins when this proof is accepted by the server. Verification fixes access through October 1, 2026.</p>
         <div class="dd2-payment-channel" aria-label="Approved payment channel">
-          <span>GoTyme InstaPay</span>
+          <span>BPI InstaPay</span>
           <strong>Exact amount: ₱149.00</strong>
         </div>
         <figure class="dd2-qr-frame">
-          <picture><img id="dd2-payment-qr" src="assets/payments/gotyme-instapay-149.png" alt="GoTyme InstaPay QR code for the ₱149 Due Diligence Early Access payment" width="676" height="775"></picture>
+          <picture><img id="dd2-payment-qr" src="assets/payments/bpi-instapay-149.png" alt="BPI InstaPay QR code for the ₱149 Due Diligence Early Access payment" width="570" height="735"></picture>
           <figcaption>Scan with an InstaPay-compatible banking or e-wallet app. Pay exactly ₱149.00, then upload the resulting receipt below.</figcaption>
         </figure>
         <form class="dd2-form" id="dd2-payment-form">
-          <input type="hidden" id="dd2-payment-method" value="gotyme_instapay">
+          <input type="hidden" id="dd2-payment-method" value="bpi_instapay">
           <label class="dd2-label">Payment date
             <input class="dd2-field" id="dd2-payment-date" type="date" value="${today}" max="${today}" required>
           </label>

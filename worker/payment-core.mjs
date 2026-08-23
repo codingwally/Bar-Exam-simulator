@@ -202,7 +202,7 @@ export function normalizePartnershipRequest(payload) {
 
 export function normalizePhase4AdminRequest(payload) {
   const section = String(payload?.section || '').trim().toLowerCase();
-  if (!['payments', 'refunds', 'partnerships', 'access'].includes(section)) {
+  if (!['payments', 'refunds', 'partnerships', 'access', 'introductory_access'].includes(section)) {
     throw new PaymentValidationError('INVALID_ADMIN_REQUEST', 'Unsupported Phase 4 admin section.');
   }
   const premiumStatus = String(payload?.premiumStatus || 'all').trim().toLowerCase();

@@ -150,8 +150,8 @@ assert.doesNotMatch(experience, /Co-Counsel|Joint Venture/);
 assert.match(experience, /one lifetime allowance of five practice tokens/i);
 assert.match(experience, /Early Access is available at the current promotional price of ₱149/);
 assert.doesNotMatch(experience, /planCode: 'free'|name: 'Free'/);
-assert.match(experience, /assets\/payments\/gotyme-instapay-149\.png/);
-assert.doesNotMatch(experience, /assets\/payments\/bpi-instapay-149\.png/);
+assert.match(experience, /assets\/payments\/bpi-instapay-149\.png/);
+assert.doesNotMatch(experience, /assets\/payments\/gotyme-instapay-149\.png/);
 assert.doesNotMatch(experience, /Pricing will be announced after beta testing\.|Beta access active\./);
 
 assert.match(examinations, /operation: 'subject_catalog'/);

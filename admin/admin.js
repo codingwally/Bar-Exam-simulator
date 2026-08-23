@@ -4,14 +4,15 @@
   const config = global.DueDiligencePhase2Config;
   const subscriptionActions = global.DueDiligenceSubscriptionActions;
   const titles = Object.freeze({
-    executive: 'Overview',
+    executive: 'Executive Pulse',
     realtime: 'Live Activity',
     acquisition: 'Sign-ups',
+    marketing: 'Acquisition',
     users: 'Users',
     learning: 'Learning Performance',
     subjects: 'Question Bank',
     reliability: 'Grading Health',
-    subscriptions: 'Access',
+    subscriptions: 'Subscriptions',
     payments: 'Payments',
     refunds: 'Refunds',
     support: 'Support',
@@ -23,11 +24,15 @@
     examinations: 'Exams',
     examination_room: 'Examination Room',
     answer_exports: 'Answers',
+    business_revenue: 'Revenue',
+    business_projections: 'Projections',
+    business_comparisons: 'Comparisons',
   });
   const requirements = Object.freeze({
     realtime: 'learner_analytics_viewer',
     users: 'learner_analytics_viewer',
     learning: 'learner_analytics_viewer',
+    marketing: 'learner_analytics_viewer',
     subscriptions: 'subscription_admin',
     payments: 'subscription_admin',
     refunds: 'subscription_admin',
@@ -37,6 +42,9 @@
     controls: 'role_admin',
     security: 'role_admin',
     answer_exports: 'learner_analytics_viewer',
+    business_revenue: 'subscription_admin',
+    business_projections: 'subscription_admin',
+    business_comparisons: 'learner_analytics_viewer',
   });
   const state = {
     client: null,
@@ -344,15 +352,16 @@
     return payload.data;
   }
 
-  async function loadPhase4Operational(section, force = false, search = null) {
+  async function loadPhase4Operational(section, force = false, search = null, offset = 0) {
     const premiumStatus = section === 'access' ? state.premiumStatus : 'all';
-    const key = `phase4:${section}:${search || ''}:${premiumStatus}`;
+    const normalizedOffset = Math.max(0, Number(offset) || 0);
+    const key = `phase4:${section}:${search || ''}:${premiumStatus}:${normalizedOffset}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await api('/admin/phase4-data', {
       section,
       search: search || '',
       limit: 100,
-      offset: 0,
+      offset: normalizedOffset,
       premiumStatus,
     });
     state.operational.set(key, payload.data);
@@ -539,7 +548,24 @@
     toast('Current page data downloaded for Google Sheets. Use the page-specific download for the complete record set.');
   }
 
-  function renderExecutive(report) {
+  function observatoryKpi(label, value, icon, tone = '', note = '') {
+    return `<article class="observatory-kpi ${escapeHtml(tone)}">
+      <div class="kpi-head"><span>${escapeHtml(label)}</span><i class="ph ${escapeHtml(icon)}" aria-hidden="true"></i></div>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(note)}</small>
+    </article>`;
+  }
+
+  function observatoryAction(label, copy, count, section, icon) {
+    const enabled = sectionAllowed(section);
+    return `<button type="button" class="observatory-action" ${enabled ? `data-admin-section="${escapeHtml(section)}"` : 'disabled'}>
+      <i class="ph ${escapeHtml(icon)}" aria-hidden="true"></i>
+      <span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(copy)}</small></span>
+      <span class="count">${escapeHtml(number(count))}</span>
+    </button>`;
+  }
+
+  async function renderExecutive(report) {
     const current = report.current || {};
     const previous = report.previous || {};
     const traffic = current.traffic || {};
@@ -552,81 +578,67 @@
     const betaKnown = typeof betaAllAccess.enabled === 'boolean';
     const betaEnabled = betaAllAccess.enabled === true;
     const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
+    const directory = await loadUserDirectory(false, '', 0).catch(() => ({ items: [], total: null }));
+    const recentAccounts = [...(directory.items || [])]
+      .sort((left, right) => new Date(right.last_sign_in_at || 0) - new Date(left.last_sign_in_at || 0))
+      .slice(0, 6);
+    const signedInAccounts = engagement.signedInAccounts ?? directory.total;
+    const activeNow = engagement.activeSignedInLast5Minutes;
+    const questionsAnswered = engagement.questionsAnswered ?? learning.successful_grades;
+    const gradingSuccess = reliability.success_rate;
     return `
-      ${heading('Overview', 'The people, answers, commercial access, and service facts needed to manage Due Diligence.')}
-      <div class="metric-strip executive-metrics">
-        ${metric('Recent signed-in activity', engagement.activeSignedInLast5Minutes, null, number, {
-          section: 'realtime', subtext: 'Last 5 minutes · approximate', cue: 'Review activity totals',
-        })}
-        ${metric('Signed-in accounts', engagement.signedInAccounts, null, number, {
-          section: 'users', subtext: 'All time', cue: 'Open user list',
-        })}
-        ${metric('Users who answered', engagement.usersWithAnswers, null, number, {
-          section: 'answer_exports', subtext: 'All time', cue: 'See answer records',
-        })}
-        ${metric('Questions answered', engagement.questionsAnswered, null, number, {
-          section: 'answer_exports', subtext: 'Practice and formal exams', cue: 'See answer records',
-        })}
-        ${metric('Open Community reports', engagement.openQuorumReports, null, number, {
-          section: 'forum', subtext: 'Needs review', cue: 'Open Community',
-        })}
-        ${metric('Grading success rate', reliability.success_rate, previous.reliability?.success_rate, percentage, {
-          section: 'reliability', cue: 'Open grading health',
-        })}
+      <header class="observatory-hero">
+        <div><p class="eyebrow">Executive command</p><h2>Judicial Observatory</h2><p>Live operational intelligence for people, learning, access, and service health. Every value below comes from Due Diligence records; unavailable data is never estimated.</p></div>
+        <span class="observatory-status"><i class="ph ph-shield-check" aria-hidden="true"></i>${betaKnown ? (betaEnabled ? 'Safety access active' : 'Commercial rules active') : 'Access state unconfirmed'}</span>
+      </header>
+      <div class="observatory-kpis">
+        ${observatoryKpi('Signed-in accounts', number(signedInAccounts), 'ph-users-three', 'gold', 'All recorded accounts')}
+        ${observatoryKpi('Recent activity', number(activeNow), 'ph-pulse', 'cyan', 'Approximate · last 5 minutes')}
+        ${observatoryKpi('Questions answered', number(questionsAnswered), 'ph-file-text', 'green', 'All study tracks')}
+        ${observatoryKpi('Grading success', percentage(gradingSuccess), 'ph-shield-check', gradingSuccess != null && Number(gradingSuccess) < 0.95 ? 'red' : 'green', 'Selected reporting period')}
       </div>
-      <section class="panel">
-        <h3>Launch safety access</h3>
-        <div class="notice ${betaKnown && !betaEnabled ? 'danger' : ''}">
-          <strong>${!betaKnown ? 'Status could not be confirmed.' : betaEnabled ? 'Temporary safety access is enabled.' : 'Commercial access rules are active.'}</strong>
-          ${!betaKnown
-            ? ' Refresh before making any access decision.'
-            : betaEnabled
-            ? ' All signed-in accounts temporarily bypass commercial limits while this protected rollback setting remains enabled.'
-            : ' Introductory tokens, Founding Beta, provisional, and verified Early Access rules determine access.'}
-        </div>
-        <dl class="definition-list">
-          <dt>Who has access</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'All signed-in users who accepted the current terms' : 'Server-resolved commercial entitlements apply'}</dd>
-          <dt>Introductory allowance</dt><dd>Five one-time lifetime practice tokens. They never reset or renew.</dd>
-          <dt>Temporary safety access accounts</dt><dd>${escapeHtml(!betaKnown ? 'Not confirmed' : betaEnabled ? number(betaAllAccess.signedInAccountCount ?? engagement.signedInAccounts) : '0')}</dd>
-          <dt>Required before access</dt><dd>Users must accept the current Terms of Use and Privacy Policy.</dd>
-          <dt>Access setting</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'Protected rollback mode remains on until an authorized founder disables it.' : 'Commercial enforcement is active.'}</dd>
-          <dt>Early Access offer</dt><dd>₱149 promotional access. The next manual renewal date is October 1, 2026 at ₱199; no automatic charge is made.</dd>
-          <dt>Last changed</dt><dd>${escapeHtml(dateTime(betaAllAccess.updatedAt))}</dd>
-        </dl>
-        ${founderAuthorized && betaKnown ? `<div class="dialog-actions">
-          ${actionButton(
-            betaEnabled ? 'Activate commercial enforcement' : 'Enable temporary safety access',
-            'global_beta_change',
-            'global_beta_all_access',
-            { currentEnabled: betaEnabled, enabled: !betaEnabled },
-          ).value}
-        </div>` : ''}
-      </section>
-      <div class="work-grid">
-        <section class="panel">
-          <h3>Reach and engagement</h3>
-          ${table(['Measure', 'Current period', 'Previous period'], [
-            ['Page views', number(traffic.page_views), number(priorTraffic.page_views)],
-            ['Unique visitors', number(traffic.unique_visitors), number(priorTraffic.unique_visitors)],
-            ['Registrations', number(funnel.registrations), number(previous.funnel?.registrations)],
-            ['Successful grades', number(learning.successful_grades), number(previous.learning?.successful_grades)],
-          ])}
+      <div class="observatory-grid">
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Performance comparison</h3><p>Current period against the immediately preceding period.</p></div><span class="status ok">Verified</span></div>
+          <div class="chart-shell"><canvas id="observatory-performance-chart" aria-label="Current and previous performance comparison chart" role="img"></canvas></div>
+          <div class="legend-row"><span class="gold"><i></i>Current</span><span class="cyan"><i></i>Previous</span></div>
         </section>
-        <section class="panel">
-          <h3>Action queue</h3>
-          <div class="queue-grid">
-            ${queueLink('Support', `${number(report.queues?.pending_support)} open cases`, 'support')}
-            ${queueLink('Corrections', `${number(report.queues?.pending_corrections)} pending editorial reviews`, 'corrections')}
-            ${queueLink('Account help', `${number(report.queues?.open_recovery_cases)} open cases; final transfer disabled`, 'support')}
-            ${queueLink('Subscriptions', `${number(report.queues?.active_manual_entitlements)} subscriptions added by Admin`, 'subscriptions')}
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Device mix</h3><p>Session categories only. Exact device identifiers are not collected.</p></div></div>
+          <div class="chart-shell compact"><canvas id="observatory-device-chart" aria-label="Device category distribution chart" role="img"></canvas></div>
+          <div class="legend-row"><span class="gold"><i></i>Desktop</span><span class="cyan"><i></i>Mobile</span><span class="green"><i></i>Other</span></div>
+        </section>
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Action queue</h3><p>Items that need an administrator decision.</p></div></div>
+          <div class="observatory-actions">
+            ${observatoryAction('Payments', 'Proofs awaiting review', report.queues?.pending_payments, 'payments', 'ph-receipt')}
+            ${observatoryAction('Support', 'Open cases', report.queues?.pending_support, 'support', 'ph-headset')}
+            ${observatoryAction('Corrections', 'Editorial reviews', report.queues?.pending_corrections, 'corrections', 'ph-note-pencil')}
+            ${observatoryAction('Community', 'Open reports', engagement.openQuorumReports, 'forum', 'ph-chats-circle')}
           </div>
         </section>
-      </div>
-      <section class="panel">
-        <h3>Business reporting</h3>
-        <div class="notice">${escapeHtml(report.financial?.paid_subscribers_status || 'Paid subscribers: Not connected — payment integration pending.')}</div>
-        <p class="panel-note">Revenue, monthly and annual recurring revenue, average revenue per user, and cancellations remain unavailable until verified financial records are connected.</p>
-      </section>`;
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Access posture</h3><p>Server-resolved commercial state.</p></div></div>
+          <dl class="definition-list">
+            <dt>Commercial enforcement</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'Temporarily bypassed' : 'Active'}</dd>
+            <dt>Introductory allowance</dt><dd>Five lifetime practice tokens</dd>
+            <dt>Active manual entitlements</dt><dd>${escapeHtml(number(report.queues?.active_manual_entitlements))}</dd>
+            <dt>Last access change</dt><dd>${escapeHtml(dateTime(betaAllAccess.updatedAt))}</dd>
+          </dl>
+          ${founderAuthorized && betaKnown ? `<div class="dialog-actions">${actionButton(
+            betaEnabled ? 'Activate commercial enforcement' : 'Enable temporary safety access',
+            'global_beta_change', 'global_beta_all_access',
+            { currentEnabled: betaEnabled, enabled: !betaEnabled },
+          ).value}</div>` : ''}
+        </section>
+        <section class="observatory-card wide">
+          <div class="card-head"><div><h3>Recent account activity</h3><p>Location and exact device are shown as unavailable because Due Diligence does not collect them.</p></div><button type="button" class="secondary-button" data-admin-section="users"><i class="ph ph-users-three" aria-hidden="true"></i>Open directory</button></div>
+          ${table(['Name', 'Email', 'School', 'Last sign-in', 'Questions answered', 'Location', 'Device'], recentAccounts.map((account) => [
+            account.display_name || 'Not provided', account.email || 'Not available', account.school || 'Not provided',
+            dateTime(account.last_sign_in_at), number(account.answered_question_count), 'Not collected', 'Not collected',
+          ]))}
+        </section>
+      </div>`;
   }
 
   function barList(rows) {
@@ -716,6 +728,109 @@
       <section class="panel"><h3>Return visits</h3>
         ${table(['Time since sign-up', 'Users old enough to measure', 'Returned', 'Return rate'], retentionRows)}
         <p class="panel-note">One-day, seven-day, and 30-day return rates appear only after the full period has passed and at least five users can be measured.</p>
+      </section>`;
+  }
+
+  function renderMarketing(report) {
+    const funnel = report.current?.funnel || {};
+    const traffic = report.current?.traffic || {};
+    return `
+      ${heading('Acquisition', 'Understand how people find Due Diligence and where the sign-in journey loses momentum. Only recorded source and session data are shown.')}
+      <div class="observatory-kpis">
+        ${observatoryKpi('Unique visitors', number(traffic.unique_visitors), 'ph-users-three', 'gold', 'Selected period')}
+        ${observatoryKpi('Sign-in starts', number(funnel.sign_in_started), 'ph-sign-in', 'cyan', 'Recorded starts')}
+        ${observatoryKpi('Registrations', number(funnel.registrations), 'ph-user-plus', 'green', 'Completed accounts')}
+        ${observatoryKpi('Activation', percentage(funnel.guest_activation_rate), 'ph-lightning', 'gold', 'Recorded guest activation')}
+      </div>
+      <div class="observatory-grid">
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Source performance</h3><p>Sessions grouped by recorded source.</p></div></div>
+          <div class="chart-shell"><canvas id="observatory-acquisition-chart" aria-label="Acquisition source chart" role="img"></canvas></div>
+        </section>
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Sign-in funnel</h3><p>From prompt to completed onboarding.</p></div></div>
+          ${barList([
+            ['Prompted', funnel.sign_in_prompted], ['Started', funnel.sign_in_started],
+            ['Completed', funnel.sign_in_completed], ['Registered', funnel.registrations],
+            ['Onboarded', funnel.onboarding_completed],
+          ])}
+        </section>
+        <section class="observatory-card wide">
+          <div class="card-head"><div><h3>Recorded channels</h3><p>No channel is inferred when source data is absent.</p></div></div>
+          ${table(['Source', 'Medium', 'Sessions'], (report.acquisition || []).map((row) => [row.source, row.medium, number(row.sessions)]))}
+        </section>
+      </div>`;
+  }
+
+  async function renderBusinessRevenue() {
+    const [payments, refunds] = await Promise.all([
+      loadPhase4Operational('payments').catch(() => ({ items: [] })),
+      loadPhase4Operational('refunds').catch(() => ({ items: [] })),
+    ]);
+    const paymentRows = payments.items || [];
+    const refundRows = refunds.items || [];
+    const approved = paymentRows.filter((row) => String(row.status).toLowerCase() === 'approved');
+    const pending = paymentRows.filter((row) => !['approved', 'rejected'].includes(String(row.status).toLowerCase()));
+    const approvedValue = approved.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0);
+    const approvedRefunds = refundRows
+      .filter((row) => String(row.status).toLowerCase() === 'approved')
+      .reduce((sum, row) => sum + (Number(row.approved_refund_php) || 0), 0);
+    return `
+      ${heading('Revenue', 'Commercial records derived from administrator-verified payment requests. These are operational records, not bank settlement or accounting statements.')}
+      <div class="observatory-kpis">
+        ${observatoryKpi('Approved requests', number(approved.length), 'ph-seal-check', 'green', 'Administrator verified')}
+        ${observatoryKpi('Approved value', `₱${number(approvedValue, 2)}`, 'ph-currency-circle-dollar', 'gold', 'Request records')}
+        ${observatoryKpi('Pending review', number(pending.length), 'ph-hourglass', 'cyan', 'Proofs awaiting decision')}
+        ${observatoryKpi('Approved refunds', `₱${number(approvedRefunds, 2)}`, 'ph-arrow-u-up-left', 'red', 'Recorded approvals')}
+      </div>
+      <section class="observatory-card">
+        <div class="card-head"><div><h3>Commercial record ledger</h3><p>Verified request totals remain separate from bank settlement.</p></div><button type="button" class="secondary-button" data-admin-section="payments"><i class="ph ph-receipt" aria-hidden="true"></i>Review payments</button></div>
+        ${table(['Status', 'Requests', 'Recorded amount'], ['approved', 'pending', 'rejected'].map((status) => {
+          const matches = paymentRows.filter((row) => (status === 'pending'
+            ? !['approved', 'rejected'].includes(String(row.status).toLowerCase())
+            : String(row.status).toLowerCase() === status));
+          const total = matches.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0);
+          return [humanizeAuditValue(status), number(matches.length), `₱${number(total, 2)}`];
+        }))}
+        <div class="notice"><strong>Accounting boundary.</strong> Bank fees, charge settlement, taxes, and cash reconciliation are not connected; the Observatory does not manufacture those figures.</div>
+      </section>`;
+  }
+
+  function renderBusinessProjections(report) {
+    const visitors = Number(report.current?.traffic?.unique_visitors || 0);
+    return `
+      ${heading('Projections', 'Build a planning scenario from transparent assumptions. Forecasts are never mixed with verified performance.')}
+      <section class="observatory-card">
+        <div class="card-head"><div><h3>Commercial planning model</h3><p>Planning estimate · not actual revenue.</p></div><span class="status warn">Forecast</span></div>
+        <div class="forecast-grid">
+          <label>Reach<input id="scenario-visitors" type="number" min="0" step="1" value="${escapeHtml(visitors || 1000)}"></label>
+          <label>Conversion rate (%)<input id="scenario-rate" type="number" min="0" max="100" step="0.1" value="5"></label>
+          <label>Price per access (₱)<input id="scenario-price" type="number" min="0" step="0.01" value="149"></label>
+        </div>
+        <div class="forecast-result" id="scenario-metrics" aria-live="polite">
+          <div><span>Assumed customers</span><strong id="scenario-customers">0</strong></div>
+          <div><span>Gross scenario</span><strong id="scenario-gross">₱0.00</strong></div>
+          <div><span>Revenue per 1,000 reached</span><strong id="scenario-rpm">₱0.00</strong></div>
+        </div>
+        <p class="panel-note" id="scenario-output"></p>
+      </section>`;
+  }
+
+  function renderBusinessComparisons(report) {
+    return `
+      ${heading('Comparisons', 'Compare the selected period with the immediately preceding period using the same definitions and reporting window.')}
+      <section class="observatory-card">
+        <div class="card-head"><div><h3>Operating comparison</h3><p>Current period versus previous period.</p></div><span class="status ok">Like-for-like</span></div>
+        <div class="chart-shell"><canvas id="observatory-comparison-chart" aria-label="Business period comparison chart" role="img"></canvas></div>
+        <div class="legend-row"><span class="gold"><i></i>Current</span><span class="cyan"><i></i>Previous</span></div>
+      </section>
+      <section class="observatory-card">
+        ${table(['Measure', 'Current', 'Previous'], [
+          ['Page views', number(report.current?.traffic?.page_views), number(report.previous?.traffic?.page_views)],
+          ['Unique visitors', number(report.current?.traffic?.unique_visitors), number(report.previous?.traffic?.unique_visitors)],
+          ['Registrations', number(report.current?.funnel?.registrations), number(report.previous?.funnel?.registrations)],
+          ['Successful grades', number(report.current?.learning?.successful_grades), number(report.previous?.learning?.successful_grades)],
+        ])}
       </section>`;
   }
 
@@ -950,11 +1065,11 @@
   }
 
   async function renderSubscriptions(report) {
-    const directory = await loadUserDirectory(
-      false,
-      state.subscriptionSearch,
-      state.subscriptionOffset,
-    );
+    const [directory, introductoryAccess] = await Promise.all([
+      loadUserDirectory(false, state.subscriptionSearch, state.subscriptionOffset),
+      loadPhase4Operational('introductory_access', false, state.subscriptionSearch, state.subscriptionOffset)
+        .catch(() => ({ items: [] })),
+    ]);
     const betaAllAccess = report.betaAllAccess || {};
     const globalBetaKnown = typeof betaAllAccess.enabled === 'boolean';
     const globalBetaEnabled = betaAllAccess.enabled === true;
@@ -964,6 +1079,7 @@
     state.subscriptionRows.clear();
     const accounts = directory.items || [];
     const commercialLabels = accounts.map((account) => commercialAccountLabel(account));
+    const tokenByUser = new Map((introductoryAccess.items || []).map((row) => [row.user_id, row]));
     const commercialCounts = commercialLabels.reduce((totals, label) => {
       totals[label] = (totals[label] || 0) + 1;
       return totals;
@@ -984,9 +1100,13 @@
         free_beta_expires_at: account.free_beta_expires_at || null,
       });
       state.subscriptionRows.set(account.id, actionRow);
+      const token = tokenByUser.get(account.id);
+      const tokenCopy = token?.introductory_token_limit == null
+        ? 'Not granted'
+        : `${number(token.introductory_tokens_remaining)} of ${number(token.introductory_token_limit)} remaining`;
       return [
         account.display_name || 'Not provided',
-        account.email || 'Not available',
+        { html: true, value: `<strong>${escapeHtml(account.email || 'Not available')}</strong><br><small>${escapeHtml(tokenCopy)}</small>` },
         account.subscription_category || 'User',
         commercialPlanLabel(account.subscription_plan),
         account.subscription_status ? humanizeAuditValue(account.subscription_status) : 'No paid record',
@@ -1005,7 +1125,7 @@
     const canGoBack = state.subscriptionOffset > 0;
     const canGoForward = pageEnd < Number(directory.total || 0);
     return `
-      ${heading('Access', 'See every account’s commercial access state in plain language. Access changes require a reason and are recorded.')}
+      ${heading('Subscriptions', 'Review each account’s commercial state and remaining introductory tokens. Access changes require a reason and are recorded.')}
       <div class="notice ${globalBetaKnown && globalBetaEnabled ? 'danger' : ''}"><strong>Launch safety access is ${!globalBetaKnown ? 'not confirmed' : globalBetaEnabled ? 'enabled' : 'disabled'}.</strong> ${!globalBetaKnown
         ? 'Refresh before making any access decision.'
         : globalBetaEnabled
@@ -1025,7 +1145,7 @@
         <button class="secondary-button" id="subscription-search-button" type="button">Search</button>
         <button class="secondary-button" id="download-subscriptions" type="button">Download subscriptions</button>
       </div>
-      ${table(['Name', 'Email', 'Category', 'Plan record', 'Record status', 'Current access', 'Last sign-in', 'Questions answered', 'Resets or expires', 'Actions'], rows)}
+      ${table(['Name', 'Email & tokens', 'Category', 'Plan record', 'Record status', 'Current access', 'Last sign-in', 'Questions answered', 'Resets or expires', 'Actions'], rows)}
       <div class="pagination-bar">
         <p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(directory.total)} matching account(s).</p>
         <div class="row-actions">
@@ -2762,6 +2882,140 @@
     });
   }
 
+  function prepareCanvas(canvas) {
+    if (!canvas) return null;
+    const ratio = Math.min(2, global.devicePixelRatio || 1);
+    const width = Math.max(280, Math.floor(canvas.clientWidth || 640));
+    const height = Math.max(180, Math.floor(canvas.clientHeight || 230));
+    canvas.width = Math.floor(width * ratio);
+    canvas.height = Math.floor(height * ratio);
+    const context = canvas.getContext('2d');
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    return { context, width, height };
+  }
+
+  function drawGroupedBars(canvas, labels, primary, secondary) {
+    const prepared = prepareCanvas(canvas);
+    if (!prepared) return;
+    const { context, width, height } = prepared;
+    const values = [...primary, ...secondary].map((value) => Math.max(0, Number(value) || 0));
+    const maximum = Math.max(1, ...values);
+    const left = 42;
+    const right = 14;
+    const top = 18;
+    const bottom = 42;
+    const plotWidth = width - left - right;
+    const plotHeight = height - top - bottom;
+    context.font = '11px Inter, sans-serif';
+    context.textAlign = 'right';
+    context.textBaseline = 'middle';
+    for (let step = 0; step <= 4; step += 1) {
+      const y = top + (plotHeight * step / 4);
+      context.strokeStyle = 'rgba(143,162,175,0.16)';
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(left, y);
+      context.lineTo(width - right, y);
+      context.stroke();
+      context.fillStyle = '#718794';
+      context.fillText(number(maximum * (1 - step / 4)), left - 7, y);
+    }
+    const groupWidth = plotWidth / Math.max(1, labels.length);
+    const barWidth = Math.max(5, Math.min(22, groupWidth * 0.27));
+    labels.forEach((label, index) => {
+      const center = left + groupWidth * index + groupWidth / 2;
+      const firstHeight = (Math.max(0, Number(primary[index]) || 0) / maximum) * plotHeight;
+      const secondHeight = (Math.max(0, Number(secondary[index]) || 0) / maximum) * plotHeight;
+      context.fillStyle = '#d2aa55';
+      context.fillRect(center - barWidth - 2, top + plotHeight - firstHeight, barWidth, firstHeight);
+      context.fillStyle = '#22c6d8';
+      context.fillRect(center + 2, top + plotHeight - secondHeight, barWidth, secondHeight);
+      context.fillStyle = '#8fa2af';
+      context.textAlign = 'center';
+      context.textBaseline = 'top';
+      const shortLabel = String(label).length > 13 ? `${String(label).slice(0, 11)}…` : String(label);
+      context.fillText(shortLabel, center, top + plotHeight + 10);
+    });
+  }
+
+  function drawDonut(canvas, segments) {
+    const prepared = prepareCanvas(canvas);
+    if (!prepared) return;
+    const { context, width, height } = prepared;
+    const normalized = segments.map((segment) => ({
+      label: segment.label,
+      value: Math.max(0, Number(segment.value) || 0),
+      color: segment.color,
+    }));
+    const total = normalized.reduce((sum, segment) => sum + segment.value, 0);
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const radius = Math.min(width, height) * 0.34;
+    const inner = radius * 0.63;
+    let angle = -Math.PI / 2;
+    const drawable = total > 0 ? normalized : [{ label: 'No data', value: 1, color: '#263946' }];
+    const drawableTotal = total > 0 ? total : 1;
+    drawable.forEach((segment) => {
+      const next = angle + (segment.value / drawableTotal) * Math.PI * 2;
+      context.beginPath();
+      context.arc(centerX, centerY, radius, angle, next);
+      context.arc(centerX, centerY, inner, next, angle, true);
+      context.closePath();
+      context.fillStyle = segment.color;
+      context.fill();
+      angle = next;
+    });
+    context.fillStyle = '#f3f6f7';
+    context.font = '700 24px Playfair Display, Georgia, serif';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(number(total), centerX, centerY - 6);
+    context.fillStyle = '#8fa2af';
+    context.font = '10px Inter, sans-serif';
+    context.fillText(total > 0 ? 'SESSIONS' : 'NO DATA', centerX, centerY + 16);
+  }
+
+  function acquisitionSourceRows(report) {
+    const totals = new Map();
+    (report.acquisition || []).forEach((row) => {
+      const label = String(row.source || 'Unattributed');
+      totals.set(label, (totals.get(label) || 0) + (Number(row.sessions) || 0));
+    });
+    return [...totals.entries()].sort((left, right) => right[1] - left[1]).slice(0, 6);
+  }
+
+  function mountObservatoryCharts(section, report) {
+    const performanceLabels = ['Views', 'Visitors', 'Sign-ups', 'Grades'];
+    const currentValues = [
+      report.current?.traffic?.page_views, report.current?.traffic?.unique_visitors,
+      report.current?.funnel?.registrations, report.current?.learning?.successful_grades,
+    ];
+    const previousValues = [
+      report.previous?.traffic?.page_views, report.previous?.traffic?.unique_visitors,
+      report.previous?.funnel?.registrations, report.previous?.learning?.successful_grades,
+    ];
+    requestAnimationFrame(() => {
+      if (section === 'executive') {
+        drawGroupedBars($('#observatory-performance-chart'), performanceLabels, currentValues, previousValues);
+        const deviceMap = new Map((report.devices || []).map((row) => [String(row.category || '').toLowerCase(), Number(row.sessions) || 0]));
+        const desktop = deviceMap.get('desktop') || 0;
+        const mobile = deviceMap.get('mobile') || 0;
+        const other = [...deviceMap.entries()].filter(([key]) => !['desktop', 'mobile'].includes(key)).reduce((sum, [, value]) => sum + value, 0);
+        drawDonut($('#observatory-device-chart'), [
+          { label: 'Desktop', value: desktop, color: '#d2aa55' },
+          { label: 'Mobile', value: mobile, color: '#22c6d8' },
+          { label: 'Other', value: other, color: '#36d39b' },
+        ]);
+      } else if (section === 'marketing') {
+        const sources = acquisitionSourceRows(report);
+        drawGroupedBars($('#observatory-acquisition-chart'), sources.map(([label]) => label), sources.map(([, value]) => value), sources.map(() => 0));
+      } else if (section === 'business_comparisons') {
+        drawGroupedBars($('#observatory-comparison-chart'), performanceLabels, currentValues, previousValues);
+      }
+    });
+  }
+
   async function renderSection(section) {
     if (!sectionAllowed(section)) {
       toast('Your administrator role does not have access to that section.');
@@ -2771,7 +3025,7 @@
     $('#section-title').textContent = titles[section];
     const rangeControl = $('#reporting-range');
     if (rangeControl) {
-      rangeControl.hidden = !['executive', 'realtime', 'acquisition', 'learning', 'subjects', 'reliability', 'forum'].includes(section);
+      rangeControl.hidden = !['executive', 'realtime', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
     }
     $$('#admin-nav button').forEach((button) => button.setAttribute(
       'aria-current',
@@ -2782,14 +3036,16 @@
     $('#dashboard-view').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
     try {
       const reportSections = new Set([
-        'executive', 'realtime', 'acquisition', 'learning', 'subjects',
+        'executive', 'realtime', 'acquisition', 'marketing', 'learning', 'subjects',
         'reliability', 'subscriptions', 'forum', 'answer_exports',
+        'business_projections', 'business_comparisons',
       ]);
       const report = reportSections.has(section) ? await loadReport() : {};
       let html;
-      if (section === 'executive') html = renderExecutive(report);
+      if (section === 'executive') html = await renderExecutive(report);
       else if (section === 'realtime') html = await renderRealtime(report);
       else if (section === 'acquisition') html = renderAcquisition(report);
+      else if (section === 'marketing') html = renderMarketing(report);
       else if (section === 'users') html = await renderUsers();
       else if (section === 'learning') html = await renderLearning(report);
       else if (section === 'subjects') html = renderSubjects(report);
@@ -2806,8 +3062,12 @@
       else if (section === 'examinations') html = await renderExaminations();
       else if (section === 'examination_room') html = await renderExaminationRoomAdmin();
       else if (section === 'answer_exports') html = await renderAnswerExports(report);
+      else if (section === 'business_revenue') html = await renderBusinessRevenue();
+      else if (section === 'business_projections') html = renderBusinessProjections(report);
+      else if (section === 'business_comparisons') html = renderBusinessComparisons(report);
       $('#dashboard-view').innerHTML = html;
       bindDynamic();
+      mountObservatoryCharts(section, report);
       if (section === 'examinations') bindExaminationAdmin();
       if (section === 'examination_room') bindExaminationRoomAdmin();
       return true;
@@ -3698,7 +3958,12 @@
     const rate = Math.min(100, Math.max(0, Number($('#scenario-rate')?.value) || 0));
     const price = Math.max(0, Number($('#scenario-price')?.value) || 0);
     const assumedCustomers = Math.round(visitors * rate / 100);
-    $('#scenario-output').textContent = `Scenario only — not actual performance: ${number(assumedCustomers)} assumed customers × ₱${number(price, 2)} = ₱${number(assumedCustomers * price, 2)} hypothetical monthly value.`;
+    const gross = assumedCustomers * price;
+    const perThousand = visitors > 0 ? (gross / visitors) * 1000 : 0;
+    if ($('#scenario-customers')) $('#scenario-customers').textContent = number(assumedCustomers);
+    if ($('#scenario-gross')) $('#scenario-gross').textContent = `₱${number(gross, 2)}`;
+    if ($('#scenario-rpm')) $('#scenario-rpm').textContent = `₱${number(perThousand, 2)}`;
+    if ($('#scenario-output')) $('#scenario-output').textContent = `Planning estimate only: ${number(assumedCustomers)} assumed customers × ₱${number(price, 2)}. This is not actual or forecast-guaranteed revenue.`;
   }
 
   function bindDynamic() {
@@ -4126,7 +4391,7 @@
   $('#refresh-dashboard')?.addEventListener('click', async () => {
     const button = $('#refresh-dashboard');
     button.disabled = true;
-    button.textContent = 'Refreshing…';
+    button.innerHTML = '<i class="ph ph-spinner-gap" aria-hidden="true"></i><span>Refreshing…</span>';
     state.report = null;
     state.operational.clear();
     state.liveActivity = null;
@@ -4138,7 +4403,7 @@
       await renderSection(state.section);
     } finally {
       button.disabled = false;
-      button.textContent = 'Refresh';
+      button.innerHTML = '<i class="ph ph-arrows-clockwise" aria-hidden="true"></i><span>Refresh</span>';
     }
   });
   $('#download-current-section')?.addEventListener('click', downloadCurrentSection);

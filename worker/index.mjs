@@ -5494,7 +5494,7 @@ async function handlePhase4AdminData(request, env, origin, allowedOrigin) {
     })
     : await protectedSupabaseRpc(env, 'phase4_admin_operational_data', {
       p_actor_user_id: user.id,
-      p_section: query.section,
+      p_section: query.section === 'introductory_access' ? 'access' : query.section,
       p_search: query.search,
       p_limit: query.limit,
       p_offset: query.offset,

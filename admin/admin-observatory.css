@@ -998,60 +998,60 @@ body.observatory::before {
 }
 
 /* Readability hotfix — 2026-08-23.
-   Increase compact Observatory labels by 1.5pt (2px at 96dpi) and raise
-   muted-text contrast without changing the dashboard's layout or hierarchy. */
+   Maintain a comfortable legibility floor for the dense Observatory UI and
+   raise muted-text contrast without changing its layout or hierarchy. */
 body.observatory {
-  --obs-muted: #b7c5cc;
-  --obs-muted-bright: #d7e0e4;
+  --obs-muted: #c4d0d5;
+  --obs-muted-bright: #e5ecef;
 }
 
-.observatory .brand strong { font-size: 1.085rem; }
-.observatory .brand small { font-size: 0.735rem; }
-.observatory .nav-group-label { color: #aebdc5; font-size: 0.655rem; }
-.observatory #admin-nav button { font-size: 0.795rem; }
-.observatory .nav-more summary { font-size: 0.745rem; }
-.observatory .admin-dock strong { font-size: 0.785rem; }
-.observatory .admin-dock small { font-size: 0.665rem; }
+.observatory .brand strong { font-size: 1.21rem; }
+.observatory .brand small { font-size: 0.86rem; }
+.observatory .nav-group-label { color: #c2cdd2; font-size: 0.78rem; }
+.observatory #admin-nav button { font-size: 0.92rem; }
+.observatory .nav-more summary { font-size: 0.87rem; }
+.observatory .admin-dock strong { font-size: 0.91rem; }
+.observatory .admin-dock small { font-size: 0.79rem; }
 .observatory .sidebar-foot .sidebar-utility a,
-.observatory .sidebar-foot .sidebar-utility button { font-size: 0.695rem; }
+.observatory .sidebar-foot .sidebar-utility button { font-size: 0.82rem; }
 
-.observatory .topbar h1 { font-size: 1.475rem; }
-.observatory .topbar-title > p:last-child { font-size: 0.725rem; }
-.observatory #reporting-range { font-size: 0.645rem; }
-.observatory #reporting-range select { font-size: 0.755rem; }
+.observatory .topbar h1 { font-size: 1.6rem; }
+.observatory .topbar-title > p:last-child { font-size: 0.85rem; }
+.observatory #reporting-range { font-size: 0.77rem; }
+.observatory #reporting-range select { font-size: 0.88rem; }
 .observatory .topbar-tools .refresh-button,
-.observatory .topbar-tools .topbar-download { font-size: 0.735rem; }
-.observatory .freshness { font-size: 0.625rem; }
-.observatory .system-banner { font-size: 0.705rem; }
+.observatory .topbar-tools .topbar-download { font-size: 0.86rem; }
+.observatory .freshness { font-size: 0.75rem; }
+.observatory .system-banner { font-size: 0.83rem; }
 
-.observatory .observatory-kpi .kpi-head span { font-size: 0.665rem; }
-.observatory .observatory-kpi strong { font-size: 1.775rem; }
-.observatory .observatory-kpi small { font-size: 0.645rem; }
-.observatory .card-head h3 { font-size: 0.885rem; }
-.observatory .card-head p { font-size: 0.645rem; }
-.observatory .card-head .status { font-size: 0.605rem; }
+.observatory .observatory-kpi .kpi-head span { font-size: 0.79rem; }
+.observatory .observatory-kpi strong { font-size: 1.9rem; }
+.observatory .observatory-kpi small { font-size: 0.77rem; }
+.observatory .card-head h3 { font-size: 1.01rem; }
+.observatory .card-head p { font-size: 0.77rem; }
+.observatory .card-head .status { font-size: 0.73rem; }
 .observatory .executive-legend span,
-.observatory .executive-legend small { font-size: 0.645rem; }
-.observatory .legend-row { font-size: 0.635rem; }
-.observatory .revenue-summary span { font-size: 0.625rem; }
-.observatory .revenue-summary b { font-size: 0.815rem; }
-.observatory .icon-link { font-size: 0.645rem; }
-.observatory .executive-recent-users table { font-size: 0.665rem; }
-.observatory .executive-recent-users .status { font-size: 0.575rem; }
-.observatory .executive-operations > summary { font-size: 0.735rem; }
-.observatory .executive-operations > summary small { font-size: 0.625rem; }
+.observatory .executive-legend small { font-size: 0.77rem; }
+.observatory .legend-row { font-size: 0.76rem; }
+.observatory .revenue-summary span { font-size: 0.75rem; }
+.observatory .revenue-summary b { font-size: 0.94rem; }
+.observatory .icon-link { font-size: 0.77rem; }
+.observatory .executive-recent-users table { font-size: 0.79rem; }
+.observatory .executive-recent-users .status { font-size: 0.7rem; }
+.observatory .executive-operations > summary { font-size: 0.86rem; }
+.observatory .executive-operations > summary small { font-size: 0.75rem; }
 
-.observatory thead th { color: #aebdc5; font-size: 0.735rem; }
+.observatory thead th { color: #c2cdd2; font-size: 0.86rem; }
 .observatory .row-actions button,
 .observatory .secondary-button,
 .observatory .primary-button,
-.observatory .primary-link { font-size: 0.845rem; }
+.observatory .primary-link { font-size: 0.97rem; }
 .observatory .panel-note,
 .observatory .notice,
 .observatory .definition-list,
 .observatory td { color: var(--obs-muted-bright); }
 
 @media (max-width: 680px) {
-  .observatory .topbar h1 { font-size: 1.125rem; }
-  .observatory .observatory-kpi strong { font-size: 1.475rem; }
+  .observatory .topbar h1 { font-size: 1.25rem; }
+  .observatory .observatory-kpi strong { font-size: 1.6rem; }
 }

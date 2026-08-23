@@ -1009,7 +1009,7 @@
       <button type="button" data-public-feature="quorum">Home</button>
       <button type="button" data-public-feature="bar-easy">Quick Drills</button>
       <button type="button" data-public-feature="doctrines">Doctrine Review</button>
-      <button type="button" data-public-feature="subject-matter">Syllabus Base Review</button>
+      <button type="button" data-public-feature="subject-matter">Syllabus-Based Review</button>
       <button type="button" data-public-feature="mock">Bar Question Practice</button>
       <button type="button" data-public-feature="bar-feels">Bar Exam Simulation</button>
       <button type="button" data-public-feature="verdict">Analytics</button>
@@ -1034,7 +1034,7 @@
         <div class="quorum-practice-links">
           <button id="spa-bar-easy" type="button" data-public-feature="bar-easy">Quick Drills</button>
           <button id="spa-jurisprudence" type="button" data-public-feature="doctrines">Doctrine Review</button>
-          <button id="spa-subject-matter" type="button" data-public-feature="subject-matter">Syllabus Base Review</button>
+          <button id="spa-subject-matter" type="button" data-public-feature="subject-matter">Syllabus-Based Review</button>
           <button id="spa-mock" type="button" data-public-feature="mock">Bar Question Practice</button>
           <button id="spa-bar-feels" type="button" data-public-feature="bar-feels">Bar Exam Simulation</button>
           <button id="spa-progress" type="button" data-public-feature="verdict">Analytics</button>
@@ -4215,7 +4215,7 @@ let activeSuggestionQuestion = null;
 
 function suggestionQuestion(context = null) {
   if (context?.id) {
-    const subject = String(context.subject || 'Syllabus Base Review').trim() || 'Syllabus Base Review';
+    const subject = String(context.subject || 'Syllabus-Based Review').trim() || 'Syllabus-Based Review';
     return { id: String(context.id).trim(), sourceSubject: subject, subject };
   }
   return BAR_QUESTIONS[currentSubj]?.[currentIdx] || null;

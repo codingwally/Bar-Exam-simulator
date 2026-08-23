@@ -184,7 +184,7 @@
       'spa-community': 'Home',
       'spa-bar-easy': 'Quick Drills',
       'spa-jurisprudence': 'Doctrine Review',
-      'spa-subject-matter': 'Syllabus Base Review',
+      'spa-subject-matter': 'Syllabus-Based Review',
       'spa-mock': 'Bar Question Practice',
       'spa-bar-feels': 'Bar Exam Simulation',
       'spa-pricing': 'Plans & Pricing',

@@ -257,7 +257,7 @@
     if (!isCurrent()) return;
     if (route === 'subject-matter') {
       if (typeof global.DueDiligenceExaminations?.restoreRoute !== 'function') {
-        throw new Error('Syllabus Base Review could not be restored. Please refresh and try again.');
+        throw new Error('Syllabus-Based Review could not be restored. Please refresh and try again.');
       }
       const outcome = await global.DueDiligenceExaminations.restoreRoute('per_subject', { isCurrent });
       if (!isCurrent()) return;

@@ -37,7 +37,7 @@ assertOrder(navigation, [
   'Practice Exam',
   'Quick Drills',
   'Doctrine Review',
-  'Syllabus Base Review',
+  'Syllabus-Based Review',
   'Bar Question Practice',
   'Bar Exam Simulation',
   'Profile',

@@ -33,7 +33,7 @@ assert.match(sharedHeader, /class="brand pb-brand"[^>]*data-public-home/,
 assert.match(sharedHeader, /data-public-feature="examination-room"[^>]*>Examination Room<\/button>/);
 assert.match(sharedHeader, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"[^>]*aria-label="Open navigation menu"[\s\S]*class="site-menu-icon"[\s\S]*<span><\/span><span><\/span><span><\/span>[\s\S]*<\/button>/);
 assert.match(sharedHeader, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
-assert.match(sharedHeader, /<summary>Practice Exam<\/summary>[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus Base Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics/);
+assert.match(sharedHeader, /<summary>Practice Exam<\/summary>[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics/);
 assert.match(sharedHeader, /data-public-action="docket"[^>]*aria-label="Sign in or open your profile"[^>]*>Profile<\/button>/);
 assert.match(sharedHeader, /Plans &amp; Pricing[\s\S]*>Support<[\s\S]*Examination Room/);
 assert.doesNotMatch(sharedHeader, />The Academy<|>The Commons<|>BarBound<|>The Docket/,

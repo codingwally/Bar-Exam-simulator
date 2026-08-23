@@ -35,6 +35,16 @@ assert.ok(frontend.includes('The 12-minute target has ended. Your answer is safe
 assert.ok(frontend.includes('Write without a visible clock or time limit.'));
 assert.ok(frontend.includes('clearPersistedWorkspace'));
 assert.ok(frontend.includes('restorePersistedWorkspace'));
+assert.match(
+  frontend,
+  /function mockBarWorkspaceRouteRequested[\s\S]*?route === 'mock'[\s\S]*?route === 'mock-bar'/,
+  'Persisted Mock Bar workspaces must be scoped to Mock Bar routes.',
+);
+assert.match(
+  frontend,
+  /async function restorePersistedWorkspace\(userId\)[\s\S]*?\|\| !mockBarWorkspaceRouteRequested\(\)/,
+  'An explicit non-Mock-Bar route must not be overwritten by Mock Bar restoration.',
+);
 assert.ok(frontend.includes('switchSessionMode'));
 assert.ok(frontend.includes('function questionAnswerKey('));
 assert.ok(frontend.includes('userAnswers[questionAnswerKey()]'));

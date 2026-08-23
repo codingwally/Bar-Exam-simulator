@@ -1933,9 +1933,19 @@ async function syncRemoteExamHistory(userId) {
   }
 }
 
+function mockBarWorkspaceRouteRequested(hash = location.hash) {
+  const route = String(hash || '')
+    .replace(/^#/, '')
+    .split(/[/?]/, 1)[0]
+    .trim()
+    .toLowerCase();
+  return route === 'mock' || route === 'mock-bar';
+}
+
 async function restorePersistedWorkspace(userId) {
   if (
     !userId
+    || !mockBarWorkspaceRouteRequested()
     || workspaceRestoreInProgress
     || workspaceRestoreCompletedForUser === userId
     || examStage === 'answering'

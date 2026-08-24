@@ -92,8 +92,8 @@
   const PRACTICE_TIMER_MODES = Object.freeze([
     Object.freeze({
       value: 'strict',
-      label: '12-minute practice',
-      description: 'Practice answering within a focused 12-minute target.',
+      label: '12-minute question',
+      description: 'Answer within a focused 12-minute target.',
     }),
     Object.freeze({
       value: 'selfPaced',
@@ -102,7 +102,7 @@
     }),
     Object.freeze({
       value: 'none',
-      label: 'Untimed practice',
+      label: 'Untimed review',
       description: 'Write without a clock or time limit.',
     }),
   ]);
@@ -809,7 +809,7 @@
     root.innerHTML = `<div class="dd-exam-page"><div class="dd-exam-shell">
       <header class="dd-exam-hero">
         <div>
-          <p class="dd-exam-kicker">Mock Bar / Examination Room</p>
+          <p class="dd-exam-kicker">Bar Exam Simulation</p>
           <h1>Bar Exam Simulation</h1>
           <p>Enter one of six Philippine Bar examination blocks. Every block contains
             twenty distinct questions, and no timer begins before you confirm the setup.</p>
@@ -821,7 +821,7 @@
         <section class="dd-bar-entry-card">
           <p class="dd-exam-kicker">Curated Route</p>
           <h2>Six Bar Examination Destinations</h2>
-          <p>Practice twenty distinct essays in each destination, with individual A.L.A.C.
+          <p>Complete twenty distinct essays in each destination, with individual A.L.A.C.
             assessment and the full suggested answer released under the examination rules.</p>
           <div class="dd-exam-card-list">${curatedBarCards()}</div>
         </section>
@@ -932,9 +932,9 @@
         aria-label="Close timer settings">&times;</button>
       <p class="dd-exam-kicker">Syllabus-Based Review</p>
       <h2 id="dd-exam-setup-title">Timer settings</h2>
-      <p class="dd-exam-description">Choose how you want to practice. Stopwatch is the default, and no clock starts until you select Start.</p>
+      <p class="dd-exam-description">Choose a timing option. Stopwatch is the default, and no clock starts until you select Start.</p>
       <fieldset class="dd-timer-options">
-        <legend class="sr-only">Practice timer</legend>
+        <legend class="sr-only">Syllabus-Based Review timer</legend>
         ${PRACTICE_TIMER_MODES.map((item) => `<label class="dd-timer-option">
           <input type="radio" name="dd-practice-timer" value="${item.value}"
             ${item.value === state.preferredTimerMode ? 'checked' : ''}>
@@ -973,9 +973,9 @@
       state.setup = setup;
       const dialog = setupDialog();
       const modes = [
-        ['strict', '12-minute practice', 'Practice answering within a focused 12-minute target.'],
+        ['strict', '12-minute question', 'Answer within a focused 12-minute target.'],
         ['selfPaced', 'Stopwatch', 'See how much time you spend on the question.'],
-        ['none', 'Untimed practice', 'Write without a clock or time limit.'],
+        ['none', 'Untimed review', 'Write without a clock or time limit.'],
       ].filter(([mode]) => (setup.allowedTimerModes || []).includes(mode));
       const compact = setup.track === 'per_subject';
       dialog.classList.toggle('is-subject-matter', compact);
@@ -1046,16 +1046,10 @@
         resetCycle: options.resetCycle === true,
       });
       if (selection.exhausted) {
-        const restart = await confirmDecision({
-          title: 'Start a new randomized cycle?',
-          copy: `You completed every available ${selected.subject} question in this cycle. Your performance history will remain available.`,
-          confirmLabel: 'Start new cycle',
-        });
-        if (restart) {
-          await requestSubjectQuestion({ subject: selected.subject, resetCycle: true });
-        } else {
-          setStatus('Cycle complete. Your performance history remains available.', 'success');
-        }
+        setStatus(
+          `You have answered every available ${selected.subject} question in Syllabus-Based Review. Your performance history remains available.`,
+          'success',
+        );
         return;
       }
       state.setup = selection.setup;
@@ -1271,7 +1265,7 @@
       <header class="dd-subject-editorial-header">
         <div>
           <p class="dd-exam-kicker">Review and retention</p>
-          <p class="dd-subject-breadcrumb"><span>Practice Exam</span><b aria-hidden="true">/</b> Syllabus-Based Review</p>
+          <p class="dd-subject-breadcrumb"><span>Syllabus-Based Review</span></p>
           <h1>Syllabus-Based Review</h1>
         </div>
         <div class="dd-subject-course-picker">
@@ -1772,7 +1766,7 @@
     if (!question || !state.active || state.active.examination.track !== 'per_subject') return;
     const confirmed = await confirmDecision({
       title: 'Skip this question?',
-      copy: 'Your draft and any flag will remain saved. This question will not be submitted, assessed, or counted in your performance. A different question will open.',
+      copy: 'Your draft and any flag will remain saved. This question will not be submitted, assessed, or counted in your performance. A different question will open if one remains in this course.',
       confirmLabel: 'Skip question',
     });
     if (!confirmed || !state.active) return;
@@ -1802,7 +1796,26 @@
         requestKey: skipRequestKey,
         tabToken: tabToken(),
       });
-      if (!skipResult?.skipped || !skipResult?.setup?.versionId) {
+      if (!skipResult?.skipped) {
+        throw new Error('The next question could not be prepared safely.');
+      }
+
+      if (skipResult.exhausted === true || skipResult.terminal === true) {
+        pauseActiveClock();
+        clearRecovery();
+        state.active = null;
+        state.setup = null;
+        state.screen = 'catalog';
+        await loadCatalog('per_subject');
+        setStatus(
+          'Question skipped without a score. You have now answered or skipped every available question in this course.',
+          'success',
+        );
+        notify('Question skipped without a score. This course is complete for the current question bank.', 'ok');
+        return;
+      }
+
+      if (!skipResult.setup?.versionId) {
         throw new Error('The next question could not be prepared safely.');
       }
 
@@ -2026,7 +2039,7 @@
         ${['ai', 'either'].includes(grading) ? '<button class="dd-exam-button is-primary" type="button" data-request-ai>Request AI Assessment</button>' : ''}
         ${['human', 'either', 'provisional'].includes(grading) ? '<button class="dd-exam-button is-gold" type="button" data-request-human>Human Examiner Review</button>' : ''}
         <button class="dd-exam-button" type="button" data-exam-verdict="${escapeHtml(receipt.attemptId || state.active?.attempt?.attemptId)}">Open assessment</button>
-        <button class="dd-exam-button" type="button" data-return-catalog>Return to Mock Bar Hub</button>
+        <button class="dd-exam-button" type="button" data-return-catalog>Return to Bar Exam Simulation</button>
       </div>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
     </section></div>`;
@@ -2087,7 +2100,7 @@
         aria-label="Close Human Examiner assignment">&times;</button>
       <p class="dd-exam-kicker">Structured Review</p>
       <h2 id="dd-human-review-title">Create a Human Examiner Assignment</h2>
-      <p class="dd-exam-description">Practice Exam email delivery is disabled. Create the assignment,
+      <p class="dd-exam-description">Automated email delivery is disabled. Create the assignment,
         then copy and share the expiring secure link directly.</p>
       <label class="dd-exam-field">Examiner email (assignment record)
         <input type="email" id="dd-examiner-email" maxlength="254" autocomplete="email"
@@ -2694,7 +2707,7 @@
       <header class="dd-subject-editorial-header">
         <div>
           <p class="dd-exam-kicker">Review and retention</p>
-          <p class="dd-subject-breadcrumb"><span>Practice Exam</span><b aria-hidden="true">/</b> Syllabus-Based Review</p>
+          <p class="dd-subject-breadcrumb"><span>Syllabus-Based Review</span></p>
           <h1 data-subject-result-heading tabindex="-1">Syllabus-Based Review</h1>
         </div>
         <div class="dd-subject-course-picker">
@@ -2925,7 +2938,7 @@
           <header><p class="dd-exam-kicker">Your saved review queue</p><h2 id="dd-subject-flagged-title">Flagged for later</h2></header>
           ${flaggedForLater.map((item) => `<article class="dd-subject-flagged-row">
             <div>
-              <p class="dd-question-label">${escapeHtml(item.topic || 'Practice question')} · ${escapeHtml(item.resumable === true ? 'Open draft' : 'Skipped without a score')} · ${escapeHtml(formatDate(item.queuedAt || item.skippedAt))}</p>
+              <p class="dd-question-label">${escapeHtml(item.topic || 'Review question')} · ${escapeHtml(item.resumable === true ? 'Open draft' : 'Skipped without a score')} · ${escapeHtml(formatDate(item.queuedAt || item.skippedAt))}</p>
               <h3>${escapeHtml(item.prompt || 'Flagged Syllabus-Based Review question')}</h3>
               ${String(item.answerText || '').trim() ? `<details class="dd-subject-flagged-draft">
                 <summary>Saved draft</summary>
@@ -2937,7 +2950,7 @@
                 data-exam-resume="${escapeAttribute(item.attemptId)}">Resume question</button>`
               : `<button class="dd-control dd-exam-button" type="button"
                 data-subject-retry-flagged="${escapeAttribute(item.versionId)}"
-                data-subject="${escapeAttribute(item.subject || subject)}">Practice again</button>`}
+                data-subject="${escapeAttribute(item.subject || subject)}">Open again</button>`}
           </article>`).join('')}
         </section>` : ''}
         ${attempts.length ? attempts.map((item) => `<article class="dd-verdict-question">
@@ -3033,7 +3046,7 @@
     } catch (error) {
       if (isStaleIdentityError(error)) return;
       if (root) root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-study-page' : ''}"><div class="dd-exam-shell">
-        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">${track === 'per_subject' ? 'Syllabus-Based Review' : 'Mock Bar'}</p>
+        <header class="dd-exam-hero"><div><p class="dd-exam-kicker">${track === 'per_subject' ? 'Syllabus-Based Review' : 'Bar Exam Simulation'}</p>
           <h1>${track === 'per_subject' ? 'Syllabus-Based Review' : 'Bar Exam Simulation'}</h1></div></header>
         <div class="dd-exam-status is-error" role="alert" tabindex="-1">${track === 'per_subject'
           ? 'Courses could not be loaded. Your saved course choice and prior work are unchanged.'
@@ -3240,7 +3253,7 @@
       });
       document.getElementById('dd-examiner-form').innerHTML = `
         <div class="dd-exam-status is-success">Human Examiner Review finalized and saved at
-          ${escapeHtml(formatDate(result.finalizedAt))}. No Practice Exam email was sent.</div>`;
+          ${escapeHtml(formatDate(result.finalizedAt))}. No automated email was sent.</div>`;
     } catch (error) {
       setStatus(error.message, 'error');
       button.disabled = false;

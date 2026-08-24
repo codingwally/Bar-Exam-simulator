@@ -17,10 +17,10 @@ const migration = read('supabase/migrations/20260813151040_master_experience_pri
 assert.match(index, /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
 assert.match(index, /data-public-home/);
 assert.match(index, /id="spa-community"[^>]*data-public-feature="quorum"/);
-assert.match(index, /<summary>Practice Exam<\/summary>/);
+assert.match(index, /<summary>Study Features<\/summary>/);
 assert.match(index, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.match(index, /assets\/private-workspace\.js\?v=master-experience-20260813-1/);
-assert.match(index, /assets\/feature-loader\.js\?v=syllabus-review-20260823-1/);
+assert.match(index, /assets\/feature-loader\.js\?v=question-randomization-20260825-1/);
 assert.doesNotMatch(index, /<script[^>]+src="assets\/(?:lex-forum|examinations|duediligence-2026)\.js/);
 assert.doesNotMatch(index, /<link[^>]+href="assets\/(?:lex-forum|examinations|duediligence-2026)\.css/);
 

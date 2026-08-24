@@ -14,6 +14,9 @@ import {
 export const WEBSITE_UPLOAD_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=141335489&single=true&output=csv';
 
+export const BAR_SIMULATION_POOL_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=20260826&single=true&output=csv';
+
 export const WEBSITE_VISIBILITY_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=1079892800&single=true&output=csv';
 

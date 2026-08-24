@@ -8,7 +8,7 @@ const phase4 = await fs.readFile(new URL('../assets/phase4-experience.js', impor
 
 assert.match(html, /id="private-beta-landing"/);
 assert.match(html, /id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
-assert.match(html, /id="site-header"[\s\S]*class="spa-nav quorum-primary-nav"[\s\S]*Home[\s\S]*Practice Exam[\s\S]*Profile[\s\S]*Plans &amp; Pricing[\s\S]*Examination Room/);
+assert.match(html, /id="site-header"[\s\S]*class="spa-nav quorum-primary-nav"[\s\S]*Home[\s\S]*Study Features[\s\S]*Profile[\s\S]*Plans &amp; Pricing[\s\S]*Examination Room/);
 assert.equal((html.match(/id="site-header"/g) || []).length, 1);
 assert.doesNotMatch(html, /id="welcome-state"|id="start-practice"/,
   'The retired authenticated landing must be removed.');
@@ -23,10 +23,10 @@ const startPracticeSource = html.slice(
 assert.doesNotMatch(
   startPracticeSource,
   /TERMS_ACCEPTANCE_KEY/,
-  'Mock Bar must rely on the current server-versioned policy gate instead of repeating a stale local Terms prompt.',
+  'Bar Question Practice must rely on the current server-versioned policy gate instead of repeating a stale local Terms prompt.',
 );
 assert.match(html, /id="terms-modal"[\s\S]*aria-modal="true"/);
-assert.match(html, /id="signin-prompt-modal"[\s\S]*Enter the Mock Bar/);
+assert.match(html, /id="signin-prompt-modal"[\s\S]*Open Bar Question Practice/);
 assert.match(
   html,
   /function continueAfterTerms\(\) \{\s*if \(window\.DueDiligencePhase4\?\.getSession\?\.\(\)\?\.access_token\) \{\s*showSubjectSelection\(\);\s*return;/,
@@ -35,7 +35,7 @@ assert.match(
 assert.match(html, /id="subject-choice-grid"/);
 assert.match(
   html,
-  /id="subject-selection-close"[\s\S]*aria-label="Close subject selection and return to Mock Bar"[\s\S]*onclick="exitSubjectSelection\(\)"/,
+  /id="subject-selection-close"[\s\S]*aria-label="Close subject selection and return to Bar Question Practice"[\s\S]*onclick="exitSubjectSelection\(\)"/,
   'The subject chooser must expose an accessible close control.',
 );
 assert.match(
@@ -56,10 +56,10 @@ assert.match(
 assert.match(
   html,
   /page === 'mock' && examStage === 'idle'[\s\S]*startPractice\(\)/,
-  'Opening Mock Bar from the application menu must go directly to the existing subject-selection flow.',
+  'Opening Bar Question Practice from the application menu must go directly to the existing subject-selection flow.',
 );
 assert.match(phase2, /\['mock-bar', 'subject-matter', 'bar-feels', 'quorum', 'examination-room'\]/,
-  'The canonical Mock Bar route must remain protected before sign-in.');
+  'The canonical Bar Question Practice route must remain protected before sign-in.');
 assert.match(phase2, /function restoreAuthDestination\(\)[\s\S]*if \(!state\.authReturnPending\) return;[\s\S]*history\.replaceState\([\s\S]*dueDiligenceRoute:\s*'quorum'[\s\S]*#quorum[\s\S]*PopStateEvent\('popstate'/,
   'OAuth return must open Quorum once while routine session recovery preserves the active route.');
 assert.match(
@@ -72,12 +72,12 @@ assert.match(
   /e\.key === 'Escape' && onboardingStage === 'subjectSelection'[\s\S]*exitSubjectSelection\(\)/,
   'Escape must close the subject chooser for keyboard users.',
 );
-assert.match(html, /id="session-choice-modal"[\s\S]*Timer settings/);
-assert.match(html, /12-minute practice[\s\S]*focused 12-minute target/);
+assert.match(html, /id="session-choice-modal"[\s\S]*Bar Question Practice timer settings/);
+assert.match(html, /12-minute question[\s\S]*focused 12-minute target/);
 assert.match(html, /Stopwatch[\s\S]*See how much time you spend/);
-assert.match(html, /Untimed practice[\s\S]*without a clock or time limit/);
+assert.match(html, /Untimed question[\s\S]*without a clock or time limit/);
 assert.match(html, /function preferredMockTimerMode\(\)[\s\S]*\? saved : 'selfPaced'/,
-  'Mock Bar must default to Stopwatch.');
+  'Bar Question Practice must default to Stopwatch.');
 assert.match(html, /function selectSubjectForSession\(subject\)[\s\S]*chooseSessionMode\(selectedSessionMode\)/,
   'Selecting a subject must start with the saved/default timing mode without forcing the settings dialog.');
 assert.match(html, /const PER_Q_SECONDS = 720;/);

@@ -59,7 +59,7 @@ assert.ok(html.indexOf('id="site-header"') < html.indexOf('id="private-beta-land
 assert.ok(html.indexOf('id="site-header"') < html.indexOf('id="authenticated-app-shell"'));
 assert.match(sharedHeader, /id="header-account-control"[^>]*data-public-action="docket"[^>]*>Profile<\/button>/);
 assert.match(sharedHeader, /id="spa-community"[^>]*data-public-feature="quorum"[^>]*>Home<\/button>/);
-assert.match(sharedHeader, /<summary>Practice Exam<\/summary>[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics/);
+assert.match(sharedHeader, /<summary>Study Features<\/summary>[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics/);
 assert.match(sharedHeader, /data-public-feature="examination-room"[^>]*>\s*Examination Room/);
 assert.doesNotMatch(sharedHeader, />The Academy<|>The Commons<|>BarBound<|>The Docket/);
 assert.match(landingJs, /function openQuorumHome\(trigger = null\)[\s\S]*openProtectedFeature\('quorum', trigger\)/);

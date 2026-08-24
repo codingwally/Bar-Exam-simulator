@@ -208,7 +208,7 @@ assert.doesNotMatch(
 assert.match(examinations, /Improved model response/);
 assert.match(examinations, /Review and retain\./);
 assert.match(examinations, /Subject Matter/);
-for (const timerLabel of ['12-minute practice', 'Stopwatch', 'Untimed practice']) {
+for (const timerLabel of ['12-minute question', 'Stopwatch', 'Untimed review']) {
   assert.match(examinations, new RegExp(timerLabel));
 }
 assert.match(examinations, /preferredTimerMode: 'selfPaced'/,

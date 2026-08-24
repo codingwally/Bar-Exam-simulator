@@ -198,7 +198,7 @@ export function normalizeAnswerHistoryPreviewRequest(payload) {
     throw new AdminValidationError('Answer-history preview request is invalid.');
   }
   const allowedFields = new Set([
-    'targetUserId', 'from', 'to', 'search', 'recordSource',
+    'targetUserId', 'from', 'to', 'search', 'feature', 'recordSource',
     'limit', 'offset', 'requestKey',
   ]);
   if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
@@ -236,8 +236,24 @@ export function normalizeAnswerHistoryPreviewRequest(payload) {
   }
   const recordSource = String(payload.recordSource || 'all').trim().toLowerCase();
   if (!['all', 'practice', 'formal_exam'].includes(recordSource)) {
-    throw new AdminValidationError('Choose a valid answer type.');
+    throw new AdminValidationError('Choose a valid answer-history source.');
   }
+  const suppliedFeature = payload.feature == null
+    ? ''
+    : String(payload.feature).trim().toLowerCase();
+  if (suppliedFeature && ![
+    'all',
+    'bar_question_practice',
+    'syllabus_based_review',
+    'bar_exam_simulation',
+  ].includes(suppliedFeature)) {
+    throw new AdminValidationError('Choose a valid website feature.');
+  }
+  const feature = suppliedFeature || ({
+    all: 'all',
+    practice: 'bar_question_practice',
+    formal_exam: 'legacy_formal_exam',
+  })[recordSource];
 
   const limit = payload.limit == null ? 100 : payload.limit;
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
@@ -258,6 +274,7 @@ export function normalizeAnswerHistoryPreviewRequest(payload) {
     from,
     to,
     search: search || null,
+    feature,
     recordSource,
     limit,
     offset,
@@ -438,8 +455,7 @@ export function userDirectoryCsv(items) {
     'Subscription status', 'Beta All Access', 'Effective access', 'Joined at',
     'Profile completed at', 'Last signed in', 'Latest region', 'Latest device',
     'Latest browser', 'Latest operating system', 'Monitoring recorded at',
-    'Questions answered', 'Practice questions answered',
-    'Examination questions answered', 'Last answered at', 'Graded answers',
+    'Questions answered', 'Last answered at', 'Graded answers',
     'Average score', 'Latest score', 'Last graded at', 'Marketing consent',
   ];
   const rows = (Array.isArray(items) ? items : []).map((item) => [
@@ -464,8 +480,6 @@ export function userDirectoryCsv(items) {
     item.current_operating_system,
     item.monitoring_recorded_at,
     item.answered_question_count,
-    item.practice_answered_count,
-    item.examination_answered_count,
     item.last_answered_at,
     item.graded_answer_count,
     item.average_score,
@@ -501,16 +515,29 @@ export function subscriptionDirectoryCsv(items) {
   return [headers, ...rows].map((row) => row.map(safeCsvCell).join(',')).join('\r\n');
 }
 
+function answerFeatureLabel(item = {}) {
+  const supplied = String(item.feature || '').trim();
+  if (supplied) return supplied;
+  if (item.recordSource === 'practice') return 'Bar Question Practice';
+  if (item.examTrack === 'per_subject' || item.track === 'per_subject') {
+    return 'Syllabus-Based Review';
+  }
+  if (item.examTrack === 'bar_feels' || item.track === 'bar_feels') {
+    return 'Bar Exam Simulation';
+  }
+  return 'Feature not recorded';
+}
+
 export function userResponsesCsv(items, user = {}) {
   const headers = [
-    'User email', 'Name', 'Answer type', 'User record ID', 'Attempt ID', 'Exam title', 'Subject',
+    'User email', 'Name', 'Feature', 'User record ID', 'Attempt ID', 'Exam title', 'Subject',
     'Question ID', 'Question text', 'Question record source', 'Student answer',
     'Status', 'Score', 'Timer mode', 'Elapsed seconds', 'Submitted at', 'Completed at',
   ];
   const rows = (Array.isArray(items) ? items : []).map((item) => [
     user.email,
     user.displayName,
-    item.recordSource,
+    answerFeatureLabel(item),
     item.userId,
     item.attemptId,
     item.examTitle,
@@ -531,7 +558,7 @@ export function userResponsesCsv(items, user = {}) {
 
 export function answerHistoryCsv(items) {
   const columns = [
-    ['Answer type', 'recordSource'],
+    ['Feature', 'feature'],
     ['User record ID', 'userId'],
     ['Name', 'userDisplayName'],
     ['User email', 'userEmail'],
@@ -599,6 +626,7 @@ export function answerHistoryCsv(items) {
           .filter(Boolean)
           .join('\n');
       }
+      if (key === 'feature') return answerFeatureLabel(item);
       return item?.[key];
     })
   ));

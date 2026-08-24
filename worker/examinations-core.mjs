@@ -845,6 +845,16 @@ export function examinationDatabaseError(error) {
     'EXAM_SUBJECT_SKIP_UNAVAILABLE',
     'EXAM_SUBJECT_NO_ALTERNATE_QUESTION',
     'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
+    'BAR_SIMULATION_START_INVALID',
+    'BAR_SIMULATION_CATALOG_STALE',
+    'BAR_SIMULATION_DESTINATION_INVALID',
+    'BAR_SIMULATION_START_REQUEST_CONFLICT',
+    'BAR_SIMULATION_START_CONFLICT',
+    'BAR_SIMULATION_POOL_EXHAUSTED',
+    'BAR_SIMULATION_RANDOMIZATION_DISABLED',
+    'BAR_SIMULATION_POOL_NOT_READY',
+    'BAR_SIMULATION_ALLOCATION_COUNT_INVALID',
+    'BAR_SIMULATION_RECEIPT_CORRUPT',
   ];
   const code = known.find((candidate) => message.includes(candidate));
   if (!code) return error;
@@ -876,14 +886,33 @@ export function examinationDatabaseError(error) {
     EXAM_SUBJECT_SKIP_UNAVAILABLE: 'This question can no longer be skipped safely.',
     EXAM_SUBJECT_NO_ALTERNATE_QUESTION: 'No different question is available in this course right now.',
     EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE: 'Verified review material is not available for this question.',
+    BAR_SIMULATION_START_INVALID: 'The Bar Exam Simulation could not be started because its request was invalid.',
+    BAR_SIMULATION_CATALOG_STALE: 'This Bar Exam Simulation set changed. Return to the Simulation list and open it again.',
+    BAR_SIMULATION_DESTINATION_INVALID: 'This Bar Exam Simulation set is not available for randomized allocation.',
+    BAR_SIMULATION_START_REQUEST_CONFLICT: 'This start request was already used with different Simulation settings.',
+    BAR_SIMULATION_START_CONFLICT: 'Another Simulation start completed at the same time. Open the active attempt to continue.',
+    BAR_SIMULATION_POOL_EXHAUSTED: 'You have answered all eligible questions needed for this Bar Exam Simulation set.',
+    BAR_SIMULATION_RANDOMIZATION_DISABLED: 'Randomized Bar Exam Simulation is temporarily unavailable. No attempt was started.',
+    BAR_SIMULATION_POOL_NOT_READY: 'Randomized Bar Exam Simulation is temporarily unavailable. No attempt was started.',
+    BAR_SIMULATION_ALLOCATION_COUNT_INVALID: 'The randomized Simulation set could not be completed. No attempt was started.',
+    BAR_SIMULATION_RECEIPT_CORRUPT: 'The Simulation start record could not be restored safely. Your saved attempts remain preserved.',
   };
-  const status = [
+  const status = code === 'BAR_SIMULATION_START_INVALID'
+    ? 400
+    : [
     'EXAM_BETA_ACCESS_REQUIRED',
     'EXAM_ACCESS_REQUIRED',
     'EXAM_PREMIUM_REQUIRED',
     'EXAM_ADMIN_REQUIRED',
   ].includes(code)
     ? 403
+    : [
+      'BAR_SIMULATION_RANDOMIZATION_DISABLED',
+      'BAR_SIMULATION_POOL_NOT_READY',
+      'BAR_SIMULATION_ALLOCATION_COUNT_INVALID',
+      'BAR_SIMULATION_RECEIPT_CORRUPT',
+    ].includes(code)
+      ? 503
     : code.includes('NOT_FOUND')
       ? 404
       : 409;

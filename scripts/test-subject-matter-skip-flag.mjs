@@ -5,7 +5,7 @@ import {
   SUBJECT_MATTER_PLACEMENTS,
 } from '../worker/subject-matter-placement-manifest.mjs';
 
-const [migration, worker, core, ui, css, pgTap, fixture, featureLoader, deployWorkflow] = await Promise.all([
+const [migration, worker, core, ui, css, pgTap, v2PgTap, fixture, featureLoader, deployWorkflow] = await Promise.all([
   readFile(new URL(
     '../supabase/migrations/20260817111306_subject_matter_skip_and_flag_queue.sql',
     import.meta.url,
@@ -16,6 +16,10 @@ const [migration, worker, core, ui, css, pgTap, fixture, featureLoader, deployWo
   readFile(new URL('../assets/examinations.css', import.meta.url), 'utf8'),
   readFile(new URL(
     '../supabase/tests/20260817_035_subject_matter_skip_and_flag_queue_test.sql',
+    import.meta.url,
+  ), 'utf8'),
+  readFile(new URL(
+    '../supabase/tests/20260824171639_syllabus_based_review_no_repeat_v2_test.sql',
     import.meta.url,
   ), 'utf8'),
   readFile(new URL('../docs/qa/option3-subject-matter-fixture.html', import.meta.url), 'utf8'),
@@ -67,7 +71,8 @@ assert.doesNotMatch(skipFunction, /insert into public\.examination_ai_assessment
 assert.match(core, /'subject_skip_question'/);
 assert.match(core, /operation === 'subject_skip_question'[\s\S]*?normalized\.attemptId[\s\S]*?normalized\.tabToken[\s\S]*?normalized\.requestKey/);
 assert.match(worker, /command\.operation === 'subject_skip_question'/);
-assert.match(worker, /examinationRpc\(env, 'subject_matter_skip_question'/);
+assert.match(worker, /const selector = syllabusBasedReviewRandomizationV2Enabled\(env\)[\s\S]*?'subject_matter_skip_question_v2'[\s\S]*?'subject_matter_skip_question'/);
+assert.match(worker, /examinationRpc\(env, selector,/);
 assert.match(worker, /p_user_id: user\.id/);
 assert.doesNotMatch(worker, /userJwtExaminationRpc|authenticatedExaminationRpc/,
   'Subject Matter Skip must stay inside the existing trusted Worker/service-role boundary.');
@@ -102,7 +107,25 @@ assert.match(clientSkipFunction, /subjectSkipRequestKey\(attemptId\)/);
 assert.doesNotMatch(clientSkipFunction, /requestKey\('skip'\)/);
 assert.match(ui, /Your draft and any flag will remain saved/);
 assert.match(ui, /operation: 'subject_skip_question'/);
-assert.match(ui, /clearRecovery\(\);[\s\S]*?startSubjectSetup\(skipResult\.setup/);
+const terminalSkipBranch = clientSkipFunction.slice(
+  clientSkipFunction.indexOf('if (skipResult.exhausted === true || skipResult.terminal === true)'),
+  clientSkipFunction.indexOf('if (!skipResult.setup?.versionId)'),
+);
+for (const contract of [
+  /clearRecovery\(\)/,
+  /state\.active = null/,
+  /state\.setup = null/,
+  /state\.screen = 'catalog'/,
+  /loadCatalog\('per_subject'\)/,
+  /return/,
+]) assert.match(terminalSkipBranch, contract);
+assert.doesNotMatch(terminalSkipBranch, /startSubjectSetup/,
+  'Terminal exhaustion must return to the course catalog without recycling a question.');
+const nonterminalSkipBranch = clientSkipFunction.slice(
+  clientSkipFunction.indexOf('if (!skipResult.setup?.versionId)'),
+  clientSkipFunction.indexOf("notify(\n        skipResult.flaggedForLater"),
+);
+assert.match(nonterminalSkipBranch, /clearRecovery\(\);[\s\S]*?startSubjectSetup\(skipResult\.setup/);
 assert.match(ui, /function retryFlaggedSubjectQuestion/);
 assert.match(ui, /It does not[\s\S]*mutate subject_matter_cycles/);
 assert.match(ui, /data-subject-retry-flagged/);
@@ -138,6 +161,10 @@ assert.match(pgTap, /same-key skip replay returns the stored next question witho
 assert.match(pgTap, /cycle exhaustion restarts once and still returns a different question/);
 assert.match(pgTap, /skipping an out-of-cycle flagged retry preserves the active no-repeat cycle exactly/);
 assert.match(pgTap, /NULL request key/);
+assert.match(v2PgTap, /skipping the last unseen question closes safely and returns terminal exhaustion/);
+assert.match(v2PgTap, /ordinary entry remains terminal after the course pool is exhausted/);
+assert.match(v2PgTap, /terminal skip does not increment or restart the legacy cycle/);
+assert.match(v2PgTap, /terminal exhaustion is owner-bound and durably represented on the closed attempt/);
 
 assert.match(fixture, /'queue-open'/);
 assert.match(fixture, /operation === 'flag_response'/);
@@ -148,7 +175,7 @@ assert.match(fixture, /operation === 'subject_performance'/);
 assert.match(fixture, /flaggedForLater:/);
 assert.match(fixture, /\['queue', 'queue-open'\]\.includes\(window\.__DD_SUBJECT_QA_STATE\)/);
 assert.match(featureLoader, /assets\/examinations\.css\?v=subject-matter-gil-fixes-20260817-5/);
-assert.match(featureLoader, /assets\/examinations\.js\?v=syllabus-review-20260823-1/);
+assert.match(featureLoader, /assets\/examinations\.js\?v=question-randomization-20260825-1/);
 assert.match(deployWorkflow, /node scripts\/test-subject-matter-skip-flag\.mjs/);
 
 console.log(JSON.stringify({

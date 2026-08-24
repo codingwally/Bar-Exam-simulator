@@ -17,7 +17,7 @@ const publicLanding = index.slice(
 
 for (const label of [
   'Home',
-  'Practice Exam',
+  'Study Features',
   'Quick Drills',
   'Doctrine Review',
   'Syllabus-Based Review',

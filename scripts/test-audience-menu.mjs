@@ -34,7 +34,7 @@ const assertOrder = (markup, labels) => {
 
 assertOrder(navigation, [
   'Home',
-  'Practice Exam',
+  'Study Features',
   'Quick Drills',
   'Doctrine Review',
   'Syllabus-Based Review',
@@ -45,7 +45,7 @@ assertOrder(navigation, [
   'Support',
   'Examination Room',
 ]);
-assert.match(navigation, /<details class="quorum-practice-menu"[\s\S]*<summary>Practice Exam<\/summary>/);
+assert.match(navigation, /<details class="quorum-practice-menu"[\s\S]*<summary>Study Features<\/summary>/);
 assert.match(navigation, /id="header-account-control"[^>]*data-public-action="docket"[^>]*>Profile<\/button>/);
 assert.match(navigation, /class="quorum-shell-compat" hidden aria-hidden="true"/);
 

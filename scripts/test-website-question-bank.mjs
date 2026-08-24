@@ -57,8 +57,8 @@ assert.equal(
 );
 
 const nonQuestionHeaders = HEADERS.filter((header) => header !== 'Essay Question');
-const sourceReviewedBaseline = payload.records.slice(0, 320);
-const nonQuestionProjection = sourceReviewedBaseline.map((record) => Object.fromEntries(
+const retainedSourceReviewedBaseline = payload.records.slice(0, 318);
+const nonQuestionProjection = retainedSourceReviewedBaseline.map((record) => Object.fromEntries(
   nonQuestionHeaders.map((header) => [header, record[header]]),
 ));
 const nonQuestionDigest = crypto
@@ -67,8 +67,8 @@ const nonQuestionDigest = crypto
   .digest('hex');
 assert.equal(
   nonQuestionDigest,
-  '6e5b4adfed83fa1f85ed6b22e630d0085b40d7fb62bcee2bb3158df615f4adf1',
-  'The source-reviewed model-answer and non-question corpus must remain byte-for-byte locked.',
+  'daf757659645eee844b9e3b841c56e2817e2c555fb694bf7885b822eec901f3c',
+  'The 318 retained source-reviewed model answers and non-question fields must remain byte-for-byte locked.',
 );
 
 const promptDigest = (value) => crypto.createHash('sha256').update(value, 'utf8').digest('hex');
@@ -94,8 +94,8 @@ assert.equal(
 );
 assert.equal(
   sourceManifest.summary.finalNonQuestionSha256,
-  nonQuestionDigest,
-  'Manifest must lock the corrected model-answer and non-question corpus.',
+  '6e5b4adfed83fa1f85ed6b22e630d0085b40d7fb62bcee2bb3158df615f4adf1',
+  'Historical manifest must retain the reviewed 320-row release digest.',
 );
 assert.equal(
   sourceManifest.summary.baselineSuggestedAnswerSha256,
@@ -108,12 +108,13 @@ assert.equal(
   'Manifest must lock the corrected Suggested Answer corpus.',
 );
 
-const recordsById = new Map(sourceReviewedBaseline.map((record) => [record['Question ID'], record]));
-assert.equal(sourceManifest.records.length, recordsById.size, 'Manifest IDs must match bank IDs exactly.');
+const recordsById = new Map(retainedSourceReviewedBaseline.map((record) => [record['Question ID'], record]));
+const sourceCertifiedManifestRecords = sourceManifest.records.filter((source) => source.status === 'source-certified');
+assert.equal(sourceCertifiedManifestRecords.length, recordsById.size, 'All 318 retained source-certified IDs must remain deployed.');
 assert.equal(
   new Set(sourceManifest.records.map((source) => source.questionId)).size,
-  recordsById.size,
-  'Manifest question IDs must be unique.',
+  sourceManifest.records.length,
+  'Historical manifest question IDs must remain unique.',
 );
 const unresolvedIds = [];
 const correctedAnswerIds = [];
@@ -129,19 +130,7 @@ const allowedAnswerFields = new Set([
 ]);
 for (const source of sourceManifest.records) {
   const record = recordsById.get(source.questionId);
-  assert.ok(record, `Manifest contains unknown bank ID ${source.questionId}.`);
-  assert.equal(
-    promptDigest(record['Essay Question']),
-    source.deployedPromptSha256,
-    `${source.questionId} prompt must match its reviewed source-manifest digest.`,
-  );
-  if (source.status === 'source-certified') {
-    assert.equal(
-      source.deployedPromptSha256,
-      source.officialPromptSha256,
-      `${source.questionId} deployed prompt must match the official source digest.`,
-    );
-  } else {
+  if (source.status !== 'source-certified') {
     unresolvedIds.push(source.questionId);
     assert.equal(
       source.status,
@@ -150,7 +139,20 @@ for (const source of sourceManifest.records) {
     );
     assert.ok(source.note, `${source.questionId} must explain why its official prompt is not deployed.`);
     assert.ok(source.officialWholeItemSha256, `${source.questionId} must retain its official whole-item digest.`);
+    assert.equal(record, undefined, `${source.questionId} must remain permanently absent from the deployable bank.`);
+    continue;
   }
+  assert.ok(record, `Source-certified manifest ID ${source.questionId} must remain in the deployable bank.`);
+  assert.equal(
+    promptDigest(record['Essay Question']),
+    source.deployedPromptSha256,
+    `${source.questionId} prompt must match its reviewed source-manifest digest.`,
+  );
+  assert.equal(
+    source.deployedPromptSha256,
+    source.officialPromptSha256,
+    `${source.questionId} deployed prompt must match the official source digest.`,
+  );
   if (source.answerAlignment) {
     correctedAnswerIds.push(source.questionId);
     assert.equal(source.answerAlignment.status, 'source-reviewed-corrected');

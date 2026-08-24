@@ -199,8 +199,7 @@ test('user directory CSV includes full identity and remains spreadsheet-safe', (
     'Subscription status', 'Beta All Access', 'Effective access', 'Joined at',
     'Profile completed at', 'Last signed in', 'Latest region', 'Latest device',
     'Latest browser', 'Latest operating system', 'Monitoring recorded at',
-    'Questions answered', 'Practice questions answered',
-    'Examination questions answered', 'Last answered at', 'Graded answers',
+    'Questions answered', 'Last answered at', 'Graded answers',
     'Average score', 'Latest score', 'Last graded at', 'Marketing consent',
   ].map((value) => `"${value}"`).join(','));
   assert.match(csv, /"student\.one@example\.com"/);
@@ -408,7 +407,7 @@ test('answer-history preview strictly validates filters and pagination', () => {
     from: '2026-07-01T00:00:00Z',
     to: '2026-08-01T00:00:00Z',
     search: 'student@example.com',
-    recordSource: 'formal_exam',
+    feature: 'syllabus_based_review',
     limit: 50,
     offset: 100,
     requestKey: 'answerpreview000001',
@@ -418,7 +417,8 @@ test('answer-history preview strictly validates filters and pagination', () => {
     from: '2026-07-01T00:00:00.000Z',
     to: '2026-08-01T00:00:00.000Z',
     search: 'student@example.com',
-    recordSource: 'formal_exam',
+    feature: 'syllabus_based_review',
+    recordSource: 'all',
     limit: 50,
     offset: 100,
     requestKey: 'answerpreview000001',
@@ -426,6 +426,10 @@ test('answer-history preview strictly validates filters and pagination', () => {
   assert.throws(() => normalizeAnswerHistoryPreviewRequest({
     recordSource: 'examination',
     requestKey: 'answerpreview000002',
+  }), AdminValidationError);
+  assert.throws(() => normalizeAnswerHistoryPreviewRequest({
+    feature: 'formal_exam',
+    requestKey: 'answerpreview000008',
   }), AdminValidationError);
   assert.throws(() => normalizeAnswerHistoryPreviewRequest({
     limit: 101,
@@ -1309,7 +1313,7 @@ test('founder answer-history preview shows current approved practice content and
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_preview_answer_history_with_sources')) {
+    if (url.endsWith('/rest/v1/rpc/admin_preview_answer_history_by_feature_v1')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         scope: 'all_users',
@@ -1349,14 +1353,14 @@ test('founder answer-history preview shows current approved practice content and
         from: null,
         to: null,
         search: 'student',
-        recordSource: 'practice',
+        feature: 'bar_question_practice',
         limit: 2,
         offset: 100,
       }),
     }), workerEnv);
     assert.equal(response.status, 200);
     assert.equal(rpcBody.p_search, 'student');
-    assert.equal(rpcBody.p_record_source, 'practice');
+    assert.equal(rpcBody.p_feature_key, 'bar_question_practice');
     assert.equal(rpcBody.p_limit, 2);
     assert.equal(rpcBody.p_offset, 100);
     assert.match(rpcBody.p_request_key, /^[A-Za-z0-9_-]{16,128}$/);

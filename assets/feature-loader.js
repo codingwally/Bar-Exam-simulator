@@ -18,7 +18,7 @@
       ],
       scripts: [
         'assets/study-workspace.js?v=syllabus-review-20260823-1',
-        'assets/examinations.js?v=syllabus-review-20260823-1',
+        'assets/examinations.js?v=question-randomization-20260825-1',
       ],
     }),
     content: Object.freeze({

@@ -7,6 +7,7 @@ import {
   MOCK_BAR_SUBJECTS,
   SUBJECT_MATTER_CSV_URL,
   WEBSITE_UPLOAD_CSV_URL,
+  WEBSITE_VISIBILITY_CSV_URL,
   buildBarFeelsManifest,
   buildSubjectMatterPlacements,
   parseSubjectMatterSource,
@@ -204,6 +205,10 @@ test('Mock Bar import and Bar Feels manifest are exact, unique, and deterministi
 test('release sync uses the versioned snapshot when the Google source is unavailable', async () => {
   const originalFetch = globalThis.fetch;
   const websiteCsv = csv(websiteRows());
+  const visibilityCsv = [
+    'Question ID,Publication Ready?',
+    ...websiteRows().map((row) => `${row['Question ID']},${row['Publication Ready?']}`),
+  ].join('\r\n');
   let syncBody;
   const stagedBodies = [];
   globalThis.fetch = async (url, options = {}) => {
@@ -222,6 +227,9 @@ test('release sync uses the versioned snapshot when the Google source is unavail
     }
     if (target === WEBSITE_UPLOAD_CSV_URL) {
       return new Response(websiteCsv, { headers: { 'Content-Type': 'text/csv' } });
+    }
+    if (target === WEBSITE_VISIBILITY_CSV_URL) {
+      return new Response(visibilityCsv, { headers: { 'Content-Type': 'text/csv' } });
     }
     if (target.endsWith('/rest/v1/rpc/release_stage_subject_matter_v2')) {
       stagedBodies.push(JSON.parse(options.body));

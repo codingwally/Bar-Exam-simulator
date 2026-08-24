@@ -149,12 +149,17 @@ import {
   SUBJECT_MATTER_SHEET_RANGE,
   SUBJECT_MATTER_SPREADSHEET_ID,
   WEBSITE_UPLOAD_CSV_URL,
+  WEBSITE_VISIBILITY_CSV_URL,
+  applyWebsitePublicationOverlay,
   buildBarFeelsManifest,
   buildSubjectMatterPlacements,
   parseSubjectMatterSource,
+  parseWebsitePublicationOverlay,
   parseWebsiteUploadSource,
   sheetValuesToCsv,
   subjectMatterReleaseSnapshotCsv,
+  visibleWebsiteReleaseRows,
+  websitePublicationDigest,
 } from './release-content-core.mjs';
 import {
   DD2026ValidationError,
@@ -184,6 +189,8 @@ const GEMINI_TIMEOUT_MS = 45 * 1000;
 const SUBJECT_MATTER_TEACHING_TIMEOUT_MS = 8 * 1000;
 const GEMINI_TRANSIENT_ATTEMPTS = 2;
 const GEMINI_RETRY_DELAY_MS = 750;
+const WEBSITE_VISIBILITY_CACHE_URL = 'https://question-visibility-cache.invalid/v1.csv';
+const WEBSITE_VISIBILITY_MAX_BYTES = 100_000;
 const rateWindows = new Map();
 const correctionRateWindows = new Map();
 const supportRateWindows = new Map();
@@ -2347,46 +2354,8 @@ async function loadLaborBank(csvUrl) {
   return records;
 }
 
-async function loadWebsiteBank(url) {
-  const now = Date.now();
-  if (websiteBankCache && now - websiteBankCache.loadedAt < 5 * 60 * 1000) {
-    return websiteBankCache.records;
-  }
-  let payload = null;
-  let sourceError = null;
-  if (url) {
-    try {
-      const response = await fetch(url, { headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error(`source status ${response.status}`);
-      payload = await response.json();
-    } catch (error) {
-      sourceError = error;
-    }
-  } else {
-    try {
-      const response = await fetch(WEBSITE_UPLOAD_CSV_URL, {
-        headers: { Accept: 'text/csv' },
-      });
-      if (!response.ok) throw new Error(`source status ${response.status}`);
-      const csvText = await response.text();
-      await parseWebsiteUploadSource(csvText);
-      const parsed = parseQuestionBank(csvText);
-      websiteBankCache = { records: parsed, loadedAt: now, source: WEBSITE_UPLOAD_CSV_URL };
-      return parsed;
-    } catch (error) {
-      sourceError = error;
-    }
-  }
-
-  // Keep the last successfully validated live source available through a
-  // transient publication outage. The embedded reviewed snapshot remains the
-  // cold-start fallback and is never preferred over the published CSV.
-  if (websiteBankCache?.records) return websiteBankCache.records;
-  if (!payload) payload = embeddedWebsiteQuestionBank;
+function websiteRecordsFromPayload(payload) {
   if (!Array.isArray(payload?.records) || payload.records.length !== 320) {
-    console.warn('Published website question bank unavailable and fallback invalid', {
-      code: sourceError?.code || 'QUESTION_BANK_UNAVAILABLE',
-    });
     throw new ExaminerError(
       'QUESTION_BANK_INVALID',
       'The website question bank could not be prepared safely.',
@@ -2397,16 +2366,213 @@ async function loadWebsiteBank(url) {
   for (const row of payload.records) {
     const id = String(row?.['Question ID'] || '').trim();
     if (!id || records.has(id)) {
-      throw new ExaminerError('QUESTION_BANK_INVALID', 'The website question bank contains an invalid or duplicate ID.', 502);
+      throw new ExaminerError(
+        'QUESTION_BANK_INVALID',
+        'The website question bank contains an invalid or duplicate ID.',
+        502,
+      );
     }
     records.set(id, row);
+  }
+  return records;
+}
+
+function boundedWebsiteVisibilityCsv(csvText) {
+  const source = String(csvText || '');
+  if (!source || new TextEncoder().encode(source).length > WEBSITE_VISIBILITY_MAX_BYTES) {
+    throw new ReleaseContentError(
+      'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+      'The website visibility projection exceeds its safe transport boundary.',
+    );
+  }
+  return source;
+}
+
+async function fetchWebsiteVisibilityCsv() {
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(WEBSITE_VISIBILITY_CSV_URL, {
+        headers: { Accept: 'text/csv' },
+      });
+      if (response.ok) return boundedWebsiteVisibilityCsv(await response.text());
+      lastError = new Error(`visibility source status ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < 3) {
+      await new Promise((resolve) => setTimeout(resolve, attempt * 100));
+    }
+  }
+  throw lastError || new Error('visibility source unavailable');
+}
+
+async function readCachedWebsiteVisibility() {
+  const cache = globalThis.caches?.default;
+  if (!cache) return null;
+  try {
+    const response = await cache.match(new Request(WEBSITE_VISIBILITY_CACHE_URL));
+    if (!response?.ok) return null;
+    const csvText = boundedWebsiteVisibilityCsv(await response.text());
+    return { records: parseWebsitePublicationOverlay(csvText), csvText };
+  } catch (error) {
+    console.warn('Validated website visibility cache could not be read', {
+      code: error?.code || 'WEBSITE_VISIBILITY_CACHE_READ_FAILED',
+    });
+    return null;
+  }
+}
+
+async function cacheWebsiteVisibility(csvText) {
+  const cache = globalThis.caches?.default;
+  if (!cache) return;
+  try {
+    const boundedCsv = boundedWebsiteVisibilityCsv(csvText);
+    await cache.put(
+      new Request(WEBSITE_VISIBILITY_CACHE_URL),
+      new Response(boundedCsv, {
+        headers: {
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Content-Type': 'text/csv; charset=utf-8',
+        },
+      }),
+    );
+  } catch (error) {
+    // Cache persistence improves cross-isolate continuity but is never allowed
+    // to delay or interrupt a paid user's exam request.
+    console.warn('Validated website visibility cache could not be updated', {
+      code: error?.code || 'WEBSITE_VISIBILITY_CACHE_WRITE_FAILED',
+    });
+  }
+}
+
+async function loadWebsiteBank(url) {
+  const now = Date.now();
+  if (websiteBankCache && now - websiteBankCache.loadedAt < 5 * 60 * 1000) {
+    return websiteBankCache.records;
+  }
+  let canonicalRecords = null;
+  let visibilityRecords = null;
+  let visibilityCsvText = null;
+  let sourceError = null;
+
+  const visibilityRequest = (async () => {
+    const csvText = await fetchWebsiteVisibilityCsv();
+    return { records: parseWebsitePublicationOverlay(csvText), csvText };
+  })();
+  const canonicalRequest = (async () => {
+    if (url) {
+      const response = await fetch(url, { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error(`source status ${response.status}`);
+      return websiteRecordsFromPayload(await response.json());
+    }
+    const response = await fetch(WEBSITE_UPLOAD_CSV_URL, {
+      headers: { Accept: 'text/csv' },
+    });
+    if (!response.ok) throw new Error(`source status ${response.status}`);
+    const csvText = await response.text();
+    await parseWebsiteUploadSource(csvText);
+    return parseQuestionBank(csvText);
+  })();
+  const [visibilityResult, canonicalResult] = await Promise.allSettled([
+    visibilityRequest,
+    canonicalRequest,
+  ]);
+  if (visibilityResult.status === 'fulfilled') {
+    visibilityRecords = visibilityResult.value.records;
+    visibilityCsvText = visibilityResult.value.csvText;
+  } else {
+    sourceError = visibilityResult.reason;
+  }
+  if (canonicalResult.status === 'fulfilled') {
+    canonicalRecords = canonicalResult.value;
+  } else {
+    sourceError = canonicalResult.reason;
+  }
+
+  if (canonicalRecords && visibilityRecords) {
+    try {
+      const records = applyWebsitePublicationOverlay(canonicalRecords, visibilityRecords);
+      websiteBankCache = {
+        records,
+        loadedAt: now,
+        source: `${url || WEBSITE_UPLOAD_CSV_URL} + Q&A Bank visibility`,
+      };
+      await cacheWebsiteVisibility(visibilityCsvText);
+      return records;
+    } catch (error) {
+      // A partial or malformed control projection must never interrupt paid
+      // users. Keep the last fully validated combined bank, or use the
+      // reviewed embedded status quo on a cold start.
+      sourceError = error;
+      visibilityRecords = null;
+    }
+  }
+
+  // Keep the last successfully validated live source available through a
+  // transient publication outage. The embedded reviewed snapshot remains the
+  // cold-start fallback. A separately available Q&A overlay is still applied
+  // so a canonical-source outage cannot reissue a question the owner hid.
+  if (websiteBankCache?.records) return websiteBankCache.records;
+  if (!visibilityRecords) {
+    const cachedVisibility = await readCachedWebsiteVisibility();
+    visibilityRecords = cachedVisibility?.records || null;
+    visibilityCsvText = cachedVisibility?.csvText || null;
+  }
+  let records = null;
+  let usedEmbeddedFallback = false;
+  try {
+    const embeddedRecords = websiteRecordsFromPayload(embeddedWebsiteQuestionBank);
+    if (visibilityRecords) {
+      try {
+        usedEmbeddedFallback = !canonicalRecords;
+        records = applyWebsitePublicationOverlay(
+          canonicalRecords || embeddedRecords,
+          visibilityRecords,
+        );
+      } catch (error) {
+        sourceError = error;
+        try {
+          records = applyWebsitePublicationOverlay(embeddedRecords, visibilityRecords);
+          usedEmbeddedFallback = true;
+        } catch (embeddedOverlayError) {
+          sourceError = embeddedOverlayError;
+          visibilityRecords = null;
+          visibilityCsvText = null;
+        }
+      }
+    }
+    if (!records) {
+      records = embeddedRecords;
+      usedEmbeddedFallback = true;
+    }
+  } catch (error) {
+    console.warn('Published website question bank unavailable and fallback invalid', {
+      code: error?.code || sourceError?.code || 'QUESTION_BANK_UNAVAILABLE',
+    });
+    throw error;
+  }
+  if (visibilityRecords && visibilityCsvText) {
+    await cacheWebsiteVisibility(visibilityCsvText);
   }
   websiteBankCache = {
     records,
     loadedAt: now,
-    source: url || 'embedded-reviewed-fallback',
+    source: visibilityRecords && !usedEmbeddedFallback
+      ? 'validated canonical fallback + Q&A Bank visibility'
+      : visibilityRecords
+        ? 'embedded-reviewed-fallback + Q&A Bank visibility'
+        : 'embedded-reviewed-status-quo-fallback',
   };
   return records;
+}
+
+export async function loadWebsiteBankForTest(url = null) {
+  return loadWebsiteBank(url);
+}
+
+export function resetWebsiteBankCacheForTest() {
+  websiteBankCache = null;
 }
 
 function normalizedAdminSourceLinks(value) {
@@ -4113,13 +4279,24 @@ async function loadSubjectMatterSource(env) {
 async function handleReleaseContentSync(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
-  const [subjectSource, websiteCsv] = await Promise.all([
+  const [subjectSource, websiteCsv, visibilityCsv] = await Promise.all([
     loadSubjectMatterSource(env),
     fetchPublishedCsv(WEBSITE_UPLOAD_CSV_URL, 'Mock Bar source'),
+    fetchPublishedCsv(WEBSITE_VISIBILITY_CSV_URL, 'website publication visibility'),
   ]);
   const websiteSource = await parseWebsiteUploadSource(websiteCsv);
+  const overlaidWebsiteRecords = applyWebsitePublicationOverlay(
+    parseQuestionBank(websiteCsv),
+    parseWebsitePublicationOverlay(visibilityCsv),
+  );
   const subjectPlacementManifest = buildSubjectMatterPlacements(subjectSource.rows);
-  const barGroups = buildBarFeelsManifest(websiteSource.rows);
+  const barGroups = buildBarFeelsManifest(
+    visibleWebsiteReleaseRows(websiteSource.rows, overlaidWebsiteRecords),
+  );
+  const barDigest = await websitePublicationDigest(
+    websiteSource.digest,
+    overlaidWebsiteRecords,
+  );
   const syncId = crypto.randomUUID();
   const stageParts = async (kind, records, partSize) => {
     const totalParts = Math.ceil(records.length / partSize);
@@ -4145,7 +4322,7 @@ async function handleReleaseContentSync(request, env, origin, allowedOrigin) {
     p_actor_user_id: user.id,
     p_sync_id: syncId,
     p_bar_groups: barGroups,
-    p_bar_digest: websiteSource.digest,
+    p_bar_digest: barDigest,
     p_bar_endpoint: WEBSITE_UPLOAD_CSV_URL,
   });
   // Never echo question or answer content from the administrative sync.

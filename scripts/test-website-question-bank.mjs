@@ -21,6 +21,15 @@ const validation = validateRecords(
 assert.deepEqual(validation.duplicateIds, [], 'Question IDs must be unique.');
 assert.deepEqual(validation.failures, [], 'Every imported row must pass publication validation.');
 
+const explicitlyHiddenRecord = {
+  __rowNumber: 2,
+  ...payload.records[0],
+  'Publication Ready?': 'No',
+};
+const hiddenValidation = validateRecords([explicitlyHiddenRecord]);
+assert.deepEqual(hiddenValidation.failures, [], 'An explicit No must remain valid import data.');
+assert.equal(hiddenValidation.valid.length, 1, 'A hidden record must remain in the canonical snapshot.');
+
 const exactPrompt = 'Keep  repeated spaces before .38-caliber.\n\nKeep the paragraph break ; exactly.';
 const sourceRecord = Object.fromEntries(HEADERS.map((header) => [header, ` ${header} `]));
 sourceRecord['Essay Question'] = exactPrompt;

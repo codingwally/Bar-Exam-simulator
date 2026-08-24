@@ -1,4 +1,5 @@
 import { parseCsv } from './examiner-core.mjs';
+import { questionWebsiteVisibility } from './question-visibility-core.mjs';
 import {
   SUBJECT_MATTER_COURSES,
   SUBJECT_MATTER_EXPECTED,
@@ -12,6 +13,9 @@ import {
 
 export const WEBSITE_UPLOAD_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=141335489&single=true&output=csv';
+
+export const WEBSITE_VISIBILITY_CSV_URL =
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=1079892800&single=true&output=csv';
 
 export const SUBJECT_MATTER_CSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vTnIYEQTEWRiQtphCLcbOz--qfS64p14RXKTM4bVcU62GGAViwuGXEjgnnRf1sZ5-_jOx9gJ9E4jyvj/pub?gid=1729202601&single=true&output=csv&range=A1%3AU1623';
@@ -475,6 +479,124 @@ export async function parseWebsiteUploadSource(csvText) {
     );
   }
   return { rows, counts, digest: await sha256(csvText) };
+}
+
+export function parseWebsitePublicationOverlay(csvText) {
+  const rows = parseCsv(csvText);
+  const headerIndex = rows.findIndex((row) => (
+    preserveText(row[0]).replace(/^\uFEFF/, '').toLowerCase() === 'question id'
+  ));
+  if (headerIndex < 0) {
+    throw new ReleaseContentError(
+      'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+      'The website visibility projection is missing its header.',
+    );
+  }
+  const headers = rows[headerIndex].map((header, index) => {
+    const value = preserveText(header, 500);
+    return index === 0 ? value.replace(/^\uFEFF/, '') : value;
+  });
+  if (headers.length !== 2
+      || headers[0] !== 'Question ID'
+      || headers[1] !== 'Publication Ready?') {
+    throw new ReleaseContentError(
+      'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+      'The website visibility projection must contain only Question ID and Publication Ready?.',
+    );
+  }
+  const questionIdIndex = headers.indexOf('Question ID');
+  const publicationReadyIndex = headers.indexOf('Publication Ready?');
+  if (questionIdIndex < 0 || publicationReadyIndex < 0) {
+    throw new ReleaseContentError(
+      'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+      'The website visibility projection must contain Question ID and Publication Ready?.',
+    );
+  }
+  const records = new Map();
+  for (let index = headerIndex + 1; index < rows.length; index += 1) {
+    const cells = rows[index];
+    if (cells.every((value) => !preserveText(value))) continue;
+    const rowNumber = index + 1;
+    const questionId = preserveText(cells[questionIdIndex], 200);
+    const rawState = preserveText(cells[publicationReadyIndex], 120).toLowerCase();
+    if (!questionId || (rawState !== 'yes' && rawState !== 'no')) {
+      throw new ReleaseContentError(
+        'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+        `Q&A Bank row ${rowNumber} must contain a question ID and an explicit Yes/No publication state.`,
+      );
+    }
+    if (records.has(questionId)) {
+      throw new ReleaseContentError(
+        'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+        `The Q&A Bank publication overlay repeats ${questionId}.`,
+      );
+    }
+    records.set(questionId, {
+      'Question ID': questionId,
+      'Publication Ready?': rawState === 'yes' ? 'Yes' : 'No',
+    });
+  }
+  return records;
+}
+
+export function applyWebsitePublicationOverlay(canonicalRecords, qnaRecords) {
+  if (!(canonicalRecords instanceof Map) || !(qnaRecords instanceof Map)) {
+    throw new ReleaseContentError(
+      'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+      'The Mock Bar publication visibility overlay is unavailable.',
+    );
+  }
+  const overlaid = new Map();
+  for (const [questionId, canonicalRecord] of canonicalRecords) {
+    const rawState = preserveText(qnaRecords.get(questionId)?.['Publication Ready?'], 120)
+      .toLowerCase();
+    if (rawState !== 'yes' && rawState !== 'no') {
+      throw new ReleaseContentError(
+        'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+        `The Q&A Bank has no explicit Yes/No publication state for ${questionId}.`,
+      );
+    }
+    overlaid.set(questionId, {
+      ...canonicalRecord,
+      'Publication Ready?': rawState === 'yes' ? 'Yes' : 'No',
+    });
+  }
+  return overlaid;
+}
+
+export function visibleWebsiteReleaseRows(rows, overlaidRecords) {
+  if (!Array.isArray(rows) || !(overlaidRecords instanceof Map)) {
+    throw new ReleaseContentError(
+      'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+      'The Mock Bar publication visibility overlay is unavailable.',
+    );
+  }
+  return rows.filter((row) => (
+    questionWebsiteVisibility(overlaidRecords.get(row.questionId)) === 'visible'
+  ));
+}
+
+export async function websitePublicationDigest(sourceDigest, overlaidRecords) {
+  if (!/^[0-9a-f]{64}$/i.test(String(sourceDigest || ''))
+      || !(overlaidRecords instanceof Map)) {
+    throw new ReleaseContentError(
+      'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+      'The Mock Bar publication visibility digest could not be prepared.',
+    );
+  }
+  const states = [...overlaidRecords.entries()]
+    .map(([questionId, row]) => {
+      const visibility = questionWebsiteVisibility(row);
+      if (visibility === 'invalid') {
+        throw new ReleaseContentError(
+          'MOCK_BAR_VISIBILITY_OVERLAY_INVALID',
+          `The Mock Bar publication state is invalid for ${questionId}.`,
+        );
+      }
+      return `${questionId}:${visibility === 'hidden' ? 'No' : 'Yes'}`;
+    })
+    .sort();
+  return sha256([String(sourceDigest).toLowerCase(), ...states].join('\n'));
 }
 
 export function buildBarFeelsManifest(rows, seed = 'duediligence-bar-feels-20260730') {

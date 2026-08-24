@@ -1,3 +1,5 @@
+import { questionWebsiteVisibility } from './question-visibility-core.mjs';
+
 export const PHASE4_SUBJECTS = Object.freeze([
   'Political Law',
   'Labor Law',
@@ -128,7 +130,10 @@ export function availableProtectedQuestionInventory(records) {
   const inventory = protectedQuestionInventory(records);
   return Object.fromEntries(PHASE4_SUBJECTS.map((subject) => [
     subject,
-    inventory[subject].filter((question) => !isProtectedQuestionWithheld(question.id)),
+    inventory[subject].filter((question) => (
+      !isProtectedQuestionWithheld(question.id)
+      && questionWebsiteVisibility(records.get(question.id)) === 'visible'
+    )),
   ]));
 }
 
@@ -139,10 +144,13 @@ export function selectProtectedQuestion(records, options = {}) {
       ? options.excludeQuestionIds.map(clean).filter(Boolean).slice(0, 40)
       : [],
   );
-  const questions = availableProtectedQuestionInventory(records)[subject];
+  const inventory = protectedQuestionInventory(records)[subject]
+    .filter((question) => !isProtectedQuestionWithheld(question.id));
   const requestedQuestionId = clean(options.questionId);
   if (requestedQuestionId) {
-    const exact = questions.find((question) => question.id === requestedQuestionId);
+    // A visibility change stops new issuance without interrupting a paid user
+    // who is restoring a question that was already issued to their workspace.
+    const exact = inventory.find((question) => question.id === requestedQuestionId);
     if (!exact) {
       throw new AccessValidationError(
         'QUESTION_NOT_FOUND',
@@ -151,6 +159,16 @@ export function selectProtectedQuestion(records, options = {}) {
       );
     }
     return exact;
+  }
+  const questions = inventory.filter((question) => (
+    questionWebsiteVisibility(records.get(question.id)) === 'visible'
+  ));
+  if (!questions.length) {
+    throw new AccessValidationError(
+      'QUESTION_BANK_INVALID',
+      'The protected question bank is temporarily unavailable.',
+      503,
+    );
   }
   const candidates = questions.filter((question) => !excluded.has(question.id));
   const pool = candidates.length ? candidates : questions;

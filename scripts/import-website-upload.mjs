@@ -46,6 +46,8 @@ export const APPROVED_SUBJECTS = Object.freeze([
   'Legal and Judicial Ethics',
 ]);
 
+export const PUBLICATION_STATES = Object.freeze(['Yes', 'No']);
+
 const NOTES_PHRASE = 'Approved for verification; not yet verified.';
 const ALAC_HEADINGS = ['Answer', 'Legal Basis', 'Application', 'Conclusion'];
 const EXPORT_URL =
@@ -115,7 +117,9 @@ export function validateRecords(records) {
     if (question.length > 20_000) reasons.push('Essay Question exceeds 20,000 characters');
     if (!approved.has(record.Subject.trim())) reasons.push('Subject is not an approved Bar subject');
     if (record['Editorial Status'].trim() !== 'Approved') reasons.push('Editorial Status is not Approved');
-    if (record['Publication Ready?'].trim() !== 'Yes') reasons.push('Publication Ready? is not Yes');
+    if (!PUBLICATION_STATES.includes(record['Publication Ready?'].trim())) {
+      reasons.push('Publication Ready? must be an explicit Yes or No');
+    }
     if (!record.Notes.includes(NOTES_PHRASE)) reasons.push('Required Notes phrase is missing');
     const nonQuestionRecord = Object.fromEntries(
       HEADERS.filter((header) => header !== 'Essay Question')

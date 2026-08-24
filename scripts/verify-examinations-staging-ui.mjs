@@ -430,7 +430,7 @@ async function openCatalog(page, track) {
   }
   await page.locator(rootSelector).waitFor({ state: 'visible', timeout: 30_000 });
   await page.locator(rootSelector).getByRole('heading', {
-    name: track === 'bar_feels' ? 'Bar Exam Simulation' : 'Subject Matter',
+    name: track === 'bar_feels' ? 'Bar Exam Simulation' : 'Syllabus-Based Review',
     exact: true,
   }).waitFor({ state: 'visible', timeout: 45_000 });
 }
@@ -937,7 +937,7 @@ try {
     { width: 1_440, height: 1_100 },
   ];
   const catalogChecks = [
-    { track: 'per_subject', label: 'subjectMatter', heading: 'Subject Matter' },
+    { track: 'per_subject', label: 'subjectMatter', heading: 'Syllabus-Based Review' },
     { track: 'bar_feels', label: 'barFeels', heading: 'Bar Exam Simulation' },
   ];
   for (const viewport of viewportChecks) {

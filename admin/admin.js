@@ -105,7 +105,7 @@
     liveActivity: null,
     answerHistory: null,
     answerSearch: '',
-    answerType: 'all',
+    answerFeature: 'all',
     answerOffset: 0,
     quorumPosts: null,
     quorumPostSearch: '',
@@ -136,6 +136,15 @@
     if (code === 'free') return 'Introductory access';
     if (['standard', 'premium'].includes(code)) return 'Legacy paid plan';
     return code ? humanizeAuditValue(code) : 'Introductory access';
+  }
+
+  function answerFeatureLabel(item = {}) {
+    const supplied = String(item.feature || '').trim();
+    if (supplied) return supplied;
+    if (item.recordSource === 'practice') return 'Bar Question Practice';
+    if (item.examTrack === 'per_subject') return 'Syllabus-Based Review';
+    if (item.examTrack === 'bar_feels') return 'Bar Exam Simulation';
+    return 'Feature not recorded';
   }
 
   function commercialAccountLabel(account = {}) {
@@ -547,7 +556,7 @@
   }
 
   async function loadAnswerHistory(force = false) {
-    const key = `answers:${state.answerSearch}:${state.answerType}:${state.answerOffset}`;
+    const key = `answers:${state.answerFeature}:${state.answerSearch}:${state.answerOffset}`;
     if (!force && state.operational.has(key)) {
       state.answerHistory = state.operational.get(key);
       return state.answerHistory;
@@ -557,7 +566,7 @@
       from: null,
       to: null,
       search: state.answerSearch || null,
-      recordSource: state.answerType,
+      feature: state.answerFeature,
       limit: 100,
       offset: state.answerOffset,
     });
@@ -888,7 +897,7 @@
       <div class="observatory-kpis">
         ${observatoryKpi('Signed-in accounts', number(signedInAccounts), 'ph-users-three', 'cyan', 'All recorded accounts')}
         ${observatoryKpi('Answering users', number(answeringUsers), 'ph-user-focus', 'cyan', 'Accounts with at least one answer')}
-        ${observatoryKpi('Questions answered', number(questionsAnswered), 'ph-chats-circle', 'cyan', 'Practice and formal examinations')}
+        ${observatoryKpi('Questions answered', number(questionsAnswered), 'ph-chats-circle', 'cyan', 'Across website features')}
         ${observatoryKpi('Grading success', percentage(gradingSuccess), 'ph-shield-check', gradingSuccess != null && Number(gradingSuccess) < 0.95 ? 'red' : 'green', 'Selected reporting period')}
       </div>
       <div class="executive-chart-grid executive-chart-grid-top">
@@ -1350,7 +1359,7 @@
 
   const userDirectoryHeaders = [
     'Name', 'Email', 'Category', 'Access', 'Last sign-in', 'Region', 'Device',
-    'Questions answered', 'Answer types', 'Score', 'Actions',
+    'Questions answered', 'Score', 'Actions',
   ];
 
   function userDirectoryCells(user, founderAuthorized) {
@@ -1363,7 +1372,6 @@
       accountRegion(user),
       accountDevice(user),
       number(user.answered_question_count),
-      `${number(user.practice_answered_count)} practice · ${number(user.examination_answered_count)} formal`,
       user.average_score == null
         ? 'Not available'
         : `${number(user.average_score, 1)} average · ${number(user.latest_score, 1)} latest`,
@@ -1518,11 +1526,21 @@
     const filteredItems = currentAnswerHistoryItems();
     const pageStart = Number(data.offset ?? state.answerOffset) + (filteredItems.length ? 1 : 0);
     const pageEnd = Number(data.offset ?? state.answerOffset) + filteredItems.length;
+    const pageFeatureCounts = filteredItems.reduce((counts, item) => {
+      const feature = answerFeatureLabel(item);
+      counts[feature] = (counts[feature] || 0) + 1;
+      return counts;
+    }, {});
+    const featureTotals = data.featureTotals || {
+      bar_question_practice: pageFeatureCounts['Bar Question Practice'] || 0,
+      syllabus_based_review: pageFeatureCounts['Syllabus-Based Review'] || 0,
+      bar_exam_simulation: pageFeatureCounts['Bar Exam Simulation'] || 0,
+    };
     const rows = filteredItems.map((item) => [
       item.userDisplayName || 'Not provided',
       item.userEmail || 'Not available',
       commercialPlanLabel(item.subscriptionCategory),
-      item.recordSource === 'formal_exam' ? 'Formal exam' : 'Practice',
+      answerFeatureLabel(item),
       item.subject || item.examTitle || 'Not available',
       detailCell(item.questionText, 'View question'),
       detailCell(item.submittedAnswer, 'View answer'),
@@ -1537,22 +1555,24 @@
       <div class="metric-strip">
         ${summaryMetric('Users who answered', number(engagement.usersWithAnswers), 'All time')}
         ${summaryMetric('Questions answered', number(engagement.questionsAnswered), 'All time')}
-        ${summaryMetric('Practice answers', number(engagement.practiceQuestionsAnswered), 'All time')}
-        ${summaryMetric('Formal exam answers', number(engagement.examinationQuestionsAnswered), 'All time')}
+        ${summaryMetric('Bar Question Practice', number(featureTotals.bar_question_practice || 0), 'All time')}
+        ${summaryMetric('Syllabus-Based Review', number(featureTotals.syllabus_based_review || 0), 'All time')}
+        ${summaryMetric('Bar Exam Simulation', number(featureTotals.bar_exam_simulation || 0), 'All time')}
       </div>
       <section class="panel">
         <div class="panel-title-row"><div><h3>Answer records</h3><p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(data.total)} matching answer record(s). “Not available” means that the source record does not contain that field.</p></div><button class="secondary-button" id="download-answer-view" type="button">Download this page</button></div>
         <div class="table-tools">
           <input id="answer-search" type="search" value="${escapeHtml(state.answerSearch)}" placeholder="Search name, email, question, or subject" aria-label="Search answer records">
-          <select id="answer-type" aria-label="Filter answer type">
-            <option value="all"${state.answerType === 'all' ? ' selected' : ''}>All answer types</option>
-            <option value="practice"${state.answerType === 'practice' ? ' selected' : ''}>Practice</option>
-            <option value="formal_exam"${state.answerType === 'formal_exam' ? ' selected' : ''}>Formal exam</option>
+          <select id="answer-feature" aria-label="Filter answer records by feature">
+            <option value="all"${state.answerFeature === 'all' ? ' selected' : ''}>All features</option>
+            <option value="bar_question_practice"${state.answerFeature === 'bar_question_practice' ? ' selected' : ''}>Bar Question Practice</option>
+            <option value="syllabus_based_review"${state.answerFeature === 'syllabus_based_review' ? ' selected' : ''}>Syllabus-Based Review</option>
+            <option value="bar_exam_simulation"${state.answerFeature === 'bar_exam_simulation' ? ' selected' : ''}>Bar Exam Simulation</option>
           </select>
           <button class="secondary-button" id="answer-filter-button" type="button">Apply filter</button>
         </div>
-        <p class="panel-note">Formal-exam content comes from the version saved with that exam. Practice content is matched by question ID to the current published Question Bank. Reference links shown with a saved result are listed first when available.</p>
-        ${table(['Name', 'Email', 'Access record', 'Type', 'Subject or exam', 'Question', 'Student answer', 'Score', 'Suggested answer', 'Model answer', 'Reference links', 'Submitted'], rows)}
+        <p class="panel-note">Syllabus-Based Review and Bar Exam Simulation content comes from the immutable version saved with that attempt. Bar Question Practice content is matched by question ID to the current published Question Bank. Reference links shown with a saved result are listed first when available.</p>
+        ${table(['Name', 'Email', 'Access record', 'Feature', 'Subject or exam', 'Question', 'Student answer', 'Score', 'Suggested answer', 'Model answer', 'Reference links', 'Submitted'], rows)}
         <div class="pagination-bar">
           <p class="panel-note">Up to 100 records per page.</p>
           <div class="row-actions">
@@ -2682,7 +2702,7 @@
           requestKey: uuidKey(),
         });
         state.examinationData = null;
-        toast('Model answers released in the application. No Practice Exam email is sent.');
+        toast('Model answers released in the application. No automated email is sent.');
         await renderSection('examinations');
       } catch (error) { toast(error.message); }
     }));
@@ -4954,7 +4974,7 @@
       button.dataset.userAnswersBound = 'true';
       button.addEventListener('click', async () => {
         state.answerSearch = button.dataset.userEmail || '';
-        state.answerType = 'all';
+        state.answerFeature = 'all';
         state.answerOffset = 0;
         state.answerHistory = null;
         await renderSection('answer_exports');
@@ -5180,7 +5200,7 @@
     });
     $('#answer-filter-button')?.addEventListener('click', async () => {
       state.answerSearch = $('#answer-search')?.value?.trim() || '';
-      state.answerType = $('#answer-type')?.value || 'all';
+      state.answerFeature = $('#answer-feature')?.value || 'all';
       state.answerOffset = 0;
       state.answerHistory = null;
       await renderSection('answer_exports');
@@ -5200,7 +5220,7 @@
         item.userDisplayName,
         item.userEmail,
         item.subscriptionCategory,
-        item.recordSource,
+        answerFeatureLabel(item),
         item.subject,
         item.examTitle,
         item.questionText,
@@ -5220,7 +5240,7 @@
         item.submittedAt || item.answerSavedAt || item.completedAt,
       ]);
       downloadCsv('due-diligence-answer-records-current-view.csv', [
-        'Name', 'Email', 'Subscription', 'Answer type', 'Subject', 'Exam', 'Question',
+        'Name', 'Email', 'Subscription', 'Feature', 'Subject', 'Exam', 'Question',
         'Question source', 'Question availability', 'Student answer', 'Score', 'Feedback',
         'Suggested answer', 'Suggested answer source', 'Suggested answer availability',
         'Model answer', 'Model answer source', 'Model answer availability',

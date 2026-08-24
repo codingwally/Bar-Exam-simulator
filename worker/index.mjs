@@ -70,6 +70,7 @@ import {
 import {
   AccessValidationError,
   accessDeniedError,
+  availableProtectedQuestionInventory,
   isProtectedQuestionWithheld,
   normalizeAccessSnapshot,
   normalizeRequestKey,
@@ -145,6 +146,7 @@ import {
   validateSubjectMatterTeachingExplanation,
 } from './subject-matter-review.mjs';
 import {
+  BAR_SIMULATION_POOL_CSV_URL,
   ReleaseContentError,
   SUBJECT_MATTER_CSV_URL,
   SUBJECT_MATTER_SHEET_RANGE,
@@ -584,9 +586,15 @@ async function examinationRpc(env, functionName, body) {
     'examination_authorize_access',
     'subject_matter_catalog',
     'subject_matter_next_question',
+    'subject_matter_next_question_v2',
     'subject_matter_performance',
     'subject_matter_skip_question',
+    'subject_matter_skip_question_v2',
     'subject_matter_reveal_review',
+    'bar_simulation_stage_pool_v1',
+    'bar_simulation_finalize_pool_v1',
+    'bar_simulation_start_attempt_v1',
+    'bar_simulation_open_attempt_v1',
     'release_sync_subject_matter',
     'release_sync_bar_feels',
     'release_sync_all_content',
@@ -1969,6 +1977,27 @@ function authenticatedSubmissionsEnforced(env) {
 
 function phase4ModelQualityEnforced(env) {
   return String(env.PHASE4_MODEL_QUALITY_ENFORCEMENT).toLowerCase() === 'true';
+}
+
+function barQuestionPracticeRandomizationV2Enabled(env) {
+  return String(env.BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED)
+    .toLowerCase() === 'true';
+}
+
+function syllabusBasedReviewRandomizationV2Enabled(env) {
+  return String(env.SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED)
+    .toLowerCase() === 'true';
+}
+
+function barExamSimulationRandomizationSchemaReady(env) {
+  return String(env.BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY)
+    .toLowerCase() === 'true';
+}
+
+function barExamSimulationRandomizationV1Enabled(env) {
+  return barExamSimulationRandomizationSchemaReady(env)
+    && String(env.BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED)
+      .toLowerCase() === 'true';
 }
 
 function privateBetaGateEnabled(env) {
@@ -3877,7 +3906,10 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
     return jsonResponse({ ok: true, data: sanitizeSubjectMatterCatalog(result) }, 200, origin, allowedOrigin);
   }
   if (user && query.operation === 'subject_next') {
-    const result = await examinationRpc(env, 'subject_matter_next_question', {
+    const selector = syllabusBasedReviewRandomizationV2Enabled(env)
+      ? 'subject_matter_next_question_v2'
+      : 'subject_matter_next_question';
+    const result = await examinationRpc(env, selector, {
       p_user_id: user.id,
       p_subject: query.subject,
       p_year_level: query.yearLevel,
@@ -3934,13 +3966,32 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
     ? null
     : await requireAuthenticatedUser(request, env);
   let authorizedAccess = null;
+  let useRandomizedBarSimulationStart = false;
   if (user) {
     if (command.operation === 'start_attempt') {
-      await authorizeExaminationAccess(
+      authorizedAccess = await authorizeExaminationAccess(
         env,
         user.id,
         { versionId: command.versionId },
       );
+      if (authorizedAccess?.track === 'bar_feels'
+          && barExamSimulationRandomizationSchemaReady(env)) {
+        if (barExamSimulationRandomizationV1Enabled(env)) {
+          useRandomizedBarSimulationStart = true;
+        } else {
+          const openRandomizedAttempt = await examinationRpc(
+            env,
+            'bar_simulation_open_attempt_v1',
+            {
+              p_user_id: user.id,
+              p_catalog_version_id: command.versionId,
+            },
+          );
+          // Rollback safety: new starts return to the fixed catalog, while an
+          // already-open private allocation must remain resumable by its owner.
+          useRandomizedBarSimulationStart = Boolean(openRandomizedAttempt?.attemptId);
+        }
+      }
     } else if (command.operation === 'confirm_upload') {
       await authorizeExaminationAccess(env, user.id, { track: 'bar_feels' });
     } else if (command.operation === 'delete_upload') {
@@ -4019,7 +4070,10 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
   }
 
   if (user && command.operation === 'subject_skip_question') {
-    const result = await examinationRpc(env, 'subject_matter_skip_question', {
+    const selector = syllabusBasedReviewRandomizationV2Enabled(env)
+      ? 'subject_matter_skip_question_v2'
+      : 'subject_matter_skip_question';
+    const result = await examinationRpc(env, selector, {
       p_user_id: user.id,
       p_attempt_id: command.attemptId,
       p_request_key: command.requestKey,
@@ -4029,6 +4083,17 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
       ok: true,
       data: sanitizeSubjectMatterSelection(result),
     }, 200, origin, allowedOrigin);
+  }
+
+  if (user && command.operation === 'start_attempt' && useRandomizedBarSimulationStart) {
+    const result = await examinationRpc(env, 'bar_simulation_start_attempt_v1', {
+      p_user_id: user.id,
+      p_catalog_version_id: command.versionId,
+      p_timer_mode: command.timerMode,
+      p_request_key: command.requestKey,
+      p_tab_token: command.tabToken,
+    });
+    return jsonResponse({ ok: true, data: result }, 201, origin, allowedOrigin);
   }
 
   const result = await examinationRpc(env, 'examination_command', {
@@ -4293,20 +4358,27 @@ async function loadSubjectMatterSource(env) {
 async function handleReleaseContentSync(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
-  const [subjectSource, websiteCsv, visibilityCsv] = await Promise.all([
+  const [subjectSource, websiteCsv, visibilityCsv, barSimulationCsv] = await Promise.all([
     loadSubjectMatterSource(env),
     fetchPublishedCsv(WEBSITE_UPLOAD_CSV_URL, 'Mock Bar source'),
     fetchPublishedCsv(WEBSITE_VISIBILITY_CSV_URL, 'website publication visibility'),
+    fetchPublishedCsv(BAR_SIMULATION_POOL_CSV_URL, 'Bar Exam Simulation pool source'),
   ]);
   const websiteSource = await parseWebsiteUploadSource(websiteCsv);
+  const barSimulationSource = await parseWebsiteUploadSource(barSimulationCsv);
   const overlaidWebsiteRecords = applyWebsitePublicationOverlay(
     parseQuestionBank(websiteCsv),
     parseWebsitePublicationOverlay(visibilityCsv),
   );
   const subjectPlacementManifest = buildSubjectMatterPlacements(subjectSource.rows);
-  const barGroups = buildBarFeelsManifest(
-    visibleWebsiteReleaseRows(websiteSource.rows, overlaidWebsiteRecords),
+  const visibleBarRows = visibleWebsiteReleaseRows(
+    websiteSource.rows,
+    overlaidWebsiteRecords,
   );
+  const visibleBarSimulationRows = barSimulationSource.rows.filter(
+    (row) => row.publicationReady === 'Yes',
+  );
+  const barGroups = buildBarFeelsManifest(visibleBarRows);
   const barDigest = await websitePublicationDigest(
     websiteSource.digest,
     overlaidWebsiteRecords,
@@ -4339,15 +4411,42 @@ async function handleReleaseContentSync(request, env, origin, allowedOrigin) {
     p_bar_digest: barDigest,
     p_bar_endpoint: WEBSITE_UPLOAD_CSV_URL,
   });
+  let barSimulationPool = null;
+  if (barExamSimulationRandomizationSchemaReady(env)) {
+    // This is a private eligibility snapshot only. The database RPC does not
+    // activate a catalog version or enable randomized allocation.
+    const poolSyncId = crypto.randomUUID();
+    const poolPartSize = 50;
+    const poolTotalParts = Math.ceil(visibleBarSimulationRows.length / poolPartSize);
+    for (let offset = 0; offset < visibleBarSimulationRows.length; offset += poolPartSize) {
+      await examinationRpc(env, 'bar_simulation_stage_pool_v1', {
+        p_actor_user_id: user.id,
+        p_sync_id: poolSyncId,
+        p_part_number: Math.floor(offset / poolPartSize) + 1,
+        p_total_parts: poolTotalParts,
+        p_rows: visibleBarSimulationRows.slice(offset, offset + poolPartSize),
+        p_source_digest: barSimulationSource.digest,
+        p_source_endpoint: BAR_SIMULATION_POOL_CSV_URL,
+      });
+    }
+    barSimulationPool = await examinationRpc(env, 'bar_simulation_finalize_pool_v1', {
+      p_actor_user_id: user.id,
+      p_sync_id: poolSyncId,
+      p_source_digest: barSimulationSource.digest,
+      p_source_endpoint: BAR_SIMULATION_POOL_CSV_URL,
+    });
+  }
   // Never echo question or answer content from the administrative sync.
   return jsonResponse({
     ok: true,
     data: {
       subjectMatter: result?.subjectMatter || null,
       barFeels: result?.barFeels || null,
+      barExamSimulationPool: barSimulationPool,
       sources: {
         subjectMatter: SUBJECT_MATTER_CSV_URL,
         mockBar: WEBSITE_UPLOAD_CSV_URL,
+        barExamSimulation: BAR_SIMULATION_POOL_CSV_URL,
       },
     },
   }, 200, origin, allowedOrigin);
@@ -4610,20 +4709,145 @@ async function handleProtectedQuestion(request, env, origin, allowedOrigin) {
   if (!access.allowed) throw accessDeniedError(access);
 
   const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
-  const inventory = protectedQuestionInventory(records);
-  const question = selectProtectedQuestion(records, {
-    subject,
-    questionId: payload?.questionId,
-    excludeQuestionIds: payload?.excludeQuestionIds,
-  });
+  if (!barQuestionPracticeRandomizationV2Enabled(env)) {
+    const inventory = protectedQuestionInventory(records);
+    const question = selectProtectedQuestion(records, {
+      subject,
+      questionId: payload?.questionId,
+      excludeQuestionIds: payload?.excludeQuestionIds,
+    });
+    return jsonResponse({
+      ok: true,
+      access,
+      question,
+      inventory: {
+        subjects: 8,
+        questionsPerSubject: inventory[subject].length,
+        totalQuestions: Object.values(inventory)
+          .reduce((total, questions) => total + questions.length, 0),
+      },
+    }, 200, origin, allowedOrigin);
+  }
+
+  const canonicalInventory = protectedQuestionInventory(records);
+  const availableInventory = availableProtectedQuestionInventory(records);
+  const requestedQuestionId = String(payload?.questionId || '').trim();
+  const requestedIssuanceId = String(payload?.issuanceId || '').trim();
+  const validRequestedIssuanceId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    .test(requestedIssuanceId)
+    ? requestedIssuanceId
+    : null;
+  let question;
+  let rotation = null;
+
+  if (requestedQuestionId) {
+    const visibleQuestionIds = new Set(
+      availableInventory[subject].map((candidate) => candidate.id),
+    );
+    let restoreAuthorized = false;
+    if (validRequestedIssuanceId) {
+      restoreAuthorized = await phase4Rpc(
+        env,
+        'feature_question_restore_authorized_v2',
+        {
+          p_user_id: user.id,
+          p_feature_key: 'bar_question_practice',
+          p_subject: subject,
+          p_question_id: requestedQuestionId,
+          p_issuance_id: validRequestedIssuanceId,
+        },
+      );
+    }
+
+    if (!visibleQuestionIds.has(requestedQuestionId)) {
+      if (restoreAuthorized !== true) {
+        throw new ExaminerError(
+          'QUESTION_NOT_FOUND',
+          'The protected question could not be restored.',
+          404,
+        );
+      }
+    } else if (restoreAuthorized !== true) {
+      // Explicit visible IDs are used by resumable workspaces and mapped
+      // Quorum links. They must still pass the same lifetime answered ledger
+      // as ordinary randomized entry. A one-candidate selection creates
+      // durable issuance/receipt evidence without allowing an answered item
+      // to bypass no-repeat.
+      rotation = await phase4Rpc(env, 'select_feature_question_v2', {
+        p_user_id: user.id,
+        p_feature_key: 'bar_question_practice',
+        p_subject: subject,
+        p_candidate_question_ids: [requestedQuestionId],
+        p_soft_exclude_question_ids: [],
+        p_request_key: requestKey,
+      });
+      if (rotation?.exhausted === true
+          || String(rotation?.questionId || '').trim() !== requestedQuestionId) {
+        throw new ExaminerError(
+          'QUESTION_ALREADY_ANSWERED',
+          'You have already answered this Bar Question Practice item. Open a randomized question instead.',
+          409,
+        );
+      }
+    }
+    // A hidden item can reach this restoration path only after the database
+    // confirms an unexpired, owner-bound issuance and that the same user has
+    // not already answered it.
+    question = selectProtectedQuestion(records, {
+      subject,
+      questionId: requestedQuestionId,
+    });
+  } else {
+    const transitionExclusions = new Set(
+      Array.isArray(payload?.excludeQuestionIds)
+        ? payload.excludeQuestionIds
+          .map((questionId) => String(questionId || '').trim())
+          .filter(Boolean)
+          .slice(0, 40)
+        : [],
+    );
+    const rotationCandidates = availableInventory[subject]
+      .map((candidate) => candidate.id);
+    rotation = await phase4Rpc(env, 'select_feature_question_v2', {
+      p_user_id: user.id,
+      p_feature_key: 'bar_question_practice',
+      p_subject: subject,
+      p_candidate_question_ids: rotationCandidates,
+      p_soft_exclude_question_ids: [...transitionExclusions],
+      p_request_key: requestKey,
+    });
+    if (rotation?.exhausted === true || !String(rotation?.questionId || '').trim()) {
+      throw new ExaminerError(
+        'QUESTION_POOL_COMPLETED',
+        `You have answered every available ${subject} question in Bar Question Practice. Choose another subject.`,
+        409,
+      );
+    }
+    question = selectProtectedQuestion(records, {
+      subject,
+      questionId: String(rotation.questionId).trim(),
+    });
+  }
   return jsonResponse({
     ok: true,
     access,
     question,
+    rotation: rotation ? {
+      feature: 'bar_question_practice',
+      answeredCount: Number(rotation.answeredCount) || 0,
+      unansweredCount: Number(rotation.unansweredCount) || 0,
+      remainingUnissued: Number(rotation.remainingUnissued) || 0,
+      cycleNumber: Number(rotation.cycleNumber) || 1,
+      issuanceId: String(rotation.issuanceId || ''),
+      issuanceExpiresAt: String(rotation.issuanceExpiresAt || ''),
+    } : null,
     inventory: {
       subjects: 8,
-      questionsPerSubject: inventory[subject].length,
-      totalQuestions: Object.values(inventory)
+      questionsPerSubject: availableInventory[subject].length,
+      totalQuestions: Object.values(availableInventory)
+        .reduce((total, questions) => total + questions.length, 0),
+      canonicalQuestionsPerSubject: canonicalInventory[subject].length,
+      canonicalTotalQuestions: Object.values(canonicalInventory)
         .reduce((total, questions) => total + questions.length, 0),
     },
   }, 200, origin, allowedOrigin);
@@ -5350,17 +5574,34 @@ async function handleAdminAnswerHistoryPreview(request, env, origin, allowedOrig
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_preview_answer_history_with_sources', {
-    p_actor_user_id: user.id,
-    p_target_user_id: previewRequest.targetUserId,
-    p_from: previewRequest.from,
-    p_to: previewRequest.to,
-    p_search: previewRequest.search,
-    p_record_source: previewRequest.recordSource,
-    p_limit: previewRequest.limit,
-    p_offset: previewRequest.offset,
-    p_request_key: previewRequest.requestKey,
-  });
+  const legacyFormalRequest = previewRequest.feature === 'legacy_formal_exam';
+  const result = await protectedSupabaseRpc(
+    env,
+    legacyFormalRequest
+      ? 'admin_preview_answer_history_with_sources'
+      : 'admin_preview_answer_history_by_feature_v1',
+    legacyFormalRequest ? {
+      p_actor_user_id: user.id,
+      p_target_user_id: previewRequest.targetUserId,
+      p_from: previewRequest.from,
+      p_to: previewRequest.to,
+      p_search: previewRequest.search,
+      p_record_source: 'formal_exam',
+      p_limit: previewRequest.limit,
+      p_offset: previewRequest.offset,
+      p_request_key: previewRequest.requestKey,
+    } : {
+      p_actor_user_id: user.id,
+      p_target_user_id: previewRequest.targetUserId,
+      p_from: previewRequest.from,
+      p_to: previewRequest.to,
+      p_search: previewRequest.search,
+      p_feature_key: previewRequest.feature,
+      p_limit: previewRequest.limit,
+      p_offset: previewRequest.offset,
+      p_request_key: previewRequest.requestKey,
+    },
+  );
   const items = await enrichAdminAnswerHistory(result?.items, env);
   return jsonResponse({
     ok: true,
@@ -5373,6 +5614,8 @@ async function handleAdminAnswerHistoryPreview(request, env, origin, allowedOrig
       tooMany: false,
       scope: result?.scope || 'all_users',
       dateScope: result?.dateScope || 'all_time',
+      featureFilter: result?.featureFilter || previewRequest.feature,
+      featureTotals: result?.featureTotals || null,
     },
   }, 200, origin, allowedOrigin);
 }

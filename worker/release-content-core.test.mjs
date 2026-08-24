@@ -3,6 +3,7 @@ import test from 'node:test';
 import worker from './index.mjs';
 import { parseCsv } from './examiner-core.mjs';
 import {
+  BAR_SIMULATION_POOL_CSV_URL,
   BAR_FEELS_DESTINATIONS,
   MOCK_BAR_SUBJECTS,
   SUBJECT_MATTER_CSV_URL,
@@ -225,12 +226,32 @@ test('Mock Bar import safely accepts a growing, strategically distributed invent
 
 test('release sync uses the versioned snapshot when the Google source is unavailable', async () => {
   const originalFetch = globalThis.fetch;
-  const websiteCsv = csv(websiteRows());
+  const releaseWebsiteRows = MOCK_BAR_SUBJECTS.flatMap((subject, subjectIndex) => (
+    Array.from({ length: 100 }, (_, index) => sourceRow({
+      id: `REL-${String(subjectIndex + 1).padStart(2, '0')}-${String(index + 1).padStart(3, '0')}`,
+      subject,
+      number: String(index + 1),
+    }))
+  ));
+  const websiteCsv = csv(releaseWebsiteRows);
+  const releaseSimulationRows = [
+    ...releaseWebsiteRows,
+    ...MOCK_BAR_SUBJECTS.flatMap((subject, subjectIndex) => (
+      Array.from({ length: 20 }, (_, index) => sourceRow({
+        id: `SIM-${String(subjectIndex + 1).padStart(2, '0')}-${String(index + 1).padStart(3, '0')}`,
+        subject,
+        number: `Simulation ${index + 1}`,
+      }))
+    )),
+  ];
+  const simulationCsv = csv(releaseSimulationRows);
   const visibilityCsv = [
     'Question ID,Publication Ready?',
-    ...websiteRows().map((row) => `${row['Question ID']},${row['Publication Ready?']}`),
+    ...releaseWebsiteRows.map((row) => `${row['Question ID']},${row['Publication Ready?']}`),
   ].join('\r\n');
   let syncBody;
+  let poolFinalizeBody;
+  const poolStagedBodies = [];
   const stagedBodies = [];
   globalThis.fetch = async (url, options = {}) => {
     const target = String(url);
@@ -252,6 +273,9 @@ test('release sync uses the versioned snapshot when the Google source is unavail
     if (target === WEBSITE_VISIBILITY_CSV_URL) {
       return new Response(visibilityCsv, { headers: { 'Content-Type': 'text/csv' } });
     }
+    if (target === BAR_SIMULATION_POOL_CSV_URL) {
+      return new Response(simulationCsv, { headers: { 'Content-Type': 'text/csv' } });
+    }
     if (target.endsWith('/rest/v1/rpc/release_stage_subject_matter_v2')) {
       stagedBodies.push(JSON.parse(options.body));
       return Response.json({ accepted: JSON.parse(options.body).p_payload.length });
@@ -261,6 +285,21 @@ test('release sync uses the versioned snapshot when the Google source is unavail
       return Response.json({
         subjectMatter: { rows: 1622, courses: 42, placements: 1890 },
         barFeels: { rows: 120, destinations: 6 },
+      });
+    }
+    if (target.endsWith('/rest/v1/rpc/bar_simulation_stage_pool_v1')) {
+      poolStagedBodies.push(JSON.parse(options.body));
+      return Response.json({ acceptedRows: JSON.parse(options.body).p_rows.length });
+    }
+    if (target.endsWith('/rest/v1/rpc/bar_simulation_finalize_pool_v1')) {
+      poolFinalizeBody = JSON.parse(options.body);
+      return Response.json({
+        eligibleQuestions: poolStagedBodies.reduce(
+          (total, body) => total + body.p_rows.length,
+          0,
+        ),
+        catalogActivated: false,
+        replayed: false,
       });
     }
     throw new Error(`Unexpected release-sync request: ${target}`);
@@ -285,13 +324,16 @@ test('release sync uses the versioned snapshot when the Google source is unavail
         GOOGLE_OAUTH_CLIENT_ID: 'test-client-id',
         GOOGLE_OAUTH_CLIENT_SECRET: 'test-client-secret',
         GOOGLE_OAUTH_REFRESH_TOKEN: 'test-refresh-token',
+        BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY: 'true',
       },
     );
     const raw = await response.text();
     const payload = JSON.parse(raw);
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 200, raw);
     assert.equal(payload.data.subjectMatter.rows, 1622);
     assert.equal(payload.data.barFeels.rows, 120);
+    assert.equal(payload.data.barExamSimulationPool.eligibleQuestions, 960);
+    assert.equal(payload.data.barExamSimulationPool.catalogActivated, false);
     assert.equal(stagedBodies.length, 27);
     assert.equal(
       stagedBodies.filter((body) => body.p_payload_kind === 'rows')
@@ -312,6 +354,18 @@ test('release sync uses the versioned snapshot when the Google source is unavail
       syncBody.p_bar_groups.reduce((count, group) => count + group.rows.length, 0),
       120,
     );
+    assert.equal(poolStagedBodies.length, 20);
+    assert.equal(poolStagedBodies.slice(0, -1).every((body) => body.p_rows.length === 50), true);
+    assert.equal(poolStagedBodies.at(-1).p_rows.length, 10);
+    assert.equal(poolStagedBodies.every((body) => body.p_total_parts === 20), true);
+    assert.equal(new Set(poolStagedBodies.map((body) => body.p_sync_id)).size, 1);
+    const stagedPoolRows = poolStagedBodies.flatMap((body) => body.p_rows);
+    assert.equal(new Set(stagedPoolRows.map((row) => row.questionId)).size, 960);
+    assert.equal(stagedPoolRows.every((row) => row.publicationReady === 'Yes'), true);
+    assert.equal(poolFinalizeBody.p_actor_user_id, '11111111-1111-4111-8111-111111111111');
+    assert.equal(poolFinalizeBody.p_sync_id, poolStagedBodies[0].p_sync_id);
+    assert.notEqual(poolFinalizeBody.p_source_digest, syncBody.p_bar_digest);
+    assert.equal(poolFinalizeBody.p_source_endpoint, BAR_SIMULATION_POOL_CSV_URL);
     assert.equal(
       stagedBodies.filter((body) => body.p_payload_kind === 'rows').at(-1).p_payload.at(-1)
         .editorialStatus,

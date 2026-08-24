@@ -51,7 +51,7 @@ for (const id of [
   assert.match(markup, /class="[^"]*modal-back[^"]*"[^>]*>Back<\/button>/, `${id} needs a lower-right Back action.`);
 }
 
-assert.match(html, /id="subject-selection-state"[\s\S]*?class="subject-selection-close"[\s\S]*?aria-label="Close subject selection and return to Mock Bar"[\s\S]*?class="btn-secondary subject-selection-back"[\s\S]*?>Back<\/button>/);
+assert.match(html, /id="subject-selection-state"[\s\S]*?class="subject-selection-close"[\s\S]*?aria-label="Close subject selection and return to Bar Question Practice"[\s\S]*?class="btn-secondary subject-selection-back"[\s\S]*?>Back<\/button>/);
 assert.match(html, /id="private-beta-dialog"[\s\S]*?id="pb-dialog-close"[\s\S]*?>×<\/button>/);
 for (const id of ['pb-disclosure-continue', 'pb-code-submit', 'pb-google-intro-continue', 'pb-google-signin', 'pb-final-continue']) {
   const primary = html.indexOf(`id="${id}"`);
@@ -73,7 +73,7 @@ assert.match(forum, /button\('×', 'lex-dialog-close', closeDialog\)/);
 assert.match(forum, /back = button\('Back', 'lex-button', closeDialog\)/);
 assert.match(examinations, /aria-label="Close time-mode selection"[\s\S]*?data-dialog-cancel>Back<\/button>/);
 assert.match(examinations, /aria-label="Close Human Examiner assignment"[\s\S]*?data-dialog-cancel>Back<\/button>/);
-assert.match(examinations, /Practice Exam email delivery is disabled[\s\S]*?Examiner email \(assignment record\)/);
+assert.match(examinations, /Automated email delivery is disabled[\s\S]*?Examiner email \(assignment record\)/);
 assert.match(examinations, /result\.assignmentUrl[\s\S]*?data-copy-human-assignment[\s\S]*?navigator\.clipboard\.writeText\(assignmentUrl\)/);
 assert.match(examinations, /candidate\.origin !== fallback\.origin[\s\S]*?candidate\.searchParams\.get\('assignment'\) !== assignmentToken[\s\S]*?candidate\.hash !== '#examiner-review'/,
   'The returned manual link must remain same-origin and bound to the generated token.');
@@ -88,7 +88,7 @@ assert.doesNotMatch(humanAssignment, /humanDialog\(\)\.close\(\)/,
 assert.match(humanAssignment, /emailInput\.readOnly = true[\s\S]*?button\.textContent = 'Assignment link created'/);
 assert.match(humanAssignment, /linkInput\.focus\(\)[\s\S]*?linkInput\.select\(\)/,
   'Clipboard failures must leave the secure link visibly selected for manual copying.');
-assert.match(examinations, /Human Examiner Review finalized and saved at[\s\S]*?No Practice Exam email was sent/);
+assert.match(examinations, /Human Examiner Review finalized and saved at[\s\S]*?No automated email was sent/);
 assert.doesNotMatch(examinations, /Student notification status|studentNotificationStatus/);
 assert.match(examinations, /aria-label="Close extracted question preview"[\s\S]*?data-upload-cancel>Back<\/button>/);
 assert.match(examinations, /id = 'dd-exam-decision-dialog'[\s\S]*?aria-label="Close confirmation and go back"[\s\S]*?>Back<\/button>/);

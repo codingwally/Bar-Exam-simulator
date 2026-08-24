@@ -59,7 +59,7 @@ assert.doesNotMatch(frontend, /Automatically proceeds when time expires/i);
 assert.doesNotMatch(
   frontend.match(/async function onTimeUp\(\)[\s\S]*?\n\}/)?.[0] || '',
   /evaluateAnswer|recordUnansweredAttempt|examStage = 'reviewing'/,
-  'The optional 12-minute practice target must preserve the answer instead of submitting it.',
+  'The optional 12-minute question target must preserve the answer instead of submitting it.',
 );
 
 for (const source of [migration, worker, controller, experience, frontend]) {

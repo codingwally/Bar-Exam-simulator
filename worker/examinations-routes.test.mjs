@@ -140,7 +140,7 @@ test('Subject Matter catalog preserves course metadata but withholds bank invent
   });
 });
 
-test('Subject Matter random selection uses the dedicated no-repeat RPC', async () => {
+test('Subject Matter selection preserves the legacy RPC while the v2 rollout flag is off', async () => {
   await withFetchMock(async (url, options) => {
     const auth = authResponse(url);
     if (auth) return auth;
@@ -175,6 +175,43 @@ test('Subject Matter random selection uses the dedicated no-repeat RPC', async (
     assert.equal('remainingQuestions' in body.data, false);
     assert.equal('questionCount' in body.data.setup, false);
     assert.equal('bankSize' in body.data.setup, false);
+  });
+});
+
+test('Syllabus-Based Review uses the lifetime no-repeat v2 selector when enabled', async () => {
+  await withFetchMock(async (url, options) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    assert.equal(String(url), `${supabaseUrl}/rest/v1/rpc/subject_matter_next_question_v2`);
+    assert.deepEqual(JSON.parse(options.body), {
+      p_user_id: userId,
+      p_subject: 'Criminal Law I',
+      p_year_level: 1,
+      p_term: 1,
+      p_reset_cycle: false,
+    });
+    return Response.json({
+      exhausted: false,
+      terminal: false,
+      setup: { versionId, track: 'per_subject', questionCount: 1 },
+    });
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'subject_next',
+      subject: 'Criminal Law I',
+      yearLevel: 1,
+      term: 1,
+      resetCycle: false,
+    }), {
+      ...env,
+      SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED: 'true',
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.data.exhausted, false);
+    assert.equal(body.data.terminal, false);
+    assert.equal(body.data.setup.versionId, versionId);
+    assert.equal('questionCount' in body.data.setup, false);
   });
 });
 
@@ -235,6 +272,49 @@ test('Subject Matter skip is owner-authorized and routed only to the dedicated i
     assert.equal('questionCount' in body.data, false);
     assert.equal('questionCount' in body.data.setup, false);
     assert.equal(skipCalls, 1);
+  });
+});
+
+test('Syllabus-Based Review v2 returns terminal exhaustion without inventing a next setup', async () => {
+  await withFetchMock(async (url, options) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    const target = String(url);
+    const payload = JSON.parse(options.body);
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      return Response.json({ allowed: true, basis: 'current_owner', track: 'per_subject' });
+    }
+    assert.equal(target, `${supabaseUrl}/rest/v1/rpc/subject_matter_skip_question_v2`);
+    assert.deepEqual(payload, {
+      p_user_id: userId,
+      p_attempt_id: attemptId,
+      p_request_key: 'subject_skip_v2_terminal_0001',
+      p_tab_token: tabToken,
+    });
+    return Response.json({
+      skipped: true,
+      replayed: false,
+      exhausted: true,
+      terminal: true,
+      attemptId,
+      setup: null,
+    });
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/command', {
+      operation: 'subject_skip_question',
+      attemptId,
+      requestKey: 'subject_skip_v2_terminal_0001',
+      tabToken,
+    }), {
+      ...env,
+      SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED: 'true',
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.data.skipped, true);
+    assert.equal(body.data.exhausted, true);
+    assert.equal(body.data.terminal, true);
+    assert.equal(body.data.setup, null);
   });
 });
 
@@ -577,6 +657,158 @@ test('start attempt preserves server response and returns HTTP 201', async () =>
     assert.equal(body.data.attempt.attemptId, attemptId);
     assert.equal(body.data.attempt.remainingSeconds, 3600);
   });
+});
+
+test('Bar Exam Simulation uses the private randomized allocator only when both rollout gates are on', async () => {
+  const called = [];
+  await withFetchMock(async (url, options) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    const target = String(url);
+    const payload = JSON.parse(options.body);
+    called.push(target);
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      return Response.json({ allowed: true, track: 'bar_feels' });
+    }
+    assert.equal(target, `${supabaseUrl}/rest/v1/rpc/bar_simulation_start_attempt_v1`);
+    assert.deepEqual(payload, {
+      p_user_id: userId,
+      p_catalog_version_id: versionId,
+      p_timer_mode: 'strict',
+      p_request_key: 'simulation_start_test_0001',
+      p_tab_token: tabToken,
+    });
+    return Response.json({
+      attempt: { attemptId, status: 'in_progress' },
+      examination: { track: 'bar_feels', questionCount: 20 },
+      questions: Array.from({ length: 20 }, (_, index) => ({ ordinal: index + 1 })),
+      allocationId: '55555555-5555-4555-8555-555555555555',
+    });
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/command', {
+      operation: 'start_attempt',
+      versionId,
+      timerMode: 'strict',
+      requestKey: 'simulation_start_test_0001',
+      tabToken,
+    }), {
+      ...env,
+      BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY: 'true',
+      BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED: 'true',
+    });
+    const body = await response.json();
+    assert.equal(response.status, 201);
+    assert.equal(body.data.attempt.attemptId, attemptId);
+    assert.equal(body.data.questions.length, 20);
+    assert.equal(called.some((url) => url.endsWith('/examination_command')), false);
+    assert.equal(called.some((url) => url.endsWith('/bar_simulation_open_attempt_v1')), false);
+  });
+});
+
+test('Simulation rollback resumes an existing private allocation but sends new starts to the fixed catalog', async () => {
+  for (const hasOpenAllocation of [true, false]) {
+    const calls = [];
+    await withFetchMock(async (url, options) => {
+      const auth = authResponse(url);
+      if (auth) return auth;
+      const target = String(url);
+      const payload = JSON.parse(options.body);
+      calls.push(target);
+      if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+        return Response.json({ allowed: true, track: 'bar_feels' });
+      }
+      if (target === `${supabaseUrl}/rest/v1/rpc/bar_simulation_open_attempt_v1`) {
+        assert.deepEqual(payload, {
+          p_user_id: userId,
+          p_catalog_version_id: versionId,
+        });
+        return Response.json(hasOpenAllocation ? { attemptId } : {});
+      }
+      if (hasOpenAllocation) {
+        assert.equal(target, `${supabaseUrl}/rest/v1/rpc/bar_simulation_start_attempt_v1`);
+      } else {
+        assert.equal(target, `${supabaseUrl}/rest/v1/rpc/examination_command`);
+        assert.equal(payload.p_operation, 'start_attempt');
+      }
+      return Response.json({
+        attempt: { attemptId, status: 'in_progress' },
+        examination: { track: 'bar_feels', questionCount: 20 },
+        questions: [],
+        resumed: hasOpenAllocation,
+      });
+    }, async () => {
+      const response = await worker.fetch(request('/examinations/command', {
+        operation: 'start_attempt',
+        versionId,
+        timerMode: 'strict',
+        requestKey: hasOpenAllocation
+          ? 'simulation_rollback_open_0001'
+          : 'simulation_rollback_new_0001',
+        tabToken,
+      }), {
+        ...env,
+        BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY: 'true',
+        BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED: 'false',
+      });
+      assert.equal(response.status, 201);
+      assert.equal(
+        calls.some((url) => url.endsWith('/bar_simulation_start_attempt_v1')),
+        hasOpenAllocation,
+      );
+      assert.equal(
+        calls.some((url) => url.endsWith('/examination_command')),
+        !hasOpenAllocation,
+      );
+    });
+  }
+});
+
+test('Simulation allocator failures return safe exhaustion and availability responses', async () => {
+  const cases = [
+    {
+      databaseCode: 'BAR_SIMULATION_POOL_EXHAUSTED',
+      expectedStatus: 409,
+      expectedMessage: 'You have answered all eligible questions needed for this Bar Exam Simulation set.',
+    },
+    {
+      databaseCode: 'BAR_SIMULATION_POOL_NOT_READY',
+      expectedStatus: 503,
+      expectedMessage: 'Randomized Bar Exam Simulation is temporarily unavailable. No attempt was started.',
+    },
+  ];
+
+  for (const testCase of cases) {
+    await withFetchMock(async (url) => {
+      const auth = authResponse(url);
+      if (auth) return auth;
+      const target = String(url);
+      if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+        return Response.json({ allowed: true, track: 'bar_feels' });
+      }
+      assert.equal(target, `${supabaseUrl}/rest/v1/rpc/bar_simulation_start_attempt_v1`);
+      return Response.json({
+        code: 'P0001',
+        message: `${testCase.databaseCode}: private allocation diagnostics must stay hidden`,
+      }, { status: 400 });
+    }, async () => {
+      const response = await worker.fetch(request('/examinations/command', {
+        operation: 'start_attempt',
+        versionId,
+        timerMode: 'strict',
+        requestKey: `simulation_error_${testCase.databaseCode.toLowerCase()}`,
+        tabToken,
+      }), {
+        ...env,
+        BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY: 'true',
+        BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED: 'true',
+      });
+      const body = await response.json();
+      assert.equal(response.status, testCase.expectedStatus);
+      assert.equal(body.error.code, testCase.databaseCode);
+      assert.equal(body.error.message, testCase.expectedMessage);
+      assert.doesNotMatch(body.error.message, /private allocation diagnostics/i);
+    });
+  }
 });
 
 test('secure examiner assignment query does not require a student bearer token', async () => {

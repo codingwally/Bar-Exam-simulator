@@ -50,7 +50,7 @@ assert.doesNotMatch(html, /id=["']welcome-state["']|id=["']start-practice["']/,
   'The retired authenticated landing must not remain in the application shell.');
 assert.match(html, /DueDiligenceExaminations\?\.openPerSubject/);
 assert.match(html, /DueDiligenceExaminations\?\.openBarFeels/);
-assert.match(html, /id="spa-community"[\s\S]*<summary>Practice Exam<\/summary>[\s\S]*id="spa-mock"[\s\S]*id="spa-bar-feels"[\s\S]*id="header-account-control"/);
+assert.match(html, /id="spa-community"[\s\S]*<summary>Study Features<\/summary>[\s\S]*id="spa-mock"[\s\S]*id="spa-bar-feels"[\s\S]*id="header-account-control"/);
 assert.match(html, /id="spa-bar-feels"[^>]*data-public-feature="bar-feels"[^>]*>Bar Exam Simulation<\/button>/);
 assert.doesNotMatch(html, /menu-premium-badge/);
 assert.match(html, /function openSubjectMatterMenu\(\)[\s\S]*openPerSubject\(\)/);
@@ -68,9 +68,10 @@ assert.doesNotMatch(
 assert.match(html, /id="spa-examination-room"[^>]*data-public-feature="examination-room"/);
 assert.match(html, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
-assert.match(html, /assets\/feature-loader\.js\?v=syllabus-review-20260823-1/);
-assert.match(html, /Mock Bar/);
-assert.match(frontend, /track === 'per_subject' \? 'Syllabus-Based Review' : 'Mock Bar'/);
+assert.match(html, /assets\/feature-loader\.js\?v=question-randomization-20260825-1/);
+assert.match(html, /id="subject-selection-title">Choose your Bar Question Practice subject\.<\/h1>/);
+assert.match(frontend, /track === 'per_subject' \? 'Syllabus-Based Review' : 'Bar Exam Simulation'/);
+assert.doesNotMatch(`${html}\n${frontend}`, /Mock Bar/);
 assert.match(frontend, /'SYLLABUS-BASED REVIEW'/);
 assert.doesNotMatch(frontend, /SUBJECT MATTER EXAMINATION/);
 assert.doesNotMatch(frontend, /Subject Matter Examinations/);

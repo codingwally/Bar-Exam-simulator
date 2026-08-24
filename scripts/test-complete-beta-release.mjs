@@ -129,7 +129,7 @@ assert.equal(new Set(assignments.map((row) => row.questionId)).size, 120);
 
 for (const phrase of [
   'Home',
-  'Practice Exam',
+  'Study Features',
   'Quick Drills',
   'Doctrine Review',
   'Syllabus-Based Review',

@@ -148,7 +148,7 @@ assert.match(admin, /Private proof access log[\s\S]*Every private-proof view is 
 assert.doesNotMatch(admin, /window\.location\.assign\(response\.proof\.url\)/,
   'Private proof review must not navigate the administrator away from the dashboard.');
 assert.match(publicPage, /assets\/phase2-experience\.js\?v=syllabus-review-20260823-1/);
-assert.match(publicPage, /assets\/phase4-experience\.js\?v=non-exam-sweep-20260822-1/);
+assert.match(publicPage, /assets\/phase4-experience\.js\?v=question-randomization-20260825-1/);
 assert.match(adminPage, /admin\.css\?v=[a-z0-9-]+/i);
 assert.match(adminPage, /subscription-actions-core\.js\?v=[a-z0-9-]+/i);
 assert.match(adminPage, /admin\.js\?v=[a-z0-9-]+/i);

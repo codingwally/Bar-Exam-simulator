@@ -430,13 +430,19 @@
     return authenticatedHeaders({ requestIdValue: requestId || undefined }) || {};
   }
 
-  async function loadProtectedQuestion(subject, excludeQuestionIds = [], questionId = null) {
+  async function loadProtectedQuestion(
+    subject,
+    excludeQuestionIds = [],
+    questionId = null,
+    issuanceId = null,
+  ) {
     if (!await ensureProtectedAccess('#mock-bar')) return null;
 
     const payload = await request('/exam/question', {
       body: {
         subject,
         questionId,
+        issuanceId,
         excludeQuestionIds,
         requestId: randomId(18),
       },
@@ -455,6 +461,8 @@
       caseLaw: '',
       verified: false,
       protected: true,
+      issuanceId: payload.rotation?.issuanceId || issuanceId || null,
+      issuanceExpiresAt: payload.rotation?.issuanceExpiresAt || null,
     };
   }
 

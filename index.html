@@ -1005,7 +1005,7 @@
         data-public-feature="examination-room">Examination Room</button>
       <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>00:00:00</div>
     </div>
-    <nav class="qfs-practice-rail" id="qfs-practice-rail" aria-label="Practice navigation">
+    <nav class="qfs-practice-rail" id="qfs-practice-rail" aria-label="Feature navigation">
       <button type="button" data-public-feature="quorum">Home</button>
       <button type="button" data-public-feature="bar-easy">Quick Drills</button>
       <button type="button" data-public-feature="doctrines">Doctrine Review</button>
@@ -1030,7 +1030,7 @@
         </div>
       </details>
       <details class="quorum-practice-menu" id="quorum-practice-menu">
-        <summary>Practice Exam</summary>
+        <summary>Study Features</summary>
         <div class="quorum-practice-links">
           <button id="spa-bar-easy" type="button" data-public-feature="bar-easy">Quick Drills</button>
           <button id="spa-jurisprudence" type="button" data-public-feature="doctrines">Doctrine Review</button>
@@ -1220,9 +1220,9 @@
   <div id="subject-selection-state" class="onboarding-state" hidden>
     <article class="subject-selection-card" aria-labelledby="subject-selection-title">
       <button type="button" class="subject-selection-close" id="subject-selection-close"
-        aria-label="Close subject selection and return to Mock Bar" onclick="exitSubjectSelection()">×</button>
+        aria-label="Close subject selection and return to Bar Question Practice" onclick="exitSubjectSelection()">×</button>
       <div class="selection-kicker">Choose Your Review Subject</div>
-      <h1 id="subject-selection-title">Choose your Mock Bar subject.</h1>
+      <h1 id="subject-selection-title">Choose your Bar Question Practice subject.</h1>
       <p>Select a Philippine Bar subject. Its first valid question will load before you choose a session mode; no timer starts during selection.</p>
       <div class="subject-choice-grid" id="subject-choice-grid"></div>
       <div class="subject-loading" id="subject-loading-status" role="status" aria-live="polite"></div>
@@ -1239,7 +1239,7 @@
     <div class="page-wrap" style="padding-bottom:0;">
       <div class="page-head" style="margin-bottom:14px;">
         <div class="eyebrow">Focused Essay Workspace</div>
-        <h2>Mock Bar</h2>
+        <h2>Bar Question Practice</h2>
       </div>
     </div>
 
@@ -1387,7 +1387,7 @@
 
         <aside class="lex-secondary" aria-label="Community supporting information">
           <section class="quorum-practice-card quorum-practice-card-desktop">
-            <span class="lex-kicker">Practice Exam</span>
+            <span class="lex-kicker">Bar Question Practice</span>
             <h3>Ace the Bar with confidence.</h3>
             <p>Build exam readiness through focused Philippine Bar-style practice.</p>
             <ul class="quorum-practice-benefits">
@@ -1395,7 +1395,7 @@
               <li>Source-grounded coaching</li>
               <li>Private progress tracking</li>
             </ul>
-            <button class="lex-button lex-button-primary" type="button" data-public-feature="mock">Try Practice Exam</button>
+            <button class="lex-button lex-button-primary" type="button" data-public-feature="mock">Open Bar Question Practice</button>
           </section>
           <section class="lex-guidance-card">
             <div class="quorum-card-head">
@@ -1535,7 +1535,7 @@
 <div class="modal-overlay blocking" id="signin-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="signin-prompt-title" aria-describedby="signin-prompt-copy">
   <div class="modal-card" tabindex="-1">
     <button type="button" class="modal-close" aria-label="Close sign-in choice and return" onclick="returnFromModal('signin-prompt-modal')">&times;</button>
-    <h3 class="modal-title" id="signin-prompt-title">Enter the Mock Bar</h3>
+    <h3 class="modal-title" id="signin-prompt-title">Open Bar Question Practice</h3>
     <p class="checking-copy" id="signin-prompt-copy">Sign in to open protected questions, save progress, and continue study sessions across devices.</p>
     <span class="tier-badge">Authentication is required before an examination question is displayed.</span>
     <div class="signin-prompt-actions">
@@ -1550,13 +1550,13 @@
 <div class="modal-overlay blocking" id="session-choice-modal" role="dialog" aria-modal="true" aria-labelledby="session-choice-title" aria-describedby="session-choice-copy">
   <div class="modal-card xl" tabindex="-1">
     <button type="button" class="modal-close" aria-label="Close timer settings" onclick="returnFromModal('session-choice-modal')">&times;</button>
-    <h3 class="modal-title" id="session-choice-title">Timer settings</h3>
-    <p class="checking-copy" id="session-choice-copy">Choose how you want to practice. Stopwatch is the default, and no clock starts until a question begins.</p>
+    <h3 class="modal-title" id="session-choice-title">Bar Question Practice timer settings</h3>
+    <p class="checking-copy" id="session-choice-copy">Choose a timing option. Stopwatch is the default, and no clock starts until a question begins.</p>
     <div class="session-mode-grid">
       <button type="button" class="session-mode-option" id="mode-timed" onclick="chooseSessionMode('strict')">
-        <strong>12-minute practice</strong>
+        <strong>12-minute question</strong>
         <span>Focused countdown</span>
-        <p>Practice answering within a focused 12-minute target. Your answer stays safe when time ends.</p>
+        <p>Answer within a focused 12-minute target. Your work stays safe when time ends.</p>
       </button>
       <button type="button" class="session-mode-option" id="mode-self-paced" onclick="chooseSessionMode('selfPaced')">
         <strong>Stopwatch</strong>
@@ -1564,7 +1564,7 @@
         <p>See how much time you spend on the question.</p>
       </button>
       <button type="button" class="session-mode-option" id="mode-untimed" onclick="chooseSessionMode('none')">
-        <strong>Untimed practice</strong>
+        <strong>Untimed question</strong>
         <span>No visible clock</span>
         <p>Write without a clock or time limit.</p>
       </button>
@@ -1844,6 +1844,7 @@ function readPersistedWorkspace() {
       || !['strict', 'selfPaced', 'none'].includes(saved.mode)
       || typeof saved.draft !== 'string'
       || saved.draft.length > 12000
+      || (saved.issuanceId != null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(saved.issuanceId)))
       || Date.now() - Number(saved.savedAt || 0) > 7 * 24 * 60 * 60 * 1000
     ) return null;
     return saved;
@@ -1864,6 +1865,7 @@ function persistWorkspace() {
     ownerUserId,
     subject: currentSubj,
     questionId: question.id,
+    issuanceId: question.issuanceId || null,
     mode: selectedSessionMode,
     draft: userAnswers[questionAnswerKey()] || '',
     attemptKey: currentAttemptKey,
@@ -1959,6 +1961,7 @@ async function restorePersistedWorkspace(userId) {
       saved.subject,
       [],
       saved.questionId,
+      saved.issuanceId || null,
     );
     if (!question || question.id !== saved.questionId) throw new Error('The saved question is no longer available.');
     currentSubj = saved.subject;
@@ -1980,6 +1983,9 @@ async function restorePersistedWorkspace(userId) {
     updateSessionClock();
     toast('Your in-progress answer and timer were restored.', 'ok');
   } catch (error) {
+    if (error?.code === 'QUESTION_ALREADY_ANSWERED') {
+      clearPersistedWorkspace();
+    }
     workspaceRestoreCompletedForUser = null;
     console.warn('Saved examination workspace could not be restored.', { code: error?.code || 'RESTORE_UNAVAILABLE' });
   } finally {
@@ -2117,8 +2123,8 @@ function preferredMockTimerMode() {
 }
 
 function mockTimerLabel(mode = preferredMockTimerMode()) {
-  if (mode === 'strict') return '12-minute practice';
-  if (mode === 'none') return 'Untimed practice';
+  if (mode === 'strict') return '12-minute question';
+  if (mode === 'none') return 'Untimed question';
   return 'Stopwatch';
 }
 
@@ -2129,8 +2135,8 @@ function syncMockTimerSettingLabel() {
 
 function openMockTimerSettings() {
   sessionChoicePurpose = 'settings';
-  document.getElementById('session-choice-title').textContent = 'Timer settings';
-  document.getElementById('session-choice-copy').textContent = 'Choose how you want to practice. Stopwatch is the default, and no clock starts until a question begins.';
+  document.getElementById('session-choice-title').textContent = 'Bar Question Practice timer settings';
+  document.getElementById('session-choice-copy').textContent = 'Choose a timing option. Stopwatch is the default, and no clock starts until a question begins.';
   openModal('session-choice-modal', { blocking: true });
 }
 
@@ -2639,7 +2645,7 @@ async function changeMockBarSubject() {
 }
 
 async function exitMockBarPractice() {
-  if (!await confirmMockWorkspaceExit('exit Mock Bar practice')) return;
+  if (!await confirmMockWorkspaceExit('exit Bar Question Practice')) return;
   showWelcome();
 }
 
@@ -2683,7 +2689,7 @@ function legacyRenderMainWrite() {
 
   main.innerHTML = `
     <div class="timer-bar" id="timer-bar">
-      <span class="timer-label">${examMode === 'strict' ? '12-minute practice' : 'Stopwatch'}</span>
+      <span class="timer-label">${examMode === 'strict' ? '12-minute question' : 'Stopwatch'}</span>
       <span id="timer-display">--:--</span>
       <span class="timer-limit">${examMode === 'strict' ? 'Your answer stays safe at 0:00' : 'No deadline or automatic advance'}</span>
     </div>
@@ -2692,7 +2698,7 @@ function legacyRenderMainWrite() {
       <div class="nav-group">
         <button class="btn-tool" onclick="nextQuestion()">NEXT</button>
         <button class="btn-tool" onclick="changeMockBarSubject()">Change Subject</button>
-        <button class="btn-tool" onclick="exitMockBarPractice()">Exit Practice</button>
+        <button class="btn-tool" onclick="exitMockBarPractice()">Exit Bar Question Practice</button>
       </div>
       <div class="question-source-meta">
         <span class="source-year">${escapeHtml(sourceMeta.yearLabel)}</span>
@@ -2738,7 +2744,7 @@ function renderExamControlBar(workspaceLocked) {
     clock = `
       <div class="exam-clock">
         <div class="exam-clock-copy">
-          <span class="exam-clock-title">12-minute practice</span>
+          <span class="exam-clock-title">12-minute question</span>
           <span class="exam-clock-note">Your answer stays safe when the target ends.</span>
         </div>
         <span id="timer-display" aria-live="polite">12:00</span>
@@ -2756,7 +2762,7 @@ function renderExamControlBar(workspaceLocked) {
     clock = `
       <div class="exam-clock no-digits">
         <div class="exam-clock-copy">
-          <span class="exam-clock-title">Untimed practice</span>
+          <span class="exam-clock-title">Untimed question</span>
           <span class="exam-clock-note">Write without a visible clock or time limit.</span>
         </div>
       </div>`;
@@ -2765,9 +2771,9 @@ function renderExamControlBar(workspaceLocked) {
     <div class="exam-control-bar timer-bar" id="timer-bar">
       <div class="exam-mode-switcher" aria-label="Exam timing mode">
         <span class="exam-mode-label">Session mode</span>
-        ${modeButton('strict', '12-minute practice')}
+        ${modeButton('strict', '12-minute question')}
         ${modeButton('selfPaced', 'Stopwatch')}
-        ${modeButton('none', 'Untimed practice')}
+        ${modeButton('none', 'Untimed question')}
       </div>
       ${clock}
     </div>`;
@@ -2826,7 +2832,7 @@ function renderMainWrite() {
       <div class="nav-group">
         <button class="btn-tool" onclick="nextQuestion()" ${navigationLocked ? 'disabled' : ''}>NEXT</button>
         <button class="btn-tool" onclick="changeMockBarSubject()" ${navigationLocked ? 'disabled' : ''}>Change Subject</button>
-        <button class="btn-tool" onclick="exitMockBarPractice()" ${navigationLocked ? 'disabled' : ''}>Exit Practice</button>
+        <button class="btn-tool" onclick="exitMockBarPractice()" ${navigationLocked ? 'disabled' : ''}>Exit Bar Question Practice</button>
       </div>
       <div class="question-source-meta">
         <span class="source-year">${escapeHtml(sourceMeta.yearLabel)}</span>
@@ -3154,7 +3160,7 @@ function renderResultHTML(key) {
         <div class="assessment-hero">
           <div class="score-medallion"><div><strong>— / 5</strong><span>No grade</span></div></div>
           <div>
-            <div class="assessment-kicker">12-minute Practice Ended</div>
+            <div class="assessment-kicker">12-minute Question Ended</div>
             <h3 class="assessment-title">Unanswered attempt recorded</h3>
             <p class="assessment-rationale">The twelve-minute period expired with a blank answer. No grading request was made, and no daily submission allowance was consumed.</p>
             <div class="assessment-badges">
@@ -3624,7 +3630,10 @@ const verdictDashboard = {
 
 function analyticsFeatureLabel(value) {
   const label = String(value || '').trim();
-  return /^bar feels$/i.test(label) ? 'Bar Exam Simulation' : label;
+  if (/^(?:mock bar|practice)$/i.test(label)) return 'Bar Question Practice';
+  if (/^(?:subject matter)$/i.test(label)) return 'Syllabus-Based Review';
+  if (/^bar feels$/i.test(label)) return 'Bar Exam Simulation';
+  return label;
 }
 
 function analyticsSubjectLabel(value) {
@@ -3676,7 +3685,7 @@ function verdictLocalRecords() {
   return loadAttempts().map((item, index) => analyticsDisplayRecord({
     id: item.id || `local-${index}`,
     sourceType: item.id ? 'phase4_exam_attempt' : 'local_only',
-    feature: 'Mock Bar', subject: item.subject || '', questionId: item.qId || '',
+    feature: 'Bar Question Practice', subject: item.subject || '', questionId: item.qId || '',
     score: item.score, elapsedSeconds: item.timeSpent, timerMode: item.timerMode || '',
     occurredAt: item.timestamp || '', rubricVersion: item.rubricVersion || '',
     wordCount: countWords(String(item.studentAnswer || '')),
@@ -3912,7 +3921,7 @@ function renderVerdictDashboard() {
         return `<tr>
           <td><input type="checkbox" data-verdict-select="${escapeHtml(key)}" aria-label="Select ${escapeHtml(record.subject || 'attempt')}" ${verdictDashboard.selected.has(key) ? 'checked' : ''}></td>
           <td class="sc">${verdictScore(record)}</td>
-          <td>${escapeHtml(record.feature || 'Practice')}</td>
+          <td>${escapeHtml(record.feature || 'Feature not recorded')}</td>
           <td><strong>${escapeHtml(record.subject || 'Unlabelled')}</strong><small>${escapeHtml(record.questionId || record.questionNumber || '')}</small></td>
           <td>${record.elapsedSeconds != null ? fmtSecs(record.elapsedSeconds) : '—'}</td>
           <td>${analyticsWpm(record) === null ? '—' : Math.round(analyticsWpm(record))}</td>
@@ -4439,10 +4448,10 @@ window.addEventListener('storage', (event) => {
 <script src="assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
 <script src="assets/phase2-experience.js?v=syllabus-review-20260823-1"></script>
-<script src="assets/phase4-experience.js?v=non-exam-sweep-20260822-1"></script>
+<script src="assets/phase4-experience.js?v=question-randomization-20260825-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=syllabus-review-20260823-1"></script>
+<script src="assets/feature-loader.js?v=question-randomization-20260825-1"></script>
 <script src="assets/quorum-first-shell.js?v=syllabus-review-20260823-1"></script>
 <script src="assets/private-beta-landing.js?v=syllabus-review-20260823-1"></script>
 

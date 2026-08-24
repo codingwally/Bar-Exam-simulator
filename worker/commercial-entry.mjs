@@ -1,4 +1,5 @@
 import coreWorker from './index.mjs';
+import { sendSubscriptionReceiptEmail } from './subscription-receipt.mjs';
 
 export const REQUIRED_PAYMENT_VERIFIER_COUNT = 5;
 
@@ -399,6 +400,76 @@ export async function drainPaymentNotificationQueue(env, limit = 5) {
   return results;
 }
 
+export async function dispatchApprovedSubscriptionReceipt(env, paymentRequestId = null) {
+  const claim = await serviceRoleRpc(env, 'phase4_claim_subscription_receipt', {
+    p_payment_request_id: paymentRequestId,
+  });
+  if (!claim.ok) {
+    console.error('Subscriber receipt queue claim failed', { status: claim.status });
+    return { status: 'failed', paymentRequestId };
+  }
+
+  const payment = claim.payload;
+  if (!payment?.id) {
+    const context = paymentRequestId
+      ? await serviceRoleRpc(env, 'phase4_subscription_receipt_context', {
+        p_payment_request_id: paymentRequestId,
+      })
+      : null;
+    return {
+      status: cleanSingleLine(context?.payload?.receiptStatus, 40) || 'idle',
+      paymentRequestId,
+    };
+  }
+
+  let receipt = { status: 'failed', providerId: null };
+  let errorCode = 'delivery_failed';
+  try {
+    const proof = await canonicalPaymentProof(env, payment);
+    receipt = await sendSubscriptionReceiptEmail(env, {
+      payment,
+      user: payment.user,
+      subscription: payment.subscription,
+      proof,
+    });
+    errorCode = receipt.status === 'not_configured'
+      ? 'receipt_not_configured'
+      : receipt.safeErrorCode || 'delivery_failed';
+  } catch (error) {
+    errorCode = cleanSingleLine(error?.message || error?.name || 'delivery_failed', 500);
+    console.error('Subscriber receipt processing failed', {
+      paymentRequestId: payment.id,
+      code: cleanSingleLine(error?.name || 'receipt_error', 80),
+    });
+  }
+
+  const terminalStatus = receipt.status === 'sent' ? 'sent' : 'failed';
+  const completion = await serviceRoleRpc(env, 'phase4_complete_subscription_receipt', {
+    p_payment_request_id: payment.id,
+    p_status: terminalStatus,
+    p_provider_id: receipt.providerId,
+    p_error: terminalStatus === 'failed' ? errorCode : null,
+  });
+  if (!completion.ok) {
+    console.error('Subscriber receipt queue completion failed', {
+      status: completion.status,
+      paymentRequestId: payment.id,
+    });
+  }
+  return { status: terminalStatus, paymentRequestId: payment.id };
+}
+
+export async function drainSubscriptionReceiptQueue(env, limit = 5) {
+  const results = [];
+  const boundedLimit = Math.max(1, Math.min(10, Number(limit) || 5));
+  for (let index = 0; index < boundedLimit; index += 1) {
+    const result = await dispatchApprovedSubscriptionReceipt(env);
+    if (result.status === 'idle') break;
+    results.push(result);
+  }
+  return results;
+}
+
 async function notifyPaymentSubmission(response, env, ctx) {
   const payload = await response.clone().json().catch(() => null);
   if (!payload?.ok || !payload?.payment?.id) return response;
@@ -418,20 +489,57 @@ async function notifyPaymentSubmission(response, env, ctx) {
   });
 }
 
+async function notifyApprovedPayment(response, env, paymentRequestId) {
+  const payload = await response.clone().json().catch(() => null);
+  if (!payload?.ok || payload?.data?.payment?.status !== 'approved') return response;
+  const receipt = await dispatchApprovedSubscriptionReceipt(
+    env,
+    payload.data.payment.id || paymentRequestId,
+  );
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  return new Response(JSON.stringify({
+    ...payload,
+    data: {
+      ...payload.data,
+      subscriberReceipt: { status: receipt.status },
+    },
+  }), {
+    status: response.status,
+    headers,
+  });
+}
+
 async function fetchWithCommercialNotifications(request, env, ctx) {
   const pathname = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
 
   const paymentRequest = request.method === 'POST' && pathname === '/payments/submit';
+  const adminActionRequest = request.method === 'POST' && pathname === '/admin/phase4-action';
+  const adminAction = adminActionRequest
+    ? await request.clone().json().catch(() => null)
+    : null;
   const response = await coreWorker.fetch(request, env, ctx);
-  if (!paymentRequest || response.status !== 201) return response;
-  return notifyPaymentSubmission(response, env, ctx);
+  if (paymentRequest && response.status === 201) {
+    return notifyPaymentSubmission(response, env, ctx);
+  }
+  if (
+    adminActionRequest
+    && response.ok
+    && adminAction?.action === 'payment_review'
+    && adminAction?.payload?.status === 'approved'
+  ) {
+    return notifyApprovedPayment(response, env, adminAction.targetId);
+  }
+  return response;
 }
 
 export default {
   fetch: fetchWithCommercialNotifications,
   scheduled(controller, env, ctx) {
     const notificationDrain = drainPaymentNotificationQueue(env, 5);
+    const receiptDrain = drainSubscriptionReceiptQueue(env, 5);
     ctx?.waitUntil?.(notificationDrain);
+    ctx?.waitUntil?.(receiptDrain);
     return coreWorker.scheduled?.(controller, env, ctx);
   },
 };

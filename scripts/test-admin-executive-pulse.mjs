@@ -14,7 +14,7 @@ for (const group of [
 ]) assert.match(html, new RegExp(group.replace('&', '&amp;').replace('&amp;amp;', '&amp;')));
 
 for (const label of [
-  'Executive Pulse', 'Live Activity', 'Users', 'Sign-ups', 'Acquisition',
+  'Executive Pulse', 'Live Activity', 'Recent users', 'Sign-ups', 'Acquisition',
   'Answers', 'Subject Performance', 'Grading Health', 'Subscriptions',
   'Payments', 'Refunds', 'Support', 'Corrections', 'Community Moderation',
   'Revenue', 'Projections', 'Comparisons', 'Audit Log', 'Controls',

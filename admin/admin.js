@@ -8,7 +8,7 @@
     realtime: 'Live Activity',
     acquisition: 'Sign-ups',
     marketing: 'Acquisition',
-    users: 'Users',
+    users: 'Recent Users',
     learning: 'Subject Performance',
     subjects: 'Question Bank',
     reliability: 'Grading Health',
@@ -31,7 +31,7 @@
   const sectionSubtitles = Object.freeze({
     executive: 'Executive command center for the Judicial Observatory.',
     realtime: 'Current signed-in activity and service demand.',
-    users: 'Account directory, access, and learning engagement.',
+    users: 'Continuously loaded account sign-ins, access, and learning engagement.',
     acquisition: 'Registration funnel and account activation.',
     marketing: 'Recorded channels and sign-in acquisition.',
     learning: 'Subject-level performance from completed assessments.',
@@ -84,6 +84,9 @@
     examinationRoomBreakGlass: null,
     userSearch: '',
     userOffset: 0,
+    userTotal: 0,
+    userDirectoryLoading: false,
+    userDirectoryObserver: null,
     subscriptionSearch: '',
     subscriptionOffset: 0,
     liveActivity: null,
@@ -759,7 +762,7 @@
         </section>
       </div>
       <section class="observatory-card executive-recent-users">
-        <div class="card-head"><div><h3>Recent Users</h3><p>Latest recorded account sign-ins.</p></div><button type="button" class="icon-link" data-admin-section="users" aria-label="Open full user directory"><span>View all users</span><i class="ph ph-caret-right" aria-hidden="true"></i></button></div>
+        <div class="card-head"><div><h3>Recent Users</h3><p>Latest recorded account sign-ins.</p></div><button type="button" class="icon-link" data-admin-section="users" aria-label="Open recent users directory"><span>View recent users</span><i class="ph ph-caret-right" aria-hidden="true"></i></button></div>
         ${table(['Name', 'Email', 'School', 'Last sign-in', 'Region', 'Device', 'Questions', 'Access', 'Remaining'], recentAccounts.map((account) => [
           account.display_name || 'Not provided', account.email || 'Not provided', account.school || 'Not provided', dateTime(account.last_sign_in_at),
           accountRegion(account), accountDevice(account), number(account.answered_question_count),
@@ -1007,10 +1010,13 @@
     };
   }
 
-  async function renderUsers() {
-    const data = await loadUserDirectory();
-    const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
-    const rows = (data.items || []).map((user) => [
+  const userDirectoryHeaders = [
+    'Name', 'Email', 'Category', 'Access', 'Last sign-in', 'Region', 'Device',
+    'Questions answered', 'Answer types', 'Score', 'Actions',
+  ];
+
+  function userDirectoryCells(user, founderAuthorized) {
+    return [
       user.display_name || 'Not provided',
       user.email,
       user.commercial_category ? humanizeAuditValue(user.commercial_category) : 'User',
@@ -1039,21 +1045,37 @@
             : ''}
         </div>`,
       },
-    ]);
-    const pageStart = Number(data.offset ?? state.userOffset) + (rows.length ? 1 : 0);
-    const pageEnd = Number(data.offset ?? state.userOffset) + rows.length;
-    const canGoBack = state.userOffset > 0;
-    const canGoForward = pageEnd < Number(data.total || 0);
+    ];
+  }
+
+  function tableRowHtml(headers, cells) {
+    return `<tr>${cells.map((cell, index) => `<td data-label="${escapeHtml(headers[index] || `Column ${index + 1}`)}">${cell?.html === true ? cell.value : escapeHtml(cellText(cell))}</td>`).join('')}</tr>`;
+  }
+
+  function userDirectoryRowsHtml(items, founderAuthorized) {
+    return (items || [])
+      .map((user) => tableRowHtml(userDirectoryHeaders, userDirectoryCells(user, founderAuthorized)))
+      .join('');
+  }
+
+  async function renderUsers() {
+    state.userDirectoryObserver?.disconnect();
+    state.userDirectoryObserver = null;
+    state.userOffset = 0;
+    const data = await loadUserDirectory(false, state.userSearch, 0);
+    const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
+    const items = data.items || [];
+    state.userOffset = items.length;
+    state.userTotal = Number(data.total || 0);
+    const hasMore = state.userOffset < state.userTotal;
     return `
-      ${heading('Users', 'Search exact names and email addresses, review access and answer activity, or download the current user list for Google Sheets.')}
+      ${heading('Recent Users', 'Search recorded accounts, review access and answer activity, or download the current user list for Google Sheets.')}
       <div class="table-tools"><input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, school, or email" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="user-directory-export" type="button">Download user list</button></div>
-      ${table(['Name', 'Email', 'Category', 'Access', 'Last sign-in', 'Region', 'Device', 'Questions answered', 'Answer types', 'Score', 'Actions'], rows)}
-      <div class="pagination-bar">
-        <p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(data.total)} matching account(s).</p>
-        <div class="row-actions">
-          <button class="secondary-button" id="users-previous" type="button"${canGoBack ? '' : ' disabled'}>Previous</button>
-          <button class="secondary-button" id="users-next" type="button"${canGoForward ? '' : ' disabled'}>Next</button>
-        </div>
+      <div class="table-wrap recent-users-directory"><table><thead><tr>${userDirectoryHeaders.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join('')}</tr></thead>
+        <tbody id="user-directory-body">${items.length ? userDirectoryRowsHtml(items, founderAuthorized) : `<tr><td colspan="${userDirectoryHeaders.length}">${empty('No matching user records are available.')}</td></tr>`}</tbody></table></div>
+      <div class="continuous-directory-footer" id="user-directory-sentinel">
+        <p class="panel-note" id="user-directory-progress" role="status">Showing ${number(state.userOffset)} of ${number(state.userTotal)} matching account(s).</p>
+        <button class="secondary-button" id="users-load-more" type="button"${hasMore ? '' : ' hidden'}>Load more users</button>
       </div>
       ${founderAuthorized ? `<section class="panel">
         <h3>Email the user list to a founder</h3>
@@ -1361,10 +1383,11 @@
             {
               html: true,
               value: `<div class="row-actions">
-                ${actionButton('Review', 'payment_review', row.id, {
+                ${['pending', 'needs_information'].includes(row.status) ? actionButton('Approve subscription', 'payment_review', row.id, {
                   status: row.status,
                   planCode: row.plan_code,
-                }).value}
+                  approvalOnly: true,
+                }).value : ''}
                 ${actionButton('View private proof', 'view_payment_proof', row.id, {
                   studentName: row.display_name || 'Not provided',
                   studentEmail: row.email || 'Not available',
@@ -3804,10 +3827,13 @@
         </div>
       </section>`;
     $('#action-dialog').classList.add('payment-proof-open');
+    state.action.payload.proofLoaded = true;
+    state.action.payload.proofReviewReason = reason;
     const reasonField = $('#action-reason')?.closest('label');
     if (reasonField) reasonField.hidden = true;
-    $('#action-warning').textContent = 'Review the image and payment details together before making a separate approval or rejection decision.';
-    $('#action-confirm').hidden = true;
+    $('#action-warning').textContent = 'Review the image and payment details together. Approval sends the user an electronic receipt with this exact proof attached.';
+    $('#action-confirm').hidden = false;
+    $('#action-confirm').textContent = 'Approve subscription';
     $('#action-dialog-cancel').textContent = 'Done';
   }
 
@@ -3840,13 +3866,15 @@
         ${actionField('End date (optional)', 'action-until', '', 'date')}`;
       warning = 'This action changes the student’s access and may affect future billing records. Confirm the requested change and effective dates before continuing.';
     } else if (action === 'payment_review') {
-      title = 'Review manual payment';
-      fields = `<label class="field">Decision<select id="action-status">
-        <option value="needs_information">Needs information</option>
-        <option value="approved">Approve Early Access</option>
-        <option value="rejected">Reject</option>
-      </select></label>`;
-      warning = 'Approval immediately verifies the current Early Access term. The next renewal is a separate manual ₱199 payment on October 1, 2026; no automatic charge is made. Verify the ₱149 amount, channel, reference, date, and private proof before confirming.';
+      title = 'Approve subscription';
+      fields = payload.approvalOnly === true
+        ? '<div class="notice"><strong>Receipt delivery</strong><br>Confirming approves Early Access and sends the subscriber an electronic receipt with the exact reviewed payment proof attached.</div>'
+        : `<label class="field">Decision<select id="action-status">
+          <option value="approved">Approve Early Access</option>
+          <option value="needs_information">Needs information</option>
+          <option value="rejected">Reject</option>
+        </select></label>`;
+      warning = 'Approval activates the verified Early Access term and emails the user a professional electronic receipt with the exact reviewed payment proof attached. No automatic charge or renewal is scheduled.';
     } else if (action === 'view_payment_proof') {
       title = 'View private payment proof';
       fields = `<div class="notice"><strong>Review context</strong><br>${escapeHtml(payload.studentName || 'Not provided')} · ${escapeHtml(payload.transactionReference || 'No reference')} · ${Number.isFinite(Number(payload.amountPhp)) ? `₱${number(payload.amountPhp, 2)}` : 'Amount unavailable'}</div>`;
@@ -3991,14 +4019,14 @@
     }
     $('#action-title').textContent = title;
     const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
-    const isHighRiskPayment = action === 'payment_review';
+    const isPaymentReview = action === 'payment_review';
     const isSensitiveExport = action === 'user_response_export';
     const isGlobalBetaAction = action === 'global_beta_change';
     const isForumAction = action.startsWith('forum_') || action.startsWith('quorum_');
     if (isAccessAction) buildAccessActionFields(action, state.action.payload);
     else $('#action-fields').innerHTML = fields;
     $('#action-context').hidden = !isAccessAction;
-    $('#action-confirmation').hidden = !(isAccessAction || isForumAction || isHighRiskPayment || isSensitiveExport || isGlobalBetaAction);
+    $('#action-confirmation').hidden = !(isAccessAction || isForumAction || isSensitiveExport || isGlobalBetaAction);
     $('#action-confirmation-copy').textContent = isGlobalBetaAction
       ? `I understand this will ${payload.enabled ? 'enable temporary safety access for' : 'activate commercial enforcement for'} all signed-in users and that the immediate change is recorded.`
       : isSensitiveExport
@@ -4011,11 +4039,33 @@
       ? 'View activity history'
       : isSensitiveExport
         ? 'Download answer records'
-        : isForumAction ? 'Confirm moderation action' : 'Confirm action';
+        : isPaymentReview && payload.approvalOnly === true ? 'Confirm'
+          : isPaymentReview ? 'Approve subscription'
+          : isForumAction ? 'Confirm moderation action' : 'Confirm action';
     $('#action-warning').textContent = warning;
     $('#action-reason').value = '';
     if (isAccessAction) updateActionContext();
     $('#action-dialog').showModal();
+    if (isPaymentReview) {
+      const decision = $('#action-status');
+      const syncPaymentDecision = () => {
+        const selected = payload.approvalOnly === true ? 'approved' : decision?.value || 'approved';
+        const isApproval = selected === 'approved';
+        $('#action-title').textContent = isApproval
+          ? 'Approve subscription'
+          : selected === 'rejected' ? 'Reject payment request' : 'Request payment information';
+        $('#action-confirm').textContent = isApproval
+          ? payload.approvalOnly === true ? 'Confirm' : 'Approve subscription'
+          : selected === 'rejected' ? 'Reject request' : 'Request information';
+        $('#action-warning').textContent = isApproval
+          ? 'Confirming activates the verified Early Access term and emails the user an electronic receipt with the exact reviewed proof attached. No automatic charge or renewal is scheduled.'
+          : selected === 'rejected'
+            ? 'Rejecting revokes provisional access and records your reason. No receipt is sent.'
+            : 'The request remains unapproved while the user provides the missing information. No receipt is sent.';
+      };
+      decision?.addEventListener('change', syncPaymentDecision);
+      syncPaymentDecision();
+    }
     if (history.state?.dueDiligenceAdminAction !== true) {
       history.pushState(
         { ...(history.state || {}), dueDiligenceAdminAction: true },
@@ -4031,10 +4081,9 @@
     const accessAction = Boolean(subscriptionActions?.isAccessAction(state.action.action));
     const forumAction = state.action.action.startsWith('forum_')
       || state.action.action.startsWith('quorum_');
-    const highRiskPayment = state.action.action === 'payment_review';
     const sensitiveExport = state.action.action === 'user_response_export';
     const globalBetaAction = state.action.action === 'global_beta_change';
-    if ((accessAction || forumAction || highRiskPayment || sensitiveExport || globalBetaAction) && !$('#action-confirm-risk').checked) {
+    if ((accessAction || forumAction || sensitiveExport || globalBetaAction) && !$('#action-confirm-risk').checked) {
       toast(forumAction
         ? 'Confirm that you verified the report and moderation action.'
         : globalBetaAction
@@ -4051,6 +4100,15 @@
     }
     const action = state.action.action;
     const payload = { ...state.action.payload };
+    if (action === 'view_payment_proof' && payload.proofLoaded === true) {
+      openAction('payment_review', state.action.targetId, {
+        ...payload,
+        approvalOnly: true,
+        status: 'approved',
+      });
+      $('#action-reason').value = payload.proofReviewReason || reason;
+      return;
+    }
     if (action === 'support_update') {
       payload.status = $('#action-status').value;
       payload.priority = $('#action-priority').value;
@@ -4066,7 +4124,7 @@
         : payload.status === 'canceled' ? 'cancel'
           : payload.status === 'expired' ? 'expire' : 'adjust';
     } else if (action === 'payment_review') {
-      payload.status = $('#action-status').value;
+      payload.status = payload.approvalOnly === true ? 'approved' : $('#action-status').value;
     } else if (action === 'refund_review') {
       payload.status = $('#action-status').value;
       payload.approvedRefundPhp = Number($('#action-refund-amount').value);
@@ -4256,6 +4314,15 @@
         if (action === 'subscription_audit_view') {
           renderAuditHistory(response.data, payload);
           toast('Access history loaded and recorded.');
+        } else if (action === 'payment_review') {
+          const receiptStatus = response?.data?.subscriberReceipt?.status;
+          if (payload.status === 'approved' && receiptStatus === 'sent') {
+            toast('Subscription approved. The electronic receipt and reviewed proof were emailed to the user.');
+          } else if (payload.status === 'approved') {
+            toast('Subscription approved, but receipt delivery needs administrator attention.');
+          } else {
+            toast('Payment decision recorded. No subscriber receipt was sent.');
+          }
         } else {
           toast('Access change completed, recorded, and refreshed.');
         }
@@ -4288,6 +4355,88 @@
     if ($('#scenario-output')) $('#scenario-output').textContent = `Planning estimate only: ${number(assumedCustomers)} assumed customers × ₱${number(price, 2)}. This is not actual or forecast-guaranteed revenue.`;
   }
 
+  function bindAdminActionButtons(root = document) {
+    $$('[data-admin-action]', root).forEach((button) => {
+      if (button.dataset.adminActionBound === 'true') return;
+      button.dataset.adminActionBound = 'true';
+      button.addEventListener('click', () => {
+        let payload = {};
+        try { payload = JSON.parse(button.dataset.payload || '{}'); } catch { payload = {}; }
+        openAction(button.dataset.adminAction, button.dataset.target, payload);
+      });
+    });
+  }
+
+  function bindUserAnswerButtons(root = document) {
+    $$('[data-view-user-answers]', root).forEach((button) => {
+      if (button.dataset.userAnswersBound === 'true') return;
+      button.dataset.userAnswersBound = 'true';
+      button.addEventListener('click', async () => {
+        state.answerSearch = button.dataset.userEmail || '';
+        state.answerType = 'all';
+        state.answerOffset = 0;
+        state.answerHistory = null;
+        await renderSection('answer_exports');
+      });
+    });
+  }
+
+  async function appendUserDirectoryPage() {
+    if (state.section !== 'users'
+        || state.userDirectoryLoading
+        || state.userOffset >= state.userTotal) return;
+    const button = $('#users-load-more');
+    const progress = $('#user-directory-progress');
+    const body = $('#user-directory-body');
+    if (!body) return;
+
+    state.userDirectoryLoading = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Loading users…';
+    }
+    try {
+      const startOffset = state.userOffset;
+      const data = await loadUserDirectory(false, state.userSearch, startOffset);
+      const items = Array.isArray(data.items) ? data.items : [];
+      state.userTotal = Number(data.total || state.userTotal || 0);
+      if (!items.length) {
+        if (progress) progress.textContent = `Showing ${number(state.userOffset)} of ${number(state.userTotal)} matching account(s). No additional records were returned.`;
+        if (button) button.hidden = true;
+        state.userDirectoryObserver?.disconnect();
+        return;
+      }
+
+      if (startOffset === 0) body.replaceChildren();
+      const template = document.createElement('template');
+      template.innerHTML = userDirectoryRowsHtml(
+        items,
+        ['founder_admin', 'super_admin'].includes(state.authorization?.role),
+      );
+      const fragment = template.content;
+      bindAdminActionButtons(fragment);
+      bindUserAnswerButtons(fragment);
+      body.append(fragment);
+      state.userOffset += items.length;
+
+      const hasMore = state.userOffset < state.userTotal;
+      if (progress) progress.textContent = hasMore
+        ? `Showing ${number(state.userOffset)} of ${number(state.userTotal)} matching account(s). More users load as you scroll.`
+        : `Showing all ${number(state.userTotal)} matching account(s).`;
+      if (button) button.hidden = !hasMore;
+      if (!hasMore) state.userDirectoryObserver?.disconnect();
+    } catch (error) {
+      if (progress) progress.textContent = `Showing ${number(state.userOffset)} of ${number(state.userTotal)} matching account(s).`;
+      toast(error.message || 'More users could not be loaded. You can retry without losing the current list.');
+    } finally {
+      state.userDirectoryLoading = false;
+      if (button && !button.hidden) {
+        button.disabled = false;
+        button.textContent = 'Load more users';
+      }
+    }
+  }
+
   function bindDynamic() {
     mountSubscriptionActions();
     $$('[data-insight]').forEach((button) => button.addEventListener('click', () => openInsight(button)));
@@ -4296,11 +4445,7 @@
       if (sectionAllowed(section)) renderSection(section);
       else toast('Your administrator role does not have access to that section.');
     }));
-    $$('[data-admin-action]').forEach((button) => button.addEventListener('click', () => {
-      let payload = {};
-      try { payload = JSON.parse(button.dataset.payload || '{}'); } catch { payload = {}; }
-      openAction(button.dataset.adminAction, button.dataset.target, payload);
-    }));
+    bindAdminActionButtons();
     $('#user-search-button')?.addEventListener('click', async () => {
       const search = $('#user-search').value.trim();
       $('#dashboard-view').innerHTML = '<div class="skeleton"></div>';
@@ -4311,21 +4456,16 @@
         await renderSection('users');
       } catch (error) { toast(error.message); }
     });
-    $('#users-previous')?.addEventListener('click', async () => {
-      state.userOffset = Math.max(0, state.userOffset - 100);
-      await renderSection('users');
-    });
-    $('#users-next')?.addEventListener('click', async () => {
-      state.userOffset += 100;
-      await renderSection('users');
-    });
-    $$('[data-view-user-answers]').forEach((button) => button.addEventListener('click', async () => {
-      state.answerSearch = button.dataset.userEmail || '';
-      state.answerType = 'all';
-      state.answerOffset = 0;
-      state.answerHistory = null;
-      await renderSection('answer_exports');
-    }));
+    bindUserAnswerButtons();
+    $('#users-load-more')?.addEventListener('click', appendUserDirectoryPage);
+    const directorySentinel = $('#user-directory-sentinel');
+    if (directorySentinel && 'IntersectionObserver' in global && state.userOffset < state.userTotal) {
+      state.userDirectoryObserver?.disconnect();
+      state.userDirectoryObserver = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) appendUserDirectoryPage();
+      }, { rootMargin: '600px 0px' });
+      state.userDirectoryObserver.observe(directorySentinel);
+    }
     $('#download-live-activity')?.addEventListener('click', () => {
       downloadCsv('due-diligence-activity-summary.csv', [
         'Measure', 'Value', 'Meaning', 'Generated at',

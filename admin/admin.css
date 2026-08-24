@@ -90,6 +90,10 @@ select, input, textarea { border: 1px solid #bfcbd9; border-radius: 5px; backgro
 .table-tools input { min-width: 260px; }
 .table-tools select { min-height: 42px; }
 .table-wrap { overflow: auto; border: 1px solid var(--line); background: white; }
+.recent-users-directory { max-height: none; overflow-x: auto; overflow-y: visible; }
+.continuous-directory-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 78px; padding: 1rem 0; }
+.continuous-directory-footer .panel-note { margin: 0; }
+.continuous-directory-footer button[hidden] { display: none; }
 table { width: 100%; border-collapse: collapse; font-size: .76rem; }
 th { position: sticky; top: 0; z-index: 1; background: #edf2f7; color: #44546a; text-transform: uppercase; letter-spacing: .05em; font-size: .66rem; text-align: left; }
 th, td { padding: .72rem .65rem; border-bottom: 1px solid #e3e8ef; vertical-align: top; }

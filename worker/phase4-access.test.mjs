@@ -53,14 +53,14 @@ test('embedded protected inventory preserves eight subjects and the released dis
   assert.deepEqual(
     Object.fromEntries(Object.entries(inventory).map(([subject, questions]) => [subject, questions.length])),
     {
-      'Political Law': 46,
-      'Labor Law': 46,
-      'Civil Law': 46,
-      'Taxation Law': 45,
-      'Mercantile Law': 45,
-      'Criminal Law': 46,
-      'Remedial Law': 45,
-      'Legal Ethics': 43,
+      'Political Law': 96,
+      'Labor Law': 96,
+      'Civil Law': 96,
+      'Taxation Law': 57,
+      'Mercantile Law': 83,
+      'Criminal Law': 96,
+      'Remedial Law': 83,
+      'Legal Ethics': 55,
     },
   );
 });
@@ -71,7 +71,7 @@ test('user-visible inventory quarantines only the two unresolved Tax questions',
   );
   const inventory = availableProtectedQuestionInventory(records);
   assert.equal(Object.values(inventory).flat().length, questionBank.records.length - 2);
-  assert.equal(inventory['Taxation Law'].length, 43);
+  assert.equal(inventory['Taxation Law'].length, 55);
   const availableIds = new Set(Object.values(inventory).flat().map((question) => question.id));
   const certifiedIds = new Set(
     sourceManifest.records
@@ -83,7 +83,7 @@ test('user-visible inventory quarantines only the two unresolved Tax questions',
       .map((record) => String(record['Question ID']).trim())
       .filter((questionId) => questionId.startsWith('DDQB-2026-Q')),
   );
-  assert.equal(ownerApprovedOriginalIds.size, 42);
+  assert.equal(ownerApprovedOriginalIds.size, 342);
   assert.deepEqual(availableIds, new Set([...certifiedIds, ...ownerApprovedOriginalIds]));
   assert.deepEqual(
     [...WITHHELD_MOCK_BAR_QUESTION_IDS].sort(),
@@ -203,8 +203,8 @@ test('authenticated entitled exam opening never creates an explicit commercial c
     assert.ok(payload.question.prompt.length > 50);
     assert.deepEqual(payload.inventory, {
       subjects: 8,
-      questionsPerSubject: 46,
-      totalQuestions: 362,
+      questionsPerSubject: 96,
+      totalQuestions: 662,
     });
     assert.doesNotMatch(JSON.stringify(payload.question), /model|suggested|legalBasis|sourceUrl/i);
   } finally {

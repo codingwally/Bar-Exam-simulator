@@ -1,4 +1,5 @@
-import { parseCsv, questionWebsiteVisibility } from './examiner-core.mjs';
+import { parseCsv } from './examiner-core.mjs';
+import { questionWebsiteVisibility } from './question-visibility-core.mjs';
 import {
   SUBJECT_MATTER_COURSES,
   SUBJECT_MATTER_EXPECTED,

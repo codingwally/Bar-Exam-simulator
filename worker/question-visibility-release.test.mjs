@@ -6,7 +6,7 @@ import {
   protectedQuestionInventory,
   selectProtectedQuestion,
 } from './access-core.mjs';
-import { questionWebsiteVisibility } from './examiner-core.mjs';
+import { questionWebsiteVisibility } from './question-visibility-core.mjs';
 import {
   applyWebsitePublicationOverlay,
   buildBarFeelsManifest,

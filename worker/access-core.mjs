@@ -1,4 +1,4 @@
-import { questionWebsiteVisibility } from './examiner-core.mjs';
+import { questionWebsiteVisibility } from './question-visibility-core.mjs';
 
 export const PHASE4_SUBJECTS = Object.freeze([
   'Political Law',

@@ -200,19 +200,6 @@ export function parseQuestionBank(csvText) {
   return records;
 }
 
-export function questionWebsiteVisibility(row) {
-  const rawValue = row && typeof row === 'object'
-    ? row['Publication Ready?'] ?? row.publicationReady
-    : row;
-  const value = cleanText(rawValue, 120)
-    .toLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ');
-  if (!value || value === 'yes') return 'visible';
-  if (['no', 'hide', 'hidden', 'hide from website'].includes(value)) return 'hidden';
-  return 'invalid';
-}
-
 export function questionFromBankRow(row) {
   if (!row) return null;
   const caseName = cleanText(row['Jurisprudence / Case'] || row.case_name);

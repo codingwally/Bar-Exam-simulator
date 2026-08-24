@@ -366,13 +366,47 @@ body.observatory::before {
 .observatory .work-grid { gap: 14px; }
 .observatory .table-wrap { overflow: auto; }
 .observatory table { width: 100%; color: var(--obs-muted-bright); background: transparent; }
-.observatory thead { background: #08131d; }
-.observatory th {
-  color: #718794;
+.observatory thead {
+  background: #08131d;
+  box-shadow: inset 0 -1px 0 rgba(143, 162, 175, 0.24);
+}
+.observatory th,
+.observatory .table-wrap th {
+  color: #e6edf0;
+  background: #08131d;
   border-color: var(--obs-line);
-  font-size: 0.61rem;
+  font-size: 0.76rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+.observatory .table-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  width: 100%;
+  min-height: 34px;
+  padding: 2px 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+  box-shadow: none;
+  cursor: pointer;
+}
+.observatory .table-sort:hover { color: #ffffff; }
+.observatory .table-sort:focus-visible {
+  outline: 2px solid var(--obs-gold-bright);
+  outline-offset: 3px;
+}
+.observatory .table-sort i {
+  flex: 0 0 auto;
+  color: var(--obs-gold-bright);
+  font-size: 0.95rem;
 }
 .observatory td { border-color: var(--obs-line-soft); }
 .observatory tbody tr:hover { background: rgba(34, 198, 216, 0.035); }
@@ -578,6 +612,27 @@ body.observatory::before {
 .observatory .forecast-result div { padding: 15px; background: #08131d; border: 1px solid var(--obs-line); border-radius: 8px; }
 .observatory .forecast-result span { color: var(--obs-muted); font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.1em; }
 .observatory .forecast-result strong { display: block; margin-top: 7px; color: var(--obs-gold-bright); font-size: 1.25rem; }
+.observatory .forecast-result small {
+  display: block;
+  margin-top: 5px;
+  color: var(--obs-muted-bright);
+}
+.observatory .forecast-result .forecast-primary {
+  border-color: var(--obs-gold);
+  background: linear-gradient(145deg, rgba(210, 170, 85, 0.13), rgba(8, 19, 29, 0.98));
+}
+
+.observatory .paid-subscriber-kpis { margin-bottom: 14px; }
+.observatory .commercial-ledger { overflow: hidden; }
+.observatory .commercial-ledger .table-wrap { max-height: 64vh; border-radius: 0; }
+.observatory .commercial-ledger thead { position: sticky; top: 0; z-index: 2; }
+.observatory .status.paid {
+  color: #091723;
+  background: #61d9e9;
+  border-color: #61d9e9;
+}
+.observatory .business-intelligence-grid .observatory-card { min-width: 0; }
+.observatory .business-intelligence-grid .chart-shell { min-height: 250px; }
 
 .observatory dialog,
 .observatory dialog form { color: var(--obs-text); background: var(--obs-panel); border-color: var(--obs-line); }
@@ -1081,7 +1136,7 @@ body.observatory {
 .observatory .executive-operations > summary { font-size: 0.86rem; }
 .observatory .executive-operations > summary small { font-size: 0.75rem; }
 
-.observatory thead th { color: #c2cdd2; font-size: 0.86rem; }
+.observatory thead th { color: #e6edf0; font-size: 0.86rem; }
 .observatory .row-actions button,
 .observatory .secondary-button,
 .observatory .primary-button,
@@ -1146,12 +1201,12 @@ body.observatory {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #e9eff2;
+  background: #08131d;
   box-shadow: 0 1px 0 rgba(5, 11, 18, 0.5);
 }
 
 .observatory .recent-user-activity-table th {
-  color: #20323e;
+  color: #e6edf0;
   font-weight: 800;
 }
 
@@ -1258,5 +1313,12 @@ body.observatory {
 
   .observatory .recent-user-activity-table {
     max-height: none;
+  }
+
+  .observatory .table-wrap tr {
+    color: var(--obs-text);
+    background: #08131d;
+    border-color: var(--obs-line);
+    box-shadow: none;
   }
 }

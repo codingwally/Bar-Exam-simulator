@@ -17,7 +17,7 @@ for (const group of [
 for (const label of [
   'Executive Pulse', 'Live Activity', 'Recent users', 'Users', 'Sign-ups', 'Acquisition',
   'Answers', 'Subject Performance', 'Grading Health', 'Subscriptions',
-  'Payments', 'Refunds', 'Support', 'Corrections', 'Community Moderation',
+  'Paid Subscribers', 'Payments', 'Refunds', 'Support', 'Corrections', 'Community Moderation',
   'Revenue', 'Projections', 'Comparisons', 'Audit Log', 'Controls',
 ]) assert.match(html, new RegExp(`<span>${label}</span>`));
 
@@ -56,6 +56,20 @@ assert.match(js, /stacked:\s*true/);
 assert.match(js, /Available after next sign-in/);
 assert.match(js, /not bank settlement/i);
 assert.doesNotMatch(js, /forecast-guaranteed revenue[^\n]*executiveVisuals/i);
+assert.match(js, /function renderPaidSubscribers\(\)/);
+assert.match(js, /Paid verified/);
+assert.match(js, /Paid not verified/);
+assert.match(js, /Expired or within five days/i);
+assert.match(js, /function administratorIdentity\(userId, directoryById/);
+assert.match(js, /row\.reviewed_by \? administratorIdentity\(row\.reviewed_by, directoryById\)/);
+assert.match(js, /class="table-sort"/);
+assert.match(js, /aria-sort/);
+assert.match(js, /Average time used/);
+assert.match(js, /Total time used/);
+assert.match(js, /Peak activity times/);
+assert.match(js, /Activity comparison is temporarily incomplete/);
+assert.match(js, /business-revenue-status-chart/);
+assert.match(js, /business-device-comparison-chart/);
 
 assert.match(css, /executive-chart-grid-top/);
 assert.match(css, /grid-template-columns:\s*226px/);
@@ -69,6 +83,9 @@ assert.match(css, /\.table-wrap td \.record-detail\[open\] > summary[\s\S]*color
 assert.match(css, /\.table-wrap td \.record-source-links a[\s\S]*color:\s*var\(--obs-cyan\)/);
 assert.match(css, /recent-user-activity-table/);
 assert.match(css, /recent-user-summary/);
+assert.match(css, /\.observatory \.table-sort/);
+assert.match(css, /\.observatory \.table-wrap th[\s\S]*background:\s*#08131d/);
+assert.doesNotMatch(css, /\.recent-users-ledger thead th[\s\S]{0,240}background:\s*#e9eff2/);
 
 assert.match(html, /private-beta-session\.js/);
 assert.doesNotMatch(js, /visualPreview|installVisualPreviewFixture|local-preview-only/);

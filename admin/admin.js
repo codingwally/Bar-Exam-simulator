@@ -493,32 +493,25 @@
   async function loadRecentUserActivityWindow(from, to, force = false) {
     const key = `recent-user-activity:all:${from}:${to}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
-    const items = [];
-    let offset = 0;
-    let total = 0;
-    let firstPage = null;
-    do {
-      const payload = await api('/admin/recent-user-activity', {
-        search: '',
-        from,
-        to,
-        limit: 100,
-        offset,
-        requestKey: uuidKey(),
-      });
-      const page = payload.data || {};
-      if (!firstPage) firstPage = page;
-      const pageItems = Array.isArray(page.items) ? page.items : [];
-      if (offset === 0) total = Number(page.total || 0);
-      items.push(...pageItems);
-      offset += pageItems.length;
-      if (!pageItems.length || items.length >= 5_000) break;
-    } while (offset < total);
+    // Aggregate totals, duration, daily activity, and activity mix already
+    // cover the complete period. A bounded page is sufficient for the clearly
+    // labelled device/hour sample and prevents a long serial request loop.
+    const payload = await api('/admin/recent-user-activity', {
+      search: '',
+      from,
+      to,
+      limit: 100,
+      offset: 0,
+      requestKey: uuidKey(),
+    });
+    const page = payload.data || {};
+    const items = Array.isArray(page.items) ? page.items : [];
+    const total = Number(page.total || 0);
     const result = {
-      ...(firstPage || {}),
+      ...page,
       items,
       total,
-      truncated: offset < total,
+      truncated: items.length < total,
     };
     state.operational.set(key, result);
     return result;
@@ -1275,12 +1268,12 @@
           <div class="legend-row"><span class="gold"><i></i>Current</span><span class="cyan"><i></i>Previous</span></div>
         </section>
         <section class="observatory-card">
-          <div class="card-head"><div><h3>Device use</h3><p>Signed-in sessions by recorded device category.</p></div></div>
+          <div class="card-head"><div><h3>Device use</h3><p>Latest 100 sessions in each period, grouped by device category.</p></div></div>
           <div class="chart-shell"><canvas id="business-device-comparison-chart" aria-label="Device use comparison chart" role="img"></canvas></div>
           <div class="legend-row"><span class="gold"><i></i>Current</span><span class="cyan"><i></i>Previous</span></div>
         </section>
         <section class="observatory-card">
-          <div class="card-head"><div><h3>Peak activity times</h3><p>Most common latest-activity hours in Asia/Manila.</p></div></div>
+          <div class="card-head"><div><h3>Peak activity times</h3><p>Latest 100 sessions in the selected period, grouped by Asia/Manila hour.</p></div></div>
           ${table(['Time', 'Recorded sessions'], currentHours.map((row) => [row.label, number(row.value)]))}
         </section>
         <section class="observatory-card wide">
@@ -1298,7 +1291,7 @@
             number(row.event_count),
             number(previousMix.get(row.event_type) || 0),
           ]))}
-          ${(currentActivity.truncated || previousActivity.truncated) ? '<div class="notice danger">The activity ledger exceeded 5,000 sessions. Narrow the reporting window before relying on exact totals.</div>' : ''}
+          ${(currentActivity.truncated || previousActivity.truncated) ? '<div class="notice"><strong>Sampling boundary.</strong> Duration totals and activity counts cover the full period. Device and peak-hour distributions use the latest 100 sessions per period.</div>' : ''}
         </section>
       </div>`;
   }

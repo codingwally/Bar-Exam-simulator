@@ -68,6 +68,8 @@ assert.match(js, /Average time used/);
 assert.match(js, /Total time used/);
 assert.match(js, /Peak activity times/);
 assert.match(js, /Activity comparison is temporarily incomplete/);
+assert.match(js, /A bounded page is sufficient/);
+assert.match(js, /Device and peak-hour distributions use the latest 100 sessions per period/);
 assert.match(js, /business-revenue-status-chart/);
 assert.match(js, /business-device-comparison-chart/);
 

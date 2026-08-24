@@ -128,8 +128,13 @@ assert.match(
 );
 assert.match(
   admin,
-  /actionButton\('Review', 'payment_review', row\.id, \{[\s\S]*planCode: row\.plan_code/,
+  /actionButton\('Approve subscription', 'payment_review', row\.id, \{[\s\S]*planCode: row\.plan_code/,
 );
+assert.match(admin, /View recent users/);
+assert.match(admin, /function appendUserDirectoryPage\(\)/);
+assert.match(admin, /new IntersectionObserver/);
+assert.doesNotMatch(admin, /id="users-(?:previous|next)"/);
+assert.match(admin, /emails the user an electronic receipt with the exact reviewed proof attached/i);
 assert.match(
   admin,
   /actionButton\('View private proof', 'view_payment_proof', row\.id, \{[\s\S]*studentName:[\s\S]*proofMimeType:[\s\S]*\}\)\.value/,

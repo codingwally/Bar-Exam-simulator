@@ -18,6 +18,10 @@ const goTyme = readFileSync(new URL(
   '../supabase/migrations/20260820174602_add_gotyme_payment_channel.sql',
   import.meta.url,
 ), 'utf8');
+const subscriberReceipt = readFileSync(new URL(
+  '../supabase/migrations/20260824123000_subscription_receipt_delivery.sql',
+  import.meta.url,
+), 'utf8');
 
 function sectionBetween(source, startName, nextName = null) {
   const startMarker = `create or replace function public.${startName}`;
@@ -39,6 +43,26 @@ function assertInOrder(source, markers, message) {
     cursor = next;
   }
 }
+
+test('subscriber receipts are durable, replay-safe, and backend-only', () => {
+  assert.equal((subscriberReceipt.match(/^begin;$/gmi) || []).length, 1);
+  assert.equal((subscriberReceipt.match(/^commit;$/gmi) || []).length, 1);
+  assert.doesNotMatch(subscriberReceipt, /^\s*(?:drop\s+table|truncate)\b/gmi);
+  assert.match(subscriberReceipt, /subscriber_receipt_status in \('pending','sending','sent','failed','suppressed'\)/);
+  assert.match(subscriberReceipt, /status = 'approved'/);
+  assert.match(subscriberReceipt, /for update skip locked/);
+  assert.match(subscriberReceipt, /subscriber_receipt_attempts < 8/);
+  assert.match(subscriberReceipt, /subscriber_receipt_last_attempt_at < clock_timestamp\(\) - interval '10 minutes'/);
+  for (const signature of [
+    'phase4_subscription_receipt_context\\(uuid\\)',
+    'phase4_claim_subscription_receipt\\(uuid\\)',
+    'phase4_complete_subscription_receipt\\(uuid,text,text,text\\)',
+  ]) {
+    assert.match(subscriberReceipt, new RegExp(`revoke all on function public\\.${signature}[\\s\\S]*from public, anon, authenticated`));
+    assert.match(subscriberReceipt, new RegExp(`grant execute on function public\\.${signature}[\\s\\S]*to service_role`));
+  }
+  assert.doesNotMatch(subscriberReceipt, /@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+});
 
 test('soft-launch migration is one transaction and preserves existing business records', () => {
   assert.equal((softLaunch.match(/^begin;$/gmi) || []).length, 1);

@@ -24,7 +24,7 @@ const [
 const sectionLabels = [
   ['executive', 'Executive Pulse'],
   ['realtime', 'Live Activity'],
-  ['users', 'Users'],
+  ['users', 'Recent users'],
   ['acquisition', 'Sign-ups'],
   ['marketing', 'Acquisition'],
   ['answer_exports', 'Answers'],

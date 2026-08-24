@@ -63,6 +63,10 @@ export const MOCK_BAR_SUBJECTS = Object.freeze([
   'Legal and Judicial Ethics',
 ]);
 
+export const MOCK_BAR_MINIMUM_TOTAL = 320;
+export const MOCK_BAR_MAXIMUM_TOTAL = 10_000;
+export const MOCK_BAR_MINIMUM_PER_SUBJECT = 40;
+
 export const BAR_FEELS_DESTINATIONS = Object.freeze([
   Object.freeze({
     destination: 'Political and Public International Law',
@@ -460,10 +464,10 @@ export async function parseWebsiteUploadSource(csvText) {
     seen.add(normalized.questionId);
     rows.push(normalized);
   }
-  if (rows.length !== 320) {
+  if (rows.length < MOCK_BAR_MINIMUM_TOTAL || rows.length > MOCK_BAR_MAXIMUM_TOTAL) {
     throw new ReleaseContentError(
       'MOCK_BAR_COUNT_MISMATCH',
-      `The Mock Bar source contains ${rows.length} rows; 320 are required.`,
+      `The Mock Bar source contains ${rows.length} rows; ${MOCK_BAR_MINIMUM_TOTAL} to ${MOCK_BAR_MAXIMUM_TOTAL} are supported.`,
     );
   }
   const counts = Object.fromEntries(
@@ -472,10 +476,12 @@ export async function parseWebsiteUploadSource(csvText) {
       rows.filter((row) => row.subject === subject).length,
     ]),
   );
-  if (Object.values(counts).some((count) => count !== 40)) {
+  const recognizedCount = Object.values(counts).reduce((total, count) => total + count, 0);
+  if (recognizedCount !== rows.length
+      || Object.values(counts).some((count) => count < MOCK_BAR_MINIMUM_PER_SUBJECT)) {
     throw new ReleaseContentError(
       'MOCK_BAR_SUBJECT_COUNT_MISMATCH',
-      'Every Mock Bar source subject must contain exactly 40 questions.',
+      `Every Mock Bar source row must use an approved subject, with at least ${MOCK_BAR_MINIMUM_PER_SUBJECT} questions per subject.`,
     );
   }
   return { rows, counts, digest: await sha256(csvText) };

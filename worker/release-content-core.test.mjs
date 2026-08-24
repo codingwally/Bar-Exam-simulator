@@ -202,6 +202,27 @@ test('Mock Bar import and Bar Feels manifest are exact, unique, and deterministi
   }
 });
 
+test('Mock Bar import safely accepts a growing, strategically distributed inventory', async () => {
+  const extraBySubject = [6, 6, 6, 5, 5, 6, 5, 3];
+  const expandedRows = websiteRows();
+  for (const [subjectIndex, extra] of extraBySubject.entries()) {
+    for (let index = 0; index < extra; index += 1) {
+      expandedRows.push(sourceRow({
+        id: `EXP-${String(subjectIndex + 1).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`,
+        subject: MOCK_BAR_SUBJECTS[subjectIndex],
+        number: String(41 + index),
+      }));
+    }
+  }
+
+  const parsed = await parseWebsiteUploadSource(csv(expandedRows));
+  assert.equal(parsed.rows.length, 362);
+  assert.deepEqual(
+    MOCK_BAR_SUBJECTS.map((subject) => parsed.counts[subject]),
+    extraBySubject.map((extra) => 40 + extra),
+  );
+});
+
 test('release sync uses the versioned snapshot when the Google source is unavailable', async () => {
   const originalFetch = globalThis.fetch;
   const websiteCsv = csv(websiteRows());

@@ -167,6 +167,22 @@ test('hiding stops future random issuance without breaking an already-issued wor
   }
 });
 
+test('protected inventory keeps its safety floor while accepting uneven growth', () => {
+  const records = canonicalRecords();
+  for (let index = 0; index < 42; index += 1) {
+    const template = questionBank.records[index];
+    const questionId = `EXPANDED-${String(index + 1).padStart(3, '0')}`;
+    records.set(questionId, {
+      ...template,
+      'Question ID': questionId,
+      'Publication Ready?': 'Yes',
+    });
+  }
+  const inventory = protectedQuestionInventory(records);
+  assert.equal(Object.values(inventory).flat().length, 362);
+  assert.ok(Object.values(inventory).every((questions) => questions.length >= 40));
+});
+
 test('an entirely hidden subject fails safely while preserving exact restore continuity', () => {
   const overrides = new Map(
     questionBank.records

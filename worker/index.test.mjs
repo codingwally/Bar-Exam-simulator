@@ -553,9 +553,19 @@ const reliabilityAnswer = [
 let reliabilityRequestCounter = 0;
 
 function reliabilityBankRecord(index) {
+  const subjects = [
+    'Civil Law',
+    'Political and Public International Law',
+    'Labor Law',
+    'Taxation Law',
+    'Commercial Law',
+    'Criminal Law',
+    'Remedial Law',
+    'Legal and Judicial Ethics',
+  ];
   return {
     'Question ID': index === 0 ? 'CIV-2024-Q01' : `TEST-${String(index).padStart(3, '0')}`,
-    Subject: 'Civil Law',
+    Subject: subjects[index % subjects.length],
     'Essay Question': index === 0
       ? 'Did a fortuitous event prevent performance and allow the claim to succeed?'
       : `Question ${index}`,

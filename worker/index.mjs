@@ -55,6 +55,7 @@ import {
   normalizeDashboardRequest,
   normalizeGlobalBetaChange,
   normalizeLiveActivityRequest,
+  normalizeRecentUserActivityRequest,
   normalizeOperationalRequest,
   normalizeQuorumPostsRequest,
   normalizeUserDirectoryEmailExport,
@@ -4986,6 +4987,30 @@ async function handleAdminLiveActivity(request, env, origin, allowedOrigin) {
   return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
 }
 
+async function handleAdminRecentUserActivity(request, env, origin, allowedOrigin) {
+  await enforceAdminRateLimit(request, env);
+  const user = await requireAdministrator(request, env);
+  let query;
+  try {
+    query = normalizeRecentUserActivityRequest(await parseBoundedJson(request, 4_000));
+  } catch (error) {
+    if (error instanceof AdminValidationError) {
+      throw new ExaminerError('INVALID_ADMIN_REQUEST', error.message, 400);
+    }
+    throw error;
+  }
+  const result = await protectedSupabaseRpc(env, 'admin_recent_user_activity_directory', {
+    p_actor_user_id: user.id,
+    p_search: query.search,
+    p_from: query.from,
+    p_to: query.to,
+    p_limit: query.limit,
+    p_offset: query.offset,
+    p_request_key: query.requestKey,
+  });
+  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+}
+
 async function handleAdminQuorumPosts(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
@@ -5967,6 +5992,9 @@ export default {
       }
       if (pathname === '/admin/live-activity') {
         return await handleAdminLiveActivity(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/admin/recent-user-activity') {
+        return await handleAdminRecentUserActivity(request, env, origin, allowedOrigin);
       }
       if (pathname === '/admin/quorum/posts') {
         return await handleAdminQuorumPosts(request, env, origin, allowedOrigin);

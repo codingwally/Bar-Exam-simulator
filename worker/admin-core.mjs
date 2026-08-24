@@ -281,6 +281,52 @@ export function normalizeLiveActivityRequest(payload) {
   return { limit, requestKey };
 }
 
+export function normalizeRecentUserActivityRequest(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new AdminValidationError('Recent user activity request is invalid.');
+  }
+  const allowedFields = new Set([
+    'search', 'from', 'to', 'limit', 'offset', 'requestKey',
+  ]);
+  if (Object.keys(payload).some((key) => !allowedFields.has(key))) {
+    throw new AdminValidationError('Recent user activity request contains an unsupported field.');
+  }
+  const search = String(payload.search || '').trim();
+  if (search.length > 180) {
+    throw new AdminValidationError('Recent user search exceeds 180 characters.');
+  }
+  const from = new Date(payload.from || '');
+  const to = new Date(payload.to || '');
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to <= from) {
+    throw new AdminValidationError('Choose a valid recent user reporting window.');
+  }
+  if (to.getTime() - from.getTime() > 366 * 86_400_000) {
+    throw new AdminValidationError('Recent user reporting window cannot exceed 366 days.');
+  }
+  const requestKey = String(payload.requestKey || '').trim();
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(requestKey)) {
+    throw new AdminValidationError('Request key is invalid.');
+  }
+  const requestedLimit = Number(payload.limit);
+  const requestedOffset = Number(payload.offset);
+  const limit = Math.min(100, Math.max(
+    1,
+    Number.isFinite(requestedLimit) ? Math.trunc(requestedLimit) : 100,
+  ));
+  const offset = Math.max(
+    0,
+    Number.isFinite(requestedOffset) ? Math.trunc(requestedOffset) : 0,
+  );
+  return {
+    search: search || null,
+    from: from.toISOString(),
+    to: to.toISOString(),
+    limit,
+    offset,
+    requestKey,
+  };
+}
+
 export function normalizeQuorumPostsRequest(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new AdminValidationError('Community post request is invalid.');

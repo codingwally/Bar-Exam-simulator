@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [html, css, js, recentSignInMigration] = await Promise.all([
+const [html, css, js, recentSignInMigration, recentActivityMigration] = await Promise.all([
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin-observatory.css', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.js', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260823173000_admin_recent_sign_in_directory.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260824014625_admin_recent_user_activity_directory.sql', import.meta.url), 'utf8'),
 ]);
 
 for (const group of [
@@ -14,7 +15,7 @@ for (const group of [
 ]) assert.match(html, new RegExp(group.replace('&', '&amp;').replace('&amp;amp;', '&amp;')));
 
 for (const label of [
-  'Executive Pulse', 'Live Activity', 'Recent users', 'Sign-ups', 'Acquisition',
+  'Executive Pulse', 'Live Activity', 'Recent users', 'Users', 'Sign-ups', 'Acquisition',
   'Answers', 'Subject Performance', 'Grading Health', 'Subscriptions',
   'Payments', 'Refunds', 'Support', 'Corrections', 'Community Moderation',
   'Revenue', 'Projections', 'Comparisons', 'Audit Log', 'Controls',
@@ -46,6 +47,9 @@ assert.doesNotMatch(js, /'Not collected', 'Not collected'/);
 assert.match(js, /\['Name', 'Email', 'School', 'Last sign-in', 'Region', 'Device'/);
 assert.match(js, /accountRegion\(account\), accountDevice\(account\)/);
 assert.match(js, /\/admin\/recent-sign-ins/);
+assert.match(js, /\/admin\/recent-user-activity/);
+assert.match(js, /data-admin-section="recent_users"/);
+assert.match(js, /Signed-in sessions, time used, and the latest recorded activity/);
 assert.match(js, /monitoring_recorded_at\s*\|\|\s*right\.last_sign_in_at/);
 assert.match(js, /return 'Administrator'/);
 assert.match(js, /stacked:\s*true/);
@@ -63,6 +67,8 @@ assert.match(css, /prefers-reduced-motion/);
 assert.match(css, /\.table-wrap td \.record-detail > summary[\s\S]*color:\s*var\(--obs-text\)/);
 assert.match(css, /\.table-wrap td \.record-detail\[open\] > summary[\s\S]*color:\s*var\(--obs-gold-bright\)/);
 assert.match(css, /\.table-wrap td \.record-source-links a[\s\S]*color:\s*var\(--obs-cyan\)/);
+assert.match(css, /recent-user-activity-table/);
+assert.match(css, /recent-user-summary/);
 
 assert.match(html, /private-beta-session\.js/);
 assert.doesNotMatch(js, /visualPreview|installVisualPreviewFixture|local-preview-only/);
@@ -73,5 +79,12 @@ assert.match(recentSignInMigration, /order by e\.signed_in_at desc, e\.id desc/)
 assert.match(recentSignInMigration, /u\.email/);
 assert.match(recentSignInMigration, /revoke all on function public\.admin_recent_sign_in_directory[\s\S]*from public, anon, authenticated/);
 assert.match(recentSignInMigration, /grant execute on function public\.admin_recent_sign_in_directory[\s\S]*to service_role/);
+
+assert.match(recentActivityMigration, /create or replace function public\.admin_recent_user_activity_directory/);
+assert.match(recentActivityMigration, /'dailyActivity'/);
+assert.match(recentActivityMigration, /'activityMix'/);
+assert.match(recentActivityMigration, /'averageDurationSeconds'/);
+assert.match(recentActivityMigration, /revoke all on function public\.admin_recent_user_activity_directory[\s\S]*from public, anon, authenticated/);
+assert.match(recentActivityMigration, /grant execute on function public\.admin_recent_user_activity_directory[\s\S]*to service_role/);
 
 console.log('Executive Pulse structure, real-data labels, responsive layout, and navigation contracts passed.');

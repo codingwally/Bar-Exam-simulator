@@ -633,3 +633,25 @@ Admin dashboard only. The production simulator, Examination Room, grading, payme
 ### Result
 
 **PASS — local visual parity and responsive structure.** Production acceptance remains gated on automated regression tests and authenticated live verification after deployment.
+
+## 2026-08-24 — Dedicated Recent Users activity ledger
+
+### Reference and hierarchy
+
+- User-provided Recent Users table screenshot: `codex-clipboard-d63c45f6-c21f-45d9-b39c-e79c2b0e3ed1.png`.
+- Recent Users is now a dedicated People & Marketing destination, separate from the complete Users directory.
+- Executive Pulse routes “View recent users” to the activity ledger.
+- The page leads with active users, unique users, sessions, average time used, and total time used, followed by two charts and a continuously loading ledger.
+
+### Resolved checks
+
+- Sticky high-contrast table headers retain context while scrolling.
+- Search and continuous loading cover the full matching session history rather than a fixed 100-row view.
+- Desktop metrics and charts collapse without horizontal page overflow at tablet and mobile widths.
+- The observatory’s navy, cyan, green, and restrained gold design language remains unchanged.
+- Admin-wide secondary copy, controls, and table cells use a stronger contrast floor.
+- Only controlled event labels, duration, coarse region/device, access, and allowance are exposed; raw IP addresses, headers, event metadata, answers, and credentials are excluded.
+
+### Verification result
+
+**PASS — structure, navigation, responsive CSS, Worker route, least-privilege database contract, and regression suites.** Authenticated production visual and interaction verification remains the final ordered release gate.

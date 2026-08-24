@@ -8,7 +8,8 @@
     realtime: 'Live Activity',
     acquisition: 'Sign-ups',
     marketing: 'Acquisition',
-    users: 'Recent Users',
+    recent_users: 'Recent Users',
+    users: 'Users',
     learning: 'Subject Performance',
     subjects: 'Question Bank',
     reliability: 'Grading Health',
@@ -31,7 +32,8 @@
   const sectionSubtitles = Object.freeze({
     executive: 'Executive command center for the Judicial Observatory.',
     realtime: 'Current signed-in activity and service demand.',
-    users: 'Continuously loaded account sign-ins, access, and learning engagement.',
+    recent_users: 'Signed-in sessions, time used, and recorded activity.',
+    users: 'Complete account directory, access, and learning engagement.',
     acquisition: 'Registration funnel and account activation.',
     marketing: 'Recorded channels and sign-in acquisition.',
     learning: 'Subject-level performance from completed assessments.',
@@ -50,6 +52,7 @@
   });
   const requirements = Object.freeze({
     realtime: 'learner_analytics_viewer',
+    recent_users: 'learner_analytics_viewer',
     users: 'learner_analytics_viewer',
     learning: 'learner_analytics_viewer',
     marketing: 'learner_analytics_viewer',
@@ -87,6 +90,12 @@
     userTotal: 0,
     userDirectoryLoading: false,
     userDirectoryObserver: null,
+    recentUserSearch: '',
+    recentUserOffset: 0,
+    recentUserTotal: 0,
+    recentUserActivity: null,
+    recentUserLoading: false,
+    recentUserObserver: null,
     subscriptionSearch: '',
     subscriptionOffset: 0,
     liveActivity: null,
@@ -387,6 +396,28 @@
     return payload.data;
   }
 
+  async function loadRecentUserActivity(
+    force = false,
+    search = state.recentUserSearch,
+    offset = state.recentUserOffset,
+  ) {
+    const window = reportingWindow();
+    const normalizedSearch = String(search || '').trim();
+    const normalizedOffset = Math.max(0, Number(offset) || 0);
+    const key = `recent-user-activity:${window.from}:${window.to}:${normalizedSearch}:${normalizedOffset}`;
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const payload = await api('/admin/recent-user-activity', {
+      search: normalizedSearch,
+      from: window.from,
+      to: window.to,
+      limit: 100,
+      offset: normalizedOffset,
+      requestKey: uuidKey(),
+    });
+    state.operational.set(key, payload.data);
+    return payload.data;
+  }
+
   async function loadPhase4Operational(section, force = false, search = null, offset = 0) {
     const premiumStatus = section === 'access' ? state.premiumStatus : 'all';
     const normalizedOffset = Math.max(0, Number(offset) || 0);
@@ -640,6 +671,52 @@
     return [label, ...details].join(' · ');
   }
 
+  function durationLabel(value) {
+    const seconds = Math.max(0, Math.round(Number(value) || 0));
+    if (seconds < 60) return `${seconds}s`;
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
+
+  function recentActivityLabel(row = {}) {
+    const labels = {
+      session_start: 'Started session',
+      sign_in_completed: 'Signed in',
+      page_view: 'Viewed page',
+      question_viewed: 'Opened question',
+      grading_started: 'Submitted answer',
+      grading_success: 'Answer graded',
+      grading_failure: 'Grading failed',
+      grading_timeout: 'Grading timed out',
+      session_end: 'Ended session',
+    };
+    const event = String(row.latest_event_type || '').trim();
+    const page = String(row.latest_page_area || '').trim();
+    const result = String(row.latest_result_category || '').trim();
+    const primary = labels[event] || (event ? humanizeAuditValue(event) : 'Session activity');
+    const detail = [page && humanizeAuditValue(page), result && humanizeAuditValue(result)]
+      .filter(Boolean)
+      .join(' · ');
+    return detail ? `${primary} · ${detail}` : primary;
+  }
+
+  function recentActivityAccessBadge(row = {}) {
+    const label = String(row.effective_access || row.subscription_category || 'Introductory access');
+    const className = /paid|founding/i.test(label) ? 'ok'
+      : /administrator/i.test(label) ? 'muted'
+        : /pending/i.test(label) ? 'warn' : 'muted';
+    return `<span class="status ${className}">${escapeHtml(label)}</span>`;
+  }
+
+  function recentActivityRemaining(row = {}) {
+    if (/paid|founding|administrator/i.test(String(row.effective_access || ''))) return 'Unlimited';
+    return Number.isFinite(Number(row.free_grades_remaining))
+      ? `${number(row.free_grades_remaining)} remaining`
+      : 'Not available';
+  }
+
   function executiveSubscriptionSegments(engagement = {}) {
     return Object.entries(engagement.subscriptionCounts || {})
       .map(([label, value], index) => ({
@@ -762,7 +839,7 @@
         </section>
       </div>
       <section class="observatory-card executive-recent-users">
-        <div class="card-head"><div><h3>Recent Users</h3><p>Latest recorded account sign-ins.</p></div><button type="button" class="icon-link" data-admin-section="users" aria-label="Open recent users directory"><span>View recent users</span><i class="ph ph-caret-right" aria-hidden="true"></i></button></div>
+        <div class="card-head"><div><h3>Recent Users</h3><p>Latest recorded account sign-ins.</p></div><button type="button" class="icon-link" data-admin-section="recent_users" aria-label="Open recent user activity"><span>View recent users</span><i class="ph ph-caret-right" aria-hidden="true"></i></button></div>
         ${table(['Name', 'Email', 'School', 'Last sign-in', 'Region', 'Device', 'Questions', 'Access', 'Remaining'], recentAccounts.map((account) => [
           account.display_name || 'Not provided', account.email || 'Not provided', account.school || 'Not provided', dateTime(account.last_sign_in_at),
           accountRegion(account), accountDevice(account), number(account.answered_question_count),
@@ -1058,6 +1135,80 @@
       .join('');
   }
 
+  const recentUserActivityHeaders = [
+    'Name', 'Email', 'School', 'Started', 'Last activity', 'Time used',
+    'Latest activity', 'Region', 'Device', 'Questions', 'Access', 'Remaining',
+  ];
+
+  function recentUserActivityCells(row = {}) {
+    const active = row.active_now === true;
+    return [
+      {
+        html: true,
+        value: `<span class="recent-user-name"><i class="recent-user-presence${active ? ' active' : ''}" aria-hidden="true"></i><span>${escapeHtml(row.display_name || 'Not provided')}</span>${active ? '<small>Active now</small>' : ''}</span>`,
+      },
+      row.email || 'Not provided',
+      row.school || 'Not provided',
+      dateTime(row.started_at),
+      dateTime(row.latest_event_at || row.last_activity_at),
+      durationLabel(row.duration_seconds),
+      recentActivityLabel(row),
+      accountRegion(row),
+      accountDevice(row),
+      number(row.questions_answered),
+      { html: true, value: recentActivityAccessBadge(row) },
+      recentActivityRemaining(row),
+    ];
+  }
+
+  function recentUserActivityRowsHtml(items) {
+    return (items || [])
+      .map((row) => tableRowHtml(recentUserActivityHeaders, recentUserActivityCells(row)))
+      .join('');
+  }
+
+  async function renderRecentUsers() {
+    state.recentUserObserver?.disconnect();
+    state.recentUserObserver = null;
+    state.recentUserOffset = 0;
+    const data = await loadRecentUserActivity(false, state.recentUserSearch, 0);
+    const items = Array.isArray(data.items) ? data.items : [];
+    state.recentUserActivity = data;
+    state.recentUserOffset = items.length;
+    state.recentUserTotal = Number(data.total || 0);
+    const hasMore = state.recentUserOffset < state.recentUserTotal;
+    const summary = data.summary || {};
+    return `
+      ${heading('Recent Users', 'Signed-in sessions, time used, and the latest recorded activity. This page is separate from the complete Users directory.')}
+      <div class="metric-strip recent-user-summary">
+        ${summaryMetric('Active now', number(summary.activeNow), 'Last 5 minutes')}
+        ${summaryMetric('Users', number(summary.uniqueUsers), 'Selected period')}
+        ${summaryMetric('Sessions', number(summary.sessions), 'Selected period')}
+        ${summaryMetric('Average time used', durationLabel(summary.averageDurationSeconds), 'Per signed-in session')}
+        ${summaryMetric('Total time used', durationLabel(summary.totalDurationSeconds), 'Selected period')}
+      </div>
+      <div class="recent-user-chart-grid">
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Time used</h3><p>Recorded signed-in session time by Philippine date.</p></div></div>
+          <div class="chart-shell"><canvas id="recent-users-duration-chart" aria-label="Signed-in time used by date" role="img"></canvas></div>
+        </section>
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Recorded activity</h3><p>Most frequent controlled events; private content is excluded.</p></div></div>
+          <div class="chart-shell"><canvas id="recent-users-activity-chart" aria-label="Recorded activity by type" role="img"></canvas></div>
+        </section>
+      </div>
+      <section class="observatory-card recent-user-ledger">
+        <div class="card-head recent-user-ledger-head"><div><h3>Session ledger</h3><p>Newest activity first. More sessions load automatically while scrolling.</p></div></div>
+        <div class="table-tools"><input id="recent-user-search" type="search" value="${escapeHtml(state.recentUserSearch)}" placeholder="Search name, school, or email" aria-label="Search recent user activity"><button class="secondary-button" id="recent-user-search-button" type="button">Search</button><button class="secondary-button" id="open-user-directory" data-admin-section="users" type="button">Open all users</button></div>
+        <div class="table-wrap recent-user-activity-table"><table><thead><tr>${recentUserActivityHeaders.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join('')}</tr></thead>
+          <tbody id="recent-user-activity-body">${items.length ? recentUserActivityRowsHtml(items) : `<tr><td colspan="${recentUserActivityHeaders.length}">${empty('No signed-in session activity matches this view.')}</td></tr>`}</tbody></table></div>
+        <div class="continuous-directory-footer" id="recent-user-activity-sentinel">
+          <p class="panel-note" id="recent-user-activity-progress" role="status">Showing ${number(state.recentUserOffset)} of ${number(state.recentUserTotal)} matching session(s).</p>
+          <button class="secondary-button" id="recent-users-load-more" type="button"${hasMore ? '' : ' hidden'}>Load more sessions</button>
+        </div>
+      </section>`;
+  }
+
   async function renderUsers() {
     state.userDirectoryObserver?.disconnect();
     state.userDirectoryObserver = null;
@@ -1069,7 +1220,7 @@
     state.userTotal = Number(data.total || 0);
     const hasMore = state.userOffset < state.userTotal;
     return `
-      ${heading('Recent Users', 'Search recorded accounts, review access and answer activity, or download the current user list for Google Sheets.')}
+      ${heading('Users', 'Search the complete account directory, review access and answer activity, or download the current user list for Google Sheets.')}
       <div class="table-tools"><input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, school, or email" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="user-directory-export" type="button">Download user list</button></div>
       <div class="table-wrap recent-users-directory"><table><thead><tr>${userDirectoryHeaders.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join('')}</tr></thead>
         <tbody id="user-directory-body">${items.length ? userDirectoryRowsHtml(items, founderAuthorized) : `<tr><td colspan="${userDirectoryHeaders.length}">${empty('No matching user records are available.')}</td></tr>`}</tbody></table></div>
@@ -3349,6 +3500,24 @@
       } else if (section === 'marketing') {
         const sources = acquisitionSourceRows(report);
         drawGroupedBars($('#observatory-acquisition-chart'), sources.map(([label]) => label), sources.map(([, value]) => value), sources.map(() => 0));
+      } else if (section === 'recent_users') {
+        const activity = state.recentUserActivity || {};
+        const daily = Array.isArray(activity.dailyActivity) ? activity.dailyActivity : [];
+        const stride = Math.max(1, Math.ceil(daily.length / 7));
+        drawLineTrend(
+          $('#recent-users-duration-chart'),
+          daily.map((row, index) => (index % stride === 0 || index === daily.length - 1)
+            ? String(row.activity_date || '').slice(5)
+            : ''),
+          daily.map((row) => Number(row.duration_seconds || 0) / 60),
+        );
+        drawHorizontalBars(
+          $('#recent-users-activity-chart'),
+          (activity.activityMix || []).map((row) => ({
+            label: recentActivityLabel({ latest_event_type: row.event_type }),
+            value: row.event_count,
+          })),
+        );
       } else if (section === 'business_comparisons') {
         drawGroupedBars($('#observatory-comparison-chart'), performanceLabels, currentValues, previousValues);
       }
@@ -3368,7 +3537,7 @@
     }
     const rangeControl = $('#reporting-range');
     if (rangeControl) {
-      rangeControl.hidden = !['executive', 'realtime', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
+      rangeControl.hidden = !['executive', 'realtime', 'recent_users', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
     }
     $$('#admin-nav button').forEach((button) => button.setAttribute(
       'aria-current',
@@ -3391,6 +3560,7 @@
       else if (section === 'realtime') html = await renderRealtime(report);
       else if (section === 'acquisition') html = renderAcquisition(report);
       else if (section === 'marketing') html = renderMarketing(report);
+      else if (section === 'recent_users') html = await renderRecentUsers();
       else if (section === 'users') html = await renderUsers();
       else if (section === 'learning') html = await renderLearning(report);
       else if (section === 'subjects') html = renderSubjects(report);
@@ -4381,6 +4551,53 @@
     });
   }
 
+  async function appendRecentUserActivityPage() {
+    if (state.section !== 'recent_users'
+        || state.recentUserLoading
+        || state.recentUserOffset >= state.recentUserTotal) return;
+    const button = $('#recent-users-load-more');
+    const progress = $('#recent-user-activity-progress');
+    const body = $('#recent-user-activity-body');
+    if (!body) return;
+
+    state.recentUserLoading = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Loading sessions…';
+    }
+    try {
+      const data = await loadRecentUserActivity(
+        false,
+        state.recentUserSearch,
+        state.recentUserOffset,
+      );
+      const items = Array.isArray(data.items) ? data.items : [];
+      state.recentUserTotal = Number(data.total || state.recentUserTotal || 0);
+      if (!items.length) {
+        if (progress) progress.textContent = `Showing ${number(state.recentUserOffset)} of ${number(state.recentUserTotal)} matching session(s). No additional records were returned.`;
+        if (button) button.hidden = true;
+        state.recentUserObserver?.disconnect();
+        return;
+      }
+      body.insertAdjacentHTML('beforeend', recentUserActivityRowsHtml(items));
+      state.recentUserOffset += items.length;
+      const hasMore = state.recentUserOffset < state.recentUserTotal;
+      if (progress) progress.textContent = hasMore
+        ? `Showing ${number(state.recentUserOffset)} of ${number(state.recentUserTotal)} matching session(s). More sessions load as you scroll.`
+        : `Showing all ${number(state.recentUserTotal)} matching session(s).`;
+      if (button) button.hidden = !hasMore;
+      if (!hasMore) state.recentUserObserver?.disconnect();
+    } catch (error) {
+      toast(error.message || 'More recent activity could not be loaded.');
+    } finally {
+      state.recentUserLoading = false;
+      if (button && !button.hidden) {
+        button.disabled = false;
+        button.textContent = 'Load more sessions';
+      }
+    }
+  }
+
   async function appendUserDirectoryPage() {
     if (state.section !== 'users'
         || state.userDirectoryLoading
@@ -4446,6 +4663,23 @@
       else toast('Your administrator role does not have access to that section.');
     }));
     bindAdminActionButtons();
+    $('#recent-user-search-button')?.addEventListener('click', async () => {
+      state.recentUserSearch = $('#recent-user-search')?.value?.trim() || '';
+      state.recentUserOffset = 0;
+      state.recentUserActivity = null;
+      await loadRecentUserActivity(true, state.recentUserSearch, 0);
+      await renderSection('recent_users');
+    });
+    $('#recent-users-load-more')?.addEventListener('click', appendRecentUserActivityPage);
+    const recentActivitySentinel = $('#recent-user-activity-sentinel');
+    if (recentActivitySentinel && 'IntersectionObserver' in global
+        && state.recentUserOffset < state.recentUserTotal) {
+      state.recentUserObserver?.disconnect();
+      state.recentUserObserver = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) appendRecentUserActivityPage();
+      }, { rootMargin: '600px 0px' });
+      state.recentUserObserver.observe(recentActivitySentinel);
+    }
     $('#user-search-button')?.addEventListener('click', async () => {
       const search = $('#user-search').value.trim();
       $('#dashboard-view').innerHTML = '<div class="skeleton"></div>';
@@ -4864,6 +5098,7 @@
     state.report = null;
     state.operational.clear();
     state.liveActivity = null;
+    state.recentUserActivity = null;
     state.answerHistory = null;
     state.quorumPosts = null;
     state.examinationRoomActivationOffset = 0;

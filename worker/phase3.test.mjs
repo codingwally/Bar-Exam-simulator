@@ -18,6 +18,7 @@ import {
   normalizeLiveActivityRequest,
   normalizeOperationalRequest,
   normalizeQuorumPostsRequest,
+  normalizeRecentUserActivityRequest,
   normalizeUserDirectoryEmailExport,
   normalizeUserDirectoryRequest,
   normalizeUserResponseExport,
@@ -282,6 +283,35 @@ test('live activity and Quorum post requests are bounded and reject unsupported 
     status: 'all',
     requestKey: 'quorumpostskey0003',
     actorUserId: 'not-client-controlled',
+  }), AdminValidationError);
+});
+
+test('recent user activity requests are bounded, normalized, and reject unsafe input', () => {
+  assert.deepEqual(normalizeRecentUserActivityRequest({
+    search: ' student@example.com ',
+    from: '2026-08-01T00:00:00+08:00',
+    to: '2026-08-24T23:59:59+08:00',
+    limit: 999.8,
+    offset: 12.9,
+    requestKey: 'recentactivitykey0001',
+  }), {
+    search: 'student@example.com',
+    from: '2026-07-31T16:00:00.000Z',
+    to: '2026-08-24T15:59:59.000Z',
+    limit: 100,
+    offset: 12,
+    requestKey: 'recentactivitykey0001',
+  });
+  assert.throws(() => normalizeRecentUserActivityRequest({
+    from: '2026-08-01T00:00:00Z',
+    to: '2026-08-24T00:00:00Z',
+    requestKey: 'recentactivitykey0002',
+    rawIp: 'not-allowed',
+  }), AdminValidationError);
+  assert.throws(() => normalizeRecentUserActivityRequest({
+    from: '2026-08-24T00:00:00Z',
+    to: '2026-08-01T00:00:00Z',
+    requestKey: 'recentactivitykey0003',
   }), AdminValidationError);
 });
 
@@ -633,6 +663,75 @@ test('authorized recent sign-ins return the newest monitored account with coarse
     const body = await response.json();
     assert.equal(body.data.items[0].current_region, 'Central Luzon, PH');
     assert.equal(body.data.items[0].current_device_category, 'desktop');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('authorized recent user activity returns controlled session analytics through the protected RPC', async () => {
+  const originalFetch = globalThis.fetch;
+  let rpcBody;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
+    }
+    if (url.endsWith('/rest/v1/rpc/admin_recent_user_activity_directory')) {
+      rpcBody = JSON.parse(init.body);
+      return Response.json({
+        total: 1,
+        limit: 100,
+        offset: 0,
+        hasMore: false,
+        summary: {
+          uniqueUsers: 1,
+          sessions: 1,
+          activeNow: 1,
+          averageDurationSeconds: 840,
+          totalDurationSeconds: 840,
+        },
+        dailyActivity: [{ activity_date: '2026-08-24', duration_seconds: 840 }],
+        activityMix: [{ event_type: 'grading_success', event_count: 2 }],
+        items: [{
+          session_id: '30000000-0000-4000-8000-000000000001',
+          display_name: 'Student One',
+          email: 'student.one@example.com',
+          latest_event_type: 'grading_success',
+          duration_seconds: 840,
+          current_region: 'Central Luzon, PH',
+          current_device_category: 'desktop',
+        }],
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/admin/recent-user-activity', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://duediligence.ph',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer synthetic-user-token',
+      },
+      body: JSON.stringify({
+        search: 'student.one@example.com',
+        from: '2026-08-01T00:00:00.000Z',
+        to: '2026-08-24T16:00:00.000Z',
+        limit: 100,
+        offset: 0,
+        requestKey: 'recentactivityroute001',
+      }),
+    }), workerEnv);
+    assert.equal(response.status, 200);
+    assert.equal(rpcBody.p_actor_user_id, '91000000-0000-4000-8000-000000000001');
+    assert.equal(rpcBody.p_search, 'student.one@example.com');
+    assert.equal(rpcBody.p_limit, 100);
+    assert.equal(rpcBody.p_offset, 0);
+    const body = await response.json();
+    assert.equal(body.data.summary.activeNow, 1);
+    assert.equal(body.data.items[0].latest_event_type, 'grading_success');
+    assert.equal(JSON.stringify(body).includes('raw_ip'), false);
+    assert.equal(JSON.stringify(body).includes('answer_text'), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -1095,3 +1095,168 @@ body.observatory {
   .observatory .topbar h1 { font-size: 1.25rem; }
   .observatory .observatory-kpi strong { font-size: 1.6rem; }
 }
+
+/* Recent Users — a dedicated signed-in activity ledger, distinct from Users. */
+.observatory .recent-user-summary {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.observatory .recent-user-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.observatory .recent-user-chart-grid .observatory-card {
+  min-width: 0;
+}
+
+.observatory .recent-user-chart-grid .chart-shell {
+  min-height: 240px;
+}
+
+.observatory .recent-user-chart-grid canvas {
+  height: 220px;
+}
+
+.observatory .recent-user-ledger {
+  padding: 0;
+  overflow: hidden;
+}
+
+.observatory .recent-user-ledger-head {
+  padding: 18px 20px 0;
+}
+
+.observatory .recent-user-ledger .table-tools {
+  padding: 14px 20px;
+}
+
+.observatory .recent-user-activity-table {
+  max-height: 58vh;
+  margin: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+}
+
+.observatory .recent-user-activity-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #e9eff2;
+  box-shadow: 0 1px 0 rgba(5, 11, 18, 0.5);
+}
+
+.observatory .recent-user-activity-table th {
+  color: #20323e;
+  font-weight: 800;
+}
+
+.observatory .recent-user-activity-table td {
+  color: #f3f7f8;
+  vertical-align: top;
+}
+
+.observatory .recent-user-activity-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.observatory .recent-user-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 170px;
+  font-weight: 700;
+}
+
+.observatory .recent-user-name small {
+  color: var(--obs-green);
+  font-size: 0.74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.observatory .recent-user-presence {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  background: #60727e;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(96, 114, 126, 0.12);
+}
+
+.observatory .recent-user-presence.active {
+  background: var(--obs-green);
+  box-shadow: 0 0 0 3px rgba(54, 211, 155, 0.14), 0 0 14px rgba(54, 211, 155, 0.28);
+}
+
+.observatory .recent-user-ledger .continuous-directory-footer {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--obs-line-soft);
+}
+
+/* Admin-wide contrast floor. The Observatory remains dark; secondary text is
+   deliberately bright enough to remain readable on every panel. */
+body.observatory {
+  --obs-muted: #d4dde1;
+  --obs-muted-bright: #f0f4f5;
+}
+
+.observatory .section-heading p,
+.observatory .panel-note,
+.observatory .card-head p,
+.observatory .observatory-card .card-head p,
+.observatory .observatory-kpi small,
+.observatory .definition-list,
+.observatory .freshness,
+.observatory .topbar-title > p:last-child {
+  color: #d4dde1;
+}
+
+.observatory td,
+.observatory .notice,
+.observatory .queue-link,
+.observatory .bar-row {
+  color: #f0f4f5;
+}
+
+.observatory input,
+.observatory select,
+.observatory textarea {
+  color: #f7fafb;
+}
+
+@media (max-width: 1180px) {
+  .observatory .recent-user-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 920px) {
+  .observatory .recent-user-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .observatory .recent-user-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .observatory .recent-user-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .observatory .recent-user-ledger-head,
+  .observatory .recent-user-ledger .table-tools,
+  .observatory .recent-user-ledger .continuous-directory-footer {
+    padding-inline: 12px;
+  }
+
+  .observatory .recent-user-activity-table {
+    max-height: none;
+  }
+}

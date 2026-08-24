@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const [
-  html, css, js, analytics, worker, migration, directoryMigration,
+  html, css, observatoryCss, js, analytics, worker, migration, directoryMigration,
   engagementMigration, globalBetaMigration, answerHistoryMigration,
-  businessDetailsMigration, monitoringMigration, preflight,
+  businessDetailsMigration, monitoringMigration, recentActivityMigration, preflight,
 ] = await Promise.all([
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.css', import.meta.url), 'utf8'),
+  readFile(new URL('../admin/admin-observatory.css', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.js', import.meta.url), 'utf8'),
   readFile(new URL('../assets/phase3-analytics.js', import.meta.url), 'utf8'),
   readFile(new URL('../worker/index.mjs', import.meta.url), 'utf8'),
@@ -18,13 +19,15 @@ const [
   readFile(new URL('../supabase/migrations/20260810002200_admin_answer_history_export.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260810002300_admin_business_dashboard_details.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/migrations/20260823080651_admin_sign_in_monitoring.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260824014625_admin_recent_user_activity_directory.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/review/phase3_production_preflight.sql', import.meta.url), 'utf8'),
 ]);
 
 const sectionLabels = [
   ['executive', 'Executive Pulse'],
   ['realtime', 'Live Activity'],
-  ['users', 'Recent users'],
+  ['recent_users', 'Recent users'],
+  ['users', 'Users'],
   ['acquisition', 'Sign-ups'],
   ['marketing', 'Acquisition'],
   ['answer_exports', 'Answers'],
@@ -67,6 +70,9 @@ assert.match(html, /Skip to admin dashboard/);
 assert.match(css, /prefers-reduced-motion/);
 assert.match(css, /@media \(max-width: 560px\)/);
 assert.match(css, /@media print/);
+assert.match(observatoryCss, /recent-user-activity-table/);
+assert.match(observatoryCss, /recent-user-chart-grid/);
+assert.match(observatoryCss, /--obs-muted-bright:\s*#f0f4f5/);
 
 assert.match(js, /operational records, not bank settlement or accounting statements/i);
 assert.match(js, /Planning estimate only:[\s\S]*not actual or forecast-guaranteed revenue/i);
@@ -96,6 +102,7 @@ for (const route of [
   '/admin/dashboard',
   '/admin/data',
   '/admin/user-directory',
+  '/admin/recent-user-activity',
   '/admin/user-directory/export',
   '/admin/subscriptions/export',
   '/admin/user-directory/email',
@@ -126,6 +133,9 @@ assert.match(js, /Suggested answer/);
 assert.match(js, /Model answer/);
 assert.match(js, /all signed-in users bypass commercial limits/i);
 assert.match(js, /api\('\/admin\/live-activity'/);
+assert.match(js, /api\('\/admin\/recent-user-activity'/);
+assert.match(js, /Signed-in sessions, time used, and the latest recorded activity/);
+assert.match(js, /Open all users/);
 assert.match(js, /api\('\/admin\/answer-history'/);
 assert.match(js, /api\('\/admin\/quorum\/posts'/);
 assert.match(js, /'Measure', 'Value', 'Meaning', 'Generated at'/);
@@ -192,6 +202,18 @@ assert.doesNotMatch(
 );
 assert.match(worker, /record_user_sign_in_event/);
 assert.match(worker, /admin_user_monitoring_directory/);
+assert.match(worker, /admin_recent_user_activity_directory/);
+
+assert.match(recentActivityMigration, /create or replace function public\.admin_recent_user_activity_directory/);
+assert.match(recentActivityMigration, /from public\.usage_sessions/);
+assert.match(recentActivityMigration, /from public\.usage_events/);
+assert.match(recentActivityMigration, /from public\.user_sign_in_events/);
+assert.match(recentActivityMigration, /duration_seconds/);
+assert.match(recentActivityMigration, /latest_event_type/);
+assert.match(recentActivityMigration, /learner_analytics_viewer/);
+assert.match(recentActivityMigration, /revoke all on function public\.admin_recent_user_activity_directory[\s\S]*from public, anon, authenticated/);
+assert.match(recentActivityMigration, /grant execute on function public\.admin_recent_user_activity_directory[\s\S]*to service_role/);
+assert.doesNotMatch(recentActivityMigration, /metadata\s+as|raw_ip|answer_text|student_answer/i);
 
 for (const capability of [
   'analytics_viewer',

@@ -74,6 +74,7 @@ import {
   normalizeAccessSnapshot,
   normalizeRequestKey,
   normalizeSubject,
+  protectedQuestionInventory,
   selectProtectedQuestion,
 } from './access-core.mjs';
 import {
@@ -190,7 +191,9 @@ const SUBJECT_MATTER_TEACHING_TIMEOUT_MS = 8 * 1000;
 const GEMINI_TRANSIENT_ATTEMPTS = 2;
 const GEMINI_RETRY_DELAY_MS = 750;
 const WEBSITE_VISIBILITY_CACHE_URL = 'https://question-visibility-cache.invalid/v1.csv';
-const WEBSITE_VISIBILITY_MAX_BYTES = 100_000;
+const WEBSITE_BANK_MINIMUM_RECORDS = 320;
+const WEBSITE_BANK_MAXIMUM_RECORDS = 10_000;
+const WEBSITE_VISIBILITY_MAX_BYTES = 2_000_000;
 const rateWindows = new Map();
 const correctionRateWindows = new Map();
 const supportRateWindows = new Map();
@@ -2355,7 +2358,9 @@ async function loadLaborBank(csvUrl) {
 }
 
 function websiteRecordsFromPayload(payload) {
-  if (!Array.isArray(payload?.records) || payload.records.length !== 320) {
+  if (!Array.isArray(payload?.records)
+      || payload.records.length < WEBSITE_BANK_MINIMUM_RECORDS
+      || payload.records.length > WEBSITE_BANK_MAXIMUM_RECORDS) {
     throw new ExaminerError(
       'QUESTION_BANK_INVALID',
       'The website question bank could not be prepared safely.',
@@ -2373,6 +2378,15 @@ function websiteRecordsFromPayload(payload) {
       );
     }
     records.set(id, row);
+  }
+  try {
+    protectedQuestionInventory(records);
+  } catch {
+    throw new ExaminerError(
+      'QUESTION_BANK_INVALID',
+      'The website question bank could not be prepared safely.',
+      502,
+    );
   }
   return records;
 }
@@ -4596,6 +4610,7 @@ async function handleProtectedQuestion(request, env, origin, allowedOrigin) {
   if (!access.allowed) throw accessDeniedError(access);
 
   const records = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
+  const inventory = protectedQuestionInventory(records);
   const question = selectProtectedQuestion(records, {
     subject,
     questionId: payload?.questionId,
@@ -4607,8 +4622,9 @@ async function handleProtectedQuestion(request, env, origin, allowedOrigin) {
     question,
     inventory: {
       subjects: 8,
-      questionsPerSubject: 40,
-      totalQuestions: 320,
+      questionsPerSubject: inventory[subject].length,
+      totalQuestions: Object.values(inventory)
+        .reduce((total, questions) => total + questions.length, 0),
     },
   }, 200, origin, allowedOrigin);
 }

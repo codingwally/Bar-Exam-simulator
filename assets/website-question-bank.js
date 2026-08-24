@@ -11,6 +11,9 @@
     'Remedial Law': 'Remedial Law',
     'Legal and Judicial Ethics': 'Legal Ethics',
   });
+  const MINIMUM_RECORDS = 320;
+  const MAXIMUM_RECORDS = 10000;
+  const MINIMUM_PER_SUBJECT = 40;
 
   function text(value) {
     return String(value ?? '')
@@ -61,8 +64,10 @@
     const response = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error(`Question bank request failed with HTTP ${response.status}.`);
     const payload = await response.json();
-    if (!Array.isArray(payload.records) || payload.records.length !== 320) {
-      throw new Error('The website question bank must contain exactly 320 records.');
+    if (!Array.isArray(payload.records)
+        || payload.records.length < MINIMUM_RECORDS
+        || payload.records.length > MAXIMUM_RECORDS) {
+      throw new Error(`The website question bank must contain ${MINIMUM_RECORDS} to ${MAXIMUM_RECORDS} records.`);
     }
     const bySubject = Object.fromEntries(
       Object.values(SUBJECT_ALIASES).map((subject) => [subject, []]),
@@ -77,8 +82,8 @@
       bySubject[question.subject].push(question);
     }
     for (const [subject, questions] of Object.entries(bySubject)) {
-      if (questions.length !== 40) {
-        throw new Error(`${subject} must contain exactly 40 approved questions.`);
+      if (questions.length < MINIMUM_PER_SUBJECT) {
+        throw new Error(`${subject} must contain at least ${MINIMUM_PER_SUBJECT} approved questions.`);
       }
     }
     return Object.freeze({ payload, bySubject });

@@ -23,6 +23,7 @@ const SUBJECT_ALIASES = Object.freeze({
 });
 
 export const REQUEST_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
+export const MINIMUM_PROTECTED_QUESTIONS_PER_SUBJECT = 40;
 
 export const WITHHELD_MOCK_BAR_QUESTION_IDS = Object.freeze([
   'TAX-2019-Q10A',
@@ -114,8 +115,11 @@ export function protectedQuestionInventory(records) {
     const question = publicQuestionFromRecord(record);
     if (question) bySubject[question.subject].push(question);
   }
+  const recognizedCount = Object.values(bySubject)
+    .reduce((total, questions) => total + questions.length, 0);
   for (const subject of PHASE4_SUBJECTS) {
-    if (bySubject[subject].length !== 40) {
+    if (recognizedCount !== records.size
+        || bySubject[subject].length < MINIMUM_PROTECTED_QUESTIONS_PER_SUBJECT) {
       throw new AccessValidationError(
         'QUESTION_BANK_INVALID',
         'The protected question bank is temporarily unavailable.',

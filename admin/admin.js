@@ -14,6 +14,7 @@
     subjects: 'Question Bank',
     reliability: 'Grading Health',
     subscriptions: 'Subscriptions',
+    paid_subscribers: 'Paid Subscribers',
     payments: 'Payments',
     refunds: 'Refunds',
     support: 'Support',
@@ -39,6 +40,7 @@
     learning: 'Subject-level performance from completed assessments.',
     reliability: 'Grading availability and response health.',
     subscriptions: 'Commercial access and introductory allowances.',
+    paid_subscribers: 'Paid access, verification state, and entitlement expiry.',
     payments: 'Private payment-proof review and verification history.',
     refunds: 'Refund requests and recorded decisions.',
     support: 'Support cases requiring administrator attention.',
@@ -57,6 +59,7 @@
     learning: 'learner_analytics_viewer',
     marketing: 'learner_analytics_viewer',
     subscriptions: 'subscription_admin',
+    paid_subscribers: 'subscription_admin',
     payments: 'subscription_admin',
     refunds: 'subscription_admin',
     support: 'support_admin',
@@ -98,6 +101,7 @@
     recentUserObserver: null,
     subscriptionSearch: '',
     subscriptionOffset: 0,
+    paidSubscriberSearch: '',
     liveActivity: null,
     answerHistory: null,
     answerSearch: '',
@@ -108,6 +112,9 @@
     quorumPostStatus: 'all',
     quorumPostOffset: 0,
     subscriptionExportRows: [],
+    paidSubscriberRows: [],
+    businessRevenueVisuals: null,
+    businessComparisonVisuals: null,
   };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -180,6 +187,15 @@
     return `${prefix ? `${prefix} · ` : ''}${text.slice(0, 8)}…${text.slice(-4)}`;
   }
 
+  function administratorIdentity(userId, directoryById = new Map()) {
+    if (!userId) return 'System';
+    const account = directoryById.get(String(userId));
+    if (!account) return maskOperationalIdentifier(userId, 'Administrator');
+    const name = String(account.display_name || '').trim() || 'Administrator';
+    const email = String(account.email || '').trim();
+    return email ? `${name} · ${email}` : name;
+  }
+
   function humanizeAuditValue(value) {
     const text = String(value || '').trim().replace(/^phase4_/, '').replace(/_/g, ' ');
     if (!text) return 'Not available';
@@ -213,7 +229,7 @@
       state.authorization?.role,
     );
     if (founderOnly && !founderAuthorized) return false;
-    if (section === 'subscriptions'
+    if (['subscriptions', 'paid_subscribers'].includes(section)
         && (!has('subscription_admin') || !has('learner_analytics_viewer'))) {
       return false;
     }
@@ -432,6 +448,80 @@
     });
     state.operational.set(key, payload.data);
     return payload.data;
+  }
+
+  async function loadAllUserDirectory(force = false, search = '') {
+    const normalizedSearch = String(search || '').trim();
+    const key = `directory:all:${normalizedSearch}`;
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const items = [];
+    let offset = 0;
+    let total = 0;
+    do {
+      const page = await loadUserDirectory(force, normalizedSearch, offset);
+      const pageItems = Array.isArray(page.items) ? page.items : [];
+      if (offset === 0) total = Number(page.total || 0);
+      items.push(...pageItems);
+      offset += pageItems.length;
+      if (!pageItems.length || items.length >= 5_000) break;
+    } while (offset < total);
+    const result = { items, total, truncated: offset < total };
+    state.operational.set(key, result);
+    return result;
+  }
+
+  async function loadAllPhase4Operational(section, force = false, search = '') {
+    const normalizedSearch = String(search || '').trim();
+    const key = `phase4:all:${section}:${normalizedSearch}`;
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const items = [];
+    let offset = 0;
+    let total = 0;
+    do {
+      const page = await loadPhase4Operational(section, force, normalizedSearch, offset);
+      const pageItems = Array.isArray(page.items) ? page.items : [];
+      if (offset === 0) total = Number(page.total || 0);
+      items.push(...pageItems);
+      offset += pageItems.length;
+      if (!pageItems.length || items.length >= 5_000) break;
+    } while (offset < total);
+    const result = { items, total, truncated: offset < total };
+    state.operational.set(key, result);
+    return result;
+  }
+
+  async function loadRecentUserActivityWindow(from, to, force = false) {
+    const key = `recent-user-activity:all:${from}:${to}`;
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const items = [];
+    let offset = 0;
+    let total = 0;
+    let firstPage = null;
+    do {
+      const payload = await api('/admin/recent-user-activity', {
+        search: '',
+        from,
+        to,
+        limit: 100,
+        offset,
+        requestKey: uuidKey(),
+      });
+      const page = payload.data || {};
+      if (!firstPage) firstPage = page;
+      const pageItems = Array.isArray(page.items) ? page.items : [];
+      if (offset === 0) total = Number(page.total || 0);
+      items.push(...pageItems);
+      offset += pageItems.length;
+      if (!pageItems.length || items.length >= 5_000) break;
+    } while (offset < total);
+    const result = {
+      ...(firstPage || {}),
+      items,
+      total,
+      truncated: offset < total,
+    };
+    state.operational.set(key, result);
+    return result;
   }
 
   async function loadForumModeration(force = false) {
@@ -994,75 +1084,223 @@
   }
 
   async function renderBusinessRevenue() {
-    const [payments, refunds] = await Promise.all([
-      loadPhase4Operational('payments').catch(() => ({ items: [] })),
-      loadPhase4Operational('refunds').catch(() => ({ items: [] })),
+    const [payments, refunds, directory] = await Promise.all([
+      loadAllPhase4Operational('payments').catch(() => ({ items: [] })),
+      loadAllPhase4Operational('refunds').catch(() => ({ items: [] })),
+      loadAllUserDirectory().catch(() => ({ items: [] })),
     ]);
     const paymentRows = payments.items || [];
     const refundRows = refunds.items || [];
+    const directoryRows = directory.items || [];
+    const directoryById = new Map(directoryRows.map((account) => [String(account.id), account]));
     const approved = paymentRows.filter((row) => String(row.status).toLowerCase() === 'approved');
     const pending = paymentRows.filter((row) => !['approved', 'rejected'].includes(String(row.status).toLowerCase()));
+    const rejected = paymentRows.filter((row) => String(row.status).toLowerCase() === 'rejected');
     const approvedValue = approved.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0);
     const approvedRefunds = refundRows
       .filter((row) => String(row.status).toLowerCase() === 'approved')
       .reduce((sum, row) => sum + (Number(row.approved_refund_php) || 0), 0);
+    const subscriberRecords = paidSubscriberRecords(directoryRows, paymentRows);
+    const activePaid = subscriberRecords.filter(({ account, payment }) => paidSubscriberAccessState(account, payment).label === 'Active');
+    const statusRows = [
+      { label: 'Approved', value: approvedValue },
+      { label: 'Pending', value: pending.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0) },
+      { label: 'Rejected', value: rejected.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0) },
+      { label: 'Refunded', value: approvedRefunds },
+    ];
+    state.businessRevenueVisuals = { statusRows };
+    const recentRows = [...paymentRows]
+      .sort((left, right) => new Date(right.submitted_at || 0) - new Date(left.submitted_at || 0))
+      .slice(0, 20)
+      .map((row) => [
+        row.display_name || row.email || 'Not provided',
+        { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(commercialPaymentLabel(row.status))}</span>`, sortValue: row.status },
+        `₱${number(row.trusted_amount_php, 2)}`,
+        { html: true, value: dateTime(row.submitted_at), sortValue: row.submitted_at || '' },
+        row.reviewed_by ? administratorIdentity(row.reviewed_by, directoryById) : 'Pending review',
+      ]);
     return `
       ${heading('Revenue', 'Commercial records derived from administrator-verified payment requests. These are operational records, not bank settlement or accounting statements.')}
       <div class="observatory-kpis">
         ${observatoryKpi('Approved requests', number(approved.length), 'ph-seal-check', 'green', 'Administrator verified')}
         ${observatoryKpi('Approved value', `₱${number(approvedValue, 2)}`, 'ph-currency-circle-dollar', 'gold', 'Request records')}
-        ${observatoryKpi('Pending review', number(pending.length), 'ph-hourglass', 'cyan', 'Proofs awaiting decision')}
-        ${observatoryKpi('Approved refunds', `₱${number(approvedRefunds, 2)}`, 'ph-arrow-u-up-left', 'red', 'Recorded approvals')}
+        ${observatoryKpi('Active paid access', number(activePaid.length), 'ph-identification-card', 'cyan', 'Current paid entitlements')}
+        ${observatoryKpi('Net recorded value', `₱${number(Math.max(0, approvedValue - approvedRefunds), 2)}`, 'ph-chart-line-up', 'green', 'Approved less approved refunds')}
       </div>
-      <section class="observatory-card">
-        <div class="card-head"><div><h3>Commercial record ledger</h3><p>Verified request totals remain separate from bank settlement.</p></div><button type="button" class="secondary-button" data-admin-section="payments"><i class="ph ph-receipt" aria-hidden="true"></i>Review payments</button></div>
-        ${table(['Status', 'Requests', 'Recorded amount'], ['approved', 'pending', 'rejected'].map((status) => {
-          const matches = paymentRows.filter((row) => (status === 'pending'
-            ? !['approved', 'rejected'].includes(String(row.status).toLowerCase())
-            : String(row.status).toLowerCase() === status));
-          const total = matches.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0);
-          return [humanizeAuditValue(status), number(matches.length), `₱${number(total, 2)}`];
-        }))}
-        <div class="notice"><strong>Accounting boundary.</strong> Bank fees, charge settlement, taxes, and cash reconciliation are not connected; the Observatory does not manufacture those figures.</div>
-      </section>`;
+      <div class="observatory-grid business-intelligence-grid">
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Recorded commercial value</h3><p>Value grouped by request state and approved refunds.</p></div></div>
+          <div class="chart-shell"><canvas id="business-revenue-status-chart" aria-label="Recorded commercial value by state" role="img"></canvas></div>
+        </section>
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Commercial operating state</h3><p>Counts are derived from protected payment and entitlement records.</p></div></div>
+          ${table(['State', 'Records', 'Recorded amount'], [
+            ['Paid verified', number(approved.length), `₱${number(approvedValue, 2)}`],
+            ['Paid not verified', number(pending.length + rejected.length), `₱${number(statusRows[1].value + statusRows[2].value, 2)}`],
+            ['Approved refunds', number(refundRows.filter((row) => String(row.status).toLowerCase() === 'approved').length), `₱${number(approvedRefunds, 2)}`],
+            ['Active paid entitlements', number(activePaid.length), 'Access records'],
+          ])}
+        </section>
+        <section class="observatory-card wide">
+          <div class="card-head"><div><h3>Latest payment records</h3><p>Newest first. Select a heading to sort, or open the payment queue for proof review.</p></div><button type="button" class="secondary-button" data-admin-section="payments"><i class="ph ph-receipt" aria-hidden="true"></i>Review payments</button></div>
+          ${table(['Student', 'Verification', 'Recorded amount', 'Submitted', 'Reviewed by'], recentRows)}
+          <div class="notice"><strong>Accounting boundary.</strong> Bank settlement, transfer fees, taxes, and cash reconciliation are not connected. Only recorded administrator decisions are reported.</div>
+        </section>
+      </div>`;
   }
 
-  function renderBusinessProjections(report) {
-    const visitors = Number(report.current?.traffic?.unique_visitors || 0);
+  async function renderBusinessProjections(report) {
+    const [directory, payments] = await Promise.all([
+      loadAllUserDirectory().catch(() => ({ items: [], total: 0 })),
+      loadAllPhase4Operational('payments').catch(() => ({ items: [] })),
+    ]);
+    const directoryRows = directory.items || [];
+    const paymentRows = payments.items || [];
+    const verifiedPaid = paidSubscriberRecords(directoryRows, paymentRows)
+      .filter(({ account, payment }) => paidSubscriberState(account, payment).label === 'Paid verified');
+    const visitors = Math.max(
+      Number(report.current?.traffic?.unique_visitors || 0),
+      Number(directory.total || directoryRows.length || 0),
+    );
+    const observedConversion = visitors > 0 ? (verifiedPaid.length / visitors) * 100 : 0;
+    const defaultRate = observedConversion > 0 ? observedConversion : 5;
+    const approvedValue = paymentRows
+      .filter((row) => String(row.status).toLowerCase() === 'approved')
+      .reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0);
     return `
       ${heading('Projections', 'Build a planning scenario from transparent assumptions. Forecasts are never mixed with verified performance.')}
+      <div class="observatory-kpis">
+        ${observatoryKpi('Recorded reach', number(visitors), 'ph-users-three', 'cyan', 'Larger of selected visitors or accounts')}
+        ${observatoryKpi('Verified paid records', number(verifiedPaid.length), 'ph-seal-check', 'green', 'Protected commercial ledger')}
+        ${observatoryKpi('Observed conversion', `${number(observedConversion, 2)}%`, 'ph-percent', 'gold', 'Verified paid ÷ recorded reach')}
+        ${observatoryKpi('Approved value', `₱${number(approvedValue, 2)}`, 'ph-currency-circle-dollar', 'green', 'Recorded requests, not bank settlement')}
+      </div>
       <section class="observatory-card">
-        <div class="card-head"><div><h3>Commercial planning model</h3><p>Planning estimate · not actual revenue.</p></div><span class="status warn">Forecast</span></div>
+        <div class="card-head"><div><h3>Commercial planning model</h3><p>Adjust reach, conversion, and price. Conservative and growth cases update automatically.</p></div><span class="status warn">Scenario</span></div>
         <div class="forecast-grid">
           <label>Reach<input id="scenario-visitors" type="number" min="0" step="1" value="${escapeHtml(visitors || 1000)}"></label>
-          <label>Conversion rate (%)<input id="scenario-rate" type="number" min="0" max="100" step="0.1" value="5"></label>
+          <label>Base conversion (%)<input id="scenario-rate" type="number" min="0" max="100" step="0.1" value="${escapeHtml(number(defaultRate, 2).replace(/,/g, ''))}"></label>
           <label>Price per access (₱)<input id="scenario-price" type="number" min="0" step="0.01" value="149"></label>
         </div>
-        <div class="forecast-result" id="scenario-metrics" aria-live="polite">
-          <div><span>Assumed customers</span><strong id="scenario-customers">0</strong></div>
-          <div><span>Gross scenario</span><strong id="scenario-gross">₱0.00</strong></div>
-          <div><span>Revenue per 1,000 reached</span><strong id="scenario-rpm">₱0.00</strong></div>
+        <div class="forecast-result forecast-scenarios" id="scenario-metrics" aria-live="polite">
+          <div><span>Conservative · 75% of base</span><strong id="scenario-low-gross">₱0.00</strong><small id="scenario-low-customers">0 customers</small></div>
+          <div class="forecast-primary"><span>Base scenario</span><strong id="scenario-gross">₱0.00</strong><small><b id="scenario-customers">0</b> customers · <b id="scenario-rpm">₱0.00</b> per 1,000 reached</small></div>
+          <div><span>Growth · 125% of base</span><strong id="scenario-high-gross">₱0.00</strong><small id="scenario-high-customers">0 customers</small></div>
         </div>
         <p class="panel-note" id="scenario-output"></p>
+      </section>
+      <section class="observatory-card">
+        <div class="card-head"><div><h3>Decision boundaries</h3><p>The model uses real recorded reach as a starting point; all scenario outputs remain assumptions.</p></div></div>
+        ${table(['Input', 'Recorded baseline', 'Planning treatment'], [
+          ['Reach', number(visitors), 'Editable'],
+          ['Conversion', `${number(observedConversion, 2)}% observed`, 'Editable base; conservative and growth brackets are derived'],
+          ['Price', '₱149.00 current recorded offer', 'Editable for planning only'],
+          ['Costs and settlement', 'Not connected', 'Excluded rather than invented'],
+        ])}
       </section>`;
   }
 
-  function renderBusinessComparisons(report) {
+  function activityDeviceRows(items = []) {
+    const counts = new Map();
+    items.forEach((row) => {
+      const category = humanizeAuditValue(row.current_device_category || 'unknown');
+      counts.set(category, (counts.get(category) || 0) + 1);
+    });
+    return [...counts.entries()].map(([label, value]) => ({ label, value }));
+  }
+
+  function activityHourRows(items = []) {
+    const counts = new Map();
+    items.forEach((row) => {
+      const value = row.latest_event_at || row.last_activity_at || row.started_at;
+      const date = value ? new Date(value) : null;
+      if (!date || !Number.isFinite(date.getTime())) return;
+      const label = new Intl.DateTimeFormat('en-PH', {
+        timeZone: 'Asia/Manila', hour: 'numeric', hour12: true,
+      }).format(date);
+      counts.set(label, (counts.get(label) || 0) + 1);
+    });
+    return [...counts.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((left, right) => right.value - left.value)
+      .slice(0, 8);
+  }
+
+  async function renderBusinessComparisons(report) {
+    const window = reportingWindow();
+    const [currentActivity, previousActivity] = await Promise.all([
+      loadRecentUserActivityWindow(window.from, window.to)
+        .catch(() => ({ items: [], summary: {}, activityMix: [], unavailable: true })),
+      loadRecentUserActivityWindow(window.previousFrom, window.previousTo)
+        .catch(() => ({ items: [], summary: {}, activityMix: [], unavailable: true })),
+    ]);
+    const currentSummary = currentActivity.summary || {};
+    const previousSummary = previousActivity.summary || {};
+    const currentDevices = activityDeviceRows(currentActivity.items || []);
+    const previousDevices = activityDeviceRows(previousActivity.items || []);
+    const deviceLabels = [...new Set([...currentDevices, ...previousDevices].map((row) => row.label))];
+    const currentDeviceMap = new Map(currentDevices.map((row) => [row.label, row.value]));
+    const previousDeviceMap = new Map(previousDevices.map((row) => [row.label, row.value]));
+    const performanceRows = [
+      ['Page views', report.current?.traffic?.page_views, report.previous?.traffic?.page_views],
+      ['Unique visitors', report.current?.traffic?.unique_visitors, report.previous?.traffic?.unique_visitors],
+      ['Registrations', report.current?.funnel?.registrations, report.previous?.funnel?.registrations],
+      ['Successful grades', report.current?.learning?.successful_grades, report.previous?.learning?.successful_grades],
+      ['Signed-in users', currentSummary.uniqueUsers, previousSummary.uniqueUsers],
+      ['Signed-in sessions', currentSummary.sessions, previousSummary.sessions],
+    ];
+    state.businessComparisonVisuals = {
+      performanceLabels: performanceRows.map(([label]) => label),
+      currentValues: performanceRows.map(([, current]) => current),
+      previousValues: performanceRows.map(([, , previous]) => previous),
+      deviceLabels,
+      currentDevices: deviceLabels.map((label) => currentDeviceMap.get(label) || 0),
+      previousDevices: deviceLabels.map((label) => previousDeviceMap.get(label) || 0),
+    };
+    const currentHours = activityHourRows(currentActivity.items || []);
+    const previousMix = new Map((previousActivity.activityMix || []).map((row) => [row.event_type, row.event_count]));
     return `
       ${heading('Comparisons', 'Compare the selected period with the immediately preceding period using the same definitions and reporting window.')}
-      <section class="observatory-card">
-        <div class="card-head"><div><h3>Operating comparison</h3><p>Current period versus previous period.</p></div><span class="status ok">Like-for-like</span></div>
-        <div class="chart-shell"><canvas id="observatory-comparison-chart" aria-label="Business period comparison chart" role="img"></canvas></div>
-        <div class="legend-row"><span class="gold"><i></i>Current</span><span class="cyan"><i></i>Previous</span></div>
-      </section>
-      <section class="observatory-card">
-        ${table(['Measure', 'Current', 'Previous'], [
-          ['Page views', number(report.current?.traffic?.page_views), number(report.previous?.traffic?.page_views)],
-          ['Unique visitors', number(report.current?.traffic?.unique_visitors), number(report.previous?.traffic?.unique_visitors)],
-          ['Registrations', number(report.current?.funnel?.registrations), number(report.previous?.funnel?.registrations)],
-          ['Successful grades', number(report.current?.learning?.successful_grades), number(report.previous?.learning?.successful_grades)],
-        ])}
-      </section>`;
+      ${(currentActivity.unavailable || previousActivity.unavailable) ? '<div class="notice danger"><strong>Activity comparison is temporarily incomplete.</strong> The protected session ledger could not be loaded. No missing values were estimated; refresh after the service recovers.</div>' : ''}
+      <div class="observatory-kpis">
+        ${observatoryKpi('Signed-in users', number(currentSummary.uniqueUsers), 'ph-users', 'cyan', 'Selected period')}
+        ${observatoryKpi('Sessions', number(currentSummary.sessions), 'ph-browser', 'gold', 'Selected period')}
+        ${observatoryKpi('Average time used', durationLabel(currentSummary.averageDurationSeconds), 'ph-timer', 'green', 'Per session')}
+        ${observatoryKpi('Total time used', durationLabel(currentSummary.totalDurationSeconds), 'ph-clock-countdown', 'cyan', 'Selected period')}
+      </div>
+      <div class="observatory-grid business-intelligence-grid">
+        <section class="observatory-card wide">
+          <div class="card-head"><div><h3>Operating comparison</h3><p>Current period versus the immediately preceding window.</p></div><span class="status ok">Like-for-like</span></div>
+          <div class="chart-shell"><canvas id="observatory-comparison-chart" aria-label="Business period comparison chart" role="img"></canvas></div>
+          <div class="legend-row"><span class="gold"><i></i>Current</span><span class="cyan"><i></i>Previous</span></div>
+        </section>
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Device use</h3><p>Signed-in sessions by recorded device category.</p></div></div>
+          <div class="chart-shell"><canvas id="business-device-comparison-chart" aria-label="Device use comparison chart" role="img"></canvas></div>
+          <div class="legend-row"><span class="gold"><i></i>Current</span><span class="cyan"><i></i>Previous</span></div>
+        </section>
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Peak activity times</h3><p>Most common latest-activity hours in Asia/Manila.</p></div></div>
+          ${table(['Time', 'Recorded sessions'], currentHours.map((row) => [row.label, number(row.value)]))}
+        </section>
+        <section class="observatory-card wide">
+          <div class="card-head"><div><h3>Performance ledger</h3><p>Every measure uses the same selected and previous reporting windows.</p></div></div>
+          ${table(['Measure', 'Current', 'Previous'], [
+            ...performanceRows.map(([label, current, previous]) => [label, number(current), number(previous)]),
+            ['Average session time', durationLabel(currentSummary.averageDurationSeconds), durationLabel(previousSummary.averageDurationSeconds)],
+            ['Total signed-in time', durationLabel(currentSummary.totalDurationSeconds), durationLabel(previousSummary.totalDurationSeconds)],
+          ])}
+        </section>
+        <section class="observatory-card wide">
+          <div class="card-head"><div><h3>Activity mix</h3><p>Controlled events only; private answers and sensitive payloads are excluded.</p></div></div>
+          ${table(['Activity', 'Current', 'Previous'], (currentActivity.activityMix || []).map((row) => [
+            recentActivityLabel({ latest_event_type: row.event_type }),
+            number(row.event_count),
+            number(previousMix.get(row.event_type) || 0),
+          ]))}
+          ${(currentActivity.truncated || previousActivity.truncated) ? '<div class="notice danger">The activity ledger exceeded 5,000 sessions. Narrow the reporting window before relying on exact totals.</div>' : ''}
+        </section>
+      </div>`;
   }
 
   function cellText(cell) {
@@ -1074,10 +1312,40 @@
     return String(cell);
   }
 
+  function tableHeaderLabel(header) {
+    return typeof header === 'object' && header ? String(header.label || '') : String(header || '');
+  }
+
+  function tableHeaderHtml(headers) {
+    return headers.map((header, index) => {
+      const label = tableHeaderLabel(header);
+      const sortable = typeof header === 'object' && header
+        ? header.sortable !== false
+        : !/^(actions?|proof|review|transfer)$/i.test(label);
+      if (!sortable) return `<th scope="col">${escapeHtml(label)}</th>`;
+      return `<th scope="col" aria-sort="none"><button type="button" class="table-sort" data-table-sort-index="${index}" aria-label="Sort by ${escapeHtml(label)}"><span>${escapeHtml(label)}</span><i class="ph ph-caret-up-down" aria-hidden="true"></i></button></th>`;
+    }).join('');
+  }
+
+  function cellSortValue(cell) {
+    if (cell && typeof cell === 'object' && Object.prototype.hasOwnProperty.call(cell, 'sortValue')) {
+      return String(cell.sortValue ?? '');
+    }
+    if (cell?.html === true) {
+      return String(cell.value || '')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    return cellText(cell);
+  }
+
   function table(headers, rows) {
     if (!rows?.length) return empty('No verified records are available.');
-    return `<div class="table-wrap"><table><thead><tr>${headers.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join('')}</tr></thead>
-      <tbody>${rows.map((row) => `<tr>${row.map((cell, index) => `<td data-label="${escapeHtml(headers[index] || `Column ${index + 1}`)}">${cell?.html === true ? cell.value : escapeHtml(cellText(cell))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    return `<div class="table-wrap"><table><thead><tr>${tableHeaderHtml(headers)}</tr></thead>
+      <tbody>${rows.map((row) => tableRowHtml(headers, row)).join('')}</tbody></table></div>`;
   }
 
   function actionButton(label, action, target, payload = {}) {
@@ -1126,7 +1394,10 @@
   }
 
   function tableRowHtml(headers, cells) {
-    return `<tr>${cells.map((cell, index) => `<td data-label="${escapeHtml(headers[index] || `Column ${index + 1}`)}">${cell?.html === true ? cell.value : escapeHtml(cellText(cell))}</td>`).join('')}</tr>`;
+    return `<tr>${cells.map((cell, index) => {
+      const label = tableHeaderLabel(headers[index]) || `Column ${index + 1}`;
+      return `<td data-label="${escapeHtml(label)}" data-sort-value="${escapeHtml(cellSortValue(cell))}">${cell?.html === true ? cell.value : escapeHtml(cellText(cell))}</td>`;
+    }).join('')}</tr>`;
   }
 
   function userDirectoryRowsHtml(items, founderAuthorized) {
@@ -1200,7 +1471,7 @@
       <section class="observatory-card recent-user-ledger">
         <div class="card-head recent-user-ledger-head"><div><h3>Session ledger</h3><p>Newest activity first. More sessions load automatically while scrolling.</p></div></div>
         <div class="table-tools"><input id="recent-user-search" type="search" value="${escapeHtml(state.recentUserSearch)}" placeholder="Search name, school, or email" aria-label="Search recent user activity"><button class="secondary-button" id="recent-user-search-button" type="button">Search</button><button class="secondary-button" id="open-user-directory" data-admin-section="users" type="button">Open all users</button></div>
-        <div class="table-wrap recent-user-activity-table"><table><thead><tr>${recentUserActivityHeaders.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join('')}</tr></thead>
+        <div class="table-wrap recent-user-activity-table"><table><thead><tr>${tableHeaderHtml(recentUserActivityHeaders)}</tr></thead>
           <tbody id="recent-user-activity-body">${items.length ? recentUserActivityRowsHtml(items) : `<tr><td colspan="${recentUserActivityHeaders.length}">${empty('No signed-in session activity matches this view.')}</td></tr>`}</tbody></table></div>
         <div class="continuous-directory-footer" id="recent-user-activity-sentinel">
           <p class="panel-note" id="recent-user-activity-progress" role="status">Showing ${number(state.recentUserOffset)} of ${number(state.recentUserTotal)} matching session(s).</p>
@@ -1222,7 +1493,7 @@
     return `
       ${heading('Users', 'Search the complete account directory, review access and answer activity, or download the current user list for Google Sheets.')}
       <div class="table-tools"><input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, school, or email" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="user-directory-export" type="button">Download user list</button></div>
-      <div class="table-wrap recent-users-directory"><table><thead><tr>${userDirectoryHeaders.map((header) => `<th scope="col">${escapeHtml(header)}</th>`).join('')}</tr></thead>
+      <div class="table-wrap recent-users-directory"><table><thead><tr>${tableHeaderHtml(userDirectoryHeaders)}</tr></thead>
         <tbody id="user-directory-body">${items.length ? userDirectoryRowsHtml(items, founderAuthorized) : `<tr><td colspan="${userDirectoryHeaders.length}">${empty('No matching user records are available.')}</td></tr>`}</tbody></table></div>
       <div class="continuous-directory-footer" id="user-directory-sentinel">
         <p class="panel-note" id="user-directory-progress" role="status">Showing ${number(state.userOffset)} of ${number(state.userTotal)} matching account(s).</p>
@@ -1390,6 +1661,126 @@
       <p class="panel-note">Last successful grade: ${escapeHtml(dateTime(reliability.last_successful_grade))}</p>`;
   }
 
+  function latestPaymentsByUser(payments = []) {
+    const result = new Map();
+    [...payments]
+      .sort((left, right) => new Date(right.submitted_at || 0) - new Date(left.submitted_at || 0))
+      .forEach((payment) => {
+        if (payment.user_id && !result.has(payment.user_id)) result.set(payment.user_id, payment);
+      });
+    return result;
+  }
+
+  function paidSubscriberState(account = {}, payment = null) {
+    const paymentStatus = String(payment?.status || '').toLowerCase();
+    const subscriptionStatus = String(account.subscription_status || '').toLowerCase();
+    if (paymentStatus === 'approved' || subscriptionStatus === 'active') {
+      return { label: 'Paid verified', className: 'ok', rank: 3 };
+    }
+    if (payment && ['pending', 'needs_information', 'rejected', 'expired'].includes(paymentStatus)) {
+      return { label: 'Paid not verified', className: 'warn', rank: 1 };
+    }
+    return { label: 'Paid', className: 'paid', rank: 2 };
+  }
+
+  function paidSubscriberAccessState(account = {}, payment = null) {
+    const now = Date.now();
+    const expiryValue = account.subscription_expires_at || payment?.provisional_access_expires_at || null;
+    const expiry = expiryValue ? new Date(expiryValue).getTime() : 0;
+    const subscriptionStatus = String(account.subscription_status || '').toLowerCase();
+    const paymentStatus = String(payment?.status || '').toLowerCase();
+    if (expiry && expiry <= now) return { label: 'Expired', className: 'danger' };
+    if (subscriptionStatus === 'active') return { label: 'Active', className: 'ok' };
+    if (paymentStatus === 'approved') return { label: 'Verified · activation pending', className: 'warn' };
+    if (paymentStatus === 'rejected') return { label: 'Verification rejected', className: 'danger' };
+    if (paymentStatus === 'needs_information') return { label: 'Needs information', className: 'warn' };
+    if (paymentStatus === 'pending') return { label: 'Verification pending', className: 'warn' };
+    return { label: humanizeAuditValue(subscriptionStatus || paymentStatus || 'recorded'), className: 'muted' };
+  }
+
+  function paidSubscriberExpiry(account = {}, payment = null) {
+    return account.subscription_expires_at || payment?.provisional_access_expires_at || null;
+  }
+
+  function paidSubscriberExpiryAlert(expiryValue) {
+    if (!expiryValue) return { label: 'No expiry recorded', className: 'muted', rank: 0 };
+    const remaining = new Date(expiryValue).getTime() - Date.now();
+    if (!Number.isFinite(remaining)) return { label: 'Invalid expiry', className: 'danger', rank: 3 };
+    if (remaining <= 0) return { label: '! Expired', className: 'danger', rank: 4 };
+    if (remaining <= 5 * 86_400_000) {
+      const days = Math.max(1, Math.ceil(remaining / 86_400_000));
+      return { label: `! Expires in ${days} day${days === 1 ? '' : 's'}`, className: 'warn', rank: 2 };
+    }
+    return { label: 'Current', className: 'ok', rank: 1 };
+  }
+
+  function paidSubscriberRecords(accounts = [], payments = []) {
+    const paymentByUser = latestPaymentsByUser(payments);
+    return accounts
+      .map((account) => ({ account, payment: paymentByUser.get(account.id) || null }))
+      .filter(({ account, payment }) => {
+        const plan = String(account.subscription_plan || '').toLowerCase();
+        const source = String(account.subscription_source || '').toLowerCase();
+        return Boolean(payment)
+          || ['early_access_beta', 'standard', 'premium'].includes(plan)
+          || /paid|payment|manual/.test(source);
+      })
+      .sort((left, right) => {
+        const rightDate = right.payment?.submitted_at || right.account.subscription_starts_at || 0;
+        const leftDate = left.payment?.submitted_at || left.account.subscription_starts_at || 0;
+        return new Date(rightDate) - new Date(leftDate);
+      });
+  }
+
+  async function renderPaidSubscribers() {
+    const [directory, payments] = await Promise.all([
+      loadAllUserDirectory(false, state.paidSubscriberSearch),
+      loadAllPhase4Operational('payments'),
+    ]);
+    const records = paidSubscriberRecords(directory.items || [], payments.items || []);
+    state.paidSubscriberRows = records;
+    const verified = records.filter(({ account, payment }) => paidSubscriberState(account, payment).label === 'Paid verified');
+    const notVerified = records.filter(({ account, payment }) => paidSubscriberState(account, payment).label === 'Paid not verified');
+    const expiring = records.filter(({ account, payment }) => paidSubscriberExpiryAlert(paidSubscriberExpiry(account, payment)).rank >= 2);
+    const rows = records.map(({ account, payment }) => {
+      const paidState = paidSubscriberState(account, payment);
+      const accessState = paidSubscriberAccessState(account, payment);
+      const expiry = paidSubscriberExpiry(account, payment);
+      const expiryAlert = paidSubscriberExpiryAlert(expiry);
+      return [
+        { html: true, value: `<strong>${escapeHtml(account.display_name || 'Not provided')}</strong><br><small>${escapeHtml(account.school || 'School not provided')}</small>`, sortValue: account.display_name || '' },
+        account.email || 'Not available',
+        commercialPlanLabel(account.subscription_plan || payment?.plan_code),
+        { html: true, value: `<span class="status ${paidState.className}">${escapeHtml(paidState.label)}</span>`, sortValue: paidState.rank },
+        { html: true, value: `<span class="status ${accessState.className}">${escapeHtml(accessState.label)}</span>`, sortValue: accessState.label },
+        payment ? `₱${number(payment.trusted_amount_php, 2)}` : 'Historical paid record',
+        { html: true, value: dateTime(payment?.submitted_at || account.subscription_starts_at), sortValue: payment?.submitted_at || account.subscription_starts_at || '' },
+        { html: true, value: dateTime(account.subscription_starts_at || payment?.submitted_at), sortValue: account.subscription_starts_at || payment?.submitted_at || '' },
+        { html: true, value: dateTime(expiry), sortValue: expiry || '' },
+        { html: true, value: `<span class="status ${expiryAlert.className}">${escapeHtml(expiryAlert.label)}</span>`, sortValue: expiryAlert.rank },
+        { html: true, value: dateTime(account.last_sign_in_at), sortValue: account.last_sign_in_at || '' },
+      ];
+    });
+    return `
+      ${heading('Paid Subscribers', 'A dedicated commercial ledger for paid records, verification state, active access, and entitlement expiry.')}
+      <div class="observatory-kpis paid-subscriber-kpis">
+        ${observatoryKpi('Paid records', number(records.length), 'ph-credit-card', 'cyan', 'Current and preserved paid records')}
+        ${observatoryKpi('Paid verified', number(verified.length), 'ph-seal-check', 'green', 'Approved payment or active paid access')}
+        ${observatoryKpi('Paid not verified', number(notVerified.length), 'ph-hourglass', 'gold', 'Pending, rejected, or needs information')}
+        ${observatoryKpi('Expiry attention', number(expiring.length), 'ph-warning-circle', expiring.length ? 'red' : 'green', 'Expired or within five days')}
+      </div>
+      <section class="observatory-card commercial-ledger">
+        <div class="card-head"><div><h3>Subscriber ledger</h3><p>Newest paid record first. Select any column heading to sort.</p></div></div>
+        <div class="table-tools">
+          <input id="paid-subscriber-search" type="search" value="${escapeHtml(state.paidSubscriberSearch)}" placeholder="Search name, school, or email" aria-label="Search paid subscribers">
+          <button class="secondary-button" id="paid-subscriber-search-button" type="button">Search</button>
+          <button class="secondary-button" id="download-paid-subscribers" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i>Download ledger</button>
+        </div>
+        ${table(['Name', 'Email', 'Plan', 'Payment state', 'Access state', 'Amount', 'Payment recorded', 'Access starts', 'Access expires', 'Attention', 'Last sign-in'], rows)}
+        ${directory.truncated || payments.truncated ? '<div class="notice danger">The protected result exceeded 5,000 records. Narrow the search before relying on this view.</div>' : ''}
+      </section>`;
+  }
+
   async function renderSubscriptions(report) {
     const [directory, introductoryAccess] = await Promise.all([
       loadUserDirectory(false, state.subscriptionSearch, state.subscriptionOffset),
@@ -1503,7 +1894,7 @@
   }
 
   async function renderPayments() {
-    const [data, proofAudit] = await Promise.all([
+    const [data, proofAudit, directory] = await Promise.all([
       loadPhase4Operational('payments'),
       loadOperational('security', true).then((security) => (
         (security.items || [])
@@ -1511,12 +1902,14 @@
             && row.target_resource_type === 'payment_proof')
           .slice(0, 20)
       )).catch(() => []),
+      loadAllUserDirectory().catch(() => ({ items: [] })),
     ]);
+    const directoryById = new Map((directory.items || []).map((account) => [String(account.id), account]));
     return `
       ${heading('Payments', 'Review ₱149 Early Access requests. Private proofs open for five minutes, and every view is recorded in the activity log.')}
       <div class="notice danger"><strong>Money and access warning.</strong> Approval verifies the current Early Access term. The next manual renewal date is October 1, 2026 at ₱199. Confirm the student, amount, channel, reference, date, and private proof before proceeding.</div>
       ${table(
-        ['Student', 'Amount & channel', 'Reference', 'Verification', 'Verifier email', 'Proof', 'Submitted', 'Actions'],
+        ['Student', 'Amount & channel', 'Reference', 'Verification', 'Reviewed by', 'Verifier email', 'Proof', 'Submitted', 'Actions'],
         (data.items || []).map((row) => {
           const notification = paymentNotificationLabel(row);
           const studentDetails = [row.email, row.school, row.year_level].filter(Boolean);
@@ -1528,6 +1921,7 @@
             { html: true, value: `<strong>₱${number(row.trusted_amount_php,2)}</strong><br><small>${escapeHtml(row.payment_method || 'Not provided')} · ${escapeHtml(row.payment_date || 'No date')}</small>` },
             row.transaction_reference,
             { html: true, value: `<span class="status ${row.status === 'approved' ? 'ok' : row.status === 'rejected' ? 'danger' : 'warn'}">${escapeHtml(commercialPaymentLabel(row.status))}</span>${row.provisional_access_expires_at ? `<br><small>Provisional until ${escapeHtml(dateTime(row.provisional_access_expires_at))}</small>` : ''}` },
+            row.reviewed_by ? administratorIdentity(row.reviewed_by, directoryById) : 'Pending review',
             { html: true, value: `<span class="status ${notification.className}">${escapeHtml(notification.text)}</span>${row.verification_email_last_attempt_at ? `<br><small>${escapeHtml(dateTime(row.verification_email_last_attempt_at))}</small>` : ''}` },
             proofDetails.join(' · ') || 'Not available',
             dateTime(row.submitted_at),
@@ -1563,7 +1957,7 @@
           ['Viewed', 'Administrator', 'Payment request', 'Reason'],
           proofAudit.map((row) => [
             dateTime(row.occurred_at),
-            row.actor_user_id ? maskOperationalIdentifier(row.actor_user_id, 'Administrator') : 'System',
+            administratorIdentity(row.actor_user_id, directoryById),
             row.target_resource_id || 'Not available',
             row.reason || 'Not provided',
           ]),
@@ -1693,7 +2087,11 @@
   }
 
   async function renderSecurity() {
-    const data = await loadOperational('security');
+    const [data, directory] = await Promise.all([
+      loadOperational('security'),
+      loadAllUserDirectory().catch(() => ({ items: [] })),
+    ]);
+    const directoryById = new Map((directory.items || []).map((account) => [String(account.id), account]));
     return `
       ${heading('Security & Activity Log', 'Only the Super Admin may choose who can use each Admin area. Admins cannot give themselves more access or create another Super Admin.')}
       <div class="notice">Wally remains the sole Super Admin. Founder Admin access is assigned to verified accounts; an email address written into website code does not grant founder access.</div>
@@ -1701,7 +2099,7 @@
         ['Time', 'Action', 'Actor', 'Record type', 'Record', 'Reason'],
         (data.items || []).map((row) => [
           dateTime(row.occurred_at), humanizeAuditValue(row.action_type),
-          row.actor_user_id ? maskOperationalIdentifier(row.actor_user_id, 'Administrator') : 'System',
+          administratorIdentity(row.actor_user_id, directoryById),
           humanizeAuditValue(row.target_resource_type), auditTargetLabel(row),
           row.reason || 'Not provided',
         ]),
@@ -3479,15 +3877,6 @@
   }
 
   function mountObservatoryCharts(section, report) {
-    const performanceLabels = ['Views', 'Visitors', 'Sign-ups', 'Grades'];
-    const currentValues = [
-      report.current?.traffic?.page_views, report.current?.traffic?.unique_visitors,
-      report.current?.funnel?.registrations, report.current?.learning?.successful_grades,
-    ];
-    const previousValues = [
-      report.previous?.traffic?.page_views, report.previous?.traffic?.unique_visitors,
-      report.previous?.funnel?.registrations, report.previous?.learning?.successful_grades,
-    ];
     requestAnimationFrame(() => {
       if (section === 'executive') {
         const visual = report.executiveVisuals || {};
@@ -3518,8 +3907,26 @@
             value: row.event_count,
           })),
         );
+      } else if (section === 'business_revenue') {
+        drawHorizontalBars(
+          $('#business-revenue-status-chart'),
+          state.businessRevenueVisuals?.statusRows || [],
+          { currency: true, gold: true, stacked: true },
+        );
       } else if (section === 'business_comparisons') {
-        drawGroupedBars($('#observatory-comparison-chart'), performanceLabels, currentValues, previousValues);
+        const visual = state.businessComparisonVisuals || {};
+        drawGroupedBars(
+          $('#observatory-comparison-chart'),
+          visual.performanceLabels || [],
+          visual.currentValues || [],
+          visual.previousValues || [],
+        );
+        drawGroupedBars(
+          $('#business-device-comparison-chart'),
+          visual.deviceLabels || [],
+          visual.currentDevices || [],
+          visual.previousDevices || [],
+        );
       }
     });
   }
@@ -3566,6 +3973,7 @@
       else if (section === 'subjects') html = renderSubjects(report);
       else if (section === 'reliability') html = renderReliability(report);
       else if (section === 'subscriptions') html = await renderSubscriptions(report);
+      else if (section === 'paid_subscribers') html = await renderPaidSubscribers();
       else if (section === 'payments') html = await renderPayments();
       else if (section === 'refunds') html = await renderRefunds();
       else if (section === 'support') html = await renderSupport();
@@ -3578,8 +3986,8 @@
       else if (section === 'examination_room') html = await renderExaminationRoomAdmin();
       else if (section === 'answer_exports') html = await renderAnswerExports(report);
       else if (section === 'business_revenue') html = await renderBusinessRevenue();
-      else if (section === 'business_projections') html = renderBusinessProjections(report);
-      else if (section === 'business_comparisons') html = renderBusinessComparisons(report);
+      else if (section === 'business_projections') html = await renderBusinessProjections(report);
+      else if (section === 'business_comparisons') html = await renderBusinessComparisons(report);
       $('#dashboard-view').innerHTML = html;
       bindDynamic();
       mountObservatoryCharts(section, report);
@@ -4519,9 +4927,19 @@
     const assumedCustomers = Math.round(visitors * rate / 100);
     const gross = assumedCustomers * price;
     const perThousand = visitors > 0 ? (gross / visitors) * 1000 : 0;
+    const lowRate = rate * 0.75;
+    const highRate = Math.min(100, rate * 1.25);
+    const lowCustomers = Math.round(visitors * lowRate / 100);
+    const highCustomers = Math.round(visitors * highRate / 100);
+    const lowGross = lowCustomers * price;
+    const highGross = highCustomers * price;
     if ($('#scenario-customers')) $('#scenario-customers').textContent = number(assumedCustomers);
     if ($('#scenario-gross')) $('#scenario-gross').textContent = `₱${number(gross, 2)}`;
     if ($('#scenario-rpm')) $('#scenario-rpm').textContent = `₱${number(perThousand, 2)}`;
+    if ($('#scenario-low-customers')) $('#scenario-low-customers').textContent = `${number(lowCustomers)} customers`;
+    if ($('#scenario-low-gross')) $('#scenario-low-gross').textContent = `₱${number(lowGross, 2)}`;
+    if ($('#scenario-high-customers')) $('#scenario-high-customers').textContent = `${number(highCustomers)} customers`;
+    if ($('#scenario-high-gross')) $('#scenario-high-gross').textContent = `₱${number(highGross, 2)}`;
     if ($('#scenario-output')) $('#scenario-output').textContent = `Planning estimate only: ${number(assumedCustomers)} assumed customers × ₱${number(price, 2)}. This is not actual or forecast-guaranteed revenue.`;
   }
 
@@ -4547,6 +4965,63 @@
         state.answerOffset = 0;
         state.answerHistory = null;
         await renderSection('answer_exports');
+      });
+    });
+  }
+
+  function normalizedTableSortValue(rawValue) {
+    const text = String(rawValue || '').replace(/\s+/g, ' ').trim();
+    if (!text || /^not (available|provided|granted)$/i.test(text)) return { type: 'empty', value: '' };
+    const numberCandidate = text
+      .replace(/[₱,$,%]/g, '')
+      .replace(/\b(remaining|average|latest|requests?|sessions?|users?)\b/gi, '')
+      .trim();
+    if (/^-?\d+(?:\.\d+)?$/.test(numberCandidate)) {
+      return { type: 'number', value: Number(numberCandidate) };
+    }
+    if (/\d{4}|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(text)) {
+      const timestamp = Date.parse(text);
+      if (Number.isFinite(timestamp)) return { type: 'number', value: timestamp };
+    }
+    return { type: 'text', value: text.toLocaleLowerCase('en-PH') };
+  }
+
+  function bindSortableTables(root = document) {
+    $$('.table-sort', root).forEach((button) => {
+      if (button.dataset.tableSortBound === 'true') return;
+      button.dataset.tableSortBound = 'true';
+      button.addEventListener('click', () => {
+        const tableElement = button.closest('table');
+        const body = tableElement?.tBodies?.[0];
+        if (!body) return;
+        const index = Number(button.dataset.tableSortIndex);
+        const header = button.closest('th');
+        const nextDirection = header?.getAttribute('aria-sort') === 'ascending'
+          ? 'descending'
+          : 'ascending';
+        [...tableElement.querySelectorAll('thead th')].forEach((cell) => cell.setAttribute('aria-sort', 'none'));
+        header?.setAttribute('aria-sort', nextDirection);
+        [...tableElement.querySelectorAll('.table-sort i')].forEach((icon) => {
+          icon.className = 'ph ph-caret-up-down';
+        });
+        const icon = button.querySelector('i');
+        if (icon) icon.className = `ph ${nextDirection === 'ascending' ? 'ph-caret-up' : 'ph-caret-down'}`;
+        const rows = [...body.rows].filter((row) => row.cells.length > index && !row.cells[0]?.hasAttribute('colspan'));
+        rows.forEach((row, originalIndex) => {
+          if (!row.dataset.originalSortIndex) row.dataset.originalSortIndex = String(originalIndex);
+        });
+        rows.sort((left, right) => {
+          const leftValue = normalizedTableSortValue(left.cells[index]?.dataset.sortValue || left.cells[index]?.textContent);
+          const rightValue = normalizedTableSortValue(right.cells[index]?.dataset.sortValue || right.cells[index]?.textContent);
+          if (leftValue.type === 'empty' && rightValue.type !== 'empty') return 1;
+          if (rightValue.type === 'empty' && leftValue.type !== 'empty') return -1;
+          let comparison = 0;
+          if (leftValue.type === 'number' && rightValue.type === 'number') comparison = leftValue.value - rightValue.value;
+          else comparison = String(leftValue.value).localeCompare(String(rightValue.value), 'en-PH', { numeric: true, sensitivity: 'base' });
+          if (!comparison) comparison = Number(left.dataset.originalSortIndex) - Number(right.dataset.originalSortIndex);
+          return nextDirection === 'ascending' ? comparison : -comparison;
+        });
+        rows.forEach((row) => body.append(row));
       });
     });
   }
@@ -4656,6 +5131,7 @@
 
   function bindDynamic() {
     mountSubscriptionActions();
+    bindSortableTables();
     $$('[data-insight]').forEach((button) => button.addEventListener('click', () => openInsight(button)));
     $$('[data-admin-section]').forEach((button) => button.addEventListener('click', () => {
       const section = button.dataset.adminSection;
@@ -4763,6 +5239,35 @@
       state.subscriptionSearch = $('#subscription-search')?.value?.trim() || '';
       state.subscriptionOffset = 0;
       await renderSection('subscriptions');
+    });
+    $('#paid-subscriber-search-button')?.addEventListener('click', async () => {
+      state.paidSubscriberSearch = $('#paid-subscriber-search')?.value?.trim() || '';
+      await renderSection('paid_subscribers');
+    });
+    $('#paid-subscriber-search')?.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      $('#paid-subscriber-search-button')?.click();
+    });
+    $('#download-paid-subscribers')?.addEventListener('click', () => {
+      downloadCsv('due-diligence-paid-subscribers.csv', [
+        'Name', 'Email', 'School', 'Plan', 'Payment state', 'Access state', 'Amount PHP',
+        'Payment recorded', 'Access starts', 'Access expires', 'Expiry attention', 'Last sign-in',
+      ], state.paidSubscriberRows.map(({ account, payment }) => {
+        const paidState = paidSubscriberState(account, payment);
+        const accessState = paidSubscriberAccessState(account, payment);
+        const expiry = paidSubscriberExpiry(account, payment);
+        return [
+          account.display_name || 'Not provided', account.email || 'Not available',
+          account.school || 'Not provided', commercialPlanLabel(account.subscription_plan || payment?.plan_code),
+          paidState.label, accessState.label,
+          payment?.trusted_amount_php == null ? '' : number(payment.trusted_amount_php, 2),
+          payment?.submitted_at || account.subscription_starts_at || '',
+          account.subscription_starts_at || payment?.submitted_at || '', expiry || '',
+          paidSubscriberExpiryAlert(expiry).label, account.last_sign_in_at || '',
+        ];
+      }));
+      toast('Paid subscriber ledger downloaded for Google Sheets.');
     });
     $('#subscriptions-previous')?.addEventListener('click', async () => {
       state.subscriptionOffset = Math.max(0, state.subscriptionOffset - 100);

@@ -25,7 +25,8 @@ assert.match(adminHtml, /id="sidebar-scrim"[^>]+type="button"/);
 assert.match(admin, /class="metric" \$\{destination\}/);
 assert.match(admin, /data-admin-section=/);
 assert.match(admin, /class="bar-row" data-insight=/);
-assert.match(admin, /data-label="\$\{escapeHtml\(headers\[index\]/);
+assert.match(admin, /data-label="\$\{escapeHtml\(label\)/);
+assert.match(admin, /const label = tableHeaderLabel\(headers\[index\]\)/);
 assert.match(admin, /function cellText\(cell\)/);
 assert.doesNotMatch(
   admin,

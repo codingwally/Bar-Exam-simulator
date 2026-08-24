@@ -6,7 +6,9 @@ import { parseCsv } from '../worker/examiner-core.mjs';
 export const SPREADSHEET_ID = '1DgDe_ObIoiTy9NJ3DmdM1ec7h7t0FS7RvFhBTjubZ8A';
 export const SHEET_ID = '141335489';
 export const SHEET_NAME = 'Website Upload';
-export const SOURCE_RANGE = 'A1:U321';
+export const SOURCE_RANGE = 'A:U';
+export const MINIMUM_RECORD_COUNT = 320;
+export const MAXIMUM_RECORD_COUNT = 10_000;
 export const OUTPUT_PATH = fileURLToPath(
   new URL('../content/question-bank/website-upload.json', import.meta.url),
 );
@@ -76,15 +78,18 @@ function cleanField(header, value) {
 
 export function recordsFromCsv(csv) {
   const rows = parseCsv(csv);
-  const selected = rows.slice(0, 321);
-  const headers = selected[0] || [];
+  while (rows.length > 1 && rows.at(-1).every((cell) => !text(cell).trim())) rows.pop();
+  const headers = rows[0] || [];
   if (JSON.stringify(headers) !== JSON.stringify(HEADERS)) {
     throw new Error(`Header mismatch in ${SHEET_NAME}!${SOURCE_RANGE}.`);
   }
-  if (selected.length !== 321) {
-    throw new Error(`Expected 321 rows including the header; received ${selected.length}.`);
+  const recordCount = rows.length - 1;
+  if (recordCount < MINIMUM_RECORD_COUNT || recordCount > MAXIMUM_RECORD_COUNT) {
+    throw new Error(
+      `Expected ${MINIMUM_RECORD_COUNT} to ${MAXIMUM_RECORD_COUNT} records; received ${recordCount}.`,
+    );
   }
-  return selected.slice(1).map((cells, offset) => ({
+  return rows.slice(1).map((cells, offset) => ({
     __rowNumber: offset + 2,
     ...Object.fromEntries(HEADERS.map((header, index) => [header, cleanField(header, cells[index])])),
   }));

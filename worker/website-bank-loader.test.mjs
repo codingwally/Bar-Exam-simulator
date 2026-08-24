@@ -61,7 +61,7 @@ test('website loader applies and edge-caches a complete visibility projection', 
   resetWebsiteBankCacheForTest();
   const records = await loadWebsiteBankForTest(CANONICAL_URL);
   assert.equal(records.get('LAB-001')['Publication Ready?'], 'No');
-  assert.equal(records.size, 320);
+  assert.equal(records.size, questionBank.records.length);
   assert.equal(edge.entries.size, 1);
 });
 
@@ -117,7 +117,7 @@ test('partial projection cannot interrupt a cold-start exam request', async (t) 
 
   resetWebsiteBankCacheForTest();
   const records = await loadWebsiteBankForTest(CANONICAL_URL);
-  assert.equal(records.size, 320);
+  assert.equal(records.size, questionBank.records.length);
   assert.equal(records.get('LAB-001')['Publication Ready?'], 'Yes');
   assert.equal(edge.entries.size, 0);
 });

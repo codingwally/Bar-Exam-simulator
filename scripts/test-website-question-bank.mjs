@@ -5,6 +5,8 @@ import {
   APPROVED_SUBJECTS,
   cleanRecord,
   HEADERS,
+  MAXIMUM_RECORD_COUNT,
+  MINIMUM_RECORD_COUNT,
   OUTPUT_PATH,
   recordsFromCsv,
   validateRecords,
@@ -12,7 +14,11 @@ import {
 
 const payload = JSON.parse(await fs.readFile(OUTPUT_PATH, 'utf8'));
 assert.deepEqual(payload.headers, HEADERS, 'A:U headers must remain exact.');
-assert.equal(payload.records.length, 320, 'Rows 2–321 must produce exactly 320 records.');
+assert.ok(
+  payload.records.length >= MINIMUM_RECORD_COUNT
+    && payload.records.length <= MAXIMUM_RECORD_COUNT,
+  `The bank must contain ${MINIMUM_RECORD_COUNT} to ${MAXIMUM_RECORD_COUNT} records.`,
+);
 assert.doesNotMatch(JSON.stringify(payload.records), /\(noun\)/i, 'Internal noun markers must never reach the website bank.');
 
 const validation = validateRecords(
@@ -51,7 +57,8 @@ assert.equal(
 );
 
 const nonQuestionHeaders = HEADERS.filter((header) => header !== 'Essay Question');
-const nonQuestionProjection = payload.records.map((record) => Object.fromEntries(
+const sourceReviewedBaseline = payload.records.slice(0, 320);
+const nonQuestionProjection = sourceReviewedBaseline.map((record) => Object.fromEntries(
   nonQuestionHeaders.map((header) => [header, record[header]]),
 ));
 const nonQuestionDigest = crypto
@@ -101,7 +108,7 @@ assert.equal(
   'Manifest must lock the corrected Suggested Answer corpus.',
 );
 
-const recordsById = new Map(payload.records.map((record) => [record['Question ID'], record]));
+const recordsById = new Map(sourceReviewedBaseline.map((record) => [record['Question ID'], record]));
 assert.equal(sourceManifest.records.length, recordsById.size, 'Manifest IDs must match bank IDs exactly.');
 assert.equal(
   new Set(sourceManifest.records.map((source) => source.questionId)).size,
@@ -209,7 +216,7 @@ assert.deepEqual(
 const counts = Object.fromEntries(APPROVED_SUBJECTS.map((subject) => [subject, 0]));
 for (const record of payload.records) counts[record.Subject] += 1;
 for (const subject of APPROVED_SUBJECTS) {
-  assert.equal(counts[subject], 40, `${subject} must contain 40 records.`);
+  assert.ok(counts[subject] >= 40, `${subject} must contain at least 40 records.`);
 }
 
 const html = await fs.readFile(new URL('../index.html', import.meta.url), 'utf8');

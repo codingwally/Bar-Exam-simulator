@@ -110,7 +110,7 @@ test('Q&A overlay changes only visibility and never replaces canonical website c
   });
 
   const overlaid = applyWebsitePublicationOverlay(canonical, qna);
-  assert.equal(overlaid.size, 320);
+  assert.equal(overlaid.size, questionBank.records.length);
   assert.equal(overlaid.has('FUTURE-001'), false);
   assert.equal(overlaid.get(questionId)['Publication Ready?'], 'No');
   assert.equal(overlaid.get(questionId)['Essay Question'], original['Essay Question']);
@@ -136,8 +136,9 @@ test('hiding stops future random issuance without breaking an already-issued wor
     publicationOverlay(new Map([[hiddenId, 'No']])),
   );
 
-  assert.equal(protectedQuestionInventory(records)['Labor Law'].length, 40);
-  assert.equal(availableProtectedQuestionInventory(records)['Labor Law'].length, 39);
+  const laborTotal = questionBank.records.filter((record) => record.Subject === 'Labor Law').length;
+  assert.equal(protectedQuestionInventory(records)['Labor Law'].length, laborTotal);
+  assert.equal(availableProtectedQuestionInventory(records)['Labor Law'].length, laborTotal - 1);
   assert.equal(
     availableProtectedQuestionInventory(records)['Labor Law']
       .some((question) => question.id === hiddenId),
@@ -179,7 +180,7 @@ test('protected inventory keeps its safety floor while accepting uneven growth',
     });
   }
   const inventory = protectedQuestionInventory(records);
-  assert.equal(Object.values(inventory).flat().length, 362);
+  assert.equal(Object.values(inventory).flat().length, questionBank.records.length + 42);
   assert.ok(Object.values(inventory).every((questions) => questions.length >= 40));
 });
 
@@ -218,7 +219,7 @@ test('Bar Feels uses only visible rows and visibility changes produce a new rele
   const visibleRows = visibleWebsiteReleaseRows(parsed.rows, hiddenOverlay);
   const hiddenGroups = buildBarFeelsManifest(visibleRows);
 
-  assert.equal(visibleRows.length, 319);
+  assert.equal(visibleRows.length, questionBank.records.length - 1);
   assert.equal(hiddenGroups.flatMap((group) => group.rows).length, 120);
   assert.equal(
     hiddenGroups.some((group) => group.rows.some((row) => row.questionId === selectedId)),
@@ -232,10 +233,12 @@ test('Bar Feels uses only visible rows and visibility changes produce a new rele
 
 test('Bar Feels refuses publication when hiding would leave an incomplete subject pool', async () => {
   const parsed = await parseWebsiteUploadSource(canonicalCsv());
+  const laborCount = questionBank.records
+    .filter((record) => record.Subject === 'Labor Law').length;
   const overrides = new Map(
     questionBank.records
       .filter((record) => record.Subject === 'Labor Law')
-      .slice(0, 21)
+      .slice(0, laborCount - 19)
       .map((record) => [String(record['Question ID']).trim(), 'No']),
   );
   const overlaid = applyWebsitePublicationOverlay(canonicalRecords(), publicationOverlay(overrides));

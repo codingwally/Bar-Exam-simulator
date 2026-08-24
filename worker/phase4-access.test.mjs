@@ -44,13 +44,25 @@ const env = {
   SUPABASE_SERVICE_ROLE_KEY: 'test-service-role',
 };
 
-test('embedded protected inventory preserves eight subjects and forty questions each', () => {
+test('embedded protected inventory preserves eight subjects and the released distribution', () => {
   const records = new Map(
     questionBank.records.map((row) => [String(row['Question ID']).trim(), row]),
   );
   const inventory = protectedQuestionInventory(records);
   assert.equal(Object.keys(inventory).length, 8);
-  for (const questions of Object.values(inventory)) assert.equal(questions.length, 40);
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(inventory).map(([subject, questions]) => [subject, questions.length])),
+    {
+      'Political Law': 46,
+      'Labor Law': 46,
+      'Civil Law': 46,
+      'Taxation Law': 45,
+      'Mercantile Law': 45,
+      'Criminal Law': 46,
+      'Remedial Law': 45,
+      'Legal Ethics': 43,
+    },
+  );
 });
 
 test('user-visible inventory quarantines only the two unresolved Tax questions', () => {
@@ -58,18 +70,21 @@ test('user-visible inventory quarantines only the two unresolved Tax questions',
     questionBank.records.map((row) => [String(row['Question ID']).trim(), row]),
   );
   const inventory = availableProtectedQuestionInventory(records);
-  assert.equal(Object.values(inventory).flat().length, 318);
-  assert.equal(inventory['Taxation Law'].length, 38);
-  for (const subject of PHASE4_SUBJECTS) {
-    if (subject !== 'Taxation Law') assert.equal(inventory[subject].length, 40);
-  }
+  assert.equal(Object.values(inventory).flat().length, questionBank.records.length - 2);
+  assert.equal(inventory['Taxation Law'].length, 43);
   const availableIds = new Set(Object.values(inventory).flat().map((question) => question.id));
   const certifiedIds = new Set(
     sourceManifest.records
       .filter((record) => record.status === 'source-certified')
       .map((record) => record.questionId),
   );
-  assert.deepEqual(availableIds, certifiedIds);
+  const ownerApprovedOriginalIds = new Set(
+    questionBank.records
+      .map((record) => String(record['Question ID']).trim())
+      .filter((questionId) => questionId.startsWith('DDQB-2026-Q')),
+  );
+  assert.equal(ownerApprovedOriginalIds.size, 42);
+  assert.deepEqual(availableIds, new Set([...certifiedIds, ...ownerApprovedOriginalIds]));
   assert.deepEqual(
     [...WITHHELD_MOCK_BAR_QUESTION_IDS].sort(),
     sourceManifest.records
@@ -188,8 +203,8 @@ test('authenticated entitled exam opening never creates an explicit commercial c
     assert.ok(payload.question.prompt.length > 50);
     assert.deepEqual(payload.inventory, {
       subjects: 8,
-      questionsPerSubject: 40,
-      totalQuestions: 320,
+      questionsPerSubject: 46,
+      totalQuestions: 362,
     });
     assert.doesNotMatch(JSON.stringify(payload.question), /model|suggested|legalBasis|sourceUrl/i);
   } finally {

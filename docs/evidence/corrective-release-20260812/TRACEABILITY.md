@@ -24,20 +24,12 @@ Date: 2026-08-12 (Asia/Manila)
 | --- | --- | --- |
 | Public homepage | Retired hero and animated rails place the four preparation choices below the first desktop viewport. | Remove the retired hero, summary, rails, counters, and motion code. Move the existing four chambers directly below the public header as image-led cards. |
 | Subject Matter | Flat course list, exposed bank totals, universal ALAC presentation, and incomplete catalog-state persistence. | Add Year → Term → Subject disclosure hierarchy, accessible mobile chooser, search, state persistence, inventory-response sanitization, and question-type-aware guidance. |
-| Examination Room | Classroom simplification is already live and verified; answer writes are locally durable after input and on attention changes, but no independent 30-second safety flush is present. | Add only a 30-second safety flush while an editable attempt is active. Preserve all classroom, grading, timing, email, and authorization behavior. |
 
 ## Production data baseline (read-only)
 
 - Subjects: 8
 - Subject Matter placements: 1,890
 - Examination questions: 1,742
-- Exam Room exams: 8
-- Exam Room roster rows: 13
-- Exam Room attempts: 6
-- Exam Room submissions: 6
-- Exam Room email jobs: 0
-- Exam Room grades: 0
-
 No production mutation was made while recording this baseline.
 
 ## Staging verification

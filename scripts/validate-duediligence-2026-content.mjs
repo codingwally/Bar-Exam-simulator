@@ -11,7 +11,6 @@ const files = Object.freeze({
   doctrines: 'doctrines.json',
   chairCases: 'chairs-cases.json',
   anchorCases: 'anchor-cases.json',
-  examSchema: 'exam-room-schema.json',
   deploymentGates: 'deployment-gates.json',
 });
 
@@ -107,7 +106,7 @@ async function verifyChairSources(rows) {
   return results;
 }
 
-const [subjects, barEasy, doctrines, chairCases, anchorCases, examSchema, deploymentGates] =
+const [subjects, barEasy, doctrines, chairCases, anchorCases, deploymentGates] =
   await Promise.all(Object.keys(files).map(load));
 
 assert.equal(subjects.length, 6);
@@ -206,7 +205,6 @@ console.log(JSON.stringify({
     doctrines: doctrines.length,
     chairCases: chairCases.length,
     anchorCases: anchorCases.length,
-    examSchemaFields: examSchema.length,
     deploymentGates: deploymentGates.length,
   },
   distributions: {

@@ -138,7 +138,6 @@ for (const phrase of [
   'Plans &amp; Pricing',
   'Profile',
   'Support',
-  'Examination Room',
 ]) assert.match(html, new RegExp(phrase));
 
 assert.match(

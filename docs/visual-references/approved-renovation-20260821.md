@@ -10,13 +10,12 @@ Owner approved. This contract is the visual source of truth for subsequent ordin
 - If exact fidelity conflicts with safe operation or accessibility, apply this order: modern, legal,
   professional.
 - Preserve real routes and application behavior; do not replace them with duplicate mock pages.
-- Examination Room internals are excluded.
 
 ## Canonical shell
 
 - Deep judicial navy canvas, warm cream reading surfaces, and restrained antique-brass gold.
 - Fraunces for editorial headings and Inter for interface/body text.
-- Desktop header first row: hamburger, Due Diligence crest/wordmark, Examination Room shortcut.
+- Desktop header first row: hamburger and Due Diligence crest/wordmark.
 - Desktop header second row, in this exact order: Home, Guided Practice, Doctrine Review,
   Bar Question Practice, Bar Exam Simulation, Analytics.
 - Home must remain immediately before Guided Practice.

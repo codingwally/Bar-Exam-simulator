@@ -28,18 +28,7 @@
       ],
       scripts: [
         'assets/study-workspace.js?v=syllabus-review-20260823-1',
-        'assets/duediligence-2026.js?v=exam-room-professor-inbox-20260825-1',
-      ],
-    }),
-    examinationRoom: Object.freeze({
-      styles: [
-        'assets/duediligence-2026.css?v=guided-random-access-20260822-1',
-        'assets/examination-room-renovation.css?v=exam-room-professor-inbox-20260825-1',
-      ],
-      scripts: [
-        'assets/examination-room-2-store.js?v=exam-room-ux-20260814-1',
-        'assets/duediligence-2026.js?v=exam-room-professor-inbox-20260825-1',
-        'assets/examination-room-renovation.js?v=exam-room-professor-inbox-20260825-1',
+        'assets/duediligence-2026.js?v=content-runtime-20260826-1',
       ],
     }),
   });
@@ -53,7 +42,6 @@
     'chair-cases': 'content',
     doctrines: 'content',
     'anchor-cases': 'content',
-    'examination-room': 'examinationRoom',
   });
 
   const protectedFeatureRoutes = Object.freeze({
@@ -62,7 +50,6 @@
     'bar-easy': '#bar-easy',
     verdict: '#verdict',
     doctrines: '#doctrines',
-    'examination-room': '#examination-room',
   });
 
   const protectedPageRoutes = Object.freeze({
@@ -74,7 +61,6 @@
     'bar-easy': '#bar-easy',
     doctrines: '#doctrines',
     verdict: '#verdict',
-    'examination-room': '#examination-room',
   });
 
   function hasResolvedAllowedAccess(access) {
@@ -262,7 +248,6 @@
   global.openChairCases = deferredFunction('chair-cases', 'openChairCases');
   global.openDoctrines = deferredFunction('doctrines', 'openDoctrines');
   global.openAnchorCases = deferredFunction('anchor-cases', 'openAnchorCases');
-  global.openExaminationRoom = deferredFunction('examination-room', 'openExaminationRoom');
   global.DueDiligenceQuorum = Object.freeze({
     open: async (...args) => {
       const placeholder = global.DueDiligenceQuorum;

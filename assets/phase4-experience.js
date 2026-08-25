@@ -12,7 +12,6 @@
     'subject-matter',
     'bar-feels',
     'verdict',
-    'examination-room',
   ]);
 
   const state = {

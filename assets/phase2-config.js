@@ -36,7 +36,6 @@
       coachingBooking: false,
       emailSignIn: false,
       adminDashboard: true,
-      examinationRoom2: true,
     }),
     plans: Object.freeze({
       catalogVersion: 'soft-launch-early-access-2026-08-21',

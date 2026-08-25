@@ -39,16 +39,12 @@ Implementations must preserve at least a 90% visual match to that reference. Whe
 not technically safe, resolve design decisions in this order: modern, legal, professional. Never replace
 the approved composition with a generic dashboard, speculative feature, or unrelated template.
 
-The Examination Room is intentionally outside this renovation scope. Its internal design and behavior
-must not be changed under this reference without a separate, explicit instruction.
-
 ## Master design goal
 
 Every redesigned or repaired surface must visibly belong to the same Due Diligence product family already established by the strongest existing interfaces—particularly:
 
 * Bar Easy
 * Doctrines
-* The approved Examination Room header reference
 * Existing official Due Diligence branding
 
 Codex must improve and standardize the website without replacing its identity with a generic template.
@@ -309,7 +305,6 @@ Use one consistent two-level Due Diligence header.
 * The Academy
 * The Commons
 * BarBound
-* Examination Room
 * Support
 * The Docket
 
@@ -317,7 +312,6 @@ Required behavior:
 
 * Chamber name navigates to its chamber page.
 * Separate chevron opens its feature menu.
-* Examination Room opens its role hub directly.
 * Header controls align to a shared baseline.
 * Navigation controls use a consistent visual family.
 * Active location uses restrained emphasis.
@@ -431,11 +425,7 @@ Remove technical wording such as:
 * Schema cache
 * API payload
 
-For a genuine unexpected Examination Room outage, the final fallback may say:
-
-> The Examination Room could not complete this action. Your saved work is safe. Try again.
-
-This fallback must not be used to hide known authorization, lifecycle, PDF, email, or database failures. Known errors require specific messages.
+Fallback messages must not hide known authorization, lifecycle, PDF, email, or database failures. Known errors require specific messages.
 
 ## Consistency audit
 

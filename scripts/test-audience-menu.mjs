@@ -18,7 +18,7 @@ assert.equal((html.match(/id="spa-nav"/g) || []).length, 1);
 
 const navigation = header.match(/<nav class="spa-nav quorum-primary-nav" id="spa-nav"[\s\S]*?<\/nav>/)?.[0];
 assert.ok(navigation, 'The Quorum-first primary drawer must remain present.');
-assert.match(header, /id="site-menu-toggle"[\s\S]*class="brand pb-brand"[\s\S]*id="spa-examination-room"/);
+assert.match(header, /id="site-menu-toggle"[\s\S]*class="brand pb-brand"[\s\S]*id="spa-support"/);
 assert.match(header, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"[^>]*aria-expanded="false"[^>]*aria-label="Open navigation menu"/);
 assert.match(header, /class="site-menu-icon"[\s\S]*<span><\/span><span><\/span><span><\/span>/);
 assert.doesNotMatch(header, /aria-expanded="false">Menu<\/button>/);
@@ -43,7 +43,6 @@ assertOrder(navigation, [
   'Profile',
   'Plans &amp; Pricing',
   'Support',
-  'Examination Room',
 ]);
 assert.match(navigation, /<details class="quorum-practice-menu"[\s\S]*<summary>Study Features<\/summary>/);
 assert.match(navigation, /id="header-account-control"[^>]*data-public-action="docket"[^>]*>Profile<\/button>/);
@@ -59,7 +58,6 @@ for (const [id, handler] of [
   ['spa-bar-easy', 'openBarEasy'],
   ['spa-chairs-case', 'openChairCases'],
   ['spa-case-digest', 'openAnchorCases'],
-  ['spa-examination-room', 'openExaminationRoom'],
 ]) {
   assert.match(html, new RegExp(`id="${id}"[^>]*data-public-feature=`));
   assert.match(features2026, new RegExp(`global\\.${handler} =`));

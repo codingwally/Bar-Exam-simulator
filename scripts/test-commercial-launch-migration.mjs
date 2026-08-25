@@ -147,7 +147,7 @@ test('single and batch reservations are atomic, idempotent, and track-aware', ()
     'phase4_reserve_submission_batch',
   );
   assert.match(single, /pg_advisory_xact_lock\(hashtextextended\(p_user_id::text, 401\)\)/);
-  assert.match(single, /p_examination_track not in \([\s\S]*'doctrine_review'[\s\S]*'examination_room'/);
+  assert.match(single, /p_examination_track not in \([\s\S]*'bar_practice'[\s\S]*'subject_matter'[\s\S]*'mock_bar'[\s\S]*'bar_feels'[\s\S]*'quiz'[\s\S]*'doctrine_review'/);
   assert.match(single, /if v_existing\.status in \('reserved','completed'\)/);
   assert.match(single, /v_used \+ v_reserved >= v_grant\.token_limit/);
   assert.match(single, /'reason', 'trial_tokens_exhausted'/);

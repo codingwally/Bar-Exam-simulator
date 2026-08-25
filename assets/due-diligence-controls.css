@@ -30,10 +30,10 @@
 /*
  * Shared Due Diligence action controls.
  *
- * `.dd26-button` remains the compatibility class for Bar Easy, Doctrines and
- * Examination Room. Subject Matter shares the examination renderer with Bar
- * Feels, so its alias is owner-scoped while the light examination surface uses
- * the same dimensions and states through examinations.css.
+ * `.dd26-button` remains the compatibility class for Quick Drills, Doctrines,
+ * and private Analytics export controls. Subject Matter shares the examination
+ * renderer with Bar Feels, so its alias is owner-scoped while the light
+ * examination surface uses the same dimensions and states through examinations.css.
  */
 .dd-control,
 .dd26-button,

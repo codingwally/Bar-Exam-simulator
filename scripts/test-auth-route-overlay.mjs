@@ -259,22 +259,6 @@ assert.match(
   /body\.private-beta-public \.dd2-overlay:not\(#dd2-native-view\):not\(\.is-open\)/,
   'An open protected-route sign-in overlay must remain visible over the public landing page.',
 );
-assert.match(phase2Source, /parameterKeys = \[\.\.\.parameters\.keys\(\)\][\s\S]*!allowed\.has\(key\)[\s\S]*new Set\(parameterKeys\)\.size !== parameterKeys\.length/,
-  'main-app return routes must reject unknown or duplicated Examination Room parameters');
-assert.match(phase2Source, /question && !submissionId[\s\S]*submissionId && role !== 'professor'[\s\S]*role === 'student' && \(submissionId \|\| question\)/,
-  'main-app return routes must preserve only role-consistent student or Professor deep links');
-assert.match(privateBetaSource, /function normalizeSafeReturnHash[\s\S]*question && !submissionId[\s\S]*submissionId && role !== 'professor'/,
-  'private-beta admission must preserve the same strict Examination Room deep-link contract');
-assert.match(
-  privateBetaSource,
-  /requestedApplicationRoute\(\) === 'examination-room'[\s\S]{0,240}openProtectedFeature\('examination-room'\)/,
-  'A signed-out direct Examination Room route must open the protected sign-in flow.',
-);
-assert.match(
-  privateBetaSource,
-  /feature === 'examination-room'[\s\S]{0,180}normalizeSafeReturnHash\(location\.hash\)/,
-  'The Examination Room sign-in path must preserve a validated structured deep link.',
-);
 assert.match(
   html,
   /assets\/private-beta-landing\.css\?v=master-experience-20260813-1/,

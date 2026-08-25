@@ -20,15 +20,15 @@ The reference and prototype were placed together in one comparison input and rev
 
 - Header proportions, content hierarchy, two-column desktop balance, mobile stacking, and the drawer order match the approved direction.
 - The existing high-resolution Due Diligence crest is retained consistently. The reference's decorative clipboard illustration was intentionally omitted because no approved first-party HD source asset exists and the product rule prohibits internet-sourced or fabricated assets.
-- The desktop header exposes only Menu and Examination Room. The mobile header exposes only Menu.
-- The drawer exposes Home, the four Practice Exam destinations, Profile, Plans & Pricing, Support, and Examination Room, with an accessible close control.
+- The desktop and mobile header expose only Menu and the approved account utilities.
+- The drawer exposes Home, the four Practice Exam destinations, Profile, Plans & Pricing, and Support, with an accessible close control.
 - No clipped controls, horizontal overflow, trapped content, low-contrast body copy, or visually broken spacing was observed in the captured states.
 
 ## Functional and release evidence
 
 - Repository regression sweep: 75/75 non-staging script suites passed, including syntax checks and sanitized Pages-artifact verification.
 - Worker regression suite: 479/479 tests passed.
-- Subject Matter guidance removal, Home navigation, session persistence, plan gate, dialog exits, grading UI, question-bank validation, Examination Room regressions, and maintenance-lock contracts passed.
+- Subject Matter guidance removal, Home navigation, session persistence, plan gate, dialog exits, grading UI, question-bank validation, and maintenance-lock contracts passed.
 - The signed-out entry, menu, and sign-in gate were browser-verified at desktop and mobile breakpoints. No visible control crossed the viewport and horizontal shifting remained blocked.
 - The payment asset was cropped to the QR and ₱149.00 only. It contains no recipient name, account digits, bank header, app controls, or transfer-fee copy; the sanitized Pages artifact ships no retired payment image.
 - The private maintenance gate remains enabled; the redesign does not remove or weaken the owner access path.

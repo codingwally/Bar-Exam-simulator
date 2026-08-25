@@ -305,7 +305,7 @@ try {
   assert.equal(features.body.ok, true);
   for (const key of [
     'BAR_EASY_ENABLED', 'DOCTRINES_ENABLED', 'CHAIR_CASES_ENABLED',
-    'ANCHOR_CASE_DIGESTS_ENABLED', 'VERDICT_PDF_ENABLED', 'EXAMINATION_ROOM_ENABLED',
+    'ANCHOR_CASE_DIGESTS_ENABLED', 'VERDICT_PDF_ENABLED',
   ]) assert.equal(features.body.flags[key], true, `${key} must be enabled on staging.`);
 
   const expectedCounts = new Map([
@@ -454,17 +454,6 @@ try {
   }, student.token);
   assert.equal(Buffer.from(repeatedPdf.bytes.subarray(0, 5)).toString('ascii'), '%PDF-');
 
-  console.log('DD2026_STAGING: Examination Room Worker authorization boundary');
-  const portal = await workerJson('/exam-room/query', { operation: 'portal' }, student.token);
-  assert.equal(portal.body.result.roles.professor, false);
-  const professorDenied = await workerJson('/exam-room/command', {
-    operation: 'create_classroom',
-    title: 'Unauthorized staging classroom',
-    schoolName: 'Due Diligence School of Law',
-    academicTerm: '2026',
-  }, student.token, [403]);
-  assert.equal(professorDenied.body.error.code, 'EXAM_ROOM_ROOM_KEY_REQUIRED');
-
   outcome = {
     ok: true,
     runId,
@@ -477,7 +466,6 @@ try {
       premiumGateVerified: true,
     },
     humanReviewGateVerified: true,
-    examRoomAuthorizationVerified: true,
     answerCanaryPersisted: false,
   };
 } finally {

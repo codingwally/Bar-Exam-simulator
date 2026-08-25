@@ -22,9 +22,8 @@ The fresh production screenshots are stored outside the repository in:
 `C:\Users\wally\OneDrive\Desktop\DUEDILLEGENCE PROGRAM\live-audit-20260811`
 
 The audit covered the signed-out landing and admission flow, signed-in product
-home, Mock Bar timer choice, Subject Matter, The Verdict, Quorum, Bar Feels, and
-the Examination Room role hub and remembered Professor route. Exact synthetic
-attempts created by the audit were removed and verified absent.
+home, Mock Bar timer choice, Subject Matter, The Verdict, Quorum, and Bar Feels.
+Exact synthetic attempts created by the audit were removed and verified absent.
 
 ## Release order and stop conditions
 

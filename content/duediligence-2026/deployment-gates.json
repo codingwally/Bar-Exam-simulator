@@ -6,7 +6,7 @@
     "version": "2026.1",
     "captured_on": "2026-08-04"
   },
-  "count": 17,
+  "count": 12,
   "rows": [
     {
       "gate_id": "G0",
@@ -86,56 +86,6 @@
       "required_evidence": "Structured schemas, enums, calibration, injection, malformed/timeout tests",
       "hard_stop_condition": "Unvalidated output, unfair label behavior, or prompt injection succeeds",
       "beta_rule": "Gemini remains grader",
-      "status": "PLANNED"
-    },
-    {
-      "gate_id": "G8",
-      "gate_name": "Roster and question count",
-      "must_pass": "Yes",
-      "owner": "Exam Room owner",
-      "required_evidence": "Non-roster denial, duplicate constraints, one attempt, dynamic exams with 1/7/20/35 questions, plus disclosed admin-configurable operational-ceiling tests if the infrastructure requires one",
-      "hard_stop_condition": "Code-only entry, duplicate enrollment/attempt, or hidden assumption of 20",
-      "beta_rule": "No bypass",
-      "status": "PLANNED"
-    },
-    {
-      "gate_id": "G9",
-      "gate_name": "Key lifecycle, sealing, disputes",
-      "must_pass": "Yes",
-      "owner": "Security owner",
-      "required_evidence": "Hash/scope/rate limits, release revocation, old-key denial, sealed data, audited temporary dispute",
-      "hard_stop_condition": "Any old key works after release or admin dispute is unaudited",
-      "beta_rule": "No bypass",
-      "status": "PLANNED"
-    },
-    {
-      "gate_id": "G10",
-      "gate_name": "Timing and integrity monitoring",
-      "must_pass": "Yes",
-      "owner": "Exam Room owner",
-      "required_evidence": "Server deadline/hard close, autosave, auto-submit, incident/lock/unlock, right-click/copy/paste/fullscreen tests",
-      "hard_stop_condition": "Client controls deadline, data loss, self-unlock, or misleading anti-cheat claim",
-      "beta_rule": "No bypass",
-      "status": "PLANNED"
-    },
-    {
-      "gate_id": "G11",
-      "gate_name": "Google backup reliability",
-      "must_pass": "Yes",
-      "owner": "Integration owner",
-      "required_evidence": "Per-exam isolation, RAW writes, formula defense, outbox/idempotency/retry/reconcile/outage tests",
-      "hard_stop_condition": "Google blocks exam, cross-professor exposure, formula execution, or duplicate/conflicting backup",
-      "beta_rule": "Database remains authoritative",
-      "status": "PLANNED"
-    },
-    {
-      "gate_id": "G12",
-      "gate_name": "Grading, email, and release",
-      "must_pass": "Yes",
-      "owner": "Professor workflow owner",
-      "required_evidence": "Website grading, one summary, batch release, optional questionnaire, sealing and retry tests",
-      "hard_stop_condition": "Email flood, premature disclosure, or release does not revoke keys",
-      "beta_rule": "Professor controls release",
       "status": "PLANNED"
     },
     {

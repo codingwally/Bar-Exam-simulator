@@ -49,11 +49,25 @@ const examEntryBlock = frontend.slice(
 );
 assert.match(examEntryBlock, /\['professor', 'Professor'[\s\S]*\['student', 'Student'/);
 assert.doesNotMatch(examEntryBlock, /\['beadle'|\['exam_administrator'/);
+assert.match(examEntryBlock, /const professorRegistered = authenticated && state\.exam\.portal\?\.roles\?\.professor === true/,
+  'the Professor card must derive access only from the server-backed active Professor role');
+assert.match(examEntryBlock, /'professor'[\s\S]*professorRegistered[\s\S]*'student'[\s\S]*true/,
+  'the Professor card must fail closed while the Student card remains enabled');
 assert.match(frontend, /data-dd26-exam-role="\$\{id\}"/);
+assert.match(examEntryBlock, /\$\{enabled \? '' : ' disabled aria-disabled="true"'\}/,
+  'unregistered Professor entry must use a native disabled control');
+assert.match(examEntryBlock, /id="dd26-activate-professor-invitation"/,
+  'first-time invitation activation must remain available outside the locked Professor card');
 assert.doesNotMatch(frontend, /\['workplace'/i);
-assert.match(frontend, /Sign-in is required to continue/);
+assert.match(examEntryBlock, /Sign in before choosing a workspace/);
 assert.doesNotMatch(frontend, /\$\{examNavigation\(\)\}/,
   'role buttons must not be repeated inside the selected workspace');
+const bindEntryBlock = frontend.slice(
+  frontend.indexOf('function bindExamEntry'),
+  frontend.indexOf('function openProfessorActivationDialog'),
+);
+assert.match(bindEntryBlock, /\[data-dd26-exam-role\]:not\(:disabled\)/,
+  'disabled Professor cards must never receive a click handler');
 const roleSelectionBlock = frontend.slice(
   frontend.indexOf('async function selectExamRole'),
   frontend.indexOf('function announceExamStatus'),
@@ -62,6 +76,11 @@ assert.ok(roleSelectionBlock.indexOf('if (!isAuthenticated())') < roleSelectionB
   'authentication must happen before the Student or classroom workspace opens');
 assert.doesNotMatch(roleSelectionBlock, /new URL\('admin\//,
   'Exam Administrator must stay room-scoped instead of redirecting into platform administration');
+assert.match(roleSelectionBlock, /if \(!state\.exam\.portal \|\| role === 'professor'\)[\s\S]*operation: 'portal'/,
+  'every Professor entry attempt must refresh server-backed registration before opening');
+assert.ok(roleSelectionBlock.indexOf("state.exam.portal?.roles?.professor !== true")
+  < roleSelectionBlock.lastIndexOf('state.exam.section = role'),
+  'a second fail-closed Professor-role guard must run before the workspace opens');
 assert.match(roleSelectionBlock, /if \(role !== 'student'\) await loadRoomRequests\(\)/);
 assert.match(examEntryBlock, /authenticated email of every student who enters/);
 assert.match(examEntryBlock, /submission receipt/);
@@ -114,6 +133,21 @@ const professorView = frontend.slice(professorStart, professorEnd);
 assert.match(professorView, /Request another Examination Room/);
 assert.match(professorView, /Open another room/);
 assert.match(professorView, /No Examination Room is open yet/);
+assert.match(professorView, /<details class="dd26-room-setup">/,
+  'Room setup and access must remain natively collapsible and minimized by default');
+assert.match(professorView, /return `\$\{setup\}<div class="dd26-professor-layout">/,
+  'Room setup and access must be the first Professor section');
+assert.match(professorView, /\$\{professorAssistantInbox\(portal\)\}/,
+  'the Professor workspace must compose the Assistant Inbox beside its main content');
+const assistantStart = frontend.indexOf('function professorAssistantConversation');
+const assistantEnd = frontend.indexOf('function professorSection', assistantStart);
+const assistantView = frontend.slice(assistantStart, assistantEnd);
+assert.match(assistantView, /data-dd26-assistant-inbox/);
+assert.match(assistantView, /Assistant Inbox/);
+assert.match(assistantView, /Professor only/);
+assert.match(assistantView, /data-dd26-assistant-action="student-access"/);
+assert.match(assistantView, /authenticated student email[\s\S]*kick-out, block, and unblock controls/,
+  'the inbox must guide Professors to the real live-room access controls');
 assert.doesNotMatch(professorView, /dd26-class-title|dd26-class-school|dd26-class-term|dd26-create-class/,
   'a Professor cannot bypass Admin room-key issuance with a free-form class creator');
 assert.doesNotMatch(frontend, /operation: 'create_classroom'/,
@@ -132,6 +166,8 @@ assert.match(professorClassView, /One Examination Room holds one examination/);
 const studentStart = frontend.indexOf('function studentSection');
 const studentEnd = frontend.indexOf('function activationSection', studentStart);
 const studentView = frontend.slice(studentStart, studentEnd);
+assert.doesNotMatch(studentView, /Assistant Inbox|data-dd26-assistant-inbox/,
+  'the Professor Assistant Inbox must never render in Student mode');
 assert.match(studentView, /Sign in with the Google account listed in the Beadle's confirmed class list/);
 assert.match(studentView, /No examination link or reference is needed/);
 assert.match(studentView, /Use the current code emailed to your rostered account/);
@@ -315,7 +351,7 @@ assert.match(frontend, /Allow entry until the exam ends[\s\S]*Your current Profe
   'rescheduling must expose an explicit until-end choice without overwriting an earlier cutoff');
 assert.match(frontend, /entryCutoffReviewHtml\(opensAt, hardClosesAt, lateAdmissionMinutes\)/,
   'final publication review must prominently state the exact student-entry cutoff');
-assert.match(featureLoader, /duediligence-2026\.js\?v=syllabus-review-20260823-1/,
+assert.match(featureLoader, /duediligence-2026\.js\?v=exam-room-professor-inbox-20260825-1/,
   'the corrected student preflight must retain a release-scoped lazy cache key');
 assert.match(frontend, /None of them replaces student sign-in and the class-list check/);
 assert.match(frontend, /publicationAttempt\.studentKey = null/,
@@ -838,12 +874,12 @@ assert.match(css, /\.dd26-reschedule-comparison>div\{grid-template-columns:1fr;g
 assert.doesNotMatch(html, /<script[^>]+assets\/examination-room-2-store\.js/);
 assert.match(featureLoader, /assets\/examination-room-2-store\.js\?v=exam-room-ux-20260814-1/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
-assert.match(featureLoader, /assets\/examination-room-renovation\.css\?v=professor-access-20260825-1/);
-assert.match(featureLoader, /assets\/examination-room-renovation\.js\?v=professor-access-20260825-1/);
+assert.match(featureLoader, /assets\/examination-room-renovation\.css\?v=exam-room-professor-inbox-20260825-1/);
+assert.match(featureLoader, /assets\/examination-room-renovation\.js\?v=exam-room-professor-inbox-20260825-1/);
 assert.match(build, /assets\/examination-room-renovation\.css/);
 assert.match(build, /assets\/examination-room-renovation\.js/);
 assert.match(featureLoader, /duediligence-2026\.css\?v=guided-random-access-20260822-1/);
-assert.match(featureLoader, /duediligence-2026\.js\?v=syllabus-review-20260823-1/);
+assert.match(featureLoader, /duediligence-2026\.js\?v=exam-room-professor-inbox-20260825-1/);
 
 // Execute the pure disclosure gate: malformed, partial, and stale replacement
 // results must never unlock one-time secret rendering.

@@ -27,6 +27,41 @@ If a proposed solution does not improve the product, do not implement it.
 
 ---
 
+# Examination Room Blank-Slate Boundary
+
+The former Examination Room is intentionally decommissioned. It is not an
+existing feature to repair, renovate, preserve, or improve. This section
+overrides **Repository First**, renovation references, and compatibility
+preferences for Examination Room work.
+
+Until the owner explicitly begins a new Examination Room build, the feature
+must remain absent from the public interface, Admin, frontend modules, Worker
+routes, email and queue flows, storage integrations, configuration, tests,
+fixtures, and product documentation.
+
+When the owner begins the replacement:
+
+* Derive requirements only from the owner's new prompts and newly approved
+  artifacts.
+* Do not restore, cherry-pick, copy, translate, adapt, or treat as a starting
+  point any deleted implementation, old branch, pull request, commit, plan,
+  screenshot, evidence file, or historical Examination Room migration.
+* Do not inspect those retired materials for product or implementation guidance
+  unless the owner explicitly requests a forensic comparison.
+* Create the architecture, data contracts, user journeys, UI, and tests as a
+  greenfield implementation. Add no legacy compatibility layer or fallback
+  unless the owner explicitly requests one.
+* Treat applied Supabase migrations and dormant database objects only as an
+  immutable environment ledger. They are not a specification and must not be
+  reused by the new implementation.
+* Keep the separate Simulator and `/examinations/*` engine protected. It is not
+  part of the retired Examination Room and must not be modified merely because
+  it uses examination terminology.
+* Replace the decommission boundary guard only in the first reviewed commit that
+  intentionally introduces the new feature. Never weaken it silently.
+
+---
+
 # Controlling Due Diligence Design Standard
 
 This section supersedes every conflicting visual instruction. It is a release gate, not an optional cosmetic preference.

@@ -8,7 +8,7 @@ const phase4 = await fs.readFile(new URL('../assets/phase4-experience.js', impor
 
 assert.match(html, /id="private-beta-landing"/);
 assert.match(html, /id="pb-pillars-title">Prepare with purpose\.<\/h1>/);
-assert.match(html, /id="site-header"[\s\S]*class="spa-nav quorum-primary-nav"[\s\S]*Home[\s\S]*Study Features[\s\S]*Profile[\s\S]*Plans &amp; Pricing[\s\S]*Examination Room/);
+assert.match(html, /id="site-header"[\s\S]*class="spa-nav quorum-primary-nav"[\s\S]*Home[\s\S]*Study Features[\s\S]*Profile[\s\S]*Plans &amp; Pricing[\s\S]*Support/);
 assert.equal((html.match(/id="site-header"/g) || []).length, 1);
 assert.doesNotMatch(html, /id="welcome-state"|id="start-practice"/,
   'The retired authenticated landing must be removed.');
@@ -58,7 +58,7 @@ assert.match(
   /page === 'mock' && examStage === 'idle'[\s\S]*startPractice\(\)/,
   'Opening Bar Question Practice from the application menu must go directly to the existing subject-selection flow.',
 );
-assert.match(phase2, /\['mock-bar', 'subject-matter', 'bar-feels', 'quorum', 'examination-room'\]/,
+assert.match(phase2, /\['mock-bar', 'subject-matter', 'bar-feels', 'quorum'\]/,
   'The canonical Bar Question Practice route must remain protected before sign-in.');
 assert.match(phase2, /function restoreAuthDestination\(\)[\s\S]*if \(!state\.authReturnPending\) return;[\s\S]*history\.replaceState\([\s\S]*dueDiligenceRoute:\s*'quorum'[\s\S]*#quorum[\s\S]*PopStateEvent\('popstate'/,
   'OAuth return must open Quorum once while routine session recovery preserves the active route.');

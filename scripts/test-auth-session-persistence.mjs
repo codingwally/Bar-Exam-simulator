@@ -209,7 +209,7 @@ assert.match(
 );
 assert.doesNotMatch(
   extractNamedFunction(phase2, 'restoreAuthDestination'),
-  /openPremiumBarFeels|openPerSubject|openExaminationRoom|showPage/,
+  /openPremiumBarFeels|openPerSubject|showPage/,
   'A stale protected route must never reopen automatically after sign-in.',
 );
 assert.match(

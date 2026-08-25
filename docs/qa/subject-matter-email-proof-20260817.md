@@ -36,18 +36,16 @@ The final inline captures shown to the owner were hashed from the exact JPEG byt
 Practice Exam email is removed at the call sites and hard-disabled at the shared
 transport boundary. This is stronger than relying on a configuration pause: a
 Practice Exam cannot call Resend even if every email mode and provider credential
-is deliberately present. Examination Room delivery remains a separate,
-explicitly controlled transactional system.
+is deliberately present.
 
 | Control | Verified behavior |
 | --- | --- |
-| General non-Room default | Missing, blank, invalid, or `suppressed` `OUTBOUND_EMAIL_MODE` fails closed to suppression |
-| Practice Exam transport | Every non-Examination-Room call to `sendExaminationEmail` returns `suppressed`; no practice caller remains |
+| General default | Missing, blank, invalid, or `suppressed` `OUTBOUND_EMAIL_MODE` fails closed to suppression |
+| Practice Exam transport | Practice flows have no automated email caller |
 | Subject Matter and Bar Feels release | Both tracks record the in-app release and make zero provider calls |
 | Human Examiner handoff | Creates an expiring secure link for manual copying; no invitation email is sent |
-| Production | General outbound mode is suppressed; `EXAMINATION_ROOM_EMAIL_MODE = "enabled"` remains independent |
-| Staging | General outbound mode and Examination Room mode are suppressed |
-| Examination Room | Its explicit mode alone controls direct and queued delivery; the general non-Room pause cannot override it |
+| Production | General outbound mode is suppressed |
+| Staging | General outbound mode is suppressed |
 | Marketing preference collection | Product-update checkboxes, reads, and writes are removed; the legacy RPC is a no-op and historical rows remain dormant audit records |
 | Web3Forms notifications | Covered by the same global pause |
 | Partnership confirmation | Truthfully says the inquiry was saved for founder review; it does not claim that an email was sent |
@@ -59,11 +57,6 @@ explicitly controlled transactional system.
 - Human Examiner assignment with all modes enabled: **0 Resend calls**, with a
   manual `assignmentUrl` returned.
 - Generic Practice Exam transport: always `suppressed`.
-- With general non-Room mode suppressed and Examination Room explicitly enabled,
-  direct Room delivery still reaches the provider exactly once.
-- Under the same separation, the Room queue still claims and completes its job.
-- All eleven supported Examination Room message types still render and deliver
-  under the explicit Room-enabled test configuration.
 
 ## Verification results
 
@@ -103,9 +96,6 @@ intentional: the required published behavior is **zero provider traffic** from
 Subject Matter, Bar Feels/model release, and Human Examiner assignment, even
 under hostile enabled configuration. The earlier Gmail self-send proves only
 the connected Gmail account; it is not presented as application-delivery proof.
-Examination Room remains independently enabled in production and retains its
-positive direct/queued boundary tests; no unsolicited live Room message was
-sent for this release.
 
 The staging database gate remains part of the evidence: Skip/Flag passed
 **27/27** and retired consent passed **6/6**. These tests ran in transactions and

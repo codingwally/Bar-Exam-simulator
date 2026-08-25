@@ -98,13 +98,7 @@ jobs:
           node scripts/test-verdict-export-loading.mjs
           node scripts/audit-subject-matter-review-quality.mjs
           node scripts/test-duediligence-2026-frontend.mjs
-          node scripts/test-examination-room-2-frontend.mjs
-          node scripts/test-examination-room-past-exam-removal.mjs
-          node scripts/test-examination-room-professor-virtual-room.mjs
-          node scripts/test-examination-room-class-results.mjs
-          node scripts/test-examination-room-2-grading-results.mjs
-          node scripts/test-examination-room-2-visual-css.mjs
-          node scripts/test-examination-room-renovation-20260825.mjs
+          node scripts/test-feature-decommission-boundary.mjs
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
 

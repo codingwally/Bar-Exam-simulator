@@ -249,8 +249,7 @@ export async function sendPaymentVerificationEmail(env, context) {
   const apiKey = String(env?.RESEND_API_KEY || '').trim();
   const from = cleanSingleLine(
     env?.PAYMENT_NOTIFICATION_EMAIL_FROM
-      || env?.SUPPORT_NOTIFICATION_EMAIL_FROM
-      || env?.EXAMINATION_EMAIL_FROM,
+      || env?.SUPPORT_NOTIFICATION_EMAIL_FROM,
     254,
   );
   if (

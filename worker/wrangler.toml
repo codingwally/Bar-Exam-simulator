@@ -18,8 +18,6 @@ PHASE4_ACCESS_ENFORCEMENT = "true"
 PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
 REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
 OUTBOUND_EMAIL_MODE = "suppressed"
-EXAMINATION_ROOM_EMAIL_MODE = "enabled"
-EXAMINATION_EMAIL_FROM = "Due Diligence Examinations <examinations@duediligence.ph>"
 ADMIN_DIRECTORY_EMAIL_MODE = "suppressed"
 ADMIN_DIRECTORY_EMAIL_FROM = "Due Diligence Administration <support@duediligence.ph>"
 SUPPORT_NOTIFICATION_EMAIL_MODE = "suppressed"
@@ -36,18 +34,12 @@ BAR_EASY_ENABLED = "true"
 CHAIR_CASES_ENABLED = "true"
 DOCTRINES_ENABLED = "true"
 ANCHOR_CASE_DIGESTS_ENABLED = "true"
-EXAMINATION_ROOM_ENABLED = "true"
-EXAMINATION_ROOM_2_ENABLED = "true"
-EXAM_ROOM_STUDENT_CODE_ACTIVE_KEY_ID = "v1"
-EXAM_GOOGLE_BACKUP_ENABLED = "true"
 AI_PREPARED_BETA_BADGE = "false"
 CONTENT_HUMAN_REVIEW_REQUIRED = "false"
 BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED = "true"
 SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED = "true"
 BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY = "true"
 BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED = "true"
-GOOGLE_BACKUP_TEMPLATE_ID = "1alXFADSsgSduVW07nOCGYa5zz26k387DeeEMF_y_fdg"
-
 [observability]
 enabled = true
 
@@ -65,13 +57,9 @@ crons = ["*/2 * * * *"]
 # Resend secret without exposing it to the browser.
 # PRIVATE_BETA_ACCESS_CODE_VERIFIER, PRIVATE_BETA_ACCESS_CODE_PEPPER, and
 # PRIVATE_BETA_FLOW_SIGNING_KEY must also remain Cloudflare secrets.
-# EXAM_ROOM_STUDENT_CODE_KEY_V1 must remain a Cloudflare secret containing
-# exactly 32 random bytes encoded as unpadded base64url.
 # ADMIN_DIRECTORY_RECIPIENTS_JSON must remain a Cloudflare secret containing
 # only the approved founder recipient-key to personal-email mapping.
 # SUPABASE_URL must be configured as a Worker environment variable.
 # Never add secret values to this file.
-# Google backup OAuth client ID, client secret, and refresh token must remain
-# encrypted Worker secrets. GOOGLE_BACKUP_FOLDER_ID may be a non-secret var.
-# RESEND_WEBHOOK_SECRET must remain an encrypted Worker secret. It verifies
-# signed provider delivery events and must never be exposed to the browser.
+# Google OAuth client ID, client secret, and refresh token must remain encrypted
+# Worker secrets for the retained content synchronization path.

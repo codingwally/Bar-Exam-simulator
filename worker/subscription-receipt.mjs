@@ -161,11 +161,7 @@ export function subscriptionReceiptContent(context = {}) {
 }
 
 export async function sendSubscriptionReceiptEmail(env, context = {}) {
-  const from = cleanLine(
-    env?.PAYMENT_NOTIFICATION_EMAIL_FROM
-      || env?.EXAMINATION_EMAIL_FROM,
-    254,
-  );
+  const from = cleanLine(env?.PAYMENT_NOTIFICATION_EMAIL_FROM, 254);
   const apiKey = String(env?.RESEND_API_KEY || '').trim();
   const recipient = validEmail(context?.user?.email);
   const proofBytes = context?.proof?.bytes instanceof Uint8Array

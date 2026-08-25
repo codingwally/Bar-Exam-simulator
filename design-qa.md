@@ -5,7 +5,7 @@
 - Contract: `docs/visual-references/approved-renovation-20260821.md`.
 - Approved walkthrough: `duediligence-design-walkthrough-20260821` (owner-reviewed prototype).
 - Required match: 90% or better; fallback hierarchy is modern, legal, professional.
-- Scope: shared shell and signed-out entry. Examination Room internals are unchanged.
+- Scope: shared shell and signed-out entry.
 
 ## Implemented match
 
@@ -34,9 +34,8 @@
 - Mobile drawer (`375 × 812`): the open drawer rectangle is exactly `x=0`, `y=0`, `375 × 812`; it
   covers the viewport without clipping or overflow.
 - The complete GitHub Pages deployment test inventory passed, including authentication, onboarding,
-  navigation, Subject Matter, commercial access, Quorum, Verdict, Examination Room regression,
+  navigation, Subject Matter, commercial access, Quorum, and Verdict regression,
   content validation, sanitized artifact build, and artifact verification.
-- No Examination Room implementation file was changed.
 
 final result: passed
 
@@ -108,7 +107,7 @@ final result: passed
 - Owner reference: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-f301d42e-5f2a-451d-8447-e4f0475e4d6e.png` (`1383 × 863`).
 - Local implementation capture: `docs/qa/renovation-20260821/bar-question-practice-cleanup-1383x863.png`.
 - Inspected browser viewport: `1383 × 863`; the in-app browser exported a `1373 × 772` visible-frame capture.
-- Scope was limited to Bar Question Practice navigation and answer-workspace controls. Question content, timers, answer persistence, grading, score rules, routes, and Examination Room were not changed.
+- Scope was limited to Bar Question Practice navigation and answer-workspace controls. Question content, timers, answer persistence, grading, score rules, and routes were not changed.
 
 ## Verified corrections
 
@@ -144,7 +143,7 @@ final result: passed
 
 - Owner reference: `C:\Users\wally\AppData\Local\Temp\codex-clipboard-d64e6be8-6142-4ed5-98f1-68a51270ee2e.png`.
 - Production-CSS fixture: `docs/qa/home-modern-20260821-fixture.html`.
-- Scope is limited to the authenticated Home community. Examination Room, grading, access, payments,
+- Scope is limited to the authenticated Home community. Grading, access, payments,
   question content, and other product pages are unchanged.
 
 ## Visual comparison
@@ -215,7 +214,6 @@ final result: passed
 
 - The surviving Practice Exam card remains in the right supporting column as explicitly requested; its duplicate in the main feed is the card that was removed.
 - Home utilities are consolidated inside the drawer instead of being discarded, preserving existing functions while reducing page clutter.
-- The examination-room shortcut remains unchanged because it was not marked for removal.
 
 ## Final QA result
 
@@ -252,7 +250,7 @@ final result: passed
 
 - Phase 2 contract, maintenance lock, admission, auth-session persistence, route-overlay, onboarding, dialog-exit, and private-beta frontend tests passed.
 - Approved GitHub Pages release command inventory passed after cache-key contracts were updated.
-- Subject Matter, examination, commercial access, correction, Quorum, Verdict, and Examination Room regressions passed without changing their runtime logic.
+- Subject Matter, examination, commercial access, correction, Quorum, and Verdict regressions passed without changing their runtime logic.
 - Worker maintenance-entry tests passed: 4/4.
 - Sanitized Pages artifact build and verification passed.
 - `git diff --check` passed.
@@ -483,48 +481,6 @@ The existing navy background, gold card edge, serif heading, two-column subject 
 
 final result: passed
 
-# Examination Room Class Results Visual QA
-
-## Scope
-
-- Surface: owning-Professor class-results selection modal and analytics dashboard.
-- Local build: isolated feature worktree served on `127.0.0.1` with synthetic student data only.
-- Design constraint: preserve the live Examination Room navy/gold visual system and universal dialog exit controls.
-
-## Verified layouts
-
-- Desktop viewport: modal centered within the viewport, internally scrollable, no page-level horizontal overflow.
-- Mobile viewport: 390 × 844 override (375 CSS-pixel layout width in the in-app browser), modal inset within the viewport, no horizontal overflow.
-- Primary and secondary actions stack to full width at the mobile breakpoint.
-- Dense candidate lists remain independently scrollable at production-scale row counts.
-- Dashboard metric cards collapse through the existing responsive grid; question and student tables remain in bounded horizontal table wrappers.
-
-## Accessibility and interaction
-
-- Modal has an accessible heading and labelled student-selection group.
-- The established upper-right × control is visible and labelled “Close dialog and go back.”
-- The established Back action is present at the bottom of the modal.
-- Native checkboxes retain visible focus styling, select-all supports checked/indeterminate states, and disabled sending remains visibly distinct.
-- Text and controls use the existing high-contrast alabaster/gold-on-navy palette.
-- Downloading or sending closes the modal before rendering the dashboard; no interval, recursive render, or navigation loop is introduced.
-
-## Findings resolved
-
-1. Ungraded `null` scores were initially eligible for numeric-zero analytics. They now remain blank and are excluded from averages; a Professor-assigned zero remains valid.
-2. A selected export initially retained full-class attendance rows. It now includes only roster identities matching the selected submitted attempts.
-3. The offline workbook was initially gated by grade finalization. It is now available before finalization, while official release continues to require all final grades.
-4. Retrying an interrupted export initially changed the workbook creation timestamp and digest. The export now reuses its audited request timestamp so retries are byte-for-byte deterministic.
-
-## Workbook compatibility
-
-- A synthetic, non-production workbook opened successfully in installed Microsoft Excel.
-- Excel exposed all five expected sheets and preserved the exact Professor question, submitted answer, and decimal score.
-- Long Professor questions are split across labelled continuation cells before Excel's per-cell text limit, without dropping content.
-
-## Result
-
-**PASS — no P0, P1, or P2 visual, responsive, or interaction defects in the class-results workflow.**
-
 # Homepage Feature Ledger and Chamber Pages Design QA
 
 ## Visual target
@@ -537,11 +493,10 @@ The implementation preserves the live navy, gold, cream, serif, and mono design 
 
 ## Homepage verification
 
-- Four distinct ledger sections render in the intended order: The Academy, The Commons, BarBound, and Examination Room.
+- Three distinct ledger sections render in the intended order: The Academy, The Commons, and BarBound.
 - The Academy exposes real Mock Bar, Subject Matter, and Verdict previews.
 - The Commons exposes real Bar Easy, Quorum, and Retainer previews.
 - BarBound exposes real Bar Feels, Chair's Cases, Doctrines, and Anchor Cases previews.
-- Examination Room uses the real role-entry interface preview.
 - Screenshot previews and text actions preserve the existing feature routes and access checks.
 - No stock-photo reference remains in the homepage or chamber rendering path.
 
@@ -612,7 +567,7 @@ final result: passed
 
 ### Scope
 
-Admin dashboard only. The production simulator, Examination Room, grading, payments, authentication, and database contracts are unchanged.
+Admin dashboard only. The production simulator, grading, payments, authentication, and database contracts are unchanged.
 
 ### Same-viewport evidence
 
@@ -657,43 +612,3 @@ Admin dashboard only. The production simulator, Examination Room, grading, payme
 **PASS — structure, navigation, responsive CSS, Worker route, least-privilege database contract, and regression suites.** Authenticated production visual and interaction verification remains the final ordered release gate.
 
 ---
-
-# Examination Room renovation design QA — 2026-08-25
-
-## Scope and evidence
-
-- Scope: Examination Room only. The Bar Exam Simulator runtime, stylesheet, session controller, page shell, and service worker remain byte-for-byte unchanged from the release baseline.
-- Visual source captures: `docs/plans/examination-room-renovation-20260825/reference-professor-monitoring.png` and `docs/plans/examination-room-renovation-20260825/reference-live-monitoring.png` (`1272 × 716`).
-- Implementation captures: `implementation-role-entry-staging.png`, `implementation-professor-monitoring-staging.png`, and `implementation-student-entry-staging-final.jpg` under the same plan directory (`1270 × 714` browser export).
-- Combined same-frame review: `docs/plans/examination-room-renovation-20260825/qa-comparison-professor-monitoring.png` (`1270 × 1428`).
-- Inspected desktop viewport: `1280 × 720` CSS pixels at device scale `1.25`; inspected content width `1270px`; measured horizontal overflow `0px`.
-- The supplied Scrimba captures expose a branded video cover rather than the underlying product frames. The comparison therefore verifies the recorded target language—warm paper, judicial navy, restrained gold, editorial headings, direct role choice, circular question navigation, and dense live-room evidence—without claiming identical video pixels.
-
-## Interaction and accessibility verification
-
-- The public doorway exposes only **Professor** and **Student** and states that the Professor can see the authenticated access email and may end a session or block re-entry.
-- The Professor live room displayed the synthetic student's exact authenticated email without displaying answers, session credentials, device hashes, or other private writing data.
-- **Kick out** closed the active session while allowing a later authorized entry. **Block** closed the session and denied a new one. **Unblock** restored normal entry checks. Each action produced one distinct audit event.
-- The Student entry, readiness acknowledgement, class-code field, and primary entry action are keyboard-labelled and remain in a single readable task column.
-- Clipboard and right-click availability, conditional focus recording, camera-off status, reconnect behavior, and no-automatic-failure behavior are stated truthfully.
-- The Professor/Student role-home control returned to the two-role doorway in the verified visible state.
-- The final desktop state had no page-level horizontal overflow and no relevant browser-console error.
-
-## Iteration history
-
-1. Replaced the failed multi-role doorway with the requested two-role entry and route-scoped paper/navy/gold presentation.
-2. Added the authenticated access-email column and explicit, audited Kick out, Block, and Unblock controls.
-3. Removed stale public copy that claimed clipboard and right-click were blocked when the runtime policy leaves them available.
-4. Replaced an inherited dark choice-card surface with a light, high-contrast renovation treatment for the Student acknowledgement.
-5. Added release contracts for least-privilege projections, role isolation, access-control reversibility, simulator-file hashes, and route-scoped assets.
-
-## Findings
-
-- P0: none.
-- P1: none.
-- P2: none.
-- Worker release inventory: passed.
-- Pages release inventory and sanitized artifact: passed.
-- Staging end-to-end access-control journey: passed.
-
-passed

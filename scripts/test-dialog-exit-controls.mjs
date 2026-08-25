@@ -101,12 +101,6 @@ for (const id of ['action-dialog', 'audit-dialog', 'insight-dialog']) {
   assert.match(markup, /class="icon-button"[^>]*aria-label="Close/i, `${id} needs an upper-right close control.`);
   assert.match(markup, /class="secondary-button"[^>]*>Back<\/button>/, `${id} needs a lower-right Back action.`);
 }
-const professorKeyStart = admin.indexOf('<dialog class="professor-room-key-dialog"');
-const professorKeyEnd = admin.indexOf('</dialog>', professorKeyStart);
-const professorKey = admin.slice(professorKeyStart, professorKeyEnd + 9);
-assert.match(professorKey, /id="professor-room-key-close"[^>]*aria-label="Close/i);
-assert.match(professorKey, /class="secondary-button" id="professor-room-key-back"[^>]*>Back<\/button>/);
-
 const verdictStart = room.indexOf('function openVerdictExport');
 const verdictEnd = room.indexOf('\n  function ', verdictStart + 30);
 const verdict = room.slice(verdictStart, verdictEnd);

@@ -65,7 +65,6 @@ assert.doesNotMatch(
   /global\.openPremiumBarFeels\s*=/,
   'The lazy loader must not overwrite the premium access controller defined by the application shell.',
 );
-assert.match(html, /id="spa-examination-room"[^>]*data-public-feature="examination-room"/);
 assert.match(html, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
 assert.match(html, /assets\/feature-loader\.js\?v=question-randomization-20260825-1/);
@@ -220,20 +219,11 @@ for (const categoryMode of [
   assert.match(productionWorkerConfig, new RegExp(`${categoryMode}\\s*=\\s*"suppressed"`));
 }
 assert.doesNotMatch(productionWorkerConfig, /EXAMINATION_EMAIL_MODE\s*=/);
-assert.match(productionWorkerConfig, /EXAMINATION_ROOM_EMAIL_MODE\s*=\s*"enabled"/);
-assert.match(
-  productionWorkerConfig,
-  /EXAMINATION_EMAIL_FROM\s*=\s*"Due Diligence Examinations <examinations@duediligence\.ph>"/,
-);
+assert.doesNotMatch(productionWorkerConfig, /EXAMINATION_EMAIL_FROM\s*=/);
 assert.doesNotMatch(productionWorkerConfig, /EXAMINATION_EMAIL_TEST_RECIPIENT/);
 assert.match(stagingWorkerConfig, /OUTBOUND_EMAIL_MODE\s*=\s*"suppressed"/);
 assert.doesNotMatch(stagingWorkerConfig, /EXAMINATION_EMAIL_MODE\s*=/);
-assert.match(stagingWorkerConfig, /EXAMINATION_ROOM_EMAIL_MODE\s*=\s*"suppressed"/);
-assert.match(
-  worker,
-  /function examinationEmailMode\(env, examRoom = false\)[\s\S]*?if \(!examRoom\) return 'suppressed';/,
-  'Practice Exam email must remain removed even if an operator enables unrelated email modes.',
-);
+assert.doesNotMatch(stagingWorkerConfig, /EXAMINATION_EMAIL_FROM\s*=/);
 const aiPracticeEmailBlock = worker.slice(
   worker.indexOf('async function processExaminationAiJob'),
   worker.indexOf('async function authorizeExaminationAccess'),
@@ -257,10 +247,9 @@ assert.doesNotMatch(
 );
 assert.equal(
   (worker.match(/sendExaminationEmail\(/g) || []).length,
-  2,
-  'The shared transport may appear only in its definition and the Examination Room adapter.',
+  0,
+  'Practice Exam email delivery must remain fully removed from the Worker.',
 );
-assert.match(worker, /sendExamRoomEmail:[\s\S]*sendExaminationEmail\(env,[\s\S]*examRoom: true/);
 assert.match(
   worker,
   /function sendSecureNotification[\s\S]*outboundEmailSuppressed\(env\)/,

@@ -19,8 +19,7 @@ and structurally verified in production. The reviewed release was merged to
   browser QA states. Protected staging has migration version `20260817121616`,
   and its transactional behavioral pgTAP passed **27/27**.
 - Practice Exam email is removed at the call sites and hard-disabled at the
-  shared transport boundary. Examination Room email remains independently
-  controlled. The successful Gmail self-send described below is a separate
+  shared transport boundary. The successful Gmail self-send described below is a separate
   Gmail API test, not a Worker or Resend delivery test.
 - Production publication is recorded below with the exact merge commit,
   migration versions, workflow run IDs, Worker version, Pages artifact digest,
@@ -41,7 +40,7 @@ and structurally verified in production. The reviewed release was merged to
 | 7 | **Writing Approach** appears after reveal controls. Move it before the reveal decision. | **Resolved and published.** The order is Question → Writing approach → response editor/actions in the left pane; review remains in the right pane. | `assets/examinations.js`; `scripts/test-design-correction-release.mjs` | **V4** desktop and **V7** mobile. Contract checks require Writing Approach before the answer workspace/reveal choice and writing before review in DOM order. |
 | 8 | There is no skip/flag flow. Add unlimited skip and flag capability. | **Resolved, production-migrated, and published.** Flag-only drafts are resumable; skipped flags can be practised again; Skip closes without submission, grading, assessment, or score; same-request replay is idempotent; out-of-cycle retries preserve the active no-repeat cycle; later submission clears the queue. | `assets/examinations.js`; `assets/examinations.css`; `worker/index.mjs`; `worker/examinations-core.mjs`; `supabase/migrations/20260817111306_subject_matter_skip_and_flag_queue.sql`; `supabase/tests/20260817_035_subject_matter_skip_and_flag_queue_test.sql`; `scripts/test-subject-matter-skip-flag.mjs` | **V8** actual flag/unflag state, **V9** confirmed Skip changing from the civil-obligation question to the different Article 1157 question, and **V10** both skipped/Practice again and flag-only/Resume question queues were exercised in the current renderer. Protected staging pgTAP passed **27/27**; production migration `20260817123037` is present and structurally verified. |
 | 9 | **Suggested Answer** and **Controlling Law** are identical and densely formatted. Distinguish them and add readable structure. | **Resolved and published for the reported rendering defect.** Suggested Answer uses a structured, escaping-only section renderer. Controlling law is separately normalized, near-duplicate guarded, and falls back to source-bound material rather than repeating the complete answer. Authorities, jurisprudence, application, limits, and sources are separated. | `assets/examinations.js`; `worker/subject-matter-review.mjs`; `worker/subject-matter-review.test.mjs`; `scripts/audit-subject-matter-review-quality.mjs`; `scripts/test-design-correction-release.mjs` | **V5** Suggested Answer open and **V6** Controlling Law open. Canonical audit: **1,490 records, 0 exact and 0 near Suggested Answer/Controlling Law duplicates**. The audit still reports separate editorial debt (bare doctrines, placeholder jurisprudence, duplicate raw authority fields, malformed case entries); this report does not misstate that corpus as fully remediated. |
-| 10 | Subject Matter submission sends the wrong repeated “model answers available” email directing users to Mock Bar. Delete that behavior. | **Resolved and published by permanent Practice Exam email removal.** Subject Matter, Bar Feels/model-release, and Human Examiner assignment make no provider call. Human Examiner now returns a manual secure link. Examination Room remains separate. | `worker/index.mjs`; `worker/examinations-routes.test.mjs`; `worker/index.test.mjs`; `worker/exam-room-delivery.mjs`; `worker/wrangler.toml`; `assets/examinations.js`; `scripts/test-examinations.mjs` | Route tests deliberately enable every email mode and assert **0 provider calls** for both practice tracks and Human Examiner. Separate tests prove explicitly enabled Examination Room direct and queued delivery still operate. **E1** below proves only the separate connected-Gmail test. |
+| 10 | Subject Matter submission sends the wrong repeated “model answers available” email directing users to Mock Bar. Delete that behavior. | **Resolved and published by permanent Practice Exam email removal.** Subject Matter, Bar Feels/model-release, and Human Examiner assignment make no provider call. Human Examiner now returns a manual secure link. | `worker/index.mjs`; `worker/examinations-routes.test.mjs`; `worker/index.test.mjs`; `worker/wrangler.toml`; `assets/examinations.js`; `scripts/test-examinations.mjs` | Route tests deliberately enable every general email mode and assert **0 provider calls** for both practice tracks and Human Examiner. **E1** below proves only the separate connected-Gmail test. |
 
 ## Visual evidence ledger
 
@@ -101,8 +100,7 @@ message through the Gmail API. It **does not** prove:
 - that any application email category has been re-enabled.
 
 Practice Exam delivery remains fail-closed in code regardless of configuration.
-Production uses `OUTBOUND_EMAIL_MODE = "suppressed"` for general non-Room
-notifications while Examination Room retains its independent explicit mode.
+Production uses `OUTBOUND_EMAIL_MODE = "suppressed"` for general notifications.
 
 ## Local verification run
 

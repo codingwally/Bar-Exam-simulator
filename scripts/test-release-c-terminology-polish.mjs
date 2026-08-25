@@ -26,7 +26,6 @@ for (const label of [
   'Profile',
   'Plans &amp; Pricing',
   'Support',
-  'Examination Room',
 ]) {
   assert.ok(index.includes(label), `Public experience must include “${label}”.`);
 }
@@ -35,7 +34,7 @@ assert.match(
   publicLanding,
   /<h1 id="pb-pillars-title">Prepare with purpose\.<\/h1>/,
 );
-for (const chamberId of ['spa-community', 'spa-bar-easy', 'spa-jurisprudence', 'spa-mock', 'spa-bar-feels', 'spa-examination-room']) {
+for (const chamberId of ['spa-community', 'spa-bar-easy', 'spa-jurisprudence', 'spa-mock', 'spa-bar-feels']) {
   assert.match(index, new RegExp(`id="${chamberId}"`));
 }
 assert.doesNotMatch(publicLanding, /class="pb-hero"|class="pb-summary"|class="pb-rail"/);

@@ -23,11 +23,6 @@ assert.match(landing, /feature\.dataset\.publicFeature === 'quorum'[\s\S]{0,100}
 assert.match(loader, /scheduleSignedInPrefetch\(\)/);
 assert.match(loader, /prefetchGroup\('content'\)/);
 assert.match(loader, /prefetchGroup\('examinations'\)/);
-assert.doesNotMatch(
-  loader.match(/function scheduleSignedInPrefetch\(\)[\s\S]*?\n  }/)?.[0] || '',
-  /prefetchGroup\('examinationRoom'\)/,
-  'The optimization sweep must not preload or modify Examination Room.',
-);
 
 assert.match(phase2, /const adminSession = accessToken[\s\S]*Promise\.all\(\[[\s\S]*adminSession/,
   'Admin/session detection must run in parallel with profile and Terms reads.');
@@ -47,4 +42,4 @@ const startPracticeSource = html.slice(
 assert.doesNotMatch(startPracticeSource, /TERMS_ACCEPTANCE_KEY/);
 assert.doesNotMatch(html, /onclick="loadLaborFromSheet\(\)"/);
 
-console.log('Non-Examination Room sweep and startup performance contracts passed.');
+console.log('Startup performance contracts passed.');

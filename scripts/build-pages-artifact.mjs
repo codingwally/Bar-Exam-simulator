@@ -24,7 +24,6 @@ const featurePreviewFiles = Object.freeze([
   'bar-feels.png',
   'chairs-cases.png',
   'doctrines.png',
-  'examination-room.png',
   'mock-bar.png',
   'quorum.png',
   'retainer.png',
@@ -63,7 +62,6 @@ const navigationIconFiles = Object.freeze([
   'circle-user-round.svg',
   'tag.svg',
   'headphones.svg',
-  'door-open.svg',
   'LICENSE.txt',
 ].map((name) => `assets/icons/navigation/${name}`));
 
@@ -80,10 +78,6 @@ const publicFiles = Object.freeze([
   'admin/admin.js',
   'admin/subscription-actions-core.js',
   'assets/exam-session-controller.js',
-  'assets/examination-room-2-store.js',
-  'assets/examination-room-renovation.css',
-  'assets/examination-room-renovation.js',
-  'assets/examination-room-beadle-class-list-template.xlsx',
   'assets/phase2-config.js',
   'assets/maintenance-gate.js',
   'assets/auth-session-storage.js',

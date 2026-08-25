@@ -17,10 +17,10 @@ begin
 
   if not exists (
     select 1 from supabase_migrations.schema_migrations
-    where version = '20260811003200'
-      and name = 'examination_room_one_key_one_room'
+    where version = '20260729120725'
+      and name = 'examinations_bar_feels_shared_engine'
   ) then
-    raise exception 'SUBJECT_MATTER_PREFLIGHT_FAILED: approved production baseline 20260811003200 missing';
+    raise exception 'SUBJECT_MATTER_PREFLIGHT_FAILED: approved Simulator baseline 20260729120725 missing';
   end if;
 
   if exists (

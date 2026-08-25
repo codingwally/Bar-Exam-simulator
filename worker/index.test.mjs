@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import worker, {
-  EXAM_ROOM_2026_RPC_FUNCTIONS,
-  EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS,
   absoluteSupabaseStorageUrl,
-  examRoom2026DatabaseError,
-  examinationEmailMode,
   outboundEmailMode,
-  sendExaminationEmail,
   sendSecureNotification,
 } from './index.mjs';
 
@@ -61,168 +56,32 @@ test('Supabase private object signing paths retain the storage API prefix', () =
   );
 });
 
-async function signedDeliveryWebhook(event, {
-  eventId = 'msg_worker_webhook_001',
-  timestamp = 1_786_477_200,
-} = {}) {
-  const secretBytes = Uint8Array.from({ length: 32 }, (_, index) => 255 - index);
-  const secret = `whsec_${Buffer.from(secretBytes).toString('base64')}`;
-  const body = JSON.stringify(event);
-  const key = await crypto.subtle.importKey(
-    'raw', secretBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-  );
-  const signature = Buffer.from(await crypto.subtle.sign(
-    'HMAC', key, new TextEncoder().encode(`${eventId}.${timestamp}.${body}`),
-  )).toString('base64');
-  return {
-    secret,
-    request: new Request('https://worker.example/webhooks/resend/email', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'svix-id': eventId,
-        'svix-timestamp': String(timestamp),
-        'svix-signature': `v1,${signature}`,
-      },
-      body,
-    }),
-  };
-}
-
-test('Examination Room email uses its explicit mode without weakening general suppression', async () => {
-  const originalFetch = globalThis.fetch;
-  const requests = [];
-  globalThis.fetch = async (_url, options) => {
-    requests.push(options);
-    return new Response(JSON.stringify({ id: 'resend-room-1' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  };
-  const baseEnv = {
-    OUTBOUND_EMAIL_MODE: 'enabled',
-    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
-    EXAMINATION_EMAIL_FROM: 'Due Diligence Examinations <examinations@duediligence.ph>',
-    RESEND_API_KEY: 'test-only-secret',
-  };
-  try {
-    assert.equal(examinationEmailMode(baseEnv), 'suppressed');
-    assert.equal(examinationEmailMode(baseEnv, true), 'enabled');
-
-    const general = await sendExaminationEmail(baseEnv, {
-      recipient: 'student@example.test', subject: 'General', text: 'General message',
-    });
-    assert.equal(general.status, 'suppressed');
-    assert.equal(requests.length, 0, 'The general pause must remain effective.');
-
-    const room = await sendExaminationEmail(baseEnv, {
-      recipient: 'student@example.test',
-      subject: 'Examination Room',
-      text: 'Room message',
-      examRoom: true,
-      idempotencyKey: 'exam-room-test-1',
-    });
-    assert.equal(room.status, 'sent');
-    assert.equal(requests.length, 1);
-    assert.equal(requests[0].headers['Idempotency-Key'], 'exam-room-test-1');
-
-    const explicitlyPausedRoom = await sendExaminationEmail({
-      ...baseEnv,
-      EXAMINATION_ROOM_EMAIL_MODE: 'suppressed',
-    }, {
-      recipient: 'student@example.test', subject: 'Paused room', text: 'Never sent', examRoom: true,
-    });
-    assert.equal(explicitlyPausedRoom.status, 'suppressed');
-    assert.equal(requests.length, 1, 'An explicit Examination Room suppression must never send.');
-
-    assert.equal(
-      examinationEmailMode({ OUTBOUND_EMAIL_MODE: 'enabled', EXAMINATION_EMAIL_MODE: 'enabled' }, true),
-      'not_configured',
-      'Examination Room must use only its explicit configuration.',
-    );
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('global non-Room policy fails closed without overriding Examination Room', async () => {
+test('global outbound policy fails closed for secure notifications', async () => {
   const originalFetch = globalThis.fetch;
   let providerCalls = 0;
   globalThis.fetch = async () => {
     providerCalls += 1;
     return Response.json({ id: 'provider-call-must-not-happen' });
   };
-  const enabledCategories = {
+  const invalidPolicy = {
     OUTBOUND_EMAIL_MODE: 'invalid-operator-value',
-    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
-    EXAMINATION_EMAIL_FROM: 'Due Diligence <support@duediligence.ph>',
-    RESEND_API_KEY: 'test-only-secret',
     WEB3FORMS_ACCESS_KEY: 'test-only-web3forms-secret',
   };
   try {
     assert.equal(outboundEmailMode({}), 'suppressed');
     assert.equal(outboundEmailMode({ OUTBOUND_EMAIL_MODE: 'enabled' }), 'enabled');
     assert.equal(outboundEmailMode({ OUTBOUND_EMAIL_MODE: 'suppressed' }), 'suppressed');
-    assert.equal(outboundEmailMode(enabledCategories), 'suppressed');
-    assert.equal(examinationEmailMode(enabledCategories), 'suppressed');
-    assert.equal(examinationEmailMode(enabledCategories, true), 'enabled');
+    assert.equal(outboundEmailMode(invalidPolicy), 'suppressed');
 
-    const general = await sendExaminationEmail(enabledCategories, {
-      recipient: 'student@example.test', subject: 'General', text: 'Never sent',
-    });
-    const room = await sendExaminationEmail(enabledCategories, {
-      recipient: 'student@example.test', subject: 'Room', text: 'Room delivery', examRoom: true,
-    });
-    const web3forms = await sendSecureNotification(enabledCategories, {
+    const web3forms = await sendSecureNotification(invalidPolicy, {
       mailbox: 'founders@duediligence.ph',
       subject: 'Never sent',
       adminPath: '/admin/',
     });
 
-    assert.equal(general.status, 'suppressed');
-    assert.equal(room.status, 'sent');
     assert.equal(web3forms.status, 'suppressed');
-    assert.equal(providerCalls, 1);
+    assert.equal(providerCalls, 0);
   } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('signed Resend webhook bypasses browser Origin but persists only a verified delivery event', async () => {
-  const originalNow = Date.now;
-  const originalFetch = globalThis.fetch;
-  const timestamp = 1_786_477_200;
-  const signed = await signedDeliveryWebhook({
-    type: 'email.delivered',
-    created_at: '2026-08-12T04:20:00.000Z',
-    data: { email_id: 'resend_result_789', to: ['private@example.test'] },
-  }, { timestamp });
-  let rpcBody = null;
-  Date.now = () => timestamp * 1000;
-  globalThis.fetch = async (url, options) => {
-    assert.match(String(url), /\/rest\/v1\/rpc\/exam_room_record_email_delivery_event_v1$/);
-    rpcBody = JSON.parse(options.body);
-    return new Response(JSON.stringify({ ok: true, matched: true }), {
-      status: 200, headers: { 'Content-Type': 'application/json' },
-    });
-  };
-  try {
-    const result = await worker.fetch(signed.request, {
-      ALLOWED_ORIGIN: 'https://duediligence.ph',
-      SUPABASE_URL: 'https://project.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'service-secret',
-      RESEND_WEBHOOK_SECRET: signed.secret,
-    }, { waitUntil() {} });
-    assert.equal(result.status, 200);
-    assert.deepEqual(rpcBody, {
-      p_provider_id: 'resend_result_789',
-      p_provider_event_id: 'msg_worker_webhook_001',
-      p_provider_event_type: 'email.delivered',
-      p_provider_event_at: '2026-08-12T04:20:00.000Z',
-    });
-    assert.doesNotMatch(JSON.stringify(rpcBody), /private@example.test/);
-  } finally {
-    Date.now = originalNow;
     globalThis.fetch = originalFetch;
   }
 });
@@ -235,42 +94,6 @@ const remedialContext = {
   sourceUrl: 'https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/1/68904',
   authority: 'legacy_client_context',
 };
-
-test('Examination Room request workflow RPCs remain in the Worker allowlist', () => {
-  const allowed = new Set(EXAM_ROOM_REQUEST_FLOW_RPC_FUNCTIONS);
-  const requestFlowFunctions = [
-    'exam_room_request_snapshot',
-    'exam_room_submit_request',
-    'exam_room_claim_request',
-    'exam_room_prepare_quotation',
-    'exam_room_quotation_delivery_context',
-    'exam_room_record_quotation_delivery',
-    'exam_room_payment_proof_upload_context',
-    'exam_room_register_payment_proof',
-    'exam_room_payment_proof_review_context',
-    'exam_room_review_payment_proof',
-  ];
-
-  for (const functionName of requestFlowFunctions) {
-    assert.equal(allowed.has(functionName), true, `${functionName} must remain callable`);
-  }
-});
-
-test('Beadle student direct-entry RPCs remain in the production Worker allowlist', () => {
-  const allowed = new Set(EXAM_ROOM_2026_RPC_FUNCTIONS);
-  assert.equal(allowed.has('exam_room_beadle_student_waiting_room_v1'), true);
-  assert.equal(allowed.has('exam_room_start_beadle_student_attempt_v1'), true);
-});
-
-test('revoked Beadle direct-entry authorization is a terminal 403 response', () => {
-  const error = examRoom2026DatabaseError({
-    message: 'EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED private database detail',
-  });
-  assert.equal(error.code, 'EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED');
-  assert.equal(error.status, 403);
-  assert.match(error.message, /active Beadle assignment is no longer available/i);
-  assert.doesNotMatch(error.message, /private database detail/i);
-});
 
 function modelAssessment(score = 5) {
   return {

@@ -239,23 +239,6 @@ body.dd-auth-pending .dd-auth-bootstrap {
   transform: translateY(-1px);
 }
 
-#site-header.qfs-shell .quorum-room-shortcut {
-  min-width: 154px;
-  min-height: 44px;
-  margin: 0;
-  padding: 11px 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #bc8c2b;
-  border-radius: 8px;
-  color: var(--qfs-navy-950);
-  background: linear-gradient(180deg, var(--qfs-gold-300), var(--qfs-gold-400));
-  box-shadow: 0 8px 22px rgba(197, 160, 89, .25);
-  font: 700 12px/1.2 Inter, sans-serif;
-  cursor: pointer;
-}
-
 #site-header.qfs-shell .qfs-practice-rail {
   grid-column: 1 / -1;
   grid-row: 2;
@@ -452,10 +435,6 @@ body.dd-auth-pending .dd-auth-bootstrap {
   --qfs-nav-icon: url("icons/navigation/headphones.svg");
 }
 
-#site-header.qfs-shell .quorum-drawer-room {
-  --qfs-nav-icon: url("icons/navigation/door-open.svg");
-}
-
 #site-header.qfs-shell .quorum-nav-link:first-of-type {
   margin-top: 14px;
 }
@@ -518,16 +497,6 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   font-size: 12px;
 }
 
-#site-header.qfs-shell .quorum-drawer-room {
-  margin-top: 18px;
-  border: 1px solid #bc8c2b;
-  border-radius: 7px;
-  color: var(--qfs-navy-950);
-  background: linear-gradient(180deg, var(--qfs-gold-300), var(--qfs-gold-400));
-  text-align: center;
-  justify-content: center;
-}
-
 #site-header.qfs-shell .quorum-shell-compat[hidden] {
   display: none !important;
 }
@@ -551,7 +520,6 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
 
 #site-header.qfs-shell :is(
   .brand,
-  .quorum-room-shortcut,
   .qfs-menu-toggle,
   .quorum-nav-close,
   .quorum-nav-link,
@@ -875,10 +843,6 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
 
   #site-header.qfs-shell .brand-name {
     font-size: 14px;
-  }
-
-  #site-header.qfs-shell .quorum-room-shortcut {
-    display: none;
   }
 
   #site-header.qfs-shell .dd2-guest-badge {

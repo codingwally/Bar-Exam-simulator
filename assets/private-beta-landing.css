@@ -296,10 +296,6 @@ body.private-beta-public .dd2-overlay:not(#dd2-native-view):not(.is-open) {
   background: rgba(255, 255, 255, .2);
 }
 
-.pb-chamber-room {
-  border-color: rgba(196, 164, 95, .62);
-}
-
 .pb-header-utilities {
   display: flex;
   align-items: center;

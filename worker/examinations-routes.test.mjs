@@ -506,9 +506,6 @@ test(`${track} AI completion suppresses email without calling a provider or fail
     }), {
       ...env,
       OUTBOUND_EMAIL_MODE: 'enabled',
-      EXAMINATION_EMAIL_MODE: 'enabled',
-      EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
-      EXAMINATION_EMAIL_FROM: 'Due Diligence <support@duediligence.ph>',
       RESEND_API_KEY: 'test-only-resend-key',
       GEMINI_API_KEY: 'test-only-gemini-key',
       GEMINI_MODEL: 'gemini-test',
@@ -575,9 +572,6 @@ test('Human Examiner assignment returns a manual link without calling an email p
     }), {
       ...env,
       OUTBOUND_EMAIL_MODE: 'enabled',
-      EXAMINATION_EMAIL_MODE: 'enabled',
-      EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
-      EXAMINATION_EMAIL_FROM: 'Due Diligence <support@duediligence.ph>',
       RESEND_API_KEY: 'test-only-resend-key',
     });
     const body = await response.json();

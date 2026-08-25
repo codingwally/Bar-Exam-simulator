@@ -4,16 +4,6 @@ const REQUEST_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
 export const DD2026_LIMITS = Object.freeze({
   barEasyAnswerCharacters: 5_000,
   doctrineAnswerCharacters: 3_000,
-  examAnswerCharacters: 20_000,
-  professorCommentCharacters: 5_000,
-  examTitleCharacters: 200,
-  examInstructionsCharacters: 10_000,
-  examDurationMinutesMinimum: 1,
-  examDurationMinutesMaximum: 480,
-  sourceUploadBytes: 10 * 1024 * 1024,
-  sourceUploadPages: 50,
-  rosterUploadBytes: 2 * 1024 * 1024,
-  rosterEntries: 500,
   verdictPdfBytes: 25 * 1024 * 1024,
 });
 
@@ -24,9 +14,6 @@ export const DD2026_DEFAULT_FLAGS = Object.freeze({
   CHAIR_CASES_ENABLED: true,
   DOCTRINES_ENABLED: true,
   ANCHOR_CASE_DIGESTS_ENABLED: true,
-  EXAMINATION_ROOM_ENABLED: true,
-  EXAMINATION_ROOM_2_ENABLED: false,
-  EXAM_GOOGLE_BACKUP_ENABLED: true,
   AI_PREPARED_BETA_BADGE: false,
   CONTENT_HUMAN_REVIEW_REQUIRED: false,
 });
@@ -358,23 +345,15 @@ export function doctrinePersistencePayload(userId, contentId, normalized, result
   };
 }
 
-export function formulaNeutralizedCell(value) {
-  const text = String(value ?? '');
-  return /^[=+\-@]/.test(text) ? `'${text}` : text;
-}
-
 export function dd2026DatabaseError(error) {
   const message = String(error?.message || '');
   const code = [
     'DD2026_AUTH_REQUIRED', 'DD2026_FEATURE_DISABLED', 'DD2026_CONTENT_NOT_FOUND',
     'DD2026_VERDICT_PDF_DISABLED', 'DD2026_PREMIUM_REQUIRED',
-    'DD2026_VERDICT_RESULT_NOT_FOUND', 'EXAM_ROOM_ADMIN_REQUIRED',
-    'EXAM_ROOM_PROFESSOR_REQUIRED', 'EXAM_ROOM_CLASS_NOT_FOUND',
-    'EXAM_ROOM_EXAM_NOT_FOUND', 'EXAM_ROOM_ATTEMPT_NOT_FOUND',
-    'EXAM_ROOM_SEALED', 'EXAM_ROOM_FINAL_GRADES_REQUIRED',
+    'DD2026_VERDICT_RESULT_NOT_FOUND',
   ].find((candidate) => message.includes(candidate));
   if (!code) return error;
-  const status = /AUTH|ADMIN|PROFESSOR|PREMIUM/.test(code) ? 403
+  const status = /AUTH|PREMIUM/.test(code) ? 403
     : /NOT_FOUND/.test(code) ? 404 : 409;
   const publicMessages = {
     DD2026_AUTH_REQUIRED: 'Sign in to continue.',
@@ -383,13 +362,6 @@ export function dd2026DatabaseError(error) {
     DD2026_VERDICT_PDF_DISABLED: 'Analytics PDF export is temporarily unavailable.',
     DD2026_PREMIUM_REQUIRED: 'Analytics PDF export is temporarily unavailable for this account.',
     DD2026_VERDICT_RESULT_NOT_FOUND: 'The requested Analytics result was not found.',
-    EXAM_ROOM_ADMIN_REQUIRED: 'Administrator authorization is required.',
-    EXAM_ROOM_PROFESSOR_REQUIRED: 'An activated professor account is required.',
-    EXAM_ROOM_CLASS_NOT_FOUND: 'The classroom could not be found.',
-    EXAM_ROOM_EXAM_NOT_FOUND: 'The examination could not be found.',
-    EXAM_ROOM_ATTEMPT_NOT_FOUND: 'The examination attempt could not be found.',
-    EXAM_ROOM_SEALED: 'This examination is sealed and cannot be changed.',
-    EXAM_ROOM_FINAL_GRADES_REQUIRED: 'Every submitted answer must have a final grade before release.',
   };
   return new DD2026ValidationError(code, publicMessages[code], status);
 }

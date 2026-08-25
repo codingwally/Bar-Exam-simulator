@@ -864,28 +864,7 @@
       const url = new URL(String(value || ''), location.origin);
       if (url.origin !== location.origin || url.pathname !== location.pathname) return '';
       if (/^#[a-z0-9][a-z0-9-]{0,64}$/i.test(url.hash)) return url.hash;
-      if (!url.hash.startsWith('#examination-room?')) return '';
-      const parameters = new URLSearchParams(url.hash.slice('#examination-room?'.length));
-      const allowed = new Set(['exam', 'submission', 'question', 'role']);
-      const parameterKeys = [...parameters.keys()];
-      if (parameterKeys.some((key) => !allowed.has(key))
-          || new Set(parameterKeys).size !== parameterKeys.length) return '';
-      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      const examId = String(parameters.get('exam') || '');
-      const submissionId = String(parameters.get('submission') || '');
-      const question = String(parameters.get('question') || '');
-      const role = String(parameters.get('role') || '');
-      if (!uuid.test(examId) || (submissionId && !uuid.test(submissionId))
-          || (question && (!/^\d{1,3}$/.test(question) || Number(question) < 1 || Number(question) > 200))
-          || (role && !['student', 'professor'].includes(role))
-          || (question && !submissionId)
-          || (submissionId && role !== 'professor')
-          || (role === 'student' && (submissionId || question))) return '';
-      const safe = new URLSearchParams({ exam: examId });
-      if (submissionId) safe.set('submission', submissionId);
-      if (question) safe.set('question', question);
-      if (role) safe.set('role', role);
-      return `#examination-room?${safe}`;
+      return '';
     } catch {
       return '';
     }
@@ -956,7 +935,7 @@
   }
 
   function returnFromEntry() {
-    const protectedRoute = ['mock-bar', 'subject-matter', 'bar-feels', 'quorum', 'examination-room']
+    const protectedRoute = ['mock-bar', 'subject-matter', 'bar-feels', 'quorum']
       .includes(location.hash.replace(/^#/, ''));
     closeEntry();
     if (!state.session?.access_token) {
@@ -995,7 +974,7 @@
 
   function syncEntryWithHistoryRoute() {
     const routeName = location.hash.replace(/^#/, '').split('?')[0];
-    const protectedRoute = ['mock-bar', 'subject-matter', 'bar-feels', 'quorum', 'examination-room']
+    const protectedRoute = ['mock-bar', 'subject-matter', 'bar-feels', 'quorum']
       .includes(routeName);
     if (protectedRoute && !state.session?.access_token) {
       showEntry({ routeBound: true, returnHash: location.hash });

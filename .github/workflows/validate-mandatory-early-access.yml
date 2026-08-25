@@ -83,7 +83,7 @@ jobs:
           node scripts/test-complete-beta-release.mjs
           node scripts/test-duediligence-2026-frontend.mjs
           node scripts/test-examinations.mjs
-          node scripts/test-examination-room-2-frontend.mjs
+          node scripts/test-feature-decommission-boundary.mjs
           node scripts/test-pages-artifact.mjs
 
       - name: Build and verify sanitized Pages artifact

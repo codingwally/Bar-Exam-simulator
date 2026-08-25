@@ -6,12 +6,20 @@ const root = process.cwd();
 const migrationName = '20260811003100_examination_room_2_beta.sql';
 const migrationPath = path.join(root, 'supabase', 'migrations', migrationName);
 const stalePath = path.join(root, 'supabase', 'migrations', '20260809141407_examination_room_2_beta.sql');
+const requestGatePath = path.join(
+  root,
+  'supabase',
+  'migrations',
+  '20260825140020_examination_room_registered_professor_request_gate.sql',
+);
 
 assert.equal(fs.existsSync(migrationPath), true, 'ordered Examination Room 2.0 migration must exist');
 assert.equal(fs.existsSync(stalePath), false, 'pre-foundation empty migration stub must not remain');
+assert.equal(fs.existsSync(requestGatePath), true, 'registered-Professor room-request gate migration must exist');
 
 const sql = fs.readFileSync(migrationPath, 'utf8');
 const lower = sql.toLowerCase();
+const requestGateSql = fs.readFileSync(requestGatePath, 'utf8');
 
 assert.match(lower, /^-- duediligence examination room 2\.0 beta\./);
 assert.match(lower, /begin;/);
@@ -352,7 +360,19 @@ const operator = functionBlock('exam_room_is_operator_v2');
 assert.doesNotMatch(operator, /exam_room_is_admin/, 'global Admin is metadata-only and must not inherit operator power');
 const professorAuthority = functionBlock('exam_room_is_professor');
 assert.match(professorAuthority, /exam_room_professors/);
+assert.match(professorAuthority, /p\.status = 'active'/,
+  'only an active Professor registration may authorize the Professor workspace');
 assert.doesNotMatch(professorAuthority, /exam_room_is_admin/, 'Admin status must not synthesize Professor authority');
+assert.match(requestGateSql, /create or replace function public\.exam_room_submit_request/);
+assert.match(requestGateSql, /perform public\.exam_room_require_professor\(p_user_id\);/,
+  'room-request submission must reuse the active Professor authority check');
+assert.ok(
+  requestGateSql.indexOf('perform public.exam_room_require_professor(p_user_id);')
+    < requestGateSql.indexOf('insert into public.exam_room_requests'),
+  'Professor authority must be checked before a room request can be inserted',
+);
+assert.match(requestGateSql, /revoke all on function public\.exam_room_submit_request[\s\S]*from public, anon, authenticated/);
+assert.match(requestGateSql, /grant execute on function public\.exam_room_submit_request[\s\S]*to service_role/);
 const rosterOperator = functionBlock('exam_room_can_manage_roster_v2');
 assert.doesNotMatch(rosterOperator, /exam_room_is_admin/, 'global Admin must not inherit roster mutation power');
 const examAccess = functionBlock('exam_room_exam_access_v2');

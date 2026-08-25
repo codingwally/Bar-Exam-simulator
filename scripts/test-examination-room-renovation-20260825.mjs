@@ -17,6 +17,7 @@ const [
   workerEntry,
   migration,
   indexMigration,
+  requestGateMigration,
   buildScript,
 ] = await Promise.all([
   read('assets/duediligence-2026.js'),
@@ -28,6 +29,7 @@ const [
   read('worker/index.mjs'),
   read('supabase/migrations/20260825183000_examination_room_professor_access_controls.sql'),
   read('supabase/migrations/20260825184500_examination_room_professor_access_control_indexes.sql'),
+  read('supabase/migrations/20260825140020_examination_room_registered_professor_request_gate.sql'),
   read('scripts/build-pages-artifact.mjs'),
 ]);
 
@@ -42,6 +44,31 @@ assert.doesNotMatch(entry, /\['(?:beadle|exam_administrator)'/,
 assert.match(entry, /authenticated email used to enter the examination/);
 assert.match(entry, /end a live session or block re-entry/);
 assert.match(entry, /Camera collection is off/);
+assert.match(entry, /const professorRegistered = authenticated && state\.exam\.portal\?\.roles\?\.professor === true/);
+assert.match(entry, /disabled aria-disabled="true"/,
+  'the Professor card must be a native disabled control until active registration is verified');
+assert.match(entry, /id="dd26-activate-professor-invitation"/,
+  'approved invitation activation must remain separate from the locked Professor workspace card');
+
+const roleSelectionStart = frontend.indexOf('async function selectExamRole');
+const roleSelectionEnd = frontend.indexOf('function announceExamStatus', roleSelectionStart);
+const roleSelection = frontend.slice(roleSelectionStart, roleSelectionEnd);
+assert.match(roleSelection, /role === 'professor'[\s\S]*state\.exam\.portal\?\.roles\?\.professor !== true/,
+  'a stale or scripted Professor selection must still fail closed');
+
+const assistantStart = frontend.indexOf('function professorAssistantConversation');
+const professorStart = frontend.indexOf('function professorSection', assistantStart);
+const professorEnd = frontend.indexOf('function professorClass', professorStart);
+const assistant = frontend.slice(assistantStart, professorStart);
+const professor = frontend.slice(professorStart, professorEnd);
+assert.match(assistant, /data-dd26-assistant-inbox/);
+assert.match(assistant, /Assistant Inbox/);
+assert.match(assistant, /Professor only/);
+assert.match(professor, /<details class="dd26-room-setup">/);
+assert.match(professor, /return `\$\{setup\}<div class="dd26-professor-layout">/,
+  'Room setup and access must be first and minimized before the Professor workspace');
+assert.match(professor, /\$\{professorAssistantInbox\(portal\)\}/,
+  'the Assistant Inbox must appear only as part of the Professor layout');
 
 const studentPortalStart = frontend.indexOf('function studentSection(portal)');
 const studentPortalEnd = frontend.indexOf('function activationSection(portal)', studentPortalStart);
@@ -95,6 +122,10 @@ for (const indexName of [
   assert.match(indexMigration, new RegExp(indexName));
 }
 assert.doesNotMatch(indexMigration, /bar_simulation|question_rotation|subject_matter/i);
+assert.match(requestGateMigration, /perform public\.exam_room_require_professor\(p_user_id\);/,
+  'room requests must enforce active Professor registration in the database');
+assert.match(requestGateMigration, /revoke all on function public\.exam_room_submit_request[\s\S]*from public, anon, authenticated/);
+assert.match(requestGateMigration, /grant execute on function public\.exam_room_submit_request[\s\S]*to service_role/);
 
 assert.match(frontend, /allowUncoordinatedWrite: false/);
 assert.doesNotMatch(frontend, /lease\.readonly\s*=\s*false/);
@@ -125,6 +156,11 @@ assert.match(renovationCss, /--dd26-paper: #f4efe5/);
 assert.match(renovationCss, /--dd26-navy: #0b243d/);
 assert.match(renovationCss, /--dd26-gold: #aa8136/);
 assert.match(renovationCss, /font-family: 'Times New Roman', Times, serif/);
+assert.match(renovationCss, /\.dd26-role-card:disabled[\s\S]*cursor: not-allowed/);
+assert.match(renovationCss, /\.dd26-role-card:disabled:hover,[\s\S]*transform: none/,
+  'the locked Professor card must not retain the enabled hover treatment');
+assert.match(renovationCss, /\.dd26-professor-layout[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(340px, 390px\)/);
+assert.match(renovationCss, /\.dd26-assistant-inbox[\s\S]*position: sticky/);
 assert.match(renovationCss, /border-radius: 50%/,
   'the question navigator retains a circular, scannable target');
 assert.match(renovationCss, /\.dd26-choice strong[\s\S]*color: var\(--dd26-navy\)/,

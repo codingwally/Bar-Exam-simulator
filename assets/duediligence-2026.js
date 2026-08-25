@@ -119,6 +119,7 @@
       tabReturnPending: false,
       lastIntegrityNoticeAt: 0,
       blurIncidentTimer: null,
+      assistantMessages: [],
     },
   };
 
@@ -426,6 +427,7 @@
     beginExamPortalLifecycle({ clearData: true });
     if (previousUserId && previousUserId !== normalizedUserId) {
       state.exam.intentRole = null;
+      state.exam.assistantMessages = [];
       clearBeadleStudentHandoff();
     }
     return true;
@@ -1117,15 +1119,30 @@
 
   function examEntry() {
     const authenticated = isAuthenticated();
+    const professorRegistered = authenticated && state.exam.portal?.roles?.professor === true;
     const cards = [
-      ['professor', 'Professor', 'Prepare and supervise an examination', 'Create or resume an examination, publish it, see the authenticated email of every student who enters, manage access, grade, and release results.'],
-      ['student', 'Student', 'Enter and take an examination', 'Sign in with the rostered email, enter the examination code, complete the readiness check, answer, review, and submit with a receipt.'],
+      ['professor', 'Professor', 'Prepare and supervise an examination', 'Create or resume an examination, publish it, see the authenticated email of every student who enters, manage access, grade, and release results.', professorRegistered, professorRegistered ? 'Open Professor workspace' : 'Registered Professors only'],
+      ['student', 'Student', 'Enter and take an examination', 'Sign in with the rostered email, enter the examination code, complete the readiness check, answer, review, and submit with a receipt.', true, 'Open Student workspace'],
     ];
-    return `<div class="dd26-shell dd26-examination-room"><header class="dd26-header"><div><div class="dd26-kicker">Due Diligence</div><h1>Examination Room</h1><p>Choose the workspace that matches what you need to do now.</p></div><div class="dd26-entry-mark">Every official action returns visible proof: a saved time, publication record, access event, grade version, or submission receipt.</div></header><main aria-labelledby="dd26-entry-title"><h2 class="dd26-visually-hidden" id="dd26-entry-title">Choose an Examination Room role</h2><div class="dd26-role-grid">${cards.map(([id, title, subtitle, description], index) => `<button class="dd26-role-card" type="button" data-dd26-exam-role="${id}"><span class="dd26-role-number" aria-hidden="true">0${index + 1}</span><span><strong>${title}</strong><em>${subtitle}</em><small>${description}</small><span class="dd26-role-cta">Open ${title} workspace</span></span></button>`).join('')}</div><div class="dd26-notice"><strong>${authenticated ? 'Signed in and ready.' : 'Sign-in is required to continue.'}</strong> ${authenticated ? 'Choose Professor or Student. The server will verify your access to the selected examination.' : 'Use the account associated with your Professor invitation or class roster.'}</div>${state.exam.entryExamId ? `<div class="dd26-deep-link"><span>Examination link detected</span><code>${escapeHtml(state.exam.entryExamId)}</code><p>The link identifies the examination only. It does not grant access by itself.</p></div>` : ''}<p class="dd26-privacy"><strong>Access notice.</strong> The Professor can see the authenticated email used to enter the examination and may end a live session or block re-entry. Active answers remain private until submission. Focus changes are recorded only when the published integrity settings require it. Camera collection is off.</p></main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
+    const accessNotice = !authenticated
+      ? '<strong>Sign in before choosing a workspace.</strong> Professor access appears only after the server verifies an active Professor registration.'
+      : professorRegistered
+        ? '<strong>Professor registration verified.</strong> Professor and Student workspaces are available for this account.'
+        : '<strong>Professor workspace locked.</strong> This signed-in account is not registered as an active Professor. Student access remains available.';
+    const activation = authenticated && !professorRegistered
+      ? '<div class="dd26-professor-activation"><div><strong>Have an approved Professor invitation?</strong><p>Activate the invitation separately. It does not open the Professor workspace until the server registers this account.</p></div><button class="dd26-button" id="dd26-activate-professor-invitation" type="button">Activate Professor invitation</button></div>'
+      : '';
+    return `<div class="dd26-shell dd26-examination-room"><header class="dd26-header"><div><div class="dd26-kicker">Due Diligence</div><h1>Examination Room</h1><p>Choose the workspace that matches what you need to do now.</p></div><div class="dd26-entry-mark">Every official action returns visible proof: a saved time, publication record, access event, grade version, or submission receipt.</div></header><main aria-labelledby="dd26-entry-title"><h2 class="dd26-visually-hidden" id="dd26-entry-title">Choose an Examination Room role</h2><div class="dd26-role-grid">${cards.map(([id, title, subtitle, description, enabled, cta], index) => `<button class="dd26-role-card" type="button" data-dd26-exam-role="${id}"${enabled ? '' : ' disabled aria-disabled="true"'}><span class="dd26-role-number" aria-hidden="true">0${index + 1}</span><span><strong>${title}</strong><em>${subtitle}</em><small>${description}</small><span class="dd26-role-cta">${cta}</span></span></button>`).join('')}</div><div class="dd26-notice">${accessNotice}</div>${activation}${state.exam.entryExamId ? `<div class="dd26-deep-link"><span>Examination link detected</span><code>${escapeHtml(state.exam.entryExamId)}</code><p>The link identifies the examination only. It does not grant access by itself.</p></div>` : ''}<p class="dd26-privacy"><strong>Access notice.</strong> The Professor can see the authenticated email used to enter the examination and may end a live session or block re-entry. Active answers remain private until submission. Focus changes are recorded only when the published integrity settings require it. Camera collection is off.</p></main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
   }
 
   function bindExamEntry() {
-    document.querySelectorAll('[data-dd26-exam-role]').forEach((button) => button.addEventListener('click', () => selectExamRole(button.dataset.dd26ExamRole)));
+    document.querySelectorAll('[data-dd26-exam-role]:not(:disabled)').forEach((button) => button.addEventListener('click', () => selectExamRole(button.dataset.dd26ExamRole)));
+    document.getElementById('dd26-activate-professor-invitation')?.addEventListener('click', openProfessorActivationDialog);
+  }
+
+  function openProfessorActivationDialog() {
+    openDialog(`<div class="dd26-label">Professor registration</div><h2>Activate an approved Professor invitation</h2><p>The invitation is tied to the exact signed-in email and can be used once. The Professor workspace opens only after the server confirms the registration.</p><label class="dd26-field"><span>Professor invitation key</span><input class="dd26-input" id="dd26-activation-key" type="password" autocomplete="one-time-code"></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-redeem-activation" type="button">Activate Professor access</button><button class="dd26-button" data-dd26-close-dialog type="button">Back</button></div>`);
+    document.getElementById('dd26-redeem-activation')?.addEventListener('click', redeemActivation);
   }
 
   async function selectExamRole(role) {
@@ -1141,13 +1158,21 @@
     }
     const lifecycle = captureExamPortalLifecycle();
     if (!lifecycle) return false;
-    if (!state.exam.portal) {
+    if (!state.exam.portal || role === 'professor') {
       const payload = await api('/exam-room/query', { operation: 'portal' });
       if (!isCurrentExamPortalLifecycle(lifecycle)) return false;
       const portal = payload.result || { roles: {}, classes: [], studentExams: [], beadleExams: [] };
       await enrichProfessorExamIntents(portal);
       if (!isCurrentExamPortalLifecycle(lifecycle)) return false;
       state.exam.portal = portal;
+    }
+    if (role === 'professor' && state.exam.portal?.roles?.professor !== true) {
+      state.exam.intentRole = null;
+      state.exam.section = 'entry';
+      renderExamRoom();
+      announceExamStatus('Professor access requires an active registered Professor account.');
+      global.toast?.('Professor access requires an active registered Professor account.', 'warn');
+      return false;
     }
     if (role !== 'student') await loadRoomRequests()
       .catch((error) => recoverRoomRequestsAvailability(error, false, lifecycle));
@@ -1167,7 +1192,9 @@
 
   function examSection(portal) {
     if (state.exam.section === 'student') return `${examRoleGuide('student')}${studentSection(portal)}`;
-    if (state.exam.section === 'professor') return `${examRoleGuide('professor')}${portal.roles?.professor ? professorSection(portal) : activationSection(portal)}`;
+    if (state.exam.section === 'professor') return portal.roles?.professor === true
+      ? professorSection(portal)
+      : '<section class="dd26-card"><div class="dd26-label">Professor access</div><h2>Active Professor registration required</h2><p>This workspace remains closed until Due Diligence verifies this signed-in account as an active Professor.</p></section>';
     if (state.exam.section === 'beadle') return `${examRoleGuide('beadle')}${roomRequestLoadStatus()}${beadleSection(portal)}`;
     if (state.exam.section === 'exam_administrator') return `${examRoleGuide('exam_administrator')}${examAdministratorSection()}`;
     return '<section class="dd26-card"><div class="dd26-empty">Choose Professor or Student.</div></section>';
@@ -1717,6 +1744,87 @@
     }).join('')}</div>`;
   }
 
+  function professorAssistantConversation() {
+    const history = state.exam.assistantMessages.map((message) => `<article class="dd26-assistant-message"><strong>${escapeHtml(message.question)}</strong><p>${escapeHtml(message.response)}</p><small>Read-only guidance · ${escapeHtml(formatDate(message.at))}</small></article>`).join('');
+    return `<article class="dd26-assistant-message is-introduction"><strong>What you can do</strong><ul><li>Explain the current Professor page.</li><li>Open Room setup and access.</li><li>Find the examination list and next ordinary action.</li><li>Show where student emails, kick-out, and block controls appear.</li></ul><small>Professor-only guidance · no official action is taken here</small></article>${history}`;
+  }
+
+  function professorAssistantInbox(portal) {
+    const roomCount = (portal.classes || []).length;
+    return `<aside class="dd26-assistant-inbox" data-dd26-assistant-inbox aria-labelledby="dd26-assistant-inbox-title"><details class="dd26-assistant-panel" open><summary><span><span class="dd26-label">Assistant Proctor</span><strong id="dd26-assistant-inbox-title">Assistant Inbox</strong></span><span class="dd26-status">Professor only</span></summary><div class="dd26-assistant-body"><p class="dd26-assistant-scope">Guidance and navigation for this Professor workspace. It reads only the owner-scoped information already visible here and cannot publish, grade, release, kick, or block.</p><div class="dd26-assistant-thread" id="dd26-assistant-thread" role="log" aria-live="polite" aria-relevant="additions text">${professorAssistantConversation()}</div><div class="dd26-assistant-quick-actions" aria-label="Assistant quick actions"><span class="dd26-label">Quick actions</span><button class="dd26-button" data-dd26-assistant-action="explain" type="button">Explain this page</button><button class="dd26-button" data-dd26-assistant-action="setup" type="button">Open room setup</button><button class="dd26-button" data-dd26-assistant-action="examinations" type="button">Find an examination</button><button class="dd26-button" data-dd26-assistant-action="student-access" type="button">Student access controls</button></div><form class="dd26-assistant-form" id="dd26-assistant-form"><label class="dd26-field"><span>Ask about this workspace</span><input class="dd26-input" id="dd26-assistant-question" maxlength="240" autocomplete="off" placeholder="For example: Where do I block a student?"></label><button class="dd26-button primary" type="submit">Ask Assistant</button></form><p class="dd26-assistant-privacy">This inbox is deterministic and session-only. Messages are not sent to Gemini or saved as an official record. ${escapeHtml(roomCount)} room${roomCount === 1 ? '' : 's'} currently available.</p></div></details></aside>`;
+  }
+
+  function professorAssistantGuidance(action, portal = state.exam.portal || {}) {
+    const classes = portal.classes || [];
+    const exams = classes.flatMap((classroom) => classroom.exams || []);
+    const published = exams.filter((exam) => Boolean(exam.currentPublicationId || exam.publicationId || exam.publishedVersion));
+    if (action === 'setup') {
+      return {
+        response: 'Room setup and access is the first Professor section. Expand it to request another room or use a one-time key.',
+        target: 'setup',
+      };
+    }
+    if (action === 'examinations') {
+      return classes.length
+        ? { response: `${classes.length} Examination Room${classes.length === 1 ? ' is' : 's are'} available. Choose the relevant examination and use its primary action.`, target: 'examinations' }
+        : { response: 'No Examination Room is open yet. Expand Room setup and access to begin.', target: 'setup' };
+    }
+    if (action === 'student-access') {
+      return published.length
+        ? { response: 'Open a published examination with Enter virtual room. The live roster shows each authenticated student email and the ordinary kick-out, block, and unblock controls.', target: 'monitor' }
+        : { response: 'Student access controls appear only after an examination is published. Continue preparation first; the live room will then show authenticated emails and kick-out or block controls.', target: 'examinations' };
+    }
+    if (action === 'grading') {
+      return { response: 'Choose a closed examination and use Grade submissions. Grades and result release remain ordinary Professor actions and are never performed by this inbox.', target: 'examinations' };
+    }
+    return {
+      response: 'This page begins with Room setup and access, followed by the Professor workflow and your examinations. The Assistant Inbox can explain or navigate, while every official action stays in the ordinary controls.',
+      target: null,
+    };
+  }
+
+  function professorAssistantActionForQuestion(question) {
+    const normalized = String(question || '').toLowerCase();
+    if (/\b(?:kick|block|unblock|student|candidate|email|monitor|live room)\b/.test(normalized)) return 'student-access';
+    if (/\b(?:grade|grading|score|result|release)\b/.test(normalized)) return 'grading';
+    if (/\b(?:setup|access|invitation|key|another room|request room)\b/.test(normalized)) return 'setup';
+    if (/\b(?:exam|examination|class|room|find|open)\b/.test(normalized)) return 'examinations';
+    return 'explain';
+  }
+
+  function focusProfessorAssistantTarget(target) {
+    let element = null;
+    if (target === 'setup') {
+      const setup = document.querySelector('.dd26-room-setup');
+      if (setup) setup.open = true;
+      element = setup?.querySelector('summary');
+    } else if (target === 'monitor') {
+      element = document.querySelector('[data-dd26-monitor-exam]');
+    } else if (target === 'examinations') {
+      element = document.querySelector('.dd26-professor-exam-list') || document.querySelector('.dd26-professor-focus');
+    }
+    element?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    element?.focus?.({ preventScroll: true });
+  }
+
+  function runProfessorAssistant(action, question) {
+    if (state.exam.section !== 'professor' || state.exam.portal?.roles?.professor !== true) return false;
+    const guidance = professorAssistantGuidance(action);
+    state.exam.assistantMessages.push({
+      question: String(question || 'Assistant request').slice(0, 240),
+      response: guidance.response,
+      at: new Date().toISOString(),
+    });
+    state.exam.assistantMessages = state.exam.assistantMessages.slice(-8);
+    const thread = document.getElementById('dd26-assistant-thread');
+    if (thread) {
+      thread.innerHTML = professorAssistantConversation();
+      thread.scrollTop = thread.scrollHeight;
+    }
+    focusProfessorAssistantTarget(guidance.target);
+    return true;
+  }
+
   function professorSection(portal) {
     const classes = portal.classes || [];
     const archivedProfessorExams = (Array.isArray(portal.archivedProfessorExams)
@@ -1731,8 +1839,9 @@
     const officialRecords = archivedProfessorExams.length
       ? `<section class="dd26-card"><div class="dd26-question-meta"><div><div class="dd26-label">Permanent Professor record</div><h2>Official grade archive</h2></div><span class="dd26-status">${escapeHtml(archivedProfessorExams.length)} preserved</span></div><p>Completed exams removed from the workspace remain available here. Their submissions, saved grades, comments, result delivery status, analytics, and workbook exports are never deleted.</p><div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Examination</th><th>Room</th><th>Status</th><th>Action</th></tr></thead><tbody>${archivedProfessorExams.map((exam) => `<tr><td><strong>${escapeHtml(exam.title || 'Past examination')}</strong><br><small>${escapeHtml(formatDate(exam.sealedAt || exam.hardClosesAt))}</small></td><td>${escapeHtml(exam.classroomTitle || 'Examination Room')}</td><td><span class="dd26-status">${escapeHtml(exam.status || 'preserved')}</span></td><td><button class="dd26-button primary" data-dd26-results-dashboard="${escapeHtml(exam.examId)}" type="button">Open grade record</button></td></tr>`).join('')}</tbody></table></div></section>`
       : '';
-    const setup = `<section class="dd26-card"><details class="dd26-room-setup" ${classes.length ? '' : 'open'}><summary>Room setup and access</summary><p>Use a new one-time key only when opening another Examination Room.</p><label class="dd26-field"><span>Professor invitation key</span><input class="dd26-input" id="dd26-activation-key" type="password" autocomplete="one-time-code"><small class="dd26-help">The key is tied to this signed-in Professor account and can be used once.</small></label><div class="dd26-actions"><button class="dd26-button" id="dd26-redeem-activation" type="button">Open another room</button><button class="dd26-button primary" id="dd26-request-room" type="button">Request another Examination Room</button><button class="dd26-button" data-dd26-refresh-room-requests type="button">Refresh request status</button></div></details></section>`;
-    return `${workspace}${officialRecords}${requestStatus}${setup}${roomRequestList(requests, 'professor', 'Your room requests')}`;
+    const setup = `<section class="dd26-card dd26-professor-setup-card"><details class="dd26-room-setup"><summary><span>Room setup and access</span><small>${classes.length ? 'Minimized · expand when you need another room' : 'Expand to open your first room'}</small></summary><p>Use a new one-time key only when opening another Examination Room.</p><label class="dd26-field"><span>Professor invitation key</span><input class="dd26-input" id="dd26-activation-key" type="password" autocomplete="one-time-code"><small class="dd26-help">The key is tied to this signed-in Professor account and can be used once.</small></label><div class="dd26-actions"><button class="dd26-button" id="dd26-redeem-activation" type="button">Open another room</button><button class="dd26-button primary" id="dd26-request-room" type="button">Request another Examination Room</button><button class="dd26-button" data-dd26-refresh-room-requests type="button">Refresh request status</button></div></details></section>`;
+    const professorMain = `${examRoleGuide('professor')}${workspace}${officialRecords}${requestStatus}${roomRequestList(requests, 'professor', 'Your room requests')}`;
+    return `${setup}<div class="dd26-professor-layout"><div class="dd26-professor-main">${professorMain}</div>${professorAssistantInbox(portal)}</div>`;
   }
 
   function professorClass(classroom) {
@@ -1930,6 +2039,21 @@
   }
 
   function bindExamSection() {
+    document.querySelectorAll('[data-dd26-assistant-action]').forEach((button) => button.addEventListener('click', () => {
+      runProfessorAssistant(button.dataset.dd26AssistantAction, button.textContent.trim());
+    }));
+    document.getElementById('dd26-assistant-form')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const input = document.getElementById('dd26-assistant-question');
+      const question = String(input?.value || '').trim();
+      if (!question) {
+        input?.focus();
+        return;
+      }
+      runProfessorAssistant(professorAssistantActionForQuestion(question), question);
+      input.value = '';
+      input.focus();
+    });
     const openBookOption = document.querySelector('#dd26-exam-integrity option[value="custom"]');
     if (openBookOption) {
       openBookOption.value = 'open_book';
@@ -2309,6 +2433,7 @@
     try {
       const result = await command({ operation: 'redeem_activation', activationKey: value('dd26-activation-key', false) });
       global.toast?.(result?.roomTitle ? `${result.roomTitle} is ready.` : 'Examination Room opened.', 'ok');
+      closeDialog();
       await refreshExamPortal('professor');
     } catch (error) { global.toast?.(error.message, 'warn'); }
   }

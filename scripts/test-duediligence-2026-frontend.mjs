@@ -822,7 +822,7 @@ assert.match(js, /readonly aria-readonly="true"/);
 assert.doesNotMatch(js, /operation: '(?:open_dispute|dispute_view|close_dispute)'/,
   'the public bundle must not expose the retired broad dispute viewer');
 assert.match(js, /open_book/);
-assert.match(js, /operation: 'live_status_v2'/);
+assert.match(js, /operation: 'live_status_v3'/);
 assert.match(js, /data-dd26-monitor-exam/);
 assert.match(js, /visibility_exit/);
 assert.match(js, /focus_exit/);
@@ -839,7 +839,14 @@ assert.match(js, /visibilitychange/);
 assert.match(js, /fullscreenchange/);
 assert.match(js, /not proof by themselves/);
 assert.doesNotMatch(js, /leak[- ]?proof/i);
-assert.match(js, /\['professor', 'Professor'[\s\S]*\['beadle', 'Beadle'[\s\S]*\['student', 'Student'[\s\S]*\['exam_administrator', 'Exam Administrator'/);
+const examinationRoomEntry = js.slice(
+  js.indexOf('function examEntry()'),
+  js.indexOf('function bindExamEntry()'),
+);
+assert.match(examinationRoomEntry, /\['professor', 'Professor'/);
+assert.match(examinationRoomEntry, /\['student', 'Student'/);
+assert.doesNotMatch(examinationRoomEntry, /\['(?:beadle|exam_administrator)'/,
+  'the public Examination Room entry must expose only Professor and Student');
 assert.match(js, /Submission pending — not yet received by Due Diligence/);
 assert.match(js, /Saved on this device/);
 assert.match(js, /Synced at/);

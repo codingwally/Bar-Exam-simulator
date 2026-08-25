@@ -1058,7 +1058,7 @@
       bindExamEntry();
       return;
     }
-    app().innerHTML = `<div class="dd26-shell"><button class="dd26-button dd26-exam-home-button" id="dd26-exam-role-home" type="button"><span aria-hidden="true">←</span> Return to Examination Room home</button><header class="dd26-header"><div><div class="dd26-kicker">Law school examination</div><h1>Examination Room</h1><p>One clear place to make, prepare, take, and grade a class examination.</p></div></header><main id="dd26-exam-main" tabindex="-1">${examSection(portal)}</main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
+    app().innerHTML = `<div class="dd26-shell dd26-examination-room"><button class="dd26-button dd26-exam-home-button" id="dd26-exam-role-home" type="button">Return to Examination Room home</button><header class="dd26-header"><div><div class="dd26-kicker">Law school examination</div><h1>Examination Room</h1><p>A quiet, reliable place to prepare, take, monitor, grade, and release a class examination.</p></div></header><main id="dd26-exam-main" tabindex="-1">${examSection(portal)}</main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
     bindExamSection();
     document.getElementById('dd26-exam-role-home')?.addEventListener('click', returnToExaminationRoomHome);
     if (activeAttempt) {
@@ -1118,12 +1118,10 @@
   function examEntry() {
     const authenticated = isAuthenticated();
     const cards = [
-      ['professor', 'Professor', 'Request or make an examination', 'Request an Examination Room, prepare the questions and rules, publish, and grade.'],
-      ['beadle', 'Beadle', 'Upload and confirm the class list', 'Use the invitation from the Professor, upload or paste the class list, review it once, and finish.'],
-      ['student', 'Student', 'Take the examination', 'Sign in, enter the class examination code, answer, review, and submit.'],
-      ['exam_administrator', 'Exam Administrator', 'Manage assigned Examination Rooms', 'Prepare quotations, issue provisional room keys, and review payment only for assigned requests.'],
+      ['professor', 'Professor', 'Prepare and supervise an examination', 'Create or resume an examination, publish it, see the authenticated email of every student who enters, manage access, grade, and release results.'],
+      ['student', 'Student', 'Enter and take an examination', 'Sign in with the rostered email, enter the examination code, complete the readiness check, answer, review, and submit with a receipt.'],
     ];
-    return `<div class="dd26-shell"><header class="dd26-header"><div><div class="dd26-kicker">Due Diligence / Law school examinations</div><h1>Examination Room</h1><p>Choose your role. Each choice opens one simple class flow.</p></div><span class="dd26-beta">2.0 beta</span></header><main aria-labelledby="dd26-entry-title"><h2 class="dd26-visually-hidden" id="dd26-entry-title">Choose an Examination Room role</h2><div class="dd26-role-grid">${cards.map(([id, title, subtitle, description], index) => `<button class="dd26-role-card" type="button" data-dd26-exam-role="${id}"><span class="dd26-role-number" aria-hidden="true">0${index + 1}</span><span><strong>${title}</strong><em>${subtitle}</em><small>${description}</small>${id === 'professor' ? '<span class="dd26-role-cta">Request an Examination Room</span>' : ''}</span><span class="dd26-role-arrow" aria-hidden="true">→</span></button>`).join('')}</div><div class="dd26-notice"><strong>${authenticated ? 'You are signed in.' : 'Sign-in is required to continue.'}</strong> ${authenticated ? 'Choose a role to continue. Your room access will still be checked.' : 'Students, Professors, Beadles, and Exam Administrators use their own authorized accounts.'}</div>${state.exam.entryExamId ? `<div class="dd26-deep-link"><span>Examination link detected</span><code>${escapeHtml(state.exam.entryExamId)}</code><p>The link identifies the examination only. It does not give anyone access.</p></div>` : ''}<p class="dd26-privacy">During a monitored examination, copy, cut, paste, and right-click are blocked. Leaving the exam tab is recorded and shown to the Professor and Beadle. It is reviewed by a person and is not an automatic failure. Camera collection is off.</p></main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
+    return `<div class="dd26-shell dd26-examination-room"><header class="dd26-header"><div><div class="dd26-kicker">Due Diligence</div><h1>Examination Room</h1><p>Choose the workspace that matches what you need to do now.</p></div><div class="dd26-entry-mark">Every official action returns visible proof: a saved time, publication record, access event, grade version, or submission receipt.</div></header><main aria-labelledby="dd26-entry-title"><h2 class="dd26-visually-hidden" id="dd26-entry-title">Choose an Examination Room role</h2><div class="dd26-role-grid">${cards.map(([id, title, subtitle, description], index) => `<button class="dd26-role-card" type="button" data-dd26-exam-role="${id}"><span class="dd26-role-number" aria-hidden="true">0${index + 1}</span><span><strong>${title}</strong><em>${subtitle}</em><small>${description}</small><span class="dd26-role-cta">Open ${title} workspace</span></span></button>`).join('')}</div><div class="dd26-notice"><strong>${authenticated ? 'Signed in and ready.' : 'Sign-in is required to continue.'}</strong> ${authenticated ? 'Choose Professor or Student. The server will verify your access to the selected examination.' : 'Use the account associated with your Professor invitation or class roster.'}</div>${state.exam.entryExamId ? `<div class="dd26-deep-link"><span>Examination link detected</span><code>${escapeHtml(state.exam.entryExamId)}</code><p>The link identifies the examination only. It does not grant access by itself.</p></div>` : ''}<p class="dd26-privacy"><strong>Access notice.</strong> The Professor can see the authenticated email used to enter the examination and may end a live session or block re-entry. Active answers remain private until submission. Focus changes are recorded only when the published integrity settings require it. Camera collection is off.</p></main><p class="dd26-sr-status" id="dd26-exam-status" role="status" aria-live="polite" aria-atomic="true"></p></div>`;
   }
 
   function bindExamEntry() {
@@ -1172,17 +1170,17 @@
     if (state.exam.section === 'professor') return `${examRoleGuide('professor')}${portal.roles?.professor ? professorSection(portal) : activationSection(portal)}`;
     if (state.exam.section === 'beadle') return `${examRoleGuide('beadle')}${roomRequestLoadStatus()}${beadleSection(portal)}`;
     if (state.exam.section === 'exam_administrator') return `${examRoleGuide('exam_administrator')}${examAdministratorSection()}`;
-    return '<section class="dd26-card"><div class="dd26-empty">Choose Professor, Beadle, Student, or Exam Administrator.</div></section>';
+    return '<section class="dd26-card"><div class="dd26-empty">Choose Professor or Student.</div></section>';
   }
 
   function examRoleGuide(role) {
     const guides = {
       professor: {
-        label: 'Professor · Preparation steps 1 to 3',
+        label: 'Professor · Complete examination flow',
         steps: [
-          'Review and revise the examination details.',
-          'Upload, review, and revise every question and its points.',
-          'Save the rules draft, review it again, then publish and send the one-time Beadle key.',
+          'Create or resume the examination and confirm every question.',
+          'Set the schedule, access rules, and exact student instructions.',
+          'Publish, monitor authenticated access, grade submissions, and release results.',
         ],
       },
       beadle: {
@@ -1193,11 +1191,11 @@
         ],
       },
       student: {
-        label: 'Student · Simple steps',
+        label: 'Student · Entry to receipt',
         steps: [
           'Sign in using the same email placed on the class list.',
-          'Get the class examination code sent to your rostered email.',
-          'Enter the code, check the exam details, answer, review, and submit.',
+          'Enter the class examination code and complete the readiness check.',
+          'Answer, flag, review, submit, and keep the server-issued receipt.',
         ],
       },
       exam_administrator: {
@@ -1652,7 +1650,7 @@
             : '<span class="dd26-help">Enter your current class code above</span>';
       return `<tr><td><strong>${escapeHtml(exam.title)}</strong></td><td>${escapeHtml(formatDate(exam.opensAt))}<br>to ${escapeHtml(formatDate(exam.hardClosesAt))}</td><td><span class="dd26-status">${escapeHtml(attemptStatus)}</span></td><td><div class="dd26-actions dd26-table-actions">${primaryAction}${examWorkspaceRemovalButton(exam, 'student')}</div></td></tr>`;
     }).join('');
-    return `<section class="dd26-card"><div class="dd26-label">Student examination</div><h2>Enter your class access code</h2><p>Sign in with the Google account listed in the Beadle's confirmed class list, then enter the code sent for your class.</p><div class="dd26-notice"><strong>No examination link or reference is needed.</strong> The secure code resolves the correct examination without revealing questions before opening.</div><div class="dd26-form-grid"><label class="dd26-field wide"><span>Student exam code</span><input class="dd26-input" id="dd26-student-key" type="password" autocomplete="one-time-code" required><small class="dd26-help">Use the current code emailed to your rostered account.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-start-attempt" type="button">Check exam details</button></div><div class="dd26-privacy">A code never replaces sign-in or the class-list check. During the exam, copy, cut, paste, and right-click are blocked. Be online to sign in and start. If the connection drops after the exam opens, answers can remain saved on this device until it reconnects. Do not clear browser data.</div></section><section class="dd26-card"><div class="dd26-label">Your examinations</div><h2>Available and completed exams</h2>${exams.length ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Examination</th><th>Schedule</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="dd26-empty">No active examination is available for this signed-in account.</div>'}</section>`;
+    return `<section class="dd26-card"><div class="dd26-label">Student examination</div><h2>Enter your class access code</h2><p>Sign in with the Google account listed in the Beadle's confirmed class list, then enter the code sent for your class.</p><div class="dd26-notice"><strong>No examination link or reference is needed.</strong> The secure code resolves the correct examination without revealing questions before opening.</div><div class="dd26-form-grid"><label class="dd26-field wide"><span>Student exam code</span><input class="dd26-input" id="dd26-student-key" type="password" autocomplete="one-time-code" required><small class="dd26-help">Use the current code emailed to your rostered account.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-start-attempt" type="button">Check exam details</button></div><div class="dd26-privacy">A code never replaces sign-in or the class-list check. Clipboard and right-click remain available. Be online to sign in and start. If the connection drops after the exam opens, answers can remain saved on this device until it reconnects. Do not clear browser data.</div></section><section class="dd26-card"><div class="dd26-label">Your examinations</div><h2>Available and completed exams</h2>${exams.length ? `<div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Examination</th><th>Schedule</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="dd26-empty">No active examination is available for this signed-in account.</div>'}</section>`;
   }
 
   function activationSection(portal) {
@@ -1740,7 +1738,7 @@
   function professorClass(classroom) {
     const exams = classroom.exams || [];
     const authoring = exams.length ? '<section class="dd26-section"><div class="dd26-notice"><strong>Continue the examination below.</strong> One Examination Room holds one examination. Each completed step unlocks the next classroom handoff.</div></section>'
-      : `<section class="dd26-section">${professorFlowList(null, classroom)}<h3>Make the examination</h3><p>Enter the official details first. The examination stays private until you review every question and publish it for the Beadle.</p><div class="dd26-form-grid"><label class="dd26-field"><span>Exam title</span><input class="dd26-input" id="dd26-exam-title" maxlength="200"></label><label class="dd26-field"><span>Number of questions</span><input class="dd26-input" id="dd26-exam-count" type="number" min="1" max="200" step="1"><small class="dd26-help">Choose 1–200 questions. The Professor decides the number.</small></label><label class="dd26-field wide"><span>Instructions for students</span><textarea class="dd26-textarea" id="dd26-exam-instructions" maxlength="10000"></textarea></label><label class="dd26-field"><span>If a student leaves the exam tab</span><select class="dd26-select" id="dd26-exam-integrity"><option value="standard" selected>Record for Professor review</option><option value="strict">Warn the student and record</option></select><small class="dd26-help">Copy, cut, paste, and right-click are blocked during the monitored exam. Leaving the tab never causes an automatic failure.</small></label><label class="dd26-field"><span>Student result when grades are sent</span><select class="dd26-select" id="dd26-exam-questionnaire"><option value="false" selected>Grades and comments only</option><option value="true">Questions, grades, and comments</option></select><small class="dd26-help">Student answers are not sent in the class result. The Professor confirms this choice again before sending.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-create-exam" type="button">Create examination</button></div></section>`;
+      : `<section class="dd26-section">${professorFlowList(null, classroom)}<h3>Make the examination</h3><p>Enter the official details first. The examination stays private until you review every question and publish it for the Beadle.</p><div class="dd26-form-grid"><label class="dd26-field"><span>Exam title</span><input class="dd26-input" id="dd26-exam-title" maxlength="200"></label><label class="dd26-field"><span>Number of questions</span><input class="dd26-input" id="dd26-exam-count" type="number" min="1" max="200" step="1"><small class="dd26-help">Choose 1–200 questions. The Professor decides the number.</small></label><label class="dd26-field wide"><span>Instructions for students</span><textarea class="dd26-textarea" id="dd26-exam-instructions" maxlength="10000"></textarea></label><label class="dd26-field"><span>If a student leaves the exam tab</span><select class="dd26-select" id="dd26-exam-integrity"><option value="standard" selected>Record for Professor review</option><option value="strict">Warn the student and record</option></select><small class="dd26-help">Clipboard and right-click remain available. Leaving the tab never causes an automatic failure.</small></label><label class="dd26-field"><span>Student result when grades are sent</span><select class="dd26-select" id="dd26-exam-questionnaire"><option value="false" selected>Grades and comments only</option><option value="true">Questions, grades, and comments</option></select><small class="dd26-help">Student answers are not sent in the class result. The Professor confirms this choice again before sending.</small></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-create-exam" type="button">Create examination</button></div></section>`;
     return `<div class="dd26-question-meta"><span>${escapeHtml(classroom.title)}</span><span class="dd26-status">${classroom.rosterCount || 0} students on the class list</span></div><div class="dd26-notice"><strong>Who creates the student exam code?</strong> The Professor publishes and sends the Beadle key. The Beadle then saves the official class list and selects <em>Create student exam code</em>. One class-wide code is given to all listed students.</div>${authoring}<section class="dd26-section"><h3>Your examination</h3>${examCards(exams, classroom)}</section>`;
   }
 
@@ -2258,6 +2256,7 @@
       EXAM_ROOM_INSUFFICIENT_DAILY_ALLOWANCE: 'This examination contains more questions than remain in your Free allowance today. Open The Docket for your reset time or Early Access.',
       ADMISSION_REQUIRED: 'The examination requires a separate admission decision before entry.',
       ADMISSION_BLOCKED: 'Entry for this student account was blocked by the examination admission record.',
+      EXAM_ROOM_ACCESS_BLOCKED: 'The Professor blocked this account from re-entering the examination. Your previously saved work remains preserved. Contact the Professor for assistance.',
       IDENTITY_VERIFICATION_BLOCKED: 'The saved identity check must be resolved before entry.',
       STUDENT_NOT_ELIGIBLE: 'This signed-in account is not currently eligible for this examination.',
       EXAM_ROOM_BEADLE_ASSIGNMENT_REQUIRED: 'This Beadle assignment is no longer active. Return to assigned examinations for the latest room status.',
@@ -2425,7 +2424,7 @@
 
   function openAccommodation(examId) {
     state.exam.activeExamId = examId;
-    openDialog(`<div class="dd26-label">Accommodation for one student</div><h2>Set an examination accommodation</h2><p>Enter only what the student needs for this examination—not a diagnosis. Due Diligence records every change.</p><div class="dd26-form-grid"><label class="dd26-field"><span>Student exam number</span><input class="dd26-input" id="dd26-accommodation-candidate" maxlength="120"></label><label class="dd26-field"><span>Additional minutes</span><input class="dd26-input" id="dd26-accommodation-extra" type="number" min="0" max="480" value="0"></label><label class="dd26-field"><span>This student may start at (optional)</span><input class="dd26-input" id="dd26-accommodation-opens" type="datetime-local"></label><label class="dd26-field"><span>This student’s exam ends at (optional)</span><input class="dd26-input" id="dd26-accommodation-closes" type="datetime-local"></label><label class="dd26-field"><span>Approved break minutes</span><input class="dd26-input" id="dd26-accommodation-break" type="number" min="0" max="240" value="0"></label><label class="dd26-field"><span>Extra minutes after an approved technical problem</span><input class="dd26-input" id="dd26-accommodation-incident" type="number" min="0" max="480" value="0"></label><label class="dd26-field wide"><span>Approved writing aids</span><input class="dd26-input" id="dd26-accommodation-aids" maxlength="1000"></label><label class="dd26-field wide"><span>Note for the Beadle and Professor</span><textarea class="dd26-textarea compact" id="dd26-accommodation-note" maxlength="1000"></textarea></label><label class="dd26-field wide"><span>Reason for this change</span><input class="dd26-input" id="dd26-accommodation-reason" maxlength="1000" value="Approved examination accommodation"></label></div><div class="dd26-choice-grid"><label class="dd26-choice"><input id="dd26-accommodation-fullscreen" type="checkbox"><span>Do not require full screen</span></label><label class="dd26-choice"><input id="dd26-accommodation-integrity" type="checkbox"><span>Do not record tab or window changes</span></label><label class="dd26-choice"><input id="dd26-accommodation-at" type="checkbox"><span>Allow assistive technology and clipboard use</span></label><label class="dd26-choice"><input id="dd26-accommodation-camera" type="checkbox"><span>Camera exception (camera is off in beta)</span></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-save-accommodation" type="button">Save accommodation</button><button class="dd26-button" data-dd26-close-dialog type="button">Cancel</button></div>`);
+    openDialog(`<div class="dd26-label">Accommodation for one student</div><h2>Set an examination accommodation</h2><p>Enter only what the student needs for this examination—not a diagnosis. Due Diligence records every change.</p><div class="dd26-form-grid"><label class="dd26-field"><span>Student exam number</span><input class="dd26-input" id="dd26-accommodation-candidate" maxlength="120"></label><label class="dd26-field"><span>Additional minutes</span><input class="dd26-input" id="dd26-accommodation-extra" type="number" min="0" max="480" value="0"></label><label class="dd26-field"><span>This student may start at (optional)</span><input class="dd26-input" id="dd26-accommodation-opens" type="datetime-local"></label><label class="dd26-field"><span>This student’s exam ends at (optional)</span><input class="dd26-input" id="dd26-accommodation-closes" type="datetime-local"></label><label class="dd26-field"><span>Approved break minutes</span><input class="dd26-input" id="dd26-accommodation-break" type="number" min="0" max="240" value="0"></label><label class="dd26-field"><span>Extra minutes after an approved technical problem</span><input class="dd26-input" id="dd26-accommodation-incident" type="number" min="0" max="480" value="0"></label><label class="dd26-field wide"><span>Approved writing aids</span><input class="dd26-input" id="dd26-accommodation-aids" maxlength="1000"></label><label class="dd26-field wide"><span>Note for the Beadle and Professor</span><textarea class="dd26-textarea compact" id="dd26-accommodation-note" maxlength="1000"></textarea></label><label class="dd26-field wide"><span>Reason for this change</span><input class="dd26-input" id="dd26-accommodation-reason" maxlength="1000" value="Approved examination accommodation"></label></div><div class="dd26-choice-grid"><label class="dd26-choice"><input id="dd26-accommodation-fullscreen" type="checkbox"><span>Do not require full screen</span></label><label class="dd26-choice"><input id="dd26-accommodation-integrity" type="checkbox"><span>Do not record tab or window changes</span></label><label class="dd26-choice"><input id="dd26-accommodation-at" type="checkbox"><span>Approve assistive technology</span></label><label class="dd26-choice"><input id="dd26-accommodation-camera" type="checkbox"><span>Camera exception (camera is off in beta)</span></label></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-save-accommodation" type="button">Save accommodation</button><button class="dd26-button" data-dd26-close-dialog type="button">Cancel</button></div>`);
     document.getElementById('dd26-save-accommodation')?.addEventListener('click', saveAccommodation);
   }
 
@@ -4318,7 +4317,7 @@
     const replacementNotice = state.exam.publishIntent.mode === 'replacement'
       ? `<div class="dd26-error" role="alert"><strong>Replacement exam in progress.</strong> You are preparing a corrected version to replace version ${escapeHtml(state.exam.publishIntent.publicationNumber || 'currently published')}. Due Diligence will confirm that no student has started before accepting it.</div>`
       : '';
-    openDialog(`<div class="dd26-label">Step 3 · Set exam rules${replacement ? ' / replacement' : ''}</div><h2>Set the schedule and exam rules</h2>${replacementNotice}${storedDraft ? `<div class="dd26-success">Your saved rules draft from ${escapeHtml(formatDate(storedDraft.updatedAt))} is open for further review.</div>` : '<div class="dd26-notice"><strong>Open now or schedule ahead.</strong> The examination may open immediately. Student access still requires the Beadle class list and class code.</div>'}<div class="dd26-form-grid"><label class="dd26-field"><span>Exam opens</span><input class="dd26-input" id="dd26-opens-at" type="datetime-local" value="${localDateValue(now)}"><small class="dd26-help">Choose an immediate or future opening time.</small></label><label class="dd26-field"><span>Exam ends</span><input class="dd26-input" id="dd26-closes-at" type="datetime-local" value="${localDateValue(close)}"></label><label class="dd26-field"><span>Time allowed in minutes</span><input class="dd26-input" id="dd26-duration" type="number" min="1" max="480" value="${escapeHtml(saved.durationMinutes ?? 120)}"></label><label class="dd26-field"><span>Late entry allowed (minutes)</span><input class="dd26-input" id="dd26-late-admission" type="number" min="0" max="480" value="${escapeHtml(saved.lateAdmissionMinutes ?? 15)}"><small class="dd26-help">Late entry does not extend the published exam end time.</small></label><label class="dd26-field"><span>Extra time to reconnect and submit</span><input class="dd26-input" id="dd26-submission-grace" type="number" min="0" max="120" value="${escapeHtml(saved.submissionGraceMinutes ?? 15)}"><small class="dd26-help">Answers written after the exam ends are kept separately for review and are not silently added to the submitted answers.</small></label><label class="dd26-field"><span>Allowed materials</span><input class="dd26-input" id="dd26-allowed-materials" maxlength="2000" value="${escapeHtml(saved.allowedMaterials ?? 'Professor-published materials only')}"></label><label class="dd26-field"><span>Moving between questions</span><select class="dd26-select" id="dd26-navigation-mode"><option value="free" ${selected(saved.navigationMode, 'free', true)}>Students may move between questions</option><option value="one_way" ${selected(saved.navigationMode, 'one_way')}>Move forward only</option></select></label><label class="dd26-field"><span>If a student leaves the exam tab</span><select class="dd26-select" id="dd26-monitoring-mode"><option value="record_only" ${selected(saved.integrityMode, 'record_only', true)}>Record for Professor review</option><option value="warn_and_record" ${selected(saved.integrityMode, 'warn_and_record')}>Warn the student and record</option></select><small class="dd26-help">Copy, cut, paste, and right-click are blocked during the monitored exam. A recorded event is never an automatic failure.</small></label><label class="dd26-field"><span>Full screen</span><select class="dd26-select" id="dd26-fullscreen-policy"><option value="requested" ${selected(saved.fullscreenPolicy, 'requested', true)}>Ask students to use full screen</option><option value="off" ${selected(saved.fullscreenPolicy, 'off')}>Do not ask for full screen</option><option value="required_with_exemptions" ${selected(saved.fullscreenPolicy, 'required_with_exemptions')}>Require full screen, with approved exemptions</option></select></label><label class="dd26-field"><span>Student entry</span><select class="dd26-select" id="dd26-admission-mode"><option value="automatic" selected>Allow after sign-in, code, and class-list checks</option></select><small class="dd26-help">The Beadle does not approve students one by one.</small></label><label class="dd26-field"><span>Temporary leave</span><select class="dd26-select" id="dd26-leave-policy"><option value="false" selected>Student records leaving and returning</option></select><small class="dd26-help">The event is recorded for Professor review; no Beadle acknowledgment is required.</small></label><label class="dd26-field"><span>Suggested answer for grading</span><select class="dd26-select" id="dd26-model-answer-mode"><option value="none" ${selected(saved.suggestedAnswerMode, 'none', true)}>None</option><option value="paste" ${selected(saved.suggestedAnswerMode, 'paste')}>Paste before publishing</option><option value="upload">Upload a private source</option></select></label></div><label class="dd26-choice"><input id="dd26-student-access-code-required" type="checkbox" checked><span><strong>Require the class examination code</strong><small>This is an extra check. Every student must still sign in with the exact class-list account and meet the entry rules.</small></span></label><label class="dd26-field" id="dd26-model-answer-field" ${saved.suggestedAnswerMode === 'paste' ? '' : 'hidden'}><span>Suggested answer for grading</span><textarea class="dd26-textarea" id="dd26-model-answer" maxlength="100000">${escapeHtml(saved.suggestedAnswer || '')}</textarea></label><label class="dd26-field" id="dd26-model-answer-upload-field" hidden><span>Private suggested-answer source</span><input class="dd26-input" id="dd26-model-answer-file" type="file" accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><small class="dd26-help">TXT, DOCX, or an inactive unencrypted PDF, maximum 10 MB. Students never receive this file.</small></label><details class="dd26-advanced"><summary>More about exam safeguards</summary><p>Leaving the tab or exam window is recorded for the Professor to review. Copy, cut, paste, and right-click are blocked during the exam unless an approved accommodation requires otherwise. These records are not proof by themselves and never automatically fail, submit, close, or erase an examination. Camera collection and AI grading are off.</p></details><div class="dd26-actions"><button class="dd26-button primary" id="dd26-review-publish" type="button">Review before publishing</button>${replacement ? '' : '<button class="dd26-button" id="dd26-save-rules-draft" type="button">Save draft and return</button>'}<button class="dd26-button" data-dd26-close-dialog type="button">Return without saving</button></div>`);
+    openDialog(`<div class="dd26-label">Step 3 · Set exam rules${replacement ? ' / replacement' : ''}</div><h2>Set the schedule and exam rules</h2>${replacementNotice}${storedDraft ? `<div class="dd26-success">Your saved rules draft from ${escapeHtml(formatDate(storedDraft.updatedAt))} is open for further review.</div>` : '<div class="dd26-notice"><strong>Open now or schedule ahead.</strong> The examination may open immediately. Student access still requires the Beadle class list and class code.</div>'}<div class="dd26-form-grid"><label class="dd26-field"><span>Exam opens</span><input class="dd26-input" id="dd26-opens-at" type="datetime-local" value="${localDateValue(now)}"><small class="dd26-help">Choose an immediate or future opening time.</small></label><label class="dd26-field"><span>Exam ends</span><input class="dd26-input" id="dd26-closes-at" type="datetime-local" value="${localDateValue(close)}"></label><label class="dd26-field"><span>Time allowed in minutes</span><input class="dd26-input" id="dd26-duration" type="number" min="1" max="480" value="${escapeHtml(saved.durationMinutes ?? 120)}"></label><label class="dd26-field"><span>Late entry allowed (minutes)</span><input class="dd26-input" id="dd26-late-admission" type="number" min="0" max="480" value="${escapeHtml(saved.lateAdmissionMinutes ?? 15)}"><small class="dd26-help">Late entry does not extend the published exam end time.</small></label><label class="dd26-field"><span>Extra time to reconnect and submit</span><input class="dd26-input" id="dd26-submission-grace" type="number" min="0" max="120" value="${escapeHtml(saved.submissionGraceMinutes ?? 15)}"><small class="dd26-help">Answers written after the exam ends are kept separately for review and are not silently added to the submitted answers.</small></label><label class="dd26-field"><span>Allowed materials</span><input class="dd26-input" id="dd26-allowed-materials" maxlength="2000" value="${escapeHtml(saved.allowedMaterials ?? 'Professor-published materials only')}"></label><label class="dd26-field"><span>Moving between questions</span><select class="dd26-select" id="dd26-navigation-mode"><option value="free" ${selected(saved.navigationMode, 'free', true)}>Students may move between questions</option><option value="one_way" ${selected(saved.navigationMode, 'one_way')}>Move forward only</option></select></label><label class="dd26-field"><span>If a student leaves the exam tab</span><select class="dd26-select" id="dd26-monitoring-mode"><option value="record_only" ${selected(saved.integrityMode, 'record_only', true)}>Record for Professor review</option><option value="warn_and_record" ${selected(saved.integrityMode, 'warn_and_record')}>Warn the student and record</option></select><small class="dd26-help">Clipboard and right-click remain available. A recorded focus event is never an automatic failure.</small></label><label class="dd26-field"><span>Full screen</span><select class="dd26-select" id="dd26-fullscreen-policy"><option value="requested" ${selected(saved.fullscreenPolicy, 'requested', true)}>Ask students to use full screen</option><option value="off" ${selected(saved.fullscreenPolicy, 'off')}>Do not ask for full screen</option><option value="required_with_exemptions" ${selected(saved.fullscreenPolicy, 'required_with_exemptions')}>Require full screen, with approved exemptions</option></select></label><label class="dd26-field"><span>Student entry</span><select class="dd26-select" id="dd26-admission-mode"><option value="automatic" selected>Allow after sign-in, code, and class-list checks</option></select><small class="dd26-help">The Beadle does not approve students one by one.</small></label><label class="dd26-field"><span>Temporary leave</span><select class="dd26-select" id="dd26-leave-policy"><option value="false" selected>Student records leaving and returning</option></select><small class="dd26-help">The event is recorded for Professor review; no Beadle acknowledgment is required.</small></label><label class="dd26-field"><span>Suggested answer for grading</span><select class="dd26-select" id="dd26-model-answer-mode"><option value="none" ${selected(saved.suggestedAnswerMode, 'none', true)}>None</option><option value="paste" ${selected(saved.suggestedAnswerMode, 'paste')}>Paste before publishing</option><option value="upload">Upload a private source</option></select></label></div><label class="dd26-choice"><input id="dd26-student-access-code-required" type="checkbox" checked><span><strong>Require the class examination code</strong><small>This is an extra check. Every student must still sign in with the exact class-list account and meet the entry rules.</small></span></label><label class="dd26-field" id="dd26-model-answer-field" ${saved.suggestedAnswerMode === 'paste' ? '' : 'hidden'}><span>Suggested answer for grading</span><textarea class="dd26-textarea" id="dd26-model-answer" maxlength="100000">${escapeHtml(saved.suggestedAnswer || '')}</textarea></label><label class="dd26-field" id="dd26-model-answer-upload-field" hidden><span>Private suggested-answer source</span><input class="dd26-input" id="dd26-model-answer-file" type="file" accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><small class="dd26-help">TXT, DOCX, or an inactive unencrypted PDF, maximum 10 MB. Students never receive this file.</small></label><details class="dd26-advanced"><summary>More about exam safeguards</summary><p>Leaving the tab or exam window is recorded for the Professor to review. Clipboard and right-click remain available. These records are not proof by themselves and never automatically fail, submit, close, or erase an examination. Camera collection and AI grading are off.</p></details><div class="dd26-actions"><button class="dd26-button primary" id="dd26-review-publish" type="button">Review before publishing</button>${replacement ? '' : '<button class="dd26-button" id="dd26-save-rules-draft" type="button">Save draft and return</button>'}<button class="dd26-button" data-dd26-close-dialog type="button">Return without saving</button></div>`);
     const durationField = document.getElementById('dd26-duration');
     const lateAdmissionField = document.getElementById('dd26-late-admission');
     const opensLabel = document.getElementById('dd26-opens-at')?.closest('label')?.querySelector('span');
@@ -5285,9 +5284,7 @@
       && accommodation.integrityExempt !== true;
     return {
       recordingEnabled,
-      clipboardBlocked: recordingEnabled
-        && accommodation.assistiveTechnology !== true
-        && accommodation.assistiveTechnologyAllowed !== true,
+      clipboardBlocked: false,
     };
   }
 
@@ -5347,6 +5344,14 @@
     const accessCodePolicyCopy = accessCodeState.copy;
     const accessCodeClass = accessCodeState.className;
     openDialog(`<div class="dd26-label">Student exam check</div><h2>Check before starting</h2><p>This check confirms that you are signed in, on the class list, and opening the correct exam. The official exam clock comes from Due Diligence.</p><ul class="dd26-check-list"><li class="${check.deviceSupported ? 'is-pass' : 'is-fail'}"><strong>Device</strong><span>${check.deviceSupported ? 'Desktop or tablet is ready' : 'This phone-size screen is not supported for a formal beta exam'}</span></li><li class="${check.storage.available ? 'is-pass' : 'is-fail'}"><strong>Answer saving</strong><span>${escapeHtml(check.storage.message || check.storage.code)}</span></li><li class="${check.persistent ? 'is-pass' : 'is-warn'}"><strong>Keep answers on this device</strong><span>${check.persistent ? 'Allowed by this browser' : 'The browser may remove local data; keep the exam page open'}</span></li><li class="is-pass"><strong>Connection</strong><span>Due Diligence responded in ${escapeHtml(check.reachabilityMs)} ms · official time ${escapeHtml(formatDate(server.serverNow || server.checks?.serverNow))}</span></li><li class="${allowanceSufficient ? 'is-pass' : 'is-fail'}"><strong>Daily submission allowance</strong><span>${escapeHtml(allowanceCopy)}</span></li><li class="${eligible ? 'is-pass' : 'is-fail'}"><strong>Class list and entry</strong><span>${eligible ? 'This signed-in student is on the class list' : escapeHtml(server.message || 'This signed-in account cannot start this examination')}</span></li><li class="${accessCodeClass}"><strong>Student exam code</strong><span>${escapeHtml(accessCodePolicyCopy)}</span></li><li class="${startReadiness.canStart ? 'is-pass' : 'is-fail'}"><strong>Opening and entry time</strong><span>${escapeHtml(startReadiness.copy)}</span></li><li class="${sessionConflict ? 'is-fail' : 'is-pass'}"><strong>Open exam session</strong><span>${sessionConflict ? 'Another open session must be resolved with the Beadle' : 'No other open session was found'}</span></li><li class="${integrity.recordingEnabled ? 'is-pass' : 'is-warn'}"><strong>Exam integrity</strong><span>${integrity.recordingEnabled ? `${integrity.clipboardBlocked ? 'Copy, cut, paste, and right-click are blocked. ' : 'Exam-menu restrictions are off for an approved arrangement. '}Leaving the exam tab or window is recorded for the Professor to review. It is not automatic proof and does not automatically fail or lock the exam.` : 'Tab recording and exam-menu restrictions are off for this exam or an approved accommodation.'}</span></li></ul><details open class="dd26-rules-summary"><summary>Instructions and exam rules</summary>${studentInstructionsHtml(server.instructions)}<dl><div><dt>Exam time</dt><dd>${escapeHtml(formatDate(server.opensAt))} to ${escapeHtml(formatDate(server.serverDeadline || server.hardClosesAt))}</dd></div><div><dt>Allowed materials</dt><dd>${escapeHtml(rules.allowedMaterials || 'See the Professor’s instructions')}</dd></div><div><dt>Questions</dt><dd>${escapeHtml(rules.navigationMode === 'one_way' ? 'Move forward only' : 'You may move between questions')}</dd></div><div><dt>Leaving the exam tab</dt><dd>${escapeHtml(integrity.recordingEnabled ? 'Recorded for Professor review' : 'Not recorded for this exam or accommodation')}</dd></div><div><dt>Full screen</dt><dd>${escapeHtml(rules.fullscreenPolicy === 'off' ? 'Not requested' : 'Requested when the exam starts')}</dd></div><div><dt>Entry</dt><dd>${escapeHtml(rules.admissionMode === 'beadle_approval' ? 'Beadle confirms entry' : 'Automatic after all checks pass')}</dd></div></dl></details><label class="dd26-choice"><input id="dd26-preflight-ack" type="checkbox" ${passing ? '' : 'disabled'}><span><strong>I reviewed the instructions and exam rules</strong><small>I understand that the exam is submitted only after Due Diligence shows a receipt.</small></span></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-preflight-start" type="button" disabled>Start examination</button><button class="dd26-button" data-dd26-close-dialog type="button">Return</button></div><div class="dd26-privacy">No camera permission is requested.</div>`);
+    const integrityRow = [...document.querySelectorAll('.dd26-check-list li')]
+      .find((row) => row.querySelector('strong')?.textContent === 'Exam integrity');
+    const integrityCopy = integrityRow?.querySelector('span');
+    if (integrityCopy) {
+      integrityCopy.textContent = integrity.recordingEnabled
+        ? 'Clipboard and right-click remain available. Leaving the exam tab or window is recorded for the Professor to review. It is not automatic proof and does not automatically fail or lock the exam.'
+        : 'Clipboard and right-click remain available. Tab recording is off for this exam or an approved accommodation.';
+    }
     const openingRow = [...document.querySelectorAll('.dd26-check-list li')]
       .find((row) => row.querySelector('strong')?.textContent === 'Opening and entry time');
     if (openingRow) {
@@ -5573,11 +5578,10 @@
       attemptId: attemptScope().attemptId,
       examVersionId: attemptScope().examVersionId,
       sessionEpoch: attemptScope().sessionEpoch,
-      allowUncoordinatedWrite: true,
+      allowUncoordinatedWrite: false,
     });
     state.exam.tabLease.subscribe((lease) => {
       if (!state.exam.attempt) return;
-      lease.readonly = false;
       const changed = state.exam.attempt.readonlyTab !== lease.readonly;
       state.exam.attempt.readonlyTab = lease.readonly;
       if (changed) renderAttempt();
@@ -5658,10 +5662,8 @@
       ? '<div class="dd26-error" role="status"><strong>Offline recovery mode.</strong> This device restored the last authorized examination bundle and local answer journal. Server time is unavailable, so the browser will not decide the deadline or claim submission. Keep working here and reconnect as soon as possible.</div>'
       : '';
     const monitoringDisclosure = integrity.recordingEnabled
-      ? integrity.clipboardBlocked
-        ? `Examination safeguards are on. Copy, cut, and paste are blocked here. Leaving this tab or exam window${fullscreenSignalsEnabled ? ', or leaving full screen' : ''}, is recorded for the Professor and Beadle to review. Your answers remain saved, and no recorded event automatically fails, locks, submits, closes, or erases this examination.`
-        : `Clipboard restrictions are off for your approved examination setup. Leaving this tab or exam window${fullscreenSignalsEnabled ? ', or leaving full screen' : ''}, is still recorded for the Professor and Beadle to review. No recorded event is automatic proof or an automatic failure.`
-      : 'Tab recording and clipboard restrictions are off for this examination or approved accommodation. Connection and answer-saving problems may still be recorded so the school can help.';
+      ? `Clipboard and right-click remain available. Leaving this tab or exam window${fullscreenSignalsEnabled ? ', or leaving full screen' : ''}, is recorded for the Professor and Beadle to review. No recorded event is automatic proof or an automatic failure.`
+      : 'Clipboard and right-click remain available, and tab recording is off for this examination or approved accommodation. Connection and answer-saving problems may still be recorded so the school can help.';
     const attentionReturnHtml = attempt.attentionReturnNotice ? attentionReturnMarkup() : '';
     const navigatorHtml = attempt.questions.map((entry, index) => {
       const blockedByOneWay = oneWay && index !== state.exam.attemptIndex && index !== state.exam.attemptIndex + 1;
@@ -6060,10 +6062,11 @@
             await state.exam.store.quarantineAttemptQueue(attemptScope(), error.code);
             await state.exam.store.clearSessionEnvelope(state.exam.attempt.attemptId);
             state.exam.attempt.recoveryAvailable = true;
-            state.exam.attempt.status = 'recovery_pending';
+            state.exam.attempt.status = 'session_ended';
             state.exam.attempt.readonlyTab = true;
             setSaveStatus('Recovery required — this session can no longer write', 'error');
-            renderAttempt();
+            renderStudentSessionEnded();
+            return;
           } else if (['ATTEMPT_CLOSED', 'EXAM_ROOM_ATTEMPT_CLOSED'].includes(error.code)) {
             await state.exam.store.recordConflict({
               operationId: operation.operationId,
@@ -6242,7 +6245,17 @@
       state.exam.attempt.serverClockUnavailable = false;
       state.exam.attempt.serverDeadline = result.serverDeadline || state.exam.attempt.serverDeadline;
       if (result.status !== 'in_progress') await loadSubmissionStatus(state.exam.attempt.attemptId);
-    } catch { recordIncident('heartbeat_gap', { durationSeconds: 60 }); }
+    } catch (error) {
+      if (['EXAM_ROOM_SESSION_STALE', 'SESSION_EPOCH_STALE', 'EXAM_ROOM_SESSION_EPOCH_CONFLICT', 'SESSION_ACTIVE_ELSEWHERE'].includes(error.code)) {
+        await state.exam.store?.quarantineAttemptQueue?.(attemptScope(), error.code).catch(() => null);
+        await state.exam.store?.clearSessionEnvelope?.(state.exam.attempt.attemptId).catch(() => null);
+        state.exam.attempt.status = 'session_ended';
+        state.exam.attempt.readonlyTab = true;
+        renderStudentSessionEnded();
+        return;
+      }
+      recordIncident('heartbeat_gap', { durationSeconds: 60 });
+    }
   }
 
   async function toggleTemporaryLeave() {
@@ -6483,9 +6496,9 @@
         await state.exam.store.clearSessionEnvelope(state.exam.attempt.attemptId);
         state.exam.submissionPending = false;
         state.exam.attempt.recoveryAvailable = true;
-        state.exam.attempt.status = 'recovery_pending';
+        state.exam.attempt.status = 'session_ended';
         state.exam.attempt.readonlyTab = true;
-        renderSubmissionRecoveryRequired('This writing session is no longer authoritative. Local work was retained for recovery; the Beadle must verify the candidate before an authorized session transfer.');
+        renderStudentSessionEnded();
         return false;
       }
       if (['ATTEMPT_CLOSED', 'EXAM_ROOM_ATTEMPT_CLOSED'].includes(error.code)) {
@@ -6688,13 +6701,29 @@
   }
 
   function professorCandidateStatus(candidate) {
+    if (candidate?.accessStatus === 'blocked') return 'Blocked · entry denied';
+    if (Number(candidate?.activeSessionCount) > 0) return 'Connected · taking exam';
     const status = String(candidate?.status || candidate?.state || 'not_started').toLowerCase();
     if (status === 'submitted') return 'Submitted';
     if (status === 'auto_submitted') return 'Auto-submitted';
     if (status === 'locked') return 'Present · needs assistance';
-    if (status === 'active' || status === 'in_progress') return 'Present · taking exam';
+    if ((status === 'active' || status === 'in_progress') && candidate?.lastKickedAt) return 'Kicked out · may re-enter';
+    if (status === 'active' || status === 'in_progress') return 'Started · disconnected';
     if (status === 'closed') return 'Exam closed';
     return 'Not yet present';
+  }
+
+  function renderStudentSessionEnded() {
+    clearAttemptTimers();
+    state.exam.tabLease?.stop?.();
+    const host = document.getElementById('dd26-exam-main');
+    if (!host) return;
+    host.innerHTML = `<section class="dd26-card"><div class="dd26-label">Student session ended</div><h2>This live examination session was ended</h2><div class="dd26-error" role="alert"><strong>You can no longer write from this session.</strong> Answers already confirmed by the server remain saved, and this browser keeps its bounded recovery copy. The examination clock may continue.</div><p>Return to the Student workspace. If the Professor only kicked out this session, you may enter again. If the Professor blocked the account, entry remains unavailable until the Professor unblocks it.</p><div class="dd26-actions"><button class="dd26-button primary" id="dd26-return-ended-session" type="button">Return to Student workspace</button></div><p class="dd26-privacy">Do not clear browser data. Keep the signed-in email and any displayed receipt or error reference available when contacting the Professor.</p></section>`;
+    document.getElementById('dd26-return-ended-session')?.addEventListener('click', () => {
+      state.exam.attempt = null;
+      void refreshExamPortal('student');
+    });
+    host.focus();
   }
 
   function normalizeProfessorRoomCandidates(value) {
@@ -6707,6 +6736,12 @@
       incidentCount: Number(candidate.incidentCount) || 0,
       focusExitCount: Number(candidate.focusExitCount) || 0,
       clipboardAttemptCount: Number(candidate.clipboardAttemptCount) || 0,
+      activeSessionCount: Number(candidate.activeSessionCount) || 0,
+      kickCount: Number(candidate.kickCount) || 0,
+      accessStatus: candidate.accessStatus === 'blocked' ? 'blocked' : 'allowed',
+      canKick: candidate.canKick === true,
+      canBlock: candidate.canBlock === true,
+      canUnblock: candidate.canUnblock === true,
     }));
   }
 
@@ -6733,7 +6768,7 @@
     state.exam.professorRoomPolling = true;
     try {
       const payload = await api('/exam-room/query', {
-        operation: 'live_status_v2', examId, gradingKey: String(gradingKey || ''),
+        operation: 'live_status_v3', examId, gradingKey: String(gradingKey || ''),
       });
       if (generation !== state.exam.professorRoomGeneration || state.exam.activeExamId !== examId) return false;
       const result = payload?.result || {};
@@ -6826,12 +6861,14 @@
       id: activeControl.id || '',
       unlockAttemptId: activeControl.dataset?.dd26UnlockLive || '',
       reopenAttemptId: activeControl.dataset?.dd26ReopenSubmission || '',
+      accessAction: activeControl.dataset?.dd26AccessAction || '',
+      accessCandidate: activeControl.dataset?.dd26AccessCandidate || '',
     } : null;
     const candidates = Array.isArray(monitor.candidates) ? monitor.candidates : [];
     const submitted = candidates.filter((candidate) => ['submitted', 'auto_submitted'].includes(String(candidate.status))).length;
-    const taking = candidates.filter((candidate) => ['active', 'in_progress', 'locked'].includes(String(candidate.status))).length;
+    const taking = candidates.filter((candidate) => candidate.accessStatus !== 'blocked' && Number(candidate.activeSessionCount) > 0).length;
     const notPresent = candidates.filter((candidate) => !candidate.startedAt && !['submitted', 'auto_submitted'].includes(String(candidate.status))).length;
-    const incidents = candidates.reduce((total, candidate) => total + (Number(candidate.incidentCount) || 0), 0);
+    const blocked = candidates.filter((candidate) => candidate.accessStatus === 'blocked').length;
     if (monitor.loading) {
       host.innerHTML = `<section class="dd26-card dd26-professor-room"><div class="dd26-professor-room-loading" role="status" aria-live="polite"><span class="dd26-room-spinner" aria-hidden="true"></span><div><div class="dd26-label">Professor virtual Examination Room</div><h2>Opening the live classroom…</h2><p>Confirming your saved Professor access and the latest class status.</p></div></div><div class="dd26-actions"><button class="dd26-button" id="dd26-return-professor" type="button">Back to Professor workspace</button></div></section>`;
       document.getElementById('dd26-return-professor')?.addEventListener('click', () => {
@@ -6851,10 +6888,34 @@
       const unlockAction = candidate.status === 'locked' && candidate.attemptId
         ? `<button class="dd26-button compact danger" data-dd26-unlock-live="${escapeHtml(candidate.attemptId)}" type="button">Unlock</button>`
         : '';
+      const kickAction = candidate.canKick
+        ? `<button class="dd26-button compact danger" data-dd26-access-action="kick" data-dd26-access-candidate="${escapeHtml(candidate.candidateNumber)}" type="button">Kick out</button>`
+        : '';
+      const blockAction = candidate.canBlock
+        ? `<button class="dd26-button compact danger" data-dd26-access-action="block" data-dd26-access-candidate="${escapeHtml(candidate.candidateNumber)}" type="button">Block</button>`
+        : '';
+      const unblockAction = candidate.canUnblock
+        ? `<button class="dd26-button compact" data-dd26-access-action="unblock" data-dd26-access-candidate="${escapeHtml(candidate.candidateNumber)}" type="button">Unblock</button>`
+        : '';
       const incidentCopy = candidate.incidentCount
-        ? `<strong>${escapeHtml(candidate.incidentCount)} for review</strong><small>${escapeHtml(candidate.focusExitCount)} tab/focus · ${escapeHtml(candidate.clipboardAttemptCount)} copy/paste/right-click</small>`
+        ? `<small>${escapeHtml(candidate.incidentCount)} integrity event${Number(candidate.incidentCount) === 1 ? '' : 's'} for review</small>`
         : '<span>No recorded incidents</span>';
-      return `<tr><td><strong>${escapeHtml(candidate.studentName || candidate.candidateNumber || 'Student')}</strong><br><small>${escapeHtml(candidate.studentNumber || candidate.candidateNumber || 'No student number')}</small></td><td><span class="dd26-live-state is-${escapeHtml(String(candidate.status || 'not_started').replace(/[^a-z0-9_-]/gi, '-'))}">${escapeHtml(professorCandidateStatus(candidate))}</span><br><small>${candidate.submittedAt ? `Submitted ${escapeHtml(formatDate(candidate.submittedAt))}` : candidate.startedAt ? `Entered ${escapeHtml(formatDate(candidate.startedAt))}` : 'Waiting for student entry'}</small></td><td class="dd26-integrity-summary">${incidentCopy}${candidate.lastIncidentAt ? `<small>Latest ${escapeHtml(formatDate(candidate.lastIncidentAt))}</small>` : ''}</td><td>${candidate.lastHeartbeatAt ? escapeHtml(formatDate(candidate.lastHeartbeatAt)) : 'No connection yet'}</td><td><div class="dd26-actions">${unlockAction}${reopenAction}${!unlockAction && !reopenAction ? '—' : ''}</div></td></tr>`;
+      const signedInEmail = String(candidate.accessEmail || '').trim().toLowerCase();
+      const rosterEmail = String(candidate.rosterEmail || '').trim().toLowerCase();
+      const accessEmail = signedInEmail || rosterEmail || 'Email unavailable';
+      const emailNote = signedInEmail
+        ? (rosterEmail && rosterEmail !== signedInEmail ? `Roster email differs: ${escapeHtml(rosterEmail)}` : 'Authenticated account used for this attempt')
+        : 'Roster email · student has not entered yet';
+      const stateClass = candidate.accessStatus === 'blocked'
+        ? 'blocked'
+        : Number(candidate.activeSessionCount) > 0
+          ? 'connected'
+          : candidate.lastKickedAt && ['active', 'in_progress', 'locked'].includes(String(candidate.status))
+            ? 'kicked'
+            : String(candidate.status || 'not_started').replace(/[^a-z0-9_-]/gi, '-');
+      const lastConnection = candidate.lastSessionSeenAt || candidate.lastHeartbeatAt;
+      const actions = `${kickAction}${blockAction}${unblockAction}${unlockAction}${reopenAction}`;
+      return `<tr><td><strong>${escapeHtml(candidate.studentName || candidate.candidateNumber || 'Student')}</strong><br><small>${escapeHtml(candidate.studentNumber || candidate.candidateNumber || 'No student number')}</small></td><td><span class="dd26-access-email">${escapeHtml(accessEmail)}</span><span class="dd26-access-note">${emailNote}</span></td><td><span class="dd26-live-state is-${escapeHtml(stateClass)}">${escapeHtml(professorCandidateStatus(candidate))}</span><br><small>${candidate.submittedAt ? `Submitted ${escapeHtml(formatDate(candidate.submittedAt))}` : candidate.startedAt ? `Entered ${escapeHtml(formatDate(candidate.startedAt))}` : 'Waiting for student entry'}</small><br>${incidentCopy}</td><td>${lastConnection ? escapeHtml(formatDate(lastConnection)) : 'No connection yet'}${Number(candidate.activeSessionCount) > 0 ? `<br><small>${escapeHtml(candidate.activeSessionCount)} active session${Number(candidate.activeSessionCount) === 1 ? '' : 's'}</small>` : ''}</td><td><div class="dd26-actions">${actions || '—'}</div></td></tr>`;
     }).join('');
     const waitingCopy = !monitor.rosterReady
       ? `<div class="dd26-professor-room-waiting" role="status"><span class="dd26-room-spinner" aria-hidden="true"></span><div><strong>Waiting for the Beadle to upload and confirm a valid class list.</strong><p>This room will update automatically. The Professor may safely leave and return on any signed-in device.</p></div></div>`
@@ -6863,7 +6924,7 @@
         : '';
     const refreshWarning = monitor.refreshError
       ? `<div class="dd26-notice dd26-professor-room-warning" role="status">${escapeHtml(monitor.refreshError)}</div>` : '';
-    host.innerHTML = `<section class="dd26-card dd26-professor-room"><section class="dd26-section"><div class="dd26-question-meta"><div><div class="dd26-label">Professor virtual Examination Room</div><h2>${escapeHtml(monitor.title || 'Live classroom')}</h2><p>Attendance, submission progress, and recorded integrity events update here. Active student answers remain private; submitted examinations open only in grading.</p></div><span class="dd26-status">${escapeHtml(monitor.status || 'Published')}</span></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-room-grade-submitted" type="button" ${submitted ? '' : 'disabled'}>Grade submitted exams${submitted ? ` (${escapeHtml(submitted)})` : ''}</button><button class="dd26-button" id="dd26-room-download" type="button">Download current workbook</button><button class="dd26-button" id="dd26-room-results" type="button">Class results dashboard</button><button class="dd26-button" id="dd26-refresh-monitor" type="button">Refresh now</button><button class="dd26-button" id="dd26-return-professor" type="button">Back to Professor workspace</button></div><p class="dd26-help">Saved Professor access works across signed-in devices. Live status refreshes every 15 seconds with one bounded request at a time. Last confirmed ${escapeHtml(formatDate(monitor.refreshedAt))}.</p></section>${refreshWarning}<div class="dd26-stat-grid dd26-professor-room-stats"><div class="dd26-stat"><strong>${escapeHtml(taking)}</strong><span>Present and taking</span></div><div class="dd26-stat"><strong>${escapeHtml(notPresent)}</strong><span>Not yet present</span></div><div class="dd26-stat"><strong>${escapeHtml(submitted)}</strong><span>Submitted</span></div><div class="dd26-stat"><strong>${escapeHtml(incidents)}</strong><span>Events for review</span></div></div>${waitingCopy}${candidates.length ? `<section class="dd26-section"><div class="dd26-question-meta"><h3>Class attendance and progress</h3><span class="dd26-status">${escapeHtml(candidates.length)} on class list</span></div><div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Student</th><th>Current status</th><th>Integrity review</th><th>Last connection</th><th>Professor action</th></tr></thead><tbody>${candidateRows}</tbody></table></div></section>` : '<div class="dd26-empty">No students are on the confirmed class list yet.</div>'}</section>`;
+    host.innerHTML = `<section class="dd26-card dd26-professor-room"><section class="dd26-section"><div class="dd26-question-meta"><div><div class="dd26-label">Professor virtual Examination Room</div><h2>${escapeHtml(monitor.title || 'Live classroom')}</h2><p>The authenticated email, connection state, and submission progress update here. Active answers remain private; a kick ends only live sessions, while a block denies re-entry until you unblock the student.</p></div><span class="dd26-status">${escapeHtml(monitor.status || 'Published')}</span></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-room-grade-submitted" type="button" ${submitted ? '' : 'disabled'}>Grade submitted exams${submitted ? ` (${escapeHtml(submitted)})` : ''}</button><button class="dd26-button" id="dd26-room-download" type="button">Download current workbook</button><button class="dd26-button" id="dd26-room-results" type="button">Class results dashboard</button><button class="dd26-button" id="dd26-refresh-monitor" type="button">Refresh now</button><button class="dd26-button" id="dd26-return-professor" type="button">Back to Professor workspace</button></div><p class="dd26-help">Live status refreshes every 15 seconds. Every kick, block, and unblock is saved in the examination audit record. Last confirmed ${escapeHtml(formatDate(monitor.refreshedAt))}.</p></section>${refreshWarning}<div class="dd26-stat-grid dd26-professor-room-stats"><div class="dd26-stat"><strong>${escapeHtml(taking)}</strong><span>Connected and taking</span></div><div class="dd26-stat"><strong>${escapeHtml(notPresent)}</strong><span>Not yet present</span></div><div class="dd26-stat"><strong>${escapeHtml(submitted)}</strong><span>Submitted</span></div><div class="dd26-stat"><strong>${escapeHtml(blocked)}</strong><span>Blocked</span></div></div>${waitingCopy}${candidates.length ? `<section class="dd26-section"><div class="dd26-question-meta"><h3>Authenticated access and progress</h3><span class="dd26-status">${escapeHtml(candidates.length)} on class list</span></div><div class="dd26-table-wrap"><table class="dd26-table"><thead><tr><th>Student</th><th>Access email</th><th>Current status</th><th>Last connection</th><th>Professor action</th></tr></thead><tbody>${candidateRows}</tbody></table></div></section>` : '<div class="dd26-empty">No students are on the confirmed class list yet.</div>'}</section>`;
     document.getElementById('dd26-refresh-monitor')?.addEventListener('click', () => {
       const generation = state.exam.professorRoomGeneration;
       void refreshProfessorVirtualRoom({ examId: monitor.examId, generation, silent: false });
@@ -6884,6 +6945,10 @@
     });
     document.querySelectorAll('[data-dd26-unlock-live]').forEach((button) => button.addEventListener('click', () => openUnlockMonitoredAttempt(button.dataset.dd26UnlockLive)));
     document.querySelectorAll('[data-dd26-reopen-submission]').forEach((button) => button.addEventListener('click', () => openReopenSubmission(button.dataset.dd26ReopenSubmission)));
+    document.querySelectorAll('[data-dd26-access-action]').forEach((button) => button.addEventListener('click', () => openCandidateAccessAction(
+      button.dataset.dd26AccessCandidate,
+      button.dataset.dd26AccessAction,
+    )));
     if (focus) {
       host.focus();
     } else if (activeControlIdentity) {
@@ -6891,8 +6956,83 @@
         || [...host.querySelectorAll('[data-dd26-unlock-live]')]
           .find((button) => button.dataset.dd26UnlockLive === activeControlIdentity.unlockAttemptId)
         || [...host.querySelectorAll('[data-dd26-reopen-submission]')]
-          .find((button) => button.dataset.dd26ReopenSubmission === activeControlIdentity.reopenAttemptId);
+          .find((button) => button.dataset.dd26ReopenSubmission === activeControlIdentity.reopenAttemptId)
+        || [...host.querySelectorAll('[data-dd26-access-action]')]
+          .find((button) => button.dataset.dd26AccessAction === activeControlIdentity.accessAction
+            && button.dataset.dd26AccessCandidate === activeControlIdentity.accessCandidate);
       replacement?.focus({ preventScroll: true });
+    }
+  }
+
+  function openCandidateAccessAction(candidateNumber, action) {
+    const candidate = (state.exam.monitoring?.candidates || [])
+      .find((entry) => String(entry.candidateNumber) === String(candidateNumber));
+    if (!candidate || !['kick', 'block', 'unblock'].includes(action)) return;
+    const copy = {
+      kick: {
+        label: 'End live session',
+        title: 'Kick this student out now?',
+        warning: 'Every active session for this attempt will close immediately. Saved answers remain intact, and the student may enter again unless you block the account.',
+        actionLabel: 'Kick out',
+      },
+      block: {
+        label: 'Deny examination access',
+        title: 'Block this student from the examination?',
+        warning: 'Every active session will close and this authenticated account will be denied re-entry until you explicitly unblock it. Saved answers and audit evidence remain intact.',
+        actionLabel: 'Block account',
+      },
+      unblock: {
+        label: 'Restore examination access',
+        title: 'Unblock this student?',
+        warning: 'The student may enter again with the same authenticated account. Closed sessions stay closed; a fresh session will be required.',
+        actionLabel: 'Unblock account',
+      },
+    }[action];
+    const email = candidate.accessEmail || candidate.rosterEmail || 'Email unavailable';
+    openDialog(`<div class="dd26-label">${escapeHtml(copy.label)}</div><h2>${escapeHtml(copy.title)}</h2><dl class="dd26-publish-summary"><div><dt>Student</dt><dd>${escapeHtml(candidate.studentName || candidate.candidateNumber)}</dd></div><div><dt>Authenticated access email</dt><dd>${escapeHtml(email)}</dd></div><div><dt>Active sessions</dt><dd>${escapeHtml(candidate.activeSessionCount || 0)}</dd></div></dl><div class="${action === 'unblock' ? 'dd26-notice' : 'dd26-error'}" role="alert"><strong>${escapeHtml(copy.warning)}</strong></div><label class="dd26-field"><span>Reason for the audit record</span><textarea class="dd26-textarea compact" id="dd26-access-control-reason" minlength="5" maxlength="1000" required></textarea></label><label class="dd26-choice"><input id="dd26-access-control-ack" type="checkbox"><span><strong>I understand the effect on this student’s access</strong><small>This action is recorded with my Professor account and the current time.</small></span></label><div class="dd26-error" id="dd26-access-control-error" role="alert" hidden></div><div class="dd26-actions"><button class="dd26-button ${action === 'unblock' ? 'primary' : 'danger'}" id="dd26-confirm-access-control" type="button" disabled>${escapeHtml(copy.actionLabel)}</button><button class="dd26-button" data-dd26-close-dialog type="button">Cancel</button></div>`);
+    const reason = document.getElementById('dd26-access-control-reason');
+    const acknowledgment = document.getElementById('dd26-access-control-ack');
+    const confirmButton = document.getElementById('dd26-confirm-access-control');
+    const update = () => {
+      confirmButton.disabled = !acknowledgment.checked || String(reason.value || '').trim().length < 5;
+    };
+    reason?.addEventListener('input', update);
+    acknowledgment?.addEventListener('change', update);
+    confirmButton?.addEventListener('click', () => applyCandidateAccessAction(candidate, action));
+    reason?.focus();
+  }
+
+  async function applyCandidateAccessAction(candidate, action) {
+    const reason = String(document.getElementById('dd26-access-control-reason')?.value || '').trim();
+    const confirmed = document.getElementById('dd26-access-control-ack')?.checked === true;
+    const button = document.getElementById('dd26-confirm-access-control');
+    const errorHost = document.getElementById('dd26-access-control-error');
+    if (!button || !confirmed || reason.length < 5) return;
+    button.disabled = true;
+    button.textContent = action === 'kick' ? 'Ending session…' : action === 'block' ? 'Blocking…' : 'Unblocking…';
+    try {
+      const result = await command({
+        operation: `${action}_candidate`,
+        examId: state.exam.activeExamId,
+        candidateNumber: candidate.candidateNumber,
+        reason,
+        requestKey: randomKey(`candidate_${action}`),
+      });
+      closeDialog();
+      global.toast?.(action === 'kick'
+        ? `${result.sessionsClosed || 0} live session${Number(result.sessionsClosed) === 1 ? '' : 's'} ended. The student may re-enter.`
+        : action === 'block'
+          ? 'Student access blocked. Saved answers remain preserved.'
+          : 'Student access restored. A fresh session is required.', 'ok');
+      const generation = state.exam.professorRoomGeneration;
+      await refreshProfessorVirtualRoom({ examId: state.exam.activeExamId, generation, silent: true });
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = action === 'kick' ? 'Kick out' : action === 'block' ? 'Block account' : 'Unblock account';
+      if (errorHost) {
+        errorHost.hidden = false;
+        errorHost.textContent = error.message;
+      }
     }
   }
 
@@ -6952,7 +7092,7 @@
       }
       try {
         const payload = await api('/exam-room/query', {
-          operation: 'live_status_v2', examId: state.exam.activeExamId, gradingKey,
+          operation: 'live_status_v3', examId: state.exam.activeExamId, gradingKey,
         });
         state.exam.monitoring = {
           ...payload.result,

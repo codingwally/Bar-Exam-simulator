@@ -505,7 +505,7 @@
       const scope = normalizeScope(input, false);
       return transact([STORE_NAMES.meta], 'readonly', async (stores) => {
         const record = await requestPromise(stores.meta.get(`attempt-flags:${scope.attemptId}`));
-        if (!record || record.attemptKey !== attemptKey(scope) || record.sessionEpoch !== scope.sessionEpoch) return [];
+        if (!record || record.attemptKey !== attemptKey(scope)) return [];
         return Array.isArray(record.questionIds) ? [...record.questionIds] : [];
       });
     }

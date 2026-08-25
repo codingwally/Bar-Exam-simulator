@@ -655,3 +655,45 @@ Admin dashboard only. The production simulator, Examination Room, grading, payme
 ### Verification result
 
 **PASS — structure, navigation, responsive CSS, Worker route, least-privilege database contract, and regression suites.** Authenticated production visual and interaction verification remains the final ordered release gate.
+
+---
+
+# Examination Room renovation design QA — 2026-08-25
+
+## Scope and evidence
+
+- Scope: Examination Room only. The Bar Exam Simulator runtime, stylesheet, session controller, page shell, and service worker remain byte-for-byte unchanged from the release baseline.
+- Visual source captures: `docs/plans/examination-room-renovation-20260825/reference-professor-monitoring.png` and `docs/plans/examination-room-renovation-20260825/reference-live-monitoring.png` (`1272 × 716`).
+- Implementation captures: `implementation-role-entry-staging.png`, `implementation-professor-monitoring-staging.png`, and `implementation-student-entry-staging-final.jpg` under the same plan directory (`1270 × 714` browser export).
+- Combined same-frame review: `docs/plans/examination-room-renovation-20260825/qa-comparison-professor-monitoring.png` (`1270 × 1428`).
+- Inspected desktop viewport: `1280 × 720` CSS pixels at device scale `1.25`; inspected content width `1270px`; measured horizontal overflow `0px`.
+- The supplied Scrimba captures expose a branded video cover rather than the underlying product frames. The comparison therefore verifies the recorded target language—warm paper, judicial navy, restrained gold, editorial headings, direct role choice, circular question navigation, and dense live-room evidence—without claiming identical video pixels.
+
+## Interaction and accessibility verification
+
+- The public doorway exposes only **Professor** and **Student** and states that the Professor can see the authenticated access email and may end a session or block re-entry.
+- The Professor live room displayed the synthetic student's exact authenticated email without displaying answers, session credentials, device hashes, or other private writing data.
+- **Kick out** closed the active session while allowing a later authorized entry. **Block** closed the session and denied a new one. **Unblock** restored normal entry checks. Each action produced one distinct audit event.
+- The Student entry, readiness acknowledgement, class-code field, and primary entry action are keyboard-labelled and remain in a single readable task column.
+- Clipboard and right-click availability, conditional focus recording, camera-off status, reconnect behavior, and no-automatic-failure behavior are stated truthfully.
+- The Professor/Student role-home control returned to the two-role doorway in the verified visible state.
+- The final desktop state had no page-level horizontal overflow and no relevant browser-console error.
+
+## Iteration history
+
+1. Replaced the failed multi-role doorway with the requested two-role entry and route-scoped paper/navy/gold presentation.
+2. Added the authenticated access-email column and explicit, audited Kick out, Block, and Unblock controls.
+3. Removed stale public copy that claimed clipboard and right-click were blocked when the runtime policy leaves them available.
+4. Replaced an inherited dark choice-card surface with a light, high-contrast renovation treatment for the Student acknowledgement.
+5. Added release contracts for least-privilege projections, role isolation, access-control reversibility, simulator-file hashes, and route-scoped assets.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+- Worker release inventory: passed.
+- Pages release inventory and sanitized artifact: passed.
+- Staging end-to-end access-control journey: passed.
+
+passed

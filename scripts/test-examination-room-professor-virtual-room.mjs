@@ -9,7 +9,7 @@ const [frontend, css, core, routes, worker, migration, workbook] = await Promise
   readFile(new URL('worker/exam-room-2026-core.mjs', root), 'utf8'),
   readFile(new URL('worker/duediligence-2026-routes.mjs', root), 'utf8'),
   readFile(new URL('worker/index.mjs', root), 'utf8'),
-  readFile(new URL('supabase/migrations/20260812235553_generalize_exam_workspace_removal.sql', root), 'utf8'),
+  readFile(new URL('supabase/migrations/20260825183000_examination_room_professor_access_controls.sql', root), 'utf8'),
   readFile(new URL('worker/exam-results-workbook.mjs', root), 'utf8'),
 ]);
 
@@ -24,7 +24,7 @@ function between(source, start, end) {
 const publish = between(frontend, 'async function scheduleExam', 'function localDateValue');
 const room = between(frontend, 'function stopProfessorRoomPolling', 'function openReopenSubmission');
 const professor = between(frontend, 'function professorExamList', 'function professorClass');
-const liveSql = between(migration, 'create or replace function public.exam_room_live_status_v2', '-- Allow a roster/status workbook');
+const liveSql = between(migration, 'create or replace function public.exam_room_live_status_v3', 'revoke all on function public.exam_room_live_status_v3');
 const pollerSource = between(frontend, 'function stopProfessorRoomPolling', 'async function openLiveStatus');
 
 assert.match(publish, /id="dd26-enter-published-room"/);
@@ -38,11 +38,14 @@ assert.doesNotMatch(professor, /classes\[0\]/,
   'the Professor list must not silently open the first examination');
 
 assert.match(room, /Waiting for the Beadle to upload and confirm a valid class list/);
-assert.match(room, /Present and taking/);
+assert.match(room, /Connected and taking/);
 assert.match(room, /Not yet present/);
 assert.match(room, /Submitted/);
-assert.match(room, /tab\/focus/);
-assert.match(room, /copy\/paste\/right-click/);
+assert.match(room, /Authenticated access and progress/);
+assert.match(room, /Access email/);
+assert.match(room, /Kick out/);
+assert.match(room, /Block/);
+assert.match(room, /Unblock/);
 assert.match(room, /Grade submitted exams/);
 assert.match(room, /Download current workbook/);
 assert.match(room, /Back to Professor workspace/);
@@ -63,21 +66,22 @@ assert.match(frontend, /analytics\.submitted > 0 && analytics\.ungraded === 0/,
   'the dashboard can release complete class grades without an open single-student grading workspace');
 assert.match(frontend, /grading\?\.examId \|\| reportBeforeRelease\?\.examId/);
 
-assert.match(core, /operation === 'live_status_v2'[\s\S]*optionalCredential/);
-assert.match(routes, /'lastHeartbeatAt', 'incidentCount', 'focusExitCount', 'clipboardAttemptCount'/);
-assert.doesNotMatch(between(routes, 'function liveStatusV2View', 'function projectEvidenceRows'), /answer|email/i,
-  'the Professor monitor projection must not expose active answers or student email');
+assert.match(core, /operation === 'live_status_v3'[\s\S]*optionalCredential/);
+const liveProjection = between(routes, 'function liveStatusV2View', 'function projectEvidenceRows');
+assert.match(liveProjection, /'rosterEmail', 'accessEmail'/);
+assert.doesNotMatch(liveProjection, /answerText|sessionId|deviceInstanceHash/i,
+  'the Professor monitor may expose authenticated email but never answers or bearer-like session data');
 assert.match(worker, /'exam_room_release_results_v2'/);
 assert.match(worker, /'exam_room_prepare_result_export_v4'/);
 
-for (const field of ['lastHeartbeatAt', 'incidentCount', 'focusExitCount', 'clipboardAttemptCount', 'lastIncidentAt']) {
+for (const field of ['accessEmail', 'rosterEmail', 'activeSessionCount', 'accessStatus', 'canKick', 'canBlock', 'canUnblock']) {
   assert.match(liveSql, new RegExp(`'${field}'`));
 }
 assert.doesNotMatch(liveSql, /answer_snapshot|answerText/i,
   'the live room SQL must remain answer-free');
 assert.match(liveSql, /exam_room_verify_grading_access_v3/);
-assert.match(migration, /exam_room_release_results_v2[\s\S]*exam_room_verify_grading_access_v3/);
-assert.match(migration, /exam_room_prepare_result_export_v4[\s\S]*exam_room_verify_grading_access_v3/);
+assert.match(migration, /exam_room_control_candidate_access_v1[\s\S]*candidate_session_kicked/);
+assert.match(migration, /exam_room_open_session_v4[\s\S]*EXAM_ROOM_ACCESS_BLOCKED/);
 
 assert.match(workbook, /function studentDetailSheet/);
 assert.match(workbook, /function uniqueStudentSheetNames/);
@@ -198,4 +202,4 @@ function professorPollerHarness() {
     'credential denial must stop background polling until the Professor verifies access');
 }
 
-console.log('Professor virtual Examination Room, remembered access, and always-available workbook contracts passed.');
+console.log('Professor authenticated access, session controls, remembered access, and workbook contracts passed.');

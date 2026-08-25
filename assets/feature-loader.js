@@ -32,10 +32,14 @@
       ],
     }),
     examinationRoom: Object.freeze({
-      styles: ['assets/duediligence-2026.css?v=guided-random-access-20260822-1'],
+      styles: [
+        'assets/duediligence-2026.css?v=guided-random-access-20260822-1',
+        'assets/examination-room-renovation.css?v=professor-access-20260825-1',
+      ],
       scripts: [
         'assets/examination-room-2-store.js?v=exam-room-ux-20260814-1',
         'assets/duediligence-2026.js?v=syllabus-review-20260823-1',
+        'assets/examination-room-renovation.js?v=professor-access-20260825-1',
       ],
     }),
   });

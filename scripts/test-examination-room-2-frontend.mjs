@@ -41,8 +41,14 @@ assert.doesNotMatch(stagingBuild, /examinationRoom2: false/,
 assert.doesNotMatch(stagingBuild, /spa-examination-room[^\n]*hidden/,
   'staging no longer needs to unhide an entry that is enabled for the beta-wide release');
 
-// Public information architecture is exactly the four room-scoped roles.
-assert.match(frontend, /\['professor', 'Professor'[\s\S]*\['beadle', 'Beadle'[\s\S]*\['student', 'Student'[\s\S]*\['exam_administrator', 'Exam Administrator'/);
+// The renovated public hub has exactly the two user-facing workspaces. Legacy
+// operator routes remain server-authorized but no longer dominate entry.
+const examEntryBlock = frontend.slice(
+  frontend.indexOf('function examEntry'),
+  frontend.indexOf('function bindExamEntry'),
+);
+assert.match(examEntryBlock, /\['professor', 'Professor'[\s\S]*\['student', 'Student'/);
+assert.doesNotMatch(examEntryBlock, /\['beadle'|\['exam_administrator'/);
 assert.match(frontend, /data-dd26-exam-role="\$\{id\}"/);
 assert.doesNotMatch(frontend, /\['workplace'/i);
 assert.match(frontend, /Sign-in is required to continue/);
@@ -57,9 +63,9 @@ assert.ok(roleSelectionBlock.indexOf('if (!isAuthenticated())') < roleSelectionB
 assert.doesNotMatch(roleSelectionBlock, /new URL\('admin\//,
   'Exam Administrator must stay room-scoped instead of redirecting into platform administration');
 assert.match(roleSelectionBlock, /if \(role !== 'student'\) await loadRoomRequests\(\)/);
-assert.match(frontend, /Request an Examination Room/);
-assert.match(frontend, /Use the invitation from the Professor/);
-assert.match(frontend, /Prepare quotations, issue provisional room keys, and review payment only for assigned requests/);
+assert.match(examEntryBlock, /authenticated email of every student who enters/);
+assert.match(examEntryBlock, /submission receipt/);
+assert.match(examEntryBlock, /may end a live session or block re-entry/);
 assert.match(frontend, /Return to Examination Room home/);
 assert.match(frontend, /class="dd26-button dd26-exam-home-button"/,
   'the role and workspace return control must be a prominent design-system button');
@@ -135,12 +141,12 @@ const beadleEnd = frontend.indexOf('function professorSection', beadleStart);
 assert.match(frontend.slice(beadleStart, beadleEnd), /After publishing, the Professor gives the named Beadle a one-time key/);
 assert.match(frontend.slice(beadleStart, beadleEnd), /This Beadle key is not the student exam code/);
 assert.match(frontend.slice(beadleStart, beadleEnd), /Do not give it to students/);
-assert.match(frontend, /Professor . Preparation steps 1 to 3[\s\S]*Beadle . Preparation steps 4 and 5[\s\S]*Student . Simple steps[\s\S]*Exam Administrator . Assigned-room controls/);
+assert.match(frontend, /Professor . Complete examination flow[\s\S]*Student . Entry to receipt/);
 
 // Existing emailed deep links identify an exam without becoming authorization.
 assert.match(frontend, /raw\.startsWith\('examination-room\?'\)/);
 assert.match(frontend, /parameters\.get\('exam'\)/);
-assert.match(frontend, /The link identifies the examination only\. It does not give anyone access/);
+assert.match(frontend, /The link identifies the examination only\. It does not grant access by itself/);
 
 // Professor authoring remains count-configurable and follows one reversible five-step preparation journey.
 assert.match(frontend, /Examination details[\s\S]*Questions reviewed[\s\S]*Rules and publication[\s\S]*Class list saved[\s\S]*Student handout ready/);
@@ -362,7 +368,7 @@ assert.match(frontend, /gradingKeyInput\.value = ''/,
 assert.match(frontend, /operation: 'reopen_submission'[\s\S]*attemptId[\s\S]*newDeadline:[\s\S]*reason[\s\S]*gradingKey[\s\S]*requestKey:/);
 assert.match(frontend, /result\.requiresNewSession !== true[\s\S]*result\.generation[\s\S]*result\.priorGeneration[\s\S]*result\.priorReceiptId[\s\S]*result\.priorSnapshotHash/);
 assert.match(frontend, /The first submission is never opened or replaced/);
-assert.match(frontend, /operation: 'live_status_v2'/);
+assert.match(frontend, /operation: 'live_status_v3'/);
 const liveStatusBlock = frontend.slice(
   frontend.indexOf('async function loadLiveStatus'),
   frontend.indexOf('function renderLiveStatus'),
@@ -594,8 +600,10 @@ const submitBlock = frontend.slice(
   frontend.indexOf('async function sendPendingSubmission'),
 );
 assert.match(submitBlock, /ensureSubmissionIntent/);
-assert.match(frontend, /allowUncoordinatedWrite: true/,
-  'the browser must not turn a valid server-authorized multi-device session read-only');
+assert.match(frontend, /allowUncoordinatedWrite: false/,
+  'a second local tab must not become an uncoordinated answer writer');
+assert.doesNotMatch(frontend, /lease\.readonly\s*=\s*false/,
+  'the browser must preserve the local tab-lease decision');
 assert.match(frontend, /activeWritingSession[\s\S]*renderExamRoom\(\)[\s\S]*return;/,
   'session refresh events must preserve an in-progress Examination Room attempt');
 assert.match(frontend, /attemptTimerKey[\s\S]*timerKey[\s\S]*updateAttemptClock\(\);[\s\S]*return;/,
@@ -640,10 +648,11 @@ const leaseBlock = frontend.slice(
   frontend.indexOf('state.exam.tabLease.subscribe'),
   frontend.indexOf('await state.exam.tabLease.start'),
 );
-assert.match(leaseBlock, /lease\.readonly = false/,
-  'browser tab coordination must not override a valid server-authorized writing session');
-assert.doesNotMatch(frontend, /This tab is read-only and cannot submit the examination/,
-  'a returning or second authorized device must not be blocked by a browser-only writer lease');
+assert.doesNotMatch(leaseBlock, /lease\.readonly\s*=\s*false/,
+  'browser tab coordination must preserve its single-writer result');
+assert.match(leaseBlock, /readonlyTab = lease\.readonly/);
+assert.match(frontend, /Another tab holds the active writing lease\. This tab is read-only to prevent conflicting edits/,
+  'a second local tab must explain why editing and submission are disabled');
 
 const loadAttemptBlock = frontend.slice(
   frontend.indexOf('async function loadAttempt'),
@@ -705,15 +714,12 @@ for (const terminalCode of [
 assert.match(pendingSubmissionBlock, /quarantineAttemptQueue/,
   'terminal submission failures retain recovery evidence and do not retry forever');
 
-// Exam safeguards block clipboard and right-click actions only inside the active
-// surface, respect approved assistive-technology settings, and never turn a
-// signal into a penalty.
+// Exam safeguards may record focus changes, but clipboard and right-click stay
+// available. Dormant handlers remain content-blind and cannot be installed
+// unless a future policy explicitly enables them.
 assert.doesNotMatch(frontend, /preventExamAction/);
-assert.match(frontend, /function examIntegrityPolicy[\s\S]*integrityMode !== 'off'[\s\S]*integrityExempt !== true[\s\S]*assistiveTechnology !== true/);
-assert.match(frontend, /addEventListener\('copy', clipboardIncident, true\)/);
-assert.match(frontend, /addEventListener\('cut', clipboardIncident, true\)/);
-assert.match(frontend, /addEventListener\('paste', clipboardIncident, true\)/);
-assert.match(frontend, /addEventListener\('contextmenu', contextMenuIncident, true\)/);
+assert.match(frontend, /function examIntegrityPolicy[\s\S]*integrityMode !== 'off'[\s\S]*integrityExempt !== true[\s\S]*clipboardBlocked: false/);
+assert.match(frontend, /if \(integrity\.clipboardBlocked[\s\S]*addEventListener\('copy', clipboardIncident, true\)[\s\S]*addEventListener\('cut', clipboardIncident, true\)[\s\S]*addEventListener\('paste', clipboardIncident, true\)[\s\S]*addEventListener\('contextmenu', contextMenuIncident, true\)/);
 assert.match(frontend, /event\.preventDefault\(\)[\s\S]*event\.type === 'paste' \? 'paste_attempt' : 'copy_attempt'/);
 assert.match(frontend, /action: event\.type, blocked: true, surface: 'examination'/);
 assert.match(frontend, /attempt\.status !== 'in_progress'[\s\S]*clipboardEventTouchesAttempt\(event, surface\)/);
@@ -771,7 +777,7 @@ assert.deepEqual(examIntegrityPolicy({ integrityMode: 'record_only' }, { integri
 assert.deepEqual(examIntegrityPolicy({ integrityMode: 'record_only' }, { assistiveTechnology: true }),
   { recordingEnabled: true, clipboardBlocked: false });
 assert.deepEqual(examIntegrityPolicy({ integrityMode: 'warn_and_record' }, {}),
-  { recordingEnabled: true, clipboardBlocked: true });
+  { recordingEnabled: true, clipboardBlocked: false });
 
 const insideNode = { location: 'inside' };
 const outsideStart = { location: 'outside-start' };
@@ -785,7 +791,7 @@ const crossingSelection = {
 };
 assert.equal(clipboardEventTouchesAttempt(
   { type: 'copy', target: outsideStart }, attemptSurface, crossingSelection,
-), true, 'a selection crossing into the examination must not bypass copy blocking');
+), true, 'the scope helper still identifies a selection crossing the examination');
 assert.equal(clipboardEventTouchesAttempt(
   { type: 'paste', target: outsideStart }, attemptSurface, crossingSelection,
 ), false, 'a stale examination selection must not block paste outside the examination');
@@ -794,7 +800,7 @@ assert.equal(clipboardEventTouchesAttempt(
 ), false, 'cut outside the examination remains available');
 assert.equal(clipboardEventTouchesAttempt(
   { type: 'paste', target: insideNode }, attemptSurface, null,
-), true, 'paste into the examination answer must be blocked');
+), true, 'the scope helper identifies paste inside the examination even though the renovated policy does not block it');
 assert.equal(clipboardEventTouchesAttempt(
   { type: 'cut', target: insideNode }, attemptSurface, null,
 ), true, 'cut from the examination answer must be blocked');
@@ -832,6 +838,10 @@ assert.match(css, /\.dd26-reschedule-comparison>div\{grid-template-columns:1fr;g
 assert.doesNotMatch(html, /<script[^>]+assets\/examination-room-2-store\.js/);
 assert.match(featureLoader, /assets\/examination-room-2-store\.js\?v=exam-room-ux-20260814-1/);
 assert.match(build, /assets\/examination-room-2-store\.js/);
+assert.match(featureLoader, /assets\/examination-room-renovation\.css\?v=professor-access-20260825-1/);
+assert.match(featureLoader, /assets\/examination-room-renovation\.js\?v=professor-access-20260825-1/);
+assert.match(build, /assets\/examination-room-renovation\.css/);
+assert.match(build, /assets\/examination-room-renovation\.js/);
 assert.match(featureLoader, /duediligence-2026\.css\?v=guided-random-access-20260822-1/);
 assert.match(featureLoader, /duediligence-2026\.js\?v=syllabus-review-20260823-1/);
 

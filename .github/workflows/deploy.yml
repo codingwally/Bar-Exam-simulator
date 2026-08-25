@@ -104,6 +104,7 @@ jobs:
           node scripts/test-examination-room-class-results.mjs
           node scripts/test-examination-room-2-grading-results.mjs
           node scripts/test-examination-room-2-visual-css.mjs
+          node scripts/test-examination-room-renovation-20260825.mjs
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
 

@@ -120,6 +120,7 @@ const EXAM_ROOM_2_QUERY_OPERATIONS = new Set([
   'incident_summary',
   'submission_status',
   'live_status_v2',
+  'live_status_v3',
   'results_dashboard',
   'result_delivery_report',
   'grading_model_answer',
@@ -154,6 +155,9 @@ const EXAM_ROOM_2_COMMAND_OPERATIONS = new Set([
   'reopen_exam_roster',
   'record_candidate_verification',
   'set_candidate_admission',
+  'kick_candidate',
+  'block_candidate',
+  'unblock_candidate',
   'set_accommodation',
   'start_attempt_by_code',
   'start_beadle_attempt',
@@ -516,11 +520,13 @@ function liveStatusV2View(value, input) {
   return {
     ...result,
     candidates: projectEvidenceRows(source.candidates, [
-      'candidateNumber', 'studentName', 'studentNumber', 'attemptId', 'state', 'startedAt', 'serverDeadline',
+      'candidateNumber', 'studentName', 'studentNumber', 'rosterEmail', 'accessEmail',
+      'attemptId', 'state', 'startedAt', 'serverDeadline',
       'submittedAt', 'generation', 'latestReceiptId', 'priorReceiptId',
       'activeReopeningId', 'canReopenSubmission', 'reopenBlockedReason',
       'lastHeartbeatAt', 'incidentCount', 'focusExitCount', 'clipboardAttemptCount',
-      'lastIncidentAt',
+      'lastIncidentAt', 'activeSessionCount', 'lastSessionSeenAt', 'accessStatus',
+      'blockedAt', 'lastKickedAt', 'kickCount', 'canKick', 'canBlock', 'canUnblock',
     ], 500),
   };
 }
@@ -1365,9 +1371,12 @@ export function createDD2026Handlers(deps) {
       };
     } else if (input.operation === 'live_status'
         || input.operation === 'live_status_v2'
+        || input.operation === 'live_status_v3'
         || input.operation === 'grading_workspace') {
-      functionName = input.operation === 'live_status_v2'
-        ? 'exam_room_live_status_v2'
+      functionName = input.operation === 'live_status_v3'
+        ? 'exam_room_live_status_v3'
+        : input.operation === 'live_status_v2'
+          ? 'exam_room_live_status_v2'
         : input.operation === 'live_status'
           ? 'exam_room_live_status'
           : 'exam_room_grading_workspace_v3';
@@ -1477,7 +1486,7 @@ export function createDD2026Handlers(deps) {
         result: gradingModelAnswerView(result, input.examId),
       }, 200, origin, allowedOrigin);
     }
-    if (input.operation === 'live_status_v2') {
+    if (input.operation === 'live_status_v2' || input.operation === 'live_status_v3') {
       return jsonResponse({
         ok: true,
         result: liveStatusV2View(result, input),
@@ -2175,6 +2184,21 @@ export function createDD2026Handlers(deps) {
         p_candidate_number: input.candidateNumber, p_decision: input.decision,
         p_reason: input.reason, p_request_key: input.requestKey,
       } }),
+      kick_candidate: async () => ({ functionName: 'exam_room_control_candidate_access_v1', body: {
+        p_professor_user_id: userId, p_exam_public_id: input.examId,
+        p_candidate_number: input.candidateNumber, p_action: 'kick',
+        p_reason: input.reason, p_request_key: input.requestKey,
+      } }),
+      block_candidate: async () => ({ functionName: 'exam_room_control_candidate_access_v1', body: {
+        p_professor_user_id: userId, p_exam_public_id: input.examId,
+        p_candidate_number: input.candidateNumber, p_action: 'block',
+        p_reason: input.reason, p_request_key: input.requestKey,
+      } }),
+      unblock_candidate: async () => ({ functionName: 'exam_room_control_candidate_access_v1', body: {
+        p_professor_user_id: userId, p_exam_public_id: input.examId,
+        p_candidate_number: input.candidateNumber, p_action: 'unblock',
+        p_reason: input.reason, p_request_key: input.requestKey,
+      } }),
       set_accommodation: async () => ({ functionName: 'exam_room_set_accommodation_v2', body: {
         p_professor_user_id: userId, p_exam_public_id: input.examId,
         p_candidate_number: input.candidateNumber, p_accommodation: input.accommodation,
@@ -2213,7 +2237,7 @@ export function createDD2026Handlers(deps) {
         p_exam_public_id: input.examId,
         p_request_key: input.requestKey,
       } }),
-      open_session: async () => ({ functionName: 'exam_room_open_session_v3', body: {
+      open_session: async () => ({ functionName: 'exam_room_open_session_v4', body: {
         p_student_user_id: userId, p_attempt_public_id: input.attemptId,
         p_device_instance_hash: input.deviceInstanceHash, p_request_key: input.requestKey,
       } }),

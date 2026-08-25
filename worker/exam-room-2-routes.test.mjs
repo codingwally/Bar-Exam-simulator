@@ -995,6 +995,90 @@ test('v2 owner monitor supports first-key and remembered access while projecting
   assert.equal(rememberedCall.body.p_rate_key_hash, null);
 });
 
+test('renovated Professor monitor exposes only authenticated access evidence and exact controls', async () => {
+  const gradingKey = 'professor-grading-key-secret';
+  const monitor = harness({
+    rpc: async (name) => name === 'exam_room_live_status_v3'
+      ? {
+        ok: true,
+        examId,
+        title: 'Civil Law Final',
+        status: 'open',
+        rosterReady: true,
+        studentAccessReady: true,
+        candidates: [{
+          candidateNumber: '0007',
+          studentName: 'Ana Reyes',
+          studentNumber: '2026-001',
+          rosterEmail: 'ana.roster@example.edu',
+          accessEmail: 'ana.access@example.edu',
+          attemptId,
+          state: 'in_progress',
+          activeSessionCount: 1,
+          lastSessionSeenAt: '2026-08-10T02:00:00Z',
+          accessStatus: 'allowed',
+          canKick: true,
+          canBlock: true,
+          canUnblock: false,
+          privateAnswer: 'must never leave the Worker',
+          sessionId,
+          deviceInstanceHash: 'a'.repeat(64),
+        }],
+      }
+      : { ok: true },
+  });
+
+  const response = await monitor.handlers.examQuery(request({
+    operation: 'live_status_v3', examId, gradingKey,
+  }), v2Env, '', '');
+  const payload = await response.json();
+  assert.equal(monitor.calls.at(-1).name, 'exam_room_live_status_v3');
+  assert.equal(monitor.calls.at(-1).body.p_professor_user_id, userId);
+  assert.equal(monitor.calls.at(-1).body.p_grading_key_hash, await sha256Hex(gradingKey));
+  assert.equal(payload.result.candidates[0].accessEmail, 'ana.access@example.edu');
+  assert.equal(payload.result.candidates[0].rosterEmail, 'ana.roster@example.edu');
+  assert.equal(payload.result.candidates[0].activeSessionCount, 1);
+  assert.equal(payload.result.candidates[0].canKick, true);
+  assert.equal(payload.result.candidates[0].privateAnswer, undefined);
+  assert.equal(payload.result.candidates[0].sessionId, undefined);
+  assert.equal(payload.result.candidates[0].deviceInstanceHash, undefined);
+
+  for (const [operation, action] of [
+    ['kick_candidate', 'kick'],
+    ['block_candidate', 'block'],
+    ['unblock_candidate', 'unblock'],
+  ]) {
+    const controlled = harness();
+    await controlled.handlers.examCommand(request({
+      operation,
+      examId,
+      candidateNumber: '0007',
+      reason: 'Professor verified this access decision.',
+      requestKey,
+    }), v2Env, '', '', {});
+    assert.equal(controlled.calls.at(-1).name, 'exam_room_control_candidate_access_v1');
+    assert.deepEqual(controlled.calls.at(-1).body, {
+      p_professor_user_id: userId,
+      p_exam_public_id: examId,
+      p_candidate_number: '0007',
+      p_action: action,
+      p_reason: 'Professor verified this access decision.',
+      p_request_key: requestKey,
+    });
+  }
+});
+
+test('student session opening is guarded by the Professor block-aware wrapper', async () => {
+  const { handlers, calls } = harness();
+  await handlers.examCommand(request({
+    operation: 'open_session',
+    attemptId,
+    deviceInstanceHash: 'a'.repeat(64),
+    requestKey,
+  }), v2Env, '', '', {});
+  assert.equal(calls.at(-1).name, 'exam_room_open_session_v4');
+});
+
 test('result release uses the remembered-access wrapper without exposing the Professor key', async () => {
   const gradingKey = 'professor-grading-key-secret';
   const release = harness({

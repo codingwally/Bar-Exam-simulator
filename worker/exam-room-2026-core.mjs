@@ -42,6 +42,7 @@ export const EXAM_ROOM_2026_QUERY_OPERATIONS = new Set([
   'submission_status',
   'live_status',
   'live_status_v2',
+  'live_status_v3',
   'grading_workspace',
   'results_dashboard',
   'result_delivery_report',
@@ -85,6 +86,9 @@ export const EXAM_ROOM_2026_COMMAND_OPERATIONS = new Set([
   'reopen_exam_roster',
   'record_candidate_verification',
   'set_candidate_admission',
+  'kick_candidate',
+  'block_candidate',
+  'unblock_candidate',
   'set_accommodation',
   'start_attempt',
   'start_attempt_by_code',
@@ -573,6 +577,7 @@ export function normalizeExamRoomQuery(input) {
     normalized.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'live_status'
       || operation === 'live_status_v2'
+      || operation === 'live_status_v3'
       || operation === 'grading_workspace'
       || operation === 'grading_model_answer'
       || operation === 'student_result') {
@@ -580,6 +585,7 @@ export function normalizeExamRoomQuery(input) {
     if (operation === 'live_status') {
       normalized.gradingKey = credential(payload.gradingKey, 'Professor grading key');
     } else if (operation === 'live_status_v2'
+        || operation === 'live_status_v3'
         || operation === 'grading_workspace'
         || operation === 'grading_model_answer') {
       normalized.gradingKey = optionalCredential(payload.gradingKey, 'Professor grading key');
@@ -980,6 +986,11 @@ export function normalizeExamRoomCommand(input) {
     n.candidateNumber = boundedText(payload.candidateNumber, 'Candidate number', 120, { minimum: 1 });
     n.decision = enumValue(payload.decision, 'Admission decision', ['admit', 'deny', 'reset']);
     n.reason = boundedText(payload.reason, 'Admission reason', 1_000, { minimum: 5 });
+    n.requestKey = requestKey(payload.requestKey);
+  } else if (['kick_candidate', 'block_candidate', 'unblock_candidate'].includes(operation)) {
+    n.examId = uuid(payload.examId, 'Examination');
+    n.candidateNumber = boundedText(payload.candidateNumber, 'Candidate number', 120, { minimum: 1 });
+    n.reason = boundedText(payload.reason, 'Access-control reason', 1_000, { minimum: 5 });
     n.requestKey = requestKey(payload.requestKey);
   } else if (operation === 'set_accommodation') {
     n.examId = uuid(payload.examId, 'Examination');

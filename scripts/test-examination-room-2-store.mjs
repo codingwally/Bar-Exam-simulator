@@ -338,8 +338,8 @@ const savedFlags = await store.saveQuestionFlags({
 assert.deepEqual(savedFlags.questionIds, ['question-1', 'question-2']);
 assert.deepEqual(await store.getQuestionFlags(scope), ['question-1', 'question-2'],
   'question flags survive a same-session reload on the same device');
-assert.deepEqual(await store.getQuestionFlags({ ...scope, sessionEpoch: 'epoch-b' }), [],
-  'question flags fail closed across a different authorized session epoch');
+assert.deepEqual(await store.getQuestionFlags({ ...scope, sessionEpoch: 'epoch-b' }), ['question-1', 'question-2'],
+  'question flags remain attached to the attempt across an authorized session transfer');
 const firstInput = {
   ...scope,
   questionId: 'question-1',

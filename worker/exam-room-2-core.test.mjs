@@ -152,6 +152,42 @@ test('Professor authoring revisions are scoped, versioned, and idempotent', () =
   }));
 });
 
+test('Professor access monitoring and student controls are tightly scoped and bounded', () => {
+  assert.deepEqual(normalizeExamRoomQuery({
+    operation: 'live_status_v3',
+    examId,
+    gradingKey: 'professor-grading-key-secret',
+  }), {
+    operation: 'live_status_v3',
+    examId,
+    gradingKey: 'professor-grading-key-secret',
+  });
+
+  for (const operation of ['kick_candidate', 'block_candidate', 'unblock_candidate']) {
+    assert.deepEqual(normalizeExamRoomCommand({
+      operation,
+      examId,
+      candidateNumber: '0007',
+      reason: 'Professor verified this access decision.',
+      requestKey,
+    }), {
+      operation,
+      examId,
+      candidateNumber: '0007',
+      reason: 'Professor verified this access decision.',
+      requestKey,
+    });
+  }
+
+  assert.throws(() => normalizeExamRoomCommand({
+    operation: 'block_candidate',
+    examId,
+    candidateNumber: '0007',
+    reason: 'no',
+    requestKey,
+  }));
+});
+
 test('Professor schedule corrections allow immediate opening with bounded rules and current publication scope', () => {
   const opensAt = new Date(Date.now() + 90 * 60 * 1_000).toISOString();
   const hardClosesAt = new Date(Date.now() + 4 * 60 * 60 * 1_000).toISOString();

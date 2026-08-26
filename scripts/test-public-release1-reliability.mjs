@@ -104,6 +104,52 @@ vm.runInContext(extractNamedFunction(landing, 'openProtectedFeature'), quorumHom
 assert.equal(await vm.runInContext("openProtectedFeature('quorum')", quorumHomeContext), true);
 assert.equal(quorumOpenOptions?.forceHome, true, 'Home must explicitly reset the community view to the feed.');
 
+// Mock navigation has already completed the authoritative access check, so the
+// page-router guard must not start a second asynchronous check and return false.
+let mockPageOptions = null;
+const mockNavigationState = {};
+const mockNavigationContext = vm.createContext({
+  state: mockNavigationState,
+  currentSession: () => ({ access_token: 'test-token' }),
+  loadFeature: async () => true,
+  showApplication() {},
+  document: { getElementById: () => ({ id: 'spa-mock' }) },
+  global: {
+    DueDiligencePhase2: { whenAuthReady: async () => {} },
+    DueDiligencePhase4: { ensureProtectedAccess: async () => true },
+    showPage(_page, _trigger, options) {
+      mockPageOptions = options;
+      return options?.accessVerified === true;
+    },
+  },
+});
+vm.runInContext(extractNamedFunction(landing, 'openProtectedFeature'), mockNavigationContext);
+assert.equal(await vm.runInContext("openProtectedFeature('mock')", mockNavigationContext), true);
+assert.equal(mockPageOptions?.accessVerified, true,
+  'Mock navigation must identify its completed access check to the page router.');
+assert.equal(mockNavigationState.lastActivatedHash, 'mock-bar');
+
+let guardedOriginalCalls = 0;
+let guardedAccessChecks = 0;
+const guardedPageContext = vm.createContext({
+  protectedPageRoutes: { mock: '#mock-bar' },
+  ensureProtectedAccess: async () => { guardedAccessChecks += 1; return true; },
+  global: {
+    showPage() { guardedOriginalCalls += 1; return true; },
+    DueDiligencePhase4: { getAccess: () => null },
+    DueDiligencePublicNavigation: {},
+  },
+});
+vm.runInContext(extractNamedFunction(loader, 'installPageRouterGuard'), guardedPageContext);
+vm.runInContext('installPageRouterGuard()', guardedPageContext);
+assert.equal(
+  vm.runInContext("global.showPage('mock', {}, { accessVerified: true })", guardedPageContext),
+  true,
+  'An access-verified Mock route must preserve the synchronous page-router result.',
+);
+assert.equal(guardedOriginalCalls, 1);
+assert.equal(guardedAccessChecks, 0, 'An access-verified route must not repeat the access check.');
+
 // Busy navigation is inert even when the trigger is an anchor, and stale BarFeels is not success.
 assert.match(landing, /event\.preventDefault\(\);\s*if \(feature\.disabled \|\| feature\.getAttribute\('aria-busy'\) === 'true'\) return;/);
 assert.match(landing, /control\.setAttribute\('aria-disabled', 'true'\)/);
@@ -169,6 +215,60 @@ assert.equal(retryButton.hidden, false);
 assert.equal(typeof retryButton.onclick, 'function');
 assert.equal(statusCopy.textContent, 'Second failure');
 assert.equal(status.role, 'alert');
+
+// A successful retry must replace the stale error with success and retire Retry.
+const successfulStatusClasses = new Set();
+const successfulStatus = {
+  hidden: true,
+  role: '',
+  classList: {
+    add(...names) { names.forEach((name) => successfulStatusClasses.add(name)); },
+    remove(...names) { names.forEach((name) => successfulStatusClasses.delete(name)); },
+    toggle(name, force) {
+      if (force === true) successfulStatusClasses.add(name);
+      else if (force === false) successfulStatusClasses.delete(name);
+    },
+  },
+  setAttribute(name, value) { if (name === 'role') this.role = value; },
+};
+const successfulStatusCopy = { textContent: '' };
+const successfulRetryButton = {
+  hidden: true,
+  disabled: false,
+  onclick: null,
+  setAttribute() {},
+  removeAttribute() {},
+};
+const successfulRetryContext = vm.createContext({
+  navigationStatus: successfulStatus,
+  navigationStatusCopy: successfulStatusCopy,
+  navigationRetry: successfulRetryButton,
+  state: { publicNavigationBusy: false, publicNavigationVersion: 0, navigationStatusTimer: null },
+  featureLabels: { mock: 'Bar Question Practice' },
+  currentSession: () => ({ access_token: 'test-token' }),
+  openQuorumHome: async () => false,
+  openProtectedFeature: async () => true,
+  resetQuorumHomeLocation() {},
+  setPublicNavigationBusy() {},
+  global: { clearTimeout() {}, setTimeout: () => 1, toast() {} },
+});
+vm.runInContext([
+  extractNamedFunction(landing, 'clearNavigationStatus'),
+  extractNamedFunction(landing, 'showNavigationStatus'),
+  extractNamedFunction(landing, 'reportNavigationError'),
+  extractNamedFunction(landing, 'runPublicNavigation'),
+].join('\n'), successfulRetryContext);
+vm.runInContext(
+  "reportNavigationError('First failure', () => runPublicNavigation('mock'))",
+  successfulRetryContext,
+);
+await successfulRetryButton.onclick();
+assert.equal(successfulStatusCopy.textContent, 'Bar Question Practice opened.');
+assert.equal(successfulStatusClasses.has('is-success'), true);
+assert.equal(successfulStatusClasses.has('is-error'), false);
+assert.equal(successfulRetryButton.hidden, true);
+assert.equal(successfulRetryButton.onclick, null);
+assert.equal(successfulRetryButton.disabled, false);
 
 // Failed lazy assets must be evicted so the next click performs a real network retry.
 assert.match(loader, /loadedStyles\.get\(href\) === pending[\s\S]*?loadedStyles\.delete\(href\)/);

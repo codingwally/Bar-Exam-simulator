@@ -121,7 +121,7 @@ assert.match(build, /assets\/quorum-first-shell\.js/);
 assert.match(build, /assets\/brand\/signin-intro\.mp4/);
 assert.match(html, /assets\/quorum-first-shell\.css\?v=public-reliability-20260827-2/,
   'The drawer stylesheet URL must change when its icon presentation changes.');
-assert.match(html, /assets\/private-beta-landing\.js\?v=public-reliability-20260827-1/,
+assert.match(html, /assets\/private-beta-landing\.js\?v=public-reliability-20260827-2/,
   'The signed-in Home router must use the current release URL.');
 assert.match(landingJs,
   /function showApplication\(options = \{\}\) \{[\s\S]*const applicationWasHidden = appShell\.hidden === true;[\s\S]*setHidden\(appShell, false\);[\s\S]*if \(applicationWasHidden && options\.focus !== false\) \{[\s\S]*siteHeader\.querySelector\('\.brand'\)\?\.focus/,

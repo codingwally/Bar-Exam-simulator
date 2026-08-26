@@ -247,7 +247,7 @@ test('audit trail loads and exports every record beyond the former 500-row bound
   };
   const instrumented = source.replace(
     'global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
-    'global.__ExaminationRoomAuditTest = Object.freeze({ state, ensureAudit, loadAllAudit, auditRows, exportPayload }); global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+    'global.__ExaminationRoomAuditTest = Object.freeze({ state, ensureAudit, loadAllAudit, auditRows, exportPayload, csvRows, csvText }); global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
   );
   vm.runInNewContext(instrumented, { window, URLSearchParams, Intl, Date, Map, Set });
   const harness = window.__ExaminationRoomAuditTest;
@@ -265,6 +265,18 @@ test('audit trail loads and exports every record beyond the former 500-row bound
   assert.equal(complete.fullyLoaded, true);
   assert.equal(harness.auditRows().length, 1_201);
   assert.equal(harness.exportPayload().audit.length, 1_201);
+  const auditOnlyRows = harness.csvRows(harness.exportPayload());
+  assert.equal(auditOnlyRows.length, 1_201);
+  assert.equal(auditOnlyRows[0].exportRecordType, 'audit_event');
+  assert.match(harness.csvText(harness.exportPayload()), /"audit_event"/u);
+  const mixedRows = harness.csvRows({ snapshots: [{ id: 'snapshot-1' }], audit: [{ id: 'audit-1' }] });
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(mixedRows)),
+    [
+      { id: 'snapshot-1', exportRecordType: 'recovery_snapshot' },
+      { id: 'audit-1', exportRecordType: 'audit_event' },
+    ],
+  );
   assert.deepEqual(offsets, [0, 250, 500, 750, 1_000]);
   assert.match(source, /const auditTitle = progress\.fullyLoaded \? 'Complete audit trail' : 'Audit trail'/);
   assert.match(source, /auditProgress\(\)\.fullyLoaded \? Promise\.resolve\(\) : loadAllAudit\(\)/);

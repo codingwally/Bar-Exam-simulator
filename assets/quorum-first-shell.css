@@ -427,6 +427,10 @@ body.dd-auth-pending .dd-auth-bootstrap {
   --qfs-nav-icon: url("icons/navigation/circle-user-round.svg");
 }
 
+#site-header.qfs-shell #spa-examination-room {
+  --qfs-nav-icon: url("icons/navigation/door-open.svg");
+}
+
 #site-header.qfs-shell #spa-pricing {
   --qfs-nav-icon: url("icons/navigation/tag.svg");
 }

@@ -1,0 +1,106 @@
+name: Bootstrap Examination Room key pepper
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Worker environment receiving its first Examination Room key pepper"
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      confirm_one_time_bootstrap:
+        description: "I confirm this is a first-time bootstrap, not a key rotation"
+        required: true
+        default: false
+        type: boolean
+      approval_reference:
+        description: "Approval/change reference recorded in the release log"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: examination-room-pepper-bootstrap-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: One-time ${{ inputs.target_environment }} pepper bootstrap
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'codingwally/Bar-Exam-simulator' &&
+      github.actor != 'dependabot[bot]'
+    environment:
+      name: ${{ inputs.target_environment == 'production' && 'production-worker' || 'staging-e2e' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Enforce approved one-time bootstrap
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+          CONFIRM_ONE_TIME_BOOTSTRAP: ${{ inputs.confirm_one_time_bootstrap }}
+          APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Key bootstrap may only run from main." >&2
+            exit 1
+          fi
+          if [[ "$TARGET_ENVIRONMENT" != "staging" && "$TARGET_ENVIRONMENT" != "production" ]]; then
+            echo "Choose staging or production." >&2
+            exit 1
+          fi
+          if [[ "$CONFIRM_ONE_TIME_BOOTSTRAP" != "true" ]]; then
+            echo "Explicit first-time bootstrap confirmation is required." >&2
+            exit 1
+          fi
+          if [[ -z "${APPROVAL_REFERENCE//[[:space:]]/}" ]]; then
+            echo "A non-empty approval/change reference is required." >&2
+            exit 1
+          fi
+
+      - name: Checkout approved configuration
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Create the missing pepper without rotation
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$TARGET_ENVIRONMENT" == "staging" ]]; then
+            worker_args=(--name duediligence-examinations-staging)
+          else
+            worker_args=(--name duediligence-gemini-examiner)
+          fi
+
+          secret_list="$(npx --yes wrangler@4.114.0 secret list --format json "${worker_args[@]}")"
+          if printf '%s' "$secret_list" \
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); process.exit(names.has('EXAMINATION_ROOM_KEY_PEPPER') ? 0 : 1); });"
+          then
+            echo "Refusing to rotate EXAMINATION_ROOM_KEY_PEPPER: it already exists in the selected environment." >&2
+            exit 1
+          fi
+          unset secret_list
+
+          examination_room_key_pepper="$(node -e "process.stdout.write(require('node:crypto').randomBytes(48).toString('base64url'))")"
+          printf '%s' "$examination_room_key_pepper" \
+            | npx --yes wrangler@4.114.0 secret put EXAMINATION_ROOM_KEY_PEPPER "${worker_args[@]}"
+          unset examination_room_key_pepper
+
+          npx --yes wrangler@4.114.0 secret list --format json "${worker_args[@]}" \
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); if (!names.has('EXAMINATION_ROOM_KEY_PEPPER')) { console.error('The pepper was not visible after bootstrap. Stop and inspect the selected Worker before any deploy.'); process.exit(1); } console.log('The one-time Examination Room pepper bootstrap completed. Its value was not printed.'); });"

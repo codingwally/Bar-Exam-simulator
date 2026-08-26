@@ -169,6 +169,11 @@ import {
   dd2026DatabaseError,
 } from './duediligence-2026-core.mjs';
 import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
+import {
+  EXAMINATION_ROOM_V1_PATHS,
+  ExaminationRoomV1RouteError,
+  createExaminationRoomV1Handlers,
+} from './examination-room-v1-routes.mjs';
 import { googleAccessToken } from './google-oauth.mjs';
 import {
   outboundEmailMode,
@@ -204,6 +209,9 @@ const forumReadRateWindows = new Map();
 const forumWriteRateWindows = new Map();
 const examinationReadRateWindows = new Map();
 const examinationWriteRateWindows = new Map();
+const examinationRoomV1ProfessorRateWindows = new Map();
+const examinationRoomV1StudentRateWindows = new Map();
+const examinationRoomV1AdminRateWindows = new Map();
 const dd2026ReadRateWindows = new Map();
 const dd2026WriteRateWindows = new Map();
 const recentSubmissions = new Map();
@@ -336,6 +344,78 @@ async function enforceExaminationRateLimit(request, env, mutation = false) {
       ? 'Too many examination actions. Wait briefly and try again.'
       : 'Too many examination requests. Wait briefly and try again.',
   );
+}
+
+async function enforceExaminationRoomV1RateLimit(request, env, scope) {
+  const policies = {
+    professor_query: [examinationRoomV1ProfessorRateWindows, 180],
+    professor_command: [examinationRoomV1ProfessorRateWindows, 90],
+    student_preview: [examinationRoomV1StudentRateWindows, 20],
+    student_consent: [examinationRoomV1StudentRateWindows, 12],
+    student_query: [examinationRoomV1StudentRateWindows, 180],
+    student_command: [examinationRoomV1StudentRateWindows, 300],
+    admin_query: [examinationRoomV1AdminRateWindows, 90],
+    admin_command: [examinationRoomV1AdminRateWindows, 45],
+  };
+  const policy = policies[scope];
+  if (!policy) {
+    throw new ExaminationRoomV1RouteError(
+      'EXAM_ROOM_V1_RATE_POLICY_INVALID',
+      'This Examination Room action is not available.',
+      500,
+      'Refresh the page. If the message continues, contact support.',
+    );
+  }
+  const [window, maximum] = policy;
+  const ip = request.headers.get('CF-Connecting-IP') || 'unavailable';
+  let subject = request.headers.get('Authorization') || '';
+  if (scope.startsWith('student_')) {
+    const body = await request.clone().json().catch(() => null);
+    const payload = body?.payload && typeof body.payload === 'object' ? body.payload : body;
+    subject = scope === 'student_preview' || scope === 'student_consent'
+      ? `${String(payload?.roomKey || '').slice(0, 100)}\0${String(
+        payload?.identity?.studentNumber || payload?.studentNumber || '',
+      ).slice(0, 128)}`
+      : String(payload?.sessionId || '').slice(0, 128);
+  }
+  const limiterSecret = env.EXAMINATION_ROOM_KEY_PEPPER || env.GUEST_USAGE_HMAC_KEY;
+  if (!limiterSecret) {
+    throw new ExaminationRoomV1RouteError(
+      'EXAM_ROOM_V1_NOT_CONFIGURED',
+      'Examination Room security is not configured.',
+      503,
+      'Contact support and provide the time this message appeared.',
+    );
+  }
+  try {
+    enforceWindow(
+      window,
+      await hmacHex(limiterSecret, `examination-room-v1:${scope}\0${ip}\0${subject}`),
+      maximum,
+      'Too many Examination Room requests. Wait a few minutes and try again.',
+    );
+    if (window.size > 5_000) {
+      const cutoff = Date.now() - WINDOW_MS;
+      for (const [entryKey, entry] of window) {
+        if (entry.startedAt < cutoff) window.delete(entryKey);
+      }
+      while (window.size > 5_000) {
+        const oldestKey = window.keys().next().value;
+        if (oldestKey === undefined) break;
+        window.delete(oldestKey);
+      }
+    }
+  } catch (error) {
+    if (error instanceof ExaminerError && error.code === 'RATE_LIMITED') {
+      throw new ExaminationRoomV1RouteError(
+        'EXAM_ROOM_V1_RATE_LIMITED',
+        error.message,
+        429,
+        'Wait ten minutes, then repeat the action once. Saved work remains preserved.',
+      );
+    }
+    throw error;
+  }
 }
 
 async function enforceDD2026RateLimit(request, env, mutation = false) {
@@ -508,6 +588,135 @@ async function protectedSupabaseRpc(env, functionName, body) {
     );
   }
   return result;
+}
+
+async function examinationRoomV1ServiceRpc(env, functionName, body) {
+  const allowedFunctions = new Set([
+    'examination_room_v1_staff_context',
+    'examination_room_v1_professor_access',
+    'examination_room_v1_manage_staff',
+    'examination_room_v1_api',
+  ]);
+  if (!allowedFunctions.has(functionName)) {
+    throw new ExaminationRoomV1RouteError(
+      'EXAM_ROOM_V1_OPERATION_UNSUPPORTED',
+      'That Examination Room operation is not available.',
+      400,
+      'Refresh the page and try again.',
+    );
+  }
+  let baseUrl;
+  try {
+    baseUrl = configuredSupabaseUrl(env);
+  } catch {
+    throw new ExaminationRoomV1RouteError(
+      'EXAM_ROOM_V1_NOT_CONFIGURED',
+      'Examination Room persistence is not configured.',
+      503,
+      'Contact support and provide the time this message appeared.',
+    );
+  }
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) {
+    const denied = response.status === 401 || response.status === 403;
+    console.error('Examination Room v1 service request failed', {
+      operation: functionName,
+      status: response.status,
+      denied,
+    });
+    throw new ExaminationRoomV1RouteError(
+      denied ? 'EXAM_ROOM_V1_FORBIDDEN' : 'EXAM_ROOM_V1_DATA_UNAVAILABLE',
+      denied
+        ? 'This account is not authorized for that Examination Room action.'
+        : 'Examination Room records are temporarily unavailable.',
+      denied ? 403 : 503,
+      denied
+        ? 'Return to Due Diligence and sign in with an authorized account.'
+        : 'Your work on this device is preserved. Wait briefly, then try again.',
+    );
+  }
+  return result;
+}
+
+async function examinationRoomV1StaffContext(env, user) {
+  const context = await examinationRoomV1ServiceRpc(
+    env,
+    'examination_room_v1_staff_context',
+    { p_user_id: user.id },
+  );
+  return context && typeof context === 'object' ? context : { authorized: false, memberships: [] };
+}
+
+function examinationRoomV1Result(result) {
+  if (result?.ok !== false) return result || { ok: true };
+  const databaseError = result.error && typeof result.error === 'object' && !Array.isArray(result.error)
+    ? result.error
+    : {};
+  const databaseCode = String(databaseError.code || result.errorCode || 'DATA_UNAVAILABLE');
+  const code = databaseCode.startsWith('EXAM_ROOM_V1_')
+    ? databaseCode
+    : `EXAM_ROOM_V1_${databaseCode}`;
+  const reportedStatus = Number(databaseError.status);
+  const status = Number.isInteger(reportedStatus) && reportedStatus >= 400 && reportedStatus <= 599
+    ? reportedStatus
+    : databaseCode === 'FORBIDDEN'
+      ? 403
+      : databaseCode === 'PERSISTENCE_OPERATION_NOT_IMPLEMENTED'
+        ? 501
+        : 400;
+  return {
+    ok: false,
+    error: {
+      code,
+      message: String(databaseError.message || result.message || 'Examination Room could not complete that action.'),
+      status,
+      recovery: String(databaseError.recovery || (databaseCode === 'PERSISTENCE_OPERATION_NOT_IMPLEMENTED'
+        ? 'Use the verified local demonstration while the production persistence release is being completed.'
+        : status === 403
+          ? 'Sign in with the authorized institution account, then try again.'
+          : 'Review the information, then try again.')),
+      ...((databaseError.details || result.details) ? { details: databaseError.details || result.details } : {}),
+    },
+  };
+}
+
+async function examinationRoomV1Rpc(env, request) {
+  const result = await examinationRoomV1ServiceRpc(env, 'examination_room_v1_api', {
+    p_scope: request.scope,
+    p_operation: request.operation,
+    p_actor_user_id: request.actorUserId,
+    p_institution_id: request.institutionId,
+    p_payload: request.payload || {},
+  });
+  return examinationRoomV1Result(result);
+}
+
+async function examinationRoomV1ManageStaff(env, request) {
+  const result = await examinationRoomV1ServiceRpc(env, 'examination_room_v1_manage_staff', {
+    p_operation: request.operation,
+    p_actor_user_id: request.actorUserId,
+    p_institution_id: request.institutionId,
+    p_payload: request.payload || {},
+  });
+  return examinationRoomV1Result(result);
+}
+
+async function examinationRoomV1ProfessorAccess(env, request) {
+  const result = await examinationRoomV1ServiceRpc(env, 'examination_room_v1_professor_access', {
+    p_operation: request.operation,
+    p_actor_user_id: request.actorUserId,
+    p_payload: request.payload || {},
+  });
+  return examinationRoomV1Result(result);
 }
 
 async function forumRpc(env, functionName, body) {
@@ -1447,6 +1656,55 @@ async function handleSignInNotification(request, env, origin, allowedOrigin) {
     recentSignInNotificationSessions.set(sessionDigest, now);
   }
   return jsonResponse({ ok: true, notification: delivery.status }, 202, origin, allowedOrigin);
+}
+
+async function sendExaminationRoomV1KeyEmail(env, message) {
+  if (outboundEmailSuppressed(env)) return { status: 'suppressed' };
+  const recipient = String(message?.recipient || '').trim().toLowerCase();
+  const from = String(
+    env.EXAMINATION_ROOM_EMAIL_FROM
+    || env.SUPPORT_NOTIFICATION_EMAIL_FROM
+    || '',
+  ).trim();
+  if (!env.RESEND_API_KEY || !from || !recipient) return { status: 'not_configured' };
+  let response;
+  try {
+    response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `exam-room-key-${String(message.idempotencyHash || '').slice(0, 64)}`,
+      },
+      body: JSON.stringify({
+        from,
+        to: [recipient],
+        subject: `Examination Room key — ${String(message.examTitle || 'Published examination').slice(0, 200)}`,
+        text: [
+          `Hello ${String(message.professorName || 'Professor').slice(0, 200)},`,
+          '',
+          'An administrator issued the room key for your published examination.',
+          '',
+          `Examination: ${String(message.examTitle || 'Published examination').slice(0, 300)}`,
+          `Room key: ${String(message.roomKey || '').slice(0, 40)}`,
+          `Valid until: ${String(message.expiresAt || 'the administrator closes or revokes the room').slice(0, 80)}`,
+          '',
+          'Open Examination Room from Due Diligence, choose Monitoring, and enter this key to open the room for students.',
+          'Do not forward the key outside the intended class. If it may have been exposed, ask the administrator to issue a replacement.',
+        ].join('\n'),
+      }),
+    });
+  } catch (error) {
+    console.error('Examination Room key email transport failed', {
+      name: String(error?.name || 'Error').slice(0, 80),
+    });
+    return { status: 'failed' };
+  }
+  if (!response.ok) {
+    console.error('Examination Room key email failed', { status: response.status });
+    return { status: 'failed' };
+  }
+  return { status: 'sent' };
 }
 
 async function handleSessionMonitoring(request, env, origin, allowedOrigin) {
@@ -5612,6 +5870,56 @@ const dd2026Handlers = createDD2026Handlers({
   structuredGemini: callGeminiStructured,
 });
 
+const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
+  parseJson: parseBoundedJson,
+  respond: jsonResponse,
+  authenticate: verifiedAuthenticatedUser,
+  authorizeProfessor: async (env, user) => {
+    const staff = await examinationRoomV1StaffContext(env, user);
+    const professorRoleSelected = staff?.professorRoleSelected === true;
+    const memberships = (Array.isArray(staff?.memberships) ? staff.memberships : [])
+      .filter((membership) => membership?.active === true && membership?.staffRole === 'professor');
+    const institutionIds = [...new Set(memberships.map((membership) => membership.institutionId).filter(Boolean))];
+    return {
+      ...staff,
+      professorRoleSelected,
+      authorized: professorRoleSelected && memberships.length > 0,
+      institutionId: institutionIds.length === 1 ? institutionIds[0] : null,
+      memberships,
+    };
+  },
+  authorizeAdmin: async (env, user) => {
+    const [staff, admin] = await Promise.all([
+      examinationRoomV1StaffContext(env, user),
+      protectedSupabaseRpc(env, 'admin_authorization_context', {
+        p_actor_user_id: user.id,
+      }),
+    ]);
+    const memberships = (Array.isArray(staff?.memberships) ? staff.memberships : [])
+      .filter((membership) => membership?.active === true && membership?.staffRole === 'admin');
+    const institutionIds = [...new Set(memberships.map((membership) => membership.institutionId).filter(Boolean))];
+    return {
+      ...staff,
+      ...admin,
+      memberships,
+      institutionId: institutionIds.length === 1 ? institutionIds[0] : null,
+      globalAuthorized: admin?.authorized === true,
+      canBootstrap: admin?.authorized === true,
+      authorized: admin?.authorized === true && memberships.length > 0,
+    };
+  },
+  rateLimit: enforceExaminationRoomV1RateLimit,
+  rpc: examinationRoomV1Rpc,
+  manageStaff: examinationRoomV1ManageStaff,
+  professorAccess: examinationRoomV1ProfessorAccess,
+  hmacHex,
+  sha256Hex: (value) => sha256Hex(new TextEncoder().encode(String(value))),
+  randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)),
+  randomUUID: () => crypto.randomUUID(),
+  now: () => new Date().toISOString(),
+  sendRoomKeyEmail: sendExaminationRoomV1KeyEmail,
+});
+
 export default {
   async fetch(request, env, ctx) {
     env = normalizedRuntimeSecrets(env);
@@ -5740,6 +6048,25 @@ export default {
       }
       if (pathname === '/study/annotations/command') {
         return await handleStudyAnnotationCommand(request, env, origin, allowedOrigin);
+      }
+      const examinationRoomV1HandlerName = EXAMINATION_ROOM_V1_PATHS[pathname];
+      if (examinationRoomV1HandlerName) {
+        if (String(env.EXAMINATION_ROOM_ENABLED || '').trim().toLowerCase() !== 'true') {
+          return jsonResponse({
+            ok: false,
+            error: {
+              code: 'EXAM_ROOM_V1_DISABLED',
+              message: 'Examination Room is temporarily unavailable.',
+              recovery: 'No saved examination data was removed. Contact support or try again after the school reopens the service.',
+            },
+          }, 503, origin, allowedOrigin);
+        }
+        return await examinationRoomV1Handlers[examinationRoomV1HandlerName](
+          request,
+          env,
+          origin,
+          allowedOrigin,
+        );
       }
       if (pathname === '/examinations/query') {
         return await handleExaminationQuery(request, env, origin, allowedOrigin);

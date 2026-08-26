@@ -24,6 +24,7 @@
     security: 'Audit Log',
     forum: 'Community Moderation',
     examinations: 'Exams',
+    examination_room_v1: 'Examination Room',
     answer_exports: 'Answers',
     business_revenue: 'Revenue',
     business_projections: 'Projections',
@@ -50,6 +51,7 @@
     business_comparisons: 'Current and previous operating-period comparison.',
     security: 'Administrator actions and sensitive-access history.',
     controls: 'Protected platform controls and feature state.',
+    examination_room_v1: 'Professor publication review, room-key activation, lifecycle operations, and recovery.',
   });
   const requirements = Object.freeze({
     realtime: 'learner_analytics_viewer',
@@ -70,6 +72,7 @@
     business_revenue: 'subscription_admin',
     business_projections: 'subscription_admin',
     business_comparisons: 'learner_analytics_viewer',
+    examination_room_v1: 'role_admin',
   });
   const state = {
     client: null,
@@ -3074,6 +3077,7 @@
       else if (section === 'security') html = await renderSecurity();
       else if (section === 'forum') html = await renderQuorumModeration();
       else if (section === 'examinations') html = await renderExaminations();
+      else if (section === 'examination_room_v1') html = await global.DueDiligenceExaminationRoomAdmin.render();
       else if (section === 'answer_exports') html = await renderAnswerExports(report);
       else if (section === 'business_revenue') html = await renderBusinessRevenue();
       else if (section === 'business_projections') html = await renderBusinessProjections(report);
@@ -3082,6 +3086,13 @@
       bindDynamic();
       mountObservatoryCharts(section, report);
       if (section === 'examinations') bindExaminationAdmin();
+      if (section === 'examination_room_v1') {
+        global.DueDiligenceExaminationRoomAdmin.bind({
+          root: $('#dashboard-view'),
+          toast,
+          refresh: () => renderSection('examination_room_v1'),
+        });
+      }
       return true;
     } catch (error) {
       $('#dashboard-view').innerHTML = heading('Admin dashboard unavailable', error.message || 'Admin data could not be loaded.')
@@ -4614,6 +4625,25 @@
   }
 
   async function initialize() {
+    const demoMode = global.ExaminationRoomV1Api?.demoEnabled?.() === true;
+    if (demoMode) {
+      state.session = {
+        access_token: 'local-demonstration',
+        user: { id: 'local-founder-admin', email: 'founder@local.demo', user_metadata: { full_name: 'Founder Admin' } },
+      };
+      state.authorization = {
+        role: 'super_admin',
+        capabilities: Object.values(requirements).filter(Boolean),
+      };
+      $('#admin-gate').hidden = true;
+      $('#admin-shell').hidden = false;
+      if ($('#admin-dock-name')) $('#admin-dock-name').textContent = 'Founder Admin';
+      if ($('#admin-dock-role')) $('#admin-dock-role').textContent = 'Local demonstration';
+      applyNavigationAuthorization();
+      const requested = global.location.hash.replace(/^#/, '');
+      await renderSection(titles[requested] ? requested : 'examination_room_v1');
+      return;
+    }
     if (!config?.features?.adminDashboard
         || !global.supabase?.createClient
         || !subscriptionActions?.actionsForSubscription) {
@@ -4674,6 +4704,7 @@
     const button = event.target.closest('button[data-section]');
     if (button && !button.hidden && sectionAllowed(button.dataset.section)) {
       renderSection(button.dataset.section);
+      global.history.replaceState(null, '', `${global.location.pathname}${global.location.search}#${button.dataset.section}`);
     }
   });
   $('#date-range')?.addEventListener('change', async () => {

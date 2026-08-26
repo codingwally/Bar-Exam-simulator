@@ -41,6 +41,59 @@ final result: passed
 
 ---
 
+# Examination Room Selected-Image Fidelity QA — 2026-08-26
+
+## Controlling target
+
+- Selected reference: `docs/visual-references/examination-room-v1/counsels-canvas-selected.png`.
+- Final professor creator: `docs/examination-room-v1/screenshots/professor-create-reference-size.png`.
+- Same-input comparison: `docs/examination-room-v1/qa/reference-vs-implementation-final.png`.
+- Reference and implementation captures are both exactly `1487 × 1058` pixels.
+- Browser viewport override was `1502 × 1069`, producing the required `1487 × 1058` visible-frame capture.
+
+## Pixel-aligned visual audit
+
+- Two-row navy and paper header geometry: passed.
+- Left rail width and section positions: passed.
+- Main creator column, title baseline, source-material card, question cards, and assistant callouts: passed.
+- Right professor-control rail width, dividers, control order, and roster placement: passed.
+- Floating Examination Assistant placement, width, and bottom alignment: passed.
+- Existing Due Diligence navy, warm paper, brass-gold, serif, and sans-serif system: passed.
+- No visible P0, P1, or P2 layout mismatch remains in the combined reference review.
+
+## Intentional live-data differences
+
+- Saved-state text reports the current live state instead of the reference fixture timestamp.
+- The working roster contains five named demo students instead of the reference's illustrative twelve-person count.
+- Native date-input formatting follows the browser locale while retaining the same measured control geometry.
+- These content values do not alter the selected image's component dimensions, hierarchy, spacing, or control placement.
+
+## Functional state audit
+
+- Professor prepare, roster, safeguards, preview, publish, wait-for-key, open-room, monitor, grade, and release views were exercised in the live browser.
+- Student identity, metadata-only preview, persistent versioned privacy notice, answering, local offline save, a fully disconnected browser refresh, exact active-attempt restoration, reconnection sync, review, signed submission receipt, and released result were exercised in the live browser.
+- Admin-only Examination Room navigation, key issuance, recovery status, and activation state were exercised in the live browser.
+- The final demonstrated grade was `92 / 100`; the multiple-choice answer rendered as `Supreme Court`, not an internal option identifier.
+- Real names are the professor default. Anonymous grading remains a professor-controlled optional switch.
+- The private persistence layer passed `89 / 89` database assertions and an `18`-RPC route-to-database lifecycle; all `21` tables have forced row-level security and no unsafe public RPC was found.
+- Recorded camera/microphone proctoring remains intentionally fail-closed until its encrypted capture, upload, retention, access, deletion, review, and accommodation pipeline exists.
+
+final result: passed
+
+## Same-day visual re-audit and virtual doors
+
+- Re-audit evidence: `docs/examination-room-v1/qa/2026-08-26-re-audit/visual-audit.md`.
+- The professor creator was compared again against the selected image at the same `1487 × 1058` visible-frame size.
+- Focused comparisons for the header/structure, question editor, and professor-control rail found no P0, P1, or P2 visual drift.
+- The website now exposes an Examination Room item immediately after Profile. It opens a purpose-built entrance with separate Professor and Student doors.
+- Professor access is locked while signed out and is granted only after the Worker confirms an active professor assignment or an authorized admin tester; the profile's self-declared role is never an authorization source.
+- Student access opens the key-and-real-identity lobby without requiring a professor account.
+- Desktop and full phone-size captures passed with no horizontal overflow and no browser console errors or warnings.
+
+final result: passed
+
+---
+
 # Account Setup Modernization Design QA — 2026-08-21
 
 ## Scope and visual evidence

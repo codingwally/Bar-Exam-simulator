@@ -3,7 +3,7 @@ import { access, readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
 
-const retiredRuntimeFiles = Object.freeze([
+const activeRuntimeFiles = Object.freeze([
   'index.html',
   'offline.html',
   'admin/index.html',
@@ -26,36 +26,12 @@ const retiredRuntimeFiles = Object.freeze([
   'worker/wrangler.staging.toml',
 ]);
 
-const retiredTokens = Object.freeze([
-  ['examination', 'room'].join('-'),
-  ['examination', 'room'].join('_'),
-  ['exam', 'room'].join('-'),
-  ['exam', 'room'].join('_'),
-  ['EXAMINATION', 'ROOM'].join('_'),
-  ['EXAM', 'ROOM'].join('_'),
-  ['Examination', 'Room'].join(' '),
-  ['open', 'Examination', 'Room'].join(''),
-  ['examination', 'Room'].join(''),
-]);
-
-for (const file of retiredRuntimeFiles) {
-  const source = await readFile(new URL(file, root), 'utf8');
-  for (const token of retiredTokens) {
-    assert.equal(
-      source.includes(token),
-      false,
-      `${file} must not expose retired runtime token ${JSON.stringify(token)}`,
-    );
-  }
-}
-
 const deletedFiles = Object.freeze([
   'assets/examination-room-2-store.js',
   'assets/examination-room-renovation.js',
   'assets/examination-room-renovation.css',
   'assets/examination-room-beadle-class-list-template.xlsx',
   'assets/feature-previews/examination-room.png',
-  'assets/icons/navigation/door-open.svg',
   'content/duediligence-2026/exam-room-schema.json',
   'worker/exam-room-2026-core.mjs',
   'worker/exam-room-delivery.mjs',
@@ -68,9 +44,42 @@ for (const file of deletedFiles) {
   await assert.rejects(
     access(new URL(file, root)),
     (error) => error?.code === 'ENOENT',
-    `${file} must remain deleted`,
+  `${file} must remain deleted`,
   );
 }
+
+for (const file of activeRuntimeFiles) {
+  const source = await readFile(new URL(file, root), 'utf8');
+  for (const legacyPath of deletedFiles) {
+    assert.equal(
+      source.includes(legacyPath) || source.includes(legacyPath.split('/').at(-1)),
+      false,
+      `${file} must not import or reference retired implementation ${legacyPath}`,
+    );
+  }
+}
+
+const greenfieldFiles = Object.freeze([
+  'examination-room/index.html',
+  'examination-room/professor.css',
+  'examination-room/professor.js',
+  'examination-room/student.html',
+  'examination-room/student.css',
+  'examination-room/student.js',
+  'examination-room/api.js',
+  'examination-room/view-models.js',
+  'admin/examination-room-admin.css',
+  'admin/examination-room-admin.js',
+  'assets/icons/navigation/door-open.svg',
+  'worker/examination-room-v1-routes.mjs',
+]);
+
+for (const file of greenfieldFiles) await access(new URL(file, root));
+
+const greenfieldClient = await readFile(new URL('examination-room/api.js', root), 'utf8');
+const greenfieldWorker = await readFile(new URL('worker/examination-room-v1-routes.mjs', root), 'utf8');
+assert.match(greenfieldClient, /\/examination-room\/v1\/professor\/query/);
+assert.match(greenfieldWorker, /EXAMINATION_ROOM_V1_PATHS/);
 
 const simulatorFiles = Object.freeze([
   'assets/exam-session-controller.js',

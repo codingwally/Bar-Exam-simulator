@@ -41,6 +41,7 @@ assertOrder(navigation, [
   'Bar Question Practice',
   'Bar Exam Simulation',
   'Profile',
+  'Examination Room',
   'Plans &amp; Pricing',
   'Support',
 ]);
@@ -50,7 +51,7 @@ assert.match(navigation, /class="quorum-shell-compat" hidden aria-hidden="true"/
 
 for (const id of [
   'spa-community', 'spa-bar-easy', 'spa-jurisprudence', 'spa-mock', 'spa-bar-feels',
-  'header-account-control', 'spa-pricing', 'spa-support', 'spa-subject-matter',
+  'header-account-control', 'spa-examination-room', 'spa-pricing', 'spa-support', 'spa-subject-matter',
   'spa-progress', 'spa-chairs-case', 'spa-case-digest', 'btn-signin',
 ]) assert.match(navigation, new RegExp(`id="${id}"`));
 

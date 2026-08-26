@@ -1,0 +1,1704 @@
+(function professorExaminationRoom(global) {
+  'use strict';
+
+  const api = global.ExaminationRoomV1Api;
+  const viewModels = global.ExaminationRoomV1ViewModels;
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const state = {
+    professor: null,
+    exam: null,
+    activation: null,
+    questions: [],
+    roster: [],
+    currentView: 'create',
+    saveTimer: null,
+    saveInFlight: null,
+    lastSavedJson: '',
+    retryAction: null,
+    monitor: null,
+    monitorTimer: null,
+    grading: null,
+    selectedGradingSessionId: null,
+    selectedReleaseIds: new Set(),
+    anonymousGrading: false,
+    sectionObserver: null,
+    hydrating: false,
+    textEntryResolve: null,
+  };
+
+  const DRAFT_STORAGE_KEY = 'duediligence.examination-room.v1.professor-draft';
+  const QUESTION_TYPES = Object.freeze({
+    essay: 'Essay',
+    short_answer: 'Short answer',
+    multiple_choice: 'Multiple choice',
+  });
+  const RECORDED_PROCTORING_AVAILABLE = global.DueDiligencePhase2Config?.features?.examinationRoomRecordedProctoring === true;
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+    }[character]));
+  }
+
+  function safeText(value, maximum = 5000) {
+    return String(value ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().slice(0, maximum);
+  }
+
+  function formatBytes(value) {
+    const bytes = Number(value) || 0;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function formatDateTime(value) {
+    if (!value) return 'Not set';
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return 'Not set';
+    return new Intl.DateTimeFormat('en-PH', {
+      dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila',
+    }).format(date);
+  }
+
+  function timeAgo(value) {
+    const elapsed = Date.now() - new Date(value || 0).getTime();
+    if (!Number.isFinite(elapsed) || elapsed < 0) return 'just now';
+    if (elapsed < 45_000) return 'just now';
+    if (elapsed < 90_000) return '1 minute ago';
+    if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)} minutes ago`;
+    return formatDateTime(value);
+  }
+
+  function initials(name) {
+    return String(name || 'Student')
+      .split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  }
+
+  function toast(message) {
+    const node = $('#toast');
+    node.textContent = message;
+    node.classList.add('is-visible');
+    clearTimeout(node.timer);
+    node.timer = setTimeout(() => node.classList.remove('is-visible'), 3600);
+  }
+
+  function showError(error, retryAction = null, title = 'Action not completed') {
+    const node = $('#error-banner');
+    $('#error-title').textContent = title;
+    $('#error-message').textContent = error?.message || 'Examination Room could not complete that action.';
+    $('#error-recovery').textContent = error?.recovery || 'Your work on this device is preserved. Check your connection, then try again.';
+    state.retryAction = retryAction;
+    $('#error-retry').hidden = typeof retryAction !== 'function';
+    node.hidden = false;
+  }
+
+  function dismissError() {
+    $('#error-banner').hidden = true;
+    state.retryAction = null;
+  }
+
+  function setButtonBusy(button, busy, busyLabel = 'Working…') {
+    if (!button) return;
+    if (busy) {
+      button.dataset.originalHtml = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = `<i class="ph ph-spinner-gap" aria-hidden="true"></i><span>${escapeHtml(busyLabel)}</span>`;
+    } else {
+      button.disabled = false;
+      if (button.dataset.originalHtml) button.innerHTML = button.dataset.originalHtml;
+      delete button.dataset.originalHtml;
+    }
+  }
+
+  function openDialog(id) {
+    const dialog = document.getElementById(id);
+    if (!dialog) return;
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  }
+
+  function closeDialog(id) {
+    const dialog = document.getElementById(id);
+    if (!dialog) return;
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+  }
+
+  function finishTextEntry(value) {
+    const resolve = state.textEntryResolve;
+    state.textEntryResolve = null;
+    closeDialog('text-entry-dialog');
+    resolve?.(value);
+  }
+
+  function requestText({
+    eyebrow = 'Secure entry', title, copy, label, help = '', type = 'text',
+    autocomplete = 'off', placeholder = '', minimumLength = 0, submitLabel = 'Continue',
+  }) {
+    if (state.textEntryResolve) finishTextEntry(null);
+    $('#text-entry-eyebrow').textContent = eyebrow;
+    $('#text-entry-title').textContent = title;
+    $('#text-entry-copy').textContent = copy;
+    $('#text-entry-label').textContent = label;
+    $('#text-entry-help span').textContent = help;
+    $('#text-entry-help').hidden = !help;
+    $('#text-entry-submit').textContent = submitLabel;
+    const input = $('#text-entry-input');
+    input.type = type;
+    input.autocomplete = autocomplete;
+    input.placeholder = placeholder;
+    input.minLength = minimumLength;
+    input.value = '';
+    openDialog('text-entry-dialog');
+    requestAnimationFrame(() => input.focus());
+    return new Promise((resolve) => { state.textEntryResolve = resolve; });
+  }
+
+  function localDateTimeInput(value) {
+    const date = new Date(value || Date.now());
+    const offset = date.getTimezoneOffset() * 60_000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  }
+
+  function editorQuestionType(value) {
+    const normalized = String(value || 'essay').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    return QUESTION_TYPES[normalized] ? normalized : 'essay';
+  }
+
+  function editorChoiceLabel(value) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) return safeText(value.label, 500);
+    return safeText(value, 500);
+  }
+
+  function clientOnlyBlankDraft(institutionId) {
+    return {
+      id: global.crypto.randomUUID(),
+      institutionId: safeText(institutionId, 80) || null,
+      versionId: null,
+      status: 'draft',
+      title: '',
+      subject: '',
+      jurisdiction: 'Philippines',
+      yearLevel: 'Second year',
+      instructions: '',
+      courseCode: '',
+      durationMinutes: 120,
+      startsAt: null,
+      lateSubmissions: 'not_allowed',
+      navigation: 'free',
+      gradingIdentity: 'real_names',
+      integrityTier: 'standard',
+      cameraRequired: false,
+      microphoneRequired: false,
+      privacyNoticeVersion: 'exam-room-v1',
+      privacyController: '',
+      retentionSummary: '',
+      sourceFileName: null,
+      sourceFileSize: null,
+      questions: [],
+      roster: [],
+      updatedAt: null,
+    };
+  }
+
+  function editorExamFromStored(storedExam, summary = {}, institutionId = '') {
+    const exam = storedExam && typeof storedExam === 'object' && !Array.isArray(storedExam) ? storedExam : {};
+    const controls = exam.controls && typeof exam.controls === 'object' && !Array.isArray(exam.controls)
+      ? exam.controls
+      : {};
+    const examId = safeText(exam.id || exam.examId || summary.id || summary.examId, 80);
+    if (!examId) throw new api.ExaminationRoomApiError(
+      'EXAMINATION_DRAFT_INVALID',
+      'The saved examination could not be opened safely.',
+      409,
+      'Return to the Examination Room doors and open the Professor workspace again. Your server-backed draft remains preserved.',
+    );
+    return {
+      ...summary,
+      ...exam,
+      id: examId,
+      institutionId: safeText(exam.institutionId || institutionId, 80) || null,
+      versionId: exam.versionId || exam.currentPublishedVersionId || summary.currentVersionId || null,
+      title: safeText(exam.title || summary.title, 180),
+      subject: safeText(exam.subject ?? controls.subject, 120),
+      jurisdiction: safeText(exam.jurisdiction ?? controls.jurisdiction, 80) || 'Philippines',
+      yearLevel: safeText(exam.yearLevel ?? controls.yearLevel, 80) || 'Second year',
+      instructions: safeText(exam.instructions ?? exam.description, 10_000),
+      courseCode: safeText(exam.courseCode ?? controls.courseCode, 40),
+      durationMinutes: Number(exam.durationMinutes || controls.durationMinutes || 120),
+      startsAt: exam.startsAt ?? controls.startsAt ?? null,
+      lateSubmissions: exam.lateSubmissions ?? controls.lateSubmissions ?? 'not_allowed',
+      navigation: exam.navigation ?? controls.navigation ?? 'free',
+      gradingIdentity: exam.gradingIdentity
+        ?? exam.identityMode
+        ?? controls.identityMode
+        ?? (exam.anonymousGrading ? 'anonymous_grading' : 'real_names'),
+      integrityTier: exam.integrityTier ?? controls.integrityTier ?? 'standard',
+      cameraRequired: exam.cameraRequired === true || controls.cameraRequired === true,
+      microphoneRequired: exam.microphoneRequired === true || controls.microphoneRequired === true,
+      privacyNoticeVersion: safeText(exam.privacyNoticeVersion ?? controls.privacyNoticeVersion, 80) || 'exam-room-v1',
+      privacyController: safeText(exam.privacyController ?? controls.privacyController, 1_000),
+      retentionSummary: safeText(exam.retentionSummary ?? controls.retentionSummary, 2_000),
+      sourceFileName: safeText(exam.sourceFileName ?? controls.sourceFileName, 255) || null,
+      sourceFileSize: Number(exam.sourceFileSize ?? controls.sourceFileSize) || null,
+      questions: (Array.isArray(exam.questions) ? exam.questions : []).map((question, index) => ({
+        ...question,
+        id: question?.id || question?.questionKey || `q-${index + 1}`,
+        type: editorQuestionType(question?.type || question?.questionKind),
+        wordGuideline: question?.wordGuideline
+          || (Number.isSafeInteger(Number(question?.wordLimit)) && Number(question.wordLimit) > 0
+            ? `Up to ${Number(question.wordLimit)} words`
+            : ''),
+        options: Array.isArray(question?.options)
+          ? question.options.map(editorChoiceLabel)
+          : Array.isArray(question?.choices)
+            ? question.choices.map(editorChoiceLabel)
+            : undefined,
+        correctOption: question?.correctOption ?? question?.correctOptionIndex ?? 0,
+      })),
+      roster: Array.isArray(exam.roster) ? exam.roster : [],
+      updatedAt: exam.updatedAt || summary.updatedAt || null,
+    };
+  }
+
+  function startIsoFromControls() {
+    const value = $('#start-control').value;
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+  }
+
+  function normalizeQuestion(question, index) {
+    const type = editorQuestionType(question?.type || question?.questionKind);
+    return {
+      id: safeText(question?.id || question?.questionKey, 80) || global.crypto.randomUUID(),
+      number: index + 1,
+      type,
+      points: Math.max(0, Math.min(1000, Number(question?.points) || 0)),
+      prompt: safeText(question?.prompt, 20_000),
+      wordGuideline: safeText(question?.wordGuideline, 100),
+      required: question?.required !== false,
+      options: type === 'multiple_choice'
+        ? (Array.isArray(question?.options)
+          ? question.options
+          : Array.isArray(question?.choices)
+            ? question.choices
+            : ['', '', '', '']).slice(0, 10).map(editorChoiceLabel)
+        : undefined,
+      correctOption: type === 'multiple_choice' && Number.isInteger(Number(question?.correctOption ?? question?.correctOptionIndex))
+        ? Number(question.correctOption ?? question.correctOptionIndex)
+        : 0,
+    };
+  }
+
+  function normalizeRoster(student, index) {
+    return {
+      id: safeText(student?.id, 80) || global.crypto.randomUUID(),
+      fullName: safeText(student?.fullName, 160) || `Student ${index + 1}`,
+      studentNumber: safeText(student?.studentNumber, 48),
+      email: safeText(student?.email, 254),
+      yearLevel: safeText(student?.yearLevel, 80) || $('#year-level')?.value || 'Second year',
+      extraMinutes: Math.max(0, Math.min(360, Number(student?.extraMinutes) || 0)),
+    };
+  }
+
+  function questionSuggestion(question, index) {
+    const prompt = String(question.prompt || '').toLowerCase();
+    if (index === 0 || prompt.includes('separation of powers')) {
+      return 'Consider asking students to distinguish structural and functional separation of powers.';
+    }
+    if (prompt.includes('judicial review')) {
+      return 'You may want to invite discussion of political question doctrine and expanded judicial power.';
+    }
+    if (question.type === 'multiple_choice') {
+      return 'Confirm that one option is clearly correct and the distractors remain plausible.';
+    }
+    return 'Check that the facts, task verb, point value, and expected depth are aligned.';
+  }
+
+  function marginSuggestion(question, index) {
+    if (index === 0) return 'AI noted that your source included discussion on separation of powers starting on page 4.';
+    if (index === 1) return 'AI suggests including standards such as “grave abuse of discretion” and “substantial evidence.”';
+    return `AI organized this as Question ${index + 1}. Review the wording and point value before publishing.`;
+  }
+
+  function choiceEditor(question) {
+    if (question.type !== 'multiple_choice') return '';
+    return `<div class="choice-editor" data-choice-editor="${escapeHtml(question.id)}">
+      ${question.options.map((option, index) => `<label class="choice-row">
+        <input type="radio" name="correct-${escapeHtml(question.id)}" value="${index}" ${index === question.correctOption ? 'checked' : ''} aria-label="Mark option ${index + 1} as correct">
+        <input type="text" value="${escapeHtml(option)}" maxlength="500" data-choice-index="${index}" aria-label="Option ${index + 1}">
+        <button type="button" data-remove-choice="${index}" aria-label="Remove option ${index + 1}"><i class="ph ph-x" aria-hidden="true"></i></button>
+      </label>`).join('')}
+      <button class="button secondary compact" type="button" data-add-choice="true"><i class="ph ph-plus" aria-hidden="true"></i>Add option</button>
+    </div>`;
+  }
+
+  function questionMarkup(question, index) {
+    return `<article class="question-layout" data-question-id="${escapeHtml(question.id)}">
+      <aside class="margin-note"><i class="ph ph-sparkle" aria-hidden="true"></i><div><p>${escapeHtml(marginSuggestion(question, index))}</p><button type="button" data-review-question="${escapeHtml(question.id)}">Review</button></div></aside>
+      <div class="question-card-wrapper">
+        <section class="question-card">
+          <header class="question-head">
+            <span class="question-number">${index + 1}</span>
+            <label><span class="sr-only">Question type</span><select class="question-type" data-question-type-select="true">${Object.entries(QUESTION_TYPES).map(([value, label]) => `<option value="${value}" ${value === question.type ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select></label>
+            <label class="points-control"><span>Points</span><input type="number" min="0" max="1000" step="1" value="${question.points}" data-points="true" aria-label="Points for question ${index + 1}"></label>
+            <button class="icon-action question-options-button" type="button" data-question-options-button="true" aria-label="Question ${index + 1} options" aria-expanded="false"><i class="ph ph-dots-three-vertical" aria-hidden="true"></i></button>
+          </header>
+          <div class="question-options" hidden>
+            <button type="button" data-question-action="move_up"><i class="ph ph-arrow-up" aria-hidden="true"></i>Move up</button>
+            <button type="button" data-question-action="move_down"><i class="ph ph-arrow-down" aria-hidden="true"></i>Move down</button>
+            <button type="button" data-question-action="duplicate"><i class="ph ph-copy" aria-hidden="true"></i>Duplicate</button>
+            <button type="button" data-question-action="delete"><i class="ph ph-trash" aria-hidden="true"></i>Delete</button>
+          </div>
+          <div class="question-toolbar" role="toolbar" aria-label="Format question ${index + 1}">
+            <select data-block-format aria-label="Text style"><option value="p">Paragraph</option><option value="h3">Heading</option><option value="blockquote">Quote</option></select>
+            <button type="button" data-format-command="bold" aria-label="Bold"><strong>B</strong></button>
+            <button type="button" data-format-command="italic" aria-label="Italic"><em>I</em></button>
+            <button type="button" data-format-command="underline" aria-label="Underline"><u>U</u></button>
+            <button type="button" data-format-command="insertUnorderedList" aria-label="Bulleted list"><i class="ph ph-list-bullets" aria-hidden="true"></i></button>
+            <button type="button" data-format-command="insertOrderedList" aria-label="Numbered list"><i class="ph ph-list-numbers" aria-hidden="true"></i></button>
+            <button type="button" data-format-command="justifyLeft" aria-label="Align left"><i class="ph ph-text-align-left" aria-hidden="true"></i></button>
+            <button type="button" data-format-command="justifyCenter" aria-label="Align center"><i class="ph ph-text-align-center" aria-hidden="true"></i></button>
+            <button type="button" data-format-command="createLink" aria-label="Add link"><i class="ph ph-link" aria-hidden="true"></i></button>
+            <span class="toolbar-spacer"></span>
+            <button type="button" data-format-command="undo" aria-label="Undo"><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i></button>
+            <button type="button" data-format-command="redo" aria-label="Redo"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i></button>
+          </div>
+          <div class="question-prompt" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Question ${index + 1} prompt" data-placeholder="Write the question…">${escapeHtml(question.prompt)}</div>
+          ${choiceEditor(question)}
+          <footer class="question-foot">
+            <label><span>Word count guideline</span><input type="text" value="${escapeHtml(question.wordGuideline || '')}" data-word-guideline="true" placeholder="e.g. 600–800 words" maxlength="100"></label>
+            <label><input type="checkbox" data-required="true" ${question.required ? 'checked' : ''}><span>Required</span></label>
+          </footer>
+          <div class="assistant-suggestion"><i class="ph ph-sparkle" aria-hidden="true"></i><span><strong>Assistant suggestion</strong><small>${escapeHtml(questionSuggestion(question, index))}</small></span><button type="button" data-insert-suggestion="${escapeHtml(question.id)}">Insert</button></div>
+        </section>
+      </div>
+    </article>`;
+  }
+
+  function renderQuestions(focusId = null) {
+    state.questions = state.questions.map(normalizeQuestion);
+    $('#questions-list').innerHTML = state.questions.map(questionMarkup).join('');
+    if (focusId) {
+      const card = $(`[data-question-id="${CSS.escape(focusId)}"] .question-card`);
+      card?.classList.add('is-focused');
+      card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => card?.classList.remove('is-focused'), 1800);
+    }
+    if (!state.hydrating) updateReviewCount();
+  }
+
+  function renderRoster() {
+    state.roster = state.roster.map(normalizeRoster);
+    $('#roster-body').innerHTML = state.roster.map((student, index) => `<tr data-student-id="${escapeHtml(student.id)}">
+      <td><input value="${escapeHtml(student.fullName)}" maxlength="160" data-roster-field="fullName" aria-label="Student ${index + 1} full legal name"></td>
+      <td><input value="${escapeHtml(student.studentNumber)}" maxlength="48" data-roster-field="studentNumber" aria-label="${escapeHtml(student.fullName)} student number"></td>
+      <td><select data-roster-field="yearLevel" aria-label="${escapeHtml(student.fullName)} year level">${['First year', 'Second year', 'Third year', 'Fourth year', 'Graduate'].map((level) => `<option ${level === student.yearLevel ? 'selected' : ''}>${level}</option>`).join('')}</select></td>
+      <td><select data-roster-field="extraMinutes" aria-label="${escapeHtml(student.fullName)} extra time"><option value="0" ${student.extraMinutes === 0 ? 'selected' : ''}>None</option><option value="15" ${student.extraMinutes === 15 ? 'selected' : ''}>+15 min</option><option value="30" ${student.extraMinutes === 30 ? 'selected' : ''}>+30 min</option><option value="60" ${student.extraMinutes === 60 ? 'selected' : ''}>+60 min</option></select></td>
+      <td><button class="icon-action" type="button" data-remove-student="true" aria-label="Remove ${escapeHtml(student.fullName)}"><i class="ph ph-trash" aria-hidden="true"></i></button></td>
+    </tr>`).join('');
+    $('#student-count').textContent = `(${state.roster.length})`;
+    if (api.demoEnabled()) document.body.dataset.demoHydratedRoster = String(state.roster.length);
+    $('#roster-preview-list').innerHTML = state.roster.slice(0, 5).map((student) => `<li><span>${escapeHtml(student.fullName)}</span><span>${escapeHtml(student.studentNumber)}</span></li>`).join('')
+      + (state.roster.length > 5 ? '<li><span>…</span><span></span></li>' : '');
+    if (!state.hydrating) updateReviewCount();
+  }
+
+  function hydrateForm(exam) {
+    state.hydrating = true;
+    state.exam = exam;
+    state.questions = (exam.questions || []).map(normalizeQuestion);
+    state.roster = (exam.roster || []).map(normalizeRoster);
+    $('#command-title').value = exam.title || '';
+    $('#command-title').readOnly = true;
+    $('#exam-title').value = exam.title || '';
+    $('#exam-date').value = String(exam.startsAt || '').slice(0, 10);
+    $('#duration-inline').value = String(exam.durationMinutes || 120);
+    $('#duration-control').value = String(exam.durationMinutes || 120);
+    $('#jurisdiction').value = exam.jurisdiction || 'Philippines';
+    $('#subject').value = exam.subject || '';
+    $('#instructions').value = exam.instructions || '';
+    $('#year-level').value = exam.yearLevel || 'Second year';
+    $('#course-code').value = exam.courseCode || 'LAW-202';
+    $('#start-control').value = exam.startsAt ? localDateTimeInput(exam.startsAt) : '';
+    $('#late-control').value = exam.lateSubmissions || 'not_allowed';
+    $('#navigation-control').value = exam.navigation || 'free';
+    $$('input[name="grading-identity"]').forEach((input) => { input.checked = input.value === (exam.gradingIdentity || 'real_names'); });
+    $$('input[name="integrity-tier-main"], input[name="integrity-tier-side"]').forEach((input) => { input.checked = input.value === (exam.integrityTier || 'standard'); });
+    $('#camera-required').checked = Boolean(exam.cameraRequired);
+    $('#microphone-required').checked = Boolean(exam.microphoneRequired);
+    $('#recording-options').hidden = (exam.integrityTier || 'standard') !== 'recorded_proctoring';
+    $('#recording-availability').hidden = RECORDED_PROCTORING_AVAILABLE;
+    $('#source-name').textContent = exam.sourceFileName || 'No source file';
+    $('#source-size').textContent = exam.sourceFileSize ? formatBytes(exam.sourceFileSize) : 'Create questions directly below';
+    $('#source-file').hidden = !exam.sourceFileName;
+    $('#import-notice').hidden = !exam.sourceFileName;
+    $('#exam-details').classList.toggle('has-source', Boolean(exam.sourceFileName));
+    renderRoster();
+    renderQuestions();
+    state.hydrating = false;
+    updateReviewCount();
+    autoResizeTitle();
+    state.lastSavedJson = JSON.stringify(collectExam());
+    updatePublishState();
+  }
+
+  function collectQuestionFromNode(node, index) {
+    const question = state.questions.find((entry) => entry.id === node.dataset.questionId) || {};
+    const type = $('[data-question-type-select]', node)?.value || question.type || 'essay';
+    const options = type === 'multiple_choice'
+      ? $$('[data-choice-index]', node).map((input) => safeText(input.value, 500))
+      : undefined;
+    const correct = type === 'multiple_choice'
+      ? Number($(`input[name="correct-${CSS.escape(question.id)}"]:checked`, node)?.value || 0)
+      : undefined;
+    return normalizeQuestion({
+      ...question,
+      type,
+      points: Number($('[data-points]', node)?.value || 0),
+      prompt: safeText($('.question-prompt', node)?.innerText, 20_000),
+      wordGuideline: safeText($('[data-word-guideline]', node)?.value, 100),
+      required: Boolean($('[data-required]', node)?.checked),
+      options,
+      correctOption: correct,
+    }, index);
+  }
+
+  function syncQuestionsFromDom() {
+    state.questions = $$('[data-question-id]', $('#questions-list')).map(collectQuestionFromNode);
+  }
+
+  function syncRosterFromDom() {
+    state.roster = $$('[data-student-id]', $('#roster-body')).map((row, index) => normalizeRoster({
+      id: row.dataset.studentId,
+      ...Object.fromEntries($$('[data-roster-field]', row).map((field) => [field.dataset.rosterField, field.value])),
+    }, index));
+  }
+
+  function selectedRadio(name, fallback) {
+    return $(`input[name="${name}"]:checked`)?.value || fallback;
+  }
+
+  function collectExam() {
+    if (!state.exam) return {};
+    syncQuestionsFromDom();
+    syncRosterFromDom();
+    const title = safeText($('#exam-title').value, 180);
+    const subject = safeText($('#subject').value, 120);
+    return {
+      ...state.exam,
+      title,
+      subject,
+      jurisdiction: safeText($('#jurisdiction').value, 80),
+      yearLevel: $('#year-level').value,
+      instructions: safeText($('#instructions').value, 10_000),
+      courseCode: safeText($('#course-code').value, 40),
+      durationMinutes: Number($('#duration-control').value || 120),
+      startsAt: startIsoFromControls(),
+      lateSubmissions: $('#late-control').value,
+      navigation: $('#navigation-control').value,
+      gradingIdentity: selectedRadio('grading-identity', 'real_names'),
+      integrityTier: selectedRadio('integrity-tier-side', 'standard'),
+      cameraRequired: $('#camera-required').checked,
+      microphoneRequired: $('#microphone-required').checked,
+      sourceFileName: $('#source-file').hidden ? null : safeText($('#source-name').textContent, 255),
+      sourceFileSize: $('#source-file').hidden ? null : state.exam.sourceFileSize,
+      questions: state.questions,
+      roster: state.roster,
+    };
+  }
+
+  async function draftDb() {
+    if (!global.indexedDB) return null;
+    if (draftDb.promise) return draftDb.promise;
+    draftDb.promise = new Promise((resolve, reject) => {
+      const request = indexedDB.open('duediligence-examination-room-v1-professor', 1);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains('drafts')) db.createObjectStore('drafts', { keyPath: 'examId' });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    }).catch(() => null);
+    return draftDb.promise;
+  }
+
+  async function saveLocalDraft(exam) {
+    const record = { examId: exam.id, exam, savedAt: new Date().toISOString() };
+    try {
+      const db = await draftDb();
+      if (db) {
+        await new Promise((resolve, reject) => {
+          const request = db.transaction('drafts', 'readwrite').objectStore('drafts').put(record);
+          request.onsuccess = resolve;
+          request.onerror = () => reject(request.error);
+        });
+        return record.savedAt;
+      }
+    } catch {
+      // Fall through to the small synchronous recovery copy.
+    }
+    global.localStorage?.setItem(DRAFT_STORAGE_KEY, JSON.stringify(record));
+    return record.savedAt;
+  }
+
+  async function readLocalDraft(examId) {
+    try {
+      const db = await draftDb();
+      if (db) {
+        const record = await new Promise((resolve, reject) => {
+          const request = db.transaction('drafts').objectStore('drafts').get(examId);
+          request.onsuccess = () => resolve(request.result || null);
+          request.onerror = () => reject(request.error);
+        });
+        if (record) return record;
+      }
+    } catch {
+      // Fall through to localStorage.
+    }
+    try {
+      const record = JSON.parse(global.localStorage?.getItem(DRAFT_STORAGE_KEY) || 'null');
+      return record?.examId === examId ? record : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function setSavedStatus(mode, label) {
+    const status = $('#saved-status');
+    status.classList.toggle('is-saving', mode === 'saving');
+    status.classList.toggle('is-error', mode === 'error' || mode === 'unsaved');
+    const icon = $('i', status);
+    icon.className = `ph ${mode === 'saving' ? 'ph-spinner-gap' : mode === 'error' ? 'ph-warning-circle' : mode === 'unsaved' ? 'ph-pencil-simple' : 'ph-check-circle'}`;
+    $('span', status).textContent = label;
+  }
+
+  async function saveDraft({ announce = false, force = false } = {}) {
+    const exam = collectExam();
+    const serialized = JSON.stringify(exam);
+    const localSavedAt = await saveLocalDraft(exam);
+    if (!force && serialized === state.lastSavedJson) {
+      setSavedStatus('saved', `Saved ${timeAgo(localSavedAt)}`);
+      if (announce) toast('Draft is already up to date.');
+      return { exam };
+    }
+    if (state.saveInFlight) await state.saveInFlight.catch(() => null);
+    setSavedStatus('saving', 'Saving…');
+    const action = async () => {
+      const result = await api.professorCommand('save_draft', { exam }, api.requestId());
+      state.exam = result.exam || exam;
+      state.lastSavedJson = JSON.stringify(exam);
+      setSavedStatus('saved', `Saved ${timeAgo(result.savedAt || new Date())}`);
+      if (announce) toast('Draft saved on this device and backed up to the server.');
+      return result;
+    };
+    state.saveInFlight = action();
+    try {
+      return await state.saveInFlight;
+    } catch (error) {
+      setSavedStatus('error', 'Saved on this device');
+      showError(error, () => saveDraft({ announce: true, force: true }), 'Server backup delayed');
+      return { exam, localOnly: true };
+    } finally {
+      state.saveInFlight = null;
+    }
+  }
+
+  function scheduleAutosave() {
+    if (!state.exam) return;
+    clearTimeout(state.saveTimer);
+    const exam = collectExam();
+    saveLocalDraft(exam).then((savedAt) => setSavedStatus('saved', `Saved on this device ${timeAgo(savedAt)}`));
+    state.saveTimer = setTimeout(() => saveDraft({ force: false }), 1600);
+    updateReviewCount();
+  }
+
+  function reviewItems() {
+    const exam = collectExam();
+    const items = [];
+    if (!exam.title) items.push({ section: 'exam-details', label: 'Add an examination title', help: 'Students and administrators need a clear title.' , blocking: true });
+    if (!exam.subject) items.push({ section: 'exam-details', label: 'Select the subject', help: 'The subject is required for student room entry.', blocking: true });
+    if (!exam.startsAt) items.push({ section: 'exam-details', label: 'Set the start date and time', help: 'The room cannot be scheduled without a start time.', blocking: true });
+    if (!exam.instructions) items.push({ section: 'additional-details', label: 'Add student instructions', help: 'State the expected answer method and permitted resources.', blocking: true });
+    if (!exam.questions.length) items.push({ section: 'questions', label: 'Add at least one question', help: 'An examination needs a question before publication.', blocking: true });
+    exam.questions.forEach((question, index) => {
+      if (!question.prompt) items.push({ section: 'questions', questionId: question.id, label: `Complete Question ${index + 1}`, help: 'Every question must have a prompt.', blocking: true });
+      if (!(Number(question.points) > 0)) items.push({ section: 'questions', questionId: question.id, label: `Set points for Question ${index + 1}`, help: 'Every question needs a positive point value.', blocking: true });
+      if (question.type === 'multiple_choice' && (!question.options?.length || question.options.some((choice) => !choice))) items.push({ section: 'questions', questionId: question.id, label: `Complete the choices for Question ${index + 1}`, help: 'Each multiple-choice option must contain text.', blocking: true });
+    });
+    if (!exam.roster.length) items.push({ section: 'students', label: 'Add at least one student', help: 'The room key is limited to the examination roster.', blocking: true });
+    exam.roster.forEach((student, index) => {
+      if (!student.fullName || !student.studentNumber) items.push({ section: 'students', label: `Complete roster row ${index + 1}`, help: 'Both real name and student number are required.', blocking: true });
+    });
+    const totalPoints = exam.questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
+    if (totalPoints !== 100) items.push({ section: 'questions', label: `Review the ${totalPoints}-point total`, help: 'One hundred points is conventional, but the professor may publish a different total.', blocking: false });
+    if (!exam.roster.some((student) => student.extraMinutes > 0)) items.push({ section: 'students', label: 'Confirm accommodations', help: 'Review whether any student needs additional time or another approved accommodation.', blocking: false });
+    if (exam.integrityTier === 'standard') items.push({ section: 'safety', label: 'Confirm Standard integrity mode', help: 'No camera or microphone recording will occur. Focus changes are not treated as misconduct.', blocking: false });
+    if (exam.integrityTier === 'recorded_proctoring' && !RECORDED_PROCTORING_AVAILABLE) items.push({ section: 'safety', label: 'Recorded proctoring is not configured', help: 'Choose Standard or Focus monitoring, or ask an administrator to configure encrypted recording, retention, deletion, review access, and an approved student alternative.', blocking: true });
+    if (exam.gradingIdentity === 'real_names') items.push({ section: 'students', label: 'Real-name grading is selected', help: 'You may switch to optional anonymous grading without losing roster access.', blocking: false });
+    if (exam.status === 'draft') items.push({ section: 'exam-details', label: 'Confirm administrator key handoff', help: 'After publication, an administrator verifies the sealed version and issues the room key.', blocking: false });
+    return items;
+  }
+
+  function updateReviewCount() {
+    if (!state.exam) return;
+    const items = reviewItems();
+    const button = $('#review-items');
+    $('span', button).textContent = `Review ${items.length} item${items.length === 1 ? '' : 's'}`;
+    button.classList.toggle('has-blockers', items.some((item) => item.blocking));
+  }
+
+  function updatePublishState() {
+    if (!state.exam) return;
+    const button = $('#publish-exam');
+    const status = state.exam.status;
+    if (['awaiting_activation', 'active', 'open', 'grading', 'results_released'].includes(status)) {
+      button.textContent = status === 'awaiting_activation' ? 'Published' : 'Published';
+      button.disabled = true;
+    } else {
+      button.textContent = 'Publish';
+      button.disabled = false;
+    }
+  }
+
+  function showReviewItems({ publishAttempt = false } = {}) {
+    const items = reviewItems();
+    $('#review-list').innerHTML = items.length
+      ? items.map((item) => `<button class="review-entry" type="button" data-review-section="${escapeHtml(item.section)}" ${item.questionId ? `data-review-question-id="${escapeHtml(item.questionId)}"` : ''}><i class="ph ${item.blocking ? 'ph-warning-circle' : 'ph-info'}" aria-hidden="true"></i><span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.help)}</small></span><i class="ph ph-caret-right" aria-hidden="true"></i></button>`).join('')
+      : '<div class="empty-state"><i class="ph ph-check-circle" aria-hidden="true"></i><h2>Ready to publish</h2><p>No required information is missing.</p></div>';
+    openDialog('review-dialog');
+    if (publishAttempt && items.some((item) => item.blocking)) toast('Complete the required review items. Suggestions remain under your control.');
+  }
+
+  function goToReviewItem(sectionId, questionId = null) {
+    closeDialog('review-dialog');
+    const target = questionId
+      ? $(`[data-question-id="${CSS.escape(questionId)}"]`)
+      : document.getElementById(sectionId);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (questionId) $('.question-card', target)?.classList.add('is-focused');
+    const focusable = questionId ? $('.question-prompt', target) : $('input, textarea, select, button', target);
+    setTimeout(() => focusable?.focus(), 350);
+  }
+
+  function showPublishDialog() {
+    const items = reviewItems();
+    const blocker = items.find((item) => item.blocking);
+    if (blocker) {
+      showReviewItems({ publishAttempt: true });
+      setTimeout(() => goToReviewItem(blocker.section, blocker.questionId), 500);
+      return;
+    }
+    const exam = collectExam();
+    const totalPoints = exam.questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
+    $('#publish-summary').innerHTML = `<div class="publish-grid">
+      <div class="publish-item"><small>Examination</small><strong>${escapeHtml(exam.title)}</strong></div>
+      <div class="publish-item"><small>Starts</small><strong>${escapeHtml(formatDateTime(exam.startsAt))}</strong></div>
+      <div class="publish-item"><small>Questions and points</small><strong>${exam.questions.length} questions · ${totalPoints} points</strong></div>
+      <div class="publish-item"><small>Students</small><strong>${exam.roster.length} real-name roster records</strong></div>
+      <div class="publish-item"><small>Grading</small><strong>${exam.gradingIdentity === 'real_names' ? 'Real names' : 'Anonymous grading (optional)'}</strong></div>
+      <div class="publish-item"><small>Integrity</small><strong>${escapeHtml(exam.integrityTier.replace(/_/g, ' '))}</strong></div>
+    </div><p class="legal-note">After publication, an administrator must verify the version and issue the room key. Students cannot see questions before the room opens and the privacy notice is accepted.</p>`;
+    $('#publish-confirmation').checked = false;
+    $('#publish-confirm').disabled = true;
+    openDialog('publish-dialog');
+  }
+
+  async function publishExam(event) {
+    event.preventDefault();
+    if (!$('#publish-confirmation').checked) return;
+    const button = $('#publish-confirm');
+    setButtonBusy(button, true, 'Publishing…');
+    try {
+      await saveDraft({ force: true });
+      const exam = collectExam();
+      const result = await api.professorCommand('publish', { exam }, api.requestId());
+      state.exam = result.exam || { ...exam, status: 'awaiting_activation' };
+      closeDialog('publish-dialog');
+      updatePublishState();
+      toast('Published. The administrator can now verify the examination and issue the room key.');
+      switchView('monitor');
+    } catch (error) {
+      showError(error, () => publishExam(event));
+    } finally {
+      setButtonBusy(button, false);
+    }
+  }
+
+  function previewExam() {
+    const exam = collectExam();
+    $('#preview-sheet').innerHTML = `<article class="preview-document">
+      <p class="section-kicker">${escapeHtml(exam.subject || 'Law examination')}</p>
+      <h1>${escapeHtml(exam.title || 'Untitled examination')}</h1>
+      <p class="preview-meta">${escapeHtml(formatDateTime(exam.startsAt))} · ${exam.durationMinutes} minutes · ${escapeHtml(exam.jurisdiction || '')}</p>
+      <p>${escapeHtml(exam.instructions || 'No instructions have been added.')}</p>
+      ${exam.questions.map((question, index) => `<section class="preview-question"><h3>${index + 1}. ${escapeHtml(question.prompt || 'Question prompt missing')} <small>(${question.points} points)</small></h3>${question.type === 'multiple_choice' ? `<ol type="A">${(question.options || []).map((option) => `<li>${escapeHtml(option)}</li>`).join('')}</ol>` : '<div class="preview-answer-area" aria-label="Student answer area"></div>'}</section>`).join('')}
+    </article>`;
+    openDialog('preview-dialog');
+  }
+
+  function autoResizeTitle() {
+    const textarea = $('#exam-title');
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.max(38, textarea.scrollHeight)}px`;
+  }
+
+  function syncTitle(source) {
+    const value = source.value;
+    $('#exam-title').value = value;
+    $('#command-title').value = value;
+    autoResizeTitle();
+    scheduleAutosave();
+  }
+
+  function addQuestion(type = 'essay', seed = {}) {
+    syncQuestionsFromDom();
+    const question = normalizeQuestion({
+      id: global.crypto.randomUUID(), type, points: seed.points ?? 10,
+      prompt: seed.prompt || '', wordGuideline: seed.wordGuideline || '', required: true,
+      options: type === 'multiple_choice' ? (seed.options || ['', '', '', '']) : undefined,
+      correctOption: seed.correctOption || 0,
+    }, state.questions.length);
+    state.questions.push(question);
+    renderQuestions(question.id);
+    scheduleAutosave();
+    $('.question-prompt', $(`[data-question-id="${CSS.escape(question.id)}"]`))?.focus();
+  }
+
+  function questionAction(questionId, action) {
+    syncQuestionsFromDom();
+    const index = state.questions.findIndex((question) => question.id === questionId);
+    if (index < 0) return;
+    if (action === 'delete') {
+      if (state.questions.length === 1) {
+        showError({ message: 'Keep at least one question in the examination.', recovery: 'Add a replacement question before deleting this one.' }, null, 'Question not deleted');
+        return;
+      }
+      state.questions.splice(index, 1);
+      renderQuestions();
+      scheduleAutosave();
+      toast('Question removed. The draft was renumbered automatically.');
+      return;
+    }
+    if (action === 'duplicate') {
+      const copy = normalizeQuestion({ ...state.questions[index], id: global.crypto.randomUUID(), prompt: `${state.questions[index].prompt} (Copy)` }, index + 1);
+      state.questions.splice(index + 1, 0, copy);
+      renderQuestions(copy.id);
+      scheduleAutosave();
+      return;
+    }
+    const destination = action === 'move_up' ? index - 1 : index + 1;
+    if (destination < 0 || destination >= state.questions.length) return;
+    [state.questions[index], state.questions[destination]] = [state.questions[destination], state.questions[index]];
+    renderQuestions(questionId);
+    scheduleAutosave();
+  }
+
+  function changeQuestionType(questionId, type) {
+    syncQuestionsFromDom();
+    const question = state.questions.find((entry) => entry.id === questionId);
+    if (!question || question.type === type) return;
+    question.type = QUESTION_TYPES[type] ? type : 'essay';
+    if (question.type === 'multiple_choice') {
+      question.options = question.options?.length ? question.options : ['', '', '', ''];
+      question.correctOption = 0;
+    } else {
+      delete question.options;
+      delete question.correctOption;
+    }
+    renderQuestions(questionId);
+    scheduleAutosave();
+  }
+
+  async function handleFormat(button, questionNode) {
+    const prompt = $('.question-prompt', questionNode);
+    prompt?.focus();
+    const command = button.dataset.formatCommand;
+    if (command === 'createLink') {
+      const url = await requestText({
+        eyebrow: 'Question editor',
+        title: 'Add a secure link',
+        copy: 'Paste the complete link you want to add to this question.',
+        label: 'Secure link address',
+        help: 'For student safety, only complete addresses beginning with https:// are accepted.',
+        type: 'url',
+        autocomplete: 'url',
+        placeholder: 'https://example.edu/reference',
+        submitLabel: 'Add link',
+      });
+      if (!url) return;
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'https:') throw new Error();
+        document.execCommand(command, false, parsed.href);
+      } catch {
+        showError({ message: 'That link address is not valid.', recovery: 'Use a complete secure address beginning with https://.' }, null, 'Link not added');
+        return;
+      }
+    } else {
+      document.execCommand(command, false);
+    }
+    scheduleAutosave();
+  }
+
+  function addStudent(seed = {}) {
+    syncRosterFromDom();
+    state.roster.push(normalizeRoster({
+      id: global.crypto.randomUUID(), fullName: '', studentNumber: '',
+      yearLevel: $('#year-level').value, extraMinutes: 0, ...seed,
+    }, state.roster.length));
+    renderRoster();
+    scheduleAutosave();
+    const row = $('#roster-body tr:last-child');
+    row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('input', row)?.focus();
+  }
+
+  function parseCsvLine(line) {
+    const values = [];
+    let value = '';
+    let quoted = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+      if (character === '"' && quoted && line[index + 1] === '"') { value += '"'; index += 1; }
+      else if (character === '"') quoted = !quoted;
+      else if (character === ',' && !quoted) { values.push(value.trim()); value = ''; }
+      else value += character;
+    }
+    values.push(value.trim());
+    return values;
+  }
+
+  async function importRoster(file) {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showError({ message: 'That roster file is larger than 2 MB.', recovery: 'Export only the required name, student number, email, year level, and extra-time columns, then import again.' }, null, 'Roster not imported');
+      return;
+    }
+    const rows = (await file.text()).split(/\r?\n/).filter((line) => line.trim()).map(parseCsvLine);
+    if (rows.length < 2) {
+      showError({ message: 'The CSV does not contain student rows.', recovery: 'Include a header row followed by at least one student.' }, null, 'Roster not imported');
+      return;
+    }
+    const headers = rows.shift().map((value) => value.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    const positions = {
+      fullName: headers.findIndex((value) => ['fullname', 'name', 'studentname'].includes(value)),
+      studentNumber: headers.findIndex((value) => ['studentnumber', 'studentno', 'idnumber'].includes(value)),
+      email: headers.findIndex((value) => value === 'email'),
+      yearLevel: headers.findIndex((value) => ['yearlevel', 'year'].includes(value)),
+      extraMinutes: headers.findIndex((value) => ['extraminutes', 'accommodationminutes'].includes(value)),
+    };
+    if (positions.fullName < 0 || positions.studentNumber < 0) {
+      showError({ message: 'The CSV needs Full name and Student number columns.', recovery: 'Rename those two headers, keep the first row as column names, then import again.' }, null, 'Roster not imported');
+      return;
+    }
+    const imported = rows.map((row, index) => normalizeRoster({
+      id: global.crypto.randomUUID(),
+      fullName: row[positions.fullName],
+      studentNumber: row[positions.studentNumber],
+      email: positions.email >= 0 ? row[positions.email] : '',
+      yearLevel: positions.yearLevel >= 0 ? row[positions.yearLevel] : $('#year-level').value,
+      extraMinutes: positions.extraMinutes >= 0 ? Number(row[positions.extraMinutes]) : 0,
+    }, index)).filter((student) => student.fullName && student.studentNumber);
+    if (!imported.length) {
+      showError({ message: 'No complete student rows were found.', recovery: 'Add a full name and student number to each row, then import again.' }, null, 'Roster not imported');
+      return;
+    }
+    state.roster = imported;
+    renderRoster();
+    scheduleAutosave();
+    toast(`${imported.length} students imported. Review the roster before publishing.`);
+  }
+
+  function questionsFromText(text) {
+    const normalized = String(text || '').replace(/\r/g, '').trim();
+    const parts = normalized.split(/\n(?=(?:Question\s+)?\d+[.)]\s+)/i).map((part) => part.replace(/^(?:Question\s+)?\d+[.)]\s*/i, '').trim()).filter(Boolean);
+    return parts.map((prompt, index) => normalizeQuestion({
+      id: global.crypto.randomUUID(), type: 'essay', points: Math.max(1, Math.floor(100 / parts.length)),
+      prompt, wordGuideline: index === 0 ? '600–800 words' : '500–700 words', required: true,
+    }, index));
+  }
+
+  async function importSource(file) {
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      showError({ message: 'That exam file is larger than 8 MB.', recovery: 'Remove unnecessary images or export the document as a smaller DOCX, text PDF, or TXT file, then try again.' }, null, 'Exam not uploaded');
+      return;
+    }
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (!['docx', 'pdf', 'txt', 'rtf'].includes(extension)) {
+      showError({ message: 'That file type is not supported.', recovery: 'Upload a DOCX, text-based PDF, RTF, or TXT file.' }, null, 'Exam not uploaded');
+      return;
+    }
+    $('#source-name').textContent = file.name;
+    $('#source-size').textContent = formatBytes(file.size);
+    $('#source-file').hidden = false;
+    $('#import-notice').hidden = false;
+    $('#exam-details').classList.add('has-source');
+    state.exam.sourceFileName = file.name;
+    state.exam.sourceFileSize = file.size;
+    try {
+      if (extension === 'txt') {
+        const parsed = questionsFromText(await file.text());
+        if (parsed.length) {
+          state.questions = parsed;
+          renderQuestions();
+        }
+      } else if (!api.demoEnabled()) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let offset = 0; offset < bytes.length; offset += chunkSize) binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+        const result = await api.professorCommand('import_document', {
+          examId: state.exam.id, fileName: file.name, mimeType: file.type || 'application/octet-stream', base64: btoa(binary),
+        }, api.requestId());
+        if (result.questions?.length) {
+          state.questions = result.questions.map(normalizeQuestion);
+          renderQuestions();
+        }
+      }
+      scheduleAutosave();
+      toast('Source uploaded. AI numbering is a draft for your review; nothing was published.');
+    } catch (error) {
+      showError(error, () => importSource(file), 'Source import delayed');
+    }
+  }
+
+  function synchronizeRadioGroup(sourceName, targetName) {
+    const selected = selectedRadio(sourceName, 'standard');
+    $$(`input[name="${targetName}"]`).forEach((input) => { input.checked = input.value === selected; });
+    $('#recording-options').hidden = selected !== 'recorded_proctoring';
+    $('#recording-availability').hidden = RECORDED_PROCTORING_AVAILABLE;
+    scheduleAutosave();
+  }
+
+  function switchView(view) {
+    if (!['create', 'monitor', 'grade'].includes(view)) return;
+    state.currentView = view;
+    document.body.dataset.workspaceView = view;
+    $$('[data-app-view]').forEach((node) => {
+      const active = node.dataset.appView === view;
+      node.hidden = !active;
+      node.classList.toggle('is-active', active);
+    });
+    $$('[data-view]').forEach((button) => button.classList.toggle('is-active', button.dataset.view === view));
+    $('#assistant-panel').hidden = view !== 'create';
+    clearInterval(state.monitorTimer);
+    state.monitorTimer = null;
+    if (view === 'monitor') {
+      refreshMonitor();
+      state.monitorTimer = setInterval(refreshMonitor, 5000);
+    }
+    if (view === 'grade') refreshGrading();
+    global.history.replaceState(null, '', `${global.location.pathname}${global.location.search}#${view}`);
+  }
+
+  async function refreshMonitor({ silent = true } = {}) {
+    try {
+      const result = await api.professorQuery('monitor', { examId: state.exam.id });
+      state.monitor = result;
+      state.exam = result.exam || state.exam;
+      state.activation = result.activation || null;
+      renderMonitor();
+      if (!silent) toast('Live student status refreshed.');
+    } catch (error) {
+      if (!silent) showError(error, () => refreshMonitor({ silent: false }), 'Monitor not refreshed');
+    }
+  }
+
+  function renderMonitor() {
+    const data = state.monitor || { sessions: [], submissions: [], incidents: [] };
+    const sessions = data.sessions || [];
+    const submittedIds = new Set((data.submissions || []).map((submission) => submission.sessionId));
+    const connected = sessions.filter((session) => session.connected && !submittedIds.has(session.id)).length;
+    const submitted = submittedIds.size;
+    const disconnected = sessions.filter((session) => !session.connected && !submittedIds.has(session.id)).length;
+    $('#monitor-title').textContent = state.exam.title;
+    $('#monitor-metrics').innerHTML = [
+      ['Roster', state.exam.roster?.length || state.roster.length, 'Expected students'],
+      ['In progress', connected, 'Connected and writing'],
+      ['Submitted', submitted, 'Receipts issued'],
+      ['Needs attention', disconnected + (data.incidents || []).filter((incident) => incident.severity !== 'info').length, 'Human review only'],
+    ].map(([label, value, help]) => `<div class="operations-metric"><small>${escapeHtml(label)}</small><strong>${value}</strong><span>${escapeHtml(help)}</span></div>`).join('');
+    const status = state.activation?.status || 'waiting';
+    $('#room-state-label').textContent = status === 'open' ? 'Room open' : status === 'active' ? 'Key issued · room closed' : status === 'closed' ? 'Room closed' : 'Waiting for admin key';
+    $('.live-indicator').classList.toggle('is-live', status === 'open');
+    const openButton = $('#open-room');
+    if (status === 'open') {
+      openButton.textContent = 'Close room';
+      openButton.dataset.roomAction = 'close';
+    } else {
+      openButton.textContent = state.activation ? 'Enter room with key' : 'Waiting for admin key';
+      openButton.dataset.roomAction = 'open';
+      openButton.disabled = !state.activation;
+    }
+    const query = $('#monitor-search').value.trim().toLowerCase();
+    const filtered = sessions.filter((session) => !query || `${session.fullName} ${session.studentNumber}`.toLowerCase().includes(query));
+    $('#monitor-table-body').innerHTML = filtered.length ? filtered.map((session) => {
+      const isSubmitted = submittedIds.has(session.id);
+      const sessionStatus = isSubmitted ? 'submitted' : session.connected ? 'in_progress' : 'disconnected';
+      const latestIncident = [...(data.incidents || [])].reverse().find((incident) => incident.sessionId === session.id);
+      return `<tr data-monitor-session="${escapeHtml(session.id)}"><td><strong>${escapeHtml(session.fullName)}</strong></td><td>${escapeHtml(session.studentNumber)}</td><td><span class="status-label ${sessionStatus}"><i aria-hidden="true"></i>${escapeHtml(sessionStatus.replace('_', ' '))}</span></td><td>${escapeHtml(String(session.currentQuestion || '—'))}</td><td>${escapeHtml(timeAgo(session.lastSeenAt))}</td><td>${latestIncident ? escapeHtml(latestIncident.type.replace(/_/g, ' ')) : 'Clear'}</td><td><button class="table-action" type="button" data-view-student="${escapeHtml(session.id)}">View</button></td></tr>`;
+    }).join('') : '<tr><td colspan="7"><div class="empty-feed">No students have entered yet. The roster remains ready, and this page will update automatically.</div></td></tr>';
+    const incidents = [...(data.incidents || [])].reverse();
+    $('#incident-feed').innerHTML = incidents.length ? incidents.map((incident) => {
+      const session = sessions.find((entry) => entry.id === incident.sessionId);
+      return `<article class="incident-entry"><i class="ph ph-warning-circle" aria-hidden="true"></i><div><strong>${escapeHtml(session?.fullName || 'Student session')}</strong><p>${escapeHtml(incident.type.replace(/_/g, ' '))}. Review the timing and context before deciding whether any follow-up is needed.</p><small>${escapeHtml(formatDateTime(incident.occurredAt))}</small></div></article>`;
+    }).join('') : '<div class="empty-feed">No integrity events require review. A focus change, device interruption, or disconnection will appear here without automatically penalizing the student.</div>';
+  }
+
+  async function roomAction() {
+    const button = $('#open-room');
+    if (button.dataset.roomAction === 'close') {
+      const confirmed = global.confirm('Close the examination room? Students who already submitted are unaffected. Students still writing will be asked to submit their last saved work.');
+      if (!confirmed) return;
+      setButtonBusy(button, true, 'Closing…');
+      try {
+        await api.professorCommand('close_room', { examId: state.exam.id }, api.requestId());
+        toast('Room closed. Grading is now available.');
+        await refreshMonitor();
+        switchView('grade');
+      } catch (error) {
+        showError(error, roomAction, 'Room not closed');
+      } finally {
+        setButtonBusy(button, false);
+      }
+      return;
+    }
+    if (!state.activation) {
+      showError({ message: 'The administrator has not issued a room key yet.', recovery: 'Keep this page open. Ask the administrator to verify the published examination and issue the key.' }, () => refreshMonitor({ silent: false }), 'Room key pending');
+      return;
+    }
+    $('#professor-room-key').value = api.demoEnabled() ? api.demoRoomKey : '';
+    openDialog('key-dialog');
+    setTimeout(() => $('#professor-room-key').focus(), 100);
+  }
+
+  async function openRoomWithKey(event) {
+    event.preventDefault();
+    const button = $('button[type="submit"]', event.currentTarget);
+    setButtonBusy(button, true, 'Opening…');
+    try {
+      const result = await api.professorCommand('open_room', { examId: state.exam.id, roomKey: $('#professor-room-key').value }, api.requestId());
+      state.exam = result.exam || state.exam;
+      state.activation = result.activation || state.activation;
+      closeDialog('key-dialog');
+      toast('Monitoring room is open. Students may now enter with the same key.');
+      await refreshMonitor();
+    } catch (error) {
+      showError(error, () => openRoomWithKey(event), 'Room not opened');
+    } finally {
+      setButtonBusy(button, false);
+    }
+  }
+
+  function showStudentDetail(sessionId) {
+    const data = state.monitor || {};
+    const session = (data.sessions || []).find((entry) => entry.id === sessionId);
+    if (!session) return;
+    const submission = (data.submissions || []).find((entry) => entry.sessionId === sessionId);
+    const incidents = (data.incidents || []).filter((entry) => entry.sessionId === sessionId);
+    $('#student-detail-title').textContent = session.fullName;
+    $('#student-detail-content').innerHTML = `<dl class="student-detail-grid">
+      <div><dt>Student number</dt><dd>${escapeHtml(session.studentNumber)}</dd></div>
+      <div><dt>Status</dt><dd>${escapeHtml(submission ? 'Submitted' : session.connected ? 'In progress' : 'Disconnected')}</dd></div>
+      <div><dt>Current question</dt><dd>${escapeHtml(String(session.currentQuestion || 'Not available'))}</dd></div>
+      <div><dt>Last server backup</dt><dd>${escapeHtml(formatDateTime(session.lastSeenAt))}</dd></div>
+      <div><dt>Privacy notice</dt><dd>${escapeHtml(session.consentVersion || 'Not available')}</dd></div>
+      <div><dt>Integrity events</dt><dd>${incidents.length}</dd></div>
+      ${submission ? `<div><dt>Receipt</dt><dd>${escapeHtml(submission.receiptCode)}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDateTime(submission.submittedAt))}</dd></div>` : ''}
+    </dl><p class="legal-note">Events are context for human review. They do not establish misconduct and do not alter the student’s grade automatically.</p>`;
+    openDialog('student-detail-dialog');
+  }
+
+  function downloadJson(filename, value) {
+    const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  function downloadMonitorSnapshot() {
+    if (!state.monitor) return;
+    const safe = {
+      generatedAt: new Date().toISOString(), examId: state.exam.id, title: state.exam.title,
+      sessions: state.monitor.sessions, submissions: state.monitor.submissions,
+      incidents: state.monitor.incidents,
+      note: 'Integrity events require human context and are not findings of misconduct.',
+    };
+    downloadJson(`examination-room-status-${state.exam.id.slice(0, 8)}.json`, safe);
+    toast('Status snapshot downloaded. It does not contain room keys or student answers.');
+  }
+
+  async function refreshGrading() {
+    try {
+      state.grading = await api.professorQuery('grading', { examId: state.exam.id });
+      renderGrading();
+    } catch (error) {
+      showError(error, refreshGrading, 'Grading not refreshed');
+    }
+  }
+
+  function latestBy(items, keyFunction) {
+    const map = new Map();
+    items.forEach((item) => map.set(keyFunction(item), item));
+    return map;
+  }
+
+  function renderGrading() {
+    const data = state.grading || { sessions: [], submissions: [], answerRevisions: [], gradeRevisions: [], releases: [] };
+    const submittedIds = new Set((data.submissions || []).map((submission) => submission.sessionId));
+    const sessions = (data.sessions || []).filter((session) => submittedIds.has(session.id));
+    if (!state.selectedGradingSessionId && sessions.length) state.selectedGradingSessionId = sessions[0].id;
+    sessions.forEach((session) => state.selectedReleaseIds.add(session.id));
+    $('#grading-student-list').innerHTML = sessions.length ? sessions.map((session, index) => {
+      const released = (data.releases || []).some((release) => release.sessionIds.includes(session.id));
+      const displayName = state.anonymousGrading ? `Student ${index + 1}` : session.fullName;
+      return `<div class="submission-person-wrap"><label class="sr-only" for="release-${escapeHtml(session.id)}">Select ${escapeHtml(displayName)} for result release</label><input id="release-${escapeHtml(session.id)}" class="release-selector" type="checkbox" data-release-session="${escapeHtml(session.id)}" ${state.selectedReleaseIds.has(session.id) ? 'checked' : ''}><button class="submission-person ${session.id === state.selectedGradingSessionId ? 'is-active' : ''}" type="button" data-grade-session="${escapeHtml(session.id)}"><span class="avatar">${escapeHtml(initials(displayName))}</span><span><strong>${escapeHtml(displayName)}</strong><small>${escapeHtml(state.anonymousGrading ? 'Identity hidden during grading' : session.studentNumber)}</small></span><i class="ph ${released ? 'ph-paper-plane-tilt' : 'ph-check-circle'}" aria-hidden="true"></i></button></div>`;
+    }).join('') : '<div class="empty-feed">No submitted answer files are available yet. Student receipts will appear here automatically.</div>';
+    renderGradingSheet();
+    const latestGrades = latestBy(data.gradeRevisions || [], (grade) => `${grade.sessionId}:${grade.questionId}`);
+    const gradedStudents = sessions.filter((session) => state.questions.every((question) => latestGrades.has(`${session.id}:${question.id}`))).length;
+    $('#grading-summary').innerHTML = `<div class="grading-summary-content"><div class="summary-row"><span>Submitted</span><strong>${sessions.length}</strong></div><div class="summary-row"><span>Fully graded</span><strong>${gradedStudents}</strong></div><div class="summary-row"><span>Selected for release</span><strong>${state.selectedReleaseIds.size}</strong></div><div class="summary-row"><span>Identity view</span><strong>${state.anonymousGrading ? 'Anonymous' : 'Real names'}</strong></div></div>`;
+  }
+
+  function renderGradingSheet() {
+    const data = state.grading || {};
+    const session = (data.sessions || []).find((entry) => entry.id === state.selectedGradingSessionId);
+    if (!session) {
+      $('#grading-sheet').innerHTML = '<div class="empty-state"><i class="ph ph-seal-check" aria-hidden="true"></i><h2>Submissions will appear here</h2><p>Select a submitted student to review answers, award points, and leave feedback.</p></div>';
+      return;
+    }
+    const studentIndex = (data.sessions || []).filter((entry) => (data.submissions || []).some((submission) => submission.sessionId === entry.id)).findIndex((entry) => entry.id === session.id);
+    const displayName = state.anonymousGrading ? `Student ${studentIndex + 1}` : session.fullName;
+    const answers = latestBy((data.answerRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
+    const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
+    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${session.studentNumber} · ${session.yearLevel}`)}</p></div><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Grade changes create durable revisions</span></header>
+      ${state.questions.map((question, index) => {
+        const answer = answers.get(question.id)?.answer;
+        const grade = grades.get(question.id) || {};
+        const answerText = viewModels?.professorAnswerLabel
+          ? viewModels.professorAnswerLabel(question, answer)
+          : answer == null
+            ? 'No saved answer was found for this question.'
+            : typeof answer === 'string'
+              ? answer
+              : Array.isArray(answer)
+                ? answer.join(', ')
+                : JSON.stringify(answer);
+        return `<article class="grade-question" data-grade-question="${escapeHtml(question.id)}"><header><h3>Question ${index + 1}</h3><strong>${question.points} points</strong></header><div class="student-answer">${escapeHtml(answerText)}</div><div class="grade-controls"><label><span>Points awarded</span><input type="number" min="0" max="${question.points}" step=".5" value="${grade.points ?? ''}" data-grade-points></label><label><span>Professor feedback</span><textarea maxlength="5000" data-grade-feedback>${escapeHtml(grade.feedback || '')}</textarea></label><button class="button primary compact" type="button" data-save-grade="${escapeHtml(question.id)}">Save grade</button></div></article>`;
+      }).join('')}`;
+  }
+
+  async function saveGrade(questionId, button) {
+    const container = $(`[data-grade-question="${CSS.escape(questionId)}"]`);
+    const points = Number($('[data-grade-points]', container).value);
+    const feedback = $('[data-grade-feedback]', container).value;
+    setButtonBusy(button, true, 'Saving…');
+    try {
+      const result = await api.professorCommand('save_grade', { examId: state.exam.id, sessionId: state.selectedGradingSessionId, questionId, points, feedback }, api.requestId());
+      state.grading.gradeRevisions.push(result.revision);
+      toast('Grade saved as a new revision.');
+      renderGrading();
+    } catch (error) {
+      showError(error, () => saveGrade(questionId, button), 'Grade not saved');
+    } finally {
+      setButtonBusy(button, false);
+    }
+  }
+
+  async function releaseResults() {
+    const sessionIds = [...state.selectedReleaseIds];
+    if (!sessionIds.length) {
+      showError({ message: 'No students are selected for result release.', recovery: 'Select the check box beside each intended student, then choose Release selected results again.' }, null, 'Results not released');
+      return;
+    }
+    const latestGrades = latestBy(state.grading?.gradeRevisions || [], (grade) => `${grade.sessionId}:${grade.questionId}`);
+    const incompleteSession = sessionIds.find((sessionId) => state.questions.some((question) => !latestGrades.has(`${sessionId}:${question.id}`)));
+    if (incompleteSession) {
+      const session = (state.grading?.sessions || []).find((entry) => entry.id === incompleteSession);
+      const displayName = state.anonymousGrading
+        ? `Student ${(state.grading?.sessions || []).findIndex((entry) => entry.id === incompleteSession) + 1}`
+        : session?.fullName || 'the selected student';
+      showError({
+        message: `Complete every question grade for ${displayName} before releasing the result.`,
+        recovery: 'Open the selected answer file, enter points and feedback for each question, save every grade, then release again.',
+      }, null, 'Results not released');
+      return;
+    }
+    const confirmed = global.confirm(`Release results to ${sessionIds.length} selected student${sessionIds.length === 1 ? '' : 's'}? Students will receive a sign-in notice; grades remain in the protected portal.`);
+    if (!confirmed) return;
+    const button = $('#release-results');
+    setButtonBusy(button, true, 'Releasing…');
+    try {
+      const result = await api.professorCommand('release_results', { examId: state.exam.id, sessionIds }, api.requestId());
+      state.grading.releases.push(result.release);
+      toast(`Results released to ${sessionIds.length} selected student${sessionIds.length === 1 ? '' : 's'}.`);
+      renderGrading();
+    } catch (error) {
+      showError(error, releaseResults, 'Results not released');
+    } finally {
+      setButtonBusy(button, false);
+    }
+  }
+
+  async function derivePackageKey(passphrase, salt) {
+    const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310_000, hash: 'SHA-256' }, material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+
+  function bytesToBase64(bytes) {
+    let binary = '';
+    for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+    return btoa(binary);
+  }
+
+  function base64ToBytes(value) {
+    const binary = atob(value);
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  }
+
+  async function exportGradingPackage() {
+    if (!state.grading) await refreshGrading();
+    const passphrase = await requestText({
+      eyebrow: 'Encrypted offline grading',
+      title: 'Protect the offline grading copy',
+      copy: 'Create a passphrase for this examination copy. You will need the same passphrase to import grades later.',
+      label: 'Passphrase',
+      help: 'Use at least 12 characters. Store the passphrase separately from the downloaded file and do not email them together.',
+      type: 'password',
+      autocomplete: 'new-password',
+      minimumLength: 12,
+      submitLabel: 'Encrypt and download',
+    });
+    if (passphrase == null) return;
+    if (passphrase.length < 12) {
+      showError({ message: 'The offline grading passphrase must contain at least 12 characters.', recovery: 'Choose a longer, unique passphrase and store it separately from the downloaded file.' }, exportGradingPackage, 'Package not created');
+      return;
+    }
+    try {
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const key = await derivePackageKey(passphrase, salt);
+      const payload = {
+        format: 'duediligence-examination-room-offline-grading-v1',
+        exportedAt: new Date().toISOString(),
+        exam: { id: state.exam.id, versionId: state.exam.versionId, title: state.exam.title, questions: state.questions },
+        sessions: state.grading.sessions,
+        submissions: state.grading.submissions,
+        answerRevisions: state.grading.answerRevisions,
+        gradeRevisions: state.grading.gradeRevisions,
+        privacy: 'Contains sensitive education records. Do not email, share, or store on an unmanaged device.',
+      };
+      const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(payload))));
+      downloadJson(`due-diligence-offline-grading-${state.exam.id.slice(0, 8)}.ddgrade.json`, {
+        format: payload.format, algorithm: 'AES-GCM', keyDerivation: 'PBKDF2-SHA256-310000',
+        salt: bytesToBase64(salt), iv: bytesToBase64(iv), ciphertext: bytesToBase64(encrypted),
+      });
+      toast('Encrypted offline grading copy downloaded. Keep its passphrase separate.');
+    } catch (error) {
+      showError({ message: 'This browser could not create the encrypted grading copy.', recovery: 'Use a current version of Chrome, Edge, Firefox, or Safari, then try again.' }, exportGradingPackage, 'Package not created');
+    }
+  }
+
+  async function importGradingPackage(file) {
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      showError({ message: 'That grading package is larger than 20 MB.', recovery: 'Choose the original Due Diligence offline grading package for this examination.' }, null, 'Package not imported');
+      return;
+    }
+    try {
+      const wrapper = JSON.parse(await file.text());
+      if (wrapper.format !== 'duediligence-examination-room-offline-grading-v1') throw new Error('format');
+      const passphrase = await requestText({
+        eyebrow: 'Encrypted offline grading',
+        title: 'Unlock the grading copy',
+        copy: 'Enter the passphrase created when this exact examination copy was downloaded.',
+        label: 'Passphrase',
+        help: 'The file is verified against this examination and immutable version before any grade is imported.',
+        type: 'password',
+        autocomplete: 'current-password',
+        submitLabel: 'Verify and import',
+      });
+      if (!passphrase) return;
+      const salt = base64ToBytes(wrapper.salt);
+      const iv = base64ToBytes(wrapper.iv);
+      const key = await derivePackageKey(passphrase, salt);
+      const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, base64ToBytes(wrapper.ciphertext));
+      const payload = JSON.parse(new TextDecoder().decode(decrypted));
+      if (payload.exam?.id !== state.exam.id || payload.exam?.versionId !== state.exam.versionId) {
+        throw new Error('exam');
+      }
+      const importedGrades = payload.gradeRevisions || [];
+      for (const grade of importedGrades) {
+        await api.professorCommand('save_grade', { examId: state.exam.id, sessionId: grade.sessionId, questionId: grade.questionId, points: grade.points, feedback: grade.feedback }, api.requestId());
+      }
+      toast(`${importedGrades.length} offline grade revision${importedGrades.length === 1 ? '' : 's'} verified and imported.`);
+      await refreshGrading();
+    } catch (error) {
+      showError({ message: 'The grading package could not be verified or decrypted.', recovery: 'Use the correct passphrase and the package exported for this exact examination version. The existing online grades were not changed.' }, () => importGradingPackage(file), 'Package not imported');
+    }
+  }
+
+  function assistantAction(action) {
+    if (action === 'add_federalism') {
+      addQuestion('essay', { points: 10, prompt: 'Evaluate whether a federal form of government can be adopted through constitutional amendment or requires constitutional revision. Explain the controlling distinction and procedure.', wordGuideline: '400–600 words' });
+      toast('Suggestion inserted as a new draft question. Review or delete it freely.');
+    } else if (action === 'add_rights') {
+      addQuestion('essay', { points: 10, prompt: 'Analyze whether the challenged government act violates the equal protection and due process clauses. State the applicable level of scrutiny and justify your conclusion.', wordGuideline: '400–600 words' });
+      toast('Suggestion inserted as a new draft question. You remain in control.');
+    } else if (action === 'check_points') {
+      const total = collectExam().questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
+      toast(total === 100 ? 'Point values total 100.' : `Point values currently total ${total}. You may keep that total or revise it.`);
+    }
+  }
+
+  function bindSectionObserver() {
+    state.sectionObserver?.disconnect();
+    state.sectionObserver = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+      if (!visible) return;
+      $$('#section-navigation button').forEach((button) => button.classList.toggle('is-active', button.dataset.scrollTo === visible.target.id));
+    }, { rootMargin: '-25% 0px -60% 0px', threshold: [0, .15, .4] });
+    ['questions', 'students', 'safety'].forEach((id) => state.sectionObserver.observe(document.getElementById(id)));
+  }
+
+  function bindEvents() {
+    $$('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => closeDialog(button.dataset.closeDialog)));
+    $$('[data-view]').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.view)));
+    $('#section-navigation').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-scroll-to]');
+      if (button) {
+        $$('#section-navigation button').forEach((entry) => entry.classList.toggle('is-active', entry === button));
+        document.getElementById(button.dataset.scrollTo)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+    $$('[data-scroll-button]').forEach((button) => button.addEventListener('click', () => document.getElementById(button.dataset.scrollButton)?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
+    $('#edit-title').addEventListener('click', () => { $('#command-title').readOnly = false; $('#command-title').focus(); $('#command-title').select(); });
+    $('#command-title').addEventListener('blur', () => { $('#command-title').readOnly = true; });
+    $('#command-title').addEventListener('input', (event) => syncTitle(event.currentTarget));
+    $('#exam-title').addEventListener('input', (event) => { $('#command-title').value = event.currentTarget.value; autoResizeTitle(); scheduleAutosave(); });
+    $('#save-draft').addEventListener('click', async () => {
+      const button = $('#save-draft');
+      setButtonBusy(button, true, 'Saving…');
+      await saveDraft({ announce: true, force: true });
+      setButtonBusy(button, false);
+    });
+    $('#preview-exam').addEventListener('click', previewExam);
+    $('#publish-exam').addEventListener('click', showPublishDialog);
+    $('#publish-confirmation').addEventListener('change', (event) => { $('#publish-confirm').disabled = !event.currentTarget.checked; });
+    $('#publish-form').addEventListener('submit', publishExam);
+    $('#review-items').addEventListener('click', () => showReviewItems());
+    $('#review-list').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-review-section]');
+      if (button) goToReviewItem(button.dataset.reviewSection, button.dataset.reviewQuestionId || null);
+    });
+    $('#more-actions').addEventListener('click', () => {
+      const menu = $('#more-actions-menu');
+      menu.hidden = !menu.hidden;
+      $('#more-actions').setAttribute('aria-expanded', String(!menu.hidden));
+    });
+    $('#more-actions-menu').addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-action]');
+      if (!button) return;
+      $('#more-actions-menu').hidden = true;
+      if (button.dataset.action === 'download-draft') {
+        downloadJson(`examination-draft-${state.exam.id.slice(0, 8)}.json`, { exportedAt: new Date().toISOString(), exam: collectExam(), note: 'Private recovery copy. Store securely.' });
+        toast('Recovery copy downloaded.');
+      } else if (button.dataset.action === 'duplicate-exam') {
+        toast('A duplicate will be created after the current draft finishes saving.');
+        await saveDraft({ force: true });
+      } else {
+        toast('Version history is preserved after each publish, grade save, and recovery snapshot.');
+      }
+    });
+    $('#add-question').addEventListener('click', () => addQuestion('essay'));
+    $('#add-question-menu-button').addEventListener('click', () => {
+      const menu = $('#add-question-menu');
+      menu.hidden = !menu.hidden;
+      $('#add-question-menu-button').setAttribute('aria-expanded', String(!menu.hidden));
+    });
+    $('#add-question-menu').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-question-type]');
+      if (button) { addQuestion(button.dataset.questionType); $('#add-question-menu').hidden = true; }
+    });
+    $('#questions-list').addEventListener('click', (event) => {
+      const questionNode = event.target.closest('[data-question-id]');
+      if (!questionNode) return;
+      const id = questionNode.dataset.questionId;
+      const optionsButton = event.target.closest('[data-question-options-button]');
+      if (optionsButton) {
+        const menu = $('.question-options', questionNode);
+        menu.hidden = !menu.hidden;
+        optionsButton.setAttribute('aria-expanded', String(!menu.hidden));
+        return;
+      }
+      const action = event.target.closest('[data-question-action]');
+      if (action) { questionAction(id, action.dataset.questionAction); return; }
+      const format = event.target.closest('[data-format-command]');
+      if (format) { handleFormat(format, questionNode); return; }
+      const insert = event.target.closest('[data-insert-suggestion]');
+      if (insert) {
+        const prompt = $('.question-prompt', questionNode);
+        prompt.textContent = `${prompt.innerText.trim()} ${questionSuggestion(state.questions.find((question) => question.id === id) || {}, state.questions.findIndex((question) => question.id === id))}`.trim();
+        scheduleAutosave();
+        toast('Suggestion inserted for your review.');
+        return;
+      }
+      const removeChoice = event.target.closest('[data-remove-choice]');
+      if (removeChoice) {
+        syncQuestionsFromDom();
+        const question = state.questions.find((entry) => entry.id === id);
+        if (question.options.length <= 2) {
+          showError({ message: 'A multiple-choice question needs at least two options.', recovery: 'Add another option before removing this one.' }, null, 'Option not removed');
+          return;
+        }
+        question.options.splice(Number(removeChoice.dataset.removeChoice), 1);
+        question.correctOption = Math.min(question.correctOption, question.options.length - 1);
+        renderQuestions(id);
+        scheduleAutosave();
+        return;
+      }
+      if (event.target.closest('[data-add-choice]')) {
+        syncQuestionsFromDom();
+        const question = state.questions.find((entry) => entry.id === id);
+        if (question.options.length >= 10) {
+          showError({ message: 'A question can contain at most ten options.', recovery: 'Remove an unused option before adding another.' }, null, 'Option not added');
+          return;
+        }
+        question.options.push('');
+        renderQuestions(id);
+        scheduleAutosave();
+      }
+    });
+    $('#questions-list').addEventListener('change', (event) => {
+      const questionNode = event.target.closest('[data-question-id]');
+      if (!questionNode) return;
+      if (event.target.matches('[data-question-type-select]')) changeQuestionType(questionNode.dataset.questionId, event.target.value);
+      else scheduleAutosave();
+    });
+    $('#questions-list').addEventListener('input', scheduleAutosave);
+    $('#questions-list').addEventListener('paste', (event) => {
+      if (!event.target.matches('[contenteditable="true"]')) return;
+      event.preventDefault();
+      document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
+    });
+    $('#add-student').addEventListener('click', () => addStudent());
+    $('#roster-body').addEventListener('input', scheduleAutosave);
+    $('#roster-body').addEventListener('change', scheduleAutosave);
+    $('#roster-body').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-remove-student]');
+      const row = event.target.closest('[data-student-id]');
+      if (!button || !row) return;
+      syncRosterFromDom();
+      state.roster = state.roster.filter((student) => student.id !== row.dataset.studentId);
+      renderRoster();
+      scheduleAutosave();
+    });
+    $('#roster-upload').addEventListener('change', (event) => importRoster(event.target.files?.[0]));
+    $('#source-upload').addEventListener('change', (event) => importSource(event.target.files?.[0]));
+    $('#remove-source').addEventListener('click', () => {
+      $('#source-file').hidden = true;
+      $('#import-notice').hidden = true;
+      $('#exam-details').classList.remove('has-source');
+      state.exam.sourceFileName = null;
+      state.exam.sourceFileSize = null;
+      scheduleAutosave();
+    });
+    $('#view-mapping').addEventListener('click', () => toast('The uploaded headings were mapped to the numbered questions shown below. Review every prompt before publishing.'));
+    $('#preview-privacy').addEventListener('click', () => openDialog('privacy-dialog'));
+    $$('input[name="integrity-tier-main"]').forEach((input) => input.addEventListener('change', () => synchronizeRadioGroup('integrity-tier-main', 'integrity-tier-side')));
+    $$('input[name="integrity-tier-side"]').forEach((input) => input.addEventListener('change', () => synchronizeRadioGroup('integrity-tier-side', 'integrity-tier-main')));
+    $$('input[name="grading-identity"]').forEach((input) => input.addEventListener('change', scheduleAutosave));
+    $('#duration-inline').addEventListener('change', () => { $('#duration-control').value = $('#duration-inline').value; scheduleAutosave(); });
+    $('#duration-control').addEventListener('change', () => { $('#duration-inline').value = $('#duration-control').value; scheduleAutosave(); });
+    $('#exam-form').addEventListener('input', (event) => { if (!event.target.closest('#questions-list, #roster-body') && event.target.id !== 'exam-title') scheduleAutosave(); });
+    $('#exam-form').addEventListener('change', (event) => { if (!event.target.closest('#questions-list, #roster-body')) scheduleAutosave(); });
+    $('.professor-controls').addEventListener('change', (event) => { if (!event.target.matches('#duration-control, input[name="integrity-tier-side"]')) scheduleAutosave(); });
+    $('#assistant-toggle').addEventListener('click', () => {
+      const panel = $('#assistant-panel');
+      const minimized = panel.classList.toggle('is-minimized');
+      $('#assistant-toggle').setAttribute('aria-expanded', String(!minimized));
+      $('#assistant-toggle i').className = `ph ${minimized ? 'ph-plus' : 'ph-minus'}`;
+    });
+    $('#assistant-panel').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-assistant-action]');
+      if (button) assistantAction(button.dataset.assistantAction);
+    });
+    $('#assistant-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const question = $('#assistant-input').value.trim();
+      if (!question) return;
+      const total = collectExam().questions.reduce((sum, entry) => sum + Number(entry.points || 0), 0);
+      const response = /point|score|total/i.test(question)
+        ? `Your current point total is ${total}. You decide whether to keep it.`
+        : /privacy|record|camera|microphone/i.test(question)
+          ? 'Use the least intrusive safeguard that meets the school’s purpose. Recording needs a specific notice, permissions, retention, access limits, and an approved alternative.'
+          : 'I can suggest wording, check missing fields, review point totals, or explain a control. I will not change the examination unless you choose an action.';
+      toast(response);
+      $('#assistant-input').value = '';
+    });
+    $('#refresh-monitor').addEventListener('click', () => refreshMonitor({ silent: false }));
+    $('#monitor-search').addEventListener('input', renderMonitor);
+    $('#monitor-table-body').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-view-student]');
+      if (button) showStudentDetail(button.dataset.viewStudent);
+    });
+    $('#open-room').addEventListener('click', roomAction);
+    $('#key-form').addEventListener('submit', openRoomWithKey);
+    $('#download-monitor-snapshot').addEventListener('click', downloadMonitorSnapshot);
+    $('#grading-student-list').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-grade-session]');
+      if (button) { state.selectedGradingSessionId = button.dataset.gradeSession; renderGrading(); }
+    });
+    $('#grading-student-list').addEventListener('change', (event) => {
+      const checkbox = event.target.closest('[data-release-session]');
+      if (!checkbox) return;
+      if (checkbox.checked) state.selectedReleaseIds.add(checkbox.dataset.releaseSession);
+      else state.selectedReleaseIds.delete(checkbox.dataset.releaseSession);
+      renderGrading();
+    });
+    $('#grading-sheet').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-save-grade]');
+      if (button) saveGrade(button.dataset.saveGrade, button);
+    });
+    $('#anonymous-grading-toggle').addEventListener('change', (event) => { state.anonymousGrading = event.target.checked; renderGrading(); });
+    $('#release-results').addEventListener('click', releaseResults);
+    $('#export-grading-package').addEventListener('click', exportGradingPackage);
+    $('#import-grading-package').addEventListener('change', (event) => importGradingPackage(event.target.files?.[0]));
+    $('#text-entry-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const input = $('#text-entry-input');
+      if (!input.reportValidity()) return;
+      finishTextEntry(input.value);
+    });
+    $('#text-entry-cancel').addEventListener('click', () => finishTextEntry(null));
+    $('#text-entry-close').addEventListener('click', () => finishTextEntry(null));
+    $('#text-entry-dialog').addEventListener('cancel', (event) => { event.preventDefault(); finishTextEntry(null); });
+    $('#error-dismiss').addEventListener('click', dismissError);
+    $('#error-retry').addEventListener('click', async () => { const action = state.retryAction; dismissError(); await action?.(); });
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('#more-actions, #more-actions-menu')) { $('#more-actions-menu').hidden = true; $('#more-actions').setAttribute('aria-expanded', 'false'); }
+      if (!event.target.closest('#add-question-menu-button, #add-question-menu')) { $('#add-question-menu').hidden = true; $('#add-question-menu-button').setAttribute('aria-expanded', 'false'); }
+      $$('.question-options').forEach((menu) => { if (!event.target.closest('[data-question-options-button], .question-options')) menu.hidden = true; });
+    });
+    global.addEventListener('beforeunload', () => { if (state.exam) global.localStorage?.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ examId: state.exam.id, exam: collectExam(), savedAt: new Date().toISOString() })); });
+    api.subscribe(() => {
+      if (state.currentView === 'monitor') refreshMonitor();
+      if (state.currentView === 'grade') refreshGrading();
+    });
+  }
+
+  function showProfessorAccessFailure(error) {
+    const code = String(error?.code || 'INITIALIZATION_FAILED');
+    const status = Number(error?.status || 0);
+    const signInRequired = status === 401 || [
+      'SIGN_IN_REQUIRED',
+      'AUTHENTICATION_REQUIRED',
+      'INVALID_SESSION',
+      'EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED',
+    ].includes(code);
+    const assignmentRequired = status === 403 || [
+      'PROFESSOR_ACCESS_REQUIRED',
+      'EXAM_ROOM_V1_PROFESSOR_FORBIDDEN',
+      'EXAM_ROOM_V1_FORBIDDEN',
+    ].includes(code);
+    const gate = $('#access-gate');
+    const primary = $('#access-primary-action');
+    const recovery = $('#access-recovery');
+
+    gate.hidden = false;
+    gate.dataset.accessState = signInRequired ? 'sign-in-required' : assignmentRequired ? 'assignment-required' : 'check-interrupted';
+    primary.href = '../#examination-room';
+    if (signInRequired) {
+      $('#access-title').textContent = 'Professor sign-in is required';
+      primary.textContent = 'Sign in through Due Diligence';
+    } else if (assignmentRequired) {
+      $('#access-title').textContent = 'Professor access has not been granted';
+      primary.textContent = 'Return to Examination Room doors';
+    } else {
+      $('#access-title').textContent = 'Professor access could not be checked';
+      primary.textContent = 'Check access from Examination Room';
+    }
+    $('#access-copy').textContent = error?.message || 'Only an authorized professor or administrator can prepare an examination.';
+    recovery.textContent = error?.recovery || (signInRequired
+      ? 'Sign in through Due Diligence. After sign-in, the Examination Room menu will reopen and check your verified staff assignment.'
+      : assignmentRequired
+        ? 'Ask an Examination Room administrator to assign Professor access to the exact email used for sign-in, then check the Professor door again.'
+        : 'Your saved work was not changed. Check your connection, then return to the Examination Room menu and try again.');
+  }
+
+  async function initialize() {
+    if (!api) {
+      $('#loading-copy').textContent = 'Examination Room could not load its secure connection module.';
+      return;
+    }
+    try {
+      const params = new URLSearchParams(global.location.search);
+      const isDemo = api.demoEnabled();
+      if (isDemo) {
+        global.__examinationRoomReady = false;
+        global.__examinationRoomState = state;
+        global.__examinationRoomError = null;
+      }
+      if (isDemo && params.get('reset') === '1') {
+        api.resetDemo();
+        global.localStorage?.removeItem(DRAFT_STORAGE_KEY);
+      }
+      const result = await api.professorQuery('session');
+      if (isDemo) document.body.dataset.demoServerRoster = String(result.exam?.roster?.length || 0);
+      if (result.professor?.authorized !== true) throw new api.ExaminationRoomApiError('PROFESSOR_ACCESS_REQUIRED', 'This account is not authorized as a professor.', 403, 'Ask an administrator to grant professor access, then refresh this page.');
+      state.professor = result.professor;
+      state.activation = result.activation || null;
+      $('#professor-short-name').textContent = result.professor.displayName || 'Professor';
+      $('.profile-initials').textContent = initials(result.professor.displayName || 'Professor');
+      const summary = result.exam && typeof result.exam === 'object' ? result.exam : null;
+      const summaryExamId = safeText(summary?.id || summary?.examId, 80);
+      let serverExam;
+      let clientOnlyDraft = false;
+      if (summaryExamId && !isDemo) {
+        const details = await api.professorQuery('exam', { examId: summaryExamId });
+        serverExam = editorExamFromStored(details?.exam, summary, result.professor.institutionId);
+      } else if (summary) {
+        serverExam = editorExamFromStored(summary, summary, result.professor.institutionId);
+      } else {
+        serverExam = clientOnlyBlankDraft(result.professor.institutionId);
+        clientOnlyDraft = true;
+      }
+      const local = params.get('reset') === '1' ? null : await readLocalDraft(serverExam.id);
+      const serverTime = new Date(serverExam.updatedAt || 0).getTime();
+      const localTime = new Date(local?.savedAt || 0).getTime();
+      const exam = local?.exam && localTime > serverTime ? local.exam : serverExam;
+      hydrateForm(exam);
+      bindEvents();
+      bindSectionObserver();
+      $('#loading-gate').hidden = true;
+      $('#app-shell').hidden = false;
+      const requestedView = global.location.hash.replace('#', '') || params.get('view') || 'create';
+      switchView(['create', 'monitor', 'grade'].includes(requestedView) ? requestedView : 'create');
+      if (local?.exam && localTime > serverTime) {
+        setSavedStatus('error', 'Restored from this device');
+        toast('A newer draft from this device was restored. Save draft to back it up to the server.');
+      } else if (clientOnlyDraft) {
+        setSavedStatus('unsaved', 'New draft · not saved yet');
+      }
+      if (isDemo) global.__examinationRoomReady = true;
+    } catch (error) {
+      $('#loading-gate').hidden = true;
+      showProfessorAccessFailure(error);
+      if (api.demoEnabled()) {
+        global.__examinationRoomReady = false;
+        global.__examinationRoomError = { code: error?.code || 'INITIALIZATION_FAILED', message: error?.message || String(error) };
+      }
+    }
+  }
+
+  initialize();
+})(window);

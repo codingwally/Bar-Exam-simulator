@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 
 const [html, css, js] = await Promise.all([
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
@@ -44,6 +45,87 @@ assert.doesNotMatch(js, /loadAllPhase4Operational\('payments'\)\.catch\(\(\) => 
 assert.doesNotMatch(js, /loadAllUserDirectory\(\)\.catch\(\(\) => \(\{ items: \[\]/);
 assert.doesNotMatch(js, /label:\s*'First answer'/);
 assert.doesNotMatch(js, /Number\((?:data|page)\.total \|\|/, 'Verified zero totals must not fall back to stale values.');
+
+const extractNamedFunction = (source, name) => {
+  const signature = `async function ${name}`;
+  const start = source.indexOf(signature);
+  assert.notEqual(start, -1, `${name} must exist.`);
+  const bodyStart = source.indexOf('{', start);
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    else if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  throw new Error(`Could not extract ${name}.`);
+};
+
+const initialNavigationSource = extractNamedFunction(js, 'navigateInitialSection');
+
+async function exerciseInitialNavigationRace(replacementSection) {
+  let resolveInitial;
+  const initialResult = new Promise((resolve) => { resolveInitial = resolve; });
+  const calls = [];
+  const toasts = [];
+  const state = { renderEpoch: 0, section: 'executive' };
+  let locationSection = 'executive';
+  const context = vm.createContext({
+    state,
+    sectionFromLocation: () => locationSection,
+    sectionAllowed: () => true,
+    navigateSection: async (section, historyMode = 'push') => {
+      state.renderEpoch += 1;
+      state.section = section;
+      locationSection = section;
+      calls.push([section, historyMode]);
+      if (calls.length === 1) return initialResult;
+      return true;
+    },
+    toast: (message) => toasts.push(message),
+  });
+  vm.runInContext(initialNavigationSource, context);
+  const startup = vm.runInContext('navigateInitialSection()', context);
+  await context.navigateSection(replacementSection);
+  resolveInitial(false);
+  await startup;
+  return { calls, toasts };
+}
+
+for (const replacementSection of ['examination_room_v1', 'executive']) {
+  const result = await exerciseInitialNavigationRace(replacementSection);
+  assert.deepEqual(
+    result.calls,
+    [['executive', 'replace'], [replacementSection, 'push']],
+    `A newer ${replacementSection} navigation must not be replaced by the stale Payments fallback.`,
+  );
+  assert.deepEqual(result.toasts, []);
+}
+
+{
+  const calls = [];
+  const toasts = [];
+  const state = { renderEpoch: 0, section: 'executive' };
+  let locationSection = 'executive';
+  const context = vm.createContext({
+    state,
+    sectionFromLocation: () => locationSection,
+    sectionAllowed: () => true,
+    navigateSection: async (section, historyMode = 'push') => {
+      state.renderEpoch += 1;
+      state.section = section;
+      locationSection = section;
+      calls.push([section, historyMode]);
+      return section !== 'executive';
+    },
+    toast: (message) => toasts.push(message),
+  });
+  vm.runInContext(initialNavigationSource, context);
+  await vm.runInContext('navigateInitialSection()', context);
+  assert.deepEqual(calls, [['executive', 'replace'], ['payments', 'replace']]);
+  assert.deepEqual(toasts, ['Overview is temporarily unavailable. Payments remains available.']);
+}
 
 const functionSource = (name) => {
   const start = js.indexOf(`async function ${name}`);

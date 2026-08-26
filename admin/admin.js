@@ -3343,6 +3343,25 @@
     return renderSection(section);
   }
 
+  async function navigateInitialSection() {
+    const initialSection = sectionFromLocation();
+    const initialNavigation = navigateSection(initialSection, 'replace');
+    const initialRenderEpoch = state.renderEpoch;
+    const initialReady = await initialNavigation;
+    const initialNavigationStillActive = state.renderEpoch === initialRenderEpoch
+      && state.section === initialSection
+      && sectionFromLocation() === initialSection;
+    if (!initialReady
+        && initialSection === 'executive'
+        && initialNavigationStillActive
+        && sectionAllowed('payments')) {
+      const paymentsReady = await navigateSection('payments', 'replace');
+      if (paymentsReady) {
+        toast('Overview is temporarily unavailable. Payments remains available.');
+      }
+    }
+  }
+
   function actionField(label, id, value = '', type = 'text') {
     return `<label class="field">${escapeHtml(label)}<input id="${escapeHtml(id)}" type="${escapeHtml(type)}" value="${escapeHtml(value)}"></label>`;
   }
@@ -4968,14 +4987,7 @@
     if ($('#admin-dock-name')) $('#admin-dock-name').textContent = accountName;
     if ($('#admin-dock-role')) $('#admin-dock-role').textContent = humanizeAuditValue(state.authorization?.role || 'administrator');
     applyNavigationAuthorization();
-    const initialSection = sectionFromLocation();
-    const overviewReady = await navigateSection(initialSection, 'replace');
-    if (!overviewReady && initialSection === 'executive' && sectionAllowed('payments')) {
-      const paymentsReady = await navigateSection('payments', 'replace');
-      if (paymentsReady) {
-        toast('Overview is temporarily unavailable. Payments remains available.');
-      }
-    }
+    await navigateInitialSection();
   }
 
   $('#admin-nav')?.addEventListener('click', (event) => {

@@ -403,4 +403,49 @@ for (const [route, feature] of [
   );
 }
 
+// Entering the signed-in application may focus Home once. Later history events
+// while an action overlay closes must leave focus restoration to that overlay.
+{
+  let brandFocusCount = 0;
+  const landing = fakeNode('private-beta-landing');
+  const appShell = fakeNode('authenticated-app-shell');
+  appShell.hidden = true;
+  const context = {
+    appShell,
+    landing,
+    dialog: { open: false },
+    document: { body: { classList: { remove() {} } } },
+    setHidden(element, hidden) { element.hidden = hidden; },
+    finishAuthEntryResolution() {},
+    global: { syncModalIsolation() {} },
+    publishAccessState() {},
+    safeReturnHash() { return '#subject-matter'; },
+    location: { hash: '#subject-matter' },
+    history: { replaceState() {} },
+    activateApplicationRoute() { return Promise.resolve(); },
+    requestAnimationFrame(callback) { callback(); },
+    siteHeader: {
+      querySelector() {
+        return { focus() { brandFocusCount += 1; } };
+      },
+    },
+  };
+  const showApplicationSource = between(
+    privateBetaLanding,
+    'function showApplication(options = {})',
+    'function resetQuorumHomeLocation()',
+  );
+  vm.runInNewContext(showApplicationSource, context);
+
+  for (let click = 0; click < 100; click += 1) {
+    context.showApplication({ activateRoute: false });
+  }
+
+  assert.equal(
+    brandFocusCount,
+    1,
+    'One initial app reveal plus 99 route refreshes must focus Home only once.',
+  );
+}
+
 console.log('Private-beta new-user authentication regressions passed.');

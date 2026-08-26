@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, pg_catalog;
 
-select plan(115);
+select plan(139);
 
 select has_schema(
   'examination_room_v1',
@@ -21,6 +21,9 @@ select tables_are(
     'grade_revision_items',
     'grade_revisions',
     'institutions',
+    'email_delivery_events',
+    'owner_identity_corrections',
+    'owner_key_envelopes',
     'privacy_acceptances',
     'privacy_notice_versions',
     'professor_access_requests',
@@ -421,6 +424,9 @@ select set_eq(
     'grade_revision_items',
     'grade_revisions',
     'institutions',
+    'email_delivery_events',
+    'owner_identity_corrections',
+    'owner_key_envelopes',
     'privacy_acceptances',
     'privacy_notice_versions',
     'questions',
@@ -603,7 +609,7 @@ select is(
     'status', '00000000-0000-0000-0000-000000000103', '{}'::jsonb
   )->>'professorRoleSelected',
   'true',
-  'signup stores Professor as the server-derived account role when the private declaration exists'
+  'the legacy Professor profile remains informational in creator status'
 );
 
 select is(
@@ -611,20 +617,19 @@ select is(
     'request',
     '00000000-0000-0000-0000-000000000103',
     '{"institutionId":"00000000-0000-0000-0000-000000000102"}'::jsonb
-  ) #>> '{request,status}',
-  'pending',
-  'a signed-in Professor profile can create a pending school activation request'
+  )->>'alreadyActive',
+  'true',
+  'a signed-in creator may select an active workspace without role approval'
 );
 
 select is(
-  (
-    select request.requested_institution_id::text
-    from examination_room_v1.professor_access_requests request
-    where request.user_id = '00000000-0000-0000-0000-000000000103'
-      and request.request_status = 'pending'
-  ),
+  public.examination_room_v1_professor_access(
+    'request',
+    '00000000-0000-0000-0000-000000000103',
+    '{"institutionId":"00000000-0000-0000-0000-000000000102"}'::jsonb
+  )->>'institutionId',
   '00000000-0000-0000-0000-000000000102',
-  'the Professor request is bound to the exact selected law-school workspace'
+  'creator workspace selection preserves the exact institution'
 );
 
 select is(
@@ -633,17 +638,16 @@ select is(
     where membership.user_id = '00000000-0000-0000-0000-000000000103'
   ),
   0::bigint,
-  'a Professor signup request never self-grants protected staff membership'
+  'creator access never self-grants a protected staff membership'
 );
 
 select is(
-  public.examination_room_v1_authorize_staff(
+  examination_room_v1.creator_authorized(
     '00000000-0000-0000-0000-000000000104',
-    '00000000-0000-0000-0000-000000000102',
-    'professor'
+    '00000000-0000-0000-0000-000000000102'
   ),
-  false,
-  'a signed-in account without the Professor role cannot open protected Professor data'
+  true,
+  'a verified signed-in account without the Professor role is an examination creator'
 );
 
 select is(
@@ -653,7 +657,7 @@ select is(
     '{"institutionId":"00000000-0000-0000-0000-000000000102"}'::jsonb
   )->>'duplicate',
   'true',
-  'repeating a Professor request for the same institution is idempotent'
+  'creator workspace selection is idempotent'
 );
 
 select is(
@@ -662,8 +666,8 @@ select is(
     from examination_room_v1.professor_access_requests request
     where request.user_id = '00000000-0000-0000-0000-000000000103'
   ),
-  1::bigint,
-  'same-institution idempotence does not create a second request row'
+  0::bigint,
+  'the retired role-approval queue receives no creator rows'
 );
 
 select is(
@@ -671,9 +675,18 @@ select is(
     'request',
     '00000000-0000-0000-0000-000000000103',
     '{"institutionId":"00000000-0000-0000-0000-000000000107"}'::jsonb
-  ) #>> '{request,institutionId}',
+  )->>'institutionId',
   '00000000-0000-0000-0000-000000000107',
-  'an explicit different institution replaces the Professor request with that exact school'
+  'a signed-in creator may explicitly choose another active workspace'
+);
+
+select ok(
+  jsonb_array_length(
+    public.examination_room_v1_professor_access(
+      'status', '00000000-0000-0000-0000-000000000103', '{}'::jsonb
+    ) -> 'availableInstitutions'
+  ) >= 2,
+  'creator status lists every active examination workspace'
 );
 
 select is(
@@ -681,24 +694,9 @@ select is(
     select count(*)
     from examination_room_v1.professor_access_requests request
     where request.user_id = '00000000-0000-0000-0000-000000000103'
-      and request.requested_institution_id = '00000000-0000-0000-0000-000000000102'
-      and request.request_status = 'cancelled'
-      and request.reviewed_by_user_id = request.user_id
   ),
-  1::bigint,
-  'the wrong-school request remains preserved as actor-owned cancelled history'
-);
-
-select is(
-  (
-    select count(*)
-    from examination_room_v1.professor_access_requests request
-    where request.user_id = '00000000-0000-0000-0000-000000000103'
-      and request.requested_institution_id = '00000000-0000-0000-0000-000000000107'
-      and request.request_status = 'pending'
-  ),
-  1::bigint,
-  'request replacement leaves exactly one pending row at the newly selected school'
+  0::bigint,
+  'switching creator workspaces still creates no approval history'
 );
 
 select is(
@@ -708,81 +706,26 @@ select is(
     where membership.user_id = '00000000-0000-0000-0000-000000000103'
   ),
   0::bigint,
-  'request replacement still never self-grants protected membership'
-);
-
-select is(
-  public.examination_room_v1_manage_staff(
-    'reject_professor_request',
-    '00000000-0000-0000-0000-000000000105',
-    '00000000-0000-0000-0000-000000000102',
-    jsonb_build_object(
-      'requestId', (
-        select request.id
-        from examination_room_v1.professor_access_requests request
-        where request.user_id = '00000000-0000-0000-0000-000000000103'
-          and request.request_status = 'pending'
-      ),
-      'reason', 'Cross-school rejection must remain blocked.',
-      'requestHash', repeat('6', 64)
-    )
-  )->>'errorCode',
-  'PROFESSOR_REQUEST_NOT_PENDING',
-  'an institution administrator cannot reject another school request'
-);
-
-select is(
-  public.examination_room_v1_manage_staff(
-    'reject_professor_request',
-    '00000000-0000-0000-0000-000000000106',
-    '00000000-0000-0000-0000-000000000107',
-    jsonb_build_object(
-      'requestId', (
-        select request.id
-        from examination_room_v1.professor_access_requests request
-        where request.user_id = '00000000-0000-0000-0000-000000000103'
-          and request.request_status = 'pending'
-      ),
-      'reason', 'Rejected by the exact institution administrator.',
-      'requestHash', repeat('7', 64)
-    )
-  )->>'status',
-  'rejected',
-  'the exact institution administrator can reject a pending Professor request'
-);
-
-select is(
-  (
-    select count(*)
-    from examination_room_v1.professor_access_requests request
-    where request.user_id = '00000000-0000-0000-0000-000000000103'
-      and request.requested_institution_id = '00000000-0000-0000-0000-000000000107'
-      and request.request_status = 'rejected'
-      and request.reviewed_by_user_id = '00000000-0000-0000-0000-000000000106'
-      and request.assigned_institution_id = request.requested_institution_id
-  ),
-  1::bigint,
-  'rejection records the exact reviewing administrator and institution'
+  'switching creator workspaces still grants no staff authority'
 );
 
 select is(
   public.examination_room_v1_professor_access(
     'request',
     '00000000-0000-0000-0000-000000000103',
-    '{"institutionId":"00000000-0000-0000-0000-000000000102"}'::jsonb
-  ) #>> '{request,status}',
-  'pending',
-  'a Professor can retry at the correct school after rejection'
+    '{"institutionId":"not-a-uuid"}'::jsonb
+  )->>'errorCode',
+  'CREATOR_WORKSPACE_INVALID',
+  'a malformed creator workspace fails with a recoverable code'
 );
 
 select is(
-  jsonb_array_length(
-    public.examination_room_v1_professor_access(
-      'status', '00000000-0000-0000-0000-000000000104', '{}'::jsonb
-    ) -> 'availableInstitutions'
+  examination_room_v1.creator_authorized(
+    '00000000-0000-0000-0000-000000000104',
+    '00000000-0000-0000-0000-000000000107'
   ),
-  0,
-  'a non-Professor account cannot enumerate private law-school workspaces'
+  true,
+  'creator authorization is based on verified sign-in and an active workspace'
 );
 
 select is(
@@ -790,9 +733,40 @@ select is(
     'request',
     '00000000-0000-0000-0000-000000000104',
     '{"institutionId":"00000000-0000-0000-0000-000000000102"}'::jsonb
+  )->>'alreadyActive',
+  'true',
+  'a non-Professor signed-in account needs no extra activation request'
+);
+
+select ok(
+  jsonb_array_length(
+    public.examination_room_v1_professor_access(
+      'status', '00000000-0000-0000-0000-000000000104', '{}'::jsonb
+    ) -> 'availableInstitutions'
+  ) >= 2,
+  'a non-Professor account sees the same active creator workspaces'
+);
+
+select is(
+  public.examination_room_v1_api(
+    'professor',
+    'session',
+    '00000000-0000-0000-0000-000000000104',
+    '00000000-0000-0000-0000-000000000102',
+    '{}'::jsonb
+  )->>'ok',
+  'true',
+  'a non-Professor signed-in creator can enter the Professor workspace'
+);
+
+select is(
+  public.examination_room_v1_professor_access(
+    'status',
+    '00000000-0000-0000-0000-000000000199',
+    '{}'::jsonb
   )->>'errorCode',
-  'PROFESSOR_ROLE_REQUIRED',
-  'a non-Professor account cannot create a Professor activation request'
+  'PROFESSOR_SIGN_IN_REQUIRED',
+  'an unknown account still fails the verified sign-in boundary'
 );
 
 select throws_ok(
@@ -819,28 +793,10 @@ select throws_ok(
 select lives_ok(
   $$
     do $publication$
-    declare
-      approval jsonb;
     begin
     update auth.users
     set email = 'professor-greenfield-new@example.invalid'
     where id = '00000000-0000-0000-0000-000000000103';
-
-    approval := public.examination_room_v1_manage_staff(
-      'assign_staff',
-      '00000000-0000-0000-0000-000000000105',
-      '00000000-0000-0000-0000-000000000102',
-      jsonb_build_object(
-        'email', 'professor-greenfield@example.invalid',
-        'displayName', 'Professor Greenfield',
-        'staffRole', 'professor',
-        'reason', 'Approved after exact-school identity review.',
-        'requestHash', repeat('5', 64)
-      )
-    );
-    if coalesce((approval ->> 'ok')::boolean, false) is not true then
-      raise exception 'Professor approval failed: %', approval;
-    end if;
 
     insert into examination_room_v1.exams (
       id,
@@ -919,21 +875,12 @@ select lives_ok(
 
 select is(
   (
-    select count(*)
-    from examination_room_v1.professor_access_requests request
-    join examination_room_v1.staff_memberships membership
-      on membership.id = request.approved_membership_id
-     and membership.institution_id = request.requested_institution_id
-     and membership.user_id = request.user_id
-     and membership.staff_role = 'professor'
-     and membership.membership_status = 'active'
-     and membership.email_normalized = 'professor-greenfield-new@example.invalid'
-    where request.user_id = '00000000-0000-0000-0000-000000000103'
-      and request.requested_institution_id = '00000000-0000-0000-0000-000000000102'
-      and request.request_status = 'approved'
+    select owner_user_id::text
+    from examination_room_v1.exams
+    where id = '00000000-0000-0000-0000-000000000201'
   ),
-  1::bigint,
-  'approval binds the request to the exact active Professor membership'
+  '00000000-0000-0000-0000-000000000103',
+  'the sealed examination remains bound to its verified signed-in creator'
 );
 
 select is(
@@ -948,39 +895,38 @@ select is(
 
 select throws_ok(
   $$
-    update examination_room_v1.professor_access_requests
-    set request_status = 'pending',
-        reviewed_by_user_id = null,
-        reviewed_at = null,
-        review_reason = null,
-        assigned_institution_id = null,
-        approved_membership_id = null
-    where user_id = '00000000-0000-0000-0000-000000000103'
-      and request_status = 'approved'
+    update examination_room_v1.exams
+    set owner_user_id = '00000000-0000-0000-0000-000000000104'
+    where id = '00000000-0000-0000-0000-000000000201'
   $$,
   '55000',
-  'Professor access request history cannot be reopened or rewritten',
-  'a finalized Professor request cannot be reopened'
+  'examination owner and workspace are immutable after creation',
+  'a creator-owned examination cannot be reassigned after creation'
 );
 
 select throws_ok(
   $$
-    delete from examination_room_v1.professor_access_requests
-    where user_id = '00000000-0000-0000-0000-000000000103'
+    insert into examination_room_v1.exams (
+      id, institution_id, owner_user_id, title
+    ) values (
+      '00000000-0000-0000-0000-000000000205',
+      '00000000-0000-0000-0000-000000000102',
+      '00000000-0000-0000-0000-000000000199',
+      'Unverified owner probe'
+    )
   $$,
-  '55000',
-  'examination_room_v1.professor_access_requests rows cannot be deleted',
-  'Professor request history cannot be deleted'
+  '42501',
+  'exam owner must be a verified account in an active examination workspace',
+  'an unknown account cannot become an examination owner'
 );
 
 select is(
-  public.examination_room_v1_authorize_staff(
+  examination_room_v1.creator_authorized(
     '00000000-0000-0000-0000-000000000103',
-    '00000000-0000-0000-0000-000000000102',
-    'professor'
+    '00000000-0000-0000-0000-000000000102'
   ),
   true,
-  'the service authorization RPC recognizes an active professor'
+  'the private creator predicate recognizes the exact verified owner workspace'
 );
 
 select is(
@@ -1104,8 +1050,8 @@ select is(
       and m.user_id = '00000000-0000-0000-0000-000000000103'
       and m.staff_role = 'professor'
   ),
-  2::bigint,
-  'the prior staff revocation remains preserved after re-grant'
+  1::bigint,
+  'an optional legacy staff assignment can still be granted without gating creator access'
 );
 
 select ok(
@@ -1508,6 +1454,188 @@ select is(
 );
 
 select is(
+  public.examination_room_v1_owner_query(
+    'access',
+    '10000000-0000-4000-8000-000000000002',
+    null, null, '{}'::jsonb
+  )->>'errorCode',
+  'PLATFORM_OWNER_REQUIRED',
+  'a Professor cannot enter the platform-owner command center'
+);
+
+select is(
+  public.examination_room_v1_owner_query(
+    'access',
+    '10000000-0000-4000-8000-000000000003',
+    null, null, '{}'::jsonb
+  )->>'ownerOnly',
+  'true',
+  'a Founder can enter the platform-owner command center'
+);
+
+select is(
+  jsonb_array_length(
+    public.examination_room_v1_owner_query(
+      'command_center',
+      '10000000-0000-4000-8000-000000000003',
+      '10000000-0000-4000-8000-000000000001',
+      null,
+      '{}'::jsonb
+    ) -> 'exams'
+  ),
+  1,
+  'the owner command center lists the published examination without code or hidden rows'
+);
+
+select is(
+  public.examination_room_v1_owner_command(
+    'store_key_envelope',
+    '10000000-0000-4000-8000-000000000003',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object(
+      'activationId', (
+        select id from examination_room_v1.room_activations
+        where exam_id = '10000000-0000-4000-8000-000000000004'
+          and activation_status = 'scheduled'
+        order by created_at desc limit 1
+      ),
+      'algorithm', 'aes-256-gcm-v1',
+      'keyVersion', 1,
+      'ciphertext', repeat('A', 32),
+      'iv', repeat('B', 24),
+      'aadSha256', repeat('c', 64)
+    )
+  )->>'escrowed',
+  'true',
+  'the Worker can bind an encrypted owner-viewable key envelope to the current activation'
+);
+
+select is(
+  public.examination_room_v1_owner_query(
+    'key_envelope',
+    '10000000-0000-4000-8000-000000000003',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    '{}'::jsonb
+  )->>'ciphertext',
+  repeat('A', 32),
+  'the owner key query returns the exact encrypted envelope for Worker-side reveal'
+);
+
+select throws_ok(
+  $$
+    update examination_room_v1.owner_key_envelopes
+    set ciphertext_base64 = repeat('Z', 32)
+  $$,
+  '55000',
+  'examination_room_v1.owner_key_envelopes is append-only',
+  'room-key escrow history cannot be rewritten'
+);
+
+select is(
+  public.examination_room_v1_owner_command(
+    'record_email_delivery',
+    '10000000-0000-4000-8000-000000000003',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object(
+      'activationId', (
+        select id from examination_room_v1.room_activations
+        where exam_id = '10000000-0000-4000-8000-000000000004'
+          and activation_status = 'scheduled'
+        order by created_at desc limit 1
+      ),
+      'requestHash', repeat('1d', 32),
+      'deliveryKind', 'key_resend',
+      'professorRecipient', 'professor.functional@example.edu.ph',
+      'ownerCopyRecipients', jsonb_build_array('owner@duediligence.ph'),
+      'providerStatus', 'failed',
+      'safeErrorCode', 'network_error',
+      'attemptedAt', clock_timestamp() - interval '2 minutes'
+    )
+  )->>'providerStatus',
+  'failed',
+  'the first failed key-email attempt is returned as the persisted audit status'
+);
+
+select is(
+  public.examination_room_v1_owner_command(
+    'record_email_delivery',
+    '10000000-0000-4000-8000-000000000003',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object(
+      'activationId', (
+        select id from examination_room_v1.room_activations
+        where exam_id = '10000000-0000-4000-8000-000000000004'
+          and activation_status = 'scheduled'
+        order by created_at desc limit 1
+      ),
+      'requestHash', repeat('1d', 32),
+      'deliveryKind', 'key_resend',
+      'professorRecipient', 'professor.functional@example.edu.ph',
+      'ownerCopyRecipients', jsonb_build_array('owner@duediligence.ph'),
+      'providerStatus', 'sent',
+      'providerId', 'email-retry-success',
+      'attemptedAt', clock_timestamp() - interval '1 minute'
+    )
+  )->>'providerStatus',
+  'sent',
+  'a successful retry monotonically upgrades the same email-delivery audit row'
+);
+
+select is(
+  public.examination_room_v1_owner_command(
+    'record_email_delivery',
+    '10000000-0000-4000-8000-000000000003',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object(
+      'activationId', (
+        select id from examination_room_v1.room_activations
+        where exam_id = '10000000-0000-4000-8000-000000000004'
+          and activation_status = 'scheduled'
+        order by created_at desc limit 1
+      ),
+      'requestHash', repeat('1d', 32),
+      'deliveryKind', 'key_resend',
+      'professorRecipient', 'professor.functional@example.edu.ph',
+      'ownerCopyRecipients', jsonb_build_array('owner@duediligence.ph'),
+      'providerStatus', 'failed',
+      'safeErrorCode', 'provider_503',
+      'attemptedAt', clock_timestamp()
+    )
+  )->>'providerStatus',
+  'sent',
+  'a later failed retry returns the earlier persisted success instead of downgrading it'
+);
+
+select is(
+  (
+    select provider_status || ':' || provider_id || ':' || coalesce(safe_error_code, 'none')
+    from examination_room_v1.email_delivery_events
+    where request_hash = repeat('1d', 32)
+  ),
+  'sent:email-retry-success:none',
+  'the successful provider evidence remains the single durable row after a failed retry'
+);
+
+select throws_ok(
+  $$
+    update examination_room_v1.email_delivery_events
+    set provider_status = 'failed',
+        provider_id = null,
+        safe_error_code = 'network_error',
+        attempted_at = clock_timestamp()
+    where request_hash = repeat('1d', 32)
+  $$,
+  '55000',
+  'email delivery status may advance only from failed or not configured to sent',
+  'direct writes cannot downgrade a recorded successful key-email delivery'
+);
+
+select is(
   public.examination_room_v1_api(
     'professor',
     'open_room',
@@ -1905,6 +2033,51 @@ select is(
   'idempotent submission has exactly one immutable server receipt'
 );
 
+select is(
+  public.examination_room_v1_owner_command(
+    'correct_student_identity',
+    '10000000-0000-4000-8000-000000000003',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object(
+      'studentIdentityId', (
+        select roster.student_identity_id
+        from examination_room_v1.exam_roster roster
+        where roster.exam_id = '10000000-0000-4000-8000-000000000004'
+        order by roster.created_at, roster.id
+        limit 1
+      ),
+      'email', 'wrong.student@example.edu.ph',
+      'reason', 'Owner recorded a deliberately wrong email before testing explicit removal.',
+      'requestHash', repeat('cd', 32)
+    )
+  ) #>> '{after,email}',
+  'wrong.student@example.edu.ph',
+  'owner identity correction can record a corrected student email explicitly'
+);
+
+select ok(
+  public.examination_room_v1_owner_command(
+    'correct_student_identity',
+    '10000000-0000-4000-8000-000000000003',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object(
+      'studentIdentityId', (
+        select roster.student_identity_id
+        from examination_room_v1.exam_roster roster
+        where roster.exam_id = '10000000-0000-4000-8000-000000000004'
+        order by roster.created_at, roster.id
+        limit 1
+      ),
+      'clearEmail', true,
+      'reason', 'Owner removed the deliberately wrong email after checking the school record.',
+      'requestHash', repeat('ce', 32)
+    )
+  ) #> '{after,email}' = 'null'::jsonb,
+  'owner identity correction explicitly clears a wrong student email and records null in its receipt'
+);
+
 update examination_room_v1.student_sessions
 set session_status = 'active', ended_at = null
 where consent_request_hash = repeat('6', 64);
@@ -1956,7 +2129,7 @@ select is(
     '10000000-0000-4000-8000-000000000002',
     '10000000-0000-4000-8000-000000000001',
     jsonb_build_object('examId', '10000000-0000-4000-8000-000000000004')
-  ) #>> '{students,0,sessionId}',
+  ) #>> '{sessions,0,sessionId}',
   examination_room_v1.uuid_from_hash(repeat('a', 64))::text,
   'anonymous grading exposes an opaque grading-session identifier instead of the monitoring session identifier'
 );
@@ -1968,9 +2141,34 @@ select is(
     '10000000-0000-4000-8000-000000000002',
     '10000000-0000-4000-8000-000000000001',
     jsonb_build_object('examId', '10000000-0000-4000-8000-000000000004')
-  ) #>> '{students,0,gradingAlias}',
-  null::text,
-  'monitoring does not expose the anonymous grading alias beside the real identity'
+  ) #>> '{sessions,0,fullName}',
+  'Maria Theresa Dela Cruz',
+  'monitoring retains the verified real identity even when grading is anonymous'
+);
+
+select ok(
+  public.examination_room_v1_api(
+    'professor',
+    'grading',
+    '10000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000001',
+    jsonb_build_object('examId', '10000000-0000-4000-8000-000000000004')
+  ) #>> '{sessions,0,realFullName}' = 'Maria Theresa Dela Cruz'
+  and public.examination_room_v1_api(
+    'professor',
+    'grading',
+    '10000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000001',
+    jsonb_build_object('examId', '10000000-0000-4000-8000-000000000004')
+  ) #>> '{sessions,0,realStudentNumber}' = '2024-10001'
+  and nullif(public.examination_room_v1_api(
+    'professor',
+    'grading',
+    '10000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000001',
+    jsonb_build_object('examId', '10000000-0000-4000-8000-000000000004')
+  ) #>> '{sessions,0,gradingAlias}', '') is not null,
+  'authorized grading returns real identity plus the optional grading alias for Professor-controlled reveal'
 );
 
 select is(
@@ -2025,6 +2223,34 @@ select ok(
     )::text
   ) = 0,
   'anonymous grading context contains no real student name'
+);
+
+select is(
+  public.examination_room_v1_grading_contexts(
+    '10000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object('requests', jsonb_build_array(jsonb_build_object(
+      'sessionId', examination_room_v1.uuid_from_hash(repeat('a', 64)),
+      'questionReferences', jsonb_build_array('q001')
+    )))
+  ) #>> '{contexts,0,sessionId}',
+  examination_room_v1.uuid_from_hash(repeat('a', 64))::text,
+  'batched offline grading contexts preserve request order and anonymous session identity'
+);
+
+select is(
+  public.examination_room_v1_grading_contexts(
+    '10000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object('requests', jsonb_build_array(jsonb_build_object(
+      'sessionId', examination_room_v1.uuid_from_hash(repeat('a', 64)),
+      'questionReferences', jsonb_build_array('not-a-question')
+    )))
+  ) ->> 'errorCode',
+  'GRADING_CONTEXT_INVALID',
+  'batched offline grading contexts reject questions outside the submitted examination version'
 );
 
 select is(
@@ -2224,6 +2450,88 @@ select is(
 );
 
 select is(
+  public.examination_room_v1_import_grades(
+    '10000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object(
+      'requestHash', repeat('91', 32),
+      'grades', jsonb_build_array(jsonb_build_object(
+        'examId', '10000000-0000-4000-8000-000000000004',
+        'sessionId', examination_room_v1.uuid_from_hash(repeat('a', 64)),
+        'requestHash', repeat('92', 32),
+        'clientRevisionId', '10000000-0000-4000-8000-000000000030',
+        'gradingHash', repeat('93', 32),
+        'gradingManifest', (
+          select grade.grading_manifest || jsonb_build_object(
+            'revisionId', '10000000-0000-4000-8000-000000000031',
+            'revision', 3,
+            'status', 'draft',
+            'gradedAt', '2026-08-26T05:02:00.000Z',
+            'scores', jsonb_build_array(jsonb_build_object(
+              'questionNumber', 1, 'questionKey', 'q001',
+              'pointsAwarded', 19, 'maxPoints', 20,
+              'feedback', 'Offline grading import.'
+            )),
+            'scoreCount', 1,
+            'totalPointsAwarded', 19,
+            'maxPoints', 20,
+            'overallFeedback', 'Imported atomically from the offline grader.'
+          )
+          from examination_room_v1.grade_revisions grade
+          where grade.submission_id = '10000000-0000-4000-8000-000000000020'
+          order by grade.revision_number desc limit 1
+        )
+      ))
+    )
+  )->>'importedCount',
+  '1',
+  'offline grading imports a verified batch through one database transaction'
+);
+
+select is(
+  public.examination_room_v1_import_grades(
+    '10000000-0000-4000-8000-000000000002',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object(
+      'requestHash', repeat('94', 32),
+      'grades', jsonb_build_array(
+        jsonb_build_object(
+          'examId', '10000000-0000-4000-8000-000000000004',
+          'sessionId', examination_room_v1.uuid_from_hash(repeat('a', 64)),
+          'requestHash', repeat('95', 32),
+          'clientRevisionId', '10000000-0000-4000-8000-000000000032',
+          'gradingHash', repeat('96', 32),
+          'gradingManifest', (
+            select grade.grading_manifest || jsonb_build_object(
+              'revisionId', '10000000-0000-4000-8000-000000000033',
+              'revision', 4,
+              'status', 'draft',
+              'gradedAt', '2026-08-26T05:03:00.000Z'
+            )
+            from examination_room_v1.grade_revisions grade
+            where grade.submission_id = '10000000-0000-4000-8000-000000000020'
+            order by grade.revision_number desc limit 1
+          )
+        ),
+        jsonb_build_object('examId', '99999999-9999-4999-8999-999999999999')
+      )
+    )
+  )->>'errorCode',
+  'GRADE_IMPORT_ATOMIC_FAILURE',
+  'one rejected offline grade rejects the complete batch'
+);
+
+select ok(
+  not exists (
+    select 1 from examination_room_v1.grade_revisions
+    where id = '10000000-0000-4000-8000-000000000033'
+  ),
+  'a rejected offline batch leaves no partial grade revision behind'
+);
+
+select is(
   public.examination_room_v1_api(
     'student',
     'result',
@@ -2375,6 +2683,122 @@ select is(
   )->>'ok',
   'true',
   'administrator revocation remains safe and idempotent after room closure'
+);
+
+select is(
+  jsonb_array_length(
+    public.examination_room_v1_owner_query(
+      'exam_detail',
+      '10000000-0000-4000-8000-000000000003',
+      '10000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000004',
+      '{}'::jsonb
+    ) #> '{bundle,tables,questions}'
+  ),
+  1,
+  'the owner examination bundle includes every published question'
+);
+
+select ok(
+  jsonb_array_length(
+    public.examination_room_v1_owner_query(
+      'exam_detail',
+      '10000000-0000-4000-8000-000000000003',
+      '10000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000004',
+      '{}'::jsonb
+    ) #> '{bundle,tables,answerRevisions}'
+  ) >= 1,
+  'the owner examination bundle includes student answer revision history'
+);
+
+select ok(
+  jsonb_array_length(
+    public.examination_room_v1_owner_query(
+      'exam_detail',
+      '10000000-0000-4000-8000-000000000003',
+      '10000000-0000-4000-8000-000000000001',
+      '10000000-0000-4000-8000-000000000004',
+      '{}'::jsonb
+    ) #> '{bundle,tables,gradeRevisions}'
+  ) >= 1,
+  'the owner examination bundle includes the complete grade revision history'
+);
+
+with snapshot_page_fixture as (
+  select
+    series,
+    examination_room_v1.jsonb_sha256(jsonb_build_object('pagingSnapshot', series)) as request_hash,
+    (select coalesce(max(snapshot.snapshot_sequence), 0)
+     from examination_room_v1.recovery_snapshots snapshot
+     where snapshot.exam_id = '10000000-0000-4000-8000-000000000004') + series as snapshot_sequence
+  from generate_series(1, 101) series
+)
+insert into examination_room_v1.recovery_snapshots (
+  id, exam_id, exam_version_id, snapshot_sequence, snapshot_scope,
+  request_hash, record_count, snapshot_status, created_by_user_id,
+  retention_until, source_kind
+)
+select
+  examination_room_v1.uuid_from_hash(fixture.request_hash),
+  '10000000-0000-4000-8000-000000000004',
+  (select exam.current_published_version_id
+   from examination_room_v1.exams exam
+   where exam.id = '10000000-0000-4000-8000-000000000004'),
+  fixture.snapshot_sequence,
+  'full_recovery',
+  fixture.request_hash,
+  0,
+  'pending',
+  '10000000-0000-4000-8000-000000000003',
+  clock_timestamp() + interval '365 days',
+  'manual'
+from snapshot_page_fixture fixture;
+
+select ok(
+  not exists (
+    select 1
+    from jsonb_array_elements(
+      public.examination_room_v1_owner_query(
+        'recovery_detail',
+        '10000000-0000-4000-8000-000000000003',
+        '10000000-0000-4000-8000-000000000001',
+        '10000000-0000-4000-8000-000000000004',
+        jsonb_build_object('limit', 100, 'offset', 0)
+      ) -> 'snapshots'
+    ) listed
+    where listed ->> 'id' = examination_room_v1.uuid_from_hash(
+      examination_room_v1.jsonb_sha256(jsonb_build_object('pagingSnapshot', 1))
+    )::text
+  )
+  and public.examination_room_v1_owner_query(
+    'recovery_detail',
+    '10000000-0000-4000-8000-000000000003',
+    '10000000-0000-4000-8000-000000000001',
+    '10000000-0000-4000-8000-000000000004',
+    jsonb_build_object(
+      'snapshotId', examination_room_v1.uuid_from_hash(
+        examination_room_v1.jsonb_sha256(jsonb_build_object('pagingSnapshot', 1))
+      ),
+      'limit', 100,
+      'offset', 0
+    )
+  ) #>> '{snapshots,0,id}' = examination_room_v1.uuid_from_hash(
+    examination_room_v1.jsonb_sha256(jsonb_build_object('pagingSnapshot', 1))
+  )::text,
+  'exact recovery lookup retrieves a checkpoint older than the first 100-row page'
+);
+
+select ok(
+  (
+    select count(*) = 1
+      and bool_and(snapshot.source_kind = 'result_release')
+      and bool_and(snapshot.request_hash = repeat('c', 64))
+    from examination_room_v1.recovery_snapshots snapshot
+    where snapshot.exam_id = '10000000-0000-4000-8000-000000000004'
+      and snapshot.source_kind in ('grade_revision', 'result_release')
+  ),
+  'an atomic result-release batch queues one exact recovery event without per-student amplification'
 );
 
 select * from finish();

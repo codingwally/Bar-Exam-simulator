@@ -7,12 +7,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, '..');
-const migrationPath = join(
-  repositoryRoot,
-  'supabase',
-  'migrations',
+const migrationPaths = [
   '20260825183055_examination_room_v1_greenfield.sql',
-);
+  '20260826130536_examination_room_owner_command_center.sql',
+].map((filename) => join(repositoryRoot, 'supabase', 'migrations', filename));
 const databaseTestPath = join(
   repositoryRoot,
   'supabase',
@@ -435,7 +433,102 @@ try {
       execute function public.handle_local_auth_user();
   `);
 
-  await database.exec(readFileSync(migrationPath, 'utf8'));
+  await database.exec(readFileSync(migrationPaths[0], 'utf8'));
+
+  // Upgrade fixture: production can already contain a fully materialized
+  // recovery row from the greenfield release. The owner-command-center
+  // migration must backfill its new availability timestamp before validating
+  // the stricter state-machine constraint.
+  await database.exec(`
+    insert into examination_room_v1.institutions (
+      id, institution_code, profile_school_id, institution_name,
+      bootstrap_request_hash, created_by_user_id
+    ) values (
+      '90000000-0000-4000-8000-000000000001', 'upgrade-fixture',
+      'upgrade-fixture', 'Upgrade Fixture Law School', repeat('9', 64),
+      '90000000-0000-4000-8000-000000000002'
+    );
+
+    insert into examination_room_v1.staff_memberships (
+      id, institution_id, user_id, staff_role, display_name,
+      email_normalized, grant_reason, granted_by_user_id
+    ) values (
+      '90000000-0000-4000-8000-000000000003',
+      '90000000-0000-4000-8000-000000000001',
+      '90000000-0000-4000-8000-000000000002',
+      'professor', 'Upgrade Professor', 'upgrade@example.invalid',
+      'Upgrade-path validation fixture.',
+      '90000000-0000-4000-8000-000000000002'
+    );
+
+    insert into examination_room_v1.privacy_notice_versions (
+      id, institution_id, notice_code, version_number, title, notice_body,
+      body_sha256, effective_at, created_by_user_id
+    ) values (
+      '90000000-0000-4000-8000-000000000004',
+      '90000000-0000-4000-8000-000000000001',
+      'upgrade-warning', 1, 'Upgrade warning', 'Upgrade fixture warning.',
+      repeat('8', 64), clock_timestamp(),
+      '90000000-0000-4000-8000-000000000002'
+    );
+
+    insert into examination_room_v1.exams (
+      id, institution_id, owner_user_id, title
+    ) values (
+      '90000000-0000-4000-8000-000000000005',
+      '90000000-0000-4000-8000-000000000001',
+      '90000000-0000-4000-8000-000000000002',
+      'Upgrade Recovery Fixture'
+    );
+
+    insert into examination_room_v1.exam_versions (
+      id, exam_id, institution_id, version_number, title_snapshot,
+      duration_seconds, privacy_notice_version_id, content_sha256
+    ) values (
+      '90000000-0000-4000-8000-000000000006',
+      '90000000-0000-4000-8000-000000000005',
+      '90000000-0000-4000-8000-000000000001', 1,
+      'Upgrade Recovery Fixture', 3600,
+      '90000000-0000-4000-8000-000000000004', repeat('7', 64)
+    );
+
+    insert into examination_room_v1.recovery_snapshots (
+      id, exam_id, exam_version_id, snapshot_sequence, snapshot_scope,
+      request_hash, encrypted_object_reference, snapshot_sha256,
+      encryption_key_reference, record_count, snapshot_status,
+      created_by_user_id, retention_until
+    ) values (
+      '90000000-0000-4000-8000-000000000007',
+      '90000000-0000-4000-8000-000000000005',
+      '90000000-0000-4000-8000-000000000006', 1, 'full_recovery',
+      repeat('6', 64), 'r2://upgrade-fixture/recovery.enc', repeat('5', 64),
+      'upgrade-key-v1', 1, 'available',
+      '90000000-0000-4000-8000-000000000002',
+      clock_timestamp() + interval '30 days'
+    );
+  `);
+
+  await database.exec(readFileSync(migrationPaths[1], 'utf8'));
+  assert.equal(
+    await scalar(database, `
+      select available_at is not null
+      from examination_room_v1.recovery_snapshots
+      where id = '90000000-0000-4000-8000-000000000007'
+    `),
+    true,
+    'the owner migration upgrades an existing available recovery snapshot',
+  );
+
+  await database.exec(`
+    set session_replication_role = replica;
+    delete from examination_room_v1.recovery_snapshots where id = '90000000-0000-4000-8000-000000000007';
+    delete from examination_room_v1.exam_versions where id = '90000000-0000-4000-8000-000000000006';
+    delete from examination_room_v1.exams where id = '90000000-0000-4000-8000-000000000005';
+    delete from examination_room_v1.privacy_notice_versions where id = '90000000-0000-4000-8000-000000000004';
+    delete from examination_room_v1.staff_memberships where id = '90000000-0000-4000-8000-000000000003';
+    delete from examination_room_v1.institutions where id = '90000000-0000-4000-8000-000000000001';
+    set session_replication_role = origin;
+  `);
 
   assert.equal(
     Number(await scalar(database, `
@@ -445,7 +538,7 @@ try {
       where schema_record.nspname = 'examination_room_v1'
         and table_record.relkind in ('r', 'p')
     `)),
-    23,
+    26,
     'the complete greenfield migration creates the expected table set',
   );
 
@@ -551,8 +644,8 @@ try {
         ) -> 'availableInstitutions'
       )
     `)),
-    0,
-    'a non-Professor account cannot enumerate private institution workspaces',
+    2,
+    'any verified signed-in account can enumerate active examination-creator workspaces',
   );
 
   assert.equal(
@@ -563,8 +656,8 @@ try {
         '{"institutionId":"not-a-uuid"}'::jsonb
       ) ->> 'errorCode'
     `),
-    'PROFESSOR_INSTITUTION_SELECTION_REQUIRED',
-    'a malformed explicit institution selection fails closed',
+    'CREATOR_WORKSPACE_INVALID',
+    'a malformed explicit creator workspace fails closed',
   );
   assert.equal(
     Number(await scalar(database, `
@@ -572,196 +665,128 @@ try {
       where user_id = '10000000-0000-0000-0000-000000000003'
     `)),
     0,
-    'a malformed explicit selection does not create or replace a request',
+    'the creator bridge never creates a Professor approval request',
   );
 
-  const firstRequestId = await scalar(database, `
-    select public.examination_room_v1_professor_access(
-      'request',
-      '10000000-0000-0000-0000-000000000003',
-      '{"institutionId":"20000000-0000-0000-0000-000000000001"}'::jsonb
-    ) #>> '{request,id}'
-  `);
-  assert(firstRequestId, 'Professor One receives a pending request identifier');
   assert.equal(
     await scalar(database, `
       select public.examination_room_v1_professor_access(
         'request',
-        '10000000-0000-0000-0000-000000000003',
+        '10000000-0000-0000-0000-000000000005',
         '{"institutionId":"20000000-0000-0000-0000-000000000001"}'::jsonb
-      ) ->> 'duplicate'
+      ) ->> 'alreadyActive'
     `),
     'true',
-    'a repeated request for the same school is idempotent',
+    'workspace selection is immediately available to every verified signed-in creator',
   );
-  assert.equal(
-    Number(await scalar(database, `
-      select count(*) from examination_room_v1.professor_access_requests
-      where user_id = '10000000-0000-0000-0000-000000000003'
-    `)),
-    1,
-    'same-school idempotence does not create a second request row',
-  );
-  assert.equal(
-    Number(await scalar(database, `
-      select count(*) from examination_room_v1.staff_memberships
-      where user_id = '10000000-0000-0000-0000-000000000003'
-    `)),
-    0,
-    'requesting access never self-grants membership',
-  );
-
   assert.equal(
     await scalar(database, `
-      select public.examination_room_v1_professor_access(
-        'request',
-        '10000000-0000-0000-0000-000000000003',
-        '{"institutionId":"20000000-0000-0000-0000-000000000002"}'::jsonb
-      ) ->> 'replacedRequestId'
-    `),
-    firstRequestId,
-    'an explicit different-school request reports the request it replaced',
-  );
-  assert.equal(
-    Number(await scalar(database, `
-      select count(*) from examination_room_v1.professor_access_requests
-      where user_id = '10000000-0000-0000-0000-000000000003'
-        and request_status = 'cancelled'
-        and requested_institution_id = '20000000-0000-0000-0000-000000000001'
-        and reviewed_by_user_id = user_id
-    `)),
-    1,
-    'the old wrong-school request remains as actor-owned cancelled history',
-  );
-  assert.equal(
-    Number(await scalar(database, `
-      select count(*) from examination_room_v1.professor_access_requests
-      where user_id = '10000000-0000-0000-0000-000000000003'
-        and request_status = 'pending'
-        and requested_institution_id = '20000000-0000-0000-0000-000000000002'
-    `)),
-    1,
-    'replacement leaves exactly one pending request at the newly selected school',
-  );
-
-  assert.equal(
-    await scalar(database, `
-      select public.examination_room_v1_manage_staff(
-        'reject_professor_request',
-        '10000000-0000-0000-0000-000000000001',
-        '20000000-0000-0000-0000-000000000001',
-        jsonb_build_object(
-          'requestId', (
-            select id from examination_room_v1.professor_access_requests
-            where user_id = '10000000-0000-0000-0000-000000000003'
-              and request_status = 'pending'
-          ),
-          'reason', 'Cross-school rejection must remain blocked.',
-          'requestHash', repeat('c', 64)
-        )
-      ) ->> 'errorCode'
-    `),
-    'PROFESSOR_REQUEST_NOT_PENDING',
-    'an administrator cannot reject another institution request',
-  );
-
-  assert.equal(
-    await scalar(database, `
-      select public.examination_room_v1_manage_staff(
-        'reject_professor_request',
-        '10000000-0000-0000-0000-000000000002',
-        '20000000-0000-0000-0000-000000000002',
-        jsonb_build_object(
-          'requestId', (
-            select id from examination_room_v1.professor_access_requests
-            where user_id = '10000000-0000-0000-0000-000000000003'
-              and request_status = 'pending'
-          ),
-          'reason', 'Rejected by the exact institution administrator.',
-          'requestHash', repeat('d', 64)
-        )
-      ) ->> 'status'
-    `),
-    'rejected',
-    'the exact institution administrator can reject the request',
-  );
-
-  await scalar(database, `
-    select public.examination_room_v1_professor_access(
-      'request',
-      '10000000-0000-0000-0000-000000000003',
-      '{"institutionId":"20000000-0000-0000-0000-000000000001"}'::jsonb
-    )
-  `);
-  await database.exec(`
-    update auth.users
-    set email = 'professor-one-new@example.invalid'
-    where id = '10000000-0000-0000-0000-000000000003';
-  `);
-  assert.equal(
-    await scalar(database, `
-      select public.examination_room_v1_manage_staff(
-        'assign_staff',
-        '10000000-0000-0000-0000-000000000001',
-        '20000000-0000-0000-0000-000000000001',
-        jsonb_build_object(
-          'email', 'professor-one@example.invalid',
-          'displayName', 'Professor One',
-          'staffRole', 'professor',
-          'reason', 'Approved after exact-school identity review.',
-          'requestHash', repeat('e', 64)
-        )
-      ) ->> 'ok'
+      select public.examination_room_v1_staff_context(
+        '10000000-0000-0000-0000-000000000005'
+      ) ->> 'creatorAuthorized'
     `),
     'true',
-    'the exact institution administrator can approve a Professor request',
-  );
-  assert.equal(
-    await scalar(database, `
-      select email_normalized
-      from examination_room_v1.staff_memberships
-      where user_id = '10000000-0000-0000-0000-000000000003'
-        and institution_id = '20000000-0000-0000-0000-000000000001'
-        and staff_role = 'professor'
-        and membership_status = 'active'
-    `),
-    'professor-one-new@example.invalid',
-    'queue approval remains bound to request user_id after an account email change',
-  );
-  assert.equal(
-    await scalar(database, `
-      select public.examination_room_v1_authorize_staff(
-        '10000000-0000-0000-0000-000000000003',
-        '20000000-0000-0000-0000-000000000001',
-        'professor'
-      )
-    `),
-    true,
-    'approval activates Professor authorization only at the assigned institution',
+    'creator authorization does not depend on a Professor profile or declaration',
   );
   assert.equal(
     await scalar(database, `
       select public.examination_room_v1_api(
         'professor',
         'session',
-        '10000000-0000-0000-0000-000000000003',
+        '10000000-0000-0000-0000-000000000005',
         '20000000-0000-0000-0000-000000000001',
         '{}'::jsonb
       ) #>> '{professor,authorized}'
     `),
     'true',
-    'the successful Professor session includes the client-required authorization flag',
+    'a signed-in non-Professor creator can open the familiar Professor workspace',
   );
   assert.equal(
     await scalar(database, `
-      select public.examination_room_v1_authorize_staff(
-        '10000000-0000-0000-0000-000000000003',
-        '20000000-0000-0000-0000-000000000002',
-        'professor'
-      )
+      select public.examination_room_v1_api(
+        'professor',
+        'session',
+        '10000000-0000-0000-0000-000000000005',
+        '20000000-0000-0000-0000-000000000001',
+        '{}'::jsonb
+      ) #>> '{professor,displayName}'
     `),
-    false,
-    'approval does not cross institution boundaries',
+    'Student Account',
+    'creator identity falls back to the verified account profile without a staff row',
+  );
+
+  await database.exec(`
+    insert into examination_room_v1.exams (
+      id, institution_id, owner_user_id, title
+    ) values (
+      '30000000-0000-4000-8000-000000000001',
+      '20000000-0000-0000-0000-000000000001',
+      '10000000-0000-0000-0000-000000000005',
+      'Signed-in Creator Ownership Probe'
+    );
+
+    update public.user_roles
+    set role = 'admin', updated_at = clock_timestamp()
+    where user_id = '10000000-0000-0000-0000-000000000001';
+  `);
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'exam',
+        '10000000-0000-0000-0000-000000000005',
+        '20000000-0000-0000-0000-000000000001',
+        '{"examId":"30000000-0000-4000-8000-000000000001"}'::jsonb
+      ) #>> '{exam,id}'
+    `),
+    '30000000-0000-4000-8000-000000000001',
+    'the exact signed-in creator can read the examination they own',
+  );
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'exam',
+        '10000000-0000-0000-0000-000000000003',
+        '20000000-0000-0000-0000-000000000001',
+        '{"examId":"30000000-0000-4000-8000-000000000001"}'::jsonb
+      ) ->> 'errorCode'
+    `),
+    'FORBIDDEN',
+    'another signed-in creator cannot cross the immutable examination-owner boundary',
+  );
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'exam',
+        '10000000-0000-0000-0000-000000000001',
+        '20000000-0000-0000-0000-000000000001',
+        '{"examId":"30000000-0000-4000-8000-000000000001"}'::jsonb
+      ) ->> 'errorCode'
+    `),
+    'FORBIDDEN',
+    'an ordinary institution admin with role_admin capability cannot inspect another creator examination',
+  );
+
+  await database.exec(`
+    update public.user_roles
+    set role = 'founder_admin', updated_at = clock_timestamp()
+    where user_id = '10000000-0000-0000-0000-000000000001';
+  `);
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'exam',
+        '10000000-0000-0000-0000-000000000001',
+        '20000000-0000-0000-0000-000000000001',
+        '{"examId":"30000000-0000-4000-8000-000000000001"}'::jsonb
+      ) #>> '{exam,id}'
+    `),
+    '30000000-0000-4000-8000-000000000001',
+    'only an exact Founder or Super Admin may cross the examination-owner boundary for testing',
   );
 
   await database.exec(`
@@ -771,100 +796,27 @@ try {
   `);
   assert.equal(
     await scalar(database, `
-      select public.examination_room_v1_authorize_staff(
+      select public.examination_room_v1_api(
+        'professor',
+        'session',
         '10000000-0000-0000-0000-000000000003',
         '20000000-0000-0000-0000-000000000001',
-        'professor'
-      )
+        '{}'::jsonb
+      ) ->> 'ok'
     `),
-    false,
-    'an active membership cannot outlive removal of the Professor account role',
-  );
-  assert.equal(
-    Number(await scalar(database, `
-      select jsonb_array_length(
-        public.examination_room_v1_professor_access(
-          'status', '10000000-0000-0000-0000-000000000003', '{}'::jsonb
-        ) -> 'availableInstitutions'
-      )
-    `)),
-    0,
-    'removing the Professor role also hides private workspace choices',
-  );
-  await database.exec(`
-    update public.profiles
-    set commercial_category = 'professor'
-    where id = '10000000-0000-0000-0000-000000000003';
-  `);
-
-  await scalar(database, `
-    select public.examination_room_v1_professor_access(
-      'request',
-      '10000000-0000-0000-0000-000000000004',
-      '{"institutionId":"20000000-0000-0000-0000-000000000001"}'::jsonb
-    )
-  `);
-  const wrongInstitutionMembershipId = await scalar(database, `
-    insert into examination_room_v1.staff_memberships (
-      institution_id, user_id, staff_role, membership_status,
-      grant_reason, granted_by_user_id
-    ) values (
-      '20000000-0000-0000-0000-000000000002',
-      '10000000-0000-0000-0000-000000000004',
-      'professor', 'active', 'Wrong-school invariant probe.',
-      '10000000-0000-0000-0000-000000000002'
-    ) returning id
-  `);
-  await expectDatabaseError(
-    () => database.exec(`
-      update examination_room_v1.professor_access_requests
-      set request_status = 'approved',
-          reviewed_by_user_id = '10000000-0000-0000-0000-000000000001',
-          reviewed_at = clock_timestamp(),
-          review_reason = 'This cross-school membership must be rejected.',
-          assigned_institution_id = '20000000-0000-0000-0000-000000000001',
-          approved_membership_id = '${wrongInstitutionMembershipId}'
-      where user_id = '10000000-0000-0000-0000-000000000004'
-        and request_status = 'pending';
-    `),
-    /matching Professor membership/i,
-    'an approval cannot bind a membership from another institution',
-  );
-
-  await expectDatabaseError(
-    () => database.exec(`
-      update examination_room_v1.professor_access_requests
-      set request_status = 'pending',
-          reviewed_by_user_id = null,
-          reviewed_at = null,
-          review_reason = null,
-          assigned_institution_id = null,
-          approved_membership_id = null
-      where user_id = '10000000-0000-0000-0000-000000000003'
-        and request_status = 'approved';
-    `),
-    /cannot be reopened or rewritten/i,
-    'a finalized Professor request cannot be reopened',
-  );
-
-  await expectDatabaseError(
-    () => database.exec(`
-      delete from examination_room_v1.professor_access_requests
-      where user_id = '10000000-0000-0000-0000-000000000003';
-    `),
-    /rows cannot be deleted/i,
-    'Professor request history cannot be deleted',
+    'true',
+    'changing away from the legacy Professor profile does not revoke creator access',
   );
 
   await database.exec(pgTapCompatibilityHarness);
-  const runnablePgTapSql = databaseTestSql.replace(
+  let runnablePgTapSql = databaseTestSql.replace(
     /^create extension if not exists pgtap with schema extensions;\s*$/imu,
     '-- Local PGlite validation uses the compatibility harness installed above.',
   );
   await database.exec(runnablePgTapSql);
 
   console.log(
-    `Examination Room database validation passed: full migration, ${plannedAssertions}-assertion database suite, plus 26 targeted Professor role, replacement, authorization, approval, rejection, and history checks.`,
+    `Examination Room database validation passed: full migration, ${plannedAssertions}-assertion database suite, plus targeted signed-in creator, exact-owner, platform-owner, and upgrade checks.`,
   );
 } finally {
   await database.close();

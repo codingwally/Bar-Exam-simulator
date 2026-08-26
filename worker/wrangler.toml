@@ -18,6 +18,7 @@ PHASE4_ACCESS_ENFORCEMENT = "true"
 PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
 REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
 EXAMINATION_ROOM_ENABLED = "true"
+EXAMINATION_ROOM_EMAIL_MODE = "enabled"
 OUTBOUND_EMAIL_MODE = "suppressed"
 ADMIN_DIRECTORY_EMAIL_MODE = "suppressed"
 ADMIN_DIRECTORY_EMAIL_FROM = "Due Diligence Administration <support@duediligence.ph>"
@@ -41,6 +42,11 @@ BAR_QUESTION_PRACTICE_RANDOMIZATION_V2_ENABLED = "true"
 SYLLABUS_BASED_REVIEW_RANDOMIZATION_V2_ENABLED = "true"
 BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY = "true"
 BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED = "true"
+
+[[r2_buckets]]
+binding = "EXAMINATION_ROOM_BACKUPS"
+bucket_name = "duediligence-examination-room-backups"
+
 [observability]
 enabled = true
 
@@ -60,6 +66,12 @@ crons = ["*/2 * * * *"]
 # PRIVATE_BETA_FLOW_SIGNING_KEY must also remain Cloudflare secrets.
 # EXAMINATION_ROOM_KEY_PEPPER must remain a Cloudflare secret. It protects
 # room-key, student-session, and idempotency verifiers; never expose or commit it.
+# EXAMINATION_ROOM_OWNER_DATA_KEY_V1 must remain a 32-byte Cloudflare secret.
+# It encrypts recoverable room-key envelopes and never enters Supabase or a browser.
+# EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1 must remain a 32-byte Cloudflare secret.
+# It encrypts immutable recovery objects before they are written to the private R2 bucket.
+# EXAMINATION_ROOM_ADMIN_EMAILS must remain a Cloudflare secret containing a JSON
+# array (or object values) of owner email addresses that receive BCC key copies.
 # EXAMINATION_ROOM_EMAIL_FROM may be configured as a non-secret sender address.
 # ADMIN_DIRECTORY_RECIPIENTS_JSON must remain a Cloudflare secret containing
 # only the approved founder recipient-key to personal-email mapping.

@@ -205,6 +205,11 @@ textarea:disabled { cursor: not-allowed; opacity: .58; }
 .brand-lockup strong { font-family: var(--serif); font-size: 16px; letter-spacing: .14em; font-weight: 600; white-space: nowrap; }
 .brand-divider { width: 1px; height: 24px; background: #425168; }
 .product-name { color: var(--gold-300); font-family: var(--serif); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.exam-switcher-wrap { min-width: 190px; max-width: 310px; margin-left: auto; }
+.exam-switcher-wrap[hidden] { display: none; }
+.exam-switcher-wrap select { width: 100%; height: 34px; border: 1px solid #334965; border-radius: 5px; padding: 0 30px 0 10px; background: #0b2039; color: white; font: 600 10px/1 var(--sans); cursor: pointer; }
+.exam-switcher-wrap select:focus { outline: 2px solid var(--gold-300); outline-offset: 2px; }
+.exam-switcher-wrap:not([hidden]) + .workspace-tabs { margin-left: 0; }
 .workspace-tabs { height: 100%; display: none; align-items: stretch; gap: 2px; margin-left: auto; }
 .workspace-tab { min-width: 84px; display: inline-flex; align-items: center; justify-content: center; gap: .38rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #bac6d5; cursor: pointer; font-size: 11px; font-weight: 650; }
 .workspace-tab:hover { color: white; background: #0c213a; }
@@ -574,6 +579,12 @@ body[data-workspace-view="grade"] .profile-button { display: flex; }
 .grading-student-head h2 { margin: .3rem 0; font-family: var(--serif); font-size: 26px; }
 .grading-student-head p { margin: 0; color: var(--muted); font-size: 10px; }
 .grade-save-state { color: var(--success); font-size: 9px; }
+.offline-grading-guide { display: grid; grid-template-columns: minmax(180px, .55fr) minmax(0, 1.45fr); gap: 1.4rem; margin: 0 28px 18px; border: 1px solid #dfd3ae; border-left: 4px solid var(--gold-600); padding: 14px 16px; background: #fffaf0; }
+.offline-grading-guide h2 { margin: 3px 0 0; color: var(--navy-900); font-family: var(--serif); font-size: 16px; }
+.offline-grading-guide ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.offline-grading-guide li { display: grid; align-content: start; gap: 4px; border-left: 1px solid #d8c99f; padding-left: 12px; }
+.offline-grading-guide li strong { color: var(--navy-900); font-size: 10px; }
+.offline-grading-guide li span { color: var(--muted); font-size: 9px; line-height: 1.5; }
 .grade-question { margin-bottom: 16px; border: 1px solid var(--line); background: white; }
 .grade-question > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .grade-question h3 { margin: 0; font-family: var(--serif); font-size: 14px; }
@@ -692,6 +703,7 @@ body[data-workspace-view="grade"] .profile-button { display: flex; }
 
 @media (max-width: 960px) {
   :root { --controls-width: 0px; }
+  .exam-switcher-wrap { min-width: 140px; max-width: 190px; }
   .creator-grid { grid-template-columns: var(--rail-width) minmax(0, 1fr); }
   .professor-controls { display: none; }
   .workspace-tabs span { display: none; }
@@ -713,6 +725,7 @@ body[data-workspace-view="grade"] .profile-button { display: flex; }
   .profile-button span:nth-child(2),
   .profile-button > i { display: none; }
   .profile-button { width: 36px; padding: .2rem; }
+  .exam-switcher-wrap { min-width: 0; max-width: 150px; }
   .workspace-tabs { margin-left: auto; }
   .command-bar { min-height: 110px; height: auto; position: sticky; top: 54px; align-items: stretch; flex-direction: column; padding: 10px 12px; }
   .command-context { flex-wrap: wrap; gap: 7px; }
@@ -750,6 +763,8 @@ body[data-workspace-view="grade"] .profile-button { display: flex; }
   .operations-metric:nth-child(2) { border-right: 0; }
   .operations-metric:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
   .grading-layout { display: block; }
+  .offline-grading-guide { grid-template-columns: 1fr; margin: 0 14px 14px; }
+  .offline-grading-guide ol { grid-template-columns: 1fr; }
   .student-submission-list { border-right: 0; border-bottom: 1px solid var(--line); }
   #grading-student-list { display: flex; overflow-x: auto; }
   .submission-person { min-width: 220px; }

@@ -3,11 +3,13 @@
 
   const api = global.ExaminationRoomV1Api;
   const viewModels = global.ExaminationRoomV1ViewModels;
+  const offlineGradingCore = global.DueDiligenceOfflineGradingCore;
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const state = {
     professor: null,
     exam: null,
+    examSummaries: [],
     activation: null,
     questions: [],
     roster: [],
@@ -15,25 +17,43 @@
     saveTimer: null,
     saveInFlight: null,
     lastSavedJson: '',
+    serverBaselineFingerprint: null,
     retryAction: null,
     monitor: null,
     monitorTimer: null,
     grading: null,
     selectedGradingSessionId: null,
     selectedReleaseIds: new Set(),
+    releaseSelectionSeenIds: new Set(),
     anonymousGrading: false,
     sectionObserver: null,
     hydrating: false,
     textEntryResolve: null,
+    offlineWorkspaceReady: Promise.resolve(false),
   };
 
   const DRAFT_STORAGE_KEY = 'duediligence.examination-room.v1.professor-draft';
+  const DRAFT_ACTIVE_KEY = 'duediligence.examination-room.v1.professor-active-draft';
+  const DRAFT_INDEX_KEY = 'duediligence.examination-room.v1.professor-draft-index';
+  const DRAFT_FALLBACK_PREFIX = 'duediligence.examination-room.v1.professor-draft.';
+  const MAX_OFFLINE_PACKAGE_BYTES = 20 * 1024 * 1024;
   const QUESTION_TYPES = Object.freeze({
     essay: 'Essay',
     short_answer: 'Short answer',
     multiple_choice: 'Multiple choice',
   });
   const RECORDED_PROCTORING_AVAILABLE = global.DueDiligencePhase2Config?.features?.examinationRoomRecordedProctoring === true;
+
+  function registerExaminationRoomServiceWorker() {
+    const serviceWorker = global.navigator?.serviceWorker;
+    if (!serviceWorker?.register) return Promise.resolve(false);
+    return serviceWorker.register('/service-worker.js?v=examination-room-v1-20260826-2')
+      .then(() => Promise.race([
+        serviceWorker.ready.then(() => true),
+        new Promise((resolve) => global.setTimeout(() => resolve(false), 5000)),
+      ]))
+      .catch(() => false);
+  }
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, (character) => ({
@@ -200,6 +220,154 @@
       roster: [],
       updatedAt: null,
     };
+  }
+
+  function examContentFingerprint(exam) {
+    const comparable = {
+      id: safeText(exam?.id || exam?.examId, 80),
+      versionId: safeText(exam?.versionId || exam?.currentPublishedVersionId, 80),
+      status: safeText(exam?.status, 40),
+      title: safeText(exam?.title, 180),
+      subject: safeText(exam?.subject, 120),
+      jurisdiction: safeText(exam?.jurisdiction, 80),
+      yearLevel: safeText(exam?.yearLevel, 80),
+      instructions: safeText(exam?.instructions, 10_000),
+      courseCode: safeText(exam?.courseCode, 40),
+      durationMinutes: Number(exam?.durationMinutes || 0),
+      startsAt: exam?.startsAt || null,
+      lateSubmissions: safeText(exam?.lateSubmissions, 40),
+      navigation: safeText(exam?.navigation, 40),
+      gradingIdentity: safeText(exam?.gradingIdentity || exam?.identityMode, 40),
+      integrityTier: safeText(exam?.integrityTier, 40),
+      cameraRequired: exam?.cameraRequired === true,
+      microphoneRequired: exam?.microphoneRequired === true,
+      questions: (exam?.questions || []).map((question) => ({
+        id: safeText(question?.id || question?.questionKey, 80),
+        type: safeText(question?.type || question?.questionKind, 40),
+        points: Number(question?.points || 0),
+        prompt: safeText(question?.prompt, 20_000),
+        options: (question?.options || question?.choices || []).map(editorChoiceLabel),
+        correctOption: Number(question?.correctOption ?? question?.correctOptionIndex ?? -1),
+        wordGuideline: safeText(question?.wordGuideline || question?.wordLimit, 100),
+        required: question?.required !== false,
+      })),
+      roster: (exam?.roster || []).map((student) => ({
+        id: safeText(student?.id, 80),
+        fullName: safeText(student?.fullName, 160),
+        studentNumber: safeText(student?.studentNumber, 48),
+        email: safeText(student?.email, 320),
+        yearLevel: safeText(student?.yearLevel, 80),
+        extraMinutes: Number(student?.extraMinutes || 0),
+      })),
+    };
+    const serialized = JSON.stringify(comparable);
+    let first = 0x811c9dc5;
+    let second = 0x9e3779b9;
+    for (let index = 0; index < serialized.length; index += 1) {
+      const code = serialized.charCodeAt(index);
+      first = Math.imul(first ^ code, 0x01000193) >>> 0;
+      second = Math.imul(second ^ (code + index), 0x85ebca6b) >>> 0;
+    }
+    return `${first.toString(16).padStart(8, '0')}${second.toString(16).padStart(8, '0')}`;
+  }
+
+  function examSummaryId(summary) {
+    return safeText(summary?.id || summary?.examId, 80);
+  }
+
+  function examSummariesFromSession(result) {
+    const candidates = Array.isArray(result?.exams) ? result.exams : [];
+    const fallback = result?.exam && typeof result.exam === 'object' ? [result.exam] : [];
+    const seen = new Set();
+    return [...candidates, ...fallback].filter((summary) => {
+      const id = examSummaryId(summary);
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }
+
+  function renderExamSwitcher(summaries, currentExamId) {
+    state.examSummaries = Array.isArray(summaries) ? summaries : [];
+    const wrap = $('#exam-switcher-wrap');
+    const select = $('#exam-switcher');
+    if (!wrap || !select) return;
+    wrap.hidden = state.examSummaries.length < 2;
+    select.innerHTML = state.examSummaries.map((summary) => {
+      const id = examSummaryId(summary);
+      const label = safeText(summary?.title, 180) || 'Untitled examination';
+      return `<option value="${escapeHtml(id)}" ${id === currentExamId ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+    }).join('');
+  }
+
+  function navigateToExam(examId, view = state.currentView) {
+    const id = safeText(examId, 80);
+    if (!id) return;
+    const next = new URL(global.location.href);
+    next.searchParams.set('exam', id);
+    next.searchParams.delete('reset');
+    next.hash = `#${['create', 'monitor', 'grade'].includes(view) ? view : 'create'}`;
+    global.location.assign(next.toString());
+  }
+
+  function replaceCurrentExamUrl(examId, view = state.currentView) {
+    const id = safeText(examId, 80);
+    if (!id || !global.history?.replaceState) return;
+    const next = new URL(global.location.href);
+    next.searchParams.set('exam', id);
+    next.searchParams.delete('reset');
+    next.hash = `#${['create', 'monitor', 'grade'].includes(view) ? view : 'create'}`;
+    global.history.replaceState(null, '', next.toString());
+  }
+
+  function duplicateDraft(source) {
+    const draft = {
+      ...clientOnlyBlankDraft(state.professor?.institutionId),
+      ...JSON.parse(JSON.stringify(source || {})),
+      id: global.crypto.randomUUID(),
+      versionId: null,
+      status: 'draft',
+      title: `${safeText(source?.title, 170) || 'Untitled examination'} — Copy`,
+      updatedAt: null,
+      publishedAt: null,
+      questions: (source?.questions || []).map((question, index) => normalizeQuestion({
+        ...question,
+        id: global.crypto.randomUUID(),
+      }, index)),
+      roster: (source?.roster || []).map((student, index) => normalizeRoster({
+        ...student,
+        id: global.crypto.randomUUID(),
+      }, index)),
+    };
+    delete draft.activation;
+    delete draft.currentPublishedVersionId;
+    delete draft.submissions;
+    delete draft.gradeRevisions;
+    delete draft.releases;
+    return draft;
+  }
+
+  async function createAnotherExam({ duplicate = false } = {}) {
+    await saveDraft({ force: true });
+    const draft = duplicate
+      ? duplicateDraft(collectExam())
+      : clientOnlyBlankDraft(state.professor?.institutionId);
+    state.activation = null;
+    state.monitor = null;
+    state.grading = null;
+    state.lastSavedJson = '';
+    hydrateForm(draft);
+    switchView('create');
+    setSavedStatus('unsaved', duplicate ? 'Duplicate · not saved yet' : 'New draft · not saved yet');
+    const result = await saveDraft({ force: true, announce: true });
+    if (result.localOnly) {
+      replaceCurrentExamUrl(draft.id, 'create');
+      renderExamSwitcher([...state.examSummaries, draft], draft.id);
+      toast('The new draft is safe on this device. Retry server backup before leaving this page.');
+      return;
+    }
+    const savedExamId = examSummaryId(result.exam) || draft.id;
+    navigateToExam(savedExamId, 'create');
   }
 
   function editorExamFromStored(storedExam, summary = {}, institutionId = '') {
@@ -426,6 +594,8 @@
     $('#late-control').value = exam.lateSubmissions || 'not_allowed';
     $('#navigation-control').value = exam.navigation || 'free';
     $$('input[name="grading-identity"]').forEach((input) => { input.checked = input.value === (exam.gradingIdentity || 'real_names'); });
+    state.anonymousGrading = exam.gradingIdentity === 'anonymous_grading' || exam.anonymousGrading === true;
+    $('#anonymous-grading-toggle').checked = state.anonymousGrading;
     $$('input[name="integrity-tier-main"], input[name="integrity-tier-side"]').forEach((input) => { input.checked = input.value === (exam.integrityTier || 'standard'); });
     $('#camera-required').checked = Boolean(exam.cameraRequired);
     $('#microphone-required').checked = Boolean(exam.microphoneRequired);
@@ -525,8 +695,75 @@
     return draftDb.promise;
   }
 
+  function professorIdentityId() {
+    return safeText(state.professor?.id || state.professor?.userId, 80);
+  }
+
+  function localDraftRecord(exam) {
+    return {
+      examId: safeText(exam?.id, 80),
+      ownerUserId: professorIdentityId(),
+      institutionId: safeText(state.professor?.institutionId || exam?.institutionId, 80),
+      exam,
+      serverBaselineFingerprint: state.serverBaselineFingerprint,
+      contentFingerprint: examContentFingerprint(exam),
+      savedAt: new Date().toISOString(),
+    };
+  }
+
+  function localDraftBelongsToCurrentProfessor(record) {
+    if (!record?.examId || !record?.exam || record.examId !== record.exam.id) return false;
+    const ownerUserId = professorIdentityId();
+    const institutionId = safeText(state.professor?.institutionId, 80);
+    return Boolean(
+      ownerUserId
+      && institutionId
+      && record.ownerUserId === ownerUserId
+      && record.institutionId === institutionId
+      && safeText(record.exam?.institutionId, 80) === institutionId
+    );
+  }
+
+  function rememberActiveLocalDraft(record) {
+    if (!localDraftBelongsToCurrentProfessor(record)) return;
+    try {
+      const pointer = {
+        examId: record.examId,
+        ownerUserId: record.ownerUserId,
+        institutionId: record.institutionId,
+        title: safeText(record.exam?.title, 180),
+        status: safeText(record.exam?.status, 40) || 'draft',
+        savedAt: record.savedAt,
+      };
+      global.localStorage?.setItem(DRAFT_ACTIVE_KEY, JSON.stringify(pointer));
+      const existing = JSON.parse(global.localStorage?.getItem(DRAFT_INDEX_KEY) || '[]');
+      const index = Array.isArray(existing) ? existing : [];
+      const next = [
+        pointer,
+        ...index.filter((entry) => !(
+          entry?.examId === pointer.examId
+          && entry?.ownerUserId === pointer.ownerUserId
+          && entry?.institutionId === pointer.institutionId
+        )),
+      ].slice(0, 50);
+      global.localStorage?.setItem(DRAFT_INDEX_KEY, JSON.stringify(next));
+    } catch {
+      // IndexedDB still keeps the recovery copy when localStorage is unavailable.
+    }
+  }
+
   async function saveLocalDraft(exam) {
-    const record = { examId: exam.id, exam, savedAt: new Date().toISOString() };
+    const record = localDraftRecord(exam);
+    rememberActiveLocalDraft(record);
+    let persisted = false;
+    try {
+      if (typeof global.localStorage?.setItem !== 'function') throw new Error('localStorage unavailable');
+      global.localStorage.setItem(`${DRAFT_FALLBACK_PREFIX}${record.examId}`, JSON.stringify(record));
+      global.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(record));
+      persisted = true;
+    } catch {
+      // IndexedDB remains the primary recovery store for larger examinations.
+    }
     try {
       const db = await draftDb();
       if (db) {
@@ -535,12 +772,19 @@
           request.onsuccess = resolve;
           request.onerror = () => reject(request.error);
         });
-        return record.savedAt;
+        persisted = true;
       }
     } catch {
       // Fall through to the small synchronous recovery copy.
     }
-    global.localStorage?.setItem(DRAFT_STORAGE_KEY, JSON.stringify(record));
+    if (!persisted) {
+      throw new api.ExaminationRoomApiError(
+        'DEVICE_STORAGE_UNAVAILABLE',
+        'This browser could not preserve the examination on this device.',
+        507,
+        'Keep this page open. Allow site storage or free browser space, then choose Save draft again.',
+      );
+    }
     return record.savedAt;
   }
 
@@ -553,17 +797,85 @@
           request.onsuccess = () => resolve(request.result || null);
           request.onerror = () => reject(request.error);
         });
-        if (record) return record;
+        if (localDraftBelongsToCurrentProfessor(record)) return record;
       }
     } catch {
       // Fall through to localStorage.
     }
     try {
-      const record = JSON.parse(global.localStorage?.getItem(DRAFT_STORAGE_KEY) || 'null');
-      return record?.examId === examId ? record : null;
+      const record = JSON.parse(
+        global.localStorage?.getItem(`${DRAFT_FALLBACK_PREFIX}${examId}`)
+        || global.localStorage?.getItem(DRAFT_STORAGE_KEY)
+        || 'null',
+      );
+      return record?.examId === examId && localDraftBelongsToCurrentProfessor(record) ? record : null;
     } catch {
       return null;
     }
+  }
+
+  async function readActiveLocalDraft() {
+    try {
+      const pointer = JSON.parse(global.localStorage?.getItem(DRAFT_ACTIVE_KEY) || 'null');
+      if (!pointer?.examId) return null;
+      if (!api?.demoEnabled?.()) {
+        if (pointer.ownerUserId !== professorIdentityId()) return null;
+        if (pointer.institutionId !== safeText(state.professor?.institutionId, 80)) return null;
+      }
+      return readLocalDraft(pointer.examId);
+    } catch {
+      return null;
+    }
+  }
+
+  async function readIndexedLocalDrafts() {
+    try {
+      const db = await draftDb();
+      if (!db) return [];
+      const records = await new Promise((resolve, reject) => {
+        const store = db.transaction('drafts').objectStore('drafts');
+        if (typeof store.getAll === 'function') {
+          const request = store.getAll();
+          request.onsuccess = () => resolve(request.result || []);
+          request.onerror = () => reject(request.error);
+          return;
+        }
+        const values = [];
+        const request = store.openCursor();
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) { resolve(values); return; }
+          values.push(cursor.value);
+          cursor.continue();
+        };
+        request.onerror = () => reject(request.error);
+      });
+      return records.filter(localDraftBelongsToCurrentProfessor);
+    } catch {
+      return [];
+    }
+  }
+
+  async function readLocalDraftIndex() {
+    const indexedRecords = await readIndexedLocalDrafts();
+    const recordsById = new Map(indexedRecords.map((record) => [record.examId, record]));
+    try {
+      const parsed = JSON.parse(global.localStorage?.getItem(DRAFT_INDEX_KEY) || '[]');
+      const pointers = Array.isArray(parsed) ? parsed.slice(0, 50) : [];
+      for (const pointer of pointers) {
+        if (!pointer?.examId) continue;
+        if (!api?.demoEnabled?.()) {
+          if (pointer.ownerUserId !== professorIdentityId()) continue;
+          if (pointer.institutionId !== safeText(state.professor?.institutionId, 80)) continue;
+        }
+        const record = await readLocalDraft(pointer.examId);
+        if (record?.exam) recordsById.set(record.examId, record);
+      }
+    } catch {
+      // IndexedDB enumeration above still makes local drafts discoverable.
+    }
+    return [...recordsById.values()]
+      .sort((left, right) => String(right.savedAt || '').localeCompare(String(left.savedAt || '')));
   }
 
   function setSavedStatus(mode, label) {
@@ -578,26 +890,52 @@
   async function saveDraft({ announce = false, force = false } = {}) {
     const exam = collectExam();
     const serialized = JSON.stringify(exam);
-    const localSavedAt = await saveLocalDraft(exam);
+    let localSavedAt = null;
+    let localSaveError = null;
+    try {
+      localSavedAt = await saveLocalDraft(exam);
+    } catch (error) {
+      localSaveError = error;
+      setSavedStatus('error', 'Device copy unavailable');
+    }
     if (!force && serialized === state.lastSavedJson) {
-      setSavedStatus('saved', `Saved ${timeAgo(localSavedAt)}`);
+      setSavedStatus('saved', localSavedAt ? `Saved ${timeAgo(localSavedAt)}` : 'Saved on server');
       if (announce) toast('Draft is already up to date.');
-      return { exam };
+      return { exam, deviceCopySaved: Boolean(localSavedAt) };
     }
     if (state.saveInFlight) await state.saveInFlight.catch(() => null);
     setSavedStatus('saving', 'Saving…');
     const action = async () => {
       const result = await api.professorCommand('save_draft', { exam }, api.requestId());
       state.exam = result.exam || exam;
+      state.serverBaselineFingerprint = examContentFingerprint(state.exam);
       state.lastSavedJson = JSON.stringify(exam);
-      setSavedStatus('saved', `Saved ${timeAgo(result.savedAt || new Date())}`);
-      if (announce) toast('Draft saved on this device and backed up to the server.');
-      return result;
+      if (localSavedAt) {
+        try {
+          localSavedAt = await saveLocalDraft(state.exam);
+        } catch {
+          localSavedAt = null;
+        }
+      }
+      setSavedStatus('saved', localSavedAt ? `Saved ${timeAgo(result.savedAt || new Date())}` : 'Saved on server');
+      if (announce) toast(localSavedAt
+        ? 'Draft saved on this device and backed up to the server.'
+        : 'Draft backed up to the server. Browser storage is unavailable on this device.');
+      return { ...result, deviceCopySaved: Boolean(localSavedAt) };
     };
     state.saveInFlight = action();
     try {
       return await state.saveInFlight;
     } catch (error) {
+      if (localSaveError) {
+        setSavedStatus('error', 'Not saved — keep this page open');
+        showError({
+          code: 'DRAFT_NOT_PRESERVED',
+          message: 'The draft could not be saved on this device or backed up to the server.',
+          recovery: 'Keep this page open. Allow site storage or free browser space, restore your connection, then choose Save draft again.',
+        }, () => saveDraft({ announce: true, force: true }), 'Draft not saved');
+        throw localSaveError;
+      }
       setSavedStatus('error', 'Saved on this device');
       showError(error, () => saveDraft({ announce: true, force: true }), 'Server backup delayed');
       return { exam, localOnly: true };
@@ -610,8 +948,10 @@
     if (!state.exam) return;
     clearTimeout(state.saveTimer);
     const exam = collectExam();
-    saveLocalDraft(exam).then((savedAt) => setSavedStatus('saved', `Saved on this device ${timeAgo(savedAt)}`));
-    state.saveTimer = setTimeout(() => saveDraft({ force: false }), 1600);
+    saveLocalDraft(exam)
+      .then((savedAt) => setSavedStatus('saved', `Saved on this device ${timeAgo(savedAt)}`))
+      .catch(() => setSavedStatus('error', 'Device copy unavailable'));
+    state.saveTimer = setTimeout(() => saveDraft({ force: false }).catch(() => null), 1600);
     updateReviewCount();
   }
 
@@ -636,7 +976,7 @@
     if (totalPoints !== 100) items.push({ section: 'questions', label: `Review the ${totalPoints}-point total`, help: 'One hundred points is conventional, but the professor may publish a different total.', blocking: false });
     if (!exam.roster.some((student) => student.extraMinutes > 0)) items.push({ section: 'students', label: 'Confirm accommodations', help: 'Review whether any student needs additional time or another approved accommodation.', blocking: false });
     if (exam.integrityTier === 'standard') items.push({ section: 'safety', label: 'Confirm Standard integrity mode', help: 'No camera or microphone recording will occur. Focus changes are not treated as misconduct.', blocking: false });
-    if (exam.integrityTier === 'recorded_proctoring' && !RECORDED_PROCTORING_AVAILABLE) items.push({ section: 'safety', label: 'Recorded proctoring is not configured', help: 'Choose Standard or Focus monitoring, or ask an administrator to configure encrypted recording, retention, deletion, review access, and an approved student alternative.', blocking: true });
+    if (exam.integrityTier === 'recorded_proctoring' && !RECORDED_PROCTORING_AVAILABLE) items.push({ section: 'safety', label: 'Recorded proctoring is unavailable', help: 'Choose Standard or Focus monitoring. Recorded proctoring requires configured encrypted camera and microphone capture storage.', blocking: true });
     if (exam.gradingIdentity === 'real_names') items.push({ section: 'students', label: 'Real-name grading is selected', help: 'You may switch to optional anonymous grading without losing roster access.', blocking: false });
     if (exam.status === 'draft') items.push({ section: 'exam-details', label: 'Confirm administrator key handoff', help: 'After publication, an administrator verifies the sealed version and issues the room key.', blocking: false });
     return items;
@@ -700,7 +1040,7 @@
       <div class="publish-item"><small>Students</small><strong>${exam.roster.length} real-name roster records</strong></div>
       <div class="publish-item"><small>Grading</small><strong>${exam.gradingIdentity === 'real_names' ? 'Real names' : 'Anonymous grading (optional)'}</strong></div>
       <div class="publish-item"><small>Integrity</small><strong>${escapeHtml(exam.integrityTier.replace(/_/g, ' '))}</strong></div>
-    </div><p class="legal-note">After publication, an administrator must verify the version and issue the room key. Students cannot see questions before the room opens and the privacy notice is accepted.</p>`;
+    </div><p class="legal-note">After publication, an administrator must verify the version and issue the room key. Students cannot see questions before the room opens and they continue past the short privacy warning.</p>`;
     $('#publish-confirmation').checked = false;
     $('#publish-confirm').disabled = true;
     openDialog('publish-dialog');
@@ -1023,14 +1363,14 @@
       ['Needs attention', disconnected + (data.incidents || []).filter((incident) => incident.severity !== 'info').length, 'Human review only'],
     ].map(([label, value, help]) => `<div class="operations-metric"><small>${escapeHtml(label)}</small><strong>${value}</strong><span>${escapeHtml(help)}</span></div>`).join('');
     const status = state.activation?.status || 'waiting';
-    $('#room-state-label').textContent = status === 'open' ? 'Room open' : status === 'active' ? 'Key issued · room closed' : status === 'closed' ? 'Room closed' : 'Waiting for admin key';
+    $('#room-state-label').textContent = status === 'open' ? 'Monitoring room open' : status === 'active' ? 'Key issued · students may enter' : status === 'closed' ? 'Room closed' : 'Waiting for admin key';
     $('.live-indicator').classList.toggle('is-live', status === 'open');
     const openButton = $('#open-room');
     if (status === 'open') {
       openButton.textContent = 'Close room';
       openButton.dataset.roomAction = 'close';
     } else {
-      openButton.textContent = state.activation ? 'Enter room with key' : 'Waiting for admin key';
+      openButton.textContent = state.activation ? 'Enter monitoring with key' : 'Waiting for admin key';
       openButton.dataset.roomAction = 'open';
       openButton.disabled = !state.activation;
     }
@@ -1106,7 +1446,7 @@
       <div><dt>Status</dt><dd>${escapeHtml(submission ? 'Submitted' : session.connected ? 'In progress' : 'Disconnected')}</dd></div>
       <div><dt>Current question</dt><dd>${escapeHtml(String(session.currentQuestion || 'Not available'))}</dd></div>
       <div><dt>Last server backup</dt><dd>${escapeHtml(formatDateTime(session.lastSeenAt))}</dd></div>
-      <div><dt>Privacy notice</dt><dd>${escapeHtml(session.consentVersion || 'Not available')}</dd></div>
+      <div><dt>Privacy warning record</dt><dd>${escapeHtml(session.consentVersion || 'Not available')}</dd></div>
       <div><dt>Integrity events</dt><dd>${incidents.length}</dd></div>
       ${submission ? `<div><dt>Receipt</dt><dd>${escapeHtml(submission.receiptCode)}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDateTime(submission.submittedAt))}</dd></div>` : ''}
     </dl><p class="legal-note">Events are context for human review. They do not establish misconduct and do not alter the student’s grade automatically.</p>`;
@@ -1123,6 +1463,10 @@
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  function jsonDownloadSize(value) {
+    return new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }).size;
   }
 
   function downloadMonitorSnapshot() {
@@ -1152,16 +1496,30 @@
     return map;
   }
 
+  function gradingDisplayIdentity(session, index) {
+    return {
+      realName: safeText(session?.realFullName || session?.fullName, 160) || `Student ${index + 1}`,
+      realStudentNumber: safeText(session?.realStudentNumber || session?.studentNumber, 48),
+      alias: safeText(session?.gradingAlias, 80) || `Student ${index + 1}`,
+    };
+  }
+
   function renderGrading() {
     const data = state.grading || { sessions: [], submissions: [], answerRevisions: [], gradeRevisions: [], releases: [] };
     const submittedIds = new Set((data.submissions || []).map((submission) => submission.sessionId));
     const sessions = (data.sessions || []).filter((session) => submittedIds.has(session.id));
     if (!state.selectedGradingSessionId && sessions.length) state.selectedGradingSessionId = sessions[0].id;
-    sessions.forEach((session) => state.selectedReleaseIds.add(session.id));
+    sessions.forEach((session) => {
+      if (state.releaseSelectionSeenIds.has(session.id)) return;
+      state.releaseSelectionSeenIds.add(session.id);
+      state.selectedReleaseIds.add(session.id);
+    });
     $('#grading-student-list').innerHTML = sessions.length ? sessions.map((session, index) => {
       const released = (data.releases || []).some((release) => release.sessionIds.includes(session.id));
-      const displayName = state.anonymousGrading ? `Student ${index + 1}` : session.fullName;
-      return `<div class="submission-person-wrap"><label class="sr-only" for="release-${escapeHtml(session.id)}">Select ${escapeHtml(displayName)} for result release</label><input id="release-${escapeHtml(session.id)}" class="release-selector" type="checkbox" data-release-session="${escapeHtml(session.id)}" ${state.selectedReleaseIds.has(session.id) ? 'checked' : ''}><button class="submission-person ${session.id === state.selectedGradingSessionId ? 'is-active' : ''}" type="button" data-grade-session="${escapeHtml(session.id)}"><span class="avatar">${escapeHtml(initials(displayName))}</span><span><strong>${escapeHtml(displayName)}</strong><small>${escapeHtml(state.anonymousGrading ? 'Identity hidden during grading' : session.studentNumber)}</small></span><i class="ph ${released ? 'ph-paper-plane-tilt' : 'ph-check-circle'}" aria-hidden="true"></i></button></div>`;
+      const identity = gradingDisplayIdentity(session, index);
+      const displayName = state.anonymousGrading ? identity.alias : identity.realName;
+      const displayDetail = state.anonymousGrading ? 'Identity hidden during grading' : identity.realStudentNumber;
+      return `<div class="submission-person-wrap"><label class="sr-only" for="release-${escapeHtml(session.id)}">Select ${escapeHtml(displayName)} for result release</label><input id="release-${escapeHtml(session.id)}" class="release-selector" type="checkbox" data-release-session="${escapeHtml(session.id)}" ${state.selectedReleaseIds.has(session.id) ? 'checked' : ''}><button class="submission-person ${session.id === state.selectedGradingSessionId ? 'is-active' : ''}" type="button" data-grade-session="${escapeHtml(session.id)}"><span class="avatar">${escapeHtml(initials(displayName))}</span><span><strong>${escapeHtml(displayName)}</strong><small>${escapeHtml(displayDetail)}</small></span><i class="ph ${released ? 'ph-paper-plane-tilt' : 'ph-check-circle'}" aria-hidden="true"></i></button></div>`;
     }).join('') : '<div class="empty-feed">No submitted answer files are available yet. Student receipts will appear here automatically.</div>';
     renderGradingSheet();
     const latestGrades = latestBy(data.gradeRevisions || [], (grade) => `${grade.sessionId}:${grade.questionId}`);
@@ -1177,10 +1535,11 @@
       return;
     }
     const studentIndex = (data.sessions || []).filter((entry) => (data.submissions || []).some((submission) => submission.sessionId === entry.id)).findIndex((entry) => entry.id === session.id);
-    const displayName = state.anonymousGrading ? `Student ${studentIndex + 1}` : session.fullName;
+    const identity = gradingDisplayIdentity(session, studentIndex);
+    const displayName = state.anonymousGrading ? identity.alias : identity.realName;
     const answers = latestBy((data.answerRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
     const grades = latestBy((data.gradeRevisions || []).filter((revision) => revision.sessionId === session.id), (revision) => revision.questionId);
-    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${session.studentNumber} · ${session.yearLevel}`)}</p></div><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Grade changes create durable revisions</span></header>
+    $('#grading-sheet').innerHTML = `<header class="grading-student-head"><div><p class="section-kicker">Individual response</p><h2>${escapeHtml(displayName)}</h2><p>${escapeHtml(state.anonymousGrading ? 'The professor may reveal the real roster at any time.' : `${identity.realStudentNumber} · ${session.yearLevel}`)}</p></div><span class="grade-save-state"><i class="ph ph-check-circle" aria-hidden="true"></i> Grade changes create durable revisions</span></header>
       ${state.questions.map((question, index) => {
         const answer = answers.get(question.id)?.answer;
         const grade = grades.get(question.id) || {};
@@ -1224,16 +1583,16 @@
     const incompleteSession = sessionIds.find((sessionId) => state.questions.some((question) => !latestGrades.has(`${sessionId}:${question.id}`)));
     if (incompleteSession) {
       const session = (state.grading?.sessions || []).find((entry) => entry.id === incompleteSession);
-      const displayName = state.anonymousGrading
-        ? `Student ${(state.grading?.sessions || []).findIndex((entry) => entry.id === incompleteSession) + 1}`
-        : session?.fullName || 'the selected student';
+      const studentIndex = (state.grading?.sessions || []).findIndex((entry) => entry.id === incompleteSession);
+      const identity = gradingDisplayIdentity(session, studentIndex);
+      const displayName = state.anonymousGrading ? identity.alias : identity.realName;
       showError({
         message: `Complete every question grade for ${displayName} before releasing the result.`,
         recovery: 'Open the selected answer file, enter points and feedback for each question, save every grade, then release again.',
       }, null, 'Results not released');
       return;
     }
-    const confirmed = global.confirm(`Release results to ${sessionIds.length} selected student${sessionIds.length === 1 ? '' : 's'}? Students will receive a sign-in notice; grades remain in the protected portal.`);
+    const confirmed = global.confirm(`Release results to ${sessionIds.length} selected student${sessionIds.length === 1 ? '' : 's'}? Students can view the grades on their protected receipt page after release.`);
     if (!confirmed) return;
     const button = $('#release-results');
     setButtonBusy(button, true, 'Releasing…');
@@ -1267,6 +1626,14 @@
 
   async function exportGradingPackage() {
     if (!state.grading) await refreshGrading();
+    await state.offlineWorkspaceReady;
+    if (!offlineGradingCore?.splitOfflineGradingPayload) {
+      showError({
+        message: 'The offline package builder did not load.',
+        recovery: 'Refresh this Professor page while online, then choose Download offline copy again.',
+      }, exportGradingPackage, 'Package not created');
+      return;
+    }
     const passphrase = await requestText({
       eyebrow: 'Encrypted offline grading',
       title: 'Protect the offline grading copy',
@@ -1285,7 +1652,6 @@
     }
     try {
       const salt = crypto.getRandomValues(new Uint8Array(16));
-      const iv = crypto.getRandomValues(new Uint8Array(12));
       const key = await derivePackageKey(passphrase, salt);
       const payload = {
         format: 'duediligence-examination-room-offline-grading-v1',
@@ -1297,54 +1663,236 @@
         gradeRevisions: state.grading.gradeRevisions,
         privacy: 'Contains sensitive education records. Do not email, share, or store on an unmanaged device.',
       };
-      const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(payload))));
-      downloadJson(`due-diligence-offline-grading-${state.exam.id.slice(0, 8)}.ddgrade.json`, {
-        format: payload.format, algorithm: 'AES-GCM', keyDerivation: 'PBKDF2-SHA256-310000',
-        salt: bytesToBase64(salt), iv: bytesToBase64(iv), ciphertext: bytesToBase64(encrypted),
-      });
-      toast('Encrypted offline grading copy downloaded. Keep its passphrase separate.');
+      const projectedPlaintextLimit = Math.floor((MAX_OFFLINE_PACKAGE_BYTES - 4096) * 0.74);
+      const parts = offlineGradingCore.splitOfflineGradingPayload(
+        payload,
+        projectedPlaintextLimit,
+        crypto.randomUUID(),
+      );
+      const width = Math.max(2, String(parts.length).length);
+      for (let index = 0; index < parts.length; index += 1) {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const plaintext = new TextEncoder().encode(JSON.stringify(parts[index]));
+        const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext));
+        const wrapper = {
+          format: payload.format, algorithm: 'AES-GCM', keyDerivation: 'PBKDF2-SHA256-310000',
+          salt: bytesToBase64(salt), iv: bytesToBase64(iv), ciphertext: bytesToBase64(encrypted),
+        };
+        if (jsonDownloadSize(wrapper) > MAX_OFFLINE_PACKAGE_BYTES) throw new Error('offline-part-size');
+        const suffix = parts.length > 1
+          ? `-part-${String(index + 1).padStart(width, '0')}-of-${String(parts.length).padStart(width, '0')}`
+          : '';
+        downloadJson(`due-diligence-offline-grading-${state.exam.id.slice(0, 8)}${suffix}.ddgrade.json`, wrapper);
+      }
+      toast(parts.length > 1
+        ? `${parts.length} numbered offline grading files downloaded. Grade every file, then select all numbered graded files when importing.`
+        : 'Encrypted offline copy downloaded. Open Offline grading, finish the grades, export the graded copy, then import it here.');
     } catch (error) {
-      showError({ message: 'This browser could not create the encrypted grading copy.', recovery: 'Use a current version of Chrome, Edge, Firefox, or Safari, then try again.' }, exportGradingPackage, 'Package not created');
+      showError({
+        message: error?.message || 'This browser could not create the encrypted grading copy.',
+        recovery: 'Keep this page open. Use a current version of Chrome, Edge, Firefox, or Safari, allow multiple downloads if asked, then choose Download offline copy again.',
+      }, exportGradingPackage, 'Package not created');
+    }
+  }
+
+  function prepareDecryptedGradePayload(payload) {
+    if (payload.exam?.id !== state.exam.id || payload.exam?.versionId !== state.exam.versionId) {
+      throw new api.ExaminationRoomApiError(
+        'OFFLINE_GRADE_EXAM_MISMATCH',
+        'This graded file belongs to another examination or published version.',
+        409,
+        'Open the matching examination in the Professor Grade page, then import this file there.',
+      );
+    }
+    const allGrades = Array.isArray(payload.gradeRevisions) ? payload.gradeRevisions : [];
+    const exportBatchId = safeText(payload.offlineGrading?.exportBatchId, 128);
+    const expectedChangeCount = Number(payload.offlineGrading?.addedRevisionCount || 0);
+    const offlineGrades = allGrades.filter((grade) => (
+      grade?.source === 'offline_grading_workspace'
+      && safeText(grade?.offlineExportBatchId, 128) === exportBatchId
+    ));
+    if (!exportBatchId || !Number.isInteger(expectedChangeCount) || expectedChangeCount <= 0 || offlineGrades.length !== expectedChangeCount) {
+      throw new api.ExaminationRoomApiError(
+        'OFFLINE_GRADE_NO_CHANGES',
+        'This copy contains no new offline grade changes.',
+        409,
+        'Open the original grading copy in Offline grading, change at least one complete point value or feedback entry, export a new graded copy, then import that file.',
+      );
+    }
+    const importedGrades = [...latestBy(offlineGrades, (grade) => `${grade.sessionId}:${grade.questionId}`).values()].filter((grade) =>
+      grade?.sessionId && grade?.questionId && Number.isFinite(Number(grade.points))
+    );
+    if (!importedGrades.length || importedGrades.length > 1000) throw new Error('grades');
+    const questionPoints = new Map(state.questions.map((question) => [question.id, Number(question.points)]));
+    if (importedGrades.some((grade) => !questionPoints.has(grade.questionId) || Number(grade.points) < 0 || Number(grade.points) > questionPoints.get(grade.questionId))) {
+      throw new Error('grade-range');
+    }
+    const knownSessions = new Set((state.grading?.sessions || []).map((session) => session.id));
+    if (knownSessions.size && importedGrades.some((grade) => !knownSessions.has(grade.sessionId))) {
+      throw new Error('student-session');
+    }
+    return {
+      exportBatchId,
+      offlinePackage: payload.offlinePackage || null,
+      grades: importedGrades.map((grade) => ({
+        sessionId: grade.sessionId,
+        questionId: grade.questionId,
+        points: Number(grade.points),
+        feedback: grade.feedback || '',
+      })),
+    };
+  }
+
+  function validateCompleteGradedPackageSets(preparedFiles) {
+    const batchIds = new Set();
+    const sets = new Map();
+    const sourceSets = new Map();
+    preparedFiles.forEach((prepared) => {
+      if (batchIds.has(prepared.exportBatchId)) {
+        throw new api.ExaminationRoomApiError(
+          'OFFLINE_GRADE_FILE_DUPLICATE',
+          'The same numbered graded file was selected more than once.',
+          409,
+          'Remove the duplicate selection, keep one copy of each numbered file, then import again.',
+        );
+      }
+      batchIds.add(prepared.exportBatchId);
+      const packageInfo = prepared.offlinePackage;
+      if (packageInfo?.kind !== 'graded_import' || !packageInfo.setId) return;
+      const partCount = Number(packageInfo.partCount || 1);
+      const partNumber = Number(packageInfo.partNumber || 1);
+      const set = sets.get(packageInfo.setId) || { partCount, parts: new Set() };
+      if (set.partCount !== partCount || !Number.isSafeInteger(partNumber) || partNumber < 1 || partNumber > partCount) {
+        throw new Error('graded-package-numbering');
+      }
+      set.parts.add(partNumber);
+      sets.set(packageInfo.setId, set);
+      if (packageInfo.sourceSetId) {
+        const sourcePartCount = Number(packageInfo.sourcePartCount || 1);
+        const sourcePartNumber = Number(packageInfo.sourcePartNumber || 1);
+        const sourceSet = sourceSets.get(packageInfo.sourceSetId) || { partCount: sourcePartCount, parts: new Set() };
+        if (
+          !Number.isSafeInteger(sourcePartCount)
+          || sourcePartCount < 1
+          || sourceSet.partCount !== sourcePartCount
+          || !Number.isSafeInteger(sourcePartNumber)
+          || sourcePartNumber < 1
+          || sourcePartNumber > sourcePartCount
+        ) {
+          throw new Error('graded-source-package-numbering');
+        }
+        sourceSet.parts.add(sourcePartNumber);
+        sourceSets.set(packageInfo.sourceSetId, sourceSet);
+      }
+    });
+    for (const set of sets.values()) {
+      if (set.parts.size !== set.partCount) {
+        const missing = Array.from({ length: set.partCount }, (_, index) => index + 1)
+          .filter((partNumber) => !set.parts.has(partNumber));
+        throw new api.ExaminationRoomApiError(
+          'OFFLINE_GRADE_PART_MISSING',
+          `The selected graded-file set is missing part ${missing.join(', ')} of ${set.partCount}.`,
+          409,
+          'Select every numbered graded file from that export together, then try again. No grade from this selection was imported.',
+        );
+      }
+    }
+    for (const sourceSet of sourceSets.values()) {
+      if (sourceSet.parts.size !== sourceSet.partCount) {
+        const missing = Array.from({ length: sourceSet.partCount }, (_, index) => index + 1)
+          .filter((partNumber) => !sourceSet.parts.has(partNumber));
+        throw new api.ExaminationRoomApiError(
+          'OFFLINE_GRADE_SOURCE_PART_MISSING',
+          `The selected files do not include the graded copy for original package ${missing.join(', ')} of ${sourceSet.partCount}.`,
+          409,
+          'Finish grading every original numbered package, export each graded copy, then select all graded files together. No grade from this selection was imported.',
+        );
+      }
+    }
+  }
+
+  async function importPreparedGradePayload(prepared) {
+    const importResult = await api.professorCommand('import_grades', {
+      examId: state.exam.id,
+      grades: prepared.grades,
+    }, prepared.exportBatchId);
+    const importedCount = Number(importResult.importedCount || 0);
+    if (importedCount !== prepared.grades.length || importResult.atomic !== true) throw new Error('atomic-import');
+    return importedCount;
+  }
+
+  async function importGradingPackages(selectedFiles) {
+    const files = [...(selectedFiles || [])].filter(Boolean);
+    if (!files.length) return;
+    const oversized = files.find((file) => file.size > MAX_OFFLINE_PACKAGE_BYTES);
+    if (oversized) {
+      showError({
+        message: `${oversized.name || 'That grading file'} is larger than 20 MB.`,
+        recovery: 'Choose the numbered graded files exported by Offline grading. Each valid file is automatically kept below 20 MB.',
+      }, null, 'Package not imported');
+      return;
+    }
+    let wrappers;
+    try {
+      wrappers = await Promise.all(files.map(async (file) => {
+        const wrapper = JSON.parse(await file.text());
+        if (wrapper.format !== 'duediligence-examination-room-offline-grading-v1') throw new Error('format');
+        return wrapper;
+      }));
+    } catch {
+      showError({
+        message: 'One of the selected files is not a Due Diligence graded copy.',
+        recovery: 'Select only the numbered .ddgrade.json files exported by Offline grading, then try again.',
+      }, () => importGradingPackages(files), 'Package not imported');
+      return;
+    }
+    const passphrase = await requestText({
+      eyebrow: 'Encrypted offline grading',
+      title: files.length > 1 ? `Unlock ${files.length} graded files` : 'Unlock the grading copy',
+      copy: files.length > 1
+        ? 'Enter the one passphrase used for these numbered files. They will be verified and imported in order.'
+        : 'Enter the passphrase created when this exact examination copy was downloaded.',
+      label: 'Passphrase',
+      help: 'Every file is verified against this examination and immutable version before its grades are imported.',
+      type: 'password',
+      autocomplete: 'current-password',
+      submitLabel: 'Verify and import',
+    });
+    if (!passphrase) return;
+    let completedFiles = 0;
+    let importedCount = 0;
+    try {
+      const preparedFiles = [];
+      for (let index = 0; index < wrappers.length; index += 1) {
+        const wrapper = wrappers[index];
+        const salt = base64ToBytes(wrapper.salt);
+        const iv = base64ToBytes(wrapper.iv);
+        const key = await derivePackageKey(passphrase, salt);
+        const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, base64ToBytes(wrapper.ciphertext));
+        const payload = JSON.parse(new TextDecoder().decode(decrypted));
+        preparedFiles.push(prepareDecryptedGradePayload(payload));
+      }
+      validateCompleteGradedPackageSets(preparedFiles);
+      for (const prepared of preparedFiles) {
+        importedCount += await importPreparedGradePayload(prepared);
+        completedFiles += 1;
+      }
+      toast(`${importedCount} offline grade${importedCount === 1 ? '' : 's'} verified and imported from ${completedFiles} file${completedFiles === 1 ? '' : 's'}. Review them before releasing results.`);
+      await refreshGrading();
+    } catch (error) {
+      const prior = completedFiles
+        ? `${completedFiles} earlier file${completedFiles === 1 ? ' was' : 's were'} already imported safely. `
+        : '';
+      if (completedFiles) await refreshGrading().catch(() => null);
+      showError({
+        message: error?.recovery ? error.message : 'A grading file could not be verified, decrypted, or imported.',
+        recovery: `${prior}${error?.recovery || 'Select the complete numbered set again and use the correct passphrase. Completed files are retry-safe; every file saves all of its listed grades or none of them.'}`,
+      }, () => importGradingPackages(files), 'Package not imported');
     }
   }
 
   async function importGradingPackage(file) {
-    if (!file) return;
-    if (file.size > 20 * 1024 * 1024) {
-      showError({ message: 'That grading package is larger than 20 MB.', recovery: 'Choose the original Due Diligence offline grading package for this examination.' }, null, 'Package not imported');
-      return;
-    }
-    try {
-      const wrapper = JSON.parse(await file.text());
-      if (wrapper.format !== 'duediligence-examination-room-offline-grading-v1') throw new Error('format');
-      const passphrase = await requestText({
-        eyebrow: 'Encrypted offline grading',
-        title: 'Unlock the grading copy',
-        copy: 'Enter the passphrase created when this exact examination copy was downloaded.',
-        label: 'Passphrase',
-        help: 'The file is verified against this examination and immutable version before any grade is imported.',
-        type: 'password',
-        autocomplete: 'current-password',
-        submitLabel: 'Verify and import',
-      });
-      if (!passphrase) return;
-      const salt = base64ToBytes(wrapper.salt);
-      const iv = base64ToBytes(wrapper.iv);
-      const key = await derivePackageKey(passphrase, salt);
-      const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, base64ToBytes(wrapper.ciphertext));
-      const payload = JSON.parse(new TextDecoder().decode(decrypted));
-      if (payload.exam?.id !== state.exam.id || payload.exam?.versionId !== state.exam.versionId) {
-        throw new Error('exam');
-      }
-      const importedGrades = payload.gradeRevisions || [];
-      for (const grade of importedGrades) {
-        await api.professorCommand('save_grade', { examId: state.exam.id, sessionId: grade.sessionId, questionId: grade.questionId, points: grade.points, feedback: grade.feedback }, api.requestId());
-      }
-      toast(`${importedGrades.length} offline grade revision${importedGrades.length === 1 ? '' : 's'} verified and imported.`);
-      await refreshGrading();
-    } catch (error) {
-      showError({ message: 'The grading package could not be verified or decrypted.', recovery: 'Use the correct passphrase and the package exported for this exact examination version. The existing online grades were not changed.' }, () => importGradingPackage(file), 'Package not imported');
-    }
+    return importGradingPackages(file ? [file] : []);
   }
 
   function assistantAction(action) {
@@ -1373,6 +1921,12 @@
   function bindEvents() {
     $$('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => closeDialog(button.dataset.closeDialog)));
     $$('[data-view]').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.view)));
+    $('#exam-switcher').addEventListener('change', async (event) => {
+      const targetExamId = safeText(event.currentTarget.value, 80);
+      if (!targetExamId || targetExamId === state.exam?.id) return;
+      await saveDraft({ force: true });
+      navigateToExam(targetExamId, state.currentView);
+    });
     $('#section-navigation').addEventListener('click', (event) => {
       const button = event.target.closest('[data-scroll-to]');
       if (button) {
@@ -1412,9 +1966,10 @@
       if (button.dataset.action === 'download-draft') {
         downloadJson(`examination-draft-${state.exam.id.slice(0, 8)}.json`, { exportedAt: new Date().toISOString(), exam: collectExam(), note: 'Private recovery copy. Store securely.' });
         toast('Recovery copy downloaded.');
+      } else if (button.dataset.action === 'new-exam') {
+        await createAnotherExam();
       } else if (button.dataset.action === 'duplicate-exam') {
-        toast('A duplicate will be created after the current draft finishes saving.');
-        await saveDraft({ force: true });
+        await createAnotherExam({ duplicate: true });
       } else {
         toast('Version history is preserved after each publish, grade save, and recovery snapshot.');
       }
@@ -1540,7 +2095,7 @@
       const response = /point|score|total/i.test(question)
         ? `Your current point total is ${total}. You decide whether to keep it.`
         : /privacy|record|camera|microphone/i.test(question)
-          ? 'Use the least intrusive safeguard that meets the school’s purpose. Recording needs a specific notice, permissions, retention, access limits, and an approved alternative.'
+          ? 'Recorded proctoring is unavailable until encrypted camera and microphone capture storage is configured. Choose Standard or Focus monitoring.'
           : 'I can suggest wording, check missing fields, review point totals, or explain a control. I will not change the examination unless you choose an action.';
       toast(response);
       $('#assistant-input').value = '';
@@ -1572,7 +2127,11 @@
     $('#anonymous-grading-toggle').addEventListener('change', (event) => { state.anonymousGrading = event.target.checked; renderGrading(); });
     $('#release-results').addEventListener('click', releaseResults);
     $('#export-grading-package').addEventListener('click', exportGradingPackage);
-    $('#import-grading-package').addEventListener('change', (event) => importGradingPackage(event.target.files?.[0]));
+    $('#import-grading-package').addEventListener('change', async (event) => {
+      const files = [...(event.target.files || [])];
+      await importGradingPackages(files);
+      event.target.value = '';
+    });
     $('#text-entry-form').addEventListener('submit', (event) => {
       event.preventDefault();
       const input = $('#text-entry-input');
@@ -1589,7 +2148,16 @@
       if (!event.target.closest('#add-question-menu-button, #add-question-menu')) { $('#add-question-menu').hidden = true; $('#add-question-menu-button').setAttribute('aria-expanded', 'false'); }
       $$('.question-options').forEach((menu) => { if (!event.target.closest('[data-question-options-button], .question-options')) menu.hidden = true; });
     });
-    global.addEventListener('beforeunload', () => { if (state.exam) global.localStorage?.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ examId: state.exam.id, exam: collectExam(), savedAt: new Date().toISOString() })); });
+    global.addEventListener('beforeunload', () => {
+      if (!state.exam) return;
+      const record = localDraftRecord(collectExam());
+      try {
+        global.localStorage?.setItem(DRAFT_STORAGE_KEY, JSON.stringify(record));
+        rememberActiveLocalDraft(record);
+      } catch {
+        // The latest successful IndexedDB save remains available for recovery.
+      }
+    });
     api.subscribe(() => {
       if (state.currentView === 'monitor') refreshMonitor();
       if (state.currentView === 'grade') refreshGrading();
@@ -1605,9 +2173,9 @@
       'INVALID_SESSION',
       'EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED',
     ].includes(code);
-    const assignmentRequired = status === 403 || [
-      'PROFESSOR_ACCESS_REQUIRED',
-      'EXAM_ROOM_V1_PROFESSOR_FORBIDDEN',
+    const workspaceUnavailable = status === 403 || [
+      'EXAM_ROOM_V1_INSTITUTION_REQUIRED',
+      'EXAM_ROOM_V1_INSTITUTION_FORBIDDEN',
       'EXAM_ROOM_V1_FORBIDDEN',
     ].includes(code);
     const gate = $('#access-gate');
@@ -1615,23 +2183,23 @@
     const recovery = $('#access-recovery');
 
     gate.hidden = false;
-    gate.dataset.accessState = signInRequired ? 'sign-in-required' : assignmentRequired ? 'assignment-required' : 'check-interrupted';
+    gate.dataset.accessState = signInRequired ? 'sign-in-required' : workspaceUnavailable ? 'workspace-unavailable' : 'check-interrupted';
     primary.href = '../#examination-room';
     if (signInRequired) {
       $('#access-title').textContent = 'Professor sign-in is required';
       primary.textContent = 'Sign in through Due Diligence';
-    } else if (assignmentRequired) {
-      $('#access-title').textContent = 'Professor access has not been granted';
+    } else if (workspaceUnavailable) {
+      $('#access-title').textContent = 'The law-school workspace is unavailable';
       primary.textContent = 'Return to Examination Room doors';
     } else {
       $('#access-title').textContent = 'Professor access could not be checked';
       primary.textContent = 'Check access from Examination Room';
     }
-    $('#access-copy').textContent = error?.message || 'Only an authorized professor or administrator can prepare an examination.';
+    $('#access-copy').textContent = error?.message || 'The Professor workspace could not be opened for this signed-in account.';
     recovery.textContent = error?.recovery || (signInRequired
-      ? 'Sign in through Due Diligence. After sign-in, the Examination Room menu will reopen and check your verified staff assignment.'
-      : assignmentRequired
-        ? 'Ask an Examination Room administrator to assign Professor access to the exact email used for sign-in, then check the Professor door again.'
+      ? 'Sign in through Due Diligence. After sign-in, reopen the Examination Room menu and enter the Professor door.'
+      : workspaceUnavailable
+        ? 'Ask Admin to create or reopen the correct law-school workspace, then try again.'
         : 'Your saved work was not changed. Check your connection, then return to the Examination Room menu and try again.');
   }
 
@@ -1640,6 +2208,7 @@
       $('#loading-copy').textContent = 'Examination Room could not load its secure connection module.';
       return;
     }
+    state.offlineWorkspaceReady = registerExaminationRoomServiceWorker();
     try {
       const params = new URLSearchParams(global.location.search);
       const isDemo = api.demoEnabled();
@@ -1651,43 +2220,108 @@
       if (isDemo && params.get('reset') === '1') {
         api.resetDemo();
         global.localStorage?.removeItem(DRAFT_STORAGE_KEY);
+        global.localStorage?.removeItem(DRAFT_ACTIVE_KEY);
+        global.localStorage?.removeItem(DRAFT_INDEX_KEY);
       }
       const result = await api.professorQuery('session');
-      if (isDemo) document.body.dataset.demoServerRoster = String(result.exam?.roster?.length || 0);
-      if (result.professor?.authorized !== true) throw new api.ExaminationRoomApiError('PROFESSOR_ACCESS_REQUIRED', 'This account is not authorized as a professor.', 403, 'Ask an administrator to grant professor access, then refresh this page.');
       state.professor = result.professor;
       state.activation = result.activation || null;
       $('#professor-short-name').textContent = result.professor.displayName || 'Professor';
       $('.profile-initials').textContent = initials(result.professor.displayName || 'Professor');
-      const summary = result.exam && typeof result.exam === 'object' ? result.exam : null;
+      const summaries = examSummariesFromSession(result);
+      const requestedExamId = safeText(params.get('exam'), 80);
+      const localDrafts = params.get('reset') === '1' ? [] : await readLocalDraftIndex();
+      const activeLocalDraft = params.get('reset') === '1'
+        ? null
+        : (await readActiveLocalDraft()) || localDrafts[0] || null;
+      const activeLocalId = safeText(activeLocalDraft?.examId, 80);
+      const activeLocalServerSummary = summaries.find((candidate) => examSummaryId(candidate) === activeLocalId) || null;
+      const activeLocalPreferred = Boolean(!requestedExamId && activeLocalDraft?.exam);
+      const activeLocalMissingFromServer = Boolean(
+        activeLocalPreferred
+        && !activeLocalServerSummary
+      );
+      const defaultSummary = result.exam && typeof result.exam === 'object' ? result.exam : summaries[0] || null;
+      const summary = requestedExamId
+        ? summaries.find((candidate) => examSummaryId(candidate) === requestedExamId) || { id: requestedExamId }
+        : activeLocalPreferred ? (activeLocalServerSummary || activeLocalDraft.exam) : defaultSummary;
       const summaryExamId = safeText(summary?.id || summary?.examId, 80);
       let serverExam;
       let clientOnlyDraft = false;
-      if (summaryExamId && !isDemo) {
-        const details = await api.professorQuery('exam', { examId: summaryExamId });
-        serverExam = editorExamFromStored(details?.exam, summary, result.professor.institutionId);
-      } else if (summary) {
-        serverExam = editorExamFromStored(summary, summary, result.professor.institutionId);
+      let exactLocalDraft = activeLocalMissingFromServer ? activeLocalDraft : null;
+      if (summaryExamId) {
+        if (exactLocalDraft?.exam) {
+          serverExam = exactLocalDraft.exam;
+          clientOnlyDraft = true;
+        } else {
+          try {
+            const details = await api.professorQuery('exam', { examId: summaryExamId });
+            serverExam = editorExamFromStored(details?.exam, summary, result.professor.institutionId);
+          } catch (error) {
+            exactLocalDraft = params.get('reset') === '1' ? null : await readLocalDraft(summaryExamId);
+            if (!exactLocalDraft?.exam || ![404, 409].includes(Number(error?.status || 0))) throw error;
+            serverExam = exactLocalDraft.exam;
+            clientOnlyDraft = true;
+          }
+        }
       } else {
-        serverExam = clientOnlyBlankDraft(result.professor.institutionId);
+        exactLocalDraft = activeLocalDraft;
+        serverExam = exactLocalDraft?.exam || clientOnlyBlankDraft(result.professor.institutionId);
         clientOnlyDraft = true;
       }
-      const local = params.get('reset') === '1' ? null : await readLocalDraft(serverExam.id);
-      const serverTime = new Date(serverExam.updatedAt || 0).getTime();
-      const localTime = new Date(local?.savedAt || 0).getTime();
-      const exam = local?.exam && localTime > serverTime ? local.exam : serverExam;
+      if (isDemo) document.body.dataset.demoServerRoster = String(serverExam?.roster?.length || 0);
+      const availableSummaries = examSummariesFromSession({
+        exams: [...summaries, ...localDrafts.map((record) => record.exam), serverExam],
+      });
+      renderExamSwitcher(availableSummaries, serverExam.id);
+      const local = exactLocalDraft || (params.get('reset') === '1' ? null : await readLocalDraft(serverExam.id));
+      const serverFingerprint = clientOnlyDraft ? null : examContentFingerprint(serverExam);
+      state.serverBaselineFingerprint = serverFingerprint;
+      let exam = serverExam;
+      let restoredLocalDraft = false;
+      let resolvedConflict = false;
+      if (local?.exam) {
+        const localFingerprint = local.contentFingerprint || examContentFingerprint(local.exam);
+        const baselineFingerprint = local.serverBaselineFingerprint || null;
+        if (clientOnlyDraft) {
+          exam = local.exam;
+          restoredLocalDraft = true;
+        } else if (localFingerprint === serverFingerprint) {
+          exam = serverExam;
+        } else if (baselineFingerprint && serverFingerprint === baselineFingerprint) {
+          exam = local.exam;
+          restoredLocalDraft = true;
+        } else if (!(baselineFingerprint && localFingerprint === baselineFingerprint)) {
+          const useDeviceDraft = typeof global.confirm === 'function' && global.confirm(
+            'This device and the server both contain different changes to this examination.\n\nChoose OK to restore this device’s draft, or Cancel to keep the server copy. Nothing is deleted; you can download a recovery copy before saving again.',
+          );
+          exam = useDeviceDraft ? local.exam : serverExam;
+          restoredLocalDraft = useDeviceDraft;
+          resolvedConflict = true;
+          if (!useDeviceDraft) await saveLocalDraft(serverExam).catch(() => null);
+        }
+      }
       hydrateForm(exam);
+      if (clientOnlyDraft) {
+        await saveLocalDraft(exam);
+        replaceCurrentExamUrl(exam.id, global.location.hash.replace('#', '') || 'create');
+      }
       bindEvents();
       bindSectionObserver();
       $('#loading-gate').hidden = true;
       $('#app-shell').hidden = false;
       const requestedView = global.location.hash.replace('#', '') || params.get('view') || 'create';
       switchView(['create', 'monitor', 'grade'].includes(requestedView) ? requestedView : 'create');
-      if (local?.exam && localTime > serverTime) {
+      if (restoredLocalDraft) {
         setSavedStatus('error', 'Restored from this device');
-        toast('A newer draft from this device was restored. Save draft to back it up to the server.');
+        toast(resolvedConflict
+          ? 'This device’s draft was restored by your choice. Save draft to make it the server copy.'
+          : 'A device-only draft was restored. Save draft to back it up to the server.');
+      } else if (resolvedConflict) {
+        setSavedStatus('saved', 'Kept server copy');
+        toast('The server copy was kept by your choice. The conflicting device draft was not published.');
       } else if (clientOnlyDraft) {
-        setSavedStatus('unsaved', 'New draft · not saved yet');
+        setSavedStatus('error', 'Saved on device · server backup pending');
       }
       if (isDemo) global.__examinationRoomReady = true;
     } catch (error) {

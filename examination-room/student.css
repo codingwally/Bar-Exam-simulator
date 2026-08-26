@@ -685,6 +685,15 @@ dialog::backdrop {
   color: var(--ivory-200);
 }
 
+.privacy-warning-copy {
+  margin: 22px 0 26px;
+  border-left: 3px solid var(--gold-400);
+  padding: 18px 20px;
+  background: rgba(6, 21, 34, 0.34);
+  font-size: clamp(1rem, 2vw, 1.12rem);
+  line-height: 1.72;
+}
+
 .notice-scroll {
   max-height: min(42vh, 360px);
   margin: 22px 0;

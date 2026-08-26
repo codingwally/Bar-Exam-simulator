@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: "production-gemini-examiner-worker"
+  group: "examination-room-production-cutover"
   cancel-in-progress: false
 
 jobs:
@@ -66,7 +66,9 @@ jobs:
           node --check worker/index.mjs
           node --check worker/commercial-entry.mjs
           node --check worker/maintenance-entry.mjs
+          node --test admin/examination-room-admin.test.cjs
           node --test worker/*.test.mjs
+          node scripts/test-examination-room-database.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-maintenance-lock.mjs
           node scripts/test-website-question-bank.mjs
@@ -77,6 +79,23 @@ jobs:
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
 
+      - name: Apply and probe only the ordered Examination Room migrations
+        env:
+          EXAMINATION_ROOM_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_PRODUCTION_DATABASE_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$EXAMINATION_ROOM_DATABASE_URL"
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-client
+          fi
+          psql --version
+          release_bundle="$RUNNER_TEMP/examination-room-release.sql"
+          node scripts/build-examination-room-release-bundle.mjs --output "$release_bundle"
+          psql "$EXAMINATION_ROOM_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$release_bundle"
+          rm -f -- "$release_bundle"
+
       - name: Verify production notification, persistence, and Examination Room secrets exist
         working-directory: worker
         env:
@@ -86,7 +105,23 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4.114.0 secret list --format json \
-            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL', 'EXAMINATION_ROOM_KEY_PEPPER']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ') + '. Use the approved one-time bootstrap workflow for a missing Examination Room pepper; never rotate it during deploy.'); process.exit(1); } console.log('Required notification, persistence, and Examination Room secrets are configured.'); });"
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL', 'EXAMINATION_ROOM_KEY_PEPPER', 'EXAMINATION_ROOM_OWNER_DATA_KEY_V1', 'EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1', 'EXAMINATION_ROOM_ADMIN_EMAILS']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ') + '. Configure the missing release secret; never rotate it during deploy.'); process.exit(1); } console.log('Required notification, persistence, owner escrow, recovery, and owner-copy secrets are configured.'); });"
+
+      - name: Verify the private Examination Room recovery bucket exists
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'binding = "EXAMINATION_ROOM_BACKUPS"' wrangler.toml
+          npx --yes wrangler@4.114.0 r2 bucket list \
+            | grep -F 'duediligence-examination-room-backups'
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/buckets/duediligence-examination-room-backups/lifecycle" \
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const body = JSON.parse(value); const rules = body?.result?.rules; const minimumAge = 365 * 24 * 60 * 60; const ready = Array.isArray(rules) && rules.some(rule => rule?.enabled === true && rule?.conditions?.prefix === 'examination-room-recovery/v1/' && rule?.deleteObjectsTransition?.condition?.type === 'Age' && Number(rule.deleteObjectsTransition.condition.maxAge) >= minimumAge); if (!ready) { console.error('The private recovery bucket needs an enabled 365-day-or-longer lifecycle rule for examination-room-recovery/v1/.'); process.exit(1); } console.log('Private recovery lifecycle is configured for at least 365 days.'); });"
 
       - name: Ensure the maintenance signing key exists
         working-directory: worker

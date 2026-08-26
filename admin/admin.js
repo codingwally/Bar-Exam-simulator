@@ -72,7 +72,6 @@
     business_revenue: 'subscription_admin',
     business_projections: 'subscription_admin',
     business_comparisons: 'learner_analytics_viewer',
-    examination_room_v1: 'role_admin',
   });
   const state = {
     client: null,
@@ -231,7 +230,7 @@
 
   function sectionAllowed(section) {
     if (!titles[section]) return false;
-    const founderOnly = ['forum', 'examinations', 'answer_exports'].includes(section);
+    const founderOnly = ['forum', 'examinations', 'answer_exports', 'examination_room_v1'].includes(section);
     const founderAuthorized = ['founder_admin', 'super_admin'].includes(
       state.authorization?.role,
     );

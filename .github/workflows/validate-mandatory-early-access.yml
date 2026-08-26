@@ -19,6 +19,7 @@ on:
       - 'admin/index.html'
       - 'admin/examination-room-admin.css'
       - 'admin/examination-room-admin.js'
+      - 'admin/examination-room-admin.test.cjs'
       - 'examination-room/**'
       - 'worker/access-core.mjs'
       - 'worker/commercial-entry.mjs'
@@ -53,10 +54,12 @@ on:
       - 'scripts/test-commercial-launch-staging.mjs'
       - 'scripts/staging-commercial-user.mjs'
       - 'scripts/test-examination-room-door-menu.mjs'
+      - 'scripts/test-examination-room-database.mjs'
       - 'scripts/test-examination-room-v1-staging-smoke.mjs'
       - 'scripts/test-examination-room-release-workflows.mjs'
       - 'scripts/test-feature-decommission-boundary.mjs'
       - 'supabase/migrations/20260825183055_examination_room_v1_greenfield.sql'
+      - 'supabase/migrations/20260826130536_examination_room_owner_command_center.sql'
       - 'supabase/tests/database/**'
       - 'supabase/migrations/20260821120000_soft_launch_five_token_trial.sql'
       - 'supabase/migrations/20260818123000_require_early_access.sql'
@@ -101,7 +104,9 @@ jobs:
           node --check worker/payment-core.mjs
           node --check worker/maintenance-entry.mjs
           node --test examination-room/*.test.cjs
+          node --test admin/examination-room-admin.test.cjs
           node --test worker/*.test.mjs
+          node scripts/test-examination-room-database.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-maintenance-lock.mjs
           node scripts/test-two-option-access-choice.mjs

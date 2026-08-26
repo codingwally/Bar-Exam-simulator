@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
-const [html, experience, phase2Css, shellCss, api, admin, serviceWorker, icon] = await Promise.all([
+const [html, experience, phase2Css, shellCss, api, admin, adminShell, serviceWorker, icon] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/phase2-experience.js', root), 'utf8'),
   readFile(new URL('assets/phase2.css', root), 'utf8'),
   readFile(new URL('assets/quorum-first-shell.css', root), 'utf8'),
   readFile(new URL('examination-room/api.js', root), 'utf8'),
   readFile(new URL('admin/examination-room-admin.js', root), 'utf8'),
+  readFile(new URL('admin/admin.js', root), 'utf8'),
   readFile(new URL('service-worker.js', root), 'utf8'),
   readFile(new URL('assets/icons/navigation/door-open.svg', root), 'utf8'),
 ]);
@@ -39,30 +40,33 @@ assert.match(experience, /showEntry\(\{ allowDismiss: true, returnHash: '#examin
 assert.match(experience, /<option value="professor">Professor<\/option>/);
 assert.match(experience, /p_category:\s*category/);
 assert.match(experience, /commercial_category:\s*category/);
-assert.match(experience, /function hasProfessorProfileRole\(\)[\s\S]*commercial_category === 'professor'/);
-assert.match(experience, /professorRole \? 'Professor Examination Room' : 'Examination Room'/);
-assert.match(experience, /operation: 'role_status'/);
-assert.match(experience, /operation: 'request_access'/);
-assert.match(experience, /role\?\.professorRoleSelected !== true \|\| role\?\.declarationOnFile !== true/);
-assert.match(experience, /Change school request/);
-assert.match(experience, /the prior request will be safely replaced/);
+assert.doesNotMatch(experience, /function hasProfessorProfileRole\(/);
+assert.match(experience, /signed-in account can create and manage its own examinations/i);
+assert.match(experience, /Admin approval is needed only before a room key is issued/i);
+assert.doesNotMatch(experience, /operation: 'role_status'/);
+assert.doesNotMatch(experience, /operation: 'request_access'/);
+assert.doesNotMatch(experience, /Professor role required/i);
+assert.doesNotMatch(experience, /requestProfessorSchoolActivation/);
 
 assert.match(
   experience,
   /nativeWorkerRequest\('\/examination-room\/v1\/professor\/query'[\s\S]*operation: 'session'/,
-  'The Professor door must use the authenticated server route.',
+  'The Professor door must use the signed-in server route.',
+);
+assert.match(experience, /if \(!token \|\| !state\.user\)/);
+assert.doesNotMatch(experience, /if \(!hasProfessorProfileRole\(\)/);
+assert.match(admin, /activate_exam/);
+assert.match(admin, /approveAndEmail/);
+assert.match(
+  adminShell,
+  /const founderOnly = \[[^\]]*'examination_room_v1'[^\]]*\]/,
+  'The Examination Room command center must be visible only to Founder and Super Admin owners.',
 );
 assert.doesNotMatch(
-  experience,
-  /commercial_category\s*===\s*['"]professor['"][\s\S]{0,240}(?:authorized|dataset\.destination|location\.assign)/,
-  'The self-selected profile category must never authorize the Professor door.',
+  adminShell,
+  /examination_room_v1:\s*'role_admin'/,
+  'Ordinary delegated role administrators must not gain Examination Room command-center access.',
 );
-assert.match(experience, /a school administrator still activates access to that school's protected examinations/i);
-assert.match(experience, /Ask an Examination Room administrator to activate your professor assignment/);
-assert.match(admin, /professorRequests/);
-assert.match(admin, /adminCommand\('assign_staff'/);
-assert.match(admin, /staffRole:\s*'professor'/);
-assert.match(admin, /adminCommand\('reject_professor_request'/);
 
 assert.match(api, /function staffPayload\(payload = \{\}\)/);
 assert.match(api, /URLSearchParams[^\n]*\.get\('institution'\)/);
@@ -77,7 +81,7 @@ assert.match(phase2Css, /@media \(max-width: 820px\)[\s\S]*\.dd2-examination-doo
 assert.doesNotMatch(phase2Css.match(/\.dd2-native-view\[data-native-view="examination-room"\][\s\S]*?body\.dd2-locked/)?.[0] || '', /linear-gradient|radial-gradient/);
 
 assert.match(serviceWorker, /\/assets\/icons\/navigation\/door-open\.svg/);
-assert.match(serviceWorker, /phase2-experience\.js\?v=syllabus-reveal-access-20260826-1/);
+assert.match(serviceWorker, /phase2-experience\.js\?v=syllabus-reveal-access-20260826-1-examination-room-2/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=examination-room-doors-20260826-2/);
 assert.match(icon, /viewBox="0 0 24 24"/);
 assert.match(icon, /M11 4\.562v16\.157/);

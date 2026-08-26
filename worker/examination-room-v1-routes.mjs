@@ -37,6 +37,7 @@ const PROFESSOR_COMMAND_OPERATIONS = new Set([
   'open_room',
   'close_room',
   'save_grade',
+  'import_grades',
   'release_results',
 ]);
 const STUDENT_QUERY_OPERATIONS = new Set(['resume', 'result']);
@@ -552,6 +553,57 @@ function selectInstitution(authorization, requestedInstitutionId = null, allowed
   return uuid(primary, 'the institution identifier');
 }
 
+function selectCreatorInstitution(authorization, requestedInstitutionId = null) {
+  const creatorWorkspaces = Array.isArray(authorization.creatorWorkspaces)
+    ? authorization.creatorWorkspaces
+    : [];
+  const memberships = Array.isArray(authorization.memberships) ? authorization.memberships : [];
+  const candidates = [];
+  const seen = new Set();
+  for (const entry of [...creatorWorkspaces, ...memberships]) {
+    if (!entry?.institutionId || entry.active !== true || seen.has(entry.institutionId)) continue;
+    const institutionId = uuid(entry.institutionId, 'the institution identifier');
+    seen.add(institutionId);
+    candidates.push({
+      institutionId,
+      institutionName: entry.institutionName || null,
+      institutionCode: entry.institutionCode || null,
+    });
+  }
+  if (requestedInstitutionId) {
+    const requested = uuid(requestedInstitutionId, 'the institution identifier');
+    if (!seen.has(requested)) {
+      fail(
+        'EXAM_ROOM_V1_CREATOR_WORKSPACE_FORBIDDEN',
+        'That law-school workspace is not available for examination creation.',
+        403,
+        'Choose an active law-school workspace listed for your signed-in account.',
+      );
+    }
+    return requested;
+  }
+  const preferred = candidates.find((entry) => entry.institutionId === authorization.institutionId);
+  if (!preferred && candidates.length > 1) {
+    fail(
+      'EXAM_ROOM_V1_INSTITUTION_SELECTION_REQUIRED',
+      'Choose the law school for this Examination Room session.',
+      409,
+      'Select one active law-school workspace, then continue.',
+      { institutions: candidates },
+    );
+  }
+  const primary = preferred?.institutionId || candidates[0]?.institutionId;
+  if (!primary) {
+    fail(
+      'EXAM_ROOM_V1_CREATOR_WORKSPACE_REQUIRED',
+      'No active law-school workspace is available for examination creation.',
+      403,
+      'Choose or request an active law-school workspace, then reopen the Professor door.',
+    );
+  }
+  return primary;
+}
+
 export function createExaminationRoomV1Handlers(dependencies) {
   const deps = plainRecord(dependencies, 'route dependencies');
   for (const name of [
@@ -594,44 +646,24 @@ export function createExaminationRoomV1Handlers(dependencies) {
     }
   }
 
-  async function professorContext(request, env, requestedInstitutionId = null) {
-    const user = await deps.authenticate(request, env);
+  async function professorContext(request, env, requestedInstitutionId = null, authenticatedUser = null) {
+    const user = authenticatedUser || await deps.authenticate(request, env);
     if (!user?.id) {
       fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'Professor sign-in is required.', 401, 'Sign in through Due Diligence, then reopen Examination Room.');
     }
-    let authorization = await deps.authorizeProfessor(env, user);
-    let allowedStaffRoles = ['professor'];
+    const authorization = await deps.authorizeProfessor(env, user);
     if (!authorizationAllowed(authorization)) {
-      const admin = await deps.authorizeAdmin(env, user).catch(() => null);
-      if (hasRoleAdmin(admin)) {
-        const memberships = (Array.isArray(admin.memberships) ? admin.memberships : [])
-          .filter((entry) => entry?.active === true && entry?.staffRole === 'admin');
-        const institutionIds = [...new Set(memberships.map((entry) => entry.institutionId).filter(Boolean))];
-        authorization = {
-          authorized: true,
-          adminTesting: true,
-          role: admin.role,
-          institutionId: institutionIds.length === 1 ? institutionIds[0] : null,
-          memberships,
-        };
-        allowedStaffRoles = ['admin'];
-      }
-    }
-    if (!authorizationAllowed(authorization)) {
-      if (authorization?.professorRoleSelected !== true) {
-        fail(
-          'EXAM_ROOM_V1_PROFESSOR_ROLE_REQUIRED',
-          'This signed-in account has not selected Professor as its account role.',
-          403,
-          'Open Profile, choose Professor, save the private declaration, and then request school activation from the Professor card.',
-        );
-      }
-      fail('EXAM_ROOM_V1_PROFESSOR_FORBIDDEN', 'This account is not authorized as a professor.', 403, 'Ask an administrator to activate the professor role for this account.');
+      fail(
+        'EXAM_ROOM_V1_CREATOR_WORKSPACE_REQUIRED',
+        'This signed-in account has no active examination-creator workspace.',
+        403,
+        'Choose or request an active law-school workspace, then reopen the Professor door.',
+      );
     }
     return {
       user,
       authorization,
-      institutionId: selectInstitution(authorization, requestedInstitutionId, allowedStaffRoles),
+      institutionId: selectCreatorInstitution(authorization, requestedInstitutionId),
     };
   }
 
@@ -762,32 +794,47 @@ export function createExaminationRoomV1Handlers(dependencies) {
     }, origin, allowedOrigin);
   }
 
-  async function professorCommand(request, env, origin, allowedOrigin) {
+  async function professorCommand(request, env, origin, allowedOrigin, executionContext = null) {
     return respondWithErrors(async () => {
       await deps.rateLimit(request, env, 'professor_command');
-      const body = plainRecord(await deps.parseJson(request, operationBodyLimit(request)));
+      const authenticatedUser = await deps.authenticate(request, env);
+      if (!authenticatedUser?.id) {
+        fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'Professor sign-in is required.', 401, 'Sign in through Due Diligence, then reopen Examination Room.');
+      }
+      const body = plainRecord(await deps.parseJson(request, 12_000_000));
       const operation = cleanText(body.operation, 80, 'operation', { required: true });
       if (!PROFESSOR_COMMAND_OPERATIONS.has(operation)) {
         fail('EXAM_ROOM_V1_OPERATION_UNSUPPORTED', 'That professor action is not available.', 400, 'Refresh Examination Room and try again.');
       }
       const payload = plainRecord(body.payload ?? {}, 'request details');
-      if (operation === 'request_access') {
-        const user = await deps.authenticate(request, env);
-        if (!user?.id) {
-          fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'Professor sign-in is required.', 401, 'Sign in through Due Diligence, then reopen the Professor Examination Room card.');
+      if (operation === 'import_grades') {
+        if (typeof deps.importGrades !== 'function') {
+          fail('EXAM_ROOM_V1_OPERATION_UNSUPPORTED', 'Offline grade import is not available.', 503, 'Your graded file remains unchanged. Retry after Examination Room is updated.');
         }
+        return deps.importGrades({
+          request,
+          env,
+          origin,
+          allowedOrigin,
+          body,
+          authenticatedUser,
+        });
+      }
+      if (operation === 'request_access') {
         const result = ensureStoreResult(await deps.professorAccess(env, {
           operation: 'request',
-          actorUserId: user.id,
+          actorUserId: authenticatedUser.id,
           payload: payload.institutionId
             ? { institutionId: uuid(payload.institutionId, 'the law-school workspace identifier') }
             : {},
         }));
         return deps.respond({ ok: true, ...result }, result.duplicate || result.alreadyActive ? 200 : 201, origin, allowedOrigin);
       }
-      const context = await professorContext(request, env, payload.institutionId);
+      const context = await professorContext(request, env, payload.institutionId, authenticatedUser);
       const requestInfo = await requestContext(env, body.idempotencyKey ?? request.headers.get('X-Request-ID'));
       let safePayload;
+      let clientGradeEntry = null;
+      let clientReleaseEntry = null;
 
       if (operation === 'save_draft' || operation === 'publish') {
         const draft = professorDraftFromClientExam(payload.exam);
@@ -902,6 +949,18 @@ export function createExaminationRoomV1Handlers(dependencies) {
           gradingManifest,
           gradingHash: await deps.sha256Hex?.(grade.hashInput) || await pepperedHmac(env, 'grading-manifest', grade.hashInput),
         };
+        const targetScore = gradingManifest.scores.find((score) => score.questionKey === question.key);
+        clientGradeEntry = {
+          id: gradingManifest.revisionId,
+          sessionId,
+          questionId: question.key,
+          points: targetScore.pointsAwarded,
+          feedback: targetScore.feedback || '',
+          revision: gradingManifest.revision,
+          status: gradingManifest.status,
+          at: gradingManifest.gradedAt,
+          source: 'online',
+        };
       } else if (operation === 'release_results') {
         const examId = uuid(payload.examId, 'the examination identifier');
         if (!Array.isArray(payload.sessionIds) || payload.sessionIds.length === 0 || payload.sessionIds.length > 1_000) {
@@ -955,6 +1014,18 @@ export function createExaminationRoomV1Handlers(dependencies) {
           fail('EXAM_ROOM_V1_GRADING_CONTEXT_INVALID', 'Some selected student records could not be prepared for release.', 409, 'Refresh grading, review the selected students, then release again.');
         }
         safePayload = { examId, sessionIds, requestHash: requestInfo.requestHash, releases };
+        const releasedAt = releases.reduce((latest, entry) => {
+          const candidate = String(entry.releaseManifest?.releasedAt || '');
+          return candidate > latest ? candidate : latest;
+        }, '');
+        clientReleaseEntry = {
+          id: requestInfo.clientEventId,
+          examId,
+          sessionIds,
+          releasedAt: releasedAt || deps.now(),
+          at: releasedAt || deps.now(),
+          status: 'released',
+        };
       }
 
       const result = await callRpc(env, {
@@ -962,7 +1033,25 @@ export function createExaminationRoomV1Handlers(dependencies) {
         institutionId: context.institutionId, payload: safePayload,
       }, [requestInfo.rawRequestKey]);
       if (operation === 'publish' && result.publicationManifest) normalizePublicationManifest(result.publicationManifest);
-      return deps.respond({ ok: true, ...result }, operation === 'publish' ? 201 : 200, origin, allowedOrigin);
+      if (typeof deps.afterProfessorCommand === 'function') {
+        deps.afterProfessorCommand({ operation, result, env, executionContext });
+      }
+      let publicResult = result;
+      if (clientGradeEntry) {
+        const entry = {
+          ...clientGradeEntry,
+          ...(result.revision?.id ? { id: result.revision.id } : {}),
+          ...(Number.isSafeInteger(Number(result.revision?.revision))
+            ? { revision: Number(result.revision.revision) }
+            : {}),
+        };
+        // `revision` is retained for the current Professor client; `grade` is
+        // the explicit canonical name for newer clients.
+        publicResult = { ...result, revision: entry, grade: entry };
+      } else if (clientReleaseEntry) {
+        publicResult = { ...result, release: clientReleaseEntry };
+      }
+      return deps.respond({ ok: true, ...publicResult }, operation === 'publish' ? 201 : 200, origin, allowedOrigin);
     }, origin, allowedOrigin);
   }
 
@@ -979,8 +1068,8 @@ export function createExaminationRoomV1Handlers(dependencies) {
 
   async function studentPreview(request, env, origin, allowedOrigin) {
     return respondWithErrors(async () => {
-      await deps.rateLimit(request, env, 'student_preview');
       const payload = plainRecord(await deps.parseJson(request, 12_000));
+      await deps.rateLimit(request, env, 'student_preview', payload);
       const preview = await previewWithVerifiedKey(env, payload);
       return deps.respond({
         ok: true,
@@ -1002,8 +1091,8 @@ export function createExaminationRoomV1Handlers(dependencies) {
 
   async function studentConsent(request, env, origin, allowedOrigin) {
     return respondWithErrors(async () => {
-      await deps.rateLimit(request, env, 'student_consent');
       const payload = plainRecord(await deps.parseJson(request, 16_000));
+      await deps.rateLimit(request, env, 'student_consent', payload);
       const info = await requestContext(env, payload.idempotencyKey ?? request.headers.get('X-Request-ID'));
       const preview = await previewWithVerifiedKey(env, payload);
       const consent = validatePrivacyConsent({
@@ -1040,8 +1129,8 @@ export function createExaminationRoomV1Handlers(dependencies) {
 
   async function studentQuery(request, env, origin, allowedOrigin) {
     return respondWithErrors(async () => {
-      await deps.rateLimit(request, env, 'student_query');
       const body = plainRecord(await deps.parseJson(request, 16_000));
+      await deps.rateLimit(request, env, 'student_query', body);
       const operation = cleanText(body.operation, 80, 'operation', { required: true });
       if (!STUDENT_QUERY_OPERATIONS.has(operation)) {
         fail('EXAM_ROOM_V1_OPERATION_UNSUPPORTED', 'That student view is not available.', 400, 'Return to the examination and try again.');
@@ -1058,10 +1147,10 @@ export function createExaminationRoomV1Handlers(dependencies) {
     }, origin, allowedOrigin);
   }
 
-  async function studentCommand(request, env, origin, allowedOrigin) {
+  async function studentCommand(request, env, origin, allowedOrigin, executionContext = null) {
     return respondWithErrors(async () => {
-      await deps.rateLimit(request, env, 'student_command');
       const body = plainRecord(await deps.parseJson(request, 140_000));
+      await deps.rateLimit(request, env, 'student_command', body);
       const operation = cleanText(body.operation, 80, 'operation', { required: true });
       if (!STUDENT_COMMAND_OPERATIONS.has(operation)) {
         fail('EXAM_ROOM_V1_OPERATION_UNSUPPORTED', 'That student action is not available.', 400, 'Refresh the examination and try again.');
@@ -1178,6 +1267,9 @@ export function createExaminationRoomV1Handlers(dependencies) {
       const result = await callRpc(env, {
         scope: 'student', operation, actorUserId: null, institutionId: null, payload: safePayload,
       }, [credential.rawSessionToken, info.rawRequestKey]);
+      if (operation === 'submit' && typeof deps.afterStudentCommand === 'function') {
+        deps.afterStudentCommand({ operation, result, env, executionContext });
+      }
       return deps.respond({ ok: true, ...result }, operation === 'submit' ? 201 : 200, origin, allowedOrigin);
     }, origin, allowedOrigin);
   }
@@ -1355,11 +1447,6 @@ export function createExaminationRoomV1Handlers(dependencies) {
     adminQuery,
     adminCommand,
   });
-}
-
-function operationBodyLimit(request) {
-  const declared = Number(request.headers.get('Content-Length') || 0);
-  return declared > 200_000 ? 12_000_000 : 220_000;
 }
 
 export const EXAMINATION_ROOM_V1_PATHS = Object.freeze({

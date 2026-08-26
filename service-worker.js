@@ -1,5 +1,6 @@
-const CACHE_VERSION = 'duediligence-shell-20260826-syllabus-reveal-access-1';
+const CACHE_VERSION = 'duediligence-shell-20260826-syllabus-reveal-access-1-examination-room-7';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
+const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',
@@ -8,14 +9,18 @@ const SHELL = Object.freeze([
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
   '/assets/quorum-first-shell.css?v=examination-room-doors-20260826-2',
   '/assets/quorum-first-shell.js?v=syllabus-review-20260823-1',
-  '/assets/phase2-experience.js?v=syllabus-reveal-access-20260826-1',
+  '/assets/phase2-experience.js?v=syllabus-reveal-access-20260826-1-examination-room-2',
   '/assets/icons/navigation/door-open.svg',
   '/assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
   EXAMINATION_STUDENT_SHELL,
+  EXAMINATION_OFFLINE_GRADER,
   '/examination-room/student.css',
   '/examination-room/view-models.js?v=greenfield-v1-20260826-1',
-  '/examination-room/api.js?v=greenfield-v1-20260826-5',
-  '/examination-room/student.js?v=greenfield-v1-20260826-3',
+  '/examination-room/api.js?v=greenfield-v1-20260826-7',
+  '/examination-room/student.js?v=greenfield-v1-20260826-5',
+  '/examination-room/offline-grading.css?v=greenfield-v1-20260826-1',
+  '/examination-room/offline-grading-core.js?v=greenfield-v1-20260826-3',
+  '/examination-room/offline-grading.js?v=greenfield-v1-20260826-3',
   '/assets/phase2-config.js?v=greenfield-examination-room-v1-20260826-2',
   '/assets/private-beta-session.js?v=beta-all-access-20260802-1',
 ]);
@@ -37,19 +42,19 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (request.mode === 'navigate') {
-    if (url.pathname === EXAMINATION_STUDENT_SHELL) {
+    if ([EXAMINATION_STUDENT_SHELL, EXAMINATION_OFFLINE_GRADER].includes(url.pathname)) {
       event.respondWith(
         fetch(request)
           .then((response) => {
             if (response.ok) {
               const copy = response.clone();
               event.waitUntil(
-                caches.open(CACHE_VERSION).then((cache) => cache.put(EXAMINATION_STUDENT_SHELL, copy)),
+                caches.open(CACHE_VERSION).then((cache) => cache.put(url.pathname, copy)),
               );
             }
             return response;
           })
-          .catch(() => caches.match(EXAMINATION_STUDENT_SHELL)
+          .catch(() => caches.match(url.pathname)
             .then((cached) => cached || caches.match('/offline.html'))),
       );
       return;

@@ -99,7 +99,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=examination-room-v1-20260826-1')
+    navigator.serviceWorker.register('/service-worker.js?v=examination-room-v1-20260826-2')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -115,9 +115,8 @@
       'previewExamTitle', 'previewSubject', 'previewProfessor',
       'previewDuration', 'previewQuestionCount', 'previewAvailability',
       'previewSafeguards', 'changeDetailsButton', 'privacyButton',
-      'privacyDialog', 'privacyTitle', 'privacyIntro', 'privacyItems',
-      'privacyRetention', 'privacyContact', 'previousAcceptance',
-      'privacyError', 'privacyBackButton', 'agreeButton', 'noticeVersion',
+      'privacyDialog', 'privacyTitle', 'privacyIntro',
+      'privacyError', 'privacyBackButton', 'agreeButton',
       'examView', 'examTitle', 'examSubjectLine', 'saveStatus', 'timerBox',
       'timerValue', 'fullscreenButton', 'offlineNotice', 'examError',
       'progressText', 'answerProgress', 'questionList', 'submitOpenButton',
@@ -375,33 +374,18 @@
     });
 
     elements.privacyButton.querySelector('span').textContent = usedCache
-      ? 'Review saved privacy notice'
-      : 'Review privacy notice';
+      ? 'Review saved privacy warning'
+      : 'Review privacy warning';
   }
 
   function renderPrivacyNotice() {
-    var notice = state.notice;
-    setText(elements.privacyTitle, notice.title || 'Privacy and examination integrity notice');
-    setText(elements.privacyIntro, notice.intro || 'Review how your information and examination activity will be handled.');
-    setText(elements.privacyRetention, notice.retention || 'Your institution controls the retention period and authorized access.');
-    setText(elements.privacyContact, notice.contact || 'Contact your examination administrator before beginning if you need an accommodation or clarification.');
-    setText(elements.noticeVersion, 'Notice version ' + notice.version);
-
-    elements.privacyItems.replaceChildren();
-    notice.items.forEach(function (item) {
-      elements.privacyItems.appendChild(createElement('li', '', String(item)));
-    });
-
     var recordingRequired = state.metadata.integrityTier === 'recorded_proctoring' || state.metadata.cameraRequired === true || state.metadata.microphoneRequired === true;
-    if (state.acceptance) {
-      elements.previousAcceptance.hidden = false;
-      elements.previousAcceptance.textContent = 'You accepted this exact notice for this examination and room key on ' + formatDateTime(state.acceptance.acceptedAt) + '.';
-      elements.agreeButton.querySelector('span').textContent = 'Continue examination';
-    } else {
-      elements.previousAcceptance.hidden = true;
-      elements.previousAcceptance.textContent = '';
-      elements.agreeButton.querySelector('span').textContent = recordingRequired ? 'Agree to recording and begin' : 'Agree and begin';
-    }
+    setText(elements.privacyTitle, recordingRequired ? 'Recorded proctoring unavailable' : 'Privacy warning');
+    setText(elements.privacyIntro, recordingRequired
+      ? 'This examination requests recorded proctoring, but encrypted camera and microphone capture storage is not configured. Ask your Professor or administrator to change the examination mode.'
+      : 'This examination records your identity, answers, submission status, grades, and any examination-integrity features enabled by your Professor. These records can be viewed by your Professor and the platform owner.');
+    elements.agreeButton.disabled = recordingRequired;
+    elements.agreeButton.querySelector('span').textContent = recordingRequired ? 'Recording unavailable' : 'I understand — begin exam';
   }
 
   async function findAcceptance(context, metadata, notice) {
@@ -464,11 +448,20 @@
       return;
     }
 
-    setButtonBusy(elements.agreeButton, true, state.acceptance ? 'Opening examination' : 'Recording agreement');
+    var recordingRequired = state.metadata.integrityTier === 'recorded_proctoring' || state.metadata.cameraRequired === true || state.metadata.microphoneRequired === true;
+    if (recordingRequired) {
+      showError(elements.privacyError, {
+        title: 'Recorded proctoring is unavailable',
+        message: 'Encrypted camera and microphone capture storage is not configured for this examination.',
+        effect: 'Questions remain sealed. Ask your Professor or administrator to change the examination mode.'
+      });
+      return;
+    }
+
+    setButtonBusy(elements.agreeButton, true, 'Opening examination');
 
     try {
       if (!state.acceptance) {
-        var recordingRequired = state.metadata.integrityTier === 'recorded_proctoring' || state.metadata.cameraRequired === true || state.metadata.microphoneRequired === true;
         var acceptance = {
           id: await acceptanceRecordId(state.context, state.metadata, state.notice),
           examId: state.metadata.examId,
@@ -1638,7 +1631,7 @@
       OFFLINE_NEW_ATTEMPT: {
         title: 'Connect before starting a new attempt',
         message: 'A new examination must be opened while connected. Saved examinations can still be resumed offline.',
-        effect: 'Your privacy agreement is saved for this exact examination, key, and notice version.'
+        effect: 'Your privacy-warning acknowledgement is saved for this exact examination and room key.'
       },
       OFFLINE_EXAM_NOT_SAVED: {
         title: 'The questions are not saved on this device',
@@ -1677,12 +1670,12 @@
       },
       PREVIEW_REQUIRED: {
         title: 'Preview the examination first',
-        message: 'Confirm the room and review its privacy notice before questions can load.',
+        message: 'Confirm the room and review its short privacy warning before questions can load.',
         effect: 'No examination attempt has started.'
       },
       NOTICE_CHANGED: {
-        title: 'The privacy notice has changed',
-        message: 'Review the current notice before entering the examination.',
+        title: 'The privacy warning has changed',
+        message: 'Review the current warning before entering the examination.',
         effect: 'Questions have not loaded.'
       },
       ATTEMPT_INVALID: {
@@ -2094,7 +2087,7 @@
             'No camera, microphone, biometric identity check, or screen recording is used in this demonstration.',
             'Your professor must review any integrity event in context; an event is not itself a finding of misconduct.'
           ],
-          retention: 'Demonstration records remain in this browser storage until the site data is cleared. A production institution must publish its own retention period and authorized roles.',
+          retention: '',
           contact: 'For a real examination, contact the professor or examination administrator before beginning if you need an accommodation or do not understand the notice.'
         };
       },

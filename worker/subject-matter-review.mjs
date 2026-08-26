@@ -490,5 +490,6 @@ export function publicSubjectMatterReviewPayload(material, explanation, metadata
     explanationSource: metadata.explanationSource || 'curated_fallback',
     teachingModel: metadata.teachingModel || null,
     sources: material.sources,
+    access: metadata.access,
   };
 }

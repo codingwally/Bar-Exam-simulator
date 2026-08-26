@@ -67,6 +67,7 @@ jobs:
           node --check worker/commercial-entry.mjs
           node --check worker/maintenance-entry.mjs
           node --test worker/*.test.mjs
+          node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-maintenance-lock.mjs
           node scripts/test-website-question-bank.mjs
           node scripts/test-private-beta-admission.mjs

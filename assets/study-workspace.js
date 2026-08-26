@@ -371,7 +371,7 @@
       if (previousUserId) purgeOwner(previousUserId).catch(() => {});
     });
     if ('serviceWorker' in navigator && location.protocol === 'https:') {
-      navigator.serviceWorker.register('/service-worker.js?v=syllabus-review-20260823-1').catch(() => {});
+      navigator.serviceWorker.register('/service-worker.js?v=syllabus-reveal-access-20260826-1').catch(() => {});
     }
   }
 

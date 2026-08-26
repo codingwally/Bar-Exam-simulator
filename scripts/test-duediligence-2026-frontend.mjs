@@ -41,7 +41,7 @@ const [html, js, css, build, examinations, featureLoader, publicLanding] = await
 
 assert.doesNotMatch(html, /<link[^>]+assets\/duediligence-2026\.css/);
 assert.doesNotMatch(html, /<script[^>]+assets\/duediligence-2026\.js/);
-assert.match(html, /assets\/feature-loader\.js\?v=question-randomization-20260825-1/);
+assert.match(html, /assets\/feature-loader\.js\?v=syllabus-reveal-access-20260826-1/);
 assert.match(featureLoader, /assets\/duediligence-2026\.css\?v=guided-random-access-20260822-1/);
 assert.match(featureLoader, /assets\/duediligence-2026\.js\?v=content-runtime-20260826-1/);
 assert.match(build, /assets\/duediligence-2026\.css/);

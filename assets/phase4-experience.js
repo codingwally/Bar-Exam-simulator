@@ -26,6 +26,8 @@
     lastOverlayOpen: null,
     releasingGate: false,
     lastRefreshAt: 0,
+    subjectReviewAccessGate: null,
+    lastFocusRefreshAt: 0,
   };
 
   function randomId(byteLength = 20) {
@@ -116,6 +118,19 @@
       );
   }
 
+  function subjectReviewRevealAllowed(access = state.access) {
+    const basis = String(access?.basis || '').trim().toLowerCase();
+    return access?.allowed === true
+      && access?.unlimited === true
+      && ['super_admin', 'founder_admin', 'founding_beta', 'early_access', 'paid_subscription'].includes(basis)
+      && !setupRequired(access);
+  }
+
+  function isSubjectReviewAccessError(error) {
+    return Number(error?.status) === 403
+      && String(error?.code || '') === 'SYLLABUS_REVIEW_SUBSCRIPTION_REQUIRED';
+  }
+
   function setupRequired(access = state.access) {
     return legalRequired(access)
       || reauthenticationRequired(access)
@@ -203,6 +218,66 @@
     }
   }
 
+  function subjectReviewReturnFocus(options = {}) {
+    const focusOrigin = options.focusOrigin || null;
+    const attemptId = String(options.attemptId || '');
+    const questionId = String(options.questionId || '');
+    const section = String(options.section || 'suggested-answer');
+    return () => {
+      if (focusOrigin?.isConnected) return focusOrigin;
+      const panel = [...document.querySelectorAll('[data-subject-review-panel]')]
+        .find((candidate) => candidate.dataset.attemptId === attemptId
+          && candidate.dataset.questionId === questionId);
+      const summary = [...(panel?.querySelectorAll('[data-subject-review-reveal]') || [])]
+        .find((candidate) => candidate.dataset.subjectReviewSection === section);
+      return summary
+        || panel?.querySelector('[data-subject-review-upgrade]')
+        || document.getElementById('dd-answer-rich-editor')
+        || document.getElementById('dd-answer-editor');
+    };
+  }
+
+  function openSubjectReviewAccessGate(options = {}) {
+    const attemptId = String(options.attemptId || '').trim();
+    const questionId = String(options.questionId || '').trim();
+    const section = String(options.section || 'suggested-answer').trim() || 'suggested-answer';
+    const gateId = `subject-review:${attemptId || 'attempt'}:${questionId || 'question'}`;
+    const nativeOverlay = document.getElementById('dd2-native-view');
+    if (state.subjectReviewAccessGate?.id === gateId
+        && overlayOpen('dd2-native-view')
+        && nativeOverlay?.dataset.nativeView === 'pricing'
+        && nativeOverlay?.dataset.nativeMode === 'action') {
+      return true;
+    }
+
+    state.subjectReviewAccessGate = {
+      id: gateId,
+      attemptId,
+      questionId,
+      section,
+      returnHash: '#subject-matter',
+    };
+    legacy.openView?.('pricing', {
+      mode: 'action',
+      actionId: gateId,
+      focusOrigin: options.focusOrigin || document.activeElement,
+      returnFocus: subjectReviewReturnFocus({ ...options, attemptId, questionId, section }),
+      context: {
+        reason: 'subject_reveal_review',
+        attemptId,
+        questionId,
+        section,
+        returnHash: '#subject-matter',
+      },
+      onClose: ({ actionId } = {}) => {
+        if (state.subjectReviewAccessGate?.id === actionId) {
+          state.subjectReviewAccessGate = null;
+        }
+      },
+    });
+    return true;
+  }
+
   function syncAccessUi() {
     const access = state.access;
     const badge = document.getElementById('dd2-guest-badge');
@@ -240,6 +315,15 @@
     global.dispatchEvent(new CustomEvent('duediligence:access', {
       detail: access,
     }));
+  }
+
+  function adoptAccess(access, options = {}) {
+    if (!access || typeof access !== 'object') return state.access;
+    state.access = access;
+    state.lastRefreshAt = Date.now();
+    syncAccessUi();
+    if (options.enforce === true) enforceResolvedAccess(state.access, options);
+    return state.access;
   }
 
   async function request(path, options = {}) {
@@ -281,19 +365,21 @@
 
       if (options.recoverAccess !== false && response.status === 403) {
         try {
-          const access = await refreshAccess({ enforce: true, force: true });
-          if (legalRequired(access)) {
-            error.code = 'LEGAL_ACCEPTANCE_REQUIRED';
-            error.message = accessMessage(access);
-          } else if (reauthenticationRequired(access)) {
-            error.code = 'REAUTHENTICATION_REQUIRED';
-            error.message = accessMessage(access);
-          } else if (profileRequired(access)) {
-            error.code = 'PROFILE_COMPLETION_REQUIRED';
-            error.message = accessMessage(access);
-          } else if (paymentRequired(access)) {
-            error.code = 'INTRODUCTORY_TOKENS_EXHAUSTED';
-            error.message = accessMessage(access);
+          const access = await refreshAccess({ enforce: false, force: true });
+          if (!isSubjectReviewAccessError(error)) {
+            if (legalRequired(access)) {
+              error.code = 'LEGAL_ACCEPTANCE_REQUIRED';
+              error.message = accessMessage(access);
+            } else if (reauthenticationRequired(access)) {
+              error.code = 'REAUTHENTICATION_REQUIRED';
+              error.message = accessMessage(access);
+            } else if (profileRequired(access)) {
+              error.code = 'PROFILE_COMPLETION_REQUIRED';
+              error.message = accessMessage(access);
+            } else if (paymentRequired(access)) {
+              error.code = 'INTRODUCTORY_TOKENS_EXHAUSTED';
+              error.message = accessMessage(access);
+            }
           }
         } catch {
           // Preserve the original endpoint error when the access refresh fails.
@@ -321,47 +407,43 @@
       return null;
     }
 
+    let access;
     if (state.accessPromise) {
-      const access = await state.accessPromise;
-      enforceResolvedAccess(access, options);
-      return access;
-    }
-
-    const pending = request('/access', {
-      requestId: false,
-      recoverAccess: false,
-    })
-      .then(async (payload) => {
-        let access = payload.access;
-        if (legalRequired(access)
-            && !setupExempt(access)
-            && typeof legacy.acceptCurrentTerms === 'function') {
-          await legacy.acceptCurrentTerms();
-          const refreshed = await request('/access', {
-            requestId: false,
-            recoverAccess: false,
-          });
-          access = refreshed.access;
-        }
-        state.access = access;
-        state.lastRefreshAt = Date.now();
-        syncAccessUi();
-
-        enforceResolvedAccess(state.access, options);
-        return state.access;
+      access = await state.accessPromise;
+    } else {
+      const pending = request('/access', {
+        requestId: false,
+        recoverAccess: false,
       })
-      .finally(() => {
-        if (state.accessPromise === pending) state.accessPromise = null;
-      });
+        .then(async (payload) => {
+          let refreshedAccess = payload.access;
+          if (legalRequired(refreshedAccess)
+              && !setupExempt(refreshedAccess)
+              && typeof legacy.acceptCurrentTerms === 'function') {
+            await legacy.acceptCurrentTerms();
+            const refreshed = await request('/access', {
+              requestId: false,
+              recoverAccess: false,
+            });
+            refreshedAccess = refreshed.access;
+          }
+          return adoptAccess(refreshedAccess, { enforce: false });
+        })
+        .finally(() => {
+          if (state.accessPromise === pending) state.accessPromise = null;
+        });
 
-    state.accessPromise = pending;
-    return pending;
+      state.accessPromise = pending;
+      access = await pending;
+    }
+    enforceResolvedAccess(access, options);
+    return access;
   }
 
   async function ensureProtectedAccess(routeHash = location.hash) {
     if (!requireAuthentication()) return false;
     const access = await refreshAccess({
-      enforce: true,
+      enforce: false,
       force: true,
       routeHash,
     });
@@ -582,15 +664,23 @@
 
     global.addEventListener('pageshow', () => {
       if (session()?.access_token && Date.now() - state.lastRefreshAt > 15_000) {
-        refreshAccess({ enforce: true }).catch(() => {});
+        refreshAccess({ enforce: false }).catch(() => {});
       }
+    });
+
+    global.addEventListener('focus', () => {
+      if (!session()?.access_token) return;
+      const now = Date.now();
+      if (now - state.lastFocusRefreshAt < 1_000) return;
+      state.lastFocusRefreshAt = now;
+      refreshAccess({ enforce: false, force: true }).catch(() => {});
     });
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible'
           && session()?.access_token
           && Date.now() - state.lastRefreshAt > 30_000) {
-        refreshAccess({ enforce: true }).catch(() => {});
+        refreshAccess({ enforce: false }).catch(() => {});
       }
     });
   }
@@ -605,7 +695,11 @@
     recordUnanswered,
     loadHistory,
     refreshAccess,
+    adoptAccess,
     ensureProtectedAccess,
+    canRevealSubjectReview: subjectReviewRevealAllowed,
+    isSubjectReviewAccessError,
+    openSubjectReviewAccessGate,
     chooseFreeAccess: () => refreshAccess({ enforce: true, force: true }),
     requireAuthentication,
     getAccess: () => state.access,
@@ -618,7 +712,7 @@
   global.addEventListener('duediligence:session', (event) => {
     if (event.detail?.authenticated) {
       setTimeout(() => {
-        refreshAccess({ enforce: true, force: true }).catch(() => {});
+        refreshAccess({ enforce: false, force: true }).catch(() => {});
       }, 80);
       return;
     }
@@ -628,6 +722,8 @@
     state.paymentGate = false;
     state.gateNoticeShown = false;
     state.pendingRoute = '';
+    state.subjectReviewAccessGate = null;
+    state.lastFocusRefreshAt = 0;
     document.documentElement?.classList?.remove?.('dd-access-gate-open');
     syncAccessUi();
   });
@@ -645,8 +741,12 @@
     installCommercialUiGuards();
 
     if (session()?.access_token) {
-      if (isProtectedRoute()) state.pendingRoute = location.hash;
-      refreshAccess({ enforce: true, force: true }).catch(() => {});
+      if (isProtectedRoute()) {
+        state.pendingRoute = location.hash;
+        ensureProtectedAccess(location.hash).catch(() => {});
+      } else {
+        refreshAccess({ enforce: false, force: true }).catch(() => {});
+      }
     }
 
     const guestButton = document.getElementById('dd2-guest-continue');

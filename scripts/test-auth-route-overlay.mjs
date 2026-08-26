@@ -239,20 +239,20 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/phase2-experience\.js\?v=examination-room-doors-20260826-2/,
+  /assets\/phase2-experience\.js\?v=syllabus-reveal-access-20260826-1/,
   'The route-overlay fix must ship behind a fresh browser cache key.',
 );
 assert.match(
   html,
-  /assets\/feature-loader\.js\?v=question-randomization-20260825-1/,
+  /assets\/feature-loader\.js\?v=syllabus-reveal-access-20260826-1/,
   'Protected routes must use the release-scoped lazy feature loader.',
 );
 assert.match(
   phase2Source,
-  /function syncNativeViewWithHash\(\)[\s\S]*nativeDefinition\(hashView\)[\s\S]*renderNativeView\(hashView, \{ push: false \}\)/,
+  /function syncNativeViewWithHash\(options = \{\}\)[\s\S]*nativeDefinition\(hashView\)[\s\S]*renderNativeView\(hashView, \{ push: false \}\)/,
   'Direct native routes must render on initial load as well as history navigation.',
 );
-assert.match(phase2Source, /addEventListener\('hashchange', syncNativeViewWithHash\)/,
+assert.match(phase2Source, /addEventListener\('hashchange', \(\) => syncNativeViewWithHash\(\{ reason: 'route-change' \}\)\)/,
   'Native support, pricing, and legal routes must respond to hash navigation.');
 assert.match(
   privateBetaCss,

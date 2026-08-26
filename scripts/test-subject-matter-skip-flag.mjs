@@ -174,8 +174,8 @@ assert.match(fixture, /Identify the five sources of obligations under Article 11
 assert.match(fixture, /operation === 'subject_performance'/);
 assert.match(fixture, /flaggedForLater:/);
 assert.match(fixture, /\['queue', 'queue-open'\]\.includes\(window\.__DD_SUBJECT_QA_STATE\)/);
-assert.match(featureLoader, /assets\/examinations\.css\?v=subject-matter-gil-fixes-20260817-5/);
-assert.match(featureLoader, /assets\/examinations\.js\?v=question-randomization-20260825-1/);
+assert.match(featureLoader, /assets\/examinations\.css\?v=syllabus-reveal-access-20260826-1/);
+assert.match(featureLoader, /assets\/examinations\.js\?v=syllabus-reveal-access-20260826-1/);
 assert.match(deployWorkflow, /node scripts\/test-subject-matter-skip-flag\.mjs/);
 
 console.log(JSON.stringify({

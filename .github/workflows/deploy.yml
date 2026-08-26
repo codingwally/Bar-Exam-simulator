@@ -91,6 +91,7 @@ jobs:
           node scripts/test-design-correction-release.mjs
           node scripts/test-subject-matter-consolidation.mjs
           node scripts/test-subject-matter-skip-flag.mjs
+          node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-examinations.mjs
           node scripts/test-phase4-release4.mjs
           node scripts/test-commercial-launch-migration.mjs

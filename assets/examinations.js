@@ -2317,15 +2317,10 @@
     return global.DueDiligencePhase4?.canRevealSubjectReview?.(access) === true;
   }
 
-  function subjectReviewAccessNote(allowed = subjectReviewAccessAllowed()) {
+  function subjectReviewAccessHint(allowed = subjectReviewAccessAllowed()) {
     return allowed
-      ? 'Protected review access is active. Choose a section when you are ready.'
-      : 'Suggested answers and legal review require ₱149 Early Access or a paid subscription. Your answer is saved and remains editable, and the review timer continues while access options are open.';
-  }
-
-  function subjectReviewUpgradeActionMarkup(section = 'suggested-answer') {
-    return `<button class="dd-control dd-exam-button is-primary" type="button" data-subject-review-upgrade
-      data-subject-review-section="${escapeAttribute(section)}">View Early Access — ₱149</button>`;
+      ? 'Your review access is active.'
+      : 'Reveal Answer requires ₱149 Early Access or a paid subscription.';
   }
 
   function subjectReviewPanelIsCurrent(panel) {
@@ -2337,9 +2332,10 @@
 
   function releaseSubjectReviewPending(panel) {
     if (panel) delete panel.dataset.reviewLoading;
-    panel?.querySelectorAll('[data-subject-review-reveal]').forEach((summary) => {
-      summary.removeAttribute('aria-busy');
-      summary.removeAttribute('aria-disabled');
+    panel?.querySelectorAll('[data-subject-review-reveal]').forEach((button) => {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.removeAttribute('aria-disabled');
     });
     if (state.active?.attempt?.attemptId === panel?.dataset.attemptId) {
       state.active.attempt.reviewConfirmationPending = false;
@@ -2369,13 +2365,13 @@
     const status = panel.querySelector('[data-subject-review-status]');
     const actions = panel.querySelector('[data-subject-review-actions]');
     const submitted = Boolean(state.active?.attempt?.submittedAt);
-    if (status) status.innerHTML = `<div class="dd-exam-status is-error">
-      <strong>Review remains locked.</strong>
+    if (status) status.innerHTML = `<div class="dd-exam-status">
+      <strong>Reveal Answer remains locked.</strong>
       <span>No protected material was opened. ${submitted
     ? 'Your submitted answer is unchanged.'
     : 'Your answer is still editable, and the timer continues.'}</span>
     </div>`;
-    if (actions) actions.innerHTML = subjectReviewUpgradeActionMarkup(section);
+    if (actions) actions.replaceChildren();
   }
 
   function syncSubjectReviewAccessUi(access) {
@@ -2383,19 +2379,17 @@
     document.querySelectorAll('[data-subject-review-panel]').forEach((panel) => {
       const wasAllowed = panel.dataset.subjectReviewAccess === 'eligible';
       panel.dataset.subjectReviewAccess = allowed ? 'eligible' : 'locked';
-      const note = panel.querySelector('[data-subject-review-access-note]');
-      if (note) note.textContent = subjectReviewAccessNote(allowed);
+      const hint = panel.querySelector('[data-subject-review-access-hint]');
+      if (hint) hint.textContent = subjectReviewAccessHint(allowed);
       const actions = panel.querySelector('[data-subject-review-actions]');
       if (actions && !actions.querySelector('[data-subject-review-retry]')) {
-        actions.innerHTML = allowed
-          ? ''
-          : subjectReviewUpgradeActionMarkup(panel.dataset.pendingReviewSection || 'suggested-answer');
+        actions.replaceChildren();
       }
       if (allowed && !wasAllowed) {
         const status = panel.querySelector('[data-subject-review-status]');
         if (status) status.innerHTML = `<div class="dd-exam-status is-success">
           <strong>Protected review access is active.</strong>
-          <span>Choose a review section when you are ready. Nothing was opened automatically.</span>
+          <span>Choose Reveal Answer when you are ready. Nothing was opened automatically.</span>
         </div>`;
       }
     });
@@ -2428,6 +2422,39 @@
   function normalizedSubjectReviewText(value) {
     return String(value || '').trim().toLowerCase().normalize('NFKD')
       .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  const INTERNAL_SUBJECT_REVIEW_MARKER = /\b(?:(?:(?:suggested|model|performance|grading|scoring|evaluation)\s+)?rubric\s*(?:\([^\n)]{0,120}\))?\s*(?::|[\u2013\u2014-])|(?:grading|scoring|evaluation)\s+(?:guide|criteria|key|notes?)\s*(?::|[\u2013\u2014-])|(?:grader|examiner|internal|editorial)\s+notes?\s*(?::|[\u2013\u2014-]))/i;
+  const SUBJECT_REVIEW_USER_TEXT_KEYS = new Set([
+    'answertext', 'answerhtml', 'studentanswer', 'useranswer', 'responseanswer',
+    'responsetext', 'prompt', 'question', 'questiontext', 'essayquestion',
+  ]);
+
+  function normalizedSubjectReviewFieldName(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  }
+
+  function stripInternalSubjectReviewBlocks(value) {
+    const text = String(value || '').replace(/\u0000/g, '').replace(/\r\n?/g, '\n').trim();
+    if (!text || !INTERNAL_SUBJECT_REVIEW_MARKER.test(text)) return text;
+    return text.split(/\n{2,}/).map((paragraph) => {
+      const marker = paragraph.match(INTERNAL_SUBJECT_REVIEW_MARKER);
+      return marker ? paragraph.slice(0, marker.index).trim() : paragraph.trim();
+    }).filter(Boolean).join('\n\n').trim();
+  }
+
+  function sanitizeSubjectReviewValue(value, depth = 0) {
+    if (typeof value === 'string') return stripInternalSubjectReviewBlocks(value);
+    if (depth >= 12 || value == null || typeof value !== 'object') return value;
+    if (Array.isArray(value)) {
+      return value.map((entry) => sanitizeSubjectReviewValue(entry, depth + 1));
+    }
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => (
+      [key, typeof entry === 'string'
+        && SUBJECT_REVIEW_USER_TEXT_KEYS.has(normalizedSubjectReviewFieldName(key))
+        ? entry
+        : sanitizeSubjectReviewValue(entry, depth + 1)]
+    )));
   }
 
   function isNearDuplicateSubjectReviewText(value, suggestedAnswer) {
@@ -2477,7 +2504,7 @@
   }
 
   function subjectReviewSuggestedAnswerMarkup(value) {
-    const text = String(value || '').replace(/\r\n?/g, '\n').trim();
+    const text = stripInternalSubjectReviewBlocks(value);
     if (!text) return '<p class="dd-study-hold">The suggested answer has not been released for this item.</p>';
     const headingPattern = /^[ \t]*(?:(?:I|II|III|IV)\.[ \t]*)?(Answer|Legal Basis|Application|Conclusion)(?:[ \t]*:[ \t]*|[ \t]*(?=\n|$))/gim;
     const matches = [...text.matchAll(headingPattern)];
@@ -2500,6 +2527,7 @@
   }
 
   function resolvedSubjectLegalReview(material) {
+    material = sanitizeSubjectReviewValue(material);
     const supplied = material?.legalReview && typeof material.legalReview === 'object'
       ? material.legalReview
       : {};
@@ -2554,6 +2582,7 @@
   }
 
   function completeSubjectReviewContent(material, { openSection = '' } = {}) {
+    material = sanitizeSubjectReviewValue(material);
     const review = resolvedSubjectLegalReview(material);
     const headingId = `dd-subject-review-heading-${String(material.attemptId || material.questionId || 'current')
       .replace(/[^a-zA-Z0-9_-]/g, '-')}`;
@@ -2617,13 +2646,13 @@
     if (material?.questionId === questionId) {
       return completeSubjectReviewContent(material);
     }
-    const accessNoteId = `dd-subject-review-access-${String(attemptId || questionId || 'current')
+    const accessHintId = `dd-subject-review-access-${String(attemptId || questionId || 'current')
       .replace(/[^a-zA-Z0-9_-]/g, '-')}`;
     const classificationNotice = assisted
       ? 'Review opened before submission. Your score is unchanged, and this attempt is excluded from unassisted mastery metrics.'
       : submitted
         ? 'Your answer was submitted before reveal, so its Unassisted classification will not change.'
-        : 'Opening any section marks this attempt Assisted / Open-book. Your score is unchanged, and it is excluded from unassisted mastery metrics.';
+        : 'Choosing Reveal Answer marks this attempt Assisted / Open-book. Your score is unchanged, and it is excluded from unassisted mastery metrics.';
     return `<section class="dd-subject-review-lock" data-subject-review-panel
       data-attempt-id="${escapeAttribute(attemptId)}" data-question-id="${escapeAttribute(questionId)}"
       data-submitted="${submitted ? 'true' : 'false'}" data-subject-review-access="${accessAllowed ? 'eligible' : 'locked'}"
@@ -2633,34 +2662,16 @@
       <div class="dd-subject-review-classification-note">
         <strong>${assisted ? 'Assisted / Open-book' : submitted ? 'Submitted before reveal' : 'Before submission'}</strong>
         <span>${escapeHtml(classificationNotice)}</span>
-        <span class="dd-subject-review-access-note" id="${escapeAttribute(accessNoteId)}"
-          data-subject-review-access-note>${escapeHtml(subjectReviewAccessNote(accessAllowed))}</span>
       </div>
-      <div class="dd-subject-review-disclosures is-locked">
-        <details>
-          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="suggested-answer"
-            aria-describedby="${escapeAttribute(accessNoteId)}">
-            <span>Reveal suggested answer</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span>
-          </summary>
-        </details>
-        <details>
-          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="controlling-law"
-            aria-describedby="${escapeAttribute(accessNoteId)}">
-            <span>Reveal controlling law and doctrine</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span>
-          </summary>
-        </details>
-        <details>
-          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="application-guidance"
-            aria-describedby="${escapeAttribute(accessNoteId)}">
-            <span>Reveal application, limits, and sources</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span>
-          </summary>
-        </details>
-      </div>
+      <button class="dd-subject-review-reveal" type="button" data-subject-review-reveal
+        data-subject-review-section="suggested-answer" aria-describedby="${escapeAttribute(accessHintId)}">
+        <span>Reveal Answer</span><small>Suggested answer · controlling law · application · sources</small>
+      </button>
+      <p class="dd-subject-review-access-hint" id="${escapeAttribute(accessHintId)}"
+        data-subject-review-access-hint>${escapeHtml(subjectReviewAccessHint(accessAllowed))}</p>
       <div class="dd-subject-review-status" id="dd-subject-review-region-${escapeAttribute(attemptId)}"
         data-subject-review-status role="status" aria-live="polite"></div>
-      <div class="dd-subject-review-error-actions" data-subject-review-actions>${accessAllowed
-    ? ''
-    : subjectReviewUpgradeActionMarkup()}</div>
+      <div class="dd-subject-review-error-actions" data-subject-review-actions></div>
     </section>`;
   }
 
@@ -2742,6 +2753,7 @@
     }
     panel.dataset.pendingReviewSection = openSection;
     panel.dataset.reviewLoading = 'true';
+    button.disabled = true;
     button.setAttribute('aria-disabled', 'true');
     button.setAttribute('aria-busy', 'true');
     const submitButton = pageRoot('per_subject')?.querySelector('[data-submit-current]');
@@ -2758,7 +2770,8 @@
     let request = state.reviewMaterialRequests.get(key);
     if (!request) {
       request = api('/examinations/command', { operation: 'subject_reveal_review', attemptId })
-        .then((material) => {
+        .then((rawMaterial) => {
+          const material = sanitizeSubjectReviewValue(rawMaterial);
           if (material?.attemptId !== attemptId || material?.questionId !== questionId) {
             throw new Error('Verified review material does not match this question.');
           }
@@ -2787,9 +2800,14 @@
       });
       reviewConfirmed = true;
     } catch (error) {
+      // The original panel can be replaced while the request is in flight.
+      // Always clear the attempt-level pending state before deciding whether
+      // the detached panel is still eligible for status rendering.
+      releaseSubjectReviewPending(panel);
       if (!subjectReviewPanelIsCurrent(panel)) return;
       if (global.DueDiligencePhase4?.isSubjectReviewAccessError?.(error) === true) {
         showSubjectReviewAccessDenied(panel, openSection);
+        if (!automatic) openSubjectReviewPricing(button, panel);
       } else {
         showCompleteSubjectReviewError(panel);
       }
@@ -2808,6 +2826,7 @@
   }
 
   function subjectMatterResultMarkup(result, attemptId = '') {
+    result = sanitizeSubjectReviewValue(result);
     const course = result?.subject
       || state.active?.examination?.subject
       || state.selectedSubject
@@ -2873,6 +2892,7 @@
   }
 
   function assessmentCard(result, options = {}) {
+    result = sanitizeSubjectReviewValue(result);
     const assessment = result.aiAssessment || result.assessment || {};
     const alac = assessment.modelAnswerALAC || {};
     const track = options.track || result.track || state.active?.examination?.track || state.track;
@@ -3408,12 +3428,6 @@
   }
 
   function handleClick(event) {
-    const reviewUpgrade = event.target.closest('[data-subject-review-upgrade]');
-    if (reviewUpgrade) {
-      event.preventDefault();
-      openSubjectReviewPricing(reviewUpgrade);
-      return;
-    }
     const reviewRetry = event.target.closest('[data-subject-review-retry]');
     if (reviewRetry) {
       event.preventDefault();

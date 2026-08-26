@@ -146,6 +146,10 @@ import {
   validateSubjectMatterTeachingExplanation,
 } from './subject-matter-review.mjs';
 import {
+  sanitizeLearnerFacingPayload,
+  stripInternalEditorialBlocks,
+} from './internal-editorial-content.mjs';
+import {
   BAR_SIMULATION_POOL_CSV_URL,
   ReleaseContentError,
   SUBJECT_MATTER_CSV_URL,
@@ -2900,6 +2904,7 @@ Rewrite the entire JSON response once. Preserve the stored legal substance, retu
           gradingRequest.studentAnswer,
           context,
         );
+        assessment = sanitizeLearnerFacingPayload({ assessment }).assessment;
         break;
       } catch (error) {
         if (!(error instanceof ExaminerError) || error.code !== 'MALFORMED_MODEL_RESPONSE' || attempt === 1) {
@@ -3460,8 +3465,8 @@ function examinationQuestionContext(question) {
   return {
     subject: String(question?.subject || 'Philippine law'),
     question: String(question?.prompt || ''),
-    suggestedAnswer: String(question?.modelAnswer || ''),
-    legalBasis: String(question?.legalBasis || ''),
+    suggestedAnswer: stripInternalEditorialBlocks(question?.modelAnswer),
+    legalBasis: stripInternalEditorialBlocks(question?.legalBasis),
     application: String(question?.application || ''),
     conclusion: String(question?.conclusion || ''),
     caseName: jurisprudence,
@@ -3539,6 +3544,7 @@ Return one complete schema-valid JSON assessment. Preserve the stored legal subs
         String(question.studentAnswer || ''),
         context,
       );
+      assessment = sanitizeLearnerFacingPayload({ assessment }).assessment;
       break;
     } catch (error) {
       if (
@@ -3687,7 +3693,10 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
       p_subject: query.subject,
       p_limit: query.limit,
     });
-    return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+    return jsonResponse({
+      ok: true,
+      data: sanitizeLearnerFacingPayload(result),
+    }, 200, origin, allowedOrigin);
   }
   if (user) {
     if (query.operation === 'catalog') {
@@ -3714,7 +3723,10 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
     p_operation: query.operation,
     p_payload: query,
   });
-  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+  const learnerResult = ['verdict', 'history'].includes(query.operation)
+    ? sanitizeLearnerFacingPayload(result)
+    : result;
+  return jsonResponse({ ok: true, data: learnerResult }, 200, origin, allowedOrigin);
 }
 
 async function handleExaminationCommand(request, env, origin, allowedOrigin) {
@@ -4705,7 +4717,10 @@ async function handleExamHistory(request, env, origin, allowedOrigin) {
     p_limit: limit,
     p_offset: offset,
   });
-  return jsonResponse({ ok: true, history: result }, 200, origin, allowedOrigin);
+  return jsonResponse({
+    ok: true,
+    history: sanitizeLearnerFacingPayload(result),
+  }, 200, origin, allowedOrigin);
 }
 
 async function handleGuestAccess(request, env, origin, allowedOrigin) {

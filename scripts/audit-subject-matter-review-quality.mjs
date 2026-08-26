@@ -8,6 +8,10 @@ import {
   normalizeSubjectMatterJurisprudence,
   sanitizeSubjectMatterRevealRecord,
 } from '../worker/subject-matter-review.mjs';
+import {
+  containsInternalEditorialBlock,
+  stripInternalEditorialBlocks,
+} from '../worker/internal-editorial-content.mjs';
 import { SUBJECT_MATTER_PLACEMENTS } from '../worker/subject-matter-placement-manifest.mjs';
 import {
   SUBJECT_MATTER_RELEASE_SNAPSHOT,
@@ -45,6 +49,8 @@ const findings = {
   malformedCaseEntries: [],
   exactSuggestedAnswerReviewDuplicates: [],
   nearSuggestedAnswerReviewDuplicates: [],
+  sourceInternalEditorialBlocks: [],
+  learnerBoundaryInternalEditorialBlocks: [],
 };
 
 const canonicalQuestionIds = new Set(SUBJECT_MATTER_PLACEMENTS.map((placement) => placement[2]));
@@ -73,8 +79,13 @@ values.forEach((row) => {
   }
 
   if (canonicalQuestionIds.has(questionId)) {
+    const sourceSuggestedAnswer = field(row, 'Suggested Answer');
+    if (containsInternalEditorialBlock(sourceSuggestedAnswer)) {
+      findings.sourceInternalEditorialBlocks.push(questionId);
+    }
+    const publicSuggestedAnswer = stripInternalEditorialBlocks(sourceSuggestedAnswer);
     const material = {
-      suggestedAnswer: field(row, 'Suggested Answer'),
+      suggestedAnswer: publicSuggestedAnswer,
       legalBasis,
       governingProvision: legalBasis,
       doctrine,
@@ -83,6 +94,9 @@ values.forEach((row) => {
     };
     const fallback = fallbackSubjectMatterTeachingExplanation(material);
     const review = buildSubjectMatterLegalReview(material, fallback);
+    if (containsInternalEditorialBlock({ material, fallback, review })) {
+      findings.learnerBoundaryInternalEditorialBlocks.push(questionId);
+    }
     if (normalized(review.controllingLawAndDoctrine) === normalized(material.suggestedAnswer)) {
       findings.exactSuggestedAnswerReviewDuplicates.push(questionId);
     }
@@ -97,6 +111,8 @@ values.forEach((row) => {
 
 assert.equal(canonicalQuestionIds.size, 1490,
   'The review-duplication gate must cover every canonical Subject Matter question.');
+assert.deepEqual(findings.learnerBoundaryInternalEditorialBlocks, [],
+  'Internal rubric or grader blocks must never survive the learner-facing review boundary.');
 if (process.argv.includes('--strict')) {
   assert.deepEqual(findings.exactSuggestedAnswerReviewDuplicates, [],
     'A controlling-law review must never exactly repeat the complete Suggested Answer.');

@@ -56,7 +56,13 @@
       const proofParams = new URLSearchParams(location.search);
       const proofState = proofParams.get('state') || 'chooser';
       const failFirstReview = proofParams.get('review') === 'fail-once';
+      const reviewDelayMs = Number(proofParams.get('review-delay') || 0);
+      const paidReviewAccess = proofParams.get('access') !== 'locked';
       let reviewRequestCount = 0;
+      window.__DD_SUBJECT_QA_REVIEW_REQUESTS = 0;
+      window.__DD_SUBJECT_QA_PAYWALL_COUNT = 0;
+      document.documentElement.dataset.qaReviewRequests = '0';
+      document.documentElement.dataset.qaPaywallCount = '0';
       window.__DD_SUBJECT_QA_STATE = proofState;
       const storagePrefix = 'dd-browser-qa:examinations:';
       const catalogItems = [
@@ -161,6 +167,16 @@
           access_token: 'browser-qa-session',
           user: { id: 'browser-qa-user', email: 'browser-qa@example.invalid' },
         }),
+        getAccess: () => ({ allowed: paidReviewAccess, unlimited: paidReviewAccess }),
+        canRevealSubjectReview: () => paidReviewAccess,
+        adoptAccess: () => {},
+        isSubjectReviewAccessError: () => false,
+        openSubjectReviewAccessGate: () => {
+          window.__DD_SUBJECT_QA_PAYWALL_OPENED = true;
+          window.__DD_SUBJECT_QA_PAYWALL_COUNT += 1;
+          document.documentElement.dataset.qaPaywallCount = String(window.__DD_SUBJECT_QA_PAYWALL_COUNT);
+          return true;
+        },
         request: async (path, options = {}) => {
           const operation = options.body?.operation;
           if (path === '/examinations/query' && operation === 'subject_catalog') {
@@ -242,6 +258,11 @@
           if (path === '/examinations/command' && operation === 'subject_reveal_review') {
             const reviewAttempt = attemptForId(options.body?.attemptId);
             reviewRequestCount += 1;
+            window.__DD_SUBJECT_QA_REVIEW_REQUESTS = reviewRequestCount;
+            document.documentElement.dataset.qaReviewRequests = String(reviewRequestCount);
+            if (reviewDelayMs > 0) {
+              await new Promise((resolve) => setTimeout(resolve, reviewDelayMs));
+            }
             if (failFirstReview && reviewRequestCount === 1) {
               throw new Error('The review response was interrupted for deterministic QA.');
             }
@@ -251,11 +272,11 @@
               assisted: true,
               assistanceKnown: true,
               reviewMaterialRevealedAt: new Date().toISOString(),
-              suggestedAnswer: 'A civil obligation is a juridical necessity to give, to do, or not to do. Its essential elements are an active subject, a passive subject, a prestation, and an efficient cause or juridical tie.',
+              suggestedAnswer: 'A civil obligation is a juridical necessity to give, to do, or not to do. Its essential elements are an active subject, a passive subject, a prestation, and an efficient cause or juridical tie.\n\nRubric (6 points): internal criterion one; internal criterion two; internal criterion three.',
               legalBasis: 'Civil Code, Article 1156.',
               doctrine: 'An obligation requires identified parties, a determinate prestation, and a juridical tie recognized by law.',
               legalReview: {
-                controllingLawAndDoctrine: 'Article 1156 defines an obligation as a juridical necessity to give, to do, or not to do. The relation requires an obligee, an obligor, a prestation, and a juridical tie.',
+                controllingLawAndDoctrine: 'Article 1156 defines an obligation as a juridical necessity to give, to do, or not to do. The relation requires an obligee, an obligor, a prestation, and a juridical tie.\n\nGrader notes: never show this fixture canary to a learner.',
                 authorityReferences: ['Civil Code, Article 1156'],
                 jurisprudence: [],
                 applicationToFacts: 'The question asks for the governing definition and each constituent element, so a complete answer should identify all four elements separately.',

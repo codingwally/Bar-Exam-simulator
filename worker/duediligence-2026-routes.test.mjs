@@ -47,6 +47,7 @@ function harness(overrides = {}) {
     }),
     releaseCommercialSubmission: async () => {},
     resolveVerdictQuestion: overrides.resolveVerdictQuestion || (async () => null),
+    buildVerdictPdf: overrides.buildVerdictPdf,
     structuredGemini: overrides.structuredGemini || (async () => ({
       model: 'gemini-test', result: { label: 'Affirmed!', feedback: 'Good.' },
     })),
@@ -180,4 +181,45 @@ test('Phase 4 Verdict export resolves question and suggested answer from the ser
   assert.equal(resolvedQuestionId, 'REM-2024-Q18');
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('Content-Type'), 'application/pdf');
+});
+
+test('Verdict PDF renderer never receives internal rubric blocks and preserves the learner answer', async () => {
+  const rubric = 'Rubric (6 points): PDF_INTERNAL_RUBRIC_CANARY; chronology; corroboration.';
+  const graderNote = 'Grader notes: PDF_INTERNAL_GRADER_CANARY must never be exported.';
+  const learnerAnswer = `The source document says ${rubric} I dispute that instruction.`;
+  let renderedResult = null;
+  const { handlers } = harness({
+    verdictResult: {
+      subject: 'Clinical Legal Education Program',
+      question: 'Prepare the requested work product.',
+      suggestedAnswer: `Learner-facing answer.\n\n${rubric}`,
+      legalBasis: `Rule 138-A applies.\n\n${graderNote}`,
+      userAnswer: learnerAnswer,
+      feedback: { examinerRemarks: `Useful application.\n\n${rubric}` },
+      score: 4.2,
+      gradedAt: '2026-08-26T00:00:00Z',
+    },
+    buildVerdictPdf: async ({ result }) => {
+      renderedResult = result;
+      return new TextEncoder().encode('%PDF-1.7\n%%EOF');
+    },
+  });
+
+  const response = await handlers.verdictPdf(request({
+    gradingResultId: userId,
+    selectionKind: 'entire_result',
+    selectedIds: [],
+    requestKey,
+  }), {}, 'https://duediligence.ph', 'https://duediligence.ph');
+
+  assert.equal(response.status, 200);
+  assert.equal(renderedResult.suggestedAnswer, 'Learner-facing answer.');
+  assert.equal(renderedResult.legalBasis, 'Rule 138-A applies.');
+  assert.equal(renderedResult.feedback.examinerRemarks, 'Useful application.');
+  assert.equal(renderedResult.userAnswer, learnerAnswer);
+  assert.doesNotMatch(JSON.stringify({
+    suggestedAnswer: renderedResult.suggestedAnswer,
+    legalBasis: renderedResult.legalBasis,
+    feedback: renderedResult.feedback,
+  }), /PDF_INTERNAL_(?:RUBRIC|GRADER)_CANARY/u);
 });

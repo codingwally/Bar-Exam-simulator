@@ -396,10 +396,97 @@ assert.doesNotMatch(
   /operation:\s*['"]subject_reveal_review['"]|loadCompleteSubjectReview|\/examinations\/command/,
   'payment submission or refresh must never reveal automatically');
 
+const commercialPricingLoader = javascriptFunctionSection(phase2, 'loadCommercialPricing');
+assert.match(commercialPricingLoader, /adoptAccess\?\.\(access,\s*\{\s*enforce:\s*false\s*\}\)/,
+  'the pricing access check must refresh the authoritative Phase 4 access snapshot');
+assert.match(commercialPricingLoader, /canRevealSubjectReview\?\.\(access\) === true[\s\S]*closeNativeView\('access-active'\)/,
+  'a stale-denied gate must close after the pricing check observes eligible review access');
+assert.doesNotMatch(commercialPricingLoader, /subject_reveal_review['"]\s*\}|loadCompleteSubjectReview|\/examinations\/command/,
+  'a fresh paid pricing snapshot must close the gate without revealing automatically');
+
+{
+  const freshPaidAccess = {
+    allowed: true,
+    unlimited: true,
+    basis: 'paid_subscription',
+  };
+  let cachedAccess = { allowed: true, unlimited: false, basis: 'introductory_tokens' };
+  let paywallCount = 0;
+  let revealRequestCount = 0;
+  let pricingRenderCount = 0;
+  const closeReasons = [];
+  const pricingState = {
+    nativeViewSequence: 7,
+    nativeView: 'pricing',
+    nativeViewMode: 'action',
+    nativeViewContext: { reason: 'subject_reveal_review' },
+    session: { access_token: 'test-session' },
+  };
+  const pricingGlobal = {
+    DueDiligencePhase4: {
+      adoptAccess: (access) => { cachedAccess = access; },
+      canRevealSubjectReview: (access) => access?.allowed === true
+        && access?.unlimited === true
+        && access?.basis === 'paid_subscription',
+    },
+    toast: () => {},
+  };
+  const pricingContext = vm.createContext({
+    state: pricingState,
+    document: { getElementById: () => ({ innerHTML: '' }) },
+    publicWorkerRequest: async () => ({ plans: [] }),
+    nativeWorkerRequest: async (path) => {
+      assert.equal(path, '/access');
+      return { access: freshPaidAccess };
+    },
+    randomId: () => 'pricing-access-request',
+    renderCommercialPlanCards: () => { pricingRenderCount += 1; },
+    closeNativeView: (reason) => { closeReasons.push(reason); },
+    escapeHtml: String,
+    global: pricingGlobal,
+    Promise,
+  });
+  vm.runInContext(
+    `async ${commercialPricingLoader}\nglobalThis.__loadCommercialPricing = loadCommercialPricing;`,
+    pricingContext,
+    { filename: 'load-commercial-pricing-contract.js' },
+  );
+
+  const explicitRevealClick = async () => {
+    if (!pricingGlobal.DueDiligencePhase4.canRevealSubjectReview(cachedAccess)) {
+      paywallCount += 1;
+      await pricingContext.__loadCommercialPricing(pricingState.nativeViewSequence);
+      return;
+    }
+    revealRequestCount += 1;
+  };
+
+  await explicitRevealClick();
+  assert.deepEqual(cachedAccess, freshPaidAccess, 'the fresh paid access must replace the stale denied snapshot');
+  assert.deepEqual(closeReasons, ['access-active'], 'the stale contextual paywall must close exactly once');
+  assert.equal(pricingRenderCount, 0, 'an already-eligible account must not remain trapped in the payment screen');
+  assert.equal(revealRequestCount, 0, 'fresh access must never reveal without a second explicit click');
+  await explicitRevealClick();
+  assert.equal(paywallCount, 1, 'the second explicit click must not reopen the stale paywall');
+  assert.equal(revealRequestCount, 1, 'only the explicit second click may request the protected review');
+}
+
 assert.match(examinations, /data-subject-review-access="\$\{accessAllowed \? 'eligible' : 'locked'\}"/);
-assert.match(examinations, /data-subject-review-upgrade/);
-assert.match(examinations, /View Early Access — ₱149/);
-assert.match(examinations, /require ₱149 Early Access or a paid subscription/);
+assert.match(examinations, /<button class="dd-subject-review-reveal"[^>]*data-subject-review-reveal/);
+assert.match(examinations, /<span>Reveal Answer<\/span>/);
+assert.doesNotMatch(examinations, /data-subject-review-upgrade|View Early Access — ₱149/,
+  'A separate payment CTA must not replace or compete with the original reveal control');
+assert.match(examinations, /requires? ₱149 Early Access or a paid subscription/);
+assert.match(examinations, /INTERNAL_SUBJECT_REVIEW_MARKER/);
+assert.match(examinations, /stripInternalSubjectReviewBlocks\(value\)/);
+assert.match(examinations, /SUBJECT_REVIEW_USER_TEXT_KEYS[\s\S]*?'answertext'[\s\S]*?'studentanswer'[\s\S]*?'prompt'/,
+  'the defensive scrubber must preserve learner-authored answers and question text');
+assert.match(examinations, /SUBJECT_REVIEW_USER_TEXT_KEYS\.has\(normalizedSubjectReviewFieldName\(key\)\)/,
+  'the defensive scrubber must preserve camelCase and snake_case learner fields consistently');
+assert.match(examinations, /const material = sanitizeSubjectReviewValue\(rawMaterial\)/,
+  'network review material must be scrubbed before it enters the in-memory cache');
+assert.match(examinations, /function assessmentCard\(result, options = \{\}\) \{[\s\S]*?sanitizeSubjectReviewValue\(result\)/,
+  'history and verdict rendering must defensively scrub nested learner-facing material');
 assert.doesNotMatch(examinations, /trusted unlimited access|approved entitlement/i);
 assert.match(examinations, /reviewConfirmationPending\s*=\s*false/);
 const genericReviewFailure = javascriptFunctionSection(examinations, 'showCompleteSubjectReviewError');
@@ -411,6 +498,11 @@ assert.match(
 assert.match(genericReviewFailure, /continue or submit now, or retry the review/,
   'generic failure copy must preserve the answering and submission path');
 const loadCompleteReview = javascriptFunctionSection(examinations, 'loadCompleteSubjectReview');
+assert.match(
+  loadCompleteReview,
+  /catch\s*\(error\)\s*\{[\s\S]*?releaseSubjectReviewPending\(panel\);[\s\S]*?if\s*\(!subjectReviewPanelIsCurrent\(panel\)\)\s*return;/,
+  'a failed in-flight reveal must clear attempt-level pending state even when its original panel was replaced',
+);
 assert.match(loadCompleteReview, /restoringReleasedMaterial\s*=\s*automatic/);
 assert.match(loadCompleteReview, /reviewMaterialRevealedAt/);
 assert.match(loadCompleteReview, /!subjectReviewAccessAllowed\(\)\s*&&\s*!restoringReleasedMaterial/,
@@ -429,7 +521,7 @@ for (const asset of [
   'assets/feature-loader.js',
 ]) {
   assert.ok(
-    index.includes(`${asset}?v=syllabus-reveal-access-20260826-1`),
+    index.includes(`${asset}?v=syllabus-reveal-p0-20260826-2`),
     `${asset} must use the reviewed cache-busting release`,
   );
 }
@@ -439,12 +531,12 @@ for (const asset of [
   'assets/examinations.js',
 ]) {
   assert.ok(
-    featureLoader.includes(`${asset}?v=syllabus-reveal-access-20260826-1`),
+    featureLoader.includes(`${asset}?v=syllabus-reveal-p0-20260826-2`),
     `${asset} must use the reviewed lazy-load cache-busting release`,
   );
 }
-assert.match(studyWorkspace, /service-worker\.js\?v=syllabus-reveal-access-20260826-1/);
-assert.match(serviceWorker, /duediligence-shell-20260826-syllabus-reveal-access-1/);
+assert.match(studyWorkspace, /service-worker\.js\?v=syllabus-reveal-p0-20260826-2/);
+assert.match(serviceWorker, /duediligence-shell-20260826-syllabus-reveal-p0-2/);
 
 const userInstructionsStart = runbook.indexOf('## Copy-ready user and Support instructions');
 const technicalContractStart = runbook.indexOf('## Technical contract');

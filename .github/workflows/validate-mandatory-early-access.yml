@@ -31,6 +31,9 @@ on:
       - 'worker/access-choice-flow.test.mjs'
       - 'worker/wrangler.toml'
       - 'worker/wrangler.staging.toml'
+      - 'worker/syllabus-review-reveal-policy.test.mjs'
+      - 'scripts/test-syllabus-review-reveal-contract.mjs'
+      - 'supabase/migrations/20260826110207_subject_matter_unlimited_review_release.sql'
       - 'scripts/build-pages-artifact.mjs'
       - 'scripts/build-staging-artifact.mjs'
       - 'scripts/test-pages-artifact.mjs'
@@ -99,6 +102,7 @@ jobs:
           node --check worker/maintenance-entry.mjs
           node --test examination-room/*.test.cjs
           node --test worker/*.test.mjs
+          node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-maintenance-lock.mjs
           node scripts/test-two-option-access-choice.mjs
           node scripts/test-private-beta-admission.mjs

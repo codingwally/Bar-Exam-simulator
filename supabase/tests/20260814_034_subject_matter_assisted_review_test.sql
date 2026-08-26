@@ -107,13 +107,17 @@ select ok(
 
 select ok(
   position('unassistedAverageScore' in
-    pg_get_functiondef('public.subject_matter_performance(uuid,text,integer)'::regprocedure)) > 0,
+    pg_get_functiondef(
+      'public.subject_matter_performance_pre_protected_review_release(uuid,text,integer)'::regprocedure
+    )) > 0,
   'Subject Matter performance reports an unassisted-only average'
 );
 
 select ok(
-  position('a.review_material_revealed_before_submission is false' in
-    pg_get_functiondef('public.subject_matter_performance(uuid,text,integer)'::regprocedure)) > 0,
+  position('attempt.review_material_revealed_before_submission is false' in
+    pg_get_functiondef(
+      'public.subject_matter_performance_pre_protected_review_release(uuid,text,integer)'::regprocedure
+    )) > 0,
   'assisted attempts are excluded from unassisted mastery calculations'
 );
 

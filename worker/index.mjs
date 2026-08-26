@@ -3646,6 +3646,15 @@ async function authorizeExaminationAccess(env, userId, options = {}) {
   });
 }
 
+const SUBJECT_MATTER_RELEASE_POLICY_VERSION = 'subject-review-unlimited-v1-2026-08-26';
+const SUBJECT_MATTER_RELEASE_ACCESS_BASES = new Set([
+  'super_admin',
+  'founder_admin',
+  'founding_beta',
+  'early_access',
+  'paid_subscription',
+]);
+
 async function handleExaminationQuery(request, env, origin, allowedOrigin) {
   await enforceExaminationRateLimit(request, env);
   const raw = await parseBoundedJson(request, 24_000);
@@ -3689,6 +3698,7 @@ async function handleExaminationQuery(request, env, origin, allowedOrigin) {
       await authorizeExaminationAccess(env, user.id, {
         attemptId: query.attemptId,
         versionId: query.versionId,
+        allowHistorical: Boolean(query.attemptId),
       });
     } else if (query.operation === 'verdict') {
       await authorizeExaminationAccess(env, user.id, {
@@ -3756,9 +3766,12 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
     } else if (command.attemptId && command.operation !== 'subject_reveal_review') {
       authorizedAccess = await authorizeExaminationAccess(env, user.id, {
         attemptId: command.attemptId,
-        allowHistorical: ['request_ai_grading', 'release_model_answers', 'subject_reveal_review'].includes(
-          command.operation,
-        ),
+        allowHistorical: [
+          'heartbeat',
+          'save_response',
+          'flag_response',
+          'submit_attempt',
+        ].includes(command.operation),
       });
     }
   }
@@ -3785,6 +3798,29 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
       throw error;
     }
 
+    const firstReveal = stored?.firstReveal === true;
+    let access;
+    try {
+      if (typeof stored?.firstReveal !== 'boolean'
+          || stored?.releaseAuthorized !== true
+          || stored?.releasePolicyVersion !== SUBJECT_MATTER_RELEASE_POLICY_VERSION) {
+        throw new Error('untrusted_release_provenance');
+      }
+      access = normalizeAccessSnapshot(stored.access);
+      if (firstReveal
+          && (!access.allowed
+            || !access.unlimited
+            || !SUBJECT_MATTER_RELEASE_ACCESS_BASES.has(access.basis))) {
+        throw new Error('invalid_first_release_access');
+      }
+    } catch {
+      throw new ExaminationValidationError(
+        'SYLLABUS_REVIEW_RELEASE_INTEGRITY',
+        'The protected review release could not be verified. Please try again later.',
+        503,
+      );
+    }
+
     let material;
     try {
       material = sanitizeSubjectMatterRevealRecord(stored, command.attemptId);
@@ -3798,20 +3834,22 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
     let explanation = fallbackSubjectMatterTeachingExplanation(material);
     let explanationSource = 'curated_fallback';
     let teachingModel = null;
-    try {
-      const generated = await callGeminiStructured(
-        env,
-        buildSubjectMatterTeachingPrompt(material),
-        SUBJECT_MATTER_TEACHING_SCHEMA,
-        (value) => validateSubjectMatterTeachingExplanation(value, material),
-      );
-      explanation = generated.result;
-      explanationSource = 'gemini_curated';
-      teachingModel = generated.model;
-    } catch (error) {
-      console.warn('Subject Matter teaching explanation used curated fallback', {
-        code: String(error?.code || 'validation_failed').slice(0, 48),
-      });
+    if (firstReveal) {
+      try {
+        const generated = await callGeminiStructured(
+          env,
+          buildSubjectMatterTeachingPrompt(material),
+          SUBJECT_MATTER_TEACHING_SCHEMA,
+          (value) => validateSubjectMatterTeachingExplanation(value, material),
+        );
+        explanation = generated.result;
+        explanationSource = 'gemini_curated';
+        teachingModel = generated.model;
+      } catch (error) {
+        console.warn('Subject Matter teaching explanation used curated fallback', {
+          code: String(error?.code || 'validation_failed').slice(0, 48),
+        });
+      }
     }
 
     return jsonResponse({
@@ -3819,6 +3857,7 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
       data: publicSubjectMatterReviewPayload(material, explanation, {
         explanationSource,
         teachingModel,
+        access,
       }),
     }, 200, origin, allowedOrigin);
   }

@@ -845,6 +845,8 @@ export function examinationDatabaseError(error) {
     'EXAM_SUBJECT_SKIP_UNAVAILABLE',
     'EXAM_SUBJECT_NO_ALTERNATE_QUESTION',
     'EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE',
+    'SYLLABUS_REVIEW_SUBSCRIPTION_REQUIRED',
+    'SYLLABUS_REVIEW_RELEASE_INTEGRITY',
     'BAR_SIMULATION_START_INVALID',
     'BAR_SIMULATION_CATALOG_STALE',
     'BAR_SIMULATION_DESTINATION_INVALID',
@@ -886,6 +888,8 @@ export function examinationDatabaseError(error) {
     EXAM_SUBJECT_SKIP_UNAVAILABLE: 'This question can no longer be skipped safely.',
     EXAM_SUBJECT_NO_ALTERNATE_QUESTION: 'No different question is available in this course right now.',
     EXAM_SUBJECT_REVIEW_MATERIAL_UNAVAILABLE: 'Verified review material is not available for this question.',
+    SYLLABUS_REVIEW_SUBSCRIPTION_REQUIRED: 'Suggested answers and full legal review require ₱149 Early Access or a paid subscription.',
+    SYLLABUS_REVIEW_RELEASE_INTEGRITY: 'The protected review release could not be verified. Please try again later.',
     BAR_SIMULATION_START_INVALID: 'The Bar Exam Simulation could not be started because its request was invalid.',
     BAR_SIMULATION_CATALOG_STALE: 'This Bar Exam Simulation set changed. Return to the Simulation list and open it again.',
     BAR_SIMULATION_DESTINATION_INVALID: 'This Bar Exam Simulation set is not available for randomized allocation.',
@@ -904,6 +908,7 @@ export function examinationDatabaseError(error) {
     'EXAM_ACCESS_REQUIRED',
     'EXAM_PREMIUM_REQUIRED',
     'EXAM_ADMIN_REQUIRED',
+    'SYLLABUS_REVIEW_SUBSCRIPTION_REQUIRED',
   ].includes(code)
     ? 403
     : [
@@ -911,6 +916,7 @@ export function examinationDatabaseError(error) {
       'BAR_SIMULATION_POOL_NOT_READY',
       'BAR_SIMULATION_ALLOCATION_COUNT_INVALID',
       'BAR_SIMULATION_RECEIPT_CORRUPT',
+      'SYLLABUS_REVIEW_RELEASE_INTEGRITY',
     ].includes(code)
       ? 503
     : code.includes('NOT_FOUND')

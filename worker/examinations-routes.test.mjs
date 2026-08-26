@@ -107,6 +107,119 @@ test('authenticated examination catalog reaches only the allowlisted RPC', async
   });
 });
 
+test('already-owned attempt continuation commands stay historical after current access ends', async () => {
+  const operations = [
+    {
+      operation: 'heartbeat',
+      attemptId,
+      tabToken,
+      takeover: false,
+    },
+    {
+      operation: 'save_response',
+      attemptId,
+      questionId: versionId,
+      tabToken,
+      answerText: 'A preserved draft answer.',
+      expectedRevision: 0,
+      flagged: false,
+    },
+    {
+      operation: 'flag_response',
+      attemptId,
+      questionId: versionId,
+      tabToken,
+      expectedRevision: 0,
+      flagged: true,
+    },
+    {
+      operation: 'submit_attempt',
+      attemptId,
+      tabToken,
+      requestKey: 'continuation_submit_route_0001',
+      confirmed: true,
+    },
+  ];
+  const authorizations = [];
+
+  await withFetchMock(async (url, options = {}) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    const target = String(url);
+    const payload = JSON.parse(options.body);
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      authorizations.push(payload);
+      return Response.json({
+        allowed: true,
+        basis: 'historical_owner',
+        track: 'per_subject',
+      });
+    }
+    assert.equal(target, `${supabaseUrl}/rest/v1/rpc/examination_command`);
+    return Response.json({
+      operation: payload.p_operation,
+      attemptId,
+      status: payload.p_operation === 'submit_attempt' ? 'submitted' : 'saved',
+    });
+  }, async () => {
+    for (const command of operations) {
+      const response = await worker.fetch(request('/examinations/command', command), env);
+      assert.equal(response.status, 200, `${command.operation} must remain owner-continuation safe`);
+    }
+  });
+
+  assert.equal(authorizations.length, operations.length);
+  for (const authorization of authorizations) {
+    assert.deepEqual(authorization, {
+      p_user_id: userId,
+      p_track: null,
+      p_version_id: null,
+      p_attempt_id: attemptId,
+      p_allow_historical: true,
+    });
+  }
+});
+
+test('resume is historical only when an existing attempt id owner-binds the request', async () => {
+  const authorizations = [];
+
+  await withFetchMock(async (url, options = {}) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    const target = String(url);
+    const payload = JSON.parse(options.body);
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      authorizations.push(payload);
+      return Response.json({
+        allowed: true,
+        basis: payload.p_attempt_id ? 'historical_owner' : 'paid_subscription',
+        track: 'per_subject',
+      });
+    }
+    assert.equal(target, `${supabaseUrl}/rest/v1/rpc/examination_query`);
+    return Response.json({ attempt: null, setup: null });
+  }, async () => {
+    const ownedAttempt = await worker.fetch(request('/examinations/query', {
+      operation: 'resume',
+      attemptId,
+    }), env);
+    assert.equal(ownedAttempt.status, 200);
+
+    const versionOnly = await worker.fetch(request('/examinations/query', {
+      operation: 'resume',
+      versionId,
+    }), env);
+    assert.equal(versionOnly.status, 200);
+  });
+
+  assert.equal(authorizations.length, 2);
+  assert.equal(authorizations[0].p_attempt_id, attemptId);
+  assert.equal(authorizations[0].p_allow_historical, true);
+  assert.equal(authorizations[1].p_attempt_id, null);
+  assert.equal(authorizations[1].p_version_id, versionId);
+  assert.equal(authorizations[1].p_allow_historical, false);
+});
+
 test('Subject Matter catalog preserves course metadata but withholds bank inventory', async () => {
   await withFetchMock(async (url, options) => {
     const auth = authResponse(url);
@@ -342,6 +455,16 @@ test('Subject Matter complete review uses the owner-bound reveal RPC and curated
       assisted: true,
       assistanceKnown: true,
       reviewMaterialRevealedAt: '2026-08-14T05:00:00.000Z',
+      firstReveal: true,
+      releaseAuthorized: true,
+      releasePolicyVersion: 'subject-review-unlimited-v1-2026-08-26',
+      access: {
+        allowed: true,
+        basis: 'paid_subscription',
+        unlimited: true,
+        tokenLimit: 5,
+        tokensRemaining: 5,
+      },
       privateNote: 'must never leave the Worker',
     });
   }, async () => {
@@ -358,6 +481,10 @@ test('Subject Matter complete review uses the owner-bound reveal RPC and curated
     assert.equal(body.data.classification, 'assisted');
     assert.match(body.data.whyThisAnswerIsCorrect.controllingLawAndElements, /Article 19/);
     assert.equal(body.data.explanationSource, 'curated_fallback');
+    assert.equal(body.data.access.tokensRemaining, 5);
+    assert.equal('firstReveal' in body.data, false);
+    assert.equal('releaseAuthorized' in body.data, false);
+    assert.equal('releasePolicyVersion' in body.data, false);
     assert.equal('privateNote' in body.data, false);
   });
 });
@@ -377,6 +504,16 @@ test('Subject Matter complete review rejects malformed database output without l
       doctrine: 'Relevant doctrine.',
       jurisprudence: [],
       sources: ['javascript:alert(1)'],
+      firstReveal: false,
+      releaseAuthorized: true,
+      releasePolicyVersion: 'subject-review-unlimited-v1-2026-08-26',
+      access: {
+        allowed: false,
+        basis: 'trial_tokens_exhausted',
+        unlimited: false,
+        tokenLimit: 5,
+        tokensRemaining: 0,
+      },
       privateNote: 'database-only detail',
     });
   }, async () => {
@@ -426,9 +563,9 @@ test(`${track} AI completion suppresses email without calling a provider or fail
         p_track: null,
         p_version_id: null,
         p_attempt_id: attemptId,
-        p_allow_historical: true,
+        p_allow_historical: false,
       });
-      return Response.json({ allowed: true, basis: 'historical_owner', track });
+      return Response.json({ allowed: true, basis: 'current_owner', track });
     }
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_command`) {
       return Response.json({

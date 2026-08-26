@@ -2313,6 +2313,94 @@
     return `${currentUserId()}:${String(attemptId || '').trim()}`;
   }
 
+  function subjectReviewAccessAllowed(access = global.DueDiligencePhase4?.getAccess?.()) {
+    return global.DueDiligencePhase4?.canRevealSubjectReview?.(access) === true;
+  }
+
+  function subjectReviewAccessNote(allowed = subjectReviewAccessAllowed()) {
+    return allowed
+      ? 'Protected review access is active. Choose a section when you are ready.'
+      : 'Suggested answers and legal review require ₱149 Early Access or a paid subscription. Your answer is saved and remains editable, and the review timer continues while access options are open.';
+  }
+
+  function subjectReviewUpgradeActionMarkup(section = 'suggested-answer') {
+    return `<button class="dd-control dd-exam-button is-primary" type="button" data-subject-review-upgrade
+      data-subject-review-section="${escapeAttribute(section)}">View Early Access — ₱149</button>`;
+  }
+
+  function subjectReviewPanelIsCurrent(panel) {
+    return Boolean(panel?.isConnected
+      && state.active?.attempt?.attemptId === panel.dataset.attemptId
+      && currentQuestion()?.questionId === panel.dataset.questionId
+      && state.active?.examination?.track === 'per_subject');
+  }
+
+  function releaseSubjectReviewPending(panel) {
+    if (panel) delete panel.dataset.reviewLoading;
+    panel?.querySelectorAll('[data-subject-review-reveal]').forEach((summary) => {
+      summary.removeAttribute('aria-busy');
+      summary.removeAttribute('aria-disabled');
+    });
+    if (state.active?.attempt?.attemptId === panel?.dataset.attemptId) {
+      state.active.attempt.reviewConfirmationPending = false;
+    }
+    const submitButton = pageRoot('per_subject')?.querySelector('[data-submit-current]');
+    if (submitButton && !state.active?.attempt?.submittedAt) {
+      submitButton.disabled = !currentQuestion()?.answerText?.trim();
+    }
+  }
+
+  function openSubjectReviewPricing(trigger, panel = trigger?.closest('[data-subject-review-panel]')) {
+    if (!panel) return false;
+    saveRecovery();
+    return global.DueDiligencePhase4?.openSubjectReviewAccessGate?.({
+      attemptId: panel.dataset.attemptId || '',
+      questionId: panel.dataset.questionId || '',
+      section: trigger?.dataset.subjectReviewSection || panel.dataset.pendingReviewSection || 'suggested-answer',
+      focusOrigin: trigger || document.activeElement,
+    }) === true;
+  }
+
+  function showSubjectReviewAccessDenied(panel, section = 'suggested-answer') {
+    if (!panel) return;
+    releaseSubjectReviewPending(panel);
+    panel.dataset.subjectReviewAccess = 'locked';
+    panel.dataset.pendingReviewSection = section;
+    const status = panel.querySelector('[data-subject-review-status]');
+    const actions = panel.querySelector('[data-subject-review-actions]');
+    const submitted = Boolean(state.active?.attempt?.submittedAt);
+    if (status) status.innerHTML = `<div class="dd-exam-status is-error">
+      <strong>Review remains locked.</strong>
+      <span>No protected material was opened. ${submitted
+    ? 'Your submitted answer is unchanged.'
+    : 'Your answer is still editable, and the timer continues.'}</span>
+    </div>`;
+    if (actions) actions.innerHTML = subjectReviewUpgradeActionMarkup(section);
+  }
+
+  function syncSubjectReviewAccessUi(access) {
+    const allowed = subjectReviewAccessAllowed(access);
+    document.querySelectorAll('[data-subject-review-panel]').forEach((panel) => {
+      const wasAllowed = panel.dataset.subjectReviewAccess === 'eligible';
+      panel.dataset.subjectReviewAccess = allowed ? 'eligible' : 'locked';
+      const note = panel.querySelector('[data-subject-review-access-note]');
+      if (note) note.textContent = subjectReviewAccessNote(allowed);
+      const actions = panel.querySelector('[data-subject-review-actions]');
+      if (actions && !actions.querySelector('[data-subject-review-retry]')) {
+        actions.innerHTML = allowed
+          ? ''
+          : subjectReviewUpgradeActionMarkup(panel.dataset.pendingReviewSection || 'suggested-answer');
+      }
+      if (allowed && !wasAllowed) {
+        const status = panel.querySelector('[data-subject-review-status]');
+        if (status) status.innerHTML = `<div class="dd-exam-status is-success">
+          <strong>Protected review access is active.</strong>
+          <span>Choose a review section when you are ready. Nothing was opened automatically.</span>
+        </div>`;
+      }
+    });
+  }
+
   function subjectReviewSubmissionBlocked() {
     return state.active?.examination?.track === 'per_subject'
       && !state.active?.attempt?.submittedAt
@@ -2524,8 +2612,13 @@
   }
 
   function subjectReviewPanelMarkup({ attemptId, questionId, assisted, submitted }) {
+    const accessAllowed = subjectReviewAccessAllowed();
     const material = state.reviewMaterialCache.get(subjectReviewMaterialKey(attemptId));
-    if (material?.questionId === questionId) return completeSubjectReviewContent(material);
+    if (material?.questionId === questionId) {
+      return completeSubjectReviewContent(material);
+    }
+    const accessNoteId = `dd-subject-review-access-${String(attemptId || questionId || 'current')
+      .replace(/[^a-zA-Z0-9_-]/g, '-')}`;
     const classificationNotice = assisted
       ? 'Review opened before submission. Your score is unchanged, and this attempt is excluded from unassisted mastery metrics.'
       : submitted
@@ -2533,33 +2626,41 @@
         : 'Opening any section marks this attempt Assisted / Open-book. Your score is unchanged, and it is excluded from unassisted mastery metrics.';
     return `<section class="dd-subject-review-lock" data-subject-review-panel
       data-attempt-id="${escapeAttribute(attemptId)}" data-question-id="${escapeAttribute(questionId)}"
-      data-submitted="${submitted ? 'true' : 'false'}" aria-labelledby="dd-subject-review-lock-title">
+      data-submitted="${submitted ? 'true' : 'false'}" data-subject-review-access="${accessAllowed ? 'eligible' : 'locked'}"
+      aria-labelledby="dd-subject-review-lock-title">
       <p class="dd-exam-kicker">Review material</p>
       <h2 id="dd-subject-review-lock-title">Suggested answer and legal review</h2>
       <div class="dd-subject-review-classification-note">
         <strong>${assisted ? 'Assisted / Open-book' : submitted ? 'Submitted before reveal' : 'Before submission'}</strong>
         <span>${escapeHtml(classificationNotice)}</span>
+        <span class="dd-subject-review-access-note" id="${escapeAttribute(accessNoteId)}"
+          data-subject-review-access-note>${escapeHtml(subjectReviewAccessNote(accessAllowed))}</span>
       </div>
       <div class="dd-subject-review-disclosures is-locked">
         <details>
-          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="suggested-answer">
+          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="suggested-answer"
+            aria-describedby="${escapeAttribute(accessNoteId)}">
             <span>Reveal suggested answer</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span>
           </summary>
         </details>
         <details>
-          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="controlling-law">
+          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="controlling-law"
+            aria-describedby="${escapeAttribute(accessNoteId)}">
             <span>Reveal controlling law and doctrine</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span>
           </summary>
         </details>
         <details>
-          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="application-guidance">
+          <summary class="dd-disclosure-control" data-subject-review-reveal data-subject-review-section="application-guidance"
+            aria-describedby="${escapeAttribute(accessNoteId)}">
             <span>Reveal application, limits, and sources</span><span class="dd-subject-disclosure-chevron" aria-hidden="true"></span>
           </summary>
         </details>
       </div>
       <div class="dd-subject-review-status" id="dd-subject-review-region-${escapeAttribute(attemptId)}"
         data-subject-review-status role="status" aria-live="polite"></div>
-      <div class="dd-subject-review-error-actions" data-subject-review-actions></div>
+      <div class="dd-subject-review-error-actions" data-subject-review-actions>${accessAllowed
+    ? ''
+    : subjectReviewUpgradeActionMarkup()}</div>
     </section>`;
   }
 
@@ -2585,20 +2686,16 @@
   }
 
   function showCompleteSubjectReviewError(panel) {
+    releaseSubjectReviewPending(panel);
     const status = panel?.querySelector('[data-subject-review-status]');
     const actions = panel?.querySelector('[data-subject-review-actions]');
     const submitted = state.active?.attempt?.attemptId === panel?.dataset.attemptId
       && Boolean(state.active.attempt.submittedAt);
-    if (panel) delete panel.dataset.reviewLoading;
-    panel?.querySelectorAll('[data-subject-review-reveal]').forEach((summary) => {
-      summary.removeAttribute('aria-busy');
-      summary.removeAttribute('aria-disabled');
-    });
     if (status) status.innerHTML = `<div class="dd-exam-status is-error">
       <strong>Review status could not be confirmed.</strong>
       <span>${submitted
         ? 'Your submitted answer is unchanged, and Retry assessment remains available. Retry the review to open the protected material.'
-        : 'Your saved answer is unchanged. This attempt may already be classified Assisted / Open-book, so submission remains paused until Due Diligence confirms the review state.'}</span>
+        : 'Your saved answer remains editable. You may continue or submit now, or retry the review. If the review was confirmed before the connection failed, its Assisted / Open-book classification is preserved.'}</span>
     </div>`;
     if (actions) actions.innerHTML = `<button class="dd-control dd-exam-button is-primary" type="button" data-subject-review-retry
       data-subject-review-section="${escapeAttribute(panel?.dataset.pendingReviewSection || 'suggested-answer')}">Retry review</button>`;
@@ -2614,6 +2711,15 @@
     const questionId = panel?.dataset.questionId || '';
     if (!attemptId || !questionId) return;
     if (panel.dataset.reviewLoading === 'true') return;
+    const restoringReleasedMaterial = automatic
+      && state.active?.attempt?.attemptId === attemptId
+      && Boolean(state.active.attempt.reviewMaterialRevealedAt);
+    if (!subjectReviewAccessAllowed() && !restoringReleasedMaterial) {
+      panel.dataset.pendingReviewSection = openSection;
+      showSubjectReviewAccessDenied(panel, openSection);
+      if (!automatic) openSubjectReviewPricing(button, panel);
+      return;
+    }
     const key = subjectReviewMaterialKey(attemptId);
     if (retry) {
       state.reviewMaterialCache.delete(key);
@@ -2665,6 +2771,9 @@
     let reviewConfirmed = false;
     try {
       const material = await request;
+      if (material?.access) {
+        global.DueDiligencePhase4?.adoptAccess?.(material.access, { enforce: false });
+      }
       if (state.active?.attempt?.attemptId === attemptId) {
         state.active.attempt.assisted = material.assisted === true;
         state.active.attempt.assistanceKnown = material.assistanceKnown === true;
@@ -2678,7 +2787,12 @@
       });
       reviewConfirmed = true;
     } catch (error) {
-      if (document.body.contains(panel)) showCompleteSubjectReviewError(panel);
+      if (!subjectReviewPanelIsCurrent(panel)) return;
+      if (global.DueDiligencePhase4?.isSubjectReviewAccessError?.(error) === true) {
+        showSubjectReviewAccessDenied(panel, openSection);
+      } else {
+        showCompleteSubjectReviewError(panel);
+      }
     } finally {
       if (reviewConfirmed && submitButton && state.active?.attempt?.attemptId === attemptId
           && !state.active.attempt.submittedAt) {
@@ -3294,6 +3408,12 @@
   }
 
   function handleClick(event) {
+    const reviewUpgrade = event.target.closest('[data-subject-review-upgrade]');
+    if (reviewUpgrade) {
+      event.preventDefault();
+      openSubjectReviewPricing(reviewUpgrade);
+      return;
+    }
     const reviewRetry = event.target.closest('[data-subject-review-retry]');
     if (reviewRetry) {
       event.preventDefault();
@@ -3503,7 +3623,11 @@
       event.preventDefault();
       event.returnValue = '';
     });
-    global.addEventListener('popstate', () => {
+    global.addEventListener('popstate', (event) => {
+      const actionOverlayOpen = document.querySelector(
+        '#dd2-native-view.is-open[data-native-mode="action"]',
+      );
+      if (event?.dueDiligenceActionOverlayHandled === true || actionOverlayOpen) return;
       if (!state.active || !['room', 'review'].includes(state.screen)) return;
       history.pushState({ dueDiligenceExamination: state.active.attempt.attemptId }, '', location.href);
       showReview();
@@ -3528,6 +3652,9 @@
       if (event.detail?.authenticated) return;
       if (state.active && ['room', 'review'].includes(state.screen)) saveRecovery();
       stopActiveTimers();
+    });
+    global.addEventListener('duediligence:access', (event) => {
+      syncSubjectReviewAccessUi(event.detail);
     });
     global.DueDiligencePrivateWorkspace?.registerReset?.(({ previousUserId, nextUserId }) => {
       if (previousUserId === nextUserId) return;

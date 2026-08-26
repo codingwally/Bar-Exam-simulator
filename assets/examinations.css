@@ -2959,6 +2959,19 @@ details[open] > summary .dd-subject-chevron {
   color: #f4d478;
 }
 
+.dd-subject-review-access-note {
+  margin: 3px 0 0;
+  padding-top: 9px;
+  border-top: 1px solid rgba(212, 170, 79, .2);
+  color: #aebdce;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+[data-subject-review-access="eligible"] .dd-subject-review-access-note {
+  color: #c9d9cc;
+}
+
 .dd-subject-review-source-note {
   margin: 12px 0 0;
   color: #9fb0c4;

@@ -37,6 +37,15 @@
     tokenDisclosureVersion: '',
     nativeViewReturnToQuorum: false,
     examinationRoomDoorRequest: 0,
+    nativeViewMode: 'route',
+    nativeViewActionId: '',
+    nativeViewContext: null,
+    nativeViewOnClose: null,
+    nativeViewReturnFocus: null,
+    nativeViewScrollPosition: null,
+    nativeViewSequence: 0,
+    nativeViewClosing: false,
+    overlayFocusOrigins: new Map(),
   };
 
   let resolveAuthReady;
@@ -566,7 +575,7 @@
     }
   }
 
-  function setOverlay(open, id) {
+  function setOverlay(open, id, options = {}) {
     const overlay = document.getElementById(id);
     if (!overlay) return;
     overlay.classList.toggle('is-open', open);
@@ -577,7 +586,9 @@
     );
     global.syncModalIsolation?.();
     if (open) {
-      state.previousFocus = document.activeElement;
+      const focusOrigin = options.focusOrigin || document.activeElement;
+      state.overlayFocusOrigins.set(id, focusOrigin);
+      state.previousFocus = focusOrigin;
       requestAnimationFrame(() => {
         const target = overlay.querySelector(
           'button:not([disabled]):not([hidden]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]',
@@ -585,7 +596,8 @@
         target?.focus();
       });
     } else {
-      const previousFocus = state.previousFocus;
+      const storedFocus = state.overlayFocusOrigins.get(id) || state.previousFocus;
+      state.overlayFocusOrigins.delete(id);
       requestAnimationFrame(() => {
         const visibleTarget = (element) => {
           if (!element?.isConnected || element.hidden || element.disabled) return false;
@@ -594,8 +606,19 @@
           }
           return element.offsetParent !== null;
         };
+        let requestedFocus = null;
+        try {
+          requestedFocus = typeof options.restoreFocus === 'function'
+            ? options.restoreFocus()
+            : options.restoreFocus;
+        } catch {
+          requestedFocus = null;
+        }
         const fallbackTargets = [
-          previousFocus,
+          requestedFocus,
+          storedFocus,
+          document.getElementById('dd-answer-rich-editor'),
+          document.getElementById('dd-answer-editor'),
           document.getElementById('site-menu-toggle'),
           document.querySelector('.spa-tab.active'),
           document.getElementById('btn-signin'),
@@ -851,7 +874,10 @@
     }
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
+    if (typeof overlay.contains === 'function' && !overlay.contains(document.activeElement)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && document.activeElement === last) {
@@ -1447,7 +1473,7 @@
         <h3>Essay assessment</h3>
         <p>Cloudflare routes grading requests to the Due Diligence Worker, which sends the submitted essay and curated question context to the configured assessment provider. Do not place client secrets or confidential case information in practice answers.</p>
         <h3>Access records</h3>
-        <p>Protected examinations require authentication. Supabase UUIDs anchor the one-time token allowance, approved Founding Beta eligibility, Early Access entitlements, legal acceptance, progress, and history so refreshes or device changes cannot recreate spent tokens.</p>
+        <p>Protected examinations require authentication. Supabase UUIDs anchor the one-time token allowance, paid-access entitlements, legal acceptance, progress, and history so refreshes or device changes cannot recreate spent tokens.</p>
         <h3>Support and corrections</h3>
         <p>Support stores the category, message, optional reply email, status, and timestamps. Do not submit examination answers through Support. Correction submissions store only the reviewed correction fields described in that form.</p>
         <h3>Payments and infrastructure</h3>
@@ -1464,8 +1490,16 @@
   }
 
   function pricingContent() {
+    const subjectReviewAction = state.nativeViewMode === 'action'
+      && state.nativeViewContext?.reason === 'subject_reveal_review';
     return `
       <div class="dd2-copy">
+        ${subjectReviewAction ? `<aside class="dd2-access-summary" id="dd2-native-description">
+          <strong>Review material remains locked</strong>
+          <span>Your answer is saved and remains editable. The review timer continues while these access options are open.</span>
+          <span>Early Access is ₱149 and includes protected Syllabus-Based Review material.</span>
+          <span>Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified.</span>
+        </aside>` : ''}
         <p class="dd2-pricing-intro"><strong>Continue without practice limits.</strong> Every ordinary account already receives five one-time practice tokens. Early Access removes that limit during the promotional access period.</p>
         <div class="dd2-plan-grid" id="dd2-pricing-plans" aria-live="polite">
           <div class="dd2-loading-line">Loading current access options…</div>
@@ -1700,10 +1734,18 @@
     return definitions[view] || null;
   }
 
-  function syncNativeViewWithHash() {
+  function syncNativeViewWithHash(options = {}) {
+    if (state.nativeViewMode === 'action' && state.nativeView) {
+      const actionStillCurrent = history.state?.dd2ActionView === state.nativeView
+        && history.state?.dd2ActionId === state.nativeViewActionId;
+      if (actionStillCurrent) return false;
+      hideNativeView({ reason: options.reason || 'history' });
+      return true;
+    }
     const hashView = location.hash.replace(/^#/, '').split(/[/?]/, 1)[0];
     if (nativeDefinition(hashView)) renderNativeView(hashView, { push: false });
     else hideNativeView();
+    return false;
   }
 
   function renderNativeView(view, options = {}) {
@@ -1712,33 +1754,135 @@
       hideNativeView();
       return;
     }
+    const actionMode = options.mode === 'action';
     state.nativeView = view;
     state.nativeViewReturnToQuorum = options.returnToQuorum === true;
+    state.nativeViewMode = actionMode ? 'action' : 'route';
+    state.nativeViewActionId = actionMode ? String(options.actionId || '').trim() : '';
+    state.nativeViewContext = actionMode && options.context && typeof options.context === 'object'
+      ? { ...options.context }
+      : null;
+    state.nativeViewOnClose = actionMode && typeof options.onClose === 'function'
+      ? options.onClose
+      : null;
+    state.nativeViewReturnFocus = actionMode && options.returnFocus
+      ? options.returnFocus
+      : null;
+    state.nativeViewScrollPosition = actionMode
+      ? { x: Number(global.scrollX) || 0, y: Number(global.scrollY) || 0 }
+      : null;
+    state.nativeViewClosing = false;
+    state.nativeViewSequence += 1;
+    const viewSequence = state.nativeViewSequence;
     const nativeOverlay = document.getElementById('dd2-native-view');
-    if (nativeOverlay) nativeOverlay.dataset.nativeView = view;
-    document.getElementById('dd2-native-kicker').textContent = definition[0];
-    document.getElementById('dd2-native-title').textContent = definition[1];
+    const subjectReviewAction = actionMode
+      && state.nativeViewContext?.reason === 'subject_reveal_review';
+    if (nativeOverlay) {
+      nativeOverlay.dataset.nativeView = view;
+      nativeOverlay.dataset.nativeMode = state.nativeViewMode;
+      if (subjectReviewAction) nativeOverlay.setAttribute('aria-describedby', 'dd2-native-description');
+      else nativeOverlay.removeAttribute('aria-describedby');
+    }
+    document.getElementById('dd2-native-kicker').textContent = subjectReviewAction
+      ? 'Syllabus-Based Review'
+      : definition[0];
+    document.getElementById('dd2-native-title').textContent = subjectReviewAction
+      ? 'Early Access for protected review material'
+      : definition[1];
     document.getElementById('dd2-native-body').innerHTML = definition[2]();
-    setOverlay(true, 'dd2-native-view');
-    bindNativeViewHandlers(view);
-    if (options.push !== false) {
+    const closeButton = document.getElementById('dd2-native-close');
+    const backButton = document.getElementById('dd2-native-back');
+    if (closeButton) closeButton.setAttribute('aria-label', subjectReviewAction
+      ? 'Close Early Access options and return to your answer'
+      : 'Close');
+    if (backButton) backButton.textContent = subjectReviewAction ? 'Back to my answer' : 'Back';
+    setOverlay(true, 'dd2-native-view', { focusOrigin: options.focusOrigin });
+    bindNativeViewHandlers(view, viewSequence);
+    if (actionMode) {
+      const actionId = state.nativeViewActionId || `native-action-${viewSequence}`;
+      state.nativeViewActionId = actionId;
+      history.pushState({
+        ...(history.state || {}),
+        dd2ActionView: view,
+        dd2ActionId: actionId,
+      }, '', `${location.pathname}${location.search}${location.hash}`);
+    } else if (options.push !== false) {
       const updateHistory = history.state?.dd2View ? 'replaceState' : 'pushState';
       history[updateHistory]({ dd2View: view }, '', `#${view}`);
     }
   }
 
-  function hideNativeView() {
+  function hideNativeView(options = {}) {
+    const closingView = state.nativeView;
+    const closingMode = state.nativeViewMode;
+    const closingActionId = state.nativeViewActionId;
+    const onClose = state.nativeViewOnClose;
+    const returnFocus = state.nativeViewReturnFocus;
+    const scrollPosition = state.nativeViewScrollPosition;
+    const ownsActionHistoryEntry = closingMode === 'action'
+      && history.state?.dd2ActionView === closingView
+      && history.state?.dd2ActionId === closingActionId;
     state.nativeView = null;
     state.nativeViewReturnToQuorum = false;
+    state.nativeViewMode = 'route';
+    state.nativeViewActionId = '';
+    state.nativeViewContext = null;
+    state.nativeViewOnClose = null;
+    state.nativeViewReturnFocus = null;
+    state.nativeViewScrollPosition = null;
+    state.nativeViewClosing = false;
+    state.nativeViewSequence += 1;
     const nativeOverlay = document.getElementById('dd2-native-view');
-    if (nativeOverlay) delete nativeOverlay.dataset.nativeView;
-    setOverlay(false, 'dd2-native-view');
+    if (nativeOverlay) {
+      delete nativeOverlay.dataset.nativeView;
+      delete nativeOverlay.dataset.nativeMode;
+      nativeOverlay.removeAttribute('aria-describedby');
+    }
+    if (ownsActionHistoryEntry) {
+      const nextHistoryState = { ...(history.state || {}) };
+      delete nextHistoryState.dd2ActionView;
+      delete nextHistoryState.dd2ActionId;
+      history.replaceState(
+        nextHistoryState,
+        '',
+        `${location.pathname}${location.search}${location.hash}`,
+      );
+    }
+    setOverlay(false, 'dd2-native-view', { restoreFocus: returnFocus });
+    if (closingMode === 'action' && scrollPosition && typeof global.scrollTo === 'function') {
+      requestAnimationFrame(() => {
+        global.scrollTo({ left: scrollPosition.x, top: scrollPosition.y, behavior: 'auto' });
+      });
+    }
+    if (typeof onClose === 'function') {
+      try {
+        onClose({
+          actionId: closingActionId,
+          reason: options.reason || 'dismiss',
+          view: closingView,
+        });
+      } catch {
+        // Closing the presentation must not be blocked by a consumer callback.
+      }
+    }
   }
 
-  function closeNativeView() {
+  function closeNativeView(reason = 'dismiss') {
+    if (state.nativeViewMode === 'action') {
+      if (state.nativeViewClosing) return;
+      state.nativeViewClosing = true;
+      const ownsHistoryEntry = history.state?.dd2ActionView === state.nativeView
+        && history.state?.dd2ActionId === state.nativeViewActionId;
+      if (ownsHistoryEntry) {
+        history.back();
+        return;
+      }
+      hideNativeView({ reason });
+      return;
+    }
     const returnToQuorum = state.nativeViewReturnToQuorum;
     const shouldRewindHistory = Boolean(history.state?.dd2View) && !returnToQuorum;
-    hideNativeView();
+    hideNativeView({ reason });
     if (returnToQuorum) {
       history.replaceState({}, '', `${location.pathname}${location.search}#quorum`);
       global.DueDiligencePublicHome?.show?.();
@@ -2182,11 +2326,17 @@
     };
     const earlyFeatures = Array.isArray(early?.features) ? early.features : [];
     const earlyOpen = access?.checkoutOpen === true && early?.checkoutEnabled !== false;
-    const alreadyUnlimited = access?.unlimited === true;
+    const subjectReviewAction = state.nativeViewMode === 'action'
+      && state.nativeViewContext?.reason === 'subject_reveal_review';
+    const alreadyUnlimited = subjectReviewAction
+      ? global.DueDiligencePhase4?.canRevealSubjectReview?.(access) === true
+      : access?.unlimited === true;
     const paidAction = alreadyUnlimited
       ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Unlimited access active</button>'
       : earlyOpen
-        ? `<button class="dd2-button dd2-button-primary" id="dd2-open-payment" type="button">${state.user ? 'Get Early Access' : 'Sign in to get Early Access'}</button>`
+        ? `<button class="dd2-button dd2-button-primary" id="dd2-open-payment" type="button">${state.user
+    ? subjectReviewAction ? 'Get Early Access — ₱149' : 'Get Early Access'
+    : 'Sign in to get Early Access'}</button>`
         : '<button class="dd2-button dd2-button-secondary" type="button" disabled>Early Access offer closed</button>';
     const regularPrice = Math.max(14900, Number(access?.regularPriceCentavos) || 19900) / 100;
     host.innerHTML = `
@@ -2201,8 +2351,12 @@
       </article>`;
     document.getElementById('dd2-open-payment')?.addEventListener('click', () => {
       if (!state.session?.access_token) {
-        hideNativeView();
-        showEntry({ allowDismiss: true, routeBound: true, returnHash: '#pricing' });
+        hideNativeView({ reason: 'authentication-required' });
+        showEntry({
+          allowDismiss: true,
+          routeBound: true,
+          returnHash: subjectReviewAction ? '#subject-matter' : '#pricing',
+        });
         return;
       }
       renderPaymentForm();
@@ -2213,11 +2367,14 @@
     const host = document.getElementById('dd2-payment-host');
     if (!host) return;
     const today = manilaTodayInput();
+    const subjectReviewAction = state.nativeViewMode === 'action'
+      && state.nativeViewContext?.reason === 'subject_reveal_review';
     host.innerHTML = `
       <section class="dd2-payment-panel" aria-labelledby="dd2-payment-title">
         <div class="dd2-view-kicker">Secure manual verification</div>
         <h3 id="dd2-payment-title">Submit ₱149 Early Access proof</h3>
         <p>Your one non-renewable 24-hour provisional access begins when this proof is accepted by the server. Verification fixes access through October 1, 2026.</p>
+        ${subjectReviewAction ? '<p class="dd2-plan-note">Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified.</p>' : ''}
         <div class="dd2-payment-channel" aria-label="Approved payment channel">
           <span>BPI InstaPay</span>
           <strong>Exact amount: ₱149.00</strong>
@@ -2301,6 +2458,9 @@
 
   async function submitCommercialPayment(event) {
     event.preventDefault();
+    const viewSequence = state.nativeViewSequence;
+    const subjectReviewAction = state.nativeViewMode === 'action'
+      && state.nativeViewContext?.reason === 'subject_reveal_review';
     const submit = document.getElementById('dd2-payment-submit');
     const proof = document.getElementById('dd2-payment-proof')?.files?.[0];
     const proofValidation = validCommercialProof(proof);
@@ -2328,18 +2488,29 @@
         submissionDraft: { planCode: 'early_access_beta' },
       });
       const access = await global.DueDiligencePhase4?.refreshAccess?.({ force: true, enforce: false }).catch(() => null);
+      if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') {
+        global.toast?.('Early Access proof received securely.', 'ok');
+        return;
+      }
       const host = document.getElementById('dd2-payment-host');
       if (host) host.innerHTML = `
         <section class="dd2-payment-success" role="status" aria-live="polite">
           <div class="dd2-view-kicker">Proof received</div>
           <h3>Verification is pending.</h3>
-          <p>${escapeHtml(result.message || 'Your proof was stored securely. Provisional access is active while the payment is reviewed.')}</p>
-          ${access?.entitlementEndsAt ? `<p><strong>Provisional access through:</strong> ${escapeHtml(manilaDate(access.entitlementEndsAt, { includeTime: true }))} Philippine time</p>` : ''}
+          <p>${escapeHtml(subjectReviewAction
+    ? 'Your proof was received securely. Protected review material remains locked until Early Access is approved.'
+    : result.message || 'Your proof was stored securely. Provisional access is active while the payment is reviewed.')}</p>
+          ${subjectReviewAction ? '<p>Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified.</p>' : ''}
+          ${access?.entitlementEndsAt && !subjectReviewAction ? `<p><strong>Provisional access through:</strong> ${escapeHtml(manilaDate(access.entitlementEndsAt, { includeTime: true }))} Philippine time</p>` : ''}
           <p>You can review the verification state in your Profile.</p>
-          <button class="dd2-button dd2-button-primary" id="dd2-payment-continue" type="button">Continue to Home</button>
+          <button class="dd2-button dd2-button-primary" id="dd2-payment-continue" type="button">${subjectReviewAction ? 'Return to my answer' : 'Continue to Home'}</button>
         </section>`;
       document.getElementById('dd2-payment-continue')?.addEventListener('click', () => {
-        hideNativeView();
+        if (subjectReviewAction) {
+          closeNativeView('payment-success');
+          return;
+        }
+        hideNativeView({ reason: 'payment-success' });
         history.replaceState({}, '', `${location.pathname}${location.search}#quorum`);
         global.DueDiligencePublicHome?.show?.();
       });
@@ -2352,7 +2523,7 @@
     }
   }
 
-  async function loadCommercialPricing() {
+  async function loadCommercialPricing(viewSequence = state.nativeViewSequence) {
     const host = document.getElementById('dd2-pricing-plans');
     if (!host) return;
     try {
@@ -2362,8 +2533,10 @@
           ? nativeWorkerRequest('/access', { requestId: randomId(18) })
           : Promise.resolve({ access: null }),
       ]);
+      if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') return;
       renderCommercialPlanCards(plansPayload.plans, accessPayload.access);
     } catch (error) {
+      if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') return;
       host.innerHTML = `<div class="dd2-status is-error">${escapeHtml(error.message || 'Current access options could not be loaded. Please retry.')}</div>`;
     }
   }
@@ -2567,7 +2740,7 @@
     closeEntry();
   }
 
-  function bindNativeViewHandlers(view) {
+  function bindNativeViewHandlers(view, viewSequence = state.nativeViewSequence) {
     document.getElementById('dd2-support-form')?.addEventListener('submit', submitSupport);
     document.getElementById('dd2-account-form')?.addEventListener('submit', submitAccount);
     document.getElementById('dd2-partnership-form')?.addEventListener('submit', submitPartnership);
@@ -2593,7 +2766,7 @@
       document.getElementById('dd2-account-year')?.addEventListener('change', syncFields);
       syncFields();
     }
-    if (view === 'pricing') loadCommercialPricing();
+    if (view === 'pricing') loadCommercialPricing(viewSequence);
     if (view === 'account' && state.user) loadBillingAndAccess();
     if (view === 'examination-room') {
       document.getElementById('dd2-professor-door')?.addEventListener('click', activateProfessorDoor);
@@ -2837,10 +3010,10 @@
     document.getElementById('dd2-year-level')?.addEventListener('change', updateEnrollmentFields);
     document.getElementById('dd2-onboarding-close')?.addEventListener('click', returnFromOnboarding);
     document.getElementById('dd2-onboarding-back')?.addEventListener('click', returnFromOnboarding);
-    document.getElementById('dd2-native-close')?.addEventListener('click', closeNativeView);
-    document.getElementById('dd2-native-back')?.addEventListener('click', closeNativeView);
+    document.getElementById('dd2-native-close')?.addEventListener('click', () => closeNativeView('close-button'));
+    document.getElementById('dd2-native-back')?.addEventListener('click', () => closeNativeView('back-button'));
     document.getElementById('dd2-native-view')?.addEventListener('click', (event) => {
-      if (event.target === event.currentTarget && state.nativeView) closeNativeView();
+      if (event.target === event.currentTarget && state.nativeView) closeNativeView('backdrop');
     });
     document.getElementById('dd2-reminder-continue')?.addEventListener('click', continueFromGuestReminder);
     document.getElementById('dd2-reminder-close')?.addEventListener('click', continueFromGuestReminder);
@@ -2870,7 +3043,7 @@
       }
       if (event.key === 'Escape' && state.nativeView) {
         event.preventDefault();
-        closeNativeView();
+        closeNativeView('escape');
         return;
       }
       if (event.key === 'Escape'
@@ -2885,11 +3058,21 @@
         continueFromGuestReminder();
       }
     });
-    global.addEventListener('popstate', () => {
+    global.addEventListener('popstate', (event) => {
       syncEntryWithHistoryRoute();
-      syncNativeViewWithHash();
+      const actionOverlayHandled = syncNativeViewWithHash({ reason: 'browser-back' });
+      if (actionOverlayHandled && event) {
+        try {
+          Object.defineProperty(event, 'dueDiligenceActionOverlayHandled', {
+            configurable: true,
+            value: true,
+          });
+        } catch {
+          event.dueDiligenceActionOverlayHandled = true;
+        }
+      }
     });
-    global.addEventListener('hashchange', syncNativeViewWithHash);
+    global.addEventListener('hashchange', () => syncNativeViewWithHash({ reason: 'route-change' }));
     global.addEventListener('pageshow', recoverAuthAfterNavigation);
     global.addEventListener('duediligence:session', () => {
       state.examinationRoomDoorRequest += 1;

@@ -1,0 +1,288 @@
+#page-community .pedro-inbox {
+  display: grid;
+  gap: 16px;
+  color: var(--home-ink);
+  font-family: var(--sans, Inter, sans-serif);
+}
+
+#page-community .pedro-header {
+  padding: 4px 2px 0;
+}
+
+#page-community .pedro-kicker {
+  margin: 0 0 6px;
+  color: var(--home-muted);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+#page-community .pedro-title,
+#page-community .pedro-empty-title,
+#page-community .pedro-error-title {
+  margin: 0;
+  color: var(--home-navy);
+  font-family: var(--serif, Georgia, serif);
+}
+
+#page-community .pedro-title {
+  font-size: clamp(30px, 5vw, 42px);
+  line-height: 1.08;
+}
+
+#page-community .pedro-intro,
+#page-community .pedro-empty-copy,
+#page-community .pedro-error-copy,
+#page-community .pedro-composer-guidance {
+  color: var(--home-muted);
+  line-height: 1.6;
+}
+
+#page-community .pedro-intro {
+  margin: 7px 0 0;
+  font-size: 15px;
+}
+
+#page-community .pedro-website-notice {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--home-gold);
+  color: var(--home-navy-soft);
+  background: color-mix(in srgb, var(--home-gold) 8%, var(--home-paper));
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+#page-community .pedro-status {
+  min-height: 20px;
+  margin: 0;
+  color: var(--home-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#page-community .pedro-thread {
+  display: grid;
+  gap: 14px;
+  max-height: min(58vh, 620px);
+  margin: 0;
+  padding: 2px 8px 2px 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 12px;
+  list-style: none;
+}
+
+#page-community .pedro-message {
+  display: grid;
+  width: min(86%, 680px);
+  gap: 7px;
+  padding: 16px 18px;
+  border: 1px solid var(--home-line);
+  border-radius: 16px;
+  background: var(--home-paper);
+  box-shadow: 0 12px 30px rgba(5, 19, 38, .06);
+}
+
+#page-community .pedro-message--user {
+  justify-self: end;
+  border-color: var(--home-navy);
+  color: var(--home-paper);
+  background: var(--home-navy);
+}
+
+#page-community .pedro-message.is-pending {
+  opacity: .72;
+}
+
+#page-community .pedro-message-role {
+  margin: 0;
+  color: var(--home-gold);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+#page-community .pedro-message--pedro .pedro-message-role {
+  color: var(--home-navy-soft);
+}
+
+#page-community .pedro-message-copy {
+  margin: 0;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1.66;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+#page-community .pedro-message-time {
+  color: var(--home-muted);
+  font-size: 13px;
+}
+
+#page-community .pedro-message--user .pedro-message-time {
+  color: color-mix(in srgb, var(--home-paper) 72%, transparent);
+}
+
+#page-community .pedro-message-actions,
+#page-community .pedro-quick-actions,
+#page-community .pedro-composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+#page-community .pedro-action,
+#page-community .pedro-suggestion,
+#page-community .pedro-retry,
+#page-community .pedro-submit {
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+#page-community .pedro-jump-latest {
+  justify-self: center;
+  min-height: 44px;
+  font-size: 14px;
+}
+
+#page-community .pedro-jump-latest[hidden] {
+  display: none !important;
+}
+
+#page-community .pedro-action:focus-visible,
+#page-community .pedro-suggestion:focus-visible,
+#page-community .pedro-retry:focus-visible,
+#page-community .pedro-submit:focus-visible,
+#page-community .pedro-composer-input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--home-gold) 45%, transparent);
+  outline-offset: 2px;
+}
+
+#page-community .pedro-empty,
+#page-community .pedro-error {
+  padding: clamp(24px, 5vw, 38px);
+  border: 1px dashed color-mix(in srgb, var(--home-gold) 68%, var(--home-line));
+  border-radius: 16px;
+  background: var(--home-paper);
+}
+
+#page-community .pedro-empty-title,
+#page-community .pedro-error-title {
+  font-size: 23px;
+  line-height: 1.2;
+}
+
+#page-community .pedro-empty-copy,
+#page-community .pedro-error-copy {
+  margin: 9px 0 17px;
+  font-size: 15px;
+}
+
+#page-community .pedro-error {
+  border-style: solid;
+  border-color: color-mix(in srgb, #9f2d35 46%, var(--home-line));
+}
+
+#page-community .pedro-composer {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--home-line);
+  border-radius: 18px;
+  background: var(--home-paper);
+  box-shadow: 0 18px 45px rgba(5, 19, 38, .08);
+}
+
+#page-community .pedro-composer-label {
+  color: var(--home-navy);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+#page-community .pedro-composer-input {
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  padding: 13px 14px;
+  border: 1px solid var(--home-line);
+  border-radius: 12px;
+  color: var(--home-ink);
+  background: var(--home-cream);
+  font: 400 16px/1.55 var(--sans, Inter, sans-serif);
+}
+
+#page-community .pedro-composer-input:disabled {
+  color: var(--home-muted);
+  cursor: progress;
+  opacity: .78;
+}
+
+#page-community .pedro-composer-guidance {
+  margin: 0;
+  font-size: 14px;
+}
+
+#page-community .pedro-composer-actions {
+  justify-content: flex-end;
+}
+
+#page-community .pedro-message--loading {
+  min-height: 116px;
+}
+
+#page-community .pedro-skeleton {
+  display: block;
+  height: 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--home-navy) 10%, var(--home-paper));
+}
+
+#page-community .pedro-skeleton--label {
+  width: 68px;
+}
+
+#page-community .pedro-skeleton--line {
+  width: 92%;
+}
+
+#page-community .pedro-skeleton--short {
+  width: 58%;
+}
+
+@media (max-width: 640px) {
+  #page-community .pedro-thread {
+    max-height: 52vh;
+  }
+
+  #page-community .pedro-message {
+    width: 94%;
+    padding: 14px 15px;
+  }
+
+  #page-community .pedro-empty,
+  #page-community .pedro-error,
+  #page-community .pedro-composer {
+    border-radius: 14px;
+  }
+
+  #page-community .pedro-action,
+  #page-community .pedro-suggestion,
+  #page-community .pedro-retry,
+  #page-community .pedro-submit {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #page-community .pedro-inbox *,
+  #page-community .pedro-inbox *::before,
+  #page-community .pedro-inbox *::after {
+    scroll-behavior: auto;
+    transition: none;
+  }
+}

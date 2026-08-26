@@ -124,6 +124,7 @@
   height: 38px;
   flex: 0 0 38px;
   place-items: center;
+  overflow: hidden;
   border: 1px solid #c5a059;
   border-radius: 50%;
   color: #c5a059;
@@ -131,6 +132,13 @@
   font-family: var(--serif-display);
   font-size: 12px;
   font-weight: 700;
+}
+
+.lex-member-mark img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
 }
 
 .lex-field-label,
@@ -2422,6 +2430,13 @@ body.quorum-drawer-open { overflow: hidden; }
   font: 800 28px/1 var(--sans);
 }
 
+.quorum-profile-portrait img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 .quorum-profile-identity {
   position: relative;
   z-index: 1;
@@ -2440,7 +2455,7 @@ body.quorum-drawer-open { overflow: hidden; }
 .quorum-profile-identity .quorum-panel-copy {
   margin: 0;
   color: #cbd7e5;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .quorum-profile-counts,
@@ -2454,9 +2469,10 @@ body.quorum-drawer-open { overflow: hidden; }
 .quorum-profile-counts { margin-top: 20px; }
 
 .quorum-profile-photo-copy {
+  min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 5px 16px;
+  gap: 8px 16px;
   align-items: center;
 }
 
@@ -2468,13 +2484,44 @@ body.quorum-drawer-open { overflow: hidden; }
 .quorum-profile-photo-copy small {
   grid-column: 1;
   color: #627087;
-  font: 500 11px/1.5 var(--sans);
+  font: 500 14px/1.55 var(--sans);
 }
 
-.quorum-profile-photo-copy .lex-button {
+.quorum-profile-photo-actions {
   grid-column: 2;
   grid-row: 1 / span 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
+
+.quorum-profile-photo-actions .lex-button {
+  font-size: 14px;
+}
+
+.quorum-profile-photo-actions .lex-button.is-danger {
+  border-color: #c87b82;
+  color: #8f2530;
+  background: #fff7f7;
+}
+
+.quorum-profile-photo-actions .lex-button.is-danger:hover,
+.quorum-profile-photo-actions .lex-button.is-danger:focus-visible {
+  border-color: #9f2d35;
+  color: #7a1721;
+  background: #ffebed;
+}
+
+.quorum-profile-photo-status {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #526174;
+  font-size: 14px;
+}
+
+.quorum-profile-photo-status.is-success { color: #246b43; }
+.quorum-profile-photo-status.is-error { color: #9f2d35; }
 
 .quorum-profile-privacy {
   margin-top: 12px;
@@ -2498,7 +2545,7 @@ body.quorum-drawer-open { overflow: hidden; }
 
 .quorum-profile-section-head small {
   color: #6b778a;
-  font: 500 11px/1.45 var(--sans);
+  font: 500 13px/1.5 var(--sans);
 }
 
 .quorum-profile-panel > .quorum-profile-actions {
@@ -2517,8 +2564,10 @@ body.quorum-drawer-open { overflow: hidden; }
   .quorum-profile-portrait { width: 88px; height: 88px; }
   .quorum-profile-photo-copy { grid-template-columns: 1fr; }
   .quorum-profile-photo-copy small,
-  .quorum-profile-photo-copy .lex-button { grid-column: 1; grid-row: auto; }
-  .quorum-profile-photo-copy .lex-button { width: 100%; margin-top: 6px; }
+  .quorum-profile-photo-actions,
+  .quorum-profile-photo-status { grid-column: 1; grid-row: auto; }
+  .quorum-profile-photo-actions { display: grid; justify-content: stretch; margin-top: 6px; }
+  .quorum-profile-photo-actions .lex-button { width: 100%; }
 }
 
 @media (max-width: 1120px) {

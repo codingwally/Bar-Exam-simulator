@@ -515,18 +515,17 @@ assert.match(
 assert.match(examinations, /dueDiligenceActionOverlayHandled\s*===\s*true/);
 assert.match(examinations, /adoptAccess\?\.\(material\.access,\s*\{\s*enforce:\s*false\s*\}\)/);
 
-for (const asset of [
-  'assets/phase2-experience.js',
-  'assets/phase4-experience.js',
-]) {
-  assert.ok(
-    index.includes(`${asset}?v=syllabus-reveal-p0-20260826-2`),
-    `${asset} must use the reviewed cache-busting release`,
-  );
-}
 assert.ok(
-  index.includes('assets/feature-loader.js?v=public-reliability-20260827-1'),
-  'assets/feature-loader.js must use the public reliability cache-busting release',
+  index.includes('assets/phase2-experience.js?v=profile-photo-release2-20260827-1'),
+  'assets/phase2-experience.js must use the profile-photo release cache key',
+);
+assert.ok(
+  index.includes('assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2'),
+  'assets/phase4-experience.js must use the reviewed cache-busting release',
+);
+assert.ok(
+  index.includes('assets/feature-loader.js?v=profile-photo-release2-20260827-1'),
+  'assets/feature-loader.js must use the profile-photo release cache key',
 );
 for (const asset of [
   'assets/study-workspace.js',
@@ -538,15 +537,18 @@ for (const asset of [
 }
 for (const asset of [
   'assets/examinations.css',
-  'assets/examinations.js',
 ]) {
   assert.ok(
     featureLoader.includes(`${asset}?v=public-reliability-20260827-1`),
     `${asset} must use the public reliability lazy-load cache-busting release`,
   );
 }
-assert.match(serviceWorker, /duediligence-shell-20260827-public-reliability-2/);
+assert.match(serviceWorker, /duediligence-shell-20260827-profile-pedro-release2-1/);
 assert.match(studyWorkspace, /service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1/);
+assert.ok(
+  featureLoader.includes('assets/examinations.js?v=pedro-release2-20260827-1'),
+  'assets/examinations.js must use the Pedro exact-opener cache-busting release',
+);
 
 const userInstructionsStart = runbook.indexOf('## Copy-ready user and Support instructions');
 const technicalContractStart = runbook.indexOf('## Technical contract');

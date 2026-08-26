@@ -55,6 +55,7 @@ const QUORUM_COMMAND_OPERATIONS = new Set([
   'mark_all_notifications',
   'remove_attachment',
   'set_profile_avatar',
+  'remove_profile_avatar',
   'telemetry',
 ]);
 const QUORUM_ADMIN_OPERATIONS = new Set([
@@ -134,7 +135,7 @@ export const QUORUM_LIMITS = Object.freeze({
   imageBytes: 3_145_728,
   imageTotalBytes: 12_582_912,
   maximumImages: 12,
-  avatarBytes: 5_242_880,
+  avatarBytes: 3_145_728,
   entryCharacters: 4_000,
   commentCharacters: 2_000,
   repostCharacters: 1_000,
@@ -528,7 +529,7 @@ export function normalizeQuorumCommandRequest(input = {}) {
         label: 'Image reference', maximum: 500, optional: true,
       }),
     };
-  } else if (operation === 'set_profile_avatar') {
+  } else if (['set_profile_avatar', 'remove_profile_avatar'].includes(operation)) {
     normalized = {};
   } else if (operation === 'telemetry') {
     normalized = {
@@ -660,6 +661,13 @@ export function normalizeQuorumAvatar(image) {
       'The file contents do not match the selected image type.',
     );
   }
+  const cropCoordinate = (value) => {
+    if (value === null || value === undefined || value === '') return 0.5;
+    const coordinate = Number(value);
+    return Number.isFinite(coordinate)
+      ? Math.min(1, Math.max(0, coordinate))
+      : 0.5;
+  };
   return {
     bytes,
     mimeType,
@@ -667,8 +675,8 @@ export function normalizeQuorumAvatar(image) {
     byteSize: bytes.byteLength,
     width,
     height,
-    cropX: Math.min(1, Math.max(0, Number(candidate.cropX) || 0.5)),
-    cropY: Math.min(1, Math.max(0, Number(candidate.cropY) || 0.5)),
+    cropX: cropCoordinate(candidate.cropX),
+    cropY: cropCoordinate(candidate.cropY),
   };
 }
 

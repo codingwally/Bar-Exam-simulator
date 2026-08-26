@@ -8,8 +8,14 @@
 
   const manifests = Object.freeze({
     quorum: Object.freeze({
-      styles: ['assets/lex-forum.css?v=public-reliability-20260827-1&profile=chambers-20260827-1'],
-      scripts: ['assets/lex-forum.js?v=public-reliability-20260827-1&profile=chambers-20260827-1'],
+      styles: [
+        'assets/lex-forum.css?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1',
+        'assets/pedro.css?v=pedro-release2-20260827-1',
+      ],
+      scripts: [
+        'assets/pedro.js?v=pedro-release2-20260827-1',
+        'assets/lex-forum.js?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-1&profile=chambers-20260827-1',
+      ],
     }),
     examinations: Object.freeze({
       styles: [
@@ -18,7 +24,7 @@
       ],
       scripts: [
         'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1',
-        'assets/examinations.js?v=public-reliability-20260827-1',
+        'assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1',
       ],
     }),
     content: Object.freeze({
@@ -28,7 +34,7 @@
       ],
       scripts: [
         'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1',
-        'assets/duediligence-2026.js?v=public-reliability-20260827-1',
+        'assets/duediligence-2026.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1',
       ],
     }),
   });

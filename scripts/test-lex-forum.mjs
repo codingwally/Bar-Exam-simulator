@@ -62,8 +62,8 @@ for (const removedComposerCopy of [
   assert.doesNotMatch(page, removedComposerCopy);
 }
 assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
-assert.match(featureLoader, /assets\/lex-forum\.css\?v=public-reliability-20260827-1/);
-assert.match(featureLoader, /assets\/lex-forum\.js\?v=public-reliability-20260827-1/);
+assert.match(featureLoader, /assets\/lex-forum\.css\?v=profile-photo-release2-20260827-1/);
+assert.match(featureLoader, /assets\/lex-forum\.js\?v=profile-photo-release2-20260827-1/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);

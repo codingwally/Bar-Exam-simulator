@@ -844,7 +844,11 @@
   global.DueDiligence2026 = Object.freeze({ open, exportVerdict, openVerdictExport, restoreRoute });
   global.openBarEasy = () => open('bar_easy', document.getElementById('spa-bar-easy'));
   global.openChairCases = () => open('chair_case', document.getElementById('spa-chairs-case'));
-  global.openDoctrines = () => open('doctrine', document.getElementById('spa-jurisprudence'));
+  global.openDoctrines = (options = {}) => open(
+    'doctrine',
+    document.getElementById('spa-jurisprudence'),
+    options,
+  );
   global.openAnchorCases = () => open('anchor_case', document.getElementById('spa-case-digest'));
   global.addEventListener('popstate', restoreRoute);
   global.addEventListener('duediligence:session', (event) => {

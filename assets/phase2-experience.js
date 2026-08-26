@@ -46,9 +46,6 @@
     nativeViewSequence: 0,
     nativeViewClosing: false,
     overlayFocusOrigins: new Map(),
-    profileAvatarUrl: '',
-    profileAvatarBusy: false,
-    profileAvatarLoaded: false,
   };
 
   let resolveAuthReady;
@@ -177,8 +174,6 @@
   const pendingSubmissionStorageKey = 'duediligence.pending-submission.v1';
   const authTimeoutMs = 12_000;
   const pendingSubmissionMaxAgeMs = 30 * 60 * 1000;
-  const profilePhotoSourceLimit = 20 * 1024 * 1024;
-  const profilePhotoPayloadLimit = 3 * 1024 * 1024;
 
   function dispatchSessionState(session, reason = 'session') {
     const userId = session?.user?.id || null;
@@ -825,8 +820,6 @@
     state.user = null;
     state.profile = null;
     state.admin = null;
-    state.profileAvatarUrl = '';
-    state.profileAvatarLoaded = false;
     global.DueDiligencePrivateBeta?.clearAccess?.();
     syncAuthUi();
   }
@@ -1115,7 +1108,9 @@
   }
 
   function initials() {
-    const source = state.profile?.display_name || state.user?.user_metadata?.full_name || 'Due Diligence';
+    const source = (state.profile?.id === state.user?.id ? state.profile?.display_name : '')
+      || state.user?.user_metadata?.full_name
+      || 'Due Diligence';
     return source.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   }
 
@@ -1128,146 +1123,253 @@
     return 'Member';
   }
 
-  function renderAvatarNode(element, url = state.profileAvatarUrl) {
-    if (!element) return;
-    element.replaceChildren();
-    if (url) {
-      const image = document.createElement('img');
-      image.src = url;
-      image.alt = '';
-      image.referrerPolicy = 'no-referrer';
-      element.append(image);
-      element.classList.add('has-photo');
+  function profilePhotoFallback() {
+    return {
+      avatarUrl: null,
+      displayName: (state.profile?.id === state.user?.id ? state.profile?.display_name : '')
+        || state.user?.user_metadata?.full_name
+        || 'Due Diligence Member',
+    };
+  }
+
+  function renderHeaderAccountControl(profile = null) {
+    const control = document.getElementById('header-account-control');
+    const signedIn = Boolean(state.session?.access_token && state.user);
+    if (!signedIn) {
+      if (control) {
+        control.classList.remove('has-profile-photo-control');
+        control.textContent = 'Sign in';
+      }
       return;
     }
-    const fallback = document.createElement('span');
-    fallback.textContent = initials();
-    element.append(fallback);
-    element.classList.remove('has-photo');
-  }
-
-  function syncProfileAvatars() {
-    renderAvatarNode(document.getElementById('dd2-account-avatar'));
-    renderAvatarNode(document.getElementById('dd2-header-role-avatar'));
-  }
-
-  async function loadProfileAvatar(options = {}) {
-    if (!state.session?.access_token || !state.user || state.profileAvatarBusy) return;
-    if (state.profileAvatarLoaded && options.force !== true) {
-      syncProfileAvatars();
-      return;
-    }
-    state.profileAvatarBusy = true;
-    try {
-      const payload = await nativeWorkerRequest('/quorum/query', {
-        body: { operation: 'profile', payload: {} },
-        submissionView: 'account',
+    const photo = profile
+      || global.DueDiligenceProfilePhoto?.current?.(state.user.id)
+      || profilePhotoFallback();
+    const renderAvatar = (avatar) => {
+      if (!avatar) return;
+      avatar.textContent = initials();
+      avatar.setAttribute('aria-hidden', 'true');
+      global.DueDiligenceProfilePhoto?.render?.(avatar, photo, {
+        decorative: true,
+        initials: initials(),
+        refreshOnError: true,
       });
-      state.profileAvatarUrl = String(payload?.data?.avatarUrl || '');
-      state.profileAvatarLoaded = true;
-      syncProfileAvatars();
-    } catch (error) {
-      const status = document.getElementById('dd2-account-photo-status');
-      if (status) {
-        status.className = 'dd2-status is-error';
-        status.textContent = error?.message || 'Your profile photo could not be loaded. Try again.';
-      }
-    } finally {
-      state.profileAvatarBusy = false;
+    };
+    renderAvatar(document.getElementById('dd2-header-role-avatar'));
+    if (control) {
+      const avatar = document.createElement('span');
+      avatar.className = 'qfs-profile-avatar';
+      const label = document.createElement('span');
+      label.textContent = 'Profile';
+      renderAvatar(avatar);
+      control.classList.add('has-profile-photo-control');
+      control.replaceChildren(avatar, label);
     }
   }
 
-  async function profilePhotoToPayload(file) {
-    if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
-        || file.size < 1 || file.size > profilePhotoSourceLimit) {
-      throw new Error('Choose a JPEG, PNG, or WebP profile photo smaller than 20 MB.');
-    }
-    const bitmap = typeof createImageBitmap === 'function'
-      ? await createImageBitmap(file)
-      : await new Promise((resolve, reject) => {
-        const image = new Image();
-        const url = URL.createObjectURL(file);
-        image.onload = () => {
-          URL.revokeObjectURL(url);
-          resolve(image);
-        };
-        image.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error('This photo could not be opened. Choose another JPG, PNG, or WebP image.'));
-        };
-        image.src = url;
-      });
-    try {
-      if (bitmap.width < 256 || bitmap.height < 256) {
-        throw new Error('Choose a profile photo at least 256 pixels wide and tall.');
-      }
-      const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
-      const width = Math.max(256, Math.round(bitmap.width * scale));
-      const height = Math.max(256, Math.round(bitmap.height * scale));
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext('2d', { alpha: false });
-      context.fillStyle = '#fff';
-      context.fillRect(0, 0, width, height);
-      context.drawImage(bitmap, 0, 0, width, height);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-      if (!blob || blob.size > profilePhotoPayloadLimit) {
-        throw new Error('This photo is still too large after optimization. Choose a smaller image.');
-      }
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      let binary = '';
-      for (let index = 0; index < bytes.length; index += 0x8000) {
-        binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
-      }
-      return {
-        mimeType: 'image/jpeg',
-        dataBase64: btoa(binary),
-        width,
-        height,
-        cropX: 0.5,
-        cropY: 0.5,
-      };
-    } finally {
-      bitmap.close?.();
-    }
-  }
-
-  async function uploadProfilePhoto(event) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    if (!file) return;
-    const button = document.getElementById('dd2-account-photo-button');
-    const status = document.getElementById('dd2-account-photo-status');
-    if (button) {
-      button.disabled = true;
-      button.textContent = 'Preparing photo…';
-    }
-    setStatus('dd2-account-photo-status', 'Optimizing your photo securely…');
-    try {
-      const profileImage = await profilePhotoToPayload(file);
-      if (button) button.textContent = 'Uploading photo…';
-      await nativeWorkerRequest('/quorum/command', {
-        body: { operation: 'set_profile_avatar', payload: {}, profileImage },
-        submissionView: 'account',
-      });
-      state.profileAvatarLoaded = false;
-      await loadProfileAvatar({ force: true });
-      setStatus('dd2-account-photo-status', 'Profile photo updated across Home.', 'success');
-      global.toast?.('Profile photo updated.', 'ok');
-    } catch (error) {
+  function resetAccountProfilePhotoRemovalConfirmation(options = {}) {
+    const remove = document.getElementById('dd2-account-photo-remove');
+    if (!remove) return;
+    const wasArmed = remove.dataset.confirmRemove === 'true';
+    delete remove.dataset.confirmRemove;
+    clearTimeout(remove.confirmTimer);
+    remove.textContent = 'Remove photo';
+    if (wasArmed && options.expired === true) {
       setStatus(
         'dd2-account-photo-status',
-        error?.message || 'Your profile photo could not be updated. Choose another image and try again.',
+        'Removal confirmation expired. Your profile photo was not changed.',
+      );
+    }
+  }
+
+  function renderAccountProfilePhoto(profile = null) {
+    resetAccountProfilePhotoRemovalConfirmation();
+    const photo = profile || profilePhotoFallback();
+    const avatar = document.getElementById('dd2-account-avatar');
+    global.DueDiligenceProfilePhoto?.render?.(avatar, photo, {
+      alt: `${photo.displayName || 'Your'} profile photo`,
+      fallbackLabel: `${photo.displayName || 'Your'} initials`,
+      initials: initials(),
+      refreshOnError: true,
+      onFallback: (reason) => {
+        if (reason === 'image-error') {
+          setStatus(
+            'dd2-account-photo-status',
+            'Your profile photo link could not be refreshed. Your initials are shown; try again when your connection is stable.',
+            'error',
+          );
+        }
+      },
+    });
+    const choose = document.getElementById('dd2-account-photo-choose');
+    const remove = document.getElementById('dd2-account-photo-remove');
+    if (choose) choose.textContent = photo.avatarUrl ? 'Change profile picture' : 'Upload profile picture';
+    if (remove) remove.hidden = !photo.avatarUrl;
+    renderHeaderAccountControl(photo);
+  }
+
+  function setAccountProfilePhotoBusy(busy, label = '') {
+    const choose = document.getElementById('dd2-account-photo-choose');
+    const remove = document.getElementById('dd2-account-photo-remove');
+    if (choose) {
+      choose.disabled = busy;
+      choose.setAttribute('aria-busy', String(busy));
+      if (busy && label) choose.textContent = label;
+      else choose.removeAttribute('aria-busy');
+    }
+    if (remove) {
+      remove.disabled = busy;
+      if (busy) remove.setAttribute('aria-busy', 'true');
+      else remove.removeAttribute('aria-busy');
+    }
+  }
+
+  async function loadAccountProfilePhoto(options = {}) {
+    if (!state.session?.access_token || !state.user) return null;
+    if (!global.DueDiligenceProfilePhoto) {
+      const choose = document.getElementById('dd2-account-photo-choose');
+      const remove = document.getElementById('dd2-account-photo-remove');
+      if (choose) {
+        choose.disabled = true;
+        choose.textContent = 'Profile photo unavailable';
+      }
+      if (remove) {
+        remove.disabled = true;
+        remove.hidden = true;
+      }
+      setStatus(
+        'dd2-account-photo-status',
+        'Profile photo controls could not be loaded. Reload Account to try again.',
+        'error',
+      );
+      return null;
+    }
+    const userId = state.user.id;
+    if (options.announce !== false) {
+      setStatus('dd2-account-photo-status', 'Loading your protected profile photo…');
+    }
+    try {
+      const profile = await global.DueDiligenceProfilePhoto.load({
+        force: options.force === true,
+        reason: 'account-profile',
+      });
+      if (state.user?.id !== userId) return null;
+      renderAccountProfilePhoto(profile);
+      if (options.announce !== false) {
+        setStatus(
+          'dd2-account-photo-status',
+          profile.avatarUrl
+            ? 'Profile photo loaded securely.'
+            : 'No profile photo uploaded yet. Your initials are shown.',
+          profile.avatarUrl ? 'success' : '',
+        );
+      }
+      return profile;
+    } catch (error) {
+      if (state.user?.id !== userId || error?.code === 'PROFILE_PHOTO_SESSION_CHANGED') return null;
+      renderAccountProfilePhoto(profilePhotoFallback());
+      if (options.announce !== false) {
+        setStatus(
+          'dd2-account-photo-status',
+          'Your profile photo could not be loaded. Your initials are shown; try again when your connection is stable.',
+          'error',
+        );
+      }
+      return null;
+    }
+  }
+
+  async function uploadAccountProfilePhoto() {
+    const input = document.getElementById('dd2-account-photo-input');
+    const file = input?.files?.[0];
+    if (!file || !state.user) return;
+    if (!global.DueDiligenceProfilePhoto) {
+      await loadAccountProfilePhoto({ announce: true });
+      return;
+    }
+    resetAccountProfilePhotoRemovalConfirmation();
+    const userId = state.user.id;
+    setAccountProfilePhotoBusy(true, 'Preparing photo…');
+    setStatus('dd2-account-photo-status', 'Optimizing and securely uploading your profile photo…');
+    try {
+      const profile = await global.DueDiligenceProfilePhoto.upload(file);
+      if (state.user?.id !== userId) return;
+      renderAccountProfilePhoto(profile);
+      setStatus('dd2-account-photo-status', 'Your profile photo was updated.', 'success');
+      global.toast?.('Profile photo updated.', 'ok');
+    } catch (error) {
+      if (state.user?.id !== userId || error?.code === 'PROFILE_PHOTO_SESSION_CHANGED') return;
+      setStatus(
+        'dd2-account-photo-status',
+        error?.message || 'Your profile photo could not be updated. Please try again.',
         'error',
       );
     } finally {
-      input.value = '';
-      if (button) {
-        button.disabled = false;
-        button.textContent = state.profileAvatarUrl ? 'Change photo' : 'Upload photo';
+      if (input) input.value = '';
+      if (state.user?.id === userId) {
+        setAccountProfilePhotoBusy(false);
+        renderAccountProfilePhoto(
+          global.DueDiligenceProfilePhoto.current?.(userId) || profilePhotoFallback(),
+        );
       }
-      if (status && !status.textContent) status.textContent = 'No photo change was made.';
+    }
+  }
+
+  async function removeAccountProfilePhoto() {
+    if (!state.user) return;
+    if (!global.DueDiligenceProfilePhoto) {
+      await loadAccountProfilePhoto({ announce: true });
+      return;
+    }
+    const current = global.DueDiligenceProfilePhoto.current?.(state.user.id);
+    if (!current?.avatarUrl) return;
+    const remove = document.getElementById('dd2-account-photo-remove');
+    if (remove?.dataset.confirmRemove !== 'true') {
+      remove.dataset.confirmRemove = 'true';
+      remove.textContent = 'Confirm removal';
+      setStatus(
+        'dd2-account-photo-status',
+        'Select Confirm removal to replace your photo with your initials.',
+      );
+      clearTimeout(remove.confirmTimer);
+      remove.confirmTimer = setTimeout(() => {
+        if (remove.isConnected && remove.dataset.confirmRemove === 'true') {
+          resetAccountProfilePhotoRemovalConfirmation({ expired: true });
+        }
+      }, 8000);
+      return;
+    }
+    resetAccountProfilePhotoRemovalConfirmation();
+    const userId = state.user.id;
+    let removalSucceeded = false;
+    setAccountProfilePhotoBusy(true);
+    if (remove) remove.textContent = 'Removing…';
+    setStatus('dd2-account-photo-status', 'Removing your profile photo…');
+    try {
+      const profile = await global.DueDiligenceProfilePhoto.remove();
+      if (state.user?.id !== userId) return;
+      renderAccountProfilePhoto(profile);
+      removalSucceeded = true;
+      setStatus('dd2-account-photo-status', 'Your profile photo was removed. Your initials are now shown.', 'success');
+      global.toast?.('Profile photo removed.', 'ok');
+    } catch (error) {
+      if (state.user?.id !== userId || error?.code === 'PROFILE_PHOTO_SESSION_CHANGED') return;
+      setStatus(
+        'dd2-account-photo-status',
+        error?.message || 'Your profile photo could not be removed. Please try again.',
+        'error',
+      );
+    } finally {
+      if (remove) remove.textContent = 'Remove photo';
+      if (state.user?.id === userId) {
+        setAccountProfilePhotoBusy(false);
+        renderAccountProfilePhoto(
+          global.DueDiligenceProfilePhoto.current?.(userId) || profilePhotoFallback(),
+        );
+        if (removalSucceeded) {
+          requestAnimationFrame(() => document.getElementById('dd2-account-photo-choose')?.focus());
+        }
+      }
     }
   }
 
@@ -1282,7 +1384,7 @@
     }
     const headerAccount = document.getElementById('header-account-control');
     if (headerAccount) {
-      headerAccount.textContent = signedIn ? 'Profile' : 'Sign in';
+      renderHeaderAccountControl();
       headerAccount.title = signedIn
         ? 'Open your profile and account controls.'
         : 'Sign in to Due Diligence.';
@@ -1300,10 +1402,6 @@
       const role = accountRoleLabel();
       roleButton.title = `Open profile · Role: ${role}`;
       roleButton.setAttribute('aria-label', `Open profile. Current role: ${role}`);
-    }
-    if (signedIn) {
-      syncProfileAvatars();
-      loadProfileAvatar().catch(() => {});
     }
     const badge = document.getElementById('dd2-guest-badge');
     if (badge && !signedIn) {
@@ -1745,12 +1843,13 @@
           </div>
         </div>
         <div class="dd2-account-photo-actions">
-          <button class="dd2-button dd2-button-secondary" id="dd2-account-photo-button" type="button">${state.profileAvatarUrl ? 'Change photo' : 'Upload photo'}</button>
+          <button class="dd2-button dd2-button-secondary" id="dd2-account-photo-choose" type="button">Upload profile picture</button>
+          <button class="dd2-button dd2-button-danger" id="dd2-account-photo-remove" type="button" hidden>Remove photo</button>
           <input id="dd2-account-photo-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
-          <small>JPEG, PNG, or WebP · at least 256 px · up to 20 MB</small>
+          <small>JPEG, PNG, or WebP source up to 20 MB. Due Diligence creates a protected, optimized upload no larger than 3 MB; the photo is shown on Home and your profile.</small>
         </div>
       </section>
-      <div class="dd2-status dd2-account-photo-status" id="dd2-account-photo-status" role="status" aria-live="polite"></div>
+      <div class="dd2-status dd2-account-photo-status" id="dd2-account-photo-status" role="status" aria-live="polite">Loading your protected profile photo…</div>
       <div class="dd2-account-grid">
         <section class="dd2-account-panel" aria-labelledby="dd2-account-details-title">
           <header class="dd2-account-panel-head">
@@ -2721,8 +2820,6 @@
     state.session = null;
     state.user = null;
     state.profile = null;
-    state.profileAvatarUrl = '';
-    state.profileAvatarLoaded = false;
     global.DueDiligencePrivateBeta?.clear?.();
     syncAuthUi();
     hideNativeView();
@@ -2734,10 +2831,6 @@
     document.getElementById('dd2-account-form')?.addEventListener('submit', submitAccount);
     document.getElementById('dd2-partnership-form')?.addEventListener('submit', submitPartnership);
     document.getElementById('dd2-logout')?.addEventListener('click', signOut);
-    document.getElementById('dd2-account-photo-button')?.addEventListener('click', () => {
-      document.getElementById('dd2-account-photo-input')?.click();
-    });
-    document.getElementById('dd2-account-photo-input')?.addEventListener('change', uploadProfilePhoto);
     document.getElementById('dd2-account-signin')?.addEventListener('click', () => {
       hideNativeView();
       showEntry({ allowDismiss: true });
@@ -2757,9 +2850,17 @@
         if (professor) professor.required = professorSelected;
       };
       document.getElementById('dd2-account-year')?.addEventListener('change', syncFields);
+      document.getElementById('dd2-account-photo-choose')?.addEventListener('click', () => {
+        resetAccountProfilePhotoRemovalConfirmation();
+        document.getElementById('dd2-account-photo-input')?.click();
+      });
+      document.getElementById('dd2-account-photo-input')?.addEventListener('change', uploadAccountProfilePhoto);
+      document.getElementById('dd2-account-photo-remove')?.addEventListener('click', removeAccountProfilePhoto);
       syncFields();
-      syncProfileAvatars();
-      loadProfileAvatar().catch(() => {});
+      renderAccountProfilePhoto(
+        global.DueDiligenceProfilePhoto?.current?.(state.user?.id) || profilePhotoFallback(),
+      );
+      loadAccountProfilePhoto({ force: true }).catch(() => {});
     }
     if (view === 'pricing') loadCommercialPricing(viewSequence);
     if (view === 'account' && state.user) loadBillingAndAccess();
@@ -3071,9 +3172,25 @@
     });
     global.addEventListener('hashchange', () => syncNativeViewWithHash({ reason: 'route-change' }));
     global.addEventListener('pageshow', recoverAuthAfterNavigation);
-    global.addEventListener('duediligence:session', () => {
+    global.addEventListener('duediligence:profile-photo', (event) => {
+      const detailUserId = String(event.detail?.userId || '');
+      const activeUserId = String(state.user?.id || '');
+      renderAccountProfilePhoto(
+        detailUserId && detailUserId === activeUserId && event.detail?.profile
+          ? event.detail.profile
+          : global.DueDiligenceProfilePhoto?.current?.(activeUserId) || profilePhotoFallback(),
+      );
+    });
+    global.addEventListener('duediligence:session', (event) => {
       state.examinationRoomDoorRequest += 1;
       if (state.nativeView === 'examination-room') checkProfessorDoor();
+      renderHeaderAccountControl();
+      if (event.detail?.authenticated === true) {
+        loadAccountProfilePhoto({
+          force: event.detail?.reason === 'SIGNED_IN',
+          announce: state.nativeView === 'account',
+        }).catch(() => {});
+      }
     });
     global.addEventListener('duediligence:profile-completed', () => {
       if (state.nativeView === 'examination-room') checkProfessorDoor();

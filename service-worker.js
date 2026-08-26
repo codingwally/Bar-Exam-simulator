@@ -1,15 +1,17 @@
-const CACHE_VERSION = 'duediligence-shell-20260827-public-reliability-2-examination-room-production-1';
+const CACHE_VERSION = 'duediligence-shell-20260827-profile-pedro-release2-1';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',
-  '/assets/phase2.css?release=examination-room-doors-20260826-2&profile=chambers-20260827-1',
+  '/assets/phase2.css?release=profile-photo-release2-20260827-1&doors=examination-room-doors-20260826-2&profile=chambers-20260827-1',
   '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
-  '/assets/quorum-first-shell.css?v=public-reliability-20260827-2',
+  '/assets/quorum-first-shell.css?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-2',
   '/assets/quorum-first-shell.js?v=syllabus-review-20260823-1',
-  '/assets/phase2-experience.js?v=syllabus-reveal-p0-20260826-2-examination-room-3&profile=chambers-20260827-1&access=paid-expiry-20260827-1',
+  '/assets/profile-photo.js?v=profile-photo-release2-20260827-1',
+  '/assets/phase2-experience.js?v=profile-photo-release2-20260827-1&baseline=syllabus-reveal-p0-20260826-2-examination-room-3&profile=chambers-20260827-1&access=paid-expiry-20260827-1',
+  '/assets/pedro-navigation.js?v=pedro-release2-20260827-1',
   '/assets/icons/navigation/door-open.svg',
   '/assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4&feedback=offline-save-20260827-1',
   EXAMINATION_STUDENT_SHELL,

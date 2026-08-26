@@ -47,7 +47,7 @@ assert.match(
   /id="dd2-header-role-button"[^>]*>[\s\S]*?<\/button>\s*<button class="dd2-header-exam-button" id="dd2-header-exam-button"[^>]*data-dd2-view="examination-room"/,
   'The visible Examination Room shortcut must sit immediately beside the signed-in Role control.',
 );
-assert.match(html, /phase2-experience\.js\?v=syllabus-reveal-p0-20260826-2-examination-room-3/);
+assert.match(html, /phase2-experience\.js\?v=profile-photo-release2-20260827-1&amp;baseline=syllabus-reveal-p0-20260826-2-examination-room-3/);
 assert.match(phase2Config, /examinationRoom:\s*true/);
 assert.match(shellCss, /#spa-examination-room\s*\{[\s\S]*door-open\.svg/);
 
@@ -158,8 +158,8 @@ assert.match(phase2Css, /@media \(max-width: 820px\)[\s\S]*\.dd2-examination-doo
 assert.doesNotMatch(phase2Css.match(/\.dd2-native-view\[data-native-view="examination-room"\][\s\S]*?body\.dd2-locked/)?.[0] || '', /linear-gradient|radial-gradient/);
 
 assert.match(serviceWorker, /\/assets\/icons\/navigation\/door-open\.svg/);
-assert.match(serviceWorker, /phase2-experience\.js\?v=syllabus-reveal-p0-20260826-2-examination-room-3/);
-assert.match(serviceWorker, /quorum-first-shell\.css\?v=public-reliability-20260827-2/);
+assert.match(serviceWorker, /phase2-experience\.js\?v=profile-photo-release2-20260827-1&baseline=syllabus-reveal-p0-20260826-2-examination-room-3/);
+assert.match(serviceWorker, /quorum-first-shell\.css\?v=profile-photo-release2-20260827-1&baseline=public-reliability-20260827-2/);
 assert.match(icon, /viewBox="0 0 24 24"/);
 assert.match(icon, /M11 4\.562v16\.157/);
 

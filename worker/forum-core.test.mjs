@@ -12,6 +12,7 @@ import {
   normalizeForumReactionRequest,
   normalizeForumReportRequest,
   normalizeQuorumAdminRequest,
+  normalizeQuorumAvatar,
   normalizeQuorumCommandRequest,
   normalizeQuorumImage,
   normalizeQuorumQueryRequest,
@@ -465,6 +466,46 @@ test('Quorum image validation accepts real signatures and rejects disguised file
   );
 });
 
+test('Quorum profile photos enforce the same 3 MB upload boundary as post images', () => {
+  const acceptedBytes = Uint8Array.from([0xff, 0xd8, 0xff, 0x00]);
+  const avatar = normalizeQuorumAvatar({
+    mimeType: 'image/jpeg',
+    dataBase64: Buffer.from(acceptedBytes).toString('base64'),
+    width: 512,
+    height: 512,
+  });
+  assert.equal(avatar.byteSize, acceptedBytes.byteLength);
+  assert.equal(avatar.cropX, 0.5);
+  assert.equal(avatar.cropY, 0.5);
+
+  const boundaryCrop = normalizeQuorumAvatar({
+    mimeType: 'image/jpeg',
+    dataBase64: Buffer.from(acceptedBytes).toString('base64'),
+    width: 512,
+    height: 512,
+    cropX: 0,
+    cropY: 1,
+  });
+  assert.equal(boundaryCrop.cropX, 0, 'An exact left-edge crop must not be recentered.');
+  assert.equal(boundaryCrop.cropY, 1, 'An exact bottom-edge crop must remain at the boundary.');
+
+  const oversizedBytes = new Uint8Array(3_145_729);
+  oversizedBytes.set([0xff, 0xd8, 0xff]);
+  assert.throws(
+    () => normalizeQuorumAvatar({
+      mimeType: 'image/jpeg',
+      dataBase64: Buffer.from(oversizedBytes).toString('base64'),
+      width: 512,
+      height: 512,
+    }),
+    /too large after optimization/i,
+  );
+  assert.deepEqual(
+    normalizeQuorumCommandRequest({ operation: 'remove_profile_avatar', payload: {} }),
+    { operation: 'remove_profile_avatar', payload: {} },
+  );
+});
+
 test('Quorum moderation requires exact safe duration and opaque targets', () => {
   const normalized = normalizeQuorumAdminRequest({
     operation: 'action',
@@ -588,6 +629,524 @@ test('Quorum image signing preserves the Supabase storage API prefix', async () 
     );
     assert.equal('imagePath' in payload.data.items[0], false);
     assert.equal('imagePath' in payload.data.items[1], false);
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum profile photo upload returns a signed avatar URL without exposing its object path', async () => {
+  let avatarPath = '';
+  let rpcBody = null;
+  const restore = installForumFetch(async (url, options) => {
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?on_conflict=object_path')
+        && options.method === 'POST') {
+      return new Response(null, { status: 201 });
+    }
+    if (url.includes('/storage/v1/object/quorum-images/profiles/')) {
+      assert.equal(options.method, 'POST');
+      assert.equal(options.headers['Cache-Control'], 'private, max-age=3600');
+      avatarPath = decodeURIComponent(url.split('/quorum-images/')[1]);
+      assert.match(avatarPath, /^profiles\/[a-f0-9]{24}\.jpg$/);
+      return new Response(null, { status: 200 });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_set_profile_avatar')) {
+      rpcBody = JSON.parse(options.body);
+      return Response.json({ previousPath: null });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_profile_avatar_cleanup_state')) {
+      assert.equal(JSON.parse(options.body).p_object_path, avatarPath);
+      return Response.json({ state: 'active' });
+    }
+    if (url.endsWith('/storage/v1/object/sign/quorum-images')) {
+      const signRequest = JSON.parse(options.body);
+      assert.deepEqual(signRequest.paths, [avatarPath]);
+      return Response.json([{
+        path: avatarPath,
+        signedURL: `/object/sign/quorum-images/${avatarPath}?token=signed-profile-photo-token`,
+      }]);
+    }
+    throw new Error(`Unexpected profile photo upload request: ${url}`);
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'set_profile_avatar',
+        payload: {},
+        profileImage: {
+          mimeType: 'image/jpeg',
+          dataBase64: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64'),
+          width: 512,
+          height: 512,
+          cropX: 0.5,
+          cropY: 0.5,
+        },
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(rpcBody.p_user_id, userA);
+    assert.equal(rpcBody.p_payload.objectPath, avatarPath);
+    assert.equal(
+      payload.data.avatarUrl,
+      `https://test.supabase.co/storage/v1/object/sign/quorum-images/${avatarPath}?token=signed-profile-photo-token`,
+    );
+    assert.equal('avatarPath' in payload.data, false);
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum profile photo upload aborts before storage when its cleanup intent is not durable', async () => {
+  let storageCalls = 0;
+  const restore = installForumFetch(async (url, options) => {
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?on_conflict=object_path')
+        && options.method === 'POST') {
+      return Response.json({ message: 'database unavailable' }, { status: 503 });
+    }
+    if (url.includes('/storage/v1/object/quorum-images/profiles/')) {
+      storageCalls += 1;
+    }
+    throw new Error(`Unexpected unsafe profile photo preflight request: ${url}`);
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'set_profile_avatar',
+        payload: {},
+        profileImage: {
+          mimeType: 'image/jpeg',
+          dataBase64: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64'),
+          width: 512,
+          height: 512,
+          cropX: 0.5,
+          cropY: 0.5,
+        },
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 503);
+    assert.equal(payload.error.code, 'QUORUM_IMAGE_UNAVAILABLE');
+    assert.match(payload.error.message, /Nothing was uploaded/);
+    assert.equal(storageCalls, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum profile photo upload reports a saved-but-undisplayable signing failure truthfully', async () => {
+  let avatarPath = '';
+  let signAttempts = 0;
+  const restore = installForumFetch(async (url, options) => {
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?on_conflict=object_path')
+        && options.method === 'POST') {
+      return new Response(null, { status: 201 });
+    }
+    if (url.includes('/storage/v1/object/quorum-images/profiles/')) {
+      assert.equal(options.method, 'POST');
+      avatarPath = decodeURIComponent(url.split('/quorum-images/')[1]);
+      return new Response(null, { status: 200 });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_set_profile_avatar')) {
+      return Response.json({ previousPath: null });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_profile_avatar_cleanup_state')) {
+      return Response.json({ state: 'active' });
+    }
+    if (url.includes('/storage/v1/object/sign/quorum-images')) {
+      signAttempts += 1;
+      return Response.json({ message: 'signing unavailable' }, { status: 503 });
+    }
+    throw new Error(`Unexpected profile photo signing-failure request: ${url}`);
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'set_profile_avatar',
+        payload: {},
+        profileImage: {
+          mimeType: 'image/jpeg',
+          dataBase64: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64'),
+          width: 512,
+          height: 512,
+          cropX: 0.5,
+          cropY: 0.5,
+        },
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.match(avatarPath, /^profiles\/[a-f0-9]{24}\.jpg$/);
+    assert.equal(response.status, 502);
+    assert.equal(payload.ok, false);
+    assert.match(payload.error.message, /was saved, but it could not be displayed securely/i);
+    assert.ok(signAttempts >= 4, 'batch and individual signing must both retry before failure');
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum profile photo replacement keeps failed old-object cleanup durably queued', async () => {
+  const previousPath = 'profiles/bbbbbbbbbbbbbbbbbbbbbbbb.jpg';
+  let avatarPath = '';
+  let attemptedNewObjectDeletion = false;
+  const restore = installForumFetch(async (url, options) => {
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?on_conflict=object_path')
+        && options.method === 'POST') {
+      return new Response(null, { status: 201 });
+    }
+    if (url.includes('/storage/v1/object/quorum-images/profiles/') && options.method === 'POST') {
+      avatarPath = decodeURIComponent(url.split('/quorum-images/')[1]);
+      return new Response(null, { status: 200 });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_set_profile_avatar')) {
+      return Response.json({
+        updated: true,
+        avatarPath,
+        previousPath,
+        cleanupQueued: true,
+      });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_profile_avatar_cleanup_state')) {
+      const cleanupPath = JSON.parse(options.body).p_object_path;
+      return Response.json({ state: cleanupPath === avatarPath ? 'active' : 'safe' });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_defer_profile_avatar_cleanup')) {
+      assert.equal(JSON.parse(options.body).p_object_path, previousPath);
+      return Response.json({ state: 'deferred', attemptCount: 1 });
+    }
+    if (url.endsWith(`/storage/v1/object/quorum-images/${previousPath}`)) {
+      assert.equal(options.method, 'DELETE');
+      return Response.json({ message: 'storage temporarily unavailable' }, { status: 503 });
+    }
+    if (avatarPath && url.endsWith(`/storage/v1/object/quorum-images/${avatarPath}`)) {
+      attemptedNewObjectDeletion = true;
+      return new Response(null, { status: 204 });
+    }
+    if (url.endsWith('/storage/v1/object/sign/quorum-images')) {
+      return Response.json([{
+        path: avatarPath,
+        signedURL: `/object/sign/quorum-images/${avatarPath}?token=replacement-token`,
+      }]);
+    }
+    throw new Error(`Unexpected profile photo replacement request: ${url}`);
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'set_profile_avatar',
+        payload: {},
+        profileImage: {
+          mimeType: 'image/jpeg',
+          dataBase64: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64'),
+          width: 512,
+          height: 512,
+          cropX: 0.5,
+          cropY: 0.5,
+        },
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(attemptedNewObjectDeletion, false, 'the newly active photo must remain stored');
+    assert.equal('previousPath' in payload.data, false, 'private cleanup paths must not leak');
+    assert.equal('cleanupQueued' in payload.data, false, 'internal queue state must not leak');
+    assert.equal(
+      payload.data.avatarUrl,
+      `https://test.supabase.co/storage/v1/object/sign/quorum-images/${avatarPath}?token=replacement-token`,
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum profile photo upload survives a lost RPC acknowledgement after commit', async () => {
+  let avatarPath = '';
+  let attemptedNewObjectDeletion = false;
+  const restore = installForumFetch(async (url, options) => {
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?on_conflict=object_path')
+        && options.method === 'POST') {
+      return new Response(null, { status: 201 });
+    }
+    if (url.includes('/storage/v1/object/quorum-images/profiles/') && options.method === 'POST') {
+      avatarPath = decodeURIComponent(url.split('/quorum-images/')[1]);
+      return new Response(null, { status: 200 });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_set_profile_avatar')) {
+      throw new TypeError('response connection closed after database commit');
+    }
+    if (url.includes('/rest/v1/forum_profile_avatars?user_id=eq.')
+        && (options.method || 'GET') === 'GET') {
+      return Response.json([{ object_path: avatarPath }]);
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_profile_avatar_cleanup_state')) {
+      return Response.json({ state: 'active' });
+    }
+    if (avatarPath && url.endsWith(`/storage/v1/object/quorum-images/${avatarPath}`)) {
+      attemptedNewObjectDeletion = true;
+      return new Response(null, { status: 204 });
+    }
+    if (url.endsWith('/storage/v1/object/sign/quorum-images')) {
+      return Response.json([{
+        path: avatarPath,
+        signedURL: `/object/sign/quorum-images/${avatarPath}?token=commit-readback-token`,
+      }]);
+    }
+    throw new Error(`Unexpected lost-acknowledgement profile photo request: ${url}`);
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'set_profile_avatar',
+        payload: {},
+        profileImage: {
+          mimeType: 'image/jpeg',
+          dataBase64: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64'),
+          width: 512,
+          height: 512,
+          cropX: 0.5,
+          cropY: 0.5,
+        },
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(attemptedNewObjectDeletion, false, 'readback-confirmed active storage must be preserved');
+    assert.equal(
+      payload.data.avatarUrl,
+      `https://test.supabase.co/storage/v1/object/sign/quorum-images/${avatarPath}?token=commit-readback-token`,
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum profile photo upload never deletes an ambiguous delayed-commit object', async () => {
+  const previousPath = 'profiles/dddddddddddddddddddddddd.jpg';
+  let avatarPath = '';
+  let attemptedNewObjectDeletion = false;
+  let queuedCleanup = null;
+  const restore = installForumFetch(async (url, options) => {
+    if (url.includes('/storage/v1/object/quorum-images/profiles/') && options.method === 'POST') {
+      avatarPath = decodeURIComponent(url.split('/quorum-images/')[1]);
+      return new Response(null, { status: 200 });
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_set_profile_avatar')) {
+      throw new TypeError('gateway closed while database commit was still completing');
+    }
+    if (url.includes('/rest/v1/forum_profile_avatars?user_id=eq.')
+        && (options.method || 'GET') === 'GET') {
+      return Response.json([{ object_path: previousPath }]);
+    }
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?on_conflict=object_path')
+        && options.method === 'POST') {
+      queuedCleanup = JSON.parse(options.body);
+      assert.equal(options.headers.Prefer, 'resolution=merge-duplicates,return=minimal');
+      assert.ok(
+        Date.parse(queuedCleanup.not_before) >= Date.now() + 9 * 60 * 1_000,
+        'uncertain cleanup must wait long enough for any delayed commit to settle',
+      );
+      return new Response(null, { status: 201 });
+    }
+    if (avatarPath && url.endsWith(`/storage/v1/object/quorum-images/${avatarPath}`)) {
+      attemptedNewObjectDeletion = true;
+      return new Response(null, { status: 204 });
+    }
+    throw new Error(`Unexpected delayed-commit profile photo request: ${url}`);
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'set_profile_avatar',
+        payload: {},
+        profileImage: {
+          mimeType: 'image/jpeg',
+          dataBase64: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64'),
+          width: 512,
+          height: 512,
+          cropX: 0.5,
+          cropY: 0.5,
+        },
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 503);
+    assert.equal(payload.error.code, 'QUORUM_PROFILE_UNCERTAIN');
+    assert.match(payload.error.message, /Refresh your profile before trying again/);
+    assert.equal(attemptedNewObjectDeletion, false, 'ambiguous commit storage must be preserved');
+    assert.equal(queuedCleanup.object_path, avatarPath);
+    assert.equal(queuedCleanup.user_id, userA);
+  } finally {
+    restore();
+  }
+});
+
+test('scheduled Quorum profile photo reconciliation deletes queued private objects', async () => {
+  const previousPath = 'profiles/cccccccccccccccccccccccc.webp';
+  const calls = [];
+  const restore = installForumFetch(async (url, options) => {
+    calls.push({ url, method: options.method || 'GET' });
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?')
+        && (options.method || 'GET') === 'GET') {
+      assert.match(url, /select=object_path/);
+      assert.match(url, /not_before=lte\./);
+      assert.match(url, /order=queued_at\.asc%2Cobject_path\.asc/);
+      return Response.json([{ object_path: previousPath }]);
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_profile_avatar_cleanup_state')) {
+      assert.equal(JSON.parse(options.body).p_object_path, previousPath);
+      return Response.json({ state: 'safe' });
+    }
+    if (url.endsWith(`/storage/v1/object/quorum-images/${previousPath}`)) {
+      assert.equal(options.method, 'DELETE');
+      return new Response(null, { status: 204 });
+    }
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?')
+        && options.method === 'DELETE') {
+      assert.match(url, /object_path=eq\.profiles%2Fcccccccccccccccccccccccc\.webp/);
+      assert.equal(options.headers.Prefer, 'return=minimal');
+      return new Response(null, { status: 204 });
+    }
+    throw new Error(`Unexpected scheduled profile photo cleanup request: ${url}`);
+  });
+  try {
+    let pendingCleanup = null;
+    await worker.scheduled({}, baseEnv, {
+      waitUntil(task) {
+        pendingCleanup = task;
+      },
+    });
+    assert.ok(pendingCleanup, 'scheduled cleanup must be registered with waitUntil');
+    await pendingCleanup;
+    assert.ok(
+      calls.some(({ url }) => url.endsWith('/rest/v1/rpc/examination_room_v1_claim_recovery_snapshot')),
+      'the combined maintenance schedule must retain Examination Room recovery',
+    );
+    assert.deepEqual(
+      calls
+        .filter(({ url }) => !url.endsWith('/rest/v1/rpc/examination_room_v1_claim_recovery_snapshot'))
+        .map(({ method }) => method),
+      ['GET', 'POST', 'DELETE', 'DELETE'],
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('scheduled Quorum reconciliation never deletes a cleanup path that became active', async () => {
+  const activePath = 'profiles/eeeeeeeeeeeeeeeeeeeeeeee.png';
+  let storageDeleteCalls = 0;
+  let queueDeleteCalls = 0;
+  const restore = installForumFetch(async (url, options) => {
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?')
+        && (options.method || 'GET') === 'GET') {
+      return Response.json([{ object_path: activePath }]);
+    }
+    if (url.endsWith('/rest/v1/rpc/forum_profile_avatar_cleanup_state')) {
+      return Response.json({ state: 'active' });
+    }
+    if (url.endsWith(`/storage/v1/object/quorum-images/${activePath}`)) {
+      storageDeleteCalls += 1;
+      return new Response(null, { status: 204 });
+    }
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?')
+        && options.method === 'DELETE') {
+      queueDeleteCalls += 1;
+      return new Response(null, { status: 204 });
+    }
+    throw new Error(`Unexpected active-path reconciliation request: ${url}`);
+  });
+  try {
+    let pendingCleanup = null;
+    await worker.scheduled({}, baseEnv, {
+      waitUntil(task) {
+        pendingCleanup = task;
+      },
+    });
+    await pendingCleanup;
+    assert.equal(storageDeleteCalls, 0, 'an active profile photo must never be deleted');
+    assert.equal(queueDeleteCalls, 0, 'the database claim atomically acknowledges an active marker');
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum profile photo removal deletes only the authenticated member record and object', async () => {
+  const avatarPath = 'profiles/aaaaaaaaaaaaaaaaaaaaaaaa.jpg';
+  const calls = [];
+  const restore = installForumFetch(async (url, options) => {
+    calls.push({ url, method: options.method || 'GET' });
+    if (url.includes('/rest/v1/forum_profile_avatars?user_id=eq.') && (options.method || 'GET') === 'GET') {
+      assert.match(url, new RegExp(`user_id=eq\\.${userA}`));
+      assert.match(url, /select=object_path&limit=1/);
+      return Response.json([{ object_path: avatarPath }]);
+    }
+    if (url.includes('/rest/v1/forum_profile_avatars?user_id=eq.') && options.method === 'DELETE') {
+      assert.match(url, new RegExp(`user_id=eq\\.${userA}`));
+      assert.match(url, /object_path=eq\.profiles%2Faaaaaaaaaaaaaaaaaaaaaaaa\.jpg/);
+      assert.equal(options.headers.Prefer, 'return=representation');
+      return Response.json([{ object_path: avatarPath }]);
+    }
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?') && options.method === 'DELETE') {
+      return new Response(null, { status: 204 });
+    }
+    if (url.endsWith(`/storage/v1/object/quorum-images/${avatarPath}`)) {
+      assert.equal(options.method, 'DELETE');
+      return new Response(null, { status: 204 });
+    }
+    throw new Error(`Unexpected profile photo removal request: ${url}`);
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'remove_profile_avatar',
+        payload: {},
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(payload.data, { removed: true });
+    assert.deepEqual(calls.map(({ method }) => method), ['GET', 'DELETE', 'DELETE', 'DELETE']);
+  } finally {
+    restore();
+  }
+});
+
+test('Quorum profile photo removal fails truthfully when private-object deletion fails', async () => {
+  const avatarPath = 'profiles/aaaaaaaaaaaaaaaaaaaaaaaa.jpg';
+  let recordDeleteCalls = 0;
+  const restore = installForumFetch(async (url, options) => {
+    if (url.includes('/rest/v1/forum_profile_avatars?user_id=eq.') && (options.method || 'GET') === 'GET') {
+      return Response.json([{ object_path: avatarPath }]);
+    }
+    if (url.endsWith(`/storage/v1/object/quorum-images/${avatarPath}`)) {
+      assert.equal(options.method, 'DELETE');
+      return Response.json({ message: 'storage unavailable' }, { status: 503 });
+    }
+    if (url.includes('/rest/v1/forum_profile_avatars?user_id=eq.') && options.method === 'DELETE') {
+      recordDeleteCalls += 1;
+      return Response.json([{ object_path: avatarPath }]);
+    }
+    throw new Error(`Unexpected profile photo failed-removal request: ${url}`);
+  });
+  try {
+    const response = await worker.fetch(
+      forumRequest('/quorum/command', {
+        operation: 'remove_profile_avatar',
+        payload: {},
+      }),
+      baseEnv,
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 502);
+    assert.equal(payload.ok, false);
+    assert.match(payload.error.message, /could not be removed/i);
+    assert.equal(recordDeleteCalls, 0, 'the recoverable database pointer must remain for retry');
   } finally {
     restore();
   }

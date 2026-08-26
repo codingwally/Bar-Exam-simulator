@@ -176,14 +176,11 @@ const subjectReviewLock = examinationsUi.slice(
   examinationsUi.indexOf('function subjectReviewPanelMarkup'),
   examinationsUi.indexOf('function updateCompleteSubjectReviewPanels'),
 );
-assert.equal((subjectReviewLock.match(/<details>/g) || []).length, 3,
-  'The locked Subject Matter review must expose three native disclosures.');
-assert.equal((subjectReviewLock.match(/<summary[^>]*data-subject-review-reveal/g) || []).length, 3,
-  'Each review category must own one secure disclosure summary.');
-assert.doesNotMatch(subjectReviewLock, /<details[^>]+\sopen(?:\s|>)/,
-  'All review disclosures must be closed before the user chooses one.');
-assert.doesNotMatch(subjectReviewLock, /<button[^>]*data-subject-review-reveal/,
-  'The obsolete one-button reveal contract must not return.');
+assert.equal((subjectReviewLock.match(/<button[^>]*data-subject-review-reveal/g) || []).length, 1,
+  'The locked Subject Matter review must expose one Reveal Answer button.');
+assert.match(subjectReviewLock, /<span>Reveal Answer<\/span>/);
+assert.equal((subjectReviewLock.match(/<details/g) || []).length, 0,
+  'Expandable review sections must remain absent until the authorized reveal succeeds.');
 assert.match(examinationsCore, /SUBJECT_MATTER_INVENTORY_KEYS/);
 const subjectSurface = examinationsUi.slice(
   examinationsUi.indexOf('function renderPerSubject'),

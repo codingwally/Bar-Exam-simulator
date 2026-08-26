@@ -20,7 +20,7 @@ assert.match(index, /id="spa-community"[^>]*data-public-feature="quorum"/);
 assert.match(index, /<summary>Study Features<\/summary>/);
 assert.match(index, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.match(index, /assets\/private-workspace\.js\?v=master-experience-20260813-1/);
-assert.match(index, /assets\/feature-loader\.js\?v=syllabus-reveal-access-20260826-1/);
+assert.match(index, /assets\/feature-loader\.js\?v=syllabus-reveal-p0-20260826-2/);
 assert.doesNotMatch(index, /<script[^>]+src="assets\/(?:lex-forum|examinations|duediligence-2026)\.js/);
 assert.doesNotMatch(index, /<link[^>]+href="assets\/(?:lex-forum|examinations|duediligence-2026)\.css/);
 

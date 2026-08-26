@@ -228,10 +228,9 @@
       const panel = [...document.querySelectorAll('[data-subject-review-panel]')]
         .find((candidate) => candidate.dataset.attemptId === attemptId
           && candidate.dataset.questionId === questionId);
-      const summary = [...(panel?.querySelectorAll('[data-subject-review-reveal]') || [])]
+      const revealButton = [...(panel?.querySelectorAll('[data-subject-review-reveal]') || [])]
         .find((candidate) => candidate.dataset.subjectReviewSection === section);
-      return summary
-        || panel?.querySelector('[data-subject-review-upgrade]')
+      return revealButton
         || document.getElementById('dd-answer-rich-editor')
         || document.getElementById('dd-answer-editor');
     };

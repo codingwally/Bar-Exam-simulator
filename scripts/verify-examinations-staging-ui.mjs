@@ -660,9 +660,7 @@ async function completeSubjectMatter(page) {
   const practiceRoomText = await practiceRoom.innerText();
   assert.match(practiceRoomText, /WRITING TIME/i);
   assert.match(practiceRoomText, /\b\d{2}:\d{2}\b/);
-  assert.match(practiceRoomText, /Reveal suggested answer/i);
-  assert.match(practiceRoomText, /Reveal controlling law and doctrine/i);
-  assert.match(practiceRoomText, /Reveal application, limits, and sources/i);
+  assert.match(practiceRoomText, /Reveal Answer/i);
   assert.match(practiceRoomText, /Assisted \/ Open-book/i);
   assert.doesNotMatch(practiceRoomText, /Question\s+\d+\s+of\s+\d+|\b\d+\s+questions?\b/i);
   assert.equal(
@@ -670,11 +668,8 @@ async function completeSubjectMatter(page) {
     0,
     'The complete review content must not exist in the DOM before the reveal operation succeeds.',
   );
-  const lockedDisclosures = practiceRoom.locator('.dd-subject-review-disclosures.is-locked > details');
-  assert.equal(await lockedDisclosures.count(), 3,
-    'The secure review must begin with exactly three native disclosures.');
-  assert.deepEqual(await lockedDisclosures.evaluateAll((details) => details.map((detail) => detail.open)),
-    [false, false, false], 'All secure review disclosures must be closed initially.');
+  assert.equal(await practiceRoom.locator('.dd-subject-review-disclosures > details').count(), 0,
+    'Review disclosures must not exist before the authorized reveal succeeds.');
   const attemptId = await page.evaluate(
     () => window.DueDiligenceExaminations.getState().activeAttemptId,
   );
@@ -690,9 +685,9 @@ async function completeSubjectMatter(page) {
   await page.setViewportSize({ width: 1_440, height: 900 });
 
   const revealControls = practiceRoom.locator('[data-subject-review-reveal]');
-  assert.equal(await revealControls.count(), 3,
-    'The locked review must expose one secure control per review category.');
-  await revealControls.filter({ hasText: 'Reveal suggested answer' }).click();
+  assert.equal(await revealControls.count(), 1,
+    'The locked review must expose exactly one Reveal Answer control.');
+  await revealControls.filter({ hasText: 'Reveal Answer' }).click();
   const completeReview = practiceRoom.locator('[data-subject-review-content]');
   await completeReview.waitFor({ state: 'visible', timeout: 150_000 });
   const revealedDisclosures = completeReview.locator('.dd-subject-review-disclosures > details');
@@ -702,6 +697,9 @@ async function completeSubjectMatter(page) {
   await revealedDisclosures.nth(1).locator('summary').click();
   await revealedDisclosures.nth(2).locator('summary').click();
   const completeReviewText = await completeReview.innerText();
+  assert.doesNotMatch(completeReviewText,
+    /Rubric\s*\([^)]*points?[^)]*\)\s*:|Grader notes:|internal criterion|fixture canary/i,
+    'Internal rubric and grader text must not reach any revealed review section.');
   assert.match(completeReviewText, /Reveal suggested answer/i);
   assert.match(completeReviewText, /Controlling Law & Doctrine/i);
   assert.match(completeReviewText, /Cited Authorities/i);
@@ -755,6 +753,9 @@ async function completeSubjectMatter(page) {
     await resultDisclosures.nth(index).locator('summary').click();
   }
   const verdictText = await subjectResult.innerText();
+  assert.doesNotMatch(verdictText,
+    /Rubric\s*\([^)]*points?[^)]*\)\s*:|Grader notes:|internal criterion|fixture canary/i,
+    'Internal rubric and grader text must remain absent after submission.');
   assert.match(verdictText, /Evaluation overview/i);
   assert.match(verdictText, /Reveal suggested answer/i);
   assert.match(verdictText, /Controlling Law & Doctrine/i);

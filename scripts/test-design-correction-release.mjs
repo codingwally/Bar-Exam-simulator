@@ -185,6 +185,10 @@ assert.match(subjectReview, /function subjectReviewSuggestedAnswerMarkup/,
   'Suggested answers must use the structured, escaping-only renderer.');
 assert.match(subjectReview, /subjectReviewSuggestedAnswerMarkup\(material\.suggestedAnswer\)/,
   'The complete review must render the Suggested Answer through the structured renderer.');
+assert.match(subjectQaFixture, /Rubric \(6 points\): internal criterion one/,
+  'The browser fixture must retain a deterministic internal-rubric canary.');
+assert.match(subjectQaFixture, /Grader notes: never show this fixture canary to a learner/,
+  'The browser fixture must exercise nested legal-review sanitation.');
 assert.match(subjectReview, /<p>\$\{escapeHtml\(paragraph\)\}<\/p>/,
   'Every source paragraph in the structured Suggested Answer must remain HTML escaped.');
 assert.equal(
@@ -192,21 +196,15 @@ assert.equal(
   0,
   'The writing renderer delegates the secure review controls to the question/review pane.',
 );
-assert.equal((subjectReviewLock.match(/<details>/g) || []).length, 3,
-  'The locked review panel must render exactly three native disclosures.');
-assert.equal((subjectReviewLock.match(/<summary[^>]*data-subject-review-reveal/g) || []).length, 3,
-  'Each secure review section must be activated by its own native summary control.');
-assert.equal((subjectReviewLock.match(/<details\s+open|<details[^>]+\sopen(?:\s|>)/g) || []).length, 0,
-  'Suggested answer, law, and application disclosures must all be closed initially.');
-for (const label of [
-  'Reveal suggested answer',
-  'Reveal controlling law and doctrine',
-  'Reveal application, limits, and sources',
-]) assert.match(subjectReviewLock, new RegExp(label));
+assert.equal((subjectReviewLock.match(/<button[^>]*data-subject-review-reveal/g) || []).length, 1,
+  'The locked review panel must render exactly one Reveal Answer button.');
+assert.match(subjectReviewLock, /<span>Reveal Answer<\/span>/);
+assert.equal((subjectReviewLock.match(/<details/g) || []).length, 0,
+  'The three review disclosures must not exist until the authorized reveal succeeds.');
 assert.match(subjectReviewLock, /excluded from unassisted mastery metrics/,
   'The shortened reveal copy must retain the material classification consequence.');
-assert.doesNotMatch(subjectReviewLock, /<button[^>]*data-subject-review-reveal/,
-  'The retired single reveal button must not return.');
+assert.equal((subjectReview.match(/<details[^>]*data-subject-review-section=/g) || []).length, 3,
+  'The authorized review must render the same three expandable sections.');
 assert.doesNotMatch(subjectReview, /<details class="dd-subject-approach"/,
   'Writing Approach must not be hidden after the reveal control.');
 assert.ok(subjectResult, 'Subject Matter must render a dedicated Option 3 post-submission review.');
@@ -262,7 +260,7 @@ assert.match(html, /assets\/phase2\.css\?release=examination-room-doors-20260826
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-20260826-syllabus-reveal-access-1/);
+assert.match(serviceWorker, /duediligence-shell-20260826-syllabus-reveal-p0-2/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=examination-room-doors-20260826-2/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
 assert.match(serviceWorker, /phase2\.css\?release=examination-room-doors-20260826-2/);

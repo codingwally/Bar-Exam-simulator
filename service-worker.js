@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-20260826-syllabus-reveal-access-1-examination-room-7';
+const CACHE_VERSION = 'duediligence-shell-20260826-syllabus-reveal-p0-2-examination-room-8';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const EXAMINATION_OFFLINE_GRADER = '/examination-room/offline-grading.html';
 const SHELL = Object.freeze([
@@ -9,7 +9,7 @@ const SHELL = Object.freeze([
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
   '/assets/quorum-first-shell.css?v=examination-room-doors-20260826-2',
   '/assets/quorum-first-shell.js?v=syllabus-review-20260823-1',
-  '/assets/phase2-experience.js?v=syllabus-reveal-access-20260826-1-examination-room-2',
+  '/assets/phase2-experience.js?v=syllabus-reveal-p0-20260826-2-examination-room-3',
   '/assets/icons/navigation/door-open.svg',
   '/assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
   EXAMINATION_STUDENT_SHELL,

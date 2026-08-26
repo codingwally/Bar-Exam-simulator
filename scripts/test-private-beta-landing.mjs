@@ -121,8 +121,11 @@ assert.match(build, /assets\/quorum-first-shell\.js/);
 assert.match(build, /assets\/brand\/signin-intro\.mp4/);
 assert.match(html, /assets\/quorum-first-shell\.css\?v=examination-room-doors-20260826-2/,
   'The drawer stylesheet URL must change when its icon presentation changes.');
-assert.match(html, /assets\/private-beta-landing\.js\?v=syllabus-review-20260823-1/,
+assert.match(html, /assets\/private-beta-landing\.js\?v=syllabus-reveal-focus-20260826-1/,
   'The signed-in Home router must use the current release URL.');
+assert.match(landingJs,
+  /function showApplication\(options = \{\}\) \{[\s\S]*const applicationWasHidden = appShell\.hidden === true;[\s\S]*setHidden\(appShell, false\);[\s\S]*if \(applicationWasHidden && options\.focus !== false\) \{[\s\S]*siteHeader\.querySelector\('\.brand'\)\?\.focus/,
+  'The application shell may focus Home only when it was actually revealed, so overlay dismissal can restore its trigger.');
 
 const signInIntro = await readFile(path.join(root, 'assets/brand/signin-intro.mp4'));
 assert.equal(

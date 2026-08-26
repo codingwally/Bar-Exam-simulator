@@ -2392,7 +2392,17 @@
           : Promise.resolve({ access: null }),
       ]);
       if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') return;
-      renderCommercialPlanCards(plansPayload.plans, accessPayload.access);
+      const access = accessPayload.access;
+      global.DueDiligencePhase4?.adoptAccess?.(access, { enforce: false });
+      const subjectReviewAction = state.nativeViewMode === 'action'
+        && state.nativeViewContext?.reason === 'subject_reveal_review';
+      if (subjectReviewAction
+          && global.DueDiligencePhase4?.canRevealSubjectReview?.(access) === true) {
+        global.toast?.('Review access is active. Choose Reveal Answer again.', 'ok');
+        closeNativeView('access-active');
+        return;
+      }
+      renderCommercialPlanCards(plansPayload.plans, access);
     } catch (error) {
       if (state.nativeViewSequence !== viewSequence || state.nativeView !== 'pricing') return;
       host.innerHTML = `<div class="dd2-status is-error">${escapeHtml(error.message || 'Current access options could not be loaded. Please retry.')}</div>`;

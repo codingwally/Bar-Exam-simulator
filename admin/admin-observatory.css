@@ -1290,6 +1290,247 @@ body.observatory {
   }
 }
 
+/* Release 1 admin reliability: keep every operational control visible, readable,
+   and truthful without changing the Observatory design language. */
+html,
+body.observatory {
+  background: #050b12;
+}
+
+body.observatory {
+  font-size: 16px;
+}
+
+.observatory #admin-nav button,
+.observatory .nav-more summary,
+.observatory .sidebar-utility a,
+.observatory .sidebar-utility button,
+.observatory button,
+.observatory input,
+.observatory select,
+.observatory textarea {
+  min-height: 44px;
+}
+
+.observatory .section-head p,
+.observatory .section-heading p,
+.observatory .panel-note,
+.observatory .card-head p,
+.observatory .empty,
+.observatory .definition-list,
+.observatory td,
+.observatory .notice {
+  font-size: max(0.875rem, 14px);
+  line-height: 1.5;
+}
+
+.observatory th,
+.observatory .status,
+.observatory .metric-definition,
+.observatory .observatory-kpi small {
+  font-size: max(0.78rem, 12.5px);
+}
+
+.observatory .metric-definition {
+  display: block;
+  min-height: 2.5em;
+  color: #d4dde1;
+  line-height: 1.35;
+}
+
+.observatory .status,
+.observatory .action-context div,
+.observatory .action-warning,
+.observatory .action-confirmation,
+.observatory .plan-option,
+.observatory .audit-entry,
+.observatory .record-detail-expanded {
+  border-color: var(--obs-line);
+  background: #0b151f;
+  color: var(--obs-text);
+}
+
+.observatory .record-detail-expanded {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 220px;
+}
+
+.observatory .record-detail-expanded > div,
+.observatory .record-detail-expanded > ul {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.observatory .executive-operations-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--obs-line-soft);
+  color: var(--obs-text);
+  font-weight: 700;
+}
+
+.observatory .executive-operations-heading span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.observatory .row-actions-visible {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  min-width: 220px;
+}
+
+.observatory .row-actions-visible button {
+  min-height: 38px;
+}
+
+.observatory .table-wrap {
+  position: relative;
+  max-height: min(68vh, 720px);
+  overflow: auto;
+}
+
+.observatory .table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #101d29;
+}
+
+.observatory .table-wrap .admin-table-actions {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  min-width: 180px;
+  background: #0b151f;
+  box-shadow: -10px 0 16px rgba(5, 11, 18, 0.52);
+}
+
+.observatory .table-wrap th.admin-table-actions {
+  z-index: 5;
+  background: #101d29;
+}
+
+.observatory .pagination-bar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  padding: 0.75rem 0;
+  background: #07111a;
+}
+
+.observatory .topbar-download[disabled],
+.observatory .refresh-button[disabled] {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.observatory #reporting-range select:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+@media (max-width: 920px) {
+  .observatory .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .observatory .topbar-tools {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(145px, 1fr) auto auto;
+    width: 100%;
+    gap: 0.55rem;
+  }
+
+  .observatory #reporting-range {
+    display: grid;
+    grid-template-columns: 1fr;
+    min-width: 0;
+  }
+
+  .observatory #reporting-range select {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .observatory .topbar-tools .freshness {
+    display: flex;
+    grid-column: 1 / -1;
+  }
+
+  .observatory .topbar-tools .topbar-download,
+  .observatory .topbar-tools .refresh-button,
+  .observatory .topbar-tools .topbar-download span,
+  .observatory .topbar-tools .refresh-button span {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 820px) {
+  .observatory .table-wrap {
+    max-height: none;
+  }
+
+  .observatory .table-wrap tr,
+  .observatory .table-wrap td,
+  .observatory .table-wrap .admin-table-actions {
+    position: static;
+    color: var(--obs-text);
+    background: #08131d;
+    border-color: var(--obs-line);
+    box-shadow: none;
+  }
+
+  .observatory .table-wrap td::before {
+    color: #d4dde1;
+    font-size: max(0.75rem, 12px);
+  }
+}
+
+@media (max-width: 520px) {
+  .observatory .topbar-tools {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .observatory #reporting-range {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .observatory .topbar-tools .refresh-button {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .observatory .topbar-tools .topbar-download {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .observatory .topbar-tools .freshness {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .observatory .topbar-tools .topbar-download,
+  .observatory .topbar-tools .refresh-button {
+    display: inline-flex;
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 920px) {
   .observatory .recent-user-chart-grid {
     grid-template-columns: 1fr;

@@ -85,9 +85,9 @@ assert.match(landingJs, /function openQuorumHome\(trigger = null\)[\s\S]*openPro
   'Authenticated Home must resolve through the protected Quorum route.');
 assert.match(landingJs, /const publicHomepageHashes = new Set\(\[[\s\S]*'quorum'[\s\S]*'lex-forum'/,
   'Both canonical and legacy Home hashes must initialize Quorum instead of stalling in route verification.');
-assert.match(landingJs, /if \(!gateEnabled\)[\s\S]*else if \(authenticated\) await openQuorumHome\(\)/,
+assert.match(landingJs, /if \(!gateEnabled\)[\s\S]*else if \(authenticated\) await runPublicNavigation\('quorum'\)/,
   'Signed-in root restoration must open Quorum rather than a retired landing.');
-assert.match(landingJs, /popstate[\s\S]*openQuorumHome\(\)[\s\S]*hashchange[\s\S]*openQuorumHome\(\)/,
+assert.match(landingJs, /popstate[\s\S]*runPublicNavigation\('quorum'\)[\s\S]*hashchange[\s\S]*runPublicNavigation\('quorum'\)/,
   'Back and hash restoration must retain the Quorum-first home.');
 assert.match(landingJs, /global\.DueDiligencePublicHome = Object\.freeze/);
 assert.doesNotMatch(landingJs, /duediligence\.signin\.intro\.seen\.v1|signInIntroWasSeen|rememberSignInIntro/,
@@ -103,11 +103,11 @@ assert.match(landingJs, /video\.addEventListener\('ended',[\s\S]*showStill/,
 assert.match(landingJs, /Promise\.allSettled\(playback\)[\s\S]*showStill/,
   'Autoplay rejection must fail open to the approved still state.');
 assert.match(landingJs, /route === 'subject-matter'[\s\S]*restoreRoute\('per_subject'/);
-assert.match(landingJs, /feature === 'verdict'[\s\S]*global\.openVerdictDashboard\?\.\(\)/);
+assert.match(landingJs, /feature === 'verdict'[\s\S]*invokePublicOpener\('openVerdictDashboard'/);
 assert.match(html, /window\.openVerdictDashboard = openAnalytics;/);
 assert.match(html, /id="page-analytics"[^>]*class="page"/,
   'Analytics must render as an application page.');
-assert.match(html, /function openAnalytics\(\)[\s\S]*showPage\('analytics', document\.getElementById\('spa-progress'\)\)/,
+assert.match(html, /async function openAnalytics\(\)[\s\S]*showPage\('analytics', document\.getElementById\('spa-progress'\)\)/,
   'The compatibility Analytics route must open the full-page experience.');
 
 assert.match(config, /privateBetaGate: false/);
@@ -119,9 +119,9 @@ assert.doesNotMatch(build, /privateBetaImageFiles|assets\/private-beta\/.+\.(?:a
 assert.match(build, /assets\/quorum-first-shell\.css/);
 assert.match(build, /assets\/quorum-first-shell\.js/);
 assert.match(build, /assets\/brand\/signin-intro\.mp4/);
-assert.match(html, /assets\/quorum-first-shell\.css\?v=examination-room-doors-20260826-2/,
+assert.match(html, /assets\/quorum-first-shell\.css\?v=public-reliability-20260827-2/,
   'The drawer stylesheet URL must change when its icon presentation changes.');
-assert.match(html, /assets\/private-beta-landing\.js\?v=syllabus-reveal-focus-20260826-1/,
+assert.match(html, /assets\/private-beta-landing\.js\?v=public-reliability-20260827-1/,
   'The signed-in Home router must use the current release URL.');
 assert.match(landingJs,
   /function showApplication\(options = \{\}\) \{[\s\S]*const applicationWasHidden = appShell\.hidden === true;[\s\S]*setHidden\(appShell, false\);[\s\S]*if \(applicationWasHidden && options\.focus !== false\) \{[\s\S]*siteHeader\.querySelector\('\.brand'\)\?\.focus/,

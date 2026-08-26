@@ -67,7 +67,7 @@ assert.doesNotMatch(
 );
 assert.match(html, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
-assert.match(html, /assets\/feature-loader\.js\?v=syllabus-reveal-p0-20260826-2/);
+assert.match(html, /assets\/feature-loader\.js\?v=public-reliability-20260827-1/);
 assert.match(html, /id="subject-selection-title">Choose your Bar Question Practice subject\.<\/h1>/);
 assert.match(frontend, /track === 'per_subject' \? 'Syllabus-Based Review' : 'Bar Exam Simulation'/);
 assert.doesNotMatch(`${html}\n${frontend}`, /Mock Bar/);
@@ -96,7 +96,7 @@ assert.match(
 );
 for (const privateRenderer of ['openVerdict', 'renderSubjectPerformance', 'loadCatalog']) {
   const renderer = frontend.match(new RegExp(`async function ${privateRenderer}\\([\\s\\S]*?(?=\\n  (?:async )?function |\\n  global\\.)`))?.[0] || '';
-  assert.match(renderer, /isStaleIdentityError\(error\)\) return;/,
+  assert.match(renderer, /isStaleIdentityError\(error\)\) return(?: false)?;/,
     `${privateRenderer} must silently discard an identity-stale response.`);
 }
 assert.match(frontend, /data-exam-setup=[\s\S]*Review &amp; Begin/);

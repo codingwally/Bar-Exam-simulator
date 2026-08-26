@@ -35,12 +35,12 @@ assert.match(
 assert.match(html, /id="subject-choice-grid"/);
 assert.match(
   html,
-  /id="subject-selection-close"[\s\S]*aria-label="Close subject selection and return to Bar Question Practice"[\s\S]*onclick="exitSubjectSelection\(\)"/,
+  /id="subject-selection-close"[\s\S]*aria-label="Close subject selection and return to Home"[\s\S]*onclick="exitSubjectSelection\(\)"/,
   'The subject chooser must expose an accessible close control.',
 );
 assert.match(
   html,
-  /id="subject-selection-back"[\s\S]*onclick="exitSubjectSelection\(\)"[\s\S]*>Back<\/button>/,
+  /id="subject-selection-back"[\s\S]*onclick="exitSubjectSelection\(\)"[\s\S]*>Back to Home<\/button>/,
   'The subject chooser must expose a visible Back action.',
 );
 assert.match(

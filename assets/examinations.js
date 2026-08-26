@@ -82,6 +82,8 @@
     reviewMaterialCache: new Map(),
     reviewMaterialRequests: new Map(),
     pendingSubjectSkip: null,
+    subjectPerformanceRequestGeneration: 0,
+    subjectPerformanceRequest: null,
     initialized: false,
   };
 
@@ -550,10 +552,15 @@
   }
 
   function applySubjectFilter(value = state.subjectQuery) {
-    const query = String(value || '').trim().toLowerCase().slice(0, 160);
-    state.subjectQuery = query;
+    const displayValue = String(value || '').slice(0, 160);
+    const query = displayValue.trim().toLowerCase();
+    state.subjectQuery = displayValue;
     document.querySelectorAll('[data-subject-search-input]').forEach((input) => {
-      if (input.value !== value) input.value = value;
+      if (input.value !== displayValue) input.value = displayValue;
+    });
+    document.querySelectorAll('[data-subject-search-clear]').forEach((control) => {
+      control.disabled = !query;
+      control.setAttribute('aria-disabled', String(!query));
     });
     document.querySelectorAll('[data-subject-tree]').forEach((tree) => {
       let visibleCount = 0;
@@ -582,6 +589,29 @@
       if (empty) empty.hidden = visibleCount > 0;
     });
     persistSubjectCatalogState();
+  }
+
+  function clearSubjectFilter(trigger = null) {
+    state.subjectQuery = '';
+    state.subjectOpenYears = new Set();
+    state.subjectOpenTerms = new Set();
+    const selected = subjectCatalogItem();
+    if (selected) ensureSubjectPathOpen(selected);
+    document.querySelectorAll('[data-subject-tree]').forEach((tree) => {
+      tree.querySelectorAll('[data-subject-year]').forEach((details) => {
+        details.open = state.subjectOpenYears.has(details.dataset.subjectYear);
+        details.querySelector(':scope > summary')
+          ?.setAttribute('aria-expanded', String(details.open));
+      });
+      tree.querySelectorAll('[data-subject-term]').forEach((details) => {
+        details.open = state.subjectOpenTerms.has(details.dataset.subjectTerm);
+        details.querySelector(':scope > summary')
+          ?.setAttribute('aria-expanded', String(details.open));
+      });
+    });
+    applySubjectFilter('');
+    const selector = trigger?.closest?.('[data-subject-selector]') || document;
+    requestAnimationFrame(() => selector.querySelector('[data-subject-search-input]')?.focus?.());
   }
 
   function closeSubjectSelector() {
@@ -672,9 +702,13 @@
           <p class="dd-exam-kicker">Syllabus-Based Review</p>
           <h2 id="dd-subject-selector-title">Choose a course</h2>
           <label class="dd-subject-search-label" for="dd-subject-search-mobile">Find a course</label>
-          <input class="dd-subject-search" id="dd-subject-search-mobile" data-subject-search-input
-            type="search" value="${escapeAttribute(state.subjectQuery)}"
-            placeholder="Search course, code, year, or term" autocomplete="off">
+          <div class="dd-subject-search-controls">
+            <input class="dd-subject-search" id="dd-subject-search-mobile" data-subject-search-input
+              type="search" value="${escapeAttribute(state.subjectQuery)}"
+              placeholder="Search course, code, year, or term" autocomplete="off">
+            <button class="dd-control dd-subject-search-clear" type="button" data-subject-search-clear
+              ${state.subjectQuery.trim() ? '' : 'disabled aria-disabled="true"'}>Clear search</button>
+          </div>
           <p class="dd-subject-search-help">Search by course title or code, or browse the Year and Term sections.</p>
           <p class="dd-subject-result-count" data-subject-result-count role="status"></p>
         </header>
@@ -3062,18 +3096,61 @@
     }
   }
 
-  async function renderSubjectPerformance(subject = state.selectedSubject) {
+  function subjectPerformanceFailureMessage(error) {
+    if (global.navigator?.onLine === false) {
+      return 'You appear to be offline. Reconnect, then retry. Your saved answers and scores are unchanged.';
+    }
+    if (['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(error?.code)) {
+      return 'Your session could not be verified. Sign in again, then retry. Your saved answers and scores are unchanged.';
+    }
+    const reason = String(error?.message || '').trim().replace(/\s+/g, ' ').slice(0, 240);
+    return reason
+      ? `Your saved answers and scores are unchanged. The record could not be loaded: ${reason}`
+      : 'Your saved answers and scores are unchanged. Due Diligence could not load this private record right now.';
+  }
+
+  function beginSubjectPerformanceRequest(root, subject) {
+    const request = Object.freeze({
+      generation: ++state.subjectPerformanceRequestGeneration,
+      identity: privateRequestIdentity(),
+      root,
+      surface: root?.firstElementChild || null,
+      subject: String(subject || ''),
+    });
+    state.subjectPerformanceRequest = request;
+    return request;
+  }
+
+  function isCurrentSubjectPerformanceRequest(request) {
+    return Boolean(
+      request
+      && state.subjectPerformanceRequest === request
+      && state.subjectPerformanceRequestGeneration === request.generation
+      && privateRequestIdentityIsCurrent(request.identity)
+      && state.track === 'per_subject'
+      && String(state.selectedSubject || '') === request.subject
+      && pageRoot('per_subject') === request.root
+      && request.root?.isConnected
+      && request.root.firstElementChild === request.surface
+      && document.getElementById('page-midterms')?.classList.contains('active') === true
+    );
+  }
+
+  async function renderSubjectPerformance(subject = state.selectedSubject, trigger = null) {
     const root = pageRoot('per_subject');
-    if (!root) return;
+    if (!root) return false;
     root.innerHTML = `<div class="dd-subject-editorial dd-subject-performance-page"><section class="dd-verdict-screen">
       <p class="dd-exam-kicker">Syllabus-Based Review</p><h1>Loading your performance…</h1>
+      <div class="dd-exam-status" role="status" aria-live="polite">Your saved work is unchanged while this record loads.</div>
     </section></div>`;
+    const performanceRequest = beginSubjectPerformanceRequest(root, subject);
     try {
       const performance = await api('/examinations/query', {
         operation: 'subject_performance',
         subject,
         limit: 50,
       });
+      if (!isCurrentSubjectPerformanceRequest(performanceRequest)) return false;
       const attempts = performance.recentAttempts || [];
       const flaggedForLater = Array.isArray(performance.flaggedForLater)
         ? performance.flaggedForLater
@@ -3117,15 +3194,27 @@
           <button class="dd-control dd-exam-button is-tertiary" type="button" data-return-catalog>Return to courses</button>
         </div>
       </section></div>`;
+      return true;
     } catch (error) {
-      if (isStaleIdentityError(error)) return;
-      root.innerHTML = `<div class="dd-subject-editorial dd-subject-performance-page"><section class="dd-verdict-screen">
+      if (isStaleIdentityError(error)) return false;
+      if (!isCurrentSubjectPerformanceRequest(performanceRequest)) return false;
+      root.innerHTML = `<div class="dd-subject-editorial dd-subject-performance-page"><section class="dd-verdict-screen" role="alert" tabindex="-1">
         <p class="dd-exam-kicker">Your private learning record</p>
         <h1>Performance unavailable.</h1>
-        <div class="dd-exam-status is-error">Your saved answers and scores are unchanged. Due Diligence could not load this private record right now.</div>
+        <div class="dd-exam-status is-error">${escapeHtml(subjectPerformanceFailureMessage(error))}</div>
         <button class="dd-control dd-exam-button is-primary" type="button" data-subject-performance="${escapeAttribute(subject)}">Retry performance</button>
         <button class="dd-control dd-exam-button is-tertiary" type="button" data-return-catalog>Return to courses</button>
       </section></div>`;
+      focusRendered(root, '[role="alert"]');
+      return false;
+    } finally {
+      if (state.subjectPerformanceRequest === performanceRequest) {
+        state.subjectPerformanceRequest = null;
+      }
+      if (trigger?.isConnected) {
+        trigger.disabled = false;
+        trigger.removeAttribute('aria-busy');
+      }
     }
   }
 
@@ -3157,6 +3246,8 @@
     state.saveInFlight = false;
     state.pendingSave = false;
     state.pendingSubjectSkip = null;
+    state.subjectPerformanceRequestGeneration += 1;
+    state.subjectPerformanceRequest = null;
     state.reviewMaterialCache.clear();
     state.reviewMaterialRequests.clear();
     ['dd-per-subject-app', 'dd-bar-feels-app', 'dd-verdict-app'].forEach((id) => {
@@ -3197,8 +3288,9 @@
           ? '#dd-selected-course-heading'
           : '#dd-subject-course-selection-heading')
         : '.dd-exam-hero h1');
+      return true;
     } catch (error) {
-      if (isStaleIdentityError(error)) return;
+      if (isStaleIdentityError(error)) return false;
       if (root) root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-study-page' : ''}"><div class="dd-exam-shell">
         <header class="dd-exam-hero"><div><p class="dd-exam-kicker">${track === 'per_subject' ? 'Syllabus-Based Review' : 'Bar Exam Simulation'}</p>
           <h1>${track === 'per_subject' ? 'Syllabus-Based Review' : 'Bar Exam Simulation'}</h1></div></header>
@@ -3209,6 +3301,7 @@
           data-retry-catalog="${track}">${track === 'per_subject' ? 'Retry loading courses' : 'Retry'}</button>
       </div></div>`;
       focusRendered(root, '[role="alert"]');
+      return false;
     }
   }
 
@@ -3474,6 +3567,11 @@
       closeSubjectSelector();
       return;
     }
+    const subjectSearchClear = event.target.closest('[data-subject-search-clear]');
+    if (subjectSearchClear) {
+      clearSubjectFilter(subjectSearchClear);
+      return;
+    }
     const subject = event.target.closest('[data-exam-subject]');
     if (subject) {
       chooseSubject(subject.dataset.examSubject);
@@ -3504,8 +3602,11 @@
     }
     const subjectPerformance = event.target.closest('[data-subject-performance]');
     if (subjectPerformance) {
+      if (subjectPerformance.disabled || subjectPerformance.getAttribute('aria-busy') === 'true') return;
+      subjectPerformance.disabled = true;
+      subjectPerformance.setAttribute('aria-busy', 'true');
       state.selectedSubject = subjectPerformance.dataset.subjectPerformance;
-      renderSubjectPerformance(state.selectedSubject);
+      renderSubjectPerformance(state.selectedSubject, subjectPerformance);
       return;
     }
     const setup = event.target.closest('[data-exam-setup]');
@@ -3616,7 +3717,10 @@
     }
   }
 
-  function handleChange() {}
+  function handleChange(event) {
+    if (!event.target.matches('[data-subject-search-input]')) return;
+    applySubjectFilter(event.target.value);
+  }
 
   function handleInput(event) {
     if (!event.target.matches('[data-subject-search-input]')) return;
@@ -3644,6 +3748,7 @@
     document.addEventListener('click', handleClick);
     document.addEventListener('change', handleChange);
     document.addEventListener('input', handleInput);
+    document.addEventListener('search', handleInput, true);
     document.addEventListener('submit', handleSubmit);
     global.addEventListener('pagehide', persistSubjectCatalogState, { capture: true });
     global.addEventListener('scroll', () => {

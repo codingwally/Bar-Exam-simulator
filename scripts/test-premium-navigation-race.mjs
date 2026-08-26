@@ -84,4 +84,25 @@ assert.equal(restoredBarFeels, 1, 'Premium access must be verified before restor
 assert.equal(openedBarFeels, 0, 'A restored Bar Feels attempt must not be replaced by the catalog.');
 assert.equal(activatedBarFeels, 1);
 
+let resolveCatalog;
+let signalCatalogStarted;
+const catalogStarted = new Promise((resolve) => { signalCatalogStarted = resolve; });
+context.window.DueDiligenceExaminations.openBarFeels = () => {
+  openedBarFeels += 1;
+  signalCatalogStarted();
+  return new Promise((resolve) => { resolveCatalog = resolve; });
+};
+const activationCountBeforeStaleCatalog = activatedBarFeels;
+const staleCatalogNavigation = context.openPremiumBarFeelsForTest();
+await catalogStarted;
+context.cancelPremiumNavigationIntentForTest();
+resolveCatalog(true);
+const staleCatalogOutcome = await staleCatalogNavigation;
+assert.equal(staleCatalogOutcome?.status, 'stale');
+assert.equal(
+  activatedBarFeels,
+  activationCountBeforeStaleCatalog,
+  'A stale Bar Feels catalog response must not activate the menu or look successful.',
+);
+
 console.log('Premium navigation race regression passed.');

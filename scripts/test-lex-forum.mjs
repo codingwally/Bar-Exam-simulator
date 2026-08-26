@@ -62,8 +62,8 @@ for (const removedComposerCopy of [
   assert.doesNotMatch(page, removedComposerCopy);
 }
 assert.doesNotMatch(page, /<(?:link|script)[^>]+assets\/lex-forum\.(?:css|js)/);
-assert.match(featureLoader, /assets\/lex-forum\.css\?v=post-body-only-20260823-1/);
-assert.match(featureLoader, /assets\/lex-forum\.js\?v=post-body-only-20260823-1/);
+assert.match(featureLoader, /assets\/lex-forum\.css\?v=public-reliability-20260827-1/);
+assert.match(featureLoader, /assets\/lex-forum\.js\?v=public-reliability-20260827-1/);
 
 assert.match(auth, /options\.allowGuest === true && !completed/);
 assert.match(auth, /guestButton\.hidden = !allowGuest/);
@@ -98,9 +98,27 @@ assert.match(forum, /payload\.cursorAt = state\.cursor\.createdAt/);
 assert.match(forum, /payload\.cursorId = state\.cursor\.id/);
 assert.match(forum, /state\.view === 'my-posts'[\s\S]*payload\.authorMemberId = state\.bootstrap\.profile\.memberId/,
   'My Posts must query the signed-in member’s posts rather than opening Profile.');
-assert.match(forum, /view === 'my-posts'[\s\S]{0,180}await refreshFeed\(\)/,
+assert.match(forum, /view === 'my-posts'[\s\S]{0,220}await refreshFeed\(\{ viewRequestSequence \}\)/,
   'My Posts must render its filtered feed.');
 assert.match(forum, /state\.items = append \? state\.items\.concat/);
+assert.match(forum, /viewRequestSequence:\s*0/);
+assert.match(forum, /feedRequestSequence:\s*0/);
+assert.match(forum, /state\.feedController\?\.abort\(\)/);
+assert.match(
+  forum,
+  /const isCurrentRequest = \(\) => feedRequestSequence === state\.feedRequestSequence[\s\S]{0,360}viewRequestSequence === state\.viewRequestSequence/,
+  'A feed response must be tied to the exact view request that started it.',
+);
+assert.match(
+  forum,
+  /query\(operation, feedPayload\(append\), \{ signal: controller\.signal \}\)[\s\S]{0,100}if \(!isCurrentRequest\(\)\) return false/,
+  'Superseded feed requests must be aborted and prevented from committing.',
+);
+assert.match(
+  forum,
+  /async function renderCirclesView\(viewRequestSequence[\s\S]{0,700}query\('circles'[\s\S]{0,180}signal: controller\.signal[\s\S]{0,180}isCommunityViewRequestActive/,
+  'Study Circles must not render after another community view wins.',
+);
 assert.match(css, /@media \(max-width: 640px\)/);
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 assert.match(css, /outline: 3px solid/);

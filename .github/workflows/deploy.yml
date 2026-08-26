@@ -92,6 +92,7 @@ jobs:
           node scripts/test-subject-matter-consolidation.mjs
           node scripts/test-subject-matter-skip-flag.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
+          node scripts/test-historical-examination-owner-access.mjs
           node scripts/test-examinations.mjs
           node scripts/test-phase4-release4.mjs
           node scripts/test-commercial-launch-migration.mjs
@@ -99,6 +100,10 @@ jobs:
           node scripts/test-complete-beta-release.mjs
           node scripts/test-lex-forum.mjs
           node scripts/test-quorum.mjs
+          node scripts/test-public-release1-async-races.mjs
+          node scripts/test-public-release1-reliability.mjs
+          node scripts/test-admin-public-reliability.mjs
+          node scripts/test-public-admin-static-stress.mjs
           node scripts/test-analytics-page.mjs
           node scripts/test-auxiliary-writing-diagnostics.mjs
           node scripts/test-history-score-safety.mjs

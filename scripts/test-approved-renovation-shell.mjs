@@ -55,7 +55,7 @@ assert.match(css, /#site-header\.qfs-shell #session-clock\s*\{[\s\S]*display:\s*
   'The elapsed-time pill must remain hidden in the simplified header.');
 assert.match(css, /#site-header\.qfs-shell \.dd2-guest-badge\.is-visible:not\(\[hidden\]\)\s*\{[\s\S]*display:\s*inline-flex/,
   'The signed-in header must expose the compact account-access badge.');
-assert.match(css, /#site-header\.qfs-shell \.brand-name\s*\{[\s\S]*font-family:\s*var\(--serif-display,[\s\S]*letter-spacing:\s*2px[\s\S]*text-transform:\s*uppercase/,
+assert.match(css, /#site-header\.qfs-shell \.brand-name\s*\{[\s\S]*font-family:\s*var\(--serif-brand,[\s\S]*letter-spacing:\s*2px[\s\S]*text-transform:\s*uppercase/,
   'The Due Diligence wordmark must use the established Cinzel display treatment.');
 assert.match(css, /#site-header\.qfs-shell \.brand:focus-visible\s*\{[\s\S]*outline:\s*0/,
   'The unwanted gold wordmark outline must remain removed.');
@@ -74,8 +74,8 @@ assert.match(shell, /'#quorum':\s*'quorum'[\s\S]*'#verdict':\s*'verdict'/);
 assert.match(shell, /addEventListener\('hashchange',[\s\S]*synchronizePracticeRail/);
 assert.match(landing, /const stillHoldMs = 30 \* 60 \* 1000/);
 assert.match(landing, /Promise\.allSettled\(playback\)/);
-assert.match(serviceWorker, /duediligence-shell-20260826-syllabus-reveal-p0-2/);
-assert.match(serviceWorker, /quorum-first-shell\.css\?v=examination-room-doors-20260826-2/);
+assert.match(serviceWorker, /duediligence-shell-20260827-public-reliability-2/);
+assert.match(serviceWorker, /quorum-first-shell\.css\?v=public-reliability-20260827-2/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
 
 console.log('Approved renovation shell contract checks passed.');

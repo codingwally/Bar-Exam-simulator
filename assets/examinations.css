@@ -98,7 +98,7 @@
 .dd-exam-room-title h1 {
   margin: 0;
   color: var(--dd-exam-navy);
-  font: 700 clamp(32px, 4vw, 58px)/1.04 "Playfair Display", Georgia, serif;
+  font: 700 clamp(32px, 4vw, 58px)/1.04 var(--serif-display, "Fraunces", Georgia, serif);
   letter-spacing: -.025em;
 }
 
@@ -336,7 +336,7 @@
 .dd-exam-card h3 {
   margin: 0;
   color: var(--dd-exam-navy);
-  font-family: "Playfair Display", Georgia, serif;
+  font-family: var(--serif-display, "Fraunces", Georgia, serif);
 }
 
 .dd-exam-panel-title {
@@ -351,13 +351,34 @@
 .dd-subject-search {
   width: 100%;
   min-height: 48px;
-  margin-bottom: 8px;
+  margin: 0;
   padding: 11px 13px;
   border: 1px solid rgba(197, 160, 89, .52);
   border-radius: 6px;
   color: #f8fafc;
   background: #021326;
   font: inherit;
+}
+
+.dd-subject-search-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dd-subject-search-clear {
+  min-width: 112px;
+  min-height: 48px;
+  border-color: rgba(197, 160, 89, .52);
+  color: #f3d783;
+  background: rgba(197, 160, 89, .08);
+  font-size: 12px;
+}
+
+.dd-subject-search-clear:disabled {
+  opacity: .55;
+  cursor: not-allowed;
 }
 
 .dd-subject-search-label {
@@ -386,6 +407,18 @@
   margin: 0 0 10px;
   color: #93a4b7;
   font: 650 10px/1.5 Inter, sans-serif;
+}
+
+#dd-per-subject-app :is(
+  .dd-exam-kicker,
+  .dd-exam-panel-title,
+  .dd-subject-search-label,
+  .dd-subject-search-help,
+  .dd-subject-result-count,
+  .dd-subject-state,
+  .dd-question-label
+) {
+  font-size: 12px;
 }
 
 .dd-subject-list {
@@ -3841,5 +3874,15 @@ details[open] > summary .dd-subject-chevron {
   .dd-subject-button,
   .dd-exam-dialog-close {
     transition: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .dd-subject-search-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .dd-subject-search-clear {
+    width: 100%;
   }
 }

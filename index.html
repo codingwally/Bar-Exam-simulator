@@ -95,8 +95,9 @@
     --shadow-lg:0 26px 60px rgba(2,12,35,.16);
     --ring-gold:0 0 0 3px rgba(197,160,89,.25);
 
-    --serif-display:'Cinzel', Georgia, serif;
-    --serif:'Playfair Display', Georgia, serif;
+    --serif-brand:'Cinzel', Georgia, serif;
+    --serif-display:'Fraunces', Georgia, serif;
+    --serif:'Fraunces', Georgia, serif;
     --sans:'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --mono:'IBM Plex Mono', ui-monospace, monospace;
   }
@@ -142,7 +143,7 @@
   .seal path{fill:var(--gold)!important;opacity:1!important;}
   .masthead h1{
     margin:0;
-    font-family:var(--serif-display);
+    font-family:var(--serif-brand);
     font-weight:700;
     font-size:26px;
     letter-spacing:2px;
@@ -704,7 +705,7 @@
   .site-footer{position:relative;z-index:1;background:linear-gradient(180deg,rgba(8,18,37,.94),rgba(4,12,24,.97));border-top:1px solid rgba(197,160,89,.28);padding:30px 26px 40px;margin-top:10px;}
   .footer-inner{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;gap:22px;justify-content:space-between;align-items:flex-start;}
   .footer-inner .fcol{max-width:640px;}
-  .footer-inner .fbrand{font-family:var(--serif-display);font-weight:700;letter-spacing:2px;color:#F6EFDD;text-transform:uppercase;font-size:15px;margin-bottom:8px;}
+  .footer-inner .fbrand{font-family:var(--serif-brand);font-weight:700;letter-spacing:2px;color:#F6EFDD;text-transform:uppercase;font-size:15px;margin-bottom:8px;}
   .disclaimer{font-family:var(--sans);font-size:11.5px;line-height:1.6;color:#9fb0c6;}
   .footer-links{display:flex;gap:16px;flex-wrap:wrap;}
   .footer-links a{font-family:var(--mono);font-size:11px;letter-spacing:.5px;color:var(--gold);text-decoration:none;cursor:pointer;}
@@ -999,7 +1000,7 @@
 <link rel="stylesheet" href="assets/phase2.css?release=examination-room-doors-20260826-2">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
-<link rel="stylesheet" href="assets/quorum-first-shell.css?v=examination-room-doors-20260826-2">
+<link rel="stylesheet" href="assets/quorum-first-shell.css?v=public-reliability-20260827-2">
 <link rel="stylesheet" href="assets/auxiliary-writing-diagnostics.css?v=auxiliary-writing-diagnostics-20260827-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
@@ -1073,6 +1074,11 @@
       </div>
     </nav>
 </header>
+
+<div class="public-navigation-status" id="public-navigation-status" role="status" aria-live="polite" hidden>
+  <span id="public-navigation-status-copy"></span>
+  <button type="button" id="public-navigation-retry" hidden>Try again</button>
+</div>
 
 <div class="dd-auth-bootstrap" id="dd-auth-bootstrap" role="status" aria-live="polite">
   <img src="assets/brand/icon-192.png" width="48" height="48" alt="">
@@ -1241,7 +1247,7 @@
   <div id="subject-selection-state" class="onboarding-state" hidden>
     <article class="subject-selection-card" aria-labelledby="subject-selection-title">
       <button type="button" class="subject-selection-close" id="subject-selection-close"
-        aria-label="Close subject selection and return to Bar Question Practice" onclick="exitSubjectSelection()">×</button>
+        aria-label="Close subject selection and return to Home" onclick="exitSubjectSelection()">×</button>
       <div class="selection-kicker">Choose Your Review Subject</div>
       <h1 id="subject-selection-title">Choose your Bar Question Practice subject.</h1>
       <p>Select a Philippine Bar subject. Its first valid question will load before you choose a session mode; no timer starts during selection.</p>
@@ -1251,7 +1257,7 @@
         <button type="button" class="btn-secondary" id="mock-timer-settings"
           onclick="openMockTimerSettings()">Timer settings: <span id="mock-timer-setting-label">Stopwatch</span></button>
         <button type="button" class="btn-secondary subject-selection-back" id="subject-selection-back"
-          onclick="exitSubjectSelection()">Back</button>
+          onclick="exitSubjectSelection()">Back to Home</button>
       </div>
     </article>
   </div>
@@ -1537,7 +1543,7 @@
 <!-- Versioned, blocking onboarding terms -->
 <div class="modal-overlay blocking" id="terms-modal" role="dialog" aria-modal="true" aria-labelledby="terms-title" aria-describedby="terms-copy">
   <div class="modal-card lg" tabindex="-1">
-    <button type="button" class="modal-close" aria-label="Close terms and return" onclick="returnFromModal('terms-modal')">&times;</button>
+    <button type="button" class="modal-close" aria-label="Close terms and return to Home" onclick="returnFromModal('terms-modal')">&times;</button>
     <h3 class="modal-title" id="terms-title">Before You Begin</h3>
     <div class="modal-sub">Educational use and source-verification notice</div>
     <div class="terms-copy" id="terms-copy">
@@ -1546,7 +1552,7 @@
       Due Diligence is intended solely for legal education and Bar examination preparation. It does not provide legal advice and should not replace independent verification using official sources.
     </div>
     <div class="modal-actions" style="margin-top:20px;">
-      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('terms-modal')">Back</button>
+      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('terms-modal')">Back to Home</button>
       <button type="button" class="btn-primary" id="accept-terms" onclick="acceptTerms()">I understand and accept</button>
     </div>
   </div>
@@ -1555,12 +1561,12 @@
 <!-- Sign-in choice shown once per onboarding session -->
 <div class="modal-overlay blocking" id="signin-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="signin-prompt-title" aria-describedby="signin-prompt-copy">
   <div class="modal-card" tabindex="-1">
-    <button type="button" class="modal-close" aria-label="Close sign-in choice and return" onclick="returnFromModal('signin-prompt-modal')">&times;</button>
+    <button type="button" class="modal-close" aria-label="Close sign-in choice and return to Home" onclick="returnFromModal('signin-prompt-modal')">&times;</button>
     <h3 class="modal-title" id="signin-prompt-title">Open Bar Question Practice</h3>
     <p class="checking-copy" id="signin-prompt-copy">Sign in to open protected questions, save progress, and continue study sessions across devices.</p>
     <span class="tier-badge">Authentication is required before an examination question is displayed.</span>
     <div class="signin-prompt-actions">
-      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('signin-prompt-modal')">Back</button>
+      <button type="button" class="btn-secondary modal-back" onclick="returnFromModal('signin-prompt-modal')">Back to Home</button>
       <button type="button" class="btn-primary" id="onboarding-signin" onclick="beginOnboardingSignIn()">Sign in</button>
       <button type="button" class="btn-secondary" id="guest-continue" onclick="continueAsGuest()" hidden>Maybe later</button>
     </div>
@@ -1718,6 +1724,7 @@ let onboardingStage = "welcome";
 let examStage = "idle";
 let selectedSessionMode = null;
 let pendingSubjectSelection = null;
+let subjectSelectionRequestGeneration = 0;
 let questionStartTs = null;
 let examMode = "none";
 let elapsed = 0;
@@ -2059,10 +2066,10 @@ function setOnboardingView(stage) {
 }
 
 function showWelcome(options = {}) {
+  invalidateSubjectSelectionRequest({ resetSelectionState: true });
   if (!options.preserveSession) stopExamSession({ reset: true });
   currentSubj = null;
   currentIdx = 0;
-  pendingSubjectSelection = null;
   selectedSessionMode = null;
   examStage = 'idle';
   setOnboardingView('home');
@@ -2133,9 +2140,40 @@ function renderSubjectSelection() {
   const grid = document.getElementById('subject-choice-grid');
   if (!grid) return;
   grid.innerHTML = SUBJECTS.map((subject) => `
-    <button type="button" class="subject-choice" onclick="selectSubjectForSession('${subject}')">
+    <button type="button" class="subject-choice" data-subject-choice="${escapeHtml(subject)}"
+      onclick="selectSubjectForSession('${subject}')">
       <span>${escapeHtml(subject)}</span>
     </button>`).join('');
+}
+
+function setSubjectSelectionStatus(message = '', kind = '') {
+  const status = document.getElementById('subject-loading-status');
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle('is-error', kind === 'error');
+  status.classList.toggle('is-success', kind === 'success');
+  status.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+}
+
+function setSubjectSelectionBusy(busy, subject = '') {
+  const card = document.querySelector('.subject-selection-card');
+  card?.setAttribute('aria-busy', busy ? 'true' : 'false');
+  document.querySelectorAll('[data-subject-choice]').forEach((control) => {
+    control.disabled = busy;
+    const selected = busy && control.dataset.subjectChoice === subject;
+    if (selected) control.setAttribute('aria-busy', 'true');
+    else control.removeAttribute('aria-busy');
+  });
+}
+
+function invalidateSubjectSelectionRequest(options = {}) {
+  subjectSelectionRequestGeneration += 1;
+  pendingSubjectSelection = null;
+  if (options.resetSelectionState !== true) return;
+  if (examStage === 'subjectLoading') examStage = 'idle';
+  currentSubj = null;
+  setSubjectSelectionBusy(false);
+  setSubjectSelectionStatus('');
 }
 
 function preferredMockTimerMode() {
@@ -2162,14 +2200,15 @@ function openMockTimerSettings() {
 }
 
 function showSubjectSelection() {
+  invalidateSubjectSelectionRequest({ resetSelectionState: true });
   stopExamSession({ reset: true });
   examStage = 'idle';
   selectedSessionMode = null;
   setOnboardingView('subjectSelection');
   renderSubjectSelection();
+  setSubjectSelectionBusy(false);
   syncMockTimerSettingLabel();
-  const status = document.getElementById('subject-loading-status');
-  if (status) status.textContent = '';
+  setSubjectSelectionStatus('');
   const close = document.getElementById('subject-selection-close');
   requestAnimationFrame(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -2178,12 +2217,16 @@ function showSubjectSelection() {
 }
 
 function exitSubjectSelection() {
-  pendingSubjectSelection = null;
+  invalidateSubjectSelectionRequest({ resetSelectionState: true });
   showWelcome();
 }
 
 async function selectSubjectForSession(subject) {
   if (!SUBJECTS.includes(subject) || examStage === 'subjectLoading') return;
+  const requestGeneration = ++subjectSelectionRequestGeneration;
+  const requestIsCurrent = () => requestGeneration === subjectSelectionRequestGeneration
+    && pendingSubjectSelection === subject
+    && examStage === 'subjectLoading';
   stopExamSession({ reset: true });
   clearPersistedWorkspace();
   currentAttemptKey = null;
@@ -2191,33 +2234,44 @@ async function selectSubjectForSession(subject) {
   currentSubj = subject;
   currentIdx = 0;
   examStage = 'subjectLoading';
+  setSubjectSelectionBusy(true, subject);
   if (onboardingStage === 'complete') {
     setWorkspaceLocked(true);
     const main = document.getElementById('main');
     if (main) main.innerHTML = `<div class="loading" role="status">Loading ${escapeHtml(subject)} questions…</div>`;
   }
-  const status = document.getElementById('subject-loading-status');
-  if (status) status.textContent = `Loading ${subject} questions…`;
+  setSubjectSelectionStatus(`Loading ${subject} questions…`);
   try {
     const question = await window.DueDiligencePhase4?.loadProtectedQuestion(subject, []);
-    if (!question || pendingSubjectSelection !== subject) return;
+    if (!requestIsCurrent()) return false;
+    if (!question) throw new Error(`${subject} questions are temporarily unavailable.`);
     BAR_QUESTIONS[subject] = [question];
     websiteQuestionBankStatus = 'ready';
     if (subject === 'Labor Law') laborQuestionBankStatus = 'ready';
-    completeSubjectSelection(subject);
+    completeSubjectSelection(subject, requestGeneration);
+    return true;
   } catch (error) {
+    if (!requestIsCurrent()) return false;
     pendingSubjectSelection = null;
     currentSubj = null;
     examStage = 'idle';
-    if (status) status.textContent = error.message || `${subject} questions are temporarily unavailable.`;
+    setSubjectSelectionBusy(false);
+    setSubjectSelectionStatus(
+      `${error?.message || `${subject} questions are temporarily unavailable.`} Your subject was not changed; choose a subject to try again.`,
+      'error',
+    );
     window.DueDiligencePhase2?.handleGradeError?.(error);
+    return false;
   }
 }
 
-function completeSubjectSelection(subject) {
-  if (pendingSubjectSelection !== subject || !BAR_QUESTIONS[subject]?.length) return;
+function completeSubjectSelection(subject, requestGeneration = subjectSelectionRequestGeneration) {
+  if (requestGeneration !== subjectSelectionRequestGeneration
+      || pendingSubjectSelection !== subject
+      || !BAR_QUESTIONS[subject]?.length) return;
   safeStorageSet(localStorage, 'duediligence.selected.subject.v1', subject);
   pendingSubjectSelection = null;
+  setSubjectSelectionBusy(false);
   currentSubj = subject;
   currentIdx = 0;
   examStage = 'modeSelection';
@@ -2232,6 +2286,10 @@ function completeSubjectSelection(subject) {
 async function openQuorumMappedQuestion(subject, questionId) {
   if (!SUBJECTS.includes(subject) || !questionId || examStage === 'subjectLoading') return false;
   if (!window.DueDiligencePhase4?.requireAuthentication?.()) return false;
+  const requestGeneration = ++subjectSelectionRequestGeneration;
+  const requestIsCurrent = () => requestGeneration === subjectSelectionRequestGeneration
+    && pendingSubjectSelection === subject
+    && examStage === 'subjectLoading';
   stopExamSession({ reset: true });
   clearPersistedWorkspace();
   currentAttemptKey = null;
@@ -2245,15 +2303,17 @@ async function openQuorumMappedQuestion(subject, questionId) {
   if (main) main.innerHTML = `<div class="loading" role="status">Loading the mapped ${escapeHtml(subject)} question…</div>`;
   try {
     const question = await window.DueDiligencePhase4.loadProtectedQuestion(subject, [], questionId);
-    if (!question || question.id !== questionId || pendingSubjectSelection !== subject) {
+    if (!requestIsCurrent()) return false;
+    if (!question || question.id !== questionId) {
       throw new Error('The mapped practice question is not currently available.');
     }
     BAR_QUESTIONS[subject] = [question];
     websiteQuestionBankStatus = 'ready';
     if (subject === 'Labor Law') laborQuestionBankStatus = 'ready';
-    completeSubjectSelection(subject);
+    completeSubjectSelection(subject, requestGeneration);
     return true;
   } catch (error) {
+    if (!requestIsCurrent()) return false;
     pendingSubjectSelection = null;
     currentSubj = null;
     examStage = 'idle';
@@ -2589,9 +2649,16 @@ async function openPremiumBarFeels(options = {}) {
         return outcome;
       }
     }
-    const request = window.DueDiligenceExaminations?.openBarFeels();
+    if (typeof window.DueDiligenceExaminations?.openBarFeels !== 'function') {
+      throw new Error('Bar Exam Simulation could not be opened. Please try again.');
+    }
+    const request = window.DueDiligenceExaminations.openBarFeels();
+    const opened = await request;
+    if (!isPremiumNavigationIntentCurrent(navigationIntent) || options.isCurrent?.() === false) {
+      return { status: 'stale' };
+    }
+    if (opened !== true) return { status: 'retryable_error' };
     activatePrimaryMenuItem('spa-bar-feels');
-    await request;
     return { status: 'catalog' };
   } catch (error) {
     if (!isPremiumNavigationIntentCurrent(navigationIntent)) return;
@@ -3383,6 +3450,16 @@ const SPA_PAGE_TABS = Object.freeze({
 });
 
 function showPage(page, el, options = {}) {
+  const target = document.getElementById('page-' + page);
+  if (!target) {
+    const message = 'That page could not be opened. Your current page is unchanged.';
+    window.DueDiligencePublicNavigation?.reportError?.(message);
+    toast?.(message, 'warn');
+    return false;
+  }
+  if (page !== 'mock' && examStage === 'subjectLoading') {
+    invalidateSubjectSelectionRequest({ resetSelectionState: true });
+  }
   if (page !== 'bar-feels') cancelPremiumNavigationIntent();
   setSiteMenuOpen(false);
   const leavingMock = document.getElementById('page-mock')?.classList.contains('active') && page !== 'mock';
@@ -3392,8 +3469,7 @@ function showPage(page, el, options = {}) {
     examPausedForPage = true;
   }
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const target = document.getElementById('page-' + page);
-  if (target) target.classList.add('active');
+  target.classList.add('active');
   const activeTab = el || document.getElementById(SPA_PAGE_TABS[page]);
   activatePrimaryMenuItem(activeTab?.id || '');
   if (page !== 'community') window.DueDiligenceQuorum?.deactivate?.();
@@ -3422,6 +3498,7 @@ function showPage(page, el, options = {}) {
     }
   }
   window.scrollTo({ top: 0, behavior: options.history === false ? 'auto' : 'smooth' });
+  return true;
 }
 
 window.addEventListener('popstate', () => {
@@ -3435,7 +3512,12 @@ window.addEventListener('popstate', () => {
     || (hash === 'lex-forum' ? 'community' : hash ? null : 'mock');
   if (!page) return;
   if (page === 'community' && window.DueDiligenceQuorum?.restoreRoute) {
-    window.DueDiligenceQuorum.restoreRoute().catch(() => {});
+    window.DueDiligenceQuorum.restoreRoute().catch((error) => {
+      window.DueDiligencePublicNavigation?.reportError?.(
+        error?.message || 'Home could not be restored. Use Try again to reload it.',
+        () => window.DueDiligenceQuorum?.restoreRoute?.(),
+      );
+    });
     return;
   }
   showPage(page, document.getElementById(SPA_PAGE_TABS[page]), { history: false });
@@ -4294,11 +4376,12 @@ window.addEventListener('duediligence:auxiliary-diagnostics-updated', () => {
   if (content) content.innerHTML = analyticsAuxiliaryMarkup(analyticsGradedRecords(verdictDashboard.active));
 });
 
-function openAnalytics() {
+async function openAnalytics() {
   verdictDashboard.selected.clear();
   verdictDashboard.showDeleted = false;
-  showPage('analytics', document.getElementById('spa-progress'));
-  loadVerdictDashboard();
+  if (showPage('analytics', document.getElementById('spa-progress')) !== true) return false;
+  await loadVerdictDashboard();
+  return true;
 }
 window.openVerdictDashboard = openAnalytics;
 
@@ -4661,9 +4744,9 @@ window.addEventListener('storage', (event) => {
 <script src="assets/auxiliary-writing-diagnostics.js?v=auxiliary-writing-diagnostics-20260827-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=syllabus-reveal-p0-20260826-2"></script>
+<script src="assets/feature-loader.js?v=public-reliability-20260827-1"></script>
 <script src="assets/quorum-first-shell.js?v=syllabus-review-20260823-1"></script>
-<script src="assets/private-beta-landing.js?v=syllabus-reveal-focus-20260826-1"></script>
+<script src="assets/private-beta-landing.js?v=public-reliability-20260827-1"></script>
 
 </body>
 </html>

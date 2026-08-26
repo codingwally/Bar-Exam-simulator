@@ -32,6 +32,8 @@
     search: '',
     result: null,
     busy: false,
+    answerRequestGeneration: 0,
+    activeAnswerRequest: null,
     sessionUserId: null,
   };
 
@@ -278,11 +280,109 @@
   function showError(error, retry) {
     const message = error?.message || 'This module could not be loaded.';
     app().innerHTML = `<div class="dd26-shell"><div class="dd26-error" role="alert">${escapeHtml(message)}</div><div class="dd26-actions"><button class="dd26-button" id="dd26-retry" type="button">Try again</button></div></div>`;
-    document.getElementById('dd26-retry')?.addEventListener('click', retry);
+    const retryButton = document.getElementById('dd26-retry');
+    retryButton?.addEventListener('click', async () => {
+      if (retryButton.disabled) return;
+      retryButton.disabled = true;
+      retryButton.setAttribute('aria-busy', 'true');
+      retryButton.textContent = 'Trying again…';
+      try {
+        await retry();
+      } catch (retryError) {
+        showError(retryError, retry);
+      } finally {
+        if (retryButton.isConnected) {
+          retryButton.disabled = false;
+          retryButton.removeAttribute('aria-busy');
+          retryButton.textContent = 'Try again';
+        }
+      }
+    });
+  }
+
+  function setAnswerStatus(kind, message, stateName = '') {
+    const status = document.getElementById(`dd26-${kind}-status`);
+    const answer = document.getElementById(`dd26-${kind}-answer`);
+    if (!status) return;
+    status.textContent = message;
+    status.className = `dd26-answer-status${stateName ? ` is-${stateName}` : ''}`;
+    status.setAttribute('role', stateName === 'error' ? 'alert' : 'status');
+    status.dataset.state = stateName;
+    if (answer) {
+      if (stateName === 'error') answer.setAttribute('aria-invalid', 'true');
+      else answer.removeAttribute('aria-invalid');
+    }
+  }
+
+  function setAnswerButtonBusy(button, busy, busyLabel, idleLabel) {
+    if (!button) return;
+    button.disabled = busy;
+    button.textContent = busy ? busyLabel : idleLabel;
+    button.classList.toggle('is-loading', busy);
+    if (busy) button.setAttribute('aria-busy', 'true');
+    else button.removeAttribute('aria-busy');
+  }
+
+  function setAnswerFlowBusy(kind, busy) {
+    const next = document.getElementById(`dd26-${kind}-next`);
+    const subject = document.getElementById('dd26-subject-select');
+    [next, subject].filter(Boolean).forEach((control) => {
+      control.disabled = busy;
+      if (busy) control.setAttribute('aria-busy', 'true');
+      else control.removeAttribute('aria-busy');
+    });
+  }
+
+  function invalidateAnswerRequest() {
+    state.answerRequestGeneration += 1;
+    state.activeAnswerRequest = null;
+    state.busy = false;
+  }
+
+  function beginAnswerRequest(kind, item, answer, button, submittedAnswer, requestKey) {
+    const request = Object.freeze({
+      generation: ++state.answerRequestGeneration,
+      kind,
+      view: state.view,
+      contentId: String(item?.id || ''),
+      selectedId: String(state.selectedId || ''),
+      userId: authenticatedUserId(),
+      answer,
+      button,
+      result: document.getElementById(`dd26-${kind}-result`),
+      submittedAnswer,
+      requestKey,
+    });
+    state.activeAnswerRequest = request;
+    state.busy = true;
+    return request;
+  }
+
+  function isCurrentAnswerRequest(request) {
+    return Boolean(
+      request
+      && state.activeAnswerRequest === request
+      && state.answerRequestGeneration === request.generation
+      && state.view === request.view
+      && String(state.selectedId || '') === request.selectedId
+      && authenticatedUserId() === request.userId
+      && document.getElementById(`dd26-${request.kind}-answer`) === request.answer
+      && document.getElementById(`dd26-${request.kind}-submit`) === request.button
+      && document.getElementById(`dd26-${request.kind}-result`) === request.result
+    );
+  }
+
+  function canCommitAnswerRequest(request) {
+    return isCurrentAnswerRequest(request)
+      && document.getElementById('page-dd2026')?.classList.contains('active') === true
+      && request.answer.value === request.submittedAnswer
+      && request.answer.dataset.requestAnswer === request.submittedAnswer
+      && request.answer.dataset.requestKey === request.requestKey;
   }
 
   async function open(view, trigger, options = {}) {
     if (!CONTENT_PATHS[view]) return false;
+    invalidateAnswerRequest();
     if (!requireAuthentication()) return false;
     const openUserId = authenticatedUserId();
     state.view = view;
@@ -353,6 +453,7 @@
   }
 
   function renderContent() {
+    invalidateAnswerRequest();
     const items = state.items.get(state.view) || [];
     setContentFilter(items);
     if (RANDOMIZED_STUDY_VIEWS.has(state.view) && !state.selectedId) {
@@ -374,7 +475,8 @@
       <div class="dd26-grid">
         <section class="dd26-pane" aria-labelledby="dd26-easy-question">
           <h2 class="dd26-prompt" id="dd26-easy-question">${escapeHtml(payload.prompt || '')}</h2>
-          <label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea" id="dd26-easy-answer" maxlength="5000" placeholder="Explain the rule in your own words."></textarea><small class="dd26-counter" id="dd26-easy-count">0 / 5,000</small></label>
+          <label class="dd26-field"><span>Your answer</span><textarea class="dd26-textarea" id="dd26-easy-answer" maxlength="5000" aria-describedby="dd26-easy-count dd26-easy-status" placeholder="Explain the rule in your own words."></textarea><small class="dd26-counter" id="dd26-easy-count">0 / 5,000</small></label>
+          <div class="dd26-answer-status" id="dd26-easy-status" role="status" aria-live="polite"></div>
           <div class="dd26-actions"><button class="dd26-button primary" id="dd26-easy-submit" type="button">Submit answer</button><button class="dd26-button" id="dd26-easy-next" type="button">Next question</button></div>
           <div class="dd26-privacy">Your answer text and coaching explanation are not saved. Only the completion count is recorded.</div>${betaNotice()}
         </section>
@@ -383,7 +485,11 @@
     </div>`;
     bindContentFilters();
     const answer = document.getElementById('dd26-easy-answer');
-    answer?.addEventListener('input', () => { document.getElementById('dd26-easy-count').textContent = `${codePointLength(answer.value).toLocaleString()} / 5,000`; });
+    answer?.addEventListener('input', () => {
+      document.getElementById('dd26-easy-count').textContent = `${codePointLength(answer.value).toLocaleString()} / 5,000`;
+      const status = document.getElementById('dd26-easy-status');
+      if (status?.dataset.state && answer.value) setAnswerStatus('easy', '');
+    });
     document.getElementById('dd26-easy-submit')?.addEventListener('click', gradeBarEasy);
     document.getElementById('dd26-easy-next')?.addEventListener('click', () => selectNext(items));
   }
@@ -393,22 +499,60 @@
     const item = selectedItem();
     const answer = document.getElementById('dd26-easy-answer');
     const button = document.getElementById('dd26-easy-submit');
-    if (!item || !answer?.value.trim()) { global.toast?.('Write an answer before submitting.', 'warn'); return; }
-    if (codePointLength(answer.value) > 5000) { global.toast?.('Quick Drills answers are limited to 5,000 characters. Nothing was truncated.', 'warn'); return; }
-    state.busy = true; button.disabled = true; button.textContent = 'Reviewing…';
+    if (!item) {
+      setAnswerStatus('easy', 'This question is unavailable. Use Next question or reopen Quick Drills.', 'error');
+      return;
+    }
+    if (!answer?.value.trim()) {
+      setAnswerStatus('easy', 'Write an answer before submitting.', 'error');
+      answer?.focus();
+      return;
+    }
+    if (codePointLength(answer.value) > 5000) {
+      setAnswerStatus('easy', 'Quick Drills answers are limited to 5,000 characters. Nothing was truncated.', 'error');
+      answer.focus();
+      return;
+    }
+    const submittedAnswer = answer.value;
+    const requestKey = answer.dataset.requestAnswer === submittedAnswer && answer.dataset.requestKey
+      ? answer.dataset.requestKey
+      : randomKey('easy');
+    answer.dataset.requestAnswer = submittedAnswer;
+    answer.dataset.requestKey = requestKey;
+    const gradingRequest = beginAnswerRequest(
+      'easy', item, answer, button, submittedAnswer, requestKey,
+    );
+    setAnswerButtonBusy(button, true, 'Reviewing…', 'Submit answer');
+    setAnswerFlowBusy('easy', true);
+    setAnswerStatus('easy', 'Reviewing your answer. Nothing has been cleared.', 'loading');
     try {
-      const payload = await api('/dd2026/bar-easy/grade', { contentId: item.id, answer: answer.value, requestKey: randomKey('easy') });
+      const payload = await api('/dd2026/bar-easy/grade', { contentId: item.id, answer: submittedAnswer, requestKey });
+      if (!canCommitAnswerRequest(gradingRequest)) return;
       const result = payload.result || {};
       const study = payload.study || {};
       document.getElementById('dd26-easy-result').innerHTML = `<div class="dd26-result"><div class="dd26-kicker">Source-based coaching</div><h2 class="dd26-result-title">${escapeHtml(result.label)}</h2><section class="dd26-section"><h3>Coaching feedback</h3><p>${escapeHtml(result.feedback)}</p></section><section class="dd26-section"><h3>Suggested answer</h3><p>${escapeHtml(study.suggestedAnswer)}</p></section><section class="dd26-section"><h3>Why this works</h3><p>${escapeHtml(study.explanation)}</p></section><section class="dd26-section"><h3>Primary source</h3><p>${escapeHtml([study.primarySource?.title, study.primarySource?.citation].filter(Boolean).join(' · '))}</p>${safeSourceLink(study.primarySource?.url)}</section>${betaNotice()}</div>`;
       answer.value = '';
+      delete answer.dataset.requestAnswer;
+      delete answer.dataset.requestKey;
       answer.dispatchEvent(new Event('input'));
-    } catch (error) { global.toast?.(error.message, 'warn'); }
-    finally { state.busy = false; button.disabled = false; button.textContent = 'Submit answer'; }
+      setAnswerStatus('easy', 'Answer reviewed. Coaching is shown beside the question.', 'success');
+    } catch (error) {
+      if (!canCommitAnswerRequest(gradingRequest)) return;
+      setAnswerStatus('easy', `${error?.message || 'The answer could not be reviewed.'} Nothing was cleared. Try again.`, 'error');
+      button.classList.add('is-error');
+    } finally {
+      if (isCurrentAnswerRequest(gradingRequest)) {
+        state.activeAnswerRequest = null;
+        state.busy = false;
+        setAnswerButtonBusy(button, false, 'Reviewing…', 'Submit answer');
+        setAnswerFlowBusy('easy', false);
+        global.setTimeout(() => button?.classList.remove('is-error'), 1200);
+      }
+    }
   }
 
   function selectNext() {
-    if (!state.filtered.length) return;
+    if (state.busy || !state.filtered.length) return;
     state.selectedId = takeRandomStudyItem(state.filtered);
     state.result = null;
     renderContent();
@@ -421,13 +565,17 @@
       <header class="dd26-header"><div><div class="dd26-kicker">Recall / Explain / Verify</div><h1>Doctrines</h1><p>Explain the doctrine in your own words, then compare your understanding with its canonical meaning and limits.</p></div><span class="dd26-beta">Source-based study</span></header>
       ${subjectSelector(items)}
       <div class="dd26-grid">
-        <section class="dd26-pane"><div class="dd26-label">Selected doctrine</div><h2 class="dd26-prompt">${escapeHtml(item?.title || payload.doctrine_title || '')}</h2><p class="dd26-help">${escapeHtml(payload.syllabus_topic || '')}</p><label class="dd26-field"><span>Explain in your own words</span><textarea class="dd26-textarea" id="dd26-doctrine-answer" maxlength="3000" placeholder="State the meaning, required elements, and any important limit."></textarea><small class="dd26-counter" id="dd26-doctrine-count">0 / 3,000</small></label><div class="dd26-actions"><button class="dd26-button primary" id="dd26-doctrine-submit" type="button">Check mastery</button><button class="dd26-button" id="dd26-doctrine-next" type="button">Next doctrine</button></div><div class="dd26-privacy">Your answer text is not saved. Only your thumbs-up or thumbs-down mastery result is recorded.</div>${betaNotice()}</section>
+        <section class="dd26-pane"><div class="dd26-label">Selected doctrine</div><h2 class="dd26-prompt">${escapeHtml(item?.title || payload.doctrine_title || '')}</h2><p class="dd26-help">${escapeHtml(payload.syllabus_topic || '')}</p><label class="dd26-field"><span>Explain in your own words</span><textarea class="dd26-textarea" id="dd26-doctrine-answer" maxlength="3000" aria-describedby="dd26-doctrine-count dd26-doctrine-status" placeholder="State the meaning, required elements, and any important limit."></textarea><small class="dd26-counter" id="dd26-doctrine-count">0 / 3,000</small></label><div class="dd26-answer-status" id="dd26-doctrine-status" role="status" aria-live="polite"></div><div class="dd26-actions"><button class="dd26-button primary" id="dd26-doctrine-submit" type="button">Check mastery</button><button class="dd26-button" id="dd26-doctrine-next" type="button">Next doctrine</button></div><div class="dd26-privacy">Your answer text is not saved. Only your thumbs-up or thumbs-down mastery result is recorded.</div>${betaNotice()}</section>
         <aside class="dd26-pane" id="dd26-doctrine-result"><div class="dd26-empty">The canonical meaning, plain-language explanation, limits, and primary authority will appear after submission.</div></aside>
       </div>
     </div>`;
     bindContentFilters();
     const answer = document.getElementById('dd26-doctrine-answer');
-    answer?.addEventListener('input', () => { document.getElementById('dd26-doctrine-count').textContent = `${codePointLength(answer.value).toLocaleString()} / 3,000`; });
+    answer?.addEventListener('input', () => {
+      document.getElementById('dd26-doctrine-count').textContent = `${codePointLength(answer.value).toLocaleString()} / 3,000`;
+      const status = document.getElementById('dd26-doctrine-status');
+      if (status?.dataset.state && answer.value) setAnswerStatus('doctrine', '');
+    });
     document.getElementById('dd26-doctrine-submit')?.addEventListener('click', gradeDoctrine);
     document.getElementById('dd26-doctrine-next')?.addEventListener('click', () => selectNext(items));
   }
@@ -437,19 +585,57 @@
     const item = selectedItem();
     const answer = document.getElementById('dd26-doctrine-answer');
     const button = document.getElementById('dd26-doctrine-submit');
-    if (!item || !answer?.value.trim()) { global.toast?.('Explain the doctrine before checking mastery.', 'warn'); return; }
-    if (codePointLength(answer.value) > 3000) { global.toast?.('Doctrine answers are limited to 3,000 characters. Nothing was truncated.', 'warn'); return; }
-    state.busy = true; button.disabled = true; button.textContent = 'Checking…';
+    if (!item) {
+      setAnswerStatus('doctrine', 'This doctrine is unavailable. Use Next doctrine or reopen Doctrine Review.', 'error');
+      return;
+    }
+    if (!answer?.value.trim()) {
+      setAnswerStatus('doctrine', 'Explain the doctrine before checking mastery.', 'error');
+      answer?.focus();
+      return;
+    }
+    if (codePointLength(answer.value) > 3000) {
+      setAnswerStatus('doctrine', 'Doctrine answers are limited to 3,000 characters. Nothing was truncated.', 'error');
+      answer.focus();
+      return;
+    }
+    const submittedAnswer = answer.value;
+    const requestKey = answer.dataset.requestAnswer === submittedAnswer && answer.dataset.requestKey
+      ? answer.dataset.requestKey
+      : randomKey('doctrine');
+    answer.dataset.requestAnswer = submittedAnswer;
+    answer.dataset.requestKey = requestKey;
+    const gradingRequest = beginAnswerRequest(
+      'doctrine', item, answer, button, submittedAnswer, requestKey,
+    );
+    setAnswerButtonBusy(button, true, 'Checking…', 'Check mastery');
+    setAnswerFlowBusy('doctrine', true);
+    setAnswerStatus('doctrine', 'Checking your explanation. Nothing has been cleared.', 'loading');
     try {
-      const payload = await api('/dd2026/doctrines/grade', { contentId: item.id, answer: answer.value, requestKey: randomKey('doctrine') });
+      const payload = await api('/dd2026/doctrines/grade', { contentId: item.id, answer: submittedAnswer, requestKey });
+      if (!canCommitAnswerRequest(gradingRequest)) return;
       const result = payload.result || {};
       const study = payload.study || {};
       const title = result.result === 'thumbs_up' ? 'Doctrine understood' : 'Review this doctrine again';
       document.getElementById('dd26-doctrine-result').innerHTML = `<div class="dd26-result"><div class="dd26-kicker">Mastery check</div><h2 class="dd26-result-title">${escapeHtml(title)}</h2><section class="dd26-section"><h3>Feedback</h3><p>${escapeHtml(result.feedback)}</p></section><section class="dd26-section"><h3>Canonical meaning</h3><p>${escapeHtml(study.canonicalMeaning)}</p></section><section class="dd26-section"><h3>In plain language</h3><p>${escapeHtml(study.plainLanguageMeaning)}</p></section><section class="dd26-section"><h3>Limits and exceptions</h3><p>${escapeHtml(study.limits)}</p></section><section class="dd26-section"><h3>Authority</h3><p>${escapeHtml([study.authority, study.citation].filter(Boolean).join(' · '))}</p>${safeSourceLink(study.sourceUrl)}</section><div class="dd26-privacy">${escapeHtml(payload.privacy)}</div>${betaNotice()}</div>`;
       answer.value = '';
+      delete answer.dataset.requestAnswer;
+      delete answer.dataset.requestKey;
       answer.dispatchEvent(new Event('input'));
-    } catch (error) { global.toast?.(error.message, 'warn'); }
-    finally { state.busy = false; button.disabled = false; button.textContent = 'Check mastery'; }
+      setAnswerStatus('doctrine', 'Mastery check complete. The explanation is shown beside the doctrine.', 'success');
+    } catch (error) {
+      if (!canCommitAnswerRequest(gradingRequest)) return;
+      setAnswerStatus('doctrine', `${error?.message || 'The mastery check could not be completed.'} Nothing was cleared. Try again.`, 'error');
+      button.classList.add('is-error');
+    } finally {
+      if (isCurrentAnswerRequest(gradingRequest)) {
+        state.activeAnswerRequest = null;
+        state.busy = false;
+        setAnswerButtonBusy(button, false, 'Checking…', 'Check mastery');
+        setAnswerFlowBusy('doctrine', false);
+        global.setTimeout(() => button?.classList.remove('is-error'), 1200);
+      }
+    }
   }
 
   function renderCaseLibrary(items, chairs) {
@@ -664,6 +850,7 @@
   global.addEventListener('duediligence:session', (event) => {
     const sessionUserId = event.detail?.authenticated ? event.detail?.userId || null : null;
     const { identityChanged } = synchronizeSessionCaches(sessionUserId);
+    if (identityChanged || !event.detail?.authenticated) invalidateAnswerRequest();
     if (event.detail?.authenticated) {
       const route = routeFromHash();
       const routePageActive = document.getElementById('page-dd2026')?.classList.contains('active');

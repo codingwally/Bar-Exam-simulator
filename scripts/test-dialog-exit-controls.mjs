@@ -48,10 +48,10 @@ for (const id of [
   const markup = html.slice(start, next > start ? next : fallbackEnd);
   assert.ok(idPosition >= 0 && start >= 0 && markup, `${id} must remain present.`);
   assert.match(markup, /class="[^"]*\bmodal-close\b[^"]*"[^>]*aria-label="Close/i, `${id} needs a labelled upper-right close control.`);
-  assert.match(markup, /class="[^"]*modal-back[^"]*"[^>]*>Back<\/button>/, `${id} needs a lower-right Back action.`);
+  assert.match(markup, /class="[^"]*modal-back[^"]*"[^>]*>Back(?: to Home)?<\/button>/, `${id} needs a truthful lower-right Back action.`);
 }
 
-assert.match(html, /id="subject-selection-state"[\s\S]*?class="subject-selection-close"[\s\S]*?aria-label="Close subject selection and return to Bar Question Practice"[\s\S]*?class="btn-secondary subject-selection-back"[\s\S]*?>Back<\/button>/);
+assert.match(html, /id="subject-selection-state"[\s\S]*?class="subject-selection-close"[\s\S]*?aria-label="Close subject selection and return to Home"[\s\S]*?class="btn-secondary subject-selection-back"[\s\S]*?>Back to Home<\/button>/);
 assert.match(html, /id="private-beta-dialog"[\s\S]*?id="pb-dialog-close"[\s\S]*?>×<\/button>/);
 for (const id of ['pb-disclosure-continue', 'pb-code-submit', 'pb-google-intro-continue', 'pb-google-signin', 'pb-final-continue']) {
   const primary = html.indexOf(`id="${id}"`);

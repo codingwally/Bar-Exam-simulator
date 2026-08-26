@@ -518,25 +518,35 @@ assert.match(examinations, /adoptAccess\?\.\(material\.access,\s*\{\s*enforce:\s
 for (const asset of [
   'assets/phase2-experience.js',
   'assets/phase4-experience.js',
-  'assets/feature-loader.js',
 ]) {
   assert.ok(
     index.includes(`${asset}?v=syllabus-reveal-p0-20260826-2`),
     `${asset} must use the reviewed cache-busting release`,
   );
 }
+assert.ok(
+  index.includes('assets/feature-loader.js?v=public-reliability-20260827-1'),
+  'assets/feature-loader.js must use the public reliability cache-busting release',
+);
 for (const asset of [
-  'assets/examinations.css',
   'assets/study-workspace.js',
-  'assets/examinations.js',
 ]) {
   assert.ok(
     featureLoader.includes(`${asset}?v=syllabus-reveal-p0-20260826-2`),
     `${asset} must use the reviewed lazy-load cache-busting release`,
   );
 }
+for (const asset of [
+  'assets/examinations.css',
+  'assets/examinations.js',
+]) {
+  assert.ok(
+    featureLoader.includes(`${asset}?v=public-reliability-20260827-1`),
+    `${asset} must use the public reliability lazy-load cache-busting release`,
+  );
+}
 assert.match(studyWorkspace, /service-worker\.js\?v=syllabus-reveal-p0-20260826-2/);
-assert.match(serviceWorker, /duediligence-shell-20260826-syllabus-reveal-p0-2/);
+assert.match(serviceWorker, /duediligence-shell-20260827-public-reliability-2/);
 
 const userInstructionsStart = runbook.indexOf('## Copy-ready user and Support instructions');
 const technicalContractStart = runbook.indexOf('## Technical contract');

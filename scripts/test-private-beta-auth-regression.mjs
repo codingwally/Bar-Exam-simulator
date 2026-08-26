@@ -230,6 +230,10 @@ async function runAuthenticatedSync({
     async openQuorumHome() {
       calls.push(['openQuorumHome']);
     },
+    async runPublicNavigation(feature) {
+      calls.push(['runPublicNavigation', feature]);
+      return true;
+    },
     showLanding() {
       calls.push(['showLanding']);
     },
@@ -258,7 +262,7 @@ async function runAuthenticatedSync({
 {
   const result = await runAuthenticatedSync({ pending: null, gateEnabled: false });
   assert.ok(
-    result.calls.some(([name]) => name === 'openQuorumHome'),
+    result.calls.some(([name, feature]) => name === 'runPublicNavigation' && feature === 'quorum'),
     'A signed-in user at root must enter the protected Quorum home.',
   );
   assert.equal(
@@ -291,7 +295,7 @@ async function runAuthenticatedSync({
     allowed: true,
   });
   assert.ok(
-    result.calls.some(([name]) => name === 'openQuorumHome'),
+    result.calls.some(([name, feature]) => name === 'runPublicNavigation' && feature === 'quorum'),
     'An eligible signed-in account at root must enter Quorum.',
   );
   assert.equal(

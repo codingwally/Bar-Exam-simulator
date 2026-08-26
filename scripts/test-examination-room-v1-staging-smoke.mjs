@@ -39,8 +39,10 @@ async function retry(label, operation, attempts = 15) {
 async function fetchStaging(pathname, init = {}) {
   const url = new URL(pathname, `${stagingUrl}/`);
   url.searchParams.set('greenfield_smoke', String(Date.now()));
-  return fetch(url, {
-    redirect: 'error',
+  const response = await fetch(url, {
+    // Cloudflare may canonicalize an explicit .html route to its extensionless
+    // equivalent. Follow only that normal same-origin static redirect.
+    redirect: 'follow',
     signal: AbortSignal.timeout(12_000),
     ...init,
     headers: {
@@ -48,6 +50,10 @@ async function fetchStaging(pathname, init = {}) {
       ...(init.headers || {}),
     },
   });
+  if (new URL(response.url).origin !== new URL(stagingUrl).origin) {
+    throw new Error('staging response left the approved origin');
+  }
+  return response;
 }
 
 const staticRoutes = [

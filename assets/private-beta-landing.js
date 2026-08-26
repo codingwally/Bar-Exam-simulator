@@ -870,7 +870,11 @@
       return true;
     }
     if (feature === 'mock') {
-      const opened = global.showPage?.('mock', document.getElementById('spa-mock'));
+      const opened = global.showPage?.(
+        'mock',
+        document.getElementById('spa-mock'),
+        { accessVerified: true },
+      );
       if (opened !== true) throw new Error('Bar Question Practice could not be opened. Please try again.');
       state.lastActivatedHash = 'mock-bar';
     } else if (feature === 'subject-matter') {

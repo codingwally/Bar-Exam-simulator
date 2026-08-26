@@ -113,6 +113,8 @@ const publicFiles = Object.freeze([
   'assets/phase4-experience.js',
   'assets/examinations.css',
   'assets/examinations.js',
+  'assets/auxiliary-writing-diagnostics.css',
+  'assets/auxiliary-writing-diagnostics.js',
   'assets/study-workspace.css',
   'assets/study-workspace.js',
   'assets/brand/apple-touch-icon.png',

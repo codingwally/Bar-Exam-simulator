@@ -77,6 +77,7 @@ jobs:
           node scripts/test-duediligence-2026-migrations.mjs
           node scripts/test-commercial-launch-migration.mjs
           node scripts/test-feature-decommission-boundary.mjs
+          node scripts/test-auxiliary-writing-diagnostics.mjs
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
 

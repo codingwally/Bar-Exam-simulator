@@ -76,8 +76,8 @@ The candidate must not be represented as production-live until all four items be
 
 1. **Cloudflare R2 is disabled for the account.** Cloudflare returned error `10042`. The account owner must complete the R2 activation screen before the required staging and production recovery buckets can be created.
 2. **GitHub Actions database connection secrets are absent.** Add the staging Session Pooler URL as `EXAMINATION_ROOM_STAGING_DATABASE_URL` in `staging-e2e`, and the production Session Pooler URL as `EXAMINATION_ROOM_PRODUCTION_DATABASE_URL` in both `production-worker` and `github-pages`.
-3. **The release candidate is not on `main`.** It is currently two local commits ahead and three commits behind the latest `origin/main`; the newer main changes must be merged and the full gates rerun.
-4. **Two obsolete Worker runs remain queued on old code:** `32984100690` and `32984321588`. Cancel these before the release dispatch.
+3. **The release candidate is not yet on `main`.** Current `origin/main` has now been integrated into the candidate, conflicts were resolved by preserving both workstreams, and the complete post-merge client/backend/stress gates passed. The reviewed candidate still needs to be accepted into `main` before the production workflow may run.
+4. **Two obsolete Worker runs display a stale queued state on old code:** `32984100690` and `32984321588`. Both ordinary and forced cancellation were attempted; GitHub returned `409` because it simultaneously reports that the runs have not queued or are already complete, and the runs contain no jobs. Recheck this inconsistent metadata before the release dispatch.
 
 The two Supabase projects are healthy. Supabase currently recommends its Session Pooler on port 5432 for IPv4-only GitHub Actions migration traffic.
 
@@ -87,7 +87,7 @@ The two Supabase projects are healthy. Supabase currently recommends its Session
 **Production deployment gate: BLOCKED by external account configuration.**  
 **Commercial-release claim: NOT YET AUTHORIZED by evidence.**
 
-Once R2 is enabled and the three environment-secret placements exist, the safe sequence is: create and lifecycle-configure both recovery buckets, cancel stale deployments, commit the candidate, merge current `origin/main`, rerun the gates, deploy staging, run the live email/backup/journey canaries, then merge and dispatch the single production workflow.
+Once R2 is enabled and the three environment-secret placements exist, the safe sequence is: create and lifecycle-configure both recovery buckets, recheck the two stale run records, push the verified candidate, deploy staging, run the live email/backup/journey canaries, then merge into `main` and dispatch the single production workflow.
 
 ## Evidence files
 

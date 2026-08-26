@@ -3,10 +3,13 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
 const read = (relative) => readFile(new URL(relative, root), 'utf8');
-const [html, migration, frontend, landing, core, pdf, workerIndex] = await Promise.all([
+const [html, measurementMigration, gradedMigration, frontend, auxiliaryFrontend, auxiliaryStyles, landing, core, pdf, workerIndex] = await Promise.all([
   read('index.html'),
   read('supabase/migrations/20260822130000_analytics_measurement_fields.sql'),
+  read('supabase/migrations/20260826165302_analytics_graded_records_only.sql'),
   read('assets/duediligence-2026.js'),
+  read('assets/auxiliary-writing-diagnostics.js'),
+  read('assets/auxiliary-writing-diagnostics.css'),
   read('assets/private-beta-landing.js'),
   read('worker/duediligence-2026-core.mjs'),
   read('worker/verdict-pdf.mjs'),
@@ -22,21 +25,31 @@ assert.match(html, /analytics:\s*'verdict'/,
 assert.match(html, /function openAnalytics\(\)[\s\S]*showPage\('analytics', document\.getElementById\('spa-progress'\)\)/,
   'Opening Analytics must use SPA routing.');
 assert.match(html, /Score trend/);
-assert.match(html, /score, date, and exact Philippine time/,
-  'Score Trend must explain that date and time details are visible.');
+assert.match(html, /exact Philippine date and time/,
+  'Score Trend must explain that exact date and time details are visible.');
 assert.match(html, /timeZone: 'Asia\/Manila'/,
   'Score Trend timestamps must use the product Philippine-time convention.');
-assert.match(html, /analytics-trend-date[\s\S]*analytics-trend-time/,
-  'Every score point must render a visible date and time, not only a browser tooltip.');
-assert.match(html, /Philippine Time \(Asia\/Manila\)/,
-  'The chart must label its time zone for users reviewing historical attempts.');
+assert.match(html, /Philippine Time/,
+  'Selected score details must label their Philippine-time convention.');
+assert.match(html, /Latest \$\{points\.length\} graded attempts\. Use left and right arrow keys/,
+  'Score trend points must support keyboard inspection.');
+assert.match(html, /analyticsTrendPointLabel\(point\)[\s\S]*subject[\s\S]*feature[\s\S]*score \$\{point\.score\.toFixed\(1\)\} out of 5[\s\S]*change\.label/,
+  'Every trend point must expose subject, feature, score, date, and change context.');
+assert.match(html, /Latest \$\{latest\.length\} average[\s\S]*Previous \$\{previous\.length \|\| 5\} average[\s\S]*Recent direction/,
+  'The trend must summarize recent performance against the preceding attempts.');
 assert.match(html, /Subject performance/);
 assert.match(html, /Writing pace/);
-assert.match(html, /Grammar strength<\/span><span>Not measured separately/,
-  'Analytics must not invent a grammar score.');
-assert.match(html, /Issue spotting<\/span><span>Not measured separately/,
-  'Analytics must not invent an issue-spotting score.');
-assert.match(html, /Account history could not be reached[\s\S]*only attempts saved on this device/,
+assert.match(html, /id="analytics-auxiliary-title">Auxiliary diagnostics/,
+  'Analytics must provide a distinct auxiliary diagnostics panel.');
+assert.doesNotMatch(html, /Not measured separately/,
+  'Measured auxiliary skills must not retain the former placeholder copy.');
+assert.match(auxiliaryFrontend, /function validPoints\(value\)[\s\S]*value === null[\s\S]*number >= 0 && number <= 5/,
+  'Auxiliary Analytics must use stored 0–5 values and preserve missing values as unassessed.');
+assert.match(auxiliaryFrontend, /These scores are not part of your answer score/,
+  'Auxiliary coaching must state that it cannot affect the answer score.');
+assert.match(auxiliaryStyles, /\.aux-analytics-fill[\s\S]*border:1px solid var\(--gold,#C5A059\)[\s\S]*background:var\(--navy,#002147\)/,
+  'Auxiliary bars must use a navy fill with a gold outline.');
+assert.match(html, /Account history could not be reached[\s\S]*graded attempts saved on this device/,
   'A local fallback must be disclosed as incomplete.');
 assert.match(html, /Reset Analytics\?[\s\S]*Recently Deleted for 30 days/,
   'Reset must be explicit and recoverable for synced records.');
@@ -50,19 +63,35 @@ assert.match(html, /function analyticsFeatureLabel\(value\)[\s\S]*Bar Exam Simul
   'Historical Bar Feels records must use the current Bar Exam Simulation label.');
 assert.match(html, /function analyticsSubjectLabel\(value\)[\s\S]*Labor Law and Social Legislation/,
   'Historical subject labels must not retain the incorrect plural form.');
-assert.match(html, /function analyticsRecordExportable\(record\)[\s\S]*phase4_exam_attempt[\s\S]*completed[\s\S]*unanswered[\s\S]*examination_attempt[\s\S]*submitted[\s\S]*expired/,
-  'Analytics must offer PDF export only for record states supported by the Worker.');
+assert.match(html, /function analyticsRecordGraded\(record\)[\s\S]*analyticsFiniteScore\(record\) === null[\s\S]*phase4_exam_attempt[\s\S]*completed[\s\S]*examination_attempt[\s\S]*gradingComplete === true/,
+  'Analytics must have one defensive graded-record predicate, including complete multi-question grading.');
+assert.match(html, /function analyticsRecordExportable\(record\)[\s\S]*!analyticsRecordGraded\(record\)/,
+  'PDF exportability must require a fully graded record.');
 assert.match(html, /const exportable = analyticsRecordExportable\(record\)/,
   'The Analytics history table must enforce the exportability guard.');
-assert.match(html, /Available after submission/,
-  'Unfinished records must explain when export becomes available instead of calling an unsupported endpoint.');
+assert.match(html, /filteredVerdictRecords\(\)\.filter\(\(record\) => verdictDashboard\.selected\.has[\s\S]*analyticsRecordExportable\(record\)\)/,
+  'Bulk PDF export must reapply the exportability guard.');
+assert.doesNotMatch(html, /Available after submission|Not graded/,
+  'Ungraded lifecycle rows must not appear in Analytics history.');
+assert.match(html, /Graded attempts only\. Search, export/,
+  'Attempt history must explain its graded-only scope.');
 
-assert.match(migration, /'wordCount', word_count/);
-assert.match(migration, /'rubricBreakdown', rubric_breakdown/);
-assert.match(migration, /a\.assessment->'rubricBreakdown'/);
-assert.match(migration, /s\.word_count::integer/);
-assert.match(migration, /revoke all on function public\.dd2026_verdict_records[\s\S]*from public, anon, authenticated/);
-assert.match(migration, /grant execute on function public\.dd2026_verdict_records[\s\S]*to service_role/);
+assert.match(measurementMigration, /'wordCount', word_count/);
+assert.match(measurementMigration, /'rubricBreakdown', rubric_breakdown/);
+assert.match(measurementMigration, /a\.assessment->'rubricBreakdown'/);
+assert.match(measurementMigration, /s\.word_count::integer/);
+assert.match(gradedMigration, /g\.overall_score is not null/);
+assert.match(gradedMigration, /a\.status = 'completed'[\s\S]*a\.score is not null/);
+assert.match(gradedMigration, /grading_job\.status = 'completed'/);
+assert.match(gradedMigration, /scores\.assessment_count = v\.question_count/,
+  'Multi-question Analytics records must wait for every assessment.');
+assert.match(gradedMigration, /'gradingComplete', grading_complete/);
+assert.match(gradedMigration, /limit v_limit offset v_offset/,
+  'Graded filtering must occur in the records CTE before pagination.');
+assert.match(gradedMigration, /revoke all on function public\.dd2026_verdict_records[\s\S]*from public, anon, authenticated/);
+assert.match(gradedMigration, /grant execute on function public\.dd2026_verdict_records[\s\S]*to service_role/);
+assert.match(gradedMigration, /create or replace function public\.dd2026_verdict_result[\s\S]*a\.status = 'completed'[\s\S]*summary\.assessment_count = v\.question_count/,
+  'Direct PDF lookup must reject unanswered and partially graded records.');
 assert.match(workerIndex, /'dd2026_verdict_records'/,
   'The production Worker RPC allowlist must permit Analytics history reads.');
 assert.match(workerIndex, /'dd2026_verdict_archive'/,

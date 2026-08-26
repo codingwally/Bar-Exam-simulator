@@ -173,6 +173,7 @@ import {
   dd2026DatabaseError,
 } from './duediligence-2026-core.mjs';
 import { createDD2026Handlers } from './duediligence-2026-routes.mjs';
+import { createAuxiliaryWritingDiagnosticsHandlers } from './auxiliary-writing-diagnostics-routes.mjs';
 import {
   EXAMINATION_ROOM_V1_PATHS,
   ExaminationRoomV1RouteError,
@@ -2847,6 +2848,11 @@ async function dd2026Rpc(env, functionName, body) {
     'dd2026_record_verdict_export',
     'dd2026_verdict_records',
     'dd2026_verdict_archive',
+    'dd2026_auxiliary_diagnostic_source',
+    'dd2026_auxiliary_diagnostic_claim',
+    'dd2026_auxiliary_diagnostic_finish',
+    'dd2026_auxiliary_diagnostic_fail',
+    'dd2026_auxiliary_diagnostic_records',
   ]);
   if (!allowedFunctions.has(functionName)) {
     throw new DD2026ValidationError('UNSUPPORTED_OPERATION', 'This study operation is not supported.');
@@ -8045,6 +8051,16 @@ const dd2026Handlers = createDD2026Handlers({
   structuredGemini: callGeminiStructured,
 });
 
+const auxiliaryWritingDiagnosticsHandlers = createAuxiliaryWritingDiagnosticsHandlers({
+  dd2026Rpc,
+  enforceDD2026RateLimit,
+  jsonResponse,
+  parseBoundedJson,
+  requireAuthenticatedUser,
+  resolveVerdictQuestion,
+  structuredGemini: callGeminiStructured,
+});
+
 const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
   parseJson: parseBoundedJson,
   respond: jsonResponse,
@@ -8206,6 +8222,14 @@ export default {
       }
       if (pathname === '/dd2026/verdict/archive') {
         return await dd2026Handlers.verdictArchive(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/dd2026/auxiliary-diagnostics/ensure') {
+        return await auxiliaryWritingDiagnosticsHandlers.ensure(
+          request, env, origin, allowedOrigin, ctx,
+        );
+      }
+      if (pathname === '/dd2026/auxiliary-diagnostics/records') {
+        return await auxiliaryWritingDiagnosticsHandlers.records(request, env, origin, allowedOrigin);
       }
       if (pathname === '/dd2026/editorial') {
         return await dd2026Handlers.editorial(request, env, origin, allowedOrigin);

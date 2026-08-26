@@ -106,6 +106,10 @@ jobs:
           node scripts/test-complete-beta-release.mjs
           node scripts/test-lex-forum.mjs
           node scripts/test-quorum.mjs
+          node scripts/test-analytics-page.mjs
+          node scripts/test-auxiliary-writing-diagnostics.mjs
+          node scripts/test-history-score-safety.mjs
+          node scripts/test-verdict-graded-analytics.mjs
           node scripts/test-verdict-export-loading.mjs
           node scripts/audit-subject-matter-review-quality.mjs
           node scripts/test-duediligence-2026-frontend.mjs

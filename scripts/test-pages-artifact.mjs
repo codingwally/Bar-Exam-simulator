@@ -65,6 +65,8 @@ for (const required of [
   'assets/icons/community/LICENSE.txt',
   'assets/examinations.css',
   'assets/examinations.js',
+  'assets/auxiliary-writing-diagnostics.css',
+  'assets/auxiliary-writing-diagnostics.js',
   'assets/study-workspace.css',
   'assets/study-workspace.js',
   'assets/brand/apple-touch-icon.png',

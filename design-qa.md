@@ -41,6 +41,39 @@ final result: passed
 
 ---
 
+# Auxiliary Writing Diagnostics Design QA — 2026-08-27
+
+## Scope and comparison evidence
+
+- Existing product reference: `audit-evidence-20260827/auxiliary-diagnostics/01-current-answer-skills.png`.
+- Combined desktop reference/component capture: `audit-evidence-20260827/auxiliary-diagnostics/02-comparison-desktop-reference.png`.
+- Desktop coaching and Analytics capture: `audit-evidence-20260827/auxiliary-diagnostics/03-components-desktop.png`.
+- Narrow coaching capture: `audit-evidence-20260827/auxiliary-diagnostics/04-coaching-mobile-320.png`.
+- Narrow Analytics capture: `audit-evidence-20260827/auxiliary-diagnostics/05-analytics-mobile-320.png`.
+- The review used the production auxiliary stylesheet and renderer with realistic completed data. The comparison fixture is not part of the release.
+
+## Visual and interaction checks
+
+- Grammar Strength and Issue Spotting are visually separate from the official Answer Skills panel.
+- Analytics uses navy fills with one-pixel gold outlines; existing official gold bars are unchanged.
+- Coaching remains text-first, compact, and subordinate, with no auxiliary progress bars competing with the assessment.
+- Both surfaces state that the diagnostics do not change the answer score.
+- Values are visible as independent `0–5%` auxiliary scales and expose native meter semantics in Analytics.
+- Loading, unavailable, not-assessed, partial, and completed states use distinct copy.
+- At the 320-pixel viewport, both metrics stack in reading order; document width equals viewport width and no horizontal overflow occurs.
+- Dark editorial and light Analytics contexts preserve the existing navy, brass-gold, paper, serif, sans, and mono design language.
+- No fixed position, sticky treatment, animation, or invasive overlay was introduced.
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+
+final result: passed
+
+---
+
 # Examination Room Selected-Image Fidelity QA — 2026-08-26
 
 ## Controlling target

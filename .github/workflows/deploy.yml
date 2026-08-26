@@ -100,6 +100,7 @@ jobs:
           node scripts/test-lex-forum.mjs
           node scripts/test-quorum.mjs
           node scripts/test-analytics-page.mjs
+          node scripts/test-auxiliary-writing-diagnostics.mjs
           node scripts/test-history-score-safety.mjs
           node scripts/test-verdict-graded-analytics.mjs
           node scripts/test-verdict-export-loading.mjs

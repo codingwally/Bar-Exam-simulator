@@ -3,11 +3,13 @@ import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
 const read = (relative) => readFile(new URL(relative, root), 'utf8');
-const [html, measurementMigration, gradedMigration, frontend, landing, core, pdf, workerIndex] = await Promise.all([
+const [html, measurementMigration, gradedMigration, frontend, auxiliaryFrontend, auxiliaryStyles, landing, core, pdf, workerIndex] = await Promise.all([
   read('index.html'),
   read('supabase/migrations/20260822130000_analytics_measurement_fields.sql'),
   read('supabase/migrations/20260826165302_analytics_graded_records_only.sql'),
   read('assets/duediligence-2026.js'),
+  read('assets/auxiliary-writing-diagnostics.js'),
+  read('assets/auxiliary-writing-diagnostics.css'),
   read('assets/private-beta-landing.js'),
   read('worker/duediligence-2026-core.mjs'),
   read('worker/verdict-pdf.mjs'),
@@ -31,10 +33,16 @@ assert.match(html, /Latest \$\{latest\.length\} average[\s\S]*Previous \$\{previ
   'The trend must summarize recent performance against the preceding attempts.');
 assert.match(html, /Subject performance/);
 assert.match(html, /Writing pace/);
-assert.match(html, /Grammar strength<\/span><span>Not measured separately/,
-  'Analytics must not invent a grammar score.');
-assert.match(html, /Issue spotting<\/span><span>Not measured separately/,
-  'Analytics must not invent an issue-spotting score.');
+assert.match(html, /id="analytics-auxiliary-title">Auxiliary diagnostics/,
+  'Analytics must provide a distinct auxiliary diagnostics panel.');
+assert.doesNotMatch(html, /Not measured separately/,
+  'Measured auxiliary skills must not retain the former placeholder copy.');
+assert.match(auxiliaryFrontend, /function validPoints\(value\)[\s\S]*value === null[\s\S]*number >= 0 && number <= 5/,
+  'Auxiliary Analytics must use stored 0–5 values and preserve missing values as unassessed.');
+assert.match(auxiliaryFrontend, /These scores are not part of your answer score/,
+  'Auxiliary coaching must state that it cannot affect the answer score.');
+assert.match(auxiliaryStyles, /\.aux-analytics-fill[\s\S]*border:1px solid var\(--gold,#C5A059\)[\s\S]*background:var\(--navy,#002147\)/,
+  'Auxiliary bars must use a navy fill with a gold outline.');
 assert.match(html, /Account history could not be reached[\s\S]*graded attempts saved on this device/,
   'A local fallback must be disclosed as incomplete.');
 assert.match(html, /Reset Analytics\?[\s\S]*Recently Deleted for 30 days/,

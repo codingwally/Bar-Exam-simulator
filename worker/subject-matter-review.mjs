@@ -1,3 +1,7 @@
+import {
+  sanitizeLearnerFacingPayload,
+} from './internal-editorial-content.mjs';
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DISTINCT_CONTROLLING_LAW_UNAVAILABLE = 'No distinct controlling-law explanation is available in the approved source material for this item.';
@@ -122,6 +126,7 @@ function safeSources(value) {
 }
 
 export function normalizeSubjectMatterJurisprudence(value) {
+  value = sanitizeLearnerFacingPayload(value);
   if (!Array.isArray(value) || value.length > 24) throw reviewError();
   const normalizedEntries = value.map((entry) => {
     if (typeof entry === 'string') {
@@ -157,6 +162,7 @@ export function normalizeSubjectMatterJurisprudence(value) {
 }
 
 export function sanitizeSubjectMatterRevealRecord(value, expectedAttemptId) {
+  value = sanitizeLearnerFacingPayload(value);
   if (!value || typeof value !== 'object' || Array.isArray(value) || value.status !== 'available') {
     throw reviewError();
   }
@@ -229,6 +235,7 @@ function jurisprudenceText(items) {
 }
 
 export function buildSubjectMatterTeachingPrompt(material) {
+  material = sanitizeLearnerFacingPayload(material);
   const corpus = {
     question: material.prompt,
     suggestedAnswer: material.suggestedAnswer,
@@ -292,6 +299,8 @@ function isSubstantiveLegalExplanation(value) {
 }
 
 export function validateSubjectMatterTeachingExplanation(value, material) {
+  value = sanitizeLearnerFacingPayload(value);
+  material = sanitizeLearnerFacingPayload(material);
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Teaching explanation must be an object.');
   }
@@ -406,6 +415,7 @@ function substantiveFallbackLimits(material) {
 }
 
 export function fallbackSubjectMatterTeachingExplanation(material) {
+  material = sanitizeLearnerFacingPayload(material);
   const sentences = answerSentences(material.suggestedAnswer);
   const answer = sectionFromSuggestedAnswer(material.suggestedAnswer, 'Answer')
     || sentences[0]
@@ -431,6 +441,8 @@ function substantiveReviewText(value, fallback) {
 }
 
 export function buildSubjectMatterLegalReview(material, explanation) {
+  material = sanitizeLearnerFacingPayload(material);
+  explanation = sanitizeLearnerFacingPayload(explanation);
   const fallback = fallbackSubjectMatterTeachingExplanation(material);
   const suppliedControllingLaw = substantiveReviewText(
     explanation?.controllingLawAndElements,
@@ -469,7 +481,9 @@ export function buildSubjectMatterLegalReview(material, explanation) {
 }
 
 export function publicSubjectMatterReviewPayload(material, explanation, metadata = {}) {
-  return {
+  material = sanitizeLearnerFacingPayload(material);
+  explanation = sanitizeLearnerFacingPayload(explanation);
+  return sanitizeLearnerFacingPayload({
     status: 'available',
     attemptId: material.attemptId,
     questionId: material.questionId,
@@ -491,5 +505,5 @@ export function publicSubjectMatterReviewPayload(material, explanation, metadata
     teachingModel: metadata.teachingModel || null,
     sources: material.sources,
     access: metadata.access,
-  };
+  });
 }

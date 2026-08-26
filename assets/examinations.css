@@ -2959,17 +2959,57 @@ details[open] > summary .dd-subject-chevron {
   color: #f4d478;
 }
 
-.dd-subject-review-access-note {
-  margin: 3px 0 0;
-  padding-top: 9px;
-  border-top: 1px solid rgba(212, 170, 79, .2);
+.dd-subject-review-access-hint {
+  margin: 10px 0 0;
   color: #aebdce;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.55;
 }
 
-[data-subject-review-access="eligible"] .dd-subject-review-access-note {
+[data-subject-review-access="eligible"] .dd-subject-review-access-hint {
   color: #c9d9cc;
+}
+
+.dd-subject-review-reveal {
+  width: 100%;
+  min-height: 76px;
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  margin-top: 22px;
+  padding: 17px 20px;
+  border: 1px solid #f0cd6d;
+  border-radius: 3px;
+  color: #061a35;
+  background: linear-gradient(115deg, #f2d47c, #dcae43 58%, #f1d174);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.dd-subject-review-reveal span {
+  font: 800 13px/1.35 "IBM Plex Mono", monospace;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.dd-subject-review-reveal small {
+  color: #293951;
+  font: 600 11px/1.45 Inter, sans-serif;
+}
+
+.dd-subject-review-reveal:hover,
+.dd-subject-review-reveal:focus-visible {
+  border-color: #fff1b5;
+  outline: 3px solid rgba(240, 205, 109, .35);
+  outline-offset: 4px;
+  filter: brightness(1.05);
+}
+
+.dd-subject-review-reveal:disabled,
+.dd-subject-review-reveal[aria-disabled="true"] {
+  cursor: wait;
+  opacity: .72;
 }
 
 .dd-subject-review-source-note {
@@ -3049,12 +3089,6 @@ details[open] > summary .dd-subject-chevron {
 
 .dd-subject-review-disclosure-body {
   padding: 6px 4px 24px;
-}
-
-.dd-subject-review-disclosures.is-locked .dd-subject-review-disclosure-body {
-  color: #9fb0c4;
-  font-size: 12px;
-  line-height: 1.6;
 }
 
 .dd-subject-review-status {

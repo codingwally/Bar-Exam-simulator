@@ -35,6 +35,11 @@ The following invariants are release gates:
   an answer automatically.
 - A user must explicitly choose `Reveal Answer` after an eligible entitlement
   becomes active.
+- Before authorization, the interface exposes exactly one `Reveal Answer`
+  button and no protected review rows. After a successful authorized request,
+  that button is replaced by the same three expandable rows: `Reveal suggested
+  answer`, `Reveal controlling law and doctrine`, and `Reveal application,
+  limits, and sources`.
 - The first authorized release creates exactly one durable
   `subject_review_released` examination audit event for the attempt. Rapid
   clicks, concurrent tabs, reloads, and replays cannot create another release
@@ -113,6 +118,16 @@ entry, restores focus to the originating reveal control or answer editor, and
 is cleared synchronously when dismissed. Background access refreshes use
 non-enforcing mode. A successful refresh may update eligibility and close a
 stale gate, but it must not call the reveal endpoint.
+
+Internal editorial blocks, including rubric, scoring-guide, grader-note,
+examiner-note, and similar labeled material, are never learner-facing content.
+They must be removed during release ingestion and again at every Worker output
+boundary that can return suggested answers, legal review, assessments,
+performance, verdicts, or history. The browser applies a final defensive scrub
+before caching or rendering. Question prompts and learner-authored answers are
+preserved verbatim, even when the learner discusses a rubric. If a protected
+answer consists only of internal editorial material, reveal fails closed as
+unavailable instead of returning an empty or partial internal block.
 
 ## Local and staging verification
 
@@ -359,6 +374,9 @@ Stop and preserve evidence if any of these occurs:
 - one attempt gains duplicate release audits or provider requests;
 - `firstReveal`, private entitlement diagnostics, or protected review material
   appears in an error or public metadata field;
+- an internal rubric, scoring guide, grader note, examiner note, or other
+  editorial instruction appears in a reveal, assessment, performance, verdict,
+  or history response;
 - an introductory token balance or ledger changes because of reveal;
 - ownership changes or account switching expose another user's review;
 - the migration is not transactional, least-privilege grants change, or any

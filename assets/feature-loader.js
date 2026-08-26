@@ -13,12 +13,12 @@
     }),
     examinations: Object.freeze({
       styles: [
-        'assets/examinations.css?v=syllabus-reveal-access-20260826-1',
+        'assets/examinations.css?v=syllabus-reveal-p0-20260826-2',
         'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
       ],
       scripts: [
-        'assets/study-workspace.js?v=syllabus-reveal-access-20260826-1',
-        'assets/examinations.js?v=syllabus-reveal-access-20260826-1',
+        'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2',
+        'assets/examinations.js?v=syllabus-reveal-p0-20260826-2',
       ],
     }),
     content: Object.freeze({
@@ -27,7 +27,7 @@
         'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
       ],
       scripts: [
-        'assets/study-workspace.js?v=syllabus-reveal-access-20260826-1',
+        'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2',
         'assets/duediligence-2026.js?v=content-runtime-20260826-1',
       ],
     }),

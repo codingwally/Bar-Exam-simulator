@@ -239,12 +239,12 @@ assert.match(
 );
 assert.match(
   html,
-  /assets\/phase2-experience\.js\?v=syllabus-reveal-access-20260826-1/,
+  /assets\/phase2-experience\.js\?v=syllabus-reveal-p0-20260826-2/,
   'The route-overlay fix must ship behind a fresh browser cache key.',
 );
 assert.match(
   html,
-  /assets\/feature-loader\.js\?v=syllabus-reveal-access-20260826-1/,
+  /assets\/feature-loader\.js\?v=syllabus-reveal-p0-20260826-2/,
   'Protected routes must use the release-scoped lazy feature loader.',
 );
 assert.match(

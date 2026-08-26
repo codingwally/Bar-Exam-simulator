@@ -19,6 +19,7 @@ import {
   validateDoctrineResult,
 } from './duediligence-2026-core.mjs';
 import { buildVerdictPdf, verdictPdfFileName } from './verdict-pdf.mjs';
+import { sanitizeLearnerFacingPayload } from './internal-editorial-content.mjs';
 
 function barEasyReveal(content) {
   const payload = content?.payload || {};
@@ -74,6 +75,7 @@ export function createDD2026Handlers(deps) {
     releaseCommercialSubmission,
     resolveVerdictQuestion,
     structuredGemini,
+    buildVerdictPdf: renderVerdictPdf = buildVerdictPdf,
   } = deps;
   async function features(request, env, origin, allowedOrigin) {
     await enforceDD2026RateLimit(request, env);
@@ -230,9 +232,9 @@ export function createDD2026Handlers(deps) {
           questionNumber: result.questionBankId,
         };
       }
-      results.push(result);
+      results.push(sanitizeLearnerFacingPayload(result));
     }
-    const result = results.length === 1 ? results[0] : {
+    const result = sanitizeLearnerFacingPayload(results.length === 1 ? results[0] : {
       subject: 'Selected personal attempts',
       gradedAt: new Date().toISOString(),
       questions: results.flatMap((entry, resultIndex) => {
@@ -257,8 +259,8 @@ export function createDD2026Handlers(deps) {
           score: entry.score,
         }];
       }),
-    };
-    const bytes = await buildVerdictPdf({
+    });
+    const bytes = await renderVerdictPdf({
       result,
       selectionKind: input.selectionKind,
       selectedIds: input.selectedIds,
@@ -296,7 +298,10 @@ export function createDD2026Handlers(deps) {
       p_limit: input.limit,
       p_offset: input.offset,
     });
-    return jsonResponse({ ok: true, result }, 200, origin, allowedOrigin);
+    return jsonResponse({
+      ok: true,
+      result: sanitizeLearnerFacingPayload(result),
+    }, 200, origin, allowedOrigin);
   }
 
   async function verdictArchive(request, env, origin, allowedOrigin) {

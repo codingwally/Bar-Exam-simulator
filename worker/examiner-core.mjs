@@ -1,3 +1,5 @@
+import { stripInternalEditorialBlocks } from './internal-editorial-content.mjs';
+
 export const RUBRIC_VERSION = 'BAR-ALIGNED-HOLISTIC-v2';
 export const DEFAULT_MODEL = 'gemini-3.6-flash';
 export const MODEL_FALLBACKS = Object.freeze([
@@ -101,8 +103,12 @@ export function normalizeRequest(payload) {
     ? {
         subject: cleanText(payload.questionContext.subject, 100),
         question: preserveQuestionText(payload.questionContext.question),
-        suggestedAnswer: cleanText(payload.questionContext.suggestedAnswer, 20_000),
-        legalBasis: cleanText(payload.questionContext.legalBasis, 10_000),
+        suggestedAnswer: stripInternalEditorialBlocks(
+          cleanText(payload.questionContext.suggestedAnswer, 20_000),
+        ),
+        legalBasis: stripInternalEditorialBlocks(
+          cleanText(payload.questionContext.legalBasis, 10_000),
+        ),
         caseName: cleanText(payload.questionContext.caseName, 500),
         caseCitation: cleanText(payload.questionContext.caseCitation, 500),
         sourceTitle: cleanText(payload.questionContext.sourceTitle, 500),
@@ -239,8 +245,12 @@ export function questionFromBankRow(row) {
   return {
     subject: cleanText(row.Subject || row.subject),
     question: preserveQuestionText(row['Essay Question'] ?? row.question, { status: 502 }),
-    suggestedAnswer: cleanText(row['Suggested Answer'] || row.suggested_answer).replace(/\s*\(noun\)/gi, ''),
-    legalBasis: cleanText(row['Legal Basis / Provision'] || row.legal_basis).replace(/\s*\(noun\)/gi, ''),
+    suggestedAnswer: stripInternalEditorialBlocks(
+      cleanText(row['Suggested Answer'] || row.suggested_answer).replace(/\s*\(noun\)/gi, ''),
+    ),
+    legalBasis: stripInternalEditorialBlocks(
+      cleanText(row['Legal Basis / Provision'] || row.legal_basis).replace(/\s*\(noun\)/gi, ''),
+    ),
     caseName,
     caseCitation,
     sourceTitle: cleanText(row['Source Title'] || row.source_title || [caseName, caseCitation].filter(Boolean).join(', ')),
@@ -1008,8 +1018,8 @@ export function buildExaminerPrompt({
     question: context.question,
     subject: context.subject,
     studentAnswer,
-    suggestedAnswer: context.suggestedAnswer || null,
-    legalBasis: context.legalBasis || null,
+    suggestedAnswer: stripInternalEditorialBlocks(context.suggestedAnswer) || null,
+    legalBasis: stripInternalEditorialBlocks(context.legalBasis) || null,
     caseName: context.caseName || null,
     caseCitation: context.caseCitation || null,
     storedSources: Array.isArray(context.sourceUrls) && context.sourceUrls.length

@@ -1,4 +1,5 @@
 import { parseCsv } from './examiner-core.mjs';
+import { stripInternalEditorialBlocks } from './internal-editorial-content.mjs';
 import { questionWebsiteVisibility } from './question-visibility-core.mjs';
 import {
   SUBJECT_MATTER_COURSES,
@@ -255,8 +256,12 @@ async function normalizeSourceRow(row, rowNumber) {
   const questionId = preserveText(row['Question ID'], 200);
   const subject = preserveText(row.Subject, 500);
   const prompt = preserveText(row['Essay Question']);
-  const suggestedAnswer = preserveText(row['Suggested Answer']);
-  const legalBasis = preserveText(row['Legal Basis / Provision']);
+  const suggestedAnswer = stripInternalEditorialBlocks(
+    preserveText(row['Suggested Answer']),
+  );
+  const legalBasis = stripInternalEditorialBlocks(
+    preserveText(row['Legal Basis / Provision']),
+  );
   if (!questionId || !subject || !prompt || !suggestedAnswer || !legalBasis) {
     throw new ReleaseContentError(
       'PUBLISHED_SOURCE_ROW_INCOMPLETE',
@@ -275,7 +280,7 @@ async function normalizeSourceRow(row, rowNumber) {
     prompt,
     suggestedAnswer,
     legalBasis,
-    doctrine: preserveText(row['Controlling Doctrine']),
+    doctrine: stripInternalEditorialBlocks(preserveText(row['Controlling Doctrine'])),
     jurisprudence: [{
       case: preserveText(row['Jurisprudence / Case']),
       citation: preserveText(row['Citation / G.R. No.']),

@@ -10,6 +10,7 @@ const repositoryRoot = resolve(scriptDirectory, '..');
 const migrationPaths = [
   '20260825183055_examination_room_v1_greenfield.sql',
   '20260826130536_examination_room_owner_command_center.sql',
+  '20260827010000_examination_room_open_admission_flow.sql',
 ].map((filename) => join(repositoryRoot, 'supabase', 'migrations', filename));
 const databaseTestPath = join(
   repositoryRoot,
@@ -530,6 +531,8 @@ try {
     set session_replication_role = origin;
   `);
 
+  await database.exec(readFileSync(migrationPaths[2], 'utf8'));
+
   assert.equal(
     Number(await scalar(database, `
       select count(*)
@@ -644,8 +647,8 @@ try {
         ) -> 'availableInstitutions'
       )
     `)),
-    2,
-    'any verified signed-in account can enumerate active examination-creator workspaces',
+    3,
+    'any verified signed-in account can enumerate active examination-creator workspaces including the community default',
   );
 
   assert.equal(
@@ -815,8 +818,449 @@ try {
   );
   await database.exec(runnablePgTapSql);
 
+  assert.equal(
+    await scalar(database, `
+      select exists (
+        select 1
+        from jsonb_array_elements(
+          public.examination_room_v1_staff_context(
+            '10000000-0000-0000-0000-000000000005'
+          ) -> 'creatorWorkspaces'
+        ) workspace
+        where workspace ->> 'institutionCode' = 'due-diligence-community'
+          and (workspace ->> 'active')::boolean
+      )
+    `),
+    true,
+    'every verified auth account receives the active Due Diligence Community workspace',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'publish',
+        '10000000-0000-0000-0000-000000000005',
+        'ddc00000-0000-4000-8000-000000000001',
+        jsonb_build_object(
+          'exam', jsonb_build_object(
+            'examId', '30000000-0000-4000-8000-000000000010',
+            'title', 'Community Key Only Practice',
+            'subject', 'Constitutional Law',
+            'yearLevel', 'Second year',
+            'instructions', 'Answer all questions.',
+            'durationMinutes', 120,
+            'startsAt', clock_timestamp(),
+            'identityMode', 'real_names',
+            'integrityTier', 'standard',
+            'cameraRequired', false,
+            'microphoneRequired', false,
+            'privacyNoticeVersion', 'exam-room-v1',
+            'admissionMode', 'key_only',
+            'allowedEmails', '[]'::jsonb,
+            'questions', jsonb_build_array(jsonb_build_object(
+              'questionNumber', 1,
+              'questionKey', 'q001',
+              'questionKind', 'essay',
+              'type', 'essay',
+              'prompt', 'Explain judicial review.',
+              'points', 20,
+              'gradingGuidance', '',
+              'wordLimit', 800,
+              'choices', '[]'::jsonb,
+              'correctOptionIndex', null,
+              'acceptedAnswers', '[]'::jsonb
+            )),
+            'roster', '[]'::jsonb
+          ),
+          'draft', jsonb_build_object(
+            'title', 'Community Key Only Practice',
+            'subject', 'Constitutional Law',
+            'yearLevel', 'Second year',
+            'instructions', 'Answer all questions.',
+            'identityMode', 'real_names',
+            'integrityTier', 'standard',
+            'privacyNoticeVersion', 'exam-room-v1',
+            'questions', jsonb_build_array(jsonb_build_object(
+              'questionNumber', 1,
+              'questionKey', 'q001',
+              'questionKind', 'essay',
+              'type', 'essay',
+              'prompt', 'Explain judicial review.',
+              'points', 20,
+              'gradingGuidance', '',
+              'wordLimit', 800,
+              'choices', '[]'::jsonb,
+              'correctOptionIndex', null,
+              'acceptedAnswers', '[]'::jsonb
+            )),
+            'questionCount', 1,
+            'totalPoints', 20
+          ),
+          'requestHash', repeat('d1', 32),
+          'requestedAt', clock_timestamp()
+        )
+      ) ->> 'status'
+    `),
+    'published',
+    'a signed-in non-Professor creator publishes a key-only exam without a roster',
+  );
+  assert.equal(
+    Number(await scalar(database, `
+      select count(*) from examination_room_v1.exam_roster
+      where exam_id = '30000000-0000-4000-8000-000000000010'
+    `)),
+    0,
+    'key-only publication does not synthesize a roster before a student enters',
+  );
+
+  await database.exec(`
+    do $approval_stress$
+    declare
+      iteration integer;
+      result jsonb;
+    begin
+      for iteration in 1..100 loop
+        result := public.examination_room_v1_api(
+          'admin',
+          'activate_exam',
+          '10000000-0000-0000-0000-000000000001',
+          'ddc00000-0000-4000-8000-000000000001',
+          jsonb_build_object(
+            'examId', '30000000-0000-4000-8000-000000000010',
+            'requestHash', repeat('d2', 32),
+            'roomKeyHash', encode(sha256(convert_to(iteration::text, 'UTF8')), 'hex'),
+            'keyHashAlgorithm', 'hmac-sha256-v1',
+            'opensAt', clock_timestamp() - interval '1 minute',
+            'closesAt', clock_timestamp() + interval '1 day',
+            'maxSessions', null,
+            'replaceCurrent', false
+          )
+        );
+        if result ->> 'ok' <> 'true' then
+          raise exception 'approval stress failed at iteration %: %', iteration, result;
+        end if;
+      end loop;
+    end;
+    $approval_stress$;
+  `);
+  assert.equal(
+    Number(await scalar(database, `
+      select count(*)
+      from examination_room_v1.room_activations
+      where exam_id = '30000000-0000-4000-8000-000000000010'
+    `)),
+    1,
+    '100 repeated approvals retain one idempotent activation',
+  );
+  assert.equal(
+    await scalar(database, `
+      select key_hash = encode(sha256(convert_to('100', 'UTF8')), 'hex')
+      from examination_room_v1.room_activations
+      where exam_id = '30000000-0000-4000-8000-000000000010'
+    `),
+    true,
+    'the latest retried key verifier is the only active verifier after 100 approvals',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'open_room',
+        '10000000-0000-0000-0000-000000000005',
+        'ddc00000-0000-4000-8000-000000000001',
+        jsonb_build_object(
+          'examId', '30000000-0000-4000-8000-000000000010',
+          'requestHash', repeat('d3', 32),
+          'openedAt', clock_timestamp()
+        )
+      ) ->> 'status'
+    `),
+    'open',
+    'the exact creator opens the latest admin activation without entering its raw key',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'student',
+        'preview',
+        null,
+        null,
+        jsonb_build_object(
+          'roomKeyHash', encode(sha256(convert_to('100', 'UTF8')), 'hex'),
+          'identity', jsonb_build_object(
+            'realName', 'Open Key Student',
+            'studentNumber', 'OPEN-1001',
+            'subject', 'Any entered subject',
+            'yearLevel', 'Any entered year'
+          )
+        )
+      ) ->> 'ok'
+    `),
+    'true',
+    'any student with the active key and complete identity can preview a key-only exam',
+  );
+  assert.equal(
+    Number(await scalar(database, `
+      select count(*) from examination_room_v1.exam_roster
+      where exam_id = '30000000-0000-4000-8000-000000000010'
+    `)),
+    1,
+    'the key-only preview atomically creates the student identity and exam roster row',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'student',
+        'consent',
+        null,
+        null,
+        jsonb_build_object(
+          'roomKeyHash', encode(sha256(convert_to('100', 'UTF8')), 'hex'),
+          'identity', jsonb_build_object(
+            'realName', 'Open Key Student',
+            'studentNumber', 'OPEN-1001',
+            'subject', 'Any entered subject',
+            'yearLevel', 'Any entered year'
+          ),
+          'consent', jsonb_build_object(
+            'noticeVersion', 'exam-room-v1',
+            'accepted', true,
+            'acceptedAt', clock_timestamp(),
+            'recordingAccepted', false
+          ),
+          'clientEventId', '30000000-0000-4000-8000-000000000011',
+          'requestHash', repeat('d4', 32),
+          'sessionTokenHash', repeat('d5', 32),
+          'clientInstanceId', '30000000-0000-4000-8000-000000000012'
+        )
+      ) ->> 'ok'
+    `),
+    'true',
+    'student consent starts the dynamically enrolled session',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'revoke_session',
+        '10000000-0000-0000-0000-000000000005',
+        'ddc00000-0000-4000-8000-000000000001',
+        jsonb_build_object(
+          'examId', '30000000-0000-4000-8000-000000000010',
+          'sessionId', (
+            select session.id
+            from examination_room_v1.student_sessions session
+            where session.exam_id = '30000000-0000-4000-8000-000000000010'
+            limit 1
+          ),
+          'reason', 'Creator removed this session during monitoring.',
+          'requestHash', repeat('d6', 32),
+          'revokedAt', clock_timestamp()
+        )
+      ) ->> 'status'
+    `),
+    'revoked',
+    'the creator can revoke a monitored session with an audit receipt',
+  );
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'student',
+        'preview',
+        null,
+        null,
+        jsonb_build_object(
+          'roomKeyHash', encode(sha256(convert_to('100', 'UTF8')), 'hex'),
+          'identity', jsonb_build_object(
+            'realName', 'Open Key Student',
+            'studentNumber', 'OPEN-1001',
+            'subject', 'Any entered subject',
+            'yearLevel', 'Any entered year'
+          )
+        )
+      ) ->> 'errorCode'
+    `),
+    'SESSION_REVOKED',
+    'a revoked session cannot re-enter the same activation',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'publish',
+        '10000000-0000-0000-0000-000000000005',
+        'ddc00000-0000-4000-8000-000000000001',
+        jsonb_build_object(
+          'exam', jsonb_build_object(
+            'examId', '30000000-0000-4000-8000-000000000020',
+            'title', 'Community Allowlist Practice',
+            'subject', 'Civil Law',
+            'yearLevel', 'First year',
+            'instructions', 'Answer all questions.',
+            'durationMinutes', 90,
+            'startsAt', clock_timestamp(),
+            'identityMode', 'real_names',
+            'integrityTier', 'standard',
+            'cameraRequired', false,
+            'microphoneRequired', false,
+            'privacyNoticeVersion', 'exam-room-v1',
+            'admissionMode', 'email_allowlist',
+            'allowedEmails', jsonb_build_array('friend@example.com'),
+            'questions', jsonb_build_array(jsonb_build_object(
+              'questionNumber', 1,
+              'questionKey', 'q001',
+              'questionKind', 'essay',
+              'type', 'essay',
+              'prompt', 'Explain obligations.',
+              'points', 20,
+              'gradingGuidance', '',
+              'wordLimit', 800,
+              'choices', '[]'::jsonb,
+              'correctOptionIndex', null,
+              'acceptedAnswers', '[]'::jsonb
+            )),
+            'roster', '[]'::jsonb
+          ),
+          'draft', jsonb_build_object(
+            'title', 'Community Allowlist Practice',
+            'subject', 'Civil Law',
+            'yearLevel', 'First year',
+            'instructions', 'Answer all questions.',
+            'identityMode', 'real_names',
+            'integrityTier', 'standard',
+            'privacyNoticeVersion', 'exam-room-v1',
+            'questions', jsonb_build_array(jsonb_build_object(
+              'questionNumber', 1,
+              'questionKey', 'q001',
+              'questionKind', 'essay',
+              'type', 'essay',
+              'prompt', 'Explain obligations.',
+              'points', 20,
+              'gradingGuidance', '',
+              'wordLimit', 800,
+              'choices', '[]'::jsonb,
+              'correctOptionIndex', null,
+              'acceptedAnswers', '[]'::jsonb
+            )),
+            'questionCount', 1,
+            'totalPoints', 20
+          ),
+          'requestHash', repeat('e1', 32),
+          'requestedAt', clock_timestamp()
+        )
+      ) ->> 'status'
+    `),
+    'published',
+    'the optional email allowlist publishes without a pre-uploaded roster',
+  );
+
+  await database.exec(`
+    select public.examination_room_v1_api(
+      'admin',
+      'activate_exam',
+      '10000000-0000-0000-0000-000000000001',
+      'ddc00000-0000-4000-8000-000000000001',
+      jsonb_build_object(
+        'examId', '30000000-0000-4000-8000-000000000020',
+        'requestHash', repeat('e2', 32),
+        'roomKeyHash', repeat('e3', 32),
+        'keyHashAlgorithm', 'hmac-sha256-v1',
+        'opensAt', clock_timestamp() - interval '1 minute',
+        'closesAt', clock_timestamp() + interval '1 day',
+        'maxSessions', null,
+        'replaceCurrent', false
+      )
+    );
+    select public.examination_room_v1_api(
+      'professor',
+      'open_room',
+      '10000000-0000-0000-0000-000000000005',
+      'ddc00000-0000-4000-8000-000000000001',
+      jsonb_build_object(
+        'examId', '30000000-0000-4000-8000-000000000020',
+        'requestHash', repeat('e4', 32),
+        'openedAt', clock_timestamp()
+      )
+    );
+  `);
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'student',
+        'preview',
+        null,
+        null,
+        jsonb_build_object(
+          'roomKeyHash', repeat('e3', 32),
+          'identity', jsonb_build_object(
+            'realName', 'Unlisted Student',
+            'studentNumber', 'LIST-1001',
+            'subject', 'Civil Law',
+            'yearLevel', 'First year',
+            'email', 'not-listed@example.com'
+          )
+        )
+      ) ->> 'errorCode'
+    `),
+    'STUDENT_EMAIL_NOT_ALLOWED',
+    'email allowlist mode rejects an unlisted address before creating a roster row',
+  );
+  assert.equal(
+    await scalar(database, `
+      select position(
+        'friend@example.com' in public.examination_room_v1_api(
+          'student',
+          'preview',
+          null,
+          null,
+          jsonb_build_object(
+            'roomKeyHash', repeat('e3', 32),
+            'identity', jsonb_build_object(
+              'realName', 'Unlisted Student',
+              'studentNumber', 'LIST-1001',
+              'subject', 'Civil Law',
+              'yearLevel', 'First year',
+              'email', 'not-listed@example.com'
+            )
+          )
+        )::text
+      ) = 0
+    `),
+    true,
+    'allowlist rejection never reveals the configured email list',
+  );
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'student',
+        'preview',
+        null,
+        null,
+        jsonb_build_object(
+          'roomKeyHash', repeat('e3', 32),
+          'identity', jsonb_build_object(
+            'realName', 'Listed Student',
+            'studentNumber', 'LIST-1002',
+            'subject', 'Civil Law',
+            'yearLevel', 'First year',
+            'email', 'FRIEND@example.com'
+          )
+        )
+      ) ->> 'ok'
+    `),
+    'true',
+    'allowlist entry accepts a normalized listed email and self-enrolls the student',
+  );
+
   console.log(
-    `Examination Room database validation passed: full migration, ${plannedAssertions}-assertion database suite, plus targeted signed-in creator, exact-owner, platform-owner, and upgrade checks.`,
+    `Examination Room database validation passed: full migration, ${plannedAssertions}-assertion database suite, plus community creator, roster-free publication, 100-approval idempotency, open admission, allowlist, revocation, exact-owner, platform-owner, and upgrade checks.`,
   );
 } finally {
   await database.close();

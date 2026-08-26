@@ -8,26 +8,26 @@
 
   const manifests = Object.freeze({
     quorum: Object.freeze({
-      styles: ['assets/lex-forum.css?v=post-body-only-20260823-1'],
-      scripts: ['assets/lex-forum.js?v=post-body-only-20260823-1'],
+      styles: ['assets/lex-forum.css?v=post-body-only-20260823-1&profile=chambers-20260827-1'],
+      scripts: ['assets/lex-forum.js?v=post-body-only-20260823-1&profile=chambers-20260827-1'],
     }),
     examinations: Object.freeze({
       styles: [
         'assets/examinations.css?v=syllabus-reveal-p0-20260826-2',
-        'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
+        'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4&feedback=offline-save-20260827-1',
       ],
       scripts: [
-        'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2',
+        'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1',
         'assets/examinations.js?v=syllabus-reveal-p0-20260826-2',
       ],
     }),
     content: Object.freeze({
       styles: [
         'assets/duediligence-2026.css?v=guided-random-access-20260822-1',
-        'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
+        'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4&feedback=offline-save-20260827-1',
       ],
       scripts: [
-        'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2',
+        'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1',
         'assets/duediligence-2026.js?v=content-runtime-20260826-1',
       ],
     }),

@@ -8,6 +8,7 @@ const vm = require('node:vm');
 
 const professorSource = fs.readFileSync(path.join(__dirname, 'professor.js'), 'utf8');
 const professorHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+const professorCss = fs.readFileSync(path.join(__dirname, 'professor.css'), 'utf8');
 const rootExperience = fs.readFileSync(path.join(__dirname, '..', 'assets', 'phase2-experience.js'), 'utf8');
 const adminSource = fs.readFileSync(path.join(__dirname, '..', 'admin', 'examination-room-admin.js'), 'utf8');
 
@@ -78,12 +79,23 @@ function loadProfessorStartupHooks({ storageBlocked = false, indexedDbAvailable 
     localStorage,
     indexedDB: indexedDbAvailable ? fakeIndexedDb() : null,
   };
+  window.__scheduledTimers = new Map();
+  window.__clearedTimers = [];
+  window.setTimeout = (callback, delay) => {
+    const id = window.__scheduledTimers.size + 1;
+    window.__scheduledTimers.set(id, { callback, delay });
+    return id;
+  };
+  window.clearTimeout = (id) => {
+    window.__clearedTimers.push(id);
+    window.__scheduledTimers.delete(id);
+  };
   const exposedSource = professorSource.replace(
     /\n\s*initialize\(\);\s*\n\}\)\(window\);\s*$/,
-    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, state };\n})(window);',
+    '\n  global.__professorStartupTestHooks = { clientOnlyBlankDraft, editorExamFromStored, examContentFingerprint, normalizeAllowedEmails, invalidAllowedEmails, creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, saveLocalDraft, readLocalDraft, readActiveLocalDraft, readLocalDraftIndex, localDraftBelongsToCurrentProfessor, prepareDecryptedGradePayload, validateCompleteGradedPackageSets, state };\n})(window);',
   );
   vm.runInNewContext(exposedSource, { window, indexedDB: window.indexedDB }, { filename: 'professor.js' });
-  return window.__professorStartupTestHooks;
+  return { ...window.__professorStartupTestHooks, __testWindow: window };
 }
 
 async function renderAccessFailure(error) {
@@ -115,9 +127,13 @@ async function renderAccessFailure(error) {
 
 test('professor text and passphrase entry never depend on blocking browser prompts', () => {
   assert.doesNotMatch(professorSource, /global\.prompt\s*\(/);
+  assert.doesNotMatch(professorSource, /global\.confirm\s*\(/);
   assert.match(professorSource, /function requestText\s*\(/);
+  assert.match(professorSource, /function requestConfirmation\s*\(/);
   assert.match(professorHtml, /id="text-entry-dialog"/);
   assert.match(professorHtml, /id="text-entry-input"/);
+  assert.match(professorHtml, /id="confirmation-dialog"/);
+  assert.match(professorHtml, /id="confirmation-confirm"/);
 });
 
 test('offline grading copies remain passphrase-encrypted and examination-version bound', () => {
@@ -134,7 +150,7 @@ test('offline grading copies remain passphrase-encrypted and examination-version
   assert.match(professorSource, /professorCommand\('import_grades'/);
   assert.match(professorSource, /importResult\.atomic !== true/);
   assert.doesNotMatch(professorSource, /for \(const grade of importedGrades\)[\s\S]{0,240}professorCommand\('save_grade'/);
-  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=examination-room-v1-20260826-2'/);
+  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-4'/);
   assert.match(professorSource, /await state\.offlineWorkspaceReady/);
   assert.match(professorSource, /MAX_OFFLINE_PACKAGE_BYTES\s*=\s*20\s*\*\s*1024\s*\*\s*1024/);
   assert.match(professorSource, /jsonDownloadSize\(wrapper\)\s*>\s*MAX_OFFLINE_PACKAGE_BYTES/);
@@ -444,6 +460,13 @@ test('IndexedDB alone preserves and enumerates multiple drafts when localStorage
   assert.deepEqual(Array.from(await readLocalDraftIndex()), []);
 });
 
+test('demo reset is consumed so later admin events cannot reset an approved room', () => {
+  assert.match(
+    professorSource,
+    /if \(isDemo && params\.get\('reset'\) === '1'\)[\s\S]*cleanUrl\.searchParams\.delete\('reset'\)[\s\S]*global\.history\.replaceState/,
+  );
+});
+
 test('server and device draft conflicts use a content baseline instead of comparing device clocks', () => {
   const { clientOnlyBlankDraft, examContentFingerprint } = loadProfessorStartupHooks();
   const original = clientOnlyBlankDraft('22222222-2222-4222-8222-222222222222');
@@ -455,7 +478,8 @@ test('server and device draft conflicts use a content baseline instead of compar
   assert.notEqual(examContentFingerprint(original), examContentFingerprint(contentChange));
   assert.match(professorSource, /serverBaselineFingerprint: state\.serverBaselineFingerprint/);
   assert.match(professorSource, /const activeLocalMissingFromServer = Boolean/);
-  assert.match(professorSource, /This device and the server both contain different changes/);
+  assert.match(professorSource, /This device and the server contain different changes/);
+  assert.match(professorSource, /confirmLabel: 'Restore this device'/);
   assert.doesNotMatch(professorSource, /localTime\s*>\s*serverTime/);
 });
 
@@ -464,6 +488,14 @@ test('Professor result release selection respects an intentional unchecked stude
   assert.match(professorSource, /if \(state\.releaseSelectionSeenIds\.has\(session\.id\)\) return/);
   assert.match(professorSource, /state\.releaseSelectionSeenIds\.add\(session\.id\)[\s\S]*state\.selectedReleaseIds\.add\(session\.id\)/);
   assert.doesNotMatch(professorSource, /sessions\.forEach\(\(session\) => state\.selectedReleaseIds\.add\(session\.id\)\)/);
+});
+
+test('live grading updates never overwrite points or feedback while the creator is editing', () => {
+  assert.match(professorSource, /function gradingEditorHasUnsavedChanges\(\)/);
+  assert.match(professorSource, /persisted\.points == null \? '' : String\(persisted\.points\)/);
+  assert.match(professorSource, /String\(feedbackInput\?\.value \|\| ''\) !== persistedFeedback/);
+  assert.match(professorSource, /state\.currentView === 'grade' && !gradingEditorHasUnsavedChanges\(\)/);
+  assert.doesNotMatch(professorSource, /state\.currentView === 'grade'\) refreshGrading\(\)/);
 });
 
 test('optional anonymous grading starts consistently and never removes Professor control of real identities', () => {
@@ -544,4 +576,120 @@ test('a returning Professor receives questions, roster, and controls from the pr
   assert.equal(exam.questions[0].wordGuideline, 'Up to 250 words');
   assert.equal(exam.roster[0].fullName, 'Maria Santos');
   assert.equal(exam.updatedAt, '2026-08-26T08:00:00.000Z');
+});
+
+test('student admission defaults to open key entry and never requires a roster upload', () => {
+  const { clientOnlyBlankDraft } = loadProfessorStartupHooks();
+  const draft = clientOnlyBlankDraft('11111111-1111-4111-8111-111111111111');
+  assert.equal(draft.admissionMode, 'key_only');
+  assert.deepEqual(Array.from(draft.allowedEmails), []);
+  assert.match(professorHtml, /name="admission-mode" value="key_only" checked/);
+  assert.match(professorHtml, /Anyone with the student key/);
+  assert.doesNotMatch(professorHtml, /id="roster-upload"/);
+  assert.doesNotMatch(professorSource, /Add at least one student/);
+  assert.match(professorSource, /admissionMode === 'email_allowlist' \? normalizeAllowedEmails/);
+});
+
+test('Professor Create page contains its question cards at a 319px viewport', () => {
+  assert.match(
+    professorCss,
+    /@media \(max-width: 390px\) \{[\s\S]*?html \{ min-width: 0; \}[\s\S]*?\.editable-title \{ width: 100%; min-width: 0; max-width: 100%; flex: 1 1 100%; margin-left: 0; \}[\s\S]*?\.questions-list \{ min-width: 0; \}[\s\S]*?\.question-layout \{ min-width: 0; width: 100%; max-width: 100%; \}[\s\S]*?\.choice-row \{ min-width: 0; grid-template-columns: auto minmax\(0, 1fr\) auto; \}/,
+  );
+  assert.match(professorHtml, /professor\.css\?v=greenfield-v1-20260827-15/);
+});
+
+test('optional email allowlist accepts newline or numbered entries and normalizes duplicates', () => {
+  const { normalizeAllowedEmails, invalidAllowedEmails } = loadProfessorStartupHooks();
+  assert.deepEqual(
+    Array.from(normalizeAllowedEmails('Student@One.com\n1. second@two.com\nstudent@one.com')),
+    ['student@one.com', 'second@two.com'],
+  );
+  assert.deepEqual(Array.from(normalizeAllowedEmails('1.email@gmail.com\n2.Email2@gmail.com')), [
+    '1.email@gmail.com',
+    '2.email2@gmail.com',
+  ]);
+  assert.deepEqual(Array.from(invalidAllowedEmails('valid@example.com\nnot-an-email')), ['not-an-email']);
+  assert.match(professorHtml, /id="allowed-emails"/);
+  assert.match(professorHtml, /No CSV upload is needed/);
+});
+
+test('creator receives monitor and grade access from activation without entering the student key', async () => {
+  const hooks = loadProfessorStartupHooks();
+  const { creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, state, __testWindow } = hooks;
+  state.exam = { id: 'exam-awaiting-key', status: 'awaiting_activation' };
+  state.activation = null;
+  assert.equal(creatorAccessUnlocked(), false);
+  scheduleActivationPoll();
+  assert.equal(state.activationTimer, 1);
+  assert.equal(__testWindow.__scheduledTimers.get(1).delay, 4500);
+  assert.equal(hooks.state.activationPollInFlight, false);
+
+  const firstPoll = __testWindow.__scheduledTimers.get(1).callback;
+  __testWindow.__scheduledTimers.delete(1);
+  await firstPoll();
+  assert.equal(state.activationPollInFlight, false);
+  assert.equal(state.activationTimer, 1, 'a transient refresh failure schedules the next bounded poll');
+
+  stopActivationPolling();
+  assert.equal(state.activationTimer, null);
+  assert.deepEqual(__testWindow.__clearedTimers, [1]);
+  assert.equal(__testWindow.__scheduledTimers.size, 0);
+  state.activation = { status: 'active' };
+  assert.equal(creatorAccessUnlocked(), true);
+  assert.doesNotMatch(professorHtml, /id="key-dialog"/);
+  assert.doesNotMatch(professorSource, /professor-room-key/);
+  assert.match(professorSource, /professorCommand\('open_room', \{ examId: state\.exam\.id \}/);
+  assert.doesNotMatch(professorSource, /professorCommand\('open_room',[\s\S]{0,120}roomKey/);
+  assert.match(professorSource, /global\.setTimeout\(async \(\) => \{[\s\S]*\}, 4500\)/);
+  assert.match(professorSource, /finally \{[\s\S]*state\.activationPollInFlight = false;[\s\S]*scheduleActivationPoll\(\)/);
+  assert.match(professorSource, /function stopActivationPolling\(\)[\s\S]*global\.clearTimeout\(state\.activationTimer\)[\s\S]*state\.activationTimer = null/);
+  assert.match(professorSource, /Monitor and Grade are ready\. You do not need to enter the student key\./);
+  assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
+  assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
+  assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
+  assert.match(professorHtml, /professor\.js\?v=greenfield-v1-20260827-25/);
+});
+
+test('creator approval survives reload and a published request keeps polling without a manual check', () => {
+  const { creatorAccessUnlocked, scheduleActivationPoll, stopActivationPolling, state, __testWindow } = loadProfessorStartupHooks();
+
+  state.exam = { id: 'exam-reloaded-pending', status: 'published', activation: null };
+  state.activation = null;
+  assert.equal(creatorAccessUnlocked(), false);
+  scheduleActivationPoll();
+  assert.equal(state.activationTimer, 1);
+  assert.equal(__testWindow.__scheduledTimers.get(1).delay, 4500);
+  stopActivationPolling();
+
+  state.exam = {
+    id: 'exam-reloaded-approved',
+    status: 'published',
+    activation: { id: 'activation-1', status: 'scheduled' },
+  };
+  state.activation = null;
+  assert.equal(creatorAccessUnlocked(), true);
+  scheduleActivationPoll();
+  assert.equal(state.activationTimer, null);
+  assert.match(professorSource, /state\.exam\?\.activation\?\.status/);
+  assert.match(professorSource, /\['published', 'key_requested', 'awaiting_approval', 'awaiting_activation'\]/);
+});
+
+test('creator can kick or block a live student through the auditable revoke_session operation', () => {
+  assert.match(professorSource, /async function revokeStudentSession\(sessionId, mode, trigger\)/);
+  assert.match(professorSource, /professorCommand\('revoke_session', \{[\s\S]*examId: state\.exam\.id,[\s\S]*sessionId,[\s\S]*reason/);
+  assert.match(professorSource, /data-revoke-mode="kick"/);
+  assert.match(professorSource, /data-revoke-mode="block"/);
+});
+
+test('the root Professor door has no role, license, membership, institution, or connectivity preflight', () => {
+  const start = rootExperience.indexOf("async function checkProfessorDoor(institutionId = '')");
+  const end = rootExperience.indexOf('function activateProfessorDoor()', start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const checkDoor = rootExperience.slice(start, end);
+  assert.match(checkDoor, /if \(!token \|\| !state\.user\)/);
+  assert.match(checkDoor, /button\.dataset\.destination = professorDoorDestination\(institutionId\)/);
+  assert.doesNotMatch(checkDoor, /nativeWorkerRequest/);
+  assert.doesNotMatch(checkDoor, /navigator\.onLine/);
+  assert.doesNotMatch(checkDoor, /PROFESSOR_FORBIDDEN|license|membership/i);
 });

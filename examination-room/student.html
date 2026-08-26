@@ -8,11 +8,11 @@
   <title>Examination Room | DueDiligence.ph</title>
   <link rel="stylesheet" href="student.css">
   <script defer src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
-  <script defer src="../assets/phase2-config.js?v=greenfield-examination-room-v1-20260826-2"></script>
+  <script defer src="../assets/phase2-config.js?v=private-maintenance-20260820-2"></script>
   <script defer src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script defer src="view-models.js?v=greenfield-v1-20260826-1"></script>
-  <script defer src="api.js?v=greenfield-v1-20260826-7"></script>
-  <script defer src="student.js?v=greenfield-v1-20260826-5"></script>
+  <script defer src="api.js?v=greenfield-v1-20260827-9"></script>
+  <script defer src="student.js?v=greenfield-v1-20260827-7"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to examination content</a>
@@ -90,6 +90,12 @@
             <div class="field field-wide">
               <label for="fullName">Real full name</label>
               <input id="fullName" name="fullName" type="text" autocomplete="name" maxlength="160" required>
+            </div>
+
+            <div class="field field-wide">
+              <label for="email">Email <span class="optional-label">only for email-limited rooms</span></label>
+              <input id="email" name="email" type="email" autocomplete="email" maxlength="254" aria-describedby="emailHelp" placeholder="student@gmail.com">
+              <small id="emailHelp">Leave this blank for the default key-only room. Enter it only when the creator limited the key to listed emails.</small>
             </div>
 
             <div class="field">

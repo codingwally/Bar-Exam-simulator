@@ -64,7 +64,7 @@
     const institutionId = '64f82d39-274e-4ce4-b92a-8430ae3f7b10';
     const administratorUserId = 'd7b0f7fd-08ec-40dd-aac7-c3ccfafc1311';
     return {
-      schemaVersion: 4,
+      schemaVersion: 5,
       institution: {
         id: institutionId,
         code: 'counsels-canvas-law',
@@ -125,6 +125,8 @@
         lateSubmissions: 'not_allowed',
         navigation: 'free',
         gradingIdentity: 'real_names',
+        admissionMode: 'key_only',
+        allowedEmails: [],
         integrityTier: 'standard',
         cameraRequired: false,
         microphoneRequired: false,
@@ -156,13 +158,7 @@
             correctOption: 1, required: true,
           },
         ],
-        roster: [
-          { id: 's-1', fullName: 'Maria Theresa Dela Cruz', studentNumber: '2024-10001', email: 'maria.delacruz@law.example.edu.ph', yearLevel: 'Second year', extraMinutes: 0 },
-          { id: 's-2', fullName: 'Jose Antonio Santos', studentNumber: '2024-10002', email: 'jose.santos@law.example.edu.ph', yearLevel: 'Second year', extraMinutes: 0 },
-          { id: 's-3', fullName: 'Juan Miguel Reyes', studentNumber: '2024-10003', email: 'juan.reyes@law.example.edu.ph', yearLevel: 'Second year', extraMinutes: 15 },
-          { id: 's-4', fullName: 'Ana Patricia Garcia', studentNumber: '2024-10004', email: 'ana.garcia@law.example.edu.ph', yearLevel: 'Second year', extraMinutes: 0 },
-          { id: 's-5', fullName: 'Gabriel Andre Lim', studentNumber: '2024-10005', email: 'gabriel.lim@law.example.edu.ph', yearLevel: 'Second year', extraMinutes: 0 },
-        ],
+        roster: [],
         updatedAt: iso(),
         publishedAt: null,
       },
@@ -182,7 +178,7 @@
   function readDemoState() {
     try {
       const parsed = JSON.parse(global.localStorage?.getItem(DEMO_STATE_KEY) || 'null');
-      if (parsed?.schemaVersion === 4 && parsed?.exam?.id && Array.isArray(parsed.examLibrary)) return parsed;
+      if (parsed?.schemaVersion === 5 && parsed?.exam?.id && Array.isArray(parsed.examLibrary)) return parsed;
     } catch {
       // A corrupt demo copy is recoverable by rebuilding the deterministic fixture.
     }
@@ -192,7 +188,7 @@
   }
 
   function writeDemoState(state, eventType = 'state_changed') {
-    state.schemaVersion = 4;
+    state.schemaVersion = 5;
     global.localStorage?.setItem(DEMO_STATE_KEY, JSON.stringify(state));
     const event = { type: eventType, at: iso(), nonce: requestId() };
     global.localStorage?.setItem(DEMO_EVENT_KEY, JSON.stringify(event));
@@ -285,6 +281,33 @@
     return result;
   }
 
+  function normalizeEmail(value, { requiredField = false } = {}) {
+    const email = String(value || '').trim().toLowerCase();
+    if (!email && !requiredField) return '';
+    if (!email) {
+      throw new ExaminationRoomApiError(
+        'STUDENT_EMAIL_REQUIRED',
+        'Email is required for this examination.',
+        400,
+        'Enter the same email address that the examination creator allowed, then try again.',
+      );
+    }
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
+      throw new ExaminationRoomApiError(
+        'STUDENT_EMAIL_INVALID',
+        'Enter a valid email address.',
+        400,
+        'Correct the email address, then try again.',
+      );
+    }
+    return email;
+  }
+
+  function normalizedAllowedEmails(values) {
+    if (!Array.isArray(values)) return [];
+    return [...new Set(values.map((value) => normalizeEmail(value)).filter(Boolean))];
+  }
+
   function examPublicMetadata(exam, activation) {
     return {
       examId: exam.id,
@@ -329,16 +352,36 @@
   function studentForIdentity(state, identity) {
     const studentNumber = required(identity.studentNumber, 'Student number', 48).toUpperCase();
     const fullName = required(identity.fullName, 'Full name', 160);
-    const rosterStudent = state.exam.roster.find((student) => (
+    const subject = required(identity.subject, 'Subject', 120);
+    const yearLevel = required(identity.yearLevel, 'Year level', 80);
+    const admissionMode = state.exam.admissionMode === 'email_allowlist' ? 'email_allowlist' : 'key_only';
+    const email = normalizeEmail(identity.email, { requiredField: admissionMode === 'email_allowlist' });
+    if (admissionMode === 'email_allowlist'
+        && !normalizedAllowedEmails(state.exam.allowedEmails).includes(email)) {
+      throw new ExaminationRoomApiError(
+        'STUDENT_EMAIL_NOT_ALLOWED',
+        'This email is not included in the creator’s allowed-email list.',
+        403,
+        'Check the email address. If it is correct, ask the examination creator to add it and request a refreshed key approval.',
+      );
+    }
+    let rosterStudent = state.exam.roster.find((student) => (
       student.studentNumber.toUpperCase() === studentNumber
     ));
     if (!rosterStudent) {
-      throw new ExaminationRoomApiError(
-        'ROSTER_NOT_FOUND',
-        'That student number is not on this examination roster.',
-        403,
-        'Check the number on your school ID. If it is correct, ask the professor to update the roster before trying again.',
-      );
+      rosterStudent = {
+        id: requestId(),
+        fullName,
+        studentNumber,
+        email,
+        subject,
+        yearLevel,
+        extraMinutes: 0,
+        joinedByKey: true,
+        joinedAt: iso(),
+      };
+      state.exam.roster.push(rosterStudent);
+      return rosterStudent;
     }
     const canonicalName = fullName.toLocaleLowerCase('en-PH').replace(/[^a-z0-9]/g, '');
     const rosterName = rosterStudent.fullName.toLocaleLowerCase('en-PH').replace(/[^a-z0-9]/g, '');
@@ -350,20 +393,39 @@
         'Enter your complete registered name. If the roster is wrong, ask the professor to correct it.',
       );
     }
+    if (rosterStudent.blockedActivationId
+        && rosterStudent.blockedActivationId === state.activation?.id) {
+      throw new ExaminationRoomApiError(
+        'STUDENT_BLOCKED',
+        'The examination creator ended this student’s access to the current room.',
+        403,
+        'Contact the examination creator if this access decision should be reviewed.',
+      );
+    }
+    if (admissionMode === 'email_allowlist' && normalizeEmail(rosterStudent.email) !== email) {
+      throw new ExaminationRoomApiError(
+        'STUDENT_EMAIL_MISMATCH',
+        'The email does not match this student record.',
+        403,
+        'Enter the allowed email associated with this student number, then try again.',
+      );
+    }
     return rosterStudent;
   }
 
   function demoProfessorQuery(operation, payload = {}) {
     const state = readDemoState();
-    if (operation === 'session') return { ok: true, professor: clone(state.professor), exam: clone(state.exam), exams: demoExamSummaries(state) };
+    if (operation === 'session') return { ok: true, professor: clone(state.professor), exam: clone(state.exam), exams: demoExamSummaries(state), activation: clone(state.activation) };
     if (operation === 'exam') {
+      const previousExamId = state.exam.id;
       requireDemoExam(state, payload.examId);
-      writeDemoState(state, 'professor_exam_selected');
+      if (state.exam.id !== previousExamId) writeDemoState(state, 'professor_exam_selected');
       return { ok: true, exam: clone(state.exam), activation: clone(state.activation) };
     }
     if (operation === 'monitor') {
+      const previousExamId = state.exam.id;
       requireDemoExam(state, payload.examId);
-      writeDemoState(state, 'professor_exam_selected');
+      if (state.exam.id !== previousExamId) writeDemoState(state, 'professor_exam_selected');
       return {
         ok: true,
         exam: clone(state.exam),
@@ -375,8 +437,12 @@
       };
     }
     if (operation === 'grading') {
+      const previousExamId = state.exam.id;
       requireDemoExam(state, payload.examId);
-      writeDemoState(state, 'professor_exam_selected');
+      // A read-only grading refresh must not broadcast another state change.
+      // Doing so caused every listening Professor tab to refresh grading again
+      // until the browser hit its call-stack limit.
+      if (state.exam.id !== previousExamId) writeDemoState(state, 'professor_exam_selected');
       return {
         ok: true,
         exam: clone(state.exam),
@@ -428,12 +494,18 @@
       return { ok: true, exam: clone(state.exam), savedAt: state.exam.updatedAt };
     }
     if (operation === 'publish') {
-      if (!state.exam.title || !state.exam.subject || !state.exam.questions?.length || !state.exam.roster?.length) {
+      const incoming = clone(payload.exam || {});
+      const candidate = { ...state.exam, ...incoming };
+      candidate.admissionMode = candidate.admissionMode === 'email_allowlist' ? 'email_allowlist' : 'key_only';
+      candidate.allowedEmails = normalizedAllowedEmails(candidate.allowedEmails);
+      if (!candidate.title || !candidate.subject || !candidate.questions?.length) {
         throw new ExaminationRoomApiError('EXAM_NOT_READY', 'This examination still has missing required information.', 409, 'Open Review items, complete each required field, then publish again.');
       }
+      if (candidate.admissionMode === 'email_allowlist' && candidate.allowedEmails.length === 0) {
+        throw new ExaminationRoomApiError('ALLOWED_EMAILS_REQUIRED', 'Add at least one allowed email or use the default Anyone with the key setting.', 409, 'Add one email per line, or select Anyone with the key, then request the key again.');
+      }
       state.exam = {
-        ...state.exam,
-        ...clone(payload.exam || {}),
+        ...candidate,
         status: 'awaiting_activation',
         publishedAt: iso(),
         updatedAt: iso(),
@@ -444,14 +516,29 @@
       return { ok: true, exam: clone(state.exam), nextAction: 'wait_for_admin_key' };
     }
     if (operation === 'open_room') {
-      if (!state.activation || !validDemoKey(payload.roomKey)) {
-        throw new ExaminationRoomApiError('ROOM_KEY_INVALID', 'The room key is not valid for this examination.', 403, 'Copy the current key from the administrator email or ask the administrator to issue a replacement.');
+      if (!state.activation || !['scheduled', 'active', 'open'].includes(state.activation.status)) {
+        throw new ExaminationRoomApiError('ROOM_ACTIVATION_NOT_FOUND', 'Admin has not issued a current student key for this examination.', 409, 'Request the key after publishing, then refresh when Admin approves it.');
       }
       state.activation.status = 'open';
       state.exam.status = 'open';
       state.activation.openedAt = iso();
       writeDemoState(state, 'room_opened');
       return { ok: true, exam: clone(state.exam), activation: clone(state.activation) };
+    }
+    if (operation === 'revoke_session') {
+      const session = state.sessions.find((entry) => entry.id === payload.sessionId);
+      if (!session) {
+        throw new ExaminationRoomApiError('SESSION_NOT_FOUND', 'That student session is no longer available.', 404, 'Refresh monitoring, then choose a current student session.');
+      }
+      session.status = 'revoked';
+      session.connected = false;
+      session.endedAt = iso();
+      session.revocationReason = required(payload.reason || 'Access ended by the examination creator.', 'Reason', 500);
+      const student = state.exam.roster.find((entry) => entry.id === session.studentId);
+      if (student && state.activation?.id) student.blockedActivationId = state.activation.id;
+      state.audit.push({ type: 'student_session_revoked', actor: 'professor', at: session.endedAt, sessionId: session.id, requestId: idempotencyKey });
+      writeDemoState(state, 'student_session_revoked');
+      return { ok: true, sessionId: session.id, status: 'revoked' };
     }
     if (operation === 'close_room') {
       state.exam.status = 'grading';
@@ -631,11 +718,14 @@
     if (!['active', 'open'].includes(state.activation.status)) {
       throw new ExaminationRoomApiError('ROOM_NOT_OPEN', 'The examination room is not open yet.', 409, 'Keep this page open and try again when the professor announces that the room is open.');
     }
-    const student = studentForIdentity(state, payload.identity || payload);
-    if (required(payload.subject, 'Subject', 120).toLowerCase() !== state.exam.subject.toLowerCase()) {
+    const identity = payload.identity || payload;
+    const priorRosterSize = state.exam.roster.length;
+    const student = studentForIdentity(state, identity);
+    if (required(identity.subject, 'Subject', 120).toLowerCase() !== state.exam.subject.toLowerCase()) {
       throw new ExaminationRoomApiError('SUBJECT_MISMATCH', 'The subject does not match this examination.', 400, 'Choose the subject shown by your professor, then try again.');
     }
-    required(payload.yearLevel, 'Year level', 80);
+    required(identity.yearLevel, 'Year level', 80);
+    if (state.exam.roster.length !== priorRosterSize) writeDemoState(state, 'student_identity_registered');
     return {
       ok: true,
       metadata: {
@@ -659,7 +749,7 @@
         title: 'Privacy and examination integrity notice',
         intro: 'Review what this examination records before any question is revealed.',
         items: [
-          'Your real name, student number, subject, and year level are used to match you to the professor’s roster.',
+          'Your real name, student number, subject, and year level create your record for this examination. If the creator selected an email allowlist, your email is also checked.',
           'Your answers, submission receipt, and grading record are retained under your school’s academic-record policy.',
           'Focus, page visibility, connection, and fullscreen changes are logged with timestamps for contextual review.',
           state.exam.cameraRequired
@@ -691,11 +781,14 @@
       throw new ExaminationRoomApiError('RECORDING_CONSENT_REQUIRED', 'This examination requires explicit recording agreement.', 412, 'Agree to recording or ask the professor for another permitted arrangement.');
     }
     let session = state.sessions.find((entry) => entry.studentNumber === student.studentNumber);
+    if (session?.status === 'revoked') {
+      throw new ExaminationRoomApiError('SESSION_REVOKED', 'The examination creator ended this student’s access to the current room.', 403, 'Contact the examination creator if this access decision should be reviewed.');
+    }
     if (!session) {
       session = {
         id: requestId(), examId: state.exam.id, studentId: student.id,
         fullName: student.fullName, studentNumber: student.studentNumber,
-        subject: state.exam.subject, yearLevel: student.yearLevel,
+        email: student.email || '', subject: state.exam.subject, yearLevel: student.yearLevel,
         status: 'in_progress', connected: true, currentQuestion: 1,
         consentVersion: payload.noticeVersion, consentedAt: iso(), recordingAccepted: recordingRequired,
         startedAt: iso(), lastSeenAt: iso(), extraMinutes: student.extraMinutes || 0,
@@ -717,6 +810,9 @@
     const session = state.sessions.find((entry) => entry.id === payload.sessionId);
     if (!session) throw new ExaminationRoomApiError('SESSION_NOT_FOUND', 'This examination session could not be restored.', 404, 'Return to the join page and use the same room key and student details. Your server-backed answers remain preserved.');
     if (operation === 'resume') {
+      if (session.status === 'revoked') {
+        throw new ExaminationRoomApiError('SESSION_REVOKED', 'This student session was ended by the examination creator.', 403, 'Contact the examination creator if this access decision should be reviewed.');
+      }
       return {
         ok: true, session: clone(session),
         exam: studentSafeExam(state.exam),
@@ -750,6 +846,9 @@
     const state = readDemoState();
     const session = state.sessions.find((entry) => entry.id === payload.sessionId);
     if (!session) throw new ExaminationRoomApiError('SESSION_NOT_FOUND', 'This examination session could not be found.', 404, 'Reconnect using the same room key and student details.');
+    if (session.status === 'revoked') {
+      throw new ExaminationRoomApiError('SESSION_REVOKED', 'This student session was ended by the examination creator.', 403, 'Contact the examination creator if this access decision should be reviewed.');
+    }
     if (operation === 'save_answer') {
       const question = state.exam.questions.find((entry) => entry.id === payload.questionId);
       if (!question) throw new ExaminationRoomApiError('QUESTION_NOT_FOUND', 'That question is no longer available in this examination version.', 409, 'Refresh the examination. Your other saved answers will remain available.');
@@ -1041,6 +1140,12 @@
       return result;
     }
     if (operation === 'activate_exam') {
+      const replay = state.audit.find((entry) => (
+        entry.type === 'room_key_issued'
+        && entry.requestId === idempotencyKey
+        && entry.result
+      ));
+      if (replay) return { ...clone(replay.result), duplicate: true };
       if (state.exam.status !== 'awaiting_activation' && state.exam.status !== 'active') {
         throw new ExaminationRoomApiError('EXAM_NOT_PUBLISHED', 'The professor must publish this examination before a room key can be issued.', 409, 'Ask the professor to finish the review and choose Publish.');
       }
@@ -1051,9 +1156,10 @@
       };
       state.exam.status = 'active';
       state.snapshots.push({ type: 'admin_activation', at: state.activation.issuedAt, examVersionId: state.exam.versionId });
-      state.audit.push({ type: 'room_key_issued', actor: 'admin', at: state.activation.issuedAt, requestId: idempotencyKey });
+      const result = { ok: true, activation: clone(state.activation), roomKey: DEMO_KEY, deliveryStatus: 'ready_to_copy' };
+      state.audit.push({ type: 'room_key_issued', actor: 'admin', at: state.activation.issuedAt, requestId: idempotencyKey, result: clone(result) });
       writeDemoState(state, 'exam_activated');
-      return { ok: true, activation: clone(state.activation), roomKey: DEMO_KEY, deliveryStatus: 'ready_to_copy' };
+      return result;
     }
     if (operation === 'email_key') {
       if (!state.activation) throw new ExaminationRoomApiError('ROOM_NOT_ACTIVATED', 'Activate the examination before sending its key.', 409, 'Choose Issue room key first.');
@@ -1176,6 +1282,7 @@
     const identity = {
       fullName: entry?.fullName,
       studentNumber: entry?.studentNumber,
+      email: entry?.email,
       subject: entry?.subject,
       yearLevel: entry?.yearLevel,
     };

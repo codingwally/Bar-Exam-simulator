@@ -306,6 +306,10 @@ test('one-click approval escrows and emails the key; reveal/resend preserve it a
     'owner-one@duediligence.ph',
     'owner-two@duediligence.ph',
   ]);
+  assert.match(emails[0].body.html, /https:\/\/duediligence\.ph\/assets\/brand\/logo1-master\.png/u);
+  assert.match(emails[0].body.html, /Open Monitoring and Grading/u);
+  assert.match(emails[0].body.text, /do not need to enter this key/u);
+  assert.match(String(emails[0].headers['Idempotency-Key']), /^exam-room-key-[0-9a-f]{64}$/u);
   assert.equal(deliveryEvents[0].deliveryKind, 'activation_key');
   assert.equal(deliveryEvents[0].providerStatus, 'sent');
   const persistenceBodies = calls
@@ -479,6 +483,45 @@ test('one-click approval escrows and emails the key; reveal/resend preserve it a
   assert.equal(deliveryEvents.length, 5);
   assert.equal(deliveryEvents[4].providerStatus, 'sent');
   assert.equal(deliveryEvents[4].providerId, recordedProviderId);
+  assert.equal(emails[3].headers['Idempotency-Key'], emails[4].headers['Idempotency-Key']);
+  assert.equal(emails[4].headers['Idempotency-Key'], emails[5].headers['Idempotency-Key']);
+
+  resendProviderMode = 'sent';
+  const sharedOwnerRequestId = '74747474-7474-4474-8474-747474747474';
+  const sharedOwnerResponse = await withMockFetch(fetchMock, () => worker.fetch(
+    request('/examination-room/v1/admin/command', {
+      operation: 'resend_key',
+      idempotencyKey: sharedOwnerRequestId,
+      payload: { institutionId: INSTITUTION_ID, examId: EXAM_ID },
+    }, sharedOwnerRequestId),
+    environment({ EXAMINATION_ROOM_ADMIN_EMAILS: '["professor@example.edu.ph"]' }),
+    {},
+  ));
+  const sharedOwner = await sharedOwnerResponse.json();
+  assert.equal(sharedOwnerResponse.status, 200);
+  assert.equal(sharedOwner.deliveryStatus, 'sent');
+  assert.deepEqual(sharedOwner.adminRecipients, ['professor@example.edu.ph']);
+  assert.deepEqual(emails.at(-1).body.to, ['professor@example.edu.ph']);
+  assert.equal(Object.hasOwn(emails.at(-1).body, 'bcc'), false, 'the same owner/creator address must not be duplicated as BCC');
+
+  const fallbackOwnerRequestId = '75757575-7575-4575-8575-757575757575';
+  const fallbackOwnerResponse = await withMockFetch(fetchMock, () => worker.fetch(
+    request('/examination-room/v1/admin/command', {
+      operation: 'resend_key',
+      idempotencyKey: fallbackOwnerRequestId,
+      payload: { institutionId: INSTITUTION_ID, examId: EXAM_ID },
+    }, fallbackOwnerRequestId),
+    environment({
+      EXAMINATION_ROOM_ADMIN_EMAILS: undefined,
+      ADMIN_EMAILS: '["legacy-owner@duediligence.ph"]',
+    }),
+    {},
+  ));
+  const fallbackOwner = await fallbackOwnerResponse.json();
+  assert.equal(fallbackOwnerResponse.status, 200);
+  assert.equal(fallbackOwner.deliveryStatus, 'sent');
+  assert.deepEqual(fallbackOwner.adminRecipients, ['legacy-owner@duediligence.ph']);
+  assert.deepEqual(emails.at(-1).body.bcc, ['legacy-owner@duediligence.ph']);
 });
 
 test('owner approval fails recoverably when the published exam has no exact usable schedule and never invents a 24-hour window', async () => {

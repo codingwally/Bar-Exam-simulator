@@ -14,6 +14,7 @@ vm.runInContext(coreSource, coreContext, { filename: 'offline-grading-core.js' }
 const core = coreContext.DueDiligenceOfflineGradingCore;
 const html = fs.readFileSync(path.join(__dirname, 'offline-grading.html'), 'utf8');
 const client = fs.readFileSync(path.join(__dirname, 'offline-grading.js'), 'utf8');
+const css = fs.readFileSync(path.join(__dirname, 'offline-grading.css'), 'utf8');
 
 function packagePayload() {
   return {
@@ -246,7 +247,8 @@ test('offline workspace has no network dependency and exposes autosave/export co
   assert.match(client, /scheduleAutosave/);
   assert.doesNotMatch(client, /\bfetch\s*\(/);
   assert.doesNotMatch(html, /https?:\/\//);
-  assert.match(client, /serviceWorker\.register\('\/service-worker\.js\?v=examination-room-v1-20260826-2'/);
+  assert.match(client, /serviceWorker\.register\('\/service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1'/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.button\s*\{\s*transition:\s*none;/);
   assert.match(client, /MAX_PACKAGE_BYTES\s*=\s*20\s*\*\s*1024\s*\*\s*1024/);
   assert.match(client, /splitOfflineGradeImportPayload/);
   assert.match(client, /numbered files/);

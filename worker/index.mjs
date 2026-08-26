@@ -191,6 +191,10 @@ import {
   ExaminationRoomRecoveryError,
   createExaminationRoomRecovery,
 } from './examination-room-v1-recovery.mjs';
+import {
+  buildExaminationRoomKeyEmail,
+  deliverExaminationRoomPublicationRequestEmail,
+} from './examination-room-email.mjs';
 import { googleAccessToken } from './google-oauth.mjs';
 import {
   outboundEmailMode,
@@ -1151,7 +1155,11 @@ async function ensureExaminationRoomOwnerKeyEscrow(
 }
 
 function examinationRoomAdminEmailRecipientReport(env, professorRecipient = '') {
-  const raw = String(env?.EXAMINATION_ROOM_ADMIN_EMAILS || '').trim();
+  const raw = String(
+    env?.EXAMINATION_ROOM_ADMIN_EMAILS
+      || env?.ADMIN_EMAILS
+      || '',
+  ).trim();
   let candidates = [];
   try {
     const configured = JSON.parse(raw);
@@ -1160,7 +1168,6 @@ function examinationRoomAdminEmailRecipientReport(env, professorRecipient = '') 
   } catch {
     candidates = raw.split(/[;,\n]/u);
   }
-  const professor = String(professorRecipient || '').trim().toLowerCase();
   const seen = new Set();
   let invalidCount = 0;
   let duplicateCount = 0;
@@ -1172,7 +1179,7 @@ function examinationRoomAdminEmailRecipientReport(env, professorRecipient = '') 
       invalidCount += 1;
       continue;
     }
-    if (value === professor || seen.has(value)) {
+    if (seen.has(value)) {
       duplicateCount += 1;
       continue;
     }
@@ -1230,7 +1237,7 @@ async function examinationRoomOwnerPreflight(env) {
       message: emailReport.recipients.length < 1
         ? 'No valid owner email recipient is configured.'
         : 'The owner email list contains an invalid address.',
-      recovery: 'Set EXAMINATION_ROOM_ADMIN_EMAILS to a JSON list of valid platform-owner email addresses, then run Preflight again.',
+      recovery: 'Set EXAMINATION_ROOM_ADMIN_EMAILS to a JSON list of valid platform-owner email addresses (or keep the existing ADMIN_EMAILS list during migration), then run Preflight again.',
       recipients: emailReport.recipients,
       invalidCount: emailReport.invalidCount,
     });
@@ -1400,7 +1407,7 @@ function examinationRoomPublishedActivationWindow(bundle, payload) {
       'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID',
       'The published examination has no valid start time and duration.',
       409,
-      'Ask the Professor to set the exact start date, time, and duration, publish the corrected examination, then approve it again.',
+      'Ask the exam creator to set the exact start date, time, and duration, publish the corrected examination, then approve it again.',
     );
   }
   if (closes <= Date.now()) {
@@ -1408,7 +1415,7 @@ function examinationRoomPublishedActivationWindow(bundle, payload) {
       'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_ENDED',
       'The published examination schedule has already ended.',
       409,
-      'Ask the Professor to correct and republish the schedule before issuing another room key.',
+      'Ask the exam creator to correct and republish the schedule before issuing another room key.',
     );
   }
   const maxSessions = payload.maxSessions == null || payload.maxSessions === ''
@@ -2009,9 +2016,9 @@ async function resendExaminationRoomOwnerKey(env, owner, request, body, payload)
   if (!exam?.professorEmail) {
     throw examinationRoomOwnerError(
       'EXAM_ROOM_V1_PROFESSOR_CONTACT_REQUIRED',
-      'The Professor account has no verified delivery email.',
+      'The exam creator account has no verified delivery email.',
       409,
-      'Add the exact Professor sign-in email, then choose Resend existing key.',
+      'Add the exact creator sign-in email, then choose Resend existing key.',
     );
   }
   const ownerCopyRecipients = examinationRoomAdminEmailRecipients(env, exam.professorEmail);
@@ -3682,17 +3689,18 @@ async function sendExaminationRoomV1KeyEmail(env, message) {
     || env.SUPPORT_NOTIFICATION_EMAIL_FROM
     || '',
   ).trim();
-  const ownerRecipients = Array.isArray(message?.ownerRecipients)
+  const configuredOwnerRecipients = [...new Set((Array.isArray(message?.ownerRecipients)
     ? message.ownerRecipients
+    : examinationRoomAdminEmailRecipients(env))
       .map((value) => String(value || '').trim().toLowerCase())
-      .filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value) && value !== recipient)
-      .slice(0, 20)
-    : [];
+      .filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value))
+      .slice(0, 20))];
+  const ownerRecipients = configuredOwnerRecipients.filter((value) => value !== recipient);
   if (emailMode !== 'enabled'
       || !env.RESEND_API_KEY
       || !from
       || !recipient
-      || ownerRecipients.length < 1) {
+      || configuredOwnerRecipients.length < 1) {
     return {
       status: 'not_configured',
       providerId: null,
@@ -3702,13 +3710,19 @@ async function sendExaminationRoomV1KeyEmail(env, message) {
           ? 'sender_missing'
           : !env.RESEND_API_KEY
             ? 'provider_key_missing'
-            : ownerRecipients.length < 1
+            : configuredOwnerRecipients.length < 1
               ? 'owner_recipients_missing'
               : 'email_mode_invalid',
     };
   }
   let response;
   try {
+    const email = buildExaminationRoomKeyEmail(env, {
+      creatorName: message.professorName,
+      examTitle: message.examTitle,
+      roomKey: message.roomKey,
+      expiresAt: message.expiresAt,
+    });
     response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -3720,19 +3734,9 @@ async function sendExaminationRoomV1KeyEmail(env, message) {
         from,
         to: [recipient],
         ...(ownerRecipients.length ? { bcc: ownerRecipients } : {}),
-        subject: `Examination Room key — ${String(message.examTitle || 'Published examination').slice(0, 200)}`,
-        text: [
-          `Hello ${String(message.professorName || 'Professor').slice(0, 200)},`,
-          '',
-          'An administrator issued the room key for your published examination.',
-          '',
-          `Examination: ${String(message.examTitle || 'Published examination').slice(0, 300)}`,
-          `Room key: ${String(message.roomKey || '').slice(0, 40)}`,
-          `Valid until: ${String(message.expiresAt || 'the administrator closes or revokes the room').slice(0, 80)}`,
-          '',
-          'Open Examination Room from Due Diligence, choose Monitoring, and enter this key to open the room for students.',
-          'Do not forward the key outside the intended class. If it may have been exposed, ask the administrator to issue a replacement.',
-        ].join('\n'),
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
       }),
     });
   } catch (error) {
@@ -3755,6 +3759,53 @@ async function sendExaminationRoomV1KeyEmail(env, message) {
     providerId: result?.id ? String(result.id).slice(0, 240) : null,
     safeErrorCode: null,
   };
+}
+
+async function sendExaminationRoomV1PublicationRequestEmail(env, result) {
+  const manifest = result?.publicationManifest && typeof result.publicationManifest === 'object'
+    ? result.publicationManifest
+    : {};
+  const examId = String(result?.examId || manifest.examinationId || '').trim();
+  const version = result?.version ?? manifest.version ?? '';
+  const publishedAt = manifest.publishedAt || '';
+  const suppliedHash = String(result?.publicationHash || '').trim().toLowerCase();
+  const idempotencyHash = /^[0-9a-f]{64}$/u.test(suppliedHash)
+    ? suppliedHash
+    : await sha256Hex(new TextEncoder().encode(
+      `examination-room-key-request\0${examId}\0${String(version)}\0${String(publishedAt)}`,
+    ));
+  return deliverExaminationRoomPublicationRequestEmail(env, {
+    recipients: examinationRoomAdminEmailRecipients(env),
+    idempotencyHash,
+    examId,
+    version,
+    publishedAt,
+    examTitle: manifest.title,
+    subject: manifest.subject,
+    questionCount: manifest.questionCount ?? manifest.questions?.length,
+  });
+}
+
+function scheduleExaminationRoomPublicationRequestNotification(env, result, executionContext) {
+  const work = sendExaminationRoomV1PublicationRequestEmail(env, result)
+    .then((delivery) => {
+      if (!['sent', 'suppressed'].includes(String(delivery?.status || ''))) {
+        console.error('Examination Room publication request email was not delivered', {
+          status: String(delivery?.status || 'failed').slice(0, 40),
+          safeErrorCode: String(delivery?.safeErrorCode || 'unknown').slice(0, 80),
+          examId: String(result?.examId || result?.publicationManifest?.examinationId || '').slice(0, 80),
+        });
+      }
+      return delivery;
+    })
+    .catch((error) => {
+      console.error('Examination Room publication request notification failed', {
+        name: String(error?.name || 'Error').slice(0, 80),
+      });
+      return { status: 'failed', safeErrorCode: 'notification_error' };
+    });
+  if (typeof executionContext?.waitUntil === 'function') executionContext.waitUntil(work);
+  else void work;
 }
 
 async function handleSessionMonitoring(request, env, origin, allowedOrigin) {
@@ -8016,7 +8067,7 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
       professorRoleSelected,
       creatorAuthorized: institutionIds.length > 0,
       authorized: institutionIds.length > 0,
-      institutionId: institutionIds.length === 1 ? institutionIds[0] : null,
+      institutionId: staff?.institutionId || (institutionIds.length === 1 ? institutionIds[0] : null),
       creatorWorkspaces,
       memberships,
     };
@@ -8057,9 +8108,12 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
     allowedOrigin,
     { body, authenticatedUser },
   ),
-  afterProfessorCommand: ({ operation, env, executionContext }) => {
+  afterProfessorCommand: ({ operation, result, env, executionContext }) => {
     if (operation === 'publish' || operation === 'release_results') {
       scheduleExaminationRoomRecoveryDrain(env, executionContext);
+    }
+    if (operation === 'publish') {
+      scheduleExaminationRoomPublicationRequestNotification(env, result, executionContext);
     }
   },
   afterStudentCommand: ({ operation, env, executionContext }) => {

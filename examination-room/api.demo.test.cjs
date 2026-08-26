@@ -7,11 +7,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function demoApi() {
+function demoApi(onStorageWrite = null) {
   const values = new Map();
   const localStorage = {
     getItem(key) { return values.has(key) ? values.get(key) : null; },
-    setItem(key, value) { values.set(key, String(value)); },
+    setItem(key, value) { values.set(key, String(value)); onStorageWrite?.(key, String(value)); },
     removeItem(key) { values.delete(key); },
   };
   const window = {
@@ -42,6 +42,18 @@ function demoApi() {
   );
   return window.ExaminationRoomV1Api;
 }
+
+test('demo monitor and grading polling are read-only for the selected examination', async () => {
+  const writes = [];
+  const api = demoApi((key) => writes.push(key));
+  api.resetDemo();
+  writes.length = 0;
+  const session = await api.professorQuery('session');
+  await api.professorQuery('monitor', { examId: session.exam.id });
+  await api.professorQuery('grading', { examId: session.exam.id });
+  await api.professorQuery('grading', { examId: session.exam.id });
+  assert.deepEqual(writes, []);
+});
 
 test('demo owner preflight exposes the same four safe readiness checks', async () => {
   const result = await demoApi().adminQuery('preflight');
@@ -307,7 +319,20 @@ test('demo import_grades accepts the Professor UI contract and commits the compl
 test('demo owner controls correct identity, change submission status, and control the room idempotently', async () => {
   const api = demoApi();
   api.resetDemo();
-  const sessionView = await api.professorQuery('session');
+  let sessionView = await api.professorQuery('session');
+  const optionalRosterStudent = {
+    id: 's-1',
+    fullName: 'Maria Theresa Dela Cruz',
+    studentNumber: '2024-10001',
+    email: 'maria.delacruz@law.example.edu.ph',
+    subject: 'Constitutional Law',
+    yearLevel: '2L',
+    extraMinutes: 0,
+  };
+  await api.professorCommand('save_draft', {
+    exam: { ...sessionView.exam, roster: [optionalRosterStudent] },
+  }, 'save-optional-owner-roster');
+  sessionView = await api.professorQuery('session');
   await api.professorCommand('publish', { exam: sessionView.exam }, 'publish-owner-controls');
   await api.adminCommand('activate_exam', { examId: sessionView.exam.id }, 'activate-owner-controls');
 
@@ -400,4 +425,127 @@ test('demo owner controls correct identity, change submission status, and contro
   });
   assert.equal(secondAuditPage.offset, 2);
   assert.notEqual(secondAuditPage.items[0].requestId, firstAuditPage.items[0].requestId);
+});
+
+test('default key-only admission publishes without a roster and registers any keyed student', async () => {
+  const api = demoApi();
+  api.resetDemo();
+  const creator = await api.professorQuery('session');
+  assert.equal(creator.exam.admissionMode, 'key_only');
+  assert.equal(creator.exam.roster.length, 0);
+
+  const published = await api.professorCommand('publish', { exam: creator.exam }, 'open-publish-0001');
+  assert.equal(published.exam.status, 'awaiting_activation');
+  const activation = await api.adminCommand('activate_exam', { examId: creator.exam.id }, 'open-activate-0001');
+  assert.equal((await api.professorQuery('session')).activation.id, activation.activation.id);
+  await api.professorCommand('open_room', { examId: creator.exam.id }, 'open-room-without-key-0001');
+
+  const identity = {
+    fullName: 'Friend Practice Student',
+    studentNumber: 'FRIEND-0001',
+    email: 'friend@example.com',
+    subject: creator.exam.subject,
+    yearLevel: 'Second year',
+  };
+  const preview = await api.studentPreview({ roomKey: activation.roomKey, identity });
+  assert.equal(preview.identity.fullName, identity.fullName);
+  const consent = await api.studentConsent({
+    roomKey: activation.roomKey,
+    identity,
+    noticeVersion: preview.metadata.noticeVersion,
+    agreed: true,
+  }, 'open-consent-0001');
+  assert.equal(consent.session.fullName, identity.fullName);
+  const after = await api.professorQuery('monitor', { examId: creator.exam.id });
+  assert.equal(after.exam.roster.length, 1);
+  assert.equal(after.sessions.length, 1);
+});
+
+test('optional email allowlist accepts only normalized listed emails', async () => {
+  const api = demoApi();
+  api.resetDemo();
+  const creator = await api.professorQuery('session');
+  const exam = {
+    ...creator.exam,
+    admissionMode: 'email_allowlist',
+    allowedEmails: ['  ALLOWED.Student@Example.COM ', 'allowed.student@example.com'],
+  };
+  const published = await api.professorCommand('publish', { exam }, 'allowlist-publish-0001');
+  assert.deepEqual(Array.from(published.exam.allowedEmails), ['allowed.student@example.com']);
+  const activation = await api.adminCommand('activate_exam', { examId: exam.id }, 'allowlist-activate-0001');
+  await api.professorCommand('open_room', { examId: exam.id }, 'allowlist-open-0001');
+
+  const baseIdentity = {
+    fullName: 'Allowed Student',
+    studentNumber: 'ALLOW-0001',
+    subject: exam.subject,
+    yearLevel: 'Second year',
+  };
+  await assert.rejects(
+    api.studentPreview({ roomKey: activation.roomKey, identity: baseIdentity }),
+    (error) => error.code === 'STUDENT_EMAIL_REQUIRED',
+  );
+  await assert.rejects(
+    api.studentPreview({ roomKey: activation.roomKey, identity: { ...baseIdentity, email: 'other@example.com' } }),
+    (error) => error.code === 'STUDENT_EMAIL_NOT_ALLOWED',
+  );
+  const preview = await api.studentPreview({
+    roomKey: activation.roomKey,
+    identity: { ...baseIdentity, email: 'Allowed.Student@Example.com' },
+  });
+  assert.equal(preview.identity.email, 'allowed.student@example.com');
+});
+
+test('admin key approval is idempotent across one hundred identical retries', async () => {
+  const api = demoApi();
+  api.resetDemo();
+  const creator = await api.professorQuery('session');
+  await api.professorCommand('publish', { exam: creator.exam }, 'idempotent-publish-0001');
+  const results = [];
+  for (let index = 0; index < 100; index += 1) {
+    results.push(await api.adminCommand('activate_exam', { examId: creator.exam.id }, 'same-admin-approval-0001'));
+  }
+  assert.equal(new Set(results.map((result) => result.activation.id)).size, 1);
+  assert.equal(new Set(results.map((result) => result.roomKey)).size, 1);
+  assert.equal(results.slice(1).every((result) => result.duplicate === true), true);
+});
+
+test('creator can revoke a live student and the same identity cannot re-enter that activation', async () => {
+  const api = demoApi();
+  api.resetDemo();
+  const creator = await api.professorQuery('session');
+  await api.professorCommand('publish', { exam: creator.exam }, 'revoke-publish-0001');
+  const activation = await api.adminCommand('activate_exam', { examId: creator.exam.id }, 'revoke-activate-0001');
+  await api.professorCommand('open_room', { examId: creator.exam.id }, 'revoke-open-0001');
+  const identity = {
+    fullName: 'Blocked Student',
+    studentNumber: 'BLOCK-0001',
+    subject: creator.exam.subject,
+    yearLevel: 'Second year',
+  };
+  const preview = await api.studentPreview({ roomKey: activation.roomKey, identity });
+  const consent = await api.studentConsent({
+    roomKey: activation.roomKey,
+    identity,
+    noticeVersion: preview.metadata.noticeVersion,
+    agreed: true,
+  }, 'revoke-consent-0001');
+  await api.professorCommand('revoke_session', {
+    examId: creator.exam.id,
+    sessionId: consent.session.id,
+    reason: 'Creator ended this practice session.',
+  }, 'revoke-session-0001');
+  await assert.rejects(
+    api.studentQuery('resume', { sessionId: consent.session.id, sessionToken: consent.session.id }),
+    (error) => error.code === 'SESSION_REVOKED',
+  );
+  await assert.rejects(
+    api.studentConsent({
+      roomKey: activation.roomKey,
+      identity,
+      noticeVersion: preview.metadata.noticeVersion,
+      agreed: true,
+    }, 'revoke-consent-again-0001'),
+    (error) => ['STUDENT_BLOCKED', 'SESSION_REVOKED'].includes(error.code),
+  );
 });

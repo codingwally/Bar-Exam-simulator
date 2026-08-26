@@ -100,8 +100,13 @@
     );
   }
 
+  function paidSubscriptionExpired(access = state.access) {
+    return access?.paidSubscriptionExpired === true
+      || String(access?.basis || '').trim().toLowerCase() === 'paid_subscription_expired';
+  }
+
   function profileRequired(access = state.access) {
-    return !setupExempt(access) && (
+    return !setupExempt(access) && !paidSubscriptionExpired(access) && (
       access?.basis === 'profile_required'
       || access?.tokenAcknowledgementRequired === true
       || (
@@ -113,7 +118,7 @@
 
   function paymentRequired(access = state.access) {
     return access?.paymentRequired === true
-      || ['trial_tokens_exhausted', 'insufficient_introductory_tokens'].includes(
+      || ['trial_tokens_exhausted', 'insufficient_introductory_tokens', 'paid_subscription_expired'].includes(
         String(access?.basis || ''),
       );
   }
@@ -146,6 +151,11 @@
     }
     if (profileRequired(access)) {
       return 'Confirm your profile and acknowledge the five one-time practice tokens.';
+    }
+    if (paidSubscriptionExpired(access)) {
+      return access?.checkoutOpen === true
+        ? 'Your paid Bar Exam Simulator access has expired. Renew Early Access to continue. Home and Examination Room remain available.'
+        : 'Your paid Bar Exam Simulator access has expired. Open Support for renewal assistance. Home and Examination Room remain available.';
     }
     if (paymentRequired(access)) {
       return 'Your five one-time practice tokens have been used. Early Access is required for more graded practice.';
@@ -207,9 +217,14 @@
     if (routeHash) state.pendingRoute = normalizedRouteHash(routeHash);
     state.paymentGate = true;
     if (!overlayOpen('dd2-native-view')) {
-      legacy.openView?.('pricing', { returnToQuorum: true });
+      const recoveryView = paidSubscriptionExpired(access) && access?.checkoutOpen !== true
+        ? 'support'
+        : 'pricing';
+      legacy.openView?.(recoveryView, { returnToQuorum: true });
       requestAnimationFrame(() => {
-        document.getElementById('dd2-open-payment')?.focus?.({ preventScroll: true });
+        document.getElementById(
+          recoveryView === 'support' ? 'dd2-support-category' : 'dd2-open-payment',
+        )?.focus?.({ preventScroll: true });
       });
     }
     if (!state.gateNoticeShown) {
@@ -291,6 +306,7 @@
         else if (/founding[_\s-]*beta/.test(identity) || access?.freeBeta?.active === true) label = 'Founding Beta';
         else if (setupRequired(access)) label = 'Complete profile';
         else if (access.unlimited) label = 'Paid Access';
+        else if (paidSubscriptionExpired(access)) label = 'Renew Bar access';
         else label = `${Math.max(0, Number(access.tokensRemaining) || 0)} tokens remaining`;
       }
       badge.textContent = label;
@@ -376,7 +392,9 @@
               error.code = 'PROFILE_COMPLETION_REQUIRED';
               error.message = accessMessage(access);
             } else if (paymentRequired(access)) {
-              error.code = 'INTRODUCTORY_TOKENS_EXHAUSTED';
+              error.code = paidSubscriptionExpired(access)
+                ? 'PAID_SUBSCRIPTION_EXPIRED'
+                : 'INTRODUCTORY_TOKENS_EXHAUSTED';
               error.message = accessMessage(access);
             }
           }

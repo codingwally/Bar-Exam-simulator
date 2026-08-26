@@ -74,7 +74,7 @@ assert.match(shell, /'#quorum':\s*'quorum'[\s\S]*'#verdict':\s*'verdict'/);
 assert.match(shell, /addEventListener\('hashchange',[\s\S]*synchronizePracticeRail/);
 assert.match(landing, /const stillHoldMs = 30 \* 60 \* 1000/);
 assert.match(landing, /Promise\.allSettled\(playback\)/);
-assert.match(serviceWorker, /duediligence-shell-20260826-syllabus-reveal-p0-2/);
+assert.match(serviceWorker, /duediligence-shell-20260827-commercial-readiness-profile-analytics-offline-paid-expiry-4/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=examination-room-doors-20260826-2/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
 

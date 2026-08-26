@@ -48,6 +48,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .button.wide { width: 100%; }
 .text-button { border: 0; padding: .2rem; color: #7c5a11; background: transparent; font-weight: 800; text-decoration: underline; }
 
+@media (prefers-reduced-motion: reduce) {
+  .button { transition: none; }
+}
+
 .welcome-view { min-height: calc(100vh - 76px); display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(330px, .85fr); align-items: center; gap: clamp(2rem, 6vw, 7rem); padding: clamp(2rem, 6vw, 6rem) clamp(1rem, 7vw, 8rem); background: linear-gradient(120deg, #f7f3e9 0%, #fbfaf6 58%, #eef2f5 100%); }
 .welcome-copy { max-width: 720px; }
 .welcome-copy h1 { max-width: 700px; margin: 0; color: var(--navy); font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.7rem, 5vw, 5.2rem); line-height: .98; letter-spacing: -.035em; }

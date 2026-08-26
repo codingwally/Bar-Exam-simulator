@@ -40,6 +40,11 @@ for (const [label, workflow] of [
     /node scripts\/test-examination-room-database\.mjs/u,
     `${label} must validate the complete Examination Room database contract.`,
   );
+  assert.match(
+    workflow,
+    /node scripts\/test-examination-room-commercial-stress\.mjs/u,
+    `${label} must run the 100-exam commercial stress contract.`,
+  );
 }
 
 for (const [label, workflow] of [
@@ -69,6 +74,8 @@ for (const requiredPath of [
   "      - 'admin/examination-room-admin.test.cjs'",
   "      - 'examination-room/**'",
   "      - 'worker/examination-room-v1-*.mjs'",
+  "      - 'worker/examination-room-email.mjs'",
+  "      - 'worker/examination-room-email.test.mjs'",
   "      - 'worker/wrangler.staging.toml'",
   "      - 'scripts/build-staging-artifact.mjs'",
   "      - 'scripts/test-staging-artifact.mjs'",
@@ -80,11 +87,13 @@ for (const requiredPath of [
   "      - 'scripts/test-phase4-release4.mjs'",
   "      - 'scripts/test-private-beta-landing.mjs'",
   "      - 'scripts/test-examination-room-database.mjs'",
+  "      - 'scripts/test-examination-room-commercial-stress.mjs'",
   "      - 'scripts/test-examination-room-v1-staging-smoke.mjs'",
   "      - 'scripts/test-examination-room-release-workflows.mjs'",
   "      - 'scripts/test-feature-decommission-boundary.mjs'",
   "      - 'supabase/migrations/20260825183055_examination_room_v1_greenfield.sql'",
   "      - 'supabase/migrations/20260826130536_examination_room_owner_command_center.sql'",
+  "      - 'supabase/migrations/20260827010000_examination_room_open_admission_flow.sql'",
   "      - 'supabase/tests/database/**'",
   "      - '.github/workflows/staging-e2e-gate.yml'",
   "      - '.github/workflows/bootstrap-examination-room-key-pepper.yml'",
@@ -205,7 +214,7 @@ for (const [label, workflow, databaseSecret] of [
   assert.match(
     workflow,
     /node scripts\/build-examination-room-release-bundle\.mjs --output "\$release_bundle"/u,
-    `${label} must build the exact reviewed two-migration bundle before cutover.`,
+    `${label} must build the exact reviewed three-migration bundle before cutover.`,
   );
   assert.match(workflow, new RegExp(databaseSecret));
   assert.match(workflow, /psql "\$EXAMINATION_ROOM_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "\$release_bundle"/u);
@@ -226,6 +235,11 @@ assert.ok(
     < releaseBundleBuilder.indexOf('20260826130536_examination_room_owner_command_center.sql'),
   'The isolated release bundle must apply the greenfield migration before the owner migration.',
 );
+assert.ok(
+  releaseBundleBuilder.indexOf('20260826130536_examination_room_owner_command_center.sql')
+    < releaseBundleBuilder.indexOf('20260827010000_examination_room_open_admission_flow.sql'),
+  'The isolated release bundle must apply the owner migration before the open-admission migration.',
+);
 for (const requiredProbe of [
   'examination_room_v1_api(text,text,uuid,uuid,jsonb)',
   'examination_room_v1_owner_query(text,uuid,uuid,uuid,jsonb)',
@@ -233,6 +247,9 @@ for (const requiredProbe of [
   'examination_room_v1_grading_contexts(uuid,uuid,uuid,jsonb)',
   'examination_room_v1_import_grades(uuid,uuid,uuid,jsonb)',
   'examination_room_v1_verify_recovery_snapshot(uuid,text)',
+  'prepare_student_admission(jsonb)',
+  'creator_revoke_session(uuid,uuid,jsonb)',
+  'admission_mode_snapshot',
 ]) {
   assert.match(releaseBundleBuilder, new RegExp(requiredProbe.replace(/[()]/gu, '\\$&')));
 }
@@ -240,6 +257,7 @@ assert.match(releaseBundleBuilder, /Partial Examination Room .* state detected; 
 assert.match(releaseBundleBuilder, /supabase_migrations\.schema_migrations/u);
 assert.match(releaseBundleBuilder, /examination_room_greenfield_ledger_exact/u);
 assert.match(releaseBundleBuilder, /examination_room_owner_ledger_exact/u);
+assert.match(releaseBundleBuilder, /examination_room_open_admission_ledger_exact/u);
 assert.match(releaseBundleBuilder, /without this release exact checksum/u);
 assert.match(releaseBundleBuilder, /Unrecorded pre-existing .* objects cannot be adopted from existence probes/u);
 assert.doesNotMatch(releaseBundleBuilder, /Repairing only the missing/u);

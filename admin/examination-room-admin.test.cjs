@@ -25,7 +25,7 @@ test('owner command center registers without touching the surrounding Admin runt
 test('owner command center exposes all eight required no-code views', () => {
   for (const label of [
     'Overview',
-    'Professor Directory',
+    'Creator Directory',
     'Examinations',
     'Questions',
     'Students & Answers',
@@ -36,6 +36,36 @@ test('owner command center exposes all eight required no-code views', () => {
   assert.match(source, /role="tablist"/);
   assert.match(source, /role="tabpanel"/);
   assert.match(css, /\.exam-admin-tabs/);
+});
+
+test('published creator key requests are isolated in a one-click Admin queue', () => {
+  const window = { ExaminationRoomV1Api: {} };
+  const instrumented = source.replace(
+    'global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+    'global.__ExaminationRoomKeyQueueTest = Object.freeze({ state, canApprove, pendingKeyRequests, renderOverview }); global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+  );
+  vm.runInNewContext(instrumented, { window, URLSearchParams, Intl, Date, Map, Set });
+  const harness = window.__ExaminationRoomKeyQueueTest;
+  harness.state.data = {
+    counts: { exams: 4 },
+    exams: [
+      { id: 'exam-published', title: 'Published request', publicationStatus: 'published', publishedAt: '2026-08-27T08:00:00.000Z' },
+      { id: 'exam-requested', title: 'Explicit key request', publicationStatus: 'key_requested', keyRequestedAt: '2026-08-27T09:00:00.000Z' },
+      { id: 'exam-active', title: 'Already active', publicationStatus: 'published', activation: { status: 'active' } },
+      { id: 'exam-draft', title: 'Saved draft', publicationStatus: 'draft' },
+    ],
+  };
+
+  assert.deepEqual(
+    Array.from(harness.pendingKeyRequests(), (exam) => exam.id),
+    ['exam-requested', 'exam-published'],
+  );
+  assert.equal(harness.canApprove(harness.state.data.exams[2]), false);
+  const html = harness.renderOverview();
+  assert.match(html, /Key requests waiting for approval/);
+  assert.match(html, /Any signed-in account can build and request a key/);
+  assert.match(html, /Approve & generate key/);
+  assert.match(html, /no creator key entry/i);
 });
 
 test('owner command center uses only the greenfield Admin transport for privileged operations', () => {
@@ -66,7 +96,7 @@ test('owner controls include exact keys, email, exports, search, and complete re
   assert.match(source, /Rotate & email/);
   assert.match(source, /Resend current key/);
   assert.match(source, /deliveryRecovery/);
-  assert.match(source, /Approve & email key/);
+  assert.match(source, /Approve & generate key/);
   assert.match(source, /data-exam-admin-export="json"/);
   assert.match(source, /data-exam-admin-export="csv"/);
   assert.match(source, /data-exam-admin-search/);
@@ -108,7 +138,8 @@ test('owner no-code controls validate, confirm, retain idempotency on retry, and
   assert.match(css, /\.exam-admin-owner-control-form/);
   assert.match(css, /min-height: 44px/);
   assert.doesNotMatch(source, /Approve Professor|Professor approved|Verified sign-in email|Waiting for owner approval/);
-  assert.match(source, /Professor entry and examination creation do not require owner role approval/);
+  assert.match(source, /Any signed-in account can enter the Professor card/);
+  assert.match(source, /never grants or blocks creator access/);
 });
 
 test('owner system check renders four plain-language statuses and every exact recovery without exposing returned configuration values', async () => {
@@ -362,6 +393,174 @@ test('owner mutation retry reuses every receipt key after a lost response', asyn
   assert.equal(harness.state.actionRequests.size, 0);
 });
 
+test('pending approval reuses every scoped receipt after a page refresh and clears only after success', async () => {
+  const records = new Map();
+  const sessionStorage = {
+    getItem(key) { return records.has(key) ? records.get(key) : null; },
+    setItem(key, value) { records.set(key, String(value)); },
+    removeItem(key) { records.delete(key); },
+  };
+  let requestCounter = 0;
+  let activationAttempts = 0;
+  const seen = [];
+  const api = {
+    requestId: () => `approval-request-${++requestCounter}`,
+    demoEnabled: () => true,
+    async adminCommand(operation, payload, requestKey) {
+      assert.equal(payload.institutionId, 'institution-1');
+      seen.push({ operation, requestKey });
+      if (operation === 'approve_and_email_key') throw Object.assign(new Error('Unsupported'), { code: 'UNSUPPORTED_OPERATION' });
+      if (operation === 'activate_exam') {
+        activationAttempts += 1;
+        if (activationAttempts === 1) throw new Error('Connection lost after the approval may have committed');
+        return { ok: true };
+      }
+      assert.equal(operation, 'email_key');
+      return { ok: true, roomKey: 'APPROVED-ROOM-KEY', deliveryStatus: 'sent' };
+    },
+  };
+  const instrumented = source.replace(
+    'global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+    'global.__ExaminationRoomApprovalRefreshTest = Object.freeze({ state, runAction }); global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+  );
+  const openPage = () => {
+    const window = { ExaminationRoomV1Api: api, sessionStorage, confirm: () => true };
+    vm.runInNewContext(instrumented, { window, URLSearchParams, Intl, Date, Map, Set, Promise, JSON, encodeURIComponent });
+    const harness = window.__ExaminationRoomApprovalRefreshTest;
+    harness.state.ownerUserId = 'owner-1';
+    harness.state.institutionId = 'institution-1';
+    return harness;
+  };
+
+  const firstPage = openPage();
+  await firstPage.runAction('approve_and_email_key', { examId: 'exam-1' }, null);
+  assert.equal(records.size, 1);
+  const pending = JSON.parse([...records.values()][0]);
+  assert.equal(pending.version, 2);
+  assert.equal(pending.operation, 'approve_and_email_key');
+  assert.deepEqual(Object.keys(pending.requestKeys).sort(), ['activate', 'email', 'fallback', 'primary']);
+  assert.equal(Object.prototype.hasOwnProperty.call(pending, 'roomKey'), false);
+
+  const refreshedPage = openPage();
+  await refreshedPage.runAction('approve_and_email_key', { examId: 'exam-1' }, null);
+  assert.deepEqual(seen.filter((entry) => entry.operation === 'approve_and_email_key').map((entry) => entry.requestKey), [pending.requestKeys.primary, pending.requestKeys.primary]);
+  assert.deepEqual(seen.filter((entry) => entry.operation === 'activate_exam').map((entry) => entry.requestKey), [pending.requestKeys.activate, pending.requestKeys.activate]);
+  assert.deepEqual(seen.filter((entry) => entry.operation === 'email_key').map((entry) => entry.requestKey), [pending.requestKeys.email]);
+  assert.equal(records.size, 0);
+  assert.equal(refreshedPage.state.actionRequests.size, 0);
+});
+
+test('pending resend-key email reuses its scoped receipt after a page refresh and clears only after success', async () => {
+  const records = new Map();
+  const sessionStorage = {
+    getItem(key) { return records.has(key) ? records.get(key) : null; },
+    setItem(key, value) { records.set(key, String(value)); },
+    removeItem(key) { records.delete(key); },
+  };
+  let requestCounter = 0;
+  let attempts = 0;
+  const seenKeys = [];
+  const api = {
+    requestId: () => `resend-request-${++requestCounter}`,
+    demoEnabled: () => false,
+    async adminCommand(operation, payload, requestKey) {
+      assert.equal(operation, 'resend_key');
+      assert.equal(payload.institutionId, 'institution-1');
+      seenKeys.push(requestKey);
+      attempts += 1;
+      if (attempts === 1) throw new Error('Connection lost after the resend may have committed');
+      return { ok: true, roomKey: 'CURRENT-ROOM-KEY', deliveryStatus: 'sent' };
+    },
+  };
+  const instrumented = source.replace(
+    'global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+    'global.__ExaminationRoomResendRefreshTest = Object.freeze({ state, runAction }); global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+  );
+  const openPage = () => {
+    const window = { ExaminationRoomV1Api: api, sessionStorage, confirm: () => true };
+    vm.runInNewContext(instrumented, { window, URLSearchParams, Intl, Date, Map, Set, Promise, JSON, encodeURIComponent });
+    const harness = window.__ExaminationRoomResendRefreshTest;
+    harness.state.ownerUserId = 'owner-1';
+    harness.state.institutionId = 'institution-1';
+    return harness;
+  };
+
+  const firstPage = openPage();
+  await firstPage.runAction('resend_key', { examId: 'exam-1' }, null);
+  assert.equal(records.size, 1);
+  const pending = JSON.parse([...records.values()][0]);
+  assert.equal(pending.operation, 'resend_key');
+  assert.equal(pending.requestKeys.primary, seenKeys[0]);
+  assert.equal(Object.prototype.hasOwnProperty.call(pending, 'roomKey'), false);
+
+  const refreshedPage = openPage();
+  await refreshedPage.runAction('resend_key', { examId: 'exam-1' }, null);
+  assert.deepEqual(seenKeys, [pending.requestKeys.primary, pending.requestKeys.primary]);
+  assert.equal(records.size, 0);
+  assert.equal(refreshedPage.state.actionRequests.size, 0);
+});
+
+test('email provider failure keeps the exact key usable and gives Admin a one-click resend recovery', async () => {
+  let requestCounter = 0;
+  const operations = [];
+  const window = {
+    confirm: () => true,
+    ExaminationRoomV1Api: {
+      requestId: () => `delivery-request-${++requestCounter}`,
+      demoEnabled: () => false,
+      async adminCommand(operation, payload, requestKey) {
+        operations.push({ operation, payload, requestKey });
+        if (operation === 'approve_and_email_key') {
+          return {
+            ok: true,
+            roomKey: 'ER1-ABCD-EFGH-9',
+            deliveryStatus: 'failed',
+            deliverySafeErrorCode: 'provider_503',
+            deliveryRecovery: 'Provider unavailable. Retry the current key.',
+            recipient: 'creator@example.edu.ph',
+            adminRecipients: ['owner@duediligence.ph'],
+          };
+        }
+        assert.equal(operation, 'resend_key');
+        return {
+          ok: true,
+          roomKey: 'ER1-ABCD-EFGH-9',
+          deliveryStatus: 'sent',
+          recipient: 'creator@example.edu.ph',
+          adminRecipients: ['owner@duediligence.ph'],
+        };
+      },
+    },
+  };
+  const instrumented = source.replace(
+    'global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+    'global.__ExaminationRoomDeliveryTest = Object.freeze({ state, runAction, renderKeysEmail }); global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+  );
+  vm.runInNewContext(instrumented, { window, URLSearchParams, Intl, Date, Map, Set, Promise });
+  const harness = window.__ExaminationRoomDeliveryTest;
+  harness.state.institutionId = 'institution-1';
+  harness.state.selectedExamId = 'exam-1';
+  harness.state.data = { exams: [{ id: 'exam-1', title: 'Provider recovery exam', publicationStatus: 'published' }] };
+  harness.state.details.set('exam-1', { keys: [{ id: 'activation-1', status: 'scheduled' }] });
+
+  await harness.runAction('approve_and_email_key', { examId: 'exam-1' }, null);
+  assert.equal(harness.state.currentKeys.get('exam-1'), 'ER1-ABCD-EFGH-9');
+  const failedHtml = harness.renderKeysEmail();
+  assert.match(failedHtml, /Key active; email needs attention/);
+  assert.match(failedHtml, /creator already has automatic Monitoring and Grading access/i);
+  assert.match(failedHtml, /Retry email/);
+  assert.match(failedHtml, /key itself must not be rotated/i);
+
+  await harness.runAction('resend_key', { examId: 'exam-1' }, null);
+  assert.equal(harness.state.currentKeys.get('exam-1'), 'ER1-ABCD-EFGH-9');
+  assert.equal(harness.state.deliveries.get('exam-1').status, 'sent');
+  assert.doesNotMatch(harness.renderKeysEmail(), /Key active; email needs attention/);
+  harness.state.deliveries.set('exam-1', { status: 'demo_delivered' });
+  assert.doesNotMatch(harness.renderKeysEmail(), /Key active; email needs attention/);
+  assert.deepEqual(operations.map((entry) => entry.operation), ['approve_and_email_key', 'resend_key']);
+  assert.notEqual(operations[0].requestKey, operations[1].requestKey);
+});
+
 test('pending owner key rotation reuses the same scoped receipt after a page refresh and clears it only after success', async () => {
   const records = new Map();
   const sessionStorage = {
@@ -488,6 +687,88 @@ test('owner bundle normalizer derives release, verification, and roster academic
   const fallbackGrade = window.__ExaminationRoomAdminTest.grades(fallback)[0];
   assert.equal(fallbackGrade.fullName, 'Fallback Student');
   assert.equal(fallbackGrade.released, true);
+});
+
+test('flat question grade revisions render one released student result without changing aggregate grade payloads', () => {
+  const window = { ExaminationRoomV1Api: {} };
+  const instrumented = source.replace(
+    'global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+    'global.__ExaminationRoomGradeAggregationTest = Object.freeze({ state, grades, renderGradesResults }); global.DueDiligenceExaminationRoomAdmin = Object.freeze({ render, bind });',
+  );
+  vm.runInNewContext(instrumented, { window, URLSearchParams, Intl, Date, Map, Set });
+  const harness = window.__ExaminationRoomGradeAggregationTest;
+  const flatDetail = {
+    questions: [
+      { id: 'q-1', number: 1, points: 25 },
+      { id: 'q-2', number: 2, points: 25 },
+      { id: 'q-3', number: 3, points: 25 },
+      { id: 'q-4', number: 4, points: 25 },
+    ],
+    sessions: [{ id: 'session-1', fullName: 'Maria Santos', studentNumber: '2026-001' }],
+    submissions: [{ id: 'submission-1', sessionId: 'session-1', submittedAt: '2026-08-27T08:00:00.000Z' }],
+    gradeRevisions: [
+      { id: 'grade-q1', sessionId: 'session-1', questionId: 'q-1', revision: 1, points: 25, feedback: 'Complete issue identification.', at: '2026-08-27T09:01:00.000Z' },
+      { id: 'grade-q2', sessionId: 'session-1', questionId: 'q-2', revision: 1, points: 20, feedback: 'Sound rule statement.', at: '2026-08-27T09:02:00.000Z' },
+      { id: 'grade-q3', sessionId: 'session-1', questionId: 'q-3', revision: 1, points: 20, feedback: 'Application needs one more authority.', at: '2026-08-27T09:03:00.000Z' },
+      { id: 'grade-q4', sessionId: 'session-1', questionId: 'q-4', revision: 1, points: 25, feedback: 'Clear and well-supported conclusion.', at: '2026-08-27T09:04:00.000Z' },
+    ],
+    releases: [{ id: 'release-1', sessionIds: ['session-1'], at: '2026-08-27T10:00:00.000Z' }],
+  };
+
+  const results = harness.grades(flatDetail);
+  assert.equal(results.length, 1);
+  assert.equal(results[0].fullName, 'Maria Santos');
+  assert.equal(results[0].studentNumber, '2026-001');
+  assert.equal(results[0].submissionId, 'submission-1');
+  assert.equal(results[0].totalScore, 90);
+  assert.equal(results[0].maximumScore, 100);
+  assert.equal(results[0].items.length, 4);
+  assert.deepEqual(Array.from(results[0].items, (item) => item.feedback), [
+    'Complete issue identification.',
+    'Sound rule statement.',
+    'Application needs one more authority.',
+    'Clear and well-supported conclusion.',
+  ]);
+  assert.equal(results[0].released, true);
+
+  harness.state.selectedExamId = 'exam-1';
+  harness.state.data = { exams: [{ id: 'exam-1', title: 'Civil Law Final', subject: 'Civil Law' }] };
+  harness.state.details.set('exam-1', flatDetail);
+  const html = harness.renderGradesResults();
+  assert.equal((html.match(/<tbody><tr /g) || []).length, 1);
+  assert.match(html, /Maria Santos/);
+  assert.match(html, /90 \/ 100/);
+  assert.match(html, /Question 1: <strong>25<\/strong> · Complete issue identification\./);
+  assert.match(html, /Question 2: <strong>20<\/strong> · Sound rule statement\./);
+  assert.match(html, /Question 3: <strong>20<\/strong> · Application needs one more authority\./);
+  assert.match(html, /Question 4: <strong>25<\/strong> · Clear and well-supported conclusion\./);
+  assert.match(html, /exam-admin-status released/);
+  assert.doesNotMatch(html, /exam-admin-status not_released/);
+
+  const aggregatePayload = {
+    grades: [{
+      id: 'aggregate-grade-1',
+      sessionId: 'session-2',
+      submissionId: 'submission-2',
+      fullName: 'Existing Aggregate Student',
+      studentNumber: '2026-002',
+      totalScore: 88,
+      maximumScore: 100,
+      gradeStatus: 'final',
+      generalFeedback: 'Existing aggregate feedback.',
+      items: [{ questionNumber: 1, pointsAwarded: 22, maximumPoints: 25, feedback: 'Existing item feedback.' }],
+    }],
+    releases: [{ id: 'aggregate-release-1', gradeRevisionId: 'aggregate-grade-1', releaseAction: 'release', occurredAt: '2026-08-27T11:00:00.000Z' }],
+  };
+  const aggregateResults = harness.grades(aggregatePayload);
+  assert.equal(aggregateResults.length, 1);
+  assert.equal(aggregateResults[0].id, 'aggregate-grade-1');
+  assert.equal(aggregateResults[0].totalScore, 88);
+  assert.equal(aggregateResults[0].maximumScore, 100);
+  assert.equal(aggregateResults[0].generalFeedback, 'Existing aggregate feedback.');
+  assert.equal(aggregateResults[0].items.length, 1);
+  assert.equal(aggregateResults[0].items[0].feedback, 'Existing item feedback.');
+  assert.equal(aggregateResults[0].released, true);
 });
 
 test('owner identity correction uses an explicit remove-email flag while blank keeps the stored value', () => {

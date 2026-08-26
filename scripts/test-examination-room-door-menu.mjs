@@ -15,45 +15,42 @@ const [html, experience, phase2Css, shellCss, api, admin, adminShell, serviceWor
 ]);
 
 const navigation = html.match(/<nav class="spa-nav quorum-primary-nav" id="spa-nav"[\s\S]*?<\/nav>/)?.[0] || '';
+const headerMemberTools = html.match(/<div class="dd2-header-member-tools" id="dd2-header-member-tools"[\s\S]*?<\/div>/)?.[0] || '';
 assert.match(
   navigation,
   /id="header-account-control"[\s\S]*id="spa-examination-room"[^>]*data-dd2-view="examination-room"[\s\S]*id="spa-pricing"/,
   'Examination Room must be a main-menu item directly after Profile.',
 );
 assert.equal((navigation.match(/id="spa-examination-room"/g) || []).length, 1);
+assert.match(
+  headerMemberTools,
+  /id="dd2-header-role-button"[\s\S]*id="dd2-header-exam-button"[^>]*data-dd2-view="examination-room"/,
+  'The visible Examination Room shortcut must sit immediately beside the signed-in Role control.',
+);
 assert.match(shellCss, /#spa-examination-room\s*\{[\s\S]*door-open\.svg/);
 
 assert.match(experience, /function examinationRoomContent\(\)/);
 assert.match(experience, /id="dd2-professor-door"[^>]*disabled[^>]*aria-disabled="true"/);
 assert.match(experience, /id="dd2-student-door"[^>]*href="\/examination-room\/student\.html"/);
 assert.match(experience, /id="dd2-examination-room-status"[^>]*role="status"[^>]*aria-live="polite"/);
-assert.match(experience, /id="dd2-professor-institution"/);
-assert.match(experience, /EXAM_ROOM_V1_INSTITUTION_SELECTION_REQUIRED/);
-assert.match(experience, /error\?\.details\?\.institutions/);
-assert.match(experience, /navigator\.onLine/);
 assert.match(experience, /id="dd2-professor-door-retry"/);
-assert.match(experience, /request !== state\.examinationRoomDoorRequest/);
-assert.match(experience, /token !== state\.session\?\.access_token/);
 assert.match(experience, /addEventListener\('duediligence:session'/);
-assert.match(experience, /addEventListener\('online'/);
 assert.match(experience, /showEntry\(\{ allowDismiss: true, returnHash: '#examination-room' \}\)/);
 assert.match(experience, /<option value="professor">Professor<\/option>/);
 assert.match(experience, /p_category:\s*category/);
 assert.match(experience, /commercial_category:\s*category/);
 assert.doesNotMatch(experience, /function hasProfessorProfileRole\(/);
 assert.match(experience, /signed-in account can create and manage its own examinations/i);
-assert.match(experience, /Admin approval is needed only before a room key is issued/i);
+assert.match(experience, /Admin is involved only after you publish and request the student key/i);
 assert.doesNotMatch(experience, /operation: 'role_status'/);
 assert.doesNotMatch(experience, /operation: 'request_access'/);
 assert.doesNotMatch(experience, /Professor role required/i);
 assert.doesNotMatch(experience, /requestProfessorSchoolActivation/);
 
-assert.match(
-  experience,
-  /nativeWorkerRequest\('\/examination-room\/v1\/professor\/query'[\s\S]*operation: 'session'/,
-  'The Professor door must use the signed-in server route.',
-);
 assert.match(experience, /if \(!token \|\| !state\.user\)/);
+assert.match(experience, /the Professor workspace is ready[\s\S]*Create and save without approval/);
+assert.match(experience, /button\.dataset\.destination = professorDoorDestination\(institutionId\)/);
+assert.doesNotMatch(experience, /id="dd2-professor-institution"|EXAM_ROOM_V1_INSTITUTION_SELECTION_REQUIRED|select-institution/);
 assert.doesNotMatch(experience, /if \(!hasProfessorProfileRole\(\)/);
 assert.match(admin, /activate_exam/);
 assert.match(admin, /approveAndEmail/);

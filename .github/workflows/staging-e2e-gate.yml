@@ -88,6 +88,7 @@ jobs:
           node --test admin/examination-room-admin.test.cjs
           node --test worker/*.test.mjs
           node scripts/test-examination-room-database.mjs
+          node scripts/test-examination-room-commercial-stress.mjs
           node scripts/test-examination-room-door-menu.mjs
           node scripts/test-examination-room-release-workflows.mjs
           node scripts/test-feature-decommission-boundary.mjs

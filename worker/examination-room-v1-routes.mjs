@@ -26,6 +26,7 @@ const SESSION_TOKEN_PATTERN = /^ers1_[0-9a-f]{64}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
 const MAX_ROSTER_SIZE = 5_000;
+const MAX_ALLOWED_EMAILS = 5_000;
 const MAX_EVENT_DETAILS_BYTES = 8_000;
 
 const PROFESSOR_QUERY_OPERATIONS = new Set(['role_status', 'session', 'exam', 'monitor', 'grading']);
@@ -36,6 +37,7 @@ const PROFESSOR_COMMAND_OPERATIONS = new Set([
   'import_document',
   'open_room',
   'close_room',
+  'revoke_session',
   'save_grade',
   'import_grades',
   'release_results',
@@ -58,7 +60,7 @@ const RECOVERY_BY_CODE = Object.freeze({
   [ERROR_CODES.PUBLICATION_NOT_READY]: 'Open Review items, complete every listed field, then publish again.',
   [ERROR_CODES.ROOM_KEY_FORMAT_INVALID]: 'Copy the complete current key from the administrator message and try again.',
   [ERROR_CODES.ROOM_KEY_CHECKSUM_INVALID]: 'Check the key for a mistyped character, then try again.',
-  [ERROR_CODES.STUDENT_IDENTITY_INVALID]: 'Use the complete registered name and the student number shown on the school record.',
+  [ERROR_CODES.STUDENT_IDENTITY_INVALID]: 'Complete the real name, student number, subject, and year level, then try again.',
   [ERROR_CODES.STUDENT_SUBJECT_MISMATCH]: 'Use the subject shown by the professor, then try again.',
   [ERROR_CODES.STUDENT_YEAR_LEVEL_MISMATCH]: 'Use the year level on the examination roster, then try again.',
   [ERROR_CODES.PRIVACY_CONSENT_REQUIRED]: 'Read the notice, choose Agree and begin, then continue.',
@@ -277,6 +279,39 @@ function normalizeRoster(rawRoster, subject, defaultYearLevel) {
   });
 }
 
+function normalizeAdmissionPolicy(rawExam) {
+  const exam = plainRecord(rawExam, 'examination');
+  const admissionMode = exam.admissionMode === 'email_allowlist'
+    ? 'email_allowlist'
+    : 'key_only';
+  const source = exam.allowedEmails ?? [];
+  if (!Array.isArray(source) || source.length > MAX_ALLOWED_EMAILS) {
+    fail(
+      'EXAM_ROOM_V1_ALLOWED_EMAILS_INVALID',
+      `Provide no more than ${MAX_ALLOWED_EMAILS.toLocaleString('en-US')} allowed emails.`,
+      400,
+      'Correct the optional email list, then try again.',
+    );
+  }
+  const seen = new Set();
+  const allowedEmails = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const email = cleanText(source[index], 320, `allowed email ${index + 1}`, { required: true }).toLowerCase();
+    if (!EMAIL_PATTERN.test(email)) {
+      fail(
+        'EXAM_ROOM_V1_ALLOWED_EMAIL_INVALID',
+        `Correct allowed email ${index + 1}.`,
+        400,
+        'Use one complete email address per line, then try again.',
+      );
+    }
+    if (seen.has(email)) continue;
+    seen.add(email);
+    allowedEmails.push(email);
+  }
+  return { admissionMode, allowedEmails };
+}
+
 function persistenceQuestion(question) {
   return {
     questionNumber: question.number,
@@ -311,6 +346,7 @@ function persistenceDraft(draft) {
 function operationalExam(rawExam, draft) {
   const exam = plainRecord(rawExam, 'examination');
   const startsAt = isoInstant(exam.startsAt, 'the examination start', { required: false });
+  const admission = normalizeAdmissionPolicy(exam);
   return {
     examId: exam.id ? uuid(exam.id, 'the examination identifier') : null,
     title: draft.title,
@@ -335,19 +371,37 @@ function operationalExam(rawExam, draft) {
     sourceFileSize: exam.sourceFileSize == null
       ? null
       : positiveInteger(exam.sourceFileSize, 'source file size', 0, MAX_DOCUMENT_BYTES),
+    admissionMode: admission.admissionMode,
+    allowedEmails: admission.allowedEmails,
     questions: draft.questions.map(persistenceQuestion),
     roster: normalizeRoster(exam.roster, draft.subject, draft.yearLevel),
   };
 }
 
 function studentIdentityFromPayload(payload) {
-  const source = isPlainRecord(payload.identity) ? payload.identity : payload;
-  return normalizeStudentIdentity({
+  const source = isPlainRecord(payload.student)
+    ? payload.student
+    : isPlainRecord(payload.identity)
+      ? payload.identity
+      : payload;
+  const identity = normalizeStudentIdentity({
     realName: source.realName ?? source.fullName,
     studentNumber: source.studentNumber,
     subject: source.subject ?? payload.subject,
     yearLevel: source.yearLevel ?? payload.yearLevel,
   });
+  const rawEmail = source.email ?? payload.email;
+  if (rawEmail === undefined || rawEmail === null || rawEmail === '') return identity;
+  const email = cleanText(rawEmail, 320, 'student email', { required: true }).toLowerCase();
+  if (!EMAIL_PATTERN.test(email)) {
+    fail(
+      'EXAM_ROOM_V1_STUDENT_EMAIL_INVALID',
+      'Enter a valid student email or leave it blank for a key-only examination.',
+      400,
+      'Correct the student email, then try again.',
+    );
+  }
+  return Object.freeze({ ...identity, email });
 }
 
 function publicPreview(metadata) {
@@ -568,6 +622,8 @@ function selectCreatorInstitution(authorization, requestedInstitutionId = null) 
       institutionId,
       institutionName: entry.institutionName || null,
       institutionCode: entry.institutionCode || null,
+      communityDefault: entry.communityDefault === true
+        || entry.institutionCode === 'due-diligence-community',
     });
   }
   if (requestedInstitutionId) {
@@ -583,7 +639,8 @@ function selectCreatorInstitution(authorization, requestedInstitutionId = null) 
     return requested;
   }
   const preferred = candidates.find((entry) => entry.institutionId === authorization.institutionId);
-  if (!preferred && candidates.length > 1) {
+  const communityDefault = candidates.find((entry) => entry.communityDefault);
+  if (!preferred && !communityDefault && candidates.length > 1) {
     fail(
       'EXAM_ROOM_V1_INSTITUTION_SELECTION_REQUIRED',
       'Choose the law school for this Examination Room session.',
@@ -592,7 +649,7 @@ function selectCreatorInstitution(authorization, requestedInstitutionId = null) 
       { institutions: candidates },
     );
   }
-  const primary = preferred?.institutionId || candidates[0]?.institutionId;
+  const primary = preferred?.institutionId || communityDefault?.institutionId || candidates[0]?.institutionId;
   if (!primary) {
     fail(
       'EXAM_ROOM_V1_CREATOR_WORKSPACE_REQUIRED',
@@ -850,8 +907,13 @@ export function createExaminationRoomV1Handlers(dependencies) {
               { issues: readiness.issues },
             );
           }
-          if (exam.roster.length === 0) {
-            fail('EXAM_ROOM_V1_ROSTER_REQUIRED', 'Add at least one student before publishing.', 409, 'Add or import the class roster, review it, then publish again.');
+          if (exam.admissionMode === 'email_allowlist' && exam.allowedEmails.length === 0) {
+            fail(
+              'EXAM_ROOM_V1_ALLOWED_EMAIL_REQUIRED',
+              'Add at least one email or switch admission to Anyone with the key.',
+              409,
+              'Add one email per line, or choose Anyone with the key, then publish again.',
+            );
           }
           if (draft.integrityTier === 'recorded_proctoring' || exam.cameraRequired || exam.microphoneRequired) {
             fail(
@@ -887,23 +949,29 @@ export function createExaminationRoomV1Handlers(dependencies) {
         });
         return deps.respond({ ok: true, examId, questions: draft.questions, warnings: imported?.warnings || [] }, 200, origin, allowedOrigin);
       } else if (operation === 'open_room') {
-        const rawRoomKey = normalizeRoomKey(payload.roomKey);
         safePayload = {
           examId: uuid(payload.examId, 'the examination identifier'),
-          roomKeyHash: await pepperedHmac(env, 'room-key', rawRoomKey),
           requestHash: requestInfo.requestHash,
           openedAt: deps.now(),
         };
-        const result = await callRpc(env, {
-          scope: 'professor', operation, actorUserId: context.user.id,
-          institutionId: context.institutionId, payload: safePayload,
-        }, [rawRoomKey]);
-        return deps.respond({ ok: true, ...result }, 200, origin, allowedOrigin);
       } else if (operation === 'close_room') {
         safePayload = {
           examId: uuid(payload.examId, 'the examination identifier'),
           requestHash: requestInfo.requestHash,
           closedAt: deps.now(),
+        };
+      } else if (operation === 'revoke_session') {
+        safePayload = {
+          examId: uuid(payload.examId, 'the examination identifier'),
+          sessionId: uuid(payload.sessionId, 'the student session identifier'),
+          reason: cleanText(
+            payload.reason ?? 'Removed from this examination by the creator.',
+            1_000,
+            'the removal reason',
+            { required: true },
+          ),
+          requestHash: requestInfo.requestHash,
+          revokedAt: deps.now(),
         };
       } else if (operation === 'save_grade') {
         const examId = uuid(payload.examId, 'the examination identifier');

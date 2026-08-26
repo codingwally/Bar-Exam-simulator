@@ -260,7 +260,7 @@ assert.match(html, /assets\/phase2\.css\?release=examination-room-doors-20260826
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-20260826-syllabus-reveal-p0-2/);
+assert.match(serviceWorker, /duediligence-shell-20260827-commercial-readiness-profile-analytics-offline-paid-expiry-4/);
 assert.match(serviceWorker, /quorum-first-shell\.css\?v=examination-room-doors-20260826-2/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
 assert.match(serviceWorker, /phase2\.css\?release=examination-room-doors-20260826-2/);

@@ -4,7 +4,7 @@
   const api = global.ExaminationRoomV1Api;
   const TABS = Object.freeze({
     overview: ['Overview', 'ph-squares-four'],
-    professor_access: ['Professor Directory', 'ph-chalkboard-teacher'],
+    professor_access: ['Creator Directory', 'ph-chalkboard-teacher'],
     examinations: ['Examinations', 'ph-files'],
     questions: ['Questions', 'ph-list-numbers'],
     students_answers: ['Students & Answers', 'ph-student'],
@@ -16,7 +16,9 @@
   const EXAM_PAGE_SIZE = 100;
   const SNAPSHOT_PAGE_SIZE = 100;
   const AUDIT_PAGE_SIZE = 250;
-  const OWNER_ROTATION_STORAGE_PREFIX = 'duediligence:examination-room:v1:pending-owner-rotation';
+  const OWNER_ACTION_STORAGE_PREFIX = 'duediligence:examination-room:v1:pending-owner-action';
+  const LEGACY_OWNER_ROTATION_STORAGE_PREFIX = 'duediligence:examination-room:v1:pending-owner-rotation';
+  const PERSISTED_OWNER_ACTIONS = new Set(['approve_and_email_key', 'resend_key', 'rotate_key']);
   const PREFLIGHT_CHECKS = Object.freeze([
     Object.freeze({ id: 'owner_data_key', label: 'Room-key protection', icon: 'ph-lock-key', help: 'Confirms that issued room keys can be encrypted before storage.', recovery: 'Finish the owner room-key encryption setup, then run the system check again.' }),
     Object.freeze({ id: 'owner_email_recipients', label: 'Owner email copies', icon: 'ph-envelope-simple-open', help: 'Confirms that at least one platform-owner address receives every key copy.', recovery: 'Add at least one valid platform-owner email address, then run the system check again.' }),
@@ -139,7 +141,14 @@
   function canApprove(exam) {
     const publication = String(exam?.publicationStatus || exam?.status || '').toLowerCase();
     const room = String(activationOf(exam)?.status || activationOf(exam)?.activationStatus || '').toLowerCase();
-    return ['published', 'awaiting_activation'].includes(publication) && !['scheduled', 'active', 'open'].includes(room);
+    return ['published', 'key_requested', 'awaiting_approval', 'awaiting_activation'].includes(publication)
+      && !['scheduled', 'active', 'open'].includes(room);
+  }
+  function pendingKeyRequests() {
+    return list(state.data?.exams)
+      .filter((exam) => canApprove(exam))
+      .sort((left, right) => new Date(right.keyRequestedAt || right.publishedAt || right.updatedAt || 0).getTime()
+        - new Date(left.keyRequestedAt || left.publishedAt || left.updatedAt || 0).getTime());
   }
   function questions(detail = selectedDetail()) {
     const source = object(detail); const exam = object(source.exam); const manifest = object(source.publicationManifest);
@@ -191,7 +200,9 @@
     const releases = firstList(source.releases, source.resultReleases, source.grading?.releases, source.data?.releases, source.data?.resultReleases);
     const sessionRows = sessions(detail);
     const rosterRows = students(detail);
-    return firstList(source.grades, source.gradeRevisions, source.data?.grades, source.grading?.students, source.grading?.gradeRevisions, source.studentsWithGrades)
+    const submissionRows = submissions(detail);
+    const questionRows = questions(detail);
+    const decorated = firstList(source.grades, source.gradeRevisions, source.data?.grades, source.grading?.students, source.grading?.gradeRevisions, source.studentsWithGrades)
       .map((grade) => {
         const session = sessionRows.find((entry) => (entry.id || entry.sessionId) === grade.sessionId) || {};
         const student = rosterRows.find((entry) => (entry.id || entry.studentIdentityId) === session.studentId
@@ -203,6 +214,77 @@
           studentNumber: grade.studentNumber || session.studentNumber || identity.studentNumber,
         }, releases.length ? releases : list(grade.releases));
       });
+    const flatQuestionRows = decorated.filter((grade) => (
+      (grade.questionId || grade.questionKey || grade.questionNumber)
+      && (grade.points != null || grade.pointsAwarded != null || grade.score != null)
+      && !firstList(grade.items, grade.scores, grade.manifest?.items, grade.manifest?.scores).length
+    ));
+    if (!flatQuestionRows.length || flatQuestionRows.length !== decorated.length) return decorated;
+
+    const latestByQuestion = new Map();
+    flatQuestionRows.forEach((grade) => {
+      const questionKey = grade.questionId || grade.questionKey || grade.questionNumber;
+      const key = `${grade.sessionId || grade.studentNumber || grade.fullName || 'student'}:${questionKey}`;
+      const current = latestByQuestion.get(key);
+      const revision = Number(grade.revision ?? grade.revisionNumber ?? 0);
+      const currentRevision = Number(current?.revision ?? current?.revisionNumber ?? 0);
+      const at = new Date(grade.gradedAt || grade.at || grade.createdAt || 0).getTime();
+      const currentAt = new Date(current?.gradedAt || current?.at || current?.createdAt || 0).getTime();
+      if (!current || revision > currentRevision || (revision === currentRevision && at >= currentAt)) latestByQuestion.set(key, grade);
+    });
+
+    const grouped = new Map();
+    [...latestByQuestion.values()].forEach((grade) => {
+      const groupKey = grade.sessionId || grade.studentNumber || grade.fullName || grade.id;
+      const session = sessionRows.find((entry) => (entry.id || entry.sessionId) === grade.sessionId) || {};
+      const submission = submissionRows.find((entry) => entry.sessionId === grade.sessionId) || {};
+      const question = questionRows.find((entry) => (
+        [entry.id, entry.questionId, entry.questionKey, entry.number, entry.questionNumber]
+          .filter((value) => value != null)
+          .map(String)
+          .includes(String(grade.questionId || grade.questionKey || grade.questionNumber))
+      )) || {};
+      const score = Number(grade.points ?? grade.pointsAwarded ?? grade.score ?? 0);
+      const maximum = Number(question.points ?? grade.maximumPoints ?? grade.maxPoints ?? 0);
+      if (!grouped.has(groupKey)) grouped.set(groupKey, {
+        id: grade.id,
+        sessionId: grade.sessionId,
+        submissionId: grade.submissionId || submission.id || submission.submissionId,
+        submittedAt: grade.submittedAt || submission.submittedAt || submission.receivedAt,
+        fullName: grade.fullName,
+        studentNumber: grade.studentNumber,
+        email: grade.email,
+        gradeStatus: 'complete',
+        revisionNumber: 0,
+        totalScore: 0,
+        maximumScore: 0,
+        items: [],
+        rawRevisions: [],
+      });
+      const group = grouped.get(groupKey);
+      const revision = Number(grade.revision ?? grade.revisionNumber ?? 0);
+      if (revision >= group.revisionNumber) {
+        group.id = grade.id || group.id;
+        group.revisionNumber = revision;
+        group.gradedAt = grade.gradedAt || grade.at || grade.createdAt || group.gradedAt;
+      }
+      group.totalScore += Number.isFinite(score) ? score : 0;
+      group.maximumScore += Number.isFinite(maximum) ? maximum : 0;
+      group.items.push({
+        questionId: grade.questionId || grade.questionKey,
+        questionNumber: grade.questionNumber || question.questionNumber || question.number,
+        questionKey: grade.questionKey || question.questionKey,
+        pointsAwarded: Number.isFinite(score) ? score : grade.points,
+        maximumPoints: Number.isFinite(maximum) ? maximum : question.points,
+        feedback: grade.feedback || '',
+        revision,
+      });
+      group.rawRevisions.push(grade);
+    });
+    return [...grouped.values()].map((grade) => ({
+      ...decorateGrade(grade, releases),
+      items: grade.items.sort((left, right) => Number(left.questionNumber || 0) - Number(right.questionNumber || 0)),
+    }));
   }
   function normalizeSnapshot(snapshot) {
     const normalized = uiValue(snapshot);
@@ -501,7 +583,7 @@
     return `<form class="exam-admin-role-form exam-admin-bootstrap-form" data-exam-admin-bootstrap-form><label><span>Law school name</span><input name="institutionName" minlength="2" maxlength="240" autocomplete="organization" required></label><label><span>Short school code</span><input name="institutionCode" minlength="2" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,63}" required></label><button class="primary-button" type="submit"><i class="ph ph-buildings" aria-hidden="true"></i>${escapeHtml(label)}</button><div class="exam-admin-form-status" role="status" aria-live="polite"></div></form>`;
   }
   function renderBootstrap() {
-    return `<div class="exam-admin-page exam-admin-bootstrap"><header class="section-head"><div><p class="eyebrow">Owner setup</p><h2>Open the first Examination Room workspace</h2><p>Create the school workspace. Professors may sign in, create examinations, and publish without a separate Professor-role approval step.</p></div></header><section class="panel exam-admin-bootstrap-panel"><div class="exam-admin-bootstrap-copy"><i class="ph ph-shield-check" aria-hidden="true"></i><div><h3>No school workspace yet</h3><p>The platform-owner account is active. Create the first workspace to begin.</p></div></div>${institutionForm()}</section></div>`;
+    return `<div class="exam-admin-page exam-admin-bootstrap"><header class="section-head"><div><p class="eyebrow">Owner setup</p><h2>Open the first Examination Room workspace</h2><p>Create the school workspace. Any signed-in account may enter the Professor card, create and save examinations, publish, and request a key without role approval.</p></div></header><section class="panel exam-admin-bootstrap-panel"><div class="exam-admin-bootstrap-copy"><i class="ph ph-shield-check" aria-hidden="true"></i><div><h3>No school workspace yet</h3><p>The platform-owner account is active. Create the first workspace to begin.</p></div></div>${institutionForm()}</section></div>`;
   }
   function institutionOptions() {
     return institutions().map((entry) => { const id = entry.institutionId || entry.id; return `<option value="${escapeHtml(id)}"${id === state.institutionId ? ' selected' : ''}>${escapeHtml(entry.institutionName || entry.name || entry.institutionCode || id)}</option>`; }).join('');
@@ -551,7 +633,7 @@
   }
   function renderContent() {
     const school = currentInstitution();
-    return `<div class="exam-admin-page"><header class="section-head exam-admin-section-head"><div><p class="eyebrow">Owner command center · ${escapeHtml(school.name || school.institutionName || 'Examination Room')}</p><h2>Examination Room</h2><p>Exact questions, identities, answers, grades, room keys, email delivery, recovery records, and audit history are available to authenticated platform owners.</p></div><div class="exam-admin-head-actions">${institutions().length > 1 ? `<label><span>Law school</span><select data-exam-admin-institution>${institutionOptions()}</select></label>` : ''}<button class="secondary-button" type="button" data-exam-admin-refresh><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Refresh</button><a class="secondary-button" href="${escapeHtml(professorHref())}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open professor test</a></div></header><section class="exam-admin-owner-band"><i class="ph ph-crown" aria-hidden="true"></i><div><strong>Platform-owner view</strong><p>Values are shown exactly as returned. Every owner action produces a retry-safe receipt.</p></div><span>Full visibility</span></section>${renderPreflightPanel()}${tabs()}${state.inlineError ? errorPanel(state.inlineError, state.inlineError.retry || 'refresh') : ''}<section class="exam-admin-tab-panel" role="tabpanel" aria-label="${escapeHtml(TABS[state.tab]?.[0] || 'Owner records')}">${renderTab()}</section></div>`;
+    return `<div class="exam-admin-page"><header class="section-head exam-admin-section-head"><div><p class="eyebrow">Owner command center · ${escapeHtml(school.name || school.institutionName || 'Examination Room')}</p><h2>Examination Room</h2><p>Exact questions, identities, answers, grades, room keys, email delivery, recovery records, and audit history are available to authenticated platform owners.</p></div><div class="exam-admin-head-actions">${institutions().length > 1 ? `<label><span>Law school</span><select data-exam-admin-institution>${institutionOptions()}</select></label>` : ''}<button class="secondary-button" type="button" data-exam-admin-refresh><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Refresh</button><a class="secondary-button" href="${escapeHtml(professorHref())}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open creator workspace</a></div></header><section class="exam-admin-owner-band"><i class="ph ph-crown" aria-hidden="true"></i><div><strong>Platform-owner view</strong><p>Values are shown exactly as returned. Every owner action produces a retry-safe receipt.</p></div><span>Full visibility</span></section>${renderPreflightPanel()}${tabs()}${state.inlineError ? errorPanel(state.inlineError, state.inlineError.retry || 'refresh') : ''}<section class="exam-admin-tab-panel" role="tabpanel" aria-label="${escapeHtml(TABS[state.tab]?.[0] || 'Owner records')}">${renderTab()}</section></div>`;
   }
 
   function renderTab() {
@@ -568,26 +650,26 @@
   function examActions(exam, compact = false) {
     const id = examId(exam); const room = activationOf(exam); const roomStatus = String(room?.status || room?.activationStatus || '').toLowerCase();
     const exactKey = state.currentKeys.get(id);
-    return `<div class="exam-admin-actions${compact ? ' compact' : ''}"><button class="secondary-button" type="button" data-exam-admin-select-exam="${escapeHtml(id)}" data-exam-admin-go-tab="examinations">Inspect</button>${canApprove(exam) ? `<button class="primary-button" type="button" data-exam-admin-action="approve_and_email_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Approve & email key</button>` : ''}${room ? `<button class="secondary-button" type="button" data-exam-admin-action="reveal_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-eye" aria-hidden="true"></i>${exactKey ? 'Refresh key' : 'Show key'}</button>` : ''}${exactKey ? `<button class="secondary-button" type="button" data-exam-admin-copy-key="${escapeHtml(id)}"><i class="ph ph-copy" aria-hidden="true"></i>Copy</button>` : ''}${['scheduled', 'active', 'open'].includes(roomStatus) ? `<button class="exam-admin-danger" type="button" data-exam-admin-action="revoke_key" data-exam-id="${escapeHtml(id)}">Revoke</button>` : ''}</div>`;
+    return `<div class="exam-admin-actions${compact ? ' compact' : ''}"><button class="secondary-button" type="button" data-exam-admin-select-exam="${escapeHtml(id)}" data-exam-admin-go-tab="examinations">Inspect</button>${canApprove(exam) ? `<button class="primary-button" type="button" data-exam-admin-action="approve_and_email_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Approve & generate key</button>` : ''}${room ? `<button class="secondary-button" type="button" data-exam-admin-action="reveal_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-eye" aria-hidden="true"></i>${exactKey ? 'Refresh key' : 'Show key'}</button>` : ''}${exactKey ? `<button class="secondary-button" type="button" data-exam-admin-copy-key="${escapeHtml(id)}"><i class="ph ph-copy" aria-hidden="true"></i>Copy</button>` : ''}${['scheduled', 'active', 'open'].includes(roomStatus) ? `<button class="exam-admin-danger" type="button" data-exam-admin-action="revoke_key" data-exam-id="${escapeHtml(id)}">Revoke</button>` : ''}</div>`;
   }
 
   function examTable(exams = state.data?.exams || []) {
     if (!exams.length) return '<div class="empty">No examination records are available for this school.</div>';
-    return `<div class="table-wrap"><table class="exam-admin-table"><thead><tr><th scope="col">Examination</th><th scope="col">Professor</th><th scope="col">Publication</th><th scope="col">Room</th><th scope="col">Students</th><th scope="col">Submissions</th><th scope="col">Owner actions</th></tr></thead><tbody>${exams.map((exam) => { const room = activationOf(exam); return `<tr data-exam-admin-searchable data-search-text="${searchText(exam)}"><td><strong>${escapeHtml(exam.title || 'Untitled examination')}</strong><small>${escapeHtml(exam.subject || examId(exam))}</small></td><td><strong>${escapeHtml(exam.professorName || exam.ownerName || 'Name not returned')}</strong><small>${escapeHtml(exam.professorEmail || exam.ownerEmail || exam.ownerUserId || 'Email not returned')}</small></td><td>${statusBadge(exam.publicationStatus || exam.status)}<small>Version ${escapeHtml(exam.versionNumber || exam.version || '—')} · ${escapeHtml(String(exam.questionCount ?? list(exam.questions).length))} questions</small></td><td>${statusBadge(room?.status || room?.activationStatus || 'not_activated')}<small>${escapeHtml(formatDateTime(room?.opensAt || exam.startsAt))}</small></td><td>${escapeHtml(String(exam.rosterCount ?? exam.studentCount ?? 0))}</td><td>${escapeHtml(String(exam.submissionCount ?? 0))}</td><td>${examActions(exam, true)}</td></tr>`; }).join('')}</tbody></table></div>`;
+    return `<div class="table-wrap"><table class="exam-admin-table"><thead><tr><th scope="col">Examination</th><th scope="col">Creator</th><th scope="col">Publication</th><th scope="col">Room</th><th scope="col">Students</th><th scope="col">Submissions</th><th scope="col">Owner actions</th></tr></thead><tbody>${exams.map((exam) => { const room = activationOf(exam); return `<tr data-exam-admin-searchable data-search-text="${searchText(exam)}"><td><strong>${escapeHtml(exam.title || 'Untitled examination')}</strong><small>${escapeHtml(exam.subject || examId(exam))}</small></td><td><strong>${escapeHtml(exam.professorName || exam.ownerName || 'Name not returned')}</strong><small>${escapeHtml(exam.professorEmail || exam.ownerEmail || exam.ownerUserId || 'Email not returned')}</small></td><td>${statusBadge(exam.publicationStatus || exam.status)}<small>Version ${escapeHtml(exam.versionNumber || exam.version || '—')} · ${escapeHtml(String(exam.questionCount ?? list(exam.questions).length))} questions</small></td><td>${statusBadge(room?.status || room?.activationStatus || 'not_activated')}<small>${escapeHtml(formatDateTime(room?.opensAt || exam.startsAt))}</small></td><td>${escapeHtml(String(exam.rosterCount ?? exam.studentCount ?? 0))}</td><td>${escapeHtml(String(exam.submissionCount ?? 0))}</td><td>${examActions(exam, true)}</td></tr>`; }).join('')}</tbody></table></div>`;
   }
 
   function renderOverview() {
-    const counts = object(state.data?.counts); const exams = list(state.data?.exams);
-    return `${toolbar('Operations overview', 'See what needs owner attention and open the exact record in one click.')}<div class="exam-admin-metrics exam-admin-metrics-six">${metric('Examinations', counts.exams ?? exams.length, 'All records in this school', 'ph-files')}${metric('Awaiting activation', counts.awaitingActivation ?? 0, 'Published and waiting for a key', 'ph-hourglass-medium')}${metric('Open rooms', counts.open ?? 0, 'Accepting or monitoring students', 'ph-door-open')}${metric('Students', counts.students ?? 0, 'Exact roster identities', 'ph-student')}${metric('Submissions', counts.submissions ?? 0, 'Server receipts recorded', 'ph-file-check')}${metric('Recovery attention', counts.recoveryAttention ?? 0, 'Pending or failed checkpoints', 'ph-lifebuoy')}</div><div class="exam-admin-flow"><article><span>1</span><div><strong>Professor creates</strong><p>Signed-in Professors enter and build without role approval.</p></div></article><i class="ph ph-arrow-right" aria-hidden="true"></i><article><span>2</span><div><strong>Review publication</strong><p>See every question and answer key.</p></div></article><i class="ph ph-arrow-right" aria-hidden="true"></i><article><span>3</span><div><strong>Approve & email key</strong><p>One click sends Professor and owner copies.</p></div></article><i class="ph ph-arrow-right" aria-hidden="true"></i><article><span>4</span><div><strong>Monitor to results</strong><p>Answers, grades, recovery, and audit stay available.</p></div></article></div><section class="panel"><header class="exam-admin-panel-head"><div><h3>Recent examinations</h3><p>Select any examination to inspect the complete owner view.</p></div><button class="secondary-button" type="button" data-exam-admin-tab="examinations">View all</button></header>${examTable(exams.slice(0, 6))}</section>`;
+    const counts = object(state.data?.counts); const exams = list(state.data?.exams); const requests = pendingKeyRequests();
+    return `${toolbar('Operations overview', 'See what needs owner attention and open the exact record in one click.')}<div class="exam-admin-metrics exam-admin-metrics-six">${metric('Examinations', counts.exams ?? exams.length, 'All records in this school', 'ph-files')}${metric('Key requests', requests.length, 'Published and waiting for one-click approval', 'ph-hourglass-medium')}${metric('Open rooms', counts.open ?? 0, 'Accepting or monitoring students', 'ph-door-open')}${metric('Students', counts.students ?? 0, 'Exact identities recorded at entry', 'ph-student')}${metric('Submissions', counts.submissions ?? 0, 'Server receipts recorded', 'ph-file-check')}${metric('Recovery attention', counts.recoveryAttention ?? 0, 'Pending or failed checkpoints', 'ph-lifebuoy')}</div><section class="panel"><header class="exam-admin-panel-head"><div><h3>Key requests waiting for approval</h3><p>Every published request from a signed-in creator appears here. Approve once to generate the student key, email creator and owner copies, and automatically unlock the creator’s Monitoring and Grading views.</p></div><span>${statusBadge(requests.length ? 'attention' : 'clear')}</span></header>${requests.length ? examTable(requests) : '<div class="empty">No key requests are waiting. New published requests will appear after Refresh.</div>'}</section><div class="exam-admin-flow"><article><span>1</span><div><strong>Creator publishes</strong><p>Any signed-in account can build and request a key.</p></div></article><i class="ph ph-arrow-right" aria-hidden="true"></i><article><span>2</span><div><strong>Admin reviews</strong><p>See every question and answer key.</p></div></article><i class="ph ph-arrow-right" aria-hidden="true"></i><article><span>3</span><div><strong>Approve & generate</strong><p>One click creates the key and emails creator and owner copies.</p></div></article><i class="ph ph-arrow-right" aria-hidden="true"></i><article><span>4</span><div><strong>Creator monitors</strong><p>Monitoring and Grading unlock automatically—no creator key entry.</p></div></article></div><section class="panel"><header class="exam-admin-panel-head"><div><h3>Recent examinations</h3><p>Select any examination to inspect the complete owner view.</p></div><button class="secondary-button" type="button" data-exam-admin-tab="examinations">View all</button></header>${examTable(exams.slice(0, 6))}</section>`;
   }
 
   function roleForm() {
-    return `<form class="exam-admin-role-form" data-exam-admin-role-form><label><span>Professor sign-in email</span><input name="email" type="email" maxlength="320" autocomplete="email" required><small>Optional school-directory placement; it does not gate Professor entry or examination creation.</small></label><label><span>Exact display name</span><input name="displayName" maxlength="240" autocomplete="name"></label><label><span>Directory role</span><select name="staffRole"><option value="professor">Professor</option><option value="admin">Institution admin</option></select></label><label><span>Internal receipt note</span><input name="reason" minlength="5" maxlength="1000" value="Added by a platform owner to the Examination Room school directory." required></label><button class="primary-button" type="submit"><i class="ph ph-user-plus" aria-hidden="true"></i>Save directory assignment</button><div class="exam-admin-form-status" role="status" aria-live="polite"></div></form>`;
+    return `<form class="exam-admin-role-form" data-exam-admin-role-form><label><span>Signed-in creator email</span><input name="email" type="email" maxlength="320" autocomplete="email" required><small>Optional school-directory placement only. It never gates entry, exam creation, saving, or key requests.</small></label><label><span>Exact display name</span><input name="displayName" maxlength="240" autocomplete="name"></label><label><span>Optional directory label</span><select name="staffRole"><option value="professor">Professor</option><option value="admin">Institution admin</option></select></label><label><span>Internal receipt note</span><input name="reason" minlength="5" maxlength="1000" value="Added by a platform owner to the optional Examination Room school directory." required></label><button class="primary-button" type="submit"><i class="ph ph-user-plus" aria-hidden="true"></i>Save directory assignment</button><div class="exam-admin-form-status" role="status" aria-live="polite"></div></form>`;
   }
   function requestCards() {
     const requests = list(state.data?.professorRequests);
-    if (!requests.length) return '<div class="empty">No Professor access requests are waiting.</div>';
-    return `<div class="exam-admin-professor-requests">${requests.map((request) => `<article data-exam-admin-searchable data-search-text="${searchText(request)}"><span class="exam-admin-avatar"><i class="ph ph-chalkboard-teacher" aria-hidden="true"></i></span><div><strong>${escapeHtml(request.displayName || 'Professor')}</strong><small>${escapeHtml(request.email || 'Email not returned')}</small><em>${escapeHtml(request.schoolName || request.schoolId || 'School not recorded')} · ${escapeHtml(formatDateTime(request.requestedAt))}</em><code>${escapeHtml(request.requestId || request.id || '')}</code></div><div class="exam-admin-request-actions"><button class="primary-button" type="button" data-exam-admin-approve-professor="${escapeHtml(request.requestId || request.id)}" data-exam-admin-request-email="${escapeHtml(request.email)}" data-exam-admin-request-name="${escapeHtml(request.displayName || '')}">Add to school directory</button><button class="exam-admin-danger" type="button" data-exam-admin-reject-professor="${escapeHtml(request.requestId || request.id)}" data-exam-admin-request-name="${escapeHtml(request.displayName || request.email || 'this request')}">Dismiss request</button></div></article>`).join('')}</div>`;
+    if (!requests.length) return '<div class="empty">No optional school-placement requests are waiting.</div>';
+    return `<div class="exam-admin-professor-requests">${requests.map((request) => `<article data-exam-admin-searchable data-search-text="${searchText(request)}"><span class="exam-admin-avatar"><i class="ph ph-chalkboard-teacher" aria-hidden="true"></i></span><div><strong>${escapeHtml(request.displayName || 'Signed-in creator')}</strong><small>${escapeHtml(request.email || 'Email not returned')}</small><em>${escapeHtml(request.schoolName || request.schoolId || 'School not recorded')} · ${escapeHtml(formatDateTime(request.requestedAt))}</em><code>${escapeHtml(request.requestId || request.id || '')}</code></div><div class="exam-admin-request-actions"><button class="primary-button" type="button" data-exam-admin-approve-professor="${escapeHtml(request.requestId || request.id)}" data-exam-admin-request-email="${escapeHtml(request.email)}" data-exam-admin-request-name="${escapeHtml(request.displayName || '')}">Add to school directory</button><button class="exam-admin-danger" type="button" data-exam-admin-reject-professor="${escapeHtml(request.requestId || request.id)}" data-exam-admin-request-name="${escapeHtml(request.displayName || request.email || 'this request')}">Dismiss request</button></div></article>`).join('')}</div>`;
   }
   function staffCards() {
     const staff = list(state.data?.staff);
@@ -595,7 +677,7 @@
     return `<div class="exam-admin-professors">${staff.map((member) => `<article data-exam-admin-searchable data-search-text="${searchText(member)}"><span class="exam-admin-avatar"><i class="ph ${member.staffRole === 'admin' ? 'ph-shield-check' : 'ph-chalkboard-teacher'}" aria-hidden="true"></i></span><div><strong>${escapeHtml(member.displayName || 'Name not returned')}</strong><small>${escapeHtml(member.email || 'Email not returned')} · ${escapeHtml(statusLabel(member.staffRole))}</small><code>${escapeHtml(member.userId || '')}</code></div><div class="exam-admin-staff-state">${statusBadge(member.status)}${member.status === 'active' && !member.isCurrentAdministrator ? `<button class="exam-admin-danger" type="button" data-exam-admin-revoke-staff="${escapeHtml(member.membershipId || member.id)}" data-exam-admin-staff-name="${escapeHtml(member.displayName || member.email || 'this account')}">Revoke</button>` : ''}</div></article>`).join('')}</div>`;
   }
   function renderProfessorAccess() {
-    return `${toolbar('Professor Directory', 'Professor entry and examination creation do not require owner role approval. Use this view only to organize school placement and inspect directory records.')}<section class="panel exam-admin-role-panel"><header class="exam-admin-panel-head"><div><h3>Optional school placement requests</h3><p>Add a Professor to the school directory or dismiss the request. Neither choice blocks Professor entry or examination creation.</p></div></header>${requestCards()}</section><section class="panel exam-admin-role-panel"><header class="exam-admin-panel-head"><div><h3>Exact staff directory</h3><p>Names, email addresses, user IDs, roles, and status are not masked. Directory status is separate from the Professor door.</p></div></header>${roleForm()}${staffCards()}</section>`;
+    return `${toolbar('Creator Directory', 'Any signed-in account can enter the Professor card, create and save an examination, publish, and request a key. This directory is optional and never grants or blocks creator access.')}<section class="panel exam-admin-role-panel"><header class="exam-admin-panel-head"><div><h3>Optional school placement requests</h3><p>Add a creator to the school directory or dismiss the request. Neither choice blocks entry, exam creation, saving, publishing, or key requests.</p></div></header>${requestCards()}</section><section class="panel exam-admin-role-panel"><header class="exam-admin-panel-head"><div><h3>Exact optional directory</h3><p>Names, email addresses, user IDs, labels, and status are not masked. Directory status is separate from the Professor card.</p></div></header>${roleForm()}${staffCards()}</section>`;
   }
 
   function renderRoomControl(exam, detail) {
@@ -626,7 +708,7 @@
     const controls = progress.hasMore
       ? `<div class="exam-admin-audit-load-actions"><button class="secondary-button" type="button" data-exam-admin-load-exams="next">Load next ${EXAM_PAGE_SIZE}</button><button class="primary-button" type="button" data-exam-admin-load-exams="all">Load all examinations</button></div>`
       : !progress.fullyLoaded ? '<button class="secondary-button" type="button" data-exam-admin-load-exams="refresh">Reload examination list</button>' : '';
-    return `${toolbar('Examinations', 'Review publication, room state, exact identifiers, and complete stored data.')}<div class="exam-admin-page-load"><p>${escapeHtml(summary)}</p>${controls}</div>${examTable()}${exam ? `<section class="panel exam-admin-record-detail"><header class="exam-admin-panel-head"><div><h3>${escapeHtml(exam.title || 'Selected examination')}</h3><p>Exact examination ID: <code>${escapeHtml(examId(exam))}</code></p></div>${examActions(exam)}</header><div class="exam-admin-detail-grid">${fact('Professor', exam.professorName || exam.ownerName || detail?.professor?.displayName, exam.professorEmail || exam.ownerEmail || detail?.professor?.email)}${fact('Publication', exam.publicationStatus || exam.status, `Version ${exam.versionNumber || exam.version || detail?.exam?.version || '—'}`)}${fact('Schedule', formatDateTime(exam.startsAt || activation?.opensAt), `Ends ${formatDateTime(exam.endsAt || activation?.closesAt)}`)}${fact('Content', `${exam.questionCount ?? questions(detail).length} questions`, `${exam.rosterCount ?? students(detail).length} students`)}</div>${renderRoomControl(exam, detail)}${detail ? rawPanel('Complete examination data', detail) : '<div class="exam-admin-loading-note">Choose another detail tab to load the complete server record.</div>'}</section>` : ''}`;
+    return `${toolbar('Examinations', 'Review publication, room state, exact identifiers, and complete stored data.')}<div class="exam-admin-page-load"><p>${escapeHtml(summary)}</p>${controls}</div>${examTable()}${exam ? `<section class="panel exam-admin-record-detail"><header class="exam-admin-panel-head"><div><h3>${escapeHtml(exam.title || 'Selected examination')}</h3><p>Exact examination ID: <code>${escapeHtml(examId(exam))}</code></p></div>${examActions(exam)}</header><div class="exam-admin-detail-grid">${fact('Creator', exam.professorName || exam.ownerName || detail?.professor?.displayName, exam.professorEmail || exam.ownerEmail || detail?.professor?.email)}${fact('Publication', exam.publicationStatus || exam.status, `Version ${exam.versionNumber || exam.version || detail?.exam?.version || '—'}`)}${fact('Schedule', formatDateTime(exam.startsAt || activation?.opensAt), `Ends ${formatDateTime(exam.endsAt || activation?.closesAt)}`)}${fact('Content', `${exam.questionCount ?? questions(detail).length} questions`, `${exam.rosterCount ?? students(detail).length} students`)}</div>${renderRoomControl(exam, detail)}${detail ? rawPanel('Complete examination data', detail) : '<div class="exam-admin-loading-note">Choose another detail tab to load the complete server record.</div>'}</section>` : ''}`;
   }
 
   function renderQuestions() {
@@ -649,7 +731,7 @@
   function identityCorrectionForm(student, identity) {
     const identityId = identity.id || identity.studentIdentityId || student.studentIdentityId;
     if (!identityId) return '<div class="exam-admin-owner-control-note">The student identity identifier was not returned. Refresh this examination before correcting the record.</div>';
-    return `<form class="exam-admin-owner-control-form" data-exam-admin-owner-control="correct_student_identity"><input name="examId" type="hidden" value="${escapeHtml(state.selectedExamId)}"><input name="studentIdentityId" type="hidden" value="${escapeHtml(identityId)}"><label><span>Full legal name</span><input name="fullName" minlength="2" maxlength="240" autocomplete="off" value="${escapeHtml(identity.fullName || identity.displayName || '')}" required><small>Shown to the Professor and in owner exports.</small></label><label><span>Student number</span><input name="studentNumber" maxlength="120" autocomplete="off" value="${escapeHtml(identity.studentNumber || identity.externalStudentId || '')}" required><small>Must remain unique within the school.</small></label><label><span>Email, if recorded</span><input name="email" type="email" maxlength="320" autocomplete="off" value="${escapeHtml(identity.email || identity.emailNormalized || '')}"><small>Leave blank to keep the current value. To remove a wrong stored email, select the explicit option below.</small></label><label class="exam-admin-clear-email"><input name="clearEmail" type="checkbox"><span>Remove the stored student email</span><small>This explicit choice overrides the email field and is recorded in the owner audit receipt.</small></label><label><span>Owner receipt note</span><input name="reason" minlength="5" maxlength="1000" value="Platform owner corrected the student identity after checking the school record." required><small>Explain how the correction was verified.</small></label><button class="secondary-button" type="submit"><i class="ph ph-identification-card" aria-hidden="true"></i>Save identity correction</button><div class="exam-admin-owner-control-status" role="status" aria-live="polite">No identity change has been sent.</div></form>`;
+    return `<form class="exam-admin-owner-control-form" data-exam-admin-owner-control="correct_student_identity"><input name="examId" type="hidden" value="${escapeHtml(state.selectedExamId)}"><input name="studentIdentityId" type="hidden" value="${escapeHtml(identityId)}"><label><span>Full legal name</span><input name="fullName" minlength="2" maxlength="240" autocomplete="off" value="${escapeHtml(identity.fullName || identity.displayName || '')}" required><small>Shown to the exam creator and in owner exports.</small></label><label><span>Student number</span><input name="studentNumber" maxlength="120" autocomplete="off" value="${escapeHtml(identity.studentNumber || identity.externalStudentId || '')}" required><small>Must remain unique within the school.</small></label><label><span>Email, if recorded</span><input name="email" type="email" maxlength="320" autocomplete="off" value="${escapeHtml(identity.email || identity.emailNormalized || '')}"><small>Leave blank to keep the current value. To remove a wrong stored email, select the explicit option below.</small></label><label class="exam-admin-clear-email"><input name="clearEmail" type="checkbox"><span>Remove the stored student email</span><small>This explicit choice overrides the email field and is recorded in the owner audit receipt.</small></label><label><span>Owner receipt note</span><input name="reason" minlength="5" maxlength="1000" value="Platform owner corrected the student identity after checking the school record." required><small>Explain how the correction was verified.</small></label><button class="secondary-button" type="submit"><i class="ph ph-identification-card" aria-hidden="true"></i>Save identity correction</button><div class="exam-admin-owner-control-status" role="status" aria-live="polite">No identity change has been sent.</div></form>`;
   }
   function submissionStatusForm(submission) {
     const id = submission.id || submission.submissionId;
@@ -684,12 +766,30 @@
     if (records.length) return records;
     const exam = selectedExam(); return exam && activationOf(exam) ? [{ ...activationOf(exam), examId: examId(exam), examTitle: exam.title }] : [];
   }
+  function deliveryRecoveryMessage(delivery) {
+    const code = String(delivery?.safeErrorCode || delivery?.deliverySafeErrorCode || '').toLowerCase();
+    if (code === 'owner_recipients_missing') return 'Add at least one owner-copy address, run the system check, then retry the current-key email.';
+    if (code === 'recipient_missing') return 'Add the creator’s sign-in email to the examination record, then retry the current-key email.';
+    if (code === 'sender_missing') return 'Configure the Examination Room sender address, run the system check, then retry.';
+    if (code === 'provider_key_missing') return 'Connect the email provider, run the system check, then retry.';
+    if (code === 'email_mode_invalid') return 'Enable the Examination Room email channel, run the system check, then retry.';
+    if (code === 'network_error' || code.startsWith('provider_')) return 'Check provider availability, then retry the current-key email. The key itself must not be rotated.';
+    return String(delivery?.recovery || delivery?.deliveryRecovery || 'Run the system check, correct the listed email item, then retry the current-key email.');
+  }
+  function deliveryRecoveryPanel(id, delivery, key) {
+    const status = String(delivery?.status || delivery?.providerStatus || delivery?.deliveryStatus || '').toLowerCase();
+    if (!status || ['sent', 'delivered', 'accepted', 'demo_delivered', 'requested', 'suppressed'].includes(status)) return '';
+    const keyState = key
+      ? 'The exact student key remains visible above.'
+      : 'Choose Retrieve exact key to show the active student key.';
+    return `<div class="exam-admin-error" role="alert"><i class="ph ph-warning-circle" aria-hidden="true"></i><div><strong>Key active; email needs attention</strong><p>The creator already has automatic Monitoring and Grading access. ${escapeHtml(keyState)} ${escapeHtml(deliveryRecoveryMessage(delivery))}</p></div><button class="secondary-button" type="button" data-exam-admin-action="resend_key" data-exam-id="${escapeHtml(id)}">Retry email</button></div>`;
+  }
   function renderKeysEmail() {
     const exam = selectedExam(); const record = keyRecords().find((item) => !item.examId || item.examId === state.selectedExamId) || keyRecords()[0] || {};
     if (!exam) return `${toolbar('Keys & Email', 'Reveal, copy, rotate, email, and revoke the exact current room key.')}${examSelector()}`;
     const id = examId(exam); const key = state.currentKeys.get(id) || record.roomKey || record.plaintextKey || record.currentKey || ''; const delivery = state.deliveries.get(id) || record.delivery || {};
     const history = keyRecords();
-    return `${toolbar('Keys & Email', 'View, copy, resend, rotate, and revoke exact room keys. Delivery records remain downloadable.')}${examSelector()}<article class="exam-admin-key-card" data-exam-admin-searchable data-search-text="${searchText(exam, record, delivery, key)}"><header><div><span class="eyebrow">${escapeHtml(exam.subject || 'Published examination')}</span><h4>${escapeHtml(exam.title || id)}</h4><code>${escapeHtml(id)}</code></div>${statusBadge(record.status || record.activationStatus || activationOf(exam)?.status || 'not_activated')}</header><label><span>Current room key</span><input value="${escapeHtml(key || 'Retrieve the exact current key below')}" readonly></label><div class="exam-admin-key-meta">${fact('Professor', exam.professorName || record.professorName, exam.professorEmail || record.professorEmail)}${fact('Owner email copy', delivery.adminRecipients || record.adminRecipients || 'Configured owner addresses', delivery.status || record.deliveryStatus)}${fact('Valid window', formatDateTime(record.opensAt || record.issuedAt), `Until ${formatDateTime(record.expiresAt || record.closesAt)}`)}</div><div class="exam-admin-key-actions">${canApprove(exam) ? `<button class="primary-button" type="button" data-exam-admin-action="approve_and_email_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Approve & email key</button>` : ''}${!key && (record.id || activationOf(exam)) ? `<button class="secondary-button" type="button" data-exam-admin-action="reveal_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-eye" aria-hidden="true"></i>Retrieve exact key</button>` : ''}${key ? `<button class="secondary-button" type="button" data-exam-admin-copy-key="${escapeHtml(id)}"><i class="ph ph-copy" aria-hidden="true"></i>Copy exact key</button><button class="secondary-button" type="button" data-exam-admin-action="resend_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Resend current key</button>` : ''}${record.id || activationOf(exam) ? `<button class="secondary-button" type="button" data-exam-admin-action="rotate_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Rotate & email</button><button class="exam-admin-danger" type="button" data-exam-admin-action="revoke_key" data-exam-id="${escapeHtml(id)}">Revoke key</button>` : ''}</div>${rawPanel('Current key and delivery record', { record, delivery })}</article>${history.length > 1 ? `<section class="panel"><header class="exam-admin-panel-head"><div><h3>Complete key history</h3><p>Newest first. Revoked and replaced keys remain visible to the platform owner for audit and recovery.</p></div></header>${rawPanel('All issued key records', history)}</section>` : ''}`;
+    return `${toolbar('Keys & Email', 'View, copy, resend, rotate, and revoke exact room keys. Delivery records remain downloadable.')}${examSelector()}<article class="exam-admin-key-card" data-exam-admin-searchable data-search-text="${searchText(exam, record, delivery, key)}"><header><div><span class="eyebrow">${escapeHtml(exam.subject || 'Published examination')}</span><h4>${escapeHtml(exam.title || id)}</h4><code>${escapeHtml(id)}</code></div>${statusBadge(record.status || record.activationStatus || activationOf(exam)?.status || 'not_activated')}</header><label><span>Current student room key</span><input value="${escapeHtml(key || 'Retrieve the exact current key below')}" readonly></label><div class="exam-admin-key-meta">${fact('Creator', exam.professorName || record.professorName, exam.professorEmail || record.professorEmail)}${fact('Owner email copy', delivery.adminRecipients || record.adminRecipients || 'Configured owner addresses', delivery.status || delivery.providerStatus || record.deliveryStatus)}${fact('Creator access', record.id || activationOf(exam) ? 'Monitoring and Grading unlocked' : 'Unlocks on approval', 'No creator key entry required')}${fact('Valid window', formatDateTime(record.opensAt || record.issuedAt), `Until ${formatDateTime(record.expiresAt || record.closesAt)}`)}</div>${deliveryRecoveryPanel(id, delivery, key)}<div class="exam-admin-key-actions">${canApprove(exam) ? `<button class="primary-button" type="button" data-exam-admin-action="approve_and_email_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Approve & generate key</button>` : ''}${!key && (record.id || activationOf(exam)) ? `<button class="secondary-button" type="button" data-exam-admin-action="reveal_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-eye" aria-hidden="true"></i>Retrieve exact key</button>` : ''}${key ? `<button class="secondary-button" type="button" data-exam-admin-copy-key="${escapeHtml(id)}"><i class="ph ph-copy" aria-hidden="true"></i>Copy exact key</button><button class="secondary-button" type="button" data-exam-admin-action="resend_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Resend current key</button>` : ''}${record.id || activationOf(exam) ? `<button class="secondary-button" type="button" data-exam-admin-action="rotate_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Rotate & email</button><button class="exam-admin-danger" type="button" data-exam-admin-action="revoke_key" data-exam-id="${escapeHtml(id)}">Revoke key</button>` : ''}</div>${rawPanel('Current key and delivery record', { record, delivery })}</article>${history.length > 1 ? `<section class="panel"><header class="exam-admin-panel-head"><div><h3>Complete key history</h3><p>Newest first. Revoked and replaced keys remain visible to the platform owner for audit and recovery.</p></div></header>${rawPanel('All issued key records', history)}</section>` : ''}`;
   }
 
   function mergeSnapshotPage(previous, result, requestedOffset = 0) {
@@ -1082,64 +1182,87 @@
     if (busy) { button.dataset.examAdminOriginal = button.innerHTML; button.disabled = true; button.innerHTML = '<i class="ph ph-spinner-gap" aria-hidden="true"></i>Working…'; }
     else { button.disabled = false; if (button.dataset.examAdminOriginal) button.innerHTML = button.dataset.examAdminOriginal; delete button.dataset.examAdminOriginal; }
   }
-  function ownerRotationStorageKey(examIdentifier) {
+  function ownerActionStorageKey(operation, examIdentifier, prefix = OWNER_ACTION_STORAGE_PREFIX) {
     const owner = String(state.ownerUserId || '').trim();
     const institution = String(state.institutionId || '').trim();
     const exam = String(examIdentifier || '').trim();
-    if (!owner || !institution || !exam) return '';
-    return `${OWNER_ROTATION_STORAGE_PREFIX}:${encodeURIComponent(owner)}:${encodeURIComponent(institution)}:${encodeURIComponent(exam)}`;
+    const action = String(operation || '').trim();
+    if (!owner || !institution || !exam || !action) return '';
+    const actionSegment = prefix === LEGACY_OWNER_ROTATION_STORAGE_PREFIX ? '' : `:${encodeURIComponent(action)}`;
+    return `${prefix}:${encodeURIComponent(owner)}:${encodeURIComponent(institution)}${actionSegment}:${encodeURIComponent(exam)}`;
   }
-  function pendingOwnerRotation(examIdentifier) {
-    const storageKey = ownerRotationStorageKey(examIdentifier);
-    if (!storageKey) return null;
-    try {
-      const saved = JSON.parse(global.sessionStorage?.getItem(storageKey) || 'null');
-      if (!saved || saved.version !== 1
-        || saved.ownerUserId !== state.ownerUserId
-        || saved.institutionId !== state.institutionId
-        || saved.examId !== examIdentifier
-        || saved.operation !== 'rotate_key'
-        || !String(saved.requestKey || '').trim()) return null;
-      return { storageKey, requestKey: String(saved.requestKey).trim() };
-    } catch { return null; }
+  function ownerActionStorageKeys(operation, examIdentifier) {
+    const keys = [ownerActionStorageKey(operation, examIdentifier)];
+    if (operation === 'rotate_key') keys.push(ownerActionStorageKey(operation, examIdentifier, LEGACY_OWNER_ROTATION_STORAGE_PREFIX));
+    return keys.filter(Boolean);
   }
-  function persistOwnerRotation(examIdentifier, requestKey) {
-    const storageKey = ownerRotationStorageKey(examIdentifier);
+  function pendingOwnerAction(operation, examIdentifier) {
+    const owner = String(state.ownerUserId || '').trim();
+    const institution = String(state.institutionId || '').trim();
+    const exam = String(examIdentifier || '').trim();
+    for (const storageKey of ownerActionStorageKeys(operation, exam)) {
+      try {
+        const saved = JSON.parse(global.sessionStorage?.getItem(storageKey) || 'null');
+        const savedRequestKeys = object(saved?.requestKeys);
+        const primary = String(savedRequestKeys.primary || saved?.requestKey || '').trim();
+        if (!saved || ![1, 2].includes(saved.version)
+          || saved.ownerUserId !== owner
+          || saved.institutionId !== institution
+          || saved.examId !== exam
+          || saved.operation !== operation
+          || !primary) continue;
+        return {
+          storageKey,
+          requestKeys: {
+            primary,
+            activate: String(savedRequestKeys.activate || '').trim(),
+            email: String(savedRequestKeys.email || '').trim(),
+            fallback: String(savedRequestKeys.fallback || '').trim(),
+          },
+        };
+      } catch { /* Ignore invalid or unavailable session storage and try the next compatible key. */ }
+    }
+    return null;
+  }
+  function persistOwnerAction(operation, examIdentifier, requestKeys) {
+    const storageKey = ownerActionStorageKey(operation, examIdentifier);
     if (!storageKey) return;
     try {
       global.sessionStorage?.setItem(storageKey, JSON.stringify({
-        version: 1,
+        version: 2,
         ownerUserId: state.ownerUserId,
         institutionId: state.institutionId,
         examId: examIdentifier,
-        operation: 'rotate_key',
-        requestKey,
+        operation,
+        requestKey: requestKeys.primary,
+        requestKeys,
         createdAt: new Date().toISOString(),
       }));
     } catch { /* Same-page retry remains protected by the in-memory request map. */ }
   }
-  function clearOwnerRotation(examIdentifier, expectedRequestKey) {
-    const storageKey = ownerRotationStorageKey(examIdentifier);
-    if (!storageKey) return;
-    try {
-      const pending = pendingOwnerRotation(examIdentifier);
-      if (pending && expectedRequestKey && pending.requestKey !== expectedRequestKey) return;
-      global.sessionStorage?.removeItem(storageKey);
-    } catch { /* A replay keeps the same server-side receipt and cannot rotate twice. */ }
+  function clearOwnerAction(operation, examIdentifier, expectedRequestKey) {
+    for (const storageKey of ownerActionStorageKeys(operation, examIdentifier)) {
+      try {
+        const saved = JSON.parse(global.sessionStorage?.getItem(storageKey) || 'null');
+        const savedPrimary = String(saved?.requestKeys?.primary || saved?.requestKey || '').trim();
+        if (savedPrimary && expectedRequestKey && savedPrimary !== expectedRequestKey) continue;
+        global.sessionStorage?.removeItem(storageKey);
+      } catch { /* A replay keeps the same server-side receipt and cannot repeat the action. */ }
+    }
   }
   function actionRequestContext(operation, payload) {
     const actionKey = `${state.ownerUserId || 'owner'}:${state.institutionId || ''}:${operation}:${payload.examId || ''}:${payload.snapshotId || ''}`;
     let requestKeys = state.actionRequests.get(actionKey);
     if (!requestKeys) {
-      const persistedRotation = operation === 'rotate_key' ? pendingOwnerRotation(payload.examId) : null;
+      const persistedAction = PERSISTED_OWNER_ACTIONS.has(operation) ? pendingOwnerAction(operation, payload.examId) : null;
       requestKeys = {
-        primary: persistedRotation?.requestKey || api.requestId(),
-        activate: api.requestId(),
-        email: api.requestId(),
-        fallback: api.requestId(),
+        primary: persistedAction?.requestKeys.primary || api.requestId(),
+        activate: persistedAction?.requestKeys.activate || api.requestId(),
+        email: persistedAction?.requestKeys.email || api.requestId(),
+        fallback: persistedAction?.requestKeys.fallback || api.requestId(),
       };
       state.actionRequests.set(actionKey, requestKeys);
-      if (operation === 'rotate_key' && !persistedRotation) persistOwnerRotation(payload.examId, requestKeys.primary);
+      if (PERSISTED_OWNER_ACTIONS.has(operation)) persistOwnerAction(operation, payload.examId, requestKeys);
     }
     return { actionKey, requestKeys };
   }
@@ -1158,7 +1281,7 @@
   async function runAction(operation, payload, button) {
     const { actionKey: key, requestKeys } = actionRequestContext(operation, payload);
     if (state.busy.has(key)) return;
-    if (operation === 'rotate_key' && !global.confirm('Rotate the current key and email the replacement to the Professor and owner addresses? The old key will stop working.')) return;
+    if (operation === 'rotate_key' && !global.confirm('Rotate the current key and email the replacement to the creator and owner addresses? The old key will stop working.')) return;
     if (operation === 'revoke_key' && !global.confirm('Revoke this room key? Existing answers, submissions, grades, and receipts remain available.')) return;
     if (operation === 'restore_snapshot' && !global.confirm('Verify and recover a downloadable copy of this checkpoint? Live examination rows will not be changed.')) return;
     state.busy.add(key); buttonBusy(button, true); state.inlineError = null;
@@ -1178,18 +1301,25 @@
         }
       }
       if (result?.roomKey && payload.examId) state.currentKeys.set(payload.examId, result.roomKey);
-      if (payload.examId && (result?.deliveryStatus || result?.recipient || result?.adminRecipients)) state.deliveries.set(payload.examId, { status: result.deliveryStatus || 'requested', professorRecipient: result.recipient || result.professorEmail || '', adminRecipients: result.adminRecipients || result.ownerRecipients || '', at: new Date().toISOString() });
+      if (payload.examId && (result?.deliveryStatus || result?.recipient || result?.adminRecipients)) state.deliveries.set(payload.examId, {
+        status: result.deliveryStatus || 'requested',
+        safeErrorCode: result.deliverySafeErrorCode || result.deliveryAttemptSafeErrorCode || '',
+        recovery: result.deliveryRecovery || result.recovery || '',
+        professorRecipient: result.recipient || result.professorEmail || '',
+        adminRecipients: result.adminRecipients || result.ownerRecipients || '',
+        at: new Date().toISOString(),
+      });
       if (operation === 'reveal_key') { state.actionRequests.delete(key); renderIntoRoot(); state.toast('The exact current key is visible.'); return; }
       if (operation === 'restore_snapshot' && (result?.recoveryBundle || result?.bundle)) {
         downloadFile(`examination-room-recovered-${payload.snapshotId || 'snapshot'}.json`, 'application/json;charset=utf-8', JSON.stringify(result.recoveryBundle || result.bundle, null, 2));
       }
       const sent = ['sent', 'delivered', 'demo_delivered', 'requested'].includes(String(result?.deliveryStatus || '').toLowerCase());
       const deliveryFailure = ['approve_and_email_key', 'rotate_key', 'resend_key'].includes(operation) && !sent;
-      const messages = { approve_and_email_key: 'Examination approved. The key was emailed and the owner copy is visible.', rotate_key: 'Replacement key issued and emailed.', resend_key: 'The current key was emailed again to the Professor and owner addresses.', revoke_key: 'Room key revoked. Examination data was preserved.', create_snapshot: 'Full recovery snapshot requested.', retry_snapshot: 'Snapshot retry started.', restore_snapshot: 'Checkpoint verified and downloaded. Live examination rows were not changed.' };
+      const messages = { approve_and_email_key: 'Key generated. Monitoring and Grading are unlocked automatically for the creator; email was sent to the creator and owner addresses.', rotate_key: 'Replacement key issued and emailed.', resend_key: 'The current key was emailed again to the creator and owner addresses.', revoke_key: 'Room key revoked. Examination data was preserved.', create_snapshot: 'Full recovery snapshot requested.', retry_snapshot: 'Snapshot retry started.', restore_snapshot: 'Checkpoint verified and downloaded. Live examination rows were not changed.' };
       const message = deliveryFailure
-        ? `The key is active and visible, but email was not sent. ${result?.deliveryRecovery || result?.recovery || 'Check the email configuration, then choose Resend current key.'}`
+        ? `The key is active and visible, and the creator can use Monitoring and Grading without entering it. Email was not sent. ${result?.deliveryRecovery || result?.recovery || 'Check the email configuration, then choose Resend current key.'}`
         : messages[operation] || 'Owner action completed.';
-      if (operation === 'rotate_key') clearOwnerRotation(payload.examId, requestKeys.primary);
+      if (PERSISTED_OWNER_ACTIONS.has(operation)) clearOwnerAction(operation, payload.examId, requestKeys.primary);
       state.actionRequests.delete(key);
       await refreshIntoRoot(message);
     } catch (error) { state.inlineError = Object.assign(error, { retry: `${operation}:${payload.examId || ''}:${payload.snapshotId || ''}` }); renderIntoRoot(); }
@@ -1263,7 +1393,7 @@
       const emailEffect = payload.clearEmail
         ? ' The stored student email will be removed.'
         : payload.email ? ` The stored email will become ${payload.email}.` : ' The stored email will remain unchanged.';
-      return `Save the corrected identity for ${payload.fullName} (${payload.studentNumber})?${emailEffect} The Professor and future owner exports will use these exact values.`;
+      return `Save the corrected identity for ${payload.fullName} (${payload.studentNumber})?${emailEffect} The exam creator and future owner exports will use these exact values.`;
     }
     if (operation === 'set_submission_status') {
       const consequence = payload.status === 'voided'
@@ -1347,20 +1477,20 @@
     if (state.busy.has('assign_staff')) return;
     const values = new FormData(form); const button = form.querySelector('button[type="submit"]'); const status = form.querySelector('.exam-admin-form-status');
     state.busy.add('assign_staff'); buttonBusy(button, true); status.textContent = 'Saving the optional directory assignment…';
-    try { await api.adminCommand('assign_staff', { institutionId: state.institutionId, email: values.get('email'), displayName: values.get('displayName'), staffRole: values.get('staffRole'), reason: values.get('reason') }, api.requestId()); form.reset(); await refreshIntoRoot('Directory assignment saved. Professor entry and exam creation remain independent of this list.'); }
+    try { await api.adminCommand('assign_staff', { institutionId: state.institutionId, email: values.get('email'), displayName: values.get('displayName'), staffRole: values.get('staffRole'), reason: values.get('reason') }, api.requestId()); form.reset(); await refreshIntoRoot('Directory assignment saved. Creator entry, exam creation, saving, and key requests remain independent of this list.'); }
     catch (error) { status.textContent = `${error.message || 'The directory assignment could not be saved.'} ${error.recovery || 'Review the sign-in email and try again.'}`; }
     finally { state.busy.delete('assign_staff'); if (button.isConnected) buttonBusy(button, false); }
   }
   async function approveProfessor(button) {
     buttonBusy(button, true);
-    try { await api.adminCommand('assign_staff', { institutionId: state.institutionId, email: button.dataset.examAdminRequestEmail, displayName: button.dataset.examAdminRequestName, staffRole: 'professor', reason: 'Added by a platform owner to the school directory.' }, api.requestId()); await refreshIntoRoot('Professor added to the school directory. Entry and exam creation did not require this step.'); }
+    try { await api.adminCommand('assign_staff', { institutionId: state.institutionId, email: button.dataset.examAdminRequestEmail, displayName: button.dataset.examAdminRequestName, staffRole: 'professor', reason: 'Added by a platform owner to the school directory.' }, api.requestId()); await refreshIntoRoot('Creator added to the optional school directory. Entry, exam creation, saving, and key requests did not require this step.'); }
     catch (error) { state.inlineError = error; renderIntoRoot(); }
     finally { if (button.isConnected) buttonBusy(button, false); }
   }
   async function rejectProfessor(button) {
-    if (!global.confirm(`Dismiss the optional directory request from ${button.dataset.examAdminRequestName || 'this Professor'}? Professor entry and examination creation will not be blocked, and no examination data will be deleted.`)) return;
+    if (!global.confirm(`Dismiss the optional directory request from ${button.dataset.examAdminRequestName || 'this creator'}? Creator entry, examination creation, saving, and key requests will not be blocked, and no examination data will be deleted.`)) return;
     buttonBusy(button, true);
-    try { await api.adminCommand('reject_professor_request', { institutionId: state.institutionId, requestId: button.dataset.examAdminRejectProfessor, reason: 'Rejected by a platform owner after review.' }, api.requestId()); await refreshIntoRoot('Professor request rejected.'); }
+    try { await api.adminCommand('reject_professor_request', { institutionId: state.institutionId, requestId: button.dataset.examAdminRejectProfessor, reason: 'Dismissed by a platform owner after review.' }, api.requestId()); await refreshIntoRoot('Optional directory request dismissed. Creator access was unchanged.'); }
     catch (error) { state.inlineError = error; renderIntoRoot(); }
     finally { if (button.isConnected) buttonBusy(button, false); }
   }

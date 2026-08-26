@@ -28,7 +28,7 @@
   function registerExaminationRoomServiceWorker() {
     const serviceWorker = global.navigator?.serviceWorker;
     if (!serviceWorker?.register) return;
-    serviceWorker.register('/service-worker.js?v=examination-room-v1-20260826-2').catch(() => {
+    serviceWorker.register('/service-worker.js?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1').catch(() => {
       // The grading workspace is already self-contained. Registration simply
       // refreshes the offline cache the next time a connection is available.
     });

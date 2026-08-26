@@ -643,10 +643,17 @@
   .analytics-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;}
   .analytics-panel h3{margin:0;font:700 21px/1.15 var(--serif-display);color:var(--navy);}
   .analytics-panel-note{margin:5px 0 0;color:var(--ink-soft);font:500 11.5px/1.5 var(--sans);}
-  .analytics-trend{display:flex;align-items:flex-end;gap:7px;height:188px;padding:15px 2px 0;border-bottom:1px solid rgba(15,33,58,.17);}
-  .analytics-trend-item{display:flex;flex:1 1 0;align-items:flex-end;min-width:7px;height:100%;}
-  .analytics-trend-bar{width:100%;min-height:3px;border-radius:5px 5px 0 0;background:linear-gradient(180deg,#efd071,#b78320);transition:filter .2s ease;}
-  .analytics-trend-item:hover .analytics-trend-bar{filter:brightness(.92);}
+  .analytics-trend-scroll{overflow-x:auto;padding:2px 0 9px;scrollbar-color:#b98a31 #ede7dc;scrollbar-width:thin;}
+  .analytics-trend-scroll:focus-visible{outline:3px solid rgba(197,160,89,.38);outline-offset:4px;border-radius:8px;}
+  .analytics-trend{display:flex;align-items:stretch;gap:8px;min-width:100%;height:224px;padding:5px 2px 0;}
+  .analytics-trend-item{display:grid;grid-template-rows:22px minmax(92px,1fr) auto auto;gap:5px;flex:1 0 68px;min-width:68px;height:100%;text-align:center;}
+  .analytics-trend-score{color:var(--navy);font:750 11px/1 var(--mono);font-variant-numeric:tabular-nums;}
+  .analytics-trend-track{display:flex;align-items:flex-end;min-height:92px;overflow:hidden;border-radius:7px 7px 2px 2px;background:linear-gradient(180deg,rgba(232,226,214,.34),rgba(232,226,214,.82));border-bottom:1px solid rgba(15,33,58,.18);}
+  .analytics-trend-bar{width:100%;min-height:4px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,#efd071,#b78320);transition:filter .2s ease,transform .2s ease;transform-origin:bottom;}
+  .analytics-trend-item:hover .analytics-trend-bar{filter:brightness(.92);transform:scaleY(1.015);}
+  .analytics-trend-date{color:var(--ink);font:700 9px/1.15 var(--sans);white-space:nowrap;}
+  .analytics-trend-time{color:var(--ink-soft);font:600 8.5px/1.15 var(--mono);white-space:nowrap;}
+  .analytics-trend-zone{display:flex;justify-content:space-between;gap:12px;margin-top:9px;color:var(--ink-soft);font:600 9px/1.4 var(--sans);}
   .analytics-empty-chart{display:grid;place-items:center;min-height:188px;color:var(--ink-soft);font:600 13px var(--sans);text-align:center;}
   .analytics-bars{display:grid;gap:13px;}
   .analytics-bar-top{display:flex;justify-content:space-between;gap:12px;margin-bottom:6px;font:650 12px var(--sans);color:var(--ink);}
@@ -677,7 +684,7 @@
   .verdict-record-badge.current{background:var(--pass-bg);color:var(--pass);}
   .verdict-record-badge.legacy{background:var(--amber-bg);color:var(--amber);}
   @media(max-width:980px){.analytics-overview{grid-template-columns:repeat(2,minmax(0,1fr));}.analytics-grid{grid-template-columns:1fr}.verdict-toolbar{grid-template-columns:repeat(2,minmax(0,1fr));}.verdict-toolbar label:first-child{grid-column:1/-1;}}
-  @media(max-width:640px){.analytics-page{padding:24px 14px 56px}.analytics-page-head{align-items:flex-start;flex-direction:column}.analytics-head-actions{justify-content:flex-start}.analytics-overview{grid-template-columns:1fr 1fr}.analytics-metric{min-height:126px;padding:15px}.analytics-grid{display:block}.analytics-panel{margin-bottom:14px;padding:16px}.verdict-toolbar{grid-template-columns:1fr}.verdict-toolbar label:first-child{grid-column:auto}.verdict-actions .btn-tool{flex:1 1 46%}.analytics-page-head h2{font-size:42px}.analytics-trend{height:150px;}}
+  @media(max-width:640px){.analytics-page{padding:24px 14px 56px}.analytics-page-head{align-items:flex-start;flex-direction:column}.analytics-head-actions{justify-content:flex-start}.analytics-overview{grid-template-columns:1fr 1fr}.analytics-metric{min-height:126px;padding:15px}.analytics-grid{display:block}.analytics-panel{margin-bottom:14px;padding:16px}.verdict-toolbar{grid-template-columns:1fr}.verdict-toolbar label:first-child{grid-column:auto}.verdict-actions .btn-tool{flex:1 1 46%}.analytics-page-head h2{font-size:42px}.analytics-trend{height:206px}.analytics-trend-item{flex-basis:64px;min-width:64px}.analytics-trend-zone{display:grid;gap:3px;}}
 
   /* ---- Footer + disclaimer ---- */
   .site-footer{position:relative;z-index:1;background:linear-gradient(180deg,rgba(8,18,37,.94),rgba(4,12,24,.97));border-top:1px solid rgba(197,160,89,.28);padding:30px 26px 40px;margin-top:10px;}
@@ -975,7 +982,7 @@
     .exam-clock-copy,.exam-clock.no-digits .exam-clock-copy{text-align:left;}
   }
 </style>
-<link rel="stylesheet" href="assets/phase2.css?release=examination-room-doors-20260826-2">
+<link rel="stylesheet" href="assets/phase2.css?release=examination-room-doors-20260826-2&amp;profile=chambers-20260827-1">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
 <link rel="stylesheet" href="assets/quorum-first-shell.css?v=examination-room-doors-20260826-2">
@@ -999,6 +1006,16 @@
       <span class="brand-meaning" id="brand-subtitle-meaning" role="tooltip">Philippine Bar Exam Simulator</span>
     </a>
     <div class="topbar-actions quorum-header-actions">
+      <div class="dd2-header-member-tools" id="dd2-header-member-tools" hidden>
+        <button class="dd2-header-role-button" id="dd2-header-role-button" type="button" data-dd2-view="account">
+          <span class="dd2-header-role-avatar" id="dd2-header-role-avatar" aria-hidden="true"><span>DD</span></span>
+          <span class="dd2-header-role-copy"><small>Role</small><strong id="dd2-header-role-label">Member</strong></span>
+        </button>
+        <button class="dd2-header-exam-button" id="dd2-header-exam-button" type="button" data-dd2-view="examination-room">
+          <img src="assets/icons/navigation/door-open.svg" width="18" height="18" alt="" aria-hidden="true">
+          <span class="dd2-header-exam-label">Examination Room</span>
+        </button>
+      </div>
       <button class="dd2-guest-badge" id="dd2-guest-badge" type="button"
         data-public-action="docket" aria-live="polite" aria-label="Open account access details" hidden></button>
       <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>00:00:00</div>
@@ -3785,14 +3802,46 @@ function analyticsSubjectSummary(records) {
 
 function analyticsTrendMarkup(records) {
   const points = records
-    .map((record) => ({ score: analyticsFiniteScore(record), occurredAt: new Date(record.occurredAt).getTime() }))
+    .map((record) => {
+      const occurredAt = new Date(record.occurredAt);
+      return {
+        score: analyticsFiniteScore(record),
+        occurredAt: occurredAt.getTime(),
+        date: occurredAt,
+        subject: String(record.subject || 'Practice attempt').trim() || 'Practice attempt',
+      };
+    })
     .filter((point) => point.score !== null && Number.isFinite(point.occurredAt))
     .sort((left, right) => left.occurredAt - right.occurredAt)
     .slice(-24);
   if (!points.length) return '<div class="analytics-empty-chart">Complete a graded question to begin your score trend.</div>';
-  return `<div class="analytics-trend" role="img" aria-label="Score trend across the latest ${points.length} graded attempts">
-    ${points.map((point) => `<span class="analytics-trend-item" title="${point.score.toFixed(1)} out of 5"><span class="analytics-trend-bar" style="height:${Math.max(4, point.score / 5 * 100)}%"></span></span>`).join('')}
-  </div>`;
+  const dateFormatter = new Intl.DateTimeFormat('en-PH', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'Asia/Manila',
+  });
+  const timeFormatter = new Intl.DateTimeFormat('en-PH', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Manila',
+  });
+  return `<div class="analytics-trend-scroll" tabindex="0" aria-label="Scrollable score trend. Dates and times use Philippine Time.">
+    <div class="analytics-trend" role="list" aria-label="Latest ${points.length} graded attempts in chronological order">
+      ${points.map((point) => {
+        const dateLabel = dateFormatter.format(point.date);
+        const timeLabel = timeFormatter.format(point.date);
+        const scoreLabel = point.score.toFixed(1);
+        return `<div class="analytics-trend-item" role="listitem" aria-label="${escapeHtml(point.subject)}, ${scoreLabel} out of 5, ${escapeHtml(dateLabel)} at ${escapeHtml(timeLabel)} Philippine Time" title="${escapeHtml(point.subject)} · ${scoreLabel} / 5 · ${escapeHtml(dateLabel)} ${escapeHtml(timeLabel)}">
+          <span class="analytics-trend-score">${scoreLabel}</span>
+          <span class="analytics-trend-track"><span class="analytics-trend-bar" style="height:${Math.max(4, point.score / 5 * 100)}%"></span></span>
+          <span class="analytics-trend-date">${escapeHtml(dateLabel)}</span>
+          <span class="analytics-trend-time">${escapeHtml(timeLabel)}</span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+  <div class="analytics-trend-zone"><span>Oldest to newest · scroll for earlier detail</span><span>Philippine Time (Asia/Manila)</span></div>`;
 }
 
 function analyticsSubjectMarkup(records) {
@@ -3867,7 +3916,7 @@ function renderVerdictDashboard() {
     <p class="analytics-data-note" role="note"><strong>Data coverage.</strong> ${escapeHtml(dataNote)} This is a private study record, not an official Bar rating or predicted result.</p>
     <div class="analytics-grid">
       <section class="analytics-panel" aria-labelledby="analytics-trend-title">
-        <div class="analytics-panel-head"><div><h3 id="analytics-trend-title">Score trend</h3><p class="analytics-panel-note">Latest graded attempts, shown chronologically.</p></div></div>
+        <div class="analytics-panel-head"><div><h3 id="analytics-trend-title">Score trend</h3><p class="analytics-panel-note">Latest graded attempts with score, date, and exact Philippine time.</p></div></div>
         ${analyticsTrendMarkup(verdictDashboard.active)}
       </section>
       <section class="analytics-panel" aria-labelledby="analytics-subject-title">
@@ -4446,11 +4495,11 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase2-config.js?v=private-maintenance-20260820-2"></script>
 <script src="assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
-<script src="assets/phase2-experience.js?v=syllabus-reveal-p0-20260826-2-examination-room-3"></script>
-<script src="assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2"></script>
+<script src="assets/phase2-experience.js?v=syllabus-reveal-p0-20260826-2-examination-room-3&amp;profile=chambers-20260827-1&amp;access=paid-expiry-20260827-1"></script>
+<script src="assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&amp;access=paid-expiry-20260827-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=syllabus-reveal-p0-20260826-2"></script>
+<script src="assets/feature-loader.js?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1"></script>
 <script src="assets/quorum-first-shell.js?v=syllabus-review-20260823-1"></script>
 <script src="assets/private-beta-landing.js?v=syllabus-reveal-focus-20260826-1"></script>
 

@@ -22,6 +22,14 @@ assert.match(html, /analytics:\s*'verdict'/,
 assert.match(html, /function openAnalytics\(\)[\s\S]*showPage\('analytics', document\.getElementById\('spa-progress'\)\)/,
   'Opening Analytics must use SPA routing.');
 assert.match(html, /Score trend/);
+assert.match(html, /score, date, and exact Philippine time/,
+  'Score Trend must explain that date and time details are visible.');
+assert.match(html, /timeZone: 'Asia\/Manila'/,
+  'Score Trend timestamps must use the product Philippine-time convention.');
+assert.match(html, /analytics-trend-date[\s\S]*analytics-trend-time/,
+  'Every score point must render a visible date and time, not only a browser tooltip.');
+assert.match(html, /Philippine Time \(Asia\/Manila\)/,
+  'The chart must label its time zone for users reviewing historical attempts.');
 assert.match(html, /Subject performance/);
 assert.match(html, /Writing pace/);
 assert.match(html, /Grammar strength<\/span><span>Not measured separately/,

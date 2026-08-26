@@ -69,6 +69,7 @@ jobs:
           node --test admin/examination-room-admin.test.cjs
           node --test worker/*.test.mjs
           node scripts/test-examination-room-database.mjs
+          node scripts/test-examination-room-commercial-stress.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-maintenance-lock.mjs
           node scripts/test-website-question-bank.mjs

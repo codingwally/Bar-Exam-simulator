@@ -16,6 +16,11 @@ const releases = Object.freeze([
     file: '20260826130536_examination_room_owner_command_center.sql',
     name: 'examination_room_owner_command_center',
   },
+  {
+    version: '20260827010000',
+    file: '20260827010000_examination_room_open_admission_flow.sql',
+    name: 'examination_room_open_admission_flow',
+  },
 ]);
 
 const outputIndex = process.argv.indexOf('--output');
@@ -41,7 +46,7 @@ for (const release of releases) {
   });
 }
 
-const [greenfield, owner] = prepared;
+const [greenfield, owner, openAdmission] = prepared;
 const ledgerInsert = (release) => `insert into supabase_migrations.schema_migrations
   (version, statements, name)
 values (
@@ -50,7 +55,7 @@ values (
   '${release.name}'
 );`;
 
-const bundle = `-- Generated only from the two reviewed Examination Room migrations.
+const bundle = `-- Generated only from the three reviewed Examination Room migrations.
 -- psql conditionals safely handle an already-applied or ledger-repair state;
 -- no other pending Supabase migration can be selected by this release gate.
 \\set ON_ERROR_STOP on
@@ -77,6 +82,15 @@ select
     where version = '${owner.version}'
       and 'sha256:${owner.sha256}' = any(coalesce(statements, array[]::text[]))
   ) as examination_room_owner_ledger_exact,
+  exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '${openAdmission.version}'
+  ) as examination_room_open_admission_ledger,
+  exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '${openAdmission.version}'
+      and 'sha256:${openAdmission.sha256}' = any(coalesce(statements, array[]::text[]))
+  ) as examination_room_open_admission_ledger_exact,
   to_regnamespace('examination_room_v1') is not null as examination_room_greenfield_any,
   coalesce(
     to_regclass('examination_room_v1.institutions') is not null
@@ -107,7 +121,38 @@ select
     and to_regprocedure('public.examination_room_v1_import_grades(uuid,uuid,uuid,jsonb)') is not null
     and to_regprocedure('public.examination_room_v1_verify_recovery_snapshot(uuid,text)') is not null,
     false
-  ) as examination_room_owner_complete
+  ) as examination_room_owner_complete,
+  coalesce(
+    exists (
+      select 1
+      from pg_catalog.pg_attribute attribute
+      where attribute.attrelid = to_regclass('examination_room_v1.exams')
+        and attribute.attname = 'admission_mode'
+        and not attribute.attisdropped
+    )
+    or to_regprocedure('examination_room_v1.prepare_student_admission(jsonb)') is not null
+    or to_regprocedure('examination_room_v1.creator_revoke_session(uuid,uuid,jsonb)') is not null,
+    false
+  ) as examination_room_open_admission_any,
+  coalesce(
+    exists (
+      select 1
+      from pg_catalog.pg_attribute attribute
+      where attribute.attrelid = to_regclass('examination_room_v1.exams')
+        and attribute.attname = 'admission_mode'
+        and not attribute.attisdropped
+    )
+    and exists (
+      select 1
+      from pg_catalog.pg_attribute attribute
+      where attribute.attrelid = to_regclass('examination_room_v1.exam_versions')
+        and attribute.attname = 'admission_mode_snapshot'
+        and not attribute.attisdropped
+    )
+    and to_regprocedure('examination_room_v1.prepare_student_admission(jsonb)') is not null
+    and to_regprocedure('examination_room_v1.creator_revoke_session(uuid,uuid,jsonb)') is not null,
+    false
+  ) as examination_room_open_admission_complete
 \\gset
 
 \\if :examination_room_greenfield_ledger
@@ -166,17 +211,62 @@ select
   \\endif
 \\endif
 
+\\if :examination_room_open_admission_ledger
+  \\if :examination_room_open_admission_ledger_exact
+    \\if :examination_room_open_admission_complete
+      \\echo 'Examination Room open-admission migration has the exact reviewed checksum and is complete.'
+    \\else
+      \\echo 'Exact open-admission ledger checksum exists but the database is structurally incomplete; refusing cutover.'
+      \\quit 3
+    \\endif
+  \\else
+    \\echo 'Open-admission migration version exists without this release exact checksum; use a new additive migration before cutover.'
+    \\quit 3
+  \\endif
+\\else
+  \\if :examination_room_open_admission_complete
+    \\echo 'Unrecorded pre-existing open-admission objects cannot be adopted from existence probes; refusing cutover.'
+    \\quit 3
+  \\else
+    \\if :examination_room_open_admission_any
+      \\echo 'Partial Examination Room open-admission state detected; refusing an unsafe reapply.'
+      \\quit 3
+    \\else
+      \\echo 'Applying the reviewed Examination Room open-admission migration.'
+      ${openAdmission.body}
+      ${ledgerInsert(openAdmission)}
+    \\endif
+  \\endif
+\\endif
+
 select coalesce(
   exists (select 1 from supabase_migrations.schema_migrations where version = '${greenfield.version}')
   and exists (select 1 from supabase_migrations.schema_migrations where version = '${owner.version}')
+  and exists (select 1 from supabase_migrations.schema_migrations where version = '${openAdmission.version}')
   and to_regclass('examination_room_v1.owner_key_envelopes') is not null
   and to_regclass('examination_room_v1.owner_identity_corrections') is not null
+  and exists (
+    select 1
+    from pg_catalog.pg_attribute attribute
+    where attribute.attrelid = to_regclass('examination_room_v1.exams')
+      and attribute.attname = 'admission_mode'
+      and not attribute.attisdropped
+  )
+  and exists (
+    select 1
+    from pg_catalog.pg_attribute attribute
+    where attribute.attrelid = to_regclass('examination_room_v1.exam_versions')
+      and attribute.attname = 'admission_mode_snapshot'
+      and not attribute.attisdropped
+  )
   and to_regprocedure('public.examination_room_v1_api(text,text,uuid,uuid,jsonb)') is not null
   and to_regprocedure('public.examination_room_v1_owner_query(text,uuid,uuid,uuid,jsonb)') is not null
   and to_regprocedure('public.examination_room_v1_owner_command(text,uuid,uuid,uuid,jsonb)') is not null
   and to_regprocedure('public.examination_room_v1_grading_contexts(uuid,uuid,uuid,jsonb)') is not null
   and to_regprocedure('public.examination_room_v1_import_grades(uuid,uuid,uuid,jsonb)') is not null
   and to_regprocedure('public.examination_room_v1_verify_recovery_snapshot(uuid,text)') is not null
+  and to_regprocedure('examination_room_v1.prepare_student_admission(jsonb)') is not null
+  and to_regprocedure('examination_room_v1.creator_revoke_session(uuid,uuid,jsonb)') is not null
   and not has_function_privilege(
     'authenticated',
     'public.examination_room_v1_owner_query(text,uuid,uuid,uuid,jsonb)',

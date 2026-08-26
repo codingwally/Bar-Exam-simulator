@@ -21,6 +21,9 @@
     retryAction: null,
     monitor: null,
     monitorTimer: null,
+    activationTimer: null,
+    activationPollInFlight: false,
+    activationAnnounced: false,
     grading: null,
     selectedGradingSessionId: null,
     selectedReleaseIds: new Set(),
@@ -29,7 +32,9 @@
     sectionObserver: null,
     hydrating: false,
     textEntryResolve: null,
+    confirmationResolve: null,
     offlineWorkspaceReady: Promise.resolve(false),
+    revokingSessions: new Set(),
   };
 
   const DRAFT_STORAGE_KEY = 'duediligence.examination-room.v1.professor-draft';
@@ -47,7 +52,7 @@
   function registerExaminationRoomServiceWorker() {
     const serviceWorker = global.navigator?.serviceWorker;
     if (!serviceWorker?.register) return Promise.resolve(false);
-    return serviceWorker.register('/service-worker.js?v=examination-room-v1-20260826-2')
+    return serviceWorker.register('/service-worker.js?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-4')
       .then(() => Promise.race([
         serviceWorker.ready.then(() => true),
         new Promise((resolve) => global.setTimeout(() => resolve(false), 5000)),
@@ -175,6 +180,35 @@
     return new Promise((resolve) => { state.textEntryResolve = resolve; });
   }
 
+  function finishConfirmation(confirmed) {
+    const resolve = state.confirmationResolve;
+    state.confirmationResolve = null;
+    closeDialog('confirmation-dialog');
+    resolve?.(confirmed === true);
+  }
+
+  function requestConfirmation({
+    eyebrow = 'Confirm action', title, copy, help = '', confirmLabel = 'Continue', cancelLabel = 'Cancel',
+  }) {
+    if (state.confirmationResolve) finishConfirmation(false);
+    $('#confirmation-eyebrow').textContent = eyebrow;
+    $('#confirmation-title').textContent = title;
+    $('#confirmation-copy').textContent = copy;
+    $('#confirmation-help span').textContent = help;
+    $('#confirmation-help').hidden = !help;
+    $('#confirmation-confirm').textContent = confirmLabel;
+    $('#confirmation-cancel').textContent = cancelLabel;
+    const form = $('#confirmation-form');
+    const dialog = $('#confirmation-dialog');
+    form.onsubmit = (event) => { event.preventDefault(); finishConfirmation(true); };
+    $('#confirmation-close').onclick = () => finishConfirmation(false);
+    $('#confirmation-cancel').onclick = () => finishConfirmation(false);
+    dialog.oncancel = (event) => { event.preventDefault(); finishConfirmation(false); };
+    openDialog('confirmation-dialog');
+    requestAnimationFrame(() => $('#confirmation-confirm').focus());
+    return new Promise((resolve) => { state.confirmationResolve = resolve; });
+  }
+
   function localDateTimeInput(value) {
     const date = new Date(value || Date.now());
     const offset = date.getTimezoneOffset() * 60_000;
@@ -214,6 +248,8 @@
       privacyNoticeVersion: 'exam-room-v1',
       privacyController: '',
       retentionSummary: '',
+      admissionMode: 'key_only',
+      allowedEmails: [],
       sourceFileName: null,
       sourceFileSize: null,
       questions: [],
@@ -241,6 +277,8 @@
       integrityTier: safeText(exam?.integrityTier, 40),
       cameraRequired: exam?.cameraRequired === true,
       microphoneRequired: exam?.microphoneRequired === true,
+      admissionMode: safeText(exam?.admissionMode, 40) || 'key_only',
+      allowedEmails: normalizeAllowedEmails(exam?.allowedEmails),
       questions: (exam?.questions || []).map((question) => ({
         id: safeText(question?.id || question?.questionKey, 80),
         type: safeText(question?.type || question?.questionKind, 40),
@@ -353,6 +391,7 @@
       ? duplicateDraft(collectExam())
       : clientOnlyBlankDraft(state.professor?.institutionId);
     state.activation = null;
+    state.activationAnnounced = false;
     state.monitor = null;
     state.grading = null;
     state.lastSavedJson = '';
@@ -408,6 +447,10 @@
       privacyNoticeVersion: safeText(exam.privacyNoticeVersion ?? controls.privacyNoticeVersion, 80) || 'exam-room-v1',
       privacyController: safeText(exam.privacyController ?? controls.privacyController, 1_000),
       retentionSummary: safeText(exam.retentionSummary ?? controls.retentionSummary, 2_000),
+      admissionMode: exam.admissionMode === 'email_allowlist' || controls.admissionMode === 'email_allowlist'
+        ? 'email_allowlist'
+        : 'key_only',
+      allowedEmails: normalizeAllowedEmails(exam.allowedEmails ?? controls.allowedEmails),
       sourceFileName: safeText(exam.sourceFileName ?? controls.sourceFileName, 255) || null,
       sourceFileSize: Number(exam.sourceFileSize ?? controls.sourceFileSize) || null,
       questions: (Array.isArray(exam.questions) ? exam.questions : []).map((question, index) => ({
@@ -469,6 +512,28 @@
       yearLevel: safeText(student?.yearLevel, 80) || $('#year-level')?.value || 'Second year',
       extraMinutes: Math.max(0, Math.min(360, Number(student?.extraMinutes) || 0)),
     };
+  }
+
+  function allowedEmailEntries(value) {
+    if (Array.isArray(value)) return value.flatMap((entry) => allowedEmailEntries(entry));
+    return String(value || '')
+      .split(/[\r\n,;]+/)
+      .map((entry) => entry.replace(/^\s*\d+[.)]\s+/, '').trim())
+      .filter(Boolean);
+  }
+
+  function normalizeAllowedEmails(value) {
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return [...new Set(allowedEmailEntries(value)
+      .map((entry) => entry.toLocaleLowerCase('en-PH'))
+      .filter((entry) => entry.length <= 254 && validEmail.test(entry)))];
+  }
+
+  function invalidAllowedEmails(value) {
+    const normalized = new Set(normalizeAllowedEmails(value));
+    return allowedEmailEntries(value)
+      .map((entry) => entry.toLocaleLowerCase('en-PH'))
+      .filter((entry) => !normalized.has(entry));
   }
 
   function questionSuggestion(question, index) {
@@ -560,23 +625,50 @@
 
   function renderRoster() {
     state.roster = state.roster.map(normalizeRoster);
-    $('#roster-body').innerHTML = state.roster.map((student, index) => `<tr data-student-id="${escapeHtml(student.id)}">
+    const body = $('#roster-body');
+    if (!body) return;
+    body.innerHTML = state.roster.map((student, index) => `<tr data-student-id="${escapeHtml(student.id)}">
       <td><input value="${escapeHtml(student.fullName)}" maxlength="160" data-roster-field="fullName" aria-label="Student ${index + 1} full legal name"></td>
       <td><input value="${escapeHtml(student.studentNumber)}" maxlength="48" data-roster-field="studentNumber" aria-label="${escapeHtml(student.fullName)} student number"></td>
       <td><select data-roster-field="yearLevel" aria-label="${escapeHtml(student.fullName)} year level">${['First year', 'Second year', 'Third year', 'Fourth year', 'Graduate'].map((level) => `<option ${level === student.yearLevel ? 'selected' : ''}>${level}</option>`).join('')}</select></td>
       <td><select data-roster-field="extraMinutes" aria-label="${escapeHtml(student.fullName)} extra time"><option value="0" ${student.extraMinutes === 0 ? 'selected' : ''}>None</option><option value="15" ${student.extraMinutes === 15 ? 'selected' : ''}>+15 min</option><option value="30" ${student.extraMinutes === 30 ? 'selected' : ''}>+30 min</option><option value="60" ${student.extraMinutes === 60 ? 'selected' : ''}>+60 min</option></select></td>
       <td><button class="icon-action" type="button" data-remove-student="true" aria-label="Remove ${escapeHtml(student.fullName)}"><i class="ph ph-trash" aria-hidden="true"></i></button></td>
     </tr>`).join('');
-    $('#student-count').textContent = `(${state.roster.length})`;
+    if ($('#student-count')) $('#student-count').textContent = `(${state.roster.length})`;
     if (api.demoEnabled()) document.body.dataset.demoHydratedRoster = String(state.roster.length);
-    $('#roster-preview-list').innerHTML = state.roster.slice(0, 5).map((student) => `<li><span>${escapeHtml(student.fullName)}</span><span>${escapeHtml(student.studentNumber)}</span></li>`).join('')
-      + (state.roster.length > 5 ? '<li><span>…</span><span></span></li>' : '');
+    if ($('#roster-preview-list')) {
+      $('#roster-preview-list').innerHTML = state.roster.slice(0, 5).map((student) => `<li><span>${escapeHtml(student.fullName)}</span><span>${escapeHtml(student.studentNumber)}</span></li>`).join('')
+        + (state.roster.length > 5 ? '<li><span>…</span><span></span></li>' : '');
+    }
     if (!state.hydrating) updateReviewCount();
+  }
+
+  function syncAdmissionControls() {
+    const mode = selectedRadio('admission-mode', state.exam?.admissionMode || 'key_only');
+    const editor = $('#allowlist-editor');
+    const input = $('#allowed-emails');
+    const emails = normalizeAllowedEmails(input?.value || []);
+    const invalid = invalidAllowedEmails(input?.value || []);
+    if (editor) editor.hidden = mode !== 'email_allowlist';
+    if ($('#allowlist-count')) {
+      $('#allowlist-count').textContent = invalid.length
+        ? `${emails.length} valid · ${invalid.length} line${invalid.length === 1 ? '' : 's'} need correction`
+        : `${emails.length} valid email address${emails.length === 1 ? '' : 'es'}`;
+      $('#allowlist-count').classList.toggle('has-error', invalid.length > 0);
+    }
+    if ($('#admission-summary')) {
+      $('#admission-summary').textContent = mode === 'email_allowlist'
+        ? `${emails.length} listed email address${emails.length === 1 ? '' : 'es'} may use the student key.`
+        : 'Anyone with the student key may enter. No roster is required.';
+    }
   }
 
   function hydrateForm(exam) {
     state.hydrating = true;
     state.exam = exam;
+    if (exam?.activation && typeof exam.activation === 'object' && !Array.isArray(exam.activation)) {
+      state.activation = exam.activation;
+    }
     state.questions = (exam.questions || []).map(normalizeQuestion);
     state.roster = (exam.roster || []).map(normalizeRoster);
     $('#command-title').value = exam.title || '';
@@ -601,6 +693,10 @@
     $('#microphone-required').checked = Boolean(exam.microphoneRequired);
     $('#recording-options').hidden = (exam.integrityTier || 'standard') !== 'recorded_proctoring';
     $('#recording-availability').hidden = RECORDED_PROCTORING_AVAILABLE;
+    const admissionMode = exam.admissionMode === 'email_allowlist' ? 'email_allowlist' : 'key_only';
+    $$('input[name="admission-mode"]').forEach((input) => { input.checked = input.value === admissionMode; });
+    $('#allowed-emails').value = normalizeAllowedEmails(exam.allowedEmails).join('\n');
+    syncAdmissionControls();
     $('#source-name').textContent = exam.sourceFileName || 'No source file';
     $('#source-size').textContent = exam.sourceFileSize ? formatBytes(exam.sourceFileSize) : 'Create questions directly below';
     $('#source-file').hidden = !exam.sourceFileName;
@@ -641,7 +737,9 @@
   }
 
   function syncRosterFromDom() {
-    state.roster = $$('[data-student-id]', $('#roster-body')).map((row, index) => normalizeRoster({
+    const body = $('#roster-body');
+    if (!body) return;
+    state.roster = $$('[data-student-id]', body).map((row, index) => normalizeRoster({
       id: row.dataset.studentId,
       ...Object.fromEntries($$('[data-roster-field]', row).map((field) => [field.dataset.rosterField, field.value])),
     }, index));
@@ -657,6 +755,9 @@
     syncRosterFromDom();
     const title = safeText($('#exam-title').value, 180);
     const subject = safeText($('#subject').value, 120);
+    const admissionMode = selectedRadio('admission-mode', 'key_only') === 'email_allowlist'
+      ? 'email_allowlist'
+      : 'key_only';
     return {
       ...state.exam,
       title,
@@ -673,6 +774,8 @@
       integrityTier: selectedRadio('integrity-tier-side', 'standard'),
       cameraRequired: $('#camera-required').checked,
       microphoneRequired: $('#microphone-required').checked,
+      admissionMode,
+      allowedEmails: admissionMode === 'email_allowlist' ? normalizeAllowedEmails($('#allowed-emails').value) : [],
       sourceFileName: $('#source-file').hidden ? null : safeText($('#source-name').textContent, 255),
       sourceFileSize: $('#source-file').hidden ? null : state.exam.sourceFileSize,
       questions: state.questions,
@@ -968,17 +1071,18 @@
       if (!(Number(question.points) > 0)) items.push({ section: 'questions', questionId: question.id, label: `Set points for Question ${index + 1}`, help: 'Every question needs a positive point value.', blocking: true });
       if (question.type === 'multiple_choice' && (!question.options?.length || question.options.some((choice) => !choice))) items.push({ section: 'questions', questionId: question.id, label: `Complete the choices for Question ${index + 1}`, help: 'Each multiple-choice option must contain text.', blocking: true });
     });
-    if (!exam.roster.length) items.push({ section: 'students', label: 'Add at least one student', help: 'The room key is limited to the examination roster.', blocking: true });
-    exam.roster.forEach((student, index) => {
-      if (!student.fullName || !student.studentNumber) items.push({ section: 'students', label: `Complete roster row ${index + 1}`, help: 'Both real name and student number are required.', blocking: true });
-    });
+    if (exam.admissionMode === 'email_allowlist') {
+      const invalidEmails = invalidAllowedEmails($('#allowed-emails').value);
+      if (!exam.allowedEmails.length) items.push({ section: 'students', label: 'Add at least one allowed email', help: 'Choose “Anyone with the student key” or enter the email addresses that may use this key.', blocking: true });
+      if (invalidEmails.length) items.push({ section: 'students', label: 'Correct the email list', help: `${invalidEmails.length} line${invalidEmails.length === 1 ? '' : 's'} cannot be used as an email address.`, blocking: true });
+    }
     const totalPoints = exam.questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
     if (totalPoints !== 100) items.push({ section: 'questions', label: `Review the ${totalPoints}-point total`, help: 'One hundred points is conventional, but the professor may publish a different total.', blocking: false });
-    if (!exam.roster.some((student) => student.extraMinutes > 0)) items.push({ section: 'students', label: 'Confirm accommodations', help: 'Review whether any student needs additional time or another approved accommodation.', blocking: false });
+    if (exam.admissionMode === 'key_only') items.push({ section: 'students', label: 'Open key entry is selected', help: 'Anyone with the student key may identify themselves and enter. No roster upload is required.', blocking: false });
     if (exam.integrityTier === 'standard') items.push({ section: 'safety', label: 'Confirm Standard integrity mode', help: 'No camera or microphone recording will occur. Focus changes are not treated as misconduct.', blocking: false });
     if (exam.integrityTier === 'recorded_proctoring' && !RECORDED_PROCTORING_AVAILABLE) items.push({ section: 'safety', label: 'Recorded proctoring is unavailable', help: 'Choose Standard or Focus monitoring. Recorded proctoring requires configured encrypted camera and microphone capture storage.', blocking: true });
-    if (exam.gradingIdentity === 'real_names') items.push({ section: 'students', label: 'Real-name grading is selected', help: 'You may switch to optional anonymous grading without losing roster access.', blocking: false });
-    if (exam.status === 'draft') items.push({ section: 'exam-details', label: 'Confirm administrator key handoff', help: 'After publication, an administrator verifies the sealed version and issues the room key.', blocking: false });
+    if (exam.gradingIdentity === 'real_names') items.push({ section: 'students', label: 'Real-name grading is selected', help: 'You may switch to optional anonymous grading without losing access to each student’s real identity.', blocking: false });
+    if (exam.status === 'draft') items.push({ section: 'exam-details', label: 'Confirm administrator key handoff', help: 'Publishing is the final creator step. Admin approves the request and issues the student key.', blocking: false });
     return items;
   }
 
@@ -994,12 +1098,121 @@
     if (!state.exam) return;
     const button = $('#publish-exam');
     const status = state.exam.status;
-    if (['awaiting_activation', 'active', 'open', 'grading', 'results_released'].includes(status)) {
-      button.textContent = status === 'awaiting_activation' ? 'Published' : 'Published';
+    if (['published', 'key_requested', 'awaiting_approval', 'awaiting_activation', 'active', 'open', 'grading', 'results_released'].includes(status)) {
+      button.textContent = ['published', 'key_requested', 'awaiting_approval', 'awaiting_activation'].includes(status)
+        ? 'Key requested'
+        : 'Published · key issued';
       button.disabled = true;
     } else {
-      button.textContent = 'Publish';
+      button.textContent = 'Publish & request key';
       button.disabled = false;
+    }
+    syncCreatorAccess();
+  }
+
+  function activationStatus() {
+    return safeText(
+      state.activation?.status
+        || state.exam?.activation?.status
+        || state.exam?.activationStatus
+        || state.exam?.status,
+      40,
+    ).toLowerCase();
+  }
+
+  function creatorAccessUnlocked() {
+    const status = activationStatus();
+    if (['active', 'open', 'closed', 'grading', 'results_released', 'scheduled'].includes(status)) return true;
+    if (!state.activation && !state.exam?.activation) return false;
+    return !['', 'waiting', 'pending', 'awaiting_activation', 'requested', 'revoked'].includes(status);
+  }
+
+  function creatorAccessPending() {
+    if (creatorAccessUnlocked()) return false;
+    const examStatus = safeText(state.exam?.status, 40).toLowerCase();
+    return ['published', 'key_requested', 'awaiting_approval', 'awaiting_activation'].includes(examStatus)
+      || ['waiting', 'pending', 'awaiting_activation', 'requested'].includes(activationStatus());
+  }
+
+  function stopActivationPolling() {
+    if (state.activationTimer) global.clearTimeout(state.activationTimer);
+    state.activationTimer = null;
+  }
+
+  function scheduleActivationPoll() {
+    if (state.activationTimer || state.activationPollInFlight || !creatorAccessPending()) return;
+    state.activationTimer = global.setTimeout(async () => {
+      state.activationTimer = null;
+      if (!creatorAccessPending()) return;
+      state.activationPollInFlight = true;
+      try {
+        await refreshCreatorAccess();
+      } finally {
+        state.activationPollInFlight = false;
+        if (creatorAccessPending()) scheduleActivationPoll();
+      }
+    }, 4500);
+  }
+
+  function syncCreatorAccess({ announce = false } = {}) {
+    if (!state.exam) return;
+    const unlocked = creatorAccessUnlocked();
+    const pending = creatorAccessPending();
+    $$('[data-requires-activation="true"]').forEach((control) => {
+      control.disabled = !unlocked;
+      control.setAttribute('aria-disabled', String(!unlocked));
+      if (control.classList.contains('workspace-tab')) {
+        const viewName = control.dataset.view === 'grade' ? 'Grade submissions' : 'Monitor examination';
+        control.setAttribute('aria-label', unlocked
+          ? viewName
+          : `${viewName} — available after Admin issues the student key`);
+      }
+      control.title = unlocked
+        ? (control.dataset.view === 'grade' ? 'Open grading' : 'Open monitoring')
+        : 'Publish the examination and wait for Admin to issue the student key';
+    });
+
+    const strip = $('#creator-access-status');
+    if (strip) {
+      strip.hidden = state.exam.status === 'draft' && !pending && !unlocked;
+      strip.dataset.state = unlocked ? 'approved' : pending ? 'pending' : 'draft';
+      $('#creator-access-title').textContent = unlocked ? 'Student key issued · creator access unlocked' : 'Student key request sent to Admin';
+      $('#creator-access-copy').textContent = unlocked
+        ? 'Monitor and Grade are ready. You do not need to enter the student key.'
+        : 'Your examination is saved and sealed. This page checks automatically; no creator key entry is required.';
+      $('#check-activation').textContent = unlocked ? 'Open monitoring' : 'Check approval';
+    }
+
+    if (unlocked) {
+      stopActivationPolling();
+      if ((announce || !state.activationAnnounced) && pending === false) {
+        state.activationAnnounced = true;
+        if (announce) toast('Admin issued the student key. Monitor and Grade are now unlocked.');
+      }
+    } else if (pending) {
+      scheduleActivationPoll();
+    } else if (!pending && state.activationTimer) {
+      stopActivationPolling();
+    }
+  }
+
+  async function refreshCreatorAccess({ silent = true } = {}) {
+    const wasUnlocked = creatorAccessUnlocked();
+    try {
+      const result = await api.professorQuery('monitor', { examId: state.exam.id });
+      state.monitor = result;
+      state.exam = result.exam || state.exam;
+      state.activation = result.activation || null;
+      const nowUnlocked = creatorAccessUnlocked();
+      syncCreatorAccess({ announce: !wasUnlocked && nowUnlocked });
+      if (state.currentView === 'monitor') renderMonitor();
+      if (state.currentView === 'grade' && nowUnlocked) await refreshGrading();
+      if (!silent && !nowUnlocked) toast('The request is still waiting for Admin approval. This page will keep checking.');
+      if (!silent && nowUnlocked && wasUnlocked) toast('Creator access is active. Monitor and Grade are ready.');
+      return nowUnlocked;
+    } catch (error) {
+      if (!silent) showError(error, () => refreshCreatorAccess({ silent: false }), 'Approval status not refreshed');
+      return false;
     }
   }
 
@@ -1037,10 +1250,10 @@
       <div class="publish-item"><small>Examination</small><strong>${escapeHtml(exam.title)}</strong></div>
       <div class="publish-item"><small>Starts</small><strong>${escapeHtml(formatDateTime(exam.startsAt))}</strong></div>
       <div class="publish-item"><small>Questions and points</small><strong>${exam.questions.length} questions · ${totalPoints} points</strong></div>
-      <div class="publish-item"><small>Students</small><strong>${exam.roster.length} real-name roster records</strong></div>
+      <div class="publish-item"><small>Student admission</small><strong>${exam.admissionMode === 'email_allowlist' ? `${exam.allowedEmails.length} allowed email address${exam.allowedEmails.length === 1 ? '' : 'es'}` : 'Anyone with the student key'}</strong></div>
       <div class="publish-item"><small>Grading</small><strong>${exam.gradingIdentity === 'real_names' ? 'Real names' : 'Anonymous grading (optional)'}</strong></div>
       <div class="publish-item"><small>Integrity</small><strong>${escapeHtml(exam.integrityTier.replace(/_/g, ' '))}</strong></div>
-    </div><p class="legal-note">After publication, an administrator must verify the version and issue the room key. Students cannot see questions before the room opens and they continue past the short privacy warning.</p>`;
+    </div><p class="legal-note">Publishing is your final setup step. Admin approves the request and issues the student key; Monitor and Grade then unlock automatically without asking you for that key.</p>`;
     $('#publish-confirmation').checked = false;
     $('#publish-confirm').disabled = true;
     openDialog('publish-dialog');
@@ -1058,8 +1271,10 @@
       state.exam = result.exam || { ...exam, status: 'awaiting_activation' };
       closeDialog('publish-dialog');
       updatePublishState();
-      toast('Published. The administrator can now verify the examination and issue the room key.');
-      switchView('monitor');
+      state.activation = result.activation || null;
+      state.activationAnnounced = false;
+      syncCreatorAccess();
+      toast('Published and key requested. Admin can approve it now; this page will unlock Monitor and Grade automatically.');
     } catch (error) {
       showError(error, () => publishExam(event));
     } finally {
@@ -1316,6 +1531,12 @@
 
   function switchView(view) {
     if (!['create', 'monitor', 'grade'].includes(view)) return;
+    if (view !== 'create' && !creatorAccessUnlocked()) {
+      view = 'create';
+      if (creatorAccessPending()) {
+        toast('Monitor and Grade unlock automatically when Admin issues the student key.');
+      }
+    }
     state.currentView = view;
     document.body.dataset.workspaceView = view;
     $$('[data-app-view]').forEach((node) => {
@@ -1341,6 +1562,7 @@
       state.monitor = result;
       state.exam = result.exam || state.exam;
       state.activation = result.activation || null;
+      syncCreatorAccess();
       renderMonitor();
       if (!silent) toast('Live student status refreshed.');
     } catch (error) {
@@ -1352,36 +1574,44 @@
     const data = state.monitor || { sessions: [], submissions: [], incidents: [] };
     const sessions = data.sessions || [];
     const submittedIds = new Set((data.submissions || []).map((submission) => submission.sessionId));
-    const connected = sessions.filter((session) => session.connected && !submittedIds.has(session.id)).length;
+    const connected = sessions.filter((session) => session.connected && !submittedIds.has(session.id) && !['revoked', 'blocked'].includes(session.status)).length;
     const submitted = submittedIds.size;
     const disconnected = sessions.filter((session) => !session.connected && !submittedIds.has(session.id)).length;
     $('#monitor-title').textContent = state.exam.title;
     $('#monitor-metrics').innerHTML = [
-      ['Roster', state.exam.roster?.length || state.roster.length, 'Expected students'],
+      ['Entered', sessions.length, state.exam.admissionMode === 'email_allowlist' ? 'From the allowed email list' : 'Anyone with the student key'],
       ['In progress', connected, 'Connected and writing'],
       ['Submitted', submitted, 'Receipts issued'],
       ['Needs attention', disconnected + (data.incidents || []).filter((incident) => incident.severity !== 'info').length, 'Human review only'],
     ].map(([label, value, help]) => `<div class="operations-metric"><small>${escapeHtml(label)}</small><strong>${value}</strong><span>${escapeHtml(help)}</span></div>`).join('');
-    const status = state.activation?.status || 'waiting';
-    $('#room-state-label').textContent = status === 'open' ? 'Monitoring room open' : status === 'active' ? 'Key issued · students may enter' : status === 'closed' ? 'Room closed' : 'Waiting for admin key';
+    const status = activationStatus() || 'waiting';
+    $('#room-state-label').textContent = status === 'open' ? 'Monitoring room open' : creatorAccessUnlocked() && status !== 'closed' ? 'Student key issued · room ready' : status === 'closed' ? 'Room closed · grading ready' : 'Waiting for Admin approval';
     $('.live-indicator').classList.toggle('is-live', status === 'open');
     const openButton = $('#open-room');
     if (status === 'open') {
       openButton.textContent = 'Close room';
       openButton.dataset.roomAction = 'close';
+      openButton.disabled = false;
+    } else if (status === 'closed') {
+      openButton.textContent = 'Room closed';
+      openButton.dataset.roomAction = 'closed';
+      openButton.disabled = true;
     } else {
-      openButton.textContent = state.activation ? 'Enter monitoring with key' : 'Waiting for admin key';
+      openButton.textContent = creatorAccessUnlocked() ? 'Open room' : 'Waiting for student key';
       openButton.dataset.roomAction = 'open';
-      openButton.disabled = !state.activation;
+      openButton.disabled = !creatorAccessUnlocked();
     }
     const query = $('#monitor-search').value.trim().toLowerCase();
     const filtered = sessions.filter((session) => !query || `${session.fullName} ${session.studentNumber}`.toLowerCase().includes(query));
     $('#monitor-table-body').innerHTML = filtered.length ? filtered.map((session) => {
       const isSubmitted = submittedIds.has(session.id);
-      const sessionStatus = isSubmitted ? 'submitted' : session.connected ? 'in_progress' : 'disconnected';
+      const sessionStatus = ['revoked', 'blocked'].includes(session.status)
+        ? session.status
+        : isSubmitted ? 'submitted' : session.connected ? 'in_progress' : 'disconnected';
       const latestIncident = [...(data.incidents || [])].reverse().find((incident) => incident.sessionId === session.id);
-      return `<tr data-monitor-session="${escapeHtml(session.id)}"><td><strong>${escapeHtml(session.fullName)}</strong></td><td>${escapeHtml(session.studentNumber)}</td><td><span class="status-label ${sessionStatus}"><i aria-hidden="true"></i>${escapeHtml(sessionStatus.replace('_', ' '))}</span></td><td>${escapeHtml(String(session.currentQuestion || '—'))}</td><td>${escapeHtml(timeAgo(session.lastSeenAt))}</td><td>${latestIncident ? escapeHtml(latestIncident.type.replace(/_/g, ' ')) : 'Clear'}</td><td><button class="table-action" type="button" data-view-student="${escapeHtml(session.id)}">View</button></td></tr>`;
-    }).join('') : '<tr><td colspan="7"><div class="empty-feed">No students have entered yet. The roster remains ready, and this page will update automatically.</div></td></tr>';
+      const canRevoke = !isSubmitted && !['revoked', 'blocked'].includes(sessionStatus);
+      return `<tr data-monitor-session="${escapeHtml(session.id)}"><td><strong>${escapeHtml(session.fullName)}</strong>${session.email ? `<small>${escapeHtml(session.email)}</small>` : ''}</td><td>${escapeHtml(session.studentNumber)}</td><td><span class="status-label ${sessionStatus}"><i aria-hidden="true"></i>${escapeHtml(sessionStatus.replace('_', ' '))}</span></td><td>${escapeHtml(String(session.currentQuestion || '—'))}</td><td>${escapeHtml(timeAgo(session.lastSeenAt))}</td><td>${latestIncident ? escapeHtml(latestIncident.type.replace(/_/g, ' ')) : 'Clear'}</td><td><div class="session-actions"><button class="table-action" type="button" data-view-student="${escapeHtml(session.id)}">View</button>${canRevoke ? `<button class="table-action warning" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="kick">Kick</button><button class="table-action danger" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="block">Block</button>` : ''}</div></td></tr>`;
+    }).join('') : '<tr><td colspan="7"><div class="empty-feed">No students have entered yet. Share the student key after the room opens; this page updates automatically.</div></td></tr>';
     const incidents = [...(data.incidents || [])].reverse();
     $('#incident-feed').innerHTML = incidents.length ? incidents.map((incident) => {
       const session = sessions.find((entry) => entry.id === incident.sessionId);
@@ -1391,8 +1621,19 @@
 
   async function roomAction() {
     const button = $('#open-room');
+    if (button.dataset.roomAction === 'closed') {
+      switchView('grade');
+      return;
+    }
     if (button.dataset.roomAction === 'close') {
-      const confirmed = global.confirm('Close the examination room? Students who already submitted are unaffected. Students still writing will be asked to submit their last saved work.');
+      const confirmed = await requestConfirmation({
+        eyebrow: 'Room control',
+        title: 'Close the examination room?',
+        copy: 'Students who already submitted are unaffected. Students still writing will be asked to submit their last saved work.',
+        help: 'Saved answers and submission records remain preserved for grading and Admin recovery.',
+        confirmLabel: 'Close room',
+        cancelLabel: 'Keep room open',
+      });
       if (!confirmed) return;
       setButtonBusy(button, true, 'Closing…');
       try {
@@ -1407,30 +1648,68 @@
       }
       return;
     }
-    if (!state.activation) {
-      showError({ message: 'The administrator has not issued a room key yet.', recovery: 'Keep this page open. Ask the administrator to verify the published examination and issue the key.' }, () => refreshMonitor({ silent: false }), 'Room key pending');
+    if (!creatorAccessUnlocked()) {
+      showError({ message: 'Admin has not issued the student key yet.', recovery: 'Keep this page open or choose Check approval. Monitor and Grade unlock automatically after approval.' }, () => refreshCreatorAccess({ silent: false }), 'Student key pending');
       return;
     }
-    $('#professor-room-key').value = api.demoEnabled() ? api.demoRoomKey : '';
-    openDialog('key-dialog');
-    setTimeout(() => $('#professor-room-key').focus(), 100);
-  }
-
-  async function openRoomWithKey(event) {
-    event.preventDefault();
-    const button = $('button[type="submit"]', event.currentTarget);
     setButtonBusy(button, true, 'Opening…');
     try {
-      const result = await api.professorCommand('open_room', { examId: state.exam.id, roomKey: $('#professor-room-key').value }, api.requestId());
+      const result = await api.professorCommand('open_room', { examId: state.exam.id }, api.requestId());
       state.exam = result.exam || state.exam;
       state.activation = result.activation || state.activation;
-      closeDialog('key-dialog');
-      toast('Monitoring room is open. Students may now enter with the same key.');
+      syncCreatorAccess();
+      toast('Monitoring room is open. Students may enter with their student key.');
       await refreshMonitor();
     } catch (error) {
-      showError(error, () => openRoomWithKey(event), 'Room not opened');
+      showError(error, roomAction, 'Room not opened');
     } finally {
       setButtonBusy(button, false);
+      renderMonitor();
+    }
+  }
+
+  async function revokeStudentSession(sessionId, mode, trigger) {
+    const session = (state.monitor?.sessions || []).find((entry) => entry.id === sessionId);
+    if (!session || state.revokingSessions.has(sessionId)) return;
+    let reason = 'Removed by the examination creator';
+    if (mode === 'block') {
+      const detail = await requestText({
+        eyebrow: 'Participant control',
+        title: `Block ${session.fullName || 'this student'}?`,
+        copy: 'This ends the active session and prevents it from continuing. The action is recorded in the examination audit trail.',
+        label: 'Reason for blocking',
+        help: 'Write a short reason the creator and Admin can understand later.',
+        minimumLength: 3,
+        submitLabel: 'Block session',
+      });
+      if (!detail) return;
+      reason = `Blocked by the examination creator: ${safeText(detail, 500)}`;
+    } else {
+      const confirmed = await requestConfirmation({
+        eyebrow: 'Participant control',
+        title: `Remove ${session.fullName || 'this student'} from the room?`,
+        copy: 'The active session will end. The student cannot continue this attempt unless the creator or Admin resolves the access decision.',
+        help: 'The latest saved work remains preserved for creator and Admin review.',
+        confirmLabel: 'Remove session',
+        cancelLabel: 'Keep student connected',
+      });
+      if (!confirmed) return;
+    }
+    state.revokingSessions.add(sessionId);
+    if (trigger) trigger.disabled = true;
+    try {
+      await api.professorCommand('revoke_session', {
+        examId: state.exam.id,
+        sessionId,
+        reason,
+      }, api.requestId());
+      toast(mode === 'block' ? 'Student session blocked. The action is recorded.' : 'Student session removed. Their latest saved work remains preserved.');
+      await refreshMonitor();
+    } catch (error) {
+      showError(error, () => revokeStudentSession(sessionId, mode, trigger), mode === 'block' ? 'Student not blocked' : 'Student not removed');
+    } finally {
+      state.revokingSessions.delete(sessionId);
+      if (trigger) trigger.disabled = false;
     }
   }
 
@@ -1556,6 +1835,26 @@
       }).join('')}`;
   }
 
+  function gradingEditorHasUnsavedChanges() {
+    const data = state.grading || {};
+    const sessionId = state.selectedGradingSessionId;
+    if (!sessionId) return false;
+    const grades = latestBy(
+      (data.gradeRevisions || []).filter((revision) => revision.sessionId === sessionId),
+      (revision) => revision.questionId,
+    );
+    return $$('[data-grade-question]').some((container) => {
+      const questionId = container.dataset.gradeQuestion;
+      const persisted = grades.get(questionId) || {};
+      const pointsInput = $('[data-grade-points]', container);
+      const feedbackInput = $('[data-grade-feedback]', container);
+      const persistedPoints = persisted.points == null ? '' : String(persisted.points);
+      const persistedFeedback = String(persisted.feedback || '');
+      return String(pointsInput?.value || '') !== persistedPoints
+        || String(feedbackInput?.value || '') !== persistedFeedback;
+    });
+  }
+
   async function saveGrade(questionId, button) {
     const container = $(`[data-grade-question="${CSS.escape(questionId)}"]`);
     const points = Number($('[data-grade-points]', container).value);
@@ -1592,7 +1891,14 @@
       }, null, 'Results not released');
       return;
     }
-    const confirmed = global.confirm(`Release results to ${sessionIds.length} selected student${sessionIds.length === 1 ? '' : 's'}? Students can view the grades on their protected receipt page after release.`);
+    const confirmed = await requestConfirmation({
+      eyebrow: 'Result release',
+      title: `Release results to ${sessionIds.length} selected student${sessionIds.length === 1 ? '' : 's'}?`,
+      copy: 'The selected students will be able to view their points and Professor feedback on their protected receipt page.',
+      help: 'Every saved grade revision remains available to the creator and Admin after release.',
+      confirmLabel: 'Release results',
+      cancelLabel: 'Continue grading',
+    });
     if (!confirmed) return;
     const button = $('#release-results');
     setButtonBusy(button, true, 'Releasing…');
@@ -2045,10 +2351,10 @@
       event.preventDefault();
       document.execCommand('insertText', false, event.clipboardData.getData('text/plain'));
     });
-    $('#add-student').addEventListener('click', () => addStudent());
-    $('#roster-body').addEventListener('input', scheduleAutosave);
-    $('#roster-body').addEventListener('change', scheduleAutosave);
-    $('#roster-body').addEventListener('click', (event) => {
+    $('#add-student')?.addEventListener('click', () => addStudent());
+    $('#roster-body')?.addEventListener('input', scheduleAutosave);
+    $('#roster-body')?.addEventListener('change', scheduleAutosave);
+    $('#roster-body')?.addEventListener('click', (event) => {
       const button = event.target.closest('[data-remove-student]');
       const row = event.target.closest('[data-student-id]');
       if (!button || !row) return;
@@ -2057,7 +2363,15 @@
       renderRoster();
       scheduleAutosave();
     });
-    $('#roster-upload').addEventListener('change', (event) => importRoster(event.target.files?.[0]));
+    $('#roster-upload')?.addEventListener('change', (event) => importRoster(event.target.files?.[0]));
+    $$('input[name="admission-mode"]').forEach((input) => input.addEventListener('change', () => {
+      syncAdmissionControls();
+      scheduleAutosave();
+    }));
+    $('#allowed-emails').addEventListener('input', () => {
+      syncAdmissionControls();
+      scheduleAutosave();
+    });
     $('#source-upload').addEventListener('change', (event) => importSource(event.target.files?.[0]));
     $('#remove-source').addEventListener('click', () => {
       $('#source-file').hidden = true;
@@ -2101,13 +2415,21 @@
       $('#assistant-input').value = '';
     });
     $('#refresh-monitor').addEventListener('click', () => refreshMonitor({ silent: false }));
+    $('#check-activation').addEventListener('click', async () => {
+      if (creatorAccessUnlocked()) switchView('monitor');
+      else await refreshCreatorAccess({ silent: false });
+    });
     $('#monitor-search').addEventListener('input', renderMonitor);
     $('#monitor-table-body').addEventListener('click', (event) => {
+      const revoke = event.target.closest('[data-revoke-session]');
+      if (revoke) {
+        revokeStudentSession(revoke.dataset.revokeSession, revoke.dataset.revokeMode || 'kick', revoke);
+        return;
+      }
       const button = event.target.closest('[data-view-student]');
       if (button) showStudentDetail(button.dataset.viewStudent);
     });
     $('#open-room').addEventListener('click', roomAction);
-    $('#key-form').addEventListener('submit', openRoomWithKey);
     $('#download-monitor-snapshot').addEventListener('click', downloadMonitorSnapshot);
     $('#grading-student-list').addEventListener('click', (event) => {
       const button = event.target.closest('[data-grade-session]');
@@ -2159,8 +2481,9 @@
       }
     });
     api.subscribe(() => {
-      if (state.currentView === 'monitor') refreshMonitor();
-      if (state.currentView === 'grade') refreshGrading();
+      if (creatorAccessPending()) refreshCreatorAccess();
+      else if (state.currentView === 'monitor') refreshMonitor();
+      else if (state.currentView === 'grade' && !gradingEditorHasUnsavedChanges()) refreshGrading();
     });
   }
 
@@ -2186,16 +2509,16 @@
     gate.dataset.accessState = signInRequired ? 'sign-in-required' : workspaceUnavailable ? 'workspace-unavailable' : 'check-interrupted';
     primary.href = '../#examination-room';
     if (signInRequired) {
-      $('#access-title').textContent = 'Professor sign-in is required';
+      $('#access-title').textContent = 'Sign in to create or manage an examination';
       primary.textContent = 'Sign in through Due Diligence';
     } else if (workspaceUnavailable) {
       $('#access-title').textContent = 'The law-school workspace is unavailable';
       primary.textContent = 'Return to Examination Room doors';
     } else {
-      $('#access-title').textContent = 'Professor access could not be checked';
+      $('#access-title').textContent = 'The Examination Room could not open';
       primary.textContent = 'Check access from Examination Room';
     }
-    $('#access-copy').textContent = error?.message || 'The Professor workspace could not be opened for this signed-in account.';
+    $('#access-copy').textContent = error?.message || 'The creator workspace could not be opened. No Professor role or license approval is required.';
     recovery.textContent = error?.recovery || (signInRequired
       ? 'Sign in through Due Diligence. After sign-in, reopen the Examination Room menu and enter the Professor door.'
       : workspaceUnavailable
@@ -2222,12 +2545,20 @@
         global.localStorage?.removeItem(DRAFT_STORAGE_KEY);
         global.localStorage?.removeItem(DRAFT_ACTIVE_KEY);
         global.localStorage?.removeItem(DRAFT_INDEX_KEY);
+        // Consume the one-time reset flag immediately. Keeping it in the URL
+        // lets a later refresh or cross-tab demo event reset a room again after
+        // Admin has approved it and issued the key.
+        if (global.history?.replaceState) {
+          const cleanUrl = new URL(global.location.href);
+          cleanUrl.searchParams.delete('reset');
+          global.history.replaceState(null, '', cleanUrl.toString());
+        }
       }
       const result = await api.professorQuery('session');
       state.professor = result.professor;
       state.activation = result.activation || null;
-      $('#professor-short-name').textContent = result.professor.displayName || 'Professor';
-      $('.profile-initials').textContent = initials(result.professor.displayName || 'Professor');
+      $('#professor-short-name').textContent = result.professor.displayName || 'Exam creator';
+      $('.profile-initials').textContent = initials(result.professor.displayName || 'Exam creator');
       const summaries = examSummariesFromSession(result);
       const requestedExamId = safeText(params.get('exam'), 80);
       const localDrafts = params.get('reset') === '1' ? [] : await readLocalDraftIndex();
@@ -2292,9 +2623,14 @@
           exam = local.exam;
           restoredLocalDraft = true;
         } else if (!(baselineFingerprint && localFingerprint === baselineFingerprint)) {
-          const useDeviceDraft = typeof global.confirm === 'function' && global.confirm(
-            'This device and the server both contain different changes to this examination.\n\nChoose OK to restore this device’s draft, or Cancel to keep the server copy. Nothing is deleted; you can download a recovery copy before saving again.',
-          );
+          const useDeviceDraft = await requestConfirmation({
+            eyebrow: 'Draft recovery',
+            title: 'This device and the server contain different changes.',
+            copy: 'Choose which copy to open. Nothing is deleted, and you can still download a recovery copy before saving again.',
+            help: 'Restore this device to continue its unsaved work, or keep the server copy to use the latest saved server version.',
+            confirmLabel: 'Restore this device',
+            cancelLabel: 'Keep server copy',
+          });
           exam = useDeviceDraft ? local.exam : serverExam;
           restoredLocalDraft = useDeviceDraft;
           resolvedConflict = true;

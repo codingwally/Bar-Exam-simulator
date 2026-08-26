@@ -46,6 +46,9 @@
     nativeViewSequence: 0,
     nativeViewClosing: false,
     overlayFocusOrigins: new Map(),
+    profileAvatarUrl: '',
+    profileAvatarBusy: false,
+    profileAvatarLoaded: false,
   };
 
   let resolveAuthReady;
@@ -174,6 +177,8 @@
   const pendingSubmissionStorageKey = 'duediligence.pending-submission.v1';
   const authTimeoutMs = 12_000;
   const pendingSubmissionMaxAgeMs = 30 * 60 * 1000;
+  const profilePhotoSourceLimit = 20 * 1024 * 1024;
+  const profilePhotoPayloadLimit = 3 * 1024 * 1024;
 
   function dispatchSessionState(session, reason = 'session') {
     const userId = session?.user?.id || null;
@@ -820,6 +825,8 @@
     state.user = null;
     state.profile = null;
     state.admin = null;
+    state.profileAvatarUrl = '';
+    state.profileAvatarLoaded = false;
     global.DueDiligencePrivateBeta?.clearAccess?.();
     syncAuthUi();
   }
@@ -1112,6 +1119,158 @@
     return source.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   }
 
+  function accountRoleLabel() {
+    if (state.admin?.authorized) return 'Admin';
+    const category = state.profile?.commercial_category || state.profile?.year_level || '';
+    if (category === 'professor') return 'Professor';
+    if (category === 'review') return 'Bar Candidate';
+    if (/_year$/.test(category) || /^[1-5]$/.test(category)) return 'Law Student';
+    return 'Member';
+  }
+
+  function renderAvatarNode(element, url = state.profileAvatarUrl) {
+    if (!element) return;
+    element.replaceChildren();
+    if (url) {
+      const image = document.createElement('img');
+      image.src = url;
+      image.alt = '';
+      image.referrerPolicy = 'no-referrer';
+      element.append(image);
+      element.classList.add('has-photo');
+      return;
+    }
+    const fallback = document.createElement('span');
+    fallback.textContent = initials();
+    element.append(fallback);
+    element.classList.remove('has-photo');
+  }
+
+  function syncProfileAvatars() {
+    renderAvatarNode(document.getElementById('dd2-account-avatar'));
+    renderAvatarNode(document.getElementById('dd2-header-role-avatar'));
+  }
+
+  async function loadProfileAvatar(options = {}) {
+    if (!state.session?.access_token || !state.user || state.profileAvatarBusy) return;
+    if (state.profileAvatarLoaded && options.force !== true) {
+      syncProfileAvatars();
+      return;
+    }
+    state.profileAvatarBusy = true;
+    try {
+      const payload = await nativeWorkerRequest('/quorum/query', {
+        body: { operation: 'profile', payload: {} },
+        submissionView: 'account',
+      });
+      state.profileAvatarUrl = String(payload?.data?.avatarUrl || '');
+      state.profileAvatarLoaded = true;
+      syncProfileAvatars();
+    } catch (error) {
+      const status = document.getElementById('dd2-account-photo-status');
+      if (status) {
+        status.className = 'dd2-status is-error';
+        status.textContent = error?.message || 'Your profile photo could not be loaded. Try again.';
+      }
+    } finally {
+      state.profileAvatarBusy = false;
+    }
+  }
+
+  async function profilePhotoToPayload(file) {
+    if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
+        || file.size < 1 || file.size > profilePhotoSourceLimit) {
+      throw new Error('Choose a JPEG, PNG, or WebP profile photo smaller than 20 MB.');
+    }
+    const bitmap = typeof createImageBitmap === 'function'
+      ? await createImageBitmap(file)
+      : await new Promise((resolve, reject) => {
+        const image = new Image();
+        const url = URL.createObjectURL(file);
+        image.onload = () => {
+          URL.revokeObjectURL(url);
+          resolve(image);
+        };
+        image.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error('This photo could not be opened. Choose another JPG, PNG, or WebP image.'));
+        };
+        image.src = url;
+      });
+    try {
+      if (bitmap.width < 256 || bitmap.height < 256) {
+        throw new Error('Choose a profile photo at least 256 pixels wide and tall.');
+      }
+      const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+      const width = Math.max(256, Math.round(bitmap.width * scale));
+      const height = Math.max(256, Math.round(bitmap.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d', { alpha: false });
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, width, height);
+      context.drawImage(bitmap, 0, 0, width, height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+      if (!blob || blob.size > profilePhotoPayloadLimit) {
+        throw new Error('This photo is still too large after optimization. Choose a smaller image.');
+      }
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      let binary = '';
+      for (let index = 0; index < bytes.length; index += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+      }
+      return {
+        mimeType: 'image/jpeg',
+        dataBase64: btoa(binary),
+        width,
+        height,
+        cropX: 0.5,
+        cropY: 0.5,
+      };
+    } finally {
+      bitmap.close?.();
+    }
+  }
+
+  async function uploadProfilePhoto(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    const button = document.getElementById('dd2-account-photo-button');
+    const status = document.getElementById('dd2-account-photo-status');
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Preparing photo…';
+    }
+    setStatus('dd2-account-photo-status', 'Optimizing your photo securely…');
+    try {
+      const profileImage = await profilePhotoToPayload(file);
+      if (button) button.textContent = 'Uploading photo…';
+      await nativeWorkerRequest('/quorum/command', {
+        body: { operation: 'set_profile_avatar', payload: {}, profileImage },
+        submissionView: 'account',
+      });
+      state.profileAvatarLoaded = false;
+      await loadProfileAvatar({ force: true });
+      setStatus('dd2-account-photo-status', 'Profile photo updated across Home.', 'success');
+      global.toast?.('Profile photo updated.', 'ok');
+    } catch (error) {
+      setStatus(
+        'dd2-account-photo-status',
+        error?.message || 'Your profile photo could not be updated. Choose another image and try again.',
+        'error',
+      );
+    } finally {
+      input.value = '';
+      if (button) {
+        button.disabled = false;
+        button.textContent = state.profileAvatarUrl ? 'Change photo' : 'Upload photo';
+      }
+      if (status && !status.textContent) status.textContent = 'No photo change was made.';
+    }
+  }
+
   function syncAuthUi() {
     const signedIn = Boolean(state.session?.access_token && state.user);
     const signInButton = document.getElementById('btn-signin');
@@ -1131,6 +1290,20 @@
         'aria-label',
         signedIn ? 'Open signed-in account controls' : 'Sign in to Due Diligence',
       );
+    }
+    const memberTools = document.getElementById('dd2-header-member-tools');
+    if (memberTools) memberTools.hidden = !signedIn;
+    const roleLabel = document.getElementById('dd2-header-role-label');
+    if (roleLabel) roleLabel.textContent = accountRoleLabel();
+    const roleButton = document.getElementById('dd2-header-role-button');
+    if (roleButton) {
+      const role = accountRoleLabel();
+      roleButton.title = `Open profile · Role: ${role}`;
+      roleButton.setAttribute('aria-label', `Open profile. Current role: ${role}`);
+    }
+    if (signedIn) {
+      syncProfileAvatars();
+      loadProfileAvatar().catch(() => {});
     }
     const badge = document.getElementById('dd2-guest-badge');
     if (badge && !signedIn) {
@@ -1445,7 +1618,7 @@
         <h3>AI, grading, and authority limitations</h3>
         <p>AI-generated grading and suggested answers may be incomplete or inaccurate. They are not official Supreme Court or Bar Examiner grades. A “Human Verified” label appears only after a genuine editorial review record exists. Provider capacity may temporarily interrupt grading; no grade or authority will be fabricated.</p>
         <h3>Introductory tokens and Early Access</h3>
-        <p>Each ordinary account receives one lifetime allowance of five practice tokens. A token is consumed only after a successful graded submission. Failed grading and duplicate retries do not consume a token, and used tokens do not reset by date, browser, device, sign-out, or account update. Early Access is available at the current promotional price of ₱149; the regular manual-renewal price is ₱199.</p>
+        <p>Each eligible first-time account receives one lifetime allowance of five practice tokens. A token is consumed only after a successful graded submission. Failed grading and duplicate retries do not consume a token, and used tokens do not reset by date, browser, device, sign-out, account update, or the end of a paid subscription. Early Access is available at the current promotional price of ₱149; the regular manual-renewal price is ₱199.</p>
         <h3>Payments, cancellation, and refunds</h3>
         <p>Early Access has no automatic charge or automatic renewal. The next manual renewal date is October 1, 2026. A valid payment-proof submission creates one non-renewable 24-hour provisional entitlement while it is reviewed. Eligible refund requests must be filed within seven calendar days of the first provisional or paid access start and are reviewed using the published unused-time formula, without limiting statutory consumer rights.</p>
         <h3>Your submissions</h3>
@@ -1495,7 +1668,7 @@
           <span>Early Access is ₱149 and includes protected Syllabus-Based Review material.</span>
           <span>Provisional access lets you continue practicing while payment is reviewed; Reveal Answer unlocks only after payment is verified.</span>
         </aside>` : ''}
-        <p class="dd2-pricing-intro"><strong>Continue without practice limits.</strong> Every ordinary account already receives five one-time practice tokens. Early Access removes that limit during the promotional access period.</p>
+        <p class="dd2-pricing-intro"><strong>Continue without practice limits.</strong> Eligible first-time accounts receive one lifetime allowance of five practice tokens. Early Access removes that limit during the active paid period; an expired paid period does not create a new token allowance.</p>
         <div class="dd2-plan-grid" id="dd2-pricing-plans" aria-live="polite">
           <div class="dd2-loading-line">Loading current access options…</div>
         </div>
@@ -1538,7 +1711,7 @@
         </form>
         <h3>Frequently asked</h3>
         <p><strong>How is an answer scored?</strong><br>Each answer receives an independent 0–5 ALAC assessment. It is not an official Bar grade.</p>
-        <p><strong>How do introductory tokens work?</strong><br>Every ordinary account receives five practice tokens once. A token is used only after successful grading. Failed requests and duplicate retries do not consume a token, and used tokens do not reset.</p>
+        <p><strong>How do introductory tokens work?</strong><br>Eligible first-time accounts receive five practice tokens once. A token is used only after successful grading. Failed requests and duplicate retries do not consume a token, and used tokens do not reset.</p>
         <p><strong>Where should I report a model-answer issue?</strong><br>Use “Suggest a Correction/Better Answer” beneath the assessment so the editorial context stays attached.</p>
       </div>`;
   }
@@ -1556,63 +1729,82 @@
     const category = state.profile?.commercial_category
       || ({ '1': 'first_year', '2': 'second_year', '3': 'third_year', '4': 'fourth_year' }[state.profile?.year_level]
         || (state.profile?.year_level === 'review' ? 'review' : ''));
-    const professorRole = category === 'professor';
+    const roleLabel = accountRoleLabel();
     return `
-      <div class="dd2-account-summary">
-        <div class="dd2-account-avatar">${escapeHtml(initials())}</div>
-        <div><strong>${escapeHtml(name)}</strong><span>${professorRole ? 'Professor account · signed in securely with Google' : 'Signed in securely with Google'}</span></div>
-      </div>
-      <form class="dd2-form" id="dd2-account-form">
-        <label class="dd2-label">Display name
-          <input class="dd2-field" id="dd2-account-name" value="${escapeHtml(state.profile?.display_name || '')}" maxlength="120" required>
-        </label>
-        <label class="dd2-label">Law school
-          <input class="dd2-field" id="dd2-account-school" list="dd2-account-school-suggestions"
-            value="${escapeHtml(schoolName)}" maxlength="180" autocomplete="organization"
-            placeholder="Type your law school" required>
-          <datalist id="dd2-account-school-suggestions">${schoolSuggestionsMarkup()}</datalist>
-          <span class="dd2-field-help">Choose a suggestion or save any school name you enter.</span>
-        </label>
-        <label class="dd2-label">Year or category
-          <select class="dd2-field" id="dd2-account-year" required>
-            <option value="">Select year or category</option>
-            ${[
-              ['first_year', 'First Year'], ['second_year', 'Second Year'],
-              ['third_year', 'Third Year'], ['fourth_year', 'Fourth Year'],
-              ['fifth_year', 'Fifth Year'], ['review', 'Review / Bar Candidate'],
-              ['professor', 'Professor'],
-            ].map(([value, label]) => `<option value="${value}"${category === value ? ' selected' : ''}>${label}</option>`).join('')}
-          </select>
-        </label>
-        <label class="dd2-label" id="dd2-account-professor-wrap"${category === 'professor' ? '' : ' hidden'}>Professor license declaration
-          <input class="dd2-field" id="dd2-account-professor-license" maxlength="80" autocomplete="off" placeholder="Re-enter to verify profile changes">
-          <span class="dd2-field-help">Professor is saved as your profile role. It is not required to open the Professor door; Admin approval occurs only after you publish an examination request.</span>
-        </label>
-        ${config.features?.examinationRoom === true ? `<section class="dd2-account-examination${professorRole ? ' is-professor' : ''}" aria-labelledby="dd2-account-examination-title">
-          <img src="assets/icons/navigation/door-open.svg" width="34" height="34" alt="" aria-hidden="true">
-          <div>
-            <strong id="dd2-account-examination-title">Examination Room</strong>
-            <span>Create and manage an examination after sign-in, or enter as a student with a room key.</span>
+      <section class="dd2-account-hero" aria-labelledby="dd2-account-name-heading">
+        <div class="dd2-account-avatar-wrap">
+          <div class="dd2-account-avatar" id="dd2-account-avatar"><span>${escapeHtml(initials())}</span></div>
+          <span class="dd2-account-secure-mark">Verified</span>
+        </div>
+        <div class="dd2-account-identity">
+          <span class="dd2-view-kicker">Your chamber</span>
+          <strong id="dd2-account-name-heading">${escapeHtml(name)}</strong>
+          <div class="dd2-account-badges">
+            <span>Role · ${escapeHtml(roleLabel)}</span>
+            <span>Google secured</span>
           </div>
-          <button class="dd2-button dd2-button-secondary" type="button" data-dd2-view="examination-room">Open examination doors</button>
-        </section>` : ''}
-        <div class="dd2-status" id="dd2-account-status" role="status" aria-live="polite"></div>
-        <button class="dd2-button dd2-button-primary" type="submit">Save approved profile fields</button>
-        <button class="dd2-button dd2-button-secondary" id="dd2-logout" type="button">Sign out</button>
-      </form>
-      <div class="dd2-copy">
-        ${state.admin?.authorized ? `
-          <h3>Administration</h3>
-          <p>Your account has verified administrator access.</p>
-          <a class="dd2-button dd2-button-primary" href="/admin/">Open Chambers</a>
-        ` : ''}
-        <h3>Docket recovery</h3>
-        <p>Contact Support. We respond within 24 hours.</p>
-        <p>Direct public email changes and account transfers are not available. Choose Docket Recovery in Support so identity verification can be documented safely.</p>
-        <h3>Plan and access</h3>
-        <div id="dd2-account-access"><p>Loading verified access status…</p></div>
-        <div id="dd2-account-billing"></div>
-        <p class="dd2-form-note">Initial response target: 24 hours. Ordinary internal resolution: seven calendar days; complex review may take up to 14 days without waiving statutory remedies.</p>
+        </div>
+        <div class="dd2-account-photo-actions">
+          <button class="dd2-button dd2-button-secondary" id="dd2-account-photo-button" type="button">${state.profileAvatarUrl ? 'Change photo' : 'Upload photo'}</button>
+          <input id="dd2-account-photo-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          <small>JPEG, PNG, or WebP · at least 256 px · up to 20 MB</small>
+        </div>
+      </section>
+      <div class="dd2-status dd2-account-photo-status" id="dd2-account-photo-status" role="status" aria-live="polite"></div>
+      <div class="dd2-account-grid">
+        <section class="dd2-account-panel" aria-labelledby="dd2-account-details-title">
+          <header class="dd2-account-panel-head">
+            <div><span class="dd2-view-kicker">Identity</span><h3 id="dd2-account-details-title">Profile details</h3></div>
+            <span>Visible only as your settings allow</span>
+          </header>
+          <form class="dd2-form" id="dd2-account-form">
+            <label class="dd2-label">Display name
+              <input class="dd2-field" id="dd2-account-name" value="${escapeHtml(state.profile?.display_name || '')}" maxlength="120" required>
+            </label>
+            <label class="dd2-label">Law school
+              <input class="dd2-field" id="dd2-account-school" list="dd2-account-school-suggestions"
+                value="${escapeHtml(schoolName)}" maxlength="180" autocomplete="organization"
+                placeholder="Type your law school" required>
+              <datalist id="dd2-account-school-suggestions">${schoolSuggestionsMarkup()}</datalist>
+              <span class="dd2-field-help">Choose a suggestion or save the school name you enter.</span>
+            </label>
+            <label class="dd2-label">Year or category
+              <select class="dd2-field" id="dd2-account-year" required>
+                <option value="">Select year or category</option>
+                ${[
+                  ['first_year', 'First Year'], ['second_year', 'Second Year'],
+                  ['third_year', 'Third Year'], ['fourth_year', 'Fourth Year'],
+                  ['fifth_year', 'Fifth Year'], ['review', 'Review / Bar Candidate'],
+                  ['professor', 'Professor'],
+                ].map(([value, label]) => `<option value="${value}"${category === value ? ' selected' : ''}>${label}</option>`).join('')}
+              </select>
+            </label>
+            <label class="dd2-label" id="dd2-account-professor-wrap"${category === 'professor' ? '' : ' hidden'}>Professor license declaration
+              <input class="dd2-field" id="dd2-account-professor-license" maxlength="80" autocomplete="off" placeholder="Re-enter to verify profile changes">
+              <span class="dd2-field-help">Professor remains your profile role. Examination approval happens only after you publish.</span>
+            </label>
+            <div class="dd2-status" id="dd2-account-status" role="status" aria-live="polite"></div>
+            <button class="dd2-button dd2-button-primary" type="submit">Save profile</button>
+          </form>
+        </section>
+        <aside class="dd2-account-panel dd2-account-access-panel" aria-labelledby="dd2-account-access-title">
+          <header class="dd2-account-panel-head">
+            <div><span class="dd2-view-kicker">Membership</span><h3 id="dd2-account-access-title">Plan and access</h3></div>
+          </header>
+          ${state.admin?.authorized ? `<div class="dd2-account-admin-callout">
+            <strong>Administrator command access</strong>
+            <span>Your owner-authorized account can open the platform command center.</span>
+            <a class="dd2-button dd2-button-primary" href="/admin/">Open Admin</a>
+          </div>` : ''}
+          <div class="dd2-copy" id="dd2-account-access"><p>Loading verified access status…</p></div>
+          <div id="dd2-account-billing"></div>
+          <div class="dd2-account-recovery">
+            <strong>Need account help?</strong>
+            <span>Open Support and choose Docket Recovery. Your request remains attached to this signed-in account.</span>
+            <button class="dd2-button dd2-button-secondary" type="button" data-dd2-view="support">Open Support</button>
+          </div>
+          <button class="dd2-button dd2-button-quiet dd2-account-signout" id="dd2-logout" type="button">Sign out</button>
+        </aside>
       </div>`;
   }
 
@@ -1632,14 +1824,7 @@
             <span class="dd2-door-role" id="dd2-professor-door-badge">${signedIn ? 'Signed in · ready' : 'Sign-in required'}</span>
           </div>
           <h3 id="dd2-professor-door-title">Professor door</h3>
-          <p>Create and publish an exam request. After Admin approves and emails the key, open the room, monitor students, grade, release, and download results.</p>
-          <div class="dd2-door-assignment" id="dd2-professor-assignment" hidden>
-            <label class="dd2-label" for="dd2-professor-institution">Law-school workspace
-              <select class="dd2-field" id="dd2-professor-institution">
-                <option value="">Choose a workspace</option>
-              </select>
-            </label>
-          </div>
+          <p>Create and save without role approval. Publish only when ready; after Admin issues the student key, Monitor and Grade unlock automatically.</p>
           <div class="dd2-door-status" id="dd2-examination-room-status" role="status" aria-live="polite">
             ${signedIn ? 'Opening your examination workspace…' : 'Sign in to create or manage an examination.'}
           </div>
@@ -1991,36 +2176,9 @@
     if (retry) retry.hidden = options.retry !== true;
   }
 
-  function showProfessorAssignments(institutions) {
-    const wrap = document.getElementById('dd2-professor-assignment');
-    const select = document.getElementById('dd2-professor-institution');
-    const button = document.getElementById('dd2-professor-door');
-    if (!wrap || !select || !button) return;
-    const safeInstitutions = (Array.isArray(institutions) ? institutions : [])
-      .filter((entry) => /^[0-9a-f-]{36}$/i.test(String(entry?.institutionId || '')));
-    select.innerHTML = '<option value="">Choose a workspace</option>'
-      + safeInstitutions.map((entry, index) => {
-        const suffix = String(entry.institutionId).slice(-8).toUpperCase();
-        const school = String(entry.institutionName || entry.institutionCode || '').trim();
-        const label = school || `Law-school assignment ${index + 1} · ${suffix}`;
-        return `<option value="${escapeHtml(entry.institutionId)}">${escapeHtml(label)}</option>`;
-      }).join('');
-    wrap.hidden = false;
-    button.dataset.mode = 'select-institution';
-    const sync = () => {
-      button.disabled = !select.value;
-      button.setAttribute('aria-disabled', String(button.disabled));
-      button.textContent = select.value ? 'Enter professor door' : 'Choose a law-school workspace';
-    };
-    select.addEventListener('change', sync);
-    sync();
-  }
-
   async function checkProfessorDoor(institutionId = '') {
-    const request = ++state.examinationRoomDoorRequest;
+    state.examinationRoomDoorRequest += 1;
     const token = state.session?.access_token || '';
-    const assignment = document.getElementById('dd2-professor-assignment');
-    if (assignment) assignment.hidden = true;
     if (!token || !state.user) {
       resetProfessorDoor(
         'Sign in through Due Diligence to create or manage an examination. Student entry remains available.',
@@ -2030,63 +2188,13 @@
       if (button) button.dataset.mode = 'sign-in';
       return;
     }
-    if (!navigator.onLine) {
-      resetProfessorDoor(
-        'You appear to be offline. Reconnect to open the Professor workspace. Any draft already downloaded to this device remains available.',
-        { buttonText: 'Professor door locked offline', badge: 'Connection required', status: 'warning', retry: true },
-      );
-      return;
-    }
-    resetProfessorDoor('Opening the law-school workspace for your signed-in account…', {
-      buttonText: 'Opening workspace…', badge: 'Signed in', status: 'checking',
-    });
-    try {
-      const payload = await nativeWorkerRequest('/examination-room/v1/professor/query', {
-        body: { operation: 'session', payload: institutionId ? { institutionId } : {} },
-        submissionView: 'examination-room',
-        submissionDraft: {},
-      });
-      if (request !== state.examinationRoomDoorRequest
-          || state.nativeView !== 'examination-room'
-          || token !== state.session?.access_token) return;
-      const displayName = String(payload?.professor?.displayName || state.profile?.display_name || 'Professor').trim();
-      resetProfessorDoor(
-        `${displayName}, your examination workspace is ready. You may create and publish an exam request now; Admin approval is needed only before a room key is issued.`,
-        { enabled: true, buttonText: 'Enter professor door', badge: 'Signed in · ready', status: 'ready' },
-      );
-      const button = document.getElementById('dd2-professor-door');
-      if (button) button.dataset.destination = professorDoorDestination(institutionId);
-    } catch (error) {
-      if (request !== state.examinationRoomDoorRequest || state.nativeView !== 'examination-room') return;
-      if (error?.code === 'EXAM_ROOM_V1_INSTITUTION_SELECTION_REQUIRED') {
-        resetProfessorDoor(
-          'More than one law-school workspace is available. Choose where this examination belongs, then continue.',
-          { buttonText: 'Choose a law-school workspace', badge: 'Workspace selection', status: 'warning' },
-        );
-        showProfessorAssignments(error?.details?.institutions);
-        return;
-      }
-      if (['EXAM_ROOM_V1_PROFESSOR_FORBIDDEN', 'EXAM_ROOM_V1_INSTITUTION_REQUIRED', 'EXAM_ROOM_V1_FORBIDDEN'].includes(error?.code)) {
-        resetProfessorDoor(
-          `${error.message} ${error.recovery || 'Ask Admin to create a law-school workspace, then try again.'}`,
-          { buttonText: 'Workspace unavailable', badge: 'Admin setup needed', status: 'warning', retry: true },
-        );
-        return;
-      }
-      if (['AUTHENTICATION_REQUIRED', 'INVALID_SESSION', 'EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED'].includes(error?.code) || error?.status === 401) {
-        resetProfessorDoor(
-          'Your sign-in expired. Sign in again; no examination or student data was changed.',
-          { enabled: true, buttonText: 'Sign in again', badge: 'Sign-in expired', status: 'locked' },
-        );
-        const button = document.getElementById('dd2-professor-door');
-        if (button) button.dataset.mode = 'sign-in';
-        return;
-      }
-      resetProfessorDoor(
-        `${error?.message || 'The Professor workspace could not be opened.'} ${error?.recovery || 'Check your connection, then try again.'}`,
-        { buttonText: 'Professor door unavailable', badge: 'Opening interrupted', status: 'warning', retry: true },
-      );
-    }
+    const displayName = String(state.profile?.display_name || state.user?.user_metadata?.full_name || 'Creator').trim();
+    resetProfessorDoor(
+      `${displayName}, the Professor workspace is ready. Create and save without approval; Admin is involved only after you publish and request the student key.`,
+      { enabled: true, buttonText: 'Enter professor door', badge: 'Signed in · ready', status: 'ready' },
+    );
+    const button = document.getElementById('dd2-professor-door');
+    if (button) button.dataset.destination = professorDoorDestination(institutionId);
   }
 
   function activateProfessorDoor() {
@@ -2094,11 +2202,6 @@
     if (!button || button.disabled) return;
     if (button.dataset.mode === 'sign-in') {
       showEntry({ allowDismiss: true, returnHash: '#examination-room' });
-      return;
-    }
-    if (button.dataset.mode === 'select-institution') {
-      const institutionId = document.getElementById('dd2-professor-institution')?.value || '';
-      if (institutionId) checkProfessorDoor(institutionId);
       return;
     }
     if (button.dataset.destination) location.assign(button.dataset.destination);
@@ -2189,11 +2292,13 @@
     const alreadyUnlimited = subjectReviewAction
       ? global.DueDiligencePhase4?.canRevealSubjectReview?.(access) === true
       : access?.unlimited === true;
+    const paidExpired = access?.paidSubscriptionExpired === true
+      || String(access?.basis || '').toLowerCase() === 'paid_subscription_expired';
     const paidAction = alreadyUnlimited
       ? '<button class="dd2-button dd2-button-secondary" type="button" disabled>Unlimited access active</button>'
       : earlyOpen
         ? `<button class="dd2-button dd2-button-primary" id="dd2-open-payment" type="button">${state.user
-    ? subjectReviewAction ? 'Get Early Access — ₱149' : 'Get Early Access'
+    ? paidExpired ? 'Renew Early Access — ₱149' : subjectReviewAction ? 'Get Early Access — ₱149' : 'Get Early Access'
     : 'Sign in to get Early Access'}</button>`
         : '<button class="dd2-button dd2-button-secondary" type="button" disabled>Early Access offer closed</button>';
     const regularPrice = Math.max(14900, Number(access?.regularPriceCentavos) || 19900) / 100;
@@ -2410,6 +2515,21 @@
   }
 
   function accessSummaryMarkup(access) {
+    const paidExpired = access?.paidSubscriptionExpired === true
+      || String(access?.basis || '').toLowerCase() === 'paid_subscription_expired';
+    if (paidExpired) {
+      const endedAt = access?.subscription?.expiresAt || access?.entitlementEndsAt || '';
+      return `
+        <div class="dd2-access-summary is-expired">
+          <strong>Paid Bar access expired</strong>
+          ${endedAt ? `<span>Your paid access ended ${escapeHtml(manilaDate(endedAt, { includeTime: true }))} Philippine time.</span>` : ''}
+          <span>${access?.checkoutOpen === false
+    ? 'Online renewal is currently closed. Support can record your renewal-assistance request.'
+    : 'Renew Early Access to continue using the Bar Exam Simulator.'}</span>
+          <span>Home and Examination Room remain available. Your original five-token allowance does not reset.</span>
+          <button class="dd2-button dd2-button-primary" type="button" data-dd2-view="${access?.checkoutOpen === false ? 'support' : 'pricing'}">${access?.checkoutOpen === false ? 'Open Support for renewal assistance' : 'Renew Early Access'}</button>
+        </div>`;
+    }
     const label = access?.accountLabel || 'Introductory access';
     const remaining = Math.max(0, Number(access?.tokensRemaining ?? access?.remainingToday) || 0);
     const limit = Math.max(0, Number(access?.tokenLimit ?? access?.dailyLimit) || 5);
@@ -2601,6 +2721,8 @@
     state.session = null;
     state.user = null;
     state.profile = null;
+    state.profileAvatarUrl = '';
+    state.profileAvatarLoaded = false;
     global.DueDiligencePrivateBeta?.clear?.();
     syncAuthUi();
     hideNativeView();
@@ -2612,6 +2734,10 @@
     document.getElementById('dd2-account-form')?.addEventListener('submit', submitAccount);
     document.getElementById('dd2-partnership-form')?.addEventListener('submit', submitPartnership);
     document.getElementById('dd2-logout')?.addEventListener('click', signOut);
+    document.getElementById('dd2-account-photo-button')?.addEventListener('click', () => {
+      document.getElementById('dd2-account-photo-input')?.click();
+    });
+    document.getElementById('dd2-account-photo-input')?.addEventListener('change', uploadProfilePhoto);
     document.getElementById('dd2-account-signin')?.addEventListener('click', () => {
       hideNativeView();
       showEntry({ allowDismiss: true });
@@ -2632,6 +2758,8 @@
       };
       document.getElementById('dd2-account-year')?.addEventListener('change', syncFields);
       syncFields();
+      syncProfileAvatars();
+      loadProfileAvatar().catch(() => {});
     }
     if (view === 'pricing') loadCommercialPricing(viewSequence);
     if (view === 'account' && state.user) loadBillingAndAccess();
@@ -2861,6 +2989,8 @@
     injectShell();
     const examinationRoomMenu = document.getElementById('spa-examination-room');
     if (examinationRoomMenu) examinationRoomMenu.hidden = config.features?.examinationRoom !== true;
+    const examinationRoomShortcut = document.getElementById('dd2-header-exam-button');
+    if (examinationRoomShortcut) examinationRoomShortcut.hidden = config.features?.examinationRoom !== true;
     bindNavigation();
     document.getElementById('dd2-google-signin')?.addEventListener('click', signInWithGoogle);
     document.getElementById('dd2-entry-consent')?.addEventListener('submit', submitEntryConsent);

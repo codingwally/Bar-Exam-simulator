@@ -28,6 +28,8 @@ on:
       - 'worker/duediligence-2026-routes.mjs'
       - 'worker/duediligence-2026-routes.test.mjs'
       - 'worker/examination-room-v1-*.mjs'
+      - 'worker/examination-room-email.mjs'
+      - 'worker/examination-room-email.test.mjs'
       - 'worker/index.mjs'
       - 'worker/internal-editorial-content.mjs'
       - 'worker/internal-editorial-content.test.mjs'
@@ -42,6 +44,7 @@ on:
       - 'worker/maintenance-entry.mjs'
       - 'worker/commercial-access-gate.test.mjs'
       - 'worker/access-choice-flow.test.mjs'
+      - 'worker/paid-subscription-expiry.test.mjs'
       - 'worker/wrangler.toml'
       - 'worker/wrangler.staging.toml'
       - 'worker/syllabus-review-reveal-policy.test.mjs'
@@ -58,6 +61,7 @@ on:
       - 'scripts/test-staging-e2e-workflow.mjs'
       - 'scripts/run-staging-e2e-suite.mjs'
       - 'scripts/test-maintenance-lock.mjs'
+      - 'scripts/test-paid-subscription-expiry-database.mjs'
       - 'scripts/test-lifetime-grade-ui.mjs'
       - 'scripts/test-two-option-access-choice.mjs'
       - 'scripts/test-approved-renovation-shell.mjs'
@@ -71,13 +75,16 @@ on:
       - 'scripts/staging-commercial-user.mjs'
       - 'scripts/test-examination-room-door-menu.mjs'
       - 'scripts/test-examination-room-database.mjs'
+      - 'scripts/test-examination-room-commercial-stress.mjs'
       - 'scripts/test-examination-room-v1-staging-smoke.mjs'
       - 'scripts/test-examination-room-release-workflows.mjs'
       - 'scripts/test-feature-decommission-boundary.mjs'
       - 'supabase/migrations/20260825183055_examination_room_v1_greenfield.sql'
       - 'supabase/migrations/20260826130536_examination_room_owner_command_center.sql'
+      - 'supabase/migrations/20260827010000_examination_room_open_admission_flow.sql'
       - 'supabase/tests/database/**'
       - 'supabase/migrations/20260821120000_soft_launch_five_token_trial.sql'
+      - 'supabase/migrations/20260827003000_paid_subscription_expiry_access.sql'
       - 'supabase/migrations/20260818123000_require_early_access.sql'
       - 'supabase/migrations/20260818123100_private_payment_verifiers.sql'
       - 'supabase/migrations/20260818133000_restore_two_option_access_choice.sql'
@@ -128,6 +135,8 @@ jobs:
           node --test admin/examination-room-admin.test.cjs
           node --test worker/*.test.mjs
           node scripts/test-examination-room-database.mjs
+          node scripts/test-examination-room-commercial-stress.mjs
+          node scripts/test-paid-subscription-expiry-database.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-design-correction-release.mjs
           node scripts/test-subject-matter-consolidation.mjs

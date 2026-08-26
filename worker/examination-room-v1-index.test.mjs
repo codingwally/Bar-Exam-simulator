@@ -87,6 +87,48 @@ test('registered professor session route verifies the bearer token and greenfiel
   assert.equal(persistenceCall.body.p_institution_id, INSTITUTION_ID);
 });
 
+test('creator authorization preserves the database-preferred workspace when Community and a school are both active', async () => {
+  const calls = [];
+  const response = await withMockFetch(async (url, options = {}) => {
+    calls.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
+    if (String(url).endsWith('/auth/v1/user')) {
+      return jsonResponse({ id: USER_ID, email: 'creator@example.edu.ph', user_metadata: {}, app_metadata: {} });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_staff_context')) {
+      return jsonResponse({
+        authorized: true,
+        institutionId: OTHER_INSTITUTION_ID,
+        creatorWorkspaces: [
+          {
+            institutionId: INSTITUTION_ID,
+            institutionCode: 'due-diligence-community',
+            communityDefault: true,
+            active: true,
+          },
+          {
+            institutionId: OTHER_INSTITUTION_ID,
+            institutionCode: 'sample-law-school',
+            active: true,
+          },
+        ],
+        memberships: [{ institutionId: OTHER_INSTITUTION_ID, staffRole: 'professor', active: true }],
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
+      return jsonResponse({ ok: true, professor: { authorized: true }, exam: null });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  }, () => worker.fetch(
+    request('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
+    env(),
+    {},
+  ));
+
+  assert.equal(response.status, 200);
+  const persistenceCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_api'));
+  assert.equal(persistenceCall.body.p_institution_id, OTHER_INSTITUTION_ID);
+});
+
 test('creator authorization fails closed when staff context omits every active workspace flag', async () => {
   const calls = [];
   const response = await withMockFetch(async (url, options = {}) => {

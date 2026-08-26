@@ -19,7 +19,7 @@ assert.match(html, /verdict-export-selected[\s\S]*withVerdictExportApi\(\(api\) 
   'Bulk export must use the same guarded export dependency.');
 assert.match(html, /feature-loader\.js[^"\n]*v=syllabus-reveal-access-20260826-1/,
   'The feature-loader hotfix must use a fresh browser cache key.');
-assert.match(html, /private-beta-landing\.js[^"\n]*v=syllabus-review-20260823-1/,
+assert.match(html, /private-beta-landing\.js[^"\n]*v=syllabus-reveal-focus-20260826-1/,
   'The routed Verdict bundle must use the approved-renovation browser cache key.');
 
 console.log('Verdict export lazy-loading contract checks passed.');

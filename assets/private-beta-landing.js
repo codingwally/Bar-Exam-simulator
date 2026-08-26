@@ -287,6 +287,7 @@
   }
 
   function showApplication(options = {}) {
+    const applicationWasHidden = appShell.hidden === true;
     if (dialog.open) dialog.close();
     document.body.classList.remove('private-beta-public');
     setHidden(landing, true);
@@ -301,7 +302,9 @@
         global.toast?.(error?.message || 'This page could not be opened. Please try again.', 'warn');
       });
     }
-    requestAnimationFrame(() => siteHeader.querySelector('.brand')?.focus?.({ preventScroll: true }));
+    if (applicationWasHidden && options.focus !== false) {
+      requestAnimationFrame(() => siteHeader.querySelector('.brand')?.focus?.({ preventScroll: true }));
+    }
   }
 
   function resetQuorumHomeLocation() {

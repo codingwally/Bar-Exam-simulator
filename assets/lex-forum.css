@@ -2346,15 +2346,13 @@ body.quorum-drawer-open { overflow: hidden; }
 }
 
 .quorum-profile-photo-control {
-  display: flex;
-  align-items: center;
+  display: grid;
   gap: 12px;
-  flex-wrap: wrap;
-  margin: 14px 0;
-  padding: 14px;
-  border: 1px solid #d9e0e9;
-  border-radius: 10px;
-  background: #f8f7f3;
+  margin: 16px 0 12px;
+  padding: 17px 18px;
+  border: 1px solid color-mix(in srgb, var(--home-gold, #c5a059) 36%, transparent);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fffaf0, #f7f2e7);
 }
 
 .quorum-profile-photo-preview {
@@ -2369,6 +2367,158 @@ body.quorum-drawer-open { overflow: hidden; }
   color: #fff;
   background: #071a33;
   font: 800 20px/1 var(--sans);
+}
+
+.quorum-profile-panel {
+  padding: 0;
+  overflow: hidden;
+  border-top: 0;
+  border-radius: 16px;
+  background: #fffdfa;
+}
+
+.quorum-profile-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+  min-height: 190px;
+  padding: 30px;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(circle at 86% 18%, rgba(239, 209, 125, .22), transparent 30%),
+    linear-gradient(145deg, #051326, #0d2d4e);
+  border-bottom: 1px solid rgba(197, 160, 89, .52);
+}
+
+.quorum-profile-hero::after {
+  content: "";
+  position: absolute;
+  right: -80px;
+  bottom: -132px;
+  width: 280px;
+  height: 280px;
+  border: 1px solid rgba(239, 209, 125, .24);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.quorum-profile-portrait {
+  position: relative;
+  z-index: 1;
+  width: 112px;
+  height: 112px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 3px solid #e4c46f;
+  border-radius: 50%;
+  object-fit: cover;
+  color: #f8e9bb;
+  background: #0c2542;
+  box-shadow: 0 0 0 7px rgba(228, 196, 111, .12), 0 18px 34px rgba(0, 0, 0, .26);
+  font: 800 28px/1 var(--sans);
+}
+
+.quorum-profile-identity {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.quorum-profile-identity .lex-kicker { color: #e9ca75; }
+
+.quorum-profile-panel .quorum-profile-identity h3 {
+  margin: 8px 0 6px;
+  color: #fff;
+  font-size: clamp(28px, 4vw, 42px);
+  letter-spacing: -.02em;
+}
+
+.quorum-profile-identity .quorum-panel-copy {
+  margin: 0;
+  color: #cbd7e5;
+  font-size: 13px;
+}
+
+.quorum-profile-counts,
+.quorum-profile-panel > .quorum-profile-photo-control,
+.quorum-profile-panel > .quorum-profile-grid,
+.quorum-profile-panel > .quorum-profile-actions {
+  margin-left: 24px;
+  margin-right: 24px;
+}
+
+.quorum-profile-counts { margin-top: 20px; }
+
+.quorum-profile-photo-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 16px;
+  align-items: center;
+}
+
+.quorum-profile-photo-copy strong {
+  color: #0b1e3b;
+  font: 700 16px/1.25 var(--serif-display);
+}
+
+.quorum-profile-photo-copy small {
+  grid-column: 1;
+  color: #627087;
+  font: 500 11px/1.5 var(--sans);
+}
+
+.quorum-profile-photo-copy .lex-button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.quorum-profile-privacy {
+  margin-top: 12px;
+  padding: 18px;
+  border: 1px solid #dce2e9;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.quorum-profile-section-head {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e9ef;
+}
+
+.quorum-profile-section-head strong {
+  color: #0b1e3b;
+  font: 700 16px/1.2 var(--serif-display);
+}
+
+.quorum-profile-section-head small {
+  color: #6b778a;
+  font: 500 11px/1.45 var(--sans);
+}
+
+.quorum-profile-panel > .quorum-profile-actions {
+  margin-top: 14px;
+  margin-bottom: 24px;
+  padding-top: 14px;
+  border-top: 1px solid #e1e5ea;
+}
+
+@media (max-width: 620px) {
+  .quorum-profile-hero {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    padding: 24px;
+  }
+  .quorum-profile-portrait { width: 88px; height: 88px; }
+  .quorum-profile-photo-copy { grid-template-columns: 1fr; }
+  .quorum-profile-photo-copy small,
+  .quorum-profile-photo-copy .lex-button { grid-column: 1; grid-row: auto; }
+  .quorum-profile-photo-copy .lex-button { width: 100%; margin-top: 6px; }
 }
 
 @media (max-width: 1120px) {

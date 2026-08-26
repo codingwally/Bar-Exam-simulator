@@ -8,11 +8,11 @@
   <title>Examination Room | DueDiligence.ph</title>
   <link rel="stylesheet" href="student.css">
   <script defer src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
-  <script defer src="../assets/phase2-config.js?v=greenfield-examination-room-v1-20260826-2"></script>
+  <script defer src="../assets/phase2-config.js?v=private-maintenance-20260820-2"></script>
   <script defer src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script defer src="view-models.js?v=greenfield-v1-20260826-1"></script>
-  <script defer src="api.js?v=greenfield-v1-20260826-5"></script>
-  <script defer src="student.js?v=greenfield-v1-20260826-3"></script>
+  <script defer src="api.js?v=greenfield-v1-20260827-9"></script>
+  <script defer src="student.js?v=greenfield-v1-20260827-7"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to examination content</a>
@@ -41,7 +41,7 @@
       <div class="entry-intro">
         <p class="eyebrow">A calm, protected place for serious work</p>
         <h1 id="entryTitle">Enter your examination room.</h1>
-        <p class="lede">Confirm your identity and course details. You will see the examination information and privacy notice before any question is loaded.</p>
+        <p class="lede">Confirm your identity and course details. You will see the examination information and a short privacy warning before any question is loaded.</p>
 
         <div id="demoModeNote" class="system-note demo-note" hidden>
           <i class="ph ph-flask" aria-hidden="true"></i>
@@ -54,7 +54,7 @@
         <div class="trust-list" aria-label="What to expect">
           <div>
             <i class="ph ph-eye" aria-hidden="true"></i>
-            <span><strong>Preview first</strong> — questions stay sealed until you agree.</span>
+            <span><strong>Preview first</strong> — questions stay sealed until you continue past the short warning.</span>
           </div>
           <div>
             <i class="ph ph-cloud-check" aria-hidden="true"></i>
@@ -90,6 +90,12 @@
             <div class="field field-wide">
               <label for="fullName">Real full name</label>
               <input id="fullName" name="fullName" type="text" autocomplete="name" maxlength="160" required>
+            </div>
+
+            <div class="field field-wide">
+              <label for="email">Email <span class="optional-label">only for email-limited rooms</span></label>
+              <input id="email" name="email" type="email" autocomplete="email" maxlength="254" aria-describedby="emailHelp" placeholder="student@gmail.com">
+              <small id="emailHelp">Leave this blank for the default key-only room. Enter it only when the creator limited the key to listed emails.</small>
             </div>
 
             <div class="field">
@@ -148,7 +154,7 @@
               <span>Change details</span>
             </button>
             <button id="privacyButton" class="button button-primary" type="button">
-              <span>Review privacy notice</span>
+              <span>Review privacy warning</span>
               <i class="ph ph-arrow-right" aria-hidden="true"></i>
             </button>
           </div>
@@ -307,32 +313,19 @@
       <div class="dialog-heading">
         <span class="dialog-icon" aria-hidden="true"><i class="ph ph-shield-check"></i></span>
         <div>
-          <p class="step-label">Required before questions load</p>
-          <h2 id="privacyTitle">Privacy and examination integrity notice</h2>
+          <p class="step-label">Before questions load</p>
+          <h2 id="privacyTitle">Privacy warning</h2>
         </div>
       </div>
-      <p id="privacyIntro"></p>
-      <div class="notice-scroll" tabindex="0" aria-label="Privacy notice">
-        <ul id="privacyItems"></ul>
-        <section>
-          <h3>Retention and access</h3>
-          <p id="privacyRetention"></p>
-        </section>
-        <section>
-          <h3>Questions or accommodations</h3>
-          <p id="privacyContact"></p>
-        </section>
-      </div>
-      <p id="previousAcceptance" class="acceptance-note" hidden></p>
+      <p id="privacyIntro" class="privacy-warning-copy">This examination records your identity, answers, submission status, grades, and any examination-integrity features enabled by your Professor. These records can be viewed by your Professor and the platform owner.</p>
       <div id="privacyError" class="error-panel" role="alert" hidden></div>
       <div class="dialog-actions">
         <button id="privacyBackButton" class="button button-secondary" type="button">Back to details</button>
         <button id="agreeButton" class="button button-primary" type="button">
-          <span>Agree and begin</span>
+          <span>I understand — begin exam</span>
           <i class="ph ph-arrow-right" aria-hidden="true"></i>
         </button>
       </div>
-      <small id="noticeVersion" class="notice-version"></small>
     </div>
   </dialog>
 

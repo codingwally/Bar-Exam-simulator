@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:wght@500;600;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
-  <link rel="stylesheet" href="professor.css?v=greenfield-v1-20260826-11">
+  <link rel="stylesheet" href="professor.css?v=greenfield-v1-20260827-15">
 </head>
 <body>
   <a class="skip-link" href="#exam-editor">Skip to examination editor</a>
@@ -20,7 +20,7 @@
     <img src="../assets/brand/icon-192.png" width="52" height="52" alt="">
     <p class="eyebrow">Due Diligence</p>
     <h1>Opening Examination Room</h1>
-    <p id="loading-copy">Checking your professor access and restoring your latest saved draft.</p>
+    <p id="loading-copy">Confirming your sign-in and restoring your latest saved draft.</p>
     <span class="spinner" aria-hidden="true"></span>
   </div>
 
@@ -28,13 +28,13 @@
     <div class="access-panel">
       <img src="../assets/brand/icon-192.png" width="58" height="58" alt="">
       <p class="eyebrow">Examination Room</p>
-      <h1 id="access-title">Professor access is required</h1>
-      <p id="access-copy">Only an authorized professor or administrator testing the feature can prepare and manage an examination.</p>
+      <h1 id="access-title">Sign in to open the Professor workspace</h1>
+      <p id="access-copy">Any signed-in Due Diligence account can create and manage its own examinations. Admin approval is required only before a room key is issued.</p>
       <div class="access-actions">
         <a class="button primary" id="access-primary-action" href="../#examination-room">Sign in through Due Diligence</a>
         <a class="button secondary" href="student.html">I am a student</a>
       </div>
-      <p class="recovery-copy" id="access-recovery">Already signed in? Return to the Examination Room doors so your verified law-school assignment can be checked again.</p>
+      <p class="recovery-copy" id="access-recovery">Already signed in? Return to the Examination Room doors and open the Professor workspace again.</p>
     </div>
   </section>
 
@@ -46,14 +46,18 @@
       </a>
       <span class="brand-divider" aria-hidden="true"></span>
       <span class="product-name">Examination Room</span>
+      <label class="exam-switcher-wrap" id="exam-switcher-wrap" hidden>
+        <span class="sr-only">Open examination</span>
+        <select id="exam-switcher" aria-label="Open examination"></select>
+      </label>
       <nav class="workspace-tabs" aria-label="Professor examination views">
-        <button class="workspace-tab is-active" type="button" data-view="create"><i class="ph ph-pencil-simple-line" aria-hidden="true"></i><span>Prepare</span></button>
-        <button class="workspace-tab" type="button" data-view="monitor"><i class="ph ph-monitor" aria-hidden="true"></i><span>Monitor</span></button>
-        <button class="workspace-tab" type="button" data-view="grade"><i class="ph ph-seal-check" aria-hidden="true"></i><span>Grade</span></button>
+        <button class="workspace-tab is-active" type="button" data-view="create" aria-label="Prepare examination"><i class="ph ph-pencil-simple-line" aria-hidden="true"></i><span>Prepare</span></button>
+        <button class="workspace-tab" type="button" data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key" title="Publish the examination and wait for Admin to issue the student key"><i class="ph ph-monitor" aria-hidden="true"></i><span>Monitor</span></button>
+        <button class="workspace-tab" type="button" data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key" title="Publish the examination and wait for Admin to issue the student key"><i class="ph ph-seal-check" aria-hidden="true"></i><span>Grade</span></button>
       </nav>
-      <button class="profile-button" id="profile-button" type="button" aria-label="Professor account options">
+      <button class="profile-button" id="profile-button" type="button" aria-label="Examination creator account options">
         <span class="profile-initials">EV</span>
-        <span><strong id="professor-short-name">Prof. Villanueva</strong><small>Professor</small></span>
+        <span><strong id="professor-short-name">Exam creator</strong><small>Creator</small></span>
         <i class="ph ph-caret-down" aria-hidden="true"></i>
       </button>
     </header>
@@ -70,17 +74,24 @@
         <div class="command-actions">
           <button class="button secondary" id="save-draft" type="button"><span>Save draft</span></button>
           <button class="button secondary" id="preview-exam" type="button"><span>Preview</span></button>
-          <button class="button primary" id="publish-exam" type="button"><span>Publish</span></button>
+          <button class="button primary" id="publish-exam" type="button"><span>Publish &amp; request key</span></button>
           <button class="icon-action overflow-action" id="more-actions" type="button" aria-label="More examination actions" aria-expanded="false"><i class="ph ph-dots-three" aria-hidden="true"></i></button>
           <div class="action-menu" id="more-actions-menu" hidden>
-            <button type="button" data-view="monitor"><i class="ph ph-monitor" aria-hidden="true"></i>Open monitoring</button>
-            <button type="button" data-view="grade"><i class="ph ph-seal-check" aria-hidden="true"></i>Grade submissions</button>
+            <button type="button" data-view="monitor" data-requires-activation="true" disabled><i class="ph ph-monitor" aria-hidden="true"></i>Open monitoring</button>
+            <button type="button" data-view="grade" data-requires-activation="true" disabled><i class="ph ph-seal-check" aria-hidden="true"></i>Grade submissions</button>
+            <button type="button" data-action="new-exam"><i class="ph ph-plus" aria-hidden="true"></i>New examination</button>
             <button type="button" data-action="duplicate-exam"><i class="ph ph-copy" aria-hidden="true"></i>Duplicate examination</button>
             <button type="button" data-action="download-draft"><i class="ph ph-download-simple" aria-hidden="true"></i>Download recovery copy</button>
             <button type="button" data-action="version-history"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>Version history</button>
           </div>
         </div>
       </header>
+
+      <section class="creator-access-strip" id="creator-access-status" data-state="draft" hidden aria-live="polite">
+        <i class="ph ph-key" aria-hidden="true"></i>
+        <div><strong id="creator-access-title">Student key not requested</strong><span id="creator-access-copy">Finish the examination, then publish and request a key as the final step.</span></div>
+        <button class="button secondary compact" id="check-activation" type="button">Check approval</button>
+      </section>
 
       <div class="creator-grid">
         <aside class="section-rail" aria-label="Examination sections">
@@ -150,16 +161,19 @@
 
             <section class="editor-section students-section" id="students" aria-labelledby="students-title">
               <header class="section-heading">
-                <div><p class="section-kicker">Students</p><h2 id="students-title">Examination roster</h2><p>Real names and student numbers are shown to the professor by default.</p></div>
-                <div class="roster-actions"><label class="button secondary compact" for="roster-upload"><i class="ph ph-file-csv" aria-hidden="true"></i>Import CSV</label><input id="roster-upload" type="file" accept=".csv,text/csv" hidden><button class="button secondary compact" id="add-student" type="button"><i class="ph ph-user-plus" aria-hidden="true"></i>Add student</button></div>
+                <div><p class="section-kicker">Student entry</p><h2 id="students-title">Who may use the student key?</h2><p>The simplest option is selected by default. Every student enters their real name, student number, subject, and year level.</p></div>
               </header>
-              <div class="roster-table-wrap">
-                <table class="roster-table">
-                  <thead><tr><th scope="col">Full legal name</th><th scope="col">Student number</th><th scope="col">Year level</th><th scope="col">Extra time</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
-                  <tbody id="roster-body"></tbody>
-                </table>
+              <fieldset class="admission-options">
+                <legend class="sr-only">Student admission mode</legend>
+                <label class="admission-option"><input type="radio" name="admission-mode" value="key_only" checked><span><i class="ph ph-key" aria-hidden="true"></i><strong>Anyone with the student key <em>Default</em></strong><small>No roster or upload. Students identify themselves when they enter.</small></span></label>
+                <label class="admission-option"><input type="radio" name="admission-mode" value="email_allowlist"><span><i class="ph ph-envelope-simple" aria-hidden="true"></i><strong>Only listed email addresses <em>Optional</em></strong><small>Use this only when you want the key to work for a specific email list.</small></span></label>
+              </fieldset>
+              <div class="allowlist-editor" id="allowlist-editor" hidden>
+                <label class="field" for="allowed-emails"><span>Allowed student emails</span><textarea id="allowed-emails" rows="7" spellcheck="false" autocomplete="off" placeholder="student1@gmail.com&#10;student2@gmail.com"></textarea></label>
+                <p class="inline-help"><i class="ph ph-info" aria-hidden="true"></i>Enter one address per line. Numbered lines such as “1. student@gmail.com” also work. No CSV upload is needed.</p>
+                <div class="allowlist-count" id="allowlist-count" role="status">0 valid email addresses</div>
               </div>
-              <p class="inline-help"><i class="ph ph-info" aria-hidden="true"></i>Optional anonymous grading hides names only while marking. It never removes the professor’s access to the real roster.</p>
+              <p class="inline-help"><i class="ph ph-eye" aria-hidden="true"></i>Real names remain visible to the examination creator. Optional anonymous grading hides names only while marking.</p>
             </section>
 
             <section class="editor-section safety-section" id="safety" aria-labelledby="safety-title">
@@ -170,17 +184,17 @@
                 <legend>Integrity mode</legend>
                 <label><input type="radio" name="integrity-tier-main" value="standard" checked><span><i class="ph ph-file-lock" aria-hidden="true"></i><strong>Standard</strong><small>Authenticated access, timer, local recovery, and server backup.</small></span></label>
                 <label><input type="radio" name="integrity-tier-main" value="focus_monitoring"><span><i class="ph ph-monitor" aria-hidden="true"></i><strong>Focus monitoring</strong><small>Logs fullscreen and visibility changes as signals for professor review.</small></span></label>
-                <label><input type="radio" name="integrity-tier-main" value="recorded_proctoring"><span><i class="ph ph-video-camera" aria-hidden="true"></i><strong>Recorded proctoring</strong><small>Optional camera or microphone capture after a device check and specific notice.</small></span></label>
+                <label><input type="radio" name="integrity-tier-main" value="recorded_proctoring"><span><i class="ph ph-video-camera" aria-hidden="true"></i><strong>Recorded proctoring — unavailable</strong><small>Requires configured encrypted camera and microphone capture storage.</small></span></label>
               </fieldset>
               <div class="recording-options" id="recording-options" hidden>
-                <label><input type="checkbox" id="camera-required"><span><strong>Camera recording</strong><small>Requires permission, a visible recording indicator, retention period, and an approved alternative.</small></span></label>
-                <label><input type="checkbox" id="microphone-required"><span><strong>Microphone recording</strong><small>Requires separate authorization and an always-visible indicator.</small></span></label>
-                <div class="recording-availability" id="recording-availability"><i class="ph ph-warning-circle" aria-hidden="true"></i><span><strong>Recorded proctoring is not enabled in this build.</strong> The examination cannot be published in this mode until an administrator configures encrypted media upload, retention, deletion, review access, and an approved student alternative.</span></div>
+                <label><input type="checkbox" id="camera-required"><span><strong>Camera recording</strong><small>Unavailable until encrypted camera capture storage is configured.</small></span></label>
+                <label><input type="checkbox" id="microphone-required"><span><strong>Microphone recording</strong><small>Unavailable until encrypted microphone capture storage is configured.</small></span></label>
+                <div class="recording-availability" id="recording-availability"><i class="ph ph-warning-circle" aria-hidden="true"></i><span><strong>Recorded proctoring is unavailable.</strong> The examination cannot be published in this mode until encrypted camera and microphone capture storage is configured.</span></div>
               </div>
               <div class="privacy-summary">
                 <i class="ph ph-shield-check" aria-hidden="true"></i>
-                <div><strong>Student privacy notice is mandatory before the examination begins.</strong><p>The student sees the school/controller, data collected, purposes, access, retention, rights, and support route. Questions remain unavailable until the current notice is accepted.</p></div>
-                <button class="button secondary compact" id="preview-privacy" type="button">Preview notice</button>
+                <div><strong>A short privacy warning appears before questions load.</strong><p>It states that identity, answers, submission status, grades, and enabled examination-integrity activity are recorded for examination administration.</p></div>
+                <button class="button secondary compact" id="preview-privacy" type="button">Preview warning</button>
               </div>
             </section>
           </form>
@@ -204,15 +218,15 @@
             <h3>Safety &amp; integrity <span>(optional)</span></h3>
             <label class="radio-control"><input type="radio" name="integrity-tier-side" value="standard" checked><span><strong>Standard</strong><small>No additional monitoring.</small></span></label>
             <label class="radio-control"><input type="radio" name="integrity-tier-side" value="focus_monitoring"><span><strong>Focus monitoring</strong><small>Detects tab visibility and fullscreen exits.</small></span></label>
-            <label class="radio-control"><input type="radio" name="integrity-tier-side" value="recorded_proctoring"><span><strong>Recorded proctoring</strong><small>Camera or microphone recording.</small></span></label>
+            <label class="radio-control"><input type="radio" name="integrity-tier-side" value="recorded_proctoring"><span><strong>Recorded proctoring — unavailable</strong><small>Requires encrypted capture storage.</small></span></label>
           </section>
-          <section class="roster-preview">
-            <header><h3>Students <span id="student-count">(5)</span></h3><button type="button" data-scroll-button="students">Preview all</button></header>
-            <ol id="roster-preview-list"></ol>
+          <section class="roster-preview admission-preview">
+            <header><h3>Student admission</h3><button type="button" data-scroll-button="students">Change</button></header>
+            <p id="admission-summary">Anyone with the student key may enter. No roster is required.</p>
           </section>
           <section class="accommodations-preview">
-            <header><h3>Accommodations</h3><button type="button" data-scroll-button="students">Manage student accommodations</button></header>
-            <p>Set exam accommodations on a per-student basis.</p>
+            <header><h3>Participant control</h3><button type="button" data-view="monitor" data-requires-activation="true" disabled>Open monitor</button></header>
+            <p>After Admin issues the student key, you can monitor real-name entries and remove or block a session.</p>
           </section>
         </aside>
       </div>
@@ -232,7 +246,7 @@
     <section class="app-view monitor-view" id="monitor-view" data-app-view="monitor" hidden aria-labelledby="monitor-title">
       <header class="operations-header">
         <div><p class="section-kicker">Live examination</p><h1 id="monitor-title">Constitutional Law — Midterm Examination</h1><p id="monitor-subtitle">Real names are shown. Integrity events are signals for professor review, never automatic findings.</p></div>
-        <div class="operations-actions"><span class="live-indicator"><i aria-hidden="true"></i><span id="room-state-label">Waiting for admin key</span></span><button class="button secondary" id="refresh-monitor" type="button"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Refresh</button><button class="button primary" id="open-room" type="button">Enter room with key</button></div>
+        <div class="operations-actions"><span class="live-indicator"><i aria-hidden="true"></i><span id="room-state-label">Waiting for admin approval</span></span><button class="button secondary" id="refresh-monitor" type="button"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Refresh</button><button class="button primary" id="open-room" type="button" disabled>Waiting for student key</button></div>
       </header>
       <div class="monitor-layout">
         <main>
@@ -249,12 +263,16 @@
     <section class="app-view grade-view" id="grade-view" data-app-view="grade" hidden aria-labelledby="grade-title">
       <header class="operations-header">
         <div><p class="section-kicker">Grade submissions</p><h1 id="grade-title">Constitutional Law — Midterm Examination</h1><p>One student at a time, with durable grade revisions and professor-controlled identity.</p></div>
-        <div class="operations-actions"><button class="button secondary" id="export-grading-package" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i>Offline grading copy</button><label class="button secondary file-button" for="import-grading-package"><i class="ph ph-upload-simple" aria-hidden="true"></i>Import grades</label><input id="import-grading-package" type="file" accept="application/json,.json" hidden><button class="button primary" id="release-results" type="button">Release selected results</button></div>
+        <div class="operations-actions"><button class="button secondary" id="export-grading-package" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i>Download offline copy</button><a class="button secondary" href="offline-grading.html" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open offline grading</a><label class="button secondary file-button" for="import-grading-package"><i class="ph ph-upload-simple" aria-hidden="true"></i>Import graded copy</label><input id="import-grading-package" type="file" accept="application/json,.json,.ddgrade.json" multiple hidden><button class="button primary" id="release-results" type="button">Release selected results</button></div>
       </header>
+      <section class="offline-grading-guide" aria-labelledby="offline-grading-guide-title">
+        <div><p class="section-kicker">Grade without a connection</p><h2 id="offline-grading-guide-title">Three-step offline grading</h2></div>
+        <ol><li><strong>1. Download</strong><span>Create an encrypted grading copy and remember its passphrase. Large classes download as numbered files automatically.</span></li><li><strong>2. Grade offline</strong><span>Open and grade every numbered file, then export each graded copy.</span></li><li><strong>3. Import here</strong><span>Choose Import graded copy and select all numbered graded files together. Review before releasing results.</span></li></ol>
+      </section>
       <div class="grading-layout">
         <aside class="student-submission-list"><header><h2>Students</h2><label><input id="anonymous-grading-toggle" type="checkbox"><span>Anonymous grading</span></label></header><div id="grading-student-list"></div></aside>
         <main class="grading-sheet" id="grading-sheet"><div class="empty-state"><i class="ph ph-seal-check" aria-hidden="true"></i><h2>Submissions will appear here</h2><p>Select a submitted student to review answers, award points, and leave feedback.</p></div></main>
-        <aside class="grading-summary"><h2>Grading progress</h2><div id="grading-summary"></div><div class="release-check"><i class="ph ph-info" aria-hidden="true"></i><p>Results are released only to the students you select. Email contains a sign-in notice, not the grade itself.</p></div></aside>
+        <aside class="grading-summary"><h2>Grading progress</h2><div id="grading-summary"></div><div class="release-check"><i class="ph ph-info" aria-hidden="true"></i><p>Results are released only to the students you select. They appear on each student’s protected receipt page.</p></div></aside>
       </div>
     </section>
   </div>
@@ -269,37 +287,20 @@
 
   <dialog class="app-dialog" id="privacy-dialog" aria-labelledby="privacy-title">
     <form method="dialog" class="dialog-shell privacy-dialog-shell">
-      <header><div><p class="eyebrow">Student privacy notice</p><h2 id="privacy-title">Before the examination begins</h2></div><button class="icon-action" value="cancel" aria-label="Close privacy preview"><i class="ph ph-x" aria-hidden="true"></i></button></header>
+      <header><div><p class="eyebrow">Student privacy warning</p><h2 id="privacy-title">Before the examination begins</h2></div><button class="icon-action" value="cancel" aria-label="Close privacy warning preview"><i class="ph ph-x" aria-hidden="true"></i></button></header>
       <div class="privacy-copy">
-        <p class="notice-lead">This preview shows what every student must review before examination questions become available.</p>
-        <dl>
-          <div><dt>Information used</dt><dd>Full name, student number, subject, year level, examination answers, save and submission records, and any safeguards selected by the professor.</dd></div>
-          <div><dt>Purpose</dt><dd>Verify eligibility, deliver the examination, preserve answers, support grading, release results, investigate documented incidents, and meet academic-record obligations.</dd></div>
-          <div><dt>Access</dt><dd>The assigned professor and specifically authorized school administrators. Due Diligence personnel receive access only when required for protected support or recovery.</dd></div>
-          <div><dt>Retention and rights</dt><dd>The school’s published retention and appeal policy applies. Students may request access or correction and may contact the school’s privacy office.</dd></div>
-        </dl>
-        <p class="legal-note">The school remains responsible for confirming the final notice, lawful basis, retention period, contact information, accommodations, and any recording consent with its Data Protection Officer and counsel.</p>
+        <p class="notice-lead">This examination records the student’s identity, answers, submission status, grades, and any examination-integrity features enabled by the Professor. These records can be viewed by the Professor and platform owner.</p>
       </div>
-      <footer><button class="button secondary" value="cancel">Close preview</button></footer>
+      <footer><button class="button secondary" value="cancel">Close warning preview</button></footer>
     </form>
   </dialog>
 
   <dialog class="app-dialog" id="publish-dialog" aria-labelledby="publish-title">
     <form class="dialog-shell" id="publish-form">
-      <header><div><p class="eyebrow">Final review</p><h2 id="publish-title">Publish this examination?</h2></div><button class="icon-action" type="button" data-close-dialog="publish-dialog" aria-label="Close publish review"><i class="ph ph-x" aria-hidden="true"></i></button></header>
+      <header><div><p class="eyebrow">Final creator step</p><h2 id="publish-title">Publish and request a student key?</h2></div><button class="icon-action" type="button" data-close-dialog="publish-dialog" aria-label="Close publish review"><i class="ph ph-x" aria-hidden="true"></i></button></header>
       <div id="publish-summary"></div>
-      <label class="confirmation-control"><input id="publish-confirmation" type="checkbox"><span>I reviewed the questions, points, roster, timing, grading identity, privacy notice, and optional safeguards. Publishing creates an immutable examination version for administrator activation.</span></label>
+      <label class="confirmation-control"><input id="publish-confirmation" type="checkbox"><span>I reviewed the questions, points, timing, student admission, grading identity, privacy warning, and optional safeguards. Publishing saves an immutable version and sends the key request to Admin.</span></label>
       <footer><button class="button secondary" type="button" data-close-dialog="publish-dialog">Continue editing</button><button class="button primary" id="publish-confirm" type="submit" disabled>Publish and request key</button></footer>
-    </form>
-  </dialog>
-
-  <dialog class="app-dialog" id="key-dialog" aria-labelledby="key-title">
-    <form class="dialog-shell" id="key-form">
-      <header><div><p class="eyebrow">Professor room access</p><h2 id="key-title">Enter the administrator key</h2></div><button class="icon-action" type="button" data-close-dialog="key-dialog" aria-label="Close key entry"><i class="ph ph-x" aria-hidden="true"></i></button></header>
-      <p class="dialog-copy">After the examination is published, an administrator verifies it and issues the room key. The key does not replace your professor sign-in.</p>
-      <label class="field"><span>Room key</span><input id="professor-room-key" inputmode="text" autocomplete="one-time-code" placeholder="DD26-XXXX-XXXX" maxlength="18" required></label>
-      <div class="recovery-message" id="key-help"><i class="ph ph-info" aria-hidden="true"></i><span>Use the latest key from the administrator email. If it was revoked or expired, ask the administrator to issue a replacement.</span></div>
-      <footer><button class="button secondary" type="button" data-close-dialog="key-dialog">Back</button><button class="button primary" type="submit">Open monitoring room</button></footer>
     </form>
   </dialog>
 
@@ -331,6 +332,17 @@
     </form>
   </dialog>
 
+  <dialog class="app-dialog" id="confirmation-dialog" aria-labelledby="confirmation-title">
+    <form class="dialog-shell" id="confirmation-form">
+      <header><div><p class="eyebrow" id="confirmation-eyebrow">Confirm action</p><h2 id="confirmation-title">Continue?</h2></div><button class="icon-action" id="confirmation-close" type="button" aria-label="Cancel and close confirmation"><i class="ph ph-x" aria-hidden="true"></i></button></header>
+      <div>
+        <p class="dialog-copy" id="confirmation-copy"></p>
+        <div class="recovery-message" id="confirmation-help"><i class="ph ph-info" aria-hidden="true"></i><span></span></div>
+      </div>
+      <footer><button class="button secondary" id="confirmation-cancel" type="button">Cancel</button><button class="button primary" id="confirmation-confirm" type="submit">Continue</button></footer>
+    </form>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="error-banner" id="error-banner" role="alert" hidden>
     <i class="ph ph-warning-circle" aria-hidden="true"></i>
@@ -340,11 +352,12 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js" crossorigin="anonymous"></script>
-  <script src="../assets/phase2-config.js?v=greenfield-examination-room-v1-20260826-2"></script>
+  <script src="../assets/phase2-config.js?v=private-maintenance-20260820-2"></script>
   <script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
   <script src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script src="view-models.js?v=greenfield-v1-20260826-1"></script>
-  <script src="api.js?v=greenfield-v1-20260826-5"></script>
-  <script src="professor.js?v=greenfield-v1-20260826-13"></script>
+  <script src="api.js?v=greenfield-v1-20260827-9"></script>
+  <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
+  <script src="professor.js?v=greenfield-v1-20260827-25"></script>
 </body>
 </html>

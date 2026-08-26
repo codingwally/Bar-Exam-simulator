@@ -99,7 +99,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=examination-room-v1-20260826-1')
+    navigator.serviceWorker.register('/service-worker.js?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-4')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -110,14 +110,13 @@
   function cacheElements() {
     var ids = [
       'connectionLabel', 'studentIdentity', 'entryView', 'roomEntryForm',
-      'roomKey', 'fullName', 'studentNumber', 'yearLevel', 'subject',
+      'roomKey', 'fullName', 'email', 'studentNumber', 'yearLevel', 'subject',
       'previewButton', 'entryError', 'demoModeNote', 'examPreview',
       'previewExamTitle', 'previewSubject', 'previewProfessor',
       'previewDuration', 'previewQuestionCount', 'previewAvailability',
       'previewSafeguards', 'changeDetailsButton', 'privacyButton',
-      'privacyDialog', 'privacyTitle', 'privacyIntro', 'privacyItems',
-      'privacyRetention', 'privacyContact', 'previousAcceptance',
-      'privacyError', 'privacyBackButton', 'agreeButton', 'noticeVersion',
+      'privacyDialog', 'privacyTitle', 'privacyIntro',
+      'privacyError', 'privacyBackButton', 'agreeButton',
       'examView', 'examTitle', 'examSubjectLine', 'saveStatus', 'timerBox',
       'timerValue', 'fullscreenButton', 'offlineNotice', 'examError',
       'progressText', 'answerProgress', 'questionList', 'submitOpenButton',
@@ -240,6 +239,9 @@
         try {
           var metadata = await state.api.previewRoom(copyObject(entry));
           validateMetadata(metadata);
+          if (metadata.admissionMode === 'email_allowlist' && !entry.email) {
+            throw createAppError('EMAIL_REQUIRED');
+          }
           var notice = await state.api.getPrivacyNotice({
             examId: metadata.examId,
             roomKey: entry.roomKey,
@@ -255,12 +257,19 @@
             cachedAt: new Date().toISOString()
           });
         } catch (liveError) {
-          var accessWasDenied = liveError && [
+          var liveCode = String(liveError && liveError.code || '').replace(/^EXAM_ROOM_V1_/, '');
+          var accessWasDenied = [
             'INVALID_ROOM_KEY',
             'IDENTITY_MISMATCH',
+            'STUDENT_EMAIL_REQUIRED',
+            'STUDENT_EMAIL_INVALID',
+            'STUDENT_EMAIL_NOT_ALLOWED',
+            'STUDENT_EMAIL_MISMATCH',
+            'ROSTER_NAME_MISMATCH',
+            'STUDENT_BLOCKED',
             'ROOM_CLOSED',
             'NOTICE_CHANGED'
-          ].indexOf(liveError.code) !== -1;
+          ].indexOf(liveCode) !== -1;
           if (!accessWasDenied && cached && isUsableCachedPreview(cached, context)) {
             previewBundle = { metadata: cached.metadata, notice: cached.notice };
             usedCache = true;
@@ -302,6 +311,7 @@
     return {
       roomKey: normaliseRoomKey(elements.roomKey.value),
       fullName: normaliseHumanText(elements.fullName.value),
+      email: normaliseEmail(elements.email.value),
       studentNumber: normaliseHumanText(elements.studentNumber.value),
       subject: normaliseHumanText(elements.subject.value),
       yearLevel: elements.yearLevel.value
@@ -310,10 +320,14 @@
 
   async function buildEntryContext(entry) {
     var roomKeyHash = await digestText(entry.roomKey);
-    var studentHash = await digestText(entry.studentNumber.toLocaleLowerCase());
+    var studentHash = await digestText([
+      entry.studentNumber.toLocaleLowerCase(),
+      entry.email
+    ].join('|'));
     var identityMaterial = [
       roomKeyHash,
       entry.fullName.toLocaleLowerCase(),
+      entry.email,
       entry.studentNumber.toLocaleLowerCase(),
       entry.subject.toLocaleLowerCase(),
       entry.yearLevel
@@ -375,33 +389,18 @@
     });
 
     elements.privacyButton.querySelector('span').textContent = usedCache
-      ? 'Review saved privacy notice'
-      : 'Review privacy notice';
+      ? 'Review saved privacy warning'
+      : 'Review privacy warning';
   }
 
   function renderPrivacyNotice() {
-    var notice = state.notice;
-    setText(elements.privacyTitle, notice.title || 'Privacy and examination integrity notice');
-    setText(elements.privacyIntro, notice.intro || 'Review how your information and examination activity will be handled.');
-    setText(elements.privacyRetention, notice.retention || 'Your institution controls the retention period and authorized access.');
-    setText(elements.privacyContact, notice.contact || 'Contact your examination administrator before beginning if you need an accommodation or clarification.');
-    setText(elements.noticeVersion, 'Notice version ' + notice.version);
-
-    elements.privacyItems.replaceChildren();
-    notice.items.forEach(function (item) {
-      elements.privacyItems.appendChild(createElement('li', '', String(item)));
-    });
-
     var recordingRequired = state.metadata.integrityTier === 'recorded_proctoring' || state.metadata.cameraRequired === true || state.metadata.microphoneRequired === true;
-    if (state.acceptance) {
-      elements.previousAcceptance.hidden = false;
-      elements.previousAcceptance.textContent = 'You accepted this exact notice for this examination and room key on ' + formatDateTime(state.acceptance.acceptedAt) + '.';
-      elements.agreeButton.querySelector('span').textContent = 'Continue examination';
-    } else {
-      elements.previousAcceptance.hidden = true;
-      elements.previousAcceptance.textContent = '';
-      elements.agreeButton.querySelector('span').textContent = recordingRequired ? 'Agree to recording and begin' : 'Agree and begin';
-    }
+    setText(elements.privacyTitle, recordingRequired ? 'Recorded proctoring unavailable' : 'Privacy warning');
+    setText(elements.privacyIntro, recordingRequired
+      ? 'This examination requests recorded proctoring, but encrypted camera and microphone capture storage is not configured. Ask your Professor or administrator to change the examination mode.'
+      : 'This examination records your identity, answers, submission status, grades, and any examination-integrity features enabled by your Professor. These records can be viewed by your Professor and the platform owner.');
+    elements.agreeButton.disabled = recordingRequired;
+    elements.agreeButton.querySelector('span').textContent = recordingRequired ? 'Recording unavailable' : 'I understand — begin exam';
   }
 
   async function findAcceptance(context, metadata, notice) {
@@ -464,11 +463,20 @@
       return;
     }
 
-    setButtonBusy(elements.agreeButton, true, state.acceptance ? 'Opening examination' : 'Recording agreement');
+    var recordingRequired = state.metadata.integrityTier === 'recorded_proctoring' || state.metadata.cameraRequired === true || state.metadata.microphoneRequired === true;
+    if (recordingRequired) {
+      showError(elements.privacyError, {
+        title: 'Recorded proctoring is unavailable',
+        message: 'Encrypted camera and microphone capture storage is not configured for this examination.',
+        effect: 'Questions remain sealed. Ask your Professor or administrator to change the examination mode.'
+      });
+      return;
+    }
+
+    setButtonBusy(elements.agreeButton, true, 'Opening examination');
 
     try {
       if (!state.acceptance) {
-        var recordingRequired = state.metadata.integrityTier === 'recorded_proctoring' || state.metadata.cameraRequired === true || state.metadata.microphoneRequired === true;
         var acceptance = {
           id: await acceptanceRecordId(state.context, state.metadata, state.notice),
           examId: state.metadata.examId,
@@ -503,6 +511,7 @@
         roomKey: state.entry.roomKey,
         student: {
           fullName: state.entry.fullName,
+          email: state.entry.email,
           studentNumber: state.entry.studentNumber,
           subject: state.entry.subject,
           yearLevel: state.entry.yearLevel
@@ -538,6 +547,7 @@
         sessionToken: beginResult.sessionToken,
         student: {
           fullName: state.entry.fullName,
+          email: state.entry.email,
           studentNumber: state.entry.studentNumber,
           subject: state.entry.subject,
           yearLevel: state.entry.yearLevel
@@ -799,7 +809,10 @@
     elements.flagButton.setAttribute('aria-pressed', state.flags[question.id] ? 'true' : 'false');
     elements.flagButton.querySelector('span').textContent = state.flags[question.id] ? 'Flagged for review' : 'Flag for review';
     elements.previousButton.disabled = state.currentIndex === 0;
-    elements.nextButton.disabled = state.currentIndex === state.questions.length - 1;
+    // On the final question this same control becomes the primary path into
+    // the review dialog. Keep it enabled so a student cannot reach the end
+    // of the examination and appear to be stuck.
+    elements.nextButton.disabled = false;
     elements.nextButton.querySelector('span').textContent = state.currentIndex === state.questions.length - 1 ? 'Review and submit' : 'Next question';
     elements.nextButton.querySelector('i').className = state.currentIndex === state.questions.length - 1
       ? 'ph ph-paper-plane-tilt'
@@ -1612,7 +1625,9 @@
   }
 
   function normaliseError(error) {
-    var code = error && error.code ? error.code : 'UNEXPECTED';
+    var code = error && error.code ? String(error.code).replace(/^EXAM_ROOM_V1_/, '') : 'UNEXPECTED';
+    if (code === 'EMAIL_REQUIRED') code = 'STUDENT_EMAIL_REQUIRED';
+    if (code === 'EMAIL_NOT_ALLOWED') code = 'STUDENT_EMAIL_NOT_ALLOWED';
     var map = {
       STORAGE_UNAVAILABLE: {
         title: 'Safe local saving is unavailable',
@@ -1638,7 +1653,7 @@
       OFFLINE_NEW_ATTEMPT: {
         title: 'Connect before starting a new attempt',
         message: 'A new examination must be opened while connected. Saved examinations can still be resumed offline.',
-        effect: 'Your privacy agreement is saved for this exact examination, key, and notice version.'
+        effect: 'Your privacy-warning acknowledgement is saved for this exact examination and room key.'
       },
       OFFLINE_EXAM_NOT_SAVED: {
         title: 'The questions are not saved on this device',
@@ -1652,8 +1667,33 @@
       },
       IDENTITY_MISMATCH: {
         title: 'These details do not match the room',
-        message: 'Check your student number, subject, and year level against the examination invitation.',
+        message: 'Check your name, student number, subject, year level, and email if this room uses an email list.',
         effect: 'No examination attempt has started.'
+      },
+      STUDENT_EMAIL_REQUIRED: {
+        title: 'This room uses an email list',
+        message: 'Enter the same email address the examination creator placed on the allowed list.',
+        effect: 'No attempt has started. Return to the entry form, add the email, and preview again.'
+      },
+      STUDENT_EMAIL_INVALID: {
+        title: 'Check the email address',
+        message: 'Enter a complete address such as student@gmail.com, or leave it blank for a key-only room.',
+        effect: 'No attempt has started. Correct the field and preview again.'
+      },
+      STUDENT_EMAIL_NOT_ALLOWED: {
+        title: 'That email is not on this room’s list',
+        message: 'Check the spelling or ask the examination creator to add the correct address before trying again.',
+        effect: 'No attempt has started and no answer was changed.'
+      },
+      STUDENT_EMAIL_MISMATCH: {
+        title: 'This student number is linked to another email',
+        message: 'Use the allowed email originally entered with this student number.',
+        effect: 'No attempt has started. Ask the examination creator to review the entry if the record is wrong.'
+      },
+      ROSTER_NAME_MISMATCH: {
+        title: 'This student number is linked to another name',
+        message: 'Enter the same real full name used when this student number first entered the room.',
+        effect: 'No attempt has started. Ask the examination creator to review the student record if needed.'
       },
       ROOM_CLOSED: {
         title: 'This examination room is not open',
@@ -1664,6 +1704,18 @@
         title: 'Your secure session needs attention',
         message: 'The examination service can no longer confirm this session automatically.',
         effect: 'Keep this page and device open. Your locally saved answers remain here while the administrator helps restore access.'
+      },
+      SESSION_REVOKED: {
+        title: 'The examination creator ended this session',
+        message: 'Your latest saved work remains attached to this attempt for creator and Admin review.',
+        effect: 'Do not start a second attempt. Contact the examination creator for the next step.',
+        retryable: false
+      },
+      STUDENT_BLOCKED: {
+        title: 'This entry has been blocked by the examination creator',
+        message: 'The current session cannot continue with this room key.',
+        effect: 'Your latest saved work remains preserved. Contact the examination creator or Admin to resolve access.',
+        retryable: false
       },
       SUBMISSION_WINDOW_CLOSED: {
         title: 'The submission window needs administrator review',
@@ -1677,12 +1729,12 @@
       },
       PREVIEW_REQUIRED: {
         title: 'Preview the examination first',
-        message: 'Confirm the room and review its privacy notice before questions can load.',
+        message: 'Confirm the room and review its short privacy warning before questions can load.',
         effect: 'No examination attempt has started.'
       },
       NOTICE_CHANGED: {
-        title: 'The privacy notice has changed',
-        message: 'Review the current notice before entering the examination.',
+        title: 'The privacy warning has changed',
+        message: 'Review the current warning before entering the examination.',
         effect: 'Questions have not loaded.'
       },
       ATTEMPT_INVALID: {
@@ -1860,6 +1912,10 @@
 
   function normaliseHumanText(value) {
     return String(value || '').trim().replace(/\s+/g, ' ');
+  }
+
+  function normaliseEmail(value) {
+    return String(value || '').trim().toLocaleLowerCase();
   }
 
   function safeDomId(value) {
@@ -2066,6 +2122,7 @@
           professor: 'Atty. Elena M. Reyes',
           durationMinutes: 45,
           questionCount: 3,
+          admissionMode: 'key_only',
           opensAt: new Date(now - 15 * 60 * 1000).toISOString(),
           closesAt: new Date(now + 3 * 60 * 60 * 1000).toISOString(),
           noticeVersion: demoNoticeVersion,
@@ -2094,7 +2151,7 @@
             'No camera, microphone, biometric identity check, or screen recording is used in this demonstration.',
             'Your professor must review any integrity event in context; an event is not itself a finding of misconduct.'
           ],
-          retention: 'Demonstration records remain in this browser storage until the site data is cleared. A production institution must publish its own retention period and authorized roles.',
+          retention: '',
           contact: 'For a real examination, contact the professor or examination administrator before beginning if you need an accommodation or do not understand the notice.'
         };
       },

@@ -193,52 +193,45 @@ export function normalizeAccessSnapshot(value) {
 
   const commercialLaunchEnabled = value.commercialLaunchEnabled === true;
   const unlimited = value.unlimited === true;
-  const tokenLimit = boundedNumber(
-    value.tokenLimit ?? value.dailyLimit,
-    commercialLaunchEnabled ? 0 : 5,
-    0,
-    100,
-  );
-  const tokensUsed = boundedNumber(
-    value.tokensUsed ?? value.completedToday,
-    0,
-    0,
-    100_000,
-  );
-  const tokensReserved = boundedNumber(
-    value.tokensReserved ?? value.reservedToday,
-    0,
-    0,
-    100_000,
-  );
-  const rawRemaining = boundedNumber(
-    value.tokensRemaining ?? value.remainingToday ?? value.freeGrades?.remaining,
-    0,
-    0,
-    100_000,
-  );
+  const basis = clean(value.basis || 'locked');
+  const paidSubscriptionExpired = value.paidSubscriptionExpired === true
+    || basis === 'paid_subscription_expired';
+  const introductoryTokensEligible = value.introductoryTokensEligible !== false
+    && !paidSubscriptionExpired;
+  const tokenLimit = introductoryTokensEligible
+    ? boundedNumber(
+      value.tokenLimit ?? value.dailyLimit,
+      commercialLaunchEnabled ? 0 : 5,
+      0,
+      100,
+    )
+    : 0;
+  const tokensUsed = introductoryTokensEligible
+    ? boundedNumber(value.tokensUsed ?? value.completedToday, 0, 0, 100_000)
+    : 0;
+  const tokensReserved = introductoryTokensEligible
+    ? boundedNumber(value.tokensReserved ?? value.reservedToday, 0, 0, 100_000)
+    : 0;
+  const rawRemaining = introductoryTokensEligible
+    ? boundedNumber(
+      value.tokensRemaining ?? value.remainingToday ?? value.freeGrades?.remaining,
+      0,
+      0,
+      100_000,
+    )
+    : 0;
   const tokensRemaining = tokenLimit > 0
     ? Math.min(tokenLimit, rawRemaining)
     : 0;
-  const freeLimit = boundedNumber(
-    value.freeGrades?.limit,
-    tokenLimit,
-    0,
-    100,
-  );
-  const freeUsed = boundedNumber(
-    value.freeGrades?.used,
-    tokensUsed,
-    0,
-    100_000,
-  );
-  const freeRemaining = boundedNumber(
-    value.freeGrades?.remaining,
-    tokensRemaining,
-    0,
-    100_000,
-  );
-  const basis = clean(value.basis || 'locked');
+  const freeLimit = introductoryTokensEligible
+    ? boundedNumber(value.freeGrades?.limit, tokenLimit, 0, 100)
+    : 0;
+  const freeUsed = introductoryTokensEligible
+    ? boundedNumber(value.freeGrades?.used, tokensUsed, 0, 100_000)
+    : 0;
+  const freeRemaining = introductoryTokensEligible
+    ? boundedNumber(value.freeGrades?.remaining, tokensRemaining, 0, 100_000)
+    : 0;
   const choiceRequired = value.choiceRequired === true
     || value.planSelectionRequired === true
     || ['plan_selection_required', 'trial_expired', 'payment_required'].includes(basis);
@@ -253,9 +246,13 @@ export function normalizeAccessSnapshot(value) {
     termsRequired: value.termsRequired === true,
     reauthenticationRequired: value.reauthenticationRequired === true,
     profileCompleted: value.profileCompleted !== false,
-    tokenAcknowledgementRequired: value.tokenAcknowledgementRequired === true,
+    tokenAcknowledgementRequired: introductoryTokensEligible
+      && value.tokenAcknowledgementRequired === true,
     choiceRequired,
-    paymentRequired: value.paymentRequired === true || basis === 'payment_required',
+    paymentRequired: value.paymentRequired === true
+      || ['payment_required', 'paid_subscription_expired'].includes(basis),
+    paidSubscriptionExpired,
+    introductoryTokensEligible,
     planSelectionRequired: value.planSelectionRequired === true
       || ['plan_selection_required', 'trial_expired'].includes(basis),
     role: clean(value.role || 'student'),
@@ -266,8 +263,8 @@ export function normalizeAccessSnapshot(value) {
     tokensUsed,
     tokensReserved,
     tokensRemaining,
-    tokenGrantAt: value.tokenGrantAt || null,
-    tokenAcknowledgedAt: value.tokenAcknowledgedAt || null,
+    tokenGrantAt: introductoryTokensEligible ? value.tokenGrantAt || null : null,
+    tokenAcknowledgedAt: introductoryTokensEligible ? value.tokenAcknowledgedAt || null : null,
     tokenDisclosureVersion: clean(value.tokenDisclosureVersion) || null,
     // Compatibility aliases retained while older examination clients roll forward.
     dailyLimit: tokenLimit,
@@ -353,6 +350,16 @@ export function accessDeniedError(access) {
     return new AccessValidationError(
       'PROFILE_COMPLETION_REQUIRED',
       'Confirm your profile and one-time token acknowledgement before continuing.',
+      403,
+    );
+  }
+
+  if (access?.paidSubscriptionExpired || access?.basis === 'paid_subscription_expired') {
+    return new AccessValidationError(
+      'PAID_SUBSCRIPTION_EXPIRED',
+      access?.checkoutOpen === true
+        ? 'Your paid Bar Exam Simulator access has expired. Renew Early Access to continue. Home and Examination Room remain available.'
+        : 'Your paid Bar Exam Simulator access has expired. Open Support for renewal assistance. Home and Examination Room remain available.',
       403,
     );
   }

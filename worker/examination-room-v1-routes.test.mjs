@@ -29,6 +29,7 @@ const ORIGIN = 'https://duediligence.ph';
 const REQUEST_KEY = '12345678-1234-4234-8234-1234567890ab';
 const SESSION_TOKEN = `ers1_${'ab'.repeat(32)}`;
 const ROOM_KEY = createRoomKey('ABCDEFGH');
+const COMMUNITY_INSTITUTION_ID = 'ddc00000-0000-4000-8000-000000000001';
 
 function clientExam(overrides = {}) {
   return {
@@ -192,9 +193,16 @@ function dependencyFixture(options = {}) {
       if (token === 'admin') return { id: IDS.admin, email: 'admin@example.edu.ph' };
       return null;
     },
-    authorizeProfessor: options.authorizeProfessor || (async (_env, user) => user.id === IDS.professor
-      ? { authorized: true, professorRoleSelected: true, institutionId: IDS.institution, memberships: [{ institutionId: IDS.institution, staffRole: 'professor', active: true }] }
-      : { authorized: false, professorRoleSelected: false }),
+    authorizeProfessor: options.authorizeProfessor || (async (_env, user) => ({
+      authorized: true,
+      creatorAuthorized: true,
+      professorRoleSelected: user.id === IDS.professor,
+      institutionId: IDS.institution,
+      creatorWorkspaces: [{ institutionId: IDS.institution, active: true }],
+      memberships: user.id === IDS.professor
+        ? [{ institutionId: IDS.institution, staffRole: 'professor', active: true }]
+        : [{ institutionId: IDS.institution, staffRole: 'admin', active: true }],
+    })),
     authorizeAdmin: options.authorizeAdmin || (async (_env, user) => user.id === IDS.admin
       ? { authorized: true, role: 'founder_admin', capabilities: ['role_admin'], institutionId: IDS.institution, memberships: [{ institutionId: IDS.institution, staffRole: 'admin', active: true }] }
       : { authorized: false }),
@@ -225,6 +233,12 @@ function dependencyFixture(options = {}) {
       deliveries.push(structuredClone(message));
       return { status: 'sent' };
     },
+    ...(typeof options.afterStudentCommand === 'function'
+      ? { afterStudentCommand: options.afterStudentCommand }
+      : {}),
+    ...(typeof options.afterProfessorCommand === 'function'
+      ? { afterProfessorCommand: options.afterProfessorCommand }
+      : {}),
   };
   return { handlers: createExaminationRoomV1Handlers(dependencies), calls, managementCalls, professorAccessCalls, deliveries };
 }
@@ -283,13 +297,15 @@ test('signed-in Professor profile can read role status and request protected sch
   assert.equal(professorAccessCalls[1].payload.institutionId, IDS.institution);
 });
 
-test('active membership alone cannot open Professor data for a non-Professor profile', async () => {
+test('any signed-in creator in an active workspace can open Professor data without selecting the Professor profile role', async () => {
   const { handlers, calls } = dependencyFixture({
     authorizeProfessor: async () => ({
-      authorized: false,
+      authorized: true,
+      creatorAuthorized: true,
       professorRoleSelected: false,
       institutionId: IDS.institution,
-      memberships: [{ institutionId: IDS.institution, staffRole: 'professor', active: true }],
+      creatorWorkspaces: [{ institutionId: IDS.institution, active: true }],
+      memberships: [],
     }),
     authorizeAdmin: async () => ({ authorized: false }),
   });
@@ -297,27 +313,58 @@ test('active membership alone cannot open Professor data for a non-Professor pro
     makeRequest('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
     ENV, ORIGIN, ORIGIN,
   );
-  const body = await json(response);
-  assert.equal(response.status, 403);
-  assert.equal(body.error.code, 'EXAM_ROOM_V1_PROFESSOR_ROLE_REQUIRED');
-  assert.equal(calls.length, 0);
+  assert.equal(response.status, 200);
+  assert.equal((await json(response)).ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].actorUserId, IDS.professor);
+  assert.equal(calls[0].institutionId, IDS.institution);
 });
 
-test('missing membership activity fails closed for default and explicitly requested institutions', async () => {
+test('multiple creator workspaces fall back to the active Due Diligence Community default', async () => {
+  const communityId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
   const { handlers, calls } = dependencyFixture({
     authorizeProfessor: async () => ({
       authorized: true,
+      creatorAuthorized: true,
+      professorRoleSelected: false,
+      institutionId: null,
+      creatorWorkspaces: [
+        { institutionId: IDS.institution, institutionCode: 'school-a', active: true },
+        {
+          institutionId: communityId,
+          institutionCode: 'due-diligence-community',
+          communityDefault: true,
+          active: true,
+        },
+      ],
+      memberships: [],
+    }),
+  });
+  const response = await handlers.professorQuery(
+    makeRequest('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
+    ENV, ORIGIN, ORIGIN,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(calls[0].institutionId, communityId);
+});
+
+test('signed-in creators fall back to the community workspace when creator context is missing or stale', async () => {
+  const { handlers, calls } = dependencyFixture({
+    authorizeProfessor: async () => ({
+      authorized: false,
+      creatorAuthorized: false,
       professorRoleSelected: true,
       institutionId: null,
-      memberships: [{ institutionId: IDS.institution, staffRole: 'professor' }],
+      creatorWorkspaces: [{ institutionId: IDS.institution, active: false }],
+      memberships: [],
     }),
   });
   const defaultResponse = await handlers.professorQuery(
     makeRequest('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
     ENV, ORIGIN, ORIGIN,
   );
-  assert.equal(defaultResponse.status, 403);
-  assert.equal((await json(defaultResponse)).error.code, 'EXAM_ROOM_V1_INSTITUTION_REQUIRED');
+  assert.equal(defaultResponse.status, 200);
+  assert.equal((await json(defaultResponse)).ok, true);
 
   const requestedResponse = await handlers.professorQuery(
     makeRequest('/examination-room/v1/professor/query', {
@@ -325,9 +372,51 @@ test('missing membership activity fails closed for default and explicitly reques
     }),
     ENV, ORIGIN, ORIGIN,
   );
-  assert.equal(requestedResponse.status, 403);
-  assert.equal((await json(requestedResponse)).error.code, 'EXAM_ROOM_V1_INSTITUTION_FORBIDDEN');
-  assert.equal(calls.length, 0);
+  assert.equal(requestedResponse.status, 200);
+  assert.equal((await json(requestedResponse)).ok, true);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls.map((call) => call.institutionId), [
+    COMMUNITY_INSTITUTION_ID,
+    COMMUNITY_INSTITUTION_ID,
+  ]);
+});
+
+test('a signed-in user without role, license, or assignment can create, save, publish, and request the key', async () => {
+  const { handlers, calls } = dependencyFixture({
+    authorizeProfessor: async () => ({
+      authorized: false,
+      creatorAuthorized: false,
+      professorRoleSelected: false,
+      institutionId: null,
+      creatorWorkspaces: [],
+      memberships: [],
+    }),
+  });
+
+  const saveResponse = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'save_draft',
+      payload: { exam: clientExam() },
+      idempotencyKey: REQUEST_KEY,
+    }),
+    ENV, ORIGIN, ORIGIN,
+  );
+  const publishResponse = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'publish',
+      payload: { exam: clientExam({ roster: undefined }) },
+      idempotencyKey: `${REQUEST_KEY}-publish`,
+    }),
+    ENV, ORIGIN, ORIGIN,
+  );
+
+  assert.equal(saveResponse.status, 200);
+  assert.equal(publishResponse.status, 201);
+  assert.deepEqual(calls.map((call) => call.operation), ['save_draft', 'publish']);
+  assert.deepEqual(calls.map((call) => call.institutionId), [
+    COMMUNITY_INSTITUTION_ID,
+    COMMUNITY_INSTITUTION_ID,
+  ]);
 });
 
 test('administrator is allowed into professor routes only as an authorized testing role', async () => {
@@ -341,7 +430,7 @@ test('administrator is allowed into professor routes only as an authorized testi
   assert.equal(calls[0].scope, 'professor');
 });
 
-test('mixed-role administrator cannot cross the institution boundary through a Professor-only membership', async () => {
+test('a stale requested workspace never blocks a signed-in creator or inherits an admin membership', async () => {
   const authorization = {
     authorized: true,
     globalAuthorized: true,
@@ -354,7 +443,14 @@ test('mixed-role administrator cannot cross the institution boundary through a P
     ],
   };
   const { handlers, calls, managementCalls } = dependencyFixture({
-    authorizeProfessor: async () => ({ authorized: false, professorRoleSelected: false }),
+    authorizeProfessor: async () => ({
+      authorized: true,
+      creatorAuthorized: true,
+      professorRoleSelected: false,
+      institutionId: IDS.institution,
+      creatorWorkspaces: [{ institutionId: IDS.institution, active: true }],
+      memberships: [],
+    }),
     authorizeAdmin: async () => authorization,
   });
 
@@ -373,9 +469,10 @@ test('mixed-role administrator cannot cross the institution boundary through a P
     }, 'admin'),
     ENV, ORIGIN, ORIGIN,
   );
-  assert.equal(testingResponse.status, 403);
-  assert.equal((await json(testingResponse)).error.code, 'EXAM_ROOM_V1_INSTITUTION_FORBIDDEN');
-  assert.equal(calls.length, 0);
+  assert.equal(testingResponse.status, 200);
+  assert.equal((await json(testingResponse)).ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].institutionId, COMMUNITY_INSTITUTION_ID);
   assert.equal(managementCalls.length, 0);
 });
 
@@ -432,16 +529,120 @@ test('publish fails closed when recorded proctoring has no complete media pipeli
   assert.equal(calls.length, 0);
 });
 
-test('professor opens a room with an HMAC only; the raw room key never reaches persistence', async () => {
+test('professor opens the latest approved activation without entering or persisting a room key', async () => {
   const { handlers, calls } = dependencyFixture();
   const response = await handlers.professorCommand(
     makeRequest('/examination-room/v1/professor/command', {
-      operation: 'open_room', payload: { examId: IDS.exam, roomKey: ROOM_KEY }, idempotencyKey: REQUEST_KEY,
+      operation: 'open_room', payload: { examId: IDS.exam }, idempotencyKey: REQUEST_KEY,
     }), ENV, ORIGIN, ORIGIN,
   );
   assert.equal(response.status, 200);
-  assert.match(calls[0].payload.roomKeyHash, /^[0-9a-f]{64}$/u);
-  assert.equal(JSON.stringify(calls[0]).includes(ROOM_KEY), false);
+  assert.deepEqual(Object.keys(calls[0].payload).sort(), ['examId', 'openedAt', 'requestHash']);
+  assert.equal('roomKeyHash' in calls[0].payload, false);
+});
+
+test('key-only admission is the default and publishing requires no roster', async () => {
+  const { handlers, calls } = dependencyFixture();
+  const response = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'publish',
+      payload: { exam: clientExam({ roster: undefined, admissionMode: undefined, allowedEmails: undefined }) },
+      idempotencyKey: REQUEST_KEY,
+    }), ENV, ORIGIN, ORIGIN,
+  );
+  assert.equal(response.status, 201);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].payload.exam.admissionMode, 'key_only');
+  assert.deepEqual(calls[0].payload.exam.allowedEmails, []);
+  assert.deepEqual(calls[0].payload.exam.roster, []);
+});
+
+test('a successful publication hands the persisted request to the owner-notification hook', async () => {
+  const handoffs = [];
+  const executionContext = { waitUntil() {} };
+  const publicationManifest = publicationFixture();
+  const { handlers } = dependencyFixture({
+    rpc: async (_env, parameters) => ({
+      ok: true,
+      examId: IDS.exam,
+      version: 1,
+      publicationHash: 'a'.repeat(64),
+      publicationManifest,
+      parameters,
+    }),
+    afterProfessorCommand: (details) => handoffs.push(details),
+  });
+
+  const response = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'publish',
+      payload: { exam: clientExam({ roster: undefined, admissionMode: undefined, allowedEmails: undefined }) },
+      idempotencyKey: REQUEST_KEY,
+    }), ENV, ORIGIN, ORIGIN, executionContext,
+  );
+
+  assert.equal(response.status, 201);
+  assert.equal(handoffs.length, 1);
+  assert.equal(handoffs[0].operation, 'publish');
+  assert.equal(handoffs[0].result.examId, IDS.exam);
+  assert.equal(handoffs[0].result.publicationHash, 'a'.repeat(64));
+  assert.deepEqual(handoffs[0].result.publicationManifest, publicationManifest);
+  assert.equal(handoffs[0].executionContext, executionContext);
+});
+
+test('optional email admission normalizes and deduplicates the creator list', async () => {
+  const { handlers, calls } = dependencyFixture();
+  const response = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'save_draft',
+      payload: {
+        exam: clientExam({
+          roster: undefined,
+          admissionMode: 'email_allowlist',
+          allowedEmails: [' First.Student@Example.COM ', 'first.student@example.com', 'second@example.com'],
+        }),
+      },
+      idempotencyKey: REQUEST_KEY,
+    }), ENV, ORIGIN, ORIGIN,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(calls[0].payload.exam.admissionMode, 'email_allowlist');
+  assert.deepEqual(calls[0].payload.exam.allowedEmails, [
+    'first.student@example.com',
+    'second@example.com',
+  ]);
+});
+
+test('email allowlist mode explains how to recover when no email is entered', async () => {
+  const { handlers, calls } = dependencyFixture();
+  const response = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'publish',
+      payload: { exam: clientExam({ roster: undefined, admissionMode: 'email_allowlist', allowedEmails: [] }) },
+      idempotencyKey: REQUEST_KEY,
+    }), ENV, ORIGIN, ORIGIN,
+  );
+  const result = await json(response);
+  assert.equal(response.status, 409);
+  assert.equal(result.error.code, 'EXAM_ROOM_V1_ALLOWED_EMAIL_REQUIRED');
+  assert.match(result.error.recovery, /Anyone with the key/iu);
+  assert.equal(calls.length, 0);
+});
+
+test('creator can revoke a monitored session with an idempotent auditable command', async () => {
+  const { handlers, calls } = dependencyFixture();
+  const response = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'revoke_session',
+      payload: { examId: IDS.exam, sessionId: IDS.session, reason: 'Removed after identity review.' },
+      idempotencyKey: REQUEST_KEY,
+    }), ENV, ORIGIN, ORIGIN,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(calls[0].operation, 'revoke_session');
+  assert.equal(calls[0].payload.sessionId, IDS.session);
+  assert.equal(calls[0].payload.reason, 'Removed after identity review.');
+  assert.match(calls[0].payload.requestHash, /^[0-9a-f]{64}$/u);
 });
 
 test('student preview exposes metadata and notice but never questions', async () => {
@@ -464,6 +665,27 @@ test('student preview exposes metadata and notice but never questions', async ()
   assert.equal(result.notice.version, 'exam-room-v1');
   assert.match(calls[0].payload.roomKeyHash, /^[0-9a-f]{64}$/u);
   assert.equal(JSON.stringify(calls[0]).includes(ROOM_KEY), false);
+});
+
+test('student preview carries optional student.email only as normalized admission identity', async () => {
+  const { handlers, calls } = dependencyFixture({
+    rpc: async (_env, parameters) => parameters.operation === 'preview' ? { ok: true, ...previewFixture() } : { ok: true },
+  });
+  const response = await handlers.studentPreview(
+    makeRequest('/examination-room/v1/student/preview', {
+      roomKey: ROOM_KEY,
+      student: {
+        fullName: 'Maria Theresa Dela Cruz',
+        studentNumber: '2024-10001',
+        subject: 'Constitutional Law',
+        yearLevel: 'Second year',
+        email: ' Maria.Student@Example.COM ',
+      },
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(calls[0].payload.identity.email, 'maria.student@example.com');
+  assert.equal(JSON.stringify(await json(response)).includes('maria.student@example.com'), false);
 });
 
 test('invalid room key is rejected before any database lookup', async () => {
@@ -630,6 +852,51 @@ test('submission freezes latest revisions into a manifest and keeps retries idem
   assert.doesNotMatch(JSON.stringify(submitCall), new RegExp(REQUEST_KEY, 'u'));
 });
 
+test('a 100-student submission burst hands every accepted submission to immediate recovery without waiting for cron', async () => {
+  const publication = publicationFixture();
+  const recoveryHandoffs = [];
+  const contexts = Array.from({ length: 100 }, () => ({ marker: Symbol('execution-context') }));
+  const { handlers } = dependencyFixture({
+    afterStudentCommand: (details) => recoveryHandoffs.push(details),
+    rpc: async (_env, parameters) => {
+      if (parameters.operation === 'session_context') {
+        return {
+          ok: true,
+          publicationManifest: publication,
+          publicationHash: 'a'.repeat(64),
+          studentIdentity: identityFixture(),
+          privacyConsent: {
+            noticeVersion: 'exam-room-v1', accepted: true,
+            acceptedAt: '2026-08-26T01:55:00.000Z', recordingAccepted: false,
+          },
+          answerRevisions: [answerRevisionFixture(publication)],
+        };
+      }
+      if (parameters.operation === 'submit') {
+        return { ok: true, submission: { id: IDS.submission }, duplicate: false };
+      }
+      return { ok: true };
+    },
+  });
+
+  const responses = await Promise.all(contexts.map((executionContext) => handlers.studentCommand(
+    makeRequest('/examination-room/v1/student/command', {
+      operation: 'submit',
+      payload: { sessionId: IDS.session, sessionToken: SESSION_TOKEN },
+      idempotencyKey: REQUEST_KEY,
+    }, null),
+    ENV,
+    ORIGIN,
+    ORIGIN,
+    executionContext,
+  )));
+
+  assert.equal(responses.every((response) => response.status === 201), true);
+  assert.equal(recoveryHandoffs.length, 100);
+  assert.equal(recoveryHandoffs.every((entry) => entry.operation === 'submit'), true);
+  assert.deepEqual(recoveryHandoffs.map((entry) => entry.executionContext), contexts);
+});
+
 test('professor grade save creates an append-only grading revision without persisting raw idempotency', async () => {
   const publication = publicationFixture();
   const submission = submissionFixture(publication);
@@ -657,6 +924,12 @@ test('professor grade save creates an append-only grading revision without persi
     }), ENV, ORIGIN, ORIGIN,
   );
   assert.equal(response.status, 200);
+  const responseBody = await json(response);
+  assert.equal(responseBody.grade.sessionId, IDS.session);
+  assert.equal(responseBody.grade.questionId, 'q001');
+  assert.equal(responseBody.grade.points, 16);
+  assert.equal(responseBody.grade.feedback, 'Clear analysis.');
+  assert.deepEqual(responseBody.revision, responseBody.grade);
   const saveCall = calls.find((entry) => entry.operation === 'save_grade');
   assert.equal(saveCall.payload.gradingManifest.scores[0].pointsAwarded, 16);
   assert.equal('idempotencyKey' in saveCall.payload.gradingManifest, false);
@@ -666,6 +939,7 @@ test('professor grade save creates an append-only grading revision without persi
 test('result release finalizes every selected score and gives each release a distinct idempotency hash', async () => {
   const publication = publicationFixture();
   const submission = submissionFixture(publication);
+  const handoffs = [];
   const { handlers, calls } = dependencyFixture({
     rpc: async (_env, parameters) => {
       if (parameters.operation === 'release_context') {
@@ -683,6 +957,15 @@ test('result release finalizes every selected score and gives each release a dis
       if (parameters.operation === 'release_results') return { ok: true, released: 1 };
       return { ok: true };
     },
+    afterProfessorCommand: async (details) => {
+      handoffs.push(structuredClone(details));
+      return {
+        resultDelivery: {
+          status: 'sent', total: 1, acceptedCount: 1, failedCount: 0, skippedCount: 0,
+          outcomes: [{ sessionId: IDS.session, status: 'sent', providerId: 'result-email-1' }],
+        },
+      };
+    },
   });
   const response = await handlers.professorCommand(
     makeRequest('/examination-room/v1/professor/command', {
@@ -692,6 +975,13 @@ test('result release finalizes every selected score and gives each release a dis
     }), ENV, ORIGIN, ORIGIN,
   );
   assert.equal(response.status, 200);
+  const responseBody = await json(response);
+  assert.equal(responseBody.release.examId, IDS.exam);
+  assert.deepEqual(responseBody.release.sessionIds, [IDS.session]);
+  assert.equal(responseBody.release.status, 'released');
+  assert.equal(responseBody.release.releasedAt, '2026-08-26T04:00:00.000Z');
+  assert.equal(responseBody.release.delivery.status, 'sent');
+  assert.equal(responseBody.release.delivery.outcomes[0].providerId, 'result-email-1');
   const releaseCall = calls.find((entry) => entry.operation === 'release_results');
   assert.equal(releaseCall.payload.releases.length, 1);
   assert.equal(releaseCall.payload.releases[0].gradingManifest.status, 'final');
@@ -699,6 +989,34 @@ test('result release finalizes every selected score and gives each release a dis
   assert.match(releaseCall.payload.releases[0].releaseRequestHash, /^[0-9a-f]{64}$/u);
   assert.equal('idempotencyKey' in releaseCall.payload.releases[0].gradingManifest, false);
   assert.equal('idempotencyKey' in releaseCall.payload.releases[0].releaseManifest, false);
+  assert.equal(handoffs.length, 1);
+  assert.equal(handoffs[0].actorUserId, IDS.professor);
+  assert.equal(handoffs[0].institutionId, IDS.institution);
+  assert.equal(handoffs[0].requestHash.length, 64);
+  assert.deepEqual(handoffs[0].resultEmailItems, [{
+    releaseId: releaseCall.payload.releases[0].releaseManifest.releaseId,
+    sessionId: IDS.session,
+    releaseRequestHash: releaseCall.payload.releases[0].releaseRequestHash,
+  }]);
+
+  const replayResponse = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'release_results',
+      payload: { examId: IDS.exam, sessionIds: [IDS.session] },
+      idempotencyKey: REQUEST_KEY,
+    }), ENV, ORIGIN, ORIGIN,
+  );
+  assert.equal(replayResponse.status, 200);
+  const releaseCalls = calls.filter((entry) => entry.operation === 'release_results');
+  assert.equal(releaseCalls.length, 2);
+  assert.equal(
+    releaseCalls[0].payload.releases[0].releaseManifest.releaseId,
+    releaseCalls[1].payload.releases[0].releaseManifest.releaseId,
+  );
+  assert.equal(
+    releaseCalls[0].payload.releases[0].gradingManifest.revisionId,
+    releaseCalls[1].payload.releases[0].gradingManifest.revisionId,
+  );
 });
 
 test('heartbeat and ordinary integrity signals contain no bearer credential in persistence payloads', async () => {
@@ -745,6 +1063,25 @@ test('admin activation generates a checksum-valid key but persists only the HMAC
   assert.equal(normalizeRoomKey(result.roomKey), result.roomKey);
   assert.match(calls[0].payload.roomKeyHash, /^[0-9a-f]{64}$/u);
   assert.equal(JSON.stringify(calls[0]).includes(result.roomKey), false);
+});
+
+test('100 repeated admin approval requests preserve one idempotency hash and never persist raw keys', async () => {
+  const { handlers, calls } = dependencyFixture({
+    rpc: async () => ({ ok: true, duplicate: true, activation: { id: '88888888-8888-4888-8888-888888888888', status: 'scheduled' } }),
+  });
+  for (let index = 0; index < 100; index += 1) {
+    const response = await handlers.adminCommand(
+      makeRequest('/examination-room/v1/admin/command', {
+        operation: 'activate_exam', payload: { examId: IDS.exam }, idempotencyKey: REQUEST_KEY,
+      }, 'admin'), ENV, ORIGIN, ORIGIN,
+    );
+    assert.equal(response.status, 201);
+    const result = await json(response);
+    assert.equal(JSON.stringify(calls[index]).includes(result.roomKey), false);
+  }
+  assert.equal(calls.length, 100);
+  assert.equal(new Set(calls.map((call) => call.payload.requestHash)).size, 1);
+  assert.equal(calls.every((call) => /^[0-9a-f]{64}$/u.test(call.payload.roomKeyHash)), true);
 });
 
 test('email key rotates the verifier and exposes plaintext only to the authorized mail boundary', async () => {

@@ -26,7 +26,9 @@ const SESSION_TOKEN_PATTERN = /^ers1_[0-9a-f]{64}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
 const MAX_ROSTER_SIZE = 5_000;
+const MAX_ALLOWED_EMAILS = 5_000;
 const MAX_EVENT_DETAILS_BYTES = 8_000;
+const COMMUNITY_CREATOR_INSTITUTION_ID = 'ddc00000-0000-4000-8000-000000000001';
 
 const PROFESSOR_QUERY_OPERATIONS = new Set(['role_status', 'session', 'exam', 'monitor', 'grading']);
 const PROFESSOR_COMMAND_OPERATIONS = new Set([
@@ -36,7 +38,9 @@ const PROFESSOR_COMMAND_OPERATIONS = new Set([
   'import_document',
   'open_room',
   'close_room',
+  'revoke_session',
   'save_grade',
+  'import_grades',
   'release_results',
 ]);
 const STUDENT_QUERY_OPERATIONS = new Set(['resume', 'result']);
@@ -57,7 +61,7 @@ const RECOVERY_BY_CODE = Object.freeze({
   [ERROR_CODES.PUBLICATION_NOT_READY]: 'Open Review items, complete every listed field, then publish again.',
   [ERROR_CODES.ROOM_KEY_FORMAT_INVALID]: 'Copy the complete current key from the administrator message and try again.',
   [ERROR_CODES.ROOM_KEY_CHECKSUM_INVALID]: 'Check the key for a mistyped character, then try again.',
-  [ERROR_CODES.STUDENT_IDENTITY_INVALID]: 'Use the complete registered name and the student number shown on the school record.',
+  [ERROR_CODES.STUDENT_IDENTITY_INVALID]: 'Complete the real name, student number, subject, and year level, then try again.',
   [ERROR_CODES.STUDENT_SUBJECT_MISMATCH]: 'Use the subject shown by the professor, then try again.',
   [ERROR_CODES.STUDENT_YEAR_LEVEL_MISMATCH]: 'Use the year level on the examination roster, then try again.',
   [ERROR_CODES.PRIVACY_CONSENT_REQUIRED]: 'Read the notice, choose Agree and begin, then continue.',
@@ -276,6 +280,39 @@ function normalizeRoster(rawRoster, subject, defaultYearLevel) {
   });
 }
 
+function normalizeAdmissionPolicy(rawExam) {
+  const exam = plainRecord(rawExam, 'examination');
+  const admissionMode = exam.admissionMode === 'email_allowlist'
+    ? 'email_allowlist'
+    : 'key_only';
+  const source = exam.allowedEmails ?? [];
+  if (!Array.isArray(source) || source.length > MAX_ALLOWED_EMAILS) {
+    fail(
+      'EXAM_ROOM_V1_ALLOWED_EMAILS_INVALID',
+      `Provide no more than ${MAX_ALLOWED_EMAILS.toLocaleString('en-US')} allowed emails.`,
+      400,
+      'Correct the optional email list, then try again.',
+    );
+  }
+  const seen = new Set();
+  const allowedEmails = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const email = cleanText(source[index], 320, `allowed email ${index + 1}`, { required: true }).toLowerCase();
+    if (!EMAIL_PATTERN.test(email)) {
+      fail(
+        'EXAM_ROOM_V1_ALLOWED_EMAIL_INVALID',
+        `Correct allowed email ${index + 1}.`,
+        400,
+        'Use one complete email address per line, then try again.',
+      );
+    }
+    if (seen.has(email)) continue;
+    seen.add(email);
+    allowedEmails.push(email);
+  }
+  return { admissionMode, allowedEmails };
+}
+
 function persistenceQuestion(question) {
   return {
     questionNumber: question.number,
@@ -310,6 +347,7 @@ function persistenceDraft(draft) {
 function operationalExam(rawExam, draft) {
   const exam = plainRecord(rawExam, 'examination');
   const startsAt = isoInstant(exam.startsAt, 'the examination start', { required: false });
+  const admission = normalizeAdmissionPolicy(exam);
   return {
     examId: exam.id ? uuid(exam.id, 'the examination identifier') : null,
     title: draft.title,
@@ -334,19 +372,37 @@ function operationalExam(rawExam, draft) {
     sourceFileSize: exam.sourceFileSize == null
       ? null
       : positiveInteger(exam.sourceFileSize, 'source file size', 0, MAX_DOCUMENT_BYTES),
+    admissionMode: admission.admissionMode,
+    allowedEmails: admission.allowedEmails,
     questions: draft.questions.map(persistenceQuestion),
     roster: normalizeRoster(exam.roster, draft.subject, draft.yearLevel),
   };
 }
 
 function studentIdentityFromPayload(payload) {
-  const source = isPlainRecord(payload.identity) ? payload.identity : payload;
-  return normalizeStudentIdentity({
+  const source = isPlainRecord(payload.student)
+    ? payload.student
+    : isPlainRecord(payload.identity)
+      ? payload.identity
+      : payload;
+  const identity = normalizeStudentIdentity({
     realName: source.realName ?? source.fullName,
     studentNumber: source.studentNumber,
     subject: source.subject ?? payload.subject,
     yearLevel: source.yearLevel ?? payload.yearLevel,
   });
+  const rawEmail = source.email ?? payload.email;
+  if (rawEmail === undefined || rawEmail === null || rawEmail === '') return identity;
+  const email = cleanText(rawEmail, 320, 'student email', { required: true }).toLowerCase();
+  if (!EMAIL_PATTERN.test(email)) {
+    fail(
+      'EXAM_ROOM_V1_STUDENT_EMAIL_INVALID',
+      'Enter a valid student email or leave it blank for a key-only examination.',
+      400,
+      'Correct the student email, then try again.',
+    );
+  }
+  return Object.freeze({ ...identity, email });
 }
 
 function publicPreview(metadata) {
@@ -552,6 +608,39 @@ function selectInstitution(authorization, requestedInstitutionId = null, allowed
   return uuid(primary, 'the institution identifier');
 }
 
+function selectCreatorInstitution(authorization, requestedInstitutionId = null) {
+  const context = isPlainRecord(authorization) ? authorization : {};
+  const creatorWorkspaces = Array.isArray(context.creatorWorkspaces)
+    ? context.creatorWorkspaces
+    : [];
+  const memberships = Array.isArray(context.memberships) ? context.memberships : [];
+  const candidates = [];
+  const seen = new Set();
+  for (const entry of [...creatorWorkspaces, ...memberships]) {
+    if (!entry?.institutionId || entry.active !== true || seen.has(entry.institutionId)) continue;
+    const institutionId = uuid(entry.institutionId, 'the institution identifier');
+    seen.add(institutionId);
+    candidates.push({
+      institutionId,
+      institutionName: entry.institutionName || null,
+      institutionCode: entry.institutionCode || null,
+      communityDefault: entry.communityDefault === true
+        || entry.institutionCode === 'due-diligence-community',
+    });
+  }
+  const preferred = candidates.find((entry) => entry.institutionId === context.institutionId);
+  const communityDefault = candidates.find((entry) => entry.communityDefault);
+  if (requestedInstitutionId) {
+    const requested = uuid(requestedInstitutionId, 'the institution identifier');
+    if (seen.has(requested)) return requested;
+    return COMMUNITY_CREATOR_INSTITUTION_ID;
+  }
+  return preferred?.institutionId
+    || communityDefault?.institutionId
+    || candidates[0]?.institutionId
+    || COMMUNITY_CREATOR_INSTITUTION_ID;
+}
+
 export function createExaminationRoomV1Handlers(dependencies) {
   const deps = plainRecord(dependencies, 'route dependencies');
   for (const name of [
@@ -594,44 +683,16 @@ export function createExaminationRoomV1Handlers(dependencies) {
     }
   }
 
-  async function professorContext(request, env, requestedInstitutionId = null) {
-    const user = await deps.authenticate(request, env);
+  async function professorContext(request, env, requestedInstitutionId = null, authenticatedUser = null) {
+    const user = authenticatedUser || await deps.authenticate(request, env);
     if (!user?.id) {
       fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'Professor sign-in is required.', 401, 'Sign in through Due Diligence, then reopen Examination Room.');
     }
-    let authorization = await deps.authorizeProfessor(env, user);
-    let allowedStaffRoles = ['professor'];
-    if (!authorizationAllowed(authorization)) {
-      const admin = await deps.authorizeAdmin(env, user).catch(() => null);
-      if (hasRoleAdmin(admin)) {
-        const memberships = (Array.isArray(admin.memberships) ? admin.memberships : [])
-          .filter((entry) => entry?.active === true && entry?.staffRole === 'admin');
-        const institutionIds = [...new Set(memberships.map((entry) => entry.institutionId).filter(Boolean))];
-        authorization = {
-          authorized: true,
-          adminTesting: true,
-          role: admin.role,
-          institutionId: institutionIds.length === 1 ? institutionIds[0] : null,
-          memberships,
-        };
-        allowedStaffRoles = ['admin'];
-      }
-    }
-    if (!authorizationAllowed(authorization)) {
-      if (authorization?.professorRoleSelected !== true) {
-        fail(
-          'EXAM_ROOM_V1_PROFESSOR_ROLE_REQUIRED',
-          'This signed-in account has not selected Professor as its account role.',
-          403,
-          'Open Profile, choose Professor, save the private declaration, and then request school activation from the Professor card.',
-        );
-      }
-      fail('EXAM_ROOM_V1_PROFESSOR_FORBIDDEN', 'This account is not authorized as a professor.', 403, 'Ask an administrator to activate the professor role for this account.');
-    }
+    const authorization = await deps.authorizeProfessor(env, user);
     return {
       user,
-      authorization,
-      institutionId: selectInstitution(authorization, requestedInstitutionId, allowedStaffRoles),
+      authorization: isPlainRecord(authorization) ? authorization : {},
+      institutionId: selectCreatorInstitution(authorization, requestedInstitutionId),
     };
   }
 
@@ -762,32 +823,48 @@ export function createExaminationRoomV1Handlers(dependencies) {
     }, origin, allowedOrigin);
   }
 
-  async function professorCommand(request, env, origin, allowedOrigin) {
+  async function professorCommand(request, env, origin, allowedOrigin, executionContext = null) {
     return respondWithErrors(async () => {
       await deps.rateLimit(request, env, 'professor_command');
-      const body = plainRecord(await deps.parseJson(request, operationBodyLimit(request)));
+      const authenticatedUser = await deps.authenticate(request, env);
+      if (!authenticatedUser?.id) {
+        fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'Professor sign-in is required.', 401, 'Sign in through Due Diligence, then reopen Examination Room.');
+      }
+      const body = plainRecord(await deps.parseJson(request, 12_000_000));
       const operation = cleanText(body.operation, 80, 'operation', { required: true });
       if (!PROFESSOR_COMMAND_OPERATIONS.has(operation)) {
         fail('EXAM_ROOM_V1_OPERATION_UNSUPPORTED', 'That professor action is not available.', 400, 'Refresh Examination Room and try again.');
       }
       const payload = plainRecord(body.payload ?? {}, 'request details');
-      if (operation === 'request_access') {
-        const user = await deps.authenticate(request, env);
-        if (!user?.id) {
-          fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'Professor sign-in is required.', 401, 'Sign in through Due Diligence, then reopen the Professor Examination Room card.');
+      if (operation === 'import_grades') {
+        if (typeof deps.importGrades !== 'function') {
+          fail('EXAM_ROOM_V1_OPERATION_UNSUPPORTED', 'Offline grade import is not available.', 503, 'Your graded file remains unchanged. Retry after Examination Room is updated.');
         }
+        return deps.importGrades({
+          request,
+          env,
+          origin,
+          allowedOrigin,
+          body,
+          authenticatedUser,
+        });
+      }
+      if (operation === 'request_access') {
         const result = ensureStoreResult(await deps.professorAccess(env, {
           operation: 'request',
-          actorUserId: user.id,
+          actorUserId: authenticatedUser.id,
           payload: payload.institutionId
             ? { institutionId: uuid(payload.institutionId, 'the law-school workspace identifier') }
             : {},
         }));
         return deps.respond({ ok: true, ...result }, result.duplicate || result.alreadyActive ? 200 : 201, origin, allowedOrigin);
       }
-      const context = await professorContext(request, env, payload.institutionId);
+      const context = await professorContext(request, env, payload.institutionId, authenticatedUser);
       const requestInfo = await requestContext(env, body.idempotencyKey ?? request.headers.get('X-Request-ID'));
       let safePayload;
+      let clientGradeEntry = null;
+      let clientReleaseEntry = null;
+      let resultEmailItems = [];
 
       if (operation === 'save_draft' || operation === 'publish') {
         const draft = professorDraftFromClientExam(payload.exam);
@@ -803,8 +880,13 @@ export function createExaminationRoomV1Handlers(dependencies) {
               { issues: readiness.issues },
             );
           }
-          if (exam.roster.length === 0) {
-            fail('EXAM_ROOM_V1_ROSTER_REQUIRED', 'Add at least one student before publishing.', 409, 'Add or import the class roster, review it, then publish again.');
+          if (exam.admissionMode === 'email_allowlist' && exam.allowedEmails.length === 0) {
+            fail(
+              'EXAM_ROOM_V1_ALLOWED_EMAIL_REQUIRED',
+              'Add at least one email or switch admission to Anyone with the key.',
+              409,
+              'Add one email per line, or choose Anyone with the key, then publish again.',
+            );
           }
           if (draft.integrityTier === 'recorded_proctoring' || exam.cameraRequired || exam.microphoneRequired) {
             fail(
@@ -840,23 +922,29 @@ export function createExaminationRoomV1Handlers(dependencies) {
         });
         return deps.respond({ ok: true, examId, questions: draft.questions, warnings: imported?.warnings || [] }, 200, origin, allowedOrigin);
       } else if (operation === 'open_room') {
-        const rawRoomKey = normalizeRoomKey(payload.roomKey);
         safePayload = {
           examId: uuid(payload.examId, 'the examination identifier'),
-          roomKeyHash: await pepperedHmac(env, 'room-key', rawRoomKey),
           requestHash: requestInfo.requestHash,
           openedAt: deps.now(),
         };
-        const result = await callRpc(env, {
-          scope: 'professor', operation, actorUserId: context.user.id,
-          institutionId: context.institutionId, payload: safePayload,
-        }, [rawRoomKey]);
-        return deps.respond({ ok: true, ...result }, 200, origin, allowedOrigin);
       } else if (operation === 'close_room') {
         safePayload = {
           examId: uuid(payload.examId, 'the examination identifier'),
           requestHash: requestInfo.requestHash,
           closedAt: deps.now(),
+        };
+      } else if (operation === 'revoke_session') {
+        safePayload = {
+          examId: uuid(payload.examId, 'the examination identifier'),
+          sessionId: uuid(payload.sessionId, 'the student session identifier'),
+          reason: cleanText(
+            payload.reason ?? 'Removed from this examination by the creator.',
+            1_000,
+            'the removal reason',
+            { required: true },
+          ),
+          requestHash: requestInfo.requestHash,
+          revokedAt: deps.now(),
         };
       } else if (operation === 'save_grade') {
         const examId = uuid(payload.examId, 'the examination identifier');
@@ -902,6 +990,18 @@ export function createExaminationRoomV1Handlers(dependencies) {
           gradingManifest,
           gradingHash: await deps.sha256Hex?.(grade.hashInput) || await pepperedHmac(env, 'grading-manifest', grade.hashInput),
         };
+        const targetScore = gradingManifest.scores.find((score) => score.questionKey === question.key);
+        clientGradeEntry = {
+          id: gradingManifest.revisionId,
+          sessionId,
+          questionId: question.key,
+          points: targetScore.pointsAwarded,
+          feedback: targetScore.feedback || '',
+          revision: gradingManifest.revision,
+          status: gradingManifest.status,
+          at: gradingManifest.gradedAt,
+          source: 'online',
+        };
       } else if (operation === 'release_results') {
         const examId = uuid(payload.examId, 'the examination identifier');
         if (!Array.isArray(payload.sessionIds) || payload.sessionIds.length === 0 || payload.sessionIds.length > 1_000) {
@@ -914,8 +1014,18 @@ export function createExaminationRoomV1Handlers(dependencies) {
         }));
         const releases = [];
         for (const entry of releaseContext.entries || []) {
+          const releaseRequestHash = await pepperedHmac(
+            env,
+            'result-release-request',
+            `${requestInfo.rawRequestKey}\0${entry.sessionId}`,
+          );
+          const gradingRevisionId = uuidFromHash(await pepperedHmac(
+            env,
+            'result-release-grading-revision',
+            releaseRequestHash,
+          ));
           const finalRevision = buildGradingRevision({
-            revisionId: deps.randomUUID(),
+            revisionId: gradingRevisionId,
             revision: positiveInteger(entry.nextRevision, 'the grading revision', 1, 1_000_000, 1),
             status: GRADING_REVISION_STATUSES.FINAL,
             graderId: context.user.id,
@@ -925,7 +1035,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
             overallFeedback: entry.overallFeedback || '',
           }, { submissionManifest: entry.submissionManifest });
           const release = buildResultRelease({
-            releaseId: deps.randomUUID(),
+            releaseId: uuidFromHash(releaseRequestHash),
             selectedRevisionId: finalRevision.manifest.revisionId,
             releasedAt: deps.now(),
             releasedBy: context.user.id,
@@ -938,23 +1048,37 @@ export function createExaminationRoomV1Handlers(dependencies) {
           const releaseManifest = { ...release.manifest };
           delete gradingManifest.idempotencyKey;
           delete releaseManifest.idempotencyKey;
+          const normalizedSessionId = uuid(entry.sessionId, 'the student session identifier');
           releases.push({
-            sessionId: uuid(entry.sessionId, 'the student session identifier'),
+            sessionId: normalizedSessionId,
             gradingManifest,
             gradingHash: await deps.sha256Hex?.(finalRevision.hashInput) || await pepperedHmac(env, 'grading-manifest', finalRevision.hashInput),
             releaseManifest,
             releaseHash: await deps.sha256Hex?.(release.hashInput) || await pepperedHmac(env, 'release-manifest', release.hashInput),
-            releaseRequestHash: await pepperedHmac(
-              env,
-              'result-release-request',
-              `${requestInfo.rawRequestKey}\0${entry.sessionId}`,
-            ),
+            releaseRequestHash,
+          });
+          resultEmailItems.push({
+            releaseId: releaseManifest.releaseId,
+            sessionId: normalizedSessionId,
+            releaseRequestHash,
           });
         }
         if (releases.length !== sessionIds.length) {
           fail('EXAM_ROOM_V1_GRADING_CONTEXT_INVALID', 'Some selected student records could not be prepared for release.', 409, 'Refresh grading, review the selected students, then release again.');
         }
         safePayload = { examId, sessionIds, requestHash: requestInfo.requestHash, releases };
+        const releasedAt = releases.reduce((latest, entry) => {
+          const candidate = String(entry.releaseManifest?.releasedAt || '');
+          return candidate > latest ? candidate : latest;
+        }, '');
+        clientReleaseEntry = {
+          id: requestInfo.clientEventId,
+          examId,
+          sessionIds,
+          releasedAt: releasedAt || deps.now(),
+          at: releasedAt || deps.now(),
+          status: 'released',
+        };
       }
 
       const result = await callRpc(env, {
@@ -962,7 +1086,44 @@ export function createExaminationRoomV1Handlers(dependencies) {
         institutionId: context.institutionId, payload: safePayload,
       }, [requestInfo.rawRequestKey]);
       if (operation === 'publish' && result.publicationManifest) normalizePublicationManifest(result.publicationManifest);
-      return deps.respond({ ok: true, ...result }, operation === 'publish' ? 201 : 200, origin, allowedOrigin);
+      let postCommandResult = null;
+      if (typeof deps.afterProfessorCommand === 'function') {
+        postCommandResult = await deps.afterProfessorCommand({
+          operation,
+          result,
+          env,
+          executionContext,
+          actorUserId: context.user.id,
+          institutionId: context.institutionId,
+          requestHash: requestInfo.requestHash,
+          examId: safePayload?.examId || result?.examId || null,
+          resultEmailItems,
+        });
+      }
+      let publicResult = result;
+      if (clientGradeEntry) {
+        const entry = {
+          ...clientGradeEntry,
+          ...(result.revision?.id ? { id: result.revision.id } : {}),
+          ...(Number.isSafeInteger(Number(result.revision?.revision))
+            ? { revision: Number(result.revision.revision) }
+            : {}),
+        };
+        // `revision` is retained for the current Professor client; `grade` is
+        // the explicit canonical name for newer clients.
+        publicResult = { ...result, revision: entry, grade: entry };
+      } else if (clientReleaseEntry) {
+        publicResult = {
+          ...result,
+          release: {
+            ...clientReleaseEntry,
+            ...(postCommandResult?.resultDelivery
+              ? { delivery: postCommandResult.resultDelivery }
+              : {}),
+          },
+        };
+      }
+      return deps.respond({ ok: true, ...publicResult }, operation === 'publish' ? 201 : 200, origin, allowedOrigin);
     }, origin, allowedOrigin);
   }
 
@@ -979,8 +1140,8 @@ export function createExaminationRoomV1Handlers(dependencies) {
 
   async function studentPreview(request, env, origin, allowedOrigin) {
     return respondWithErrors(async () => {
-      await deps.rateLimit(request, env, 'student_preview');
       const payload = plainRecord(await deps.parseJson(request, 12_000));
+      await deps.rateLimit(request, env, 'student_preview', payload);
       const preview = await previewWithVerifiedKey(env, payload);
       return deps.respond({
         ok: true,
@@ -1002,8 +1163,8 @@ export function createExaminationRoomV1Handlers(dependencies) {
 
   async function studentConsent(request, env, origin, allowedOrigin) {
     return respondWithErrors(async () => {
-      await deps.rateLimit(request, env, 'student_consent');
       const payload = plainRecord(await deps.parseJson(request, 16_000));
+      await deps.rateLimit(request, env, 'student_consent', payload);
       const info = await requestContext(env, payload.idempotencyKey ?? request.headers.get('X-Request-ID'));
       const preview = await previewWithVerifiedKey(env, payload);
       const consent = validatePrivacyConsent({
@@ -1040,8 +1201,8 @@ export function createExaminationRoomV1Handlers(dependencies) {
 
   async function studentQuery(request, env, origin, allowedOrigin) {
     return respondWithErrors(async () => {
-      await deps.rateLimit(request, env, 'student_query');
       const body = plainRecord(await deps.parseJson(request, 16_000));
+      await deps.rateLimit(request, env, 'student_query', body);
       const operation = cleanText(body.operation, 80, 'operation', { required: true });
       if (!STUDENT_QUERY_OPERATIONS.has(operation)) {
         fail('EXAM_ROOM_V1_OPERATION_UNSUPPORTED', 'That student view is not available.', 400, 'Return to the examination and try again.');
@@ -1058,10 +1219,10 @@ export function createExaminationRoomV1Handlers(dependencies) {
     }, origin, allowedOrigin);
   }
 
-  async function studentCommand(request, env, origin, allowedOrigin) {
+  async function studentCommand(request, env, origin, allowedOrigin, executionContext = null) {
     return respondWithErrors(async () => {
-      await deps.rateLimit(request, env, 'student_command');
       const body = plainRecord(await deps.parseJson(request, 140_000));
+      await deps.rateLimit(request, env, 'student_command', body);
       const operation = cleanText(body.operation, 80, 'operation', { required: true });
       if (!STUDENT_COMMAND_OPERATIONS.has(operation)) {
         fail('EXAM_ROOM_V1_OPERATION_UNSUPPORTED', 'That student action is not available.', 400, 'Refresh the examination and try again.');
@@ -1178,6 +1339,9 @@ export function createExaminationRoomV1Handlers(dependencies) {
       const result = await callRpc(env, {
         scope: 'student', operation, actorUserId: null, institutionId: null, payload: safePayload,
       }, [credential.rawSessionToken, info.rawRequestKey]);
+      if (operation === 'submit' && typeof deps.afterStudentCommand === 'function') {
+        deps.afterStudentCommand({ operation, result, env, executionContext });
+      }
       return deps.respond({ ok: true, ...result }, operation === 'submit' ? 201 : 200, origin, allowedOrigin);
     }, origin, allowedOrigin);
   }
@@ -1355,11 +1519,6 @@ export function createExaminationRoomV1Handlers(dependencies) {
     adminQuery,
     adminCommand,
   });
-}
-
-function operationBodyLimit(request) {
-  const declared = Number(request.headers.get('Content-Length') || 0);
-  return declared > 200_000 ? 12_000_000 : 220_000;
 }
 
 export const EXAMINATION_ROOM_V1_PATHS = Object.freeze({

@@ -51,7 +51,7 @@ jobs:
           test "$REPOSITORY_NAME" = "codingwally/Bar-Exam-simulator"
           test "$RELEASE_ACTOR" != "dependabot[bot]"
           case "$RELEASE_REF" in
-            refs/heads/main|refs/heads/agent/master-experience-release-20260813|refs/heads/agent/header-subject-review-correction-20260814|refs/heads/agent/subject-matter-split-review-20260814|refs/heads/agent/high-value-subject-review-20260815|refs/heads/agent/homepage-feature-ledger-20260815|refs/heads/agent/commercial-launch-20260818|refs/heads/agent/commercial-terms-acceptance-hotfix-20260818|refs/heads/agent/commercial-terms-worker-persistence-20260818|refs/heads/agent/renovation-commercial-cutover-20260820|refs/heads/agent/soft-launch-five-token-20260821|refs/heads/codex/examination-room-greenfield-20260826) ;;
+            refs/heads/main|refs/heads/agent/master-experience-release-20260813|refs/heads/agent/header-subject-review-correction-20260814|refs/heads/agent/subject-matter-split-review-20260814|refs/heads/agent/high-value-subject-review-20260815|refs/heads/agent/homepage-feature-ledger-20260815|refs/heads/agent/commercial-launch-20260818|refs/heads/agent/commercial-terms-acceptance-hotfix-20260818|refs/heads/agent/commercial-terms-worker-persistence-20260818|refs/heads/agent/renovation-commercial-cutover-20260820|refs/heads/agent/soft-launch-five-token-20260821|refs/heads/codex/examination-room-greenfield-20260826|refs/heads/codex/examination-room-owner-command-center-20260826) ;;
             *)
               echo "The staging gate may run only from an explicitly trusted release branch." >&2
               exit 1
@@ -85,14 +85,35 @@ jobs:
           node --check worker/examination-room-v1-core.mjs
           node --check worker/examination-room-v1-routes.mjs
           node --test examination-room/*.test.cjs
+          node --test admin/examination-room-admin.test.cjs
           node --test worker/*.test.mjs
+          node scripts/test-examination-room-database.mjs
+          node scripts/test-examination-room-commercial-stress.mjs
           node scripts/test-examination-room-door-menu.mjs
           node scripts/test-examination-room-release-workflows.mjs
           node scripts/test-feature-decommission-boundary.mjs
           node scripts/build-pages-artifact.mjs
           node scripts/test-pages-artifact.mjs
 
-      - name: Verify staging Examination Room secrets exist
+      - name: Apply and probe only the ordered Examination Room migrations
+        if: inputs.deploy_greenfield == true
+        env:
+          EXAMINATION_ROOM_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_STAGING_DATABASE_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$EXAMINATION_ROOM_DATABASE_URL"
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-client
+          fi
+          psql --version
+          release_bundle="$RUNNER_TEMP/examination-room-release.sql"
+          node scripts/build-examination-room-release-bundle.mjs --output "$release_bundle"
+          psql "$EXAMINATION_ROOM_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$release_bundle"
+          rm -f -- "$release_bundle"
+
+      - name: Verify staging secrets and private Supabase Storage recovery configuration
         if: inputs.deploy_greenfield == true
         working-directory: worker
         env:
@@ -102,7 +123,16 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4.114.0 secret list --format json --name duediligence-examinations-staging \
-            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['SUPABASE_SERVICE_ROLE_KEY', 'EXAMINATION_ROOM_KEY_PEPPER']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required staging Worker secrets are missing: ' + missing.join(', ') + '. Use the approved one-time bootstrap workflow for a missing Examination Room pepper; never create or rotate it during deploy.'); process.exit(1); } console.log('Required staging Examination Room secrets are configured.'); });"
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['SUPABASE_SERVICE_ROLE_KEY', 'EXAMINATION_ROOM_KEY_PEPPER', 'EXAMINATION_ROOM_OWNER_DATA_KEY_V1', 'EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1', 'EXAMINATION_ROOM_ADMIN_EMAILS']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required staging Worker secrets are missing: ' + missing.join(', ') + '. Configure the missing release secret; never rotate it during deploy.'); process.exit(1); } console.log('Required staging Examination Room secrets are configured.'); });"
+          grep -F 'EXAMINATION_ROOM_RECOVERY_MODE = "supabase_storage"' wrangler.staging.toml
+          if grep -Eq '^[[:space:]]*\[\[r2_buckets\]\]|binding[[:space:]]*=[[:space:]]*"EXAMINATION_ROOM_BACKUPS"' wrangler.staging.toml; then
+            echo "Staging must use the reviewed private Supabase Storage recovery mode without an R2 binding." >&2
+            exit 1
+          fi
+          grep -F "'examination-room-recovery'" ../supabase/migrations/20260827030000_examination_room_supabase_storage_recovery.sql
+          grep -F 'public is false' ../scripts/build-examination-room-release-bundle.mjs
+          grep -F 'application/vnd.duediligence.examination-room-recovery+json' ../scripts/build-examination-room-release-bundle.mjs
+          echo "Private Supabase Storage recovery configuration matches the staging database probe."
 
       - name: Resolve the approved staging publishable configuration
         if: inputs.deploy_greenfield == true

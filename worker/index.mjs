@@ -179,6 +179,24 @@ import {
   ExaminationRoomV1RouteError,
   createExaminationRoomV1Handlers,
 } from './examination-room-v1-routes.mjs';
+import {
+  GRADING_REVISION_STATUSES,
+  ROOM_KEY,
+  buildGradingRevision,
+  createRoomKey,
+  isExaminationRoomV1Error,
+  normalizePublicationManifest,
+  normalizeRoomKey,
+} from './examination-room-v1-core.mjs';
+import {
+  ExaminationRoomRecoveryError,
+  createExaminationRoomRecovery,
+} from './examination-room-v1-recovery.mjs';
+import {
+  buildExaminationRoomKeyEmail,
+  deliverExaminationRoomPublicationRequestEmail,
+  deliverExaminationRoomResultReleaseEmails,
+} from './examination-room-email.mjs';
 import { googleAccessToken } from './google-oauth.mjs';
 import {
   outboundEmailMode,
@@ -351,7 +369,7 @@ async function enforceExaminationRateLimit(request, env, mutation = false) {
   );
 }
 
-async function enforceExaminationRoomV1RateLimit(request, env, scope) {
+async function enforceExaminationRoomV1RateLimit(request, env, scope, boundedPayload = null) {
   const policies = {
     professor_query: [examinationRoomV1ProfessorRateWindows, 180],
     professor_command: [examinationRoomV1ProfessorRateWindows, 90],
@@ -375,8 +393,12 @@ async function enforceExaminationRoomV1RateLimit(request, env, scope) {
   const ip = request.headers.get('CF-Connecting-IP') || 'unavailable';
   let subject = request.headers.get('Authorization') || '';
   if (scope.startsWith('student_')) {
-    const body = await request.clone().json().catch(() => null);
-    const payload = body?.payload && typeof body.payload === 'object' ? body.payload : body;
+    // Student credentials live in the JSON body. Route handlers pass the object
+    // produced by their single, size-bounded parse so the limiter never clones or
+    // buffers an untrusted request body on its own.
+    const payload = boundedPayload?.payload && typeof boundedPayload.payload === 'object'
+      ? boundedPayload.payload
+      : boundedPayload;
     subject = scope === 'student_preview' || scope === 'student_consent'
       ? `${String(payload?.roomKey || '').slice(0, 100)}\0${String(
         payload?.identity?.studentNumber || payload?.studentNumber || '',
@@ -601,6 +623,17 @@ async function examinationRoomV1ServiceRpc(env, functionName, body) {
     'examination_room_v1_professor_access',
     'examination_room_v1_manage_staff',
     'examination_room_v1_api',
+    'examination_room_v1_owner_query',
+    'examination_room_v1_owner_command',
+    'examination_room_v1_owner_ensure_membership',
+    'examination_room_v1_claim_recovery_snapshot',
+    'examination_room_v1_complete_recovery_snapshot',
+    'examination_room_v1_fail_recovery_snapshot',
+    'examination_room_v1_verify_recovery_snapshot',
+    'examination_room_v1_grading_contexts',
+    'examination_room_v1_import_grades',
+    'examination_room_v1_claim_result_email_deliveries',
+    'examination_room_v1_complete_result_email_deliveries',
   ]);
   if (!allowedFunctions.has(functionName)) {
     throw new ExaminationRoomV1RouteError(
@@ -722,6 +755,1997 @@ async function examinationRoomV1ProfessorAccess(env, request) {
     p_payload: request.payload || {},
   });
   return examinationRoomV1Result(result);
+}
+
+const EXAMINATION_ROOM_OWNER_ROLES = new Set(['founder_admin', 'super_admin']);
+const EXAMINATION_ROOM_OWNER_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const EXAMINATION_ROOM_OWNER_REQUEST_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/u;
+const EXAMINATION_ROOM_OWNER_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+const EXAMINATION_ROOM_OWNER_ENVELOPE_ALGORITHM = 'aes-256-gcm-v1';
+const EXAMINATION_ROOM_OWNER_ENVELOPE_AAD = 'duediligence-examination-room-owner-key-v1';
+const EXAMINATION_ROOM_RECOVERY_REFERENCE_PREFIXES = Object.freeze([
+  'r2:EXAMINATION_ROOM_BACKUPS:',
+  'supabase-storage:examination-room-recovery:',
+]);
+
+function examinationRoomOwnerError(code, message, status, recovery, details = undefined) {
+  return new ExaminationRoomV1RouteError(code, message, status, recovery, details);
+}
+
+function examinationRoomOwnerRecord(value, label = 'request details') {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_REQUEST_INVALID',
+      `Provide ${label} as an object with named fields.`,
+      400,
+      'Refresh the page and try the action again.',
+    );
+  }
+  return value;
+}
+
+function examinationRoomOwnerUuid(value, label) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!EXAMINATION_ROOM_OWNER_UUID_PATTERN.test(normalized)) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_IDENTIFIER_INVALID',
+      `The ${label} is invalid.`,
+      400,
+      'Refresh the command center, choose the current record, and try again.',
+    );
+  }
+  return normalized;
+}
+
+function examinationRoomOwnerRequestKey(request, body) {
+  const value = String(body?.idempotencyKey || request.headers.get('X-Request-ID') || '').trim();
+  if (!EXAMINATION_ROOM_OWNER_REQUEST_KEY_PATTERN.test(value)) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_IDEMPOTENCY_KEY_INVALID',
+      'This owner action is missing a valid retry-safe request key.',
+      400,
+      'Refresh Admin, then repeat the action once.',
+    );
+  }
+  return value;
+}
+
+async function examinationRoomOwnerRequestHash(env, requestKey) {
+  const pepper = String(env?.EXAMINATION_ROOM_KEY_PEPPER || '').trim();
+  if (pepper.length < 32) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_NOT_CONFIGURED',
+      'Examination Room key protection is not configured.',
+      503,
+      'Configure the Examination Room key secret, then retry the action.',
+    );
+  }
+  return hmacHex(pepper, `request\0${requestKey}`);
+}
+
+function ensureExaminationRoomOwnerResult(result) {
+  const normalized = examinationRoomV1Result(result);
+  if (normalized?.ok === false) {
+    const error = normalized.error || {};
+    throw examinationRoomOwnerError(
+      String(error.code || 'EXAM_ROOM_V1_DATA_UNAVAILABLE'),
+      String(error.message || 'Examination Room could not complete that owner action.'),
+      Number.isInteger(error.status) ? error.status : 503,
+      String(error.recovery || 'Refresh the command center and try again.'),
+      error.details,
+    );
+  }
+  return normalized || { ok: true };
+}
+
+async function requireExaminationRoomPlatformOwner(request, env) {
+  const user = await verifiedAuthenticatedUser(request, env);
+  if (!user?.id) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_ADMIN_SIGN_IN_REQUIRED',
+      'Platform-owner sign-in is required.',
+      401,
+      'Sign in with the Founder or Super Admin account, then reopen Admin.',
+    );
+  }
+  let authorization;
+  try {
+    authorization = await protectedSupabaseRpc(env, 'admin_authorization_context', {
+      p_actor_user_id: user.id,
+    });
+  } catch (error) {
+    if (error?.code !== 'ADMIN_FORBIDDEN') {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_OWNER_AUTHORIZATION_UNAVAILABLE',
+        'Platform-owner authorization is temporarily unavailable.',
+        503,
+        'No Examination Room data was changed. Wait briefly, then sign in again and retry.',
+      );
+    }
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_PLATFORM_OWNER_REQUIRED',
+      'Only a Founder or Super Admin can open the Examination Room command center.',
+      403,
+      'Sign in with the platform-owner account.',
+    );
+  }
+  if (authorization?.authorized !== true
+      || !EXAMINATION_ROOM_OWNER_ROLES.has(String(authorization.role || ''))) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_PLATFORM_OWNER_REQUIRED',
+      'Only a Founder or Super Admin can open the Examination Room command center.',
+      403,
+      'Sign in with the platform-owner account.',
+    );
+  }
+  return { user, authorization };
+}
+
+async function examinationRoomV1OwnerQueryRpc(env, request) {
+  return examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+    env,
+    'examination_room_v1_owner_query',
+    {
+      p_operation: request.operation,
+      p_actor_user_id: request.actorUserId,
+      p_institution_id: request.institutionId || null,
+      p_exam_id: request.examId || null,
+      p_payload: request.payload || {},
+    },
+  ));
+}
+
+async function examinationRoomV1OwnerCommandRpc(env, request) {
+  return examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+    env,
+    'examination_room_v1_owner_command',
+    {
+      p_operation: request.operation,
+      p_actor_user_id: request.actorUserId,
+      p_institution_id: request.institutionId,
+      p_exam_id: request.examId || null,
+      p_payload: request.payload || {},
+    },
+  ));
+}
+
+async function examinationRoomV1OwnerEnsureMembership(env, actorUserId, institutionId) {
+  return ensureExaminationRoomOwnerResult(await examinationRoomV1ServiceRpc(
+    env,
+    'examination_room_v1_owner_ensure_membership',
+    { p_actor_user_id: actorUserId, p_institution_id: institutionId },
+  ));
+}
+
+function examinationRoomOwnerBytesToBase64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/gu, '');
+}
+
+function examinationRoomOwnerBase64ToBytes(value) {
+  const source = String(value || '').trim().replace(/^base64:/iu, '');
+  if (!/^[A-Za-z0-9+/_-]+={0,2}$/u.test(source)) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_KEY_ESCROW_INVALID',
+      'The encrypted room-key record is invalid.',
+      409,
+      'Rotate the room key once to create a new recoverable record.',
+    );
+  }
+  const normalized = source.replace(/-/gu, '+').replace(/_/gu, '/');
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  try {
+    return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+  } catch {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_KEY_ESCROW_INVALID',
+      'The encrypted room-key record is invalid.',
+      409,
+      'Rotate the room key once to create a new recoverable record.',
+    );
+  }
+}
+
+function examinationRoomOwnerDataKeyBytes(env) {
+  const source = String(env?.EXAMINATION_ROOM_OWNER_DATA_KEY_V1 || '').trim();
+  if (!source) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_KEY_ESCROW_NOT_CONFIGURED',
+      'Owner room-key recovery is not configured.',
+      503,
+      'Configure the 32-byte owner data key, then retry the same approval action.',
+    );
+  }
+  let bytes;
+  if (/^hex:[0-9a-f]{64}$/iu.test(source)) {
+    const hex = source.slice(4);
+    bytes = Uint8Array.from({ length: 32 }, (_, index) => Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16));
+  } else if (/^[0-9a-f]{64}$/iu.test(source)) {
+    bytes = Uint8Array.from({ length: 32 }, (_, index) => Number.parseInt(source.slice(index * 2, index * 2 + 2), 16));
+  } else if (new TextEncoder().encode(source).byteLength === 32) {
+    bytes = new TextEncoder().encode(source);
+  } else {
+    bytes = examinationRoomOwnerBase64ToBytes(source);
+  }
+  if (bytes.byteLength !== 32) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_KEY_ESCROW_NOT_CONFIGURED',
+      'Owner room-key recovery is not configured.',
+      503,
+      'Configure the 32-byte owner data key, then retry the same approval action.',
+    );
+  }
+  return bytes;
+}
+
+function examinationRoomOwnerEnvelopeAad(institutionId, examId, activationId) {
+  return new TextEncoder().encode(
+    `${EXAMINATION_ROOM_OWNER_ENVELOPE_AAD}\0${institutionId}\0${examId}\0${activationId}`,
+  );
+}
+
+async function examinationRoomOwnerEncryptionKey(env, usages) {
+  try {
+    return await crypto.subtle.importKey(
+      'raw',
+      examinationRoomOwnerDataKeyBytes(env),
+      { name: 'AES-GCM' },
+      false,
+      usages,
+    );
+  } catch (error) {
+    if (error instanceof ExaminationRoomV1RouteError) throw error;
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_KEY_ESCROW_CRYPTO_UNAVAILABLE',
+      'Owner room-key recovery could not use the required encryption service.',
+      503,
+      'Retry once. If it continues, verify the owner data-key configuration.',
+    );
+  }
+}
+
+async function encryptExaminationRoomOwnerKey(env, identifiers, roomKey) {
+  const aad = examinationRoomOwnerEnvelopeAad(
+    identifiers.institutionId,
+    identifiers.examId,
+    identifiers.activationId,
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await examinationRoomOwnerEncryptionKey(env, ['encrypt']);
+  let ciphertext;
+  try {
+    ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv, additionalData: aad, tagLength: 128 },
+      key,
+      new TextEncoder().encode(normalizeRoomKey(roomKey)),
+    ));
+  } catch {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_KEY_ESCROW_ENCRYPT_FAILED',
+      'The room key could not be protected for owner recovery.',
+      503,
+      'No unencrypted key was stored. Retry the same approval action.',
+    );
+  }
+  return {
+    algorithm: EXAMINATION_ROOM_OWNER_ENVELOPE_ALGORITHM,
+    keyVersion: 1,
+    ciphertext: examinationRoomOwnerBytesToBase64(ciphertext),
+    iv: examinationRoomOwnerBytesToBase64(iv),
+    aadSha256: await sha256Hex(aad),
+  };
+}
+
+async function decryptExaminationRoomOwnerKey(env, envelope) {
+  if (envelope?.algorithm !== EXAMINATION_ROOM_OWNER_ENVELOPE_ALGORITHM
+      || Number(envelope?.keyVersion) !== 1) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_KEY_ESCROW_VERSION_UNAVAILABLE',
+      'This room-key record uses an unavailable encryption version.',
+      409,
+      'Rotate the room key once to create a current recoverable record.',
+    );
+  }
+  const identifiers = {
+    institutionId: examinationRoomOwnerUuid(envelope.institutionId, 'institution identifier'),
+    examId: examinationRoomOwnerUuid(envelope.examId, 'examination identifier'),
+    activationId: examinationRoomOwnerUuid(envelope.activationId, 'room activation identifier'),
+  };
+  const aad = examinationRoomOwnerEnvelopeAad(
+    identifiers.institutionId,
+    identifiers.examId,
+    identifiers.activationId,
+  );
+  if (await sha256Hex(aad) !== String(envelope.aadSha256 || '').toLowerCase()) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_KEY_ESCROW_SCOPE_MISMATCH',
+      'The encrypted room key does not match this examination activation.',
+      409,
+      'Do not use this record. Rotate the key once from the selected examination.',
+    );
+  }
+  const key = await examinationRoomOwnerEncryptionKey(env, ['decrypt']);
+  let plaintext;
+  try {
+    plaintext = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: examinationRoomOwnerBase64ToBytes(envelope.iv),
+        additionalData: aad,
+        tagLength: 128,
+      },
+      key,
+      examinationRoomOwnerBase64ToBytes(envelope.ciphertext),
+    );
+  } catch {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_KEY_ESCROW_DECRYPT_FAILED',
+      'The room-key record could not be authenticated.',
+      409,
+      'Verify the owner data-key version. If needed, rotate the room key once.',
+    );
+  }
+  try {
+    return normalizeRoomKey(new TextDecoder('utf-8', { fatal: true }).decode(plaintext));
+  } catch {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_KEY_ESCROW_INVALID',
+      'The decrypted room-key record is invalid.',
+      409,
+      'Rotate the room key once to create a new recoverable record.',
+    );
+  }
+}
+
+async function currentExaminationRoomOwnerKeyEnvelope(env, owner, institutionId, examId) {
+  const result = await examinationRoomV1OwnerQueryRpc(env, {
+    operation: 'key_envelope',
+    actorUserId: owner.user.id,
+    institutionId,
+    examId,
+    payload: {},
+  });
+  if (result?.ok === false) return null;
+  return result;
+}
+
+async function ensureExaminationRoomOwnerKeyEscrow(
+  env,
+  owner,
+  identifiers,
+  roomKey,
+) {
+  const current = await currentExaminationRoomOwnerKeyEnvelope(
+    env,
+    owner,
+    identifiers.institutionId,
+    identifiers.examId,
+  );
+  if (current?.activationId === identifiers.activationId) {
+    const recovered = await decryptExaminationRoomOwnerKey(env, current);
+    if (recovered !== roomKey) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_KEY_ESCROW_CONFLICT',
+        'A different encrypted key is already bound to this room activation.',
+        409,
+        'Refresh Admin and use Rotate key exactly once.',
+      );
+    }
+    return { duplicate: true, activationId: identifiers.activationId };
+  }
+
+  const envelope = await encryptExaminationRoomOwnerKey(env, identifiers, roomKey);
+  try {
+    return ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerCommandRpc(env, {
+      operation: 'store_key_envelope',
+      actorUserId: owner.user.id,
+      institutionId: identifiers.institutionId,
+      examId: identifiers.examId,
+      payload: { activationId: identifiers.activationId, ...envelope },
+    }));
+  } catch (error) {
+    if (!String(error?.code || '').includes('KEY_ESCROW_CONFLICT')) throw error;
+    const raced = await currentExaminationRoomOwnerKeyEnvelope(
+      env,
+      owner,
+      identifiers.institutionId,
+      identifiers.examId,
+    );
+    if (raced?.activationId !== identifiers.activationId
+        || await decryptExaminationRoomOwnerKey(env, raced) !== roomKey) throw error;
+    return { duplicate: true, activationId: identifiers.activationId };
+  }
+}
+
+function examinationRoomAdminEmailRecipientReport(env, professorRecipient = '') {
+  const raw = String(
+    env?.EXAMINATION_ROOM_ADMIN_EMAILS
+      || env?.ADMIN_EMAILS
+      || '',
+  ).trim();
+  let candidates = [];
+  try {
+    const configured = JSON.parse(raw);
+    if (Array.isArray(configured)) candidates = configured;
+    else if (configured && typeof configured === 'object') candidates = Object.values(configured);
+  } catch {
+    candidates = raw.split(/[;,\n]/u);
+  }
+  const seen = new Set();
+  let invalidCount = 0;
+  let duplicateCount = 0;
+  const recipients = [];
+  for (const candidate of candidates) {
+    const value = String(candidate || '').trim().toLowerCase();
+    if (!value) continue;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value)) {
+      invalidCount += 1;
+      continue;
+    }
+    if (seen.has(value)) {
+      duplicateCount += 1;
+      continue;
+    }
+    seen.add(value);
+    if (recipients.length < 20) recipients.push(value);
+  }
+  return {
+    recipients,
+    invalidCount,
+    duplicateCount,
+    configuredCount: candidates.filter((value) => String(value || '').trim()).length,
+  };
+}
+
+function examinationRoomAdminEmailRecipients(env, professorRecipient = '') {
+  return examinationRoomAdminEmailRecipientReport(env, professorRecipient).recipients;
+}
+
+async function examinationRoomOwnerPreflight(env) {
+  const checks = [];
+  try {
+    await examinationRoomOwnerEncryptionKey(env, ['encrypt']);
+    checks.push({
+      id: 'owner_data_key',
+      ok: true,
+      status: 'ready',
+      message: 'Owner room-key encryption is ready.',
+    });
+  } catch (error) {
+    checks.push({
+      id: 'owner_data_key',
+      ok: false,
+      status: 'not_configured',
+      code: String(error?.code || 'EXAM_ROOM_V1_KEY_ESCROW_NOT_CONFIGURED'),
+      message: String(error?.message || 'Owner room-key encryption is not configured.'),
+      recovery: String(error?.recovery || 'Configure the 32-byte owner data key, then run Preflight again.'),
+    });
+  }
+
+  const emailReport = examinationRoomAdminEmailRecipientReport(env);
+  if (emailReport.recipients.length > 0 && emailReport.invalidCount === 0) {
+    checks.push({
+      id: 'owner_email_recipients',
+      ok: true,
+      status: 'ready',
+      message: `${emailReport.recipients.length} owner email recipient${emailReport.recipients.length === 1 ? '' : 's'} configured.`,
+      recipients: emailReport.recipients,
+    });
+  } else {
+    checks.push({
+      id: 'owner_email_recipients',
+      ok: false,
+      status: 'not_configured',
+      code: 'EXAM_ROOM_V1_OWNER_EMAILS_INVALID',
+      message: emailReport.recipients.length < 1
+        ? 'No valid owner email recipient is configured.'
+        : 'The owner email list contains an invalid address.',
+      recovery: 'Set EXAMINATION_ROOM_ADMIN_EMAILS to a JSON list of valid platform-owner email addresses (or keep the existing ADMIN_EMAILS list during migration), then run Preflight again.',
+      recipients: emailReport.recipients,
+      invalidCount: emailReport.invalidCount,
+    });
+  }
+
+  const emailMode = String(env?.EXAMINATION_ROOM_EMAIL_MODE || '').trim().toLowerCase();
+  const emailFrom = String(env?.EXAMINATION_ROOM_EMAIL_FROM || env?.SUPPORT_NOTIFICATION_EMAIL_FROM || '').trim();
+  const emailReady = emailMode === 'suppressed'
+    || (emailMode === 'enabled' && Boolean(env?.RESEND_API_KEY) && Boolean(emailFrom));
+  checks.push(emailReady ? {
+    id: 'key_email_delivery',
+    ok: true,
+    status: emailMode === 'suppressed' ? 'suppressed' : 'ready',
+    mode: emailMode,
+    message: emailMode === 'suppressed'
+      ? 'Examination Room key email is intentionally suppressed in this environment.'
+      : 'Examination Room key email is configured for provider delivery.',
+  } : {
+    id: 'key_email_delivery',
+    ok: false,
+    status: 'not_configured',
+    mode: emailMode || 'missing',
+    code: 'EXAM_ROOM_V1_KEY_EMAIL_NOT_CONFIGURED',
+    message: 'Examination Room key email is not completely configured.',
+    recovery: 'Set the scoped email mode, sender, and provider key, then run Preflight again.',
+  });
+
+  try {
+    const recovery = await createExaminationRoomRecovery().preflight(env);
+    checks.push({
+      id: 'encrypted_recovery',
+      ok: true,
+      status: 'ready',
+      message: 'The backup master key and private recovery storage are ready.',
+      keyVersion: recovery.keyVersion,
+      binding: recovery.binding,
+      storageProvider: recovery.storageProvider,
+      storageStatus: recovery.storageStatus,
+      recoveryMode: recovery.recoveryMode,
+      maxObjectBytes: recovery.maxObjectBytes,
+      maxPlaintextBytes: recovery.maxPlaintextBytes,
+      oversizeFallback: recovery.oversizeFallback,
+    });
+  } catch (error) {
+    checks.push({
+      id: 'encrypted_recovery',
+      ok: false,
+      status: 'not_configured',
+      code: String(error?.code || 'EXAM_ROOM_V1_RECOVERY_NOT_CONFIGURED'),
+      message: String(error?.message || 'Encrypted recovery storage is not configured.'),
+      recovery: String(error?.recovery || 'Configure the backup master key and private storage, then run Preflight again.'),
+    });
+  }
+
+  return {
+    ok: true,
+    ready: checks.every((check) => check.ok === true),
+    checkedAt: new Date().toISOString(),
+    checks,
+  };
+}
+
+async function recordExaminationRoomOwnerEmailDelivery(env, owner, details) {
+  const eventRequestHash = await sha256Hex(new TextEncoder().encode(
+    `examination-room-email\0${details.requestHash}\0${details.deliveryKind}`,
+  ));
+  return ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerCommandRpc(env, {
+    operation: 'record_email_delivery',
+    actorUserId: owner.user.id,
+    institutionId: details.institutionId,
+    examId: details.examId,
+    payload: {
+      activationId: details.activationId,
+      requestHash: eventRequestHash,
+      deliveryKind: details.deliveryKind,
+      professorRecipient: details.professorRecipient,
+      ownerCopyRecipients: details.ownerCopyRecipients,
+      providerStatus: details.delivery.status,
+      providerId: details.delivery.providerId || null,
+      safeErrorCode: details.delivery.safeErrorCode || null,
+      attemptedAt: new Date().toISOString(),
+    },
+  }));
+}
+
+function examinationRoomPersistedDelivery(attempt, auditResult) {
+  const knownStatuses = new Set(['sent', 'suppressed', 'not_configured', 'failed']);
+  const attemptedStatus = String(attempt?.status || 'failed');
+  const recordedStatus = String(auditResult?.providerStatus || '');
+  const hasRecordedStatus = knownStatuses.has(recordedStatus);
+  return {
+    status: hasRecordedStatus ? recordedStatus : attemptedStatus,
+    providerId: hasRecordedStatus
+      ? (auditResult?.providerId || null)
+      : (attempt?.providerId || null),
+    safeErrorCode: hasRecordedStatus
+      ? (auditResult?.safeErrorCode || null)
+      : (attempt?.safeErrorCode || null),
+    attemptedAt: hasRecordedStatus ? (auditResult?.attemptedAt || null) : null,
+  };
+}
+
+function examinationRoomOwnerDeliverySummary(delivery, professorRecipient, ownerRecipients) {
+  const status = String(delivery?.status || 'failed');
+  const owners = Array.isArray(ownerRecipients) ? ownerRecipients : [];
+  return {
+    status,
+    providerAccepted: status === 'sent',
+    providerId: delivery?.providerId || null,
+    safeErrorCode: delivery?.safeErrorCode || null,
+    professor: {
+      recipient: String(professorRecipient || '').trim().toLowerCase() || null,
+      status,
+    },
+    owners: {
+      recipients: owners,
+      status: owners.length ? status : 'not_configured',
+    },
+  };
+}
+
+async function deterministicExaminationRoomKey(env, requestHash, institutionId, examId) {
+  const pepper = String(env?.EXAMINATION_ROOM_KEY_PEPPER || '').trim();
+  const digest = await hmacHex(
+    pepper,
+    `room-key-generation\0${institutionId}\0${examId}\0${requestHash}`,
+  );
+  let payload = '';
+  for (let index = 0; index < ROOM_KEY.PAYLOAD_LENGTH; index += 1) {
+    const byte = Number.parseInt(digest.slice(index * 2, index * 2 + 2), 16);
+    payload += ROOM_KEY.ALPHABET[byte % ROOM_KEY.ALPHABET.length];
+  }
+  return createRoomKey(payload);
+}
+
+function examinationRoomPublishedActivationWindow(bundle, payload) {
+  const publishedVersionId = String(bundle?.currentPublishedVersionId || '').trim();
+  const version = examinationRoomOwnerBundleRows(bundle, 'examVersions')
+    .find((entry) => String(examinationRoomOwnerRowValue(entry, 'id') || '') === publishedVersionId);
+  const startsAt = examinationRoomOwnerRowValue(version?.controls, 'startsAt', 'starts_at');
+  const opens = Date.parse(String(startsAt || ''));
+  const durationSeconds = Number(examinationRoomOwnerRowValue(
+    version,
+    'durationSeconds',
+    'duration_seconds',
+  ));
+  const maximumExtraMinutes = examinationRoomOwnerBundleRows(bundle, 'examRoster')
+    .reduce((maximum, roster) => {
+      const accommodations = examinationRoomOwnerRowValue(roster, 'accommodations') || {};
+      const extra = Number(examinationRoomOwnerRowValue(
+        accommodations,
+        'extraMinutes',
+        'extra_minutes',
+      ) || 0);
+      return Number.isFinite(extra) && extra >= 0 ? Math.max(maximum, extra) : maximum;
+    }, 0);
+  const closes = opens + (durationSeconds + maximumExtraMinutes * 60) * 1_000;
+  if (!publishedVersionId
+      || !version
+      || examinationRoomOwnerRowValue(version, 'publicationStatus', 'publication_status') !== 'published'
+      || !Number.isFinite(opens)
+      || !Number.isSafeInteger(durationSeconds)
+      || durationSeconds < 60
+      || durationSeconds > 86_400
+      || !Number.isFinite(closes)
+      || closes <= opens) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID',
+      'The published examination has no valid start time and duration.',
+      409,
+      'Ask the exam creator to set the exact start date, time, and duration, publish the corrected examination, then approve it again.',
+    );
+  }
+  if (closes <= Date.now()) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_ENDED',
+      'The published examination schedule has already ended.',
+      409,
+      'Ask the exam creator to correct and republish the schedule before issuing another room key.',
+    );
+  }
+  const maxSessions = payload.maxSessions == null || payload.maxSessions === ''
+    ? null
+    : Number(payload.maxSessions);
+  if (maxSessions !== null
+      && (!Number.isSafeInteger(maxSessions) || maxSessions < 1 || maxSessions > 100_000)) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_MAX_SESSIONS_INVALID',
+      'Maximum sessions must be a whole number from 1 to 100,000.',
+      400,
+      'Correct maximum sessions, then try again.',
+    );
+  }
+  return {
+    opensAt: new Date(opens).toISOString(),
+    closesAt: new Date(closes).toISOString(),
+    durationSeconds,
+    maximumExtraMinutes,
+    scheduleSource: 'published_exam',
+    maxSessions,
+  };
+}
+
+async function issueExaminationRoomOwnerKey(env, owner, request, body, payload, options) {
+  const institutionId = examinationRoomOwnerUuid(payload.institutionId, 'institution identifier');
+  const examId = examinationRoomOwnerUuid(payload.examId, 'examination identifier');
+  await examinationRoomV1OwnerEnsureMembership(env, owner.user.id, institutionId);
+  const detail = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerQueryRpc(env, {
+    operation: 'exam_detail',
+    actorUserId: owner.user.id,
+    institutionId,
+    examId,
+    payload: {},
+  }));
+  const requestKey = examinationRoomOwnerRequestKey(request, body);
+  const requestHash = await examinationRoomOwnerRequestHash(env, requestKey);
+  const roomKey = await deterministicExaminationRoomKey(
+    env,
+    requestHash,
+    institutionId,
+    examId,
+  );
+  const activationWindow = examinationRoomPublishedActivationWindow(detail.bundle, payload);
+  const activationResult = ensureExaminationRoomOwnerResult(await examinationRoomV1Rpc(env, {
+    scope: 'admin',
+    operation: 'email_key',
+    actorUserId: owner.user.id,
+    institutionId,
+    payload: {
+      examId,
+      roomKeyHash: await hmacHex(
+        String(env.EXAMINATION_ROOM_KEY_PEPPER).trim(),
+        `room-key\0${roomKey}`,
+      ),
+      keyHashAlgorithm: 'hmac-sha256-v1',
+      requestHash,
+      opensAt: activationWindow.opensAt,
+      closesAt: activationWindow.closesAt,
+      maxSessions: activationWindow.maxSessions,
+      replaceCurrent: options.replaceCurrent === true,
+    },
+  }));
+  const activationId = examinationRoomOwnerUuid(
+    activationResult.activation?.id,
+    'room activation identifier',
+  );
+  await ensureExaminationRoomOwnerKeyEscrow(env, owner, {
+    institutionId, examId, activationId,
+  }, roomKey);
+
+  const ownerCopyRecipients = examinationRoomAdminEmailRecipients(
+    env,
+    activationResult.professorEmail,
+  );
+  const delivery = await sendExaminationRoomV1KeyEmail(env, {
+    recipient: activationResult.professorEmail,
+    professorName: activationResult.professorName,
+    examTitle: activationResult.examTitle,
+    roomKey,
+    expiresAt: activationResult.activation?.expiresAt || activationWindow.closesAt,
+    idempotencyHash: requestHash,
+    ownerRecipients: ownerCopyRecipients,
+  });
+  const deliveryAudit = await recordExaminationRoomOwnerEmailDelivery(env, owner, {
+    institutionId,
+    examId,
+    activationId,
+    requestHash,
+    deliveryKind: options.deliveryKind,
+    professorRecipient: String(activationResult.professorEmail || '').trim().toLowerCase(),
+    ownerCopyRecipients,
+    delivery,
+  });
+  const persistedDelivery = examinationRoomPersistedDelivery(delivery, deliveryAudit);
+  return {
+    ok: true,
+    ...activationResult,
+    roomKey,
+    deliveryStatus: persistedDelivery.status,
+    deliverySafeErrorCode: persistedDelivery.safeErrorCode,
+    deliveryAttemptStatus: delivery.status,
+    deliveryAttemptSafeErrorCode: delivery.safeErrorCode || null,
+    delivery: examinationRoomOwnerDeliverySummary(
+      persistedDelivery,
+      activationResult.professorEmail,
+      ownerCopyRecipients,
+    ),
+    deliveryRecovery: delivery.status === 'sent'
+      ? null
+      : persistedDelivery.status === 'sent'
+        ? 'This retry was not accepted by the email provider, but an earlier successful delivery remains recorded. Choose Resend existing key to try again; the room key was not changed.'
+      : 'The room key is active and visible here. Correct the email configuration, then choose Resend existing key; do not rotate unless the key itself must change.',
+    recipient: activationResult.professorEmail,
+    adminRecipients: ownerCopyRecipients,
+    ownerRecipients: ownerCopyRecipients,
+    schedule: activationWindow,
+  };
+}
+
+function examinationRoomSnapshotValue(snapshot, camelName, snakeName) {
+  return snapshot?.[camelName] ?? snapshot?.[snakeName];
+}
+
+function examinationRoomSnapshotDescriptor(snapshot) {
+  const reference = String(examinationRoomSnapshotValue(
+    snapshot,
+    'encryptedObjectReference',
+    'encrypted_object_reference',
+  ) || '');
+  const referencePrefix = EXAMINATION_ROOM_RECOVERY_REFERENCE_PREFIXES.find((prefix) => reference.startsWith(prefix));
+  if (!referencePrefix) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_RECOVERY_NOT_AVAILABLE',
+      'This recovery checkpoint has not finished materializing.',
+      409,
+      'Choose Retry for a failed checkpoint, or wait for a pending checkpoint to become Available.',
+    );
+  }
+  const snapshotSha256 = String(examinationRoomSnapshotValue(
+    snapshot,
+    'snapshotSha256',
+    'snapshot_sha256',
+  ) || '').toLowerCase();
+  if (!EXAMINATION_ROOM_OWNER_SHA256_PATTERN.test(snapshotSha256)) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_RECOVERY_NOT_AVAILABLE',
+      'This recovery checkpoint has no verified checksum yet.',
+      409,
+      'Wait for materialization or retry the failed checkpoint.',
+    );
+  }
+  return {
+    objectKey: reference.slice(referencePrefix.length),
+    snapshotSha256,
+  };
+}
+
+function examinationRoomOwnerBundleRows(bundle, tableName) {
+  const rows = bundle?.tables?.[tableName];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function examinationRoomOwnerRowValue(row, camelName, snakeName = camelName) {
+  return row?.[camelName] ?? row?.[snakeName] ?? null;
+}
+
+function examinationRoomOwnerKeyHistoryTime(record) {
+  const time = Date.parse(String(record?.issuedAt || record?.createdAt || ''));
+  return Number.isFinite(time) ? time : 0;
+}
+
+async function examinationRoomOwnerKeyHistory(env, bundle) {
+  const activations = examinationRoomOwnerBundleRows(bundle, 'roomActivations');
+  const envelopes = examinationRoomOwnerBundleRows(bundle, 'ownerKeyEnvelopes');
+  const deliveryEvents = examinationRoomOwnerBundleRows(bundle, 'emailDeliveryEvents');
+  const activationById = new Map(activations.map((activation) => [
+    String(examinationRoomOwnerRowValue(activation, 'id') || ''),
+    activation,
+  ]));
+  const deliveryByActivation = new Map();
+  for (const event of deliveryEvents) {
+    const activationId = String(examinationRoomOwnerRowValue(
+      event,
+      'activationId',
+      'activation_id',
+    ) || '');
+    if (!activationId) continue;
+    const listed = deliveryByActivation.get(activationId) || [];
+    listed.push({
+      id: examinationRoomOwnerRowValue(event, 'id'),
+      kind: examinationRoomOwnerRowValue(event, 'deliveryKind', 'delivery_kind'),
+      status: examinationRoomOwnerRowValue(event, 'providerStatus', 'provider_status'),
+      providerId: examinationRoomOwnerRowValue(event, 'providerId', 'provider_id'),
+      safeErrorCode: examinationRoomOwnerRowValue(event, 'safeErrorCode', 'safe_error_code'),
+      professorRecipient: examinationRoomOwnerRowValue(
+        event,
+        'professorRecipient',
+        'professor_recipient',
+      ),
+      ownerCopyRecipients: examinationRoomOwnerRowValue(
+        event,
+        'ownerCopyRecipients',
+        'owner_copy_recipients',
+      ) || [],
+      attemptedAt: examinationRoomOwnerRowValue(event, 'attemptedAt', 'attempted_at'),
+    });
+    deliveryByActivation.set(activationId, listed);
+  }
+
+  const history = await Promise.all(envelopes.map(async (envelope) => {
+    const activationId = examinationRoomOwnerUuid(
+      examinationRoomOwnerRowValue(envelope, 'activationId', 'activation_id'),
+      'room activation identifier',
+    );
+    const activation = activationById.get(activationId) || {};
+    let roomKey = null;
+    let keyStatus = 'available';
+    let keyError = null;
+    try {
+      roomKey = await decryptExaminationRoomOwnerKey(env, {
+        activationId,
+        examId: examinationRoomOwnerRowValue(envelope, 'examId', 'exam_id'),
+        institutionId: examinationRoomOwnerRowValue(
+          envelope,
+          'institutionId',
+          'institution_id',
+        ),
+        algorithm: examinationRoomOwnerRowValue(
+          envelope,
+          'algorithm',
+          'envelope_algorithm',
+        ),
+        keyVersion: examinationRoomOwnerRowValue(envelope, 'keyVersion', 'key_version'),
+        ciphertext: examinationRoomOwnerRowValue(
+          envelope,
+          'ciphertext',
+          'ciphertext_base64',
+        ),
+        iv: examinationRoomOwnerRowValue(envelope, 'iv', 'iv_base64'),
+        aadSha256: examinationRoomOwnerRowValue(envelope, 'aadSha256', 'aad_sha256'),
+      });
+    } catch (error) {
+      keyStatus = 'unavailable';
+      keyError = {
+        code: String(error?.code || 'EXAM_ROOM_V1_KEY_ESCROW_DECRYPT_FAILED'),
+        message: String(error?.message || 'This historical key could not be recovered.'),
+        recovery: String(error?.recovery || 'Verify the owner key version, then retry.'),
+      };
+    }
+    const deliveries = (deliveryByActivation.get(activationId) || [])
+      .sort((left, right) => Date.parse(String(right.attemptedAt || '')) - Date.parse(String(left.attemptedAt || '')));
+    return {
+      activationId,
+      roomKey,
+      keyStatus,
+      ...(keyError ? { error: keyError } : {}),
+      status: examinationRoomOwnerRowValue(
+        activation,
+        'activationStatus',
+        'activation_status',
+      ) || 'unknown',
+      issuedAt: examinationRoomOwnerRowValue(activation, 'createdAt', 'created_at')
+        || examinationRoomOwnerRowValue(envelope, 'createdAt', 'created_at'),
+      opensAt: examinationRoomOwnerRowValue(activation, 'opensAt', 'opens_at'),
+      closesAt: examinationRoomOwnerRowValue(activation, 'closesAt', 'closes_at'),
+      revokedAt: examinationRoomOwnerRowValue(
+        activation,
+        'deactivatedAt',
+        'deactivated_at',
+      ),
+      deactivationReason: examinationRoomOwnerRowValue(
+        activation,
+        'deactivationReason',
+        'deactivation_reason',
+      ),
+      deliveries,
+      latestDelivery: deliveries[0] || null,
+    };
+  }));
+  return history.sort((left, right) => (
+    examinationRoomOwnerKeyHistoryTime(right) - examinationRoomOwnerKeyHistoryTime(left)
+    || right.activationId.localeCompare(left.activationId)
+  ));
+}
+
+async function examinationRoomRecoveryResult(env, snapshot, includePayload) {
+  const recovery = createExaminationRoomRecovery();
+  const descriptor = examinationRoomSnapshotDescriptor(snapshot);
+  return includePayload
+    ? recovery.retrieve(env, descriptor)
+    : recovery.verify(env, descriptor);
+}
+
+async function examinationRoomRecordVerifiedSnapshot(env, snapshotId, descriptor) {
+  return ensureExaminationRoomOwnerResult(await examinationRoomV1ServiceRpc(
+    env,
+    'examination_room_v1_verify_recovery_snapshot',
+    {
+      p_snapshot_id: examinationRoomOwnerUuid(snapshotId, 'snapshot identifier'),
+      p_snapshot_sha256: String(descriptor?.snapshotSha256 || '').toLowerCase(),
+    },
+  ));
+}
+
+function examinationRoomRecoveryMetadata(payload) {
+  const snapshot = examinationRoomOwnerRecord(payload?.snapshot, 'snapshot metadata');
+  return {
+    snapshotId: examinationRoomOwnerUuid(
+      examinationRoomSnapshotValue(snapshot, 'snapshotId', 'id'),
+      'snapshot identifier',
+    ),
+    institutionId: examinationRoomOwnerUuid(payload.institutionId, 'institution identifier'),
+    examId: examinationRoomOwnerUuid(payload.examId, 'examination identifier'),
+    examVersionId: examinationRoomOwnerUuid(payload.examVersionId, 'examination version identifier'),
+    sequence: Number(examinationRoomSnapshotValue(snapshot, 'snapshotSequence', 'snapshot_sequence')),
+    scope: String(payload.scope || examinationRoomSnapshotValue(snapshot, 'snapshotScope', 'snapshot_scope') || ''),
+    recordCount: Number(examinationRoomSnapshotValue(snapshot, 'recordCount', 'record_count') || 0),
+    createdAt: String(examinationRoomSnapshotValue(snapshot, 'createdAt', 'created_at') || ''),
+  };
+}
+
+export async function drainExaminationRoomRecovery(env) {
+  const recovery = createExaminationRoomRecovery();
+  const limit = 1;
+  const summary = { claimed: 0, materialized: 0, failed: 0, leaseLost: 0 };
+  for (let index = 0; index < limit; index += 1) {
+    const claimed = ensureExaminationRoomOwnerResult(await examinationRoomV1ServiceRpc(
+      env,
+      'examination_room_v1_claim_recovery_snapshot',
+      { p_lease_seconds: 300 },
+    ));
+    if (!claimed.job) break;
+    summary.claimed += 1;
+    const snapshotId = examinationRoomOwnerUuid(claimed.job.snapshotId, 'snapshot identifier');
+    const leaseId = examinationRoomOwnerUuid(claimed.job.leaseId, 'snapshot lease identifier');
+    try {
+      const descriptor = await recovery.materialize(env, {
+        metadata: examinationRoomRecoveryMetadata(claimed.job.payload),
+        payload: claimed.job.payload,
+        keyVersion: 'v1',
+      });
+      const completed = await examinationRoomV1ServiceRpc(
+        env,
+        'examination_room_v1_complete_recovery_snapshot',
+        {
+          p_snapshot_id: snapshotId,
+          p_lease_id: leaseId,
+          p_object_reference: descriptor.encryptedObjectReference,
+          p_snapshot_sha256: descriptor.snapshotSha256,
+          p_encryption_key_reference: descriptor.encryptionKeyReference,
+        },
+      );
+      if (completed?.ok === true) summary.materialized += 1;
+      else summary.leaseLost += 1;
+    } catch (error) {
+      summary.failed += 1;
+      const attempts = Number(examinationRoomSnapshotValue(
+        claimed.job.payload?.snapshot,
+        'materializationAttempts',
+        'materialization_attempts',
+      ) || 1);
+      const retryAfter = Math.min(3_600, 30 * (2 ** Math.min(7, Math.max(0, attempts - 1))));
+      await examinationRoomV1ServiceRpc(
+        env,
+        'examination_room_v1_fail_recovery_snapshot',
+        {
+          p_snapshot_id: snapshotId,
+          p_lease_id: leaseId,
+          p_error_code: String(error?.code || 'BACKUP_FAILED').slice(0, 80),
+          p_retry_after_seconds: retryAfter,
+        },
+      ).catch(() => null);
+    }
+  }
+  return summary;
+}
+
+function scheduleExaminationRoomRecoveryDrain(env, ctx) {
+  if (typeof ctx?.waitUntil !== 'function') return false;
+  ctx.waitUntil(drainExaminationRoomRecovery(env).catch((error) => {
+    console.error('Examination Room immediate recovery drain failed; scheduled retry remains active', {
+      code: String(error?.code || 'EXAM_ROOM_V1_RECOVERY_DRAIN_FAILED').slice(0, 80),
+    });
+    return { claimed: 0, materialized: 0, failed: 1, leaseLost: 0 };
+  }));
+  return true;
+}
+
+async function examinationRoomOwnerResponse(work, origin, allowedOrigin) {
+  try {
+    return await work();
+  } catch (error) {
+    const known = error instanceof ExaminationRoomV1RouteError
+      || error instanceof ExaminationRoomRecoveryError;
+    return jsonResponse({
+      ok: false,
+      error: {
+        code: known ? error.code : 'EXAM_ROOM_V1_INTERNAL_ERROR',
+        message: known
+          ? error.message
+          : 'Examination Room encountered an unexpected owner-command problem.',
+        recovery: known
+          ? error.recovery
+          : 'No saved examination data was removed. Refresh Admin and try again.',
+        ...(known && error.details !== undefined ? { details: error.details } : {}),
+      },
+    }, known ? error.status : 500, origin, allowedOrigin);
+  }
+}
+
+function examinationRoomOwnerPagingValue(value, label, minimum, maximum, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < minimum || number > maximum) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_OWNER_PAGING_INVALID',
+      `${label} must be a whole number from ${minimum.toLocaleString('en-US')} to ${maximum.toLocaleString('en-US')}.`,
+      400,
+      'Refresh the command center and load the page again.',
+    );
+  }
+  return number;
+}
+
+function examinationRoomOwnerQueryPayload(operation, payload) {
+  if (!['command_center', 'audit_log', 'recovery_detail'].includes(operation)) return payload;
+  const allowed = new Set(['institutionId', 'examId', 'limit', 'offset']);
+  if (operation === 'recovery_detail') {
+    allowed.add('snapshotId');
+    allowed.add('includeBundle');
+    allowed.add('verify');
+  }
+  if (Object.keys(payload).some((key) => !allowed.has(key))) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_OWNER_FILTER_UNSUPPORTED',
+      'The command-center request contains an unsupported filter.',
+      400,
+      'Refresh Admin and load the view again.',
+    );
+  }
+  const safe = {
+    ...(payload.institutionId ? { institutionId: payload.institutionId } : {}),
+    ...(payload.examId ? { examId: payload.examId } : {}),
+    limit: examinationRoomOwnerPagingValue(payload.limit, 'Page size', 1, 500, 100),
+    offset: examinationRoomOwnerPagingValue(payload.offset, 'Page offset', 0, 10_000_000, 0),
+  };
+  if (operation === 'recovery_detail') {
+    if (payload.snapshotId) {
+      safe.snapshotId = examinationRoomOwnerUuid(payload.snapshotId, 'snapshot identifier');
+    }
+    if (payload.includeBundle !== undefined) safe.includeBundle = payload.includeBundle === true;
+    if (payload.verify !== undefined) safe.verify = payload.verify === true;
+  }
+  return safe;
+}
+
+async function handleExaminationRoomOwnerQuery(request, env, origin, allowedOrigin) {
+  return examinationRoomOwnerResponse(async () => {
+    await enforceExaminationRoomV1RateLimit(request, env, 'admin_query');
+    const owner = await requireExaminationRoomPlatformOwner(request, env);
+    const body = examinationRoomOwnerRecord(await parseBoundedJson(request.clone(), 24_000));
+    const operation = String(body.operation || '').trim();
+    const payload = examinationRoomOwnerRecord(body.payload || {});
+    const institutionId = payload.institutionId
+      ? examinationRoomOwnerUuid(payload.institutionId, 'institution identifier')
+      : null;
+    const examId = payload.examId
+      ? examinationRoomOwnerUuid(payload.examId, 'examination identifier')
+      : null;
+
+    if (operation === 'staff_directory') {
+      if (!institutionId) {
+        throw examinationRoomOwnerError(
+          'EXAM_ROOM_V1_INSTITUTION_REQUIRED',
+          'Choose a law-school workspace.',
+          400,
+          'Select a school from the command-center menu, then try again.',
+        );
+      }
+      await examinationRoomV1OwnerEnsureMembership(env, owner.user.id, institutionId);
+      return examinationRoomV1Handlers.adminQuery(request, env, origin, allowedOrigin);
+    }
+
+    if (operation === 'preflight') {
+      return jsonResponse(await examinationRoomOwnerPreflight(env), 200, origin, allowedOrigin);
+    }
+
+    const directOperations = new Set([
+      'access', 'overview', 'command_center', 'exam_detail',
+      'export_exam_bundle', 'audit_log', 'recovery_detail',
+    ]);
+    if (!directOperations.has(operation)) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_OPERATION_UNSUPPORTED',
+        'That owner command-center view is not available.',
+        400,
+        'Refresh Admin and choose one of the listed views.',
+      );
+    }
+
+    const safeQueryPayload = examinationRoomOwnerQueryPayload(operation, payload);
+
+    const result = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerQueryRpc(env, {
+      operation,
+      actorUserId: owner.user.id,
+      institutionId,
+      examId,
+      payload: safeQueryPayload,
+    }));
+    if (operation === 'exam_detail' || operation === 'export_exam_bundle') {
+      const keyHistory = await examinationRoomOwnerKeyHistory(env, result.bundle);
+      const latestKeyRecord = keyHistory[0] || null;
+      return jsonResponse({
+        ok: true,
+        ...result,
+        bundle: {
+          ...result.bundle,
+          latestKeyRecord,
+          keyHistory,
+        },
+        latestKeyRecord,
+        keyHistory,
+      }, 200, origin, allowedOrigin);
+    }
+    if (operation !== 'recovery_detail' || !safeQueryPayload.snapshotId) {
+      return jsonResponse({ ok: true, ...result }, 200, origin, allowedOrigin);
+    }
+
+    const snapshotId = safeQueryPayload.snapshotId;
+    const snapshots = Array.isArray(result.snapshots) ? result.snapshots : [];
+    const snapshot = snapshots.find((entry) => String(entry?.id || entry?.snapshotId) === snapshotId);
+    if (!snapshot) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_RECOVERY_NOT_FOUND',
+        'That recovery checkpoint is no longer in the selected examination.',
+        404,
+        'Refresh Recovery and choose a current checkpoint.',
+      );
+    }
+    if (safeQueryPayload.includeBundle === true) {
+      const recovered = await examinationRoomRecoveryResult(env, snapshot, true);
+      const recordedVerification = await examinationRoomRecordVerifiedSnapshot(
+        env,
+        snapshotId,
+        recovered.descriptor,
+      );
+      return jsonResponse({
+        ok: true,
+        snapshots,
+        snapshot,
+        verified: true,
+        verificationStatus: 'verified',
+        descriptor: recovered.descriptor,
+        bundle: recovered.payload,
+        verifiedAt: recordedVerification.verifiedAt,
+      }, 200, origin, allowedOrigin);
+    }
+    if (safeQueryPayload.verify === true) {
+      const verification = await examinationRoomRecoveryResult(env, snapshot, true);
+      const recordedVerification = await examinationRoomRecordVerifiedSnapshot(
+        env,
+        snapshotId,
+        verification.descriptor,
+      );
+      return jsonResponse({
+        ok: true,
+        snapshots,
+        snapshot,
+        verified: true,
+        verificationStatus: 'verified',
+        descriptor: verification.descriptor,
+        bundle: verification.payload,
+        verifiedAt: recordedVerification.verifiedAt,
+      }, 200, origin, allowedOrigin);
+    }
+    return jsonResponse({ ok: true, ...result, snapshot }, 200, origin, allowedOrigin);
+  }, origin, allowedOrigin);
+}
+
+async function resendExaminationRoomOwnerKey(env, owner, request, body, payload) {
+  const institutionId = examinationRoomOwnerUuid(payload.institutionId, 'institution identifier');
+  const examId = examinationRoomOwnerUuid(payload.examId, 'examination identifier');
+  const requestKey = examinationRoomOwnerRequestKey(request, body);
+  const requestHash = await examinationRoomOwnerRequestHash(env, requestKey);
+  const envelope = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerQueryRpc(env, {
+    operation: 'key_envelope', actorUserId: owner.user.id, institutionId, examId, payload: {},
+  }));
+  const roomKey = await decryptExaminationRoomOwnerKey(env, envelope);
+  const center = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerQueryRpc(env, {
+    operation: 'command_center',
+    actorUserId: owner.user.id,
+    institutionId,
+    examId,
+    payload: { limit: 1, offset: 0 },
+  }));
+  const exam = (Array.isArray(center.exams) ? center.exams : [])
+    .find((entry) => String(entry?.examId || entry?.id) === examId);
+  if (!exam?.professorEmail) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_PROFESSOR_CONTACT_REQUIRED',
+      'The exam creator account has no verified delivery email.',
+      409,
+      'Add the exact creator sign-in email, then choose Resend existing key.',
+    );
+  }
+  const ownerCopyRecipients = examinationRoomAdminEmailRecipients(env, exam.professorEmail);
+  const delivery = await sendExaminationRoomV1KeyEmail(env, {
+    recipient: exam.professorEmail,
+    professorName: exam.professorName,
+    examTitle: exam.title,
+    roomKey,
+    expiresAt: exam.activation?.closesAt,
+    idempotencyHash: requestHash,
+    ownerRecipients: ownerCopyRecipients,
+  });
+  const deliveryAudit = await recordExaminationRoomOwnerEmailDelivery(env, owner, {
+    institutionId,
+    examId,
+    activationId: envelope.activationId,
+    requestHash,
+    deliveryKind: 'key_resend',
+    professorRecipient: exam.professorEmail,
+    ownerCopyRecipients,
+    delivery,
+  });
+  const persistedDelivery = examinationRoomPersistedDelivery(delivery, deliveryAudit);
+  return {
+    ok: true,
+    examId,
+    activationId: envelope.activationId,
+    roomKey,
+    deliveryStatus: persistedDelivery.status,
+    deliverySafeErrorCode: persistedDelivery.safeErrorCode,
+    deliveryAttemptStatus: delivery.status,
+    deliveryAttemptSafeErrorCode: delivery.safeErrorCode || null,
+    delivery: examinationRoomOwnerDeliverySummary(
+      persistedDelivery,
+      exam.professorEmail,
+      ownerCopyRecipients,
+    ),
+    deliveryRecovery: delivery.status === 'sent'
+      ? null
+      : persistedDelivery.status === 'sent'
+        ? 'This retry was not accepted by the email provider, but an earlier successful delivery remains recorded. Choose Resend existing key to try again; the current key was not changed.'
+      : 'Correct the email configuration, then choose Resend existing key again. The current key was not changed.',
+    recipient: exam.professorEmail,
+    adminRecipients: ownerCopyRecipients,
+    ownerRecipients: ownerCopyRecipients,
+  };
+}
+
+function examinationRoomOwnerCommandText(value, label, options = {}) {
+  if (value == null || value === '') {
+    if (!options.required) return null;
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_OWNER_FIELD_REQUIRED',
+      `${label} is required.`,
+      400,
+      `Complete ${label.toLowerCase()}, then try the action again.`,
+    );
+  }
+  if (typeof value !== 'string') {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_OWNER_FIELD_INVALID',
+      `${label} is invalid.`,
+      400,
+      `Correct ${label.toLowerCase()}, then try the action again.`,
+    );
+  }
+  const normalized = value.normalize('NFKC').replace(/\s+/gu, ' ').trim();
+  const maximum = Number(options.maximum || 1_000);
+  const minimum = Number(options.minimum || (options.required ? 1 : 0));
+  if (normalized.length < minimum
+      || normalized.length > maximum
+      || /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/iu.test(normalized)) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_OWNER_FIELD_INVALID',
+      `${label} must contain ${minimum} to ${maximum} safe characters.`,
+      400,
+      `Correct ${label.toLowerCase()}, then try the action again.`,
+    );
+  }
+  return normalized;
+}
+
+function examinationRoomValidatedOwnerDirectPayload(operation, payload) {
+  const common = new Set(['institutionId', 'examId']);
+  const reason = () => examinationRoomOwnerCommandText(payload.reason, 'Owner receipt note', {
+    required: true,
+    minimum: 5,
+    maximum: 1_000,
+  });
+  if (operation === 'correct_student_identity') {
+    const allowed = new Set([
+      ...common, 'studentIdentityId', 'fullName', 'studentNumber', 'email', 'clearEmail', 'reason',
+    ]);
+    if (Object.keys(payload).some((key) => !allowed.has(key))) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_OWNER_FIELD_UNSUPPORTED',
+        'The student correction contains an unsupported field.',
+        400,
+        'Refresh Students, reopen the correction form, and try again.',
+      );
+    }
+    const fullName = examinationRoomOwnerCommandText(payload.fullName, 'Student name', { maximum: 160 });
+    const studentNumber = examinationRoomOwnerCommandText(payload.studentNumber, 'Student number', { maximum: 64 });
+    const email = examinationRoomOwnerCommandText(payload.email, 'Student email', { maximum: 254 });
+    const hasClearEmail = Object.prototype.hasOwnProperty.call(payload, 'clearEmail');
+    if (hasClearEmail && typeof payload.clearEmail !== 'boolean') {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_STUDENT_EMAIL_CLEAR_INVALID',
+        'The remove-email choice is invalid.',
+        400,
+        'Refresh Students and select or clear the Remove stored student email checkbox.',
+      );
+    }
+    const clearEmail = payload.clearEmail === true;
+    if (clearEmail && email) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_STUDENT_EMAIL_ACTION_CONFLICT',
+        'Choose either a corrected student email or Remove stored student email.',
+        400,
+        'Clear the email field or clear the remove-email checkbox, then try again.',
+      );
+    }
+    if (!fullName && !studentNumber && !email && !clearEmail) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_STUDENT_CORRECTION_REQUIRED',
+        'Enter at least one corrected student detail.',
+        400,
+        'Enter the corrected name, student number, or email, or explicitly remove the stored email, then try again.',
+      );
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_STUDENT_EMAIL_INVALID',
+        'Enter a valid student email address.',
+        400,
+        'Correct the email or leave it blank when it should remain unchanged.',
+      );
+    }
+    return {
+      institutionId: payload.institutionId,
+      examId: payload.examId,
+      studentIdentityId: examinationRoomOwnerUuid(
+        payload.studentIdentityId,
+        'student identity identifier',
+      ),
+      ...(fullName ? { fullName } : {}),
+      ...(studentNumber ? { studentNumber } : {}),
+      ...(email ? { email: email.toLowerCase() } : {}),
+      ...(clearEmail ? { clearEmail: true } : {}),
+      reason: reason(),
+    };
+  }
+  if (operation === 'set_submission_status') {
+    const allowed = new Set([...common, 'submissionId', 'status', 'reason']);
+    if (Object.keys(payload).some((key) => !allowed.has(key))) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_OWNER_FIELD_UNSUPPORTED',
+        'The submission action contains an unsupported field.',
+        400,
+        'Refresh Answers, reopen the status form, and try again.',
+      );
+    }
+    const status = String(payload.status || '').trim().toLowerCase();
+    if (!['accepted', 'under_review', 'voided'].includes(status)) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_SUBMISSION_STATUS_INVALID',
+        'Choose Accepted, Under review, or Voided.',
+        400,
+        'Choose one listed submission status, then try again.',
+      );
+    }
+    return {
+      institutionId: payload.institutionId,
+      examId: payload.examId,
+      submissionId: examinationRoomOwnerUuid(payload.submissionId, 'submission identifier'),
+      status,
+      reason: reason(),
+    };
+  }
+  const allowed = new Set([...common, 'action', 'reason']);
+  if (Object.keys(payload).some((key) => !allowed.has(key))) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_OWNER_FIELD_UNSUPPORTED',
+      'The room-control action contains an unsupported field.',
+      400,
+      'Refresh Examinations, reopen Room control, and try again.',
+    );
+  }
+  const action = String(payload.action || '').trim().toLowerCase();
+  if (!['open', 'close'].includes(action)) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_ROOM_ACTION_INVALID',
+      'Choose Open room or Close room.',
+      400,
+      'Choose one listed room action, then try again.',
+    );
+  }
+  return {
+    institutionId: payload.institutionId,
+    examId: payload.examId,
+    action,
+    reason: reason(),
+  };
+}
+
+async function handleExaminationRoomOwnerCommand(
+  request,
+  env,
+  origin,
+  allowedOrigin,
+  executionContext = null,
+) {
+  return examinationRoomOwnerResponse(async () => {
+    await enforceExaminationRoomV1RateLimit(request, env, 'admin_command');
+    const owner = await requireExaminationRoomPlatformOwner(request, env);
+    const body = examinationRoomOwnerRecord(await parseBoundedJson(request.clone(), 220_000));
+    const operation = String(body.operation || '').trim();
+    const payload = examinationRoomOwnerRecord(body.payload || {});
+
+    if (['approve_and_email_key', 'activate_exam'].includes(operation)) {
+      const result = await issueExaminationRoomOwnerKey(env, owner, request, body, payload, {
+        replaceCurrent: false,
+        deliveryKind: 'activation_key',
+      });
+      return jsonResponse(result, 201, origin, allowedOrigin);
+    }
+    if (['email_key', 'rotate_key'].includes(operation)) {
+      const result = await issueExaminationRoomOwnerKey(env, owner, request, body, payload, {
+        replaceCurrent: true,
+        deliveryKind: 'key_rotation',
+      });
+      return jsonResponse(result, 200, origin, allowedOrigin);
+    }
+    if (operation === 'reveal_key') {
+      const institutionId = examinationRoomOwnerUuid(payload.institutionId, 'institution identifier');
+      const examId = examinationRoomOwnerUuid(payload.examId, 'examination identifier');
+      if (payload.activationId) {
+        const activationId = examinationRoomOwnerUuid(
+          payload.activationId,
+          'room activation identifier',
+        );
+        const detail = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerQueryRpc(env, {
+          operation: 'exam_detail',
+          actorUserId: owner.user.id,
+          institutionId,
+          examId,
+          payload: {},
+        }));
+        const record = (await examinationRoomOwnerKeyHistory(env, detail.bundle))
+          .find((entry) => entry.activationId === activationId);
+        if (!record) {
+          throw examinationRoomOwnerError(
+            'EXAM_ROOM_V1_ROOM_KEY_HISTORY_NOT_FOUND',
+            'That historical room key is not available for this examination.',
+            404,
+            'Refresh the examination detail and choose a listed key activation.',
+          );
+        }
+        if (!record.roomKey) {
+          throw examinationRoomOwnerError(
+            record.error?.code || 'EXAM_ROOM_V1_KEY_ESCROW_DECRYPT_FAILED',
+            record.error?.message || 'That historical room key could not be recovered.',
+            409,
+            record.error?.recovery || 'Verify the owner key version, then retry.',
+          );
+        }
+        return jsonResponse({
+          ok: true,
+          examId,
+          activationId,
+          roomKey: record.roomKey,
+          keyRecord: record,
+        }, 200, origin, allowedOrigin);
+      }
+      const envelope = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerQueryRpc(env, {
+        operation: 'key_envelope', actorUserId: owner.user.id, institutionId, examId, payload: {},
+      }));
+      return jsonResponse({
+        ok: true,
+        examId,
+        activationId: envelope.activationId,
+        roomKey: await decryptExaminationRoomOwnerKey(env, envelope),
+        keyVersion: envelope.keyVersion,
+      }, 200, origin, allowedOrigin);
+    }
+    if (operation === 'resend_key') {
+      return jsonResponse(
+        await resendExaminationRoomOwnerKey(env, owner, request, body, payload),
+        200,
+        origin,
+        allowedOrigin,
+      );
+    }
+
+    if (operation === 'retry_snapshot') {
+      const institutionId = examinationRoomOwnerUuid(payload.institutionId, 'institution identifier');
+      const examId = examinationRoomOwnerUuid(payload.examId, 'examination identifier');
+      const requestHash = await examinationRoomOwnerRequestHash(
+        env,
+        examinationRoomOwnerRequestKey(request, body),
+      );
+      const result = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerCommandRpc(env, {
+        operation,
+        actorUserId: owner.user.id,
+        institutionId,
+        examId,
+        payload: {
+          ...payload,
+          snapshotId: examinationRoomOwnerUuid(payload.snapshotId, 'snapshot identifier'),
+          requestHash,
+        },
+      }));
+      const materialization = await drainExaminationRoomRecovery(env);
+      return jsonResponse({ ok: true, ...result, materialization }, 200, origin, allowedOrigin);
+    }
+
+    if (operation === 'restore_snapshot' || operation === 'verify_snapshot') {
+      const institutionId = examinationRoomOwnerUuid(payload.institutionId, 'institution identifier');
+      const examId = examinationRoomOwnerUuid(payload.examId, 'examination identifier');
+      const snapshotId = examinationRoomOwnerUuid(payload.snapshotId, 'snapshot identifier');
+      const details = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerQueryRpc(env, {
+        operation: 'recovery_detail',
+        actorUserId: owner.user.id,
+        institutionId,
+        examId,
+        payload: { snapshotId, limit: 1, offset: 0 },
+      }));
+      const snapshot = (Array.isArray(details.snapshots) ? details.snapshots : [])
+        .find((entry) => String(entry?.id || entry?.snapshotId) === snapshotId);
+      if (!snapshot) {
+        throw examinationRoomOwnerError(
+          'EXAM_ROOM_V1_RECOVERY_NOT_FOUND',
+          'That recovery checkpoint is no longer available.',
+          404,
+          'Refresh Recovery and choose a current checkpoint.',
+        );
+      }
+      const recovered = await examinationRoomRecoveryResult(env, snapshot, operation === 'restore_snapshot');
+      const recordedVerification = await examinationRoomRecordVerifiedSnapshot(
+        env,
+        snapshotId,
+        recovered.descriptor,
+      );
+      return jsonResponse({
+        ok: true,
+        snapshotId,
+        verified: true,
+        verificationStatus: 'verified',
+        status: operation === 'restore_snapshot' ? 'verification_only' : 'verified',
+        restored: false,
+        descriptor: recovered.descriptor,
+        verifiedAt: recordedVerification.verifiedAt,
+        ...(operation === 'restore_snapshot' ? {
+          recoveryBundle: recovered.payload,
+          message: 'The encrypted checkpoint was authenticated and decrypted. No live database rows were overwritten.',
+          recovery: 'Download this verified bundle or use a supervised database-recovery procedure before changing live records.',
+        } : {}),
+      }, 200, origin, allowedOrigin);
+    }
+
+    const ownerDirectCommands = new Set([
+      'correct_student_identity', 'set_submission_status', 'room_control',
+    ]);
+    if (ownerDirectCommands.has(operation)) {
+      const institutionId = examinationRoomOwnerUuid(payload.institutionId, 'institution identifier');
+      const examId = examinationRoomOwnerUuid(payload.examId, 'examination identifier');
+      const safePayload = examinationRoomValidatedOwnerDirectPayload(operation, payload);
+      const requestHash = await examinationRoomOwnerRequestHash(
+        env,
+        examinationRoomOwnerRequestKey(request, body),
+      );
+      const result = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerCommandRpc(env, {
+        operation,
+        actorUserId: owner.user.id,
+        institutionId,
+        examId,
+        payload: { ...safePayload, requestHash },
+      }));
+      scheduleExaminationRoomRecoveryDrain(env, executionContext);
+      return jsonResponse({ ok: true, ...result }, 200, origin, allowedOrigin);
+    }
+
+    const delegatedCommands = new Set([
+      'bootstrap_institution', 'assign_staff', 'revoke_staff',
+      'reject_professor_request', 'revoke_key', 'create_snapshot',
+    ]);
+    if (!delegatedCommands.has(operation)) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_OPERATION_UNSUPPORTED',
+        'That owner command-center action is not available.',
+        400,
+        'Refresh Admin and choose one of the listed actions.',
+      );
+    }
+    if (operation !== 'bootstrap_institution') {
+      const institutionId = examinationRoomOwnerUuid(payload.institutionId, 'institution identifier');
+      await examinationRoomV1OwnerEnsureMembership(env, owner.user.id, institutionId);
+    }
+    const response = await examinationRoomV1Handlers.adminCommand(request, env, origin, allowedOrigin);
+    if (operation !== 'create_snapshot' || !response.ok) {
+      if (operation === 'revoke_key' && response.ok) {
+        scheduleExaminationRoomRecoveryDrain(env, executionContext);
+      }
+      return response;
+    }
+    const responseBody = await response.clone().json().catch(() => null);
+    const materialization = await drainExaminationRoomRecovery(env);
+    return jsonResponse({ ...responseBody, materialization }, response.status, origin, allowedOrigin);
+  }, origin, allowedOrigin);
+}
+
+async function examinationRoomProfessorImportContext(
+  request,
+  env,
+  requestedInstitutionId,
+  authenticatedUser = null,
+) {
+  const user = authenticatedUser || await verifiedAuthenticatedUser(request, env);
+  if (!user?.id) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED',
+      'Professor sign-in is required.',
+      401,
+      'Sign in through Due Diligence, then reopen Examination Room.',
+    );
+  }
+  const institutionId = examinationRoomOwnerUuid(
+    requestedInstitutionId,
+    'institution identifier',
+  );
+  // Both batch-context and atomic-import RPCs independently authorize this
+  // verified actor against the exact institution/exam. Keeping authorization
+  // in those database transactions avoids one HTTP subrequest per student and
+  // lets platform owners use the same tested grading path without weakening it.
+  return { user, institutionId };
+}
+
+function examinationRoomSimpleOfflineGrade(value, index) {
+  const grade = examinationRoomOwnerRecord(value, `offline grade ${index + 1}`);
+  const allowed = new Set(['sessionId', 'questionId', 'points', 'feedback']);
+  if (Object.keys(grade).some((key) => !allowed.has(key))) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_OFFLINE_GRADE_INVALID',
+      `Offline grade ${index + 1} contains an unsupported field.`,
+      400,
+      'Export a fresh graded package from the Due Diligence offline workspace, then import it again.',
+    );
+  }
+  const questionId = String(grade.questionId || '').normalize('NFKC').trim();
+  const feedback = grade.feedback == null ? '' : grade.feedback;
+  const points = Number(grade.points);
+  if (!questionId
+      || questionId.length > 128
+      || /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/iu.test(questionId)
+      || typeof feedback !== 'string'
+      || Array.from(feedback).length > 20_000
+      || !Number.isFinite(points)
+      || points < 0
+      || points > 1_000_000) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_OFFLINE_GRADE_INVALID',
+      `Offline grade ${index + 1} contains an invalid question, score, or feedback value.`,
+      400,
+      'Open the original offline grading copy, correct the listed grade, export it again, then import the fresh file.',
+    );
+  }
+  return {
+    sessionId: examinationRoomOwnerUuid(grade.sessionId, 'student session identifier'),
+    questionId,
+    points,
+    feedback,
+  };
+}
+
+function examinationRoomUuidFromDigest(digest) {
+  const hex = String(digest || '').toLowerCase();
+  if (!EXAMINATION_ROOM_OWNER_SHA256_PATTERN.test(hex)) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_OFFLINE_GRADE_HASH_INVALID',
+      'The offline grading receipt could not be created.',
+      503,
+      'No grades were saved. Retry the same import once.',
+    );
+  }
+  const chars = hex.slice(0, 32).split('');
+  chars[12] = '4';
+  chars[16] = (8 | (Number.parseInt(chars[16], 16) & 3)).toString(16);
+  const compact = chars.join('');
+  return `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20)}`;
+}
+
+function examinationRoomOfflineGradeQuestion(publicationManifest, reference) {
+  const clientQuestionNumber = /^q-(\d{1,3})$/u.test(reference)
+    ? Number(reference.slice(2))
+    : Number(reference);
+  return publicationManifest.questions.find((entry) => (
+    entry.key === reference
+    || String(entry.number) === reference
+    || entry.number === clientQuestionNumber
+  ));
+}
+
+async function examinationRoomPrepareOfflineGradeSession(
+  env,
+  context,
+  examId,
+  batchRequestHash,
+  sessionId,
+  entries,
+  gradingContext,
+) {
+  let publicationManifest;
+  try {
+    publicationManifest = normalizePublicationManifest(gradingContext.publicationManifest);
+  } catch (error) {
+    if (!isExaminationRoomV1Error(error)) throw error;
+    throw examinationRoomOwnerError(
+      error.code,
+      error.message,
+      409,
+      'Refresh the online grading view, export a new offline copy, then import that matching copy.',
+      error.details,
+    );
+  }
+
+  const replacements = [];
+  const replacedNumbers = new Set();
+  for (const entry of entries) {
+    const question = examinationRoomOfflineGradeQuestion(publicationManifest, entry.questionId);
+    if (!question) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_QUESTION_NOT_FOUND',
+        `Question ${entry.questionId} is not part of this submitted examination version.`,
+        409,
+        'Refresh grading, export a new offline copy, and import that matching copy.',
+      );
+    }
+    if (replacedNumbers.has(question.number)) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_OFFLINE_GRADE_DUPLICATE',
+        `The offline package contains more than one grade for question ${question.number} in the same student submission.`,
+        409,
+        'Keep the latest grade for that student and question, export again, then retry the import.',
+      );
+    }
+    replacedNumbers.add(question.number);
+    replacements.push({
+      questionNumber: question.number,
+      pointsAwarded: entry.points,
+      feedback: entry.feedback,
+    });
+  }
+
+  const priorScores = Array.isArray(gradingContext.scores) ? gradingContext.scores : [];
+  const sessionRequestHash = await hmacHex(
+    String(env.EXAMINATION_ROOM_KEY_PEPPER).trim(),
+    `offline-grade-session\0${batchRequestHash}\0${context.institutionId}\0${examId}\0${sessionId}`,
+  );
+  let grade;
+  try {
+    grade = buildGradingRevision({
+      revisionId: examinationRoomUuidFromDigest(sessionRequestHash),
+      revision: Number(gradingContext.nextRevision || 1),
+      status: GRADING_REVISION_STATUSES.DRAFT,
+      graderId: context.user.id,
+      gradedAt: new Date().toISOString(),
+      idempotencyKey: sessionRequestHash,
+      scores: priorScores
+        .filter((score) => !replacedNumbers.has(Number(score.questionNumber)))
+        .concat(replacements),
+      overallFeedback: String(gradingContext.overallFeedback || ''),
+    }, { submissionManifest: gradingContext.submissionManifest });
+  } catch (error) {
+    if (!isExaminationRoomV1Error(error)) throw error;
+    throw examinationRoomOwnerError(
+      error.code,
+      error.message,
+      409,
+      'Correct the affected offline score, export the graded copy again, then retry the complete import.',
+      error.details,
+    );
+  }
+  const { idempotencyKey: _discardedIdempotencyKey, ...gradingManifest } = grade.manifest;
+  return {
+    examId,
+    sessionId,
+    requestHash: sessionRequestHash,
+    clientRevisionId: examinationRoomUuidFromDigest(sessionRequestHash),
+    gradingManifest,
+    gradingHash: await sha256Hex(new TextEncoder().encode(grade.hashInput)),
+  };
+}
+
+async function handleExaminationRoomProfessorImportGrades(
+  request,
+  env,
+  origin,
+  allowedOrigin,
+  prepared = {},
+) {
+  return examinationRoomOwnerResponse(async () => {
+    const body = examinationRoomOwnerRecord(
+      prepared.body || await parseBoundedJson(request, 12_000_000),
+    );
+    const payload = examinationRoomOwnerRecord(body.payload || {});
+    const context = await examinationRoomProfessorImportContext(
+      request,
+      env,
+      payload.institutionId,
+      prepared.authenticatedUser,
+    );
+    const examId = examinationRoomOwnerUuid(payload.examId, 'examination identifier');
+    if (!Array.isArray(payload.grades) || payload.grades.length < 1 || payload.grades.length > 1_000) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_OFFLINE_GRADE_BATCH_INVALID',
+        'Choose a graded package containing 1 to 1,000 changed question grades.',
+        400,
+        'Export a fresh graded package from the offline workspace, then import it again.',
+      );
+    }
+    const requestHash = await examinationRoomOwnerRequestHash(
+      env,
+      examinationRoomOwnerRequestKey(request, body),
+    );
+    const simpleFormat = payload.grades.every((grade) => (
+      grade && typeof grade === 'object' && !Array.isArray(grade)
+      && 'sessionId' in grade && 'questionId' in grade && 'points' in grade
+      && !('gradingManifest' in grade)
+    ));
+    if (!simpleFormat) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_OFFLINE_GRADE_BATCH_INVALID',
+        'The offline grade list is not in the official changed-question format.',
+        400,
+        'Export one fresh graded copy from the current Due Diligence offline workspace, then import that file.',
+      );
+    }
+
+    const simpleGrades = payload.grades.map((grade, index) => (
+      examinationRoomSimpleOfflineGrade(grade, index)
+    ));
+    const grouped = new Map();
+    for (const grade of simpleGrades) {
+      const entries = grouped.get(grade.sessionId) || [];
+      entries.push(grade);
+      grouped.set(grade.sessionId, entries);
+    }
+    const sessionEntries = [...grouped.entries()];
+    const contextResult = ensureExaminationRoomOwnerResult(await examinationRoomV1ServiceRpc(
+      env,
+      'examination_room_v1_grading_contexts',
+      {
+        p_actor_user_id: context.user.id,
+        p_institution_id: context.institutionId,
+        p_exam_id: examId,
+        p_payload: {
+          requests: sessionEntries.map(([sessionId, entries]) => ({
+            sessionId,
+            questionReferences: entries.map((entry) => entry.questionId),
+          })),
+        },
+      },
+    ));
+    if (!Array.isArray(contextResult.contexts)
+        || contextResult.contexts.length !== sessionEntries.length) {
+      throw examinationRoomOwnerError(
+        'EXAM_ROOM_V1_OFFLINE_GRADE_CONTEXT_INCOMPLETE',
+        'The server could not match every offline grade to its submitted examination.',
+        409,
+        'Refresh online grading, export a new offline copy, and import that matching file.',
+      );
+    }
+    const contextBySession = new Map();
+    for (const gradingContext of contextResult.contexts) {
+      const sessionId = examinationRoomOwnerUuid(
+        gradingContext?.sessionId,
+        'student session identifier',
+      );
+      if (!grouped.has(sessionId) || contextBySession.has(sessionId)) {
+        throw examinationRoomOwnerError(
+          'EXAM_ROOM_V1_OFFLINE_GRADE_CONTEXT_MISMATCH',
+          'The server returned a grading context outside this exact import batch.',
+          409,
+          'No grades were saved. Refresh online grading, export a new offline copy, and retry.',
+        );
+      }
+      contextBySession.set(sessionId, gradingContext);
+    }
+    const grades = await Promise.all(sessionEntries.map(([sessionId, entries]) => (
+      examinationRoomPrepareOfflineGradeSession(
+        env,
+        context,
+        examId,
+        requestHash,
+        sessionId,
+        entries,
+        contextBySession.get(sessionId),
+      )
+    )));
+    const importedGradeCount = simpleGrades.length;
+    const result = ensureExaminationRoomOwnerResult(await examinationRoomV1ServiceRpc(
+      env,
+      'examination_room_v1_import_grades',
+      {
+        p_actor_user_id: context.user.id,
+        p_institution_id: context.institutionId,
+        p_exam_id: examId,
+        p_payload: { requestHash, grades },
+      },
+    ));
+    return jsonResponse({
+      ok: true,
+      ...result,
+      importedRevisionCount: Number(result.importedCount || grades.length),
+      importedCount: importedGradeCount,
+      atomic: true,
+    }, result.duplicate ? 200 : 201, origin, allowedOrigin);
+  }, origin, allowedOrigin);
 }
 
 async function forumRpc(env, functionName, body) {
@@ -1669,16 +3693,50 @@ async function handleSignInNotification(request, env, origin, allowedOrigin) {
 }
 
 async function sendExaminationRoomV1KeyEmail(env, message) {
-  if (outboundEmailSuppressed(env)) return { status: 'suppressed' };
+  const emailMode = String(env.EXAMINATION_ROOM_EMAIL_MODE || '').trim().toLowerCase();
+  if (emailMode === 'suppressed') {
+    return { status: 'suppressed', providerId: null, safeErrorCode: 'email_suppressed' };
+  }
   const recipient = String(message?.recipient || '').trim().toLowerCase();
   const from = String(
     env.EXAMINATION_ROOM_EMAIL_FROM
     || env.SUPPORT_NOTIFICATION_EMAIL_FROM
     || '',
   ).trim();
-  if (!env.RESEND_API_KEY || !from || !recipient) return { status: 'not_configured' };
+  const configuredOwnerRecipients = [...new Set((Array.isArray(message?.ownerRecipients)
+    ? message.ownerRecipients
+    : examinationRoomAdminEmailRecipients(env))
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value))
+      .slice(0, 20))];
+  const ownerRecipients = configuredOwnerRecipients.filter((value) => value !== recipient);
+  if (emailMode !== 'enabled'
+      || !env.RESEND_API_KEY
+      || !from
+      || !recipient
+      || configuredOwnerRecipients.length < 1) {
+    return {
+      status: 'not_configured',
+      providerId: null,
+      safeErrorCode: !recipient
+        ? 'recipient_missing'
+        : !from
+          ? 'sender_missing'
+          : !env.RESEND_API_KEY
+            ? 'provider_key_missing'
+            : configuredOwnerRecipients.length < 1
+              ? 'owner_recipients_missing'
+              : 'email_mode_invalid',
+    };
+  }
   let response;
   try {
+    const email = buildExaminationRoomKeyEmail(env, {
+      creatorName: message.professorName,
+      examTitle: message.examTitle,
+      roomKey: message.roomKey,
+      expiresAt: message.expiresAt,
+    });
     response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -1689,32 +3747,250 @@ async function sendExaminationRoomV1KeyEmail(env, message) {
       body: JSON.stringify({
         from,
         to: [recipient],
-        subject: `Examination Room key — ${String(message.examTitle || 'Published examination').slice(0, 200)}`,
-        text: [
-          `Hello ${String(message.professorName || 'Professor').slice(0, 200)},`,
-          '',
-          'An administrator issued the room key for your published examination.',
-          '',
-          `Examination: ${String(message.examTitle || 'Published examination').slice(0, 300)}`,
-          `Room key: ${String(message.roomKey || '').slice(0, 40)}`,
-          `Valid until: ${String(message.expiresAt || 'the administrator closes or revokes the room').slice(0, 80)}`,
-          '',
-          'Open Examination Room from Due Diligence, choose Monitoring, and enter this key to open the room for students.',
-          'Do not forward the key outside the intended class. If it may have been exposed, ask the administrator to issue a replacement.',
-        ].join('\n'),
+        ...(ownerRecipients.length ? { bcc: ownerRecipients } : {}),
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
       }),
     });
   } catch (error) {
     console.error('Examination Room key email transport failed', {
       name: String(error?.name || 'Error').slice(0, 80),
     });
-    return { status: 'failed' };
+    return { status: 'failed', providerId: null, safeErrorCode: 'network_error' };
   }
+  const result = await response.json().catch(() => null);
   if (!response.ok) {
     console.error('Examination Room key email failed', { status: response.status });
-    return { status: 'failed' };
+    return {
+      status: 'failed',
+      providerId: null,
+      safeErrorCode: `provider_${response.status}`.slice(0, 80),
+    };
   }
-  return { status: 'sent' };
+  return {
+    status: 'sent',
+    providerId: result?.id ? String(result.id).slice(0, 240) : null,
+    safeErrorCode: null,
+  };
+}
+
+async function sendExaminationRoomV1PublicationRequestEmail(env, result) {
+  const manifest = result?.publicationManifest && typeof result.publicationManifest === 'object'
+    ? result.publicationManifest
+    : {};
+  const examId = String(result?.examId || manifest.examinationId || '').trim();
+  const version = result?.version ?? manifest.version ?? '';
+  const publishedAt = manifest.publishedAt || '';
+  const suppliedHash = String(result?.publicationHash || '').trim().toLowerCase();
+  const idempotencyHash = /^[0-9a-f]{64}$/u.test(suppliedHash)
+    ? suppliedHash
+    : await sha256Hex(new TextEncoder().encode(
+      `examination-room-key-request\0${examId}\0${String(version)}\0${String(publishedAt)}`,
+    ));
+  return deliverExaminationRoomPublicationRequestEmail(env, {
+    recipients: examinationRoomAdminEmailRecipients(env),
+    idempotencyHash,
+    examId,
+    version,
+    publishedAt,
+    examTitle: manifest.title,
+    subject: manifest.subject,
+    questionCount: manifest.questionCount ?? manifest.questions?.length,
+  });
+}
+
+function scheduleExaminationRoomPublicationRequestNotification(env, result, executionContext) {
+  const work = sendExaminationRoomV1PublicationRequestEmail(env, result)
+    .then((delivery) => {
+      if (!['sent', 'suppressed'].includes(String(delivery?.status || ''))) {
+        console.error('Examination Room publication request email was not delivered', {
+          status: String(delivery?.status || 'failed').slice(0, 40),
+          safeErrorCode: String(delivery?.safeErrorCode || 'unknown').slice(0, 80),
+          examId: String(result?.examId || result?.publicationManifest?.examinationId || '').slice(0, 80),
+        });
+      }
+      return delivery;
+    })
+    .catch((error) => {
+      console.error('Examination Room publication request notification failed', {
+        name: String(error?.name || 'Error').slice(0, 80),
+      });
+      return { status: 'failed', safeErrorCode: 'notification_error' };
+    });
+  if (typeof executionContext?.waitUntil === 'function') executionContext.waitUntil(work);
+  else void work;
+}
+
+function examinationRoomResultDeliverySummary(outcomes, extra = {}) {
+  const normalized = (Array.isArray(outcomes) ? outcomes : [])
+    .map((outcome) => ({
+      releaseId: String(outcome?.releaseId || '').trim() || null,
+      sessionId: String(outcome?.sessionId || '').trim() || null,
+      recipient: String(outcome?.recipient || '').trim().toLowerCase() || null,
+      status: String(outcome?.status || 'failed').trim().toLowerCase(),
+      providerId: String(outcome?.providerId || '').trim() || null,
+      safeErrorCode: String(outcome?.safeErrorCode || '').trim().toLowerCase() || null,
+      ...(Number.isSafeInteger(Number(outcome?.attemptCount))
+        ? { attemptCount: Number(outcome.attemptCount) }
+        : {}),
+    }))
+    .sort((left, right) => String(left.sessionId || '').localeCompare(String(right.sessionId || '')));
+  const counts = normalized.reduce((summary, outcome) => {
+    summary[outcome.status] = (summary[outcome.status] || 0) + 1;
+    return summary;
+  }, {});
+  const acceptedCount = counts.sent || 0;
+  const failedCount = counts.failed || 0;
+  const skippedCount = counts.skipped || 0;
+  const suppressedCount = counts.suppressed || 0;
+  const notConfiguredCount = counts.not_configured || 0;
+  const pendingCount = counts.pending || 0;
+  const status = normalized.length === 0
+    ? 'skipped'
+    : failedCount || notConfiguredCount || pendingCount
+      ? acceptedCount || suppressedCount || skippedCount ? 'partial' : 'failed'
+      : skippedCount
+        ? acceptedCount || suppressedCount ? 'partial' : 'skipped'
+        : suppressedCount ? 'suppressed' : 'sent';
+  return {
+    status,
+    total: normalized.length,
+    acceptedCount,
+    failedCount,
+    skippedCount,
+    suppressedCount,
+    notConfiguredCount,
+    pendingCount,
+    outcomes: normalized,
+    providerBatchIds: Array.isArray(extra.providerBatchIds) ? extra.providerBatchIds : [],
+    retrySafe: extra.retrySafe !== false,
+    ...(extra.recovery ? { recovery: String(extra.recovery) } : {}),
+  };
+}
+
+function examinationRoomResultDeliveryFailure(items, safeErrorCode, recovery) {
+  return examinationRoomResultDeliverySummary(
+    (Array.isArray(items) ? items : []).map((item) => ({
+      releaseId: item?.releaseId,
+      sessionId: item?.sessionId,
+      status: 'failed',
+      providerId: null,
+      safeErrorCode,
+    })),
+    { recovery },
+  );
+}
+
+async function sendExaminationRoomV1ResultReleaseEmails(env, details = {}) {
+  const resultEmailItems = Array.isArray(details.resultEmailItems)
+    ? details.resultEmailItems.slice(0, 1_000)
+    : [];
+  if (resultEmailItems.length === 0) {
+    return examinationRoomResultDeliverySummary([], {
+      recovery: 'No released student records required an email notification.',
+    });
+  }
+
+  let claimed;
+  try {
+    claimed = examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+      env,
+      'examination_room_v1_claim_result_email_deliveries',
+      {
+        p_actor_user_id: details.actorUserId,
+        p_institution_id: details.institutionId,
+        p_exam_id: details.examId,
+        p_request_hash: details.requestHash,
+        p_items: resultEmailItems,
+        p_lease_seconds: 300,
+      },
+    ));
+  } catch (error) {
+    console.error('Examination Room result-email outbox claim failed', {
+      code: String(error?.code || 'claim_failed').slice(0, 80),
+    });
+    return examinationRoomResultDeliveryFailure(
+      resultEmailItems,
+      'outbox_claim_failed',
+      'The grades were released. Release the same students again after a brief wait; provider-accepted messages will not be resent.',
+    );
+  }
+  if (claimed?.ok === false) {
+    return examinationRoomResultDeliveryFailure(
+      resultEmailItems,
+      'outbox_claim_rejected',
+      String(claimed?.error?.recovery || 'The grades were released. Refresh grading, then release the same students again.'),
+    );
+  }
+
+  const claimedItems = Array.isArray(claimed?.items) ? claimed.items : [];
+  const deliverable = claimedItems.filter((item) => item?.shouldSend === true);
+  const persisted = claimedItems.filter((item) => item?.shouldSend !== true);
+  if (deliverable.length === 0) {
+    return examinationRoomResultDeliverySummary(persisted, {
+      retrySafe: true,
+      recovery: persisted.some((item) => item?.status === 'pending')
+        ? 'Another delivery attempt is still active. Refresh grading before retrying.'
+        : null,
+    });
+  }
+
+  const stableReleaseIds = deliverable
+    .map((item) => String(item?.releaseId || '').trim())
+    .filter(Boolean)
+    .sort();
+  const idempotencyHash = await sha256Hex(new TextEncoder().encode(
+    `examination-room-result-email\0${String(details.requestHash || '')}\0${stableReleaseIds.join('\0')}`,
+  ));
+  const delivery = await deliverExaminationRoomResultReleaseEmails(env, {
+    recipients: deliverable,
+    idempotencyHash,
+  });
+  const attempted = Array.isArray(delivery?.outcomes)
+    ? delivery.outcomes.filter((outcome) => outcome?.releaseId)
+    : [];
+
+  let completedItems = attempted;
+  let completionPending = false;
+  try {
+    const completion = examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+      env,
+      'examination_room_v1_complete_result_email_deliveries',
+      {
+        p_claim_token: claimed.claimToken,
+        p_outcomes: attempted.map((outcome) => ({
+          releaseId: outcome.releaseId,
+          status: outcome.status,
+          providerId: outcome.providerId || null,
+          safeErrorCode: outcome.safeErrorCode || null,
+        })),
+      },
+    ));
+    if (completion?.ok === false) throw new Error('completion_rejected');
+    completedItems = Array.isArray(completion?.items) ? completion.items : attempted;
+  } catch (error) {
+    completionPending = true;
+    console.error('Examination Room result-email outbox completion failed', {
+      code: String(error?.code || error?.message || 'completion_failed').slice(0, 80),
+    });
+  }
+
+  const summary = examinationRoomResultDeliverySummary(
+    [...persisted, ...completedItems],
+    {
+      providerBatchIds: delivery?.providerBatchIds,
+      retrySafe: delivery?.retrySafe !== false,
+      recovery: completionPending
+        ? 'The provider response was received but its audit record is still pending. Retry within 24 hours using the same released students; the provider idempotency key prevents duplicate delivery.'
+        : delivery?.failedCount || delivery?.notConfiguredCount || delivery?.suppressedCount
+          ? 'Release the same students again after correcting email delivery. Already accepted messages will not be resent.'
+          : null,
+    },
+  );
+  return completionPending
+    ? { ...summary, persistenceStatus: 'pending' }
+    : { ...summary, persistenceStatus: 'recorded' };
 }
 
 async function handleSessionMonitoring(request, env, origin, allowedOrigin) {
@@ -4937,9 +7213,33 @@ async function parseBoundedJson(request, maximumBytes = 20_000) {
   if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
     throw new ExaminerError('REQUEST_TOO_LARGE', 'The request is too large.', 413);
   }
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > maximumBytes) {
-    throw new ExaminerError('REQUEST_TOO_LARGE', 'The request is too large.', 413);
+  const reader = request.body?.getReader?.();
+  const chunks = [];
+  let totalBytes = 0;
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value instanceof Uint8Array ? value : new Uint8Array(value || 0);
+      totalBytes += chunk.byteLength;
+      if (totalBytes > maximumBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new ExaminerError('REQUEST_TOO_LARGE', 'The request is too large.', 413);
+      }
+      chunks.push(chunk);
+    }
+  }
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  let raw;
+  try {
+    raw = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new ExaminerError('INVALID_JSON', 'The request contains invalid JSON.', 400);
   }
   try {
     return JSON.parse(raw);
@@ -5947,14 +8247,23 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
   authorizeProfessor: async (env, user) => {
     const staff = await examinationRoomV1StaffContext(env, user);
     const professorRoleSelected = staff?.professorRoleSelected === true;
+    const creatorWorkspaces = (Array.isArray(staff?.creatorWorkspaces)
+      ? staff.creatorWorkspaces
+      : [])
+      .filter((workspace) => workspace?.active === true && workspace?.institutionId);
     const memberships = (Array.isArray(staff?.memberships) ? staff.memberships : [])
-      .filter((membership) => membership?.active === true && membership?.staffRole === 'professor');
-    const institutionIds = [...new Set(memberships.map((membership) => membership.institutionId).filter(Boolean))];
+      .filter((membership) => membership?.active === true && membership?.institutionId);
+    const institutionIds = [...new Set([
+      ...creatorWorkspaces.map((workspace) => workspace.institutionId),
+      ...memberships.map((membership) => membership.institutionId),
+    ].filter(Boolean))];
     return {
       ...staff,
       professorRoleSelected,
-      authorized: professorRoleSelected && memberships.length > 0,
-      institutionId: institutionIds.length === 1 ? institutionIds[0] : null,
+      creatorAuthorized: institutionIds.length > 0,
+      authorized: institutionIds.length > 0,
+      institutionId: staff?.institutionId || (institutionIds.length === 1 ? institutionIds[0] : null),
+      creatorWorkspaces,
       memberships,
     };
   },
@@ -5965,23 +8274,70 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
         p_actor_user_id: user.id,
       }),
     ]);
+    const platformOwner = admin?.authorized === true
+      && EXAMINATION_ROOM_OWNER_ROLES.has(String(admin?.role || ''));
     const memberships = (Array.isArray(staff?.memberships) ? staff.memberships : [])
       .filter((membership) => membership?.active === true && membership?.staffRole === 'admin');
     const institutionIds = [...new Set(memberships.map((membership) => membership.institutionId).filter(Boolean))];
     return {
       ...staff,
       ...admin,
+      capabilities: platformOwner ? admin.capabilities : [],
       memberships,
       institutionId: institutionIds.length === 1 ? institutionIds[0] : null,
-      globalAuthorized: admin?.authorized === true,
-      canBootstrap: admin?.authorized === true,
-      authorized: admin?.authorized === true && memberships.length > 0,
+      globalAuthorized: platformOwner,
+      canBootstrap: platformOwner,
+      authorized: platformOwner && memberships.length > 0,
     };
   },
   rateLimit: enforceExaminationRoomV1RateLimit,
   rpc: examinationRoomV1Rpc,
   manageStaff: examinationRoomV1ManageStaff,
   professorAccess: examinationRoomV1ProfessorAccess,
+  importGrades: ({
+    request, env, origin, allowedOrigin, body, authenticatedUser,
+  }) => handleExaminationRoomProfessorImportGrades(
+    request,
+    env,
+    origin,
+    allowedOrigin,
+    { body, authenticatedUser },
+  ),
+  afterProfessorCommand: async ({
+    operation,
+    result,
+    env,
+    executionContext,
+    actorUserId,
+    institutionId,
+    requestHash,
+    examId,
+    resultEmailItems,
+  }) => {
+    if (operation === 'publish' || operation === 'release_results') {
+      scheduleExaminationRoomRecoveryDrain(env, executionContext);
+    }
+    if (operation === 'publish') {
+      scheduleExaminationRoomPublicationRequestNotification(env, result, executionContext);
+    }
+    if (operation === 'release_results' && Array.isArray(resultEmailItems) && resultEmailItems.length) {
+      return {
+        resultDelivery: await sendExaminationRoomV1ResultReleaseEmails(env, {
+          actorUserId,
+          institutionId,
+          requestHash,
+          examId,
+          resultEmailItems,
+        }),
+      };
+    }
+    return null;
+  },
+  afterStudentCommand: ({ operation, env, executionContext }) => {
+    if (operation === 'submit') {
+      scheduleExaminationRoomRecoveryDrain(env, executionContext);
+    }
+  },
   hmacHex,
   sha256Hex: (value) => sha256Hex(new TextEncoder().encode(String(value))),
   randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)),
@@ -6139,11 +8495,24 @@ export default {
             },
           }, 503, origin, allowedOrigin);
         }
+        if (pathname === '/examination-room/v1/admin/query') {
+          return handleExaminationRoomOwnerQuery(request, env, origin, allowedOrigin);
+        }
+        if (pathname === '/examination-room/v1/admin/command') {
+          return handleExaminationRoomOwnerCommand(
+            request,
+            env,
+            origin,
+            allowedOrigin,
+            ctx,
+          );
+        }
         return await examinationRoomV1Handlers[examinationRoomV1HandlerName](
           request,
           env,
           origin,
           allowedOrigin,
+          ctx,
         );
       }
       if (pathname === '/examinations/query') {
@@ -6310,5 +8679,13 @@ export default {
         },
       }, known ? error.status : 500, requestOrigin, allowedOrigin);
     }
+  },
+  scheduled(_controller, env, ctx) {
+    const drain = drainExaminationRoomRecovery(normalizedRuntimeSecrets(env));
+    if (typeof ctx?.waitUntil === 'function') {
+      ctx.waitUntil(drain);
+      return undefined;
+    }
+    return drain;
   },
 };

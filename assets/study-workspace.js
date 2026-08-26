@@ -126,6 +126,22 @@
     return element;
   }
 
+  function setSaveFeedback(message, state = 'idle') {
+    const status = document.getElementById('dd-study-sync');
+    if (!status) return;
+    status.textContent = message;
+    status.dataset.state = state;
+    status.setAttribute('role', state === 'error' ? 'alert' : 'status');
+    status.setAttribute('aria-live', state === 'error' ? 'assertive' : 'polite');
+  }
+
+  function setSaveButtonBusy(button, busy, label) {
+    if (!button) return;
+    button.disabled = busy;
+    button.setAttribute('aria-busy', busy ? 'true' : 'false');
+    button.textContent = label;
+  }
+
   async function reconcileRemote(definition, stored) {
     if (!navigator.onLine || !userId()) return stored;
     try {
@@ -177,7 +193,13 @@
       return;
     }
     activeItem = snapshot(definition);
-    let stored = await getItem(activeItem.type, activeItem.id);
+    let deviceStorageUnavailable = false;
+    let stored = null;
+    try {
+      stored = await getItem(activeItem.type, activeItem.id);
+    } catch {
+      deviceStorageUnavailable = true;
+    }
     stored = await reconcileRemote(activeItem, stored);
     if (!stored) {
       stored = {
@@ -195,56 +217,80 @@
       <h2>${escapeHtml(stored.title)}</h2>
       <p class="dd-study-copy">Save this opened study item on this device and attach a private note. It syncs to your account when online.</p>
       <label><span>Your note</span><textarea id="dd-study-note" maxlength="12000" placeholder="Add a concise private note…">${escapeHtml(stored.noteText || '')}</textarea></label>
-      <p class="dd-study-sync" id="dd-study-sync" role="status">${stored.savedOffline ? 'Available offline' : 'Not yet saved offline'}</p>
+      <p class="dd-study-sync" id="dd-study-sync" role="status" aria-live="polite" data-state="${stored.savedOffline ? 'success' : 'idle'}">${stored.savedOffline ? 'Saved in this browser on this device.' : 'Not saved on this device yet.'}</p>
+      <p class="dd-study-location"><strong>Where it goes:</strong> your private browser storage on this device, not Downloads. Reopen this same study item and choose <b>Available offline · Study notes</b>.</p>
       <div class="dd-study-note-actions">
         ${stored.savedOffline ? '<button class="dd-study-delete" type="button" data-study-delete>Delete note and offline copy</button>' : ''}
         <button type="button" data-study-close>Back</button>
-        <button class="dd-study-primary" type="button" data-study-save>Save for offline</button>
+        <button class="dd-study-primary" type="button" data-study-save>${stored.savedOffline ? 'Save changes offline' : 'Save for offline'}</button>
       </div>
     </form>`;
     element.querySelectorAll('[data-study-close]').forEach((button) => button.addEventListener('click', () => element.close()));
     element.querySelector('[data-study-save]')?.addEventListener('click', () => saveNotes(stored));
     element.querySelector('[data-study-delete]')?.addEventListener('click', (event) => requestDeleteNotes(event.currentTarget, stored));
     element.showModal();
-    if (stored.conflict?.server) {
-      document.getElementById('dd-study-sync').textContent = 'A newer version exists on another device. Both versions were preserved.';
+    if (deviceStorageUnavailable) {
+      setSaveFeedback('Browser storage is unavailable. Allow site storage or free browser space, then choose Try Save for offline.', 'error');
+      const button = element.querySelector('[data-study-save]');
+      if (button) button.textContent = 'Try Save for offline';
+    } else if (stored.conflict?.server) {
+      setSaveFeedback('A newer version exists on another device. Both versions were preserved.', 'warning');
       showConflictChoices(stored, stored.conflict.server);
     }
   }
 
   async function saveNotes(stored) {
-    const status = document.getElementById('dd-study-sync');
+    const button = dialog().querySelector('[data-study-save]');
+    if (button?.disabled) return;
     const noteText = String(document.getElementById('dd-study-note')?.value || '');
     const local = {
       ...stored, ...activeItem, key: itemKey(activeItem.type, activeItem.id), ownerUserId: userId(),
       noteText, dirty: true, savedOffline: true, savedAt: Date.now(),
     };
-    await putItem(local);
-    if (status) status.textContent = navigator.onLine ? 'Syncing…' : 'Offline — changes will sync';
-    if (!navigator.onLine) return;
+    let savedOnDevice = false;
+    setSaveButtonBusy(button, true, 'Saving…');
+    setSaveFeedback('Saving the offline copy in this browser…', 'working');
     try {
-      const result = await api('/study/annotations/command', {
-        operation: 'save', resourceType: local.type, resourceId: local.id,
-        noteText, selectedText: local.selectedText || null,
-        expectedRevision: Number(local.revision) || 0,
-      });
-      if (result?.conflict) {
-        local.conflict = { local: noteText, server: result.server };
-        local.dirty = true;
-        await putItem(local);
-        if (status) status.textContent = 'A newer version exists on another device. Both versions were preserved.';
-        showConflictChoices(local, result.server);
+      await putItem(local);
+      savedOnDevice = true;
+      Object.assign(stored, local);
+      refreshToolStatus(local.type, local.id, true);
+      if (!navigator.onLine) {
+        setSaveFeedback('Saved in this browser on this device · It will sync when you are online.', 'success');
         return;
       }
-      local.revision = Number(result?.revision) || local.revision;
-      local.updatedAt = result?.updatedAt || new Date().toISOString();
-      local.dirty = false;
-      local.conflict = null;
-      await putItem(local);
-      if (status) status.textContent = 'Available offline · Saved to Due Diligence';
-      refreshToolStatus(local.type, local.id, true);
+      setSaveFeedback('Saved in this browser on this device · Syncing to Due Diligence…', 'working');
+      try {
+        const result = await api('/study/annotations/command', {
+          operation: 'save', resourceType: local.type, resourceId: local.id,
+          noteText, selectedText: local.selectedText || null,
+          expectedRevision: Number(local.revision) || 0,
+        });
+        if (result?.conflict) {
+          local.conflict = { local: noteText, server: result.server };
+          local.dirty = true;
+          await putItem(local);
+          Object.assign(stored, local);
+          setSaveFeedback('Saved on this device · A newer online note also exists. Choose which version to keep below.', 'warning');
+          showConflictChoices(local, result.server);
+          return;
+        }
+        local.revision = Number(result?.revision) || local.revision;
+        local.updatedAt = result?.updatedAt || new Date().toISOString();
+        local.dirty = false;
+        local.conflict = null;
+        await putItem(local);
+        Object.assign(stored, local);
+        setSaveFeedback('Saved in this browser on this device · Synced to Due Diligence.', 'success');
+      } catch {
+        local.dirty = true;
+        Object.assign(stored, local);
+        setSaveFeedback('Saved in this browser on this device · Online sync failed and will retry automatically.', 'warning');
+      }
     } catch {
-      if (status) status.textContent = 'Saved on this device · Sync will retry';
+      setSaveFeedback('Could not save in this browser. Keep this window open, allow site storage or free browser space, then choose Try Save for offline again.', 'error');
+    } finally {
+      setSaveButtonBusy(button, false, savedOnDevice ? 'Save changes offline' : 'Try Save for offline again');
     }
   }
 
@@ -257,7 +303,7 @@
       local.noteText = server.noteText || ''; local.revision = Number(server.revision) || 0;
       local.dirty = false; local.conflict = null; await putItem(local);
       document.getElementById('dd-study-note').value = local.noteText;
-      document.getElementById('dd-study-sync').textContent = 'Available offline · Newer version restored';
+      setSaveFeedback('Saved in this browser on this device · Newer online version restored.', 'success');
       keepServer.remove(); keepLocal.remove();
     });
     const keepLocal = document.createElement('button');
@@ -275,7 +321,7 @@
       button.dataset.confirmDelete = 'true';
       button.textContent = 'Yes, delete this note';
       button.setAttribute('aria-label', 'Confirm deletion of this private note and offline copy');
-      document.getElementById('dd-study-sync').textContent = 'Delete this private note and its offline copy? Choose Back to keep it.';
+      setSaveFeedback('Delete this private note and its offline copy? Choose Back to keep it.', 'warning');
       return;
     }
     deleteNotes(stored);
@@ -291,7 +337,7 @@
       refreshToolStatus(stored.type, stored.id, false);
       dialog().close();
     } catch {
-      document.getElementById('dd-study-sync').textContent = 'Could not delete because a newer version exists.';
+      setSaveFeedback('Could not delete because a newer version exists. Reopen the note and choose which version to keep.', 'error');
     }
   }
 
@@ -371,7 +417,7 @@
       if (previousUserId) purgeOwner(previousUserId).catch(() => {});
     });
     if ('serviceWorker' in navigator && location.protocol === 'https:') {
-      navigator.serviceWorker.register('/service-worker.js?v=syllabus-reveal-p0-20260826-2').catch(() => {});
+      navigator.serviceWorker.register('/service-worker.js?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1').catch(() => {});
     }
   }
 

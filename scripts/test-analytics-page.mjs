@@ -25,6 +25,12 @@ assert.match(html, /analytics:\s*'verdict'/,
 assert.match(html, /function openAnalytics\(\)[\s\S]*showPage\('analytics', document\.getElementById\('spa-progress'\)\)/,
   'Opening Analytics must use SPA routing.');
 assert.match(html, /Score trend/);
+assert.match(html, /exact Philippine date and time/,
+  'Score Trend must explain that exact date and time details are visible.');
+assert.match(html, /timeZone: 'Asia\/Manila'/,
+  'Score Trend timestamps must use the product Philippine-time convention.');
+assert.match(html, /Philippine Time/,
+  'Selected score details must label their Philippine-time convention.');
 assert.match(html, /Latest \$\{points\.length\} graded attempts\. Use left and right arrow keys/,
   'Score trend points must support keyboard inspection.');
 assert.match(html, /analyticsTrendPointLabel\(point\)[\s\S]*subject[\s\S]*feature[\s\S]*score \$\{point\.score\.toFixed\(1\)\} out of 5[\s\S]*change\.label/,

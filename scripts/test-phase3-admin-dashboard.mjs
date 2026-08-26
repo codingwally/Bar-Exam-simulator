@@ -81,7 +81,7 @@ assert.match(js, /Contact Support\. We respond within 24 hours\./);
 assert.match(js, /Nothing was changed/);
 assert.match(js, /No verified events/);
 assert.match(js, /Administrator request failed/);
-assert.match(js, /const overviewReady = await navigateSection\(initialSection, 'replace'\)/);
+assert.match(js, /await navigateInitialSection\(\)/);
 assert.match(js, /Overview is temporarily unavailable\. Payments remains available\./);
 assert.match(js, /const report = reportSections\.has\(section\) \? await loadReport\(false, context\)/);
 assert.match(js, /Aggregate export|aggregate-report\.csv/i);

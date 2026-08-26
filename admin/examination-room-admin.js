@@ -1521,7 +1521,16 @@
   }
   function csvRows(payload) {
     if (Array.isArray(payload)) return payload;
-    const source = object(payload); const key = ['answers', 'grades', 'questions', 'students', 'exams', 'snapshots', 'audit', 'staff', 'professorRequests', 'keys'].find((name) => Array.isArray(source[name]));
+    const source = object(payload);
+    if (Array.isArray(source.snapshots) && Array.isArray(source.audit)) {
+      return [
+        ...source.snapshots.map((row) => ({ ...object(row), exportRecordType: 'recovery_snapshot' })),
+        ...source.audit.map((row) => ({ ...object(row), exportRecordType: 'audit_event' })),
+      ];
+    }
+    const rowKeys = ['answers', 'grades', 'questions', 'students', 'exams', 'snapshots', 'audit', 'staff', 'professorRequests', 'keys'];
+    const key = rowKeys.find((name) => Array.isArray(source[name]) && source[name].length)
+      || rowKeys.find((name) => Array.isArray(source[name]));
     return key ? source[key] : [source];
   }
   function csvText(payload) {

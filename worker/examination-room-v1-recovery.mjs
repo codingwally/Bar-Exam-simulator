@@ -173,6 +173,7 @@ function objectTooLargeError(metadata, actualBytes, maximumBytes, stage) {
 }
 
 function runtimeFrom(dependencies = {}) {
+  const fetchImplementation = dependencies.fetch || globalThis.fetch;
   const runtime = {
     crypto: dependencies.crypto || globalThis.crypto,
     TextEncoder: dependencies.TextEncoder || globalThis.TextEncoder,
@@ -183,7 +184,9 @@ function runtimeFrom(dependencies = {}) {
     Response: dependencies.Response || globalThis.Response,
     btoa: dependencies.btoa || globalThis.btoa,
     atob: dependencies.atob || globalThis.atob,
-    fetch: dependencies.fetch || globalThis.fetch,
+    fetch: typeof fetchImplementation === 'function'
+      ? (...args) => Reflect.apply(fetchImplementation, globalThis, args)
+      : fetchImplementation,
   };
   if (!runtime.crypto?.subtle || typeof runtime.crypto.getRandomValues !== 'function') {
     throw recoveryError(RECOVERY_ERROR_CODES.CRYPTO_UNAVAILABLE);

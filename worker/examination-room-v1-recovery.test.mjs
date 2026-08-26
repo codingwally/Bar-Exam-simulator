@@ -254,6 +254,29 @@ test('private Supabase Storage fallback materializes, deduplicates, retrieves, a
   );
 });
 
+test('Supabase Storage calls preserve the Cloudflare global fetch receiver', async (t) => {
+  let calls = 0;
+  async function receiverSensitiveFetch(input) {
+    assert.equal(this, globalThis);
+    calls += 1;
+    const url = new URL(String(input));
+    if (url.pathname === '/storage/v1/bucket/examination-room-recovery') {
+      return Response.json({ id: 'examination-room-recovery', public: false });
+    }
+    return Response.json({ message: 'not found' }, { status: 400 });
+  }
+  t.mock.method(globalThis, 'fetch', receiverSensitiveFetch);
+  const result = await recovery().preflight({
+    EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1: MASTER_KEY,
+    EXAMINATION_ROOM_RECOVERY_MODE: 'supabase_storage',
+    SUPABASE_URL: 'https://project.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'service-role-test-key',
+  });
+  assert.equal(result.storageProvider, 'supabase_storage');
+  assert.equal(result.storageStatus, 'available');
+  assert.equal(calls, 2);
+});
+
 test('preflight distinguishes an unavailable R2 bucket from missing configuration', async () => {
   const unavailableBucket = new FakeR2();
   unavailableBucket.head = async () => { throw new Error('simulated R2 outage'); };

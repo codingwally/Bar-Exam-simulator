@@ -545,8 +545,8 @@ for (const asset of [
     `${asset} must use the public reliability lazy-load cache-busting release`,
   );
 }
-assert.match(studyWorkspace, /service-worker\.js\?v=syllabus-reveal-p0-20260826-2/);
 assert.match(serviceWorker, /duediligence-shell-20260827-public-reliability-2/);
+assert.match(studyWorkspace, /service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1/);
 
 const userInstructionsStart = runbook.indexOf('## Copy-ready user and Support instructions');
 const technicalContractStart = runbook.indexOf('## Technical contract');

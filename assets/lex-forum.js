@@ -2156,14 +2156,29 @@
 
   function profilePanel(profile) {
     const panel = document.createElement('section');
-    panel.className = 'quorum-panel';
-    panel.append(
+    panel.className = 'quorum-panel quorum-profile-panel';
+    const hero = document.createElement('div');
+    hero.className = 'quorum-profile-hero';
+    const portrait = document.createElement(profile.avatarUrl ? 'img' : 'span');
+    portrait.className = 'quorum-profile-portrait';
+    if (profile.avatarUrl) {
+      portrait.src = profile.avatarUrl;
+      portrait.alt = `${profile.displayName || 'Member'} profile photo`;
+    } else {
+      portrait.textContent = initials(profile.displayName);
+      portrait.setAttribute('aria-label', 'No profile photo selected');
+    }
+    const identity = document.createElement('div');
+    identity.className = 'quorum-profile-identity';
+    identity.append(
       textElement('span', 'lex-kicker', profile.verifiedAcademicIdentity ? 'Verified Academic Identity' : 'Community member'),
       textElement('h3', '', profile.displayName || 'Due Diligence Member'),
       textElement('p', 'quorum-panel-copy', [profile.school, profile.yearLevel].filter(Boolean).join(' · ') || 'Academic details are private.'),
     );
+    hero.append(portrait, identity);
+    panel.append(hero);
     const counts = document.createElement('div');
-    counts.className = 'quorum-chip-row';
+    counts.className = 'quorum-chip-row quorum-profile-counts';
     counts.append(
       chip(`${Number(profile.counts?.entries || 0)} public posts`),
       chip(`${Number(profile.counts?.circles || 0)} Study Circles`),
@@ -2174,23 +2189,16 @@
     if (profile.viewerOwns) {
       const photoControl = document.createElement('div');
       photoControl.className = 'quorum-profile-photo-control';
-      const preview = document.createElement(profile.avatarUrl ? 'img' : 'span');
-      preview.className = 'quorum-profile-photo-preview';
-      if (profile.avatarUrl) {
-        preview.src = profile.avatarUrl;
-        preview.alt = 'Your current community profile photo';
-      } else {
-        preview.textContent = initials(profile.displayName);
-        preview.setAttribute('aria-label', 'No profile photo selected');
-      }
       const photoInput = document.createElement('input');
       photoInput.type = 'file';
       photoInput.accept = 'image/jpeg,image/png,image/webp';
       photoInput.hidden = true;
       const choosePhoto = button('Update profile photo', 'lex-button', () => photoInput.click());
-      const photoHelp = textElement('small', '', 'JPEG, PNG, or WebP up to 20 MB. Due Diligence removes embedded metadata and creates an optimized private version.');
+      const photoHeading = textElement('strong', '', 'Profile photograph');
+      const photoHelp = textElement('small', '', 'JPEG, PNG, or WebP up to 20 MB. The image is optimized and embedded metadata is removed before upload.');
       const photoCopy = document.createElement('div');
-      photoCopy.append(choosePhoto, photoHelp);
+      photoCopy.className = 'quorum-profile-photo-copy';
+      photoCopy.append(photoHeading, photoHelp, choosePhoto);
       photoInput.addEventListener('change', async () => {
         const file = photoInput.files?.[0];
         if (!file) return;
@@ -2207,7 +2215,7 @@
           handleError(error, null);
         }
       });
-      photoControl.append(preview, photoCopy, photoInput);
+      photoControl.append(photoCopy, photoInput);
       panel.append(photoControl);
       const settings = profile.settings || {
         profilePublic: true,
@@ -2218,7 +2226,14 @@
       const showSchool = checkbox('Show school', settings.showSchool);
       const showYear = checkbox('Show year level', settings.showYear);
       const form = document.createElement('div');
-      form.className = 'quorum-profile-grid';
+      form.className = 'quorum-profile-grid quorum-profile-privacy';
+      const settingsHead = document.createElement('div');
+      settingsHead.className = 'quorum-profile-section-head';
+      settingsHead.append(
+        textElement('strong', '', 'Profile visibility'),
+        textElement('small', '', 'Choose what other members can see on Home.'),
+      );
+      form.append(settingsHead);
       form.append(profilePublic.label, showSchool.label, showYear.label);
       const save = button('Save privacy settings', 'lex-button lex-button-primary', async () => {
         save.disabled = true;

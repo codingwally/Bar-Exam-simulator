@@ -1,0 +1,246 @@
+{
+  "ok": true,
+  "counts": {
+    "exams": 1,
+    "awaitingActivation": 0,
+    "open": 0,
+    "students": 2,
+    "submissions": 2,
+    "recoveryAttention": 0,
+    "grading": 0
+  },
+  "exams": [
+    {
+      "id": "8f275845-a250-4a13-b0db-d40d57a2b826",
+      "institutionId": "64f82d39-274e-4ce4-b92a-8430ae3f7b10",
+      "versionId": "47aa9b2a-9aa7-43e8-a71a-30e91ef8f101",
+      "ownerUserId": "20be2ffd-b9af-455d-9f4d-a696c9030a11",
+      "status": "results_released",
+      "title": "Constitutional Law — Midterm Examination",
+      "subject": "Constitutional Law",
+      "jurisdiction": "Philippines",
+      "yearLevel": "Second year",
+      "instructions": "Answer each question completely. Identify the controlling doctrine, apply it to the facts, and state a clear conclusion.",
+      "durationMinutes": 120,
+      "startsAt": "2026-08-26T01:00:00.000Z",
+      "lateSubmissions": "not_allowed",
+      "navigation": "free",
+      "gradingIdentity": "real_names",
+      "admissionMode": "key_only",
+      "allowedEmails": [],
+      "integrityTier": "standard",
+      "cameraRequired": false,
+      "microphoneRequired": false,
+      "sourceFileName": "Constitutional_Law_Midterm.docx",
+      "sourceFileSize": 191488,
+      "privacyNoticeVersion": "exam-room-privacy-v1-2026-08-26",
+      "privacyController": "The participating law school, with Due Diligence acting as its examination service provider",
+      "retentionSummary": "Exam records follow the school’s published academic-record policy. Optional recordings follow the shorter review and appeal period shown before the exam.",
+      "updatedAt": "2026-08-26T18:13:44.305Z",
+      "publishedAt": "2026-08-26T18:13:44.305Z",
+      "courseCode": "LAW-202",
+      "rosterCount": 2,
+      "questionCount": 4,
+      "activation": {
+        "id": "76f0dec8-13da-475f-bfcd-430457fe91f8",
+        "examId": "8f275845-a250-4a13-b0db-d40d57a2b826",
+        "status": "open",
+        "keyHint": "••••-••••-826K",
+        "issuedAt": "2026-08-26T18:14:20.455Z",
+        "expiresAt": "2026-08-27T18:14:20.455Z",
+        "issuedBy": "Founder Admin",
+        "openedAt": "2026-08-26T18:18:24.213Z"
+      },
+      "professorName": "Prof. Elena M. Villanueva",
+      "professorEmail": "elena.villanueva@law.example.edu.ph"
+    }
+  ],
+  "examTotal": 1,
+  "examLimit": 100,
+  "examOffset": 0,
+  "examHasMore": false,
+  "examNextOffset": null,
+  "professors": [
+    {
+      "userId": "20be2ffd-b9af-455d-9f4d-a696c9030a11",
+      "institutionId": "64f82d39-274e-4ce4-b92a-8430ae3f7b10",
+      "displayName": "Prof. Elena M. Villanueva",
+      "email": "elena.villanueva@law.example.edu.ph",
+      "authorized": true
+    }
+  ],
+  "snapshots": [
+    {
+      "type": "submission",
+      "at": "2026-08-26T19:57:51.438Z",
+      "submission": {
+        "id": "88bffd10-945c-4cca-bab3-dfb364252ca1",
+        "sessionId": "62fd24ae-2ac5-4a4d-9a8f-eef4e5a760b9",
+        "examVersionId": "47aa9b2a-9aa7-43e8-a71a-30e91ef8f101",
+        "submittedAt": "2026-08-26T19:57:51.438Z",
+        "answeredQuestionIds": [
+          "q-1",
+          "q-2",
+          "q-3",
+          "q-4"
+        ],
+        "receiptCode": "DD-RCPT-MTAIN4CU-CH1LG",
+        "manifestHash": "96c9f1a653584deda7b5c6a55a03e3cd",
+        "requestId": "submission:2c47e343-189f-4b69-970f-afe6f38822bb"
+      },
+      "verified": false
+    },
+    {
+      "type": "submission",
+      "at": "2026-08-26T18:22:32.943Z",
+      "submission": {
+        "id": "d32a344d-c1a7-4dc3-b3fb-8d1212ec8198",
+        "sessionId": "f63cc881-d965-43df-b32e-5fc603b26460",
+        "examVersionId": "47aa9b2a-9aa7-43e8-a71a-30e91ef8f101",
+        "submittedAt": "2026-08-26T18:22:32.943Z",
+        "answeredQuestionIds": [
+          "q-1",
+          "q-2",
+          "q-3",
+          "q-4"
+        ],
+        "receiptCode": "DD-RCPT-MTAF8JXR-80FU1",
+        "manifestHash": "0385fcc3c1bb4e739d6af0c491d78f57",
+        "requestId": "submission:bf29f4b8-7a59-4fa0-8a13-195e254d2a9d"
+      },
+      "verified": false
+    },
+    {
+      "type": "admin_activation",
+      "at": "2026-08-26T18:14:20.455Z",
+      "examVersionId": "47aa9b2a-9aa7-43e8-a71a-30e91ef8f101",
+      "verified": false
+    },
+    {
+      "type": "published_version",
+      "at": "2026-08-26T18:13:44.305Z",
+      "versionId": "47aa9b2a-9aa7-43e8-a71a-30e91ef8f101",
+      "exam": {
+        "id": "8f275845-a250-4a13-b0db-d40d57a2b826",
+        "institutionId": "64f82d39-274e-4ce4-b92a-8430ae3f7b10",
+        "versionId": "47aa9b2a-9aa7-43e8-a71a-30e91ef8f101",
+        "ownerUserId": "20be2ffd-b9af-455d-9f4d-a696c9030a11",
+        "status": "awaiting_activation",
+        "title": "Constitutional Law — Midterm Examination",
+        "subject": "Constitutional Law",
+        "jurisdiction": "Philippines",
+        "yearLevel": "Second year",
+        "instructions": "Answer each question completely. Identify the controlling doctrine, apply it to the facts, and state a clear conclusion.",
+        "durationMinutes": 120,
+        "startsAt": "2026-08-26T01:00:00.000Z",
+        "lateSubmissions": "not_allowed",
+        "navigation": "free",
+        "gradingIdentity": "real_names",
+        "admissionMode": "key_only",
+        "allowedEmails": [],
+        "integrityTier": "standard",
+        "cameraRequired": false,
+        "microphoneRequired": false,
+        "sourceFileName": "Constitutional_Law_Midterm.docx",
+        "sourceFileSize": 191488,
+        "privacyNoticeVersion": "exam-room-privacy-v1-2026-08-26",
+        "privacyController": "The participating law school, with Due Diligence acting as its examination service provider",
+        "retentionSummary": "Exam records follow the school’s published academic-record policy. Optional recordings follow the shorter review and appeal period shown before the exam.",
+        "questions": [
+          {
+            "id": "q-1",
+            "number": 1,
+            "type": "essay",
+            "points": 30,
+            "prompt": "Discuss the doctrine of separation of powers under the 1987 Philippine Constitution. In your answer, explain its foundations, identify at least three (3) mechanisms that maintain the balance among the branches of government, and analyze a relevant Supreme Court decision that illustrates the doctrine in practice.",
+            "wordGuideline": "600–800 words",
+            "required": true,
+            "correctOption": 0
+          },
+          {
+            "id": "q-2",
+            "number": 2,
+            "type": "essay",
+            "points": 25,
+            "prompt": "Critically analyze the extent of judicial review in the Philippines. Discuss the standards used by the Supreme Court in reviewing acts of Congress and the Executive, and evaluate the tension between judicial review and democratic accountability.",
+            "wordGuideline": "500–700 words",
+            "required": true,
+            "correctOption": 0
+          },
+          {
+            "id": "q-3",
+            "number": 3,
+            "type": "short_answer",
+            "points": 20,
+            "prompt": "State the requisites of judicial inquiry and briefly explain each.",
+            "wordGuideline": "250–350 words",
+            "required": true,
+            "correctOption": 0
+          },
+          {
+            "id": "q-4",
+            "number": 4,
+            "type": "multiple_choice",
+            "points": 25,
+            "prompt": "Which constitutional body has the exclusive authority to promulgate rules concerning pleading, practice, and procedure in all courts?",
+            "wordGuideline": "",
+            "required": true,
+            "options": [
+              "Congress",
+              "Supreme Court",
+              "Judicial and Bar Council",
+              "Department of Justice"
+            ],
+            "correctOption": 1
+          }
+        ],
+        "roster": [],
+        "updatedAt": "2026-08-26T18:13:44.305Z",
+        "publishedAt": "2026-08-26T18:13:44.305Z",
+        "courseCode": "LAW-202"
+      },
+      "verified": false
+    }
+  ],
+  "generatedAt": "2026-08-26T19:59:34.779Z",
+  "institution": {
+    "id": "64f82d39-274e-4ce4-b92a-8430ae3f7b10",
+    "code": "counsels-canvas-law",
+    "name": "Counsel’s Canvas College of Law"
+  },
+  "staff": [
+    {
+      "membershipId": "0c36a4a5-e2c7-4d0e-a346-967673080986",
+      "userId": "d7b0f7fd-08ec-40dd-aac7-c3ccfafc1311",
+      "staffRole": "admin",
+      "displayName": "Founder Administrator",
+      "email": "founder@duediligence.ph",
+      "status": "active",
+      "isCurrentAdministrator": true,
+      "grantedAt": "2026-08-25T17:58:33.378Z"
+    },
+    {
+      "membershipId": "1f43825c-0f0c-4538-9527-67ef44e313a3",
+      "userId": "20be2ffd-b9af-455d-9f4d-a696c9030a11",
+      "staffRole": "professor",
+      "displayName": "Prof. Elena M. Villanueva",
+      "email": "elena.villanueva@law.example.edu.ph",
+      "status": "active",
+      "isCurrentAdministrator": false,
+      "grantedAt": "2026-08-25T18:58:33.381Z"
+    }
+  ],
+  "professorRequests": [
+    {
+      "requestId": "81f1a867-8e0e-481a-9204-2716354fbb38",
+      "userId": "f5cbdaf4-95ab-4f0c-b82d-23e7d24e1f83",
+      "email": "rafael.mendoza@law.example.edu.ph",
+      "displayName": "Atty. Rafael Mendoza",
+      "schoolId": "counsels-canvas-college-of-law",
+      "schoolName": "Counsel’s Canvas College of Law",
+      "status": "pending",
+      "requestedAt": "2026-08-26T15:58:33.381Z"
+    }
+  ],
+  "audit": []
+}

@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="theme-color" content="#06182e">
+  <title>Offline Grading — Due Diligence Examination Room</title>
+  <link rel="stylesheet" href="offline-grading.css?v=greenfield-v1-20260826-1">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to offline grading</a>
+
+  <header class="offline-header">
+    <a class="brand" href="./" aria-label="Return to the Professor Examination Room">
+      <span class="brand-mark" aria-hidden="true">DD</span>
+      <span><strong>Due Diligence</strong><small>Examination Room</small></span>
+    </a>
+    <div class="connection-state" id="connection-state" role="status" aria-live="polite">
+      <span aria-hidden="true"></span>
+      <strong id="connection-label">Offline-ready</strong>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section class="welcome-view" id="welcome-view" aria-labelledby="welcome-title">
+      <div class="welcome-copy">
+        <p class="eyebrow">Network-independent grading</p>
+        <h1 id="welcome-title">Grade securely, even without a connection.</h1>
+        <p>Open the encrypted grading copy downloaded from the Professor Examination Room. Real student names are shown by default; pseudonyms are optional.</p>
+        <ol class="quick-steps" aria-label="Offline grading steps">
+          <li><span>1</span><strong>Choose one encrypted <code>.ddgrade.json</code> file. Large classes use numbered files.</strong></li>
+          <li><span>2</span><strong>Enter the passphrase created during download.</strong></li>
+          <li><span>3</span><strong>Grade and export every numbered file, then select all graded files online.</strong></li>
+        </ol>
+        <p class="local-note"><strong>No server connection is required.</strong> Grade changes autosave on this device until you export the graded package.</p>
+      </div>
+
+      <form class="unlock-card" id="unlock-form" novalidate>
+        <p class="eyebrow">Open grading package</p>
+        <h2>Choose your offline copy</h2>
+        <label class="file-drop" for="package-file">
+          <span class="file-badge" aria-hidden="true">FILE</span>
+          <span><strong id="file-label">Select .ddgrade.json</strong><small>Maximum file size: 20 MB</small></span>
+          <input id="package-file" type="file" accept=".json,.ddgrade.json,application/json" required>
+        </label>
+        <label class="field" for="package-passphrase">
+          <span>Passphrase</span>
+          <input id="package-passphrase" type="password" minlength="12" autocomplete="current-password" required>
+          <small>Use the passphrase created when the Professor downloaded this copy.</small>
+        </label>
+        <div class="form-error" id="unlock-error" role="alert" hidden></div>
+        <button class="button primary wide" id="unlock-button" type="submit">Unlock grading workspace</button>
+      </form>
+    </section>
+
+    <section class="workspace" id="workspace" hidden aria-labelledby="workspace-title">
+      <header class="workspace-command">
+        <div>
+          <p class="eyebrow">Offline grading workspace</p>
+          <h1 id="workspace-title">Examination</h1>
+          <p id="workspace-meta"></p>
+        </div>
+        <div class="command-actions">
+          <span class="save-state" id="save-state" role="status" aria-live="polite">Saved on this device</span>
+          <button class="button secondary" id="choose-another" type="button">Choose another file</button>
+          <button class="button primary" id="export-package" type="button">Export graded copy</button>
+        </div>
+      </header>
+
+      <section class="offline-banner" aria-label="Offline grading information">
+        <div><strong>Everything here works without the internet.</strong><span>Export a graded copy before returning online. Importing happens in the Professor Grade page.</span></div>
+        <button class="text-button" id="show-instructions" type="button">Show steps</button>
+      </section>
+
+      <div class="workspace-grid">
+        <aside class="student-panel" aria-labelledby="student-list-title">
+          <header>
+            <div><p class="eyebrow">Submissions</p><h2 id="student-list-title">Students</h2></div>
+            <label class="identity-toggle"><input id="pseudonym-toggle" type="checkbox"><span>Use pseudonyms</span></label>
+          </header>
+          <label class="search-field" for="student-search"><span class="sr-only">Search students</span><input id="student-search" type="search" placeholder="Search name or number"></label>
+          <div class="student-list" id="student-list"></div>
+        </aside>
+
+        <main class="grading-main">
+          <header class="student-heading">
+            <div><p class="eyebrow">Individual response</p><h2 id="student-name">Select a student</h2><p id="student-detail"></p></div>
+            <div class="student-progress"><span>Questions graded</span><strong id="student-progress">0 / 0</strong></div>
+          </header>
+          <div class="grading-error" id="workspace-error" role="alert" hidden></div>
+          <div id="question-grades" class="question-grades"></div>
+        </main>
+
+        <aside class="summary-panel" aria-labelledby="summary-title">
+          <h2 id="summary-title">Grading progress</h2>
+          <dl>
+            <div><dt>Students</dt><dd id="summary-students">0</dd></div>
+            <div><dt>Questions graded</dt><dd id="summary-complete">0</dd></div>
+            <div><dt>Remaining</dt><dd id="summary-remaining">0</dd></div>
+            <div><dt>Identity view</dt><dd id="summary-identity">Real names</dd></div>
+          </dl>
+          <div class="summary-help">
+            <strong>When you finish</strong>
+            <ol>
+              <li>Export the graded copy for this numbered package.</li>
+              <li>Return to the online Professor Grade page.</li>
+              <li>Choose <b>Import grades</b> and select all numbered graded files together.</li>
+            </ol>
+          </div>
+          <button class="button secondary wide" id="clear-local-draft" type="button">Clear local grade draft</button>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="instructions-dialog" aria-labelledby="instructions-title">
+    <div class="dialog-shell">
+      <p class="eyebrow">Three simple steps</p>
+      <h2 id="instructions-title">Return grades to the Examination Room</h2>
+      <ol>
+        <li><strong>Export here.</strong><span>Choose Export graded copy for every numbered package you received.</span></li>
+        <li><strong>Go back online.</strong><span>Open the same examination in the Professor Grade page.</span></li>
+        <li><strong>Import there.</strong><span>Choose Import grades, select all numbered graded files together, and enter the same passphrase once.</span></li>
+      </ol>
+      <button class="button primary wide" id="close-instructions" type="button">Got it</button>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <noscript>This offline grading workspace requires JavaScript to decrypt and edit the grading package.</noscript>
+  <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
+  <script src="offline-grading.js?v=greenfield-v1-20260826-3"></script>
+</body>
+</html>

@@ -7,6 +7,7 @@ const ORIGIN = 'https://duediligence.ph';
 const USER_ID = '22222222-2222-4222-8222-222222222222';
 const INSTITUTION_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_INSTITUTION_ID = '77777777-7777-4777-8777-777777777777';
+const COMMUNITY_INSTITUTION_ID = 'ddc00000-0000-4000-8000-000000000001';
 const ROOM_KEY = createRoomKey('ABCDEFGH');
 
 function env() {
@@ -87,7 +88,49 @@ test('registered professor session route verifies the bearer token and greenfiel
   assert.equal(persistenceCall.body.p_institution_id, INSTITUTION_ID);
 });
 
-test('Professor authorization fails closed when staff context omits the active membership flag', async () => {
+test('creator authorization preserves the database-preferred workspace when Community and a school are both active', async () => {
+  const calls = [];
+  const response = await withMockFetch(async (url, options = {}) => {
+    calls.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
+    if (String(url).endsWith('/auth/v1/user')) {
+      return jsonResponse({ id: USER_ID, email: 'creator@example.edu.ph', user_metadata: {}, app_metadata: {} });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_staff_context')) {
+      return jsonResponse({
+        authorized: true,
+        institutionId: OTHER_INSTITUTION_ID,
+        creatorWorkspaces: [
+          {
+            institutionId: INSTITUTION_ID,
+            institutionCode: 'due-diligence-community',
+            communityDefault: true,
+            active: true,
+          },
+          {
+            institutionId: OTHER_INSTITUTION_ID,
+            institutionCode: 'sample-law-school',
+            active: true,
+          },
+        ],
+        memberships: [{ institutionId: OTHER_INSTITUTION_ID, staffRole: 'professor', active: true }],
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
+      return jsonResponse({ ok: true, professor: { authorized: true }, exam: null });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  }, () => worker.fetch(
+    request('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
+    env(),
+    {},
+  ));
+
+  assert.equal(response.status, 200);
+  const persistenceCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_api'));
+  assert.equal(persistenceCall.body.p_institution_id, OTHER_INSTITUTION_ID);
+});
+
+test('a verified session reaches Professor persistence even when creator context omits active workspace flags', async () => {
   const calls = [];
   const response = await withMockFetch(async (url, options = {}) => {
     calls.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
@@ -106,6 +149,9 @@ test('Professor authorization fails closed when staff context omits the active m
     if (String(url).endsWith('/rest/v1/rpc/admin_authorization_context')) {
       return jsonResponse({ authorized: false, role: null, capabilities: [] });
     }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
+      return jsonResponse({ ok: true, professor: { authorized: true }, exam: null });
+    }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
     request('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
@@ -113,9 +159,10 @@ test('Professor authorization fails closed when staff context omits the active m
     {},
   ));
   const result = await response.json();
-  assert.equal(response.status, 403);
-  assert.equal(result.error.code, 'EXAM_ROOM_V1_PROFESSOR_FORBIDDEN');
-  assert.equal(calls.some((entry) => entry.url.endsWith('/examination_room_v1_api')), false);
+  assert.equal(response.status, 200);
+  assert.equal(result.ok, true);
+  const persistenceCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_api'));
+  assert.equal(persistenceCall.body.p_institution_id, COMMUNITY_INSTITUTION_ID);
 });
 
 test('Professor signup role status reaches the service-only approval bridge', async () => {
@@ -188,7 +235,7 @@ test('global Role admin bootstrap reaches the allowlisted staff-management RPC',
   assert.equal(managementCall.body.p_payload.profileSchoolId, 'sample-law-school');
 });
 
-test('institution administrator authorization fails closed when staff context omits the active flag', async () => {
+test('platform owner command center does not require a pre-existing institution-admin membership', async () => {
   const calls = [];
   const response = await withMockFetch(async (url, options = {}) => {
     calls.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
@@ -205,6 +252,9 @@ test('institution administrator authorization fails closed when staff context om
     if (String(url).endsWith('/rest/v1/rpc/admin_authorization_context')) {
       return jsonResponse({ authorized: true, role: 'founder_admin', capabilities: ['role_admin'] });
     }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_query')) {
+      return jsonResponse({ ok: true, ownerOnly: true, institutionId: INSTITUTION_ID, exams: [] });
+    }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
     request('/examination-room/v1/admin/query', { operation: 'overview', payload: { institutionId: INSTITUTION_ID } }),
@@ -212,12 +262,13 @@ test('institution administrator authorization fails closed when staff context om
     {},
   ));
   const result = await response.json();
-  assert.equal(response.status, 403);
-  assert.equal(result.error.code, 'EXAM_ROOM_V1_INSTITUTION_ADMIN_REQUIRED');
+  assert.equal(response.status, 200);
+  assert.equal(result.ownerOnly, true);
+  assert.equal(calls.some((entry) => entry.url.endsWith('/examination_room_v1_owner_query')), true);
   assert.equal(calls.some((entry) => entry.url.endsWith('/examination_room_v1_api')), false);
 });
 
-test('institution administrator cannot target a school where the account is only an active Professor', async () => {
+test('platform owner can inspect any selected institution without relying on staff-membership scope', async () => {
   const calls = [];
   const response = await withMockFetch(async (url, options = {}) => {
     calls.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
@@ -237,6 +288,10 @@ test('institution administrator cannot target a school where the account is only
     if (String(url).endsWith('/rest/v1/rpc/admin_authorization_context')) {
       return jsonResponse({ authorized: true, role: 'founder_admin', capabilities: ['role_admin'] });
     }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_query')) {
+      assert.equal(JSON.parse(options.body).p_institution_id, OTHER_INSTITUTION_ID);
+      return jsonResponse({ ok: true, ownerOnly: true, institutionId: OTHER_INSTITUTION_ID, exams: [] });
+    }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
     request('/examination-room/v1/admin/query', {
@@ -246,9 +301,31 @@ test('institution administrator cannot target a school where the account is only
     {},
   ));
   const result = await response.json();
-  assert.equal(response.status, 403);
-  assert.equal(result.error.code, 'EXAM_ROOM_V1_INSTITUTION_FORBIDDEN');
+  assert.equal(response.status, 200);
+  assert.equal(result.institutionId, OTHER_INSTITUTION_ID);
   assert.equal(calls.some((entry) => entry.url.endsWith('/examination_room_v1_api')), false);
+});
+
+test('ordinary role_admin capability is denied from the owner command center', async () => {
+  const calls = [];
+  const response = await withMockFetch(async (url, options = {}) => {
+    calls.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
+    if (String(url).endsWith('/auth/v1/user')) {
+      return jsonResponse({ id: USER_ID, email: 'worker-admin@example.edu.ph', user_metadata: {}, app_metadata: {} });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/admin_authorization_context')) {
+      return jsonResponse({ authorized: true, role: 'admin', capabilities: ['role_admin'] });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  }, () => worker.fetch(
+    request('/examination-room/v1/admin/query', { operation: 'access', payload: {} }),
+    env(),
+    {},
+  ));
+  const result = await response.json();
+  assert.equal(response.status, 403);
+  assert.equal(result.error.code, 'EXAM_ROOM_V1_PLATFORM_OWNER_REQUIRED');
+  assert.equal(calls.some((entry) => entry.url.endsWith('/examination_room_v1_owner_query')), false);
 });
 
 test('whole-feature kill switch fails closed before any external request', async () => {

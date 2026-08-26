@@ -8,6 +8,11 @@ on:
         required: true
         default: false
         type: boolean
+      database_release_preapplied:
+        description: "The reviewed Examination Room database release was manually applied and live-probed"
+        required: true
+        default: false
+        type: boolean
       approval_reference:
         description: "Approval/change reference recorded in the release log"
         required: true
@@ -17,7 +22,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: "production-pages"
+  group: "examination-room-production-cutover"
   cancel-in-progress: false
 
 jobs:
@@ -63,6 +68,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
       - name: Verify authentication, maintenance, admission, and public-shell contracts
         run: |
           node --check assets/phase2-config.js
@@ -70,6 +78,10 @@ jobs:
           node --check assets/phase4-experience.js
           node --check assets/lex-forum.js
           node --test examination-room/*.test.cjs
+          node --test admin/examination-room-admin.test.cjs
+          node --test worker/*.test.mjs
+          node scripts/test-examination-room-database.mjs
+          node scripts/test-examination-room-commercial-stress.mjs
           node scripts/test-maintenance-lock.mjs
           node scripts/test-private-beta-admission.mjs
           node scripts/test-private-beta-frontend.mjs
@@ -114,6 +126,65 @@ jobs:
           node scripts/test-feature-decommission-boundary.mjs
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
+
+      - name: Apply and probe only the ordered Examination Room migrations
+        env:
+          EXAMINATION_ROOM_DATABASE_URL: ${{ secrets.EXAMINATION_ROOM_PRODUCTION_DATABASE_URL }}
+          DATABASE_RELEASE_PREAPPLIED: ${{ inputs.database_release_preapplied }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_bundle="$RUNNER_TEMP/examination-room-release.sql"
+          trap 'rm -f -- "$release_bundle"' EXIT
+          node scripts/build-examination-room-release-bundle.mjs --output "$release_bundle"
+          if [[ -n "$EXAMINATION_ROOM_DATABASE_URL" ]]; then
+            if ! command -v psql >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install --yes postgresql-client
+            fi
+            psql --version
+            psql "$EXAMINATION_ROOM_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "$release_bundle"
+          elif [[ "$DATABASE_RELEASE_PREAPPLIED" == "true" ]]; then
+            echo "The production database URL is absent. The explicit database_release_preapplied confirmation attests that this exact reviewed bundle was manually applied and live-probed before cutover."
+          else
+            echo "EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing. Configure it, or manually apply and live-probe this exact reviewed bundle and rerun with database_release_preapplied=true." >&2
+            exit 1
+          fi
+
+      - name: Verify production Examination Room Worker secrets exist
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.114.0 secret list --format json \
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL', 'EXAMINATION_ROOM_KEY_PEPPER', 'EXAMINATION_ROOM_OWNER_DATA_KEY_V1', 'EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1', 'EXAMINATION_ROOM_ADMIN_EMAILS']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ') + '.'); process.exit(1); } console.log('Required production Examination Room Worker secrets are configured.'); });"
+
+      - name: Verify private Supabase Storage recovery configuration before cutover
+        working-directory: worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'EXAMINATION_ROOM_RECOVERY_MODE = "supabase_storage"' wrangler.toml
+          if grep -Eq '^[[:space:]]*\[\[r2_buckets\]\]|binding[[:space:]]*=[[:space:]]*"EXAMINATION_ROOM_BACKUPS"' wrangler.toml; then
+            echo "Production must use the reviewed private Supabase Storage recovery mode without an R2 binding." >&2
+            exit 1
+          fi
+          grep -F "'examination-room-recovery'" ../supabase/migrations/20260827030000_examination_room_supabase_storage_recovery.sql
+          grep -F 'public is false' ../scripts/build-examination-room-release-bundle.mjs
+          grep -F 'application/vnd.duediligence.examination-room-recovery+json' ../scripts/build-examination-room-release-bundle.mjs
+          echo "Private Supabase Storage recovery configuration matches the live-probed database release contract."
+
+      - name: Deploy Worker before exposing the new Pages client
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy
 
       - name: Build sanitized Pages artifact
         run: node scripts/build-pages-artifact.mjs

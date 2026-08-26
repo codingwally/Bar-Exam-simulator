@@ -997,7 +997,7 @@
     .exam-clock-copy,.exam-clock.no-digits .exam-clock-copy{text-align:left;}
   }
 </style>
-<link rel="stylesheet" href="assets/phase2.css?release=examination-room-doors-20260826-2">
+<link rel="stylesheet" href="assets/phase2.css?release=examination-room-doors-20260826-2&amp;profile=chambers-20260827-1">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
 <link rel="stylesheet" href="assets/quorum-first-shell.css?v=public-reliability-20260827-2">
@@ -1022,6 +1022,16 @@
       <span class="brand-meaning" id="brand-subtitle-meaning" role="tooltip">Philippine Bar Exam Simulator</span>
     </a>
     <div class="topbar-actions quorum-header-actions">
+      <div class="dd2-header-member-tools" id="dd2-header-member-tools" hidden>
+        <button class="dd2-header-role-button" id="dd2-header-role-button" type="button" data-dd2-view="account">
+          <span class="dd2-header-role-avatar" id="dd2-header-role-avatar" aria-hidden="true"><span>DD</span></span>
+          <span class="dd2-header-role-copy"><small>Role</small><strong id="dd2-header-role-label">Member</strong></span>
+        </button>
+        <button class="dd2-header-exam-button" id="dd2-header-exam-button" type="button" data-dd2-view="examination-room">
+          <img src="assets/icons/navigation/door-open.svg" width="18" height="18" alt="" aria-hidden="true">
+          <span class="dd2-header-exam-label">Examination Room</span>
+        </button>
+      </div>
       <button class="dd2-guest-badge" id="dd2-guest-badge" type="button"
         data-public-action="docket" aria-live="polite" aria-label="Open account access details" hidden></button>
       <div class="session-clock exam-only-action" id="session-clock" title="Total Session Time" hidden>00:00:00</div>
@@ -3966,8 +3976,8 @@ function analyticsTrendDate(value, short = false) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return 'Date unavailable';
   return short
-    ? date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
-    : date.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+    ? date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' })
+    : `${date.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' })} Philippine Time`;
 }
 
 function analyticsTrendPointLabel(point) {
@@ -4016,8 +4026,8 @@ function analyticsTrendMarkup(records) {
       </div>
       <div class="analytics-trend-dates" aria-hidden="true"><span>${escapeHtml(analyticsTrendDate(points[0].occurredAt, true))}</span><span>${points.length} graded attempt${points.length === 1 ? '' : 's'}</span><span>${escapeHtml(analyticsTrendDate(points.at(-1).occurredAt, true))}</span></div>
     </div>
-    <figcaption class="analytics-trend-detail" id="analytics-trend-detail" aria-live="polite">${analyticsTrendDetailMarkup(selected)}</figcaption>
-  </figure>`;
+     <figcaption class="analytics-trend-detail" id="analytics-trend-detail" aria-live="polite">${analyticsTrendDetailMarkup(selected)}</figcaption>
+   </figure>`;
 }
 
 function analyticsSubjectMarkup(records) {
@@ -4105,7 +4115,7 @@ function renderVerdictDashboard() {
     <p class="analytics-data-note" role="note"><strong>Data coverage.</strong> ${escapeHtml(dataNote)} This is a private study record, not an official Bar rating or predicted result.</p>
     <div class="analytics-grid">
       <section class="analytics-panel" aria-labelledby="analytics-trend-title">
-        <div class="analytics-panel-head"><div><h3 id="analytics-trend-title">Score trend</h3><p class="analytics-panel-note">Latest graded attempts, shown chronologically. Select a bar for the subject, date, timing, and score change.</p></div></div>
+        <div class="analytics-panel-head"><div><h3 id="analytics-trend-title">Score trend</h3><p class="analytics-panel-note">Latest graded attempts, shown chronologically. Select a bar for the subject, exact Philippine date and time, timing, and score change.</p></div></div>
         ${analyticsTrendMarkup(active)}
       </section>
       <section class="analytics-panel" aria-labelledby="analytics-subject-title">
@@ -4739,12 +4749,12 @@ window.addEventListener('storage', (event) => {
 <script src="assets/phase2-config.js?v=private-maintenance-20260820-2"></script>
 <script src="assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
-<script src="assets/phase2-experience.js?v=syllabus-reveal-p0-20260826-2"></script>
-<script src="assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2"></script>
+<script src="assets/phase2-experience.js?v=syllabus-reveal-p0-20260826-2-examination-room-3&amp;profile=chambers-20260827-1&amp;access=paid-expiry-20260827-1"></script>
+<script src="assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&amp;access=paid-expiry-20260827-1"></script>
 <script src="assets/auxiliary-writing-diagnostics.js?v=auxiliary-writing-diagnostics-20260827-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=public-reliability-20260827-1"></script>
+<script src="assets/feature-loader.js?v=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1"></script>
 <script src="assets/quorum-first-shell.js?v=syllabus-review-20260823-1"></script>
 <script src="assets/private-beta-landing.js?v=public-reliability-20260827-2"></script>
 

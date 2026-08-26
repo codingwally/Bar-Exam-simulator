@@ -151,6 +151,20 @@
   color: var(--dd2-muted);
 }
 
+.dd2-access-summary.is-expired {
+  gap: 8px;
+  background: #fff8ed;
+  border-color: rgba(164, 102, 25, .28);
+  border-left-color: #a46619;
+}
+
+.dd2-access-summary.is-expired strong { text-transform: none; }
+
+.dd2-access-summary.is-expired .dd2-button {
+  justify-self: start;
+  margin-top: 6px;
+}
+
 .dd2-sr-only {
   position: absolute !important;
   width: 1px !important;
@@ -470,6 +484,25 @@
   box-shadow: 0 28px 90px rgba(2, 12, 35, .38);
 }
 
+.dd2-native-view[data-native-view="account"] {
+  align-items: center;
+  justify-content: center;
+  padding: clamp(14px, 3vw, 40px);
+  background: rgba(3, 14, 31, .74);
+  backdrop-filter: blur(10px);
+}
+
+.dd2-native-view[data-native-view="account"] .dd2-native-card {
+  width: min(1080px, 100%);
+  height: auto;
+  max-height: calc(100dvh - clamp(28px, 6vw, 80px));
+  padding: clamp(28px, 4vw, 48px);
+  border: 1px solid rgba(213, 181, 111, .7);
+  border-top: 3px solid var(--dd2-gold);
+  border-radius: 14px;
+  box-shadow: 0 30px 100px rgba(2, 12, 35, .42);
+}
+
 .dd2-native-card .dd2-view-kicker {
   color: #87651f;
 }
@@ -694,37 +727,210 @@ textarea.dd2-field {
   font: 500 13px/1.65 var(--sans, sans-serif);
 }
 
-.dd2-account-summary {
+.dd2-account-hero {
+  position: relative;
   display: grid;
-  grid-template-columns: 58px 1fr;
-  gap: 15px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 20px;
   align-items: center;
-  margin-bottom: 26px;
-  padding: 18px;
-  background: var(--dd2-navy);
+  margin-bottom: 0;
+  padding: clamp(20px, 3vw, 30px);
+  overflow: hidden;
   color: #fff;
-  border-top: 3px solid var(--dd2-gold);
+  background:
+    radial-gradient(circle at 88% 12%, rgba(230, 197, 111, .18), transparent 30%),
+    linear-gradient(145deg, #06172c 0%, #0d2c4c 100%);
+  border: 1px solid rgba(213, 181, 111, .55);
+  border-radius: 12px;
+  box-shadow: 0 18px 42px rgba(7, 24, 47, .18);
+}
+
+.dd2-account-hero::after {
+  content: "";
+  position: absolute;
+  right: -58px;
+  bottom: -96px;
+  width: 210px;
+  height: 210px;
+  border: 1px solid rgba(213, 181, 111, .22);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.dd2-account-avatar-wrap {
+  position: relative;
+  z-index: 1;
 }
 
 .dd2-account-avatar {
-  width: 58px;
-  height: 58px;
+  width: 92px;
+  height: 92px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(213, 181, 111, .75);
+  overflow: hidden;
+  border: 2px solid rgba(239, 210, 137, .9);
   border-radius: 50%;
   color: var(--dd2-gold-bright);
-  font: 800 17px/1 var(--sans, sans-serif);
+  background: rgba(255, 255, 255, .06);
+  box-shadow: 0 0 0 6px rgba(213, 181, 111, .1);
+  font: 800 22px/1 var(--sans, sans-serif);
 }
 
-.dd2-account-summary strong {
+.dd2-account-avatar img,
+.dd2-header-role-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dd2-account-secure-mark {
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  transform: translateX(-50%);
+  padding: 5px 8px;
+  color: #173a28;
+  background: #edf7ef;
+  border: 1px solid rgba(40, 97, 60, .3);
+  border-radius: 999px;
+  font: 800 8px/1 var(--mono, monospace);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dd2-account-identity {
+  position: relative;
+  z-index: 1;
+}
+
+.dd2-account-identity .dd2-view-kicker { color: #e8c76f; }
+
+.dd2-account-identity strong {
   display: block;
-  font: 700 18px/1.3 var(--serif, Georgia, serif);
+  margin-top: 5px;
+  font: 700 clamp(24px, 3vw, 34px)/1.12 var(--serif, Georgia, serif);
 }
 
-.dd2-account-summary span {
-  color: #cbd5e1;
-  font: 500 12px/1.4 var(--sans, sans-serif);
+.dd2-account-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.dd2-account-badges span {
+  padding: 6px 9px;
+  color: #dce6f1;
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 999px;
+  font: 700 9px/1 var(--mono, monospace);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.dd2-account-photo-actions {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+  max-width: 230px;
+}
+
+.dd2-account-photo-actions .dd2-button {
+  min-width: 142px;
+  color: #f9efd5;
+  background: rgba(255, 255, 255, .07);
+  border-color: rgba(239, 210, 137, .65);
+}
+
+.dd2-account-photo-actions small {
+  color: #b9c8d9;
+  font: 500 9px/1.45 var(--sans, sans-serif);
+  text-align: right;
+}
+
+.dd2-account-photo-status {
+  margin: 8px 2px 12px;
+  text-align: right;
+}
+
+.dd2-account-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr);
+  gap: 16px;
+}
+
+.dd2-account-panel {
+  min-width: 0;
+  padding: 22px;
+  background: rgba(255, 253, 248, .88);
+  border: 1px solid rgba(15, 39, 68, .14);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(7, 24, 47, .05);
+}
+
+.dd2-account-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--dd2-line);
+}
+
+.dd2-account-panel-head h3 {
+  margin: 4px 0 0;
+  color: var(--dd2-navy);
+  font: 700 21px/1.2 var(--serif, Georgia, serif);
+}
+
+.dd2-account-panel-head > span {
+  max-width: 170px;
+  color: var(--dd2-muted);
+  font: 500 9px/1.45 var(--sans, sans-serif);
+  text-align: right;
+}
+
+.dd2-account-admin-callout,
+.dd2-account-recovery {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 16px;
+  padding: 14px;
+  color: #536075;
+  background: #f7f3e8;
+  border: 1px solid rgba(184, 147, 79, .3);
+  border-radius: 8px;
+  font: 500 11px/1.5 var(--sans, sans-serif);
+}
+
+.dd2-account-admin-callout strong,
+.dd2-account-recovery strong {
+  color: var(--dd2-navy);
+  font: 700 14px/1.3 var(--serif, Georgia, serif);
+}
+
+.dd2-account-admin-callout .dd2-button,
+.dd2-account-recovery .dd2-button {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.dd2-button-quiet {
+  color: var(--dd2-muted);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.dd2-account-signout {
+  width: 100%;
+  margin-top: 8px;
+  border-top-color: rgba(15, 39, 68, .13);
+  border-radius: 0;
 }
 
 .dd2-guest-badge {
@@ -742,6 +948,90 @@ textarea.dd2-field {
 }
 
 .dd2-guest-badge.is-visible { display: inline-flex; }
+
+.dd2-header-member-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dd2-header-member-tools[hidden] { display: none !important; }
+
+.dd2-header-role-button,
+.dd2-header-exam-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  color: #f3e5bd;
+  background: rgba(255, 255, 255, .045);
+  border: 1px solid rgba(213, 181, 111, .28);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--sans, sans-serif);
+  transition: background .16s ease, border-color .16s ease, transform .16s ease;
+}
+
+.dd2-header-role-button:hover,
+.dd2-header-exam-button:hover {
+  background: rgba(213, 181, 111, .12);
+  border-color: rgba(239, 210, 137, .66);
+  transform: translateY(-1px);
+}
+
+.dd2-header-role-button:focus-visible,
+.dd2-header-exam-button:focus-visible {
+  outline: 3px solid rgba(239, 210, 137, .46);
+  outline-offset: 3px;
+}
+
+.dd2-header-role-avatar {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex: none;
+  color: #07182f;
+  background: #e8c76f;
+  border-radius: 50%;
+  font: 800 9px/1 var(--sans, sans-serif);
+}
+
+.dd2-header-role-copy {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.dd2-header-role-copy small {
+  color: #9fb0c4;
+  font: 700 7px/1 var(--mono, monospace);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.dd2-header-role-copy strong {
+  color: #f5e9c8;
+  font: 750 10px/1.1 var(--sans, sans-serif);
+}
+
+.dd2-header-exam-button {
+  color: #07182f;
+  background: linear-gradient(135deg, #ead17d, #c79c43);
+  border-color: #e8c76f;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.dd2-header-exam-button:hover { background: linear-gradient(135deg, #f0dc9a, #d4ae58); }
+
+.dd2-header-exam-button img {
+  width: 18px;
+  height: 18px;
+}
 
 .dd2-reminder-card,
 .dd2-onboarding-card {
@@ -1435,6 +1725,25 @@ body.dd2-locked {
     border-top: 3px solid var(--dd2-gold);
     border-radius: 10px;
   }
+  .dd2-native-view[data-native-view="account"] {
+    padding: 10px;
+  }
+  .dd2-native-view[data-native-view="account"] .dd2-native-card {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    padding: 24px 18px 32px;
+    border: 1px solid rgba(213, 181, 111, .72);
+    border-top: 3px solid var(--dd2-gold);
+    border-radius: 10px;
+  }
+  .dd2-account-grid { grid-template-columns: 1fr; }
+  .dd2-account-hero { grid-template-columns: auto minmax(0, 1fr); }
+  .dd2-account-photo-actions {
+    grid-column: 1 / -1;
+    max-width: none;
+    justify-items: start;
+  }
+  .dd2-account-photo-actions small { text-align: left; }
   .dd2-native-view[data-native-view="examination-room"] {
     padding: 10px;
   }
@@ -1481,6 +1790,16 @@ body.dd2-locked {
 }
 
 @media (max-width: 560px) {
+  .dd2-header-role-copy { display: none; }
+  .dd2-header-role-button { padding: 5px; }
+  .dd2-header-exam-button { padding-inline: 8px; }
+  .dd2-header-exam-label { max-width: 60px; line-height: 1.05; text-align: left; }
+  .dd2-account-avatar { width: 72px; height: 72px; }
+  .dd2-account-hero { gap: 16px; padding: 18px; }
+  .dd2-account-identity strong { font-size: 23px; }
+  .dd2-account-panel { padding: 18px; }
+  .dd2-account-panel-head { display: block; }
+  .dd2-account-panel-head > span { display: block; margin-top: 6px; text-align: left; }
   .topbar-actions .dd2-guest-badge.is-visible {
     display: inline-flex !important;
     min-height: 38px;

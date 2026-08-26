@@ -63,7 +63,23 @@
 .dd-study-notes-shell textarea { min-height: 180px; padding: 14px; border: 1px solid #cbd4df; border-radius: 8px; resize: vertical; font: 400 15px/1.65 Inter, sans-serif; }
 .dd-study-notes-shell textarea:focus { outline: 3px solid rgba(197, 160, 89, .28); border-color: #b58c37; }
 .dd-study-notes-close { position: absolute; top: 18px; right: 18px; width: 44px; height: 44px; border: 1px solid #b58c37; border-radius: 50%; color: #0b2442; background: transparent; font-size: 26px; cursor: pointer; }
-.dd-study-sync { min-height: 22px; color: #38654f; font: 700 12px/1.5 Inter, sans-serif; }
+.dd-study-sync {
+  min-height: 22px;
+  margin: 16px 0 8px;
+  padding: 10px 12px;
+  border: 1px solid #ccd5df;
+  border-left: 4px solid #77879b;
+  border-radius: 7px;
+  color: #34445a;
+  background: #f3f6f9;
+  font: 750 13px/1.5 Inter, sans-serif;
+}
+.dd-study-sync[data-state="working"] { border-color: #9ebad6; border-left-color: #326b9b; color: #17466c; background: #eef6fd; }
+.dd-study-sync[data-state="success"] { border-color: #9bc4a8; border-left-color: #2e7047; color: #245d3b; background: #eef8f1; }
+.dd-study-sync[data-state="warning"] { border-color: #dac183; border-left-color: #9b6a13; color: #6f4a0b; background: #fff8e7; }
+.dd-study-sync[data-state="error"] { border-color: #dfa4a9; border-left-color: #a82f39; color: #84252d; background: #fff1f2; }
+.dd-study-location { margin: 0; color: #536177; font: 600 12px/1.55 Inter, sans-serif; }
+.dd-study-location strong { color: #253a56; }
 .dd-study-note-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .dd-study-note-actions .dd-study-primary {
   color: var(--dd-control-navy, #061a35);

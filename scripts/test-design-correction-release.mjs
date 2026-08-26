@@ -62,8 +62,8 @@ assert.match(sharedHeader, /id="spa-community"[^>]*data-public-feature="quorum"[
 assert.match(sharedHeader, /<summary>Study Features<\/summary>[\s\S]*Quick Drills[\s\S]*Doctrine Review[\s\S]*Syllabus-Based Review[\s\S]*Bar Question Practice[\s\S]*Bar Exam Simulation[\s\S]*Analytics/);
 assert.doesNotMatch(sharedHeader, />The Academy<|>The Commons<|>BarBound<|>The Docket/);
 assert.match(landingJs, /function openQuorumHome\(trigger = null\)[\s\S]*openProtectedFeature\('quorum', trigger\)/);
-assert.match(landingJs, /global\.addEventListener\('popstate'[\s\S]*openQuorumHome\(\)/);
-assert.match(landingJs, /global\.addEventListener\('hashchange'[\s\S]*openQuorumHome\(\)/);
+assert.match(landingJs, /global\.addEventListener\('popstate'[\s\S]*runPublicNavigation\('quorum'\)/);
+assert.match(landingJs, /global\.addEventListener\('hashchange'[\s\S]*runPublicNavigation\('quorum'\)/);
 assert.match(shellJs, /event\.key !== 'Escape'[\s\S]*setDrawer\(refs, false, \{ restoreFocus: true \}\)/);
 assert.match(shellJs, /document\.getElementById\('spa-mock'\)\?\.click\(\)/);
 assert.match(shellCss, /#site-header\.qfs-shell #spa-nav\.qfs-drawer[\s\S]*position:\s*fixed[\s\S]*height:\s*100dvh/);
@@ -260,8 +260,8 @@ assert.match(html, /assets\/phase2\.css\?release=examination-room-doors-20260826
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-20260826-syllabus-reveal-p0-2/);
-assert.match(serviceWorker, /quorum-first-shell\.css\?v=examination-room-doors-20260826-2/);
+assert.match(serviceWorker, /duediligence-shell-20260827-public-reliability-2/);
+assert.match(serviceWorker, /quorum-first-shell\.css\?v=public-reliability-20260827-2/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
 assert.match(serviceWorker, /phase2\.css\?release=examination-room-doors-20260826-2/);
 assert.match(serviceWorker, /due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);

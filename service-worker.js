@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duediligence-shell-20260826-syllabus-reveal-p0-2';
+const CACHE_VERSION = 'duediligence-shell-20260827-public-reliability-2';
 const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const SHELL = Object.freeze([
   '/offline.html',
@@ -6,7 +6,7 @@ const SHELL = Object.freeze([
   '/assets/phase2.css?release=examination-room-doors-20260826-2',
   '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
-  '/assets/quorum-first-shell.css?v=examination-room-doors-20260826-2',
+  '/assets/quorum-first-shell.css?v=public-reliability-20260827-2',
   '/assets/quorum-first-shell.js?v=syllabus-review-20260823-1',
   '/assets/phase2-experience.js?v=syllabus-reveal-p0-20260826-2',
   '/assets/icons/navigation/door-open.svg',

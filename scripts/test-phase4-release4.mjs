@@ -113,7 +113,7 @@ assert.match(
 assert.match(adminPage, /data-section="payments"[\s\S]*?<span>Payments<\/span>[\s\S]*?<\/button>/);
 assert.match(adminPage, /data-section="refunds"[\s\S]*?<span>Refunds<\/span>[\s\S]*?<\/button>/);
 assert.match(adminPage, /data-section="partnerships"[\s\S]*?<span>Partnerships<\/span>[\s\S]*?<\/button>/);
-assert.match(adminPage, /admin-observatory\.css\?v=(?:judicial-observatory|executive-pulse)-/);
+assert.match(adminPage, /admin-observatory\.css\?v=public-admin-reliability-20260827-2/);
 assert.match(adminPage, /Judicial Observatory/);
 assert.match(adminPage, /data-section="business_revenue"/);
 assert.match(adminPage, /data-section="business_projections"/);

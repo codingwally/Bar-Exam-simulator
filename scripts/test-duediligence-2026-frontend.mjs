@@ -41,9 +41,9 @@ const [html, js, css, build, examinations, featureLoader, publicLanding] = await
 
 assert.doesNotMatch(html, /<link[^>]+assets\/duediligence-2026\.css/);
 assert.doesNotMatch(html, /<script[^>]+assets\/duediligence-2026\.js/);
-assert.match(html, /assets\/feature-loader\.js\?v=syllabus-reveal-p0-20260826-2/);
-assert.match(featureLoader, /assets\/duediligence-2026\.css\?v=guided-random-access-20260822-1/);
-assert.match(featureLoader, /assets\/duediligence-2026\.js\?v=content-runtime-20260826-1/);
+assert.match(html, /assets\/feature-loader\.js\?v=public-reliability-20260827-1/);
+assert.match(featureLoader, /assets\/duediligence-2026\.css\?v=public-reliability-20260827-1/);
+assert.match(featureLoader, /assets\/duediligence-2026\.js\?v=public-reliability-20260827-1/);
 assert.match(build, /assets\/duediligence-2026\.css/);
 assert.match(build, /assets\/duediligence-2026\.js/);
 
@@ -84,7 +84,7 @@ for (const [id, feature, handler] of [
   ['spa-case-digest', 'anchor-cases', 'openAnchorCases'],
 ]) {
   assert.match(html, new RegExp(`id="${id}"[^>]*data-public-feature="${feature}"`));
-  assert.match(publicLanding, new RegExp(`feature === '${feature}'[\\s\\S]*?global\\.${handler}\\?\\.\\(\\)`));
+  assert.match(publicLanding, new RegExp(`feature === '${feature}'[\\s\\S]*?invokePublicOpener\\('${handler}'`));
   assert.match(js, new RegExp(`global\\.${handler} =`));
 }
 
@@ -110,7 +110,7 @@ assert.match(js, /selectedIds/);
 assert.match(html, /openVerdictExport/);
 assert.match(css, /#031a33/);
 assert.match(css, /#c5a059/i);
-assert.match(css, /'Playfair Display'/);
+assert.match(css, /var\(--serif-display,'Fraunces'/);
 assert.match(css, /@media \(prefers-reduced-motion:reduce\)/);
 assert.match(css, /animation-duration:\.01ms!important/);
 

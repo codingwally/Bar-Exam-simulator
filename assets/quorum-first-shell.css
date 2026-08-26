@@ -164,7 +164,7 @@ body.dd-auth-pending .dd-auth-bootstrap {
 #site-header.qfs-shell .brand-name {
   display: block;
   color: #fff;
-  font-family: var(--serif-display, "Cinzel", Georgia, serif);
+  font-family: var(--serif-brand, "Cinzel", Georgia, serif);
   font-size: 18px;
   font-weight: 700;
   line-height: 1;
@@ -196,7 +196,7 @@ body.dd-auth-pending .dd-auth-bootstrap {
 
 #site-header.qfs-shell .dd2-guest-badge {
   position: relative;
-  min-height: 38px;
+  min-height: 44px;
   max-width: 190px;
   margin: 0;
   padding: 9px 13px 9px 29px;
@@ -259,7 +259,7 @@ body.dd-auth-pending .dd-auth-bootstrap {
 }
 
 #site-header.qfs-shell .qfs-practice-rail button {
-  height: 34px;
+  min-height: 44px;
   padding: 0 15px;
   white-space: nowrap;
   border: 1px solid transparent;
@@ -343,7 +343,7 @@ body.dd-auth-pending .dd-auth-bootstrap {
 #site-header.qfs-shell .quorum-nav-link,
 #site-header.qfs-shell .quorum-practice-links button {
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
   padding: 10px 12px;
   display: flex;
   align-items: center;
@@ -355,7 +355,7 @@ body.dd-auth-pending .dd-auth-bootstrap {
   color: #fff;
   background: transparent;
   box-shadow: none;
-  font: 600 13px/1.25 Inter, sans-serif;
+  font: 600 14px/1.25 Inter, sans-serif;
   text-align: left;
   text-transform: none;
   cursor: pointer;
@@ -474,7 +474,7 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   align-items: center;
   gap: 12px;
   color: #fff;
-  font: 700 13px/1.2 Inter, sans-serif;
+  font: 700 14px/1.2 Inter, sans-serif;
   list-style: none;
   cursor: pointer;
 }
@@ -496,9 +496,74 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
 }
 
 #site-header.qfs-shell .quorum-practice-links button {
-  min-height: 42px;
+  min-height: 44px;
   border-bottom: 0;
-  font-size: 12px;
+  font-size: 13px;
+}
+
+.public-navigation-status {
+  position: fixed;
+  z-index: 1090;
+  top: calc(var(--qfs-header-height) + var(--qfs-rail-height) + 12px);
+  left: 50%;
+  width: min(720px, calc(100vw - 32px));
+  min-height: 52px;
+  padding: 10px 12px 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid rgba(197, 160, 89, .62);
+  border-radius: 10px;
+  color: #f8fafc;
+  background: #0a2340;
+  box-shadow: 0 18px 44px rgba(0, 8, 24, .3);
+  transform: translateX(-50%);
+  font: 600 13px/1.45 Inter, system-ui, sans-serif;
+}
+
+.public-navigation-status[hidden] {
+  display: none !important;
+}
+
+.public-navigation-status.is-error {
+  border-color: rgba(248, 113, 113, .7);
+}
+
+.public-navigation-status.is-success {
+  border-color: rgba(74, 222, 128, .72);
+}
+
+.public-navigation-status.is-loading::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 2px solid rgba(255, 255, 255, .35);
+  border-top-color: #e4c56f;
+  border-radius: 50%;
+  animation: public-navigation-spin .72s linear infinite;
+}
+
+@keyframes public-navigation-spin {
+  to { transform: rotate(360deg); }
+}
+
+.public-navigation-status button {
+  min-width: 104px;
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid #e4c56f;
+  border-radius: 8px;
+  color: #07182b;
+  background: #e4c56f;
+  font: 700 13px/1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+[data-public-feature][aria-busy="true"] {
+  cursor: progress !important;
+  opacity: .72;
 }
 
 #site-header.qfs-shell .quorum-shell-compat[hidden] {
@@ -744,7 +809,7 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   color: var(--qfs-navy-950);
   background: linear-gradient(180deg, var(--qfs-gold-300), var(--qfs-gold-400));
   box-shadow: 0 8px 22px rgba(197, 160, 89, .25);
-  font: 700 13px/1.2 Inter, sans-serif;
+  font: 700 14px/1.2 Inter, sans-serif;
   cursor: pointer;
   transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
 }
@@ -764,7 +829,7 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   min-height: 20px;
   margin: 9px 0 -7px;
   color: var(--qfs-muted);
-  font: 600 12px/1.45 Inter, sans-serif;
+  font: 600 13px/1.45 Inter, sans-serif;
   text-align: center;
 }
 
@@ -781,11 +846,14 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   margin-top: 15px;
   margin-bottom: 0;
   color: var(--qfs-muted);
-  font: 400 12px/1.55 Inter, sans-serif;
+  font: 400 13px/1.55 Inter, sans-serif;
   text-align: center;
 }
 
 #private-beta-landing .quorum-entry-legal a {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
   color: #765613;
   text-underline-offset: 3px;
 }
@@ -851,9 +919,9 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
 
   #site-header.qfs-shell .dd2-guest-badge {
     max-width: 116px;
-    min-height: 36px;
+    min-height: 44px;
     padding: 8px 10px 8px 25px;
-    font-size: 9px;
+    font-size: 11px;
   }
 
   #site-header.qfs-shell .dd2-guest-badge::before {
@@ -870,7 +938,7 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
   }
 
   #private-beta-landing .quorum-entry-visual {
-    min-height: 42svh;
+    min-height: max(420px, 52svh);
   }
 
   #private-beta-landing .quorum-entry-copy {
@@ -890,8 +958,19 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
     padding: 24px;
   }
 
+  #private-beta-landing .quorum-signin-intro-still img {
+    top: 28%;
+    width: min(170px, 42%);
+  }
+
   #private-beta-landing .quorum-signin-intro-still h1 {
     font-size: clamp(42px, 14vw, 64px);
+  }
+}
+
+@media (max-width: 900px) {
+  .public-navigation-status {
+    top: 72px;
   }
 }
 
@@ -907,6 +986,10 @@ body:has(#page-community.active) #site-header.qfs-shell .quorum-home-tools {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .public-navigation-status.is-loading::before {
+    animation: none;
+  }
+
   #site-header.qfs-shell #spa-nav.qfs-drawer,
   #private-beta-landing .quorum-signin-intro-video,
   #private-beta-landing .quorum-signin-intro-still,

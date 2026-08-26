@@ -45,8 +45,8 @@ const sectionLabels = [
   ['business_revenue', 'Revenue'],
   ['business_projections', 'Projections'],
   ['business_comparisons', 'Comparisons'],
-  ['controls', 'Controls'],
-  ['security', 'Audit Log'],
+  ['controls', 'Website Settings'],
+  ['security', 'Security &amp; Activity Log'],
 ];
 for (const [section, label] of sectionLabels) {
   assert.match(
@@ -81,9 +81,9 @@ assert.match(js, /Contact Support\. We respond within 24 hours\./);
 assert.match(js, /Nothing was changed/);
 assert.match(js, /No verified events/);
 assert.match(js, /Administrator request failed/);
-assert.match(js, /const overviewReady = await renderSection\('executive'\)/);
+assert.match(js, /const overviewReady = await navigateSection\(initialSection, 'replace'\)/);
 assert.match(js, /Overview is temporarily unavailable\. Payments remains available\./);
-assert.match(js, /const report = reportSections\.has\(section\) \? await loadReport\(\) : \{\}/);
+assert.match(js, /const report = reportSections\.has\(section\) \? await loadReport\(false, context\)/);
 assert.match(js, /Aggregate export|aggregate-report\.csv/i);
 assert.match(js, /Mastery average/);
 assert.match(js, /One-day, seven-day, and 30-day return rates/);
@@ -132,15 +132,15 @@ assert.match(js, /Download all answer records/);
 assert.match(js, /Suggested answer/);
 assert.match(js, /Model answer/);
 assert.match(js, /all signed-in users bypass commercial limits/i);
-assert.match(js, /api\('\/admin\/live-activity'/);
-assert.match(js, /api\('\/admin\/recent-user-activity'/);
+assert.match(js, /readApi\('\/admin\/live-activity'/);
+assert.match(js, /readApi\('\/admin\/recent-user-activity'/);
 assert.match(js, /Signed-in sessions, time used, and the latest recorded activity/);
 assert.match(js, /Open all users/);
-assert.match(js, /api\('\/admin\/answer-history'/);
-assert.match(js, /api\('\/admin\/quorum\/posts'/);
+assert.match(js, /readApi\('\/admin\/answer-history'/);
+assert.match(js, /readApi\('\/admin\/quorum\/posts'/);
 assert.match(js, /'Measure', 'Value', 'Meaning', 'Generated at'/);
 assert.match(js, /identity|Exact online names are withheld/i);
-assert.match(js, /'Answer type', 'Subject', 'Exam', 'Question',[\s\S]*'Student answer'/);
+assert.match(js, /'Name', 'Email', 'Access record', 'Feature', 'Subject or exam', 'Question',[\s\S]*'Student answer'/);
 assert.match(js, /'Category', 'Plan record', 'Record status', 'Current access',[\s\S]*'Questions answered'/);
 assert.match(js, /'Posted', 'Name', 'Email', 'Type', 'Topic', 'Post', 'Status', 'Comments', 'Reports'/);
 assert.match(js, /\^\[\\s\\u0000-\\u001f\\u007f-\\u009f\]\*\[=\+\\-@\]/);

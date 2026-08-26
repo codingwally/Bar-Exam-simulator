@@ -97,10 +97,40 @@
     draftOwnerId: null,
     drawerOpen: false,
     drawerReturnFocus: null,
+    sidebarRequestSequence: 0,
+    entryRequestSequence: 0,
+    circleRequestSequence: 0,
+    viewRequestSequence: 0,
+    feedRequestSequence: 0,
+    feedController: null,
+    viewController: null,
   };
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+
+  function cancelCommunityViewRequests() {
+    state.feedController?.abort();
+    state.feedController = null;
+    state.viewController?.abort();
+    state.viewController = null;
+    state.searchController?.abort();
+    state.searchController = null;
+    state.loading = false;
+    $('#lex-feed')?.setAttribute('aria-busy', 'false');
+  }
+
+  function beginCommunityViewRequest() {
+    state.viewRequestSequence += 1;
+    cancelCommunityViewRequests();
+    return state.viewRequestSequence;
+  }
+
+  function isCommunityViewRequestActive(sequence, expectedView, controller = null) {
+    return sequence === state.viewRequestSequence
+      && (!expectedView || state.view === expectedView)
+      && (!controller || (!controller.signal.aborted && state.viewController === controller));
+  }
 
   function session() {
     return global.DueDiligencePhase2?.getSession?.() || null;
@@ -172,6 +202,7 @@
   }
 
   function clearPrivateView() {
+    beginCommunityViewRequest();
     state.items = [];
     state.cursor = null;
     state.hasMore = false;
@@ -905,8 +936,21 @@
   }
 
   async function refreshFeed(options = {}) {
-    if (!hasSession() || state.loading) return;
+    if (!hasSession()) return false;
     const append = options.append === true;
+    const viewRequestSequence = options.viewRequestSequence ?? state.viewRequestSequence;
+    const feedRequestSequence = ++state.feedRequestSequence;
+    const requestedView = state.view;
+    const requestedCircleId = state.activeCircleId;
+    state.feedController?.abort();
+    const controller = new AbortController();
+    state.feedController = controller;
+    const isCurrentRequest = () => feedRequestSequence === state.feedRequestSequence
+      && viewRequestSequence === state.viewRequestSequence
+      && requestedView === state.view
+      && requestedCircleId === state.activeCircleId
+      && state.feedController === controller
+      && !controller.signal.aborted;
     state.loading = true;
     const feed = $('#lex-feed');
     feed?.setAttribute('aria-busy', 'true');
@@ -919,7 +963,8 @@
     }
     try {
       let operation = state.view === 'saved' ? 'saved' : state.view === 'unanswered' ? 'unanswered' : 'feed';
-      const payload = await query(operation, feedPayload(append));
+      const payload = await query(operation, feedPayload(append), { signal: controller.signal });
+      if (!isCurrentRequest()) return false;
       state.items = append ? state.items.concat(payload.items || []) : payload.items || [];
       state.cursor = payload.nextCursor || null;
       state.hasMore = Boolean(payload.hasMore);
@@ -928,52 +973,77 @@
       setFeedStatus(state.items.length
         ? `${state.items.length.toLocaleString()} ${state.items.length === 1 ? 'post' : 'posts'} shown.`
         : '');
+      return true;
     } catch (error) {
+      if (!isCurrentRequest() || error?.name === 'AbortError') return false;
       if (!append) state.items = [];
       renderFeed();
       handleError(error);
+      return false;
     } finally {
-      state.loading = false;
-      feed?.setAttribute('aria-busy', 'false');
+      if (feedRequestSequence === state.feedRequestSequence && state.feedController === controller) {
+        state.feedController = null;
+        state.loading = false;
+        feed?.setAttribute('aria-busy', 'false');
+      }
     }
   }
 
   async function openEntry(entryId, options = {}) {
-    if (!entryId) return;
-    state.view = 'entry';
-    state.directEntryId = entryId;
-    state.legacyPostId = null;
-    setViewLabels('Community post', 'Stable community link');
-    syncViewButtons();
-    if (options.route !== false) {
-      setStableLocation(entryId, { replace: options.push !== true });
-    }
-    $('#lex-composer').hidden = true;
+    if (!entryId) return false;
+    const requestSequence = ++state.entryRequestSequence;
+    state.circleRequestSequence += 1;
+    const viewRequestSequence = beginCommunityViewRequest();
+    const controller = new AbortController();
+    state.viewController = controller;
     const feed = $('#lex-feed');
     feed?.setAttribute('aria-busy', 'true');
     setFeedStatus('Opening post…');
     try {
-      const payload = await query('entry', { entryId });
+      const payload = await query('entry', { entryId }, { signal: controller.signal });
+      if (requestSequence !== state.entryRequestSequence
+          || !isCommunityViewRequestActive(viewRequestSequence, null, controller)) return false;
+      state.view = 'entry';
+      state.directEntryId = entryId;
+      state.legacyPostId = null;
+      setViewLabels('Community post', 'Stable community link');
+      syncViewButtons();
+      if (options.route !== false) {
+        setStableLocation(entryId, { replace: options.push !== true });
+      }
+      $('#lex-composer').hidden = true;
       state.items = [payload.entry];
       state.comments.set(entryId, Array.isArray(payload.comments) ? payload.comments : []);
       state.commentsOpen.add(entryId);
       state.hasMore = false;
       renderFeed();
       setFeedStatus('');
+      return true;
     } catch (error) {
-      handleError(error);
+      if (requestSequence === state.entryRequestSequence
+          && isCommunityViewRequestActive(viewRequestSequence, null, controller)
+          && error?.name !== 'AbortError') handleError(error);
+      return false;
     } finally {
-      feed?.setAttribute('aria-busy', 'false');
+      if (requestSequence === state.entryRequestSequence
+          && viewRequestSequence === state.viewRequestSequence) {
+        if (state.viewController === controller) state.viewController = null;
+        feed?.setAttribute('aria-busy', 'false');
+      }
     }
   }
 
   async function openLegacyEntry(legacyPostId) {
+    const viewRequestSequence = beginCommunityViewRequest();
+    const controller = new AbortController();
+    state.viewController = controller;
     state.view = 'entry';
     $('#lex-composer').hidden = true;
     setViewLabels('Community post', 'Opening a legacy stable link');
     setFeedStatus('Opening post…');
     try {
-      const payload = await query('entry', { legacyPostId });
+      const payload = await query('entry', { legacyPostId }, { signal: controller.signal });
+      if (!isCommunityViewRequestActive(viewRequestSequence, 'entry', controller)) return false;
       state.directEntryId = payload.entry.entryId;
       state.legacyPostId = null;
       state.items = [payload.entry];
@@ -983,8 +1053,13 @@
       setStableLocation(payload.entry.entryId);
       renderFeed();
       setFeedStatus('');
+      return true;
     } catch (error) {
-      handleError(error);
+      if (isCommunityViewRequestActive(viewRequestSequence, 'entry', controller)
+          && error?.name !== 'AbortError') handleError(error);
+      return false;
+    } finally {
+      if (state.viewController === controller) state.viewController = null;
     }
   }
 
@@ -1557,8 +1632,11 @@
   async function setView(view, options = {}) {
     if (!hasSession()) {
       askForSignIn();
-      return;
+      return false;
     }
+    state.entryRequestSequence += 1;
+    state.circleRequestSequence += 1;
+    const viewRequestSequence = beginCommunityViewRequest();
     state.view = view;
     state.directEntryId = null;
     state.legacyPostId = null;
@@ -1579,29 +1657,33 @@
       state.activeCircleId = null;
       state.circleDetail = null;
       setViewLabels('Latest member discussions', 'Academic community');
-      await refreshFeed();
+      await refreshFeed({ viewRequestSequence });
     } else if (view === 'saved') {
       setViewLabels('My Authorities', 'Private saved posts');
-      await refreshFeed();
+      await refreshFeed({ viewRequestSequence });
     } else if (view === 'unanswered') {
       setViewLabels('Unanswered questions', 'Help a fellow law student');
-      await refreshFeed();
+      await refreshFeed({ viewRequestSequence });
     } else if (view === 'circles') {
       setViewLabels('Study Circles', 'Study with purpose');
-      await renderCirclesView();
+      await renderCirclesView(viewRequestSequence);
     } else if (view === 'notifications') {
       setViewLabels('Notifications', 'Activity relevant to you');
-      await renderNotificationsView();
+      await renderNotificationsView(viewRequestSequence);
     } else if (view === 'my-posts') {
       setViewLabels('My Posts', 'Your community contributions');
-      await refreshFeed();
+      await refreshFeed({ viewRequestSequence });
     } else if (view === 'profile') {
       setViewLabels('Community profile', 'Your public academic identity');
-      await renderProfileView();
+      await renderProfileView(null, viewRequestSequence);
     }
+    return viewRequestSequence === state.viewRequestSequence && state.view === view;
   }
 
-  async function renderCirclesView() {
+  async function renderCirclesView(viewRequestSequence = state.viewRequestSequence) {
+    state.viewController?.abort();
+    const controller = new AbortController();
+    state.viewController = controller;
     const feed = $('#lex-feed');
     feed.replaceChildren(Object.assign(document.createElement('div'), { className: 'lex-skeleton' }));
     $('#lex-load-more').hidden = true;
@@ -1610,12 +1692,18 @@
       const result = await query('circles', {
         limit: 20,
         joinedOnly: state.circleJoinedOnly,
-      });
+      }, { signal: controller.signal });
+      if (!isCommunityViewRequestActive(viewRequestSequence, 'circles', controller)) return false;
       state.circles = result.items || [];
       feed.replaceChildren(circlesPanel(state.circles));
       setFeedStatus('');
+      return true;
     } catch (error) {
-      handleError(error);
+      if (isCommunityViewRequestActive(viewRequestSequence, 'circles', controller)
+          && error?.name !== 'AbortError') handleError(error);
+      return false;
+    } finally {
+      if (state.viewController === controller) state.viewController = null;
     }
   }
 
@@ -1640,7 +1728,13 @@
     const grid = document.createElement('div');
     grid.className = 'quorum-circle-grid';
     if (!circles.length) {
-      grid.append(textElement('p', 'quorum-empty-copy', 'No Study Circles yet. Create the first focused academic community.'));
+      grid.append(textElement(
+        'p',
+        'quorum-empty-copy',
+        state.circleJoinedOnly
+          ? 'You have not joined a Study Circle yet. Browse all circles to find one.'
+          : 'No Study Circles yet. Create the first focused academic community.',
+      ));
     } else {
       circles.forEach((circle) => grid.append(circleCard(circle)));
     }
@@ -1718,8 +1812,9 @@
 
   function openCreateCircleDialog() {
     openDialog('Create a Study Circle', (body) => {
-      const form = document.createElement('div');
+      const form = document.createElement('form');
       form.className = 'quorum-form-grid';
+      form.noValidate = true;
       const makeField = (label, control, wide = false) => {
         const wrapper = document.createElement('label');
         if (wide) wrapper.className = 'is-wide';
@@ -1727,6 +1822,8 @@
         return wrapper;
       };
       const name = document.createElement('input');
+      name.required = true;
+      name.minLength = 3;
       name.maxLength = 100;
       const subject = document.createElement('select');
       subject.append(option('', 'All subjects'));
@@ -1735,9 +1832,13 @@
       school.maxLength = 200;
       school.placeholder = 'Optional';
       const description = document.createElement('textarea');
+      description.required = true;
+      description.minLength = 10;
       description.maxLength = 1000;
       description.rows = 4;
       const rules = document.createElement('textarea');
+      rules.required = true;
+      rules.minLength = 10;
       rules.maxLength = 2000;
       rules.rows = 4;
       form.append(
@@ -1747,50 +1848,172 @@
         makeField('Description', description, true),
         makeField('Academic rules', rules, true),
       );
-      const error = inlineError();
+      const status = textElement('div', 'lex-status', '');
+      status.id = 'lex-circle-create-status';
+      [name, subject, school, description, rules].forEach((control) => {
+        control.setAttribute('aria-describedby', status.id);
+      });
       const actions = document.createElement('div');
       actions.className = 'lex-dialog-actions';
-      const create = button('Create circle', 'lex-button lex-button-primary', async () => {
+      const back = button('Back', 'lex-button', closeDialog);
+      const create = document.createElement('button');
+      create.type = 'submit';
+      create.className = 'lex-button lex-button-primary';
+      create.textContent = 'Create circle';
+      let createdCircleId = null;
+      let creationSettled = false;
+
+      const showStatus = (message, kind = 'error') => {
+        status.textContent = message;
+        status.classList.toggle('is-error', kind === 'error');
+        status.classList.toggle('is-success', kind === 'success');
+        status.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+      };
+      const setCreateBusy = (busy) => {
+        back.disabled = busy;
+        create.disabled = busy || creationSettled;
+        create.setAttribute('aria-busy', busy ? 'true' : 'false');
+        create.textContent = createdCircleId
+          ? 'Circle created'
+          : creationSettled
+            ? 'Creation not confirmed'
+            : (busy ? 'Creating circle…' : 'Create circle');
+      };
+      const addCheckCirclesAction = () => {
+        if (actions.querySelector('[data-check-created-circle]')) return;
+        create.classList.remove('lex-button-primary');
+        const check = button('Check Study Circles', 'lex-button lex-button-primary', async () => {
+          check.disabled = true;
+          check.setAttribute('aria-busy', 'true');
+          closeDialog();
+          await setView('circles', { push: true });
+        });
+        check.dataset.checkCreatedCircle = 'true';
+        actions.append(check);
+      };
+      const openCreatedCircle = async (control) => {
+        if (!createdCircleId) return false;
+        control.disabled = true;
+        control.setAttribute('aria-busy', 'true');
+        control.textContent = 'Opening created circle…';
+        showStatus('Your Study Circle was created. Opening it now…', 'success');
+        const opened = await openCircle(createdCircleId, { push: true });
+        if (opened) {
+          closeDialog();
+          toast('Study Circle created.');
+          loadBootstrap().catch(() => {});
+          return true;
+        }
+        control.disabled = false;
+        control.removeAttribute('aria-busy');
+        control.textContent = 'Open created circle';
+        showStatus('The Study Circle was created, but it could not be opened. Nothing will be created again; use Open created circle to retry.', 'error');
+        return false;
+      };
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (creationSettled) return;
+        [name, school, description, rules].forEach((control) => control.removeAttribute('aria-invalid'));
+        const values = {
+          name: name.value.trim(),
+          description: description.value.trim(),
+          subject: subject.value || null,
+          school: school.value.trim(),
+          rules: rules.value.trim(),
+        };
+        const invalid = values.name.length < 3
+          ? [name, 'Circle name must be at least 3 characters.']
+          : values.description.length < 10
+            ? [description, 'Description must be at least 10 characters.']
+            : values.rules.length < 10
+              ? [rules, 'Academic rules must be at least 10 characters.']
+              : values.school.includes('@')
+                ? [school, 'Use a school name only; do not enter an email address.']
+                : null;
+        if (invalid) {
+          invalid[0].setAttribute('aria-invalid', 'true');
+          showStatus(invalid[1], 'error');
+          invalid[0].focus();
+          return;
+        }
+        showStatus('Creating your Study Circle…', '');
+        setCreateBusy(true);
         create.disabled = true;
         try {
           const result = await command('create_circle', {
-            name: name.value,
-            description: description.value,
-            subject: subject.value || null,
-            school: school.value,
-            rules: rules.value,
+            ...values,
           });
-          closeDialog();
-          await loadBootstrap();
-          await openCircle(result.circleId);
-          toast('Study Circle created.');
+          creationSettled = true;
+          createdCircleId = result?.circleId || null;
+          if (!createdCircleId) {
+            setCreateBusy(false);
+            addCheckCirclesAction();
+            showStatus('Due Diligence received the create response but no destination. To avoid a duplicate, check Study Circles before trying again.', 'error');
+            return;
+          }
+          create.classList.remove('lex-button-primary');
+          setCreateBusy(false);
+          const recovery = button('Open created circle', 'lex-button lex-button-primary', () => openCreatedCircle(recovery));
+          actions.append(recovery);
+          await openCreatedCircle(recovery);
         } catch (failure) {
-          create.disabled = false;
-          error.textContent = failure?.message || 'The Study Circle could not be created.';
+          const definitelyNotCreated = failure?.code === 'OFFLINE'
+            || ['AUTHENTICATION_REQUIRED', 'INVALID_SESSION', 'INVALID_QUORUM_REQUEST'].includes(failure?.code)
+            || (Number(failure?.status) >= 400 && Number(failure?.status) < 500);
+          if (!definitelyNotCreated) {
+            creationSettled = true;
+            setCreateBusy(false);
+            addCheckCirclesAction();
+            showStatus('The connection ended before creation could be confirmed. To avoid a duplicate, check Study Circles before trying again.', 'error');
+            return;
+          }
+          setCreateBusy(false);
+          showStatus(failure?.message || 'The Study Circle was not created. Check the fields and try again.', 'error');
         }
       });
-      actions.append(button('Back', 'lex-button', closeDialog), create);
-      body.append(form, error, actions);
+      actions.append(back, create);
+      form.append(status, actions);
+      body.append(form);
     });
   }
 
   async function openCircle(circleId, options = {}) {
-    state.view = 'circle';
-    state.activeCircleId = circleId;
-    if (options.route !== false) {
-      setStableLocation(null, { replace: options.push !== true });
-    }
-    syncViewButtons();
-    $('#lex-composer').hidden = false;
-    setViewLabels('Study Circle', 'Member circle feed');
+    if (!circleId) return false;
+    const requestSequence = ++state.circleRequestSequence;
+    state.entryRequestSequence += 1;
+    const viewRequestSequence = beginCommunityViewRequest();
+    const controller = new AbortController();
+    state.viewController = controller;
+    const feed = $('#lex-feed');
+    feed?.setAttribute('aria-busy', 'true');
     setFeedStatus('Opening Study Circle…');
     try {
-      const circle = await query('circle', { circleId });
+      const circle = await query('circle', { circleId }, { signal: controller.signal });
+      if (requestSequence !== state.circleRequestSequence
+          || !isCommunityViewRequestActive(viewRequestSequence, null, controller)) return false;
+      state.view = 'circle';
+      state.activeCircleId = circleId;
+      if (options.route !== false) {
+        setStableLocation(null, { replace: options.push !== true });
+      }
+      syncViewButtons();
+      $('#lex-composer').hidden = false;
+      setViewLabels('Study Circle', 'Member circle feed');
       state.circleDetail = circle;
       $('#lex-composer').hidden = !(circle.viewerJoined || circle.viewerOwns) || circle.status !== 'active';
-      await refreshFeed();
+      return refreshFeed({ viewRequestSequence });
     } catch (error) {
-      handleError(error);
+      if (requestSequence === state.circleRequestSequence
+          && viewRequestSequence === state.viewRequestSequence
+          && error?.name !== 'AbortError') handleError(error);
+      return false;
+    } finally {
+      if (requestSequence === state.circleRequestSequence
+          && viewRequestSequence === state.viewRequestSequence) {
+        if (state.viewController === controller) state.viewController = null;
+        feed?.setAttribute('aria-busy', 'false');
+      }
     }
   }
 
@@ -1833,13 +2056,17 @@
     });
   }
 
-  async function renderNotificationsView() {
+  async function renderNotificationsView(viewRequestSequence = state.viewRequestSequence) {
+    state.viewController?.abort();
+    const controller = new AbortController();
+    state.viewController = controller;
     const feed = $('#lex-feed');
     feed.replaceChildren(Object.assign(document.createElement('div'), { className: 'lex-skeleton' }));
     $('#lex-load-more').hidden = true;
     setFeedStatus('Loading notifications…');
     try {
-      const result = await query('notifications', { limit: 20 });
+      const result = await query('notifications', { limit: 20 }, { signal: controller.signal });
+      if (!isCommunityViewRequestActive(viewRequestSequence, 'notifications', controller)) return false;
       const unreadCount = Math.max(0, Number(result.unreadCount || 0));
       $('#quorum-notification-count').textContent = unreadCount;
       if (state.bootstrap?.counts) state.bootstrap.counts.unreadNotifications = unreadCount;
@@ -1894,22 +2121,36 @@
       panel.append(head, list);
       feed.replaceChildren(panel);
       setFeedStatus('');
+      return true;
     } catch (error) {
-      handleError(error);
+      if (isCommunityViewRequestActive(viewRequestSequence, 'notifications', controller)
+          && error?.name !== 'AbortError') handleError(error);
+      return false;
+    } finally {
+      if (state.viewController === controller) state.viewController = null;
     }
   }
 
-  async function renderProfileView(memberId = null) {
+  async function renderProfileView(memberId = null, viewRequestSequence = state.viewRequestSequence) {
+    state.viewController?.abort();
+    const controller = new AbortController();
+    state.viewController = controller;
     const feed = $('#lex-feed');
     feed.replaceChildren(Object.assign(document.createElement('div'), { className: 'lex-skeleton' }));
     $('#lex-load-more').hidden = true;
     setFeedStatus('Loading academic profile…');
     try {
-      const profile = await query('profile', memberId ? { memberId } : {});
+      const profile = await query('profile', memberId ? { memberId } : {}, { signal: controller.signal });
+      if (!isCommunityViewRequestActive(viewRequestSequence, 'profile', controller)) return false;
       feed.replaceChildren(profilePanel(profile));
       setFeedStatus('');
+      return true;
     } catch (error) {
-      handleError(error);
+      if (isCommunityViewRequestActive(viewRequestSequence, 'profile', controller)
+          && error?.name !== 'AbortError') handleError(error);
+      return false;
+    } finally {
+      if (state.viewController === controller) state.viewController = null;
     }
   }
 
@@ -2029,11 +2270,12 @@
   }
 
   async function showMemberProfile(memberId) {
+    const viewRequestSequence = beginCommunityViewRequest();
     state.view = 'profile';
     syncViewButtons();
     $('#lex-composer').hidden = true;
     setViewLabels('Academic profile', 'Community member');
-    await renderProfileView(memberId);
+    await renderProfileView(memberId, viewRequestSequence);
   }
 
   async function renderBlockedMembers() {
@@ -2075,9 +2317,10 @@
       return;
     }
     const append = options.append === true;
+    const viewRequestSequence = beginCommunityViewRequest();
+    const controller = new AbortController();
+    state.searchController = controller;
     if (!append) {
-      state.searchController?.abort();
-      state.searchController = new AbortController();
       state.searchResults = null;
       state.cursor = null;
     }
@@ -2109,7 +2352,11 @@
           cursorAt: state.cursor.createdAt,
           cursorId: state.cursor.id,
         } : {}),
-      }, { signal: state.searchController.signal });
+      }, { signal: controller.signal });
+      if (viewRequestSequence !== state.viewRequestSequence
+          || state.view !== 'search'
+          || state.searchController !== controller
+          || controller.signal.aborted) return false;
       if (append && state.searchResults) {
         result.entries.items = (state.searchResults.entries?.items || []).concat(result.entries?.items || []);
         result.circles = state.searchResults.circles || [];
@@ -2146,8 +2393,15 @@
       feed.replaceChildren(panel);
       $('#lex-load-more').hidden = !state.hasMore;
       setFeedStatus('');
+      return true;
     } catch (error) {
-      handleError(error);
+      if (viewRequestSequence === state.viewRequestSequence
+          && state.view === 'search'
+          && state.searchController === controller
+          && error?.name !== 'AbortError') handleError(error);
+      return false;
+    } finally {
+      if (state.searchController === controller) state.searchController = null;
     }
   }
 
@@ -2400,19 +2654,56 @@
   }
 
   async function loadSidebar() {
+    const requestSequence = ++state.sidebarRequestSequence;
+    renderSidebarState($('#quorum-active-issues'), 'Loading active issues…');
+    renderSidebarState($('#quorum-unanswered'), 'Loading unanswered questions…');
+    renderSidebarState($('#quorum-recommended-circles'), 'Loading Study Circles…');
     const results = await Promise.allSettled([
       query('insights'),
       query('circles', { limit: 3 }),
     ]);
-    const insights = results[0].status === 'fulfilled'
-      ? results[0].value
-      : { trending: [], questions: [] };
-    renderTrending($('#quorum-active-issues'), insights.trending || []);
-    renderQuestionsNeedingAnswers($('#quorum-unanswered'), insights.questions || []);
-    renderCompactCircles(
-      $('#quorum-recommended-circles'),
-      results[1].status === 'fulfilled' ? results[1].value.items : [],
-    );
+    if (requestSequence !== state.sidebarRequestSequence) return false;
+    if (results[0].status === 'fulfilled') {
+      renderTrending($('#quorum-active-issues'), results[0].value.trending || []);
+      renderQuestionsNeedingAnswers($('#quorum-unanswered'), results[0].value.questions || []);
+    } else {
+      renderSidebarState(
+        $('#quorum-active-issues'),
+        'Active issues could not be loaded. This is not an empty result.',
+        'error',
+      );
+      renderSidebarState(
+        $('#quorum-unanswered'),
+        'Unanswered questions could not be loaded. This is not an empty result.',
+        'error',
+      );
+    }
+    if (results[1].status === 'fulfilled') {
+      renderCompactCircles($('#quorum-recommended-circles'), results[1].value.items || []);
+    } else {
+      renderSidebarState(
+        $('#quorum-recommended-circles'),
+        'Study Circles could not be loaded. This is not an empty result.',
+        'error',
+      );
+    }
+    return results.every((result) => result.status === 'fulfilled');
+  }
+
+  function renderSidebarState(container, message, kind = '') {
+    if (!container) return;
+    container.replaceChildren();
+    const copy = textElement('p', `quorum-empty-copy${kind ? ` is-${kind}` : ''}`, message);
+    copy.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+    container.append(copy);
+    if (kind !== 'error') return;
+    const retry = button('Try again', 'lex-button lex-button-quiet', async () => {
+      retry.disabled = true;
+      retry.setAttribute('aria-busy', 'true');
+      retry.textContent = 'Trying again…';
+      await loadSidebar();
+    });
+    container.append(retry);
   }
 
   function renderTrending(container, items = []) {
@@ -2442,7 +2733,16 @@
       return;
     }
     items.forEach((item) => {
-      const control = button(item.body, 'quorum-question-item', () => openEntry(item.entryId, { push: true }));
+      const control = button(item.body, 'quorum-question-item', async () => {
+        control.disabled = true;
+        control.setAttribute('aria-busy', 'true');
+        try {
+          await openEntry(item.entryId, { push: true });
+        } finally {
+          control.disabled = false;
+          control.removeAttribute('aria-busy');
+        }
+      });
       control.append(textElement('small', '', `${Number(item.answerCount) || 0} answers · ${relativeTime(item.createdAt)}`));
       container.append(control);
     });
@@ -2470,9 +2770,16 @@
       return;
     }
     circles.forEach((circle) => {
-      const control = button(circle.name, 'quorum-compact-item', () => (
-        openCircle(circle.circleId, { push: true })
-      ));
+      const control = button(circle.name, 'quorum-compact-item', async () => {
+        control.disabled = true;
+        control.setAttribute('aria-busy', 'true');
+        try {
+          await openCircle(circle.circleId, { push: true });
+        } finally {
+          control.disabled = false;
+          control.removeAttribute('aria-busy');
+        }
+      });
       control.append(textElement('small', '', `${Number(circle.memberCount || 0)} members · ${circle.subject || 'All subjects'}`));
       container.append(control);
     });
@@ -2511,16 +2818,21 @@
     else setView(['saved', 'unanswered', 'my-posts'].includes(state.view) ? state.view : 'home', { keepQuery: true });
   }
 
-  async function activate() {
+  async function activate(options = {}) {
     state.active = true;
     setAuthView(true);
     try {
       await loadBootstrap();
-      loadSidebar();
+      await loadSidebar();
       telemetry('quorum_opened');
-      await restoreRoute({ loadChrome: false });
+      const restored = options.forceHome === true
+        ? await setView('home', { route: false })
+        : await restoreRoute({ loadChrome: false });
+      if (restored !== true) await setView('home', { route: false });
+      return true;
     } catch (error) {
       handleError(error);
+      return false;
     }
   }
 
@@ -2535,7 +2847,7 @@
     setAuthView(true);
     if (options.loadChrome !== false) {
       await loadBootstrap();
-      loadSidebar();
+      await loadSidebar();
     }
 
     const params = new URLSearchParams(location.search);
@@ -2564,8 +2876,10 @@
 
   function deactivate() {
     state.active = false;
+    state.entryRequestSequence += 1;
+    state.circleRequestSequence += 1;
+    beginCommunityViewRequest();
     closeQuorumDrawer({ restoreFocus: false });
-    state.searchController?.abort();
     $$('.quorum-affirm-menu').forEach((menu) => {
       menu.hidden = true;
       menu.closest('.quorum-affirm-control')
@@ -2574,22 +2888,21 @@
     });
   }
 
-  function open(trigger = null) {
+  async function open(trigger = null, options = {}) {
     state.trigger = trigger || state.trigger || $('#spa-community');
     const params = new URLSearchParams(location.search);
     state.directEntryId = params.get('quorumEntry') || state.directEntryId;
     state.legacyPostId = params.get('forumPost') || state.legacyPostId;
-    if (!['#quorum', '#lex-forum'].includes(location.hash)) {
-      setStableLocation(state.directEntryId, { replace: false });
-    }
+    const forceHome = options.forceHome === true || !['#quorum', '#lex-forum'].includes(location.hash);
     if (!hasSession()) {
       askForSignIn();
       return true;
     }
     setAuthView(true);
-    global.showPage?.('community', state.trigger, { history: false });
-    activate();
-    return true;
+    if (global.showPage?.('community', state.trigger, { history: false }) !== true) return false;
+    const opened = await activate({ forceHome });
+    if (opened && forceHome) setStableLocation(null, { replace: false });
+    return opened;
   }
 
   function closeQuorumDrawer({ restoreFocus = true } = {}) {

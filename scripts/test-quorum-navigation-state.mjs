@@ -33,12 +33,12 @@ assert.match(
 );
 assert.match(
   featureLoader,
-  /assets\/lex-forum\.css\?v=post-body-only-20260823-1/,
+  /assets\/lex-forum\.css\?v=public-reliability-20260827-1/,
   'The Home accessibility fix must ship behind the current stylesheet cache key.',
 );
 assert.match(
   featureLoader,
-  /assets\/lex-forum\.js\?v=post-body-only-20260823-1/,
+  /assets\/lex-forum\.js\?v=public-reliability-20260827-1/,
   'The Home navigation fix must ship behind the current script cache key.',
 );
 assert.match(
@@ -48,7 +48,7 @@ assert.match(
 );
 assert.match(
   source,
-  /else if \(view === 'my-posts'\) \{[\s\S]{0,180}?await refreshFeed\(\);/,
+  /else if \(view === 'my-posts'\) \{[\s\S]{0,220}?await refreshFeed\(\{ viewRequestSequence \}\);/,
   'The My Posts view must render the member-filtered contribution feed.',
 );
 assert.match(

@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
-  <link rel="stylesheet" href="admin.css?v=subscription-receipt-20260824-1">
-  <link rel="stylesheet" href="admin-observatory.css?v=executive-pulse-paid-commercial-intelligence-20260824-2">
+  <link rel="stylesheet" href="admin.css?v=public-admin-reliability-20260827-1">
+  <link rel="stylesheet" href="admin-observatory.css?v=public-admin-reliability-20260827-2">
   <link rel="stylesheet" href="examination-room-admin.css?v=greenfield-v1-20260826-2">
 </head>
 <body class="observatory">
@@ -68,10 +68,10 @@
         </div>
         <div class="nav-group" role="group" aria-label="Administration">
           <p class="nav-group-label">Security &amp; Operations</p>
-          <button data-section="security"><i class="ph ph-lock-key" aria-hidden="true"></i><span>Audit Log</span></button>
-          <button data-section="controls"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i><span>Controls</span></button>
+          <button data-section="security"><i class="ph ph-lock-key" aria-hidden="true"></i><span>Security &amp; Activity Log</span></button>
+          <button data-section="controls"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i><span>Website Settings</span></button>
         </div>
-        <details class="nav-more">
+        <details class="nav-more" open>
           <summary><i class="ph ph-dots-three-outline" aria-hidden="true"></i><span>Additional tools</span></summary>
           <button data-section="subjects"><i class="ph ph-books" aria-hidden="true"></i><span>Question Bank</span></button>
           <button data-section="partnerships"><i class="ph ph-handshake" aria-hidden="true"></i><span>Partnerships</span></button>
@@ -85,7 +85,7 @@
           <button id="sidebar-collapse" type="button" aria-label="Collapse navigation"><i class="ph ph-caret-double-left" aria-hidden="true"></i></button>
         </div>
         <div class="sidebar-utility">
-          <a href="../"><i class="ph ph-arrow-square-out" aria-hidden="true"></i><span>Return to simulator</span></a>
+          <a href="../"><i class="ph ph-arrow-square-out" aria-hidden="true"></i><span>Return to website</span></a>
           <button id="admin-signout" type="button"><i class="ph ph-sign-out" aria-hidden="true"></i><span>Sign out</span></button>
         </div>
       </div>
@@ -102,7 +102,7 @@
           <p id="section-subtitle">Executive command center for Due Diligence.</p>
         </div>
         <div class="topbar-tools">
-          <label id="reporting-range">Date range
+          <label id="reporting-range"><span class="reporting-range-label">Date range</span>
             <select id="date-range">
               <option value="7">Last 7 days</option>
               <option value="30" selected>Last 30 days</option>
@@ -113,7 +113,7 @@
             <span></span><b>Checking freshness…</b>
           </div>
           <button class="refresh-button" id="refresh-dashboard" type="button"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i><span>Refresh</span></button>
-          <button class="secondary-button topbar-download" id="download-current-section" type="button"><i class="ph ph-download-simple" aria-hidden="true"></i><span>Export</span><i class="ph ph-caret-down" aria-hidden="true"></i></button>
+          <button class="secondary-button topbar-download" id="download-current-section" type="button" disabled><i class="ph ph-download-simple" aria-hidden="true"></i><span>Export current view</span></button>
         </div>
       </header>
 
@@ -212,6 +212,6 @@
   <script src="../examination-room/api.js?v=greenfield-v1-20260826-5"></script>
   <script src="subscription-actions-core.js?v=admin-business-dashboard-20260802-2"></script>
   <script src="examination-room-admin.js?v=greenfield-v1-20260826-3"></script>
-  <script src="admin.js?v=greenfield-examination-room-v1-20260826-1"></script>
+  <script src="admin.js?v=public-admin-reliability-20260827-1"></script>
 </body>
 </html>

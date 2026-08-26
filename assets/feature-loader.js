@@ -8,27 +8,27 @@
 
   const manifests = Object.freeze({
     quorum: Object.freeze({
-      styles: ['assets/lex-forum.css?v=post-body-only-20260823-1'],
-      scripts: ['assets/lex-forum.js?v=post-body-only-20260823-1'],
+      styles: ['assets/lex-forum.css?v=public-reliability-20260827-1'],
+      scripts: ['assets/lex-forum.js?v=public-reliability-20260827-1'],
     }),
     examinations: Object.freeze({
       styles: [
-        'assets/examinations.css?v=syllabus-reveal-p0-20260826-2',
+        'assets/examinations.css?v=public-reliability-20260827-1',
         'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
       ],
       scripts: [
         'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2',
-        'assets/examinations.js?v=syllabus-reveal-p0-20260826-2',
+        'assets/examinations.js?v=public-reliability-20260827-1',
       ],
     }),
     content: Object.freeze({
       styles: [
-        'assets/duediligence-2026.css?v=guided-random-access-20260822-1',
+        'assets/duediligence-2026.css?v=public-reliability-20260827-1',
         'assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
       ],
       scripts: [
         'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2',
-        'assets/duediligence-2026.js?v=content-runtime-20260826-1',
+        'assets/duediligence-2026.js?v=public-reliability-20260827-1',
       ],
     }),
   });
@@ -104,7 +104,11 @@
       link.href = href;
       link.dataset.ddFeatureAsset = 'style';
       link.addEventListener('load', resolve, { once: true });
-      link.addEventListener('error', () => reject(new Error(`Unable to load ${href}`)), { once: true });
+      link.addEventListener('error', () => {
+        if (loadedStyles.get(href) === pending) loadedStyles.delete(href);
+        link.remove();
+        reject(new Error(`Unable to load ${href}`));
+      }, { once: true });
       document.head.append(link);
     });
     loadedStyles.set(href, pending);
@@ -119,7 +123,11 @@
       script.async = false;
       script.dataset.ddFeatureAsset = 'script';
       script.addEventListener('load', resolve, { once: true });
-      script.addEventListener('error', () => reject(new Error(`Unable to load ${src}`)), { once: true });
+      script.addEventListener('error', () => {
+        if (loadedScripts.get(src) === pending) loadedScripts.delete(src);
+        script.remove();
+        reject(new Error(`Unable to load ${src}`));
+      }, { once: true });
       document.body.append(script);
     });
     loadedScripts.set(src, pending);
@@ -230,7 +238,12 @@
           ...options,
           accessVerified: true,
         });
-      }).catch(() => {});
+      }).catch((error) => {
+        global.DueDiligencePublicNavigation?.reportError?.(
+          error?.message || 'This page could not be opened. Please try again.',
+          () => guardedShowPage(page, element, options),
+        );
+      });
       return false;
     };
 

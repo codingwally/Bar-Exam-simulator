@@ -18,7 +18,7 @@ for (const label of [
   'Executive Pulse', 'Live Activity', 'Recent users', 'Users', 'Sign-ups', 'Acquisition',
   'Answers', 'Subject Performance', 'Grading Health', 'Subscriptions',
   'Paid Subscribers', 'Payments', 'Refunds', 'Support', 'Corrections', 'Community Moderation',
-  'Revenue', 'Projections', 'Comparisons', 'Audit Log', 'Controls',
+  'Revenue', 'Projections', 'Comparisons', 'Security &amp; Activity Log', 'Website Settings',
 ]) assert.match(html, new RegExp(`<span>${label}</span>`));
 
 const navigationSections = [...html.matchAll(/data-section="([a-z_]+)"/g)]
@@ -56,7 +56,7 @@ assert.match(js, /stacked:\s*true/);
 assert.match(js, /Available after next sign-in/);
 assert.match(js, /not bank settlement/i);
 assert.doesNotMatch(js, /forecast-guaranteed revenue[^\n]*executiveVisuals/i);
-assert.match(js, /function renderPaidSubscribers\(\)/);
+assert.match(js, /function renderPaidSubscribers\(context\)/);
 assert.match(js, /Paid verified/);
 assert.match(js, /Paid not verified/);
 assert.match(js, /Expired or within five days/i);
@@ -67,7 +67,7 @@ assert.match(js, /aria-sort/);
 assert.match(js, /Average time used/);
 assert.match(js, /Total time used/);
 assert.match(js, /Peak activity times/);
-assert.match(js, /Activity comparison is temporarily incomplete/);
+assert.doesNotMatch(js, /loadRecentUserActivityWindow\([\s\S]{0,180}\.catch\(\(\) => \(\{ items: \[\]/);
 assert.match(js, /A bounded page is sufficient/);
 assert.match(js, /Device and peak-hour distributions use the latest 100 sessions per period/);
 assert.match(js, /business-revenue-status-chart/);
@@ -80,8 +80,8 @@ assert.match(css, /dashboard-loading/);
 assert.match(css, /@media \(max-width: 920px\)/);
 assert.match(css, /@media \(min-width: 921px\)[\s\S]*\.menu-button \{ display: none !important; \}/);
 assert.match(css, /prefers-reduced-motion/);
-assert.match(css, /\.table-wrap td \.record-detail > summary[\s\S]*color:\s*var\(--obs-text\)/);
-assert.match(css, /\.table-wrap td \.record-detail\[open\] > summary[\s\S]*color:\s*var\(--obs-gold-bright\)/);
+assert.match(css, /\.record-detail-expanded[\s\S]*display:\s*grid/);
+assert.match(css, /\.admin-table-actions[\s\S]*position:\s*sticky/);
 assert.match(css, /\.table-wrap td \.record-source-links a[\s\S]*color:\s*var\(--obs-cyan\)/);
 assert.match(css, /recent-user-activity-table/);
 assert.match(css, /recent-user-summary/);

@@ -78,7 +78,7 @@ assert.doesNotMatch(phase2Css.match(/\.dd2-native-view\[data-native-view="examin
 
 assert.match(serviceWorker, /\/assets\/icons\/navigation\/door-open\.svg/);
 assert.match(serviceWorker, /phase2-experience\.js\?v=syllabus-reveal-p0-20260826-2/);
-assert.match(serviceWorker, /quorum-first-shell\.css\?v=examination-room-doors-20260826-2/);
+assert.match(serviceWorker, /quorum-first-shell\.css\?v=public-reliability-20260827-2/);
 assert.match(icon, /viewBox="0 0 24 24"/);
 assert.match(icon, /M11 4\.562v16\.157/);
 

@@ -7,6 +7,9 @@
   const siteHeader = document.getElementById('site-header');
   const appShell = document.getElementById('authenticated-app-shell');
   const dialog = document.getElementById('private-beta-dialog');
+  const navigationStatus = document.getElementById('public-navigation-status');
+  const navigationStatusCopy = document.getElementById('public-navigation-status-copy');
+  const navigationRetry = document.getElementById('public-navigation-retry');
   if (!landing || !siteHeader || !appShell || !dialog) return;
 
   const gateEnabled = config?.features?.privateBetaGate === true;
@@ -38,6 +41,9 @@
     routeActivationVersion: 0,
     quorumHomePromise: null,
     signInIntroInitialized: false,
+    publicNavigationVersion: 0,
+    publicNavigationBusy: false,
+    navigationStatusTimer: null,
   };
 
   function initializeSignInIntro() {
@@ -298,6 +304,7 @@
     const returnHash = safeReturnHash();
     if (returnHash && location.hash !== returnHash) history.replaceState({}, '', returnHash);
     if (options.activateRoute !== false) {
+      clearNavigationStatus();
       activateApplicationRoute(returnHash || location.hash).catch((error) => {
         global.toast?.(error?.message || 'This page could not be opened. Please try again.', 'warn');
       });
@@ -325,7 +332,6 @@
 
   function openQuorumHome(trigger = null) {
     if (state.quorumHomePromise) return state.quorumHomePromise;
-    resetQuorumHomeLocation();
     state.quorumHomePromise = openProtectedFeature('quorum', trigger)
       .finally(() => { state.quorumHomePromise = null; });
     return state.quorumHomePromise;
@@ -335,7 +341,7 @@
     if (dialog.open) dialog.close();
     state.lastActivatedHash = '';
     if (currentSession()?.access_token) {
-      await openQuorumHome(siteHeader.querySelector('.brand'));
+      await runPublicNavigation('quorum', siteHeader.querySelector('.brand'));
       return;
     }
     showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
@@ -609,7 +615,7 @@
     const authenticated = detail.authenticated === true || Boolean(currentSession()?.access_token);
     if (!gateEnabled) {
       if (authenticated && applicationRouteRequested()) showApplication();
-      else if (authenticated) await openQuorumHome();
+      else if (authenticated) await runPublicNavigation('quorum');
       else {
         showLanding({ accessAllowed: true });
       }
@@ -644,7 +650,7 @@
       const access = await api.status(currentSession().access_token);
       if (access?.allowed === true) {
         if (applicationRouteRequested()) showApplication();
-        else await openQuorumHome();
+        else await runPublicNavigation('quorum');
         return;
       }
     } catch {
@@ -708,6 +714,115 @@
     return await loader.loadForFeature(feature);
   }
 
+  const featureLabels = Object.freeze({
+    mock: 'Bar Question Practice',
+    'subject-matter': 'Syllabus-Based Review',
+    verdict: 'Analytics',
+    'bar-easy': 'Quick Drills',
+    quorum: 'Home',
+    retainer: 'Plans & Pricing',
+    'bar-feels': 'Bar Exam Simulation',
+    'chair-cases': '2026 Bar Chair’s Cases',
+    doctrines: 'Doctrine Review',
+    'anchor-cases': 'Anchor Case Digests',
+  });
+
+  function setPublicNavigationBusy(feature, busy) {
+    document.querySelectorAll('[data-public-feature], [data-public-home]').forEach((control) => {
+      const activeControl = control.dataset.publicFeature === feature
+        || (feature === 'quorum' && control.hasAttribute('data-public-home'));
+      if (busy) {
+        if (!Object.prototype.hasOwnProperty.call(control.dataset, 'publicNavigationWasDisabled')) {
+          control.dataset.publicNavigationWasDisabled = control.disabled ? 'true' : 'false';
+        }
+        control.disabled = true;
+        control.setAttribute('aria-disabled', 'true');
+        if (activeControl) {
+          control.setAttribute('aria-busy', 'true');
+          control.classList.add('is-loading');
+        }
+      } else {
+        if (!Object.prototype.hasOwnProperty.call(control.dataset, 'publicNavigationWasDisabled')) return;
+        control.disabled = control.dataset.publicNavigationWasDisabled === 'true';
+        delete control.dataset.publicNavigationWasDisabled;
+        if (!control.disabled) control.removeAttribute('aria-disabled');
+        control.removeAttribute('aria-busy');
+        control.classList.remove('is-loading');
+      }
+    });
+  }
+
+  function clearNavigationStatus() {
+    global.clearTimeout(state.navigationStatusTimer);
+    state.navigationStatusTimer = null;
+    if (!navigationStatus) return;
+    navigationStatus.hidden = true;
+    navigationStatus.classList.remove('is-error');
+    navigationStatus.setAttribute('role', 'status');
+    if (navigationStatusCopy) navigationStatusCopy.textContent = '';
+    if (navigationRetry) {
+      navigationRetry.hidden = true;
+      navigationRetry.disabled = false;
+      navigationRetry.onclick = null;
+    }
+  }
+
+  function showNavigationStatus(message, kind = 'loading') {
+    global.clearTimeout(state.navigationStatusTimer);
+    state.navigationStatusTimer = null;
+    if (!navigationStatus || !navigationStatusCopy) return;
+    navigationStatus.hidden = false;
+    navigationStatus.classList.toggle('is-error', kind === 'error');
+    navigationStatus.classList.toggle('is-success', kind === 'success');
+    navigationStatus.classList.toggle('is-loading', kind === 'loading');
+    navigationStatus.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+    navigationStatusCopy.textContent = message;
+    if (navigationRetry) {
+      navigationRetry.hidden = true;
+      navigationRetry.disabled = false;
+      navigationRetry.onclick = null;
+    }
+  }
+
+  function reportNavigationError(message, retry = null) {
+    if (!navigationStatus || !navigationStatusCopy) {
+      global.toast?.(message, 'warn');
+      return;
+    }
+    navigationStatus.hidden = false;
+    navigationStatus.classList.add('is-error');
+    navigationStatus.classList.remove('is-success', 'is-loading');
+    navigationStatus.setAttribute('role', 'alert');
+    navigationStatusCopy.textContent = message;
+    if (navigationRetry) {
+      navigationRetry.hidden = typeof retry !== 'function';
+      navigationRetry.disabled = false;
+      navigationRetry.onclick = typeof retry === 'function' ? async () => {
+        navigationRetry.disabled = true;
+        navigationRetry.setAttribute('aria-busy', 'true');
+        try {
+          await retry();
+        } catch (error) {
+          reportNavigationError(
+            error?.message || 'The page still could not be opened. Please try again.',
+            retry,
+          );
+        } finally {
+          navigationRetry.disabled = false;
+          navigationRetry.removeAttribute('aria-busy');
+        }
+      } : null;
+    }
+  }
+
+  async function invokePublicOpener(name, failureMessage, ...args) {
+    const opener = global[name];
+    if (typeof opener !== 'function') throw new Error(failureMessage);
+    const outcome = await opener(...args);
+    if (outcome === false || outcome == null) throw new Error(failureMessage);
+    return outcome;
+  }
+
   async function openProtectedFeature(feature, trigger = null) {
     const routes = {
       mock: '#mock-bar',
@@ -731,7 +846,7 @@
         title: 'Continue to Due Diligence',
         copy: 'Use Google to continue. You will return to the exact feature you selected.',
       });
-      return;
+      return false;
     }
     // Home/community is part of the signed-in shell, not a metered examination
     // feature. Requiring a commercial-access round trip here can strand a valid
@@ -739,80 +854,137 @@
     // slow or temporarily unavailable.
     if (!['retainer', 'quorum'].includes(feature)) {
       const allowed = await global.DueDiligencePhase4?.ensureProtectedAccess?.(returnHash);
-      if (allowed !== true) return;
+      if (allowed !== true) return false;
     }
     const loaded = feature === 'mock' || feature === 'retainer'
       ? true
       : await loadFeature(feature);
-    if (loaded === false) return;
+    if (loaded === false) return false;
     showApplication({ activateRoute: false });
     if (feature === 'quorum') {
-      const opened = await global.DueDiligenceQuorum?.open?.(document.getElementById('spa-community'));
+      const opened = await global.DueDiligenceQuorum?.open?.(
+        document.getElementById('spa-community'),
+        { forceHome: true },
+      );
       if (opened !== true) throw new Error('Home could not be opened. Please refresh and try again.');
       return true;
     }
-    requestAnimationFrame(() => {
-      if (feature === 'mock') {
-        state.lastActivatedHash = 'mock-bar';
-        global.showPage?.('mock', document.getElementById('spa-mock'));
-      } else if (feature === 'subject-matter') {
-        global.DueDiligenceExaminations?.openPerSubject?.();
-      } else if (feature === 'verdict') {
-        const url = new URL(location.href);
-        url.hash = routes.verdict;
-        const nextUrl = `${url.pathname}${url.search}${url.hash}`;
-        if (`${location.pathname}${location.search}${location.hash}` !== nextUrl) {
-          history.pushState({ ...(history.state || {}), dueDiligenceRoute: 'verdict' }, '', nextUrl);
-        }
-        state.lastActivatedHash = 'verdict';
-        global.openVerdictDashboard?.();
-      } else if (feature === 'bar-easy') {
-        global.openBarEasy?.();
-      } else if (feature === 'retainer') {
-        openLegalView('pricing');
-      } else if (feature === 'bar-feels') {
-        global.openPremiumBarFeels?.();
-      } else if (feature === 'chair-cases') {
-        global.openChairCases?.();
-      } else if (feature === 'doctrines') {
-        global.openDoctrines?.();
-      } else if (feature === 'anchor-cases') {
-        global.openAnchorCases?.();
+    if (feature === 'mock') {
+      const opened = global.showPage?.('mock', document.getElementById('spa-mock'));
+      if (opened !== true) throw new Error('Bar Question Practice could not be opened. Please try again.');
+      state.lastActivatedHash = 'mock-bar';
+    } else if (feature === 'subject-matter') {
+      const opened = await global.DueDiligenceExaminations?.openPerSubject?.();
+      if (opened !== true) throw new Error('Syllabus-Based Review could not be opened. Please try again.');
+    } else if (feature === 'verdict') {
+      await invokePublicOpener('openVerdictDashboard', 'Analytics could not be opened. Please try again.');
+      state.lastActivatedHash = 'verdict';
+    } else if (feature === 'bar-easy') {
+      await invokePublicOpener('openBarEasy', 'Quick Drills could not be opened. Please try again.');
+    } else if (feature === 'retainer') {
+      openLegalView('pricing');
+    } else if (feature === 'bar-feels') {
+      const outcome = await invokePublicOpener('openPremiumBarFeels', 'Bar Exam Simulation could not be opened. Please try again.');
+      if (outcome?.status === 'retryable_error') {
+        throw new Error('Bar Exam Simulation could not be opened. Please try again.');
       }
-    });
+      if (outcome?.status === 'stale') return false;
+    } else if (feature === 'chair-cases') {
+      await invokePublicOpener('openChairCases', '2026 Bar Chair’s Cases could not be opened. Please try again.');
+    } else if (feature === 'doctrines') {
+      await invokePublicOpener('openDoctrines', 'Doctrine Review could not be opened. Please try again.');
+    } else if (feature === 'anchor-cases') {
+      await invokePublicOpener('openAnchorCases', 'Anchor Case Digests could not be opened. Please try again.');
+    } else {
+      throw new Error('That feature is not available from this menu.');
+    }
+    return true;
+  }
+
+  async function runPublicNavigation(feature, trigger = null) {
+    if (state.publicNavigationBusy) return false;
+    state.publicNavigationBusy = true;
+    const navigationVersion = ++state.publicNavigationVersion;
+    const label = featureLabels[feature] || 'This feature';
+    setPublicNavigationBusy(feature, true);
+    showNavigationStatus(`Opening ${label}…`);
+    try {
+      const opened = feature === 'quorum'
+        ? await openQuorumHome(trigger)
+        : await openProtectedFeature(feature, trigger);
+      if (navigationVersion !== state.publicNavigationVersion) return false;
+      if (opened !== true) {
+        if (!currentSession()?.access_token) {
+          showNavigationStatus(
+            `Sign in to continue to ${label}. Your selection will return after sign-in.`,
+            'info',
+          );
+        } else {
+          reportNavigationError(
+            `${label} did not open. Complete any access prompt, then try again.`,
+            () => runPublicNavigation(feature, trigger),
+          );
+        }
+        return false;
+      }
+      if (feature === 'quorum') resetQuorumHomeLocation();
+      showNavigationStatus(`${label} opened.`, 'success');
+      state.navigationStatusTimer = global.setTimeout(() => {
+        if (navigationVersion === state.publicNavigationVersion) clearNavigationStatus();
+      }, 1600);
+      return true;
+    } catch (error) {
+      if (navigationVersion !== state.publicNavigationVersion) return false;
+      reportNavigationError(
+        error?.message || `${label} could not be opened. Your current page is unchanged.`,
+        () => runPublicNavigation(feature, trigger),
+      );
+      return false;
+    } finally {
+      state.publicNavigationBusy = false;
+      setPublicNavigationBusy(feature, false);
+    }
+  }
+
+  async function handlePublicNavigation(event) {
+    const home = event.target.closest?.('[data-public-home]');
+    if (home && !event.defaultPrevented && !event.target.closest?.('#brand-subtitle')) {
+      event.preventDefault();
+      if (state.publicNavigationBusy || home.getAttribute('aria-disabled') === 'true') {
+        showNavigationStatus(
+          navigationStatusCopy?.textContent || 'Please wait for the current page to finish opening.',
+          'loading',
+        );
+        return;
+      }
+      closePublicMenus();
+      if (typeof global.returnToPublicHomepage === 'function') await global.returnToPublicHomepage();
+      else showPublicHomepage();
+      return;
+    }
+    const feature = event.target.closest?.('[data-public-feature]');
+    if (feature) {
+      event.preventDefault();
+      if (feature.disabled || feature.getAttribute('aria-busy') === 'true') return;
+      closePublicMenus();
+      await runPublicNavigation(feature.dataset.publicFeature, feature);
+      return;
+    }
+    const chamberLink = event.target.closest?.('[data-pb-chamber-link]');
+    if (chamberLink) {
+      closePublicMenus();
+      return;
+    }
+    const trigger = event.target.closest?.('[data-pb-menu-trigger]');
+    if (trigger) {
+      event.preventDefault();
+      togglePublicMenu(trigger);
+      return;
+    }
+    if (!event.target.closest?.('.pb-chamber-menu')) closePublicMenus();
   }
 
   function bindEvents() {
-    const handlePublicNavigation = async (event) => {
-      const home = event.target.closest?.('[data-public-home]');
-      if (home && !event.defaultPrevented && !event.target.closest?.('#brand-subtitle')) {
-        event.preventDefault();
-        closePublicMenus();
-        if (typeof global.returnToPublicHomepage === 'function') await global.returnToPublicHomepage();
-        else showPublicHomepage();
-        return;
-      }
-      const feature = event.target.closest?.('[data-public-feature]');
-      if (feature) {
-        event.preventDefault();
-        closePublicMenus();
-        if (feature.dataset.publicFeature === 'quorum') await openQuorumHome(feature);
-        else await openProtectedFeature(feature.dataset.publicFeature, feature);
-        return;
-      }
-      const chamberLink = event.target.closest?.('[data-pb-chamber-link]');
-      if (chamberLink) {
-        closePublicMenus();
-        return;
-      }
-      const trigger = event.target.closest?.('[data-pb-menu-trigger]');
-      if (trigger) {
-        event.preventDefault();
-        togglePublicMenu(trigger);
-        return;
-      }
-      if (!event.target.closest?.('.pb-chamber-menu')) closePublicMenus();
-    };
     [landing, siteHeader].forEach((root) => root.addEventListener('click', handlePublicNavigation));
     document.addEventListener('click', (event) => {
       if (!event.target.closest?.('.pb-chamber-menu')) closePublicMenus();
@@ -919,7 +1091,7 @@
       closePublicMenus();
       if (!applicationRouteRequested()) {
         if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
-          openQuorumHome();
+          runPublicNavigation('quorum');
         } else {
           showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
           renderPublicRoute({ focus: true });
@@ -934,7 +1106,7 @@
       closePublicMenus();
       if (!applicationRouteRequested()) {
         if (currentSession()?.access_token && (!gateEnabled || state.accessAllowed === true)) {
-          openQuorumHome();
+          runPublicNavigation('quorum');
         } else {
           showLanding({ accessAllowed: !gateEnabled || state.accessAllowed === true });
           renderPublicRoute({ focus: true });
@@ -964,7 +1136,7 @@
     if (!gateEnabled) {
       bindEvents();
       if (currentSession()?.access_token && applicationRouteRequested()) showApplication();
-      else if (currentSession()?.access_token) await openQuorumHome();
+      else if (currentSession()?.access_token) await runPublicNavigation('quorum');
       else {
         showLanding({ accessAllowed: true });
         renderPublicRoute({ focus: normalizedHash().startsWith('chamber/') });
@@ -982,6 +1154,11 @@
   global.DueDiligencePublicHome = Object.freeze({
     show: showPublicHomepage,
     showApplication,
+  });
+  global.DueDiligencePublicNavigation = Object.freeze({
+    clearStatus: clearNavigationStatus,
+    reportError: reportNavigationError,
+    open: runPublicNavigation,
   });
 
   if (document.readyState === 'loading') {

@@ -43,7 +43,11 @@ http.createServer(async (request, response) => {
     }
     return;
   }
-  const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  const relativePath = pathname === '/'
+    ? 'index.html'
+    : pathname.endsWith('/')
+      ? `${pathname.replace(/^\/+/, '')}index.html`
+      : pathname.replace(/^\/+/, '');
   const target = path.resolve(root, relativePath);
   if (!target.startsWith(`${root}${path.sep}`)) {
     response.writeHead(403);

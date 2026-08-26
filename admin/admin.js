@@ -20,8 +20,8 @@
     support: 'Support',
     corrections: 'Corrections',
     partnerships: 'Partnerships',
-    controls: 'Controls',
-    security: 'Audit Log',
+    controls: 'Website Settings',
+    security: 'Security & Activity Log',
     forum: 'Community Moderation',
     examinations: 'Exams',
     examination_room_v1: 'Examination Room',
@@ -113,6 +113,13 @@
     paidSubscriberRows: [],
     businessRevenueVisuals: null,
     businessComparisonVisuals: null,
+    renderEpoch: 0,
+    renderController: null,
+    reportWindowKey: null,
+    answerHistoryKey: null,
+    quorumPostsKey: null,
+    sectionReady: false,
+    exportInFlight: false,
   };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -305,6 +312,7 @@
       aria-label="${escapeHtml(options.section && sectionAllowed(options.section) ? 'Open' : 'Explain')} ${escapeHtml(label)}: ${escapeHtml(displayValue)}">
       <small title="${escapeHtml(label)}">${escapeHtml(label)}</small>
       <strong>${escapeHtml(displayValue)}</strong>${status}
+      <span class="metric-definition">${escapeHtml(options.copy || options.subtext || 'Selected reporting period.')}</span>
       <span class="metric-cue">${escapeHtml(options.cue || (options.section && sectionAllowed(options.section) ? 'Open details' : 'How this is counted'))}</span></button>`;
   }
 
@@ -344,7 +352,7 @@
     };
   }
 
-  async function api(path, body = {}) {
+  async function api(path, body = {}, options = {}) {
     const token = state.session?.access_token;
     if (!token) throw new Error('Administrator sign-in is required.');
     const response = await fetch(`${config.workerUrl}${path}`, {
@@ -356,6 +364,7 @@
         ...(global.DueDiligencePrivateBeta?.accessHeaders?.() || {}),
       },
       body: JSON.stringify(body),
+      signal: options.signal,
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.ok) {
@@ -366,55 +375,120 @@
     return payload;
   }
 
-  async function loadReport(force = false) {
-    if (state.report && !force) return state.report;
-    $('#dashboard-view').innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
-    const payload = await api('/admin/dashboard', reportingWindow());
-    state.report = payload.report;
-    const meta = state.report.meta || {};
+  function isRenderActive(epoch, section = state.section, signal = state.renderController?.signal) {
+    return epoch === state.renderEpoch
+      && section === state.section
+      && signal === state.renderController?.signal
+      && !signal?.aborted;
+  }
+
+  function isAbortError(error) {
+    return error?.name === 'AbortError' || error?.code === 'ABORT_ERR';
+  }
+
+  function currentRenderContext(section = state.section) {
+    return {
+      epoch: state.renderEpoch,
+      section,
+      signal: state.renderController?.signal,
+      commits: [],
+    };
+  }
+
+  function assertRenderActive(context) {
+    if (!context?.signal || !isRenderActive(context.epoch, context.section, context.signal)) {
+      throw new DOMException('Administrator view changed.', 'AbortError');
+    }
+  }
+
+  async function readApi(path, body, context) {
+    assertRenderActive(context);
+    const payload = await api(path, body, { signal: context.signal });
+    assertRenderActive(context);
+    return payload;
+  }
+
+  function stageRenderCommit(context, commit) {
+    assertRenderActive(context);
+    context.commits.push(commit);
+  }
+
+  function applyRenderCommits(context) {
+    assertRenderActive(context);
+    context.commits.forEach((commit) => commit());
+    context.commits.length = 0;
+  }
+
+  function commitReportMeta(report) {
+    const meta = report?.meta || {};
     $('#freshness b').textContent = meta.data_collection_start
       ? `Updated ${dateTime(meta.generated_at)}`
       : 'No verified analytics events yet';
     $('#system-banner').textContent = meta.data_collection_start
       ? `Data available since ${dateTime(meta.data_collection_start)}. Times shown in Asia/Manila.`
       : 'Analytics collection has no verified events yet. Historical figures are not fabricated.';
+  }
+
+  async function loadReport(force = false, context = currentRenderContext()) {
+    assertRenderActive(context);
+    const windowKey = context.windowKey || String($('#date-range')?.value || 30);
+    if (state.report && state.reportWindowKey === windowKey && !force) return state.report;
+    const payload = await readApi('/admin/dashboard', context.window || reportingWindow(), context);
+    assertRenderActive(context);
+    state.report = payload.report;
+    state.reportWindowKey = windowKey;
     return state.report;
   }
 
-  async function loadOperational(section, force = false, search = null) {
+  async function loadOperational(section, force = false, search = null, context = currentRenderContext()) {
+    assertRenderActive(context);
     const key = `${section}:${search || ''}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
-    const payload = await api('/admin/data', { section, search, limit: 100, offset: 0 });
+    const payload = await readApi('/admin/data', { section, search, limit: 100, offset: 0 }, context);
+    assertRenderActive(context);
     state.operational.set(key, payload.data);
     return payload.data;
+  }
+
+  function requireVerifiedTotal(data, label) {
+    if (data?.total == null || !Number.isFinite(Number(data.total))) {
+      throw new Error(`${label} did not provide a verified total. Partial results are not shown.`);
+    }
+    return data;
   }
 
   async function loadUserDirectory(
     force = false,
     search = state.userSearch,
     offset = state.userOffset,
+    context = currentRenderContext(),
   ) {
+    assertRenderActive(context);
     const normalizedSearch = String(search || '').trim();
     const normalizedOffset = Math.max(0, Number(offset) || 0);
     const key = `directory:${normalizedSearch}:${normalizedOffset}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
-    const payload = await api('/admin/user-directory', {
+    const payload = await readApi('/admin/user-directory', {
       search: normalizedSearch,
       limit: 100,
       offset: normalizedOffset,
       requestKey: uuidKey(),
-    });
+    }, context);
+    requireVerifiedTotal(payload.data, 'The account directory');
+    assertRenderActive(context);
     state.operational.set(key, payload.data);
     return payload.data;
   }
 
-  async function loadRecentSignIns(force = false) {
+  async function loadRecentSignIns(force = false, context = currentRenderContext()) {
+    assertRenderActive(context);
     const key = 'recent-sign-ins';
     if (!force && state.operational.has(key)) return state.operational.get(key);
-    const payload = await api('/admin/recent-sign-ins', {
+    const payload = await readApi('/admin/recent-sign-ins', {
       limit: 7,
       requestKey: uuidKey(),
-    });
+    }, context);
+    assertRenderActive(context);
     state.operational.set(key, payload.data);
     return payload.data;
   }
@@ -423,143 +497,170 @@
     force = false,
     search = state.recentUserSearch,
     offset = state.recentUserOffset,
+    context = currentRenderContext(),
   ) {
+    assertRenderActive(context);
     const window = reportingWindow();
     const normalizedSearch = String(search || '').trim();
     const normalizedOffset = Math.max(0, Number(offset) || 0);
     const key = `recent-user-activity:${window.from}:${window.to}:${normalizedSearch}:${normalizedOffset}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
-    const payload = await api('/admin/recent-user-activity', {
+    const payload = await readApi('/admin/recent-user-activity', {
       search: normalizedSearch,
       from: window.from,
       to: window.to,
       limit: 100,
       offset: normalizedOffset,
       requestKey: uuidKey(),
-    });
+    }, context);
+    requireVerifiedTotal(payload.data, 'Recent user activity');
+    assertRenderActive(context);
     state.operational.set(key, payload.data);
     return payload.data;
   }
 
-  async function loadPhase4Operational(section, force = false, search = null, offset = 0) {
+  async function loadPhase4Operational(section, force = false, search = null, offset = 0, context = currentRenderContext()) {
+    assertRenderActive(context);
     const premiumStatus = section === 'access' ? state.premiumStatus : 'all';
     const normalizedOffset = Math.max(0, Number(offset) || 0);
     const key = `phase4:${section}:${search || ''}:${premiumStatus}:${normalizedOffset}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
-    const payload = await api('/admin/phase4-data', {
+    const payload = await readApi('/admin/phase4-data', {
       section,
       search: search || '',
       limit: 100,
       offset: normalizedOffset,
       premiumStatus,
-    });
+    }, context);
+    requireVerifiedTotal(payload.data, humanizeAuditValue(section));
+    assertRenderActive(context);
     state.operational.set(key, payload.data);
     return payload.data;
   }
 
-  async function loadAllUserDirectory(force = false, search = '') {
+  async function loadAllUserDirectory(force = false, search = '', context = currentRenderContext()) {
+    assertRenderActive(context);
     const normalizedSearch = String(search || '').trim();
     const key = `directory:all:${normalizedSearch}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const items = [];
     let offset = 0;
-    let total = 0;
+    let total = null;
     do {
-      const page = await loadUserDirectory(force, normalizedSearch, offset);
+      const page = await loadUserDirectory(force, normalizedSearch, offset, context);
       const pageItems = Array.isArray(page.items) ? page.items : [];
-      if (offset === 0) total = Number(page.total || 0);
+      if (offset === 0) {
+        if (page.total == null || !Number.isFinite(Number(page.total))) {
+          throw new Error('The account directory did not provide a verified total. Partial results are not shown.');
+        }
+        total = Number(page.total);
+      }
       items.push(...pageItems);
       offset += pageItems.length;
       if (!pageItems.length || items.length >= 5_000) break;
     } while (offset < total);
     const result = { items, total, truncated: offset < total };
+    assertRenderActive(context);
     state.operational.set(key, result);
     return result;
   }
 
-  async function loadAllPhase4Operational(section, force = false, search = '') {
+  async function loadAllPhase4Operational(section, force = false, search = '', context = currentRenderContext()) {
+    assertRenderActive(context);
     const normalizedSearch = String(search || '').trim();
     const key = `phase4:all:${section}:${normalizedSearch}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const items = [];
     let offset = 0;
-    let total = 0;
+    let total = null;
     do {
-      const page = await loadPhase4Operational(section, force, normalizedSearch, offset);
+      const page = await loadPhase4Operational(section, force, normalizedSearch, offset, context);
       const pageItems = Array.isArray(page.items) ? page.items : [];
-      if (offset === 0) total = Number(page.total || 0);
+      if (offset === 0) {
+        if (page.total == null || !Number.isFinite(Number(page.total))) {
+          throw new Error(`${humanizeAuditValue(section)} did not provide a verified total. Partial results are not shown.`);
+        }
+        total = Number(page.total);
+      }
       items.push(...pageItems);
       offset += pageItems.length;
       if (!pageItems.length || items.length >= 5_000) break;
     } while (offset < total);
     const result = { items, total, truncated: offset < total };
+    assertRenderActive(context);
     state.operational.set(key, result);
     return result;
   }
 
-  async function loadRecentUserActivityWindow(from, to, force = false) {
+  async function loadRecentUserActivityWindow(from, to, force = false, context = currentRenderContext()) {
+    assertRenderActive(context);
     const key = `recent-user-activity:all:${from}:${to}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     // Aggregate totals, duration, daily activity, and activity mix already
     // cover the complete period. A bounded page is sufficient for the clearly
     // labelled device/hour sample and prevents a long serial request loop.
-    const payload = await api('/admin/recent-user-activity', {
+    const payload = await readApi('/admin/recent-user-activity', {
       search: '',
       from,
       to,
       limit: 100,
       offset: 0,
       requestKey: uuidKey(),
-    });
+    }, context);
+    requireVerifiedTotal(payload.data, 'Recent user activity');
     const page = payload.data || {};
     const items = Array.isArray(page.items) ? page.items : [];
-    const total = Number(page.total || 0);
+    const total = Number(page.total);
     const result = {
       ...page,
       items,
       total,
       truncated: items.length < total,
     };
+    assertRenderActive(context);
     state.operational.set(key, result);
     return result;
   }
 
-  async function loadForumModeration(force = false) {
+  async function loadForumModeration(force = false, context = currentRenderContext()) {
+    assertRenderActive(context);
     const window = reportingWindow();
     const key = `quorum:${window.from}:${window.to}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const [queue, analytics] = await Promise.all([
-      api('/admin/quorum', {
+      readApi('/admin/quorum', {
         operation: 'queue',
         payload: { status: 'pending' },
-      }),
-      api('/admin/quorum', {
+      }, context),
+      readApi('/admin/quorum', {
         operation: 'analytics',
         payload: { from: window.from, to: window.to },
-      }),
+      }, context),
     ]);
     const data = { queue: queue.data, analytics: analytics.data };
+    assertRenderActive(context);
     state.operational.set(key, data);
     return data;
   }
 
-  async function loadLiveActivity(force = false) {
-    if (state.liveActivity && !force) return state.liveActivity;
-    const payload = await api('/admin/live-activity', {
+  async function loadLiveActivity(force = false, context = currentRenderContext()) {
+    assertRenderActive(context);
+    const key = 'live-activity';
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const payload = await readApi('/admin/live-activity', {
       limit: 100,
       requestKey: uuidKey(),
-    });
-    state.liveActivity = payload.data;
-    return state.liveActivity;
+    }, context);
+    assertRenderActive(context);
+    state.operational.set(key, payload.data);
+    return payload.data;
   }
 
-  async function loadAnswerHistory(force = false) {
+  async function loadAnswerHistory(force = false, context = currentRenderContext()) {
+    assertRenderActive(context);
     const key = `answers:${state.answerFeature}:${state.answerSearch}:${state.answerOffset}`;
-    if (!force && state.operational.has(key)) {
-      state.answerHistory = state.operational.get(key);
-      return state.answerHistory;
-    }
-    const payload = await api('/admin/answer-history', {
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const payload = await readApi('/admin/answer-history', {
       targetUserId: null,
       from: null,
       to: null,
@@ -567,27 +668,32 @@
       feature: state.answerFeature,
       limit: 100,
       offset: state.answerOffset,
-    });
-    state.answerHistory = payload.data;
-    state.operational.set(key, state.answerHistory);
-    return state.answerHistory;
+    }, context);
+    requireVerifiedTotal(payload.data, 'Answer history');
+    assertRenderActive(context);
+    state.operational.set(key, payload.data);
+    return payload.data;
   }
 
   function currentAnswerHistoryItems() {
     return Array.isArray(state.answerHistory?.items) ? state.answerHistory.items : [];
   }
 
-  async function loadQuorumPosts(force = false) {
-    if (state.quorumPosts && !force) return state.quorumPosts;
-    const payload = await api('/admin/quorum/posts', {
+  async function loadQuorumPosts(force = false, context = currentRenderContext()) {
+    assertRenderActive(context);
+    const key = `quorum:${state.quorumPostStatus}:${state.quorumPostSearch}:${state.quorumPostOffset}`;
+    if (!force && state.operational.has(key)) return state.operational.get(key);
+    const payload = await readApi('/admin/quorum/posts', {
       search: state.quorumPostSearch,
       status: state.quorumPostStatus,
       limit: 100,
       offset: state.quorumPostOffset,
       requestKey: uuidKey(),
-    });
-    state.quorumPosts = payload.data;
-    return state.quorumPosts;
+    }, context);
+    requireVerifiedTotal(payload.data, 'Community posts');
+    assertRenderActive(context);
+    state.operational.set(key, payload.data);
+    return payload.data;
   }
 
   function compactText(value, emptyCopy = 'Not available') {
@@ -599,7 +705,7 @@
     const text = compactText(value);
     return {
       html: true,
-      value: `<details class="record-detail"><summary>${escapeHtml(label)}</summary><div>${escapeHtml(text)}</div></details>`,
+      value: `<div class="record-detail record-detail-expanded"><strong>${escapeHtml(label)}</strong><div>${escapeHtml(text)}</div></div>`,
     };
   }
 
@@ -614,7 +720,7 @@
     if (!links.length) return 'Not available';
     return {
       html: true,
-      value: `<details class="record-detail"><summary>View reference links</summary><ul class="record-source-links">${links.join('')}</ul></details>`,
+      value: `<div class="record-detail record-detail-expanded"><strong>Reference links</strong><ul class="record-source-links">${links.join('')}</ul></div>`,
     };
   }
 
@@ -641,16 +747,27 @@
     return String(copy.textContent || '').replace(/\s+/g, ' ').trim();
   }
 
-  function downloadCurrentSection() {
+  async function downloadCurrentSection() {
     const view = $('#dashboard-view');
-    if (!view) return;
-    const rangeControl = $('#reporting-range');
+    const button = $('#download-current-section');
+    if (!view || !state.sectionReady || state.exportInFlight) {
+      toast('Wait for the current Admin page to finish loading before exporting.');
+      return;
+    }
+    state.exportInFlight = true;
+    if (button) {
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.innerHTML = '<i class="ph ph-spinner-gap" aria-hidden="true"></i><span>Exporting…</span>';
+    }
+    try {
+    const rangeApplies = !$('#date-range')?.disabled;
     const rows = [
       ['Page', titles[state.section] || 'Admin'],
       ['Downloaded', new Date().toISOString()],
-      [rangeControl?.hidden ? 'Scope' : 'Date range', rangeControl?.hidden
-        ? 'All records shown for the current filters'
-        : ($('#date-range')?.selectedOptions?.[0]?.textContent || 'Current view')],
+      [rangeApplies ? 'Date range' : 'Scope', rangeApplies
+        ? ($('#date-range')?.selectedOptions?.[0]?.textContent || 'Current view')
+        : 'All records shown for the current filters'],
       [],
     ];
 
@@ -697,6 +814,18 @@
       .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     downloadCsv(`due-diligence-${filenameSection || 'admin'}-current-page.csv`, rows[0], rows.slice(1));
     toast('Current page data downloaded for Google Sheets. Use the page-specific download for the complete record set.');
+    if (button) button.innerHTML = '<i class="ph ph-check" aria-hidden="true"></i><span>Downloaded</span>';
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    } catch (error) {
+      toast(error?.message || 'The current Admin page could not be exported. Nothing was changed.');
+    } finally {
+      state.exportInFlight = false;
+      if (button) {
+        button.disabled = !state.sectionReady;
+        button.removeAttribute('aria-busy');
+        button.innerHTML = '<i class="ph ph-download-simple" aria-hidden="true"></i><span>Export current view</span>';
+      }
+    }
   }
 
   function observatoryKpi(label, value, icon, tone = '', note = '') {
@@ -826,7 +955,7 @@
       .slice(0, 7);
   }
 
-  async function renderExecutive(report) {
+  async function renderExecutive(report, context) {
     const current = report.current || {};
     const previous = report.previous || {};
     const traffic = current.traffic || {};
@@ -838,12 +967,13 @@
     const betaKnown = typeof betaAllAccess.enabled === 'boolean';
     const betaEnabled = betaAllAccess.enabled === true;
     const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
+    const paymentDataAvailable = sectionAllowed('payments');
     const [directory, recentSignIns, paymentData] = await Promise.all([
-      loadUserDirectory(false, '', 0).catch(() => ({ items: [], total: null })),
-      loadRecentSignIns(false).catch(() => ({ items: [] })),
-      sectionAllowed('payments')
-        ? loadPhase4Operational('payments').catch(() => ({ items: [] }))
-        : Promise.resolve({ items: [] }),
+      loadUserDirectory(false, '', 0, context),
+      loadRecentSignIns(false, context),
+      paymentDataAvailable
+        ? loadAllPhase4Operational('payments', false, '', context)
+        : Promise.resolve(null),
     ]);
     const recentAccounts = [...(
       recentSignIns.items?.length ? recentSignIns.items : directory.items || []
@@ -852,40 +982,48 @@
         right.monitoring_recorded_at || right.last_sign_in_at || 0,
       ) - new Date(left.monitoring_recorded_at || left.last_sign_in_at || 0))
       .slice(0, 7);
+    if (paymentData?.truncated) {
+      throw new Error('Payment records exceed the 5,000-record reporting limit. Executive commercial totals are not shown because they would be incomplete.');
+    }
     const signedInAccounts = engagement.signedInAccounts ?? directory.total;
     const answeringUsers = engagement.usersWithAnswers;
     const questionsAnswered = engagement.questionsAnswered ?? learning.successful_grades;
     const gradingSuccess = reliability.success_rate;
     const subscriptionSegments = executiveSubscriptionSegments(engagement);
     const deviceSegments = executiveDeviceSegments(report);
-    const paymentRows = paymentData.items || [];
+    const paymentRows = paymentData?.items || [];
     const approvedRows = paymentRows.filter((row) => String(row.status || '').toLowerCase() === 'approved');
     const pendingRows = paymentRows.filter((row) => !['approved', 'rejected'].includes(String(row.status || '').toLowerCase()));
-    const approvedValue = approvedRows.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0);
-    const pendingValue = pendingRows.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0);
+    const approvedValue = paymentDataAvailable
+      ? approvedRows.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0)
+      : null;
+    const pendingValue = paymentDataAvailable
+      ? pendingRows.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0)
+      : null;
     const subjectRows = [...(report.subjects || [])]
       .map((row) => ({ label: row.subject || 'Unspecified', value: Math.max(0, Number(row.successful_grades) || 0) }))
       .sort((left, right) => right.value - left.value)
       .slice(0, 7);
     const funnelRows = [
-      { label: 'Visitors', value: Number(traffic.unique_visitors) || 0 },
-      { label: 'Sign-in starts', value: Number(funnel.sign_in_started) || 0 },
-      { label: 'Sign-in completed', value: Number(funnel.sign_in_completed) || 0 },
-      { label: 'Registered', value: Number(funnel.registrations) || 0 },
-      { label: 'First answer', value: Number(answeringUsers) || 0 },
-    ];
-    report.executiveVisuals = {
+      { label: 'Visitors', value: traffic.unique_visitors },
+      { label: 'Sign-in starts', value: funnel.sign_in_started },
+      { label: 'Sign-in completed', value: funnel.sign_in_completed },
+      { label: 'Registered', value: funnel.registrations },
+      { label: 'Onboarding completed', value: funnel.onboarding_completed },
+    ].filter((row) => row.value != null);
+    const executiveVisuals = {
       activityLabels: ['Previous period', 'Selected period'],
       activityValues: [Number(previous.learning?.successful_grades) || 0, Number(learning.successful_grades) || 0],
       subscriptionSegments,
       deviceSegments,
       funnelRows,
-      revenueRows: [
+      revenueRows: paymentDataAvailable ? [
         { label: 'Approved value', value: approvedValue },
         { label: 'Pending request value', value: pendingValue },
-      ],
+      ] : [],
       subjectRows,
     };
+    stageRenderCommit(context, () => { report.executiveVisuals = executiveVisuals; });
     return `
       <div class="observatory-kpis">
         ${observatoryKpi('Signed-in accounts', number(signedInAccounts), 'ph-users-three', 'cyan', 'All recorded accounts')}
@@ -914,9 +1052,9 @@
           <div class="chart-shell compact"><canvas id="observatory-funnel-chart" aria-label="Sign-up funnel chart" role="img"></canvas></div>
         </section>
         <section class="observatory-card">
-          <div class="card-head"><div><h3>Revenue Record</h3><p>Verified requests; not bank settlement.</p></div><button type="button" class="icon-link" data-admin-section="business_revenue" aria-label="Open revenue records"><i class="ph ph-arrow-up-right" aria-hidden="true"></i></button></div>
+          <div class="card-head"><div><h3>Revenue Record</h3><p>${paymentDataAvailable ? 'Verified requests; not bank settlement.' : 'Requires payment-administration permission.'}</p></div>${paymentDataAvailable ? '<button type="button" class="icon-link" data-admin-section="business_revenue" aria-label="Open revenue records"><i class="ph ph-arrow-up-right" aria-hidden="true"></i></button>' : ''}</div>
           <div class="chart-shell compact"><canvas id="observatory-revenue-chart" aria-label="Approved and pending payment request value chart" role="img"></canvas></div>
-          <div class="revenue-summary"><span><b>${escapeHtml(`₱${number(approvedValue, 2)}`)}</b>Approved</span><span><b>${escapeHtml(`₱${number(pendingValue, 2)}`)}</b>Pending</span></div>
+          <div class="revenue-summary"><span><b>${escapeHtml(approvedValue == null ? 'Not available' : `₱${number(approvedValue, 2)}`)}</b>Approved</span><span><b>${escapeHtml(pendingValue == null ? 'Not available' : `₱${number(pendingValue, 2)}`)}</b>Pending</span></div>
         </section>
         <section class="observatory-card">
           <div class="card-head"><div><h3>Top Subjects by Answers</h3><p>Completed grades in the selected period.</p></div></div>
@@ -931,8 +1069,8 @@
           { html: true, value: commercialAccessBadge(account) }, accountRemainingAllowance(account),
         ]))}
       </section>
-      <details class="executive-operations observatory-card">
-        <summary><span><i class="ph ph-bell-ringing" aria-hidden="true"></i>Operations &amp; access</span><small>${escapeHtml(number((Number(report.queues?.pending_payments) || 0) + (Number(report.queues?.pending_support) || 0) + (Number(report.queues?.pending_corrections) || 0) + (Number(engagement.openQuorumReports) || 0)))} open items</small></summary>
+      <section class="executive-operations observatory-card">
+        <header class="executive-operations-heading"><span><i class="ph ph-bell-ringing" aria-hidden="true"></i>Operations &amp; access</span><small>${escapeHtml(number((Number(report.queues?.pending_payments) || 0) + (Number(report.queues?.pending_support) || 0) + (Number(report.queues?.pending_corrections) || 0) + (Number(engagement.openQuorumReports) || 0)))} open items</small></header>
         <div class="executive-operations-grid">
           <div class="observatory-actions">
             ${observatoryAction('Payments', 'Proofs awaiting review', report.queues?.pending_payments, 'payments', 'ph-receipt')}
@@ -954,7 +1092,7 @@
             ).value}</div>` : ''}
           </div>
         </div>
-      </details>`;
+      </section>`;
   }
 
   function barList(rows) {
@@ -969,8 +1107,9 @@
         <strong>${number(value)}</strong></button>`).join('')}</div>`;
   }
 
-  async function renderRealtime(report) {
-    const activity = await loadLiveActivity();
+  async function renderRealtime(report, context) {
+    const activity = await loadLiveActivity(false, context);
+    stageRenderCommit(context, () => { state.liveActivity = activity; });
     const current = report.current?.traffic || {};
     const previous = report.previous?.traffic || {};
     return `
@@ -1078,12 +1217,15 @@
       </div>`;
   }
 
-  async function renderBusinessRevenue() {
+  async function renderBusinessRevenue(context) {
     const [payments, refunds, directory] = await Promise.all([
-      loadAllPhase4Operational('payments').catch(() => ({ items: [] })),
-      loadAllPhase4Operational('refunds').catch(() => ({ items: [] })),
-      loadAllUserDirectory().catch(() => ({ items: [] })),
+      loadAllPhase4Operational('payments', false, '', context),
+      loadAllPhase4Operational('refunds', false, '', context),
+      loadAllUserDirectory(false, '', context),
     ]);
+    if (payments.truncated || refunds.truncated || directory.truncated) {
+      throw new Error('Revenue records exceed the 5,000-record reporting limit. Partial totals are not shown.');
+    }
     const paymentRows = payments.items || [];
     const refundRows = refunds.items || [];
     const directoryRows = directory.items || [];
@@ -1103,7 +1245,7 @@
       { label: 'Rejected', value: rejected.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0) },
       { label: 'Refunded', value: approvedRefunds },
     ];
-    state.businessRevenueVisuals = { statusRows };
+    stageRenderCommit(context, () => { state.businessRevenueVisuals = { statusRows }; });
     const recentRows = [...paymentRows]
       .sort((left, right) => new Date(right.submitted_at || 0) - new Date(left.submitted_at || 0))
       .slice(0, 20)
@@ -1144,20 +1286,20 @@
       </div>`;
   }
 
-  async function renderBusinessProjections(report) {
+  async function renderBusinessProjections(report, context) {
     const [directory, payments] = await Promise.all([
-      loadAllUserDirectory().catch(() => ({ items: [], total: 0 })),
-      loadAllPhase4Operational('payments').catch(() => ({ items: [] })),
+      loadAllUserDirectory(false, '', context),
+      loadAllPhase4Operational('payments', false, '', context),
     ]);
+    if (directory.truncated || payments.truncated) {
+      throw new Error('Projection inputs exceed the 5,000-record reporting limit. Partial baselines are not shown.');
+    }
     const directoryRows = directory.items || [];
     const paymentRows = payments.items || [];
     const verifiedPaid = paidSubscriberRecords(directoryRows, paymentRows)
       .filter(({ account, payment }) => paidSubscriberState(account, payment).label === 'Paid verified');
-    const visitors = Math.max(
-      Number(report.current?.traffic?.unique_visitors || 0),
-      Number(directory.total || directoryRows.length || 0),
-    );
-    const observedConversion = visitors > 0 ? (verifiedPaid.length / visitors) * 100 : 0;
+    const accountReach = Number(directory.total || directoryRows.length || 0);
+    const observedConversion = accountReach > 0 ? (verifiedPaid.length / accountReach) * 100 : 0;
     const defaultRate = observedConversion > 0 ? observedConversion : 5;
     const approvedValue = paymentRows
       .filter((row) => String(row.status).toLowerCase() === 'approved')
@@ -1165,7 +1307,7 @@
     return `
       ${heading('Projections', 'Build a planning scenario from transparent assumptions. Forecasts are never mixed with verified performance.')}
       <div class="observatory-kpis">
-        ${observatoryKpi('Recorded reach', number(visitors), 'ph-users-three', 'cyan', 'Larger of selected visitors or accounts')}
+        ${observatoryKpi('Signed-in accounts', number(accountReach), 'ph-users-three', 'cyan', 'All-time account directory')}
         ${observatoryKpi('Verified paid records', number(verifiedPaid.length), 'ph-seal-check', 'green', 'Protected commercial ledger')}
         ${observatoryKpi('Observed conversion', `${number(observedConversion, 2)}%`, 'ph-percent', 'gold', 'Verified paid ÷ recorded reach')}
         ${observatoryKpi('Approved value', `₱${number(approvedValue, 2)}`, 'ph-currency-circle-dollar', 'green', 'Recorded requests, not bank settlement')}
@@ -1173,7 +1315,7 @@
       <section class="observatory-card">
         <div class="card-head"><div><h3>Commercial planning model</h3><p>Adjust reach, conversion, and price. Conservative and growth cases update automatically.</p></div><span class="status warn">Scenario</span></div>
         <div class="forecast-grid">
-          <label>Reach<input id="scenario-visitors" type="number" min="0" step="1" value="${escapeHtml(visitors || 1000)}"></label>
+          <label>Reach<input id="scenario-visitors" type="number" min="0" step="1" value="${escapeHtml(accountReach || 1000)}"></label>
           <label>Base conversion (%)<input id="scenario-rate" type="number" min="0" max="100" step="0.1" value="${escapeHtml(number(defaultRate, 2).replace(/,/g, ''))}"></label>
           <label>Price per access (₱)<input id="scenario-price" type="number" min="0" step="0.01" value="149"></label>
         </div>
@@ -1187,7 +1329,7 @@
       <section class="observatory-card">
         <div class="card-head"><div><h3>Decision boundaries</h3><p>The model uses real recorded reach as a starting point; all scenario outputs remain assumptions.</p></div></div>
         ${table(['Input', 'Recorded baseline', 'Planning treatment'], [
-          ['Reach', number(visitors), 'Editable'],
+          ['Reach', number(accountReach), 'All-time signed-in accounts; editable for planning'],
           ['Conversion', `${number(observedConversion, 2)}% observed`, 'Editable base; conservative and growth brackets are derived'],
           ['Price', '₱149.00 current recorded offer', 'Editable for planning only'],
           ['Costs and settlement', 'Not connected', 'Excluded rather than invented'],
@@ -1221,13 +1363,11 @@
       .slice(0, 8);
   }
 
-  async function renderBusinessComparisons(report) {
+  async function renderBusinessComparisons(report, context) {
     const window = reportingWindow();
     const [currentActivity, previousActivity] = await Promise.all([
-      loadRecentUserActivityWindow(window.from, window.to)
-        .catch(() => ({ items: [], summary: {}, activityMix: [], unavailable: true })),
-      loadRecentUserActivityWindow(window.previousFrom, window.previousTo)
-        .catch(() => ({ items: [], summary: {}, activityMix: [], unavailable: true })),
+      loadRecentUserActivityWindow(window.from, window.to, false, context),
+      loadRecentUserActivityWindow(window.previousFrom, window.previousTo, false, context),
     ]);
     const currentSummary = currentActivity.summary || {};
     const previousSummary = previousActivity.summary || {};
@@ -1244,7 +1384,7 @@
       ['Signed-in users', currentSummary.uniqueUsers, previousSummary.uniqueUsers],
       ['Signed-in sessions', currentSummary.sessions, previousSummary.sessions],
     ];
-    state.businessComparisonVisuals = {
+    const businessComparisonVisuals = {
       performanceLabels: performanceRows.map(([label]) => label),
       currentValues: performanceRows.map(([, current]) => current),
       previousValues: performanceRows.map(([, , previous]) => previous),
@@ -1252,11 +1392,11 @@
       currentDevices: deviceLabels.map((label) => currentDeviceMap.get(label) || 0),
       previousDevices: deviceLabels.map((label) => previousDeviceMap.get(label) || 0),
     };
+    stageRenderCommit(context, () => { state.businessComparisonVisuals = businessComparisonVisuals; });
     const currentHours = activityHourRows(currentActivity.items || []);
     const previousMix = new Map((previousActivity.activityMix || []).map((row) => [row.event_type, row.event_count]));
     return `
       ${heading('Comparisons', 'Compare the selected period with the immediately preceding period using the same definitions and reporting window.')}
-      ${(currentActivity.unavailable || previousActivity.unavailable) ? '<div class="notice danger"><strong>Activity comparison is temporarily incomplete.</strong> The protected session ledger could not be loaded. No missing values were estimated; refresh after the service recovers.</div>' : ''}
       <div class="observatory-kpis">
         ${observatoryKpi('Signed-in users', number(currentSummary.uniqueUsers), 'ph-users', 'cyan', 'Selected period')}
         ${observatoryKpi('Sessions', number(currentSummary.sessions), 'ph-browser', 'gold', 'Selected period')}
@@ -1317,7 +1457,8 @@
       const sortable = typeof header === 'object' && header
         ? header.sortable !== false
         : !/^(actions?|proof|review|transfer)$/i.test(label);
-      if (!sortable) return `<th scope="col">${escapeHtml(label)}</th>`;
+      const actionClass = /^actions?$/i.test(label) ? ' class="admin-table-actions"' : '';
+      if (!sortable) return `<th scope="col"${actionClass}>${escapeHtml(label)}</th>`;
       return `<th scope="col" aria-sort="none"><button type="button" class="table-sort" data-table-sort-index="${index}" aria-label="Sort by ${escapeHtml(label)}"><span>${escapeHtml(label)}</span><i class="ph ph-caret-up-down" aria-hidden="true"></i></button></th>`;
     }).join('');
   }
@@ -1390,7 +1531,8 @@
   function tableRowHtml(headers, cells) {
     return `<tr>${cells.map((cell, index) => {
       const label = tableHeaderLabel(headers[index]) || `Column ${index + 1}`;
-      return `<td data-label="${escapeHtml(label)}" data-sort-value="${escapeHtml(cellSortValue(cell))}">${cell?.html === true ? cell.value : escapeHtml(cellText(cell))}</td>`;
+      const actionClass = /^actions?$/i.test(label) ? ' class="admin-table-actions"' : '';
+      return `<td${actionClass} data-label="${escapeHtml(label)}" data-sort-value="${escapeHtml(cellSortValue(cell))}">${cell?.html === true ? cell.value : escapeHtml(cellText(cell))}</td>`;
     }).join('')}</tr>`;
   }
 
@@ -1432,16 +1574,20 @@
       .join('');
   }
 
-  async function renderRecentUsers() {
+  async function renderRecentUsers(context) {
     state.recentUserObserver?.disconnect();
-    state.recentUserObserver = null;
-    state.recentUserOffset = 0;
-    const data = await loadRecentUserActivity(false, state.recentUserSearch, 0);
+    const data = await loadRecentUserActivity(false, state.recentUserSearch, 0, context);
     const items = Array.isArray(data.items) ? data.items : [];
-    state.recentUserActivity = data;
-    state.recentUserOffset = items.length;
-    state.recentUserTotal = Number(data.total || 0);
-    const hasMore = state.recentUserOffset < state.recentUserTotal;
+    const recentUserOffset = items.length;
+    const recentUserTotal = Number(data.total);
+    const hasMore = recentUserOffset < recentUserTotal;
+    stageRenderCommit(context, () => {
+      state.recentUserObserver = null;
+      state.recentUserLoading = false;
+      state.recentUserActivity = data;
+      state.recentUserOffset = recentUserOffset;
+      state.recentUserTotal = recentUserTotal;
+    });
     const summary = data.summary || {};
     return `
       ${heading('Recent Users', 'Signed-in sessions, time used, and the latest recorded activity. This page is separate from the complete Users directory.')}
@@ -1468,29 +1614,33 @@
         <div class="table-wrap recent-user-activity-table"><table><thead><tr>${tableHeaderHtml(recentUserActivityHeaders)}</tr></thead>
           <tbody id="recent-user-activity-body">${items.length ? recentUserActivityRowsHtml(items) : `<tr><td colspan="${recentUserActivityHeaders.length}">${empty('No signed-in session activity matches this view.')}</td></tr>`}</tbody></table></div>
         <div class="continuous-directory-footer" id="recent-user-activity-sentinel">
-          <p class="panel-note" id="recent-user-activity-progress" role="status">Showing ${number(state.recentUserOffset)} of ${number(state.recentUserTotal)} matching session(s).</p>
+          <p class="panel-note" id="recent-user-activity-progress" role="status">Showing ${number(recentUserOffset)} of ${number(recentUserTotal)} matching session(s).</p>
           <button class="secondary-button" id="recent-users-load-more" type="button"${hasMore ? '' : ' hidden'}>Load more sessions</button>
         </div>
       </section>`;
   }
 
-  async function renderUsers() {
+  async function renderUsers(context) {
     state.userDirectoryObserver?.disconnect();
-    state.userDirectoryObserver = null;
-    state.userOffset = 0;
-    const data = await loadUserDirectory(false, state.userSearch, 0);
+    const data = await loadUserDirectory(false, state.userSearch, 0, context);
     const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
     const items = data.items || [];
-    state.userOffset = items.length;
-    state.userTotal = Number(data.total || 0);
-    const hasMore = state.userOffset < state.userTotal;
+    const userOffset = items.length;
+    const userTotal = Number(data.total);
+    const hasMore = userOffset < userTotal;
+    stageRenderCommit(context, () => {
+      state.userDirectoryObserver = null;
+      state.userDirectoryLoading = false;
+      state.userOffset = userOffset;
+      state.userTotal = userTotal;
+    });
     return `
       ${heading('Users', 'Search the complete account directory, review access and answer activity, or download the current user list for Google Sheets.')}
       <div class="table-tools"><input id="user-search" type="search" value="${escapeHtml(state.userSearch)}" placeholder="Search name, school, or email" aria-label="Search users"><button class="secondary-button" id="user-search-button">Search</button><button class="secondary-button" id="user-directory-export" type="button">Download user list</button></div>
       <div class="table-wrap recent-users-directory"><table><thead><tr>${tableHeaderHtml(userDirectoryHeaders)}</tr></thead>
         <tbody id="user-directory-body">${items.length ? userDirectoryRowsHtml(items, founderAuthorized) : `<tr><td colspan="${userDirectoryHeaders.length}">${empty('No matching user records are available.')}</td></tr>`}</tbody></table></div>
       <div class="continuous-directory-footer" id="user-directory-sentinel">
-        <p class="panel-note" id="user-directory-progress" role="status">Showing ${number(state.userOffset)} of ${number(state.userTotal)} matching account(s).</p>
+        <p class="panel-note" id="user-directory-progress" role="status">Showing ${number(userOffset)} of ${number(userTotal)} matching account(s).</p>
         <button class="secondary-button" id="users-load-more" type="button"${hasMore ? '' : ' hidden'}>Load more users</button>
       </div>
       ${founderAuthorized ? `<section class="panel">
@@ -1507,16 +1657,20 @@
             </select>
           </label>
           <label>Reason for sending<textarea id="user-directory-email-reason" minlength="5" maxlength="1000" required></textarea></label>
-          <label class="check-row"><input id="user-directory-email-confirm" type="checkbox" required> I am authorized to send this user list to the selected founder.</label>
           <button class="secondary-button" type="submit">Email user list</button>
         </form>
       </section>` : ''}`;
   }
 
-  async function renderAnswerExports(report) {
+  async function renderAnswerExports(report, context) {
     const engagement = report.engagement || report.engagementOverview || {};
-    const data = await loadAnswerHistory();
-    const filteredItems = currentAnswerHistoryItems();
+    const data = await loadAnswerHistory(false, context);
+    const filteredItems = Array.isArray(data.items) ? data.items : [];
+    const answerHistoryKey = `answers:${state.answerFeature}:${state.answerSearch}:${state.answerOffset}`;
+    stageRenderCommit(context, () => {
+      state.answerHistory = data;
+      state.answerHistoryKey = answerHistoryKey;
+    });
     const pageStart = Number(data.offset ?? state.answerOffset) + (filteredItems.length ? 1 : 0);
     const pageEnd = Number(data.offset ?? state.answerOffset) + filteredItems.length;
     const pageFeatureCounts = filteredItems.reduce((counts, item) => {
@@ -1565,7 +1719,6 @@
           <button class="secondary-button" id="answer-filter-button" type="button">Apply filter</button>
         </div>
         <p class="panel-note">Syllabus-Based Review and Bar Exam Simulation content comes from the immutable version saved with that attempt. Bar Question Practice content is matched by question ID to the current published Question Bank. Reference links shown with a saved result are listed first when available.</p>
-        ${table(['Name', 'Email', 'Access record', 'Feature', 'Subject or exam', 'Question', 'Student answer', 'Score', 'Suggested answer', 'Model answer', 'Reference links', 'Submitted'], rows)}
         <div class="pagination-bar">
           <p class="panel-note">Up to 100 records per page.</p>
           <div class="row-actions">
@@ -1573,6 +1726,7 @@
             <button class="secondary-button" id="answers-next" type="button"${data.hasMore ? '' : ' disabled'}>Next</button>
           </div>
         </div>
+        ${table(['Name', 'Email', 'Access record', 'Feature', 'Subject or exam', 'Question', 'Student answer', 'Score', 'Suggested answer', 'Model answer', 'Reference links', 'Submitted'], rows)}
       </section>
       <section class="panel">
         <h3>Download complete answer history</h3>
@@ -1583,21 +1737,20 @@
             <label>Through date (optional, inclusive)<input id="answer-history-to" type="date"></label>
           </div>
           <label>Reason for downloading<textarea id="answer-history-reason" minlength="5" maxlength="1000" required></textarea></label>
-          <label class="check-row"><input id="answer-history-confirm" type="checkbox" required> I am authorized to download private student work and will store it securely.</label>
           <button class="primary-button" type="submit">Download all answer records</button>
         </form>
       </section>`;
   }
 
-  async function renderLearning(report) {
-    const data = await loadUserDirectory(false, '', 0);
+  async function renderLearning(report, context) {
+    const data = await loadUserDirectory(false, '', 0, context);
     const studentRows = (data.items || []).filter((row) => (
       !['admin', 'founder_admin', 'super_admin'].includes(String(row.role || '').toLowerCase())
     ));
     const engagement = report.engagement || report.engagementOverview || {};
     const current = report.current?.learning || {};
     return `
-      ${heading('Learning Performance', 'Scores use the simulator’s 0–5 scale and one decimal place. Failed, timed-out, blocked, missing, and ungraded requests are not included in averages.')}
+      ${heading('Subject Performance', 'Scores use the simulator’s 0–5 scale and one decimal place. Failed, timed-out, blocked, missing, and ungraded requests are not included in averages.')}
       <div class="metric-strip">
         ${metric('Attempt average', current.attempt_average, null, (v) => v == null ? 'Not available' : `${number(v, 1)} / 5`)}
         ${metric('Mastery average', current.mastery_average, null, (v) => v == null ? 'Not available' : `${number(v, 1)} / 5`)}
@@ -1607,7 +1760,7 @@
         ${metric('Repeated-question improvement', current.average_improvement, null, (v) => v == null ? 'Not available' : `${Number(v) >= 0 ? '+' : ''}${number(v, 1)}`)}
         ${metric('Questions viewed', current.questions_viewed)}
         ${metric('Successful grades', current.successful_grades)}
-        ${metric('Users with grades', engagement.usersWithAnswers)}
+        ${metric('Users with grades', engagement.usersWithAnswers, null, number, { subtext: 'All-time persisted answers', copy: 'All-time accounts with at least one persisted answer.' })}
       </div>
       ${table(
         ['Name', 'Email', 'Access', 'Average score', 'Questions answered', 'Latest score', 'Last sign-in'],
@@ -1627,10 +1780,10 @@
     return `
       ${heading('Question Bank', 'Content counts come from the published Question Bank. The stored count helps Admins confirm that the website is using the expected records.')}
       <div class="metric-strip">
-        ${metric('Published subjects', report.inventory?.public_subjects)}
-        ${metric('Published questions', report.inventory?.public_question_bank)}
-        ${metric('Database subjects', report.inventory?.database_subjects)}
-        ${metric('Database questions', report.inventory?.database_questions)}
+        ${metric('Published subjects', report.inventory?.public_subjects, null, number, { copy: 'Current published Question Bank inventory.' })}
+        ${metric('Published questions', report.inventory?.public_question_bank, null, number, { copy: 'Current published Question Bank inventory.' })}
+        ${metric('Database subjects', report.inventory?.database_subjects, null, number, { copy: 'Current protected database inventory.' })}
+        ${metric('Database questions', report.inventory?.database_questions, null, number, { copy: 'Current protected database inventory.' })}
       </div>
       ${table(
         ['Subject', 'Views', 'Grading starts', 'Successful', 'Failures', 'Average', 'Reliability'],
@@ -1647,7 +1800,7 @@
   function renderReliability(report) {
     const reliability = report.current?.reliability || {};
     return `
-      ${heading('AI Grading Health', 'Recent grading service records. This is not a guaranteed uptime monitor, and private answers, prompts, passwords, and internal error details are not shown.')}
+      ${heading('Grading Health', 'Recent grading service records. This is not a guaranteed uptime monitor, and private answers, prompts, passwords, and internal error details are not shown.')}
       <div class="metric-strip">
         ${metric('Grading starts', reliability.grading_started)}
         ${metric('Successes', reliability.grading_success)}
@@ -1738,13 +1891,16 @@
       });
   }
 
-  async function renderPaidSubscribers() {
+  async function renderPaidSubscribers(context) {
     const [directory, payments] = await Promise.all([
-      loadAllUserDirectory(false, state.paidSubscriberSearch),
-      loadAllPhase4Operational('payments'),
+      loadAllUserDirectory(false, state.paidSubscriberSearch, context),
+      loadAllPhase4Operational('payments', false, '', context),
     ]);
+    if (directory.truncated || payments.truncated) {
+      throw new Error('Paid-subscriber records exceed the 5,000-record reporting limit. Partial totals are not shown.');
+    }
     const records = paidSubscriberRecords(directory.items || [], payments.items || []);
-    state.paidSubscriberRows = records;
+    stageRenderCommit(context, () => { state.paidSubscriberRows = records; });
     const verified = records.filter(({ account, payment }) => paidSubscriberState(account, payment).label === 'Paid verified');
     const notVerified = records.filter(({ account, payment }) => paidSubscriberState(account, payment).label === 'Paid not verified');
     const expiring = records.filter(({ account, payment }) => paidSubscriberExpiryAlert(paidSubscriberExpiry(account, payment)).rank >= 2);
@@ -1787,11 +1943,10 @@
       </section>`;
   }
 
-  async function renderSubscriptions(report) {
+  async function renderSubscriptions(report, context) {
     const [directory, introductoryAccess] = await Promise.all([
-      loadUserDirectory(false, state.subscriptionSearch, state.subscriptionOffset),
-      loadPhase4Operational('introductory_access', false, state.subscriptionSearch, state.subscriptionOffset)
-        .catch(() => ({ items: [] })),
+      loadUserDirectory(false, state.subscriptionSearch, state.subscriptionOffset, context),
+      loadPhase4Operational('introductory_access', false, state.subscriptionSearch, state.subscriptionOffset, context)
     ]);
     const betaAllAccess = report.betaAllAccess || {};
     const globalBetaKnown = typeof betaAllAccess.enabled === 'boolean';
@@ -1799,15 +1954,14 @@
     const subscriptionCounts = report.engagement?.subscriptionCounts
       || report.engagementOverview?.subscriptionCounts
       || {};
-    state.subscriptionRows.clear();
     const accounts = directory.items || [];
-    const commercialLabels = accounts.map((account) => commercialAccountLabel(account));
+    const subscriptionRows = new Map();
     const tokenByUser = new Map((introductoryAccess.items || []).map((row) => [row.user_id, row]));
-    const commercialCounts = commercialLabels.reduce((totals, label) => {
-      totals[label] = (totals[label] || 0) + 1;
-      return totals;
-    }, {});
-    state.subscriptionExportRows = accounts;
+    const reportCount = (label, fallbackLabel = null) => {
+      if (Object.prototype.hasOwnProperty.call(subscriptionCounts, label)) return subscriptionCounts[label];
+      if (fallbackLabel && Object.prototype.hasOwnProperty.call(subscriptionCounts, fallbackLabel)) return subscriptionCounts[fallbackLabel];
+      return null;
+    };
     const rows = accounts.map((account) => {
       const actionRow = Object.freeze({
         user_id: account.id,
@@ -1822,7 +1976,7 @@
         free_beta_enabled: Boolean(account.free_beta_enabled),
         free_beta_expires_at: account.free_beta_expires_at || null,
       });
-      state.subscriptionRows.set(account.id, actionRow);
+      subscriptionRows.set(account.id, actionRow);
       const token = tokenByUser.get(account.id);
       const tokenCopy = token?.introductory_token_limit == null
         ? 'Not granted'
@@ -1847,6 +2001,10 @@
     const pageEnd = Number(directory.offset ?? state.subscriptionOffset) + rows.length;
     const canGoBack = state.subscriptionOffset > 0;
     const canGoForward = pageEnd < Number(directory.total || 0);
+    stageRenderCommit(context, () => {
+      state.subscriptionRows = subscriptionRows;
+      state.subscriptionExportRows = accounts;
+    });
     return `
       ${heading('Subscriptions', 'Review each account’s commercial state and remaining introductory tokens. Access changes require a reason and are recorded.')}
       <div class="notice ${globalBetaKnown && globalBetaEnabled ? 'danger' : ''}"><strong>Launch safety access is ${!globalBetaKnown ? 'not confirmed' : globalBetaEnabled ? 'enabled' : 'disabled'}.</strong> ${!globalBetaKnown
@@ -1855,20 +2013,16 @@
         ? 'Every signed-in user temporarily bypasses commercial limits until an authorized founder activates commercial enforcement.'
         : 'Introductory-token, Founding Beta, provisional, and verified Early Access records determine access.'}</div>
       <div class="metric-strip">
-        ${summaryMetric('Admin & Staff', number(subscriptionCounts['Admin & Staff'] || 0))}
-        ${summaryMetric('Founding Beta', number(commercialCounts['Founding Beta'] || 0))}
-        ${summaryMetric('Introductory access', number(commercialCounts['Introductory access'] || commercialCounts.Free || 0))}
-        ${summaryMetric('Early Access — pending', number(commercialCounts['Early Access — pending'] || 0))}
-        ${summaryMetric('Early Access — verified', number(commercialCounts['Early Access — verified'] || 0))}
-        ${summaryMetric('Early Access — rejected', number(commercialCounts['Early Access — rejected'] || 0))}
-        ${summaryMetric('Expired', number(commercialCounts.Expired || 0))}
+        ${summaryMetric('Admin & Staff', reportCount('Admin & Staff') == null ? null : number(reportCount('Admin & Staff')), 'All accounts')}
+        ${summaryMetric('Beta Tester', reportCount('Beta Tester') == null ? null : number(reportCount('Beta Tester')), 'All accounts · server category')}
+        ${summaryMetric('Premium (legacy)', reportCount('Premium') == null ? null : number(reportCount('Premium')), 'All accounts · server category')}
+        ${summaryMetric('Regular / other access', reportCount('Regular') == null ? null : number(reportCount('Regular')), 'All accounts · server category')}
       </div>
       <div class="table-tools">
         <input id="subscription-search" type="search" value="${escapeHtml(state.subscriptionSearch)}" placeholder="Search name, school, or email" aria-label="Search subscriptions">
         <button class="secondary-button" id="subscription-search-button" type="button">Search</button>
         <button class="secondary-button" id="download-subscriptions" type="button">Download subscriptions</button>
       </div>
-      ${table(['Name', 'Email & tokens', 'Category', 'Plan record', 'Record status', 'Current access', 'Last sign-in', 'Questions answered', 'Resets or expires', 'Actions'], rows)}
       <div class="pagination-bar">
         <p class="panel-note">Showing ${number(pageStart)}–${number(pageEnd)} of ${number(directory.total)} matching account(s).</p>
         <div class="row-actions">
@@ -1876,8 +2030,9 @@
           <button class="secondary-button" id="subscriptions-next" type="button"${canGoForward ? '' : ' disabled'}>Next</button>
         </div>
       </div>
-      <details class="panel record-detail">
-        <summary>Show legacy access records</summary>
+      ${table(['Name', 'Email & tokens', 'Category', 'Plan record', 'Record status', 'Current access', 'Last sign-in', 'Questions answered', 'Resets or expires', 'Actions'], rows)}
+      <section class="panel record-detail record-detail-expanded">
+        <h3>Legacy access records</h3>
         <p class="panel-note">Historical trial and plan records remain preserved for audit and recovery. They are not offered for new purchase.</p>
         ${table(
           ['Name', 'Historical trial end', 'Founding-program record', 'Source', 'Historical status'],
@@ -1889,7 +2044,7 @@
             account.subscription_status ? humanizeAuditValue(account.subscription_status) : 'None',
           ]),
         )}
-      </details>
+      </section>
       <section class="panel">
         <h3>Commercial access options</h3>
         ${table(['Access', 'Price', 'Availability'], [
@@ -1899,16 +2054,16 @@
       <section class="panel"><h3>Refund policy</h3><p class="panel-note">Eligible Early Access requests must be filed within seven calendar days of first provisional or paid access. The server calculates the unused-time amount through October 1, capped at ₱149; administrator review and manual payment confirmation are required.</p></section>`;
   }
 
-  async function renderPayments() {
+  async function renderPayments(context) {
     const [data, proofAudit, directory] = await Promise.all([
-      loadPhase4Operational('payments'),
-      loadOperational('security', true).then((security) => (
+      loadPhase4Operational('payments', false, null, 0, context),
+      loadOperational('security', true, null, context).then((security) => (
         (security.items || [])
           .filter((row) => row.action_type === 'sensitive_data_viewed'
             && row.target_resource_type === 'payment_proof')
           .slice(0, 20)
-      )).catch(() => []),
-      loadAllUserDirectory().catch(() => ({ items: [] })),
+      )),
+      loadAllUserDirectory(false, '', context),
     ]);
     const directoryById = new Map((directory.items || []).map((account) => [String(account.id), account]));
     return `
@@ -1971,8 +2126,8 @@
       </section>`;
   }
 
-  async function renderRefunds() {
-    const data = await loadPhase4Operational('refunds');
+  async function renderRefunds(context) {
+    const data = await loadPhase4Operational('refunds', false, null, 0, context);
     return `
       ${heading('Refunds', 'Apply the published Philippine-peso policy and record payment, usage, and outage details before deciding.')}
       ${table(
@@ -1991,10 +2146,10 @@
       )}`;
   }
 
-  async function renderSupport() {
+  async function renderSupport(context) {
     const [support, recovery] = await Promise.all([
-      loadOperational('support'),
-      has('account_recovery_admin') ? loadOperational('recovery') : Promise.resolve({ items: [], total: 0 }),
+      loadOperational('support', false, null, context),
+      has('account_recovery_admin') ? loadOperational('recovery', false, null, context) : Promise.resolve({ items: [], total: 0 }),
     ]);
     const supportRows = (support.items || []).map((row) => [
       humanizeAuditValue(row.category), row.message, humanizeAuditValue(row.priority),
@@ -2019,8 +2174,8 @@
       </section>`;
   }
 
-  async function renderCorrections() {
-    const data = await loadOperational('corrections');
+  async function renderCorrections(context) {
+    const data = await loadOperational('corrections', false, null, context);
     const rows = (data.items || []).map((row) => [
       row.question_bank_id, row.subject, humanizeAuditValue(row.correction_type),
       row.proposed_correction, row.explanation,
@@ -2042,8 +2197,8 @@
       ${table(['Question', 'Subject', 'Type', 'Proposed correction', 'Explanation', 'Sources', 'Status', 'Action'], rows)}`;
   }
 
-  async function renderPartnerships() {
-    const data = await loadPhase4Operational('partnerships');
+  async function renderPartnerships(context) {
+    const data = await loadPhase4Operational('partnerships', false, null, 0, context);
     return `
       ${heading('Partnerships', 'Review institutional, academic, content, technology, and media inquiries. Contact details are private, and access is recorded in the activity log.')}
       ${table(
@@ -2062,8 +2217,8 @@
       )}`;
   }
 
-  async function renderControls() {
-    const data = await loadOperational('controls');
+  async function renderControls(context) {
+    const data = await loadOperational('controls', false, null, context);
     const allowed = [
       ['announcement_text', 'Announcement text'],
       ['beta_label', 'Beta label'],
@@ -2089,13 +2244,13 @@
           ];
         }),
       )}
-      <details class="panel record-detail"><summary>Future Admin tools</summary><p class="panel-note">Prepared, but not active: automated payments, renewals, coaching schedules, organizations, institution dashboards, notifications, content publishing, experiments, daily summaries, and return-visit reporting.</p></details>`;
+      `;
   }
 
-  async function renderSecurity() {
+  async function renderSecurity(context) {
     const [data, directory] = await Promise.all([
-      loadOperational('security'),
-      loadAllUserDirectory().catch(() => ({ items: [] })),
+      loadOperational('security', false, null, context),
+      loadAllUserDirectory(false, '', context),
     ]);
     const directoryById = new Map((directory.items || []).map((account) => [String(account.id), account]));
     return `
@@ -2136,8 +2291,8 @@
     return { html: true, value: `<span class="row-actions">${actions.join('')}</span>` };
   }
 
-  async function renderForumModeration() {
-    const data = await loadForumModeration();
+  async function renderForumModeration(context) {
+    const data = await loadForumModeration(false, context);
     const reportRows = (data.reports || []).map((row) => [
       dateTime(row.createdAt),
       row.targetType,
@@ -2156,7 +2311,7 @@
       actionButton('Remove restriction', 'forum_remove_restriction', row.id),
     ]);
     return `
-      ${heading('Community', 'Founder and Super Admin review only. Reports never reveal the reporting member, and post management never changes subscriptions or examination records.')}
+      ${heading('Community Moderation', 'Founder and Super Admin review only. Reports never reveal the reporting member, and post management never changes subscriptions or examination records.')}
       <div class="notice"><strong>Community safeguards:</strong> Plain-text publishing, source-link checks, rate limits, duplicate controls, private reporting, posting restrictions, and recorded moderation are active.</div>
       <section class="panel">
         <h3>Reported posts and comments</h3>
@@ -2235,10 +2390,10 @@
     return { html: true, value: `<div class="row-actions">${actions.join('')}</div>` };
   }
 
-  async function renderQuorumModeration() {
+  async function renderQuorumModeration(context) {
     const [data, posts] = await Promise.all([
-      loadForumModeration(),
-      loadQuorumPosts(),
+      loadForumModeration(false, context),
+      loadQuorumPosts(false, context),
     ]);
     const queue = data.queue || {};
     const analytics = data.analytics || {};
@@ -2292,8 +2447,13 @@
     ]);
     const postStart = Number(posts.offset || 0) + (postRows.length ? 1 : 0);
     const postEnd = Number(posts.offset || 0) + postRows.length;
+    const quorumPostsKey = `quorum:${state.quorumPostStatus}:${state.quorumPostSearch}:${state.quorumPostOffset}`;
+    stageRenderCommit(context, () => {
+      state.quorumPosts = posts;
+      state.quorumPostsKey = quorumPostsKey;
+    });
     return `
-      ${heading('Community', 'Review every post, see the author’s exact email, and remove content when necessary. A member can still delete their own post.')}
+      ${heading('Community Moderation', 'Review every post, see the author’s exact email, and remove content when necessary. A member can still delete their own post.')}
       <section class="panel">
         <div class="panel-title-row"><div><h3>All Community posts</h3><p class="panel-note">Showing ${number(postStart)}–${number(postEnd)} of ${number(posts.total)} post(s). Admin actions are recorded.</p></div><button class="secondary-button" id="download-quorum-posts" type="button">Download all matching posts</button></div>
         <div class="table-tools">
@@ -2303,11 +2463,11 @@
           </select>
           <button class="secondary-button" id="quorum-post-filter" type="button">Apply filter</button>
         </div>
-        ${table(['Posted', 'Name', 'Email', 'Type', 'Topic', 'Post', 'Status', 'Comments', 'Reports', 'Actions'], postRows)}
         <div class="pagination-bar"><span></span><div class="row-actions">
           <button class="secondary-button" id="quorum-post-previous" type="button"${state.quorumPostOffset > 0 ? '' : ' disabled'}>Previous</button>
           <button class="secondary-button" id="quorum-post-next" type="button"${posts.hasMore ? '' : ' disabled'}>Next</button>
         </div></div>
+        ${table(['Posted', 'Name', 'Email', 'Type', 'Topic', 'Post', 'Status', 'Comments', 'Reports', 'Actions'], postRows)}
       </section>
       <div class="notice"><strong>Reporting period:</strong> ${escapeHtml(dateTime(analytics.from))} to ${escapeHtml(dateTime(analytics.to))}. Updated ${escapeHtml(dateTime(analytics.lastUpdatedAt))}.</div>
       <div class="metric-strip">
@@ -2970,8 +3130,12 @@
     return [...totals.entries()].sort((left, right) => right[1] - left[1]).slice(0, 6);
   }
 
-  function mountObservatoryCharts(section, report) {
+  function mountObservatoryCharts(section, report, context, renderedSurface) {
     requestAnimationFrame(() => {
+      const view = $('#dashboard-view');
+      if (!isRenderActive(context?.epoch, context?.section, context?.signal)
+          || context.section !== section
+          || view?.firstElementChild !== renderedSurface) return;
       if (section === 'executive') {
         const visual = report.executiveVisuals || {};
         drawLineTrend($('#observatory-activity-chart'), visual.activityLabels || [], visual.activityValues || []);
@@ -3030,15 +3194,37 @@
       toast('Your administrator role does not have access to that section.');
       return false;
     }
+    state.renderController?.abort();
+    const controller = new AbortController();
+    const epoch = state.renderEpoch + 1;
+    state.renderEpoch = epoch;
+    state.renderController = controller;
     state.section = section;
+    state.sectionReady = false;
+    const context = {
+      epoch,
+      section,
+      signal: controller.signal,
+      commits: [],
+    };
     const title = titles[section] || 'Administration';
     $('#section-title').innerHTML = `${section === 'executive' ? '<i class="ph ph-wave-sine" aria-hidden="true"></i>' : ''}${escapeHtml(title)}`;
     if ($('#section-subtitle')) {
       $('#section-subtitle').textContent = sectionSubtitles[section] || 'Protected Due Diligence administration.';
     }
     const rangeControl = $('#reporting-range');
+    const rangeApplies = ['executive', 'realtime', 'recent_users', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
     if (rangeControl) {
-      rangeControl.hidden = !['executive', 'realtime', 'recent_users', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
+      rangeControl.hidden = false;
+      const rangeLabel = rangeControl.querySelector('.reporting-range-label');
+      if (rangeLabel) rangeLabel.textContent = rangeApplies ? 'Date range' : 'Scope';
+      const rangeSelect = $('#date-range');
+      if (rangeSelect) {
+        rangeSelect.disabled = !rangeApplies;
+        rangeSelect.title = rangeApplies
+          ? 'Choose the reporting period for this page'
+          : 'This page shows the current filtered record set';
+      }
     }
     $$('#admin-nav button').forEach((button) => button.setAttribute(
       'aria-current',
@@ -3047,44 +3233,61 @@
     const additionalTool = $(`.nav-more button[data-section="${section}"]`);
     if (additionalTool) additionalTool.closest('details').open = true;
     setSidebarOpen(false);
-    $('#dashboard-view').setAttribute('aria-busy', 'true');
-    $('#dashboard-view').innerHTML = '<div class="dashboard-loading" role="status" aria-label="Loading administrator data"><div class="skeleton skeleton-kpis"></div><div class="skeleton skeleton-panels"></div></div>';
+    const view = $('#dashboard-view');
+    const exportButton = $('#download-current-section');
+    const refreshButton = $('#refresh-dashboard');
+    view.setAttribute('aria-busy', 'true');
+    view.innerHTML = `<div class="dashboard-loading" role="status" aria-label="Loading administrator data"><p>Loading ${escapeHtml(title)}…</p><div class="skeleton skeleton-kpis"></div><div class="skeleton skeleton-panels"></div></div>`;
+    $('#freshness b').textContent = `Loading ${title}…`;
+    $('#system-banner').textContent = `Loading ${title}. Previously shown values are cleared until this request succeeds.`;
+    if (exportButton) exportButton.disabled = true;
+    if (refreshButton) {
+      refreshButton.disabled = true;
+      refreshButton.innerHTML = '<i class="ph ph-spinner-gap" aria-hidden="true"></i><span>Loading…</span>';
+    }
     try {
       const reportSections = new Set([
         'executive', 'realtime', 'acquisition', 'marketing', 'learning', 'subjects',
         'reliability', 'subscriptions', 'forum', 'answer_exports',
         'business_projections', 'business_comparisons',
       ]);
-      const report = reportSections.has(section) ? await loadReport() : {};
+      const window = reportingWindow();
+      const windowKey = String($('#date-range')?.value || 30);
+      context.window = window;
+      context.windowKey = windowKey;
+      const report = reportSections.has(section) ? await loadReport(false, context) : {};
       let html;
-      if (section === 'executive') html = await renderExecutive(report);
-      else if (section === 'realtime') html = await renderRealtime(report);
+      if (section === 'executive') html = await renderExecutive(report, context);
+      else if (section === 'realtime') html = await renderRealtime(report, context);
       else if (section === 'acquisition') html = renderAcquisition(report);
       else if (section === 'marketing') html = renderMarketing(report);
-      else if (section === 'recent_users') html = await renderRecentUsers();
-      else if (section === 'users') html = await renderUsers();
-      else if (section === 'learning') html = await renderLearning(report);
+      else if (section === 'recent_users') html = await renderRecentUsers(context);
+      else if (section === 'users') html = await renderUsers(context);
+      else if (section === 'learning') html = await renderLearning(report, context);
       else if (section === 'subjects') html = renderSubjects(report);
       else if (section === 'reliability') html = renderReliability(report);
-      else if (section === 'subscriptions') html = await renderSubscriptions(report);
-      else if (section === 'paid_subscribers') html = await renderPaidSubscribers();
-      else if (section === 'payments') html = await renderPayments();
-      else if (section === 'refunds') html = await renderRefunds();
-      else if (section === 'support') html = await renderSupport();
-      else if (section === 'corrections') html = await renderCorrections();
-      else if (section === 'partnerships') html = await renderPartnerships();
-      else if (section === 'controls') html = await renderControls();
-      else if (section === 'security') html = await renderSecurity();
-      else if (section === 'forum') html = await renderQuorumModeration();
+      else if (section === 'subscriptions') html = await renderSubscriptions(report, context);
+      else if (section === 'paid_subscribers') html = await renderPaidSubscribers(context);
+      else if (section === 'payments') html = await renderPayments(context);
+      else if (section === 'refunds') html = await renderRefunds(context);
+      else if (section === 'support') html = await renderSupport(context);
+      else if (section === 'corrections') html = await renderCorrections(context);
+      else if (section === 'partnerships') html = await renderPartnerships(context);
+      else if (section === 'controls') html = await renderControls(context);
+      else if (section === 'security') html = await renderSecurity(context);
+      else if (section === 'forum') html = await renderQuorumModeration(context);
       else if (section === 'examinations') html = await renderExaminations();
       else if (section === 'examination_room_v1') html = await global.DueDiligenceExaminationRoomAdmin.render();
-      else if (section === 'answer_exports') html = await renderAnswerExports(report);
-      else if (section === 'business_revenue') html = await renderBusinessRevenue();
-      else if (section === 'business_projections') html = await renderBusinessProjections(report);
-      else if (section === 'business_comparisons') html = await renderBusinessComparisons(report);
-      $('#dashboard-view').innerHTML = html;
+      else if (section === 'answer_exports') html = await renderAnswerExports(report, context);
+      else if (section === 'business_revenue') html = await renderBusinessRevenue(context);
+      else if (section === 'business_projections') html = await renderBusinessProjections(report, context);
+      else if (section === 'business_comparisons') html = await renderBusinessComparisons(report, context);
+      assertRenderActive(context);
+      applyRenderCommits(context);
+      view.innerHTML = html || empty('No verified records are available for this page.');
       bindDynamic();
-      mountObservatoryCharts(section, report);
+      const renderedSurface = view.firstElementChild;
+      mountObservatoryCharts(section, report, context, renderedSurface);
       if (section === 'examinations') bindExaminationAdmin();
       if (section === 'examination_room_v1') {
         global.DueDiligenceExaminationRoomAdmin.bind({
@@ -3093,14 +3296,52 @@
           refresh: () => renderSection('examination_room_v1'),
         });
       }
+      if (reportSections.has(section)) commitReportMeta(report);
+      else {
+        $('#freshness b').textContent = `Loaded ${dateTime(new Date().toISOString())}`;
+        $('#system-banner').textContent = `${title} shows current records for the filters on this page. The date-range selector does not apply.`;
+      }
+      state.sectionReady = true;
+      if (exportButton) exportButton.disabled = false;
       return true;
     } catch (error) {
-      $('#dashboard-view').innerHTML = heading('Admin dashboard unavailable', error.message || 'Admin data could not be loaded.')
-        + empty('Nothing was changed. Refresh after the connection or account permission is restored.');
+      if (isAbortError(error) || !isRenderActive(epoch, section)) return false;
+      state.sectionReady = false;
+      view.innerHTML = `${heading(`${title} unavailable`, error.message || 'Admin data could not be loaded.')}
+        <div class="notice danger" role="alert"><strong>No data was substituted.</strong> Previously loaded values were not shown under this page. Check the connection or permission, then retry.</div>
+        <button class="primary-button" type="button" data-retry-section="${escapeHtml(section)}">Retry ${escapeHtml(title)}</button>`;
+      view.querySelector('[data-retry-section]')?.addEventListener('click', () => renderSection(section));
+      $('#freshness b').textContent = `${title} not loaded`;
+      $('#system-banner').textContent = `${title} could not be loaded. No earlier page values are being shown.`;
+      if (exportButton) exportButton.disabled = true;
       return false;
     } finally {
-      $('#dashboard-view').removeAttribute('aria-busy');
+      if (isRenderActive(epoch, section, controller.signal)) {
+        view.removeAttribute('aria-busy');
+        if (refreshButton) {
+          refreshButton.disabled = false;
+          refreshButton.innerHTML = '<i class="ph ph-arrows-clockwise" aria-hidden="true"></i><span>Refresh</span>';
+        }
+      }
     }
+  }
+
+  function sectionFromLocation() {
+    const section = String(global.location.hash || '').replace(/^#/, '');
+    return Object.prototype.hasOwnProperty.call(titles, section) && sectionAllowed(section)
+      ? section
+      : 'executive';
+  }
+
+  function navigateSection(section, historyMode = 'push') {
+    if (!sectionAllowed(section)) {
+      toast('Your administrator role does not have access to that section.');
+      return Promise.resolve(false);
+    }
+    const nextUrl = `${global.location.pathname}${global.location.search}#${section}`;
+    if (historyMode === 'replace') global.history.replaceState(null, '', nextUrl);
+    else if (historyMode === 'push' && global.location.hash !== `#${section}`) global.history.pushState(null, '', nextUrl);
+    return renderSection(section);
   }
 
   function actionField(label, id, value = '', type = 'text') {
@@ -3150,35 +3391,25 @@
         mount.textContent = 'No permitted actions';
         return;
       }
-      const menu = document.createElement('details');
-      menu.className = 'action-menu';
-      const summary = document.createElement('summary');
-      summary.textContent = 'Actions';
-      summary.setAttribute(
-        'aria-label',
-        `Actions for ${row?.display_name || row?.user_id || 'student'}`,
-      );
-      const popover = document.createElement('div');
-      popover.className = 'action-menu-popover';
-      popover.setAttribute('role', 'menu');
+      mount.classList.add('row-actions', 'row-actions-visible');
       for (const descriptor of descriptors) {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = descriptor.label;
         button.dataset.tone = descriptor.tone;
-        button.setAttribute('role', 'menuitem');
+        button.setAttribute(
+          'aria-label',
+          `${descriptor.label} for ${row?.display_name || row?.user_id || 'student'}`,
+        );
         button.addEventListener('click', () => {
-          menu.open = false;
           openAction(
             descriptor.action,
             row.user_id,
             accessActionPayload(row, descriptor),
           );
         });
-        popover.append(button);
+        mount.append(button);
       }
-      menu.append(summary, popover);
-      mount.append(menu);
     });
   }
 
@@ -3515,6 +3746,28 @@
     $('#action-dialog-cancel').textContent = 'Done';
   }
 
+  function requiresDestructiveConfirmation(action, payload = {}) {
+    const operation = String(payload.operation || '').toLowerCase();
+    if (subscriptionActions?.isAccessAction(action)) {
+      return ['pause', 'cancel', 'expire', 'replace', 'replace_plan', 'remove', 'revoke', 'disable'].includes(operation);
+    }
+    if (action === 'entitlement_change') return ['paused', 'canceled', 'expired'].includes(String(payload.status || '').toLowerCase());
+    if (action === 'refund_review') return ['approved', 'rejected', 'paid'].includes(String(payload.status || '').toLowerCase());
+    if (action === 'global_beta_change') return payload.enabled === false;
+    if (action === 'website_control_update') return payload.wasPublished === true && payload.is_published === false;
+    if (action === 'role_change') {
+      const roleRank = { student: 0, beta_tester: 1, admin: 2, founder_admin: 3, super_admin: 4 };
+      const previousRank = roleRank[String(payload.previousRole || '').toLowerCase()];
+      const nextRank = roleRank[String(payload.role || '').toLowerCase()];
+      return Number.isFinite(previousRank) && Number.isFinite(nextRank) && nextRank < previousRank;
+    }
+    if (action === 'payment_review') return String(payload.status || '').toLowerCase() === 'rejected';
+    if (action.startsWith('forum_') || action.startsWith('quorum_')) {
+      return /(hide|remove|restrict|lock|reject)/i.test(action);
+    }
+    return false;
+  }
+
   function openAction(action, targetId, payload) {
     state.action = { action, targetId: targetId || null, payload: { ...(payload || {}) } };
     state.actionInFlight = false;
@@ -3698,24 +3951,34 @@
     $('#action-title').textContent = title;
     const isAccessAction = Boolean(subscriptionActions?.isAccessAction(action));
     const isPaymentReview = action === 'payment_review';
-    const isSensitiveExport = action === 'user_response_export';
     const isGlobalBetaAction = action === 'global_beta_change';
     const isForumAction = action.startsWith('forum_') || action.startsWith('quorum_');
     if (isAccessAction) buildAccessActionFields(action, state.action.payload);
     else $('#action-fields').innerHTML = fields;
+    const syncActionConfirmation = () => {
+      const livePayload = {
+        ...payload,
+        status: $('#action-status')?.value || payload.status,
+        role: $('#action-role')?.value || payload.role,
+        previousRole: payload.role,
+        is_published: $('#action-published')?.checked ?? payload.is_published,
+        wasPublished: Boolean(payload.is_published),
+      };
+      const destructive = requiresDestructiveConfirmation(action, livePayload);
+      $('#action-confirmation').hidden = !destructive;
+      if (!destructive) $('#action-confirm-risk').checked = false;
+    };
     $('#action-context').hidden = !isAccessAction;
-    $('#action-confirmation').hidden = !(isAccessAction || isForumAction || isSensitiveExport || isGlobalBetaAction);
+    syncActionConfirmation();
     $('#action-confirmation-copy').textContent = isGlobalBetaAction
       ? `I understand this will ${payload.enabled ? 'enable temporary safety access for' : 'activate commercial enforcement for'} all signed-in users and that the immediate change is recorded.`
-      : isSensitiveExport
-      ? 'I am authorized to access this student work and will handle the downloaded file securely. I understand this download is recorded.'
       : isForumAction
         ? 'I checked the report or content and the proposed moderation action. I understand this immediate action is recorded.'
         : 'I checked the user, current access, and proposed change. I understand this immediate action is recorded.';
     $('#action-confirm-risk').checked = false;
     $('#action-confirm').textContent = action === 'subscription_audit_view'
       ? 'View activity history'
-      : isSensitiveExport
+      : action === 'user_response_export'
         ? 'Download answer records'
         : isPaymentReview && payload.approvalOnly === true ? 'Confirm'
           : isPaymentReview ? 'Approve subscription'
@@ -3740,10 +4003,13 @@
           : selected === 'rejected'
             ? 'Rejecting revokes provisional access and records your reason. No receipt is sent.'
             : 'The request remains unapproved while the user provides the missing information. No receipt is sent.';
+        syncActionConfirmation();
       };
       decision?.addEventListener('change', syncPaymentDecision);
       syncPaymentDecision();
     }
+    if (!isPaymentReview) $('#action-status')?.addEventListener('change', syncActionConfirmation);
+    $('#action-published')?.addEventListener('change', syncActionConfirmation);
     if (history.state?.dueDiligenceAdminAction !== true) {
       history.pushState(
         { ...(history.state || {}), dueDiligenceAdminAction: true },
@@ -3756,19 +4022,23 @@
   async function confirmAction(event) {
     event.preventDefault();
     if (!state.action || state.actionInFlight) return;
-    const accessAction = Boolean(subscriptionActions?.isAccessAction(state.action.action));
     const forumAction = state.action.action.startsWith('forum_')
       || state.action.action.startsWith('quorum_');
-    const sensitiveExport = state.action.action === 'user_response_export';
-    const globalBetaAction = state.action.action === 'global_beta_change';
-    if ((accessAction || forumAction || sensitiveExport || globalBetaAction) && !$('#action-confirm-risk').checked) {
+    const confirmationPayload = {
+      ...state.action.payload,
+      status: $('#action-status')?.value || state.action.payload?.status,
+      role: $('#action-role')?.value || state.action.payload?.role,
+      previousRole: state.action.payload?.role,
+      is_published: $('#action-published')?.checked ?? state.action.payload?.is_published,
+      wasPublished: Boolean(state.action.payload?.is_published),
+    };
+    const destructive = requiresDestructiveConfirmation(state.action.action, confirmationPayload);
+    if (destructive && !$('#action-confirm-risk').checked) {
       toast(forumAction
         ? 'Confirm that you verified the report and moderation action.'
-        : globalBetaAction
+        : state.action.action === 'global_beta_change'
           ? 'Confirm that you understand the platform-wide access impact.'
-        : sensitiveExport
-          ? 'Confirm that you are authorized to download this private student work.'
-          : 'Confirm that you verified the target and proposed access change.');
+          : 'Confirm that you verified the target and destructive change.');
       return;
     }
     const reason = $('#action-reason').value.trim();
@@ -4134,6 +4404,8 @@
     const progress = $('#recent-user-activity-progress');
     const body = $('#recent-user-activity-body');
     if (!body) return;
+    const context = currentRenderContext('recent_users');
+    assertRenderActive(context);
 
     state.recentUserLoading = true;
     if (button) {
@@ -4145,9 +4417,11 @@
         false,
         state.recentUserSearch,
         state.recentUserOffset,
+        context,
       );
+      assertRenderActive(context);
       const items = Array.isArray(data.items) ? data.items : [];
-      state.recentUserTotal = Number(data.total || state.recentUserTotal || 0);
+      state.recentUserTotal = Number(data.total);
       if (!items.length) {
         if (progress) progress.textContent = `Showing ${number(state.recentUserOffset)} of ${number(state.recentUserTotal)} matching session(s). No additional records were returned.`;
         if (button) button.hidden = true;
@@ -4163,12 +4437,16 @@
       if (button) button.hidden = !hasMore;
       if (!hasMore) state.recentUserObserver?.disconnect();
     } catch (error) {
-      toast(error.message || 'More recent activity could not be loaded.');
+      if (!isAbortError(error) && isRenderActive(context.epoch, context.section, context.signal)) {
+        toast(error.message || 'More recent activity could not be loaded.');
+      }
     } finally {
-      state.recentUserLoading = false;
-      if (button && !button.hidden) {
-        button.disabled = false;
-        button.textContent = 'Load more sessions';
+      if (isRenderActive(context.epoch, context.section, context.signal)) {
+        state.recentUserLoading = false;
+        if (button && !button.hidden) {
+          button.disabled = false;
+          button.textContent = 'Load more sessions';
+        }
       }
     }
   }
@@ -4181,6 +4459,8 @@
     const progress = $('#user-directory-progress');
     const body = $('#user-directory-body');
     if (!body) return;
+    const context = currentRenderContext('users');
+    assertRenderActive(context);
 
     state.userDirectoryLoading = true;
     if (button) {
@@ -4189,9 +4469,10 @@
     }
     try {
       const startOffset = state.userOffset;
-      const data = await loadUserDirectory(false, state.userSearch, startOffset);
+      const data = await loadUserDirectory(false, state.userSearch, startOffset, context);
+      assertRenderActive(context);
       const items = Array.isArray(data.items) ? data.items : [];
-      state.userTotal = Number(data.total || state.userTotal || 0);
+      state.userTotal = Number(data.total);
       if (!items.length) {
         if (progress) progress.textContent = `Showing ${number(state.userOffset)} of ${number(state.userTotal)} matching account(s). No additional records were returned.`;
         if (button) button.hidden = true;
@@ -4218,13 +4499,17 @@
       if (button) button.hidden = !hasMore;
       if (!hasMore) state.userDirectoryObserver?.disconnect();
     } catch (error) {
-      if (progress) progress.textContent = `Showing ${number(state.userOffset)} of ${number(state.userTotal)} matching account(s).`;
-      toast(error.message || 'More users could not be loaded. You can retry without losing the current list.');
+      if (!isAbortError(error) && isRenderActive(context.epoch, context.section, context.signal)) {
+        if (progress) progress.textContent = `Showing ${number(state.userOffset)} of ${number(state.userTotal)} matching account(s).`;
+        toast(error.message || 'More users could not be loaded. You can retry without losing the current list.');
+      }
     } finally {
-      state.userDirectoryLoading = false;
-      if (button && !button.hidden) {
-        button.disabled = false;
-        button.textContent = 'Load more users';
+      if (isRenderActive(context.epoch, context.section, context.signal)) {
+        state.userDirectoryLoading = false;
+        if (button && !button.hidden) {
+          button.disabled = false;
+          button.textContent = 'Load more users';
+        }
       }
     }
   }
@@ -4235,7 +4520,7 @@
     $$('[data-insight]').forEach((button) => button.addEventListener('click', () => openInsight(button)));
     $$('[data-admin-section]').forEach((button) => button.addEventListener('click', () => {
       const section = button.dataset.adminSection;
-      if (sectionAllowed(section)) renderSection(section);
+      if (sectionAllowed(section)) navigateSection(section);
       else toast('Your administrator role does not have access to that section.');
     }));
     bindAdminActionButtons();
@@ -4243,8 +4528,7 @@
       state.recentUserSearch = $('#recent-user-search')?.value?.trim() || '';
       state.recentUserOffset = 0;
       state.recentUserActivity = null;
-      await loadRecentUserActivity(true, state.recentUserSearch, 0);
-      await renderSection('recent_users');
+      await navigateSection('recent_users', 'replace');
     });
     $('#recent-users-load-more')?.addEventListener('click', appendRecentUserActivityPage);
     const recentActivitySentinel = $('#recent-user-activity-sentinel');
@@ -4258,13 +4542,9 @@
     }
     $('#user-search-button')?.addEventListener('click', async () => {
       const search = $('#user-search').value.trim();
-      $('#dashboard-view').innerHTML = '<div class="skeleton"></div>';
-      try {
-        state.userSearch = search;
-        state.userOffset = 0;
-        await loadUserDirectory(true, search);
-        await renderSection('users');
-      } catch (error) { toast(error.message); }
+      state.userSearch = search;
+      state.userOffset = 0;
+      await navigateSection('users', 'replace');
     });
     bindUserAnswerButtons();
     $('#users-load-more')?.addEventListener('click', appendUserDirectoryPage);
@@ -4495,9 +4775,8 @@
       const form = event.currentTarget;
       const recipientKey = $('#user-directory-email-recipient')?.value || '';
       const reason = $('#user-directory-email-reason')?.value?.trim() || '';
-      const confirmed = $('#user-directory-email-confirm')?.checked === true;
-      if (!recipientKey || reason.length < 5 || !confirmed) {
-        toast('Select a founder, provide a reason, and confirm that you are allowed to send the list.');
+      if (!recipientKey || reason.length < 5) {
+        toast('Select a founder and provide a reason of at least five characters.');
         return;
       }
       const button = form.querySelector('button[type="submit"]');
@@ -4524,11 +4803,10 @@
       event.preventDefault();
       const form = event.currentTarget;
       const reason = $('#answer-history-reason')?.value?.trim() || '';
-      const confirmed = $('#answer-history-confirm')?.checked === true;
       const fromValue = $('#answer-history-from')?.value || '';
       const toValue = $('#answer-history-to')?.value || '';
-      if (reason.length < 5 || !confirmed) {
-        toast('Provide a reason and confirm that you are allowed to download private student work.');
+      if (reason.length < 5) {
+        toast('Provide a reason of at least five characters before downloading private student work.');
         return;
       }
       if (Boolean(fromValue) !== Boolean(toValue)) {
@@ -4691,9 +4969,10 @@
     if ($('#admin-dock-name')) $('#admin-dock-name').textContent = accountName;
     if ($('#admin-dock-role')) $('#admin-dock-role').textContent = humanizeAuditValue(state.authorization?.role || 'administrator');
     applyNavigationAuthorization();
-    const overviewReady = await renderSection('executive');
-    if (!overviewReady && sectionAllowed('payments')) {
-      const paymentsReady = await renderSection('payments');
+    const initialSection = sectionFromLocation();
+    const overviewReady = await navigateSection(initialSection, 'replace');
+    if (!overviewReady && initialSection === 'executive' && sectionAllowed('payments')) {
+      const paymentsReady = await navigateSection('payments', 'replace');
       if (paymentsReady) {
         toast('Overview is temporarily unavailable. Payments remains available.');
       }
@@ -4703,31 +4982,26 @@
   $('#admin-nav')?.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-section]');
     if (button && !button.hidden && sectionAllowed(button.dataset.section)) {
-      renderSection(button.dataset.section);
-      global.history.replaceState(null, '', `${global.location.pathname}${global.location.search}#${button.dataset.section}`);
+      navigateSection(button.dataset.section);
     }
   });
   $('#date-range')?.addEventListener('change', async () => {
     state.report = null;
+    state.reportWindowKey = null;
     state.operational.clear();
     await renderSection(state.section);
   });
   $('#refresh-dashboard')?.addEventListener('click', async () => {
-    const button = $('#refresh-dashboard');
-    button.disabled = true;
-    button.innerHTML = '<i class="ph ph-spinner-gap" aria-hidden="true"></i><span>Refreshing…</span>';
     state.report = null;
+    state.reportWindowKey = null;
     state.operational.clear();
     state.liveActivity = null;
     state.recentUserActivity = null;
     state.answerHistory = null;
+    state.answerHistoryKey = null;
     state.quorumPosts = null;
-    try {
-      await renderSection(state.section);
-    } finally {
-      button.disabled = false;
-      button.innerHTML = '<i class="ph ph-arrows-clockwise" aria-hidden="true"></i><span>Refresh</span>';
-    }
+    state.quorumPostsKey = null;
+    await renderSection(state.section);
   });
   $('#download-current-section')?.addEventListener('click', downloadCurrentSection);
   $('#menu-button')?.addEventListener('click', () => {
@@ -4768,7 +5042,11 @@
     }
   });
   global.addEventListener('popstate', () => {
-    if ($('#action-dialog')?.open) cancelActionDialog({ consumeHistory: false });
+    if ($('#action-dialog')?.open) {
+      cancelActionDialog({ consumeHistory: false });
+      return;
+    }
+    renderSection(sectionFromLocation());
   });
 
   initialize().catch(() => deny('The Admin dashboard could not open. Nothing was changed.'));

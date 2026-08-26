@@ -536,7 +536,7 @@ for (const asset of [
   );
 }
 assert.match(studyWorkspace, /service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1/);
-assert.match(serviceWorker, /duediligence-shell-20260827-commercial-readiness-profile-analytics-offline-paid-expiry-2/);
+assert.match(serviceWorker, /duediligence-shell-20260827-commercial-readiness-profile-analytics-offline-paid-expiry-4/);
 
 const userInstructionsStart = runbook.indexOf('## Copy-ready user and Support instructions');
 const technicalContractStart = runbook.indexOf('## Technical contract');

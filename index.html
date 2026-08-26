@@ -643,10 +643,31 @@
   .analytics-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px;}
   .analytics-panel h3{margin:0;font:700 21px/1.15 var(--serif-display);color:var(--navy);}
   .analytics-panel-note{margin:5px 0 0;color:var(--ink-soft);font:500 11.5px/1.5 var(--sans);}
-  .analytics-trend{display:flex;align-items:flex-end;gap:7px;height:188px;padding:15px 2px 0;border-bottom:1px solid rgba(15,33,58,.17);}
-  .analytics-trend-item{display:flex;flex:1 1 0;align-items:flex-end;min-width:7px;height:100%;}
-  .analytics-trend-bar{width:100%;min-height:3px;border-radius:5px 5px 0 0;background:linear-gradient(180deg,#efd071,#b78320);transition:filter .2s ease;}
-  .analytics-trend-item:hover .analytics-trend-bar{filter:brightness(.92);}
+  .analytics-trend-figure{margin:0;}
+  .analytics-trend-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:15px;}
+  .analytics-trend-summary-item{padding:10px 12px;border:1px solid rgba(15,33,58,.11);border-radius:9px;background:rgba(248,245,238,.72);}
+  .analytics-trend-summary-item span{display:block;font:700 8.5px var(--mono);letter-spacing:.9px;text-transform:uppercase;color:var(--ink-soft);}
+  .analytics-trend-summary-item strong{display:block;margin-top:5px;font:700 18px/1 var(--serif-display);color:var(--navy);font-variant-numeric:tabular-nums;}
+  .analytics-trend-summary-item strong.positive{color:var(--pass);}
+  .analytics-trend-summary-item strong.negative{color:var(--fail);}
+  .analytics-trend-plot{display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px;}
+  .analytics-trend-scale{display:flex;flex-direction:column;justify-content:space-between;height:188px;padding:12px 0 1px;text-align:right;color:var(--ink-soft);font:700 8.5px var(--mono);font-variant-numeric:tabular-nums;}
+  .analytics-trend{display:flex;align-items:flex-end;gap:7px;height:188px;padding:12px 2px 0;border-bottom:1px solid rgba(15,33,58,.24);background:linear-gradient(to bottom,rgba(15,33,58,.09) 0,rgba(15,33,58,.09) 1px,transparent 1px,transparent calc(50% - .5px),rgba(15,33,58,.07) calc(50% - .5px),rgba(15,33,58,.07) calc(50% + .5px),transparent calc(50% + .5px));}
+  .analytics-trend-item{display:flex;flex:1 1 0;align-items:flex-end;min-width:7px;height:100%;padding:0;border:0;background:transparent;cursor:pointer;}
+  .analytics-trend-bar{display:block;width:100%;min-height:3px;border-radius:5px 5px 0 0;background:linear-gradient(180deg,#efd071,#b78320);transition:filter .2s ease,box-shadow .2s ease,transform .2s ease;}
+  .analytics-trend-item:hover .analytics-trend-bar,.analytics-trend-item.is-selected .analytics-trend-bar{filter:brightness(.9);box-shadow:0 0 0 2px #fff,0 0 0 4px rgba(154,107,18,.62);transform:translateY(-1px);}
+  .analytics-trend-item:focus-visible{outline:none;}
+  .analytics-trend-item:focus-visible .analytics-trend-bar{filter:brightness(.9);box-shadow:0 0 0 2px #fff,0 0 0 4px var(--navy);transform:translateY(-1px);}
+  .analytics-trend-dates{grid-column:2;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:7px;color:var(--ink-soft);font:650 9px var(--mono);}
+  .analytics-trend-detail{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:14px;margin-top:15px;padding:13px 14px;border:1px solid rgba(197,160,89,.42);border-radius:10px;background:#fffaf0;}
+  .analytics-trend-detail-score strong{display:block;font:700 27px/1 var(--serif-display);color:var(--navy);font-variant-numeric:tabular-nums;}
+  .analytics-trend-detail-score span{display:block;margin-top:5px;font:700 8.5px var(--mono);letter-spacing:.7px;text-transform:uppercase;color:#805d1c;}
+  .analytics-trend-detail-copy strong,.analytics-trend-detail-copy span{display:block;}
+  .analytics-trend-detail-copy strong{font:700 13px/1.3 var(--sans);color:var(--ink);}
+  .analytics-trend-detail-copy span{margin-top:4px;color:var(--ink-soft);font:500 11px/1.45 var(--sans);}
+  .analytics-trend-change{justify-self:end;padding:6px 8px;border-radius:999px;background:rgba(15,33,58,.07);color:var(--navy);font:700 9px var(--mono);white-space:nowrap;}
+  .analytics-trend-change.positive{background:var(--pass-bg);color:var(--pass);}
+  .analytics-trend-change.negative{background:var(--fail-bg);color:var(--fail);}
   .analytics-empty-chart{display:grid;place-items:center;min-height:188px;color:var(--ink-soft);font:600 13px var(--sans);text-align:center;}
   .analytics-bars{display:grid;gap:13px;}
   .analytics-bar-top{display:flex;justify-content:space-between;gap:12px;margin-bottom:6px;font:650 12px var(--sans);color:var(--ink);}
@@ -677,7 +698,7 @@
   .verdict-record-badge.current{background:var(--pass-bg);color:var(--pass);}
   .verdict-record-badge.legacy{background:var(--amber-bg);color:var(--amber);}
   @media(max-width:980px){.analytics-overview{grid-template-columns:repeat(2,minmax(0,1fr));}.analytics-grid{grid-template-columns:1fr}.verdict-toolbar{grid-template-columns:repeat(2,minmax(0,1fr));}.verdict-toolbar label:first-child{grid-column:1/-1;}}
-  @media(max-width:640px){.analytics-page{padding:24px 14px 56px}.analytics-page-head{align-items:flex-start;flex-direction:column}.analytics-head-actions{justify-content:flex-start}.analytics-overview{grid-template-columns:1fr 1fr}.analytics-metric{min-height:126px;padding:15px}.analytics-grid{display:block}.analytics-panel{margin-bottom:14px;padding:16px}.verdict-toolbar{grid-template-columns:1fr}.verdict-toolbar label:first-child{grid-column:auto}.verdict-actions .btn-tool{flex:1 1 46%}.analytics-page-head h2{font-size:42px}.analytics-trend{height:150px;}}
+  @media(max-width:640px){.analytics-page{padding:24px 14px 56px}.analytics-page-head{align-items:flex-start;flex-direction:column}.analytics-head-actions{justify-content:flex-start}.analytics-overview{grid-template-columns:1fr 1fr}.analytics-metric{min-height:126px;padding:15px}.analytics-grid{display:block}.analytics-panel{margin-bottom:14px;padding:16px}.verdict-toolbar{grid-template-columns:1fr}.verdict-toolbar label:first-child{grid-column:auto}.verdict-actions .btn-tool{flex:1 1 46%}.analytics-page-head h2{font-size:42px}.analytics-trend-summary{grid-template-columns:1fr 1fr}.analytics-trend-summary-item:last-child{grid-column:1/-1}.analytics-trend,.analytics-trend-scale{height:150px}.analytics-trend{gap:4px}.analytics-trend-detail{grid-template-columns:auto 1fr}.analytics-trend-change{grid-column:1/-1;justify-self:start}.analytics-trend-dates span:nth-child(2){display:none;}}
 
   /* ---- Footer + disclaimer ---- */
   .site-footer{position:relative;z-index:1;background:linear-gradient(180deg,rgba(8,18,37,.94),rgba(4,12,24,.97));border-top:1px solid rgba(197,160,89,.28);padding:30px 26px 40px;margin-top:10px;}
@@ -3621,6 +3642,7 @@ function logAttempt(obj) {
 const verdictDashboard = {
   active: [], deleted: [], selected: new Set(), showDeleted: false,
   dataState: 'loading', dataMessage: '', capped: false,
+  trendSelectedKey: '',
   filters: {
     query: '', subject: '', feature: '', timer: '', record: '',
     minimum: '', maximum: '', dateFrom: '', dateTo: '',
@@ -3651,13 +3673,14 @@ function analyticsDisplayRecord(record) {
 }
 
 function analyticsRecordExportable(record) {
-  if (!record?.id || record.localOnly || verdictDashboard.showDeleted) return false;
+  if (!analyticsRecordGraded(record) || !record?.id || record.localOnly || verdictDashboard.showDeleted) return false;
   if (record.sourceType === 'legacy_grading_result') return true;
   if (record.sourceType === 'phase4_exam_attempt') {
-    return ['completed', 'unanswered'].includes(String(record.status || '').toLowerCase());
+    return String(record.status || '').toLowerCase() === 'completed';
   }
   if (record.sourceType === 'examination_attempt') {
-    return ['submitted', 'expired'].includes(String(record.status || '').toLowerCase());
+    return record.gradingComplete === true
+      && ['submitted', 'expired'].includes(String(record.status || '').toLowerCase());
   }
   return false;
 }
@@ -3686,7 +3709,9 @@ function verdictLocalRecords() {
     sourceType: item.id ? 'phase4_exam_attempt' : 'local_only',
     feature: 'Bar Question Practice', subject: item.subject || '', questionId: item.qId || '',
     score: item.score, elapsedSeconds: item.timeSpent, timerMode: item.timerMode || '',
-    occurredAt: item.timestamp || '', rubricVersion: item.rubricVersion || '',
+    status: analyticsFiniteScore(item) === null ? String(item.status || '') : 'completed',
+    gradingComplete: analyticsFiniteScore(item) !== null,
+    occurredAt: item.gradedAt || item.timestamp || '', rubricVersion: item.rubricVersion || '',
     wordCount: countWords(String(item.studentAnswer || '')),
     rubricBreakdown: item.rubricBreakdown && typeof item.rubricBreakdown === 'object'
       ? item.rubricBreakdown
@@ -3696,7 +3721,7 @@ function verdictLocalRecords() {
 }
 
 function filteredVerdictRecords() {
-  const source = verdictDashboard.showDeleted ? verdictDashboard.deleted : verdictDashboard.active;
+  const source = analyticsGradedRecords(verdictDashboard.showDeleted ? verdictDashboard.deleted : verdictDashboard.active);
   const filters = verdictDashboard.filters;
   return source.filter((record) => {
     const query = filters.query.toLowerCase();
@@ -3721,7 +3746,7 @@ function filteredVerdictRecords() {
 function verdictScore(record) {
   const score = normalizeFivePointScore(record.score);
   if (score !== null) return `${score.toFixed(1)} / 5`;
-  return record.score == null ? 'Not graded' : `${escapeHtml(String(record.score))} (legacy)`;
+  return '—';
 }
 
 function verdictFilterOptions(records, key) {
@@ -3735,13 +3760,41 @@ function analyticsFiniteScore(record) {
   return normalizeFivePointScore(record?.score);
 }
 
+function analyticsRecordGraded(record) {
+  if (analyticsFiniteScore(record) === null) return false;
+  if (record?.sourceType === 'legacy_grading_result') return true;
+  if (record?.sourceType === 'phase4_exam_attempt') {
+    return String(record.status || '').toLowerCase() === 'completed';
+  }
+  if (record?.sourceType === 'examination_attempt') {
+    return record.gradingComplete === true
+      && ['submitted', 'expired'].includes(String(record.status || '').toLowerCase());
+  }
+  return record?.sourceType === 'local_only' || record?.gradingComplete === true;
+}
+
+function analyticsGradedRecords(records) {
+  return (Array.isArray(records) ? records : []).filter(analyticsRecordGraded);
+}
+
+function analyticsRecordKey(record) {
+  return `${record?.sourceType || 'record'}:${record?.id || ''}`;
+}
+
 function analyticsAverage(values) {
-  const valid = values.map(Number).filter(Number.isFinite);
+  const valid = values
+    .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+    .map(Number)
+    .filter(Number.isFinite);
   return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : null;
 }
 
 function analyticsMedian(values) {
-  const valid = values.map(Number).filter(Number.isFinite).sort((left, right) => left - right);
+  const valid = values
+    .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+    .map(Number)
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right);
   if (!valid.length) return null;
   const middle = Math.floor(valid.length / 2);
   return valid.length % 2 ? valid[middle] : (valid[middle - 1] + valid[middle]) / 2;
@@ -3783,16 +3836,88 @@ function analyticsSubjectSummary(records) {
     .slice(0, 7);
 }
 
+function analyticsTrendPoints(records) {
+  return analyticsGradedRecords(records)
+    .map((record) => ({
+      record,
+      key: analyticsRecordKey(record),
+      score: analyticsFiniteScore(record),
+      occurredAt: record.occurredAt ? new Date(record.occurredAt).getTime() : NaN,
+    }))
+    .filter((point) => Number.isFinite(point.occurredAt))
+    .sort((left, right) => left.occurredAt - right.occurredAt || left.key.localeCompare(right.key))
+    .slice(-24)
+    .map((point, index, points) => ({
+      ...point,
+      change: index ? point.score - points[index - 1].score : null,
+    }));
+}
+
+function analyticsTrendChange(change) {
+  if (change === null) return { label: 'Starting point', compact: 'Start', className: '' };
+  if (Math.abs(change) < .05) return { label: 'No change from previous attempt', compact: 'No change', className: '' };
+  const magnitude = Math.abs(change).toFixed(1);
+  return change > 0
+    ? { label: `Improved by ${magnitude} from previous attempt`, compact: `+${magnitude} vs previous`, className: 'positive' }
+    : { label: `Declined by ${magnitude} from previous attempt`, compact: `−${magnitude} vs previous`, className: 'negative' };
+}
+
+function analyticsTrendDate(value, short = false) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return 'Date unavailable';
+  return short
+    ? date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
+    : date.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function analyticsTrendPointLabel(point) {
+  const change = analyticsTrendChange(point.change);
+  const subject = point.record.subject || 'Subject not recorded';
+  const feature = point.record.feature || 'Feature not recorded';
+  const question = point.record.questionId || point.record.questionNumber;
+  return `${analyticsTrendDate(point.occurredAt)}; ${subject}; ${feature}${question ? `; question ${question}` : ''}; score ${point.score.toFixed(1)} out of 5; ${change.label}.`;
+}
+
+function analyticsTrendDetailMarkup(point) {
+  const change = analyticsTrendChange(point.change);
+  const question = point.record.questionId || point.record.questionNumber;
+  const duration = point.record.elapsedSeconds != null ? `Writing time ${fmtSecs(point.record.elapsedSeconds)}` : '';
+  const wpm = analyticsWpm(point.record);
+  const measurements = [analyticsTrendDate(point.occurredAt), duration, wpm === null ? '' : `${Math.round(wpm)} WPM`].filter(Boolean);
+  return `<div class="analytics-trend-detail-score"><strong>${point.score.toFixed(1)} / 5</strong><span>Selected score</span></div>
+    <div class="analytics-trend-detail-copy"><strong>${escapeHtml(point.record.subject || 'Subject not recorded')}</strong><span>${escapeHtml(point.record.feature || 'Feature not recorded')}${question ? ` · ${escapeHtml(question)}` : ''}</span><span>${escapeHtml(measurements.join(' · '))}</span></div>
+    <span class="analytics-trend-change ${change.className}">${escapeHtml(change.compact)}</span>`;
+}
+
 function analyticsTrendMarkup(records) {
-  const points = records
-    .map((record) => ({ score: analyticsFiniteScore(record), occurredAt: new Date(record.occurredAt).getTime() }))
-    .filter((point) => point.score !== null && Number.isFinite(point.occurredAt))
-    .sort((left, right) => left.occurredAt - right.occurredAt)
-    .slice(-24);
+  const points = analyticsTrendPoints(records);
   if (!points.length) return '<div class="analytics-empty-chart">Complete a graded question to begin your score trend.</div>';
-  return `<div class="analytics-trend" role="img" aria-label="Score trend across the latest ${points.length} graded attempts">
-    ${points.map((point) => `<span class="analytics-trend-item" title="${point.score.toFixed(1)} out of 5"><span class="analytics-trend-bar" style="height:${Math.max(4, point.score / 5 * 100)}%"></span></span>`).join('')}
-  </div>`;
+  const selected = points.find((point) => point.key === verdictDashboard.trendSelectedKey) || points.at(-1);
+  verdictDashboard.trendSelectedKey = selected.key;
+  const latest = points.slice(-5);
+  const previous = points.slice(Math.max(0, points.length - 10), Math.max(0, points.length - 5));
+  const latestAverage = analyticsAverage(latest.map((point) => point.score));
+  const previousAverage = analyticsAverage(previous.map((point) => point.score));
+  const averageChange = previousAverage === null ? null : latestAverage - previousAverage;
+  const direction = analyticsTrendChange(averageChange);
+  return `<figure class="analytics-trend-figure">
+    <div class="analytics-trend-summary" aria-label="Recent score summary">
+      <div class="analytics-trend-summary-item"><span>Latest ${latest.length} average</span><strong>${latestAverage.toFixed(1)} / 5</strong></div>
+      <div class="analytics-trend-summary-item"><span>Previous ${previous.length || 5} average</span><strong>${previousAverage === null ? '—' : `${previousAverage.toFixed(1)} / 5`}</strong></div>
+      <div class="analytics-trend-summary-item"><span>Recent direction</span><strong class="${direction.className}">${averageChange === null ? `Need ${Math.max(1, 6 - points.length)} more` : escapeHtml(direction.compact)}</strong></div>
+    </div>
+    <div class="analytics-trend-plot">
+      <div class="analytics-trend-scale" aria-hidden="true"><span>5</span><span>2.5</span><span>0</span></div>
+      <div class="analytics-trend" role="group" aria-label="Latest ${points.length} graded attempts. Use left and right arrow keys to inspect each attempt.">
+        ${points.map((point) => {
+          const active = point.key === selected.key;
+          return `<button class="analytics-trend-item${active ? ' is-selected' : ''}" type="button" data-analytics-trend-key="${escapeHtml(point.key)}" aria-label="${escapeHtml(analyticsTrendPointLabel(point))}" aria-pressed="${active}" aria-controls="analytics-trend-detail" tabindex="${active ? '0' : '-1'}"><span class="analytics-trend-bar" style="height:${Math.max(3, point.score / 5 * 100)}%"></span></button>`;
+        }).join('')}
+      </div>
+      <div class="analytics-trend-dates" aria-hidden="true"><span>${escapeHtml(analyticsTrendDate(points[0].occurredAt, true))}</span><span>${points.length} graded attempt${points.length === 1 ? '' : 's'}</span><span>${escapeHtml(analyticsTrendDate(points.at(-1).occurredAt, true))}</span></div>
+    </div>
+    <figcaption class="analytics-trend-detail" id="analytics-trend-detail" aria-live="polite">${analyticsTrendDetailMarkup(selected)}</figcaption>
+  </figure>`;
 }
 
 function analyticsSubjectMarkup(records) {
@@ -3841,19 +3966,24 @@ function syncAnalyticsDataStatus() {
 function renderVerdictDashboard() {
   const body = document.getElementById('analytics-body');
   if (!body) return;
-  const all = verdictDashboard.showDeleted ? verdictDashboard.deleted : verdictDashboard.active;
+  const active = analyticsGradedRecords(verdictDashboard.active);
+  const deleted = analyticsGradedRecords(verdictDashboard.deleted);
+  const all = verdictDashboard.showDeleted ? deleted : active;
   const rows = filteredVerdictRecords();
-  const scored = verdictDashboard.active.map(analyticsFiniteScore).filter((score) => score !== null);
+  const scored = active.map(analyticsFiniteScore);
   const averageScore = analyticsAverage(scored);
   const bestScore = scored.length ? Math.max(...scored) : null;
-  const subjects = new Set(verdictDashboard.active.map((record) => record.subject).filter(Boolean));
-  const recent = verdictDashboard.active.filter((record) => Date.now() - new Date(record.occurredAt).getTime() <= 30 * 86400000).length;
-  const wpmValues = verdictDashboard.active.map(analyticsWpm).filter((value) => value !== null);
+  const subjects = new Set(active.map((record) => record.subject).filter(Boolean));
+  const recent = active.filter((record) => Date.now() - new Date(record.occurredAt).getTime() <= 30 * 86400000).length;
+  const wpmValues = active.map(analyticsWpm).filter((value) => value !== null);
   const medianWpm = analyticsMedian(wpmValues);
   const selected = rows.filter((record) => verdictDashboard.selected.has(`${record.sourceType}:${record.id}`));
+  const selectableRows = rows.filter((record) => !record.localOnly && record.id);
+  const exportableSelected = selected.filter(analyticsRecordExportable);
+  const actionableSelected = selected.filter((record) => !record.localOnly && record.id);
   const filtersActive = Object.values(verdictDashboard.filters).some((value) => String(value || '').trim());
   const dataNote = verdictDashboard.dataMessage || (verdictDashboard.dataState === 'complete'
-    ? `${verdictDashboard.capped ? 'The newest 500 active records are loaded; older records are not included in these charts. ' : ''}Synced account history is the primary source. Device-only attempts are identified in the table.`
+    ? `${verdictDashboard.capped ? 'The newest 500 graded records are loaded; older records are not included in these charts. ' : ''}Synced graded history is the primary source. Device-only graded attempts are identified in the table.`
     : verdictDashboard.dataState === 'partial'
       ? 'Account history could not be reached. The page is showing only attempts saved on this device, so totals and charts may be incomplete.'
       : 'No analytics history is currently available. Refresh after the service connection is restored.');
@@ -3867,18 +3997,18 @@ function renderVerdictDashboard() {
     <p class="analytics-data-note" role="note"><strong>Data coverage.</strong> ${escapeHtml(dataNote)} This is a private study record, not an official Bar rating or predicted result.</p>
     <div class="analytics-grid">
       <section class="analytics-panel" aria-labelledby="analytics-trend-title">
-        <div class="analytics-panel-head"><div><h3 id="analytics-trend-title">Score trend</h3><p class="analytics-panel-note">Latest graded attempts, shown chronologically.</p></div></div>
-        ${analyticsTrendMarkup(verdictDashboard.active)}
+        <div class="analytics-panel-head"><div><h3 id="analytics-trend-title">Score trend</h3><p class="analytics-panel-note">Latest graded attempts, shown chronologically. Select a bar for the subject, date, timing, and score change.</p></div></div>
+        ${analyticsTrendMarkup(active)}
       </section>
       <section class="analytics-panel" aria-labelledby="analytics-subject-title">
         <div class="analytics-panel-head"><div><h3 id="analytics-subject-title">Subject performance</h3><p class="analytics-panel-note">Average of recorded 0–5 assessments.</p></div></div>
-        ${analyticsSubjectMarkup(verdictDashboard.active)}
+        ${analyticsSubjectMarkup(active)}
       </section>
     </div>
     <div class="analytics-grid">
       <section class="analytics-panel" aria-labelledby="analytics-skills-title">
         <div class="analytics-panel-head"><div><h3 id="analytics-skills-title">Answer skills</h3><p class="analytics-panel-note">Only components present in stored grading records are calculated.</p></div></div>
-        ${analyticsRubricMarkup(verdictDashboard.active)}
+        ${analyticsRubricMarkup(active)}
       </section>
       <section class="analytics-panel" aria-labelledby="analytics-pace-title">
         <div class="analytics-panel-head"><div><h3 id="analytics-pace-title">Writing pace</h3><p class="analytics-panel-note">Words per minute requires both a stored word count and elapsed writing time.</p></div></div>
@@ -3888,7 +4018,7 @@ function renderVerdictDashboard() {
       </section>
     </div>
     <section class="analytics-panel" aria-labelledby="analytics-history-title">
-      <div class="analytics-panel-head"><div><h3 id="analytics-history-title">Attempt history</h3><p class="analytics-panel-note">Search, export, or move records to Recently Deleted for 30 days.</p></div></div>
+      <div class="analytics-panel-head"><div><h3 id="analytics-history-title">Attempt history</h3><p class="analytics-panel-note">Graded attempts only. Search, export, or move records to Recently Deleted for 30 days.</p></div></div>
     <details class="analytics-controls" ${filtersActive ? 'open' : ''}>
       <summary>Filter history</summary>
       <div class="verdict-toolbar" aria-label="Filter personal attempts">
@@ -3904,12 +4034,12 @@ function renderVerdictDashboard() {
       </div>
     </details>
     <div class="verdict-actions">
-      <button class="btn-tool" id="verdict-select-visible" type="button">Select filtered (${rows.length})</button>
-      <button class="btn-tool" id="verdict-export-selected" type="button" ${selected.length ? '' : 'disabled'}>Export selected (${selected.length})</button>
+      <button class="btn-tool" id="verdict-select-visible" type="button" ${selectableRows.length ? '' : 'disabled'}>Select synced (${selectableRows.length})</button>
+      <button class="btn-tool" id="verdict-export-selected" type="button" ${exportableSelected.length ? '' : 'disabled'}>Export selected (${exportableSelected.length})</button>
       ${verdictDashboard.showDeleted
-        ? `<button class="btn-tool" id="verdict-restore-selected" type="button" ${selected.length ? '' : 'disabled'}>Restore selected</button>`
-        : `<button class="btn-tool" id="verdict-archive-selected" type="button" ${selected.length ? '' : 'disabled'}>Remove selected</button>`}
-      <button class="btn-tool" id="verdict-toggle-deleted" type="button">${verdictDashboard.showDeleted ? 'Back to active history' : `Recently Deleted (${verdictDashboard.deleted.length})`}</button>
+        ? `<button class="btn-tool" id="verdict-restore-selected" type="button" ${actionableSelected.length ? '' : 'disabled'}>Restore selected</button>`
+        : `<button class="btn-tool" id="verdict-archive-selected" type="button" ${actionableSelected.length ? '' : 'disabled'}>Remove selected</button>`}
+      <button class="btn-tool" id="verdict-toggle-deleted" type="button">${verdictDashboard.showDeleted ? 'Back to active history' : `Recently Deleted (${deleted.length})`}</button>
     </div>
     <div class="table-scroll"><table class="attempt-table verdict-table">
       <thead><tr><th><span class="sr-only">Select</span></th><th>Score</th><th>Feature</th><th>Subject / question</th><th>Time</th><th>WPM</th><th>When</th><th>Record</th><th>Review</th></tr></thead>
@@ -3918,7 +4048,7 @@ function renderVerdictDashboard() {
         const current = record.sourceType !== 'legacy_grading_result';
         const exportable = analyticsRecordExportable(record);
         return `<tr>
-          <td><input type="checkbox" data-verdict-select="${escapeHtml(key)}" aria-label="Select ${escapeHtml(record.subject || 'attempt')}" ${verdictDashboard.selected.has(key) ? 'checked' : ''}></td>
+          <td><input type="checkbox" data-verdict-select="${escapeHtml(key)}" aria-label="Select ${escapeHtml(record.subject || 'attempt')}" ${verdictDashboard.selected.has(key) ? 'checked' : ''} ${record.localOnly ? 'disabled' : ''}></td>
           <td class="sc">${verdictScore(record)}</td>
           <td>${escapeHtml(record.feature || 'Feature not recorded')}</td>
           <td><strong>${escapeHtml(record.subject || 'Unlabelled')}</strong><small>${escapeHtml(record.questionId || record.questionNumber || '')}</small></td>
@@ -3928,9 +4058,9 @@ function renderVerdictDashboard() {
           <td><span class="verdict-record-badge ${current ? 'current' : 'legacy'}">${current ? 'Current' : 'Legacy'}</span></td>
           <td>${exportable
             ? `<button class="btn-tool" type="button" data-verdict-export-one="${escapeHtml(record.id)}">Export PDF</button>`
-            : (!record.localOnly && !verdictDashboard.showDeleted ? '<span class="analytics-export-unavailable">Available after submission</span>' : '—')}</td>
+            : (record.localOnly && !verdictDashboard.showDeleted ? '<span class="analytics-export-unavailable">Device-only summary</span>' : '—')}</td>
         </tr>`;
-      }).join('') || '<tr><td colspan="9"><div class="empty">No personal attempts match these filters.</div></td></tr>'}</tbody>
+      }).join('') || '<tr><td colspan="9"><div class="empty">No graded attempts match these filters.</div></td></tr>'}</tbody>
     </table></div>
     </section>`;
   syncAnalyticsDataStatus();
@@ -3951,7 +4081,41 @@ async function withVerdictExportApi(callback) {
   }
 }
 
+function bindAnalyticsTrend() {
+  const controls = [...document.querySelectorAll('[data-analytics-trend-key]')];
+  const activate = (control, focus = false) => {
+    if (!control) return;
+    const key = control.dataset.analyticsTrendKey;
+    const point = analyticsTrendPoints(verdictDashboard.active).find((item) => item.key === key);
+    if (!point) return;
+    verdictDashboard.trendSelectedKey = key;
+    controls.forEach((item) => {
+      const active = item === control;
+      item.classList.toggle('is-selected', active);
+      item.setAttribute('aria-pressed', String(active));
+      item.tabIndex = active ? 0 : -1;
+    });
+    const detail = document.getElementById('analytics-trend-detail');
+    if (detail) detail.innerHTML = analyticsTrendDetailMarkup(point);
+    if (focus) control.focus({ preventScroll: true });
+  };
+  controls.forEach((control, index) => {
+    control.addEventListener('click', () => activate(control));
+    control.addEventListener('keydown', (event) => {
+      let target = null;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') target = controls[Math.min(controls.length - 1, index + 1)];
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') target = controls[Math.max(0, index - 1)];
+      if (event.key === 'Home') target = controls[0];
+      if (event.key === 'End') target = controls.at(-1);
+      if (!target) return;
+      event.preventDefault();
+      activate(target, true);
+    });
+  });
+}
+
 function bindVerdictDashboard() {
+  bindAnalyticsTrend();
   const refreshButton = document.getElementById('analytics-refresh');
   if (refreshButton) refreshButton.onclick = () => loadVerdictDashboard();
   const resetButton = document.getElementById('analytics-reset');
@@ -3974,7 +4138,7 @@ function bindVerdictDashboard() {
     await withVerdictExportApi((api) => api.openVerdictExport(control.dataset.verdictExportOne));
   }));
   document.getElementById('verdict-select-visible')?.addEventListener('click', () => {
-    const rows = filteredVerdictRecords();
+    const rows = filteredVerdictRecords().filter((record) => !record.localOnly && record.id);
     const allSelected = rows.every((record) => verdictDashboard.selected.has(`${record.sourceType}:${record.id}`));
     rows.forEach((record) => {
       const key = `${record.sourceType}:${record.id}`;
@@ -3983,7 +4147,7 @@ function bindVerdictDashboard() {
     renderVerdictDashboard();
   });
   document.getElementById('verdict-export-selected')?.addEventListener('click', async () => {
-    const records = filteredVerdictRecords().filter((record) => verdictDashboard.selected.has(`${record.sourceType}:${record.id}`) && !record.localOnly);
+    const records = filteredVerdictRecords().filter((record) => verdictDashboard.selected.has(`${record.sourceType}:${record.id}`) && analyticsRecordExportable(record));
     if (records.length) await withVerdictExportApi((api) => api.exportVerdict(records.map((record) => record.id)));
   });
   document.getElementById('verdict-toggle-deleted')?.addEventListener('click', () => {
@@ -4014,8 +4178,8 @@ async function resetAnalyticsHistory() {
     toast('Reset is unavailable while more than 500 active records may exist. Narrow removal through the history table or contact Support.', 'warn');
     return;
   }
-  const localRecords = verdictLocalRecords();
-  const remoteRecords = verdictDashboard.active.filter((record) => !record.localOnly && record.id);
+  const localRecords = analyticsGradedRecords(verdictLocalRecords());
+  const remoteRecords = analyticsGradedRecords(verdictDashboard.active).filter((record) => !record.localOnly && record.id);
   if (!localRecords.length && !remoteRecords.length) {
     toast('Analytics is already clear.', 'ok');
     return;
@@ -4030,8 +4194,13 @@ async function resetAnalyticsHistory() {
       });
     }
     const storageKey = mockBarScopedKey(LS_KEY);
-    if (storageKey) safeStorageRemove(localStorage, storageKey);
-    historyLog = [];
+    const gradedLocalKeys = new Set(localRecords.map((record) => String(record.id || '')));
+    const retainedLocalHistory = loadAttempts().filter((item, index) => !gradedLocalKeys.has(String(item.id || `local-${index}`)));
+    if (storageKey) {
+      if (retainedLocalHistory.length) safeStorageSet(localStorage, storageKey, JSON.stringify(retainedLocalHistory));
+      else safeStorageRemove(localStorage, storageKey);
+    }
+    historyLog = retainedLocalHistory;
     verdictDashboard.selected.clear();
     await loadVerdictDashboard();
     toast('Analytics reset. Synced records remain recoverable in Recently Deleted for 30 days.', 'ok');
@@ -4048,37 +4217,36 @@ async function loadVerdictDashboard() {
   verdictDashboard.dataMessage = '';
   verdictDashboard.capped = false;
   syncAnalyticsDataStatus();
-  const local = verdictLocalRecords();
+  const local = analyticsGradedRecords(verdictLocalRecords());
   const [activeResult, deletedResult] = await Promise.allSettled([
     verdictRequest('/dd2026/verdict/records', { includeDeleted: false, limit: 500 }),
     verdictRequest('/dd2026/verdict/records', { includeDeleted: true, limit: 500 }),
   ]);
   if (activeResult.status === 'fulfilled') {
-    const remote = Array.isArray(activeResult.value?.items)
-      ? activeResult.value.items.map(analyticsDisplayRecord)
-      : [];
-    const remoteIds = new Set(remote.map((record) => String(record.id || '')));
+    const remoteItems = Array.isArray(activeResult.value?.items) ? activeResult.value.items : [];
+    const remote = analyticsGradedRecords(remoteItems.map(analyticsDisplayRecord));
+    const remoteKeys = new Set(remote.map(analyticsRecordKey));
     const deviceOnly = local
-      .filter((record) => record.localOnly || !remoteIds.has(String(record.id || '')))
+      .filter((record) => record.localOnly || !remoteKeys.has(analyticsRecordKey(record)))
       .map((record) => ({ ...record, localOnly: true }));
     verdictDashboard.active = [...remote, ...deviceOnly];
     verdictDashboard.deleted = deletedResult.status === 'fulfilled' && Array.isArray(deletedResult.value?.items)
-      ? deletedResult.value.items.map(analyticsDisplayRecord)
+      ? analyticsGradedRecords(deletedResult.value.items.map(analyticsDisplayRecord))
       : [];
-    verdictDashboard.capped = remote.length >= 500;
+    verdictDashboard.capped = remoteItems.length >= 500;
     verdictDashboard.dataState = deletedResult.status === 'fulfilled' ? 'complete' : 'partial';
     verdictDashboard.dataMessage = verdictDashboard.capped
-      ? 'The newest 500 synced active records are loaded. Older records are not included, so reset is disabled to avoid an incomplete reset.'
+      ? 'The newest 500 synced graded records are loaded. Older graded records are not included, so reset is disabled to avoid an incomplete reset.'
       : deletedResult.status === 'fulfilled'
-        ? 'Synced account history is loaded. Unsynced device-only attempts, if any, are also included.'
-        : 'Active history is synced, but Recently Deleted could not be loaded. Active charts remain usable.';
+        ? 'Synced graded history is loaded. Unsynced device-only graded attempts, if any, are also included.'
+        : 'Active graded history is synced, but Recently Deleted could not be loaded. Active charts remain usable.';
   } else {
     verdictDashboard.active = local;
     verdictDashboard.deleted = [];
     verdictDashboard.dataState = local.length ? 'partial' : 'unavailable';
     verdictDashboard.dataMessage = local.length
-      ? 'Account history could not be reached. Only attempts saved on this device are shown, so totals and charts may be incomplete.'
-      : 'Account history could not be reached and no device-only attempts are available. Refresh after the connection is restored.';
+      ? 'Account history could not be reached. Only graded attempts saved on this device are shown, so totals and charts may be incomplete.'
+      : 'Account history could not be reached and no device-only graded attempts are available. Refresh after the connection is restored.';
     toast(activeResult.reason?.message || 'Analytics history could not be synced.', 'warn');
   }
   renderVerdictDashboard();

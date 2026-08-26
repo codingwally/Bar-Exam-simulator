@@ -80,7 +80,8 @@ assert.match(shellJs, /refs\.brand\.setAttribute\('href', '#quorum'\)/);
 assert.match(landingJs, /function openQuorumHome\(trigger = null\)/);
 assert.match(landingJs, /openProtectedFeature\('quorum', trigger\)/);
 assert.match(experience, /signInButton\.textContent = 'Profile';/);
-assert.match(experience, /headerAccount\.textContent = signedIn \? 'Profile' : 'Sign in';/);
+assert.match(experience, /function renderHeaderAccountControl[\s\S]*control\.textContent = 'Sign in'[\s\S]*qfs-profile-avatar/);
+assert.match(experience, /if \(headerAccount\) \{[\s\S]*renderHeaderAccountControl\(\)/);
 assert.doesNotMatch(navigation, /id="spa-partner"/);
 assert.match(html, /<a href="#partnership" data-dd2-view="partnership"[^>]*>Quid Pro Quo<\/a>/);
 

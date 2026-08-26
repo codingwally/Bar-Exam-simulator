@@ -997,10 +997,10 @@
     .exam-clock-copy,.exam-clock.no-digits .exam-clock-copy{text-align:left;}
   }
 </style>
-<link rel="stylesheet" href="assets/phase2.css?release=examination-room-doors-20260826-2&amp;profile=chambers-20260827-1">
+<link rel="stylesheet" href="assets/phase2.css?release=profile-photo-release2-20260827-1&amp;doors=examination-room-doors-20260826-2&amp;profile=chambers-20260827-1">
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
-<link rel="stylesheet" href="assets/quorum-first-shell.css?v=public-reliability-20260827-2">
+<link rel="stylesheet" href="assets/quorum-first-shell.css?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-2">
 <link rel="stylesheet" href="assets/auxiliary-writing-diagnostics.css?v=auxiliary-writing-diagnostics-20260827-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
@@ -1054,6 +1054,7 @@
       <details class="quorum-practice-menu quorum-home-tools" id="quorum-home-tools-menu">
         <summary>Home tools</summary>
         <div class="quorum-practice-links">
+          <button type="button" data-quorum-view="pedro">Pedro</button>
           <button type="button" data-quorum-view="my-posts">My Posts</button>
           <button type="button" data-quorum-view="saved">Saved</button>
           <button type="button" data-quorum-view="circles">Study Circles</button>
@@ -1312,6 +1313,9 @@
             <button class="quorum-side-link is-active" type="button" data-quorum-view="home">
               Home
             </button>
+            <button class="quorum-side-link" type="button" data-quorum-view="pedro">
+              Pedro
+            </button>
             <button class="quorum-side-link" type="button" data-quorum-view="my-posts">
               My Posts
             </button>
@@ -1364,7 +1368,7 @@
 
           <form class="lex-composer" id="lex-composer" aria-label="Share with the community">
             <div class="lex-composer-heading">
-              <span class="lex-member-mark" aria-hidden="true">DD</span>
+              <span class="lex-member-mark" aria-hidden="true"></span>
             </div>
             <label class="sr-only" for="lex-post-body">Share with the community</label>
             <textarea id="lex-post-body" maxlength="4000" rows="2"
@@ -1672,7 +1676,7 @@
 </div>
 
 
-<!-- Gemini examiner progress / controlled error modal -->
+<!-- Assessment progress / controlled error modal -->
 <div class="modal-overlay" id="checking-modal" role="dialog" aria-modal="true" aria-labelledby="checking-title">
   <div class="modal-card checking-card" id="checking-card" tabindex="-1">
     <button type="button" class="modal-close" aria-label="Close assessment progress" onclick="returnFromModal('checking-modal')">&times;</button>
@@ -1750,7 +1754,7 @@ const TERMS_ACCEPTANCE_KEY = "duediligence.terms.accepted.v1";
 const GUEST_PROMPT_SESSION_KEY = "duediligence.guest.prompt.dismissed.v1";
 const DRAFTS_KEY = "duediligence.answer.drafts.v1";
 const EXAM_WORKSPACE_KEY = "duediligence.exam.workspace.v2";
-const EXAMINER_WORKER_URL = 'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev';
+const EXAMINER_WORKER_URL = 'https://duediligence-api.wallyesteban1993.workers.dev';
 const SC_RUBRIC_VERSION = 'SC-2025-BB4-PER-QUESTION-v1';
 const SC_2025_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/08/2025-Bar-Bar-Bulletin-No.-4-August-8-2025-Approved.pdf';
 const SC_2026_BULLETIN_URL = 'https://sc.judiciary.gov.ph/wp-content/uploads/2025/10/2026-BAR-Bar-Bulletin-No.-1-October-16-2025.pdf';
@@ -4746,17 +4750,22 @@ window.addEventListener('storage', (event) => {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js"
   crossorigin="anonymous"></script>
-<script src="assets/phase2-config.js?v=private-maintenance-20260820-2"></script>
+<script src="assets/phase2-config.js?v=provider-neutral-release2-20260827-1"></script>
 <script src="assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
-<script src="assets/phase2-experience.js?v=syllabus-reveal-p0-20260826-2-examination-room-3&amp;profile=chambers-20260827-1&amp;access=paid-expiry-20260827-1"></script>
+<script src="assets/profile-photo.js?v=profile-photo-release2-20260827-1"></script>
+<script src="assets/phase2-experience.js?v=profile-photo-release2-20260827-1&amp;baseline=syllabus-reveal-p0-20260826-2-examination-room-3&amp;profile=chambers-20260827-1&amp;access=paid-expiry-20260827-1"></script>
 <script src="assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&amp;access=paid-expiry-20260827-1"></script>
 <script src="assets/auxiliary-writing-diagnostics.js?v=auxiliary-writing-diagnostics-20260827-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
-<script src="assets/feature-loader.js?v=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1"></script>
+<script src="assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1"></script>
 <script src="assets/quorum-first-shell.js?v=syllabus-review-20260823-1"></script>
 <script src="assets/private-beta-landing.js?v=public-reliability-20260827-2"></script>
+<script src="assets/pedro-navigation.js?v=pedro-release2-20260827-1"></script>
+<script>
+window.DueDiligencePedroNavigation?.restoreFromUrl?.();
+</script>
 
 </body>
 </html>

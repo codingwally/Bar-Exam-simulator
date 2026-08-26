@@ -33,12 +33,12 @@ assert.match(
 );
 assert.match(
   featureLoader,
-  /assets\/lex-forum\.css\?v=public-reliability-20260827-1/,
+  /assets\/lex-forum\.css\?v=profile-photo-release2-20260827-1/,
   'The Home accessibility fix must ship behind the current stylesheet cache key.',
 );
 assert.match(
   featureLoader,
-  /assets\/lex-forum\.js\?v=public-reliability-20260827-1/,
+  /assets\/lex-forum\.js\?v=profile-photo-release2-20260827-1/,
   'The Home navigation fix must ship behind the current script cache key.',
 );
 assert.match(

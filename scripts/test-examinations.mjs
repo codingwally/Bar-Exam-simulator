@@ -67,7 +67,7 @@ assert.doesNotMatch(
 );
 assert.match(html, /id="site-menu-toggle"[^>]*aria-controls="spa-nav"/);
 assert.doesNotMatch(html, /Angel Investors|id="investor-modal"/);
-assert.match(html, /assets\/feature-loader\.js\?v=public-reliability-20260827-1/);
+assert.match(html, /assets\/feature-loader\.js\?v=profile-photo-release2-20260827-1/);
 assert.match(html, /id="subject-selection-title">Choose your Bar Question Practice subject\.<\/h1>/);
 assert.match(frontend, /track === 'per_subject' \? 'Syllabus-Based Review' : 'Bar Exam Simulation'/);
 assert.doesNotMatch(`${html}\n${frontend}`, /Mock Bar/);

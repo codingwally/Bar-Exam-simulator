@@ -76,6 +76,29 @@ for (const requiredPath of [
   "      - 'worker/examination-room-v1-*.mjs'",
   "      - 'worker/examination-room-email.mjs'",
   "      - 'worker/examination-room-email.test.mjs'",
+  "      - 'worker/public-api-alias.mjs'",
+  "      - 'worker/public-api-alias.test.mjs'",
+  "      - 'worker/wrangler.public-api.toml'",
+  "      - 'assets/profile-photo.js'",
+  "      - 'assets/pedro-navigation.js'",
+  "      - 'assets/pedro.js'",
+  "      - 'assets/pedro.css'",
+  "      - 'worker/pedro-core.mjs'",
+  "      - 'worker/pedro-core.test.mjs'",
+  "      - 'worker/pedro-routes.mjs'",
+  "      - 'worker/pedro-routes.test.mjs'",
+  "      - 'worker/forum-core.mjs'",
+  "      - 'worker/forum-core.test.mjs'",
+  "      - 'scripts/test-profile-photo-release2.mjs'",
+  "      - 'scripts/test-profile-avatar-cleanup-migration.mjs'",
+  "      - 'scripts/test-pedro-release2-integration.mjs'",
+  "      - 'scripts/test-pedro-migration-contract.mjs'",
+  "      - 'scripts/test-pedro-exact-openers.mjs'",
+  "      - 'scripts/test-pedro-frontend.mjs'",
+  "      - 'scripts/test-pedro-navigation.mjs'",
+  "      - 'supabase/migrations/20260827143000_pedro_private_study_inbox.sql'",
+  "      - 'supabase/migrations/20260827144000_profile_avatar_cleanup_queue.sql'",
+  "      - 'supabase/migrations/20260827145000_pedro_foreign_key_indexes.sql'",
   "      - 'worker/wrangler.staging.toml'",
   "      - 'scripts/build-staging-artifact.mjs'",
   "      - 'scripts/test-staging-artifact.mjs'",
@@ -83,6 +106,15 @@ for (const requiredPath of [
   "      - 'scripts/test-audience-menu.mjs'",
   "      - 'scripts/test-auth-route-overlay.mjs'",
   "      - 'scripts/test-design-correction-release.mjs'",
+  "      - 'scripts/measure-private-beta-read-capacity.mjs'",
+  "      - 'scripts/test-duediligence-2026-frontend.mjs'",
+  "      - 'scripts/test-examinations.mjs'",
+  "      - 'scripts/test-gemini-examiner.mjs'",
+  "      - 'scripts/test-lex-forum.mjs'",
+  "      - 'scripts/test-master-experience-release.mjs'",
+  "      - 'scripts/test-quorum-navigation-state.mjs'",
+  "      - 'scripts/test-subject-matter-skip-flag.mjs'",
+  "      - 'scripts/test-verdict-export-loading.mjs'",
   "      - 'scripts/test-phase2-contract.mjs'",
   "      - 'scripts/test-phase4-release4.mjs'",
   "      - 'scripts/test-private-beta-landing.mjs'",
@@ -107,6 +139,74 @@ for (const requiredPath of [
 }
 
 assert.match(workerWorkflow, /EXAMINATION_ROOM_KEY_PEPPER/u);
+for (const [label, workflow] of [
+  ['Pages release', pagesWorkflow],
+  ['Worker release', workerWorkflow],
+  ['staging release', stagingWorkflow],
+]) {
+  assert.match(
+    workflow,
+    /const required = \[[^\]\n]*'GEMINI_API_KEY'/u,
+    `${label} must fail closed when the application model-provider secret is absent.`,
+  );
+}
+
+for (const [label, workflow] of [
+  ['Pages release', pagesWorkflow],
+  ['Worker release', workerWorkflow],
+  ['staging release', stagingWorkflow],
+]) {
+  assert.match(
+    workflow,
+    /release2_database_preapplied:\s*\r?\n\s+description:.*Pedro and profile-photo.*manually applied and live-probed.*\r?\n\s+required: true\s*\r?\n\s+default: false\s*\r?\n\s+type: boolean/u,
+    `${label} must default the Release 2 database attestation to false.`,
+  );
+  assert.match(workflow, /RELEASE2_DATABASE_PREAPPLIED: \$\{\{ inputs\.release2_database_preapplied \}\}/u);
+  assert.match(workflow, /if \[\[ "\$RELEASE2_DATABASE_PREAPPLIED" != "true" \]\]; then/u);
+  for (const migration of [
+    '20260827143000_pedro_private_study_inbox.sql',
+    '20260827144000_profile_avatar_cleanup_queue.sql',
+    '20260827145000_pedro_foreign_key_indexes.sql',
+  ]) {
+    assert.ok(workflow.includes(migration), `${label} Release 2 attestation is missing ${migration}`);
+  }
+  assert.match(
+    workflow,
+    /grep -R --include='\*\.html' -F 'phase2-config\.js\?v=private-maintenance-20260820-2' index\.html admin examination-room/u,
+    `${label} must reject every legacy provider-visible HTML config consumer.`,
+  );
+  const release2Gate = workflow.indexOf('Require the live-probed Release 2 database contract');
+  const cutover = label === 'Pages release'
+    ? workflow.indexOf('Deploy Worker before exposing the new Pages client')
+    : workflow.indexOf(label === 'Worker release' ? '      - name: Deploy Worker\n' : 'Deploy reviewed Worker and static artifact to staging');
+  assert.ok(release2Gate >= 0 && cutover > release2Gate, `${label} must attest Release 2 before Worker cutover.`);
+}
+assert.match(
+  pullRequestWorkflow,
+  /grep -R --include='\*\.html' -F 'phase2-config\.js\?v=private-maintenance-20260820-2' index\.html admin examination-room/u,
+);
+
+for (const [label, workflow] of [
+  ['Pages release', pagesWorkflow],
+  ['Worker release', workerWorkflow],
+  ['staging release', stagingWorkflow],
+  ['pull-request validation', pullRequestWorkflow],
+]) {
+  for (const release2Gate of [
+    'test-profile-photo-release2.mjs',
+    'test-profile-avatar-cleanup-migration.mjs',
+    'test-pedro-release2-integration.mjs',
+    'test-pedro-migration-contract.mjs',
+    'test-pedro-exact-openers.mjs',
+    'test-pedro-frontend.mjs',
+    'test-pedro-navigation.mjs',
+    'test-gemini-examiner.mjs',
+    'test-master-experience-release.mjs',
+    'test-quorum-navigation-state.mjs',
+  ]) {
+    assert.ok(workflow.includes(release2Gate), `${label} is missing Release 2 gate: ${release2Gate}`);
+  }
+}
 for (const [label, workflow] of [
   ['Pages release', pagesWorkflow],
   ['Worker release', workerWorkflow],
@@ -138,14 +238,27 @@ for (const requiredPreflight of [
   assert.ok(pagesWorkflow.includes(requiredPreflight), 'Pages release is missing: ' + requiredPreflight);
 }
 const pagesWorkerCutover = pagesWorkflow.indexOf('Deploy Worker before exposing the new Pages client');
+const pagesPublicAliasCutover = pagesWorkflow.indexOf(
+  'Deploy provider-neutral public API alias before exposing the new Pages client',
+);
 const pagesArtifactBuild = pagesWorkflow.indexOf('Build sanitized Pages artifact');
 const pagesDeployment = pagesWorkflow.indexOf('Deploy to GitHub Pages');
 assert.ok(
   pagesWorkerCutover >= 0
-    && pagesArtifactBuild > pagesWorkerCutover
+    && pagesPublicAliasCutover > pagesWorkerCutover
+    && pagesArtifactBuild > pagesPublicAliasCutover
     && pagesDeployment > pagesArtifactBuild,
-  'The Pages release must deploy the verified Worker before building and exposing the new client.',
+  'The Pages release must deploy the verified Worker and provider-neutral public alias before building and exposing the new client.',
 );
+assert.match(pagesWorkflow, /command: deploy --config wrangler\.public-api\.toml/u);
+
+const workerCoreCutover = workerWorkflow.indexOf('      - name: Deploy Worker\n');
+const workerPublicAliasCutover = workerWorkflow.indexOf('      - name: Deploy provider-neutral public API alias\n');
+assert.ok(
+  workerCoreCutover >= 0 && workerPublicAliasCutover > workerCoreCutover,
+  'The Worker-only release must deploy the verified core Worker before its provider-neutral public alias.',
+);
+assert.match(workerWorkflow, /command: deploy --config wrangler\.public-api\.toml/u);
 assert.doesNotMatch(
   workerWorkflow,
   /secret put EXAMINATION_ROOM_KEY_PEPPER|Ensure the Examination Room key pepper exists/u,
@@ -217,9 +330,10 @@ assert.match(stagingSmoke, /\/examination-room\/v1\/student\/preview/u);
 assert.match(stagingSmoke, /EXAM_ROOM_V1_ROOM_KEY_INVALID/u);
 assert.doesNotMatch(stagingSmoke, /console\.log\([^\n]*(body|roomKey|response)/u);
 
-for (const [label, workflow] of [
-  ['Pages release', pagesWorkflow],
-  ['Worker release', workerWorkflow],
+for (const [label, workflow, databaseSecret] of [
+  ['Pages release', pagesWorkflow, 'EXAMINATION_ROOM_PRODUCTION_DATABASE_URL'],
+  ['Worker release', workerWorkflow, 'EXAMINATION_ROOM_PRODUCTION_DATABASE_URL'],
+  ['staging release', stagingWorkflow, 'EXAMINATION_ROOM_STAGING_DATABASE_URL'],
 ]) {
   assert.match(
     workflow,
@@ -229,7 +343,7 @@ for (const [label, workflow] of [
   assert.match(workflow, /DATABASE_RELEASE_PREAPPLIED: \$\{\{ inputs\.database_release_preapplied \}\}/u);
   assert.match(workflow, /elif \[\[ "\$DATABASE_RELEASE_PREAPPLIED" == "true" \]\]; then/u);
   assert.match(workflow, /this exact reviewed bundle was manually applied and live-probed before cutover/u);
-  assert.match(workflow, /EXAMINATION_ROOM_PRODUCTION_DATABASE_URL is missing\./u);
+  assert.match(workflow, new RegExp(`${databaseSecret} is missing\\.`));
   assert.doesNotMatch(
     workflow,
     /test -n "\$EXAMINATION_ROOM_DATABASE_URL"/u,

@@ -13,7 +13,7 @@ const expected = Object.freeze({
   supabaseUrl: 'https://hlzqmreeoghbldnhlybr.supabase.co',
   workerUrl: 'https://duediligence-examinations-staging.wallyesteban1993.workers.dev',
   productionProjectRef: 'hbllomlijfznnuudpdvr',
-  productionWorkerHost: 'duediligence-gemini-examiner.wallyesteban1993.workers.dev',
+  productionWorkerHost: 'duediligence-api.wallyesteban1993.workers.dev',
 });
 const suites = Object.freeze({
   'complete-beta': [

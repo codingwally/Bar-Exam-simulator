@@ -48,6 +48,8 @@
   ]);
   const HEARTBEAT_MS = 30_000;
   const AUTOSAVE_MS = 1_100;
+  const TARGETED_QUESTION_UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   const state = {
     catalog: [],
@@ -170,6 +172,47 @@
 
   function isStaleIdentityError(error) {
     return error?.code === 'STALE_IDENTITY';
+  }
+
+  function normalizeTargetedQuestion(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const keys = Object.keys(value);
+    if (keys.length !== 2 || !keys.includes('versionId') || !keys.includes('questionId')) {
+      return null;
+    }
+    const versionId = typeof value.versionId === 'string'
+      ? value.versionId.trim().toLowerCase()
+      : '';
+    const questionId = typeof value.questionId === 'string'
+      ? value.questionId.trim().toLowerCase()
+      : '';
+    if (!TARGETED_QUESTION_UUID_PATTERN.test(versionId)
+        || !TARGETED_QUESTION_UUID_PATTERN.test(questionId)) {
+      return null;
+    }
+    return Object.freeze({ versionId, questionId });
+  }
+
+  function setupMatchesTargetedQuestion(setup, target) {
+    return String(setup?.versionId || '').trim().toLowerCase() === target.versionId
+      && setup?.track === 'per_subject'
+      && Number(setup?.questionCount) === 1;
+  }
+
+  function activeMatchesTargetedQuestion(active, target) {
+    const questions = Array.isArray(active?.questions) ? active.questions : [];
+    return String(active?.attempt?.versionId || '').trim().toLowerCase() === target.versionId
+      && active?.examination?.track === 'per_subject'
+      && questions.length === 1
+      && String(questions[0]?.questionId || '').trim().toLowerCase() === target.questionId;
+  }
+
+  function targetedQuestionError() {
+    const error = new Error(
+      'That Syllabus-Based Review question is no longer available. Ask Pedro to find the topic again.',
+    );
+    error.code = 'TARGETED_QUESTION_UNAVAILABLE';
+    return error;
   }
 
   function privateKey(baseKey) {
@@ -1062,9 +1105,54 @@
       requestKey: requestKey('start'),
       tabToken: tabToken(),
     });
+    if (options.expectedTarget
+        && !activeMatchesTargetedQuestion(active, options.expectedTarget)) {
+      throw targetedQuestionError();
+    }
     active.practiceTimerMode = practiceTimerMode;
     activateAttempt(active);
     return active;
+  }
+
+  function targetedQuestionTimerMode(setup) {
+    const allowed = Array.isArray(setup?.allowedTimerModes)
+      ? setup.allowedTimerModes.filter((mode) => PRACTICE_TIMER_MODES.some((item) => item.value === mode))
+      : [];
+    const candidates = [state.preferredTimerMode, setup?.timerMode, ...allowed];
+    return candidates.find((mode) => {
+      if (!PRACTICE_TIMER_MODES.some((item) => item.value === mode)) return false;
+      const serverMode = mode === 'strict' ? 'selfPaced' : mode;
+      return allowed.includes(serverMode);
+    }) || null;
+  }
+
+  async function openTargetedQuestion(value) {
+    const target = normalizeTargetedQuestion(value);
+    if (!target) {
+      setStatus('That Pedro Syllabus-Based Review link is invalid. Ask Pedro to find the topic again.', 'error');
+      return false;
+    }
+
+    showTrackPage('per_subject');
+    setStatus('Opening Pedro\'s exact Syllabus-Based Review question…');
+    try {
+      const setup = await api('/examinations/query', {
+        operation: 'setup',
+        versionId: target.versionId,
+      });
+      if (!setupMatchesTargetedQuestion(setup, target)) throw targetedQuestionError();
+      const practiceTimerMode = targetedQuestionTimerMode(setup);
+      if (!practiceTimerMode) throw targetedQuestionError();
+      await startSubjectSetup(setup, {
+        practiceTimerMode,
+        expectedTarget: target,
+      });
+      return true;
+    } catch (error) {
+      if (isStaleIdentityError(error)) return false;
+      setStatus(error?.message || 'That Syllabus-Based Review question could not be opened.', 'error');
+      return false;
+    }
   }
 
   async function requestSubjectQuestion(options = {}) {
@@ -3811,6 +3899,7 @@
   global.DueDiligenceExaminations = Object.freeze({
     openPerSubject: () => loadCatalog('per_subject'),
     openBarFeels: () => loadCatalog('bar_feels'),
+    openTargetedQuestion,
     restoreRoute,
     resumeAttempt,
     openVerdict,

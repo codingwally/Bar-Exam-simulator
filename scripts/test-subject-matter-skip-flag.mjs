@@ -175,7 +175,10 @@ assert.match(fixture, /operation === 'subject_performance'/);
 assert.match(fixture, /flaggedForLater:/);
 assert.match(fixture, /\['queue', 'queue-open'\]\.includes\(window\.__DD_SUBJECT_QA_STATE\)/);
 assert.match(featureLoader, /assets\/examinations\.css\?v=public-reliability-20260827-1/);
-assert.match(featureLoader, /assets\/examinations\.js\?v=public-reliability-20260827-1/);
+assert.match(
+  featureLoader,
+  /assets\/examinations\.js\?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1/,
+);
 assert.match(deployWorkflow, /node scripts\/test-subject-matter-skip-flag\.mjs/);
 
 console.log(JSON.stringify({

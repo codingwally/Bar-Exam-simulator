@@ -123,6 +123,8 @@ import {
   normalizeForumRepostRequest,
 } from './forum-core.mjs';
 import { buildCommunitySampleContent } from './community-sample-content.mjs';
+import { PedroValidationError } from './pedro-core.mjs';
+import { createPedroHandlers } from './pedro-routes.mjs';
 import {
   EXAMINATION_LIMITS,
   ExaminationValidationError,
@@ -237,6 +239,8 @@ const examinationRoomV1StudentRateWindows = new Map();
 const examinationRoomV1AdminRateWindows = new Map();
 const dd2026ReadRateWindows = new Map();
 const dd2026WriteRateWindows = new Map();
+const pedroReadRateWindows = new Map();
+const pedroWriteRateWindows = new Map();
 const recentSubmissions = new Map();
 const recentSignInNotificationSessions = new Map();
 const authenticatedUserCache = new WeakMap();
@@ -356,6 +360,28 @@ async function enforceForumRateLimit(request, env, mutation = false) {
       ? 'Too many forum actions. Please wait and try again.'
       : 'Too many forum requests. Please wait and try again.',
   );
+}
+
+async function enforcePedroRateLimit(request, env, operation = 'query') {
+  const mutation = operation === 'message';
+  try {
+    enforceWindow(
+      mutation ? pedroWriteRateWindows : pedroReadRateWindows,
+      await transientRateKey(request, env, mutation ? 'pedro-message' : 'pedro-query'),
+      mutation ? 2500 : 5000,
+      'Pedro needs a moment. Please try again shortly.',
+    );
+  } catch (error) {
+    if (String(error?.code || '').toUpperCase() === 'RATE_LIMITED') {
+      throw new PedroValidationError(
+        'PEDRO_RATE_LIMITED',
+        'Pedro needs a moment. Please try again shortly.',
+        429,
+        { retryable: true, retryAfterSeconds: 30 },
+      );
+    }
+    throw error;
+  }
 }
 
 async function enforceExaminationRateLimit(request, env, mutation = false) {
@@ -2775,6 +2801,107 @@ async function forumRpc(env, functionName, body) {
   return result;
 }
 
+async function pedroRpc(env, functionName, body) {
+  const allowedFunctions = new Set([
+    'pedro_reserve_turn',
+    'pedro_search_published_content',
+    'pedro_complete_turn',
+    'pedro_fail_turn',
+    'pedro_history',
+    'pedro_resolve_action',
+  ]);
+  if (!allowedFunctions.has(functionName)) {
+    throw new PedroValidationError(
+      'PEDRO_INVALID_OPERATION',
+      'Pedro received an unsupported operation.',
+      400,
+    );
+  }
+  const runtimeEnv = normalizedRuntimeSecrets(env);
+  const baseUrl = configuredSupabaseUrl(runtimeEnv);
+  const response = await fetch(new URL(`/rest/v1/rpc/${functionName}`, baseUrl), {
+    method: 'POST',
+    headers: {
+      apikey: runtimeEnv.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${runtimeEnv.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => null);
+  if (response.ok) return result;
+
+  const databaseMessage = [result?.message, result?.details, result?.hint]
+    .filter((value) => typeof value === 'string')
+    .join(' ');
+  let code = 'PEDRO_UNAVAILABLE';
+  let message = 'Pedro is temporarily unavailable. Your message is still here—try again.';
+  let status = 503;
+  let retryable = true;
+  let retryAfterSeconds = 3;
+  if (/current_terms_required/i.test(databaseMessage)) {
+    code = 'PEDRO_TERMS_REQUIRED';
+    message = 'Accept the current Terms and Privacy Notice before using Pedro.';
+    status = 403;
+    retryable = false;
+    retryAfterSeconds = null;
+  } else if (/paid_access_required/i.test(databaseMessage)) {
+    code = 'PEDRO_PAID_REQUIRED';
+    message = 'Pedro is available with an active paid subscription.';
+    status = 403;
+    retryable = false;
+    retryAfterSeconds = null;
+  } else if (/authentication_required|PEDRO_ACCESS_REQUIRED:authentication/i.test(databaseMessage)) {
+    code = 'AUTHENTICATION_REQUIRED';
+    message = 'Sign in to use Pedro.';
+    status = 401;
+    retryable = false;
+    retryAfterSeconds = null;
+  } else if (/PEDRO_REQUEST_KEY_REUSED/i.test(databaseMessage)) {
+    code = 'PEDRO_IDEMPOTENCY_CONFLICT';
+    message = 'That retry key belongs to a different message. Send this as a new message.';
+    status = 409;
+    retryable = false;
+    retryAfterSeconds = null;
+  } else if (/PEDRO_RATE_LIMIT_(?:SHORT|DAILY)/i.test(databaseMessage)) {
+    code = 'PEDRO_RATE_LIMITED';
+    message = 'Pedro needs a moment. Please try again shortly.';
+    status = 429;
+    retryAfterSeconds = 30;
+  } else if (/PEDRO_(?:ACTION_NOT_FOUND|ACTION_STALE|SYLLABUS_TARGET_(?:STALE|ALREADY_USED))/i.test(databaseMessage)) {
+    code = 'PEDRO_ACTION_NOT_FOUND';
+    message = 'That study destination is no longer available.';
+    status = 404;
+    retryable = false;
+    retryAfterSeconds = null;
+  } else if (/PEDRO_SYLLABUS_ACTIVE_ATTEMPT/i.test(databaseMessage)) {
+    code = 'PEDRO_ACTIVE_ATTEMPT';
+    message = 'Finish or leave the current study attempt, then try this destination again.';
+    status = 409;
+    retryAfterSeconds = 3;
+  } else if (/PEDRO_THREAD_INVALID/i.test(databaseMessage)) {
+    code = 'PEDRO_THREAD_INVALID';
+    message = 'This Pedro inbox is no longer available. Reload your latest inbox.';
+    status = 409;
+    retryable = false;
+    retryAfterSeconds = null;
+  } else if (/PEDRO_HISTORY_CURSOR_INVALID/i.test(databaseMessage)) {
+    code = 'PEDRO_HISTORY_CURSOR_INVALID';
+    message = 'This saved inbox position is no longer available. Reload the latest messages.';
+    status = 400;
+    retryable = false;
+    retryAfterSeconds = null;
+  } else if (/PEDRO_(?:CLAIM_STALE|TURN_NOT_FOUND)/i.test(databaseMessage)) {
+    code = 'PEDRO_UNAVAILABLE';
+    status = 409;
+  }
+
+  throw new PedroValidationError(code, message, status, {
+    retryable,
+    retryAfterSeconds,
+  });
+}
+
 async function examinationRpc(env, functionName, body) {
   const allowedFunctions = new Set([
     'examination_query',
@@ -2937,8 +3064,7 @@ async function uploadQuorumImage(env, entryId, image) {
   return objectPath;
 }
 
-async function uploadQuorumAvatar(env, image) {
-  const objectPath = `profiles/${quorumRandomHex(12)}.${image.extension}`;
+async function uploadQuorumAvatar(env, image, objectPath) {
   const response = await fetch(quorumStorageObjectUrl(env, objectPath), {
     method: 'POST',
     headers: {
@@ -2961,6 +3087,63 @@ async function uploadQuorumAvatar(env, image) {
   return objectPath;
 }
 
+async function readQuorumAvatarRecord(env, userId) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(
+    `/rest/v1/forum_profile_avatars?user_id=eq.${encodeURIComponent(userId)}&select=object_path&limit=1`,
+    baseUrl,
+  ), {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  const rows = await response.json().catch(() => []);
+  if (!response.ok) {
+    console.error('Quorum profile photo record lookup failed', { status: response.status });
+    throw forumDatabaseError([
+      rows?.message,
+      rows?.details,
+      rows?.hint,
+    ].filter(Boolean).join(' '));
+  }
+  const objectPath = Array.isArray(rows) ? String(rows[0]?.object_path || '') : '';
+  return /^profiles\/[a-f0-9]{24}\.(?:jpg|png|webp)$/.test(objectPath) ? objectPath : null;
+}
+
+async function removeQuorumAvatarRecord(env, userId, objectPath) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const response = await fetch(new URL(
+    `/rest/v1/forum_profile_avatars?user_id=eq.${encodeURIComponent(userId)}&object_path=eq.${encodeURIComponent(objectPath)}&select=object_path`,
+    baseUrl,
+  ), {
+    method: 'DELETE',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      Prefer: 'return=representation',
+    },
+  });
+  const rows = await response.json().catch(() => []);
+  if (!response.ok) {
+    console.error('Quorum profile photo record removal failed', { status: response.status });
+    throw forumDatabaseError([
+      rows?.message,
+      rows?.details,
+      rows?.hint,
+    ].filter(Boolean).join(' '));
+  }
+  const removedPath = Array.isArray(rows) ? String(rows[0]?.object_path || '') : '';
+  if (removedPath !== objectPath) {
+    throw new ForumValidationError(
+      'QUORUM_PROFILE_CHANGED',
+      'Your profile photo changed while it was being removed. Review the current photo, then try again.',
+      409,
+    );
+  }
+  return removedPath;
+}
+
 async function deleteQuorumImage(env, objectPath) {
   if (!objectPath) return true;
   const response = await fetch(quorumStorageObjectUrl(env, objectPath), {
@@ -2975,6 +3158,136 @@ async function deleteQuorumImage(env, objectPath) {
     return false;
   }
   return true;
+}
+
+async function readQuorumAvatarCleanupJobs(env, limit = 50) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const url = new URL('/rest/v1/forum_profile_avatar_cleanup_jobs', baseUrl);
+  url.searchParams.set('select', 'object_path');
+  url.searchParams.set('not_before', `lte.${new Date().toISOString()}`);
+  url.searchParams.set('order', 'queued_at.asc,object_path.asc');
+  url.searchParams.set('limit', String(Math.max(1, Math.min(Number(limit) || 50, 100))));
+  const response = await fetch(url, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  const rows = await response.json().catch(() => []);
+  if (!response.ok) {
+    console.error('Quorum profile photo cleanup queue lookup failed', { status: response.status });
+    return [];
+  }
+  return (Array.isArray(rows) ? rows : [])
+    .map((row) => String(row?.object_path || ''))
+    .filter((path) => /^profiles\/[a-f0-9]{24}\.(?:jpg|png|webp)$/.test(path));
+}
+
+async function queueQuorumAvatarCleanupJob(env, userId, objectPath, delaySeconds = 600) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const url = new URL('/rest/v1/forum_profile_avatar_cleanup_jobs', baseUrl);
+  url.searchParams.set('on_conflict', 'object_path');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify({
+      object_path: objectPath,
+      user_id: userId,
+      not_before: new Date(Date.now() + Math.max(0, Number(delaySeconds) || 0) * 1_000)
+        .toISOString(),
+      attempt_count: 0,
+      last_attempt_at: null,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+  if (!response.ok) {
+    console.error('Quorum uncertain profile photo could not be queued for reconciliation', {
+      status: response.status,
+    });
+    return false;
+  }
+  return true;
+}
+
+async function removeQuorumAvatarCleanupJob(env, objectPath) {
+  const baseUrl = configuredSupabaseUrl(env);
+  const url = new URL('/rest/v1/forum_profile_avatar_cleanup_jobs', baseUrl);
+  url.searchParams.set('object_path', `eq.${objectPath}`);
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      Prefer: 'return=minimal',
+    },
+  });
+  if (!response.ok) {
+    console.error('Quorum profile photo cleanup queue acknowledgement failed', {
+      status: response.status,
+    });
+    return false;
+  }
+  return true;
+}
+
+async function quorumAvatarCleanupState(env, objectPath) {
+  try {
+    const result = await forumRpc(env, 'forum_profile_avatar_cleanup_state', {
+      p_object_path: objectPath,
+    });
+    const state = String(result?.state || '');
+    return ['active', 'safe', 'missing'].includes(state) ? state : 'unavailable';
+  } catch (error) {
+    console.error('Quorum profile photo cleanup safety check failed', {
+      code: error?.code || 'UNKNOWN',
+    });
+    return 'unavailable';
+  }
+}
+
+async function deferQuorumAvatarCleanupJob(env, objectPath) {
+  try {
+    const result = await forumRpc(env, 'forum_defer_profile_avatar_cleanup', {
+      p_object_path: objectPath,
+    });
+    return ['deferred', 'missing'].includes(String(result?.state || ''));
+  } catch (error) {
+    console.error('Quorum profile photo cleanup backoff update failed', {
+      code: error?.code || 'UNKNOWN',
+    });
+    return false;
+  }
+}
+
+async function reconcileQuorumAvatarCleanupJobs(env, objectPaths = null) {
+  const paths = Array.isArray(objectPaths)
+    ? objectPaths
+      .map((path) => String(path || ''))
+      .filter((path) => /^profiles\/[a-f0-9]{24}\.(?:jpg|png|webp)$/.test(path))
+    : await readQuorumAvatarCleanupJobs(env);
+  let removed = 0;
+  for (const objectPath of [...new Set(paths)]) {
+    try {
+      const state = await quorumAvatarCleanupState(env, objectPath);
+      if (state === 'active' || state === 'missing') continue;
+      if (state !== 'safe') continue;
+      if (!await deleteQuorumImage(env, objectPath)) {
+        await deferQuorumAvatarCleanupJob(env, objectPath);
+        continue;
+      }
+      if (await removeQuorumAvatarCleanupJob(env, objectPath)) removed += 1;
+    } catch (error) {
+      console.error('Quorum profile photo cleanup reconciliation failed', {
+        code: error?.code || 'UNKNOWN',
+      });
+    }
+  }
+  return { examined: paths.length, removed };
 }
 
 function collectQuorumImagePaths(value, paths = new Set()) {
@@ -4153,6 +4466,11 @@ async function privateBetaCapabilityExempt(request, pathname) {
   if (pathname === '/plans') {
     return true;
   }
+  // Pedro enforces its own stricter current-terms plus verified paid-payment
+  // entitlement (with explicit Founder/Super Admin test access) in SQL.
+  if (pathname === '/pedro/message' || pathname === '/pedro/query') {
+    return true;
+  }
   // Administrator authorization is enforced again by every /admin handler.
   // Keep the protected Admin console reachable even when a Founder disables
   // the learner-wide beta policy; otherwise the console could be unable to
@@ -4650,6 +4968,47 @@ async function loadWebsiteBank(url) {
   return records;
 }
 
+async function searchPedroMockBar(request, env) {
+  const terms = Array.isArray(request?.terms)
+    ? request.terms
+      .map((value) => String(value || '').normalize('NFKC').trim().toLocaleLowerCase('en'))
+      .filter((value) => value.length >= 2 && value.length <= 48)
+      .slice(0, 12)
+    : [];
+  const limit = Math.min(Math.max(Number(request?.limit) || 4, 1), 4);
+  if (!terms.length) return { candidates: [] };
+  const bank = await loadWebsiteBank(env.WEBSITE_BANK_URL || null);
+  const candidates = [];
+  for (const [questionIdValue, row] of bank.entries()) {
+    const questionId = String(questionIdValue || row?.['Question ID'] || '').trim();
+    const subject = String(row?.Subject || '').normalize('NFKC').trim();
+    const topic = String(row?.Topic || '').normalize('NFKC').trim();
+    if (!questionId || !subject) continue;
+    const searchable = [
+      topic,
+      subject,
+      row?.['Essay Question'],
+      row?.['Controlling Doctrine'],
+      row?.['Jurisprudence / Case'],
+    ].map((value) => String(value || '').normalize('NFKC').toLocaleLowerCase('en')).join('\n');
+    const matchCount = terms.reduce((count, term) => count + (searchable.includes(term) ? 1 : 0), 0);
+    if (!matchCount) continue;
+    candidates.push({
+      type: 'mock_bar',
+      title: (topic || `${subject} practice question`).slice(0, 180),
+      subject: subject.slice(0, 120),
+      questionId,
+      score: matchCount / terms.length,
+    });
+  }
+  candidates.sort((left, right) => (
+    right.score - left.score
+      || left.title.localeCompare(right.title)
+      || left.questionId.localeCompare(right.questionId)
+  ));
+  return { candidates: candidates.slice(0, limit) };
+}
+
 export async function loadWebsiteBankForTest(url = null) {
   return loadWebsiteBank(url);
 }
@@ -4951,7 +5310,8 @@ async function callGemini(env, prompt, groundingEnabled) {
   );
 }
 
-async function callGeminiStructured(env, prompt, responseSchema, validateResult) {
+async function callGeminiStructured(env, prompt, responseSchema, validateResult, options = {}) {
+  const quiet = options?.quiet === true;
   if (!env.GEMINI_API_KEY) {
     throw new DD2026ValidationError(
       'COACH_NOT_CONFIGURED',
@@ -4997,11 +5357,13 @@ async function callGeminiStructured(env, prompt, responseSchema, validateResult)
       } catch (error) {
         providerFailureSeen = true;
         timeoutSeen ||= error?.name === 'AbortError';
-        console.warn('Structured study coach request failed', {
-          model,
-          attempt: attempt + 1,
-          reason: error?.name === 'AbortError' ? 'timeout' : 'network',
-        });
+        if (!quiet) {
+          console.warn('Structured study coach request failed', {
+            model,
+            attempt: attempt + 1,
+            reason: error?.name === 'AbortError' ? 'timeout' : 'network',
+          });
+        }
         if (attempt === 0) {
           await retryDelay(attempt);
           continue;
@@ -5011,12 +5373,14 @@ async function callGeminiStructured(env, prompt, responseSchema, validateResult)
         clearTimeout(timeout);
       }
       if (!response.ok) {
-        console.warn('Structured study coach request rejected', {
-          model,
-          status: response.status,
-          attempt: attempt + 1,
-          provider: safeProviderErrorSummary(responseText, env.GEMINI_API_KEY),
-        });
+        if (!quiet) {
+          console.warn('Structured study coach request rejected', {
+            model,
+            status: response.status,
+            attempt: attempt + 1,
+            provider: safeProviderErrorSummary(responseText, env.GEMINI_API_KEY),
+          });
+        }
         if (isUnsupportedModel(response.status, responseText)) {
           unsupported = true;
           break;
@@ -5569,6 +5933,12 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
   const avatar = command.operation === 'set_profile_avatar'
     ? normalizeQuorumAvatar(raw?.profileImage)
     : null;
+  if (raw?.profileImage && command.operation !== 'set_profile_avatar') {
+    throw new ForumValidationError(
+      'INVALID_QUORUM_IMAGE',
+      'A profile photo can be uploaded only while updating the profile photo.',
+    );
+  }
   if ((raw?.image || raw?.images) && !isEntryCreate) {
     throw new ForumValidationError(
       'INVALID_QUORUM_IMAGE',
@@ -5578,9 +5948,16 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
 
   let result;
   if (command.operation === 'set_profile_avatar') {
-    let objectPath = null;
+    const objectPath = `profiles/${quorumRandomHex(12)}.${avatar.extension}`;
+    if (!await queueQuorumAvatarCleanupJob(env, user.id, objectPath)) {
+      throw new ForumValidationError(
+        'QUORUM_IMAGE_UNAVAILABLE',
+        'Your profile photo could not be prepared safely. Nothing was uploaded. Please try again.',
+        503,
+      );
+    }
+    await uploadQuorumAvatar(env, avatar, objectPath);
     try {
-      objectPath = await uploadQuorumAvatar(env, avatar);
       result = await forumRpc(env, 'forum_set_profile_avatar', {
         p_user_id: user.id,
         p_payload: {
@@ -5593,14 +5970,58 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
           cropY: avatar.cropY,
         },
       });
-      if (result?.previousPath && result.previousPath !== objectPath) {
-        await deleteQuorumImage(env, result.previousPath);
-      }
-      result = { ...result, avatarPath: objectPath };
     } catch (error) {
-      if (objectPath) await deleteQuorumImage(env, objectPath);
-      throw error;
+      let activePath;
+      try {
+        activePath = await readQuorumAvatarRecord(env, user.id);
+      } catch (readbackError) {
+        console.error('Quorum profile photo commit state is uncertain; preserving uploaded object', {
+          code: readbackError?.code || 'UNKNOWN',
+        });
+      }
+      if (activePath === objectPath) {
+        result = {
+          updated: true,
+          avatarPath: objectPath,
+        };
+      } else if (error instanceof ForumValidationError
+          && Number(error.status) >= 400
+          && Number(error.status) < 500) {
+        await reconcileQuorumAvatarCleanupJobs(env, [objectPath]);
+        throw error;
+      } else {
+        throw new ForumValidationError(
+          'QUORUM_PROFILE_UNCERTAIN',
+          'Your profile photo update could not be confirmed. Refresh your profile before trying again.',
+          503,
+        );
+      }
     }
+    const previousPath = result?.previousPath && result.previousPath !== objectPath
+      ? String(result.previousPath)
+      : null;
+    await reconcileQuorumAvatarCleanupJobs(
+      env,
+      [objectPath, previousPath].filter(Boolean),
+    );
+    const publicAvatarResult = { ...(result || {}) };
+    delete publicAvatarResult.previousPath;
+    delete publicAvatarResult.cleanupQueued;
+    result = { ...publicAvatarResult, avatarPath: objectPath };
+  } else if (command.operation === 'remove_profile_avatar') {
+    const previousPath = await readQuorumAvatarRecord(env, user.id);
+    if (previousPath && !await deleteQuorumImage(env, previousPath)) {
+      throw new ForumValidationError(
+        'QUORUM_IMAGE_UNAVAILABLE',
+        'Your profile photo could not be removed. Please try again.',
+        502,
+      );
+    }
+    if (previousPath) {
+      await removeQuorumAvatarRecord(env, user.id, previousPath);
+      await removeQuorumAvatarCleanupJob(env, previousPath);
+    }
+    result = { removed: Boolean(previousPath) };
   } else if (command.operation === 'set_affirm') {
     result = await forumRpc(env, 'forum_set_affirm', {
       p_user_id: user.id,
@@ -5694,8 +6115,20 @@ async function handleQuorumCommand(request, env, origin, allowedOrigin) {
     });
   }
 
+  let publicResult = await withSignedQuorumImages(result, env);
+  if (command.operation === 'set_profile_avatar' && result?.avatarPath && !publicResult?.avatarUrl) {
+    await retryDelay(0);
+    publicResult = await withSignedQuorumImages(result, env);
+    if (!publicResult?.avatarUrl) {
+      throw new ForumValidationError(
+        'QUORUM_IMAGE_UNAVAILABLE',
+        'Your profile photo was saved, but it could not be displayed securely. Please try again.',
+        502,
+      );
+    }
+  }
   return jsonResponse(
-    { ok: true, data: await withSignedQuorumImages(result, env) },
+    { ok: true, data: publicResult },
     command.operation.startsWith('create_') ? 201 : 200,
     origin,
     allowedOrigin,
@@ -8240,6 +8673,25 @@ const auxiliaryWritingDiagnosticsHandlers = createAuxiliaryWritingDiagnosticsHan
   structuredGemini: callGeminiStructured,
 });
 
+const pedroHandlers = createPedroHandlers({
+  requireAuthenticatedUser,
+  parseBoundedJson,
+  jsonResponse,
+  pedroRpc,
+  enforcePedroRateLimit,
+  searchMockBar: searchPedroMockBar,
+  structuredClassifier: async (env, prompt, responseSchema, validateResult) => {
+    const generated = await callGeminiStructured(
+      env,
+      prompt,
+      responseSchema,
+      validateResult,
+      { quiet: true },
+    );
+    return { result: generated.result };
+  },
+});
+
 const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
   parseJson: parseBoundedJson,
   respond: jsonResponse,
@@ -8530,6 +8982,12 @@ export default {
       if (pathname === '/admin/content/sync') {
         return await handleReleaseContentSync(request, env, origin, allowedOrigin);
       }
+      if (pathname === '/pedro/message') {
+        return await pedroHandlers.message(request, env, origin, allowedOrigin);
+      }
+      if (pathname === '/pedro/query') {
+        return await pedroHandlers.query(request, env, origin, allowedOrigin);
+      }
       if (pathname === '/quorum/query') {
         return await handleQuorumQuery(request, env, origin, allowedOrigin);
       }
@@ -8681,11 +9139,25 @@ export default {
     }
   },
   scheduled(_controller, env, ctx) {
-    const drain = drainExaminationRoomRecovery(normalizedRuntimeSecrets(env));
+    const runtimeEnv = normalizedRuntimeSecrets(env);
+    const recovery = drainExaminationRoomRecovery(runtimeEnv).catch((error) => {
+      console.error('Scheduled Examination Room recovery drain failed', {
+        code: String(error?.code || 'EXAM_ROOM_V1_RECOVERY_DRAIN_FAILED').slice(0, 80),
+      });
+      throw error;
+    });
+    const avatarCleanup = reconcileQuorumAvatarCleanupJobs(runtimeEnv).catch((error) => {
+      console.error('Scheduled Quorum profile photo cleanup failed', {
+        code: error?.code || 'UNKNOWN',
+      });
+      return 0;
+    });
+    const maintenance = Promise.all([recovery, avatarCleanup])
+      .then(([recoveryResult]) => recoveryResult);
     if (typeof ctx?.waitUntil === 'function') {
-      ctx.waitUntil(drain);
+      ctx.waitUntil(maintenance);
       return undefined;
     }
-    return drain;
+    return maintenance;
   },
 };

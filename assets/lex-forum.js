@@ -10,7 +10,6 @@
   const imageLimit = 3 * 1024 * 1024;
   const imageTotalLimit = 12 * 1024 * 1024;
   const imageCountLimit = 12;
-  const avatarSourceLimit = 20 * 1024 * 1024;
   const subjects = [
     'Political Law',
     'Labor Law',
@@ -203,6 +202,7 @@
 
   function clearPrivateView() {
     beginCommunityViewRequest();
+    global.DueDiligencePedro?.unmount?.();
     state.items = [];
     state.cursor = null;
     state.hasMore = false;
@@ -211,6 +211,7 @@
     state.comments.clear();
     state.commentsOpen.clear();
     $('#lex-feed')?.replaceChildren();
+    syncComposerProfile(null);
     setAuthView(false);
   }
 
@@ -229,6 +230,7 @@
 
   const routableViews = new Set([
     'home',
+    'pedro',
     'saved',
     'unanswered',
     'circles',
@@ -247,6 +249,7 @@
     url.searchParams.delete('quorumView');
     url.searchParams.delete('quorumCircle');
     url.searchParams.delete('quorumQuery');
+    url.searchParams.delete('pedroAction');
 
     const view = entryId ? 'entry' : (routableViews.has(state.view) ? state.view : 'home');
     if (entryId) url.searchParams.set('quorumEntry', entryId);
@@ -320,14 +323,6 @@
       operation,
       payload,
       ...(Array.isArray(image) ? { images: image } : image ? { image } : {}),
-    });
-  }
-
-  function profilePhotoCommand(profileImage) {
-    return api('/quorum/command', {
-      operation: 'set_profile_avatar',
-      payload: {},
-      profileImage,
     });
   }
 
@@ -446,6 +441,34 @@
       .map((part) => part.charAt(0))
       .join('')
       .toUpperCase() || 'DD';
+  }
+
+  function currentProfileFallback() {
+    const currentSession = session();
+    return {
+      avatarUrl: null,
+      displayName: currentSession?.user?.user_metadata?.full_name
+        || currentSession?.user?.user_metadata?.name
+        || 'Due Diligence Member',
+    };
+  }
+
+  function syncComposerProfile(profile = null) {
+    const mark = $('#lex-composer .lex-member-mark');
+    if (!mark) return null;
+    const userId = currentUserId();
+    const nextProfile = profile
+      || global.DueDiligenceProfilePhoto?.current?.(userId)
+      || currentProfileFallback();
+    const fallbackInitials = initials(nextProfile.displayName);
+    mark.textContent = fallbackInitials;
+    mark.setAttribute('aria-hidden', 'true');
+    global.DueDiligenceProfilePhoto?.render?.(mark, nextProfile, {
+      decorative: true,
+      initials: fallbackInitials,
+      refreshOnError: true,
+    });
+    return nextProfile;
   }
 
   function relativeTime(value) {
@@ -1629,14 +1652,56 @@
     node.replaceChildren(...values.map((value) => chip(value)));
   }
 
+  function syncPrimaryViewChrome(view) {
+    const pedroActive = view === 'pedro';
+    const searchForm = $('#quorum-search-form');
+    const toolbar = $('.lex-feed-toolbar');
+    const feed = $('#lex-feed');
+    if (searchForm) searchForm.hidden = pedroActive;
+    if (toolbar) toolbar.hidden = pedroActive;
+    if (feed) feed.setAttribute('aria-live', pedroActive ? 'off' : 'polite');
+  }
+
+  async function renderPedroView(viewRequestSequence = state.viewRequestSequence) {
+    const feed = $('#lex-feed');
+    if (!feed) return false;
+    $('#lex-load-more').hidden = true;
+    setFeedStatus('');
+    const container = document.createElement('div');
+    container.className = 'pedro-view';
+    container.id = 'pedro-view';
+    feed.replaceChildren(container);
+    if (typeof global.DueDiligencePedro?.mount !== 'function') {
+      const panel = document.createElement('section');
+      panel.className = 'pedro-error';
+      panel.setAttribute('role', 'alert');
+      panel.append(
+        textElement('h3', 'pedro-error-title', 'Pedro could not be opened'),
+        textElement('p', 'pedro-error-copy', 'The private study inbox did not load. Refresh the page, then try again.'),
+      );
+      container.append(panel);
+      return true;
+    }
+    await global.DueDiligencePedro.mount({ container });
+    if (viewRequestSequence !== state.viewRequestSequence || state.view !== 'pedro') {
+      global.DueDiligencePedro.unmount();
+      return false;
+    }
+    return true;
+  }
+
   async function setView(view, options = {}) {
     if (!hasSession()) {
       askForSignIn();
       return false;
     }
+    const previousView = state.view;
     state.entryRequestSequence += 1;
     state.circleRequestSequence += 1;
     const viewRequestSequence = beginCommunityViewRequest();
+    if (previousView === 'pedro' && view !== 'pedro') {
+      global.DueDiligencePedro?.unmount?.();
+    }
     state.view = view;
     state.directEntryId = null;
     state.legacyPostId = null;
@@ -1644,6 +1709,7 @@
       setStableLocation(null, { replace: options.push !== true });
     }
     syncViewButtons();
+    syncPrimaryViewChrome(view);
     const composer = $('#lex-composer');
     if (composer) composer.hidden = !['home', 'circle'].includes(view);
     state.filters.query = options.keepQuery ? state.filters.query : '';
@@ -1658,6 +1724,9 @@
       state.circleDetail = null;
       setViewLabels('Latest member discussions', 'Academic community');
       await refreshFeed({ viewRequestSequence });
+    } else if (view === 'pedro') {
+      setViewLabels('Pedro', 'Private study inbox');
+      await renderPedroView(viewRequestSequence);
     } else if (view === 'saved') {
       setViewLabels('My Authorities', 'Private saved posts');
       await refreshFeed({ viewRequestSequence });
@@ -2159,15 +2228,33 @@
     panel.className = 'quorum-panel quorum-profile-panel';
     const hero = document.createElement('div');
     hero.className = 'quorum-profile-hero';
-    const portrait = document.createElement(profile.avatarUrl ? 'img' : 'span');
+    const portrait = document.createElement('span');
     portrait.className = 'quorum-profile-portrait';
-    if (profile.avatarUrl) {
-      portrait.src = profile.avatarUrl;
-      portrait.alt = `${profile.displayName || 'Member'} profile photo`;
-    } else {
-      portrait.textContent = initials(profile.displayName);
-      portrait.setAttribute('aria-label', 'No profile photo selected');
-    }
+    const renderPortrait = (nextProfile = profile) => {
+      const resolvedProfile = nextProfile || currentProfileFallback();
+      if (profile.viewerOwns && global.DueDiligenceProfilePhoto) {
+        global.DueDiligenceProfilePhoto.render(portrait, resolvedProfile, {
+          alt: 'Your Due Diligence profile photo',
+          fallbackLabel: 'Your profile initials',
+          initials: initials(resolvedProfile.displayName),
+          refreshOnError: true,
+        });
+        return;
+      }
+      portrait.replaceChildren();
+      if (resolvedProfile.avatarUrl) {
+        const image = document.createElement('img');
+        image.src = resolvedProfile.avatarUrl;
+        image.alt = `${resolvedProfile.displayName || 'Member'} profile photo`;
+        image.decoding = 'async';
+        portrait.replaceChildren(image);
+        portrait.removeAttribute('aria-label');
+      } else {
+        portrait.textContent = initials(resolvedProfile.displayName);
+        portrait.setAttribute('aria-label', 'No profile photo selected');
+      }
+    };
+    renderPortrait(profile);
     const identity = document.createElement('div');
     identity.className = 'quorum-profile-identity';
     identity.append(
@@ -2187,32 +2274,108 @@
     const actions = document.createElement('div');
     actions.className = 'quorum-profile-actions';
     if (profile.viewerOwns) {
+      let photoProfile = profile;
+      if (global.DueDiligenceProfilePhoto && currentUserId()) {
+        try {
+          photoProfile = global.DueDiligenceProfilePhoto.remember(profile, {
+            userId: currentUserId(),
+            reason: 'community-profile',
+          });
+        } catch {
+          photoProfile = currentProfileFallback();
+        }
+      }
       const photoControl = document.createElement('div');
       photoControl.className = 'quorum-profile-photo-control';
+      const renderPhotoPreview = (nextProfile) => {
+        photoProfile = nextProfile || currentProfileFallback();
+        renderPortrait(photoProfile);
+      };
+      renderPhotoPreview(photoProfile);
       const photoInput = document.createElement('input');
       photoInput.type = 'file';
       photoInput.accept = 'image/jpeg,image/png,image/webp';
       photoInput.hidden = true;
-      const choosePhoto = button('Update profile photo', 'lex-button', () => photoInput.click());
+      const choosePhoto = button(photoProfile.avatarUrl ? 'Change profile photo' : 'Upload profile photo', 'lex-button', () => photoInput.click());
+      const removePhoto = button('Remove photo', 'lex-button is-danger', () => {
+        confirmDialog({
+          title: 'Remove profile photo',
+          copy: 'Your initials will appear on Home and your Due Diligence profile instead.',
+          confirmLabel: 'Remove photo',
+          onConfirm: async () => {
+            setPhotoBusy(true, 'Removing photo…');
+            setPhotoStatus('Removing your profile photo…');
+            try {
+              if (!global.DueDiligenceProfilePhoto) throw new Error('Profile photo controls are temporarily unavailable.');
+              const updated = await global.DueDiligenceProfilePhoto.remove();
+              renderPhotoPreview(updated);
+              syncComposerProfile(updated);
+              choosePhoto.textContent = 'Upload profile photo';
+              removePhoto.hidden = true;
+              state.dialogReturnFocus = choosePhoto;
+              setPhotoStatus('Profile photo removed. Your initials are now shown.', 'success');
+              toast('Your profile photo was removed.');
+            } catch (error) {
+              setPhotoStatus(
+                error?.message || 'Your profile photo could not be removed. Please try again.',
+                'error',
+              );
+              throw error;
+            } finally {
+              setPhotoBusy(false);
+            }
+          },
+        });
+      });
+      removePhoto.hidden = !photoProfile.avatarUrl;
       const photoHeading = textElement('strong', '', 'Profile photograph');
-      const photoHelp = textElement('small', '', 'JPEG, PNG, or WebP up to 20 MB. The image is optimized and embedded metadata is removed before upload.');
+      const photoHelp = textElement('small', '', 'JPEG, PNG, or WebP source up to 20 MB. Due Diligence creates a protected, optimized upload no larger than 3 MB; the photo is shown on Home and your profile.');
+      const photoStatus = textElement('div', 'lex-status quorum-profile-photo-status', '');
+      photoStatus.id = 'quorum-profile-photo-status';
+      photoStatus.setAttribute('role', 'status');
+      photoStatus.setAttribute('aria-live', 'polite');
+      const setPhotoStatus = (message = '', kind = '') => {
+        photoStatus.textContent = message;
+        photoStatus.className = `lex-status quorum-profile-photo-status${kind ? ` is-${kind}` : ''}`;
+      };
+      const setPhotoBusy = (busy, label = '') => {
+        choosePhoto.disabled = busy;
+        removePhoto.disabled = busy;
+        if (busy) {
+          choosePhoto.setAttribute('aria-busy', 'true');
+          if (label) choosePhoto.textContent = label;
+        } else {
+          choosePhoto.removeAttribute('aria-busy');
+          choosePhoto.textContent = photoProfile.avatarUrl ? 'Change profile photo' : 'Upload profile photo';
+        }
+      };
       const photoCopy = document.createElement('div');
       photoCopy.className = 'quorum-profile-photo-copy';
-      photoCopy.append(photoHeading, photoHelp, choosePhoto);
+      const photoActions = document.createElement('div');
+      photoActions.className = 'quorum-profile-photo-actions';
+      photoActions.append(choosePhoto, removePhoto);
+      photoCopy.append(photoHeading, photoHelp, photoActions, photoStatus);
       photoInput.addEventListener('change', async () => {
         const file = photoInput.files?.[0];
         if (!file) return;
-        choosePhoto.disabled = true;
-        choosePhoto.textContent = 'Preparing photo…';
+        setPhotoBusy(true, 'Preparing photo…');
+        setPhotoStatus('Optimizing and uploading your profile photo…');
         try {
-          const image = await optimizedProfilePhoto(file);
-          await profilePhotoCommand(image);
-          toast('Your community profile photo was updated.', 'ok');
-          await renderProfileView();
+          if (!global.DueDiligenceProfilePhoto) throw new Error('Profile photo controls are temporarily unavailable.');
+          const updated = await global.DueDiligenceProfilePhoto.upload(file);
+          renderPhotoPreview(updated);
+          syncComposerProfile(updated);
+          removePhoto.hidden = false;
+          setPhotoStatus('Profile photo updated and shown on Home.', 'success');
+          toast('Your profile photo was updated.');
         } catch (error) {
-          choosePhoto.disabled = false;
-          choosePhoto.textContent = 'Update profile photo';
-          handleError(error, null);
+          if (error?.code !== 'PROFILE_PHOTO_SESSION_CHANGED') {
+            setPhotoStatus(error?.message || 'Your profile photo could not be updated.', 'error');
+            handleError(error, null);
+          }
+        } finally {
+          photoInput.value = '';
+          setPhotoBusy(false);
         }
       });
       photoControl.append(photoCopy, photoInput);
@@ -2510,51 +2673,6 @@
     return { mimeType: file.type, dataBase64: btoa(binary) };
   }
 
-  async function optimizedProfilePhoto(file) {
-    if (!file || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
-        || file.size < 1 || file.size > avatarSourceLimit) {
-      throw new Error('Choose a JPEG, PNG, or WebP profile photo smaller than 20 MB.');
-    }
-    const bitmap = typeof createImageBitmap === 'function'
-      ? await createImageBitmap(file)
-      : await new Promise((resolve, reject) => {
-        const image = new Image();
-        const url = URL.createObjectURL(file);
-        image.onload = () => {
-          URL.revokeObjectURL(url);
-          resolve(image);
-        };
-        image.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error('This photo could not be opened. Choose another JPG, PNG, or WebP image.'));
-        };
-        image.src = url;
-      });
-    try {
-      if (bitmap.width < 256 || bitmap.height < 256) {
-        throw new Error('Choose a profile photo at least 256 pixels wide and tall.');
-      }
-      const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
-      const width = Math.max(256, Math.round(bitmap.width * scale));
-      const height = Math.max(256, Math.round(bitmap.height * scale));
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext('2d', { alpha: false });
-      context.fillStyle = '#fff';
-      context.fillRect(0, 0, width, height);
-      context.drawImage(bitmap, 0, 0, width, height);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-      if (!blob || blob.size > imageLimit) {
-        throw new Error('This photo is too large after optimization. Choose a smaller photo.');
-      }
-      const payload = await imageToPayload(new File([blob], 'profile.jpg', { type: 'image/jpeg' }));
-      return { ...payload, width, height, cropX: 0.5, cropY: 0.5 };
-    } finally {
-      bitmap.close?.();
-    }
-  }
-
   async function publishEntry(event) {
     event.preventDefault();
     const submit = $('#lex-post-submit');
@@ -2660,8 +2778,16 @@
   }
 
   async function loadBootstrap() {
+    const requestedUserId = currentUserId();
+    const profilePhotoRequest = global.DueDiligenceProfilePhoto
+      ? global.DueDiligenceProfilePhoto.load({ reason: 'community-home' }).catch(() => null)
+      : Promise.resolve(null);
     const data = await query('bootstrap');
+    if (!requestedUserId || requestedUserId !== currentUserId()) return false;
     state.bootstrap = data;
+    const profilePhoto = await profilePhotoRequest;
+    if (requestedUserId !== currentUserId()) return false;
+    syncComposerProfile(profilePhoto || data.profile || currentProfileFallback());
     $('#quorum-saved-count').textContent = Number(data.counts?.savedAuthorities || 0);
     $('#quorum-circle-count').textContent = Number(data.counts?.joinedCircles || 0);
     $('#quorum-notification-count').textContent = Number(data.counts?.unreadNotifications || 0);
@@ -2894,6 +3020,7 @@
     state.entryRequestSequence += 1;
     state.circleRequestSequence += 1;
     beginCommunityViewRequest();
+    global.DueDiligencePedro?.unmount?.();
     closeQuorumDrawer({ restoreFocus: false });
     $$('.quorum-affirm-menu').forEach((menu) => {
       menu.hidden = true;
@@ -2985,6 +3112,7 @@
       else if (state.view === 'notifications') renderNotificationsView();
       else if (state.view === 'my-posts') refreshFeed();
       else if (state.view === 'profile') renderProfileView();
+      else if (state.view === 'pedro') renderPedroView();
       else if (state.view === 'search') searchQuorum(state.filters.query);
       else refreshFeed();
       loadSidebar();
@@ -3022,13 +3150,39 @@
     global.addEventListener('offline', () => {
       if (state.active) setFeedStatus('You are offline. Existing posts remain visible until you reconnect.', 'error');
     });
+    global.addEventListener('duediligence:profile-photo', (event) => {
+      const eventUserId = String(event.detail?.userId || '');
+      const activeUserId = currentUserId();
+      if (!activeUserId || eventUserId !== activeUserId) {
+        syncComposerProfile(null);
+        return;
+      }
+      const profile = event.detail?.profile || currentProfileFallback();
+      if (state.bootstrap?.profile) {
+        state.bootstrap.profile = {
+          ...state.bootstrap.profile,
+          avatarUrl: profile.avatarUrl || null,
+          displayName: profile.displayName || state.bootstrap.profile.displayName,
+        };
+      }
+      syncComposerProfile(profile);
+    });
     global.addEventListener('duediligence:session', (event) => {
       const authenticated = event.detail?.authenticated === true;
       const nextUserId = authenticated ? currentUserId() : '';
-      if (state.draftOwnerId !== (nextUserId || null)) {
+      const accountChanged = state.draftOwnerId !== (nextUserId || null);
+      if (accountChanged) {
+        beginCommunityViewRequest();
+        state.items = [];
+        state.cursor = null;
+        state.hasMore = false;
+        state.loaded = false;
+        state.bootstrap = null;
+        $('#lex-feed')?.replaceChildren();
         resetComposerForSession();
         if (authenticated) restoreDraft();
       }
+      syncComposerProfile(null);
       if (!authenticated) {
         clearPrivateView();
         if (state.active) askForSignIn();
@@ -3061,6 +3215,7 @@
     populateControls();
     bind();
     state.draftOwnerId = currentUserId() || null;
+    syncComposerProfile(null);
     restoreDraft();
     const params = new URLSearchParams(location.search);
     state.directEntryId = params.get('quorumEntry');

@@ -405,6 +405,18 @@
   background: rgba(184, 147, 79, .06);
 }
 
+.dd2-button-danger {
+  color: #8f1f28;
+  border-color: rgba(180, 35, 45, .46);
+  background: rgba(255, 255, 255, .76);
+}
+
+.dd2-button-danger:hover {
+  color: #741821;
+  border-color: var(--dd2-danger);
+  background: rgba(180, 35, 45, .08);
+}
+
 .dd2-button-gold {
   color: var(--dd-control-navy, #061a35);
   border-color: var(--dd-control-gold, #d4af57);
@@ -780,6 +792,7 @@ textarea.dd2-field {
 .dd2-header-role-avatar img {
   width: 100%;
   height: 100%;
+  border-radius: inherit;
   object-fit: cover;
 }
 
@@ -839,20 +852,37 @@ textarea.dd2-field {
 }
 
 .dd2-account-photo-actions .dd2-button {
+  min-height: 44px;
   min-width: 142px;
+  padding-inline: 15px;
   color: #f9efd5;
   background: rgba(255, 255, 255, .07);
   border-color: rgba(239, 210, 137, .65);
+  font-size: 14px;
+}
+
+.dd2-account-photo-actions .dd2-button-danger {
+  color: #ffd7db;
+  background: rgba(180, 35, 45, .16);
+  border-color: rgba(255, 151, 160, .72);
+}
+
+.dd2-account-photo-actions .dd2-button-danger:hover {
+  color: #fff0f1;
+  background: rgba(180, 35, 45, .28);
+  border-color: #ffb3ba;
 }
 
 .dd2-account-photo-actions small {
   color: #b9c8d9;
-  font: 500 9px/1.45 var(--sans, sans-serif);
+  font: 500 13px/1.55 var(--sans, sans-serif);
   text-align: right;
 }
 
 .dd2-account-photo-status {
   margin: 8px 2px 12px;
+  font-size: 14px;
+  line-height: 1.55;
   text-align: right;
 }
 

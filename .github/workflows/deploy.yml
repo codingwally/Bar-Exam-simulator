@@ -13,6 +13,11 @@ on:
         required: true
         default: false
         type: boolean
+      release2_database_preapplied:
+        description: "The reviewed Pedro and profile-photo database release was manually applied and live-probed"
+        required: true
+        default: false
+        type: boolean
       approval_reference:
         description: "Approval/change reference recorded in the release log"
         required: true
@@ -103,6 +108,16 @@ jobs:
           node scripts/test-design-correction-release.mjs
           node scripts/test-subject-matter-consolidation.mjs
           node scripts/test-subject-matter-skip-flag.mjs
+          node --test scripts/test-profile-photo-release2.mjs
+          node scripts/test-profile-avatar-cleanup-migration.mjs
+          node scripts/test-pedro-release2-integration.mjs
+          node scripts/test-pedro-migration-contract.mjs
+          node scripts/test-pedro-exact-openers.mjs
+          node --test scripts/test-pedro-frontend.mjs
+          node scripts/test-pedro-navigation.mjs
+          node scripts/test-gemini-examiner.mjs
+          node scripts/test-master-experience-release.mjs
+          node scripts/test-quorum-navigation-state.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
           node scripts/test-historical-examination-owner-access.mjs
           node scripts/test-examinations.mjs
@@ -151,6 +166,25 @@ jobs:
             exit 1
           fi
 
+      - name: Require the live-probed Release 2 database contract
+        env:
+          RELEASE2_DATABASE_PREAPPLIED: ${{ inputs.release2_database_preapplied }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f supabase/migrations/20260827143000_pedro_private_study_inbox.sql
+          test -f supabase/migrations/20260827144000_profile_avatar_cleanup_queue.sql
+          test -f supabase/migrations/20260827145000_pedro_foreign_key_indexes.sql
+          if grep -R --include='*.html' -F 'phase2-config.js?v=private-maintenance-20260820-2' index.html admin examination-room; then
+            echo "A legacy provider-visible phase2-config cache key remains in an HTML consumer." >&2
+            exit 1
+          fi
+          if [[ "$RELEASE2_DATABASE_PREAPPLIED" != "true" ]]; then
+            echo "Release 2 database migrations must be manually applied and live-probed before Worker deployment. Rerun with release2_database_preapplied=true only after verification." >&2
+            exit 1
+          fi
+          echo "The explicit Release 2 attestation confirms the reviewed Pedro and profile-photo database contract was manually applied and live-probed before cutover."
+
       - name: Verify production Examination Room Worker secrets exist
         working-directory: worker
         env:
@@ -160,7 +194,7 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4.114.0 secret list --format json \
-            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL', 'EXAMINATION_ROOM_KEY_PEPPER', 'EXAMINATION_ROOM_OWNER_DATA_KEY_V1', 'EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1', 'EXAMINATION_ROOM_ADMIN_EMAILS']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ') + '.'); process.exit(1); } console.log('Required production Examination Room Worker secrets are configured.'); });"
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['GEMINI_API_KEY', 'RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL', 'EXAMINATION_ROOM_KEY_PEPPER', 'EXAMINATION_ROOM_OWNER_DATA_KEY_V1', 'EXAMINATION_ROOM_BACKUP_MASTER_KEY_V1', 'EXAMINATION_ROOM_ADMIN_EMAILS']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ') + '.'); process.exit(1); } console.log('Required production Examination Room Worker secrets are configured.'); });"
 
       - name: Verify private Supabase Storage recovery configuration before cutover
         working-directory: worker
@@ -185,6 +219,15 @@ jobs:
           workingDirectory: worker
           wranglerVersion: "4.114.0"
           command: deploy
+
+      - name: Deploy provider-neutral public API alias before exposing the new Pages client
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: "4.114.0"
+          command: deploy --config wrangler.public-api.toml
 
       - name: Build sanitized Pages artifact
         run: node scripts/build-pages-artifact.mjs

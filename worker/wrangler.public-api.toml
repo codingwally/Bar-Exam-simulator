@@ -1,0 +1,15 @@
+name = "duediligence-api"
+main = "public-api-alias.mjs"
+compatibility_date = "2026-07-26"
+preview_urls = false
+workers_dev = true
+
+[[services]]
+binding = "DUE_DILIGENCE_APPLICATION"
+service = "duediligence-gemini-examiner"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true

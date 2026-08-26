@@ -23,7 +23,7 @@ const SHELL = Object.freeze([
   '/examination-room/offline-grading.css?v=greenfield-v1-20260826-1',
   '/examination-room/offline-grading-core.js?v=greenfield-v1-20260826-3',
   '/examination-room/offline-grading.js?v=greenfield-v1-20260826-3',
-  '/assets/phase2-config.js?v=private-maintenance-20260820-2',
+  '/assets/phase2-config.js?v=provider-neutral-release2-20260827-1',
   '/assets/private-beta-session.js?v=beta-all-access-20260802-1',
 ]);
 

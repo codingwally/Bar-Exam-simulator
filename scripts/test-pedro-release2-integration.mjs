@@ -5,6 +5,9 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 const [
   index,
+  adminIndex,
+  examinationIndex,
+  examinationStudent,
   featureLoader,
   forum,
   frontend,
@@ -16,6 +19,9 @@ const [
   artifactBuilder,
 ] = await Promise.all([
   read('index.html'),
+  read('admin/index.html'),
+  read('examination-room/index.html'),
+  read('examination-room/student.html'),
   read('assets/feature-loader.js'),
   read('assets/lex-forum.js'),
   read('assets/pedro.js'),
@@ -29,6 +35,14 @@ const [
 
 assert.match(index, /data-quorum-view="home"[\s\S]*data-quorum-view="pedro"[\s\S]*>\s*Pedro\s*</);
 assert.match(index, /assets\/profile-photo\.js\?v=profile-photo-release2-20260827-1/);
+assert.match(index, /assets\/phase2-config\.js\?v=provider-neutral-release2-20260827-1/);
+for (const html of [adminIndex, examinationIndex, examinationStudent]) {
+  assert.match(html, /assets\/phase2-config\.js\?v=provider-neutral-release2-20260827-1/);
+}
+assert.doesNotMatch(
+  [index, adminIndex, examinationIndex, examinationStudent].join('\n'),
+  /phase2-config\.js\?v=private-maintenance-20260820-2/,
+);
 assert.match(index, /assets\/pedro-navigation\.js\?v=pedro-release2-20260827-1[\s\S]*DueDiligencePedroNavigation\?\.restoreFromUrl\?\.\(\)/);
 
 assert.match(featureLoader, /'assets\/pedro\.css\?v=pedro-release2-20260827-1'/);
@@ -69,6 +83,7 @@ assert.doesNotMatch(worker, /pedroHandlers[\s\S]{0,900}generated\.model/);
 
 assert.match(serviceWorker, /CACHE_VERSION = 'duediligence-shell-20260827-profile-pedro-release2-1'/);
 assert.match(serviceWorker, /assets\/pedro-navigation\.js\?v=pedro-release2-20260827-1/);
+assert.match(serviceWorker, /assets\/phase2-config\.js\?v=provider-neutral-release2-20260827-1/);
 for (const asset of [
   'assets/profile-photo.js',
   'assets/pedro-navigation.js',

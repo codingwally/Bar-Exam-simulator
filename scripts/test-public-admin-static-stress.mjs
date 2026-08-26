@@ -17,6 +17,7 @@ test('load harness is locked to local preview and the approved staging host', ()
   for (const forbidden of [
     'https://duediligence.ph',
     'https://www.duediligence.ph',
+    'https://duediligence-api.wallyesteban1993.workers.dev',
     'https://duediligence-gemini-examiner.wallyesteban1993.workers.dev',
     'https://example.com',
   ]) {

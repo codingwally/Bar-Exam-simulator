@@ -23,6 +23,18 @@ async function walk(directory, prefix = '') {
 
 const output = path.join(root, '.pages-dist');
 const files = await walk(output);
+const publicTextFiles = files.filter((file) => /\.(?:css|html|js|svg|txt|webmanifest|xml)$/i.test(file));
+const publicTextSources = await Promise.all(publicTextFiles.map(async (file) => ({
+  file,
+  source: await readFile(path.join(output, file), 'utf8'),
+})));
+for (const { file, source } of publicTextSources) {
+  assert.doesNotMatch(
+    source,
+    /gemini|generativelanguage(?:\.googleapis\.com)?|generative language/i,
+    `${file} must not disclose the private application provider`,
+  );
+}
 for (const required of [
   'index.html',
   'CNAME',
@@ -101,6 +113,10 @@ const phase2Config = await readFile(path.join(output, 'assets/phase2-config.js')
 const maintenanceGate = await readFile(path.join(output, 'assets/maintenance-gate.js'), 'utf8');
 const robots = await readFile(path.join(output, 'robots.txt'), 'utf8');
 const sitemap = await readFile(path.join(output, 'sitemap.xml'), 'utf8');
+const publicBackendUrl = 'https://duediligence-api.wallyesteban1993.workers.dev';
+assert.ok(index.includes(publicBackendUrl));
+assert.ok(phase2Config.includes(publicBackendUrl));
+assert.doesNotMatch(`${index}\n${phase2Config}`, /gemini|generativelanguage/i);
 assert.doesNotMatch(index, /content\/question-bank|website-upload\.json|DueDiligenceWebsiteQuestionBank/i);
 assert.doesNotMatch(index, /const BAR_QUESTIONS\s*=\s*\{/);
 assert.doesNotMatch(index, /PH Bar Essay Trainer|Advanced Pro Repository/);

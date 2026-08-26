@@ -24,13 +24,13 @@ test('service worker precaches the complete local student examination shell', ()
     '/examination-room/offline-grading.css?v=greenfield-v1-20260826-1',
     '/examination-room/offline-grading-core.js?v=greenfield-v1-20260826-3',
     '/examination-room/offline-grading.js?v=greenfield-v1-20260826-3',
-    '/assets/phase2-config.js?v=private-maintenance-20260820-2',
+    '/assets/phase2-config.js?v=provider-neutral-release2-20260827-1',
     '/assets/private-beta-session.js?v=beta-all-access-20260802-1',
   ].forEach((asset) => assert.ok(serviceWorker.includes(`'${asset}'`), `${asset} is cached`));
 
   assert.ok(studentHtml.includes('student.js?v=greenfield-v1-20260827-7'));
   assert.ok(studentHtml.includes('api.js?v=greenfield-v1-20260827-9'));
-  assert.ok(studentHtml.includes('phase2-config.js?v=private-maintenance-20260820-2'));
+  assert.ok(studentHtml.includes('phase2-config.js?v=provider-neutral-release2-20260827-1'));
 });
 
 test('offline student navigation uses its cached application before the generic offline page', () => {

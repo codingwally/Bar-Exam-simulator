@@ -990,6 +990,9 @@ test('scheduled Quorum profile photo reconciliation deletes queued private objec
   const calls = [];
   const restore = installForumFetch(async (url, options) => {
     calls.push({ url, method: options.method || 'GET' });
+    if (url.endsWith('/rest/v1/rpc/examination_room_v1_claim_recovery_snapshot')) {
+      return Response.json({ ok: true, job: null });
+    }
     if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?')
         && (options.method || 'GET') === 'GET') {
       assert.match(url, /select=object_path/);
@@ -1042,6 +1045,9 @@ test('scheduled Quorum reconciliation never deletes a cleanup path that became a
   let storageDeleteCalls = 0;
   let queueDeleteCalls = 0;
   const restore = installForumFetch(async (url, options) => {
+    if (url.endsWith('/rest/v1/rpc/examination_room_v1_claim_recovery_snapshot')) {
+      return Response.json({ ok: true, job: null });
+    }
     if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?')
         && (options.method || 'GET') === 'GET') {
       return Response.json([{ object_path: activePath }]);
@@ -1070,6 +1076,31 @@ test('scheduled Quorum reconciliation never deletes a cleanup path that became a
     await pendingCleanup;
     assert.equal(storageDeleteCalls, 0, 'an active profile photo must never be deleted');
     assert.equal(queueDeleteCalls, 0, 'the database claim atomically acknowledges an active marker');
+  } finally {
+    restore();
+  }
+});
+
+test('scheduled Examination Room recovery failures remain observable while avatar cleanup stays isolated', async () => {
+  const restore = installForumFetch(async (url, options) => {
+    if (url.endsWith('/rest/v1/rpc/examination_room_v1_claim_recovery_snapshot')) {
+      throw new Error('test recovery outage');
+    }
+    if (url.includes('/rest/v1/forum_profile_avatar_cleanup_jobs?')
+        && (options.method || 'GET') === 'GET') {
+      return Response.json([]);
+    }
+    throw new Error(`Unexpected scheduled maintenance request: ${url}`);
+  });
+  try {
+    let pendingMaintenance = null;
+    worker.scheduled({}, baseEnv, {
+      waitUntil(task) {
+        pendingMaintenance = task;
+      },
+    });
+    assert.ok(pendingMaintenance, 'combined maintenance must be registered with waitUntil');
+    await assert.rejects(pendingMaintenance, /test recovery outage/);
   } finally {
     restore();
   }

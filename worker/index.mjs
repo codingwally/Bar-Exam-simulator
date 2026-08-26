@@ -9144,7 +9144,7 @@ export default {
       console.error('Scheduled Examination Room recovery drain failed', {
         code: String(error?.code || 'EXAM_ROOM_V1_RECOVERY_DRAIN_FAILED').slice(0, 80),
       });
-      return { claimed: 0, materialized: 0, failed: 1, leaseLost: 0 };
+      throw error;
     });
     const avatarCleanup = reconcileQuorumAvatarCleanupJobs(runtimeEnv).catch((error) => {
       console.error('Scheduled Quorum profile photo cleanup failed', {

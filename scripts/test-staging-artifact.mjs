@@ -46,6 +46,8 @@ assert.match(index, /duediligence-examinations-staging\.wallyesteban1993\.worker
 assert.doesNotMatch(config, /hbllomlijfznnuudpdvr/);
 assert.doesNotMatch(config, /duediligence-gemini-examiner\.wallyesteban1993\.workers\.dev/);
 assert.doesNotMatch(index, /duediligence-gemini-examiner\.wallyesteban1993\.workers\.dev/);
+assert.doesNotMatch(config, /duediligence-api\.wallyesteban1993\.workers\.dev/);
+assert.doesNotMatch(index, /duediligence-api\.wallyesteban1993\.workers\.dev/);
 
 for (const required of ['assets/examinations.css', 'assets/examinations.js']) {
   await assert.doesNotReject(() => readFile(path.join(output, required)));

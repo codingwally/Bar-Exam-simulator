@@ -5,6 +5,8 @@ import { PEDRO_ACTION_LABELS, PEDRO_FIXED_RESPONSES } from '../worker/pedro-core
 const file = new URL('../supabase/migrations/20260827143000_pedro_private_study_inbox.sql', import.meta.url);
 const sql = readFileSync(file, 'utf8');
 const normalized = sql.replace(/\r\n/g, '\n');
+const indexFile = new URL('../supabase/migrations/20260827145000_pedro_foreign_key_indexes.sql', import.meta.url);
+const indexSql = readFileSync(indexFile, 'utf8').replace(/\r\n/g, '\n');
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -27,6 +29,17 @@ assert.match(normalized, /^-- Due Diligence Release 2:[\s\S]*\nbegin;/);
 assert.equal((normalized.match(/^begin;$/gm) || []).length, 1);
 assert.equal((normalized.match(/^commit;$/gm) || []).length, 1);
 assert.match(normalized, /commit;\s*$/);
+assert.equal((indexSql.match(/^begin;$/gm) || []).length, 1);
+assert.equal((indexSql.match(/^commit;$/gm) || []).length, 1);
+for (const index of [
+  /pedro_turns_thread_owner_idx[\s\S]*\(thread_id, user_id, access_kind\)/,
+  /pedro_actions_turn_owner_idx[\s\S]*\(turn_id, user_id\)/,
+  /pedro_actions_doctrine_content_idx[\s\S]*\(doctrine_content_id\)/,
+  /pedro_actions_syllabus_target_idx[\s\S]*\(syllabus_version_id, syllabus_question_id\)/,
+  /pedro_actions_syllabus_question_idx[\s\S]*\(syllabus_question_id\)/,
+]) {
+  assert.match(indexSql, index);
+}
 
 for (const table of ['pedro_threads', 'pedro_turns', 'pedro_actions']) {
   assert.match(normalized, new RegExp(`create table public\\.${table} \\(`));
@@ -166,6 +179,10 @@ assert.match(normalized, /grant execute on function public\.pedro_history\(uuid,
 const target = functionSql('subject_matter_target_question');
 assert.match(target, /v_access := public\.pedro_access_snapshot\(p_user_id\)/);
 assert.match(target, /public\.examination_authorize_access\([\s\S]*'per_subject'/);
+assert.match(target, /v_target record/);
+assert.match(target, /placement\.exam_id as placement_exam_id[\s\S]*into v_target/);
+assert.doesNotMatch(target, /select placement, definition, version[\s\S]*into v_placement, v_definition, v_version/);
+assert.match(target, /if not found then\n\s+raise exception 'PEDRO_SYLLABUS_TARGET_STALE'/);
 assert.match(target, /'subject-cycle:' \|\| p_user_id::text/);
 assert.match(target, /for update of cycle/);
 assert.match(target, /for update of attempt/);

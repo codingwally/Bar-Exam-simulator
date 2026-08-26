@@ -199,7 +199,8 @@ for (const record of websiteQuestionBank.records) {
 }
 
 // Frontend and deployment regression checks.
-assert.match(html, /EXAMINER_WORKER_URL\s*=\s*'https:\/\/duediligence-gemini-examiner\.wallyesteban1993\.workers\.dev'/);
+assert.match(html, /EXAMINER_WORKER_URL\s*=\s*'https:\/\/duediligence-api\.wallyesteban1993\.workers\.dev'/);
+assert.doesNotMatch(html, /gemini|generativelanguage/i);
 assert.doesNotMatch(html, /generativelanguage\.googleapis\.com/);
 assert.doesNotMatch(html, /Math\.min\(100|score\s*>=\s*75|\/100/);
 assert.doesNotMatch(html, /Estimated Bar Passability|Projected Passers|Avg Score|Pass Rate/);
@@ -218,7 +219,8 @@ for (const heading of ['ANSWER', 'LEGAL BASIS', 'APPLICATION', 'CONCLUSION']) {
   assert.match(html, new RegExp(`<b>${heading}</b>`));
 }
 assert.match(html, /This answer was generated from online legal research/);
-assert.doesNotMatch(workflow, /Inject Gemini API Key|GEMINI_API_KEY/);
+assert.doesNotMatch(workflow, /Inject Gemini API Key|secret put GEMINI_API_KEY|secrets\.GEMINI_API_KEY/);
+assert.match(workflow, /const required = \['GEMINI_API_KEY'/);
 assert.doesNotMatch(html, /GEMINI_API_KEY|YOUR_GEMINI_API_KEY/);
 assert.match(workerSource, /env\.GEMINI_API_KEY/);
 

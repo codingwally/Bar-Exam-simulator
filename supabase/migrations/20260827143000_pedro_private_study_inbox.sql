@@ -1283,9 +1283,7 @@ as $$
 declare
   v_now timestamptz := pg_catalog.clock_timestamp();
   v_access jsonb;
-  v_placement public.subject_matter_placements%rowtype;
-  v_definition public.examination_definitions%rowtype;
-  v_version public.examination_versions%rowtype;
+  v_target record;
   v_cycle public.subject_matter_cycles%rowtype;
   v_open_attempt_id uuid;
 begin
@@ -1306,8 +1304,22 @@ begin
     false
   );
 
-  select placement, definition, version
-  into v_placement, v_definition, v_version
+  select
+    placement.exam_id as placement_exam_id,
+    placement.course_name,
+    placement.year_level,
+    placement.term,
+    definition.id as definition_id,
+    definition.title as definition_title,
+    definition.subject as definition_subject,
+    version.id as version_id,
+    version.duration_seconds,
+    version.default_timer_mode,
+    version.allowed_timer_modes,
+    version.instructions,
+    version.grading_route,
+    version.answer_release_rule
+  into v_target
   from public.subject_matter_placements placement
   join public.examination_definitions definition
     on definition.id = placement.exam_id
@@ -1330,13 +1342,19 @@ begin
     and question.id = p_question_id
   limit 1;
 
-  if v_placement.exam_id is null or v_definition.id is null or v_version.id is null then
+  if not found then
+    raise exception 'PEDRO_SYLLABUS_TARGET_STALE';
+  end if;
+  if v_target.placement_exam_id is null
+     or v_target.definition_id is null
+     or v_target.version_id is null
+  then
     raise exception 'PEDRO_SYLLABUS_TARGET_STALE';
   end if;
 
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
-    'subject-cycle:' || p_user_id::text || ':' || v_placement.course_name
-      || ':' || v_placement.year_level::text || ':' || v_placement.term::text,
+    'subject-cycle:' || p_user_id::text || ':' || v_target.course_name
+      || ':' || v_target.year_level::text || ':' || v_target.term::text,
     0
   ));
 
@@ -1347,9 +1365,9 @@ begin
     term
   ) values (
     p_user_id,
-    v_placement.course_name,
-    v_placement.year_level,
-    v_placement.term
+    v_target.course_name,
+    v_target.year_level,
+    v_target.term
   )
   on conflict (user_id, subject, year_level, term) do nothing;
 
@@ -1357,9 +1375,9 @@ begin
   into v_cycle
   from public.subject_matter_cycles cycle
   where cycle.user_id = p_user_id
-    and cycle.subject = v_placement.course_name
-    and cycle.year_level = v_placement.year_level
-    and cycle.term = v_placement.term
+    and cycle.subject = v_target.course_name
+    and cycle.year_level = v_target.year_level
+    and cycle.term = v_target.term
   for update of cycle;
 
   select attempt.id
@@ -1388,9 +1406,9 @@ begin
     where active_attempt.user_id = p_user_id
       and active_attempt.status in ('in_progress', 'review')
       and active_attempt.submitted_at is null
-      and active_placement.course_name = v_placement.course_name
-      and active_placement.year_level = v_placement.year_level
-      and active_placement.term = v_placement.term
+      and active_placement.course_name = v_target.course_name
+      and active_placement.year_level = v_target.year_level
+      and active_placement.term = v_target.term
       and active_attempt.version_id <> p_version_id
   ) then
     raise exception 'PEDRO_SYLLABUS_ACTIVE_ATTEMPT';
@@ -1415,9 +1433,9 @@ begin
         on history_response.attempt_id = history_attempt.id
        and history_response.question_id = p_question_id
       where history_attempt.user_id = p_user_id
-        and history_placement.course_name = v_placement.course_name
-        and history_placement.year_level = v_placement.year_level
-        and history_placement.term = v_placement.term
+        and history_placement.course_name = v_target.course_name
+        and history_placement.year_level = v_target.year_level
+        and history_placement.term = v_target.term
         and (
           pg_catalog.btrim(coalesce(history_response.answer_text, '')) <> ''
           or history_attempt.subject_matter_skipped_at is not null
@@ -1431,30 +1449,30 @@ begin
   set active_version_id = p_version_id,
       updated_at = v_now
   where user_id = p_user_id
-    and subject = v_placement.course_name
-    and year_level = v_placement.year_level
-    and term = v_placement.term;
+    and subject = v_target.course_name
+    and year_level = v_target.year_level
+    and term = v_target.term;
 
   return pg_catalog.jsonb_build_object(
-    'subject', v_placement.course_name,
-    'yearLevel', v_placement.year_level,
-    'term', v_placement.term,
+    'subject', v_target.course_name,
+    'yearLevel', v_target.year_level,
+    'term', v_target.term,
     'versionId', p_version_id,
     'questionId', p_question_id,
     'resumeAttemptId', v_open_attempt_id,
     'setup', pg_catalog.jsonb_build_object(
-      'versionId', v_version.id,
+      'versionId', v_target.version_id,
       'track', 'per_subject',
       'assessmentKind', 'quiz',
-      'title', v_definition.title,
-      'subject', v_definition.subject,
+      'title', v_target.definition_title,
+      'subject', v_target.definition_subject,
       'questionCount', 1,
-      'durationSeconds', v_version.duration_seconds,
-      'timerMode', v_version.default_timer_mode,
-      'allowedTimerModes', v_version.allowed_timer_modes,
-      'instructions', v_version.instructions,
-      'gradingRoute', v_version.grading_route,
-      'answerReleaseRule', v_version.answer_release_rule
+      'durationSeconds', v_target.duration_seconds,
+      'timerMode', v_target.default_timer_mode,
+      'allowedTimerModes', v_target.allowed_timer_modes,
+      'instructions', v_target.instructions,
+      'gradingRoute', v_target.grading_route,
+      'answerReleaseRule', v_target.answer_release_rule
     )
   );
 end;

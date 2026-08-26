@@ -1,0 +1,198 @@
+.exam-admin-page { display: grid; gap: 1.2rem; }
+
+.exam-admin-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.exam-admin-metric {
+  min-height: 110px;
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: .75rem;
+  align-items: start;
+  padding: 1rem;
+  border-right: 1px solid var(--line);
+}
+
+.exam-admin-metric:last-child { border-right: 0; }
+.exam-admin-metric > i { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid #d7c38c; border-radius: 50%; color: var(--gold-dark); background: #fffaf0; font-size: 1.15rem; }
+.exam-admin-metric span { display: grid; gap: .25rem; min-width: 0; }
+.exam-admin-metric small { color: var(--muted); font-size: .62rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.exam-admin-metric strong { color: var(--navy); font-family: "Playfair Display", serif; font-size: 1.8rem; line-height: 1; }
+.exam-admin-metric em { color: var(--muted); font-size: .65rem; font-style: normal; line-height: 1.4; }
+
+.exam-admin-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .85rem; }
+.exam-admin-panel-head h3 { margin: 0; }
+.exam-admin-panel-head p { margin: .25rem 0 0; color: var(--muted); font-size: .72rem; line-height: 1.5; }
+.exam-admin-panel-head .secondary-button { flex: none; gap: .4rem; }
+
+.exam-admin-section-head { align-items: flex-start; }
+.exam-admin-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .65rem; }
+.exam-admin-head-actions label { display: grid; gap: .25rem; color: var(--muted); font-size: .62rem; font-weight: 750; letter-spacing: .05em; text-transform: uppercase; }
+.exam-admin-head-actions select { min-height: 38px; min-width: 220px; border: 1px solid var(--line-strong); border-radius: 5px; padding: .45rem .65rem; background: white; color: var(--navy); font: inherit; }
+
+.exam-admin-queue td:first-child span,
+.exam-admin-queue td:first-child { min-width: 220px; }
+.exam-admin-queue td:first-child strong,
+.exam-admin-queue td:first-child small { display: block; }
+.exam-admin-queue td:first-child strong { color: var(--navy); font-family: "Playfair Display", serif; font-size: .82rem; }
+.exam-admin-queue td:first-child small,
+.exam-admin-queue td:nth-child(6) small { margin-top: .2rem; color: var(--muted); font-size: .62rem; }
+
+.exam-admin-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: .25rem .5rem;
+  background: #f8fafc;
+  color: #526173;
+  font-size: .6rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.exam-admin-status.awaiting_activation { border-color: #ddbd77; background: #fff9eb; color: #815d1b; }
+.exam-admin-status.active,
+.exam-admin-status.open { border-color: #9fc3ad; background: #f1f8f3; color: #246343; }
+.exam-admin-status.grading,
+.exam-admin-status.results_released { border-color: #a9bfd7; background: #f1f6fb; color: #244f78; }
+.exam-admin-status.revoked { border-color: #dca9a4; background: #fff5f4; color: #963229; }
+
+.exam-admin-actions { min-width: 250px; display: flex; flex-wrap: wrap; gap: .4rem; }
+.exam-admin-actions button { min-height: 34px; padding: .42rem .55rem; font-size: .64rem; }
+.exam-admin-danger { min-height: 34px; border: 1px solid #dba8a3; border-radius: 5px; padding: .42rem .55rem; background: #fff7f6; color: var(--danger); cursor: pointer; font-size: .64rem; font-weight: 700; }
+.exam-admin-danger:hover { border-color: var(--danger); background: #fff0ee; }
+
+.exam-admin-key-panel {
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) minmax(210px, .65fr) auto;
+  gap: 1rem;
+  align-items: center;
+  border: 1px solid #c9ad68;
+  border-left: 4px solid var(--gold);
+  padding: 1rem;
+  background: #fffaf0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .04);
+}
+.exam-admin-key-panel h3 { margin: .2rem 0 .35rem; color: var(--navy); font-family: "Playfair Display", serif; }
+.exam-admin-key-panel p { margin: 0; color: #6b5a38; font-size: .7rem; line-height: 1.5; }
+.exam-admin-key-panel label { display: grid; gap: .35rem; color: var(--muted); font-size: .62rem; font-weight: 750; text-transform: uppercase; }
+.exam-admin-key-panel input { min-height: 44px; border: 1px solid #b89b52; background: white; color: var(--navy); font-family: "IBM Plex Mono", monospace; font-size: 1rem; font-weight: 700; letter-spacing: .08em; text-align: center; }
+.exam-admin-key-actions { display: flex; flex-wrap: wrap; gap: .45rem; }
+.exam-admin-key-actions button { gap: .35rem; }
+.exam-admin-key-warning { grid-column: 1 / -1; display: flex; align-items: center; gap: .45rem; padding-top: .65rem; border-top: 1px solid #e3d2a8; }
+.exam-admin-key-warning i { color: var(--warning); font-size: 1rem; }
+
+.exam-admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.exam-admin-grid .panel { margin-bottom: 0; }
+
+.exam-admin-professors { display: grid; }
+.exam-admin-professors article { min-height: 58px; display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: .65rem; border-bottom: 1px solid var(--line); padding: .55rem .25rem; }
+.exam-admin-professors article:last-child { border-bottom: 0; }
+.exam-admin-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--navy); color: white; font-size: 1rem; }
+.exam-admin-professors article > div { display: grid; gap: .18rem; }
+.exam-admin-professors strong { color: var(--navy); font-size: .72rem; }
+.exam-admin-professors small { color: var(--muted); font-size: .62rem; overflow-wrap: anywhere; }
+.exam-admin-staff-state { display: flex !important; grid-auto-flow: column; align-items: center; justify-content: end; gap: .45rem !important; }
+.exam-admin-staff-state .exam-admin-danger { min-height: 30px; }
+
+.exam-admin-professor-requests { display: grid; gap: .55rem; }
+.exam-admin-professor-requests article { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: .75rem; border: 1px solid #d8c48d; border-left: 3px solid var(--gold); padding: .75rem; background: #fffdf8; }
+.exam-admin-professor-requests article > div { min-width: 0; display: grid; gap: .2rem; }
+.exam-admin-professor-requests strong { color: var(--navy); font-size: .74rem; }
+.exam-admin-professor-requests small,
+.exam-admin-professor-requests em { color: var(--muted); font-size: .61rem; font-style: normal; overflow-wrap: anywhere; }
+.exam-admin-request-actions { display: flex !important; flex-wrap: wrap; justify-content: flex-end; gap: .45rem !important; }
+.exam-admin-request-actions button { min-height: 34px; }
+
+.exam-admin-role-panel { display: grid; gap: .85rem; }
+.exam-admin-role-form { display: grid; grid-template-columns: minmax(210px, 1.3fr) minmax(180px, 1fr) minmax(160px, .75fr) minmax(240px, 1.25fr) auto; gap: .7rem; align-items: end; border: 1px solid var(--line); padding: .85rem; background: #f8fafc; }
+.exam-admin-role-form label { display: grid; gap: .3rem; min-width: 0; color: var(--muted); font-size: .62rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.exam-admin-role-form input,
+.exam-admin-role-form select { width: 100%; min-height: 42px; border: 1px solid #bac4cf; border-radius: 5px; padding: .55rem .65rem; background: white; color: var(--navy); font: 500 .72rem/1.3 Inter, sans-serif; letter-spacing: 0; text-transform: none; }
+.exam-admin-role-form input:focus,
+.exam-admin-role-form select:focus,
+.exam-admin-head-actions select:focus { outline: 3px solid rgba(178, 137, 47, .22); outline-offset: 1px; border-color: var(--gold-dark); }
+.exam-admin-role-form small { min-height: 1.2em; color: #697789; font-size: .58rem; font-weight: 500; line-height: 1.35; letter-spacing: 0; text-transform: none; }
+.exam-admin-role-form button { min-height: 42px; white-space: nowrap; }
+.exam-admin-form-status { grid-column: 1 / -1; min-height: 1rem; color: #6c5530; font-size: .66rem; line-height: 1.45; }
+.exam-admin-bootstrap-form { grid-template-columns: minmax(240px, 1.4fr) minmax(180px, .8fr) auto; }
+.exam-admin-bootstrap-panel { display: grid; gap: 1rem; }
+.exam-admin-bootstrap-copy { display: grid; grid-template-columns: 46px 1fr; gap: .8rem; align-items: start; }
+.exam-admin-bootstrap-copy > i { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid #d7c38c; border-radius: 50%; background: #fffaf0; color: var(--gold-dark); font-size: 1.25rem; }
+.exam-admin-bootstrap-copy h3 { margin: 0 0 .3rem; color: var(--navy); font-family: "Playfair Display", serif; }
+.exam-admin-bootstrap-copy p { margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.55; }
+.exam-admin-existing-schools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+.exam-admin-existing-schools article { display: grid; gap: .2rem; border: 1px solid var(--line); padding: .75rem; background: #f8fafc; }
+.exam-admin-existing-schools strong { color: var(--navy); font-size: .72rem; }
+.exam-admin-existing-schools small,
+.exam-admin-existing-schools span { color: var(--muted); font-size: .6rem; }
+.exam-admin-new-school details { border: 1px solid var(--line); background: #f8fafc; }
+.exam-admin-new-school summary { min-height: 42px; display: flex; align-items: center; padding: .6rem .75rem; color: var(--navy); cursor: pointer; font-size: .7rem; font-weight: 750; }
+.exam-admin-new-school details[open] summary { border-bottom: 1px solid var(--line); }
+.exam-admin-new-school .exam-admin-role-form { border: 0; }
+
+.exam-admin-snapshots { display: grid; gap: .55rem; margin: 0; padding: 0; list-style: none; }
+.exam-admin-snapshots li { min-height: 52px; display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: .6rem; border-left: 3px solid var(--gold); padding: .55rem .65rem; background: #f8fafc; }
+.exam-admin-snapshots li > i { color: var(--navy-2); font-size: 1rem; }
+.exam-admin-snapshots li > span { display: grid; gap: .15rem; }
+.exam-admin-snapshots strong { color: var(--navy); font-size: .68rem; }
+.exam-admin-snapshots small,
+.exam-admin-snapshots li > span:last-child { color: var(--muted); font-size: .6rem; }
+
+.exam-admin-truth,
+.exam-admin-error { display: grid; grid-template-columns: auto 1fr auto; gap: .75rem; align-items: start; border: 1px solid #d8c48d; border-left: 4px solid var(--gold); padding: .85rem 1rem; background: #fffaf0; color: #665537; }
+.exam-admin-truth > i,
+.exam-admin-error > i { color: var(--gold-dark); font-size: 1.2rem; }
+.exam-admin-truth strong,
+.exam-admin-error strong { color: var(--navy); }
+.exam-admin-truth p,
+.exam-admin-error p { margin: .25rem 0 0; font-size: .7rem; line-height: 1.55; }
+.exam-admin-error { border-color: #dca9a4; border-left-color: var(--danger); background: #fff5f4; color: #7b3d37; }
+.exam-admin-error > i { color: var(--danger); }
+
+@media (max-width: 1100px) {
+  .exam-admin-metrics { grid-template-columns: 1fr 1fr; }
+  .exam-admin-metric:nth-child(2) { border-right: 0; }
+  .exam-admin-metric:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .exam-admin-key-panel { grid-template-columns: 1fr 1fr; }
+  .exam-admin-key-actions { grid-column: 1 / -1; }
+  .exam-admin-role-form { grid-template-columns: 1fr 1fr; }
+  .exam-admin-role-form button { justify-self: start; }
+  .exam-admin-form-status { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .exam-admin-metrics,
+  .exam-admin-grid,
+  .exam-admin-key-panel { grid-template-columns: 1fr; }
+  .exam-admin-metric { border-right: 0; border-bottom: 1px solid var(--line); }
+  .exam-admin-metric:last-child { border-bottom: 0; }
+  .exam-admin-key-actions,
+  .exam-admin-key-warning { grid-column: auto; }
+  .exam-admin-panel-head { align-items: flex-start; flex-direction: column; }
+  .exam-admin-panel-head .secondary-button { width: 100%; }
+  .exam-admin-head-actions { width: 100%; justify-content: stretch; }
+  .exam-admin-head-actions label,
+  .exam-admin-head-actions select,
+  .exam-admin-head-actions .secondary-button { width: 100%; }
+  .exam-admin-role-form,
+  .exam-admin-bootstrap-form,
+  .exam-admin-existing-schools { grid-template-columns: 1fr; }
+  .exam-admin-role-form button { width: 100%; }
+  .exam-admin-form-status { grid-column: auto; }
+  .exam-admin-actions { min-width: 0; }
+  .exam-admin-actions button { flex: 1; }
+  .exam-admin-truth,
+  .exam-admin-error { grid-template-columns: auto 1fr; }
+  .exam-admin-error .secondary-button { grid-column: 2; justify-self: start; }
+  .exam-admin-professors article { grid-template-columns: 38px 1fr; }
+  .exam-admin-staff-state { grid-column: 2; justify-content: start; }
+  .exam-admin-professor-requests article { grid-template-columns: 38px 1fr; }
+  .exam-admin-request-actions { grid-column: 2; justify-content: start; }
+}

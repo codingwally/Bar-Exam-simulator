@@ -76,7 +76,7 @@ jobs:
           node scripts/test-import-duediligence-2026-content.mjs
           node scripts/validate-duediligence-2026-content.mjs
 
-      - name: Verify production notification secrets exist
+      - name: Verify production notification, persistence, and Examination Room secrets exist
         working-directory: worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -85,7 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4.114.0 secret list --format json \
-            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ')); process.exit(1); } console.log('Required payment-notification secrets are configured.'); });"
+            | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const names = new Set(JSON.parse(value).map(item => item.name)); const required = ['RESEND_API_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_URL', 'EXAMINATION_ROOM_KEY_PEPPER']; const missing = required.filter(name => !names.has(name)); if (missing.length) { console.error('Required production Worker secrets are missing: ' + missing.join(', ') + '. Use the approved one-time bootstrap workflow for a missing Examination Room pepper; never rotate it during deploy.'); process.exit(1); } console.log('Required notification, persistence, and Examination Room secrets are configured.'); });"
 
       - name: Ensure the maintenance signing key exists
         working-directory: worker

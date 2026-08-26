@@ -147,7 +147,7 @@ assert.match(admin, /Private proof access log[\s\S]*Every private-proof view is 
   'Payments must visibly expose recent private-proof access reasons.');
 assert.doesNotMatch(admin, /window\.location\.assign\(response\.proof\.url\)/,
   'Private proof review must not navigate the administrator away from the dashboard.');
-assert.match(publicPage, /assets\/phase2-experience\.js\?v=syllabus-review-20260823-1/);
+assert.match(publicPage, /assets\/phase2-experience\.js\?v=examination-room-doors-20260826-2/);
 assert.match(publicPage, /assets\/phase4-experience\.js\?v=question-randomization-20260825-1/);
 assert.match(adminPage, /admin\.css\?v=[a-z0-9-]+/i);
 assert.match(adminPage, /subscription-actions-core\.js\?v=[a-z0-9-]+/i);

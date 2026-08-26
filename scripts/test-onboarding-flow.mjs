@@ -60,8 +60,16 @@ assert.match(
 );
 assert.match(phase2, /\['mock-bar', 'subject-matter', 'bar-feels', 'quorum'\]/,
   'The canonical Bar Question Practice route must remain protected before sign-in.');
-assert.match(phase2, /function restoreAuthDestination\(\)[\s\S]*if \(!state\.authReturnPending\) return;[\s\S]*history\.replaceState\([\s\S]*dueDiligenceRoute:\s*'quorum'[\s\S]*#quorum[\s\S]*PopStateEvent\('popstate'/,
-  'OAuth return must open Quorum once while routine session recovery preserves the active route.');
+assert.match(
+  phase2,
+  /function restoreAuthDestination\(\)[\s\S]*if \(!state\.authReturnPending\) return;[\s\S]*const storedReturn = safeSessionRead\(authReturnStorageKey\);[\s\S]*const returnHash = safeReturnHash\(storedReturn\) \|\| '#quorum';[\s\S]*dueDiligenceRoute:\s*returnHash\.slice\(1\)[\s\S]*PopStateEvent\('popstate'/,
+  'OAuth return must restore a validated requested destination while routine session recovery preserves the active route and Quorum remains the fallback.',
+);
+assert.match(
+  phase2,
+  /showEntry\(\{ allowDismiss: true, returnHash: '#examination-room' \}\)/,
+  'The Professor door must preserve Examination Room as the post-sign-in destination.',
+);
 assert.match(
   html,
   /function showSubjectSelection\(\) \{[\s\S]*window\.scrollTo\(\{ top: 0, behavior: 'auto' \}\);[\s\S]*close\?\.focus\(\{ preventScroll: true \}\);[\s\S]*\}/,

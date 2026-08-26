@@ -255,14 +255,14 @@ assert.match(examCss, /@media \(max-width: 900px\)[\s\S]*?\.dd-subject-editorial
   'The balanced split must stack review below writing on smaller screens.');
 assert.match(examCss, /\.dd-study-disclosures details\s*\{[\s\S]*?border-top:/);
 
-assert.match(html, /assets\/phase2\.css\?release=payment-admin-hotfix-20260821-1/);
+assert.match(html, /assets\/phase2\.css\?release=examination-room-doors-20260826-2/);
 assert.match(html, /assets\/private-beta-landing\.css[^"\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(html, /assets\/due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(loader, /subject-matter-gil-fixes-20260817-4/);
-assert.match(serviceWorker, /duediligence-shell-20260823-syllabus-review-1/);
-assert.match(serviceWorker, /quorum-first-shell\.css\?v=auth-entry-flow-20260823-1/);
+assert.match(serviceWorker, /duediligence-shell-20260826-examination-room-v1-3/);
+assert.match(serviceWorker, /quorum-first-shell\.css\?v=examination-room-doors-20260826-2/);
 assert.match(serviceWorker, /quorum-first-shell\.js\?v=syllabus-review-20260823-1/);
-assert.match(serviceWorker, /phase2\.css\?release=payment-admin-hotfix-20260821-1/);
+assert.match(serviceWorker, /phase2\.css\?release=examination-room-doors-20260826-2/);
 assert.match(serviceWorker, /due-diligence-controls\.css\?v=subject-matter-controls-20260817-4/);
 assert.match(serviceWorker, /private-beta-landing\.css[^'\n]*subject-matter-gil-fixes-20260817-4/);
 assert.match(serviceWorker, /study-workspace\.css[^'\n]*subject-matter-gil-fixes-20260817-4/);

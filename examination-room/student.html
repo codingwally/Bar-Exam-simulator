@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#071826">
+  <title>Examination Room | DueDiligence.ph</title>
+  <link rel="stylesheet" href="student.css">
+  <script defer src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+  <script defer src="../assets/phase2-config.js?v=greenfield-examination-room-v1-20260826-2"></script>
+  <script defer src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
+  <script defer src="view-models.js?v=greenfield-v1-20260826-1"></script>
+  <script defer src="api.js?v=greenfield-v1-20260826-5"></script>
+  <script defer src="student.js?v=greenfield-v1-20260826-3"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to examination content</a>
+
+  <header class="site-header" aria-label="Examination Room header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="DueDiligence.ph home">
+        <span class="brand-mark" aria-hidden="true"><i class="ph ph-scales"></i></span>
+        <span>
+          <strong>DueDiligence.ph</strong>
+          <small>Examination Room</small>
+        </span>
+      </a>
+      <div class="header-context">
+        <span id="connectionLabel" class="connection-label">
+          <i class="ph ph-wifi-high" aria-hidden="true"></i>
+          <span>Connected</span>
+        </span>
+        <span id="studentIdentity" class="student-identity" hidden></span>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section id="entryView" class="entry-view" aria-labelledby="entryTitle">
+      <div class="entry-intro">
+        <p class="eyebrow">A calm, protected place for serious work</p>
+        <h1 id="entryTitle">Enter your examination room.</h1>
+        <p class="lede">Confirm your identity and course details. You will see the examination information and privacy notice before any question is loaded.</p>
+
+        <div id="demoModeNote" class="system-note demo-note" hidden>
+          <i class="ph ph-flask" aria-hidden="true"></i>
+          <div>
+            <strong>Local demonstration</strong>
+            <p>Use the prefilled details and room key <span class="nowrap">DD26-LAW1-826K</span>. Nothing is sent to a school server.</p>
+          </div>
+        </div>
+
+        <div class="trust-list" aria-label="What to expect">
+          <div>
+            <i class="ph ph-eye" aria-hidden="true"></i>
+            <span><strong>Preview first</strong> — questions stay sealed until you agree.</span>
+          </div>
+          <div>
+            <i class="ph ph-cloud-check" aria-hidden="true"></i>
+            <span><strong>Saved as you work</strong> — answers remain recoverable during connection loss.</span>
+          </div>
+          <div>
+            <i class="ph ph-seal-check" aria-hidden="true"></i>
+            <span><strong>Clear proof</strong> — a signed receipt confirms successful submission.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="entry-panel">
+        <form id="roomEntryForm" novalidate>
+          <div class="form-heading">
+            <p class="step-label">Step 1 of 2</p>
+            <h2>Identify your examination</h2>
+            <p>Enter the details exactly as they appear in your school record.</p>
+          </div>
+
+          <div id="entryError" class="error-panel" role="alert" hidden></div>
+
+          <div class="field-grid">
+            <div class="field field-wide">
+              <label for="roomKey">Room key</label>
+              <div class="input-with-icon">
+                <i class="ph ph-key" aria-hidden="true"></i>
+                <input id="roomKey" name="roomKey" type="text" inputmode="text" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="48" required aria-describedby="roomKeyHelp">
+              </div>
+              <small id="roomKeyHelp">Use the key provided by your examination administrator.</small>
+            </div>
+
+            <div class="field field-wide">
+              <label for="fullName">Real full name</label>
+              <input id="fullName" name="fullName" type="text" autocomplete="name" maxlength="160" required>
+            </div>
+
+            <div class="field">
+              <label for="studentNumber">Student number</label>
+              <input id="studentNumber" name="studentNumber" type="text" autocomplete="off" maxlength="64" required>
+            </div>
+
+            <div class="field">
+              <label for="yearLevel">Year level</label>
+              <select id="yearLevel" name="yearLevel" required>
+                <option value="">Select year level</option>
+                <option value="1L">First year</option>
+                <option value="2L">Second year</option>
+                <option value="3L">Third year</option>
+                <option value="4L">Fourth year</option>
+                <option value="5L">Fifth year or extended program</option>
+              </select>
+            </div>
+
+            <div class="field field-wide">
+              <label for="subject">Subject</label>
+              <input id="subject" name="subject" type="text" autocomplete="off" maxlength="120" required placeholder="For example, Remedial Law">
+            </div>
+          </div>
+
+          <button id="previewButton" class="button button-primary button-wide" type="submit">
+            <span>Preview examination details</span>
+            <i class="ph ph-arrow-right" aria-hidden="true"></i>
+          </button>
+        </form>
+
+        <section id="examPreview" class="exam-preview" aria-labelledby="previewTitle" hidden>
+          <div class="preview-heading">
+            <p class="step-label">Step 2 of 2</p>
+            <h2 id="previewTitle">Confirm before entering</h2>
+            <p>Only examination metadata is shown here. Questions remain sealed.</p>
+          </div>
+
+          <dl class="metadata-list">
+            <div><dt>Examination</dt><dd id="previewExamTitle"></dd></div>
+            <div><dt>Subject</dt><dd id="previewSubject"></dd></div>
+            <div><dt>Professor</dt><dd id="previewProfessor"></dd></div>
+            <div><dt>Duration</dt><dd id="previewDuration"></dd></div>
+            <div><dt>Questions</dt><dd id="previewQuestionCount"></dd></div>
+            <div><dt>Availability</dt><dd id="previewAvailability"></dd></div>
+          </dl>
+
+          <div class="security-summary">
+            <h3><i class="ph ph-shield-check" aria-hidden="true"></i> Examination safeguards</h3>
+            <ul id="previewSafeguards"></ul>
+          </div>
+
+          <div class="action-row">
+            <button id="changeDetailsButton" class="button button-secondary" type="button">
+              <i class="ph ph-arrow-left" aria-hidden="true"></i>
+              <span>Change details</span>
+            </button>
+            <button id="privacyButton" class="button button-primary" type="button">
+              <span>Review privacy notice</span>
+              <i class="ph ph-arrow-right" aria-hidden="true"></i>
+            </button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="examView" class="exam-view" aria-labelledby="examTitle" hidden>
+      <div class="exam-bar">
+        <div class="exam-heading">
+          <p class="eyebrow">Examination in progress</p>
+          <h1 id="examTitle"></h1>
+          <p id="examSubjectLine"></p>
+        </div>
+
+        <div class="exam-status-group">
+          <div id="saveStatus" class="save-status" role="status" aria-live="polite">
+            <i class="ph ph-cloud-check" aria-hidden="true"></i>
+            <span>Saved on this device</span>
+          </div>
+          <div id="timerBox" class="timer-box">
+            <span>Time remaining</span>
+            <strong id="timerValue" role="timer" aria-label="Time remaining">--:--:--</strong>
+          </div>
+          <button id="fullscreenButton" class="button button-secondary button-icon-text" type="button">
+            <i class="ph ph-corners-out" aria-hidden="true"></i>
+            <span>Enter fullscreen</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="offlineNotice" class="system-note offline-note" hidden>
+        <i class="ph ph-wifi-slash" aria-hidden="true"></i>
+        <div>
+          <strong>You are offline. Keep working.</strong>
+          <p>Your answers are being saved on this device and will sync when the connection returns.</p>
+        </div>
+      </div>
+
+      <div id="examError" class="error-panel exam-error" role="alert" hidden></div>
+
+      <div class="exam-layout">
+        <aside class="question-navigator" aria-labelledby="questionNavigatorTitle">
+          <div class="navigator-heading">
+            <div>
+              <p class="step-label">Your progress</p>
+              <h2 id="questionNavigatorTitle">Questions</h2>
+            </div>
+            <strong id="progressText">0 of 0 answered</strong>
+          </div>
+          <progress id="answerProgress" value="0" max="1">0%</progress>
+          <div class="navigator-key" aria-label="Question status key">
+            <span><i class="ph ph-check-circle" aria-hidden="true"></i> Answered</span>
+            <span><i class="ph ph-flag" aria-hidden="true"></i> Flagged</span>
+          </div>
+          <nav id="questionList" class="question-list" aria-label="Go to question"></nav>
+          <button id="submitOpenButton" class="button button-secondary submit-open" type="button">
+            <i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>
+            <span>Review and submit</span>
+          </button>
+        </aside>
+
+        <article class="question-workspace" aria-live="polite" aria-atomic="false">
+          <div class="question-toolbar">
+            <div>
+              <p id="questionPosition" class="step-label"></p>
+              <p id="questionType" class="question-type"></p>
+            </div>
+            <button id="flagButton" class="button button-tertiary" type="button" aria-pressed="false">
+              <i class="ph ph-flag" aria-hidden="true"></i>
+              <span>Flag for review</span>
+            </button>
+          </div>
+
+          <div id="questionContent" class="question-content"></div>
+
+          <div class="question-actions">
+            <button id="previousButton" class="button button-secondary" type="button">
+              <i class="ph ph-arrow-left" aria-hidden="true"></i>
+              <span>Previous</span>
+            </button>
+            <button id="nextButton" class="button button-primary" type="button">
+              <span>Next question</span>
+              <i class="ph ph-arrow-right" aria-hidden="true"></i>
+            </button>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="receiptView" class="receipt-view" aria-labelledby="receiptTitle" hidden>
+      <div class="receipt-shell">
+        <div id="receiptIcon" class="receipt-icon" aria-hidden="true"><i class="ph ph-seal-check"></i></div>
+        <p id="receiptEyebrow" class="eyebrow">Submission confirmed</p>
+        <h1 id="receiptTitle">Your examination was submitted.</h1>
+        <p id="receiptMessage" class="lede">Keep this receipt until your professor releases the results.</p>
+
+        <div id="pendingSubmissionNote" class="system-note pending-note" hidden>
+          <i class="ph ph-cloud-arrow-up" aria-hidden="true"></i>
+          <div>
+            <strong>Your answers are safe on this device.</strong>
+            <p>Submission is waiting for a connection. Keep this browser and device available; it will retry automatically.</p>
+          </div>
+        </div>
+
+        <dl id="receiptDetails" class="receipt-details">
+          <div><dt>Receipt reference</dt><dd id="receiptReference"></dd></div>
+          <div><dt>Submitted</dt><dd id="receiptSubmittedAt"></dd></div>
+          <div><dt>Examination version</dt><dd id="receiptExamVersion"></dd></div>
+          <div><dt>Answers received</dt><dd id="receiptAnswerCount"></dd></div>
+          <div class="signature-row"><dt>Signed receipt</dt><dd id="receiptSignature"></dd></div>
+        </dl>
+
+        <section id="resultPanel" class="result-panel" aria-labelledby="resultTitle" aria-live="polite">
+          <header class="result-panel-heading">
+            <span id="resultStatusIcon" class="result-status-icon is-waiting" aria-hidden="true"><i class="ph ph-hourglass-medium"></i></span>
+            <div>
+              <p class="step-label">Grading status</p>
+              <h2 id="resultTitle">Awaiting your professor’s grade</h2>
+              <p id="resultMessage">Your signed submission is complete. This page will update after your professor releases the result.</p>
+            </div>
+          </header>
+          <div class="result-check-row">
+            <small id="resultCheckedAt">Checking for an update…</small>
+            <button id="resultRefreshButton" class="button button-secondary compact-button" type="button">
+              <i class="ph ph-arrow-clockwise" aria-hidden="true"></i>
+              <span>Check for result</span>
+            </button>
+          </div>
+          <div id="resultSummary" class="result-summary" hidden>
+            <div class="result-total"><span>Total score</span><strong><b id="resultTotalScore">0</b> / <b id="resultTotalPossible">0</b></strong></div>
+            <p id="resultReleasedAt"></p>
+            <ol id="resultQuestionList" class="result-question-list"></ol>
+          </div>
+          <div id="resultError" class="error-panel result-error" role="alert" hidden></div>
+        </section>
+
+        <div id="receiptError" class="error-panel" role="alert" hidden></div>
+
+        <div class="action-row receipt-actions">
+          <button id="retrySubmissionButton" class="button button-primary" type="button" hidden>
+            <i class="ph ph-arrow-clockwise" aria-hidden="true"></i>
+            <span>Retry submission now</span>
+          </button>
+          <button id="printReceiptButton" class="button button-secondary" type="button" hidden>
+            <i class="ph ph-printer" aria-hidden="true"></i>
+            <span>Print receipt</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="privacyDialog" class="privacy-dialog" aria-labelledby="privacyTitle" aria-describedby="privacyIntro">
+    <div class="dialog-shell">
+      <div class="dialog-heading">
+        <span class="dialog-icon" aria-hidden="true"><i class="ph ph-shield-check"></i></span>
+        <div>
+          <p class="step-label">Required before questions load</p>
+          <h2 id="privacyTitle">Privacy and examination integrity notice</h2>
+        </div>
+      </div>
+      <p id="privacyIntro"></p>
+      <div class="notice-scroll" tabindex="0" aria-label="Privacy notice">
+        <ul id="privacyItems"></ul>
+        <section>
+          <h3>Retention and access</h3>
+          <p id="privacyRetention"></p>
+        </section>
+        <section>
+          <h3>Questions or accommodations</h3>
+          <p id="privacyContact"></p>
+        </section>
+      </div>
+      <p id="previousAcceptance" class="acceptance-note" hidden></p>
+      <div id="privacyError" class="error-panel" role="alert" hidden></div>
+      <div class="dialog-actions">
+        <button id="privacyBackButton" class="button button-secondary" type="button">Back to details</button>
+        <button id="agreeButton" class="button button-primary" type="button">
+          <span>Agree and begin</span>
+          <i class="ph ph-arrow-right" aria-hidden="true"></i>
+        </button>
+      </div>
+      <small id="noticeVersion" class="notice-version"></small>
+    </div>
+  </dialog>
+
+  <dialog id="submitDialog" class="submit-dialog" aria-labelledby="submitTitle" aria-describedby="submitIntro">
+    <div class="dialog-shell compact-dialog">
+      <div class="dialog-heading">
+        <span class="dialog-icon" aria-hidden="true"><i class="ph ph-paper-plane-tilt"></i></span>
+        <div>
+          <p class="step-label">Final check</p>
+          <h2 id="submitTitle">Submit your examination?</h2>
+        </div>
+      </div>
+      <p id="submitIntro">After submission, your answers can no longer be changed.</p>
+      <dl class="submit-summary">
+        <div><dt>Answered</dt><dd id="submitAnswered"></dd></div>
+        <div><dt>Unanswered</dt><dd id="submitUnanswered"></dd></div>
+        <div><dt>Flagged</dt><dd id="submitFlagged"></dd></div>
+      </dl>
+      <div id="submitWarning" class="system-note warning-note" hidden>
+        <i class="ph ph-warning" aria-hidden="true"></i>
+        <div>
+          <strong>Some questions are unanswered.</strong>
+          <p>You may return to the examination, or submit the answers you have saved.</p>
+        </div>
+      </div>
+      <div id="submitError" class="error-panel" role="alert" hidden></div>
+      <div class="dialog-actions">
+        <button id="continueExamButton" class="button button-secondary" type="button">Return to examination</button>
+        <button id="confirmSubmitButton" class="button button-primary" type="button">
+          <span>Submit examination</span>
+          <i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <div id="assertiveStatus" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
+
+  <noscript>
+    <div class="noscript-message">JavaScript is required to save answers and enter the Examination Room. Please enable it, then reload this page.</div>
+  </noscript>
+</body>
+</html>

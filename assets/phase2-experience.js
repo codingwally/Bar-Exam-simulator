@@ -36,6 +36,7 @@
     onboardingRequired: false,
     tokenDisclosureVersion: '',
     nativeViewReturnToQuorum: false,
+    examinationRoomDoorRequest: 0,
   };
 
   let resolveAuthReady;
@@ -496,7 +497,7 @@
                   </label>
                   <label class="dd2-label dd2-wide" id="dd2-professor-license-wrap" hidden><span class="dd2-label-text">Professor license declaration</span>
                     <input class="dd2-field" id="dd2-professor-license" maxlength="80" autocomplete="off" placeholder="IBP or professional license number">
-                    <span class="dd2-field-help">Stored privately for verification. This does not grant Professor or administrator authority.</span>
+                    <span class="dd2-field-help">Selecting Professor saves Professor as your account role and makes the Professor Examination Room card available. Your private declaration is never displayed publicly; a school administrator still activates access to that school's protected examinations.</span>
                   </label>
                 </div>
                 <p class="dd2-entry-note dd2-onboarding-legal">By continuing, you acknowledge the <button class="link-button" type="button" data-dd2-view="terms">Terms of Use</button> and <button class="link-button" type="button" data-dd2-view="privacy">Privacy Policy</button>.</p>
@@ -1085,6 +1086,10 @@
     return source.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   }
 
+  function hasProfessorProfileRole() {
+    return state.profile?.commercial_category === 'professor';
+  }
+
   function syncAuthUi() {
     const signedIn = Boolean(state.session?.access_token && state.user);
     const signInButton = document.getElementById('btn-signin');
@@ -1122,11 +1127,13 @@
   function restoreAuthDestination() {
     if (!state.authReturnPending) return;
     state.authReturnPending = false;
+    const storedReturn = safeSessionRead(authReturnStorageKey);
+    const returnHash = safeReturnHash(storedReturn) || '#quorum';
     safeSessionRemove(authReturnStorageKey);
     history.replaceState(
-      { ...(history.state || {}), dueDiligenceRoute: 'quorum' },
+      { ...(history.state || {}), dueDiligenceRoute: returnHash.slice(1) },
       '',
-      `${location.pathname}${location.search}#quorum`,
+      `${location.pathname}${location.search}${returnHash}`,
     );
     global.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
   }
@@ -1373,7 +1380,12 @@
         commercial_onboarding_completed_at: new Date().toISOString(),
         profile_completed_at: new Date().toISOString(),
       };
-      setStatus('dd2-onboarding-status', 'Profile saved.', 'success');
+      if (category === 'professor') {
+        setStatus('dd2-onboarding-status', 'Professor role saved. Preparing your school activation request…', 'success');
+        setTimeout(() => requestProfessorSchoolActivation({ quiet: true }), 0);
+      } else {
+        setStatus('dd2-onboarding-status', 'Profile saved.', 'success');
+      }
       state.onboardingRequired = false;
       setOverlay(false, 'dd2-onboarding-overlay');
       syncAuthUi();
@@ -1515,10 +1527,11 @@
     const category = state.profile?.commercial_category
       || ({ '1': 'first_year', '2': 'second_year', '3': 'third_year', '4': 'fourth_year' }[state.profile?.year_level]
         || (state.profile?.year_level === 'review' ? 'review' : ''));
+    const professorRole = category === 'professor';
     return `
       <div class="dd2-account-summary">
         <div class="dd2-account-avatar">${escapeHtml(initials())}</div>
-        <div><strong>${escapeHtml(name)}</strong><span>Signed in securely with Google</span></div>
+        <div><strong>${escapeHtml(name)}</strong><span>${professorRole ? 'Professor account · signed in securely with Google' : 'Signed in securely with Google'}</span></div>
       </div>
       <form class="dd2-form" id="dd2-account-form">
         <label class="dd2-label">Display name
@@ -1544,8 +1557,16 @@
         </label>
         <label class="dd2-label" id="dd2-account-professor-wrap"${category === 'professor' ? '' : ' hidden'}>Professor license declaration
           <input class="dd2-field" id="dd2-account-professor-license" maxlength="80" autocomplete="off" placeholder="Re-enter to verify profile changes">
-          <span class="dd2-field-help">Stored privately. This declaration does not grant Professor or administrator authority.</span>
+          <span class="dd2-field-help">Professor is saved as your account role. Your private declaration is never displayed publicly; a school administrator still activates access to that school's protected examinations.</span>
         </label>
+        ${config.features?.examinationRoom === true ? `<section class="dd2-account-examination${professorRole ? ' is-professor' : ''}" aria-labelledby="dd2-account-examination-title">
+          <img src="assets/icons/navigation/door-open.svg" width="34" height="34" alt="" aria-hidden="true">
+          <div>
+            <strong id="dd2-account-examination-title">${professorRole ? 'Professor Examination Room' : 'Examination Room'}</strong>
+            <span>${professorRole ? 'Your Professor role is saved. Open the card to verify or request your school assignment.' : 'Enter as a student with a room key. Change your category to Professor only if that is your actual role.'}</span>
+          </div>
+          <button class="dd2-button dd2-button-secondary" type="button" data-dd2-view="examination-room">${professorRole ? 'Open professor card' : 'Open student door'}</button>
+        </section>` : ''}
         <div class="dd2-status" id="dd2-account-status" role="status" aria-live="polite"></div>
         <button class="dd2-button dd2-button-primary" type="submit">Save approved profile fields</button>
         <button class="dd2-button dd2-button-secondary" id="dd2-logout" type="button">Sign out</button>
@@ -1564,6 +1585,59 @@
         <div id="dd2-account-billing"></div>
         <p class="dd2-form-note">Initial response target: 24 hours. Ordinary internal resolution: seven calendar days; complex review may take up to 14 days without waiving statutory remedies.</p>
       </div>`;
+  }
+
+  function examinationRoomContent() {
+    const signedIn = Boolean(state.session?.access_token && state.user);
+    const professorRole = hasProfessorProfileRole();
+    const adminTester = state.admin?.authorized === true;
+    const intro = !signedIn
+      ? 'Choose an entrance. Professor access begins with secure sign-in; students continue with the room key supplied for their examination.'
+      : professorRole
+        ? 'Your saved account role is Professor. This card is available to you now; the protected room checks your active law-school assignment before any examination data opens.'
+        : adminTester
+          ? 'Your administrator account may use the Professor door for authorized testing. Students continue through the separate room-key lobby.'
+          : 'Your current account role is not Professor. The Student door is ready; update your Profile only if Professor is your actual role.';
+    return `
+      <div class="dd2-examination-door-intro">
+        <p>${escapeHtml(intro)}</p>
+      </div>
+      <div class="dd2-examination-door-grid">
+        <article class="dd2-examination-door dd2-professor-entrance${professorRole ? ' is-role-selected' : ''}" aria-labelledby="dd2-professor-door-title">
+          <div class="dd2-door-heading">
+            <span class="dd2-door-icon" aria-hidden="true"><img src="assets/icons/navigation/door-open.svg" width="42" height="42" alt=""></span>
+            <span class="dd2-door-role" id="dd2-professor-door-badge">${professorRole ? 'Professor role saved' : 'Professor role required'}</span>
+          </div>
+          <h3 id="dd2-professor-door-title">Professor door</h3>
+          <p>Prepare and publish an exam, open the keyed room, monitor students, grade submissions, and release results.</p>
+          <div class="dd2-door-assignment" id="dd2-professor-assignment" hidden>
+            <label class="dd2-label" for="dd2-professor-institution">Law-school assignment
+              <select class="dd2-field" id="dd2-professor-institution">
+                <option value="">Choose an assignment</option>
+              </select>
+            </label>
+          </div>
+          <div class="dd2-door-status" id="dd2-examination-room-status" role="status" aria-live="polite">
+            Checking your verified professor access…
+          </div>
+          <button class="dd2-button dd2-button-primary dd2-door-action" id="dd2-professor-door" type="button" disabled aria-disabled="true">Checking access…</button>
+          <button class="dd2-door-retry" id="dd2-professor-door-retry" type="button" hidden>Check access again</button>
+        </article>
+        <article class="dd2-examination-door dd2-student-entrance" aria-labelledby="dd2-student-door-title">
+          <div class="dd2-door-heading">
+            <span class="dd2-door-icon" aria-hidden="true"><img src="assets/icons/navigation/door-open.svg" width="42" height="42" alt=""></span>
+            <span class="dd2-door-role">Room key required</span>
+          </div>
+          <h3 id="dd2-student-door-title">Student door</h3>
+          <p>Enter the room key, your real name, student number, subject, and year level. Privacy terms appear before the exam can begin.</p>
+          <div class="dd2-door-status is-ready" role="status">Ready for your room key. You do not need a professor account.</div>
+          <a class="dd2-button dd2-button-primary dd2-door-action" id="dd2-student-door" href="/examination-room/student.html">Enter student door</a>
+        </article>
+      </div>
+      <aside class="dd2-door-safety-note">
+        <strong>Two entrances, one controlled room.</strong>
+        <span>The professor route checks authorization again after entry. The student route opens only the key-and-identity lobby, not an examination.</span>
+      </aside>`;
   }
 
   function partnershipContent() {
@@ -1618,6 +1692,9 @@
       terms: ['Legal', 'Terms of Use', termsContent],
       privacy: ['Legal', 'Privacy Policy', privacyContent],
       account: ['Your account', 'Profile', accountContent],
+      ...(config.features?.examinationRoom === true
+        ? { 'examination-room': ['Secure assessment', 'Examination Room', examinationRoomContent] }
+        : {}),
       partnership: ['Collaborate', 'Partnerships', partnershipContent],
     };
     return definitions[view] || null;
@@ -1732,6 +1809,9 @@
       const error = new Error(payload?.error?.message || 'The request could not be completed.');
       error.code = payload?.error?.code
         || (response.status === 401 ? 'AUTHENTICATION_REQUIRED' : 'REQUEST_FAILED');
+      error.status = response.status;
+      error.recovery = payload?.error?.recovery || '';
+      error.details = payload?.error?.details || null;
       if (response.status === 401
           || ['AUTHENTICATION_REQUIRED', 'INVALID_SESSION'].includes(error.code)) {
         if (options.authRetry !== false && await refreshAuthenticatedSession()) {
@@ -1750,6 +1830,276 @@
       throw error;
     }
     return payload;
+  }
+
+  function professorDoorDestination(institutionId = '') {
+    const destination = new URL('/examination-room/', location.origin);
+    destination.searchParams.set('live', '1');
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(institutionId)) {
+      destination.searchParams.set('institution', institutionId);
+    }
+    return `${destination.pathname}${destination.search}`;
+  }
+
+  function resetProfessorDoor(message, options = {}) {
+    const button = document.getElementById('dd2-professor-door');
+    const retry = document.getElementById('dd2-professor-door-retry');
+    const status = document.getElementById('dd2-examination-room-status');
+    const badge = document.getElementById('dd2-professor-door-badge');
+    if (!button || !status || !badge) return;
+    button.disabled = options.enabled !== true;
+    button.setAttribute('aria-disabled', String(button.disabled));
+    button.textContent = options.buttonText || 'Professor access unavailable';
+    delete button.dataset.destination;
+    delete button.dataset.mode;
+    status.className = `dd2-door-status${options.status ? ` is-${options.status}` : ''}`;
+    status.textContent = message;
+    badge.textContent = options.badge || 'Verified staff only';
+    if (retry) retry.hidden = options.retry !== true;
+  }
+
+  function showProfessorAssignments(institutions) {
+    const wrap = document.getElementById('dd2-professor-assignment');
+    const select = document.getElementById('dd2-professor-institution');
+    const button = document.getElementById('dd2-professor-door');
+    if (!wrap || !select || !button) return;
+    const safeInstitutions = (Array.isArray(institutions) ? institutions : [])
+      .filter((entry) => /^[0-9a-f-]{36}$/i.test(String(entry?.institutionId || '')));
+    select.innerHTML = '<option value="">Choose an assignment</option>'
+      + safeInstitutions.map((entry, index) => {
+        const role = entry.staffRole === 'admin' ? 'Administrator tester' : 'Professor';
+        const suffix = String(entry.institutionId).slice(-8).toUpperCase();
+        const school = String(entry.institutionName || entry.institutionCode || '').trim();
+        const label = school || `Law-school assignment ${index + 1} · ${suffix}`;
+        return `<option value="${escapeHtml(entry.institutionId)}">${escapeHtml(label)} · ${role}</option>`;
+      }).join('');
+    wrap.hidden = false;
+    button.dataset.mode = 'select-institution';
+    const sync = () => {
+      button.disabled = !select.value;
+      button.setAttribute('aria-disabled', String(button.disabled));
+      button.textContent = select.value ? 'Verify & enter professor door' : 'Choose a law-school assignment';
+    };
+    select.addEventListener('change', sync);
+    sync();
+  }
+
+  function showProfessorActivationChoices(institutions, options = {}) {
+    const wrap = document.getElementById('dd2-professor-assignment');
+    const select = document.getElementById('dd2-professor-institution');
+    const button = document.getElementById('dd2-professor-door');
+    if (!wrap || !select || !button) return;
+    const currentInstitutionId = String(options.currentInstitutionId || '');
+    const choices = (Array.isArray(institutions) ? institutions : [])
+      .filter((entry) => /^[0-9a-f-]{36}$/i.test(String(entry?.institutionId || '')))
+      .filter((entry) => !options.replacePending || String(entry.institutionId) !== currentInstitutionId);
+    select.innerHTML = '<option value="">Choose your law-school workspace</option>'
+      + choices.map((entry) => `<option value="${escapeHtml(entry.institutionId)}"${entry.profileMatch ? ' selected' : ''}>${escapeHtml(entry.institutionName || entry.institutionCode || 'Law-school workspace')}</option>`).join('');
+    wrap.hidden = choices.length === 0;
+    button.dataset.mode = 'request-institution';
+    const sync = () => {
+      button.disabled = !select.value;
+      button.setAttribute('aria-disabled', String(button.disabled));
+      button.textContent = select.value
+        ? (options.replacePending ? 'Change school request' : 'Request school activation')
+        : (options.replacePending ? 'Choose a different law school' : 'Choose your law school');
+    };
+    select.addEventListener('change', sync);
+    sync();
+  }
+
+  async function requestProfessorSchoolActivation(options = {}) {
+    if (!state.session?.access_token || !state.user || !hasProfessorProfileRole()) return null;
+    try {
+      const result = await nativeWorkerRequest('/examination-room/v1/professor/command', {
+        body: { operation: 'request_access', payload: options.institutionId ? { institutionId: options.institutionId } : {} },
+        submissionView: 'examination-room',
+        submissionDraft: {},
+      });
+      if (options.quiet !== true) {
+        global.toast?.(
+          result?.alreadyActive
+            ? 'Your Professor school assignment is already active.'
+            : 'Professor activation request sent to your law-school administrator.',
+          'ok',
+        );
+      }
+      return result;
+    } catch (error) {
+      if (options.quiet !== true) {
+        resetProfessorDoor(
+          `${error?.message || 'The Professor activation request could not be sent.'} ${error?.recovery || 'Check your Profile and connection, then try again.'}`,
+          { enabled: true, buttonText: 'Try activation request again', badge: 'Request interrupted', status: 'warning', retry: true },
+        );
+        const button = document.getElementById('dd2-professor-door');
+        if (button) button.dataset.mode = 'request-access';
+      }
+      return null;
+    }
+  }
+
+  async function checkProfessorDoor(institutionId = '') {
+    const request = ++state.examinationRoomDoorRequest;
+    const token = state.session?.access_token || '';
+    const assignment = document.getElementById('dd2-professor-assignment');
+    if (assignment) assignment.hidden = true;
+    if (!token || !state.user) {
+      resetProfessorDoor(
+        'Sign in through Due Diligence with the account assigned by your law school. Student entry remains available.',
+        { enabled: true, buttonText: 'Sign in as professor', badge: 'Sign-in required', status: 'locked' },
+      );
+      const button = document.getElementById('dd2-professor-door');
+      if (button) button.dataset.mode = 'sign-in';
+      return;
+    }
+    if (!hasProfessorProfileRole() && state.admin?.authorized !== true) {
+      resetProfessorDoor(
+        'This signed-in account is not set to Professor. The Student door remains available.',
+        { buttonText: 'Professor role required', badge: 'Professor role required', status: 'locked' },
+      );
+      return;
+    }
+    if (!navigator.onLine) {
+      resetProfessorDoor(
+        'You appear to be offline. Reconnect, then check professor access again. The student lobby can still open, but a live room key must be verified online.',
+        { buttonText: 'Professor door locked offline', badge: 'Connection required', status: 'warning', retry: true },
+      );
+      return;
+    }
+    resetProfessorDoor('Checking your signed-in account against active law-school assignments…', {
+      buttonText: 'Checking access…', badge: 'Checking securely', status: 'checking',
+    });
+    try {
+      if (hasProfessorProfileRole() && state.admin?.authorized !== true) {
+        const role = await nativeWorkerRequest('/examination-room/v1/professor/query', {
+          body: { operation: 'role_status', payload: {} },
+          submissionView: 'examination-room',
+          submissionDraft: {},
+        });
+        if (request !== state.examinationRoomDoorRequest
+            || state.nativeView !== 'examination-room'
+            || token !== state.session?.access_token) return;
+        if (role?.professorRoleSelected !== true || role?.declarationOnFile !== true) {
+          resetProfessorDoor(
+            'Your Professor profile is incomplete. Save the private Professor declaration in Profile before requesting school activation.',
+            { buttonText: 'Complete Professor Profile', badge: 'Profile incomplete', status: 'locked' },
+          );
+          return;
+        }
+        if (role?.activeAssignment !== true) {
+          if (role?.request?.status === 'pending') {
+            const availableInstitutions = Array.isArray(role?.availableInstitutions) ? role.availableInstitutions : [];
+            const alternatives = availableInstitutions.filter(
+              (entry) => String(entry?.institutionId || '') !== String(role?.request?.institutionId || ''),
+            );
+            resetProfessorDoor(
+              `Your Professor role is saved and your request for ${role?.request?.institutionName || role?.school?.name || 'your law school'} is awaiting administrator activation. You do not need to submit it again.${alternatives.length ? ' If the wrong school was selected, choose the correct workspace below; the prior request will be safely replaced.' : ''}`,
+              { buttonText: 'Activation request pending', badge: 'Professor · awaiting activation', status: 'warning' },
+            );
+            if (alternatives.length) {
+              showProfessorActivationChoices(availableInstitutions, {
+                replacePending: true,
+                currentInstitutionId: role?.request?.institutionId,
+              });
+            }
+          } else {
+            const priorRejected = role?.request?.status === 'rejected';
+            const availableInstitutions = Array.isArray(role?.availableInstitutions) ? role.availableInstitutions : [];
+            if (!availableInstitutions.length) {
+              resetProfessorDoor(
+                'Your Professor role is saved, but your law school has not opened an Examination Room workspace yet.',
+                { buttonText: 'School workspace not available', badge: 'Administrator setup required', status: 'warning', retry: true },
+              );
+              return;
+            }
+            resetProfessorDoor(
+              priorRejected
+                ? `Your prior request was not activated. ${role?.request?.reason || 'Confirm your law-school Profile details and request review again.'}`
+                : 'Your Professor role is saved. Choose your law-school workspace and send one activation request before protected examination data can open.',
+              { buttonText: 'Choose your law school', badge: 'Professor role saved', status: priorRejected ? 'warning' : 'ready' },
+            );
+            showProfessorActivationChoices(availableInstitutions);
+          }
+          return;
+        }
+      }
+      const payload = await nativeWorkerRequest('/examination-room/v1/professor/query', {
+        body: { operation: 'session', payload: institutionId ? { institutionId } : {} },
+        submissionView: 'examination-room',
+        submissionDraft: {},
+      });
+      if (request !== state.examinationRoomDoorRequest
+          || state.nativeView !== 'examination-room'
+          || token !== state.session?.access_token) return;
+      const displayName = String(payload?.professor?.displayName || state.profile?.display_name || 'Professor').trim();
+      resetProfessorDoor(
+        `${displayName}, your verified staff assignment is active. The professor workspace will check it once more when the door opens.`,
+        { enabled: true, buttonText: 'Enter professor door', badge: payload?.professor?.adminTesting ? 'Authorized admin tester' : 'Authorized professor', status: 'ready' },
+      );
+      const button = document.getElementById('dd2-professor-door');
+      if (button) button.dataset.destination = professorDoorDestination(institutionId);
+    } catch (error) {
+      if (request !== state.examinationRoomDoorRequest || state.nativeView !== 'examination-room') return;
+      if (error?.code === 'EXAM_ROOM_V1_INSTITUTION_SELECTION_REQUIRED') {
+        resetProfessorDoor(
+          'This account has more than one active law-school assignment. Choose the school assignment for this session, then continue.',
+          { buttonText: 'Choose a law-school assignment', badge: 'School selection required', status: 'warning' },
+        );
+        showProfessorAssignments(error?.details?.institutions);
+        return;
+      }
+      if (['EXAM_ROOM_V1_PROFESSOR_FORBIDDEN', 'EXAM_ROOM_V1_INSTITUTION_REQUIRED', 'EXAM_ROOM_V1_FORBIDDEN'].includes(error?.code)) {
+        resetProfessorDoor(
+          `${error.message} ${error.recovery || 'Ask an Examination Room administrator to activate your professor assignment, then check again.'}`,
+          { buttonText: 'Professor access not active', badge: 'Assignment required', status: 'locked', retry: true },
+        );
+        return;
+      }
+      if (['AUTHENTICATION_REQUIRED', 'INVALID_SESSION', 'EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED'].includes(error?.code) || error?.status === 401) {
+        resetProfessorDoor(
+          'Your sign-in expired. Sign in again; no examination or student data was changed.',
+          { enabled: true, buttonText: 'Sign in again', badge: 'Sign-in expired', status: 'locked' },
+        );
+        const button = document.getElementById('dd2-professor-door');
+        if (button) button.dataset.mode = 'sign-in';
+        return;
+      }
+      resetProfessorDoor(
+        `${error?.message || 'Professor access could not be checked.'} ${error?.recovery || 'Check your connection, then try again.'}`,
+        { buttonText: 'Professor door unavailable', badge: 'Check interrupted', status: 'warning', retry: true },
+      );
+    }
+  }
+
+  function activateProfessorDoor() {
+    const button = document.getElementById('dd2-professor-door');
+    if (!button || button.disabled) return;
+    if (button.dataset.mode === 'sign-in') {
+      showEntry({ allowDismiss: true, returnHash: '#examination-room' });
+      return;
+    }
+    if (button.dataset.mode === 'select-institution') {
+      const institutionId = document.getElementById('dd2-professor-institution')?.value || '';
+      if (institutionId) checkProfessorDoor(institutionId);
+      return;
+    }
+    if (button.dataset.mode === 'request-access') {
+      button.disabled = true;
+      button.setAttribute('aria-disabled', 'true');
+      button.textContent = 'Sending activation request…';
+      requestProfessorSchoolActivation().then(() => checkProfessorDoor());
+      return;
+    }
+    if (button.dataset.mode === 'request-institution') {
+      const institutionId = document.getElementById('dd2-professor-institution')?.value || '';
+      if (!institutionId) return;
+      button.disabled = true;
+      button.setAttribute('aria-disabled', 'true');
+      button.textContent = 'Sending activation request…';
+      requestProfessorSchoolActivation({ institutionId }).then(() => checkProfessorDoor());
+      return;
+    }
+    if (button.dataset.destination) location.assign(button.dataset.destination);
   }
 
   async function recordCurrentTermsAcceptance() {
@@ -2190,7 +2540,12 @@
         commercial_onboarding_completed_at: new Date().toISOString(),
       };
       syncAuthUi();
-      setStatus('dd2-account-status', 'Docket preferences saved.', 'success');
+      if (values.category === 'professor') {
+        setStatus('dd2-account-status', 'Professor role saved. Preparing your school activation request…', 'success');
+        setTimeout(() => requestProfessorSchoolActivation({ quiet: true }), 0);
+      } else {
+        setStatus('dd2-account-status', 'Docket preferences saved.', 'success');
+      }
     } catch {
       setStatus('dd2-account-status', 'Docket preferences could not be saved. Please try again.', 'error');
     }
@@ -2240,6 +2595,11 @@
     }
     if (view === 'pricing') loadCommercialPricing();
     if (view === 'account' && state.user) loadBillingAndAccess();
+    if (view === 'examination-room') {
+      document.getElementById('dd2-professor-door')?.addEventListener('click', activateProfessorDoor);
+      document.getElementById('dd2-professor-door-retry')?.addEventListener('click', () => checkProfessorDoor());
+      checkProfessorDoor();
+    }
   }
 
   function bindNavigation() {
@@ -2459,6 +2819,8 @@
     if (state.initialized) return;
     state.initialized = true;
     injectShell();
+    const examinationRoomMenu = document.getElementById('spa-examination-room');
+    if (examinationRoomMenu) examinationRoomMenu.hidden = config.features?.examinationRoom !== true;
     bindNavigation();
     document.getElementById('dd2-google-signin')?.addEventListener('click', signInWithGoogle);
     document.getElementById('dd2-entry-consent')?.addEventListener('submit', submitEntryConsent);
@@ -2491,7 +2853,11 @@
     });
     document.addEventListener('click', (event) => {
       const button = event.target.closest?.('[data-dd2-view]');
-      if (button) renderNativeView(button.dataset.dd2View);
+      if (button) {
+        event.preventDefault();
+        global.DueDiligenceQuorumFirstShell?.closeMenu?.();
+        renderNativeView(button.dataset.dd2View);
+      }
     });
     document.addEventListener('keydown', (event) => {
       trapOverlayFocus(event);
@@ -2525,6 +2891,16 @@
     });
     global.addEventListener('hashchange', syncNativeViewWithHash);
     global.addEventListener('pageshow', recoverAuthAfterNavigation);
+    global.addEventListener('duediligence:session', () => {
+      state.examinationRoomDoorRequest += 1;
+      if (state.nativeView === 'examination-room') checkProfessorDoor();
+    });
+    global.addEventListener('duediligence:profile-completed', () => {
+      if (state.nativeView === 'examination-room') checkProfessorDoor();
+    });
+    global.addEventListener('online', () => {
+      if (state.nativeView === 'examination-room') checkProfessorDoor();
+    });
     global.addEventListener('duediligence:private-beta-access', (event) => {
       state.privateBetaAllowed = config.features?.privateBetaGate !== true
         || event.detail?.allowed === true;

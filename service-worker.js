@@ -1,13 +1,23 @@
-const CACHE_VERSION = 'duediligence-shell-20260823-syllabus-review-1';
+const CACHE_VERSION = 'duediligence-shell-20260826-examination-room-v1-3';
+const EXAMINATION_STUDENT_SHELL = '/examination-room/student.html';
 const SHELL = Object.freeze([
   '/offline.html',
   '/assets/brand/icon-192.png',
-  '/assets/phase2.css?release=payment-admin-hotfix-20260821-1',
+  '/assets/phase2.css?release=examination-room-doors-20260826-2',
   '/assets/private-beta-landing.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
   '/assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4',
-  '/assets/quorum-first-shell.css?v=auth-entry-flow-20260823-1',
+  '/assets/quorum-first-shell.css?v=examination-room-doors-20260826-2',
   '/assets/quorum-first-shell.js?v=syllabus-review-20260823-1',
+  '/assets/phase2-experience.js?v=examination-room-doors-20260826-2',
+  '/assets/icons/navigation/door-open.svg',
   '/assets/study-workspace.css?v=master-experience-20260813-1&release=subject-matter-gil-fixes-20260817-4',
+  EXAMINATION_STUDENT_SHELL,
+  '/examination-room/student.css',
+  '/examination-room/view-models.js?v=greenfield-v1-20260826-1',
+  '/examination-room/api.js?v=greenfield-v1-20260826-5',
+  '/examination-room/student.js?v=greenfield-v1-20260826-3',
+  '/assets/phase2-config.js?v=greenfield-examination-room-v1-20260826-2',
+  '/assets/private-beta-session.js?v=beta-all-access-20260802-1',
 ]);
 
 self.addEventListener('install', (event) => {
@@ -27,6 +37,23 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   if (request.mode === 'navigate') {
+    if (url.pathname === EXAMINATION_STUDENT_SHELL) {
+      event.respondWith(
+        fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              event.waitUntil(
+                caches.open(CACHE_VERSION).then((cache) => cache.put(EXAMINATION_STUDENT_SHELL, copy)),
+              );
+            }
+            return response;
+          })
+          .catch(() => caches.match(EXAMINATION_STUDENT_SHELL)
+            .then((cached) => cached || caches.match('/offline.html'))),
+      );
+      return;
+    }
     event.respondWith(fetch(request).catch(() => caches.match('/offline.html')));
     return;
   }

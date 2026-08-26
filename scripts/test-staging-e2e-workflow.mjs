@@ -21,6 +21,13 @@ assert.match(workflow, /github\.actor != 'dependabot\[bot\]'/);
 assert.match(workflow, /refs\/heads\/agent\/master-experience-release-20260813/);
 assert.match(workflow, /refs\/heads\/agent\/header-subject-review-correction-20260814/);
 assert.match(workflow, /refs\/heads\/agent\/soft-launch-five-token-20260821/);
+assert.match(workflow, /refs\/heads\/codex\/examination-room-greenfield-20260826/);
+assert.match(workflow, /deploy_greenfield:/);
+assert.match(workflow, /smoke_greenfield:/);
+assert.match(workflow, /EXAMINATION_ROOM_KEY_PEPPER/);
+assert.match(workflow, /deploy --config wrangler\.staging\.toml/);
+assert.match(workflow, /test-examination-room-v1-staging-smoke\.mjs/);
+assert.doesNotMatch(workflow, /secret put EXAMINATION_ROOM_KEY_PEPPER|randomBytes\(48\)/);
 assert.equal(
   (workflow.match(/STAGING_SUPABASE_SERVICE_ROLE_KEY:\s*\$\{\{ secrets\.STAGING_SUPABASE_SERVICE_ROLE_KEY \}\}/g) || []).length,
   3,

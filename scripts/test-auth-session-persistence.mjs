@@ -197,10 +197,11 @@ assert.match(
   /if \(state\.authReturnPending && state\.welcomedUserId !== userId\)[\s\S]*Welcome back/,
   'Only an interactive authentication return may emit a welcome notification.',
 );
+const restoreAuthDestinationSource = extractNamedFunction(phase2, 'restoreAuthDestination');
 assert.match(
-  extractNamedFunction(phase2, 'restoreAuthDestination'),
-  /if \(!state\.authReturnPending\) return;[\s\S]*state\.authReturnPending = false;[\s\S]*safeSessionRemove\(authReturnStorageKey\)[\s\S]*history\.replaceState\([\s\S]*dueDiligenceRoute:\s*'quorum'[\s\S]*#quorum[\s\S]*PopStateEvent\('popstate'/,
-  'Only a genuine completed authentication return may send the user to Quorum.',
+  restoreAuthDestinationSource,
+  /if \(!state\.authReturnPending\) return;[\s\S]*const storedReturn = safeSessionRead\(authReturnStorageKey\);[\s\S]*const returnHash = safeReturnHash\(storedReturn\) \|\| '#quorum';[\s\S]*safeSessionRemove\(authReturnStorageKey\)[\s\S]*dueDiligenceRoute:\s*returnHash\.slice\(1\)[\s\S]*PopStateEvent\('popstate'/,
+  'A completed authentication return must restore only a validated saved destination and retain Quorum as its fallback.',
 );
 assert.match(
   phase2,
@@ -208,10 +209,76 @@ assert.match(
   'Authentication-return state must be captured once so ordinary session refreshes preserve the active page.',
 );
 assert.doesNotMatch(
-  extractNamedFunction(phase2, 'restoreAuthDestination'),
+  restoreAuthDestinationSource,
   /openPremiumBarFeels|openPerSubject|showPage/,
   'A stale protected route must never reopen automatically after sign-in.',
 );
+
+function exerciseAuthDestinationRestore(storedReturn) {
+  const authReturnStorageKey = 'duediligence.auth.return.v1';
+  const sessionValues = new Map(storedReturn == null ? [] : [[authReturnStorageKey, storedReturn]]);
+  const replacements = [];
+  const events = [];
+  const restoreState = { authReturnPending: true };
+  const location = {
+    origin: 'https://duediligence.ph',
+    pathname: '/',
+    search: '',
+  };
+  const history = {
+    state: { preserved: true },
+    replaceState(stateValue, _title, url) {
+      this.state = stateValue;
+      replacements.push({ state: stateValue, url });
+    },
+  };
+  const restoreAuthDestination = vm.runInNewContext(
+    `(() => {
+      ${extractNamedFunction(phase2, 'safeReturnHash')}
+      ${restoreAuthDestinationSource}
+      return restoreAuthDestination;
+    })()`,
+    {
+      URL,
+      state: restoreState,
+      location,
+      history,
+      authReturnStorageKey,
+      safeSessionRead: (key) => sessionValues.get(key) ?? null,
+      safeSessionRemove: (key) => sessionValues.delete(key),
+      global: { dispatchEvent: (event) => events.push(event) },
+      PopStateEvent: class PopStateEvent {
+        constructor(type, init) {
+          this.type = type;
+          this.state = init.state;
+        }
+      },
+    },
+  );
+  restoreAuthDestination();
+  return { events, replacements, restoreState, sessionValues };
+}
+
+const examinationRoomReturn = exerciseAuthDestinationRestore('https://duediligence.ph/#examination-room');
+assert.equal(
+  examinationRoomReturn.replacements[0]?.url,
+  '/#examination-room',
+  'Professor sign-in must return to the Examination Room door through the validated same-page hash.',
+);
+assert.equal(examinationRoomReturn.replacements[0]?.state?.preserved, true);
+assert.equal(examinationRoomReturn.replacements[0]?.state?.dueDiligenceRoute, 'examination-room');
+assert.equal(examinationRoomReturn.events[0]?.type, 'popstate');
+assert.equal(examinationRoomReturn.restoreState.authReturnPending, false);
+assert.equal(examinationRoomReturn.sessionValues.size, 0, 'The one-time authentication destination must be removed after use.');
+
+const unsafeReturn = exerciseAuthDestinationRestore('https://attacker.invalid/#examination-room');
+assert.equal(
+  unsafeReturn.replacements[0]?.url,
+  '/#quorum',
+  'An unsafe or unavailable authentication destination must fall back to Quorum.',
+);
+assert.equal(unsafeReturn.replacements[0]?.state?.preserved, true);
+assert.equal(unsafeReturn.replacements[0]?.state?.dueDiligenceRoute, 'quorum');
 assert.match(
   extractNamedFunction(phase2, 'recoverAuthAfterNavigation'),
   /state\.session = data\.session;[\s\S]*state\.user = data\.session\.user \|\| null;[\s\S]*dispatchSessionState\(data\.session, 'navigation-recovery'\);[\s\S]*await loadUserState\(\);/,

@@ -69,6 +69,7 @@ jobs:
           node --check assets/maintenance-gate.js
           node --check assets/phase4-experience.js
           node --check assets/lex-forum.js
+          node --test examination-room/*.test.cjs
           node scripts/test-maintenance-lock.mjs
           node scripts/test-private-beta-admission.mjs
           node scripts/test-private-beta-frontend.mjs
@@ -84,6 +85,8 @@ jobs:
           node scripts/test-beta-readiness-copy-seo.mjs
           node scripts/test-lifetime-grade-ui.mjs
           node scripts/test-audience-menu.mjs
+          node scripts/test-examination-room-door-menu.mjs
+          node scripts/test-examination-room-release-workflows.mjs
           node scripts/test-approved-renovation-shell.mjs
           node scripts/test-design-correction-release.mjs
           node scripts/test-subject-matter-consolidation.mjs

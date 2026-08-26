@@ -17,6 +17,7 @@ ALLOW_LEGACY_GUESTS = "false"
 PHASE4_ACCESS_ENFORCEMENT = "true"
 PHASE4_MODEL_QUALITY_ENFORCEMENT = "true"
 REQUIRE_AUTHENTICATED_SUBMISSIONS = "true"
+EXAMINATION_ROOM_ENABLED = "true"
 OUTBOUND_EMAIL_MODE = "suppressed"
 ADMIN_DIRECTORY_EMAIL_MODE = "suppressed"
 ADMIN_DIRECTORY_EMAIL_FROM = "Due Diligence Administration <support@duediligence.ph>"
@@ -57,6 +58,9 @@ crons = ["*/2 * * * *"]
 # Resend secret without exposing it to the browser.
 # PRIVATE_BETA_ACCESS_CODE_VERIFIER, PRIVATE_BETA_ACCESS_CODE_PEPPER, and
 # PRIVATE_BETA_FLOW_SIGNING_KEY must also remain Cloudflare secrets.
+# EXAMINATION_ROOM_KEY_PEPPER must remain a Cloudflare secret. It protects
+# room-key, student-session, and idempotency verifiers; never expose or commit it.
+# EXAMINATION_ROOM_EMAIL_FROM may be configured as a non-secret sender address.
 # ADMIN_DIRECTORY_RECIPIENTS_JSON must remain a Cloudflare secret containing
 # only the approved founder recipient-key to personal-email mapping.
 # SUPABASE_URL must be configured as a Worker environment variable.

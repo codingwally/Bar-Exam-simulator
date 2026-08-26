@@ -1000,6 +1000,7 @@
 <link rel="stylesheet" href="assets/private-beta-landing.css?v=master-experience-20260813-1&amp;release=subject-matter-gil-fixes-20260817-4">
 <link rel="stylesheet" href="assets/due-diligence-controls.css?v=subject-matter-controls-20260817-4">
 <link rel="stylesheet" href="assets/quorum-first-shell.css?v=examination-room-doors-20260826-2">
+<link rel="stylesheet" href="assets/auxiliary-writing-diagnostics.css?v=auxiliary-writing-diagnostics-20260827-1">
 <script src="assets/exam-session-controller.js"></script>
 </head>
 <body class="private-beta-public dd-auth-pending">
@@ -3618,7 +3619,24 @@ function applyExamEnhancements() {
       }
     });
   }
+  if (examStage === 'reviewing') {
+    const result = submissionResults[questionAnswerKey()];
+    const root = document.getElementById('evaluation-result-area');
+    if (result?.id && !result.unanswered && root) {
+      try {
+        window.DueDiligenceAuxiliaryDiagnostics?.mount({
+          root,
+          sourceType: 'phase4_exam_attempt',
+          sourceId: result.id,
+        });
+      } catch (auxiliaryError) {
+        console.warn('Auxiliary diagnostics could not be mounted.', auxiliaryError);
+      }
+    }
+  }
 }
+
+window.addEventListener('duediligence:auxiliary-diagnostics-ready', applyExamEnhancements);
 
 /* ---------- Analytics (localStorage) ---------- */
 const LS_KEY = 'dd_attempts_v1';
@@ -3941,9 +3959,17 @@ function analyticsRubricMarkup(records) {
       <div><div class="analytics-bar-top"><span>${item.label}</span><strong>${item.value.toFixed(1)} / 5</strong></div>
       <div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:${Math.max(2, item.value / 5 * 100)}%"></div></div></div>`).join('')}</div>`
     : '<div class="analytics-empty-chart">Component analysis appears when stored grading records include a rubric breakdown.</div>';
-  return `${bars}
-    <div class="analytics-measurement-note"><span>Grammar strength</span><span>Not measured separately</span></div>
-    <div class="analytics-measurement-note"><span>Issue spotting</span><span>Not measured separately</span></div>`;
+  return bars;
+}
+
+function analyticsAuxiliaryMarkup(records) {
+  try {
+    return window.DueDiligenceAuxiliaryDiagnostics?.analyticsMarkup(records)
+      || '<div class="analytics-empty-chart">Auxiliary diagnostics are loading.</div>';
+  } catch (auxiliaryError) {
+    console.warn('Auxiliary Analytics could not be rendered.', auxiliaryError);
+    return '<div class="analytics-empty-chart">Auxiliary diagnostics are temporarily unavailable. Your answer scores are unchanged.</div>';
+  }
 }
 
 function syncAnalyticsDataStatus() {
@@ -4017,6 +4043,10 @@ function renderVerdictDashboard() {
           : '<div class="analytics-empty-chart">Typing pace will appear when stored attempts include both writing time and word count.</div>'}
       </section>
     </div>
+    <section class="analytics-panel analytics-auxiliary-panel" aria-labelledby="analytics-auxiliary-title" data-auxiliary-analytics>
+      <div class="analytics-panel-head"><div><h3 id="analytics-auxiliary-title">Auxiliary diagnostics</h3></div></div>
+      <div data-auxiliary-analytics-content>${analyticsAuxiliaryMarkup(active)}</div>
+    </section>
     <section class="analytics-panel" aria-labelledby="analytics-history-title">
       <div class="analytics-panel-head"><div><h3 id="analytics-history-title">Attempt history</h3><p class="analytics-panel-note">Graded attempts only. Search, export, or move records to Recently Deleted for 30 days.</p></div></div>
     <details class="analytics-controls" ${filtersActive ? 'open' : ''}>
@@ -4250,7 +4280,19 @@ async function loadVerdictDashboard() {
     toast(activeResult.reason?.message || 'Analytics history could not be synced.', 'warn');
   }
   renderVerdictDashboard();
+  const auxiliaryDiagnostics = window.DueDiligenceAuxiliaryDiagnostics;
+  auxiliaryDiagnostics?.loadForRecords?.(verdictDashboard.active)
+    .then(() => auxiliaryDiagnostics.ensureForRecords?.(
+      verdictDashboard.active
+        .filter((record) => record.sourceType === 'legacy_grading_result'),
+    ))
+    .catch(() => undefined);
 }
+
+window.addEventListener('duediligence:auxiliary-diagnostics-updated', () => {
+  const content = document.querySelector('[data-auxiliary-analytics-content]');
+  if (content) content.innerHTML = analyticsAuxiliaryMarkup(analyticsGradedRecords(verdictDashboard.active));
+});
 
 function openAnalytics() {
   verdictDashboard.selected.clear();
@@ -4616,6 +4658,7 @@ window.addEventListener('storage', (event) => {
 <script src="assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
 <script src="assets/phase2-experience.js?v=syllabus-reveal-p0-20260826-2"></script>
 <script src="assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2"></script>
+<script src="assets/auxiliary-writing-diagnostics.js?v=auxiliary-writing-diagnostics-20260827-1"></script>
 <script src="assets/phase3-analytics.js"></script>
 <script src="assets/private-workspace.js?v=master-experience-20260813-1"></script>
 <script src="assets/feature-loader.js?v=syllabus-reveal-p0-20260826-2"></script>

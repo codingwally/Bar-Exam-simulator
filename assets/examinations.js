@@ -2998,6 +2998,17 @@
           </section></div>`;
         if (result) restoreRevealedSubjectReview(root);
         focusRendered(root, result ? '[data-subject-result-heading]' : 'h1');
+        if (result) {
+          try {
+            global.DueDiligenceAuxiliaryDiagnostics?.mount({
+              root,
+              sourceType: 'examination_attempt',
+              sourceId: attemptId,
+            });
+          } catch (auxiliaryError) {
+            console.warn('Auxiliary diagnostics could not be mounted.', auxiliaryError);
+          }
+        }
         return;
       }
       root.innerHTML = `<div class="dd-exam-page ${track === 'per_subject' ? 'dd-subject-review-page' : ''}"><section class="dd-verdict-screen">
@@ -3023,6 +3034,15 @@
           ` : '<button class="dd-exam-button" type="button" data-return-catalog>Return to Examination Catalog</button>'}
         </div>
       </section></div>`;
+      try {
+        global.DueDiligenceAuxiliaryDiagnostics?.mount({
+          root,
+          sourceType: 'examination_attempt',
+          sourceId: attemptId,
+        });
+      } catch (auxiliaryError) {
+        console.warn('Auxiliary diagnostics could not be mounted.', auxiliaryError);
+      }
     } catch (error) {
       if (isStaleIdentityError(error)) return;
       root.innerHTML = track === 'per_subject'

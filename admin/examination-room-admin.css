@@ -317,6 +317,12 @@
 .exam-admin-table td > code { display: block; }
 .exam-admin-table td > strong { color: var(--navy); font-size: .68rem; line-height: 1.4; }
 .exam-admin-table td > small { margin-top: .2rem; color: var(--muted); font-size: .58rem; line-height: 1.4; overflow-wrap: anywhere; }
+.observatory .exam-admin-table th { color: #c8d4e2; }
+.observatory .exam-admin-table td { color: #f5f8fb; }
+.observatory .exam-admin-table td > strong { color: #ffffff; }
+.observatory .exam-admin-table td > small { color: #bdc9d7; }
+.observatory .exam-admin-table td > code { color: #d8e2ec; }
+.observatory .exam-admin-table tbody tr:hover { background: rgba(255, 255, 255, .045); }
 .exam-admin-table code,
 .exam-admin-record-detail code,
 .exam-admin-professors code,

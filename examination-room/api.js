@@ -701,11 +701,50 @@
           'Open the selected student, enter points and feedback for every question, save each grade, then release again.',
         );
       }
-      const release = { id: requestId(), sessionIds, at: iso(), requestId: idempotencyKey };
+      const releasedAt = iso();
+      const outcomes = sessionIds.map((sessionId) => {
+        const session = state.sessions.find((entry) => entry.id === sessionId);
+        const recipient = normalizeEmail(session?.email);
+        return {
+          releaseId: requestId(),
+          sessionId,
+          recipient: recipient || null,
+          status: recipient ? 'sent' : 'skipped',
+          providerId: recipient ? `demo-result-${sessionId}` : null,
+          safeErrorCode: recipient ? null : 'recipient_missing',
+          attemptCount: recipient ? 1 : 0,
+        };
+      });
+      const acceptedCount = outcomes.filter((entry) => entry.status === 'sent').length;
+      const skippedCount = outcomes.filter((entry) => entry.status === 'skipped').length;
+      const delivery = {
+        status: acceptedCount && skippedCount ? 'partial' : acceptedCount ? 'sent' : 'skipped',
+        total: outcomes.length,
+        acceptedCount,
+        failedCount: 0,
+        skippedCount,
+        suppressedCount: 0,
+        notConfiguredCount: 0,
+        pendingCount: 0,
+        outcomes,
+        providerBatchIds: acceptedCount
+          ? [outcomes.filter((entry) => entry.providerId).map((entry) => entry.providerId)]
+          : [],
+        retrySafe: true,
+        persistenceStatus: 'recorded',
+      };
+      const release = {
+        id: requestId(),
+        sessionIds,
+        at: releasedAt,
+        releasedAt,
+        requestId: idempotencyKey,
+        delivery,
+      };
       state.releases.push(release);
       state.exam.status = 'results_released';
       writeDemoState(state, 'results_released');
-      return { ok: true, release: clone(release), emailStatus: 'demo_delivered' };
+      return { ok: true, release: clone(release) };
     }
     throw new ExaminationRoomApiError('UNSUPPORTED_OPERATION', 'That professor action is not available. Refresh the page and try again.', 400);
   }

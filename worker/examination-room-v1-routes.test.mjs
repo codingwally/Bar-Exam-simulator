@@ -29,6 +29,7 @@ const ORIGIN = 'https://duediligence.ph';
 const REQUEST_KEY = '12345678-1234-4234-8234-1234567890ab';
 const SESSION_TOKEN = `ers1_${'ab'.repeat(32)}`;
 const ROOM_KEY = createRoomKey('ABCDEFGH');
+const COMMUNITY_INSTITUTION_ID = 'ddc00000-0000-4000-8000-000000000001';
 
 function clientExam(overrides = {}) {
   return {
@@ -347,7 +348,7 @@ test('multiple creator workspaces fall back to the active Due Diligence Communit
   assert.equal(calls[0].institutionId, communityId);
 });
 
-test('missing creator-workspace activity fails closed for default and explicitly requested institutions', async () => {
+test('signed-in creators fall back to the community workspace when creator context is missing or stale', async () => {
   const { handlers, calls } = dependencyFixture({
     authorizeProfessor: async () => ({
       authorized: false,
@@ -362,8 +363,8 @@ test('missing creator-workspace activity fails closed for default and explicitly
     makeRequest('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
     ENV, ORIGIN, ORIGIN,
   );
-  assert.equal(defaultResponse.status, 403);
-  assert.equal((await json(defaultResponse)).error.code, 'EXAM_ROOM_V1_CREATOR_WORKSPACE_REQUIRED');
+  assert.equal(defaultResponse.status, 200);
+  assert.equal((await json(defaultResponse)).ok, true);
 
   const requestedResponse = await handlers.professorQuery(
     makeRequest('/examination-room/v1/professor/query', {
@@ -371,9 +372,51 @@ test('missing creator-workspace activity fails closed for default and explicitly
     }),
     ENV, ORIGIN, ORIGIN,
   );
-  assert.equal(requestedResponse.status, 403);
-  assert.equal((await json(requestedResponse)).error.code, 'EXAM_ROOM_V1_CREATOR_WORKSPACE_REQUIRED');
-  assert.equal(calls.length, 0);
+  assert.equal(requestedResponse.status, 200);
+  assert.equal((await json(requestedResponse)).ok, true);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls.map((call) => call.institutionId), [
+    COMMUNITY_INSTITUTION_ID,
+    COMMUNITY_INSTITUTION_ID,
+  ]);
+});
+
+test('a signed-in user without role, license, or assignment can create, save, publish, and request the key', async () => {
+  const { handlers, calls } = dependencyFixture({
+    authorizeProfessor: async () => ({
+      authorized: false,
+      creatorAuthorized: false,
+      professorRoleSelected: false,
+      institutionId: null,
+      creatorWorkspaces: [],
+      memberships: [],
+    }),
+  });
+
+  const saveResponse = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'save_draft',
+      payload: { exam: clientExam() },
+      idempotencyKey: REQUEST_KEY,
+    }),
+    ENV, ORIGIN, ORIGIN,
+  );
+  const publishResponse = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'publish',
+      payload: { exam: clientExam({ roster: undefined }) },
+      idempotencyKey: `${REQUEST_KEY}-publish`,
+    }),
+    ENV, ORIGIN, ORIGIN,
+  );
+
+  assert.equal(saveResponse.status, 200);
+  assert.equal(publishResponse.status, 201);
+  assert.deepEqual(calls.map((call) => call.operation), ['save_draft', 'publish']);
+  assert.deepEqual(calls.map((call) => call.institutionId), [
+    COMMUNITY_INSTITUTION_ID,
+    COMMUNITY_INSTITUTION_ID,
+  ]);
 });
 
 test('administrator is allowed into professor routes only as an authorized testing role', async () => {
@@ -387,7 +430,7 @@ test('administrator is allowed into professor routes only as an authorized testi
   assert.equal(calls[0].scope, 'professor');
 });
 
-test('creator workspace selection never inherits a platform-owner admin membership from another institution', async () => {
+test('a stale requested workspace never blocks a signed-in creator or inherits an admin membership', async () => {
   const authorization = {
     authorized: true,
     globalAuthorized: true,
@@ -426,9 +469,10 @@ test('creator workspace selection never inherits a platform-owner admin membersh
     }, 'admin'),
     ENV, ORIGIN, ORIGIN,
   );
-  assert.equal(testingResponse.status, 403);
-  assert.equal((await json(testingResponse)).error.code, 'EXAM_ROOM_V1_CREATOR_WORKSPACE_FORBIDDEN');
-  assert.equal(calls.length, 0);
+  assert.equal(testingResponse.status, 200);
+  assert.equal((await json(testingResponse)).ok, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].institutionId, COMMUNITY_INSTITUTION_ID);
   assert.equal(managementCalls.length, 0);
 });
 
@@ -895,6 +939,7 @@ test('professor grade save creates an append-only grading revision without persi
 test('result release finalizes every selected score and gives each release a distinct idempotency hash', async () => {
   const publication = publicationFixture();
   const submission = submissionFixture(publication);
+  const handoffs = [];
   const { handlers, calls } = dependencyFixture({
     rpc: async (_env, parameters) => {
       if (parameters.operation === 'release_context') {
@@ -912,6 +957,15 @@ test('result release finalizes every selected score and gives each release a dis
       if (parameters.operation === 'release_results') return { ok: true, released: 1 };
       return { ok: true };
     },
+    afterProfessorCommand: async (details) => {
+      handoffs.push(structuredClone(details));
+      return {
+        resultDelivery: {
+          status: 'sent', total: 1, acceptedCount: 1, failedCount: 0, skippedCount: 0,
+          outcomes: [{ sessionId: IDS.session, status: 'sent', providerId: 'result-email-1' }],
+        },
+      };
+    },
   });
   const response = await handlers.professorCommand(
     makeRequest('/examination-room/v1/professor/command', {
@@ -926,6 +980,8 @@ test('result release finalizes every selected score and gives each release a dis
   assert.deepEqual(responseBody.release.sessionIds, [IDS.session]);
   assert.equal(responseBody.release.status, 'released');
   assert.equal(responseBody.release.releasedAt, '2026-08-26T04:00:00.000Z');
+  assert.equal(responseBody.release.delivery.status, 'sent');
+  assert.equal(responseBody.release.delivery.outcomes[0].providerId, 'result-email-1');
   const releaseCall = calls.find((entry) => entry.operation === 'release_results');
   assert.equal(releaseCall.payload.releases.length, 1);
   assert.equal(releaseCall.payload.releases[0].gradingManifest.status, 'final');
@@ -933,6 +989,34 @@ test('result release finalizes every selected score and gives each release a dis
   assert.match(releaseCall.payload.releases[0].releaseRequestHash, /^[0-9a-f]{64}$/u);
   assert.equal('idempotencyKey' in releaseCall.payload.releases[0].gradingManifest, false);
   assert.equal('idempotencyKey' in releaseCall.payload.releases[0].releaseManifest, false);
+  assert.equal(handoffs.length, 1);
+  assert.equal(handoffs[0].actorUserId, IDS.professor);
+  assert.equal(handoffs[0].institutionId, IDS.institution);
+  assert.equal(handoffs[0].requestHash.length, 64);
+  assert.deepEqual(handoffs[0].resultEmailItems, [{
+    releaseId: releaseCall.payload.releases[0].releaseManifest.releaseId,
+    sessionId: IDS.session,
+    releaseRequestHash: releaseCall.payload.releases[0].releaseRequestHash,
+  }]);
+
+  const replayResponse = await handlers.professorCommand(
+    makeRequest('/examination-room/v1/professor/command', {
+      operation: 'release_results',
+      payload: { examId: IDS.exam, sessionIds: [IDS.session] },
+      idempotencyKey: REQUEST_KEY,
+    }), ENV, ORIGIN, ORIGIN,
+  );
+  assert.equal(replayResponse.status, 200);
+  const releaseCalls = calls.filter((entry) => entry.operation === 'release_results');
+  assert.equal(releaseCalls.length, 2);
+  assert.equal(
+    releaseCalls[0].payload.releases[0].releaseManifest.releaseId,
+    releaseCalls[1].payload.releases[0].releaseManifest.releaseId,
+  );
+  assert.equal(
+    releaseCalls[0].payload.releases[0].gradingManifest.revisionId,
+    releaseCalls[1].payload.releases[0].gradingManifest.revisionId,
+  );
 });
 
 test('heartbeat and ordinary integrity signals contain no bearer credential in persistence payloads', async () => {

@@ -1,0 +1,61 @@
+{
+  "sink": "redacted",
+  "sinkConfigured": true,
+  "realProviderContacted": false,
+  "evidenceLevel": "template_and_mock_transport_only",
+  "accepted": [
+    {
+      "type": "publication_request",
+      "providerId": "mock_publication_request_01",
+      "subject": "Key approval requested — Commercial readiness audit examination",
+      "logoPresent": true,
+      "transport": "mock_resend_single",
+      "evidenceLevel": "mock_transport_only"
+    },
+    {
+      "type": "key_approval",
+      "providerId": "mock_key_approval_02",
+      "subject": "Your Examination Room key is ready — Commercial readiness audit examination",
+      "logoPresent": true,
+      "transport": "mock_resend_single",
+      "evidenceLevel": "mock_transport_only"
+    },
+    {
+      "type": "key_resend",
+      "providerId": "mock_key_resend_03",
+      "subject": "Your Examination Room key is ready — Commercial readiness audit examination",
+      "logoPresent": true,
+      "transport": "mock_resend_single",
+      "evidenceLevel": "mock_transport_only"
+    },
+    {
+      "type": "key_rotation",
+      "providerId": "mock_key_rotation_04",
+      "subject": "Your Examination Room key is ready — Commercial readiness audit examination",
+      "logoPresent": true,
+      "transport": "mock_resend_single",
+      "evidenceLevel": "mock_transport_only"
+    },
+    {
+      "type": "result_release",
+      "providerId": "mock_result_release_05",
+      "subject": "Your examination result is ready — Commercial audit examination 01",
+      "logoPresent": true,
+      "transport": "mock_resend_batch",
+      "evidenceLevel": "mock_transport_only"
+    }
+  ],
+  "resultReleaseEmail": {
+    "implemented": true,
+    "attempted": true,
+    "transport": "mock_resend_batch",
+    "status": "sent",
+    "acceptedCount": 1,
+    "providerAcceptanceIds": [
+      "mock_result_release_05"
+    ],
+    "providerId": "mock_result_release_05",
+    "retrySafe": true,
+    "blocker": null
+  }
+}

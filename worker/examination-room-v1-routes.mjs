@@ -28,6 +28,7 @@ const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
 const MAX_ROSTER_SIZE = 5_000;
 const MAX_ALLOWED_EMAILS = 5_000;
 const MAX_EVENT_DETAILS_BYTES = 8_000;
+const COMMUNITY_CREATOR_INSTITUTION_ID = 'ddc00000-0000-4000-8000-000000000001';
 
 const PROFESSOR_QUERY_OPERATIONS = new Set(['role_status', 'session', 'exam', 'monitor', 'grading']);
 const PROFESSOR_COMMAND_OPERATIONS = new Set([
@@ -608,10 +609,11 @@ function selectInstitution(authorization, requestedInstitutionId = null, allowed
 }
 
 function selectCreatorInstitution(authorization, requestedInstitutionId = null) {
-  const creatorWorkspaces = Array.isArray(authorization.creatorWorkspaces)
-    ? authorization.creatorWorkspaces
+  const context = isPlainRecord(authorization) ? authorization : {};
+  const creatorWorkspaces = Array.isArray(context.creatorWorkspaces)
+    ? context.creatorWorkspaces
     : [];
-  const memberships = Array.isArray(authorization.memberships) ? authorization.memberships : [];
+  const memberships = Array.isArray(context.memberships) ? context.memberships : [];
   const candidates = [];
   const seen = new Set();
   for (const entry of [...creatorWorkspaces, ...memberships]) {
@@ -626,39 +628,17 @@ function selectCreatorInstitution(authorization, requestedInstitutionId = null) 
         || entry.institutionCode === 'due-diligence-community',
     });
   }
+  const preferred = candidates.find((entry) => entry.institutionId === context.institutionId);
+  const communityDefault = candidates.find((entry) => entry.communityDefault);
   if (requestedInstitutionId) {
     const requested = uuid(requestedInstitutionId, 'the institution identifier');
-    if (!seen.has(requested)) {
-      fail(
-        'EXAM_ROOM_V1_CREATOR_WORKSPACE_FORBIDDEN',
-        'That law-school workspace is not available for examination creation.',
-        403,
-        'Choose an active law-school workspace listed for your signed-in account.',
-      );
-    }
-    return requested;
+    if (seen.has(requested)) return requested;
+    return COMMUNITY_CREATOR_INSTITUTION_ID;
   }
-  const preferred = candidates.find((entry) => entry.institutionId === authorization.institutionId);
-  const communityDefault = candidates.find((entry) => entry.communityDefault);
-  if (!preferred && !communityDefault && candidates.length > 1) {
-    fail(
-      'EXAM_ROOM_V1_INSTITUTION_SELECTION_REQUIRED',
-      'Choose the law school for this Examination Room session.',
-      409,
-      'Select one active law-school workspace, then continue.',
-      { institutions: candidates },
-    );
-  }
-  const primary = preferred?.institutionId || communityDefault?.institutionId || candidates[0]?.institutionId;
-  if (!primary) {
-    fail(
-      'EXAM_ROOM_V1_CREATOR_WORKSPACE_REQUIRED',
-      'No active law-school workspace is available for examination creation.',
-      403,
-      'Choose or request an active law-school workspace, then reopen the Professor door.',
-    );
-  }
-  return primary;
+  return preferred?.institutionId
+    || communityDefault?.institutionId
+    || candidates[0]?.institutionId
+    || COMMUNITY_CREATOR_INSTITUTION_ID;
 }
 
 export function createExaminationRoomV1Handlers(dependencies) {
@@ -709,17 +689,9 @@ export function createExaminationRoomV1Handlers(dependencies) {
       fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'Professor sign-in is required.', 401, 'Sign in through Due Diligence, then reopen Examination Room.');
     }
     const authorization = await deps.authorizeProfessor(env, user);
-    if (!authorizationAllowed(authorization)) {
-      fail(
-        'EXAM_ROOM_V1_CREATOR_WORKSPACE_REQUIRED',
-        'This signed-in account has no active examination-creator workspace.',
-        403,
-        'Choose or request an active law-school workspace, then reopen the Professor door.',
-      );
-    }
     return {
       user,
-      authorization,
+      authorization: isPlainRecord(authorization) ? authorization : {},
       institutionId: selectCreatorInstitution(authorization, requestedInstitutionId),
     };
   }
@@ -892,6 +864,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
       let safePayload;
       let clientGradeEntry = null;
       let clientReleaseEntry = null;
+      let resultEmailItems = [];
 
       if (operation === 'save_draft' || operation === 'publish') {
         const draft = professorDraftFromClientExam(payload.exam);
@@ -1041,8 +1014,18 @@ export function createExaminationRoomV1Handlers(dependencies) {
         }));
         const releases = [];
         for (const entry of releaseContext.entries || []) {
+          const releaseRequestHash = await pepperedHmac(
+            env,
+            'result-release-request',
+            `${requestInfo.rawRequestKey}\0${entry.sessionId}`,
+          );
+          const gradingRevisionId = uuidFromHash(await pepperedHmac(
+            env,
+            'result-release-grading-revision',
+            releaseRequestHash,
+          ));
           const finalRevision = buildGradingRevision({
-            revisionId: deps.randomUUID(),
+            revisionId: gradingRevisionId,
             revision: positiveInteger(entry.nextRevision, 'the grading revision', 1, 1_000_000, 1),
             status: GRADING_REVISION_STATUSES.FINAL,
             graderId: context.user.id,
@@ -1052,7 +1035,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
             overallFeedback: entry.overallFeedback || '',
           }, { submissionManifest: entry.submissionManifest });
           const release = buildResultRelease({
-            releaseId: deps.randomUUID(),
+            releaseId: uuidFromHash(releaseRequestHash),
             selectedRevisionId: finalRevision.manifest.revisionId,
             releasedAt: deps.now(),
             releasedBy: context.user.id,
@@ -1065,17 +1048,19 @@ export function createExaminationRoomV1Handlers(dependencies) {
           const releaseManifest = { ...release.manifest };
           delete gradingManifest.idempotencyKey;
           delete releaseManifest.idempotencyKey;
+          const normalizedSessionId = uuid(entry.sessionId, 'the student session identifier');
           releases.push({
-            sessionId: uuid(entry.sessionId, 'the student session identifier'),
+            sessionId: normalizedSessionId,
             gradingManifest,
             gradingHash: await deps.sha256Hex?.(finalRevision.hashInput) || await pepperedHmac(env, 'grading-manifest', finalRevision.hashInput),
             releaseManifest,
             releaseHash: await deps.sha256Hex?.(release.hashInput) || await pepperedHmac(env, 'release-manifest', release.hashInput),
-            releaseRequestHash: await pepperedHmac(
-              env,
-              'result-release-request',
-              `${requestInfo.rawRequestKey}\0${entry.sessionId}`,
-            ),
+            releaseRequestHash,
+          });
+          resultEmailItems.push({
+            releaseId: releaseManifest.releaseId,
+            sessionId: normalizedSessionId,
+            releaseRequestHash,
           });
         }
         if (releases.length !== sessionIds.length) {
@@ -1101,8 +1086,19 @@ export function createExaminationRoomV1Handlers(dependencies) {
         institutionId: context.institutionId, payload: safePayload,
       }, [requestInfo.rawRequestKey]);
       if (operation === 'publish' && result.publicationManifest) normalizePublicationManifest(result.publicationManifest);
+      let postCommandResult = null;
       if (typeof deps.afterProfessorCommand === 'function') {
-        deps.afterProfessorCommand({ operation, result, env, executionContext });
+        postCommandResult = await deps.afterProfessorCommand({
+          operation,
+          result,
+          env,
+          executionContext,
+          actorUserId: context.user.id,
+          institutionId: context.institutionId,
+          requestHash: requestInfo.requestHash,
+          examId: safePayload?.examId || result?.examId || null,
+          resultEmailItems,
+        });
       }
       let publicResult = result;
       if (clientGradeEntry) {
@@ -1117,7 +1113,15 @@ export function createExaminationRoomV1Handlers(dependencies) {
         // the explicit canonical name for newer clients.
         publicResult = { ...result, revision: entry, grade: entry };
       } else if (clientReleaseEntry) {
-        publicResult = { ...result, release: clientReleaseEntry };
+        publicResult = {
+          ...result,
+          release: {
+            ...clientReleaseEntry,
+            ...(postCommandResult?.resultDelivery
+              ? { delivery: postCommandResult.resultDelivery }
+              : {}),
+          },
+        };
       }
       return deps.respond({ ok: true, ...publicResult }, operation === 'publish' ? 201 : 200, origin, allowedOrigin);
     }, origin, allowedOrigin);

@@ -1,7 +1,11 @@
 const DEFAULT_PUBLIC_ORIGIN = 'https://duediligence.ph';
 const OFFICIAL_LOGO_PATH = '/assets/brand/logo1-master.png';
 const EXAMINATION_ROOM_PATH = '/examination-room/';
+const EXAMINATION_ROOM_STUDENT_PATH = '/examination-room/student.html';
 const EXAMINATION_ROOM_ADMIN_PATH = '/admin/#examination_room_v1';
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+const RESULT_EMAIL_BATCH_SIZE = 100;
 
 function cleanSingleLine(value, maximum, fallback = '') {
   const normalized = String(value ?? '')
@@ -40,10 +44,13 @@ export function examinationRoomEmailBrand(env = {}) {
   }
   const workspace = new URL(EXAMINATION_ROOM_PATH, origin);
   workspace.hash = 'monitor';
+  const studentResult = new URL(EXAMINATION_ROOM_STUDENT_PATH, origin);
+  studentResult.hash = 'result';
   return Object.freeze({
     origin,
     logoUrl: new URL(OFFICIAL_LOGO_PATH, origin).href,
     workspaceUrl: workspace.href,
+    studentResultUrl: studentResult.href,
     adminUrl: new URL(EXAMINATION_ROOM_ADMIN_PATH, origin).href,
   });
 }
@@ -175,6 +182,260 @@ export function buildExaminationRoomKeyEmail(env, message = {}) {
   });
 }
 
+function displayScore(value) {
+  const points = Number(value);
+  if (!Number.isFinite(points) || points < 0) return 'Not available';
+  return Number.isInteger(points) ? String(points) : points.toFixed(2).replace(/0+$/u, '').replace(/\.$/u, '');
+}
+
+export function buildExaminationRoomResultEmail(env, message = {}) {
+  const brand = examinationRoomEmailBrand(env);
+  const studentName = cleanSingleLine(message.studentName, 200, 'Student');
+  const examTitle = cleanSingleLine(message.examTitle, 300, 'Published examination');
+  const subjectName = cleanSingleLine(message.subject, 200, 'Subject not specified');
+  const totalScore = displayScore(message.totalScore);
+  const maximumScore = displayScore(message.maximumScore);
+  const releasedAt = displayExpiry(message.releasedAt || 'Released just now');
+  const subject = `Your examination result is ready — ${examTitle.slice(0, 140)}`.slice(0, 200);
+  const safe = {
+    studentName: escapeExaminationRoomEmailHtml(studentName),
+    examTitle: escapeExaminationRoomEmailHtml(examTitle),
+    subjectName: escapeExaminationRoomEmailHtml(subjectName),
+    totalScore: escapeExaminationRoomEmailHtml(totalScore),
+    maximumScore: escapeExaminationRoomEmailHtml(maximumScore),
+    releasedAt: escapeExaminationRoomEmailHtml(releasedAt),
+    logoUrl: escapeExaminationRoomEmailHtml(brand.logoUrl),
+    studentResultUrl: escapeExaminationRoomEmailHtml(brand.studentResultUrl),
+  };
+
+  const text = [
+    `Hello ${studentName},`,
+    '',
+    'Your professor released your Examination Room result.',
+    '',
+    `Examination: ${examTitle}`,
+    `Subject: ${subjectName}`,
+    `Score: ${totalScore} / ${maximumScore}`,
+    `Released: ${releasedAt}`,
+    '',
+    `Open your protected result and Professor feedback: ${brand.studentResultUrl}`,
+    'Use the same browser and device when possible. If asked, reopen the Student door with the current room key and your exact examination identity.',
+    '',
+    'This email does not contain the room key, answers, or per-question feedback.',
+    '',
+    'Due Diligence · Examination Room',
+  ].join('\n');
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>${safe.examTitle} — result ready</title>
+  <style>@media only screen and (max-width:620px){.dd-shell{width:100%!important}.dd-pad{padding-left:22px!important;padding-right:22px!important}.dd-score{font-size:27px!important}.dd-button{display:block!important;text-align:center!important}}</style>
+</head>
+<body style="margin:0;padding:0;background:#eef1f4;color:#172033;font-family:Inter,Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your professor released your Examination Room score and feedback.</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#eef1f4;">
+    <tr><td align="center" style="padding:28px 12px;">
+      <table role="presentation" class="dd-shell" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;background:#fff;border:1px solid #d8dfe7;border-top:5px solid #b8934f;">
+        <tr><td class="dd-pad" style="padding:24px 34px;background:#07182f;"><img src="${safe.logoUrl}" width="80" alt="Due Diligence" style="display:block;width:80px;max-width:80px;height:auto;border:0;"><p style="margin:14px 0 0;color:#dfc681;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;">Examination Room</p></td></tr>
+        <tr><td class="dd-pad" style="padding:34px 34px 18px;"><p style="margin:0 0 12px;color:#596579;font-size:15px;line-height:1.6;">Hello ${safe.studentName},</p><h1 style="margin:0;color:#07182f;font-family:'Playfair Display',Cambria,serif;font-size:29px;line-height:1.2;">Your result is ready.</h1><p style="margin:16px 0 0;color:#364152;font-size:16px;line-height:1.65;">Your professor released the result for <strong>${safe.examTitle}</strong>.</p></td></tr>
+        <tr><td class="dd-pad" style="padding:8px 34px 22px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#fffaf0;border:1px solid #dfd3ae;border-left:4px solid #b8934f;"><tr><td style="padding:22px;"><p style="margin:0 0 7px;color:#6d531d;font-size:11px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;">Released score</p><p class="dd-score" style="margin:0;color:#07182f;font-family:'Playfair Display',Cambria,serif;font-size:32px;font-weight:700;">${safe.totalScore} <span style="color:#6a7280;font-size:20px;">/ ${safe.maximumScore}</span></p><p style="margin:15px 0 0;color:#596579;font-size:13px;line-height:1.55;">${safe.subjectName}<br>Released ${safe.releasedAt}</p></td></tr></table></td></tr>
+        <tr><td class="dd-pad" style="padding:5px 34px 34px;"><a class="dd-button" href="${safe.studentResultUrl}" style="display:inline-block;padding:13px 21px;background:#c7a24f;border:1px solid #a98237;color:#07182f;font-size:15px;font-weight:700;text-decoration:none;">Open score &amp; Professor feedback</a><p style="margin:22px 0 0;color:#364152;font-size:14px;line-height:1.65;">Use the same browser and device when possible. If asked, reopen the Student door with the current room key and your exact examination identity.</p><p style="margin:14px 0 0;color:#6a7280;font-size:12px;line-height:1.55;">This message does not contain the room key, answers, or per-question feedback.</p></td></tr>
+        <tr><td class="dd-pad" style="padding:20px 34px;background:#f8f7f3;border-top:1px solid #e4e0d6;color:#6a7280;font-size:12px;line-height:1.55;"><strong style="color:#07182f;">Due Diligence · Examination Room</strong><br>Operational result notification sent after the professor released this student's grade.</td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  return Object.freeze({
+    subject,
+    text,
+    html,
+    logoUrl: brand.logoUrl,
+    studentResultUrl: brand.studentResultUrl,
+  });
+}
+
+function resultRecipient(entry, index) {
+  const sessionId = cleanSingleLine(entry?.sessionId, 120, `recipient-${index + 1}`);
+  const releaseId = cleanSingleLine(entry?.releaseId, 120, '');
+  const recipient = String(entry?.recipient || entry?.email || '').trim().toLowerCase();
+  if (!EMAIL_PATTERN.test(recipient) || recipient.length > 320) {
+    return {
+      sessionId,
+      releaseId,
+      recipient: null,
+      status: 'skipped',
+      providerId: null,
+      safeErrorCode: 'recipient_missing',
+    };
+  }
+  return {
+    sessionId,
+    releaseId,
+    recipient,
+    studentName: cleanSingleLine(entry?.studentName, 200, 'Student'),
+    examTitle: cleanSingleLine(entry?.examTitle, 300, 'Published examination'),
+    subject: cleanSingleLine(entry?.subject, 200, 'Subject not specified'),
+    totalScore: Number(entry?.totalScore),
+    maximumScore: Number(entry?.maximumScore),
+    releasedAt: cleanSingleLine(entry?.releasedAt, 120, 'Released just now'),
+  };
+}
+
+function resultDeliveryStatus(outcomes) {
+  const counts = outcomes.reduce((summary, outcome) => {
+    summary[outcome.status] = (summary[outcome.status] || 0) + 1;
+    return summary;
+  }, {});
+  const acceptedCount = counts.sent || 0;
+  const failedCount = counts.failed || 0;
+  const skippedCount = counts.skipped || 0;
+  const suppressedCount = counts.suppressed || 0;
+  const notConfiguredCount = counts.not_configured || 0;
+  const pendingCount = counts.pending || 0;
+  const status = failedCount || notConfiguredCount || pendingCount
+    ? acceptedCount || suppressedCount || skippedCount ? 'partial' : 'failed'
+    : skippedCount
+      ? acceptedCount || suppressedCount ? 'partial' : 'skipped'
+      : suppressedCount ? 'suppressed' : 'sent';
+  return {
+    status,
+    total: outcomes.length,
+    acceptedCount,
+    failedCount,
+    skippedCount,
+    suppressedCount,
+    notConfiguredCount,
+    pendingCount,
+  };
+}
+
+export async function deliverExaminationRoomResultReleaseEmails(
+  env,
+  message = {},
+  transport = globalThis.fetch,
+) {
+  const normalized = (Array.isArray(message.recipients) ? message.recipients : [])
+    .slice(0, 1_000)
+    .map(resultRecipient)
+    .sort((left, right) => left.sessionId.localeCompare(right.sessionId));
+  const skipped = normalized.filter((entry) => !entry.recipient);
+  const deliverable = normalized.filter((entry) => entry.recipient);
+  const mode = String(env?.EXAMINATION_ROOM_EMAIL_MODE || '').trim().toLowerCase();
+  const from = String(env?.EXAMINATION_ROOM_EMAIL_FROM || env?.SUPPORT_NOTIFICATION_EMAIL_FROM || '').trim();
+  const idempotencyHash = String(message.idempotencyHash || '').trim().toLowerCase();
+  const unavailableStatus = mode === 'suppressed' ? 'suppressed' : 'not_configured';
+  const configurationError = mode !== 'enabled'
+    ? mode === 'suppressed' ? 'email_suppressed' : 'email_mode_invalid'
+    : !env?.RESEND_API_KEY ? 'provider_key_missing'
+      : !from ? 'sender_missing'
+        : !SHA256_PATTERN.test(idempotencyHash) ? 'idempotency_hash_invalid'
+          : null;
+
+  if (configurationError || deliverable.length === 0) {
+    const outcomes = [
+      ...deliverable.map((entry) => ({
+        sessionId: entry.sessionId,
+        releaseId: entry.releaseId,
+        recipient: entry.recipient,
+        status: unavailableStatus,
+        providerId: null,
+        safeErrorCode: configurationError,
+      })),
+      ...skipped,
+    ].sort((left, right) => left.sessionId.localeCompare(right.sessionId));
+    return Object.freeze({
+      ...resultDeliveryStatus(outcomes),
+      outcomes,
+      providerBatchIds: [],
+      retrySafe: SHA256_PATTERN.test(idempotencyHash),
+    });
+  }
+
+  const outcomes = [...skipped];
+  const providerBatchIds = [];
+  for (let offset = 0; offset < deliverable.length; offset += RESULT_EMAIL_BATCH_SIZE) {
+    const batch = deliverable.slice(offset, offset + RESULT_EMAIL_BATCH_SIZE);
+    const batchNumber = Math.floor(offset / RESULT_EMAIL_BATCH_SIZE) + 1;
+    const emails = batch.map((entry) => {
+      const email = buildExaminationRoomResultEmail(env, entry);
+      return {
+        from,
+        to: [entry.recipient],
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        tags: [
+          { name: 'product', value: 'examination-room' },
+          { name: 'message_type', value: 'result-release' },
+        ],
+      };
+    });
+    let response;
+    try {
+      response = await transport('https://api.resend.com/emails/batch', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `exam-room-results-${idempotencyHash}-${String(batchNumber).padStart(3, '0')}`,
+        },
+        body: JSON.stringify(emails),
+      });
+    } catch {
+      batch.forEach((entry) => outcomes.push({
+        sessionId: entry.sessionId,
+        releaseId: entry.releaseId,
+        recipient: entry.recipient,
+        status: 'failed',
+        providerId: null,
+        safeErrorCode: 'network_error',
+      }));
+      continue;
+    }
+    const result = await response.json().catch(() => null);
+    const providerEntries = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
+    if (!response.ok || providerEntries.length !== batch.length) {
+      const safeErrorCode = response.ok ? 'provider_response_invalid' : `provider_${response.status}`.slice(0, 80);
+      batch.forEach((entry) => outcomes.push({
+        sessionId: entry.sessionId,
+        releaseId: entry.releaseId,
+        recipient: entry.recipient,
+        status: 'failed',
+        providerId: null,
+        safeErrorCode,
+      }));
+      continue;
+    }
+    const ids = [];
+    batch.forEach((entry, index) => {
+      const providerId = providerEntries[index]?.id ? String(providerEntries[index].id).slice(0, 240) : null;
+      ids.push(providerId);
+      outcomes.push({
+        sessionId: entry.sessionId,
+        releaseId: entry.releaseId,
+        recipient: entry.recipient,
+        status: providerId ? 'sent' : 'failed',
+        providerId,
+        safeErrorCode: providerId ? null : 'provider_response_invalid',
+      });
+    });
+    if (ids.every(Boolean)) providerBatchIds.push(ids);
+  }
+  outcomes.sort((left, right) => left.sessionId.localeCompare(right.sessionId));
+  return Object.freeze({
+    ...resultDeliveryStatus(outcomes),
+    outcomes,
+    providerBatchIds,
+    retrySafe: true,
+  });
+}
+
 export function buildExaminationRoomPublicationRequestEmail(env, message = {}) {
   const brand = examinationRoomEmailBrand(env);
   const examTitle = cleanSingleLine(message.examTitle, 300, 'Published examination');
@@ -290,5 +551,6 @@ export const EXAMINATION_ROOM_EMAIL_ASSETS = Object.freeze({
   defaultOrigin: DEFAULT_PUBLIC_ORIGIN,
   logoPath: OFFICIAL_LOGO_PATH,
   examinationRoomPath: EXAMINATION_ROOM_PATH,
+  studentPath: EXAMINATION_ROOM_STUDENT_PATH,
   adminPath: EXAMINATION_ROOM_ADMIN_PATH,
 });

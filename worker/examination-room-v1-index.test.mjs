@@ -7,6 +7,7 @@ const ORIGIN = 'https://duediligence.ph';
 const USER_ID = '22222222-2222-4222-8222-222222222222';
 const INSTITUTION_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_INSTITUTION_ID = '77777777-7777-4777-8777-777777777777';
+const COMMUNITY_INSTITUTION_ID = 'ddc00000-0000-4000-8000-000000000001';
 const ROOM_KEY = createRoomKey('ABCDEFGH');
 
 function env() {
@@ -129,7 +130,7 @@ test('creator authorization preserves the database-preferred workspace when Comm
   assert.equal(persistenceCall.body.p_institution_id, OTHER_INSTITUTION_ID);
 });
 
-test('creator authorization fails closed when staff context omits every active workspace flag', async () => {
+test('a verified session reaches Professor persistence even when creator context omits active workspace flags', async () => {
   const calls = [];
   const response = await withMockFetch(async (url, options = {}) => {
     calls.push({ url: String(url), body: options.body ? JSON.parse(options.body) : null });
@@ -148,6 +149,9 @@ test('creator authorization fails closed when staff context omits every active w
     if (String(url).endsWith('/rest/v1/rpc/admin_authorization_context')) {
       return jsonResponse({ authorized: false, role: null, capabilities: [] });
     }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
+      return jsonResponse({ ok: true, professor: { authorized: true }, exam: null });
+    }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
     request('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
@@ -155,9 +159,10 @@ test('creator authorization fails closed when staff context omits every active w
     {},
   ));
   const result = await response.json();
-  assert.equal(response.status, 403);
-  assert.equal(result.error.code, 'EXAM_ROOM_V1_CREATOR_WORKSPACE_REQUIRED');
-  assert.equal(calls.some((entry) => entry.url.endsWith('/examination_room_v1_api')), false);
+  assert.equal(response.status, 200);
+  assert.equal(result.ok, true);
+  const persistenceCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_api'));
+  assert.equal(persistenceCall.body.p_institution_id, COMMUNITY_INSTITUTION_ID);
 });
 
 test('Professor signup role status reaches the service-only approval bridge', async () => {

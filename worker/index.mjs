@@ -195,6 +195,7 @@ import {
 import {
   buildExaminationRoomKeyEmail,
   deliverExaminationRoomPublicationRequestEmail,
+  deliverExaminationRoomResultReleaseEmails,
 } from './examination-room-email.mjs';
 import { googleAccessToken } from './google-oauth.mjs';
 import {
@@ -631,6 +632,8 @@ async function examinationRoomV1ServiceRpc(env, functionName, body) {
     'examination_room_v1_verify_recovery_snapshot',
     'examination_room_v1_grading_contexts',
     'examination_room_v1_import_grades',
+    'examination_room_v1_claim_result_email_deliveries',
+    'examination_room_v1_complete_result_email_deliveries',
   ]);
   if (!allowedFunctions.has(functionName)) {
     throw new ExaminationRoomV1RouteError(
@@ -3812,6 +3815,177 @@ function scheduleExaminationRoomPublicationRequestNotification(env, result, exec
     });
   if (typeof executionContext?.waitUntil === 'function') executionContext.waitUntil(work);
   else void work;
+}
+
+function examinationRoomResultDeliverySummary(outcomes, extra = {}) {
+  const normalized = (Array.isArray(outcomes) ? outcomes : [])
+    .map((outcome) => ({
+      releaseId: String(outcome?.releaseId || '').trim() || null,
+      sessionId: String(outcome?.sessionId || '').trim() || null,
+      recipient: String(outcome?.recipient || '').trim().toLowerCase() || null,
+      status: String(outcome?.status || 'failed').trim().toLowerCase(),
+      providerId: String(outcome?.providerId || '').trim() || null,
+      safeErrorCode: String(outcome?.safeErrorCode || '').trim().toLowerCase() || null,
+      ...(Number.isSafeInteger(Number(outcome?.attemptCount))
+        ? { attemptCount: Number(outcome.attemptCount) }
+        : {}),
+    }))
+    .sort((left, right) => String(left.sessionId || '').localeCompare(String(right.sessionId || '')));
+  const counts = normalized.reduce((summary, outcome) => {
+    summary[outcome.status] = (summary[outcome.status] || 0) + 1;
+    return summary;
+  }, {});
+  const acceptedCount = counts.sent || 0;
+  const failedCount = counts.failed || 0;
+  const skippedCount = counts.skipped || 0;
+  const suppressedCount = counts.suppressed || 0;
+  const notConfiguredCount = counts.not_configured || 0;
+  const pendingCount = counts.pending || 0;
+  const status = normalized.length === 0
+    ? 'skipped'
+    : failedCount || notConfiguredCount || pendingCount
+      ? acceptedCount || suppressedCount || skippedCount ? 'partial' : 'failed'
+      : skippedCount
+        ? acceptedCount || suppressedCount ? 'partial' : 'skipped'
+        : suppressedCount ? 'suppressed' : 'sent';
+  return {
+    status,
+    total: normalized.length,
+    acceptedCount,
+    failedCount,
+    skippedCount,
+    suppressedCount,
+    notConfiguredCount,
+    pendingCount,
+    outcomes: normalized,
+    providerBatchIds: Array.isArray(extra.providerBatchIds) ? extra.providerBatchIds : [],
+    retrySafe: extra.retrySafe !== false,
+    ...(extra.recovery ? { recovery: String(extra.recovery) } : {}),
+  };
+}
+
+function examinationRoomResultDeliveryFailure(items, safeErrorCode, recovery) {
+  return examinationRoomResultDeliverySummary(
+    (Array.isArray(items) ? items : []).map((item) => ({
+      releaseId: item?.releaseId,
+      sessionId: item?.sessionId,
+      status: 'failed',
+      providerId: null,
+      safeErrorCode,
+    })),
+    { recovery },
+  );
+}
+
+async function sendExaminationRoomV1ResultReleaseEmails(env, details = {}) {
+  const resultEmailItems = Array.isArray(details.resultEmailItems)
+    ? details.resultEmailItems.slice(0, 1_000)
+    : [];
+  if (resultEmailItems.length === 0) {
+    return examinationRoomResultDeliverySummary([], {
+      recovery: 'No released student records required an email notification.',
+    });
+  }
+
+  let claimed;
+  try {
+    claimed = examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+      env,
+      'examination_room_v1_claim_result_email_deliveries',
+      {
+        p_actor_user_id: details.actorUserId,
+        p_institution_id: details.institutionId,
+        p_exam_id: details.examId,
+        p_request_hash: details.requestHash,
+        p_items: resultEmailItems,
+        p_lease_seconds: 300,
+      },
+    ));
+  } catch (error) {
+    console.error('Examination Room result-email outbox claim failed', {
+      code: String(error?.code || 'claim_failed').slice(0, 80),
+    });
+    return examinationRoomResultDeliveryFailure(
+      resultEmailItems,
+      'outbox_claim_failed',
+      'The grades were released. Release the same students again after a brief wait; provider-accepted messages will not be resent.',
+    );
+  }
+  if (claimed?.ok === false) {
+    return examinationRoomResultDeliveryFailure(
+      resultEmailItems,
+      'outbox_claim_rejected',
+      String(claimed?.error?.recovery || 'The grades were released. Refresh grading, then release the same students again.'),
+    );
+  }
+
+  const claimedItems = Array.isArray(claimed?.items) ? claimed.items : [];
+  const deliverable = claimedItems.filter((item) => item?.shouldSend === true);
+  const persisted = claimedItems.filter((item) => item?.shouldSend !== true);
+  if (deliverable.length === 0) {
+    return examinationRoomResultDeliverySummary(persisted, {
+      retrySafe: true,
+      recovery: persisted.some((item) => item?.status === 'pending')
+        ? 'Another delivery attempt is still active. Refresh grading before retrying.'
+        : null,
+    });
+  }
+
+  const stableReleaseIds = deliverable
+    .map((item) => String(item?.releaseId || '').trim())
+    .filter(Boolean)
+    .sort();
+  const idempotencyHash = await sha256Hex(new TextEncoder().encode(
+    `examination-room-result-email\0${String(details.requestHash || '')}\0${stableReleaseIds.join('\0')}`,
+  ));
+  const delivery = await deliverExaminationRoomResultReleaseEmails(env, {
+    recipients: deliverable,
+    idempotencyHash,
+  });
+  const attempted = Array.isArray(delivery?.outcomes)
+    ? delivery.outcomes.filter((outcome) => outcome?.releaseId)
+    : [];
+
+  let completedItems = attempted;
+  let completionPending = false;
+  try {
+    const completion = examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+      env,
+      'examination_room_v1_complete_result_email_deliveries',
+      {
+        p_claim_token: claimed.claimToken,
+        p_outcomes: attempted.map((outcome) => ({
+          releaseId: outcome.releaseId,
+          status: outcome.status,
+          providerId: outcome.providerId || null,
+          safeErrorCode: outcome.safeErrorCode || null,
+        })),
+      },
+    ));
+    if (completion?.ok === false) throw new Error('completion_rejected');
+    completedItems = Array.isArray(completion?.items) ? completion.items : attempted;
+  } catch (error) {
+    completionPending = true;
+    console.error('Examination Room result-email outbox completion failed', {
+      code: String(error?.code || error?.message || 'completion_failed').slice(0, 80),
+    });
+  }
+
+  const summary = examinationRoomResultDeliverySummary(
+    [...persisted, ...completedItems],
+    {
+      providerBatchIds: delivery?.providerBatchIds,
+      retrySafe: delivery?.retrySafe !== false,
+      recovery: completionPending
+        ? 'The provider response was received but its audit record is still pending. Retry within 24 hours using the same released students; the provider idempotency key prevents duplicate delivery.'
+        : delivery?.failedCount || delivery?.notConfiguredCount || delivery?.suppressedCount
+          ? 'Release the same students again after correcting email delivery. Already accepted messages will not be resent.'
+          : null,
+    },
+  );
+  return completionPending
+    ? { ...summary, persistenceStatus: 'pending' }
+    : { ...summary, persistenceStatus: 'recorded' };
 }
 
 async function handleSessionMonitoring(request, env, origin, allowedOrigin) {
@@ -8124,13 +8298,35 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
     allowedOrigin,
     { body, authenticatedUser },
   ),
-  afterProfessorCommand: ({ operation, result, env, executionContext }) => {
+  afterProfessorCommand: async ({
+    operation,
+    result,
+    env,
+    executionContext,
+    actorUserId,
+    institutionId,
+    requestHash,
+    examId,
+    resultEmailItems,
+  }) => {
     if (operation === 'publish' || operation === 'release_results') {
       scheduleExaminationRoomRecoveryDrain(env, executionContext);
     }
     if (operation === 'publish') {
       scheduleExaminationRoomPublicationRequestNotification(env, result, executionContext);
     }
+    if (operation === 'release_results' && Array.isArray(resultEmailItems) && resultEmailItems.length) {
+      return {
+        resultDelivery: await sendExaminationRoomV1ResultReleaseEmails(env, {
+          actorUserId,
+          institutionId,
+          requestHash,
+          examId,
+          resultEmailItems,
+        }),
+      };
+    }
+    return null;
   },
   afterStudentCommand: ({ operation, env, executionContext }) => {
     if (operation === 'submit') {

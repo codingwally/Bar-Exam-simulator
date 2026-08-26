@@ -1,0 +1,61 @@
+{
+  "generatedAt": "2026-08-26T19:54:41.588Z",
+  "examId": "8f275845-a250-4a13-b0db-d40d57a2b826",
+  "title": "Constitutional Law — Midterm Examination",
+  "sessions": [
+    {
+      "id": "f63cc881-d965-43df-b32e-5fc603b26460",
+      "examId": "8f275845-a250-4a13-b0db-d40d57a2b826",
+      "studentId": "89b16149-9739-4b87-8c23-dd1bf35cd5cd",
+      "fullName": "Maria Theresa Dela Cruz",
+      "studentNumber": "2024-10001",
+      "email": "",
+      "subject": "Constitutional Law",
+      "yearLevel": "2L",
+      "status": "submitted",
+      "connected": true,
+      "currentQuestion": 4,
+      "consentVersion": "exam-room-privacy-v1-2026-08-26",
+      "consentedAt": "2026-08-26T18:18:50.430Z",
+      "recordingAccepted": false,
+      "startedAt": "2026-08-26T18:18:50.430Z",
+      "lastSeenAt": "2026-08-26T18:56:36.307Z",
+      "extraMinutes": 0,
+      "submittedAt": "2026-08-26T18:22:32.943Z"
+    }
+  ],
+  "submissions": [
+    {
+      "id": "d32a344d-c1a7-4dc3-b3fb-8d1212ec8198",
+      "sessionId": "f63cc881-d965-43df-b32e-5fc603b26460",
+      "examVersionId": "47aa9b2a-9aa7-43e8-a71a-30e91ef8f101",
+      "submittedAt": "2026-08-26T18:22:32.943Z",
+      "answeredQuestionIds": [
+        "q-1",
+        "q-2",
+        "q-3",
+        "q-4"
+      ],
+      "receiptCode": "DD-RCPT-MTAF8JXR-80FU1",
+      "manifestHash": "0385fcc3c1bb4e739d6af0c491d78f57",
+      "requestId": "submission:bf29f4b8-7a59-4fa0-8a13-195e254d2a9d"
+    }
+  ],
+  "incidents": [
+    {
+      "id": "878e296b-d252-444f-86f0-f583f54871a0",
+      "sessionId": "f63cc881-d965-43df-b32e-5fc603b26460",
+      "type": "attempt_started",
+      "severity": "info",
+      "occurredAt": "2026-08-26T18:18:50.508Z"
+    },
+    {
+      "id": "a983fa43-c2bb-43c3-943c-1598111d0800",
+      "sessionId": "f63cc881-d965-43df-b32e-5fc603b26460",
+      "type": "window_blurred",
+      "severity": "info",
+      "occurredAt": "2026-08-26T18:56:36.019Z"
+    }
+  ],
+  "note": "Integrity events require human context and are not findings of misconduct."
+}

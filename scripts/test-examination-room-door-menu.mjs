@@ -2,12 +2,32 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const root = new URL('../', import.meta.url);
-const [html, experience, phase2Css, shellCss, api, admin, adminShell, serviceWorker, icon] = await Promise.all([
+const [
+  html,
+  experience,
+  phase2Config,
+  phase2Css,
+  shellCss,
+  featureLoader,
+  api,
+  workerRoutes,
+  creatorMigration,
+  openAdmissionMigration,
+  admin,
+  adminShell,
+  serviceWorker,
+  icon,
+] = await Promise.all([
   readFile(new URL('index.html', root), 'utf8'),
   readFile(new URL('assets/phase2-experience.js', root), 'utf8'),
+  readFile(new URL('assets/phase2-config.js', root), 'utf8'),
   readFile(new URL('assets/phase2.css', root), 'utf8'),
   readFile(new URL('assets/quorum-first-shell.css', root), 'utf8'),
+  readFile(new URL('assets/feature-loader.js', root), 'utf8'),
   readFile(new URL('examination-room/api.js', root), 'utf8'),
+  readFile(new URL('worker/examination-room-v1-routes.mjs', root), 'utf8'),
+  readFile(new URL('supabase/migrations/20260826130536_examination_room_owner_command_center.sql', root), 'utf8'),
+  readFile(new URL('supabase/migrations/20260827010000_examination_room_open_admission_flow.sql', root), 'utf8'),
   readFile(new URL('admin/examination-room-admin.js', root), 'utf8'),
   readFile(new URL('admin/admin.js', root), 'utf8'),
   readFile(new URL('service-worker.js', root), 'utf8'),
@@ -24,9 +44,11 @@ assert.match(
 assert.equal((navigation.match(/id="spa-examination-room"/g) || []).length, 1);
 assert.match(
   headerMemberTools,
-  /id="dd2-header-role-button"[\s\S]*id="dd2-header-exam-button"[^>]*data-dd2-view="examination-room"/,
+  /id="dd2-header-role-button"[^>]*>[\s\S]*?<\/button>\s*<button class="dd2-header-exam-button" id="dd2-header-exam-button"[^>]*data-dd2-view="examination-room"/,
   'The visible Examination Room shortcut must sit immediately beside the signed-in Role control.',
 );
+assert.match(html, /phase2-experience\.js\?v=syllabus-reveal-p0-20260826-2-examination-room-3/);
+assert.match(phase2Config, /examinationRoom:\s*true/);
 assert.match(shellCss, /#spa-examination-room\s*\{[\s\S]*door-open\.svg/);
 
 assert.match(experience, /function examinationRoomContent\(\)/);
@@ -52,6 +74,62 @@ assert.match(experience, /the Professor workspace is ready[\s\S]*Create and save
 assert.match(experience, /button\.dataset\.destination = professorDoorDestination\(institutionId\)/);
 assert.doesNotMatch(experience, /id="dd2-professor-institution"|EXAM_ROOM_V1_INSTITUTION_SELECTION_REQUIRED|select-institution/);
 assert.doesNotMatch(experience, /if \(!hasProfessorProfileRole\(\)/);
+
+const professorDoorCheck = experience.slice(
+  experience.indexOf("async function checkProfessorDoor(institutionId = '')"),
+  experience.indexOf('function activateProfessorDoor()'),
+);
+assert.match(professorDoorCheck, /if \(!token \|\| !state\.user\)/);
+assert.doesNotMatch(
+  professorDoorCheck,
+  /nativeWorkerRequest|navigator\.onLine|hasProfessorProfileRole|role_status|request_access|PROFESSOR_FORBIDDEN|license|membership|assignment/iu,
+  'Signed-in state must be the only Professor-door UI gate.',
+);
+
+assert.doesNotMatch(
+  featureLoader,
+  /examination-room|professor/iu,
+  'Examination Room must not be routed through paid-feature or profile-role loader guards.',
+);
+
+const apiPost = api.slice(api.indexOf('async function post('), api.indexOf('async function professorQuery('));
+assert.match(apiPost, /options\.auth === true && !session\?\.access_token/);
+assert.doesNotMatch(apiPost, /license|membership|assignment|profile role/iu);
+
+const professorContext = workerRoutes.slice(
+  workerRoutes.indexOf('async function professorContext('),
+  workerRoutes.indexOf('async function adminContext('),
+);
+assert.match(professorContext, /if \(!user\?\.id\)/);
+assert.match(professorContext, /selectCreatorInstitution\(authorization, requestedInstitutionId\)/);
+assert.doesNotMatch(
+  professorContext,
+  /authorizationAllowed|CREATOR_WORKSPACE_REQUIRED|PROFESSOR_FORBIDDEN|license|membership|assignment/iu,
+  'Worker Professor routes must require a verified session, not a Professor assignment.',
+);
+assert.match(workerRoutes, /COMMUNITY_CREATOR_INSTITUTION_ID = 'ddc00000-0000-4000-8000-000000000001'/);
+
+const creatorAuthorizationSql = creatorMigration.slice(
+  creatorMigration.indexOf('create or replace function examination_room_v1.creator_authorized('),
+  creatorMigration.indexOf('create or replace function examination_room_v1.validate_exam_owner()'),
+);
+assert.match(creatorAuthorizationSql, /from auth\.users auth_user where auth_user\.id = p_actor_user_id/);
+assert.doesNotMatch(creatorAuthorizationSql, /staff_memberships|professor_license_declarations/);
+assert.match(openAdmissionMigration, /'due-diligence-community'/);
+assert.match(openAdmissionMigration, /Every verified auth user has an active Due Diligence Community workspace; no Professor profile or staff membership is required\./);
+assert.match(openAdmissionMigration, /'save_draft', 'publish', 'open_room'/);
+
+const openCreatorAuthorizationSql = openAdmissionMigration.slice(
+  openAdmissionMigration.indexOf('create or replace function examination_room_v1.creator_authorized('),
+  openAdmissionMigration.indexOf('comment on function examination_room_v1.creator_authorized(uuid, uuid)'),
+);
+assert.match(openCreatorAuthorizationSql, /from auth\.users auth_user where auth_user\.id = p_actor_user_id/);
+assert.match(openCreatorAuthorizationSql, /institution\.institution_code = 'due-diligence-community'/);
+assert.doesNotMatch(
+  openCreatorAuthorizationSql,
+  /commercial_category\s*=\s*'professor'|professor_license_declarations|professorRoleSelected/iu,
+  'The current database creator policy must give every verified account the Community workspace without a Professor role or license.',
+);
 assert.match(admin, /activate_exam/);
 assert.match(admin, /approveAndEmail/);
 assert.match(
@@ -72,6 +150,8 @@ assert.match(api, /this\.details = details/);
 assert.match(api, /error\.details \|\| null/);
 
 assert.match(phase2Css, /data-native-view="examination-room"/);
+assert.match(phase2Css, /\.dd2-header-member-tools\s*\{[^}]*display:\s*inline-flex;[^}]*gap:\s*8px;/s);
+assert.match(phase2Css, /\.dd2-header-exam-button\s*\{[^}]*background:\s*linear-gradient\(135deg, #ead17d, #c79c43\);/s);
 assert.match(phase2Css, /\.dd2-examination-door-grid/);
 assert.match(phase2Css, /grid-template-columns:\s*repeat\(2/);
 assert.match(phase2Css, /@media \(max-width: 820px\)[\s\S]*\.dd2-examination-door-grid \{ grid-template-columns: 1fr; \}/);

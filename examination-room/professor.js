@@ -1905,7 +1905,23 @@
     try {
       const result = await api.professorCommand('release_results', { examId: state.exam.id, sessionIds }, api.requestId());
       state.grading.releases.push(result.release);
-      toast(`Results released to ${sessionIds.length} selected student${sessionIds.length === 1 ? '' : 's'}.`);
+      const delivery = result.release?.delivery;
+      const baseMessage = `Results released to ${sessionIds.length} selected student${sessionIds.length === 1 ? '' : 's'}.`;
+      if (!delivery) {
+        toast(baseMessage);
+      } else if (Number(delivery.failedCount || 0)
+          + Number(delivery.notConfiguredCount || 0)
+          + Number(delivery.pendingCount || 0)
+          + Number(delivery.suppressedCount || 0) > 0) {
+        showError({
+          message: `${baseMessage} ${Number(delivery.acceptedCount || 0)} result email${Number(delivery.acceptedCount || 0) === 1 ? '' : 's'} accepted; ${Number(delivery.failedCount || 0) + Number(delivery.notConfiguredCount || 0) + Number(delivery.pendingCount || 0) + Number(delivery.suppressedCount || 0)} still need delivery.`,
+          recovery: delivery.recovery || 'After email service is restored, select the same released students and release again. Provider-accepted messages will not be resent.',
+        }, releaseResults, 'Results released; email needs attention');
+      } else if (Number(delivery.skippedCount || 0) > 0) {
+        toast(`${baseMessage} ${Number(delivery.acceptedCount || 0)} email${Number(delivery.acceptedCount || 0) === 1 ? '' : 's'} sent; ${Number(delivery.skippedCount || 0)} student${Number(delivery.skippedCount || 0) === 1 ? '' : 's'} had no email and can view the result in the Student room.`);
+      } else {
+        toast(`${baseMessage} ${Number(delivery.acceptedCount || 0)} result email${Number(delivery.acceptedCount || 0) === 1 ? '' : 's'} accepted by the provider.`);
+      }
       renderGrading();
     } catch (error) {
       showError(error, releaseResults, 'Results not released');

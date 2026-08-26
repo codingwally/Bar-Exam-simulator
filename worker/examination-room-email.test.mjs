@@ -5,7 +5,9 @@ import {
   EXAMINATION_ROOM_EMAIL_ASSETS,
   buildExaminationRoomKeyEmail,
   buildExaminationRoomPublicationRequestEmail,
+  buildExaminationRoomResultEmail,
   deliverExaminationRoomPublicationRequestEmail,
+  deliverExaminationRoomResultReleaseEmails,
   escapeExaminationRoomEmailHtml,
   examinationRoomEmailBrand,
 } from './examination-room-email.mjs';
@@ -147,4 +149,107 @@ test('publication request delivery returns recoverable provider and configuratio
   assert.deepEqual(networkFailure, { status: 'failed', providerId: null, safeErrorCode: 'network_error' });
   assert.equal(missingOwners.status, 'not_configured');
   assert.equal(missingOwners.safeErrorCode, 'owner_recipients_missing');
+});
+
+test('result email is branded, escapes student data, and links only to the protected result door', () => {
+  const email = buildExaminationRoomResultEmail({}, {
+    studentName: 'Maria <img src=x onerror=alert(1)> & Reyes',
+    examTitle: 'Constitutional Law </h1><script>alert(1)</script>',
+    subject: 'Public Law & Remedies',
+    totalScore: 90,
+    maximumScore: 100,
+    releasedAt: '2099-08-26T08:30:00.000Z',
+  });
+
+  assert.match(email.subject, /^Your examination result is ready/u);
+  assert.match(email.html, /https:\/\/duediligence\.ph\/assets\/brand\/logo1-master\.png/u);
+  assert.match(email.studentResultUrl, /\/examination-room\/student\.html#result$/u);
+  assert.match(email.html, /90 <span[^>]*>\/ 100/u);
+  assert.match(email.text, /Score: 90 \/ 100/u);
+  assert.match(email.text, /does not contain the room key, answers, or per-question feedback/u);
+  assert.doesNotMatch(email.html, /<script>|<img src=x/iu);
+  assert.match(email.html, /Maria &lt;img src=x onerror=alert\(1\)&gt; &amp; Reyes/u);
+  assert.equal(examinationRoomEmailBrand({}).studentResultUrl, 'https://duediligence.ph/examination-room/student.html#result');
+});
+
+test('result delivery batches unique student messages, returns provider IDs, and keeps retries idempotent', async () => {
+  const calls = [];
+  const transport = async (url, options) => {
+    const body = JSON.parse(options.body);
+    calls.push({ url, headers: options.headers, body });
+    return new Response(JSON.stringify({
+      data: body.map((_, index) => ({ id: `result-email-${calls.length}-${index + 1}` })),
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const environment = {
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+    EXAMINATION_ROOM_EMAIL_FROM: 'Due Diligence <exams@duediligence.ph>',
+    RESEND_API_KEY: 'test-provider-key',
+  };
+  const recipients = Array.from({ length: 101 }, (_, index) => ({
+    sessionId: `session-${String(index + 1).padStart(3, '0')}`,
+    releaseId: `release-${String(index + 1).padStart(3, '0')}`,
+    recipient: `student-${index + 1}@example.edu.ph`,
+    studentName: `Student ${index + 1}`,
+    examTitle: 'Constitutional Law Final',
+    subject: 'Constitutional Law',
+    totalScore: 90,
+    maximumScore: 100,
+    releasedAt: '2099-08-26T08:30:00.000Z',
+  }));
+  recipients.push({ sessionId: 'session-missing-email', releaseId: 'release-missing-email' });
+
+  const first = await deliverExaminationRoomResultReleaseEmails(environment, {
+    recipients,
+    idempotencyHash: 'c'.repeat(64),
+  }, transport);
+  const retry = await deliverExaminationRoomResultReleaseEmails(environment, {
+    recipients,
+    idempotencyHash: 'c'.repeat(64),
+  }, transport);
+
+  assert.equal(first.status, 'partial');
+  assert.equal(first.acceptedCount, 101);
+  assert.equal(first.skippedCount, 1);
+  assert.equal(first.failedCount, 0);
+  assert.equal(first.outcomes.length, 102);
+  assert.equal(first.providerBatchIds.length, 2);
+  assert.equal(calls.length, 4);
+  assert.equal(calls[0].url, 'https://api.resend.com/emails/batch');
+  assert.equal(calls[0].body.length, 100);
+  assert.equal(calls[1].body.length, 1);
+  assert.deepEqual(calls[0].body[0].to, ['student-1@example.edu.ph']);
+  assert.equal(calls[0].headers['Idempotency-Key'], calls[2].headers['Idempotency-Key']);
+  assert.equal(calls[1].headers['Idempotency-Key'], calls[3].headers['Idempotency-Key']);
+  assert.equal(retry.acceptedCount, 101);
+});
+
+test('result delivery reports suppressed and recoverable provider failures per student', async () => {
+  const recipients = [{
+    sessionId: 'session-1',
+    releaseId: 'release-1',
+    recipient: 'student@example.edu.ph',
+    studentName: 'Student One',
+    examTitle: 'Civil Law Final',
+    totalScore: 88,
+    maximumScore: 100,
+    releasedAt: '2099-08-26T08:30:00.000Z',
+  }];
+  const suppressed = await deliverExaminationRoomResultReleaseEmails({
+    EXAMINATION_ROOM_EMAIL_MODE: 'suppressed',
+  }, { recipients, idempotencyHash: 'd'.repeat(64) }, async () => {
+    throw new Error('suppressed delivery must not contact a provider');
+  });
+  const failed = await deliverExaminationRoomResultReleaseEmails({
+    EXAMINATION_ROOM_EMAIL_MODE: 'enabled',
+    EXAMINATION_ROOM_EMAIL_FROM: 'Due Diligence <exams@duediligence.ph>',
+    RESEND_API_KEY: 'test-provider-key',
+  }, { recipients, idempotencyHash: 'e'.repeat(64) }, async () => (
+    new Response(JSON.stringify({ message: 'temporary failure' }), { status: 503 })
+  ));
+
+  assert.equal(suppressed.status, 'suppressed');
+  assert.equal(suppressed.outcomes[0].safeErrorCode, 'email_suppressed');
+  assert.equal(failed.status, 'failed');
+  assert.equal(failed.outcomes[0].safeErrorCode, 'provider_503');
 });

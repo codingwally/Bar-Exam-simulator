@@ -82,6 +82,7 @@ on:
       - 'supabase/migrations/20260825183055_examination_room_v1_greenfield.sql'
       - 'supabase/migrations/20260826130536_examination_room_owner_command_center.sql'
       - 'supabase/migrations/20260827010000_examination_room_open_admission_flow.sql'
+      - 'supabase/migrations/20260827020000_examination_room_result_email_delivery.sql'
       - 'supabase/tests/database/**'
       - 'supabase/migrations/20260821120000_soft_launch_five_token_trial.sql'
       - 'supabase/migrations/20260827003000_paid_subscription_expiry_access.sql'

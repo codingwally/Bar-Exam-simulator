@@ -1456,3 +1456,183 @@ test('successful result release schedules an immediate recovery drain with the c
   await Promise.all(scheduled);
   assert.equal(calls.filter((entry) => entry.url.endsWith('/examination_room_v1_claim_recovery_snapshot')).length, 1);
 });
+
+test('result release sends one branded student email and a retry reuses durable provider acceptance', async () => {
+  const sessionId = 'acacacac-acac-4cac-8cac-acacacacacac';
+  const requestKey = '79797979-7979-4979-8979-797979797979';
+  const claimToken = 'dededede-dede-4ede-8ede-dededededede';
+  const studentEmail = 'andrea.reyes@example.edu.ph';
+  const publication = buildPublicationVersion({
+    examinationId: EXAM_ID,
+    version: 4,
+    publishedAt: '2026-08-26T01:00:00.000Z',
+    draft: {
+      title: 'Result Email Test',
+      subject: 'Constitutional Law',
+      yearLevel: 'Second year',
+      instructions: 'Answer completely.',
+      identityMode: 'real_names',
+      integrityTier: 'standard',
+      privacyNoticeVersion: 'exam-room-v1',
+      questions: [{ type: 'essay', prompt: 'Discuss equal protection.', points: 10, wordLimit: 500 }],
+    },
+  }).manifest;
+  const answer = normalizeAnswerRevision({
+    attemptId: sessionId,
+    questionNumber: 1,
+    revision: 1,
+    idempotencyKey: 'result-email-answer-revision-0001',
+    answer: 'The student response.',
+  }, { versionManifest: publication, publicationHash: 'a'.repeat(64) });
+  const submission = buildSubmissionManifest({
+    submissionId: 'cececece-cece-4ece-8ece-cececececece',
+    attemptId: sessionId,
+    idempotencyKey: 'result-email-submission-request-1',
+    submittedAt: '2026-08-26T03:00:00.000Z',
+    versionManifest: publication,
+    publicationHash: 'a'.repeat(64),
+    studentIdentity: {
+      realName: 'Andrea Reyes',
+      studentNumber: '2026-00002',
+      subject: 'Constitutional Law',
+      yearLevel: 'Second year',
+    },
+    privacyConsent: {
+      noticeVersion: 'exam-room-v1',
+      accepted: true,
+      acceptedAt: '2026-08-26T01:55:00.000Z',
+      recordingAccepted: false,
+    },
+    answerRevisions: [answer],
+  }).manifest;
+  const providerMessages = [];
+  const scheduled = [];
+  const releaseIds = [];
+  let claimCalls = 0;
+  let completionCalls = 0;
+
+  const fetchMock = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (String(url).endsWith('/auth/v1/user')) {
+      return jsonResponse({ id: USER_ID, email: 'professor@example.edu.ph', user_metadata: {}, app_metadata: {} });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_staff_context')) {
+      return jsonResponse({
+        authorized: true,
+        professorRoleSelected: false,
+        memberships: [{ institutionId: INSTITUTION_ID, staffRole: 'professor', active: true }],
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
+      if (body.p_operation === 'release_context') {
+        return jsonResponse({
+          ok: true,
+          entries: [{
+            sessionId,
+            submissionManifest: submission,
+            scores: [{ questionNumber: 1, pointsAwarded: 9, feedback: 'Excellent analysis.' }],
+            overallFeedback: 'Passed with distinction.',
+            nextRevision: 3,
+          }],
+        });
+      }
+      assert.equal(body.p_operation, 'release_results');
+      releaseIds.push(body.p_payload.releases[0].releaseManifest.releaseId);
+      return jsonResponse({ ok: true, releasedCount: 1 });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_claim_result_email_deliveries')) {
+      claimCalls += 1;
+      assert.equal(body.p_actor_user_id, USER_ID);
+      assert.equal(body.p_institution_id, INSTITUTION_ID);
+      assert.equal(body.p_exam_id, EXAM_ID);
+      assert.match(body.p_request_hash, /^[0-9a-f]{64}$/u);
+      assert.equal(body.p_items.length, 1);
+      assert.equal(body.p_items[0].releaseId, releaseIds.at(-1));
+      return jsonResponse({
+        ok: true,
+        claimToken,
+        items: [{
+          releaseId: body.p_items[0].releaseId,
+          sessionId,
+          recipient: studentEmail,
+          studentName: 'Andrea Reyes',
+          examTitle: 'Result Email Test',
+          subject: 'Constitutional Law',
+          totalScore: 9,
+          maximumScore: 10,
+          releasedAt: '2026-08-26T04:00:00.000Z',
+          status: claimCalls === 1 ? 'pending' : 'sent',
+          providerId: claimCalls === 1 ? null : 'result-provider-1',
+          safeErrorCode: null,
+          attemptCount: 1,
+          shouldSend: claimCalls === 1,
+        }],
+      });
+    }
+    if (String(url) === 'https://api.resend.com/emails/batch') {
+      providerMessages.push({ body, headers: options.headers });
+      return jsonResponse({ data: [{ id: 'result-provider-1' }] });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_complete_result_email_deliveries')) {
+      completionCalls += 1;
+      assert.equal(body.p_claim_token, claimToken);
+      assert.deepEqual(body.p_outcomes, [{
+        releaseId: releaseIds.at(-1),
+        status: 'sent',
+        providerId: 'result-provider-1',
+        safeErrorCode: null,
+      }]);
+      return jsonResponse({
+        ok: true,
+        items: [{
+          releaseId: releaseIds.at(-1),
+          sessionId,
+          recipient: studentEmail,
+          status: 'sent',
+          providerId: 'result-provider-1',
+          safeErrorCode: null,
+          attemptCount: 1,
+        }],
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_claim_recovery_snapshot')) {
+      return jsonResponse({ ok: true, job: null });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+
+  const release = () => withMockFetch(fetchMock, () => worker.fetch(
+    request('/examination-room/v1/professor/command', {
+      operation: 'release_results',
+      idempotencyKey: requestKey,
+      payload: { institutionId: INSTITUTION_ID, examId: EXAM_ID, sessionIds: [sessionId] },
+    }, requestKey),
+    environment(),
+    { waitUntil: (promise) => scheduled.push(promise) },
+  ));
+
+  const firstResponse = await release();
+  const first = await firstResponse.json();
+  assert.equal(firstResponse.status, 200);
+  assert.equal(first.release.delivery.status, 'sent');
+  assert.equal(first.release.delivery.acceptedCount, 1);
+  assert.equal(first.release.delivery.outcomes[0].providerId, 'result-provider-1');
+  assert.equal(first.release.delivery.persistenceStatus, 'recorded');
+  assert.equal(providerMessages.length, 1);
+  assert.equal(providerMessages[0].body.length, 1);
+  assert.deepEqual(providerMessages[0].body[0].to, [studentEmail]);
+  assert.match(providerMessages[0].body[0].html, /assets\/brand\/logo1-master\.png/u);
+  assert.doesNotMatch(providerMessages[0].body[0].html, /ER1-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]/u);
+  assert.match(String(providerMessages[0].headers['Idempotency-Key']), /^exam-room-results-[0-9a-f]{64}-001$/u);
+
+  const replayResponse = await release();
+  const replay = await replayResponse.json();
+  assert.equal(replayResponse.status, 200);
+  assert.equal(replay.release.delivery.status, 'sent');
+  assert.equal(replay.release.delivery.outcomes[0].providerId, 'result-provider-1');
+  assert.equal(providerMessages.length, 1);
+  assert.equal(completionCalls, 1);
+  assert.equal(claimCalls, 2);
+  assert.equal(releaseIds[0], releaseIds[1]);
+  await Promise.all(scheduled);
+});

@@ -214,10 +214,14 @@ test('demo student path withholds answer keys and releases only complete profess
       feedback: `Professor feedback ${index + 1}`,
     }, `grade-${index + 1}`);
   }
-  await api.professorCommand('release_results', {
+  const resultRelease = await api.professorCommand('release_results', {
     examId: sessionView.exam.id,
     sessionIds: [attemptId],
   }, 'release-1');
+  assert.equal(resultRelease.release.delivery.status, 'skipped');
+  assert.equal(resultRelease.release.delivery.skippedCount, 1);
+  assert.equal(resultRelease.release.delivery.outcomes[0].safeErrorCode, 'recipient_missing');
+  assert.equal(resultRelease.release.delivery.retrySafe, true);
 
   const released = await api.getResult({ attemptId, sessionToken });
   assert.equal(released.released, true);

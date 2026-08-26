@@ -94,6 +94,7 @@ for (const requiredPath of [
   "      - 'supabase/migrations/20260825183055_examination_room_v1_greenfield.sql'",
   "      - 'supabase/migrations/20260826130536_examination_room_owner_command_center.sql'",
   "      - 'supabase/migrations/20260827010000_examination_room_open_admission_flow.sql'",
+  "      - 'supabase/migrations/20260827020000_examination_room_result_email_delivery.sql'",
   "      - 'supabase/tests/database/**'",
   "      - '.github/workflows/staging-e2e-gate.yml'",
   "      - '.github/workflows/bootstrap-examination-room-key-pepper.yml'",
@@ -240,6 +241,11 @@ assert.ok(
     < releaseBundleBuilder.indexOf('20260827010000_examination_room_open_admission_flow.sql'),
   'The isolated release bundle must apply the owner migration before the open-admission migration.',
 );
+assert.ok(
+  releaseBundleBuilder.indexOf('20260827010000_examination_room_open_admission_flow.sql')
+    < releaseBundleBuilder.indexOf('20260827020000_examination_room_result_email_delivery.sql'),
+  'The isolated release bundle must apply open admission before durable result-email delivery.',
+);
 for (const requiredProbe of [
   'examination_room_v1_api(text,text,uuid,uuid,jsonb)',
   'examination_room_v1_owner_query(text,uuid,uuid,uuid,jsonb)',
@@ -250,6 +256,9 @@ for (const requiredProbe of [
   'prepare_student_admission(jsonb)',
   'creator_revoke_session(uuid,uuid,jsonb)',
   'admission_mode_snapshot',
+  'examination_room_v1_claim_result_email_deliveries(uuid,uuid,uuid,text,jsonb,integer)',
+  'examination_room_v1_complete_result_email_deliveries(uuid,jsonb)',
+  'result_email_delivery_events',
 ]) {
   assert.match(releaseBundleBuilder, new RegExp(requiredProbe.replace(/[()]/gu, '\\$&')));
 }

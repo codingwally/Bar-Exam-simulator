@@ -31,6 +31,7 @@ select tables_are(
     'proctoring_incidents',
     'questions',
     'recovery_snapshots',
+    'result_email_delivery_events',
     'result_releases',
     'room_activations',
     'staff_memberships',
@@ -644,10 +645,10 @@ select is(
 select is(
   examination_room_v1.creator_authorized(
     '00000000-0000-0000-0000-000000000104',
-    '00000000-0000-0000-0000-000000000102'
+    'ddc00000-0000-4000-8000-000000000001'
   ),
   true,
-  'a verified signed-in account without the Professor role is an examination creator'
+  'a verified signed-in account without the Professor role is a Community examination creator'
 );
 
 select is(
@@ -675,9 +676,9 @@ select is(
     'request',
     '00000000-0000-0000-0000-000000000103',
     '{"institutionId":"00000000-0000-0000-0000-000000000107"}'::jsonb
-  )->>'institutionId',
-  '00000000-0000-0000-0000-000000000107',
-  'a signed-in creator may explicitly choose another active workspace'
+  )->>'errorCode',
+  'CREATOR_WORKSPACE_FORBIDDEN',
+  'a signed-in creator cannot choose an unrelated active school workspace'
 );
 
 select ok(
@@ -724,27 +725,28 @@ select is(
     '00000000-0000-0000-0000-000000000104',
     '00000000-0000-0000-0000-000000000107'
   ),
-  true,
-  'creator authorization is based on verified sign-in and an active workspace'
+  false,
+  'verified sign-in alone does not expose an unrelated school workspace'
 );
 
 select is(
   public.examination_room_v1_professor_access(
     'request',
     '00000000-0000-0000-0000-000000000104',
-    '{"institutionId":"00000000-0000-0000-0000-000000000102"}'::jsonb
+    '{"institutionId":"ddc00000-0000-4000-8000-000000000001"}'::jsonb
   )->>'alreadyActive',
   'true',
-  'a non-Professor signed-in account needs no extra activation request'
+  'a non-Professor signed-in account needs no extra activation request for Community'
 );
 
-select ok(
+select is(
   jsonb_array_length(
     public.examination_room_v1_professor_access(
       'status', '00000000-0000-0000-0000-000000000104', '{}'::jsonb
     ) -> 'availableInstitutions'
-  ) >= 2,
-  'a non-Professor account sees the same active creator workspaces'
+  ),
+  1,
+  'an unassigned non-Professor account sees only the shared Community creator workspace'
 );
 
 select is(
@@ -752,11 +754,11 @@ select is(
     'professor',
     'session',
     '00000000-0000-0000-0000-000000000104',
-    '00000000-0000-0000-0000-000000000102',
+    'ddc00000-0000-4000-8000-000000000001',
     '{}'::jsonb
   )->>'ok',
   'true',
-  'a non-Professor signed-in creator can enter the Professor workspace'
+  'a non-Professor signed-in creator can enter the Community Professor workspace'
 );
 
 select is(

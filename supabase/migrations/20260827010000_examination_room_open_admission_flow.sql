@@ -132,6 +132,53 @@ where institution.institution_code = 'due-diligence-community'
       and notice.notice_code = 'exam-room-v1'
   );
 
+-- Every verified account can create in the shared Community workspace. A
+-- separate law-school workspace is available only when the account profile
+-- matches that school or the account has an active membership there. Neither
+-- path requires the Professor profile category or a license declaration.
+create or replace function examination_room_v1.creator_authorized(
+  p_actor_user_id uuid,
+  p_institution_id uuid
+)
+returns boolean
+language sql
+stable
+set search_path = pg_catalog
+as $$
+  select p_actor_user_id is not null
+    and p_institution_id is not null
+    and exists (
+      select 1 from auth.users auth_user where auth_user.id = p_actor_user_id
+    )
+    and exists (
+      select 1
+      from examination_room_v1.institutions institution
+      left join public.profiles profile on profile.id = p_actor_user_id
+      where institution.id = p_institution_id
+        and institution.institution_status = 'active'
+        and (
+          institution.institution_code = 'due-diligence-community'
+          or institution.profile_school_id = lower(btrim(coalesce(profile.law_school_id, '')))
+          or lower(institution.institution_name) = lower(btrim(coalesce(
+            nullif(profile.law_school_other, ''), profile.school, ''
+          )))
+          or exists (
+            select 1
+            from examination_room_v1.staff_memberships membership
+            where membership.institution_id = institution.id
+              and membership.user_id = p_actor_user_id
+              and membership.membership_status = 'active'
+          )
+        )
+    );
+$$;
+
+comment on function examination_room_v1.creator_authorized(uuid, uuid) is
+  'Verified creators always receive the Community workspace. Other active schools require a profile match or active membership; no Professor role or license declaration is required.';
+
+revoke all on function examination_room_v1.creator_authorized(uuid, uuid)
+  from public, anon, authenticated, service_role;
+
 create or replace function public.examination_room_v1_staff_context(p_user_id uuid)
 returns jsonb
 language sql
@@ -169,6 +216,18 @@ as $$
     from examination_room_v1.institutions institution
     cross join actor
     where institution.institution_status = 'active'
+      and (
+        institution.institution_code = 'due-diligence-community'
+        or institution.profile_school_id = actor.law_school_id
+        or lower(institution.institution_name) = actor.school_name
+        or exists (
+          select 1
+          from examination_room_v1.staff_memberships creator_membership
+          where creator_membership.institution_id = institution.id
+            and creator_membership.user_id = actor.id
+            and creator_membership.membership_status = 'active'
+        )
+      )
   ),
   memberships as (
     select

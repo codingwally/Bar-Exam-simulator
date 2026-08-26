@@ -21,6 +21,11 @@ const releases = Object.freeze([
     file: '20260827010000_examination_room_open_admission_flow.sql',
     name: 'examination_room_open_admission_flow',
   },
+  {
+    version: '20260827020000',
+    file: '20260827020000_examination_room_result_email_delivery.sql',
+    name: 'examination_room_result_email_delivery',
+  },
 ]);
 
 const outputIndex = process.argv.indexOf('--output');
@@ -46,7 +51,7 @@ for (const release of releases) {
   });
 }
 
-const [greenfield, owner, openAdmission] = prepared;
+const [greenfield, owner, openAdmission, resultEmail] = prepared;
 const ledgerInsert = (release) => `insert into supabase_migrations.schema_migrations
   (version, statements, name)
 values (
@@ -55,7 +60,7 @@ values (
   '${release.name}'
 );`;
 
-const bundle = `-- Generated only from the three reviewed Examination Room migrations.
+const bundle = `-- Generated only from the four reviewed Examination Room migrations.
 -- psql conditionals safely handle an already-applied or ledger-repair state;
 -- no other pending Supabase migration can be selected by this release gate.
 \\set ON_ERROR_STOP on
@@ -91,6 +96,15 @@ select
     where version = '${openAdmission.version}'
       and 'sha256:${openAdmission.sha256}' = any(coalesce(statements, array[]::text[]))
   ) as examination_room_open_admission_ledger_exact,
+  exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '${resultEmail.version}'
+  ) as examination_room_result_email_ledger,
+  exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '${resultEmail.version}'
+      and 'sha256:${resultEmail.sha256}' = any(coalesce(statements, array[]::text[]))
+  ) as examination_room_result_email_ledger_exact,
   to_regnamespace('examination_room_v1') is not null as examination_room_greenfield_any,
   coalesce(
     to_regclass('examination_room_v1.institutions') is not null
@@ -152,7 +166,19 @@ select
     and to_regprocedure('examination_room_v1.prepare_student_admission(jsonb)') is not null
     and to_regprocedure('examination_room_v1.creator_revoke_session(uuid,uuid,jsonb)') is not null,
     false
-  ) as examination_room_open_admission_complete
+  ) as examination_room_open_admission_complete,
+  coalesce(
+    to_regclass('examination_room_v1.result_email_delivery_events') is not null
+    or to_regprocedure('public.examination_room_v1_claim_result_email_deliveries(uuid,uuid,uuid,text,jsonb,integer)') is not null
+    or to_regprocedure('public.examination_room_v1_complete_result_email_deliveries(uuid,jsonb)') is not null,
+    false
+  ) as examination_room_result_email_any,
+  coalesce(
+    to_regclass('examination_room_v1.result_email_delivery_events') is not null
+    and to_regprocedure('public.examination_room_v1_claim_result_email_deliveries(uuid,uuid,uuid,text,jsonb,integer)') is not null
+    and to_regprocedure('public.examination_room_v1_complete_result_email_deliveries(uuid,jsonb)') is not null,
+    false
+  ) as examination_room_result_email_complete
 \\gset
 
 \\if :examination_room_greenfield_ledger
@@ -239,10 +265,39 @@ select
   \\endif
 \\endif
 
+\\if :examination_room_result_email_ledger
+  \\if :examination_room_result_email_ledger_exact
+    \\if :examination_room_result_email_complete
+      \\echo 'Examination Room result-email migration has the exact reviewed checksum and is complete.'
+    \\else
+      \\echo 'Exact result-email ledger checksum exists but the database is structurally incomplete; refusing cutover.'
+      \\quit 3
+    \\endif
+  \\else
+    \\echo 'Result-email migration version exists without this release exact checksum; use a new additive migration before cutover.'
+    \\quit 3
+  \\endif
+\\else
+  \\if :examination_room_result_email_complete
+    \\echo 'Unrecorded pre-existing result-email objects cannot be adopted from existence probes; refusing cutover.'
+    \\quit 3
+  \\else
+    \\if :examination_room_result_email_any
+      \\echo 'Partial Examination Room result-email state detected; refusing an unsafe reapply.'
+      \\quit 3
+    \\else
+      \\echo 'Applying the reviewed Examination Room result-email delivery migration.'
+      ${resultEmail.body}
+      ${ledgerInsert(resultEmail)}
+    \\endif
+  \\endif
+\\endif
+
 select coalesce(
   exists (select 1 from supabase_migrations.schema_migrations where version = '${greenfield.version}')
   and exists (select 1 from supabase_migrations.schema_migrations where version = '${owner.version}')
   and exists (select 1 from supabase_migrations.schema_migrations where version = '${openAdmission.version}')
+  and exists (select 1 from supabase_migrations.schema_migrations where version = '${resultEmail.version}')
   and to_regclass('examination_room_v1.owner_key_envelopes') is not null
   and to_regclass('examination_room_v1.owner_identity_corrections') is not null
   and exists (
@@ -267,6 +322,9 @@ select coalesce(
   and to_regprocedure('public.examination_room_v1_verify_recovery_snapshot(uuid,text)') is not null
   and to_regprocedure('examination_room_v1.prepare_student_admission(jsonb)') is not null
   and to_regprocedure('examination_room_v1.creator_revoke_session(uuid,uuid,jsonb)') is not null
+  and to_regclass('examination_room_v1.result_email_delivery_events') is not null
+  and to_regprocedure('public.examination_room_v1_claim_result_email_deliveries(uuid,uuid,uuid,text,jsonb,integer)') is not null
+  and to_regprocedure('public.examination_room_v1_complete_result_email_deliveries(uuid,jsonb)') is not null
   and not has_function_privilege(
     'authenticated',
     'public.examination_room_v1_owner_query(text,uuid,uuid,uuid,jsonb)',

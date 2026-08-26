@@ -681,6 +681,14 @@ test('creator can kick or block a live student through the auditable revoke_sess
   assert.match(professorSource, /data-revoke-mode="block"/);
 });
 
+test('result release explains sent, skipped, and retry-safe email outcomes without hiding released grades', () => {
+  assert.match(professorSource, /const delivery = result\.release\?\.delivery/);
+  assert.match(professorSource, /Results released; email needs attention/);
+  assert.match(professorSource, /Provider-accepted messages will not be resent/);
+  assert.match(professorSource, /had no email and can view the result in the Student room/);
+  assert.match(professorSource, /result email[\s\S]*accepted by the provider/);
+});
+
 test('the root Professor door has no role, license, membership, institution, or connectivity preflight', () => {
   const start = rootExperience.indexOf("async function checkProfessorDoor(institutionId = '')");
   const end = rootExperience.indexOf('function activateProfessorDoor()', start);

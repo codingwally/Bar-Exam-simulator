@@ -1,0 +1,354 @@
+{
+  "format": "duediligence-examination-room-10x30-audit-v1",
+  "status": "pass",
+  "startedAt": "2026-08-26T20:11:40.518Z",
+  "completedAt": "2026-08-26T20:11:44.155Z",
+  "durationMs": 3621,
+  "scope": {
+    "exams": 10,
+    "studentsPerExam": 30,
+    "keyOnlyExams": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "emailAllowlistExams": [
+      9,
+      10
+    ]
+  },
+  "totals": {
+    "exams": 10,
+    "keyOnlyExams": 8,
+    "emailAllowlistExams": 2,
+    "students": 300,
+    "allowlistRejections": 2,
+    "approvalReplays": 10,
+    "automaticCreatorAccessSignals": 10,
+    "answerSaves": 1200,
+    "submissions": 300,
+    "gradeSaves": 1200,
+    "releaseBatches": 10,
+    "releasedResults": 300,
+    "verifiedResultViews": 300
+  },
+  "assertions": {
+    "exactScale": true,
+    "admissionModes": true,
+    "idempotentApproval": true,
+    "automaticCreatorAccess": true,
+    "answerSubmissionGradingRelease": true,
+    "allowlistEnforced": true,
+    "downloadableArtifactsChecksummed": true,
+    "realEmailDeliveryProven": false,
+    "resultReleaseEmailImplemented": true,
+    "resultReleaseEmailMockAccepted": true,
+    "runtimeSinkPersisted": false
+  },
+  "emailEvidence": {
+    "sink": "redacted",
+    "sinkConfigured": true,
+    "realProviderContacted": false,
+    "evidenceLevel": "template_and_mock_transport_only",
+    "accepted": [
+      {
+        "type": "publication_request",
+        "providerId": "mock_publication_request_01",
+        "subject": "Key approval requested — Commercial readiness audit examination",
+        "logoPresent": true,
+        "transport": "mock_resend_single",
+        "evidenceLevel": "mock_transport_only"
+      },
+      {
+        "type": "key_approval",
+        "providerId": "mock_key_approval_02",
+        "subject": "Your Examination Room key is ready — Commercial readiness audit examination",
+        "logoPresent": true,
+        "transport": "mock_resend_single",
+        "evidenceLevel": "mock_transport_only"
+      },
+      {
+        "type": "key_resend",
+        "providerId": "mock_key_resend_03",
+        "subject": "Your Examination Room key is ready — Commercial readiness audit examination",
+        "logoPresent": true,
+        "transport": "mock_resend_single",
+        "evidenceLevel": "mock_transport_only"
+      },
+      {
+        "type": "key_rotation",
+        "providerId": "mock_key_rotation_04",
+        "subject": "Your Examination Room key is ready — Commercial readiness audit examination",
+        "logoPresent": true,
+        "transport": "mock_resend_single",
+        "evidenceLevel": "mock_transport_only"
+      },
+      {
+        "type": "result_release",
+        "providerId": "mock_result_release_05",
+        "subject": "Your examination result is ready — Commercial audit examination 01",
+        "logoPresent": true,
+        "transport": "mock_resend_batch",
+        "evidenceLevel": "mock_transport_only"
+      }
+    ],
+    "resultReleaseEmail": {
+      "implemented": true,
+      "attempted": true,
+      "transport": "mock_resend_batch",
+      "status": "sent",
+      "acceptedCount": 1,
+      "providerAcceptanceIds": [
+        "mock_result_release_05"
+      ],
+      "providerId": "mock_result_release_05",
+      "retrySafe": true,
+      "blocker": null
+    }
+  },
+  "realDelivery": {
+    "attemptedByHarness": false,
+    "providerAcceptanceIds": [],
+    "reason": "This deterministic harness never reads deployment credentials or contacts a live email provider."
+  },
+  "exams": [
+    {
+      "examIndex": 1,
+      "examId": "f945dd2b-7ff7-4870-bd16-3b447700858f",
+      "admissionMode": "key_only",
+      "configuredAllowedEmails": 0,
+      "allowlistOutsiderRejected": false,
+      "studentsAdmitted": 30,
+      "answersSaved": 120,
+      "submissions": 30,
+      "gradesSaved": 120,
+      "releasedResults": 30,
+      "resultViewsVerified": 30,
+      "resultScore": 100,
+      "automaticCreatorAccessAfterApproval": true,
+      "approvalIdempotencyReplayVerified": true,
+      "offlinePackageRoundTripVerified": true,
+      "files": [
+        "exam-01/professor-monitor-snapshot.json",
+        "exam-01/professor-offline-grading.ddgrade.json",
+        "exam-01/professor-gradebook.csv",
+        "exam-01/admin-full-examination-export.json"
+      ]
+    },
+    {
+      "examIndex": 2,
+      "examId": "57730922-58a4-44c4-a93e-df54af4b87a7",
+      "admissionMode": "key_only",
+      "configuredAllowedEmails": 0,
+      "allowlistOutsiderRejected": false,
+      "studentsAdmitted": 30,
+      "answersSaved": 120,
+      "submissions": 30,
+      "gradesSaved": 120,
+      "releasedResults": 30,
+      "resultViewsVerified": 30,
+      "resultScore": 100,
+      "automaticCreatorAccessAfterApproval": true,
+      "approvalIdempotencyReplayVerified": true,
+      "offlinePackageRoundTripVerified": true,
+      "files": [
+        "exam-02/professor-monitor-snapshot.json",
+        "exam-02/professor-offline-grading.ddgrade.json",
+        "exam-02/professor-gradebook.csv",
+        "exam-02/admin-full-examination-export.json"
+      ]
+    },
+    {
+      "examIndex": 3,
+      "examId": "db1b5fda-4849-4ad6-afed-fe8184933c8f",
+      "admissionMode": "key_only",
+      "configuredAllowedEmails": 0,
+      "allowlistOutsiderRejected": false,
+      "studentsAdmitted": 30,
+      "answersSaved": 120,
+      "submissions": 30,
+      "gradesSaved": 120,
+      "releasedResults": 30,
+      "resultViewsVerified": 30,
+      "resultScore": 100,
+      "automaticCreatorAccessAfterApproval": true,
+      "approvalIdempotencyReplayVerified": true,
+      "offlinePackageRoundTripVerified": true,
+      "files": [
+        "exam-03/professor-monitor-snapshot.json",
+        "exam-03/professor-offline-grading.ddgrade.json",
+        "exam-03/professor-gradebook.csv",
+        "exam-03/admin-full-examination-export.json"
+      ]
+    },
+    {
+      "examIndex": 4,
+      "examId": "3a9fc081-1c91-42b8-99f2-88d2a27a03e5",
+      "admissionMode": "key_only",
+      "configuredAllowedEmails": 0,
+      "allowlistOutsiderRejected": false,
+      "studentsAdmitted": 30,
+      "answersSaved": 120,
+      "submissions": 30,
+      "gradesSaved": 120,
+      "releasedResults": 30,
+      "resultViewsVerified": 30,
+      "resultScore": 100,
+      "automaticCreatorAccessAfterApproval": true,
+      "approvalIdempotencyReplayVerified": true,
+      "offlinePackageRoundTripVerified": true,
+      "files": [
+        "exam-04/professor-monitor-snapshot.json",
+        "exam-04/professor-offline-grading.ddgrade.json",
+        "exam-04/professor-gradebook.csv",
+        "exam-04/admin-full-examination-export.json"
+      ]
+    },
+    {
+      "examIndex": 5,
+      "examId": "b44f6fe2-5f65-4a80-ae22-21b4c8d18cbe",
+      "admissionMode": "key_only",
+      "configuredAllowedEmails": 0,
+      "allowlistOutsiderRejected": false,
+      "studentsAdmitted": 30,
+      "answersSaved": 120,
+      "submissions": 30,
+      "gradesSaved": 120,
+      "releasedResults": 30,
+      "resultViewsVerified": 30,
+      "resultScore": 100,
+      "automaticCreatorAccessAfterApproval": true,
+      "approvalIdempotencyReplayVerified": true,
+      "offlinePackageRoundTripVerified": true,
+      "files": [
+        "exam-05/professor-monitor-snapshot.json",
+        "exam-05/professor-offline-grading.ddgrade.json",
+        "exam-05/professor-gradebook.csv",
+        "exam-05/admin-full-examination-export.json"
+      ]
+    },
+    {
+      "examIndex": 6,
+      "examId": "45abd335-0b10-4ec6-8597-ebe861cfcb60",
+      "admissionMode": "key_only",
+      "configuredAllowedEmails": 0,
+      "allowlistOutsiderRejected": false,
+      "studentsAdmitted": 30,
+      "answersSaved": 120,
+      "submissions": 30,
+      "gradesSaved": 120,
+      "releasedResults": 30,
+      "resultViewsVerified": 30,
+      "resultScore": 100,
+      "automaticCreatorAccessAfterApproval": true,
+      "approvalIdempotencyReplayVerified": true,
+      "offlinePackageRoundTripVerified": true,
+      "files": [
+        "exam-06/professor-monitor-snapshot.json",
+        "exam-06/professor-offline-grading.ddgrade.json",
+        "exam-06/professor-gradebook.csv",
+        "exam-06/admin-full-examination-export.json"
+      ]
+    },
+    {
+      "examIndex": 7,
+      "examId": "8b16e893-5065-49c0-862a-ab068b50a457",
+      "admissionMode": "key_only",
+      "configuredAllowedEmails": 0,
+      "allowlistOutsiderRejected": false,
+      "studentsAdmitted": 30,
+      "answersSaved": 120,
+      "submissions": 30,
+      "gradesSaved": 120,
+      "releasedResults": 30,
+      "resultViewsVerified": 30,
+      "resultScore": 100,
+      "automaticCreatorAccessAfterApproval": true,
+      "approvalIdempotencyReplayVerified": true,
+      "offlinePackageRoundTripVerified": true,
+      "files": [
+        "exam-07/professor-monitor-snapshot.json",
+        "exam-07/professor-offline-grading.ddgrade.json",
+        "exam-07/professor-gradebook.csv",
+        "exam-07/admin-full-examination-export.json"
+      ]
+    },
+    {
+      "examIndex": 8,
+      "examId": "1059df86-df55-46df-ba37-a021e4566bd4",
+      "admissionMode": "key_only",
+      "configuredAllowedEmails": 0,
+      "allowlistOutsiderRejected": false,
+      "studentsAdmitted": 30,
+      "answersSaved": 120,
+      "submissions": 30,
+      "gradesSaved": 120,
+      "releasedResults": 30,
+      "resultViewsVerified": 30,
+      "resultScore": 100,
+      "automaticCreatorAccessAfterApproval": true,
+      "approvalIdempotencyReplayVerified": true,
+      "offlinePackageRoundTripVerified": true,
+      "files": [
+        "exam-08/professor-monitor-snapshot.json",
+        "exam-08/professor-offline-grading.ddgrade.json",
+        "exam-08/professor-gradebook.csv",
+        "exam-08/admin-full-examination-export.json"
+      ]
+    },
+    {
+      "examIndex": 9,
+      "examId": "e04c7b7e-c06d-4368-9d43-95fc5edec7cb",
+      "admissionMode": "email_allowlist",
+      "configuredAllowedEmails": 30,
+      "allowlistOutsiderRejected": true,
+      "studentsAdmitted": 30,
+      "answersSaved": 120,
+      "submissions": 30,
+      "gradesSaved": 120,
+      "releasedResults": 30,
+      "resultViewsVerified": 30,
+      "resultScore": 100,
+      "automaticCreatorAccessAfterApproval": true,
+      "approvalIdempotencyReplayVerified": true,
+      "offlinePackageRoundTripVerified": true,
+      "files": [
+        "exam-09/professor-monitor-snapshot.json",
+        "exam-09/professor-offline-grading.ddgrade.json",
+        "exam-09/professor-gradebook.csv",
+        "exam-09/admin-full-examination-export.json"
+      ]
+    },
+    {
+      "examIndex": 10,
+      "examId": "2d62c183-7bf8-4ead-88e4-427b2eef0dbd",
+      "admissionMode": "email_allowlist",
+      "configuredAllowedEmails": 30,
+      "allowlistOutsiderRejected": true,
+      "studentsAdmitted": 30,
+      "answersSaved": 120,
+      "submissions": 30,
+      "gradesSaved": 120,
+      "releasedResults": 30,
+      "resultViewsVerified": 30,
+      "resultScore": 100,
+      "automaticCreatorAccessAfterApproval": true,
+      "approvalIdempotencyReplayVerified": true,
+      "offlinePackageRoundTripVerified": true,
+      "files": [
+        "exam-10/professor-monitor-snapshot.json",
+        "exam-10/professor-offline-grading.ddgrade.json",
+        "exam-10/professor-gradebook.csv",
+        "exam-10/admin-full-examination-export.json"
+      ]
+    }
+  ],
+  "artifactManifest": "artifact-manifest.json",
+  "checksumFile": "checksums.sha256",
+  "privacy": "The approved audit sink remained memory-only and is redacted from every generated artifact."
+}

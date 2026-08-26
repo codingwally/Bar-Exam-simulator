@@ -11,6 +11,7 @@ const migrationPaths = [
   '20260825183055_examination_room_v1_greenfield.sql',
   '20260826130536_examination_room_owner_command_center.sql',
   '20260827010000_examination_room_open_admission_flow.sql',
+  '20260827020000_examination_room_result_email_delivery.sql',
 ].map((filename) => join(repositoryRoot, 'supabase', 'migrations', filename));
 const databaseTestPath = join(
   repositoryRoot,
@@ -532,6 +533,7 @@ try {
   `);
 
   await database.exec(readFileSync(migrationPaths[2], 'utf8'));
+  await database.exec(readFileSync(migrationPaths[3], 'utf8'));
 
   assert.equal(
     Number(await scalar(database, `
@@ -541,7 +543,7 @@ try {
       where schema_record.nspname = 'examination_room_v1'
         and table_record.relkind in ('r', 'p')
     `)),
-    26,
+    27,
     'the complete greenfield migration creates the expected table set',
   );
 
@@ -551,7 +553,8 @@ try {
       ('10000000-0000-0000-0000-000000000002', 'admin-b@example.invalid', '{"full_name":"Administrator B"}'),
       ('10000000-0000-0000-0000-000000000003', 'professor-one@example.invalid', '{"full_name":"Professor One"}'),
       ('10000000-0000-0000-0000-000000000004', 'professor-two@example.invalid', '{"full_name":"Professor Two"}'),
-      ('10000000-0000-0000-0000-000000000005', 'student@example.invalid', '{"full_name":"Student Account"}');
+      ('10000000-0000-0000-0000-000000000005', 'student@example.invalid', '{"full_name":"Student Account"}'),
+      ('10000000-0000-0000-0000-000000000006', 'ordinary-member@example.invalid', '{"full_name":"Ordinary Member"}');
 
     insert into public.profiles (
       id, display_name, law_school_id, school, commercial_category
@@ -647,8 +650,24 @@ try {
         ) -> 'availableInstitutions'
       )
     `)),
-    3,
-    'any verified signed-in account can enumerate active examination-creator workspaces including the community default',
+    2,
+    'a verified account sees the community workspace and its profile-matched school without seeing unrelated schools',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select not exists (
+        select 1
+        from jsonb_array_elements(
+          public.examination_room_v1_staff_context(
+            '10000000-0000-0000-0000-000000000005'
+          ) -> 'creatorWorkspaces'
+        ) workspace
+        where workspace ->> 'institutionCode' = 'school-b'
+      )
+    `),
+    true,
+    'an unrelated law-school workspace is not exposed to a signed-in creator',
   );
 
   assert.equal(
@@ -833,6 +852,211 @@ try {
     `),
     true,
     'every verified auth account receives the active Due Diligence Community workspace',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select user_role.role = 'student'
+        and profile.commercial_category is null
+        and not exists (
+          select 1 from public.professor_license_declarations declaration
+          where declaration.user_id = auth_user.id
+        )
+        and not exists (
+          select 1 from examination_room_v1.staff_memberships membership
+          where membership.user_id = auth_user.id
+        )
+      from auth.users auth_user
+      join public.profiles profile on profile.id = auth_user.id
+      join public.user_roles user_role on user_role.user_id = auth_user.id
+      where auth_user.id = '10000000-0000-0000-0000-000000000006'
+    `),
+    true,
+    'the open-admission fixture is an ordinary student-role account with no Professor category, license, or staff assignment',
+  );
+  assert.equal(
+    Number(await scalar(database, `
+      select jsonb_array_length(
+        public.examination_room_v1_staff_context(
+          '10000000-0000-0000-0000-000000000006'
+        ) -> 'creatorWorkspaces'
+      )
+    `)),
+    1,
+    'an unassigned signed-in account receives exactly the shared Community creator workspace',
+  );
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_staff_context(
+        '10000000-0000-0000-0000-000000000006'
+      ) #>> '{creatorWorkspaces,0,institutionCode}'
+    `),
+    'due-diligence-community',
+    'the unassigned account Community fallback is deterministic',
+  );
+  assert.equal(
+    await scalar(database, `
+      select examination_room_v1.creator_authorized(
+        '10000000-0000-0000-0000-000000000006',
+        'ddc00000-0000-4000-8000-000000000001'
+      )
+    `),
+    true,
+    'an ordinary signed-in account is authorized in Community without Professor approval',
+  );
+  assert.equal(
+    await scalar(database, `
+      select examination_room_v1.creator_authorized(
+        '10000000-0000-0000-0000-000000000006',
+        '20000000-0000-0000-0000-000000000001'
+      )
+    `),
+    false,
+    'open Community admission does not expose an unrelated school workspace',
+  );
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'session',
+        '10000000-0000-0000-0000-000000000006',
+        'ddc00000-0000-4000-8000-000000000001',
+        '{}'::jsonb
+      ) #>> '{professor,displayName}'
+    `),
+    'Ordinary Member',
+    'the ordinary account opens the familiar Professor workspace with its verified identity',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'save_draft',
+        '10000000-0000-0000-0000-000000000006',
+        'ddc00000-0000-4000-8000-000000000001',
+        jsonb_build_object(
+          'exam', jsonb_build_object(
+            'examId', '30000000-0000-4000-8000-000000000030',
+            'title', 'Ordinary Member Open Admission Proof',
+            'subject', 'Remedial Law',
+            'yearLevel', 'Practice group',
+            'instructions', 'Answer the question.',
+            'durationMinutes', 60,
+            'startsAt', clock_timestamp(),
+            'identityMode', 'real_names',
+            'integrityTier', 'standard',
+            'cameraRequired', false,
+            'microphoneRequired', false,
+            'privacyNoticeVersion', 'exam-room-v1',
+            'admissionMode', 'key_only',
+            'allowedEmails', '[]'::jsonb,
+            'questions', '[]'::jsonb,
+            'roster', '[]'::jsonb
+          ),
+          'draft', jsonb_build_object(
+            'title', 'Ordinary Member Open Admission Proof',
+            'subject', 'Remedial Law',
+            'yearLevel', 'Practice group',
+            'questions', '[]'::jsonb,
+            'questionCount', 0,
+            'totalPoints', 0
+          ),
+          'requestHash', repeat('f1', 32),
+          'requestedAt', clock_timestamp()
+        )
+      ) ->> 'status'
+    `),
+    'draft',
+    'an ordinary signed-in account creates and saves an exam without role, license, assignment, or roster upload',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'professor',
+        'publish',
+        '10000000-0000-0000-0000-000000000006',
+        'ddc00000-0000-4000-8000-000000000001',
+        jsonb_build_object(
+          'exam', jsonb_build_object(
+            'examId', '30000000-0000-4000-8000-000000000030',
+            'title', 'Ordinary Member Open Admission Proof',
+            'subject', 'Remedial Law',
+            'yearLevel', 'Practice group',
+            'instructions', 'Answer the question.',
+            'durationMinutes', 60,
+            'startsAt', clock_timestamp(),
+            'identityMode', 'real_names',
+            'integrityTier', 'standard',
+            'cameraRequired', false,
+            'microphoneRequired', false,
+            'privacyNoticeVersion', 'exam-room-v1',
+            'admissionMode', 'key_only',
+            'allowedEmails', '[]'::jsonb,
+            'questions', jsonb_build_array(jsonb_build_object(
+              'questionNumber', 1,
+              'questionKey', 'q001',
+              'questionKind', 'essay',
+              'type', 'essay',
+              'prompt', 'Explain jurisdiction over the subject matter.',
+              'points', 20,
+              'gradingGuidance', '',
+              'wordLimit', 800,
+              'choices', '[]'::jsonb,
+              'correctOptionIndex', null,
+              'acceptedAnswers', '[]'::jsonb
+            )),
+            'roster', '[]'::jsonb
+          ),
+          'draft', jsonb_build_object(
+            'title', 'Ordinary Member Open Admission Proof',
+            'subject', 'Remedial Law',
+            'yearLevel', 'Practice group',
+            'questions', jsonb_build_array(jsonb_build_object(
+              'questionNumber', 1,
+              'questionKey', 'q001',
+              'questionKind', 'essay',
+              'type', 'essay',
+              'prompt', 'Explain jurisdiction over the subject matter.',
+              'points', 20,
+              'gradingGuidance', '',
+              'wordLimit', 800,
+              'choices', '[]'::jsonb,
+              'correctOptionIndex', null,
+              'acceptedAnswers', '[]'::jsonb
+            )),
+            'questionCount', 1,
+            'totalPoints', 20
+          ),
+          'requestHash', repeat('f2', 32),
+          'requestedAt', clock_timestamp()
+        )
+      ) ->> 'status'
+    `),
+    'published',
+    'the same ordinary account publishes and requests a student key with no roster upload',
+  );
+  assert.equal(
+    await scalar(database, `
+      select exists (
+        select 1
+        from jsonb_array_elements(
+          public.examination_room_v1_api(
+            'admin',
+            'overview',
+            '10000000-0000-0000-0000-000000000001',
+            'ddc00000-0000-4000-8000-000000000001',
+            '{}'::jsonb
+          ) -> 'exams'
+        ) exam
+        where exam ->> 'examId' = '30000000-0000-4000-8000-000000000030'
+          and exam ->> 'status' = 'published'
+          and exam -> 'activation' = 'null'::jsonb
+      )
+    `),
+    true,
+    'the ordinary creator publication appears in Admin as a final key request awaiting approval',
   );
 
   assert.equal(
@@ -1257,6 +1481,151 @@ try {
     `),
     'true',
     'allowlist entry accepts a normalized listed email and self-enrolls the student',
+  );
+
+  await database.exec(`
+    insert into examination_room_v1.student_sessions (
+      id, activation_id, exam_id, institution_id, exam_version_id, roster_id,
+      session_token_hash, consent_request_hash, client_instance_id,
+      session_status, started_at, lease_expires_at, ended_at
+    ) values (
+      '30000000-0000-4000-8000-000000000021',
+      (select activation.id from examination_room_v1.room_activations activation
+       where activation.exam_id = '30000000-0000-4000-8000-000000000020'
+       order by activation.created_at desc limit 1),
+      '30000000-0000-4000-8000-000000000020',
+      'ddc00000-0000-4000-8000-000000000001',
+      (select exam.current_published_version_id from examination_room_v1.exams exam
+       where exam.id = '30000000-0000-4000-8000-000000000020'),
+      (select roster.id
+       from examination_room_v1.exam_roster roster
+       join examination_room_v1.student_identities identity on identity.id = roster.student_identity_id
+       where roster.exam_id = '30000000-0000-4000-8000-000000000020'
+         and identity.email_normalized = 'friend@example.com'),
+      repeat('a1', 32), repeat('a2', 32),
+      '30000000-0000-4000-8000-000000000025',
+      'submitted', clock_timestamp() - interval '1 hour',
+      clock_timestamp() + interval '1 hour', clock_timestamp()
+    );
+
+    insert into examination_room_v1.submissions (
+      id, session_id, exam_version_id, idempotency_key_hash, manifest_sha256,
+      submission_manifest, answer_count, submitted_at_client
+    ) values (
+      '30000000-0000-4000-8000-000000000022',
+      '30000000-0000-4000-8000-000000000021',
+      (select exam.current_published_version_id from examination_room_v1.exams exam
+       where exam.id = '30000000-0000-4000-8000-000000000020'),
+      repeat('a3', 32), repeat('a4', 32),
+      jsonb_build_object('schemaVersion', 'examination-room/submission/v1'),
+      0, clock_timestamp()
+    );
+
+    insert into examination_room_v1.grade_revisions (
+      id, submission_id, exam_version_id, revision_number, client_revision_id,
+      manifest_sha256, grading_manifest, grader_user_id, source, grade_status,
+      item_count, total_score, maximum_score, general_feedback
+    ) values (
+      '30000000-0000-4000-8000-000000000023',
+      '30000000-0000-4000-8000-000000000022',
+      (select exam.current_published_version_id from examination_room_v1.exams exam
+       where exam.id = '30000000-0000-4000-8000-000000000020'),
+      1, '30000000-0000-4000-8000-000000000026', repeat('a5', 32),
+      jsonb_build_object('schemaVersion', 'examination-room/grading/v1'),
+      '10000000-0000-0000-0000-000000000005', 'online', 'final',
+      1, 18, 20, 'Released result email database proof.'
+    );
+
+    insert into examination_room_v1.grade_revision_items (
+      grade_revision_id, exam_version_id, question_id, score, maximum_score, feedback
+    ) values (
+      '30000000-0000-4000-8000-000000000023',
+      (select exam.current_published_version_id from examination_room_v1.exams exam
+       where exam.id = '30000000-0000-4000-8000-000000000020'),
+      (select question.id
+       from examination_room_v1.questions question
+       join examination_room_v1.exams exam on exam.current_published_version_id = question.exam_version_id
+       where exam.id = '30000000-0000-4000-8000-000000000020'
+       order by question.position limit 1),
+      18, 20, 'Strong analysis.'
+    );
+
+    insert into examination_room_v1.result_releases (
+      id, submission_id, grade_revision_id, release_action, channel,
+      idempotency_key_hash, batch_request_hash, manifest_sha256,
+      release_manifest, performed_by_user_id
+    ) values (
+      '30000000-0000-4000-8000-000000000024',
+      '30000000-0000-4000-8000-000000000022',
+      '30000000-0000-4000-8000-000000000023', 'release', 'student_portal',
+      repeat('a6', 32), repeat('a7', 32), repeat('a8', 32),
+      jsonb_build_object(
+        'schemaVersion', 'examination-room/result-release/v1',
+        'releaseId', '30000000-0000-4000-8000-000000000024'
+      ),
+      '10000000-0000-0000-0000-000000000005'
+    );
+  `);
+
+  const firstResultEmailClaim = await scalar(database, `
+    select public.examination_room_v1_claim_result_email_deliveries(
+      '10000000-0000-0000-0000-000000000005',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000020',
+      repeat('a7', 32),
+      jsonb_build_array(jsonb_build_object(
+        'releaseId', '30000000-0000-4000-8000-000000000024',
+        'sessionId', '30000000-0000-4000-8000-000000000021'
+      )),
+      300
+    )
+  `);
+  assert.equal(firstResultEmailClaim.ok, true, 'a released result creates a durable email claim');
+  assert.equal(firstResultEmailClaim.items[0].shouldSend, true, 'the first result-email claim owns the provider attempt');
+  assert.equal(firstResultEmailClaim.items[0].recipient, 'friend@example.com', 'the outbox uses the canonical normalized student email');
+  assert.equal(firstResultEmailClaim.items[0].totalScore, 18, 'the outbox carries the canonical released score');
+
+  const completedResultEmail = await scalar(database, `
+    select public.examination_room_v1_complete_result_email_deliveries(
+      (select claim_token from examination_room_v1.result_email_delivery_events
+       where release_id = '30000000-0000-4000-8000-000000000024'),
+      jsonb_build_array(jsonb_build_object(
+        'releaseId', '30000000-0000-4000-8000-000000000024',
+        'status', 'sent',
+        'providerId', 'provider-result-db-proof',
+        'safeErrorCode', null
+      ))
+    )
+  `);
+  assert.equal(completedResultEmail.ok, true, 'the provider result is durably completed');
+  assert.equal(completedResultEmail.items[0].status, 'sent', 'provider acceptance is terminal');
+  assert.equal(completedResultEmail.items[0].providerId, 'provider-result-db-proof', 'provider evidence remains retrievable');
+
+  const replayedResultEmailClaim = await scalar(database, `
+    select public.examination_room_v1_claim_result_email_deliveries(
+      '10000000-0000-0000-0000-000000000005',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000020',
+      repeat('a7', 32),
+      jsonb_build_array(jsonb_build_object(
+        'releaseId', '30000000-0000-4000-8000-000000000024',
+        'sessionId', '30000000-0000-4000-8000-000000000021'
+      )),
+      300
+    )
+  `);
+  assert.equal(replayedResultEmailClaim.items[0].shouldSend, false, 'a sent result is never reclaimed for duplicate delivery');
+  assert.equal(replayedResultEmailClaim.items[0].status, 'sent', 'a retry receives the persisted provider status');
+  assert.equal(replayedResultEmailClaim.items[0].providerId, 'provider-result-db-proof', 'a retry receives the original provider id');
+
+  assert.equal(
+    await scalar(database, `
+      select examination_room_v1.owner_exam_bundle(
+        '30000000-0000-4000-8000-000000000020'
+      ) #>> '{tables,resultEmailDeliveryEvents,0,provider_id}'
+    `),
+    'provider-result-db-proof',
+    'the owner exam bundle includes exact per-student result-email evidence',
   );
 
   console.log(

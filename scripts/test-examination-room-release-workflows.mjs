@@ -102,6 +102,8 @@ assert.match(stagingWorkflow, /EXAMINATION_ROOM_KEY_PEPPER/u);
 assert.match(stagingWorkflow, /secret list --format json --name duediligence-examinations-staging/u);
 assert.match(stagingWorkflow, /deploy --config wrangler\.staging\.toml/u);
 assert.match(stagingWorkflow, /node scripts\/test-examination-room-v1-staging-smoke\.mjs/u);
+assert.match(stagingSmoke, /redirect:\s*'follow'/u);
+assert.match(stagingSmoke, /response\.url\)\.origin !== new URL\(stagingUrl\)\.origin/u);
 assert.match(stagingWorkflow, /node --test examination-room\/\*\.test\.cjs/u);
 assert.doesNotMatch(
   stagingWorkflow,

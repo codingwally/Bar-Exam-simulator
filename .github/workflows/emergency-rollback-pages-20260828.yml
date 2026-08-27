@@ -1,0 +1,90 @@
+name: Emergency rollback to previous production Pages release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/emergency-rollback-pages-20260828.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: emergency-production-pages-rollback-20260828
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Restore previous production website
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out the last production release from before the Examination Room change
+        uses: actions/checkout@v4
+        with:
+          ref: 79245d573d4c79264b7e8ee8771eefa545bff754
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the previous sanitized Pages artifact
+        run: node scripts/build-pages-artifact.mjs
+
+      - name: Verify the previous artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-pages-artifact.mjs
+          test -f .pages-dist/index.html
+          test -f .pages-dist/examination-room/index.html
+          grep -F 'professor.css?v=greenfield-v1-20260827-15' .pages-dist/examination-room/index.html
+          if grep -Fq 'professor-readable.css' .pages-dist/examination-room/index.html; then
+            echo 'Rollback artifact still contains the readability override.' >&2
+            exit 1
+          fi
+          if grep -Fq 'professor-compatibility.js' .pages-dist/examination-room/index.html; then
+            echo 'Rollback artifact still contains the privacy compatibility override.' >&2
+            exit 1
+          fi
+          if grep -Fq 'id="new-exam-direct"' .pages-dist/examination-room/index.html; then
+            echo 'Rollback artifact still contains the added New examination button.' >&2
+            exit 1
+          fi
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload previous production artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Restore GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify the live rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            page="$(curl -fsSL --retry 2 --retry-delay 1 "https://duediligence.ph/examination-room/?rollback=${GITHUB_RUN_ID}-${attempt}" || true)"
+            if grep -Fq 'professor.css?v=greenfield-v1-20260827-15' <<< "$page" \
+              && ! grep -Fq 'professor-readable.css' <<< "$page" \
+              && ! grep -Fq 'professor-compatibility.js' <<< "$page" \
+              && ! grep -Fq 'id="new-exam-direct"' <<< "$page"; then
+              echo 'Previous production website restored and verified on duediligence.ph.'
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Rollback deployed, but the custom domain did not expose the previous production markers within the verification window.' >&2
+          exit 1

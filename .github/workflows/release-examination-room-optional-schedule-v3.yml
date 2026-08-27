@@ -80,6 +80,7 @@ jobs:
           PY
 
       - name: Install reviewed test dependencies
+        working-directory: worker
         shell: bash
         run: npm ci --ignore-scripts --no-audit --no-fund
 

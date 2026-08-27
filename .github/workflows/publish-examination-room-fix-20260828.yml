@@ -57,6 +57,13 @@ jobs:
       - name: Verify sanitized Pages artifact
         run: node scripts/test-pages-artifact.mjs
 
+      - name: Add the reviewed Examination Room-only release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 0644 examination-room/professor-readable.css .pages-dist/examination-room/professor-readable.css
+          install -m 0644 examination-room/professor-compatibility.js .pages-dist/examination-room/professor-compatibility.js
+
       - name: Confirm Examination Room files are in the artifact
         shell: bash
         run: |
@@ -64,6 +71,8 @@ jobs:
           test -f .pages-dist/examination-room/index.html
           test -f .pages-dist/examination-room/professor-readable.css
           test -f .pages-dist/examination-room/professor-compatibility.js
+          cmp --silent examination-room/professor-readable.css .pages-dist/examination-room/professor-readable.css
+          cmp --silent examination-room/professor-compatibility.js .pages-dist/examination-room/professor-compatibility.js
           grep -F 'professor-readable.css?v=exam-room-readability-20260827-1' .pages-dist/examination-room/index.html
           grep -F 'professor-compatibility.js?v=exam-room-reliability-20260827-1' .pages-dist/examination-room/index.html
 

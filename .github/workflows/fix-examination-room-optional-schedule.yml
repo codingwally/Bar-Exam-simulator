@@ -1,0 +1,353 @@
+name: Fix Examination Room optional schedule
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/fix-examination-room-optional-schedule.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-examination-room-optional-schedule
+  cancel-in-progress: false
+
+jobs:
+  patch-test-publish:
+    if: github.event.head_commit.message == 'chore: stage examination room optional schedule fix'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the production branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch only Examination Room scheduling
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          index_path = Path('worker/index.mjs')
+          professor_path = Path('examination-room/professor.js')
+          page_path = Path('examination-room/index.html')
+          helper_path = Path('worker/examination-room-activation-window.mjs')
+          test_path = Path('worker/examination-room-activation-window.test.mjs')
+
+          helper_source = r'''export const EXAMINATION_ROOM_UNSCHEDULED_ACTIVATION_SECONDS = 24 * 60 * 60;
+
+function activationWindowError(code, message) {
+  const error = new TypeError(message);
+  error.code = code;
+  return error;
+}
+
+export function resolveExaminationRoomActivationWindow({
+  startsAt = null,
+  durationSeconds,
+  maximumExtraMinutes = 0,
+  now = Date.now(),
+} = {}) {
+  const duration = Number(durationSeconds);
+  const extraMinutes = Number(maximumExtraMinutes);
+  const nowMs = Number(now);
+
+  if (!Number.isSafeInteger(duration) || duration < 60 || duration > 86_400) {
+    throw activationWindowError(
+      'INVALID_DURATION',
+      'durationSeconds must be an integer between 60 and 86400.',
+    );
+  }
+  if (!Number.isFinite(extraMinutes) || extraMinutes < 0) {
+    throw activationWindowError(
+      'INVALID_EXTRA_MINUTES',
+      'maximumExtraMinutes must be a non-negative number.',
+    );
+  }
+  if (!Number.isFinite(nowMs)) {
+    throw activationWindowError('INVALID_NOW', 'now must be a valid timestamp.');
+  }
+
+  const normalizedStart = String(startsAt || '').trim();
+  const scheduledOpens = normalizedStart ? Date.parse(normalizedStart) : Number.NaN;
+  if (normalizedStart && !Number.isFinite(scheduledOpens)) {
+    throw activationWindowError(
+      'INVALID_START_TIME',
+      'startsAt must be a valid date when it is provided.',
+    );
+  }
+
+  const scheduledCloses = Number.isFinite(scheduledOpens)
+    ? scheduledOpens + (duration + extraMinutes * 60) * 1_000
+    : Number.NaN;
+  const usePublishedSchedule = Number.isFinite(scheduledCloses)
+    && scheduledCloses > scheduledOpens
+    && scheduledCloses > nowMs;
+  const opens = usePublishedSchedule ? scheduledOpens : nowMs;
+  const closes = usePublishedSchedule
+    ? scheduledCloses
+    : opens + EXAMINATION_ROOM_UNSCHEDULED_ACTIVATION_SECONDS * 1_000;
+
+  return {
+    opensAt: new Date(opens).toISOString(),
+    closesAt: new Date(closes).toISOString(),
+    durationSeconds: duration,
+    maximumExtraMinutes: extraMinutes,
+    scheduleSource: usePublishedSchedule ? 'published_exam' : 'room_key_issuance',
+  };
+}
+'''
+
+          test_source = r'''import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  EXAMINATION_ROOM_UNSCHEDULED_ACTIVATION_SECONDS,
+  resolveExaminationRoomActivationWindow,
+} from './examination-room-activation-window.mjs';
+
+const NOW = Date.parse('2026-08-27T10:00:00.000Z');
+
+function secondsBetween(left, right) {
+  return (Date.parse(right) - Date.parse(left)) / 1_000;
+}
+
+test('blank start time creates a fresh 24-hour room-key window', () => {
+  const window = resolveExaminationRoomActivationWindow({
+    startsAt: null,
+    durationSeconds: 3_600,
+    maximumExtraMinutes: 15,
+    now: NOW,
+  });
+  assert.equal(window.opensAt, '2026-08-27T10:00:00.000Z');
+  assert.equal(window.scheduleSource, 'room_key_issuance');
+  assert.equal(
+    secondsBetween(window.opensAt, window.closesAt),
+    EXAMINATION_ROOM_UNSCHEDULED_ACTIVATION_SECONDS,
+  );
+  assert.equal(window.durationSeconds, 3_600);
+  assert.equal(window.maximumExtraMinutes, 15);
+});
+
+test('an ended published schedule no longer blocks a new room key', () => {
+  const window = resolveExaminationRoomActivationWindow({
+    startsAt: '2026-08-26T08:00:00.000Z',
+    durationSeconds: 7_200,
+    now: NOW,
+  });
+  assert.equal(window.opensAt, '2026-08-27T10:00:00.000Z');
+  assert.equal(window.scheduleSource, 'room_key_issuance');
+  assert.equal(
+    secondsBetween(window.opensAt, window.closesAt),
+    EXAMINATION_ROOM_UNSCHEDULED_ACTIVATION_SECONDS,
+  );
+});
+
+test('a future or still-running published schedule remains authoritative', () => {
+  const window = resolveExaminationRoomActivationWindow({
+    startsAt: '2026-08-27T09:30:00.000Z',
+    durationSeconds: 3_600,
+    maximumExtraMinutes: 15,
+    now: NOW,
+  });
+  assert.equal(window.opensAt, '2026-08-27T09:30:00.000Z');
+  assert.equal(window.closesAt, '2026-08-27T10:45:00.000Z');
+  assert.equal(window.scheduleSource, 'published_exam');
+});
+
+test('a malformed nonblank start time is rejected', () => {
+  assert.throws(
+    () => resolveExaminationRoomActivationWindow({
+      startsAt: 'not-a-date',
+      durationSeconds: 3_600,
+      now: NOW,
+    }),
+    (error) => error?.code === 'INVALID_START_TIME',
+  );
+});
+'''
+
+          replacement_function = r'''function examinationRoomPublishedActivationWindow(bundle, payload) {
+  const publishedVersionId = String(bundle?.currentPublishedVersionId || '').trim();
+  const version = examinationRoomOwnerBundleRows(bundle, 'examVersions')
+    .find((entry) => String(examinationRoomOwnerRowValue(entry, 'id') || '') === publishedVersionId);
+  if (!publishedVersionId
+      || !version
+      || examinationRoomOwnerRowValue(version, 'publicationStatus', 'publication_status') !== 'published') {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID',
+      'The examination does not have a valid published version.',
+      409,
+      'Ask the exam creator to publish the examination before issuing a room key.',
+    );
+  }
+
+  const startsAt = examinationRoomOwnerRowValue(version?.controls, 'startsAt', 'starts_at');
+  const durationSeconds = Number(examinationRoomOwnerRowValue(
+    version,
+    'durationSeconds',
+    'duration_seconds',
+  ));
+  const maximumExtraMinutes = examinationRoomOwnerBundleRows(bundle, 'examRoster')
+    .reduce((maximum, roster) => {
+      const accommodations = examinationRoomOwnerRowValue(roster, 'accommodations') || {};
+      const extra = Number(examinationRoomOwnerRowValue(
+        accommodations,
+        'extraMinutes',
+        'extra_minutes',
+      ) || 0);
+      return Number.isFinite(extra) && extra >= 0 ? Math.max(maximum, extra) : maximum;
+    }, 0);
+
+  let activationWindow;
+  try {
+    activationWindow = resolveExaminationRoomActivationWindow({
+      startsAt,
+      durationSeconds,
+      maximumExtraMinutes,
+    });
+  } catch (error) {
+    const invalidStart = error?.code === 'INVALID_START_TIME';
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID',
+      invalidStart
+        ? 'The published examination has an invalid optional start time.'
+        : 'The published examination has no valid duration.',
+      409,
+      invalidStart
+        ? 'Ask the exam creator to clear the optional start time or enter a valid date, then publish the corrected examination.'
+        : 'Ask the exam creator to confirm the examination duration and publish the corrected examination before issuing a room key.',
+    );
+  }
+
+  const maxSessions = payload?.maxSessions == null || payload.maxSessions === ''
+    ? null
+    : Number(payload.maxSessions);
+  if (maxSessions !== null
+      && (!Number.isSafeInteger(maxSessions) || maxSessions < 1 || maxSessions > 100_000)) {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_MAX_SESSIONS_INVALID',
+      'The maximum student-session count must be a whole number from 1 to 100,000.',
+      400,
+      'Enter a valid maximum session count or leave it blank for no separate cap.',
+    );
+  }
+
+  return {
+    ...activationWindow,
+    maxSessions,
+  };
+}
+'''
+
+          helper_path.write_text(helper_source, encoding='utf-8')
+          test_path.write_text(test_source, encoding='utf-8')
+
+          index_source = index_path.read_text(encoding='utf-8')
+          import_line = "import { resolveExaminationRoomActivationWindow } from './examination-room-activation-window.mjs';\n"
+          if import_line not in index_source:
+            index_source = import_line + index_source
+          signature = 'function examinationRoomPublishedActivationWindow(bundle, payload) {'
+          end_marker = '\nasync function issueExaminationRoomOwnerKey'
+          start = index_source.find(signature)
+          end = index_source.find(end_marker, start)
+          if start < 0 or end < 0:
+            raise SystemExit('Could not locate the Examination Room activation-window function safely.')
+          index_source = index_source[:start] + replacement_function + index_source[end:]
+          if 'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_ENDED' in index_source:
+            raise SystemExit('The obsolete ended-schedule rejection still exists after patching.')
+          index_path.write_text(index_source, encoding='utf-8')
+
+          professor_source = professor_path.read_text(encoding='utf-8')
+          required_start = "    if (!exam.startsAt) items.push({ section: 'exam-details', label: 'Set the start date and time', help: 'The room cannot be scheduled without a start time.', blocking: true });\n"
+          if professor_source.count(required_start) != 1:
+            raise SystemExit('Could not safely locate the required-start publish blocker.')
+          professor_source = professor_source.replace(required_start, '', 1)
+
+          old_publish_summary = "      <div class=\"publish-item\"><small>Starts</small><strong>${escapeHtml(formatDateTime(exam.startsAt))}</strong></div>"
+          new_publish_summary = "      <div class=\"publish-item\"><small>Schedule</small><strong>${escapeHtml(exam.startsAt ? formatDateTime(exam.startsAt) : 'No fixed date · opens when the student key is issued')}</strong></div>"
+          if professor_source.count(old_publish_summary) != 1:
+            raise SystemExit('Could not safely locate the publish schedule summary.')
+          professor_source = professor_source.replace(old_publish_summary, new_publish_summary, 1)
+
+          old_preview = "      <p class=\"preview-meta\">${escapeHtml(formatDateTime(exam.startsAt))} · ${exam.durationMinutes} minutes · ${escapeHtml(exam.jurisdiction || '')}</p>"
+          new_preview = "      <p class=\"preview-meta\">${escapeHtml(exam.startsAt ? formatDateTime(exam.startsAt) : 'No fixed date · opens with the student key')} · ${exam.durationMinutes} minutes · ${escapeHtml(exam.jurisdiction || '')}</p>"
+          if professor_source.count(old_preview) != 1:
+            raise SystemExit('Could not safely locate the examination preview schedule.')
+          professor_source = professor_source.replace(old_preview, new_preview, 1)
+          professor_path.write_text(professor_source, encoding='utf-8')
+
+          page_source = page_path.read_text(encoding='utf-8')
+          old_meta_date = '<label><i class="ph ph-calendar-blank" aria-hidden="true"></i><span class="sr-only">Date</span><input id="exam-date" type="date" value="2026-08-26"></label>'
+          new_meta_date = '<label><i class="ph ph-calendar-blank" aria-hidden="true"></i><span class="sr-only">Optional examination date</span><input id="exam-date" type="date" aria-label="Optional examination date"></label>'
+          if page_source.count(old_meta_date) != 1:
+            raise SystemExit('Could not safely locate the examination date field.')
+          page_source = page_source.replace(old_meta_date, new_meta_date, 1)
+
+          old_start_control = '<label><span>Start</span><input id="start-control" type="datetime-local" value="2026-08-26T09:00"></label>'
+          new_start_control = '<label><span>Start <small>(optional)</small></span><input id="start-control" type="datetime-local" aria-describedby="start-control-help"><small id="start-control-help">Leave blank to open the room when Admin issues the student key.</small></label>'
+          if page_source.count(old_start_control) != 1:
+            raise SystemExit('Could not safely locate the start-time control.')
+          page_source = page_source.replace(old_start_control, new_start_control, 1)
+
+          old_professor_script = '<script src="professor.js?v=greenfield-v1-20260827-25"></script>'
+          new_professor_script = '<script src="professor.js?v=greenfield-v1-20260827-26-optional-schedule"></script>'
+          if page_source.count(old_professor_script) != 1:
+            raise SystemExit('Could not safely locate the Professor script cache key.')
+          page_source = page_source.replace(old_professor_script, new_professor_script, 1)
+          page_path.write_text(page_source, encoding='utf-8')
+          PY
+
+      - name: Validate syntax and focused behavior
+        shell: bash
+        run: |
+          node --check worker/index.mjs
+          node --check worker/examination-room-activation-window.mjs
+          node --check examination-room/professor.js
+          node --test worker/examination-room-activation-window.test.mjs
+          node --test worker/examination-room-v1-owner.test.mjs
+          node --test examination-room/professor.client.test.cjs
+          git diff --check
+
+      - name: Enforce the Examination Room-only scope
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          allowed = {
+              'worker/index.mjs',
+              'worker/examination-room-activation-window.mjs',
+              'worker/examination-room-activation-window.test.mjs',
+              'examination-room/professor.js',
+              'examination-room/index.html',
+              '.github/workflows/fix-examination-room-optional-schedule.yml',
+          }
+          changed = set(subprocess.check_output(
+              ['git', 'diff', '--name-only'], text=True,
+          ).splitlines())
+          unexpected = sorted(changed - allowed)
+          if unexpected:
+              raise SystemExit(f'Unexpected out-of-scope files changed: {unexpected}')
+          required = allowed - {'.github/workflows/fix-examination-room-optional-schedule.yml'}
+          missing = sorted(required - changed)
+          if missing:
+              raise SystemExit(f'Expected Examination Room files were not changed: {missing}')
+          PY
+
+      - name: Commit and publish the verified fix
+        shell: bash
+        run: |
+          git config user.name "Due Diligence Release Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/fix-examination-room-optional-schedule.yml
+          git add worker/index.mjs \
+            worker/examination-room-activation-window.mjs \
+            worker/examination-room-activation-window.test.mjs \
+            examination-room/professor.js \
+            examination-room/index.html \
+            .github/workflows/fix-examination-room-optional-schedule.yml
+          git commit -m "fix(examination-room): make room-key schedule optional"
+          git push origin HEAD:main

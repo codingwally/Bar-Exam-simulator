@@ -113,7 +113,7 @@
                 <textarea id="exam-title" rows="1" maxlength="180">Constitutional Law — Midterm Examination</textarea>
               </label>
               <div class="exam-meta-row">
-                <label><i class="ph ph-calendar-blank" aria-hidden="true"></i><span class="sr-only">Date</span><input id="exam-date" type="date" value="2026-08-26"></label>
+                <label><i class="ph ph-calendar-blank" aria-hidden="true"></i><span class="sr-only">Optional examination date</span><input id="exam-date" type="date" aria-label="Optional examination date"></label>
                 <label><i class="ph ph-clock" aria-hidden="true"></i><span class="sr-only">Duration</span><select id="duration-inline"><option value="120">2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select></label>
                 <label><i class="ph ph-file-text" aria-hidden="true"></i><span class="sr-only">Jurisdiction</span><input id="jurisdiction" value="Philippines" maxlength="80"></label>
                 <label><i class="ph ph-tag" aria-hidden="true"></i><span class="sr-only">Subject</span><input id="subject" value="Constitutional Law" maxlength="120"></label>
@@ -205,7 +205,7 @@
           <section>
             <h3>Timing &amp; navigation</h3>
             <label><span>Duration</span><select id="duration-control"><option value="60">1 hour</option><option value="90">1 hour 30 minutes</option><option value="120" selected>2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select></label>
-            <label><span>Start</span><input id="start-control" type="datetime-local" value="2026-08-26T09:00"></label>
+            <label><span>Start <small>(optional)</small></span><input id="start-control" type="datetime-local" aria-describedby="start-control-help"><small id="start-control-help">Leave blank to open the room when Admin issues the student key.</small></label>
             <label><span>Late submissions</span><select id="late-control"><option value="not_allowed">Not allowed</option><option value="professor_review">Professor review</option><option value="grace_5">5-minute grace period</option></select></label>
             <label><span>Navigation</span><select id="navigation-control"><option value="free">Students can navigate freely</option><option value="forward_only">Forward only</option></select></label>
           </section>
@@ -358,6 +358,6 @@
   <script src="view-models.js?v=greenfield-v1-20260826-1"></script>
   <script src="api.js?v=greenfield-v1-20260827-9"></script>
   <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
-  <script src="professor.js?v=greenfield-v1-20260827-25"></script>
+  <script src="professor.js?v=greenfield-v1-20260827-26-optional-schedule"></script>
 </body>
 </html>

@@ -1063,7 +1063,6 @@
     const items = [];
     if (!exam.title) items.push({ section: 'exam-details', label: 'Add an examination title', help: 'Students and administrators need a clear title.' , blocking: true });
     if (!exam.subject) items.push({ section: 'exam-details', label: 'Select the subject', help: 'The subject is required for student room entry.', blocking: true });
-    if (!exam.startsAt) items.push({ section: 'exam-details', label: 'Set the start date and time', help: 'The room cannot be scheduled without a start time.', blocking: true });
     if (!exam.instructions) items.push({ section: 'additional-details', label: 'Add student instructions', help: 'State the expected answer method and permitted resources.', blocking: true });
     if (!exam.questions.length) items.push({ section: 'questions', label: 'Add at least one question', help: 'An examination needs a question before publication.', blocking: true });
     exam.questions.forEach((question, index) => {
@@ -1248,7 +1247,7 @@
     const totalPoints = exam.questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
     $('#publish-summary').innerHTML = `<div class="publish-grid">
       <div class="publish-item"><small>Examination</small><strong>${escapeHtml(exam.title)}</strong></div>
-      <div class="publish-item"><small>Starts</small><strong>${escapeHtml(formatDateTime(exam.startsAt))}</strong></div>
+      <div class="publish-item"><small>Schedule</small><strong>${escapeHtml(exam.startsAt ? formatDateTime(exam.startsAt) : 'No fixed date · opens when the student key is issued')}</strong></div>
       <div class="publish-item"><small>Questions and points</small><strong>${exam.questions.length} questions · ${totalPoints} points</strong></div>
       <div class="publish-item"><small>Student admission</small><strong>${exam.admissionMode === 'email_allowlist' ? `${exam.allowedEmails.length} allowed email address${exam.allowedEmails.length === 1 ? '' : 'es'}` : 'Anyone with the student key'}</strong></div>
       <div class="publish-item"><small>Grading</small><strong>${exam.gradingIdentity === 'real_names' ? 'Real names' : 'Anonymous grading (optional)'}</strong></div>
@@ -1287,7 +1286,7 @@
     $('#preview-sheet').innerHTML = `<article class="preview-document">
       <p class="section-kicker">${escapeHtml(exam.subject || 'Law examination')}</p>
       <h1>${escapeHtml(exam.title || 'Untitled examination')}</h1>
-      <p class="preview-meta">${escapeHtml(formatDateTime(exam.startsAt))} · ${exam.durationMinutes} minutes · ${escapeHtml(exam.jurisdiction || '')}</p>
+      <p class="preview-meta">${escapeHtml(exam.startsAt ? formatDateTime(exam.startsAt) : 'No fixed date · opens with the student key')} · ${exam.durationMinutes} minutes · ${escapeHtml(exam.jurisdiction || '')}</p>
       <p>${escapeHtml(exam.instructions || 'No instructions have been added.')}</p>
       ${exam.questions.map((question, index) => `<section class="preview-question"><h3>${index + 1}. ${escapeHtml(question.prompt || 'Question prompt missing')} <small>(${question.points} points)</small></h3>${question.type === 'multiple_choice' ? `<ol type="A">${(question.options || []).map((option) => `<li>${escapeHtml(option)}</li>`).join('')}</ol>` : '<div class="preview-answer-area" aria-label="Student answer area"></div>'}</section>`).join('')}
     </article>`;

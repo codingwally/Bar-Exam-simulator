@@ -647,7 +647,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=greenfield-v1-20260827-25/);
+  assert.match(professorHtml, /professor\.js\?v=greenfield-v1-20260827-26-optional-schedule/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {
@@ -700,4 +700,14 @@ test('the root Professor door has no role, license, membership, institution, or 
   assert.doesNotMatch(checkDoor, /nativeWorkerRequest/);
   assert.doesNotMatch(checkDoor, /navigator\.onLine/);
   assert.doesNotMatch(checkDoor, /PROFESSOR_FORBIDDEN|license|membership/i);
+});
+
+test('examination scheduling is optional while key access remains explicit', () => {
+  assert.doesNotMatch(professorSource, /Set the start date and time/);
+  assert.doesNotMatch(professorSource, /The room cannot be scheduled without a start time/);
+  assert.match(professorSource, /No fixed date · opens when the student key is issued/);
+  assert.match(professorHtml, /Start <small>\(optional\)<\/small>/);
+  assert.match(professorHtml, /Leave blank to open the room when Admin issues the student key/);
+  assert.doesNotMatch(professorHtml, /id="exam-date"[^>]*value=/);
+  assert.doesNotMatch(professorHtml, /id="start-control"[^>]*value=/);
 });

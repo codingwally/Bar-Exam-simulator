@@ -524,8 +524,10 @@ test('one-click approval escrows and emails the key; reveal/resend preserve it a
   assert.deepEqual(emails.at(-1).body.bcc, ['legacy-owner@duediligence.ph']);
 });
 
-test('owner approval fails recoverably when the published exam has no exact usable schedule and never invents a 24-hour window', async () => {
+test('owner approval converts a blank published schedule into a fresh 24-hour key window', async () => {
   let activationCalls = 0;
+  let activationPayload = null;
+  const beforeRequest = Date.now();
   const response = await withMockFetch(async (url, options = {}) => {
     const authorized = authenticatedOwner(url);
     if (authorized) return authorized;
@@ -553,7 +555,19 @@ test('owner approval fails recoverably when the published exam has no exact usab
         },
       });
     }
-    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) activationCalls += 1;
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
+      activationCalls += 1;
+      activationPayload = body.p_payload;
+      return jsonResponse({
+        ok: false,
+        error: {
+          code: 'EXPECTED_ACTIVATION_STOP',
+          message: 'The test stops after verifying the generated activation window.',
+          status: 409,
+          recovery: 'No recovery is required in this test.',
+        },
+      });
+    }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
     request('/examination-room/v1/admin/command', {
@@ -564,11 +578,19 @@ test('owner approval fails recoverably when the published exam has no exact usab
     environment(),
     {},
   ));
+  const afterRequest = Date.now();
   const result = await response.json();
+  const opens = Date.parse(activationPayload?.opensAt || '');
+  const closes = Date.parse(activationPayload?.closesAt || '');
   assert.equal(response.status, 409);
-  assert.equal(result.error.code, 'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID');
-  assert.match(result.error.recovery, /exact start date, time, and duration/u);
-  assert.equal(activationCalls, 0);
+  assert.equal(result.error.code, 'EXAM_ROOM_V1_EXPECTED_ACTIVATION_STOP');
+  assert.equal(activationCalls, 1);
+  assert.equal(activationPayload.replaceCurrent, false);
+  assert.ok(Number.isFinite(opens));
+  assert.ok(Number.isFinite(closes));
+  assert.ok(opens >= beforeRequest - 1_000);
+  assert.ok(opens <= afterRequest + 1_000);
+  assert.equal(closes - opens, 24 * 60 * 60 * 1_000);
 });
 
 function bytes(value) {

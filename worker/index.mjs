@@ -1,3 +1,4 @@
+import { resolveExaminationRoomActivationWindow } from './examination-room-activation-window.mjs';
 import {
   DEFAULT_MODEL,
   ExaminerError,
@@ -1410,8 +1411,18 @@ function examinationRoomPublishedActivationWindow(bundle, payload) {
   const publishedVersionId = String(bundle?.currentPublishedVersionId || '').trim();
   const version = examinationRoomOwnerBundleRows(bundle, 'examVersions')
     .find((entry) => String(examinationRoomOwnerRowValue(entry, 'id') || '') === publishedVersionId);
+  if (!publishedVersionId
+      || !version
+      || examinationRoomOwnerRowValue(version, 'publicationStatus', 'publication_status') !== 'published') {
+    throw examinationRoomOwnerError(
+      'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID',
+      'The examination does not have a valid published version.',
+      409,
+      'Ask the exam creator to publish the examination before issuing a room key.',
+    );
+  }
+
   const startsAt = examinationRoomOwnerRowValue(version?.controls, 'startsAt', 'starts_at');
-  const opens = Date.parse(String(startsAt || ''));
   const durationSeconds = Number(examinationRoomOwnerRowValue(
     version,
     'durationSeconds',
@@ -1427,49 +1438,43 @@ function examinationRoomPublishedActivationWindow(bundle, payload) {
       ) || 0);
       return Number.isFinite(extra) && extra >= 0 ? Math.max(maximum, extra) : maximum;
     }, 0);
-  const closes = opens + (durationSeconds + maximumExtraMinutes * 60) * 1_000;
-  if (!publishedVersionId
-      || !version
-      || examinationRoomOwnerRowValue(version, 'publicationStatus', 'publication_status') !== 'published'
-      || !Number.isFinite(opens)
-      || !Number.isSafeInteger(durationSeconds)
-      || durationSeconds < 60
-      || durationSeconds > 86_400
-      || !Number.isFinite(closes)
-      || closes <= opens) {
+
+  let activationWindow;
+  try {
+    activationWindow = resolveExaminationRoomActivationWindow({
+      startsAt,
+      durationSeconds,
+      maximumExtraMinutes,
+    });
+  } catch (error) {
+    const invalidStart = error?.code === 'INVALID_START_TIME';
     throw examinationRoomOwnerError(
       'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID',
-      'The published examination has no valid start time and duration.',
+      invalidStart
+        ? 'The published examination has an invalid optional start time.'
+        : 'The published examination has no valid duration.',
       409,
-      'Ask the exam creator to set the exact start date, time, and duration, publish the corrected examination, then approve it again.',
+      invalidStart
+        ? 'Ask the exam creator to clear the optional start time or enter a valid date, then publish the corrected examination.'
+        : 'Ask the exam creator to confirm the examination duration and publish the corrected examination before issuing a room key.',
     );
   }
-  if (closes <= Date.now()) {
-    throw examinationRoomOwnerError(
-      'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_ENDED',
-      'The published examination schedule has already ended.',
-      409,
-      'Ask the exam creator to correct and republish the schedule before issuing another room key.',
-    );
-  }
-  const maxSessions = payload.maxSessions == null || payload.maxSessions === ''
+
+  const maxSessions = payload?.maxSessions == null || payload.maxSessions === ''
     ? null
     : Number(payload.maxSessions);
   if (maxSessions !== null
       && (!Number.isSafeInteger(maxSessions) || maxSessions < 1 || maxSessions > 100_000)) {
     throw examinationRoomOwnerError(
       'EXAM_ROOM_V1_MAX_SESSIONS_INVALID',
-      'Maximum sessions must be a whole number from 1 to 100,000.',
+      'The maximum student-session count must be a whole number from 1 to 100,000.',
       400,
-      'Correct maximum sessions, then try again.',
+      'Enter a valid maximum session count or leave it blank for no separate cap.',
     );
   }
+
   return {
-    opensAt: new Date(opens).toISOString(),
-    closesAt: new Date(closes).toISOString(),
-    durationSeconds,
-    maximumExtraMinutes,
-    scheduleSource: 'published_exam',
+    ...activationWindow,
     maxSessions,
   };
 }

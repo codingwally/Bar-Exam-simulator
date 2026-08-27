@@ -98,7 +98,7 @@ jobs:
               "  const opens = Date.parse(activationPayload?.opensAt || '');\n"
               "  const closes = Date.parse(activationPayload?.closesAt || '');\n"
               "  assert.equal(response.status, 409);\n"
-              "  assert.equal(result.error.code, 'EXPECTED_ACTIVATION_STOP');\n"
+              "  assert.equal(result.error.code, 'EXAM_ROOM_V1_EXPECTED_ACTIVATION_STOP');\n"
               "  assert.equal(activationCalls, 1);\n"
               "  assert.equal(activationPayload.replaceCurrent, false);\n"
               "  assert.ok(Number.isFinite(opens));\n"

@@ -2844,15 +2844,10 @@
     const questionId = panel?.dataset.questionId || '';
     if (!attemptId || !questionId) return;
     if (panel.dataset.reviewLoading === 'true') return;
-    const restoringReleasedMaterial = automatic
-      && state.active?.attempt?.attemptId === attemptId
-      && Boolean(state.active.attempt.reviewMaterialRevealedAt);
-    if (!subjectReviewAccessAllowed() && !restoringReleasedMaterial) {
-      panel.dataset.pendingReviewSection = openSection;
-      showSubjectReviewAccessDenied(panel, openSection);
-      if (!automatic) openSubjectReviewPricing(button, panel);
-      return;
-    }
+    // An open tab can retain provisional access after an administrator approves
+    // the payment. Let the owner-bound server command re-check the current
+    // entitlement; it returns a fail-closed 403 before releasing protected
+    // material when the account is still ineligible.
     const key = subjectReviewMaterialKey(attemptId);
     if (retry) {
       state.reviewMaterialCache.delete(key);

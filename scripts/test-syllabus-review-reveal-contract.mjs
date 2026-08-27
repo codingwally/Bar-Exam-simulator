@@ -503,10 +503,16 @@ assert.match(
   /catch\s*\(error\)\s*\{[\s\S]*?releaseSubjectReviewPending\(panel\);[\s\S]*?if\s*\(!subjectReviewPanelIsCurrent\(panel\)\)\s*return;/,
   'a failed in-flight reveal must clear attempt-level pending state even when its original panel was replaced',
 );
-assert.match(loadCompleteReview, /restoringReleasedMaterial\s*=\s*automatic/);
-assert.match(loadCompleteReview, /reviewMaterialRevealedAt/);
-assert.match(loadCompleteReview, /!subjectReviewAccessAllowed\(\)\s*&&\s*!restoringReleasedMaterial/,
-  'automatic recovery of a recorded release must reach the owner-bound server check');
+assert.doesNotMatch(
+  loadCompleteReview,
+  /if\s*\(\s*!subjectReviewAccessAllowed\(\)/,
+  'a stale browser access snapshot must not redirect before the owner-bound server check',
+);
+assert.match(
+  loadCompleteReview,
+  /api\('\/examinations\/command',\s*\{\s*operation:\s*'subject_reveal_review',\s*attemptId\s*\}\)/,
+  'Reveal Answer must always ask the server for the current entitlement',
+);
 assert.match(
   examinations,
   /material\?\.questionId\s*===\s*questionId[\s\S]*return completeSubjectReviewContent\(material\)/,
@@ -524,8 +530,8 @@ assert.ok(
   'assets/phase4-experience.js must use the reviewed cache-busting release',
 );
 assert.ok(
-  index.includes('assets/feature-loader.js?v=profile-photo-release2-20260827-1'),
-  'assets/feature-loader.js must use the profile-photo release cache key',
+  index.includes('assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1&amp;hotfix=ian-provisional-reveal-20260828-1'),
+  'assets/feature-loader.js must publish the provisional-to-paid reveal hotfix',
 );
 for (const asset of [
   'assets/study-workspace.js',
@@ -546,8 +552,8 @@ for (const asset of [
 assert.match(serviceWorker, /duediligence-shell-20260827-profile-pedro-release2-1/);
 assert.match(studyWorkspace, /service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1/);
 assert.ok(
-  featureLoader.includes('assets/examinations.js?v=pedro-release2-20260827-1'),
-  'assets/examinations.js must use the Pedro exact-opener cache-busting release',
+  featureLoader.includes('assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1'),
+  'assets/examinations.js must publish the provisional-to-paid reveal hotfix',
 );
 
 const userInstructionsStart = runbook.indexOf('## Copy-ready user and Support instructions');

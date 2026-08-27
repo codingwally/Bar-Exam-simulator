@@ -40,7 +40,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p browser-qa
-          cat > /tmp/examination-room-browser-qa.cjs <<'NODE'
+          cat > browser-qa-runner.cjs <<'NODE'
           const { chromium } = require('playwright');
           const fs = require('node:fs');
 
@@ -127,7 +127,7 @@ jobs:
             process.exit(1);
           });
           NODE
-          node /tmp/examination-room-browser-qa.cjs
+          node browser-qa-runner.cjs
 
       - name: Upload browser evidence
         if: always()

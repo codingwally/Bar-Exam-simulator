@@ -1,0 +1,237 @@
+/* Examination Room-only readability layer: stronger contrast and comfortable laptop-scale type. */
+:root {
+  --ink: #111827;
+  --muted: #4b5563;
+  --gold-600: #6f4d0f;
+  --line: #c7c1b6;
+  --line-strong: #9f978a;
+  --success: #256644;
+  --warning: #7a4f0e;
+  --danger: #8f2f29;
+  --focus: #1f5f9e;
+  --brand-bar-height: 48px;
+  --command-bar-height: 70px;
+}
+
+body {
+  font-size: clamp(15px, calc(14.2px + .12vw), 16px);
+  line-height: 1.55;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[contenteditable="true"]:focus-visible {
+  outline: 3px solid rgba(31, 95, 158, .42);
+  outline-offset: 3px;
+}
+
+.eyebrow,
+.section-kicker {
+  color: var(--gold-600);
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: .13em;
+}
+
+.button {
+  min-height: 42px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.button.compact {
+  min-height: 38px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.icon-action {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+}
+
+.brand-bar {
+  gap: 14px;
+}
+
+.brand-lockup strong { font-size: 17px; }
+.product-name { font-size: 15px; }
+.exam-switcher-wrap select { height: 38px; font-size: 12px; }
+.workspace-tab { min-width: 90px; font-size: 13px; }
+.profile-button { height: 40px; }
+.profile-button strong { font-size: 12px; }
+.profile-button small { color: #c5d0de; font-size: 10px; }
+.profile-initials { width: 28px; height: 28px; font-size: 11px; }
+
+.command-context > strong { font-size: 16px; }
+.editable-title input { font-size: 15px; }
+.saved-status { font-size: 12px; }
+.action-menu button,
+.split-menu button { font-size: 14px; line-height: 1.35; }
+
+.creator-access-strip strong { font-size: 14px; }
+.creator-access-strip span { font-size: 13px; line-height: 1.55; }
+
+.section-rail nav button {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.review-items { min-height: 40px; font-size: 13px; }
+.hero-title-field textarea { font-size: clamp(30px, 2.2vw, 38px); }
+.exam-meta-row label { color: var(--muted); font-size: 13px; }
+.exam-meta-row input,
+.exam-meta-row select { font-size: 13px; }
+
+.field { color: var(--muted); font-size: 13px; }
+.field input,
+.field select,
+.field textarea,
+.details-grid input,
+.details-grid select,
+.details-grid textarea,
+.allowlist-editor textarea,
+.choice-row input[type="text"],
+.points-control input {
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.source-header p:not(.section-kicker),
+.section-heading p:not(.section-kicker) {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.source-file strong { font-size: 13px; }
+.source-file small { font-size: 12px; }
+.success-notice { color: #364d3d; font-size: 13px; line-height: 1.45; }
+.success-notice button { font-size: 13px; }
+.section-heading h2 { font-size: 24px; line-height: 1.25; }
+.split-menu button small { font-size: 12px; }
+
+.margin-note { color: #3d654b; font-size: 12px; line-height: 1.6; }
+.margin-note button { font-size: 12px; }
+.question-type { font-size: 13px; }
+.points-control { color: var(--muted); font-size: 12px; }
+.question-options button { font-size: 13px; }
+.question-toolbar select,
+.question-toolbar button { font-size: 13px; }
+.question-prompt { font-size: 15px; line-height: 1.65; }
+.question-prompt:empty::before { color: #6b7280; }
+.question-foot { font-size: 12px; line-height: 1.45; }
+.assistant-suggestion { color: #384b3e; font-size: 12px; line-height: 1.5; }
+.assistant-suggestion strong,
+.assistant-suggestion button { font-size: 12px; }
+
+.app-shell small,
+.inline-help,
+.allowlist-count,
+.privacy-copy dd,
+.legal-note,
+.confirmation-control,
+.recovery-message,
+.review-entry small,
+.student-detail-grid dt,
+.preview-document .preview-meta,
+.publish-item small {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.preview-question h3,
+.notice-lead { font-size: 16px; }
+.profile-button small { color: #c5d0de; font-size: 10px; }
+.toast { font-size: 13px; }
+.error-banner p { font-size: 13px; }
+.error-banner small { color: #6f3e3a; font-size: 12px; }
+
+.editor-rule,
+.question-card,
+.source-file,
+.field input,
+.field select,
+.field textarea,
+.details-grid input,
+.details-grid select,
+.details-grid textarea,
+.question-prompt,
+.choice-row input[type="text"],
+.preview-document,
+.preview-answer-area,
+.publish-item,
+.review-entry,
+.student-detail-grid div {
+  border-color: var(--line-strong);
+}
+
+@media (min-width: 1201px) and (max-width: 1500px) {
+  :root {
+    --rail-width: 164px;
+    --controls-width: 312px;
+  }
+
+  .brand-bar { padding-inline: 16px; }
+  .command-bar { padding-inline: 18px; }
+  #exam-form {
+    width: min(calc(100% - 24px), 760px);
+    margin-left: 24px;
+    padding-top: 30px;
+  }
+  .exam-details,
+  .questions-section > .section-heading {
+    width: 584px;
+    margin-left: 176px;
+  }
+  .question-layout { grid-template-columns: 164px minmax(0, 1fr); }
+}
+
+@media (min-width: 1501px) {
+  :root {
+    --rail-width: 188px;
+    --controls-width: 360px;
+  }
+  #exam-form { width: min(calc(100% - 36px), 820px); }
+}
+
+@media (max-width: 1200px) {
+  .section-rail nav button span { font-size: 11px; line-height: 1.3; }
+  #exam-form { padding-inline: 28px; }
+}
+
+@media (max-width: 960px) {
+  .workspace-tab { min-width: 46px; }
+  .exam-switcher-wrap select { font-size: 12px; }
+}
+
+@media (max-width: 720px) {
+  body { font-size: 16px; }
+  .button { min-height: 44px; font-size: 15px; }
+  .button.compact { min-height: 40px; font-size: 14px; }
+  input,
+  select,
+  textarea,
+  [contenteditable="true"] { font-size: 16px; }
+  .command-context > strong { font-size: 15px; }
+  .editable-title input { font-size: 16px; }
+  .saved-status { font-size: 13px; }
+  .section-rail nav button span { font-size: 12px; }
+  .hero-title-field textarea { font-size: 29px; }
+  #exam-form { padding-inline: 18px; }
+  .error-banner p { font-size: 14px; }
+  .error-banner small { font-size: 13px; }
+}
+
+@media (max-width: 390px) {
+  .brand-lockup strong { font-size: 13px; }
+  .command-actions .button { font-size: 14px; }
+  .workspace-tab { min-width: 40px; font-size: 14px; }
+}

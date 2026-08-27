@@ -1,0 +1,80 @@
+name: Temporary Examination Room hotfix validator
+
+on:
+  push:
+    branches:
+      - fix/examination-room-privacy-new-exam-readability-20260827
+    paths:
+      - .github/workflows/temp-examination-room-hotfix-validator.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-commit:
+    if: contains(github.event.head_commit.message, 'stage temporary examination room validator')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out isolated hotfix branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Wire the scoped Examination Room fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('examination-room/index.html')
+          source = path.read_text(encoding='utf-8')
+
+          css_anchor = '  <link rel="stylesheet" href="professor.css?v=greenfield-v1-20260827-15">\n'
+          css_link = '  <link rel="stylesheet" href="professor-readability.css?v=readability-20260827-1">\n'
+          if css_link not in source:
+              if source.count(css_anchor) != 1:
+                  raise SystemExit('Professor stylesheet anchor changed; refusing an unsafe patch.')
+              source = source.replace(css_anchor, css_anchor + css_link, 1)
+
+          api_anchor = '  <script src="api.js?v=greenfield-v1-20260827-9"></script>\n'
+          runtime_script = '  <script src="professor-runtime-fix.js?v=privacy-new-exam-20260827-1"></script>\n'
+          if runtime_script not in source:
+              if source.count(api_anchor) != 1:
+                  raise SystemExit('Professor API script anchor changed; refusing an unsafe patch.')
+              source = source.replace(api_anchor, api_anchor + runtime_script, 1)
+
+          path.write_text(source, encoding='utf-8')
+          PY
+
+      - name: Verify JavaScript syntax
+        run: node --check examination-room/professor-runtime-fix.js
+
+      - name: Run focused Examination Room regressions
+        run: >-
+          node --test
+          examination-room/professor-runtime-fix.test.cjs
+          examination-room/professor.client.test.cjs
+          examination-room/api.demo.test.cjs
+          examination-room/view-models.test.cjs
+
+      - name: Enforce final change boundary
+        shell: bash
+        run: |
+          changed="$(git diff --name-only)"
+          test -n "$changed"
+          while IFS= read -r file; do
+            case "$file" in
+              examination-room/*) ;;
+              *) echo "Out-of-scope change: $file" >&2; exit 1 ;;
+            esac
+          done <<< "$changed"
+
+      - name: Commit the validated page wiring
+        shell: bash
+        run: |
+          git config user.name "Due Diligence Release Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add examination-room/index.html
+          git commit -m "fix(examination-room): repair draft creation and readability"
+          git push origin HEAD:${{ github.ref_name }}

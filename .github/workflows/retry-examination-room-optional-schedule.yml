@@ -1,0 +1,89 @@
+name: Release verified Examination Room optional schedule fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/retry-examination-room-optional-schedule.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-examination-room-optional-schedule
+  cancel-in-progress: false
+
+jobs:
+  patch-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the production branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply the isolated Examination Room patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/fix-examination-room-optional-schedule.yml').read_text(encoding='utf-8')
+          step = source.index('      - name: Patch only Examination Room scheduling\n')
+          start_marker = '        run: |\n'
+          start = source.index(start_marker, step) + len(start_marker)
+          end = source.index('\n      - name: Validate syntax and focused behavior', start)
+          block = source[start:end]
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in block.splitlines()) + '\n'
+          Path('/tmp/examination-room-optional-schedule-patch.sh').write_text(script, encoding='utf-8')
+          PY
+          bash -n /tmp/examination-room-optional-schedule-patch.sh
+          bash /tmp/examination-room-optional-schedule-patch.sh
+
+      - name: Install the existing worker test dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Validate syntax and focused behavior
+        shell: bash
+        run: |
+          node --check worker/index.mjs
+          node --check worker/examination-room-activation-window.mjs
+          node --check examination-room/professor.js
+          node --test worker/examination-room-activation-window.test.mjs
+          node --test worker/examination-room-v1-owner.test.mjs
+          node --test examination-room/professor.client.test.cjs
+          git diff --check
+
+      - name: Enforce the Examination Room-only scope
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+          allowed = {'worker/index.mjs', 'worker/examination-room-activation-window.mjs', 'worker/examination-room-activation-window.test.mjs', 'examination-room/professor.js', 'examination-room/index.html'}
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          unexpected = sorted(changed - allowed)
+          missing = sorted(allowed - changed)
+          if unexpected:
+              raise SystemExit(f'Unexpected out-of-scope files changed: {unexpected}')
+          if missing:
+              raise SystemExit(f'Expected Examination Room files were not changed: {missing}')
+          PY
+
+      - name: Commit and publish the verified fix
+        shell: bash
+        run: |
+          git config user.name "Due Diligence Release Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/fix-examination-room-optional-schedule.yml
+          rm .github/workflows/retry-examination-room-optional-schedule.yml
+          git add worker/index.mjs \
+            worker/examination-room-activation-window.mjs \
+            worker/examination-room-activation-window.test.mjs \
+            examination-room/professor.js \
+            examination-room/index.html \
+            .github/workflows/fix-examination-room-optional-schedule.yml \
+            .github/workflows/retry-examination-room-optional-schedule.yml
+          git commit -m "fix(examination-room): make room-key schedule optional"
+          git push origin HEAD:main

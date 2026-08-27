@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   browser-qa:
-    if: contains(github.event.head_commit.message, 'stage temporary examination room browser QA')
+    if: contains(github.event.head_commit.message, 'examination room phone overflow')
     runs-on: ubuntu-latest
     steps:
       - name: Check out isolated hotfix branch
@@ -36,7 +36,7 @@ jobs:
           cat /tmp/examination-room-preview.log
           exit 1
 
-      - name: Verify consecutive creation and responsive readability
+      - name: Identify the overflowing phone element
         shell: bash
         run: |
           mkdir -p browser-qa
@@ -44,81 +44,89 @@ jobs:
           const { chromium } = require('playwright');
           const fs = require('node:fs');
 
-          const viewports = [
-            { name: 'laptop-1366x768', width: 1366, height: 768 },
-            { name: 'desktop-1920x1080', width: 1920, height: 1080 },
-            { name: 'phone-390x844', width: 390, height: 844 },
-          ];
-
-          function numericStyle(value) {
-            return Number.parseFloat(String(value || '').replace('px', ''));
+          function selectorFor(element) {
+            if (element.id) return `#${element.id}`;
+            const classes = [...element.classList].slice(0, 3).join('.');
+            return `${element.tagName.toLowerCase()}${classes ? `.${classes}` : ''}`;
           }
 
           (async () => {
             const browser = await chromium.launch({ headless: true });
-            const report = { viewports: [], creation: [] };
             try {
-              for (const viewport of viewports) {
-                const context = await browser.newContext({ viewport });
-                const page = await context.newPage();
-                await page.addInitScript(() => localStorage.clear());
-                await page.goto('http://127.0.0.1:4173/examination-room/?demo=1', { waitUntil: 'networkidle' });
-                await page.waitForSelector('#app-shell:not([hidden])', { timeout: 15000 });
-                const styles = await page.evaluate(() => {
-                  const body = getComputedStyle(document.body);
-                  const save = getComputedStyle(document.querySelector('#save-draft'));
-                  const title = getComputedStyle(document.querySelector('#exam-title'));
-                  const prompt = getComputedStyle(document.querySelector('.question-prompt'));
-                  const field = getComputedStyle(document.querySelector('#instructions'));
-                  return {
-                    bodyFontSize: body.fontSize,
-                    bodyLineHeight: body.lineHeight,
-                    saveFontSize: save.fontSize,
-                    saveMinHeight: save.minHeight,
-                    titleFontSize: title.fontSize,
-                    promptFontSize: prompt.fontSize,
-                    fieldFontSize: field.fontSize,
-                    scrollWidth: document.documentElement.scrollWidth,
-                    clientWidth: document.documentElement.clientWidth,
-                  };
-                });
-                if (numericStyle(styles.bodyFontSize) < 15) throw new Error(`${viewport.name}: body text below 15px`);
-                if (numericStyle(styles.saveFontSize) < 14) throw new Error(`${viewport.name}: button text below 14px`);
-                if (numericStyle(styles.saveMinHeight) < 42) throw new Error(`${viewport.name}: button target below 42px`);
-                if (numericStyle(styles.promptFontSize) < 15) throw new Error(`${viewport.name}: question text below 15px`);
-                if (numericStyle(styles.fieldFontSize) < 15) throw new Error(`${viewport.name}: field text below 15px`);
-                if (styles.scrollWidth > styles.clientWidth + 1) throw new Error(`${viewport.name}: horizontal overflow detected`);
-                await page.screenshot({ path: `browser-qa/${viewport.name}.png`, fullPage: true });
-                report.viewports.push({ ...viewport, ...styles });
-                await context.close();
-              }
-
-              const context = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+              const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
               const page = await context.newPage();
               await page.addInitScript(() => localStorage.clear());
               await page.goto('http://127.0.0.1:4173/examination-room/?demo=1', { waitUntil: 'networkidle' });
               await page.waitForSelector('#app-shell:not([hidden])', { timeout: 15000 });
-              for (let attempt = 1; attempt <= 2; attempt += 1) {
-                await page.click('#more-actions');
-                await page.click('[data-action="new-exam"]');
-                await page.waitForLoadState('networkidle');
-                await page.waitForSelector('#app-shell:not([hidden])', { timeout: 15000 });
-                const state = await page.evaluate(() => ({
-                  url: location.href,
-                  title: document.querySelector('#exam-title')?.value || '',
-                  saved: document.querySelector('#saved-status')?.textContent?.trim() || '',
-                  errorHidden: document.querySelector('#error-banner')?.hidden === true,
-                  privacyFixLoaded: window.ExaminationRoomV1Api?.__professorDraftPolicyFixApplied === true,
-                }));
-                if (!state.url.includes('exam=')) throw new Error(`creation ${attempt}: examination URL was not assigned`);
-                if (state.title !== 'Untitled examination') throw new Error(`creation ${attempt}: server-backed untitled draft was not restored`);
-                if (!state.errorHidden) throw new Error(`creation ${attempt}: an error banner remained visible`);
-                if (!state.privacyFixLoaded) throw new Error(`creation ${attempt}: privacy policy normalizer was not loaded`);
-                report.creation.push({ attempt, ...state });
-              }
-              await page.screenshot({ path: 'browser-qa/consecutive-new-examinations.png', fullPage: true });
+              const report = await page.evaluate(() => {
+                const viewportWidth = document.documentElement.clientWidth;
+                const bodyWidth = document.body.clientWidth;
+                const overflowing = [...document.querySelectorAll('body *')]
+                  .map((element) => {
+                    const rect = element.getBoundingClientRect();
+                    return {
+                      tag: element.tagName.toLowerCase(),
+                      id: element.id || '',
+                      classes: [...element.classList].slice(0, 5),
+                      text: String(element.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+                      left: Math.round(rect.left * 100) / 100,
+                      right: Math.round(rect.right * 100) / 100,
+                      width: Math.round(rect.width * 100) / 100,
+                      clientWidth: element.clientWidth,
+                      scrollWidth: element.scrollWidth,
+                      overflowX: getComputedStyle(element).overflowX,
+                    };
+                  })
+                  .filter((entry) => entry.right > viewportWidth + 1 || entry.left < -1)
+                  .sort((left, right) => Math.max(right.right - viewportWidth, -right.left) - Math.max(left.right - viewportWidth, -left.left))
+                  .slice(0, 30);
+                const styleOf = (selector) => {
+                  const element = document.querySelector(selector);
+                  if (!element) return null;
+                  const style = getComputedStyle(element);
+                  const rect = element.getBoundingClientRect();
+                  return {
+                    selector,
+                    display: style.display,
+                    position: style.position,
+                    width: style.width,
+                    minWidth: style.minWidth,
+                    maxWidth: style.maxWidth,
+                    flex: style.flex,
+                    gridTemplateColumns: style.gridTemplateColumns,
+                    whiteSpace: style.whiteSpace,
+                    overflowX: style.overflowX,
+                    left: rect.left,
+                    right: rect.right,
+                  };
+                };
+                return {
+                  viewportWidth,
+                  bodyWidth,
+                  htmlScrollWidth: document.documentElement.scrollWidth,
+                  bodyScrollWidth: document.body.scrollWidth,
+                  overflowing,
+                  keyStyles: [
+                    styleOf('.brand-bar'),
+                    styleOf('.command-bar'),
+                    styleOf('.command-actions'),
+                    styleOf('#save-draft'),
+                    styleOf('#preview-exam'),
+                    styleOf('#publish-exam'),
+                    styleOf('#more-actions'),
+                    styleOf('.creator-grid'),
+                    styleOf('#exam-form'),
+                    styleOf('.section-rail'),
+                  ],
+                };
+              });
+              console.log(JSON.stringify(report, null, 2));
+              fs.writeFileSync('browser-qa/phone-overflow-report.json', JSON.stringify(report, null, 2));
+              await page.screenshot({ path: 'browser-qa/phone-390x844-overflow.png', fullPage: true });
               await context.close();
-              fs.writeFileSync('browser-qa/report.json', JSON.stringify(report, null, 2));
+              if (report.htmlScrollWidth > report.viewportWidth + 1) {
+                throw new Error(`phone overflow: ${report.htmlScrollWidth}px document inside ${report.viewportWidth}px viewport`);
+              }
             } finally {
               await browser.close();
             }
@@ -129,10 +137,10 @@ jobs:
           NODE
           node browser-qa-runner.cjs
 
-      - name: Upload browser evidence
+      - name: Upload diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: examination-room-browser-qa
+          name: examination-room-phone-overflow-diagnostic
           path: browser-qa
           if-no-files-found: error

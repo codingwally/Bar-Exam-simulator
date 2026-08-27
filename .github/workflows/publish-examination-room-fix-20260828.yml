@@ -1,0 +1,97 @@
+name: Publish verified Examination Room fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/publish-examination-room-fix-20260828.yml
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publish-verified-examination-room-fix-20260828
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Test and publish Examination Room
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out production main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker test dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
+
+      - name: Verify the Examination Room release
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check examination-room/api.js
+          node --check examination-room/professor.js
+          node --check examination-room/professor-compatibility.js
+          node --test examination-room/*.test.cjs
+          grep -F 'professor-readable.css?v=exam-room-readability-20260827-1' examination-room/index.html
+          grep -F 'professor-compatibility.js?v=exam-room-reliability-20260827-1' examination-room/index.html
+          grep -F 'id="new-exam-direct"' examination-room/index.html
+          grep -F "const CURRENT_PRIVACY_NOTICE = 'exam-room-v1';" examination-room/professor-compatibility.js
+
+      - name: Build sanitized Pages artifact
+        run: node scripts/build-pages-artifact.mjs
+
+      - name: Verify sanitized Pages artifact
+        run: node scripts/test-pages-artifact.mjs
+
+      - name: Confirm Examination Room files are in the artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f .pages-dist/examination-room/index.html
+          test -f .pages-dist/examination-room/professor-readable.css
+          test -f .pages-dist/examination-room/professor-compatibility.js
+          grep -F 'professor-readable.css?v=exam-room-readability-20260827-1' .pages-dist/examination-room/index.html
+          grep -F 'professor-compatibility.js?v=exam-room-reliability-20260827-1' .pages-dist/examination-room/index.html
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages-dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify the live Examination Room bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            page="$(curl -fsSL --retry 2 --retry-delay 1 "https://duediligence.ph/examination-room/?release=${GITHUB_SHA}-${attempt}" || true)"
+            if grep -Fq 'professor-readable.css?v=exam-room-readability-20260827-1' <<< "$page" \
+              && grep -Fq 'professor-compatibility.js?v=exam-room-reliability-20260827-1' <<< "$page" \
+              && grep -Fq 'id="new-exam-direct"' <<< "$page"; then
+              echo "Live Examination Room assets verified on duediligence.ph."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Deployment completed, but the custom domain did not expose all new Examination Room markers within the verification window." >&2
+          exit 1

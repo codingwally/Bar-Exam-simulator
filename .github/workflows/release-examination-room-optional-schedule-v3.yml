@@ -1,0 +1,134 @@
+name: Release Examination Room optional schedule fix v3
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-optional-schedule-v3.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-examination-room-optional-schedule-v3
+  cancel-in-progress: false
+
+jobs:
+  patch-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out production main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply the isolated Examination Room implementation patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/fix-examination-room-optional-schedule.yml').read_text(encoding='utf-8')
+          step = source.index('      - name: Patch only Examination Room scheduling\n')
+          start_marker = '        run: |\n'
+          start = source.index(start_marker, step) + len(start_marker)
+          end = source.index('\n      - name: Install reviewed Worker dependencies', start) if '\n      - name: Install reviewed Worker dependencies' in source[start:] else source.index('\n      - name: Validate syntax and focused behavior', start)
+          block = source[start:end]
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in block.splitlines()) + '\n'
+          Path('/tmp/examination-room-optional-schedule-patch.sh').write_text(script, encoding='utf-8')
+          PY
+          bash -n /tmp/examination-room-optional-schedule-patch.sh
+          bash /tmp/examination-room-optional-schedule-patch.sh
+
+      - name: Update the owner and professor regression contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64
+          from pathlib import Path
+
+          owner_test = Path('worker/examination-room-v1-owner.test.mjs')
+          owner_source = owner_test.read_text(encoding='utf-8')
+          start_marker = "test('owner approval fails recoverably when the published exam has no exact usable schedule and never invents a 24-hour window', async () => {"
+          end_marker = '\nfunction bytes(value) {'
+          start = owner_source.find(start_marker)
+          end = owner_source.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit('Could not safely locate the obsolete owner schedule test.')
+          replacement = base64.b64decode('dGVzdCgnb3duZXIgYXBwcm92YWwgdHJlYXRzIGEgYmxhbmsgc3RhcnQgZGF0ZSBhcyBvcHRpb25hbCBhbmQgaXNzdWVzIGEgZnJlc2ggMjQtaG91ciBrZXkgd2luZG93JywgYXN5bmMgKCkgPT4gewogIGxldCBhY3RpdmF0aW9uQ2FsbHMgPSAwOwogIGxldCBpc3N1ZWRXaW5kb3cgPSBudWxsOwogIGNvbnN0IHJlcXVlc3RTdGFydGVkQXQgPSBEYXRlLm5vdygpOwoKICBjb25zdCByZXNwb25zZSA9IGF3YWl0IHdpdGhNb2NrRmV0Y2goYXN5bmMgKHVybCwgb3B0aW9ucyA9IHt9KSA9PiB7CiAgICBjb25zdCBhdXRob3JpemVkID0gYXV0aGVudGljYXRlZE93bmVyKHVybCk7CiAgICBpZiAoYXV0aG9yaXplZCkgcmV0dXJuIGF1dGhvcml6ZWQ7CiAgICBjb25zdCBib2R5ID0gb3B0aW9ucy5ib2R5ID8gSlNPTi5wYXJzZShvcHRpb25zLmJvZHkpIDogbnVsbDsKCiAgICBpZiAoU3RyaW5nKHVybCkuZW5kc1dpdGgoJy9yZXN0L3YxL3JwYy9leGFtaW5hdGlvbl9yb29tX3YxX293bmVyX2Vuc3VyZV9tZW1iZXJzaGlwJykpIHsKICAgICAgcmV0dXJuIGpzb25SZXNwb25zZSh7CiAgICAgICAgb2s6IHRydWUsCiAgICAgICAgZHVwbGljYXRlOiBmYWxzZSwKICAgICAgICBtZW1iZXJzaGlwSWQ6ICc5OTk5OTk5OS05OTk5LTQ5OTktODk5OS05OTk5OTk5OTk5OTknLAogICAgICB9KTsKICAgIH0KCiAgICBpZiAoU3RyaW5nKHVybCkuZW5kc1dpdGgoJy9yZXN0L3YxL3JwYy9leGFtaW5hdGlvbl9yb29tX3YxX293bmVyX3F1ZXJ5JykpIHsKICAgICAgYXNzZXJ0LmVxdWFsKGJvZHkucF9vcGVyYXRpb24sICdleGFtX2RldGFpbCcpOwogICAgICByZXR1cm4ganNvblJlc3BvbnNlKHsKICAgICAgICBvazogdHJ1ZSwKICAgICAgICBidW5kbGU6IHsKICAgICAgICAgIGluc3RpdHV0aW9uSWQ6IElOU1RJVFVUSU9OX0lELAogICAgICAgICAgZXhhbUlkOiBFWEFNX0lELAogICAgICAgICAgY3VycmVudFB1Ymxpc2hlZFZlcnNpb25JZDogVkVSU0lPTl9JRCwKICAgICAgICAgIHRhYmxlczogewogICAgICAgICAgICBleGFtVmVyc2lvbnM6IFt7CiAgICAgICAgICAgICAgaWQ6IFZFUlNJT05fSUQsCiAgICAgICAgICAgICAgcHVibGljYXRpb25fc3RhdHVzOiAncHVibGlzaGVkJywKICAgICAgICAgICAgICBkdXJhdGlvbl9zZWNvbmRzOiA3XzIwMCwKICAgICAgICAgICAgICBjb250cm9sczoge30sCiAgICAgICAgICAgIH1dLAogICAgICAgICAgICBleGFtUm9zdGVyOiBbXSwKICAgICAgICAgIH0sCiAgICAgICAgfSwKICAgICAgfSk7CiAgICB9CgogICAgaWYgKFN0cmluZyh1cmwpLmVuZHNXaXRoKCcvcmVzdC92MS9ycGMvZXhhbWluYXRpb25fcm9vbV92MV9hcGknKSkgewogICAgICBhY3RpdmF0aW9uQ2FsbHMgKz0gMTsKICAgICAgYXNzZXJ0LmVxdWFsKGJvZHkucF9zY29wZSwgJ2FkbWluJyk7CiAgICAgIGFzc2VydC5lcXVhbChib2R5LnBfb3BlcmF0aW9uLCAnZW1haWxfa2V5Jyk7CiAgICAgIGFzc2VydC5lcXVhbChib2R5LnBfcGF5bG9hZC5yZXBsYWNlQ3VycmVudCwgZmFsc2UpOwogICAgICBhc3NlcnQuZXF1YWwoJ3Jvb21LZXknIGluIGJvZHkucF9wYXlsb2FkLCBmYWxzZSk7CgogICAgICBjb25zdCBvcGVuc0F0TXMgPSBEYXRlLnBhcnNlKGJvZHkucF9wYXlsb2FkLm9wZW5zQXQpOwogICAgICBjb25zdCBjbG9zZXNBdE1zID0gRGF0ZS5wYXJzZShib2R5LnBfcGF5bG9hZC5jbG9zZXNBdCk7CiAgICAgIGFzc2VydC5vayhOdW1iZXIuaXNGaW5pdGUob3BlbnNBdE1zKSk7CiAgICAgIGFzc2VydC5vayhOdW1iZXIuaXNGaW5pdGUoY2xvc2VzQXRNcykpOwogICAgICBhc3NlcnQub2sob3BlbnNBdE1zID49IHJlcXVlc3RTdGFydGVkQXQgLSAxXzAwMCk7CiAgICAgIGFzc2VydC5vayhvcGVuc0F0TXMgPD0gRGF0ZS5ub3coKSArIDFfMDAwKTsKICAgICAgYXNzZXJ0LmVxdWFsKGNsb3Nlc0F0TXMgLSBvcGVuc0F0TXMsIDI0ICogNjAgKiA2MCAqIDFfMDAwKTsKICAgICAgaXNzdWVkV2luZG93ID0gewogICAgICAgIG9wZW5zQXQ6IGJvZHkucF9wYXlsb2FkLm9wZW5zQXQsCiAgICAgICAgY2xvc2VzQXQ6IGJvZHkucF9wYXlsb2FkLmNsb3Nlc0F0LAogICAgICB9OwoKICAgICAgcmV0dXJuIGpzb25SZXNwb25zZSh7CiAgICAgICAgb2s6IHRydWUsCiAgICAgICAgYWN0aXZhdGlvbjogewogICAgICAgICAgaWQ6IEFDVElWQVRJT05fSUQsCiAgICAgICAgICBzdGF0dXM6ICdzY2hlZHVsZWQnLAogICAgICAgICAgb3BlbnNBdDogYm9keS5wX3BheWxvYWQub3BlbnNBdCwKICAgICAgICAgIGV4cGlyZXNBdDogYm9keS5wX3BheWxvYWQuY2xvc2VzQXQsCiAgICAgICAgfSwKICAgICAgICBwcm9mZXNzb3JFbWFpbDogJ3Byb2Zlc3NvckBleGFtcGxlLmVkdS5waCcsCiAgICAgICAgcHJvZmVzc29yTmFtZTogJ1Byb2YuIEVsZW5hIFZpbGxhbnVldmEnLAogICAgICAgIGV4YW1UaXRsZTogJ0NvbnN0aXR1dGlvbmFsIExhdyBNaWR0ZXJtJywKICAgICAgfSk7CiAgICB9CgogICAgaWYgKFN0cmluZyh1cmwpLmVuZHNXaXRoKCcvcmVzdC92MS9ycGMvZXhhbWluYXRpb25fcm9vbV92MV9vd25lcl9jb21tYW5kJykpIHsKICAgICAgaWYgKGJvZHkucF9vcGVyYXRpb24gPT09ICdzdG9yZV9rZXlfZW52ZWxvcGUnKSB7CiAgICAgICAgcmV0dXJuIGpzb25SZXNwb25zZSh7CiAgICAgICAgICBvazogdHJ1ZSwKICAgICAgICAgIGFjdGl2YXRpb25JZDogYm9keS5wX3BheWxvYWQuYWN0aXZhdGlvbklkLAogICAgICAgICAgZXNjcm93ZWQ6IHRydWUsCiAgICAgICAgfSk7CiAgICAgIH0KICAgICAgaWYgKGJvZHkucF9vcGVyYXRpb24gPT09ICdyZWNvcmRfZW1haWxfZGVsaXZlcnknKSB7CiAgICAgICAgcmV0dXJuIGpzb25SZXNwb25zZSh7CiAgICAgICAgICBvazogdHJ1ZSwKICAgICAgICAgIHJlY29yZGVkOiB0cnVlLAogICAgICAgICAgcmVxdWVzdEhhc2g6IGJvZHkucF9wYXlsb2FkLnJlcXVlc3RIYXNoLAogICAgICAgICAgcHJvdmlkZXJTdGF0dXM6IGJvZHkucF9wYXlsb2FkLnByb3ZpZGVyU3RhdHVzLAogICAgICAgICAgcHJvdmlkZXJJZDogYm9keS5wX3BheWxvYWQucHJvdmlkZXJJZCwKICAgICAgICAgIHNhZmVFcnJvckNvZGU6IGJvZHkucF9wYXlsb2FkLnNhZmVFcnJvckNvZGUsCiAgICAgICAgICBhdHRlbXB0ZWRBdDogYm9keS5wX3BheWxvYWQuYXR0ZW1wdGVkQXQsCiAgICAgICAgfSk7CiAgICAgIH0KICAgIH0KCiAgICBpZiAoU3RyaW5nKHVybCkgPT09ICdodHRwczovL2FwaS5yZXNlbmQuY29tL2VtYWlscycpIHsKICAgICAgcmV0dXJuIGpzb25SZXNwb25zZSh7IGlkOiAnZW1haWwtb3B0aW9uYWwtc2NoZWR1bGUnIH0pOwogICAgfQoKICAgIHRocm93IG5ldyBFcnJvcihgVW5leHBlY3RlZCBmZXRjaCAke3VybH1gKTsKICB9LCAoKSA9PiB3b3JrZXIuZmV0Y2goCiAgICByZXF1ZXN0KCcvZXhhbWluYXRpb24tcm9vbS92MS9hZG1pbi9jb21tYW5kJywgewogICAgICBvcGVyYXRpb246ICdhcHByb3ZlX2FuZF9lbWFpbF9rZXknLAogICAgICBpZGVtcG90ZW5jeUtleTogJzQ1NDU0NTQ1LTQ1NDUtNDU0NS04NTQ1LTQ1NDU0NTQ1NDU0NScsCiAgICAgIHBheWxvYWQ6IHsgaW5zdGl0dXRpb25JZDogSU5TVElUVVRJT05fSUQsIGV4YW1JZDogRVhBTV9JRCB9LAogICAgfSwgJzQ1NDU0NTQ1LTQ1NDUtNDU0NS04NTQ1LTQ1NDU0NTQ1NDU0NScpLAogICAgZW52aXJvbm1lbnQoKSwKICAgIHt9LAogICkpKTsKCiAgY29uc3QgcmVzdWx0ID0gYXdhaXQgcmVzcG9uc2UuanNvbigpOwogIGFzc2VydC5lcXVhbChyZXNwb25zZS5zdGF0dXMsIDIwMSk7CiAgYXNzZXJ0LmVxdWFsKGFjdGl2YXRpb25DYWxscywgMSk7CiAgYXNzZXJ0Lm9rKGlzc3VlZFdpbmRvdyk7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5zY2hlZHVsZS5vcGVuc0F0LCBpc3N1ZWRXaW5kb3cub3BlbnNBdCk7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5zY2hlZHVsZS5jbG9zZXNBdCwgaXNzdWVkV2luZG93LmNsb3Nlc0F0KTsKICBhc3NlcnQuZXF1YWwocmVzdWx0LnNjaGVkdWxlLmR1cmF0aW9uU2Vjb25kcywgN18yMDApOwogIGFzc2VydC5lcXVhbChyZXN1bHQuc2NoZWR1bGUubWF4aW11bUV4dHJhTWludXRlcywgMCk7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5zY2hlZHVsZS5zY2hlZHVsZVNvdXJjZSwgJ3Jvb21fa2V5X2lzc3VhbmNlJyk7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5zY2hlZHVsZS5tYXhTZXNzaW9ucywgbnVsbCk7Cn0pOwo=').decode('utf-8')
+          owner_source = owner_source[:start] + replacement + owner_source[end:]
+          owner_test.write_text(owner_source, encoding='utf-8')
+
+          professor_test = Path('examination-room/professor.client.test.cjs')
+          professor_source = professor_test.read_text(encoding='utf-8')
+          optional_test = r'''
+          test('examination scheduling is optional while key access remains explicit', () => {
+            assert.doesNotMatch(professorSource, /Set the start date and time/);
+            assert.doesNotMatch(professorSource, /The room cannot be scheduled without a start time/);
+            assert.match(professorSource, /No fixed date · opens when the student key is issued/);
+            assert.match(professorHtml, /Start <small>\(optional\)<\/small>/);
+            assert.match(professorHtml, /Leave blank to open the room when Admin issues the student key/);
+            assert.doesNotMatch(professorHtml, /id="exam-date"[^>]*value=/);
+            assert.doesNotMatch(professorHtml, /id="start-control"[^>]*value=/);
+          });
+          '''
+          if "test('examination scheduling is optional while key access remains explicit'" not in professor_source:
+              professor_source = professor_source.rstrip() + '\n\n' + optional_test.strip() + '\n'
+          professor_test.write_text(professor_source, encoding='utf-8')
+          PY
+
+      - name: Install reviewed test dependencies
+        shell: bash
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Validate syntax and focused Examination Room behavior
+        shell: bash
+        run: |
+          node --check worker/index.mjs
+          node --check worker/examination-room-activation-window.mjs
+          node --check examination-room/professor.js
+          node --test worker/examination-room-activation-window.test.mjs
+          node --test worker/examination-room-v1-owner.test.mjs
+          node --test examination-room/professor.client.test.cjs
+          git diff --check
+
+      - name: Enforce Examination Room-only scope
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          expected = {
+              'worker/index.mjs',
+              'worker/examination-room-activation-window.mjs',
+              'worker/examination-room-activation-window.test.mjs',
+              'worker/examination-room-v1-owner.test.mjs',
+              'examination-room/professor.js',
+              'examination-room/professor.client.test.cjs',
+              'examination-room/index.html',
+          }
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          unexpected = sorted(changed - expected)
+          missing = sorted(expected - changed)
+          if unexpected:
+              raise SystemExit(f'Unexpected out-of-scope files changed: {unexpected}')
+          if missing:
+              raise SystemExit(f'Expected Examination Room files were not changed: {missing}')
+          PY
+
+      - name: Commit and publish only the verified Examination Room fix
+        shell: bash
+        run: |
+          git config user.name "Due Diligence Release Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/index.mjs \
+            worker/examination-room-activation-window.mjs \
+            worker/examination-room-activation-window.test.mjs \
+            worker/examination-room-v1-owner.test.mjs \
+            examination-room/professor.js \
+            examination-room/professor.client.test.cjs \
+            examination-room/index.html
+          git commit -m "fix(examination-room): make examination schedule optional"
+          git push origin HEAD:main

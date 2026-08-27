@@ -91,7 +91,7 @@ assert.match(
 );
 assert.match(
   frontend,
-  /const payload = await phase4\.request\(path, \{ body \}\);[\s\S]*!privateRequestIdentityIsCurrent\(identity\)[\s\S]*STALE_IDENTITY[\s\S]*return payload\.data/,
+  /const payload = await phase4\.request\(path, \{ body, signal: options\.signal \}\);[\s\S]*!privateRequestIdentityIsCurrent\(identity\)[\s\S]*STALE_IDENTITY[\s\S]*return payload\.data/,
   'Late responses from a previous signed-in identity must be rejected before private data reaches a renderer.',
 );
 for (const privateRenderer of ['openVerdict', 'renderSubjectPerformance', 'loadCatalog']) {

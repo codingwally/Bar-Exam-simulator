@@ -324,6 +324,25 @@ const phase4Api = windowMock.DueDiligencePhase4;
 assert.equal(typeof phase4Api?.canRevealSubjectReview, 'function');
 assert.equal(typeof phase4Api?.isSubjectReviewAccessError, 'function');
 
+legacy.getSession = () => ({ access_token: 'test-session' });
+windowMock.DueDiligencePhase2Config.workerUrl = 'https://example.invalid';
+let forwardedSignal = null;
+context.fetch = async (_url, options) => {
+  forwardedSignal = options.signal;
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ ok: true, data: { status: 'available' } }),
+  };
+};
+const requestController = new AbortController();
+await phase4Api.request('/examinations/command', {
+  body: { operation: 'subject_reveal_review' },
+  signal: requestController.signal,
+});
+assert.equal(forwardedSignal, requestController.signal,
+  'the authenticated request helper must preserve the exact caller abort signal');
+
 for (const basis of APPROVED_BASES) {
   assert.equal(
     phase4Api.canRevealSubjectReview({ allowed: true, unlimited: true, basis }),
@@ -510,9 +529,13 @@ assert.doesNotMatch(
 );
 assert.match(
   loadCompleteReview,
-  /api\('\/examinations\/command',\s*\{\s*operation:\s*'subject_reveal_review',\s*attemptId\s*\}\)/,
+  /api\([\s\S]*?'\/examinations\/command',[\s\S]*?operation:\s*'subject_reveal_review',[\s\S]*?attemptId[\s\S]*?signal:\s*controller\?\.signal[\s\S]*?\)/,
   'Reveal Answer must always ask the server for the current entitlement',
 );
+assert.match(loadCompleteReview, /SUBJECT_REVIEW_REQUEST_TIMEOUT_MS/,
+  'Reveal Answer must have a bounded client deadline before presenting its Retry state');
+assert.match(phase4, /fetch\(`\$\{config\.workerUrl\}\$\{path\}`,[\s\S]*?signal:\s*options\.signal/,
+  'the authenticated request helper must pass through an opt-in abort signal');
 assert.match(
   examinations,
   /material\?\.questionId\s*===\s*questionId[\s\S]*return completeSubjectReviewContent\(material\)/,
@@ -526,11 +549,11 @@ assert.ok(
   'assets/phase2-experience.js must use the profile-photo release cache key',
 );
 assert.ok(
-  index.includes('assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2'),
+  index.includes('assets/phase4-experience.js?v=syllabus-reveal-p0-20260826-2&amp;access=paid-expiry-20260827-1&amp;recovery=subject-review-timeout-20260828-1'),
   'assets/phase4-experience.js must use the reviewed cache-busting release',
 );
 assert.ok(
-  index.includes('assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1&amp;hotfix=ian-provisional-reveal-20260828-1'),
+  index.includes('assets/feature-loader.js?v=profile-photo-release2-20260827-1&amp;baseline=public-reliability-20260827-1&amp;feedback=offline-save-20260827-1&amp;hotfix=ian-provisional-reveal-20260828-1&amp;recovery=subject-review-timeout-20260828-1'),
   'assets/feature-loader.js must publish the provisional-to-paid reveal hotfix',
 );
 for (const asset of [
@@ -552,7 +575,7 @@ for (const asset of [
 assert.match(serviceWorker, /duediligence-shell-20260827-profile-pedro-release2-1/);
 assert.match(studyWorkspace, /service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-1/);
 assert.ok(
-  featureLoader.includes('assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1'),
+  featureLoader.includes('assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1&recovery=subject-review-timeout-20260828-1'),
   'assets/examinations.js must publish the provisional-to-paid reveal hotfix',
 );
 

@@ -28,6 +28,7 @@ const results = {
   consoleErrors: [],
   networkErrors: [],
   pageErrors: [],
+  recoveries: [],
 };
 
 const completeAnswers = [
@@ -615,6 +616,40 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
   }
 }
 
+async function waitForSubjectReviewOutcome(page) {
+  try {
+    const outcome = await page.waitForFunction(() => {
+      const room = document.querySelector('#dd-per-subject-app .dd-subject-editorial:not(.is-result)');
+      if (!room) return '';
+      const visible = (element) => {
+        if (!element) return false;
+        const style = getComputedStyle(element);
+        const bounds = element.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden'
+          && bounds.width > 0 && bounds.height > 0;
+      };
+      if (visible(room.querySelector('[data-subject-review-content]'))) return 'complete';
+      if (visible(room.querySelector('[data-subject-review-retry]'))) return 'retry';
+      const status = room.querySelector('[data-subject-review-status]')?.textContent || '';
+      if (/Reveal Answer remains locked|requires .*access|subscription required/i.test(status)) {
+        return 'denied';
+      }
+      return '';
+    }, null, { timeout: 60_000 });
+    return outcome.jsonValue();
+  } catch (error) {
+    const currentText = await page.locator(
+      '#dd-per-subject-app .dd-subject-editorial:not(.is-result)',
+    ).innerText().catch(() => 'Unavailable');
+    throw new Error(
+      `Reveal Answer did not reach content, retry, or access-denied state within 60 seconds. `
+      + `Current UI: ${currentText.slice(0, 900)}; network errors: `
+      + `${JSON.stringify(results.networkErrors).slice(0, 900)}.`,
+      { cause: error },
+    );
+  }
+}
+
 async function completeSubjectMatter(page) {
   await completeOnboardingIfShown(page);
   await completeTermsAcceptanceIfShown(page);
@@ -689,7 +724,27 @@ async function completeSubjectMatter(page) {
     'The locked review must expose exactly one Reveal Answer control.');
   await revealControls.filter({ hasText: 'Reveal Answer' }).click();
   const completeReview = practiceRoom.locator('[data-subject-review-content]');
-  await completeReview.waitFor({ state: 'visible', timeout: 150_000 });
+  let reviewOutcome = await waitForSubjectReviewOutcome(page);
+  if (reviewOutcome === 'retry') {
+    const statusText = await practiceRoom.locator('[data-subject-review-status]')
+      .innerText().catch(() => 'Review request failed with a retryable status.');
+    results.recoveries.push({
+      flow: 'subject-review',
+      action: 'retry-once',
+      status: statusText.slice(0, 500),
+    });
+    await practiceRoom.locator('[data-subject-review-retry]').click();
+    reviewOutcome = await waitForSubjectReviewOutcome(page);
+  }
+  if (reviewOutcome !== 'complete') {
+    const statusText = await practiceRoom.locator('[data-subject-review-status]')
+      .innerText().catch(() => 'Unavailable');
+    throw new Error(
+      `Reveal Answer ended in ${reviewOutcome} after one controlled retry. `
+      + `Current status: ${statusText.slice(0, 900)}; network errors: `
+      + `${JSON.stringify(results.networkErrors).slice(0, 900)}.`,
+    );
+  }
   const revealedDisclosures = completeReview.locator('.dd-subject-review-disclosures > details');
   assert.equal(await revealedDisclosures.count(), 3);
   assert.deepEqual(await revealedDisclosures.evaluateAll((details) => details.map((detail) => detail.open)),

@@ -48,6 +48,7 @@
   ]);
   const HEARTBEAT_MS = 30_000;
   const AUTOSAVE_MS = 1_100;
+  const SUBJECT_REVIEW_REQUEST_TIMEOUT_MS = 45_000;
   const TARGETED_QUESTION_UUID_PATTERN =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -268,7 +269,7 @@
     try { localStorage.removeItem(storageKey); } catch {}
   }
 
-  async function api(path, body = {}) {
+  async function api(path, body = {}, options = {}) {
     const phase4 = global.DueDiligencePhase4;
     if (!phase4?.getSession?.()?.access_token) {
       phase4?.openSignIn?.({ routeBound: true });
@@ -277,7 +278,7 @@
       throw error;
     }
     const identity = privateRequestIdentity();
-    const payload = await phase4.request(path, { body });
+    const payload = await phase4.request(path, { body, signal: options.signal });
     if (!privateRequestIdentityIsCurrent(identity)) {
       const error = new Error('The signed-in account changed before the request completed.');
       error.code = 'STALE_IDENTITY';
@@ -2886,7 +2887,17 @@
     if (status) status.textContent = 'Opening the approved review material…';
     let request = state.reviewMaterialRequests.get(key);
     if (!request) {
-      request = api('/examinations/command', { operation: 'subject_reveal_review', attemptId })
+      const controller = typeof global.AbortController === 'function'
+        ? new global.AbortController()
+        : null;
+      const timeout = controller
+        ? setTimeout(() => controller.abort(), SUBJECT_REVIEW_REQUEST_TIMEOUT_MS)
+        : null;
+      request = api(
+        '/examinations/command',
+        { operation: 'subject_reveal_review', attemptId },
+        { signal: controller?.signal },
+      )
         .then((rawMaterial) => {
           const material = sanitizeSubjectReviewValue(rawMaterial);
           if (material?.attemptId !== attemptId || material?.questionId !== questionId) {
@@ -2895,7 +2906,10 @@
           state.reviewMaterialCache.set(key, material);
           return material;
         })
-        .finally(() => state.reviewMaterialRequests.delete(key));
+        .finally(() => {
+          if (timeout) clearTimeout(timeout);
+          state.reviewMaterialRequests.delete(key);
+        });
       state.reviewMaterialRequests.set(key, request);
     }
     let reviewConfirmed = false;

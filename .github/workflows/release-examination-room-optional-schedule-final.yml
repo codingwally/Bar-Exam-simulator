@@ -1,0 +1,203 @@
+name: Release Examination Room optional schedule fix final
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-optional-schedule-final.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-examination-room-optional-schedule-final
+  cancel-in-progress: false
+
+jobs:
+  patch-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out production main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply the isolated Examination Room implementation patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/fix-examination-room-optional-schedule.yml').read_text(encoding='utf-8')
+          step = source.index('      - name: Patch only Examination Room scheduling\n')
+          marker = '        run: |\n'
+          start = source.index(marker, step) + len(marker)
+          candidates = [
+              source.find('\n      - name: Install reviewed Worker dependencies', start),
+              source.find('\n      - name: Validate syntax and focused behavior', start),
+          ]
+          end = min(value for value in candidates if value >= 0)
+          block = source[start:end]
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in block.splitlines()) + '\n'
+          Path('/tmp/examination-room-optional-schedule-patch.sh').write_text(script, encoding='utf-8')
+          PY
+          bash -n /tmp/examination-room-optional-schedule-patch.sh
+          bash /tmp/examination-room-optional-schedule-patch.sh
+
+      - name: Align Examination Room regression contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          owner_path = Path('worker/examination-room-v1-owner.test.mjs')
+          owner = owner_path.read_text(encoding='utf-8')
+          old_title = "test('owner approval fails recoverably when the published exam has no exact usable schedule and never invents a 24-hour window'"
+          new_title = "test('owner approval converts a blank published schedule into a fresh 24-hour key window'"
+          end_marker = '\n\nfunction bytes('
+          start = owner.find(old_title)
+          end = owner.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit('Could not safely locate the obsolete owner schedule test.')
+          block = owner[start:end].replace(old_title, new_title, 1)
+          block = block.replace(
+              '  let activationCalls = 0;\n',
+              '  let activationCalls = 0;\n  let activationPayload = null;\n  const beforeRequest = Date.now();\n',
+              1,
+          )
+          old_fetch = (
+              "    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) activationCalls += 1;\n"
+              "    throw new Error(`Unexpected fetch ${url}`);"
+          )
+          new_fetch = (
+              "    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {\n"
+              "      activationCalls += 1;\n"
+              "      activationPayload = body.p_payload;\n"
+              "      return jsonResponse({\n"
+              "        ok: false,\n"
+              "        error: {\n"
+              "          code: 'EXPECTED_ACTIVATION_STOP',\n"
+              "          message: 'The test stops after verifying the generated activation window.',\n"
+              "          status: 409,\n"
+              "          recovery: 'No recovery is required in this test.',\n"
+              "        },\n"
+              "      });\n"
+              "    }\n"
+              "    throw new Error(`Unexpected fetch ${url}`);"
+          )
+          if old_fetch not in block:
+              raise SystemExit('Could not safely locate the former no-activation fetch guard.')
+          block = block.replace(old_fetch, new_fetch, 1)
+          old_assertions = (
+              "  const result = await response.json();\n"
+              "  assert.equal(response.status, 409);\n"
+              "  assert.equal(result.error.code, 'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID');\n"
+              "  assert.match(result.error.recovery, /exact start date, time, and duration/u);\n"
+              "  assert.equal(activationCalls, 0);"
+          )
+          new_assertions = (
+              "  const afterRequest = Date.now();\n"
+              "  const result = await response.json();\n"
+              "  const opens = Date.parse(activationPayload?.opensAt || '');\n"
+              "  const closes = Date.parse(activationPayload?.closesAt || '');\n"
+              "  assert.equal(response.status, 409);\n"
+              "  assert.equal(result.error.code, 'EXAM_ROOM_V1_EXPECTED_ACTIVATION_STOP');\n"
+              "  assert.equal(activationCalls, 1);\n"
+              "  assert.equal(activationPayload.replaceCurrent, false);\n"
+              "  assert.ok(Number.isFinite(opens));\n"
+              "  assert.ok(Number.isFinite(closes));\n"
+              "  assert.ok(opens >= beforeRequest - 1_000);\n"
+              "  assert.ok(opens <= afterRequest + 1_000);\n"
+              "  assert.equal(closes - opens, 24 * 60 * 60 * 1_000);"
+          )
+          if old_assertions not in block:
+              raise SystemExit('Could not safely locate the obsolete owner schedule assertions.')
+          block = block.replace(old_assertions, new_assertions, 1)
+          owner = owner[:start] + block + owner[end:]
+          owner_path.write_text(owner, encoding='utf-8')
+
+          professor_path = Path('examination-room/professor.client.test.cjs')
+          professor = professor_path.read_text(encoding='utf-8')
+          old_version = r"assert.match(professorHtml, /professor\.js\?v=greenfield-v1-20260827-25/);"
+          new_version = r"assert.match(professorHtml, /professor\.js\?v=greenfield-v1-20260827-26-optional-schedule/);"
+          if old_version not in professor:
+              raise SystemExit('Could not safely locate the Professor cache-version assertion.')
+          professor = professor.replace(old_version, new_version, 1)
+          optional_test = r'''
+          test('examination scheduling is optional while key access remains explicit', () => {
+            assert.doesNotMatch(professorSource, /Set the start date and time/);
+            assert.doesNotMatch(professorSource, /The room cannot be scheduled without a start time/);
+            assert.match(professorSource, /No fixed date · opens when the student key is issued/);
+            assert.match(professorHtml, /Start <small>\(optional\)<\/small>/);
+            assert.match(professorHtml, /Leave blank to open the room when Admin issues the student key/);
+            assert.doesNotMatch(professorHtml, /id="exam-date"[^>]*value=/);
+            assert.doesNotMatch(professorHtml, /id="start-control"[^>]*value=/);
+          });
+          '''
+          if "test('examination scheduling is optional while key access remains explicit'" not in professor:
+              professor = professor.rstrip() + '\n\n' + optional_test.strip() + '\n'
+          professor_path.write_text(professor, encoding='utf-8')
+          PY
+
+      - name: Install reviewed Worker dependencies
+        working-directory: worker
+        shell: bash
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Run focused Examination Room validation
+        shell: bash
+        run: |
+          node --check worker/index.mjs
+          node --check worker/examination-room-activation-window.mjs
+          node --check examination-room/professor.js
+          node --test worker/examination-room-activation-window.test.mjs
+          node --test worker/examination-room-v1-owner.test.mjs
+          node --test examination-room/professor.client.test.cjs
+          git diff --check
+
+      - name: Enforce strict Examination Room scope
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          expected = {
+              'worker/index.mjs',
+              'worker/examination-room-activation-window.mjs',
+              'worker/examination-room-activation-window.test.mjs',
+              'worker/examination-room-v1-owner.test.mjs',
+              'examination-room/professor.js',
+              'examination-room/professor.client.test.cjs',
+              'examination-room/index.html',
+          }
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          unexpected = sorted(changed - expected)
+          missing = sorted(expected - changed)
+          if unexpected:
+              raise SystemExit(f'Unexpected out-of-scope files changed: {unexpected}')
+          if missing:
+              raise SystemExit(f'Expected Examination Room files were not changed: {missing}')
+          PY
+
+      - name: Publish the verified Examination Room fix
+        shell: bash
+        run: |
+          git config user.name "Due Diligence Release Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/index.mjs \
+            worker/examination-room-activation-window.mjs \
+            worker/examination-room-activation-window.test.mjs \
+            worker/examination-room-v1-owner.test.mjs \
+            examination-room/professor.js \
+            examination-room/professor.client.test.cjs \
+            examination-room/index.html
+          git commit -m "fix(examination-room): make examination schedule optional"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+          done
+          exit 1

@@ -46,20 +46,75 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import base64
           from pathlib import Path
 
-          owner_test = Path('worker/examination-room-v1-owner.test.mjs')
-          owner_source = owner_test.read_text(encoding='utf-8')
-          start_marker = "test('owner approval fails recoverably when the published exam has no exact usable schedule and never invents a 24-hour window', async () => {"
-          end_marker = '\nfunction bytes(value) {'
-          start = owner_source.find(start_marker)
-          end = owner_source.find(end_marker, start)
+          path = Path('worker/examination-room-v1-owner.test.mjs')
+          source = path.read_text(encoding='utf-8')
+          old_title = "test('owner approval fails recoverably when the published exam has no exact usable schedule and never invents a 24-hour window'"
+          new_title = "test('owner approval converts a blank published schedule into a fresh 24-hour key window'"
+          end_marker = '\n\nfunction bytes('
+          start = source.find(old_title)
+          end = source.find(end_marker, start)
           if start < 0 or end < 0:
-              raise SystemExit('Could not safely locate the obsolete owner schedule test.')
-          replacement = base64.b64decode('dGVzdCgnb3duZXIgYXBwcm92YWwgdHJlYXRzIGEgYmxhbmsgc3RhcnQgZGF0ZSBhcyBvcHRpb25hbCBhbmQgaXNzdWVzIGEgZnJlc2ggMjQtaG91ciBrZXkgd2luZG93JywgYXN5bmMgKCkgPT4gewogIGxldCBhY3RpdmF0aW9uQ2FsbHMgPSAwOwogIGxldCBpc3N1ZWRXaW5kb3cgPSBudWxsOwogIGNvbnN0IHJlcXVlc3RTdGFydGVkQXQgPSBEYXRlLm5vdygpOwoKICBjb25zdCByZXNwb25zZSA9IGF3YWl0IHdpdGhNb2NrRmV0Y2goYXN5bmMgKHVybCwgb3B0aW9ucyA9IHt9KSA9PiB7CiAgICBjb25zdCBhdXRob3JpemVkID0gYXV0aGVudGljYXRlZE93bmVyKHVybCk7CiAgICBpZiAoYXV0aG9yaXplZCkgcmV0dXJuIGF1dGhvcml6ZWQ7CiAgICBjb25zdCBib2R5ID0gb3B0aW9ucy5ib2R5ID8gSlNPTi5wYXJzZShvcHRpb25zLmJvZHkpIDogbnVsbDsKCiAgICBpZiAoU3RyaW5nKHVybCkuZW5kc1dpdGgoJy9yZXN0L3YxL3JwYy9leGFtaW5hdGlvbl9yb29tX3YxX293bmVyX2Vuc3VyZV9tZW1iZXJzaGlwJykpIHsKICAgICAgcmV0dXJuIGpzb25SZXNwb25zZSh7CiAgICAgICAgb2s6IHRydWUsCiAgICAgICAgZHVwbGljYXRlOiBmYWxzZSwKICAgICAgICBtZW1iZXJzaGlwSWQ6ICc5OTk5OTk5OS05OTk5LTQ5OTktODk5OS05OTk5OTk5OTk5OTknLAogICAgICB9KTsKICAgIH0KCiAgICBpZiAoU3RyaW5nKHVybCkuZW5kc1dpdGgoJy9yZXN0L3YxL3JwYy9leGFtaW5hdGlvbl9yb29tX3YxX293bmVyX3F1ZXJ5JykpIHsKICAgICAgYXNzZXJ0LmVxdWFsKGJvZHkucF9vcGVyYXRpb24sICdleGFtX2RldGFpbCcpOwogICAgICByZXR1cm4ganNvblJlc3BvbnNlKHsKICAgICAgICBvazogdHJ1ZSwKICAgICAgICBidW5kbGU6IHsKICAgICAgICAgIGluc3RpdHV0aW9uSWQ6IElOU1RJVFVUSU9OX0lELAogICAgICAgICAgZXhhbUlkOiBFWEFNX0lELAogICAgICAgICAgY3VycmVudFB1Ymxpc2hlZFZlcnNpb25JZDogVkVSU0lPTl9JRCwKICAgICAgICAgIHRhYmxlczogewogICAgICAgICAgICBleGFtVmVyc2lvbnM6IFt7CiAgICAgICAgICAgICAgaWQ6IFZFUlNJT05fSUQsCiAgICAgICAgICAgICAgcHVibGljYXRpb25fc3RhdHVzOiAncHVibGlzaGVkJywKICAgICAgICAgICAgICBkdXJhdGlvbl9zZWNvbmRzOiA3XzIwMCwKICAgICAgICAgICAgICBjb250cm9sczoge30sCiAgICAgICAgICAgIH1dLAogICAgICAgICAgICBleGFtUm9zdGVyOiBbXSwKICAgICAgICAgIH0sCiAgICAgICAgfSwKICAgICAgfSk7CiAgICB9CgogICAgaWYgKFN0cmluZyh1cmwpLmVuZHNXaXRoKCcvcmVzdC92MS9ycGMvZXhhbWluYXRpb25fcm9vbV92MV9hcGknKSkgewogICAgICBhY3RpdmF0aW9uQ2FsbHMgKz0gMTsKICAgICAgYXNzZXJ0LmVxdWFsKGJvZHkucF9zY29wZSwgJ2FkbWluJyk7CiAgICAgIGFzc2VydC5lcXVhbChib2R5LnBfb3BlcmF0aW9uLCAnZW1haWxfa2V5Jyk7CiAgICAgIGFzc2VydC5lcXVhbChib2R5LnBfcGF5bG9hZC5yZXBsYWNlQ3VycmVudCwgZmFsc2UpOwogICAgICBhc3NlcnQuZXF1YWwoJ3Jvb21LZXknIGluIGJvZHkucF9wYXlsb2FkLCBmYWxzZSk7CgogICAgICBjb25zdCBvcGVuc0F0TXMgPSBEYXRlLnBhcnNlKGJvZHkucF9wYXlsb2FkLm9wZW5zQXQpOwogICAgICBjb25zdCBjbG9zZXNBdE1zID0gRGF0ZS5wYXJzZShib2R5LnBfcGF5bG9hZC5jbG9zZXNBdCk7CiAgICAgIGFzc2VydC5vayhOdW1iZXIuaXNGaW5pdGUob3BlbnNBdE1zKSk7CiAgICAgIGFzc2VydC5vayhOdW1iZXIuaXNGaW5pdGUoY2xvc2VzQXRNcykpOwogICAgICBhc3NlcnQub2sob3BlbnNBdE1zID49IHJlcXVlc3RTdGFydGVkQXQgLSAxXzAwMCk7CiAgICAgIGFzc2VydC5vayhvcGVuc0F0TXMgPD0gRGF0ZS5ub3coKSArIDFfMDAwKTsKICAgICAgYXNzZXJ0LmVxdWFsKGNsb3Nlc0F0TXMgLSBvcGVuc0F0TXMsIDI0ICogNjAgKiA2MCAqIDFfMDAwKTsKICAgICAgaXNzdWVkV2luZG93ID0gewogICAgICAgIG9wZW5zQXQ6IGJvZHkucF9wYXlsb2FkLm9wZW5zQXQsCiAgICAgICAgY2xvc2VzQXQ6IGJvZHkucF9wYXlsb2FkLmNsb3Nlc0F0LAogICAgICB9OwoKICAgICAgcmV0dXJuIGpzb25SZXNwb25zZSh7CiAgICAgICAgb2s6IHRydWUsCiAgICAgICAgYWN0aXZhdGlvbjogewogICAgICAgICAgaWQ6IEFDVElWQVRJT05fSUQsCiAgICAgICAgICBzdGF0dXM6ICdzY2hlZHVsZWQnLAogICAgICAgICAgb3BlbnNBdDogYm9keS5wX3BheWxvYWQub3BlbnNBdCwKICAgICAgICAgIGV4cGlyZXNBdDogYm9keS5wX3BheWxvYWQuY2xvc2VzQXQsCiAgICAgICAgfSwKICAgICAgICBwcm9mZXNzb3JFbWFpbDogJ3Byb2Zlc3NvckBleGFtcGxlLmVkdS5waCcsCiAgICAgICAgcHJvZmVzc29yTmFtZTogJ1Byb2YuIEVsZW5hIFZpbGxhbnVldmEnLAogICAgICAgIGV4YW1UaXRsZTogJ0NvbnN0aXR1dGlvbmFsIExhdyBNaWR0ZXJtJywKICAgICAgfSk7CiAgICB9CgogICAgaWYgKFN0cmluZyh1cmwpLmVuZHNXaXRoKCcvcmVzdC92MS9ycGMvZXhhbWluYXRpb25fcm9vbV92MV9vd25lcl9jb21tYW5kJykpIHsKICAgICAgaWYgKGJvZHkucF9vcGVyYXRpb24gPT09ICdzdG9yZV9rZXlfZW52ZWxvcGUnKSB7CiAgICAgICAgcmV0dXJuIGpzb25SZXNwb25zZSh7CiAgICAgICAgICBvazogdHJ1ZSwKICAgICAgICAgIGFjdGl2YXRpb25JZDogYm9keS5wX3BheWxvYWQuYWN0aXZhdGlvbklkLAogICAgICAgICAgZXNjcm93ZWQ6IHRydWUsCiAgICAgICAgfSk7CiAgICAgIH0KICAgICAgaWYgKGJvZHkucF9vcGVyYXRpb24gPT09ICdyZWNvcmRfZW1haWxfZGVsaXZlcnknKSB7CiAgICAgICAgcmV0dXJuIGpzb25SZXNwb25zZSh7CiAgICAgICAgICBvazogdHJ1ZSwKICAgICAgICAgIHJlY29yZGVkOiB0cnVlLAogICAgICAgICAgcmVxdWVzdEhhc2g6IGJvZHkucF9wYXlsb2FkLnJlcXVlc3RIYXNoLAogICAgICAgICAgcHJvdmlkZXJTdGF0dXM6IGJvZHkucF9wYXlsb2FkLnByb3ZpZGVyU3RhdHVzLAogICAgICAgICAgcHJvdmlkZXJJZDogYm9keS5wX3BheWxvYWQucHJvdmlkZXJJZCwKICAgICAgICAgIHNhZmVFcnJvckNvZGU6IGJvZHkucF9wYXlsb2FkLnNhZmVFcnJvckNvZGUsCiAgICAgICAgICBhdHRlbXB0ZWRBdDogYm9keS5wX3BheWxvYWQuYXR0ZW1wdGVkQXQsCiAgICAgICAgfSk7CiAgICAgIH0KICAgIH0KCiAgICBpZiAoU3RyaW5nKHVybCkgPT09ICdodHRwczovL2FwaS5yZXNlbmQuY29tL2VtYWlscycpIHsKICAgICAgcmV0dXJuIGpzb25SZXNwb25zZSh7IGlkOiAnZW1haWwtb3B0aW9uYWwtc2NoZWR1bGUnIH0pOwogICAgfQoKICAgIHRocm93IG5ldyBFcnJvcihgVW5leHBlY3RlZCBmZXRjaCAke3VybH1gKTsKICB9LCAoKSA9PiB3b3JrZXIuZmV0Y2goCiAgICByZXF1ZXN0KCcvZXhhbWluYXRpb24tcm9vbS92MS9hZG1pbi9jb21tYW5kJywgewogICAgICBvcGVyYXRpb246ICdhcHByb3ZlX2FuZF9lbWFpbF9rZXknLAogICAgICBpZGVtcG90ZW5jeUtleTogJzQ1NDU0NTQ1LTQ1NDUtNDU0NS04NTQ1LTQ1NDU0NTQ1NDU0NScsCiAgICAgIHBheWxvYWQ6IHsgaW5zdGl0dXRpb25JZDogSU5TVElUVVRJT05fSUQsIGV4YW1JZDogRVhBTV9JRCB9LAogICAgfSwgJzQ1NDU0NTQ1LTQ1NDUtNDU0NS04NTQ1LTQ1NDU0NTQ1NDU0NScpLAogICAgZW52aXJvbm1lbnQoKSwKICAgIHt9LAogICkpKTsKCiAgY29uc3QgcmVzdWx0ID0gYXdhaXQgcmVzcG9uc2UuanNvbigpOwogIGFzc2VydC5lcXVhbChyZXNwb25zZS5zdGF0dXMsIDIwMSk7CiAgYXNzZXJ0LmVxdWFsKGFjdGl2YXRpb25DYWxscywgMSk7CiAgYXNzZXJ0Lm9rKGlzc3VlZFdpbmRvdyk7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5zY2hlZHVsZS5vcGVuc0F0LCBpc3N1ZWRXaW5kb3cub3BlbnNBdCk7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5zY2hlZHVsZS5jbG9zZXNBdCwgaXNzdWVkV2luZG93LmNsb3Nlc0F0KTsKICBhc3NlcnQuZXF1YWwocmVzdWx0LnNjaGVkdWxlLmR1cmF0aW9uU2Vjb25kcywgN18yMDApOwogIGFzc2VydC5lcXVhbChyZXN1bHQuc2NoZWR1bGUubWF4aW11bUV4dHJhTWludXRlcywgMCk7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5zY2hlZHVsZS5zY2hlZHVsZVNvdXJjZSwgJ3Jvb21fa2V5X2lzc3VhbmNlJyk7CiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5zY2hlZHVsZS5tYXhTZXNzaW9ucywgbnVsbCk7Cn0pOwo=').decode('utf-8')
-          owner_source = owner_source[:start] + replacement + owner_source[end:]
-          owner_test.write_text(owner_source, encoding='utf-8')
+              raise SystemExit('Could not locate the obsolete Examination Room schedule test safely.')
+          block = source[start:end].replace(old_title, new_title, 1)
+          block = block.replace(
+              '  let activationCalls = 0;\n',
+              '  let activationCalls = 0;\n  let activationPayload = null;\n  const beforeRequest = Date.now();\n',
+              1,
+          )
+          old_activation = (
+              "    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) activationCalls += 1;\n"
+              "    throw new Error(`Unexpected fetch ${url}`);"
+          )
+          new_activation = (
+              "    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {\n"
+              "      activationCalls += 1;\n"
+              "      activationPayload = body.p_payload;\n"
+              "      return jsonResponse({\n"
+              "        ok: false,\n"
+              "        error: {\n"
+              "          code: 'EXPECTED_ACTIVATION_STOP',\n"
+              "          message: 'The test stops after verifying the generated activation window.',\n"
+              "          status: 409,\n"
+              "          recovery: 'No recovery is required in this test.',\n"
+              "        },\n"
+              "      });\n"
+              "    }\n"
+              "    throw new Error(`Unexpected fetch ${url}`);"
+          )
+          if old_activation not in block:
+              raise SystemExit('Could not locate the former no-activation assertion safely.')
+          block = block.replace(old_activation, new_activation, 1)
+          old_assertions = (
+              "  const result = await response.json();\n"
+              "  assert.equal(response.status, 409);\n"
+              "  assert.equal(result.error.code, 'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID');\n"
+              "  assert.match(result.error.recovery, /exact start date, time, and duration/u);\n"
+              "  assert.equal(activationCalls, 0);"
+          )
+          new_assertions = (
+              "  const afterRequest = Date.now();\n"
+              "  const result = await response.json();\n"
+              "  const opens = Date.parse(activationPayload?.opensAt || '');\n"
+              "  const closes = Date.parse(activationPayload?.closesAt || '');\n"
+              "  assert.equal(response.status, 409);\n"
+              "  assert.equal(result.error.code, 'EXAM_ROOM_V1_EXPECTED_ACTIVATION_STOP');\n"
+              "  assert.equal(activationCalls, 1);\n"
+              "  assert.equal(activationPayload.replaceCurrent, false);\n"
+              "  assert.ok(Number.isFinite(opens));\n"
+              "  assert.ok(Number.isFinite(closes));\n"
+              "  assert.ok(opens >= beforeRequest - 1_000);\n"
+              "  assert.ok(opens <= afterRequest + 1_000);\n"
+              "  assert.equal(closes - opens, 24 * 60 * 60 * 1_000);"
+          )
+          if old_assertions not in block:
+              raise SystemExit('Could not locate the obsolete schedule assertions safely.')
+          block = block.replace(old_assertions, new_assertions, 1)
+          source = source[:start] + block + source[end:]
+          if 'never invents a 24-hour window' in source:
+              raise SystemExit('The obsolete schedule contract remains after patching.')
+          path.write_text(source, encoding='utf-8')
 
           professor_test = Path('examination-room/professor.client.test.cjs')
           professor_source = professor_test.read_text(encoding='utf-8')

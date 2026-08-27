@@ -6,13 +6,14 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#071826">
   <title>Examination Room | DueDiligence.ph</title>
-  <link rel="stylesheet" href="student.css">
+  <link rel="stylesheet" href="student.css?v=renovation-20260828-4">
   <script defer src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
   <script defer src="../assets/phase2-config.js?v=provider-neutral-release2-20260827-1"></script>
   <script defer src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script defer src="view-models.js?v=greenfield-v1-20260826-1"></script>
-  <script defer src="api.js?v=greenfield-v1-20260827-9"></script>
-  <script defer src="student.js?v=greenfield-v1-20260827-7"></script>
+  <script defer src="api.js?v=renovation-20260828-4"></script>
+  <script defer src="media-capture.js?v=renovation-20260828-4"></script>
+  <script defer src="student.js?v=renovation-20260828-4"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to examination content</a>
@@ -41,7 +42,7 @@
       <div class="entry-intro">
         <p class="eyebrow">A calm, protected place for serious work</p>
         <h1 id="entryTitle">Enter your examination room.</h1>
-        <p class="lede">Confirm your identity and course details. You will see the examination information and a short privacy warning before any question is loaded.</p>
+        <p class="lede">Enter the room key, confirm your identity and course details, then begin. Questions stay sealed until the examination opens.</p>
 
         <div id="demoModeNote" class="system-note demo-note" hidden>
           <i class="ph ph-flask" aria-hidden="true"></i>
@@ -54,7 +55,7 @@
         <div class="trust-list" aria-label="What to expect">
           <div>
             <i class="ph ph-eye" aria-hidden="true"></i>
-            <span><strong>Preview first</strong> — questions stay sealed until you continue past the short warning.</span>
+            <span><strong>Preview first</strong> — confirm the title, duration, and safeguards before questions load.</span>
           </div>
           <div>
             <i class="ph ph-cloud-check" aria-hidden="true"></i>
@@ -153,8 +154,8 @@
               <i class="ph ph-arrow-left" aria-hidden="true"></i>
               <span>Change details</span>
             </button>
-            <button id="privacyButton" class="button button-primary" type="button">
-              <span>Review privacy warning</span>
+            <button id="beginButton" class="button button-primary" type="button">
+              <span>Begin examination</span>
               <i class="ph ph-arrow-right" aria-hidden="true"></i>
             </button>
           </div>
@@ -171,6 +172,10 @@
         </div>
 
         <div class="exam-status-group">
+          <div id="mediaStatus" class="media-status" role="status" aria-live="polite" hidden>
+            <i class="ph ph-video-camera" aria-hidden="true"></i>
+            <span>Recording is preparing</span>
+          </div>
           <div id="saveStatus" class="save-status" role="status" aria-live="polite">
             <i class="ph ph-cloud-check" aria-hidden="true"></i>
             <span>Saved on this device</span>
@@ -307,27 +312,6 @@
       </div>
     </section>
   </main>
-
-  <dialog id="privacyDialog" class="privacy-dialog" aria-labelledby="privacyTitle" aria-describedby="privacyIntro">
-    <div class="dialog-shell">
-      <div class="dialog-heading">
-        <span class="dialog-icon" aria-hidden="true"><i class="ph ph-shield-check"></i></span>
-        <div>
-          <p class="step-label">Before questions load</p>
-          <h2 id="privacyTitle">Privacy warning</h2>
-        </div>
-      </div>
-      <p id="privacyIntro" class="privacy-warning-copy">This examination records your identity, answers, submission status, grades, and any examination-integrity features enabled by your Professor. These records can be viewed by your Professor and the platform owner.</p>
-      <div id="privacyError" class="error-panel" role="alert" hidden></div>
-      <div class="dialog-actions">
-        <button id="privacyBackButton" class="button button-secondary" type="button">Back to details</button>
-        <button id="agreeButton" class="button button-primary" type="button">
-          <span>I understand — begin exam</span>
-          <i class="ph ph-arrow-right" aria-hidden="true"></i>
-        </button>
-      </div>
-    </div>
-  </dialog>
 
   <dialog id="submitDialog" class="submit-dialog" aria-labelledby="submitTitle" aria-describedby="submitIntro">
     <div class="dialog-shell compact-dialog">

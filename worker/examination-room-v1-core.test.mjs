@@ -232,12 +232,16 @@ test('drafts may be incomplete, and readiness reports every resolvable publicati
   assert.ok(codes.includes(PUBLICATION_READINESS_CODES.TITLE_REQUIRED));
   assert.ok(codes.includes(PUBLICATION_READINESS_CODES.SUBJECT_REQUIRED));
   assert.ok(codes.includes(PUBLICATION_READINESS_CODES.YEAR_LEVEL_REQUIRED));
-  assert.ok(codes.includes(PUBLICATION_READINESS_CODES.PRIVACY_NOTICE_REQUIRED));
+  assert.equal(codes.includes(PUBLICATION_READINESS_CODES.PRIVACY_NOTICE_REQUIRED), false);
   assert.ok(codes.includes(PUBLICATION_READINESS_CODES.QUESTION_PROMPT_REQUIRED));
   assert.ok(codes.includes(PUBLICATION_READINESS_CODES.QUESTION_POINTS_REQUIRED));
   assert.ok(codes.includes(PUBLICATION_READINESS_CODES.MULTIPLE_CHOICE_OPTIONS_UNIQUE));
   assert.ok(codes.includes(PUBLICATION_READINESS_CODES.MULTIPLE_CHOICE_KEY_REQUIRED));
   assert.equal(Object.isFrozen(readiness.issues), true);
+
+  const noCustomPrivacyStep = getPublicationReadiness(makeReadyDraft({ privacyNoticeVersion: '' }));
+  assert.equal(noCustomPrivacyStep.ready, true);
+  assert.equal(noCustomPrivacyStep.draft.privacyNoticeVersion, 'exam-room-direct-entry-v1');
 });
 
 test('rejects structurally invalid and hostile professor draft input safely', () => {
@@ -341,7 +345,7 @@ test('builds a deeply immutable publication manifest and deterministic canonical
 
 test('publication is blocked until ready and rejects invalid immutable-manifest claims', () => {
   expectCode(
-    () => makePublication(makeReadyDraft({ privacyNoticeVersion: '', questions: [] })),
+    () => makePublication(makeReadyDraft({ questions: [] })),
     ERROR_CODES.PUBLICATION_NOT_READY,
   );
   const tampered = cloneJson(makePublication().manifest);

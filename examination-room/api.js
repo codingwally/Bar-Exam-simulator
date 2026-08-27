@@ -164,6 +164,7 @@
       },
       examLibrary: [],
       activation: null,
+      activationHistory: [],
       sessions: [],
       answerRevisions: [],
       submissions: [],
@@ -178,7 +179,13 @@
   function readDemoState() {
     try {
       const parsed = JSON.parse(global.localStorage?.getItem(DEMO_STATE_KEY) || 'null');
-      if (parsed?.schemaVersion === 5 && parsed?.exam?.id && Array.isArray(parsed.examLibrary)) return parsed;
+      if (parsed?.schemaVersion === 5 && parsed?.exam?.id && Array.isArray(parsed.examLibrary)) {
+        parsed.activationHistory = Array.isArray(parsed.activationHistory) ? parsed.activationHistory : [];
+        parsed.examLibrary.forEach((bundle) => {
+          if (bundle && !Array.isArray(bundle.activationHistory)) bundle.activationHistory = [];
+        });
+        return parsed;
+      }
     } catch {
       // A corrupt demo copy is recoverable by rebuilding the deterministic fixture.
     }
@@ -205,6 +212,7 @@
   const DEMO_EXAM_BUNDLE_FIELDS = Object.freeze([
     'exam',
     'activation',
+    'activationHistory',
     'sessions',
     'answerRevisions',
     'submissions',
@@ -239,7 +247,9 @@
   }
 
   function demoExamSummaries(state) {
-    return allDemoExamBundles(state).map((bundle) => clone(bundle.exam));
+    return allDemoExamBundles(state)
+      .map((bundle) => clone(bundle.exam))
+      .filter((exam) => !exam.deletedAt);
   }
 
   function requireDemoExam(state, examId) {
@@ -256,8 +266,24 @@
     return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^DD26/, '');
   }
 
-  function validDemoKey(value) {
-    return normalizeKey(value) === normalizeKey(DEMO_KEY);
+  function demoRoomKeyForRequest(value) {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let hash = 2166136261;
+    for (const character of String(value || 'demo-room-key')) {
+      hash ^= character.charCodeAt(0);
+      hash = Math.imul(hash, 16777619) >>> 0;
+    }
+    let key = '';
+    for (let index = 0; index < 9; index += 1) {
+      hash = (Math.imul(hash ^ (hash >>> 15), 2246822519) + index) >>> 0;
+      key += alphabet[hash % alphabet.length];
+    }
+    return `DD26-${key.slice(0, 4)}-${key.slice(4, 8)}-${key.slice(8)}`;
+  }
+
+  function validDemoKey(value, state = null) {
+    const current = state?.activation?.roomKey || DEMO_KEY;
+    return normalizeKey(value) === normalizeKey(current);
   }
 
   function required(value, field, maximum = 200) {
@@ -279,6 +305,14 @@
       );
     }
     return result;
+  }
+
+  function demoOwnerReceiptReason(value) {
+    const reason = required(value, 'Owner receipt note', 1_000);
+    if (reason.length < 5) {
+      throw new ExaminationRoomApiError('FIELD_TOO_SHORT', 'Owner receipt note must be at least 5 characters.', 400, 'Add a short reason for the owner audit trail, then try again.');
+    }
+    return reason;
   }
 
   function normalizeEmail(value, { requiredField = false } = {}) {
@@ -319,9 +353,6 @@
       integrityTier: exam.integrityTier,
       cameraRequired: exam.cameraRequired,
       microphoneRequired: exam.microphoneRequired,
-      privacyNoticeVersion: exam.privacyNoticeVersion,
-      privacyController: exam.privacyController,
-      retentionSummary: exam.retentionSummary,
       activationStatus: activation?.status || 'unavailable',
     };
   }
@@ -481,6 +512,7 @@
       if (createsAnotherExam) {
         state.examLibrary.push(previousBundle);
         state.activation = null;
+        state.activationHistory = [];
         state.sessions = [];
         state.answerRevisions = [];
         state.submissions = [];
@@ -514,6 +546,17 @@
       state.audit.push({ type: 'exam_published', actor: 'professor', at: iso(), requestId: idempotencyKey });
       writeDemoState(state, 'exam_published');
       return { ok: true, exam: clone(state.exam), nextAction: 'wait_for_admin_key' };
+    }
+    if (operation === 'archive_exam' || operation === 'delete_draft') {
+      if (operation === 'delete_draft' && state.exam.status !== 'draft') {
+        throw new ExaminationRoomApiError('DRAFT_DELETE_STATE_INVALID', 'Only an unpublished draft can be deleted from the creator workspace.', 409, 'Archive a published examination instead.');
+      }
+      state.exam.deletedAt = iso();
+      state.exam.deletedReason = operation === 'archive_exam' ? 'creator_archived' : 'creator_deleted_draft';
+      if (operation === 'archive_exam' && state.exam.status !== 'draft') state.exam.status = 'archived';
+      state.audit.push({ type: operation, actor: 'professor', at: state.exam.deletedAt, requestId: idempotencyKey });
+      writeDemoState(state, operation);
+      return { ok: true, examId: state.exam.id, archived: operation === 'archive_exam', deleted: operation === 'delete_draft', recoverable: true };
     }
     if (operation === 'open_room') {
       if (!state.activation || !['scheduled', 'active', 'open'].includes(state.activation.status)) {
@@ -751,7 +794,13 @@
 
   function demoStudentPreview(payload = {}) {
     const state = readDemoState();
-    if (!state.activation || !validDemoKey(payload.roomKey)) {
+    if (state.exam.deletedAt) {
+      throw new ExaminationRoomApiError('EXAMINATION_ARCHIVED', 'This examination is not accepting new students.', 409, 'Ask the examination creator or administrator to restore the room or provide another key.');
+    }
+    if (state.exam.blockedAt) {
+      throw new ExaminationRoomApiError('EXAMINATION_BLOCKED', 'This examination is temporarily blocked by the administrator.', 409, 'Wait for the administrator to reopen admission, then enter the same key again.');
+    }
+    if (!state.activation || !validDemoKey(payload.roomKey, state)) {
       throw new ExaminationRoomApiError('ROOM_KEY_INVALID', 'We could not find an active examination for that room key.', 404, 'Check every character. If the key is correct, ask the professor whether the room has been opened.');
     }
     if (!['active', 'open'].includes(state.activation.status)) {
@@ -772,68 +821,50 @@
         examVersion: state.exam.versionId,
         professor: state.professor.displayName,
         questionCount: state.exam.questions.length,
-        noticeVersion: state.exam.privacyNoticeVersion,
         opensAt: state.activation.openedAt || state.activation.issuedAt,
         closesAt: state.activation.expiresAt,
         safeguards: [
           'Answers are saved locally first and synchronized when connected.',
           'Focus, visibility, connection, and fullscreen changes are recorded for professor review.',
           state.exam.cameraRequired || state.exam.microphoneRequired
-            ? 'Camera or microphone recording is used only when the professor enabled it and the notice explains it.'
+            ? 'Camera or microphone access is requested separately after the examination opens. If recording is unavailable, answers and submission continue normally.'
             : 'This examination does not require camera or microphone recording.',
         ],
-      },
-      notice: {
-        version: state.exam.privacyNoticeVersion,
-        title: 'Privacy and examination integrity notice',
-        intro: 'Review what this examination records before any question is revealed.',
-        items: [
-          'Your real name, student number, subject, and year level create your record for this examination. If the creator selected an email allowlist, your email is also checked.',
-          'Your answers, submission receipt, and grading record are retained under your school’s academic-record policy.',
-          'Focus, page visibility, connection, and fullscreen changes are logged with timestamps for contextual review.',
-          state.exam.cameraRequired
-            ? 'Camera recording is enabled for this examination and starts only after you agree and begin.'
-            : 'Camera recording is not enabled for this examination.',
-          state.exam.microphoneRequired
-            ? 'Microphone recording is enabled for this examination and starts only after you agree and begin.'
-            : 'Microphone recording is not enabled for this examination.',
-          'An integrity event is not by itself a finding of misconduct; the professor must review it in context.',
-        ],
-        retention: state.exam.retentionSummary,
-        contact: 'Contact your professor or examination administrator before beginning if you need an accommodation or clarification.',
       },
       identity: clone(student),
     };
   }
 
-  function demoStudentConsent(payload = {}, idempotencyKey = requestId()) {
+  function demoStudentBegin(payload = {}, idempotencyKey = requestId()) {
     const state = readDemoState();
-    if (!state.activation || !validDemoKey(payload.roomKey)) {
+    if (state.exam.deletedAt) {
+      throw new ExaminationRoomApiError('EXAMINATION_ARCHIVED', 'This examination is not accepting new students.', 409, 'Ask the examination creator or administrator to restore the room or provide another key.');
+    }
+    if (state.exam.blockedAt) {
+      throw new ExaminationRoomApiError('EXAMINATION_BLOCKED', 'This examination is temporarily blocked by the administrator.', 409, 'Wait for the administrator to reopen admission, then enter the same key again.');
+    }
+    if (!state.activation || !validDemoKey(payload.roomKey, state)) {
       throw new ExaminationRoomApiError('ROOM_KEY_INVALID', 'The room key is no longer valid.', 403, 'Return to the join page and enter the current key.');
     }
     const student = studentForIdentity(state, payload.identity || payload);
-    if (payload.noticeVersion !== state.exam.privacyNoticeVersion || payload.agreed !== true) {
-      throw new ExaminationRoomApiError('PRIVACY_AGREEMENT_REQUIRED', 'Review and agree to the current examination privacy notice before beginning.', 412, 'Read the notice, choose Agree and begin, then continue.');
-    }
-    const recordingRequired = state.exam.integrityTier === 'recorded_proctoring' || state.exam.cameraRequired || state.exam.microphoneRequired;
-    if (recordingRequired && payload.recordingAccepted !== true) {
-      throw new ExaminationRoomApiError('RECORDING_CONSENT_REQUIRED', 'This examination requires explicit recording agreement.', 412, 'Agree to recording or ask the professor for another permitted arrangement.');
-    }
-    let session = state.sessions.find((entry) => entry.studentNumber === student.studentNumber);
+    let session = state.sessions.find((entry) => (
+      entry.studentNumber === student.studentNumber
+      && (!entry.activationId || entry.activationId === state.activation.id)
+    ));
     if (session?.status === 'revoked') {
       throw new ExaminationRoomApiError('SESSION_REVOKED', 'The examination creator ended this student’s access to the current room.', 403, 'Contact the examination creator if this access decision should be reviewed.');
     }
     if (!session) {
       session = {
-        id: requestId(), examId: state.exam.id, studentId: student.id,
+        id: requestId(), examId: state.exam.id, activationId: state.activation.id, studentId: student.id,
         fullName: student.fullName, studentNumber: student.studentNumber,
         email: student.email || '', subject: state.exam.subject, yearLevel: student.yearLevel,
         status: 'in_progress', connected: true, currentQuestion: 1,
-        consentVersion: payload.noticeVersion, consentedAt: iso(), recordingAccepted: recordingRequired,
+        attemptBindingId: String(payload.attemptBindingId || ''),
         startedAt: iso(), lastSeenAt: iso(), extraMinutes: student.extraMinutes || 0,
       };
       state.sessions.push(session);
-      state.audit.push({ type: 'privacy_agreed', actor: 'student', at: session.consentedAt, sessionId: session.id, requestId: idempotencyKey, noticeVersion: payload.noticeVersion });
+      state.audit.push({ type: 'student_started', actor: 'student', at: session.startedAt, sessionId: session.id, requestId: idempotencyKey });
     }
     writeDemoState(state, 'student_started');
     return {
@@ -982,6 +1013,66 @@
         ],
       };
     }
+    if (operation === 'exam_detail') {
+      const requestedExamId = String(payload.examId || state.exam.id || '').trim();
+      const bundle = allDemoExamBundles(state).find((entry) => entry?.exam?.id === requestedExamId);
+      if (!bundle) {
+        throw new ExaminationRoomApiError('EXAM_NOT_FOUND', 'That examination is not available in this Administrator workspace.', 404, 'Refresh the command center and choose a current examination.');
+      }
+      const activation = bundle.activation ? clone(bundle.activation) : null;
+      const activationHistory = [
+        ...(activation ? [activation] : []),
+        ...clone(bundle.activationHistory || []),
+      ].filter((entry, index, records) => (
+        entry?.id && records.findIndex((candidate) => candidate?.id === entry.id) === index
+      ));
+      const roomKey = activation?.roomKey || (activation ? DEMO_KEY : null);
+      const latestDelivery = activation ? {
+        id: `demo-delivery-${activation.id}`,
+        examId: bundle.exam.id,
+        activationId: activation.id,
+        status: 'demo_delivered',
+        deliveryStatus: 'demo_delivered',
+        professorRecipient: state.professor.email,
+        recipient: state.professor.email,
+        ownerCopyRecipients: ['founder@duediligence.ph'],
+        adminRecipients: ['founder@duediligence.ph'],
+        attemptedAt: activation.issuedAt,
+        persistenceStatus: 'recorded',
+      } : null;
+      const keyHistory = activationHistory.map((record, index) => ({
+        ...record,
+        activationId: record.id,
+        examId: bundle.exam.id,
+        roomKey: record.roomKey || (index === 0 ? roomKey : null),
+        keyAvailable: Boolean(record.roomKey || (index === 0 && roomKey)),
+        keyStatus: index === 0 ? 'available' : 'historical',
+        activationStatus: record.status,
+        latestDelivery: index === 0 ? latestDelivery : null,
+      }));
+      return {
+        ok: true,
+        exam: clone(bundle.exam),
+        professor: clone(state.professor),
+        questions: clone(bundle.exam.questions || []),
+        students: clone(bundle.exam.roster || []),
+        roster: clone(bundle.exam.roster || []),
+        sessions: clone(bundle.sessions || []),
+        submissions: clone(bundle.submissions || []),
+        answers: clone(bundle.answerRevisions || []),
+        answerRevisions: clone(bundle.answerRevisions || []),
+        grades: clone(bundle.gradeRevisions || []),
+        gradeRevisions: clone(bundle.gradeRevisions || []),
+        releases: clone(bundle.releases || []),
+        resultReleases: clone(bundle.releases || []),
+        activations: clone(activationHistory),
+        keys: clone(keyHistory),
+        keyHistory: clone(keyHistory),
+        emailDeliveryEvents: latestDelivery ? [clone(latestDelivery)] : [],
+        snapshots: clone(bundle.snapshots || []),
+        auditEvents: clone(state.audit.filter((entry) => !entry.examId || entry.examId === bundle.exam.id)),
+      };
+    }
     if (operation === 'audit_log') {
       const limit = Math.min(Math.max(Number(payload.limit) || 100, 1), 500);
       const offset = Math.max(Number(payload.offset) || 0, 0);
@@ -1044,6 +1135,8 @@
         awaitingActivation: examRecords.filter((exam) => exam.status === 'awaiting_activation').length,
         open: examRecords.filter((exam) => exam.status === 'open').length,
         grading: examRecords.filter((exam) => exam.status === 'grading').length,
+        blocked: examRecords.filter((exam) => Boolean(exam.blockedAt)).length,
+        archived: examRecords.filter((exam) => Boolean(exam.deletedAt)).length,
         submissions: bundles.reduce((total, bundle) => total + bundle.submissions.length, 0),
       },
       exams,
@@ -1109,6 +1202,191 @@
       entry.type === `owner_${operation}` && entry.requestId === idempotencyKey && entry.result
     ));
     if (ownerReplay) return { ...clone(ownerReplay.result), duplicate: true };
+    const lifecycleOperations = new Set(['reopen_exam', 'block_exam', 'unblock_exam', 'archive_exam', 'restore_exam']);
+    if (lifecycleOperations.has(operation)) {
+      const reason = demoOwnerReceiptReason(payload.reason);
+      const changedAt = iso();
+      let result;
+
+      if (operation === 'block_exam') {
+        state.exam.blockedAt = state.exam.blockedAt || changedAt;
+        state.exam.blockedByUserId = state.exam.blockedByUserId || 'demo-owner';
+        state.exam.blockReason = state.exam.blockReason || reason;
+        state.exam.isBlocked = true;
+        state.exam.lifecycleState = state.exam.deletedAt ? 'archived' : 'blocked';
+        result = {
+          ok: true,
+          examId: state.exam.id,
+          blocked: true,
+          blockReason: state.exam.blockReason,
+          existingAnswersPreserved: true,
+        };
+      } else if (operation === 'unblock_exam') {
+        state.exam.blockedAt = null;
+        state.exam.blockedByUserId = null;
+        state.exam.blockReason = null;
+        state.exam.isBlocked = false;
+        state.exam.lifecycleState = state.exam.deletedAt ? 'archived' : null;
+        result = { ok: true, examId: state.exam.id, blocked: false };
+      } else if (operation === 'archive_exam') {
+        const wasPublished = Boolean(state.exam.publishedAt);
+        state.exam.lifecyclePriorStatus = state.exam.lifecyclePriorStatus || state.exam.status;
+        if (state.activation && ['scheduled', 'active', 'open'].includes(state.activation.status)) {
+          state.activation.status = 'closed';
+          state.activation.closedAt = state.activation.closedAt || changedAt;
+          state.activation.closeReason = state.activation.closeReason || reason;
+        }
+        state.sessions
+          .filter((session) => ['created', 'active', 'in_progress'].includes(session.status))
+          .forEach((session) => {
+            session.status = 'expired';
+            session.connected = false;
+            session.endedAt = session.endedAt || changedAt;
+          });
+        state.exam.status = wasPublished ? 'archived' : 'draft';
+        state.exam.archivedAt = wasPublished ? (state.exam.archivedAt || changedAt) : (state.exam.archivedAt || null);
+        state.exam.deletedAt = state.exam.deletedAt || changedAt;
+        state.exam.deletedByUserId = state.exam.deletedByUserId || 'demo-owner';
+        state.exam.deleteReason = state.exam.deleteReason || reason;
+        state.exam.deletedReason = state.exam.deletedReason || reason;
+        state.exam.deleted = true;
+        state.exam.canRestore = true;
+        state.exam.needsNewKey = wasPublished;
+        state.exam.lifecycleState = 'archived';
+        result = {
+          ok: true,
+          examId: state.exam.id,
+          archived: true,
+          recoverable: true,
+          status: state.exam.status,
+          archivedAt: state.exam.archivedAt || state.exam.deletedAt,
+        };
+      } else if (operation === 'restore_exam') {
+        const wasArchived = Boolean(state.exam.deletedAt);
+        const wasPublished = Boolean(state.exam.publishedAt);
+        if (wasArchived) {
+          state.exam.deletedAt = null;
+          state.exam.deletedByUserId = null;
+          state.exam.deleteReason = null;
+          state.exam.deletedReason = null;
+          state.exam.deleted = false;
+          state.exam.status = wasPublished ? 'closed' : 'draft';
+          state.exam.closedAt = wasPublished ? (state.exam.closedAt || changedAt) : null;
+          state.exam.archivedAt = null;
+          state.exam.lifecyclePriorStatus = null;
+        }
+        state.exam.canRestore = false;
+        state.exam.needsNewKey = wasPublished;
+        state.exam.lifecycleState = state.exam.blockedAt ? 'blocked' : null;
+        result = {
+          ok: true,
+          examId: state.exam.id,
+          restored: true,
+          ...(wasArchived ? {} : { duplicate: true }),
+          status: state.exam.status,
+          needsNewKey: wasPublished,
+        };
+      } else {
+        if (!state.exam.publishedAt) {
+          throw new ExaminationRoomApiError('PUBLICATION_REQUIRED', 'Publish this examination before reopening it.', 409, 'Open the creator workspace, review the draft, then publish and request a key.');
+        }
+        const priorActivation = state.activation ? clone(state.activation) : null;
+        if (priorActivation) {
+          state.sessions.forEach((session) => {
+            if (!session.activationId) session.activationId = priorActivation.id;
+          });
+          priorActivation.status = 'closed';
+          priorActivation.closedAt = priorActivation.closedAt || changedAt;
+          priorActivation.closeReason = priorActivation.closeReason || reason;
+          if (!state.activationHistory.some((entry) => entry.id === priorActivation.id)) {
+            state.activationHistory.unshift(priorActivation);
+          }
+        }
+        state.sessions
+          .filter((session) => ['created', 'active', 'in_progress'].includes(session.status))
+          .forEach((session) => {
+            session.status = 'expired';
+            session.connected = false;
+            session.endedAt = session.endedAt || changedAt;
+          });
+        state.exam.deletedAt = null;
+        state.exam.deletedByUserId = null;
+        state.exam.deleteReason = null;
+        state.exam.deletedReason = null;
+        state.exam.deleted = false;
+        state.exam.blockedAt = null;
+        state.exam.blockedByUserId = null;
+        state.exam.blockReason = null;
+        state.exam.isBlocked = false;
+        state.exam.status = 'published';
+        state.exam.closedAt = null;
+        state.exam.archivedAt = null;
+        state.exam.lifecyclePriorStatus = null;
+        state.exam.lifecycleState = null;
+        state.exam.canRestore = false;
+        state.exam.needsNewKey = true;
+
+        const roomKey = demoRoomKeyForRequest(idempotencyKey);
+        state.activation = {
+          id: requestId(),
+          examId: state.exam.id,
+          status: 'active',
+          roomKey,
+          keyHint: `••••-••••-${roomKey.slice(-4)}`,
+          issuedAt: changedAt,
+          expiresAt: iso(24 * 60 * 60 * 1000),
+          issuedBy: 'Founder Admin',
+        };
+        state.exam.status = 'active';
+        state.exam.needsNewKey = false;
+        const lifecycle = {
+          ok: true,
+          examId: state.exam.id,
+          reopened: true,
+          status: 'published',
+          needsNewKey: true,
+          nextAction: 'issue_and_email_key',
+        };
+        const keyEscrow = { status: 'escrowed', activationId: state.activation.id };
+        const deliveryAudit = {
+          status: 'recorded',
+          activationId: state.activation.id,
+          professorRecipient: state.professor.email,
+          ownerCopyRecipients: ['founder@duediligence.ph'],
+        };
+        result = {
+          ok: true,
+          reopened: true,
+          roomKey,
+          activation: clone(state.activation),
+          activationCommitted: true,
+          keyIssuanceStatus: 'active',
+          keyEscrow,
+          keyRecovery: { status: 'escrowed', activationId: state.activation.id },
+          deliveryAudit,
+          deliveryStatus: 'demo_delivered',
+          recoveryRequired: false,
+          recoveryActions: [],
+          recipient: state.professor.email,
+          adminRecipients: ['founder@duediligence.ph'],
+          ownerCopyRecipients: ['founder@duediligence.ph'],
+          lifecycle,
+        };
+      }
+
+      state.exam.updatedAt = changedAt;
+      state.audit.push({
+        type: `owner_${operation}`,
+        actor: 'admin',
+        at: changedAt,
+        examId: state.exam.id,
+        requestId: idempotencyKey,
+        reason,
+        result: clone(result),
+      });
+      writeDemoState(state, `owner_${operation}`);
+      return result;
+    }
     if (operation === 'correct_student_identity') {
       const student = state.exam.roster.find((entry) => entry.id === payload.studentIdentityId);
       if (!student) {
@@ -1154,6 +1432,7 @@
       if (!['open', 'close'].includes(action)) {
         throw new ExaminationRoomApiError('ROOM_ACTION_INVALID', 'Choose Open room now or Close room.', 400, 'Refresh Examinations and choose one listed room action.');
       }
+      const reason = demoOwnerReceiptReason(payload.reason);
       if (action === 'open') {
         if (!['scheduled', 'active'].includes(state.activation.status)) {
           throw new ExaminationRoomApiError('ROOM_STATE_CHANGED', 'This room can no longer be opened from its current state.', 409, 'Refresh Examinations to see the current room controls.');
@@ -1167,14 +1446,14 @@
         }
         state.activation.status = 'closed';
         state.activation.closedAt = iso();
-        state.activation.closeReason = required(payload.reason || 'Platform owner closed the room.', 'Owner receipt note', 1_000);
+        state.activation.closeReason = reason;
         state.exam.status = 'closed';
         state.sessions
           .filter((session) => !['submitted', 'expired'].includes(session.status))
           .forEach((session) => { session.status = 'expired'; session.connected = false; session.endedAt = state.activation.closedAt; });
       }
       const result = { ok: true, examId: state.exam.id, status: state.activation.status };
-      state.audit.push({ type: 'owner_room_control', actor: 'admin', at: iso(), requestId: idempotencyKey, action, reason: payload.reason, result: clone(result) });
+      state.audit.push({ type: 'owner_room_control', actor: 'admin', at: iso(), examId: state.exam.id, requestId: idempotencyKey, action, reason, result: clone(result) });
       writeDemoState(state, action === 'open' ? 'room_opened_by_owner' : 'room_closed_by_owner');
       return result;
     }
@@ -1188,8 +1467,12 @@
       if (state.exam.status !== 'awaiting_activation' && state.exam.status !== 'active') {
         throw new ExaminationRoomApiError('EXAM_NOT_PUBLISHED', 'The professor must publish this examination before a room key can be issued.', 409, 'Ask the professor to finish the review and choose Publish.');
       }
+      if (state.activation && !state.activationHistory.some((entry) => entry.id === state.activation.id)) {
+        state.activationHistory.unshift(clone(state.activation));
+      }
       state.activation = {
         id: requestId(), examId: state.exam.id, status: 'active',
+        roomKey: DEMO_KEY,
         keyHint: '••••-••••-826K', issuedAt: iso(), expiresAt: iso(24 * 60 * 60 * 1000),
         issuedBy: 'Founder Admin',
       };
@@ -1204,7 +1487,32 @@
       if (!state.activation) throw new ExaminationRoomApiError('ROOM_NOT_ACTIVATED', 'Activate the examination before sending its key.', 409, 'Choose Issue room key first.');
       state.audit.push({ type: 'room_key_email_requested', actor: 'admin', at: iso(), requestId: idempotencyKey });
       writeDemoState(state, 'key_email_requested');
-      return { ok: true, roomKey: DEMO_KEY, deliveryStatus: 'demo_delivered', recipient: state.professor.email };
+      return { ok: true, roomKey: state.activation.roomKey || DEMO_KEY, deliveryStatus: 'demo_delivered', recipient: state.professor.email, adminRecipients: ['founder@duediligence.ph'] };
+    }
+    if (operation === 'reveal_key') {
+      if (!state.activation) throw new ExaminationRoomApiError('ROOM_NOT_ACTIVATED', 'This examination does not have a current key to reveal.', 409, 'Approve the published examination first.');
+      return {
+        ok: true,
+        examId: state.exam.id,
+        activationId: state.activation.id,
+        roomKey: state.activation.roomKey || DEMO_KEY,
+      };
+    }
+    if (operation === 'resend_key') {
+      if (!state.activation) throw new ExaminationRoomApiError('ROOM_NOT_ACTIVATED', 'This examination does not have a current key to resend.', 409, 'Approve the published examination first.');
+      const result = {
+        ok: true,
+        examId: state.exam.id,
+        activationId: state.activation.id,
+        roomKey: state.activation.roomKey || DEMO_KEY,
+        deliveryStatus: 'demo_delivered',
+        deliveryAudit: { status: 'recorded', activationId: state.activation.id },
+        recipient: state.professor.email,
+        adminRecipients: ['founder@duediligence.ph'],
+      };
+      state.audit.push({ type: 'owner_resend_key', actor: 'admin', at: iso(), examId: state.exam.id, requestId: idempotencyKey, result: clone(result) });
+      writeDemoState(state, 'key_email_resent');
+      return result;
     }
     if (operation === 'revoke_key') {
       if (state.activation) state.activation.status = 'revoked';
@@ -1278,16 +1586,51 @@
       : post('/examination-room/v1/professor/command', { operation, payload: staffPayload(payload), idempotencyKey }, { auth: true, idempotencyKey });
   }
 
+  async function professorAssistant(payload = {}, idempotencyKey = requestId()) {
+    if (demoEnabled()) {
+      const exam = payload.examContext || {};
+      const message = String(payload.message || '').trim();
+      const missing = Array.isArray(exam.reviewIssues) ? exam.reviewIssues : [];
+      const total = Number(exam.totalPoints || 0);
+      const questions = Array.isArray(exam.questions) ? exam.questions : [];
+      const highest = questions.reduce((current, question) => (
+        !current || Number(question?.points || 0) > Number(current?.points || 0) ? question : current
+      ), null);
+      const requestedNumber = Number(message.match(/question\s+(\d+)/i)?.[1] || 0);
+      const requestedQuestion = requestedNumber > 0
+        ? questions.find((question, index) => Number(question?.number || index + 1) === requestedNumber)
+        : null;
+      const asksRelativePoints = /how\s+many\s+points?|difference|compare|lower|higher/i.test(message);
+      const reply = requestedQuestion && highest && asksRelativePoints
+        ? `Question ${requestedNumber} is worth ${Number(requestedQuestion.points || 0)} points, which is ${Math.abs(Number(highest.points || 0) - Number(requestedQuestion.points || 0))} point${Math.abs(Number(highest.points || 0) - Number(requestedQuestion.points || 0)) === 1 ? '' : 's'} ${Number(requestedQuestion.points || 0) <= Number(highest.points || 0) ? 'lower than' : 'higher than'} Question ${Number(highest.number || questions.indexOf(highest) + 1)} at ${Number(highest.points || 0)} points.`
+        : /highest|largest|most\s+(?:points|weight)|carries?\s+the\s+most/i.test(message)
+        ? highest
+          ? `Question ${Number(highest.number || questions.indexOf(highest) + 1)} carries the most weight at ${Number(highest.points || 0)} points${highest.prompt ? `: “${String(highest.prompt).trim().slice(0, 180)}${String(highest.prompt).trim().length > 180 ? '…' : ''}”` : '.'}`
+          : 'There are no questions to compare yet. Add a question, then ask me again.'
+        : requestedQuestion && /point|score|weight|worth/i.test(message)
+          ? `Question ${requestedNumber} is worth ${Number(requestedQuestion.points || 0)} points.`
+        : /missing|ready|publish/i.test(message)
+        ? missing.length
+          ? `There ${missing.length === 1 ? 'is' : 'are'} ${missing.length} required item${missing.length === 1 ? '' : 's'} before publishing: ${missing.join('; ')}.`
+          : `This draft has no missing required fields. It contains ${questions.length} question${questions.length === 1 ? '' : 's'} worth ${total} points.`
+        : /point|score|distribution/i.test(message)
+          ? `The current examination totals ${total} points across ${questions.length} question${questions.length === 1 ? '' : 's'}. A 100-point total is familiar but not required.`
+          : `I reviewed “${exam.title || 'this examination'}” in ${exam.subject || 'the selected subject'}. Ask me to check readiness, points, question wording, timing, navigation, grading identity, or safeguards; I will keep the conversation connected to this draft.`;
+      return { ok: true, assistant: { reply, suggestedActionIds: [] } };
+    }
+    return post('/examination-room/v1/professor/assistant', payload, { auth: true, idempotencyKey });
+  }
+
   async function studentPreview(payload) {
     return demoEnabled()
       ? demoStudentPreview(payload)
       : post('/examination-room/v1/student/preview', payload, { auth: false });
   }
 
-  async function studentConsent(payload, idempotencyKey = requestId()) {
+  async function studentBegin(payload, idempotencyKey = requestId()) {
     return demoEnabled()
-      ? demoStudentConsent(payload, idempotencyKey)
-      : post('/examination-room/v1/student/consent', { ...payload, idempotencyKey }, { auth: false, idempotencyKey });
+      ? demoStudentBegin(payload, idempotencyKey)
+      : post('/examination-room/v1/student/begin', { ...payload, idempotencyKey }, { auth: false, idempotencyKey });
   }
 
   async function studentQuery(operation, payload = {}) {
@@ -1315,8 +1658,8 @@
   }
 
   // Compatibility surface used by the resilient student client. It keeps the
-  // transport contract small while preserving metadata-only preview, explicit
-  // consent, append-only answer saves, and idempotent final submission.
+  // transport contract small while preserving metadata-only preview, direct
+  // entry, append-only answer saves, and idempotent final submission.
   async function previewRoom(entry) {
     const identity = {
       fullName: entry?.fullName,
@@ -1331,46 +1674,16 @@
     return clone(result.metadata || result);
   }
 
-  async function getPrivacyNotice({ examId, roomKey, noticeVersion }) {
-    let result = studentCompatibility.lastPreview;
-    const metadata = result?.metadata || {};
-    if (!result || metadata.examId !== examId || metadata.noticeVersion !== noticeVersion) {
-      const entry = studentCompatibility.lastEntry;
-      if (!entry || normalizeKey(entry.roomKey) !== normalizeKey(roomKey)) {
-        throw new ExaminationRoomApiError(
-          'PREVIEW_REQUIRED',
-          'Check your room and identity details before reviewing the privacy notice.',
-          412,
-          'Return to the entry form and choose Check examination details.',
-        );
-      }
-      result = await studentPreview(entry);
-      studentCompatibility.lastPreview = clone(result);
-    }
-    if (!result.notice) {
-      throw new ExaminationRoomApiError(
-        'NOTICE_UNAVAILABLE',
-        'The current privacy notice could not be loaded.',
-        503,
-        'Your examination has not started. Check your connection and try again.',
-      );
-    }
-    return clone(result.notice);
-  }
-
   async function beginAttempt(request) {
-    const result = await studentConsent({
+    const attemptBindingId = String(request.attemptBindingId || '').trim();
+    const result = await studentBegin({
       examId: request.examId,
       examVersion: request.examVersion,
       roomKey: request.roomKey,
       identity: request.student,
-      noticeVersion: request.acceptance?.noticeVersion,
-      acceptedAt: request.acceptance?.acceptedAt,
-      acceptanceId: request.acceptance?.acceptanceId,
-      agreed: true,
-      recordingAccepted: request.acceptance?.recordingAccepted === true,
+      attemptBindingId,
       client: request.client,
-    }, request.acceptance?.acceptanceId || requestId());
+    }, attemptBindingId ? `student-begin:${attemptBindingId}` : requestId());
     const session = result.session || {};
     const exam = result.exam || {};
     const startedAt = session.startedAt || result.serverTime || iso();
@@ -1479,12 +1792,12 @@
     authSession,
     professorQuery,
     professorCommand,
+    professorAssistant,
     studentPreview,
-    studentConsent,
+    studentBegin,
     studentQuery,
     studentCommand,
     previewRoom,
-    getPrivacyNotice,
     beginAttempt,
     loadExam,
     syncOperations,

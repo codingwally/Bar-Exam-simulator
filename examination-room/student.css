@@ -799,6 +799,41 @@ dialog::backdrop {
   gap: 16px;
 }
 
+.media-status {
+  display: inline-flex;
+  align-items: center;
+  max-width: 260px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid rgba(215, 177, 80, 0.28);
+  border-radius: 999px;
+  gap: 8px;
+  background: rgba(215, 177, 80, 0.08);
+  color: var(--ivory-200);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.media-status[data-state="active"] {
+  border-color: rgba(86, 185, 126, 0.4);
+  background: rgba(86, 185, 126, 0.1);
+  color: var(--success);
+}
+
+.media-status[data-state="queued"],
+.media-status[data-state="finishing"] {
+  color: var(--warning);
+}
+
+.media-status[data-state="permission_denied"],
+.media-status[data-state="unavailable"],
+.media-status[data-state="storage_full"] {
+  border-color: rgba(224, 118, 118, 0.35);
+  background: rgba(224, 118, 118, 0.08);
+  color: var(--danger);
+}
+
 .save-status {
   display: inline-flex;
   align-items: center;
@@ -1460,6 +1495,11 @@ progress::-moz-progress-bar {
   }
 
   .save-status {
+    grid-column: 1 / -1;
+    max-width: none;
+  }
+
+  .media-status {
     grid-column: 1 / -1;
     max-width: none;
   }

@@ -198,6 +198,38 @@ async function grantBetaAccess(actorUserId, targetUserId) {
   assert.equal(result.enabled, true);
 }
 
+async function grantFoundingBetaAccess(actorUserId, targetUser) {
+  const expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+  const { body } = await jsonRequest(
+    `${SUPABASE_URL}/rest/v1/free_beta_access?on_conflict=user_id`,
+    {
+      method: 'POST',
+      headers: {
+        ...serviceHeaders,
+        Prefer: 'resolution=merge-duplicates,return=representation',
+      },
+      body: JSON.stringify({
+        user_id: targetUser.id,
+        enabled: true,
+        expires_at: expiresAt,
+        reason: `Protected staging review verification ${runId}`,
+        created_by: actorUserId,
+        updated_by: actorUserId,
+        access_program: 'founding_beta_2026',
+      }),
+    },
+    [200, 201],
+  );
+  assert.equal(body.length, 1);
+  assert.equal(body[0].enabled, true);
+  assert.equal(body[0].access_program, 'founding_beta_2026');
+
+  const access = await workerPost('/access', {}, targetUser.token);
+  assert.equal(access.body.access?.allowed, true);
+  assert.equal(access.body.access?.unlimited, true);
+  assert.equal(access.body.access?.basis, 'founding_beta');
+}
+
 function alacAnswer() {
   return [
     'I. ANSWER: The legal result depends on whether every statutory element is established by the facts given.',
@@ -240,6 +272,8 @@ try {
   const peer = await createUser('peer');
   await grantBetaAccess(actorUserId, student.id);
   await grantBetaAccess(actorUserId, peer.id);
+  await grantFoundingBetaAccess(actorUserId, student);
+  await grantFoundingBetaAccess(actorUserId, peer);
 
   console.log('STAGING_GATE: validating the 1,890-placement Subject Matter catalog');
   const catalog = await examinationQuery(student, 'subject_catalog');

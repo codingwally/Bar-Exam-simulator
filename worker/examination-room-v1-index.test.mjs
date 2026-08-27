@@ -8,6 +8,7 @@ const USER_ID = '22222222-2222-4222-8222-222222222222';
 const INSTITUTION_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_INSTITUTION_ID = '77777777-7777-4777-8777-777777777777';
 const COMMUNITY_INSTITUTION_ID = 'ddc00000-0000-4000-8000-000000000001';
+const EXAM_ID = '44444444-4444-4444-8444-444444444444';
 const ROOM_KEY = createRoomKey('ABCDEFGH');
 
 function env() {
@@ -70,7 +71,24 @@ test('registered professor session route verifies the bearer token and greenfiel
       });
     }
     if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
-      return jsonResponse({ ok: true, professor: { authorized: true, displayName: 'Prof. Elena Villanueva' }, exam: null });
+      return jsonResponse({
+        ok: true,
+        professor: { authorized: true, displayName: 'Prof. Elena Villanueva' },
+        exam: null,
+        exams: [{ examId: EXAM_ID, status: 'published' }],
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_query')) {
+      return jsonResponse({
+        ok: true,
+        items: [{
+          examId: EXAM_ID,
+          deleted: true,
+          deletedAt: '2026-08-28T02:00:00.000Z',
+          deleteReason: 'Archived by the creator.',
+          canRestore: true,
+        }],
+      });
     }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
@@ -82,10 +100,16 @@ test('registered professor session route verifies the bearer token and greenfiel
   assert.equal(response.status, 200);
   assert.equal(result.professor.authorized, true);
   assert.equal(result.professor.displayName, 'Prof. Elena Villanueva');
+  assert.equal(result.exams[0].lifecycleState, 'archived');
+  assert.equal(result.exams[0].canRestore, true);
   const persistenceCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_api'));
   assert.equal(persistenceCall.body.p_scope, 'professor');
   assert.equal(persistenceCall.body.p_actor_user_id, USER_ID);
   assert.equal(persistenceCall.body.p_institution_id, INSTITUTION_ID);
+  const lifecycleCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_lifecycle_query'));
+  assert.equal(lifecycleCall.body.p_actor_user_id, USER_ID);
+  assert.equal(lifecycleCall.body.p_institution_id, INSTITUTION_ID);
+  assert.equal(lifecycleCall.body.p_exam_id, null);
 });
 
 test('creator authorization preserves the database-preferred workspace when Community and a school are both active', async () => {
@@ -118,6 +142,9 @@ test('creator authorization preserves the database-preferred workspace when Comm
     if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
       return jsonResponse({ ok: true, professor: { authorized: true }, exam: null });
     }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_query')) {
+      return jsonResponse({ ok: true, items: [] });
+    }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
     request('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
@@ -128,6 +155,8 @@ test('creator authorization preserves the database-preferred workspace when Comm
   assert.equal(response.status, 200);
   const persistenceCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_api'));
   assert.equal(persistenceCall.body.p_institution_id, OTHER_INSTITUTION_ID);
+  const lifecycleCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_lifecycle_query'));
+  assert.equal(lifecycleCall.body.p_institution_id, OTHER_INSTITUTION_ID);
 });
 
 test('a verified session reaches Professor persistence even when creator context omits active workspace flags', async () => {
@@ -152,6 +181,9 @@ test('a verified session reaches Professor persistence even when creator context
     if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
       return jsonResponse({ ok: true, professor: { authorized: true }, exam: null });
     }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_query')) {
+      return jsonResponse({ ok: true, items: [] });
+    }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
     request('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
@@ -163,6 +195,8 @@ test('a verified session reaches Professor persistence even when creator context
   assert.equal(result.ok, true);
   const persistenceCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_api'));
   assert.equal(persistenceCall.body.p_institution_id, COMMUNITY_INSTITUTION_ID);
+  const lifecycleCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_lifecycle_query'));
+  assert.equal(lifecycleCall.body.p_institution_id, COMMUNITY_INSTITUTION_ID);
 });
 
 test('Professor signup role status reaches the service-only approval bridge', async () => {
@@ -253,7 +287,23 @@ test('platform owner command center does not require a pre-existing institution-
       return jsonResponse({ authorized: true, role: 'founder_admin', capabilities: ['role_admin'] });
     }
     if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_query')) {
-      return jsonResponse({ ok: true, ownerOnly: true, institutionId: INSTITUTION_ID, exams: [] });
+      return jsonResponse({
+        ok: true,
+        ownerOnly: true,
+        institutionId: INSTITUTION_ID,
+        exams: [{ examId: EXAM_ID, status: 'published' }],
+        counts: { total: 1 },
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_query')) {
+      return jsonResponse({
+        ok: true,
+        items: [{
+          examId: EXAM_ID,
+          blockedAt: '2026-08-28T03:00:00.000Z',
+          blockReason: 'Owner review in progress.',
+        }],
+      });
     }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
@@ -264,7 +314,11 @@ test('platform owner command center does not require a pre-existing institution-
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.equal(result.ownerOnly, true);
+  assert.equal(result.exams[0].lifecycleState, 'blocked');
+  assert.equal(result.exams[0].blockReason, 'Owner review in progress.');
+  assert.equal(result.counts.blocked, 1);
   assert.equal(calls.some((entry) => entry.url.endsWith('/examination_room_v1_owner_query')), true);
+  assert.equal(calls.some((entry) => entry.url.endsWith('/examination_room_v1_lifecycle_query')), true);
   assert.equal(calls.some((entry) => entry.url.endsWith('/examination_room_v1_api')), false);
 });
 
@@ -290,7 +344,24 @@ test('platform owner can inspect any selected institution without relying on sta
     }
     if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_query')) {
       assert.equal(JSON.parse(options.body).p_institution_id, OTHER_INSTITUTION_ID);
-      return jsonResponse({ ok: true, ownerOnly: true, institutionId: OTHER_INSTITUTION_ID, exams: [] });
+      return jsonResponse({
+        ok: true,
+        ownerOnly: true,
+        institutionId: OTHER_INSTITUTION_ID,
+        exams: [{ examId: EXAM_ID, status: 'published' }],
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_query')) {
+      assert.equal(JSON.parse(options.body).p_institution_id, OTHER_INSTITUTION_ID);
+      return jsonResponse({
+        ok: true,
+        items: [{
+          examId: EXAM_ID,
+          deletedAt: '2026-08-28T04:00:00.000Z',
+          deleteReason: 'Archived by the platform owner.',
+          canRestore: true,
+        }],
+      });
     }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
@@ -303,6 +374,8 @@ test('platform owner can inspect any selected institution without relying on sta
   const result = await response.json();
   assert.equal(response.status, 200);
   assert.equal(result.institutionId, OTHER_INSTITUTION_ID);
+  assert.equal(result.exams[0].lifecycleState, 'archived');
+  assert.equal(result.exams[0].canRestore, true);
   assert.equal(calls.some((entry) => entry.url.endsWith('/examination_room_v1_api')), false);
 });
 
@@ -354,7 +427,7 @@ test('student preview sends only a room-key HMAC to the service-only dispatcher'
       return jsonResponse({
         ok: true,
         metadata: {
-          examId: '44444444-4444-4444-8444-444444444444',
+          examId: EXAM_ID,
           title: 'Constitutional Law Midterm',
           subject: 'Constitutional Law',
           yearLevel: 'Second year',
@@ -367,6 +440,9 @@ test('student preview sends only a room-key HMAC to the service-only dispatcher'
           activationStatus: 'open',
         },
       });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_guard')) {
+      return jsonResponse({ ok: true, examId: EXAM_ID, blocked: false, deleted: false });
     }
     throw new Error(`Unexpected fetch ${url}`);
   }, () => worker.fetch(
@@ -386,6 +462,62 @@ test('student preview sends only a room-key HMAC to the service-only dispatcher'
   assert.equal(serialized.includes(ROOM_KEY), false);
   assert.match(persistenceCall.body.p_payload.roomKeyHash, /^[0-9a-f]{64}$/u);
   assert.equal(persistenceCall.body.p_institution_id, null);
+  const lifecycleCall = calls.find((entry) => entry.url.endsWith('/examination_room_v1_lifecycle_guard'));
+  assert.equal(lifecycleCall.body.p_exam_id, EXAM_ID);
+});
+
+test('student preview enforces the lifecycle guard after the keyed preview succeeds', async () => {
+  const calls = [];
+  const response = await withMockFetch(async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    calls.push({ url: String(url), body });
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
+      return jsonResponse({
+        ok: true,
+        metadata: {
+          examId: EXAM_ID,
+          title: 'Constitutional Law Midterm',
+          subject: 'Constitutional Law',
+          yearLevel: 'Second year',
+          durationMinutes: 120,
+          startsAt: '2026-08-26T02:00:00.000Z',
+          professor: 'Prof. Elena Villanueva',
+          questionCount: 1,
+          integrityTier: 'standard',
+          privacyNoticeVersion: 'exam-room-v1',
+          activationStatus: 'open',
+        },
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_guard')) {
+      return jsonResponse({
+        ok: false,
+        error: {
+          code: 'EXAMINATION_BLOCKED',
+          message: 'This examination is temporarily blocked.',
+          status: 409,
+          recovery: 'Wait for Admin to unblock the examination, then enter the same key again.',
+        },
+      });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  }, () => worker.fetch(
+    request('/examination-room/v1/student/preview', {
+      roomKey: ROOM_KEY,
+      fullName: 'Maria Theresa Dela Cruz',
+      studentNumber: '2024-10001',
+      subject: 'Constitutional Law',
+      yearLevel: 'Second year',
+    }, null),
+    env(),
+    {},
+  ));
+  const result = await response.json();
+  assert.equal(response.status, 409);
+  assert.equal(result.error.code, 'EXAM_ROOM_V1_EXAMINATION_BLOCKED');
+  assert.match(result.error.recovery, /Admin to unblock/u);
+  assert.equal(calls.filter((entry) => entry.url.endsWith('/examination_room_v1_api')).length, 1);
+  assert.equal(calls.filter((entry) => entry.url.endsWith('/examination_room_v1_lifecycle_guard')).length, 1);
 });
 
 test('database authorization denials are exposed as controlled 403 responses', async () => {
@@ -432,7 +564,7 @@ test('database status and recovery guidance survive the service-only adapter', a
           code: 'ROOM_NOT_OPEN',
           message: 'The professor has not opened this examination room yet.',
           status: 409,
-          recovery: 'Wait for the professor to open the room, then choose Agree and begin again.',
+          recovery: 'Ask the examination creator or Admin to refresh the active student key, then choose Begin examination again.',
         },
       });
     }
@@ -451,7 +583,9 @@ test('database status and recovery guidance survive the service-only adapter', a
   const result = await response.json();
   assert.equal(response.status, 409);
   assert.equal(result.error.code, 'EXAM_ROOM_V1_ROOM_NOT_OPEN');
-  assert.match(result.error.recovery, /Wait for the professor to open the room/u);
+  assert.equal(result.error.message, 'This student key is not active for admission.');
+  assert.match(result.error.recovery, /creator or Admin to issue or refresh the active student key/u);
+  assert.doesNotMatch(`${result.error.message} ${result.error.recovery}`, /professor.*open|creator.*open/u);
 });
 
 test('invalid student key fails before any external request', async () => {

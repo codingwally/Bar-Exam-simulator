@@ -15,6 +15,7 @@ const [
   openAdmissionMigration,
   admin,
   adminShell,
+  adminCss,
   serviceWorker,
   icon,
 ] = await Promise.all([
@@ -30,6 +31,7 @@ const [
   readFile(new URL('supabase/migrations/20260827010000_examination_room_open_admission_flow.sql', root), 'utf8'),
   readFile(new URL('admin/examination-room-admin.js', root), 'utf8'),
   readFile(new URL('admin/admin.js', root), 'utf8'),
+  readFile(new URL('admin/admin.css', root), 'utf8'),
   readFile(new URL('service-worker.js', root), 'utf8'),
   readFile(new URL('assets/icons/navigation/door-open.svg', root), 'utf8'),
 ]);
@@ -142,6 +144,12 @@ assert.doesNotMatch(
   /examination_room_v1:\s*'role_admin'/,
   'Ordinary delegated role administrators must not gain Examination Room command-center access.',
 );
+assert.match(adminShell, /const isExaminationRoom = section === 'examination_room_v1'/);
+assert.match(adminShell, /rangeControl\.hidden = isExaminationRoom/);
+assert.match(adminShell, /exportButton\.hidden = isExaminationRoom/);
+assert.match(adminShell, /refreshButton\.hidden = isExaminationRoom/);
+assert.match(adminShell, /systemBanner\.hidden = isExaminationRoom/);
+assert.match(adminCss, /#reporting-range\[hidden\][\s\S]*#refresh-dashboard\[hidden\][\s\S]*#download-current-section\[hidden\][\s\S]*#system-banner\[hidden\][\s\S]*display:\s*none\s*!important/);
 
 assert.match(api, /function staffPayload\(payload = \{\}\)/);
 assert.match(api, /URLSearchParams[^\n]*\.get\('institution'\)/);

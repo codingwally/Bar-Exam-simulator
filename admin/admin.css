@@ -50,6 +50,10 @@ h1, h2, h3 { font-family: "Playfair Display", Georgia, serif; }
 .topbar-tools { margin-left: auto; display: flex; align-items: center; gap: .8rem; }
 .topbar-tools label { display: grid; gap: .25rem; font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
 .topbar-tools label[hidden] { display: none; }
+#reporting-range[hidden],
+#refresh-dashboard[hidden],
+#download-current-section[hidden],
+#system-banner[hidden] { display: none !important; }
 select, input, textarea { border: 1px solid #bfcbd9; border-radius: 5px; background: white; color: var(--ink); padding: .58rem .7rem; }
 .freshness { align-self: center; display: flex; gap: .45rem; align-items: center; color: var(--muted); font-size: .72rem; max-width: 220px; }
 .freshness span { width: 8px; height: 8px; background: var(--success); border-radius: 50%; flex: none; }

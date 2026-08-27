@@ -18,7 +18,19 @@
   const AUDIT_PAGE_SIZE = 250;
   const OWNER_ACTION_STORAGE_PREFIX = 'duediligence:examination-room:v1:pending-owner-action';
   const LEGACY_OWNER_ROTATION_STORAGE_PREFIX = 'duediligence:examination-room:v1:pending-owner-rotation';
-  const PERSISTED_OWNER_ACTIONS = new Set(['approve_and_email_key', 'resend_key', 'rotate_key']);
+  const PERSISTED_OWNER_ACTIONS = new Set(['approve_and_email_key', 'reopen_exam', 'resend_key', 'rotate_key']);
+  const KEY_ESCROW_READY_STATES = new Set(['stored', 'escrowed', 'recovered', 'available', 'complete', 'completed', 'succeeded']);
+  const KEY_ESCROW_REPAIR_STATES = new Set(['failed', 'missing', 'repair_required', 'recovery_required', 'unavailable']);
+  const COMMAND_CENTER_SECTIONS = Object.freeze({
+    examination: ['Examination & questions', 'ph-file-text'],
+    students: ['Students & answers', 'ph-student'],
+    grades: ['Grades & results', 'ph-seal-check'],
+    keys: ['Key & delivery', 'ph-key'],
+    recovery: ['Recovery & audit', 'ph-database'],
+    examinations: ['All examinations', 'ph-files'],
+    directory: ['Creator directory', 'ph-address-book'],
+    system: ['System readiness', 'ph-shield-check'],
+  });
   const PREFLIGHT_CHECKS = Object.freeze([
     Object.freeze({ id: 'owner_data_key', label: 'Room-key protection', icon: 'ph-lock-key', help: 'Confirms that issued room keys can be encrypted before storage.', recovery: 'Finish the owner room-key encryption setup, then run the system check again.' }),
     Object.freeze({ id: 'owner_email_recipients', label: 'Owner email copies', icon: 'ph-envelope-simple-open', help: 'Confirms that at least one platform-owner address receives every key copy.', recovery: 'Add at least one valid platform-owner email address, then run the system check again.' }),
@@ -41,13 +53,20 @@
     audit: new Map(),
     recovery: new Map(),
     currentKeys: new Map(),
+    keyRevealErrors: new Map(),
     deliveries: new Map(),
+    keyRecovery: new Map(),
     actionRequests: new Map(),
     examPaging: null,
     inlineError: null,
     preflight: null,
     preflightError: null,
     ownerUserId: '',
+    globalQueue: [],
+    globalQueuePartial: false,
+    embedded: false,
+    openSections: new Set(['examination']),
+    pendingSelection: null,
   };
 
   function escapeHtml(value) {
@@ -59,6 +78,10 @@
   function list(value) { return Array.isArray(value) ? value : []; }
   function object(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
   function firstList(...values) { return values.find(Array.isArray) || []; }
+  function countLabel(value, singular, plural = `${singular}s`) {
+    const count = Number(value || 0);
+    return `${count} ${count === 1 ? singular : plural}`;
+  }
   function camelKey(value) { return String(value).replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()); }
   function uiValue(value) {
     if (Array.isArray(value)) return value.map(uiValue);
@@ -140,9 +163,18 @@
   }
   function canApprove(exam) {
     const publication = String(exam?.publicationStatus || exam?.status || '').toLowerCase();
-    const room = String(activationOf(exam)?.status || activationOf(exam)?.activationStatus || '').toLowerCase();
+    const activation = activationOf(exam);
+    const room = String(activation?.status || activation?.activationStatus || '').toLowerCase();
+    const lifecycle = String(exam?.lifecycleState || '').toLowerCase();
+    const unavailable = Boolean(
+      exam?.deletedAt || exam?.archivedAt || exam?.deleted === true
+      || exam?.blockedAt || exam?.isBlocked === true
+      || ['archived', 'deleted', 'blocked'].includes(lifecycle),
+    );
+    const hasActivation = Boolean(activation?.id || activation?.activationId || (room && room !== 'not_activated'));
     return ['published', 'key_requested', 'awaiting_approval', 'awaiting_activation'].includes(publication)
-      && !['scheduled', 'active', 'open'].includes(room);
+      && !unavailable
+      && !hasActivation;
   }
   function pendingKeyRequests() {
     return list(state.data?.exams)
@@ -486,10 +518,98 @@
     };
   }
 
-  async function centerQuery(offset = 0) {
-    const payload = { institutionId: state.institutionId, limit: EXAM_PAGE_SIZE, offset };
+  async function centerQueryForInstitution(institutionId, offset = 0) {
+    const payload = { institutionId, limit: EXAM_PAGE_SIZE, offset };
     try { return await api.adminQuery('command_center', payload); }
     catch (error) { if (!isUnsupported(error)) throw error; return api.adminQuery('overview', payload); }
+  }
+
+  async function centerQuery(offset = 0) {
+    return centerQueryForInstitution(state.institutionId, offset);
+  }
+
+  function centerPageRows(result) {
+    const source = uiValue(result);
+    return firstList(source.exams, source.examSummaries, source.commandCenter?.exams, source.data?.exams);
+  }
+
+  function centerPageCursor(result, page, requestedOffset = 0) {
+    const source = uiValue(result);
+    const parsedTotal = Number(source.examTotal ?? source.counts?.exams);
+    const total = Number.isFinite(parsedTotal) && parsedTotal >= 0 ? parsedTotal : null;
+    const limitValue = Number(source.examLimit ?? source.limit);
+    const limit = Number.isFinite(limitValue) && limitValue > 0 ? limitValue : EXAM_PAGE_SIZE;
+    const offsetValue = Number(source.examOffset ?? source.offset);
+    const offset = Number.isFinite(offsetValue) && offsetValue >= 0 ? offsetValue : requestedOffset;
+    const inferredNextOffset = offset + page.length;
+    const explicitHasMore = source.examHasMore ?? source.hasMore;
+    const hasMore = typeof explicitHasMore === 'boolean'
+      ? explicitHasMore
+      : total != null ? inferredNextOffset < total : page.length === limit;
+    const rawNextOffset = source.examNextOffset ?? source.nextOffset;
+    const nextOffset = hasMore
+      ? rawNextOffset != null && Number.isFinite(Number(rawNextOffset)) ? Number(rawNextOffset) : inferredNextOffset
+      : null;
+    return { hasMore, nextOffset, offset };
+  }
+
+  async function pendingRequestsForInstitution(institution, firstPage = null) {
+    const institutionId = String(institution?.institutionId || institution?.id || '').trim();
+    const institutionName = institution?.institutionName || institution?.name || institution?.institutionCode || institutionId;
+    if (!institutionId) return { requests: [], partial: true };
+    const requests = [];
+    const knownExams = new Set();
+    const visitedOffsets = new Set();
+    const pageSignatures = new Set();
+    let pageResult = firstPage;
+    let offset = 0;
+    let partial = false;
+    for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+      if (!pageResult) pageResult = await centerQueryForInstitution(institutionId, offset);
+      const page = centerPageRows(pageResult);
+      const signature = page.map((exam) => examId(exam)).filter(Boolean).join('|');
+      if (pageNumber > 0 && signature && pageSignatures.has(signature)) { partial = true; break; }
+      if (signature) pageSignatures.add(signature);
+      page.forEach((exam) => {
+        const id = examId(exam);
+        if (!id || knownExams.has(id)) return;
+        knownExams.add(id);
+        if (canApprove(exam)) requests.push({
+          ...exam,
+          ownerInstitutionId: institutionId,
+          ownerInstitutionName: institutionName,
+        });
+      });
+      const cursor = centerPageCursor(pageResult, page, offset);
+      if (!cursor.hasMore) break;
+      const nextOffset = Number(cursor.nextOffset);
+      if (!Number.isInteger(nextOffset) || nextOffset <= offset || visitedOffsets.has(nextOffset)) { partial = true; break; }
+      visitedOffsets.add(nextOffset);
+      offset = nextOffset;
+      pageResult = null;
+      if (pageNumber === 99) partial = true;
+    }
+    return { requests, partial };
+  }
+
+  async function loadGlobalPendingQueue(currentCenter) {
+    const currentId = String(state.institutionId || '').trim();
+    const results = await Promise.allSettled(institutions().map((institution) => {
+      const id = String(institution?.institutionId || institution?.id || '').trim();
+      return pendingRequestsForInstitution(institution, id === currentId ? currentCenter : null);
+    }));
+    const requests = [];
+    let partial = false;
+    results.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        requests.push(...result.value.requests);
+        partial = partial || result.value.partial;
+      } else partial = true;
+    });
+    state.globalQueue = requests.sort((left, right) => new Date(right.keyRequestedAt || right.publishedAt || right.updatedAt || 0).getTime()
+      - new Date(left.keyRequestedAt || left.publishedAt || left.updatedAt || 0).getTime());
+    state.globalQueuePartial = partial;
+    return state.globalQueue;
   }
   async function load(requestToken = state.loadRequest) {
     if (!api) throw new Error('The Examination Room administration module is unavailable.');
@@ -508,14 +628,26 @@
     if (requestToken !== state.loadRequest) return null;
     state.ownerUserId = String(ownerSession?.user?.id || access.actorUserId || access.userId || '').trim();
     state.data = normalizeCenter(center, directory, access);
+    if (state.pendingSelection
+      && state.pendingSelection.ownerInstitutionId === state.institutionId
+      && !state.data.exams.some((exam) => examId(exam) === examId(state.pendingSelection))) {
+      state.data.exams.unshift(state.pendingSelection);
+    }
     state.examPaging = examPageProgress(center, state.data.exams, 0, state.data.exams.length);
     if (state.examPaging.total != null) state.data.counts.exams = state.examPaging.total;
     if (!state.data.exams.some((exam) => examId(exam) === state.selectedExamId)) state.selectedExamId = examId(state.data.exams[0]) || null;
+    await loadGlobalPendingQueue(center);
     return renderContent();
   }
   async function render() {
     const requestToken = ++state.loadRequest;
-    try { return await load(requestToken); }
+    try {
+      const html = await load(requestToken);
+      if (requestToken !== state.loadRequest || html == null || !state.institutionId || !state.selectedExamId) return html;
+      await ensureDetail();
+      state.pendingSelection = null;
+      return renderContent();
+    }
     catch (error) { return `<div class="exam-admin-page">${errorPanel(error)}</div>`; }
   }
 
@@ -598,10 +730,12 @@
     return `<div class="exam-admin-tabs" role="tablist" aria-label="Examination Room owner views">${Object.entries(TABS).map(([key, [label, icon]]) => `<button type="button" role="tab" aria-selected="${state.tab === key}" tabindex="${state.tab === key ? '0' : '-1'}" data-exam-admin-tab="${key}"><i class="ph ${icon}" aria-hidden="true"></i><span>${escapeHtml(label)}</span></button>`).join('')}</div>`;
   }
   function toolbar(title, help) {
+    if (state.embedded) return '';
     const exportPrefix = ['overview', 'examinations', 'recovery_audit'].includes(state.tab) ? 'Export all ' : '';
     return `<div class="exam-admin-view-toolbar"><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(help)}</p></div><label class="exam-admin-search"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search ${escapeHtml(title)}</span><input type="search" value="${escapeHtml(state.search)}" placeholder="Search names, IDs, titles, status…" data-exam-admin-search></label><div class="exam-admin-export-actions"><button class="secondary-button" type="button" data-exam-admin-export="json"><i class="ph ph-file-code" aria-hidden="true"></i>${exportPrefix}JSON</button><button class="secondary-button" type="button" data-exam-admin-export="csv"><i class="ph ph-file-csv" aria-hidden="true"></i>${exportPrefix}CSV</button></div></div>`;
   }
   function examSelector() {
+    if (state.embedded) return '';
     if (!state.data?.exams?.length) return '<div class="empty">No examination is available to inspect.</div>';
     return `<label class="exam-admin-exam-selector"><span>Selected examination</span><select data-exam-admin-exam-selector>${state.data.exams.map((exam) => `<option value="${escapeHtml(examId(exam))}"${examId(exam) === state.selectedExamId ? ' selected' : ''}>${escapeHtml(exam.title || examId(exam))}</option>`).join('')}</select></label>`;
   }
@@ -631,9 +765,213 @@
       : '';
     return `<section class="exam-admin-preflight" aria-labelledby="exam-admin-preflight-title" aria-live="polite"><header><div><p class="eyebrow">Release readiness</p><h3 id="exam-admin-preflight-title">Examination Room system check</h3><span>${escapeHtml(checkedAt)}</span></div><div><strong class="${allReady ? 'ready' : 'attention'}"><i class="ph ${allReady ? 'ph-check-circle' : 'ph-warning-circle'}" aria-hidden="true"></i>${escapeHtml(overallLabel)}</strong><button class="secondary-button" type="button" data-exam-admin-preflight><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Run system check</button></div></header>${error}<div class="exam-admin-preflight-grid">${cards}</div><footer>No passwords, encryption keys, provider credentials, storage bindings, or recipient addresses are shown here.</footer></section>`;
   }
+
+  function renderEmbedded(renderer) {
+    const prior = state.embedded;
+    state.embedded = true;
+    try { return renderer(); }
+    finally { state.embedded = prior; }
+  }
+
+  function pendingKeyIssuanceAction(examIdentifier) {
+    return ['approve_and_email_key', 'reopen_exam']
+      .map((operation) => pendingOwnerAction(operation, examIdentifier))
+      .filter(Boolean)
+      .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime())[0] || null;
+  }
+
+  function selectedOperationalState(exam = selectedExam(), detail = selectedDetail()) {
+    if (!exam) return {
+      label: 'No examination selected', tone: 'not_recorded', keyAvailable: false,
+      setupIncomplete: false, emailNeedsAttention: false, blocked: false, archived: false,
+      roomStatus: 'not_activated', hasActivation: false, deliveryStatus: 'not_attempted',
+    };
+    const id = examId(exam);
+    const pendingKeyAction = pendingKeyIssuanceAction(id);
+    const source = object(detail);
+    const detailExam = object(source.exam);
+    const activation = selectedRoomActivation(exam, detail);
+    const roomStatus = String(activation?.status || activation?.activationStatus || 'not_activated').toLowerCase();
+    const hasActivation = Boolean(activation?.id || activation?.activationId || !['', 'not_activated'].includes(roomStatus));
+    const envelopes = firstList(source.ownerKeyEnvelopes, source.keys, source.bundle?.tables?.ownerKeyEnvelopes);
+    const recovery = state.keyRecovery.get(id) || source.keyRecovery || exam.keyRecovery || {};
+    const keyEscrow = object(recovery.keyEscrow || source.keyEscrow || exam.keyEscrow);
+    const keyEscrowStatus = String(keyEscrow.status || '').toLowerCase();
+    const keyIssuanceStatus = String(recovery.keyIssuanceStatus || source.keyIssuanceStatus || exam.keyIssuanceStatus || '').toLowerCase();
+    const keyEscrowReady = KEY_ESCROW_READY_STATES.has(keyEscrowStatus)
+      || (!keyEscrowStatus && ['active', 'ready', 'issued'].includes(keyIssuanceStatus));
+    const keyEscrowNeedsRepair = KEY_ESCROW_REPAIR_STATES.has(keyEscrowStatus)
+      || (!keyEscrowReady && ['active_recovery_required', 'recovery_required'].includes(keyIssuanceStatus));
+    const deliveryAudit = object(recovery.deliveryAudit || source.deliveryAudit || exam.deliveryAudit);
+    const deliveryAuditStatus = String(deliveryAudit.status || '').toLowerCase();
+    const deliveryAuditNeedsRepair = deliveryAuditStatus === 'failed';
+    const explicitKeyAvailable = source.keyAvailable ?? source.keySetup?.available ?? exam.keyAvailable ?? activation?.keyAvailable
+      ?? (keyEscrowReady ? true : keyEscrowNeedsRepair ? false : undefined);
+    const keyAvailable = typeof explicitKeyAvailable === 'boolean'
+      ? explicitKeyAvailable
+      : Boolean(state.currentKeys.get(id) || envelopes.length);
+    const setupState = String(source.keySetupState || source.keySetup?.status || exam.keySetupState || '').toLowerCase();
+    const setupIncomplete = hasActivation && (
+      keyEscrowNeedsRepair
+      || ((recovery.recoveryRequired === true || source.recoveryRequired === true || exam.recoveryRequired === true)
+        && !keyEscrowReady && !deliveryAuditNeedsRepair)
+      || explicitKeyAvailable === false
+      || ['missing', 'incomplete', 'repair_required', 'setup_incomplete', 'escrow_missing'].includes(setupState)
+      || (!keyAvailable && !setupState)
+    );
+    const record = keyRecords().find((entry) => !entry.examId || entry.examId === id) || keyRecords()[0] || {};
+    const deliveries = firstList(source.emailDeliveryEvents, source.deliveries);
+    const delivery = state.deliveries.get(id) || record.delivery || deliveries[0] || {};
+    const deliveryStatus = String(delivery.status || delivery.providerStatus || delivery.deliveryStatus || record.deliveryStatus || 'not_attempted').toLowerCase();
+    const deliveryHealthy = ['sent', 'delivered', 'accepted', 'demo_delivered', 'requested', 'suppressed'].includes(deliveryStatus);
+    const emailNeedsAttention = hasActivation && keyAvailable && !deliveryHealthy;
+    const recoveryReported = Boolean(recovery.operation || keyEscrowStatus || keyIssuanceStatus || deliveryAuditStatus);
+    const lifecycle = String(exam.lifecycleState || detailExam.lifecycleState || exam.status || detailExam.status || '').toLowerCase();
+    const blocked = Boolean(exam.blockedAt || detailExam.blockedAt || exam.isBlocked || detailExam.isBlocked || lifecycle === 'blocked');
+    const archived = Boolean(exam.deletedAt || detailExam.deletedAt || exam.archivedAt || detailExam.archivedAt || ['archived', 'deleted'].includes(lifecycle));
+    let label = statusLabel(roomStatus);
+    let tone = roomStatus;
+    if (archived) { label = 'Archived'; tone = 'archived'; }
+    else if (blocked) { label = 'Blocked'; tone = 'blocked'; }
+    else if (setupIncomplete) { label = 'Finish key setup'; tone = 'attention'; }
+    else if (deliveryAuditNeedsRepair) { label = 'Key ready · audit pending'; tone = 'attention'; }
+    else if (pendingKeyAction) { label = 'Confirm prior key action'; tone = 'attention'; }
+    else if (canApprove(exam)) { label = 'Awaiting approval'; tone = 'awaiting_activation'; }
+    else if (emailNeedsAttention) { label = 'Key ready · email pending'; tone = 'attention'; }
+    return {
+      label, tone, activation, roomStatus, hasActivation, keyAvailable, setupIncomplete,
+      emailNeedsAttention, deliveryStatus, delivery,
+      blocked, archived, recovery, keyEscrowStatus, keyEscrowReady, keyEscrowNeedsRepair,
+      deliveryAudit, deliveryAuditStatus, deliveryAuditNeedsRepair,
+      pendingKeyAction, recoveryReported,
+      approvalReplayRequired: setupIncomplete || deliveryAuditNeedsRepair || Boolean(pendingKeyAction),
+    };
+  }
+
+  function commandButton(label, icon, operation, examIdentifier, options = {}) {
+    const classes = options.danger ? 'exam-admin-danger' : options.primary ? 'primary-button' : 'secondary-button';
+    const attributes = [
+      `data-exam-admin-action="${escapeHtml(operation)}"`,
+      `data-exam-id="${escapeHtml(examIdentifier)}"`,
+      options.roomAction ? `data-exam-admin-room-action="${escapeHtml(options.roomAction)}"` : '',
+      options.reason ? `data-exam-admin-reason="${escapeHtml(options.reason)}"` : '',
+    ].filter(Boolean).join(' ');
+    return `<button class="${classes}" type="button" ${attributes}><i class="ph ${escapeHtml(icon)}" aria-hidden="true"></i>${escapeHtml(label)}</button>`;
+  }
+
+  function renderPrimaryCommandStrip(exam = selectedExam(), detail = selectedDetail()) {
+    if (!exam) return '<div class="empty">Choose an examination to show its owner controls.</div>';
+    const id = examId(exam);
+    const snapshot = selectedOperationalState(exam, detail);
+    const key = state.currentKeys.get(id);
+    const keyControls = [];
+    if (key) keyControls.push(`<output class="exam-admin-current-key" aria-label="Current student key"><small>Current student key</small><code>${escapeHtml(key)}</code></output>`);
+    else if (state.keyRevealErrors.has(id)) keyControls.push(`<span class="exam-admin-key-reveal-error">${escapeHtml(state.keyRevealErrors.get(id)?.recovery || 'Use Show exact key to retrieve the current key again.')}</span>`);
+    const recoveryOperation = PERSISTED_OWNER_ACTIONS.has(snapshot.pendingKeyAction?.operation || snapshot.recovery?.operation)
+      ? (snapshot.pendingKeyAction?.operation || snapshot.recovery.operation)
+      : 'approve_and_email_key';
+    if (canApprove(exam)) keyControls.push(commandButton('Approve & generate key', 'ph-paper-plane-tilt', 'approve_and_email_key', id, { primary: true }));
+    if (snapshot.pendingKeyAction && !snapshot.recoveryReported) keyControls.push(commandButton('Confirm prior key action', 'ph-arrow-clockwise', recoveryOperation, id, { primary: true, reason: 'Platform owner replayed the original key-issuance receipt after an interrupted response.' }));
+    else if (snapshot.setupIncomplete) keyControls.push(commandButton('Repair current key record', 'ph-wrench', recoveryOperation, id, { primary: true, reason: 'Platform owner retried the original key-issuance receipt to complete recoverable room-key storage.' }));
+    else if (snapshot.deliveryAuditNeedsRepair) keyControls.push(commandButton('Repair delivery record', 'ph-receipt', recoveryOperation, id, { primary: true, reason: 'Platform owner retried the original key-issuance receipt to complete the recoverable delivery audit.' }));
+    else if (snapshot.pendingKeyAction) keyControls.push(commandButton('Confirm prior key action', 'ph-arrow-clockwise', recoveryOperation, id, { primary: true, reason: 'Platform owner replayed the original key-issuance receipt after an interrupted response.' }));
+    if (snapshot.hasActivation) keyControls.push(commandButton(key ? 'Refresh shown key' : 'Show exact key', 'ph-eye', 'reveal_key', id));
+    if (key) keyControls.push(`<button class="secondary-button" type="button" data-exam-admin-copy-key="${escapeHtml(id)}"><i class="ph ph-copy" aria-hidden="true"></i>Copy exact key</button>`);
+    if (snapshot.emailNeedsAttention) keyControls.push(commandButton('Retry email', 'ph-paper-plane-right', 'resend_key', id));
+    if (snapshot.hasActivation) keyControls.push(commandButton('Reissue key', 'ph-arrows-clockwise', 'rotate_key', id));
+    if (['scheduled', 'active', 'open'].includes(snapshot.roomStatus)) keyControls.push(commandButton('Revoke key', 'ph-key-return', 'revoke_key', id, { danger: true }));
+
+    const roomControls = [];
+    if (snapshot.roomStatus === 'scheduled') roomControls.push(commandButton('Activate legacy key now', 'ph-door-open', 'room_control', id, { roomAction: 'open', reason: 'Platform owner activated a legacy scheduled key from the unified command center.' }));
+    if (['scheduled', 'active', 'open'].includes(snapshot.roomStatus)) roomControls.push(commandButton('Close room', 'ph-door', 'room_control', id, { roomAction: 'close', reason: 'Platform owner closed the room from the unified command center.', danger: snapshot.roomStatus === 'open' }));
+    if (['closed', 'revoked', 'expired'].includes(snapshot.roomStatus)) roomControls.push(commandButton('Reopen with new key', 'ph-arrow-counter-clockwise', 'reopen_exam', id, { primary: true, reason: 'Platform owner reopened the preserved examination with a new current key.' }));
+
+    const lifecycleControls = [];
+    if (snapshot.archived) lifecycleControls.push(commandButton('Restore examination', 'ph-arrow-u-up-left', 'restore_exam', id, { primary: true, reason: 'Platform owner restored the archived examination and its preserved records.' }));
+    else {
+      lifecycleControls.push(snapshot.blocked
+        ? commandButton('Unblock examination', 'ph-lock-open', 'unblock_exam', id, { reason: 'Platform owner restored examination access after review.' })
+        : commandButton('Block examination', 'ph-prohibit', 'block_exam', id, { danger: true, reason: 'Platform owner suspended examination access while preserving all records.' }));
+      lifecycleControls.push(commandButton('Delete examination', 'ph-trash', 'archive_exam', id, { danger: true, reason: 'Platform owner removed the examination from active rooms while preserving its questions, answers, grades, keys, and receipts in the recoverable archive.' }));
+    }
+    const group = (label, controls) => `<section><span>${escapeHtml(label)}</span><div>${controls.length ? controls.join('') : '<em>No action is needed in this state.</em>'}</div></section>`;
+    return `<div class="exam-admin-command-strip" aria-label="Selected examination owner controls">${group('Key', keyControls)}${group('Room', roomControls)}${group('Lifecycle', lifecycleControls)}</div>`;
+  }
+
+  function renderGlobalQueue() {
+    const queue = state.globalQueue.length
+      ? state.globalQueue
+      : pendingKeyRequests().map((exam) => ({ ...exam, ownerInstitutionId: state.institutionId, ownerInstitutionName: currentInstitution().institutionName || currentInstitution().name }));
+    const counts = object(state.data?.counts);
+    const queueCards = queue.map((exam) => {
+      const institutionId = exam.ownerInstitutionId || state.institutionId;
+      const selected = institutionId === state.institutionId && examId(exam) === state.selectedExamId;
+      return `<article class="exam-admin-request-card${selected ? ' selected' : ''}" data-exam-admin-searchable data-search-text="${searchText(exam)}"><div class="exam-admin-request-state"><i class="ph ph-hourglass-medium" aria-hidden="true"></i>${statusBadge('awaiting_activation')}</div><div><span>${escapeHtml(exam.ownerInstitutionName || 'Current workspace')}</span><h3>${escapeHtml(exam.title || 'Untitled examination')}</h3><p>${escapeHtml(exam.subject || 'Subject not returned')} · ${escapeHtml(exam.professorName || exam.ownerName || exam.professorEmail || exam.ownerEmail || 'Signed-in creator')}</p></div><button class="${selected ? 'secondary-button' : 'primary-button'}" type="button" data-exam-admin-select-exam="${escapeHtml(examId(exam))}" data-exam-admin-institution-id="${escapeHtml(institutionId)}"><i class="ph ${selected ? 'ph-check-circle' : 'ph-arrow-right'}" aria-hidden="true"></i>${selected ? 'Selected' : 'Review request'}</button></article>`;
+    }).join('');
+    const partial = state.globalQueuePartial
+      ? '<div class="exam-admin-queue-warning" role="status"><i class="ph ph-warning-circle" aria-hidden="true"></i>Some school queues could not be fully refreshed. Visible requests remain usable; choose Refresh to try the remaining schools again.</div>'
+      : '';
+    return `<section class="exam-admin-global-queue" aria-labelledby="exam-admin-queue-title"><header><div><p class="eyebrow">Approval queue · all owner workspaces</p><h2 id="exam-admin-queue-title">Key requests</h2><p>Open a published request, review its complete examination, then approve it from the command strip below.</p></div><span>${statusBadge(queue.length ? 'attention' : 'clear')}</span></header><div class="exam-admin-command-metrics">${metric('Waiting', queue.length, 'Across every owner workspace', 'ph-hourglass-medium')}${metric('Current workspace', counts.exams ?? list(state.data?.exams).length, 'Examinations visible here', 'ph-files')}${metric('Open rooms', counts.open ?? 0, 'Currently active rooms', 'ph-door-open')}${metric('Recovery', counts.recoveryAttention ?? 0, 'Checkpoints needing attention', 'ph-lifebuoy')}</div>${partial}<div class="exam-admin-request-grid">${queueCards || '<div class="empty">No published key request is waiting. Refresh after a creator publishes an examination.</div>'}</div></section>`;
+  }
+
+  function renderCommandToolbar() {
+    return `<div class="exam-admin-view-toolbar exam-admin-command-toolbar"><div><h3>Owner operations</h3><p>Search every visible record or export the complete selected command-center view.</p></div><label class="exam-admin-search"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Search visible Examination Room records</span><input type="search" value="${escapeHtml(state.search)}" placeholder="Search examinations, names, IDs, status…" data-exam-admin-search></label><div class="exam-admin-export-actions"><button class="secondary-button" type="button" data-exam-admin-export="json" data-exam-admin-export-scope="all"><i class="ph ph-file-code" aria-hidden="true"></i>Export JSON</button><button class="secondary-button" type="button" data-exam-admin-export="csv" data-exam-admin-export-scope="all"><i class="ph ph-file-csv" aria-hidden="true"></i>Export CSV</button></div></div>`;
+  }
+
+  function sectionExport(scope) {
+    return `<div class="exam-admin-section-export" aria-label="Section export"><span>Download this section</span><button class="secondary-button" type="button" data-exam-admin-export="json" data-exam-admin-export-scope="${escapeHtml(scope)}">JSON</button><button class="secondary-button" type="button" data-exam-admin-export="csv" data-exam-admin-export-scope="${escapeHtml(scope)}">CSV</button></div>`;
+  }
+
+  function commandCenterSection(id, description, count, renderer, options = {}) {
+    const definition = COMMAND_CENTER_SECTIONS[id] || [statusLabel(id), 'ph-folder-open'];
+    const open = state.openSections.has(id);
+    const content = open || options.eager ? renderer() : '<div class="exam-admin-section-placeholder">Open this section to load its complete owner view.</div>';
+    return `<details class="exam-admin-command-section" data-exam-admin-section="${escapeHtml(id)}"${open ? ' open' : ''}><summary class="exam-admin-section-summary"><i class="ph ${escapeHtml(definition[1])}" aria-hidden="true"></i><span><strong>${escapeHtml(definition[0])}</strong><small>${escapeHtml(description)}</small></span>${count != null ? `<em>${escapeHtml(count)}</em>` : ''}<i class="ph ph-caret-down" aria-hidden="true"></i></summary><div class="exam-admin-section-body">${content}</div></details>`;
+  }
+
+  function renderSelectedHeader() {
+    const exam = selectedExam(); const detail = selectedDetail();
+    if (!exam) return '<section class="exam-admin-selected-empty"><i class="ph ph-files" aria-hidden="true"></i><h2>No examination selected</h2><p>Choose a request above or an examination from the complete index.</p></section>';
+    const snapshot = selectedOperationalState(exam, detail);
+    return `<section class="exam-admin-selected-header" data-exam-admin-searchable data-search-text="${searchText(exam, detail)}"><div class="exam-admin-selected-title"><div><p class="eyebrow">Selected examination</p><h2>${escapeHtml(exam.title || 'Untitled examination')}</h2><p>${escapeHtml(exam.subject || 'Subject not returned')} · <code>${escapeHtml(examId(exam))}</code></p></div><div>${statusBadge(exam.publicationStatus || exam.status)}${statusBadge(snapshot.tone)}</div></div>${examSelector()}<div class="exam-admin-selected-facts">${fact('Creator', exam.professorName || exam.ownerName || detail?.professor?.displayName, exam.professorEmail || exam.ownerEmail || detail?.professor?.email)}${fact('Content', countLabel(exam.questionCount ?? questions(detail).length, 'question'), `Version ${exam.versionNumber || exam.version || detail?.exam?.version || '—'}`)}${fact('Participation', countLabel(exam.rosterCount ?? students(detail).length, 'student'), countLabel(exam.submissionCount ?? submissions(detail).length, 'submission'))}${fact('Current state', snapshot.label, snapshot.keyAvailable ? 'Exact key is recoverable by the owner' : snapshot.hasActivation ? 'Key setup needs owner attention' : 'No active student key')}</div></section>`;
+  }
+
+  function renderSelectedExaminationRecord() {
+    const exam = selectedExam(); const detail = selectedDetail();
+    if (!exam) return '<div class="empty">No selected examination record is available.</div>';
+    return `<section class="exam-admin-selected-record"><header><div><h3>Stored examination</h3><p>Publication, creator, rules, and the complete server record remain available here.</p></div>${statusBadge(exam.publicationStatus || exam.status)}</header><div class="exam-admin-detail-grid">${fact('Creator', exam.professorName || exam.ownerName || detail?.professor?.displayName, exam.professorEmail || exam.ownerEmail || detail?.professor?.email)}${fact('Publication', exam.publicationStatus || exam.status, `Version ${exam.versionNumber || exam.version || detail?.exam?.version || '—'}`)}${fact('Questions', exam.questionCount ?? questions(detail).length, `${questions(detail).reduce((sum, question) => sum + Number(question.points || 0), 0)} total points`)}${fact('Admission', exam.admissionMode || detail?.exam?.admissionMode || 'Key access', 'No roster is required unless the creator chooses an allowlist')}</div>${detail ? rawPanel('Complete examination data', detail) : '<div class="exam-admin-loading-note">The complete examination record is loading.</div>'}</section>`;
+  }
+
+  function renderExamIndex() {
+    const exams = list(state.data?.exams);
+    if (!exams.length) return '<div class="empty">No examinations are available in this workspace.</div>';
+    return `<div class="table-wrap"><table class="exam-admin-table exam-admin-index-table"><thead><tr><th scope="col">Examination</th><th scope="col">Creator</th><th scope="col">Publication</th><th scope="col">Room</th><th scope="col">Participation</th><th scope="col">Open</th></tr></thead><tbody>${exams.map((exam) => { const room = activationOf(exam); const lifecycle = String(exam.lifecycleState || '').toLowerCase(); return `<tr data-exam-admin-searchable data-search-text="${searchText(exam)}"><td><strong>${escapeHtml(exam.title || 'Untitled examination')}</strong><small>${escapeHtml(exam.subject || examId(exam))}</small></td><td><strong>${escapeHtml(exam.professorName || exam.ownerName || 'Name not returned')}</strong><small>${escapeHtml(exam.professorEmail || exam.ownerEmail || exam.ownerUserId || 'Email not returned')}</small></td><td>${statusBadge(exam.publicationStatus || exam.status)}${lifecycle && lifecycle !== String(exam.publicationStatus || exam.status || '').toLowerCase() ? statusBadge(lifecycle) : ''}</td><td>${statusBadge(room?.status || room?.activationStatus || 'not_activated')}</td><td><strong>${escapeHtml(countLabel(exam.rosterCount ?? exam.studentCount ?? 0, 'student'))}</strong><small>${escapeHtml(countLabel(exam.submissionCount ?? 0, 'submission'))}</small></td><td><button class="secondary-button" type="button" data-exam-admin-select-exam="${escapeHtml(examId(exam))}" data-exam-admin-institution-id="${escapeHtml(state.institutionId)}">Open record</button></td></tr>`; }).join('')}</tbody></table></div>`;
+  }
+
+  function renderAllExaminations() {
+    const progress = examProgress();
+    const summary = progress.fullyLoaded
+      ? `All ${progress.loaded} examinations are loaded.`
+      : progress.total != null ? `${progress.loaded} of ${progress.total} examinations are loaded.` : `${progress.loaded} examinations are loaded; the total is still being checked.`;
+    const controls = progress.hasMore
+      ? `<div class="exam-admin-audit-load-actions"><button class="secondary-button" type="button" data-exam-admin-load-exams="next">Load next ${EXAM_PAGE_SIZE}</button><button class="primary-button" type="button" data-exam-admin-load-exams="all">Load all examinations</button></div>`
+      : !progress.fullyLoaded ? '<button class="secondary-button" type="button" data-exam-admin-load-exams="refresh">Reload examination list</button>' : '';
+    return `${sectionExport('examinations')}<div class="exam-admin-page-load"><p>${escapeHtml(summary)}</p>${controls}</div>${renderExamIndex()}`;
+  }
+
+  function renderCohesiveCommandCenter() {
+    const exam = selectedExam(); const detail = selectedDetail();
+    const questionCount = questions(detail).length;
+    const studentCount = students(detail).length || sessions(detail).length;
+    const gradeCount = grades(detail).length;
+    const keyCount = keyRecords().length;
+    const recoveryCount = snapshotRows().length + auditRows().length;
+    return `<main class="exam-admin-command-center">${renderGlobalQueue()}${renderSelectedHeader()}${renderPrimaryCommandStrip(exam, detail)}${commandCenterSection('examination', 'Rules, exact questions, answer keys, points, and stored publication data.', questionCount, () => `${sectionExport('examination')}${renderSelectedExaminationRecord()}${renderEmbedded(renderQuestions)}`)}${commandCenterSection('students', 'Real identities, sessions, submissions, answers, receipts, and owner corrections.', studentCount, () => `${sectionExport('students')}${renderEmbedded(renderStudentsAnswers)}`)}${commandCenterSection('grades', 'Every grade revision, score item, feedback record, and result-release state.', gradeCount, () => `${sectionExport('grades')}${renderEmbedded(renderGradesResults)}`)}${commandCenterSection('keys', 'Exact current key, delivery state, key history, resend, and recovery evidence.', keyCount, () => `${sectionExport('keys')}${renderEmbedded(renderKeysEmail)}`)}${commandCenterSection('recovery', 'Encrypted checkpoints and the append-only owner audit trail.', recoveryCount, () => `${sectionExport('recovery')}${renderEmbedded(renderRecoveryAudit)}`)}${commandCenterSection('examinations', 'Search and open every examination in the current workspace.', examProgress().total ?? examProgress().loaded, renderAllExaminations)}${commandCenterSection('directory', 'Optional school labels only; never a gate to creating or publishing an exam.', list(state.data?.staff).length, () => renderEmbedded(renderProfessorAccess))}${commandCenterSection('system', 'Key protection, owner copies, email delivery, and encrypted recovery status.', state.preflight?.ready === true ? 'Ready' : 'Check', renderPreflightPanel, { eager: true })}</main>`;
+  }
+
   function renderContent() {
     const school = currentInstitution();
-    return `<div class="exam-admin-page"><header class="section-head exam-admin-section-head"><div><p class="eyebrow">Owner command center · ${escapeHtml(school.name || school.institutionName || 'Examination Room')}</p><h2>Examination Room</h2><p>Exact questions, identities, answers, grades, room keys, email delivery, recovery records, and audit history are available to authenticated platform owners.</p></div><div class="exam-admin-head-actions">${institutions().length > 1 ? `<label><span>Law school</span><select data-exam-admin-institution>${institutionOptions()}</select></label>` : ''}<button class="secondary-button" type="button" data-exam-admin-refresh><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Refresh</button><a class="secondary-button" href="${escapeHtml(professorHref())}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open creator workspace</a></div></header><section class="exam-admin-owner-band"><i class="ph ph-crown" aria-hidden="true"></i><div><strong>Platform-owner view</strong><p>Values are shown exactly as returned. Every owner action produces a retry-safe receipt.</p></div><span>Full visibility</span></section>${renderPreflightPanel()}${tabs()}${state.inlineError ? errorPanel(state.inlineError, state.inlineError.retry || 'refresh') : ''}<section class="exam-admin-tab-panel" role="tabpanel" aria-label="${escapeHtml(TABS[state.tab]?.[0] || 'Owner records')}">${renderTab()}</section></div>`;
+    return `<div class="exam-admin-page"><header class="section-head exam-admin-section-head"><div><p class="eyebrow">Examination Room · ${escapeHtml(school.name || school.institutionName || 'Owner workspace')}</p><h2>Owner command center</h2><p>Approve requests and control the selected examination from one complete owner view.</p></div><div class="exam-admin-head-actions">${institutions().length > 1 ? `<label><span>Law school</span><select data-exam-admin-institution>${institutionOptions()}</select></label>` : ''}<button class="secondary-button" type="button" data-exam-admin-refresh><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Refresh</button><a class="secondary-button" href="${escapeHtml(professorHref())}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open creator workspace</a></div></header><section class="exam-admin-owner-band"><i class="ph ph-crown" aria-hidden="true"></i><div><strong>Platform-owner view</strong><p>Questions, identities, answers, grades, exact keys, delivery, recovery, and audit remain fully visible.</p></div><span>Full control</span></section>${renderCommandToolbar()}${state.inlineError ? errorPanel(state.inlineError, state.inlineError.retry || 'refresh') : ''}${renderCohesiveCommandCenter()}</div>`;
   }
 
   function renderTab() {
@@ -686,13 +1024,13 @@
       return '<section class="exam-admin-owner-control-panel"><header><i class="ph ph-door" aria-hidden="true"></i><div><h4>Room control</h4><p>Approve and issue the first room key before opening or closing this room.</p></div></header></section>';
     }
     const roomStatus = String(activation.status || activation.activationStatus || '').toLowerCase();
-    const canOpen = ['scheduled', 'active'].includes(roomStatus);
+    const canOpen = roomStatus === 'scheduled';
     const canClose = ['scheduled', 'open', 'active'].includes(roomStatus);
     if (!canOpen && !canClose) {
       return `<section class="exam-admin-owner-control-panel"><header><i class="ph ph-door" aria-hidden="true"></i><div><h4>Room control</h4><p>This activation is ${escapeHtml(statusLabel(roomStatus))}. Issue or rotate a room key from Keys & Email when a replacement room is needed.</p></div>${statusBadge(roomStatus)}</header></section>`;
     }
     const options = [
-      canOpen ? '<option value="open">Open room now</option>' : '',
+      canOpen ? '<option value="open">Activate legacy scheduled key now</option>' : '',
       canClose ? '<option value="close">Close room and end active sessions</option>' : '',
     ].join('');
     return `<section class="exam-admin-owner-control-panel"><header><i class="ph ph-door-open" aria-hidden="true"></i><div><h4>Room control</h4><p>Change the live room state without coding. Closing preserves every saved answer, submission, grade, and receipt.</p></div>${statusBadge(roomStatus)}</header><form class="exam-admin-owner-control-form exam-admin-room-control-form" data-exam-admin-owner-control="room_control"><input name="examId" type="hidden" value="${escapeHtml(examId(exam))}"><label><span>Room action</span><select name="action" required>${options}</select><small>Only actions supported by the current room state are listed.</small></label><label><span>Owner receipt note</span><input name="reason" minlength="5" maxlength="1000" value="Platform owner changed the room state from the Examination Room command center." required><small>This note remains in the owner audit trail.</small></label><button class="primary-button" type="submit"><i class="ph ph-check-circle" aria-hidden="true"></i>Apply room control</button><div class="exam-admin-owner-control-status" role="status" aria-live="polite">Review the action, then apply it.</div></form></section>`;
@@ -708,7 +1046,7 @@
     const controls = progress.hasMore
       ? `<div class="exam-admin-audit-load-actions"><button class="secondary-button" type="button" data-exam-admin-load-exams="next">Load next ${EXAM_PAGE_SIZE}</button><button class="primary-button" type="button" data-exam-admin-load-exams="all">Load all examinations</button></div>`
       : !progress.fullyLoaded ? '<button class="secondary-button" type="button" data-exam-admin-load-exams="refresh">Reload examination list</button>' : '';
-    return `${toolbar('Examinations', 'Review publication, room state, exact identifiers, and complete stored data.')}<div class="exam-admin-page-load"><p>${escapeHtml(summary)}</p>${controls}</div>${examTable()}${exam ? `<section class="panel exam-admin-record-detail"><header class="exam-admin-panel-head"><div><h3>${escapeHtml(exam.title || 'Selected examination')}</h3><p>Exact examination ID: <code>${escapeHtml(examId(exam))}</code></p></div>${examActions(exam)}</header><div class="exam-admin-detail-grid">${fact('Creator', exam.professorName || exam.ownerName || detail?.professor?.displayName, exam.professorEmail || exam.ownerEmail || detail?.professor?.email)}${fact('Publication', exam.publicationStatus || exam.status, `Version ${exam.versionNumber || exam.version || detail?.exam?.version || '—'}`)}${fact('Schedule', formatDateTime(exam.startsAt || activation?.opensAt), `Ends ${formatDateTime(exam.endsAt || activation?.closesAt)}`)}${fact('Content', `${exam.questionCount ?? questions(detail).length} questions`, `${exam.rosterCount ?? students(detail).length} students`)}</div>${renderRoomControl(exam, detail)}${detail ? rawPanel('Complete examination data', detail) : '<div class="exam-admin-loading-note">Choose another detail tab to load the complete server record.</div>'}</section>` : ''}`;
+    return `${toolbar('Examinations', 'Review publication, room state, exact identifiers, and complete stored data.')}<div class="exam-admin-page-load"><p>${escapeHtml(summary)}</p>${controls}</div>${examTable()}${exam ? `<section class="panel exam-admin-record-detail"><header class="exam-admin-panel-head"><div><h3>${escapeHtml(exam.title || 'Selected examination')}</h3><p>Exact examination ID: <code>${escapeHtml(examId(exam))}</code></p></div>${examActions(exam)}</header><div class="exam-admin-detail-grid">${fact('Creator', exam.professorName || exam.ownerName || detail?.professor?.displayName, exam.professorEmail || exam.ownerEmail || detail?.professor?.email)}${fact('Publication', exam.publicationStatus || exam.status, `Version ${exam.versionNumber || exam.version || detail?.exam?.version || '—'}`)}${fact('Key access', statusLabel(activation?.status || activation?.activationStatus || 'waiting'), activation ? 'Available until Admin closes, blocks, archives, or revokes the key.' : 'Waiting for Admin key approval.')}${fact('Content', `${exam.questionCount ?? questions(detail).length} questions`, `${exam.rosterCount ?? students(detail).length} students`)}</div>${renderRoomControl(exam, detail)}${detail ? rawPanel('Complete examination data', detail) : '<div class="exam-admin-loading-note">Choose another detail tab to load the complete server record.</div>'}</section>` : ''}`;
   }
 
   function renderQuestions() {
@@ -782,14 +1120,16 @@
     const keyState = key
       ? 'The exact student key remains visible above.'
       : 'Choose Retrieve exact key to show the active student key.';
-    return `<div class="exam-admin-error" role="alert"><i class="ph ph-warning-circle" aria-hidden="true"></i><div><strong>Key active; email needs attention</strong><p>The creator already has automatic Monitoring and Grading access. ${escapeHtml(keyState)} ${escapeHtml(deliveryRecoveryMessage(delivery))}</p></div><button class="secondary-button" type="button" data-exam-admin-action="resend_key" data-exam-id="${escapeHtml(id)}">Retry email</button></div>`;
+    return `<div class="exam-admin-error" role="alert"><i class="ph ph-warning-circle" aria-hidden="true"></i><div><strong>Key active; email needs attention</strong><p>The creator already has automatic Monitoring and Grading access. ${escapeHtml(keyState)} ${escapeHtml(deliveryRecoveryMessage(delivery))}</p></div>${state.embedded ? '' : `<button class="secondary-button" type="button" data-exam-admin-action="resend_key" data-exam-id="${escapeHtml(id)}">Retry email</button>`}</div>`;
   }
   function renderKeysEmail() {
     const exam = selectedExam(); const record = keyRecords().find((item) => !item.examId || item.examId === state.selectedExamId) || keyRecords()[0] || {};
     if (!exam) return `${toolbar('Keys & Email', 'Reveal, copy, rotate, email, and revoke the exact current room key.')}${examSelector()}`;
-    const id = examId(exam); const key = state.currentKeys.get(id) || record.roomKey || record.plaintextKey || record.currentKey || ''; const delivery = state.deliveries.get(id) || record.delivery || {};
+    const detailDeliveries = firstList(selectedDetail()?.emailDeliveryEvents, selectedDetail()?.deliveries);
+    const id = examId(exam); const key = state.currentKeys.get(id) || record.roomKey || record.plaintextKey || record.currentKey || ''; const delivery = state.deliveries.get(id) || record.latestDelivery || record.delivery || detailDeliveries[0] || {};
     const history = keyRecords();
-    return `${toolbar('Keys & Email', 'View, copy, resend, rotate, and revoke exact room keys. Delivery records remain downloadable.')}${examSelector()}<article class="exam-admin-key-card" data-exam-admin-searchable data-search-text="${searchText(exam, record, delivery, key)}"><header><div><span class="eyebrow">${escapeHtml(exam.subject || 'Published examination')}</span><h4>${escapeHtml(exam.title || id)}</h4><code>${escapeHtml(id)}</code></div>${statusBadge(record.status || record.activationStatus || activationOf(exam)?.status || 'not_activated')}</header><label><span>Current student room key</span><input value="${escapeHtml(key || 'Retrieve the exact current key below')}" readonly></label><div class="exam-admin-key-meta">${fact('Creator', exam.professorName || record.professorName, exam.professorEmail || record.professorEmail)}${fact('Owner email copy', delivery.adminRecipients || record.adminRecipients || 'Configured owner addresses', delivery.status || delivery.providerStatus || record.deliveryStatus)}${fact('Creator access', record.id || activationOf(exam) ? 'Monitoring and Grading unlocked' : 'Unlocks on approval', 'No creator key entry required')}${fact('Valid window', formatDateTime(record.opensAt || record.issuedAt), `Until ${formatDateTime(record.expiresAt || record.closesAt)}`)}</div>${deliveryRecoveryPanel(id, delivery, key)}<div class="exam-admin-key-actions">${canApprove(exam) ? `<button class="primary-button" type="button" data-exam-admin-action="approve_and_email_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Approve & generate key</button>` : ''}${!key && (record.id || activationOf(exam)) ? `<button class="secondary-button" type="button" data-exam-admin-action="reveal_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-eye" aria-hidden="true"></i>Retrieve exact key</button>` : ''}${key ? `<button class="secondary-button" type="button" data-exam-admin-copy-key="${escapeHtml(id)}"><i class="ph ph-copy" aria-hidden="true"></i>Copy exact key</button><button class="secondary-button" type="button" data-exam-admin-action="resend_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Resend current key</button>` : ''}${record.id || activationOf(exam) ? `<button class="secondary-button" type="button" data-exam-admin-action="rotate_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Rotate & email</button><button class="exam-admin-danger" type="button" data-exam-admin-action="revoke_key" data-exam-id="${escapeHtml(id)}">Revoke key</button>` : ''}</div>${rawPanel('Current key and delivery record', { record, delivery })}</article>${history.length > 1 ? `<section class="panel"><header class="exam-admin-panel-head"><div><h3>Complete key history</h3><p>Newest first. Revoked and replaced keys remain visible to the platform owner for audit and recovery.</p></div></header>${rawPanel('All issued key records', history)}</section>` : ''}`;
+    const keyActions = state.embedded ? '' : `<div class="exam-admin-key-actions">${canApprove(exam) ? `<button class="primary-button" type="button" data-exam-admin-action="approve_and_email_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Approve & generate key</button>` : ''}${!key && (record.id || activationOf(exam)) ? `<button class="secondary-button" type="button" data-exam-admin-action="reveal_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-eye" aria-hidden="true"></i>Retrieve exact key</button>` : ''}${key ? `<button class="secondary-button" type="button" data-exam-admin-copy-key="${escapeHtml(id)}"><i class="ph ph-copy" aria-hidden="true"></i>Copy exact key</button><button class="secondary-button" type="button" data-exam-admin-action="resend_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Resend current key</button>` : ''}${record.id || activationOf(exam) ? `<button class="secondary-button" type="button" data-exam-admin-action="rotate_key" data-exam-id="${escapeHtml(id)}"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i>Rotate & email</button><button class="exam-admin-danger" type="button" data-exam-admin-action="revoke_key" data-exam-id="${escapeHtml(id)}">Revoke key</button>` : ''}</div>`;
+    return `${toolbar('Keys & Email', 'View, copy, resend, rotate, and revoke exact room keys. Delivery records remain downloadable.')}${examSelector()}<article class="exam-admin-key-card" data-exam-admin-searchable data-search-text="${searchText(exam, record, delivery, key)}"><header><div><span class="eyebrow">${escapeHtml(exam.subject || 'Published examination')}</span><h4>${escapeHtml(exam.title || id)}</h4><code>${escapeHtml(id)}</code></div>${statusBadge(record.status || record.activationStatus || activationOf(exam)?.status || 'not_activated')}</header><label><span>Current student room key</span><input value="${escapeHtml(key || 'Use Show exact key in the command strip')}" readonly></label><div class="exam-admin-key-meta">${fact('Creator', exam.professorName || record.professorName, exam.professorEmail || record.professorEmail)}${fact('Owner email copy', delivery.adminRecipients || delivery.ownerCopyRecipients || record.adminRecipients || 'Configured owner addresses', delivery.status || delivery.providerStatus || record.deliveryStatus)}${fact('Creator access', record.id || activationOf(exam) ? 'Monitoring and Grading unlocked' : 'Unlocks on approval', 'No creator key entry required')}${fact('Key state', selectedOperationalState(exam, selectedDetail()).keyAvailable ? 'Recoverable' : 'Needs owner attention', selectedOperationalState(exam, selectedDetail()).label)}</div>${deliveryRecoveryPanel(id, delivery, key)}${keyActions}${rawPanel('Current key and delivery record', { record, delivery, recovery: state.keyRecovery.get(id) || null })}</article>${history.length > 1 ? `<section class="panel"><header class="exam-admin-panel-head"><div><h3>Complete key history</h3><p>Newest first. Revoked and replaced keys remain visible to the platform owner for audit and recovery.</p></div></header>${rawPanel('All issued key records', history)}</section>` : ''}`;
   }
 
   function mergeSnapshotPage(previous, result, requestedOffset = 0) {
@@ -957,7 +1297,27 @@
     }
     detail = normalizeOwnerDetail(detail);
     state.details.set(id, detail);
+    await ensureExactOwnerKey(id, detail);
     return detail;
+  }
+  async function ensureExactOwnerKey(id = state.selectedExamId, detail = selectedDetail()) {
+    if (!id || state.currentKeys.has(id)) return state.currentKeys.get(id) || null;
+    const exam = list(state.data?.exams).find((record) => examId(record) === id) || null;
+    if (!exam || !selectedRoomActivation(exam, detail)) return null;
+    try {
+      const result = await api.adminCommand('reveal_key', {
+        institutionId: state.institutionId,
+        examId: id,
+      }, api.requestId());
+      if (result?.roomKey) {
+        state.currentKeys.set(id, result.roomKey);
+        state.keyRevealErrors.delete(id);
+        return result.roomKey;
+      }
+    } catch (error) {
+      state.keyRevealErrors.set(id, error);
+    }
+    return null;
   }
   async function ensureAudit(force = false) {
     const key = state.selectedExamId || state.institutionId;
@@ -1155,8 +1515,9 @@
     try {
       const html = await load(requestToken);
       if (requestToken !== state.loadRequest || html == null) return;
-      if (DETAIL_TABS.has(state.tab)) await ensureDetail();
-      if (state.tab === 'recovery_audit') await Promise.all([ensureRecovery(), ensureAudit()]);
+      if (state.selectedExamId) await ensureDetail();
+      if (state.selectedExamId && state.openSections.has('recovery')) await Promise.all([ensureRecovery(), ensureAudit()]);
+      state.pendingSelection = null;
       state.inlineError = null; state.root.innerHTML = renderContent();
       if (message) state.toast(message);
     } catch (error) { if (requestToken === state.loadRequest) state.root.innerHTML = `<div class="exam-admin-page">${errorPanel(error)}</div>`; }
@@ -1213,6 +1574,8 @@
           || !primary) continue;
         return {
           storageKey,
+          operation,
+          createdAt: saved.createdAt || null,
           requestKeys: {
             primary,
             activate: String(savedRequestKeys.activate || '').trim(),
@@ -1278,12 +1641,34 @@
     try { return await api.adminCommand('reveal_key', { institutionId: state.institutionId, examId: id }, requestKeys.primary); }
     catch (error) { if (!api.demoEnabled?.() || !isUnsupported(error)) throw error; return api.adminCommand('email_key', { institutionId: state.institutionId, examId: id }, requestKeys.email); }
   }
+
+  function ownerActionConfirmation(operation, payload) {
+    if (operation === 'rotate_key') return 'Reissue this room key? The replacement will be emailed and the previous student key will stop working.';
+    if (operation === 'revoke_key') return 'Revoke this room key? Existing answers, submissions, grades, and receipts remain available.';
+    if (operation === 'restore_snapshot') return 'Verify and recover a downloadable copy of this checkpoint? Live examination rows will not be changed.';
+    if (operation === 'room_control' && payload.action === 'open') return 'Open this room now? Students with the current key will be able to enter.';
+    if (operation === 'room_control' && payload.action === 'close') return 'Close this room now? Active student sessions will end, while every saved answer and receipt remains preserved.';
+    if (operation === 'reopen_exam') return 'Reopen this preserved examination with a new current key? The previous key will remain invalid.';
+    if (operation === 'block_exam') return 'Block new access to this examination? Questions, answers, grades, keys, and receipts will remain visible to the owner.';
+    if (operation === 'unblock_exam') return 'Unblock this examination and restore access under its current room state?';
+    if (operation === 'archive_exam') return 'Delete this examination from active rooms? Its complete record will remain preserved in the recoverable owner archive.';
+    if (operation === 'restore_exam') return 'Restore this archived examination and its preserved records?';
+    return '';
+  }
+
+  function actionRetryToken(operation, payload) {
+    const extras = { ...payload };
+    delete extras.examId;
+    delete extras.snapshotId;
+    const encoded = Object.keys(extras).length ? encodeURIComponent(JSON.stringify(extras)) : '';
+    return `${operation}:${payload.examId || ''}:${payload.snapshotId || ''}:${encoded}`;
+  }
+
   async function runAction(operation, payload, button) {
     const { actionKey: key, requestKeys } = actionRequestContext(operation, payload);
     if (state.busy.has(key)) return;
-    if (operation === 'rotate_key' && !global.confirm('Rotate the current key and email the replacement to the creator and owner addresses? The old key will stop working.')) return;
-    if (operation === 'revoke_key' && !global.confirm('Revoke this room key? Existing answers, submissions, grades, and receipts remain available.')) return;
-    if (operation === 'restore_snapshot' && !global.confirm('Verify and recover a downloadable copy of this checkpoint? Live examination rows will not be changed.')) return;
+    const confirmation = ownerActionConfirmation(operation, payload);
+    if (confirmation && !global.confirm(confirmation)) return;
     state.busy.add(key); buttonBusy(button, true); state.inlineError = null;
     try {
       let result;
@@ -1301,10 +1686,21 @@
         }
       }
       if (result?.roomKey && payload.examId) state.currentKeys.set(payload.examId, result.roomKey);
-      if (payload.examId && (result?.deliveryStatus || result?.recipient || result?.adminRecipients)) state.deliveries.set(payload.examId, {
-        status: result.deliveryStatus || 'requested',
+      if (payload.examId && (result?.keyEscrow || result?.keyRecovery || result?.keyIssuanceStatus || result?.recoveryRequired != null)) state.keyRecovery.set(payload.examId, {
+        operation,
+        recoveryRequired: result.recoveryRequired === true,
+        activationCommitted: result.activationCommitted === true,
+        keyIssuanceStatus: result.keyIssuanceStatus || '',
+        keyEscrow: result.keyEscrow || null,
+        keyRecovery: result.keyRecovery || null,
+        deliveryAudit: result.deliveryAudit || null,
+        recoveryActions: list(result.recoveryActions),
+      });
+      const deliveryResult = object(result?.deliveryAudit || result?.delivery);
+      if (payload.examId && (result?.deliveryStatus || result?.recipient || result?.adminRecipients || Object.keys(deliveryResult).length)) state.deliveries.set(payload.examId, {
+        status: result.deliveryStatus || deliveryResult.status || 'requested',
         safeErrorCode: result.deliverySafeErrorCode || result.deliveryAttemptSafeErrorCode || '',
-        recovery: result.deliveryRecovery || result.recovery || '',
+        recovery: result.deliveryRecovery || deliveryResult.recovery || result.recovery || '',
         professorRecipient: result.recipient || result.professorEmail || '',
         adminRecipients: result.adminRecipients || result.ownerRecipients || '',
         at: new Date().toISOString(),
@@ -1313,16 +1709,30 @@
       if (operation === 'restore_snapshot' && (result?.recoveryBundle || result?.bundle)) {
         downloadFile(`examination-room-recovered-${payload.snapshotId || 'snapshot'}.json`, 'application/json;charset=utf-8', JSON.stringify(result.recoveryBundle || result.bundle, null, 2));
       }
-      const sent = ['sent', 'delivered', 'demo_delivered', 'requested'].includes(String(result?.deliveryStatus || '').toLowerCase());
-      const deliveryFailure = ['approve_and_email_key', 'rotate_key', 'resend_key'].includes(operation) && !sent;
-      const messages = { approve_and_email_key: 'Key generated. Monitoring and Grading are unlocked automatically for the creator; email was sent to the creator and owner addresses.', rotate_key: 'Replacement key issued and emailed.', resend_key: 'The current key was emailed again to the creator and owner addresses.', revoke_key: 'Room key revoked. Examination data was preserved.', create_snapshot: 'Full recovery snapshot requested.', retry_snapshot: 'Snapshot retry started.', restore_snapshot: 'Checkpoint verified and downloaded. Live examination rows were not changed.' };
-      const message = deliveryFailure
+      const escrowStatus = String(result?.keyEscrow?.status || '').toLowerCase();
+      const escrowReady = KEY_ESCROW_READY_STATES.has(escrowStatus);
+      const escrowNeedsRepair = KEY_ESCROW_REPAIR_STATES.has(escrowStatus)
+        || (result?.recoveryRequired === true && !escrowReady && escrowStatus !== '');
+      const deliveryAuditStatus = String(result?.deliveryAudit?.status || '').toLowerCase();
+      const deliveryAuditNeedsRepair = deliveryAuditStatus === 'failed';
+      const approvalReplayRequired = escrowNeedsRepair || deliveryAuditNeedsRepair;
+      const deliveryStatus = String(result?.deliveryStatus || deliveryResult.status || '').toLowerCase();
+      const deliveryCompleted = ['sent', 'delivered', 'demo_delivered', 'requested', 'accepted', 'suppressed'].includes(deliveryStatus);
+      const deliveryFailure = ['approve_and_email_key', 'reopen_exam', 'rotate_key', 'resend_key'].includes(operation) && !deliveryCompleted;
+      const messages = { approve_and_email_key: 'Key generated. Students may enter immediately; Monitoring and Grading are unlocked automatically for the creator; email was sent to the creator and owner addresses.', rotate_key: 'Replacement key issued and emailed.', resend_key: 'The current key was emailed again to the creator and owner addresses.', revoke_key: 'Room key revoked. Examination data was preserved.', room_control: payload.action === 'open' ? 'Legacy scheduled key activated. Students with the current key may enter.' : 'Room closed. Active sessions ended and all records were preserved.', reopen_exam: 'Examination reopened with a new current room key.', block_exam: 'Examination blocked. All stored records remain visible.', unblock_exam: 'Examination unblocked.', archive_exam: 'Examination deleted from active rooms; its complete record remains preserved in the recoverable archive.', restore_exam: 'Archived examination restored.', create_snapshot: 'Full recovery snapshot requested.', retry_snapshot: 'Snapshot retry started.', restore_snapshot: 'Checkpoint verified and downloaded. Live examination rows were not changed.' };
+      const message = escrowNeedsRepair
+        ? `The activation exists, but its exact key record still needs repair. Choose Repair current key record to retry the same key-issuance receipt safely. ${result?.keyRecovery?.recovery || result?.recovery || ''}`
+        : deliveryAuditNeedsRepair
+        ? `The key is active, but its delivery receipt still needs repair. Choose Repair delivery record to replay the same key-issuance receipt safely. ${result?.deliveryAudit?.recovery || result?.recoveryActions?.[0] || ''}`
+        : deliveryFailure
         ? `The key is active and visible, and the creator can use Monitoring and Grading without entering it. Email was not sent. ${result?.deliveryRecovery || result?.recovery || 'Check the email configuration, then choose Resend current key.'}`
+        : deliveryStatus === 'suppressed' && ['approve_and_email_key', 'reopen_exam', 'rotate_key', 'resend_key'].includes(operation)
+        ? 'The key is active and visible. Email delivery is intentionally suppressed in this environment; creator access is already unlocked.'
         : messages[operation] || 'Owner action completed.';
-      if (PERSISTED_OWNER_ACTIONS.has(operation)) clearOwnerAction(operation, payload.examId, requestKeys.primary);
+      if (PERSISTED_OWNER_ACTIONS.has(operation) && !approvalReplayRequired) clearOwnerAction(operation, payload.examId, requestKeys.primary);
       state.actionRequests.delete(key);
       await refreshIntoRoot(message);
-    } catch (error) { state.inlineError = Object.assign(error, { retry: `${operation}:${payload.examId || ''}:${payload.snapshotId || ''}` }); renderIntoRoot(); }
+    } catch (error) { state.inlineError = Object.assign(error, { retry: actionRetryToken(operation, payload) }); renderIntoRoot(); }
     finally { state.busy.delete(key); if (button?.isConnected) buttonBusy(button, false); }
   }
 
@@ -1508,8 +1918,36 @@
     catch { const input = [...state.root.querySelectorAll('.exam-admin-key-card input')].find((node) => node.value === value); input?.select(); state.toast('The key is selected. Use Copy.'); }
   }
 
-  function exportPayload() {
+  function exportPayload(scope = null) {
     const detail = selectedDetail();
+    if (scope === 'all') return {
+      exportSections: true,
+      institution: currentInstitution(),
+      examinations: state.data?.exams || [],
+      selectedExam: selectedExam(),
+      selectedDetail: detail,
+      questions: questions(detail),
+      students: students(detail),
+      sessions: sessions(detail),
+      submissions: submissions(detail),
+      answers: answers(detail),
+      grades: grades(detail),
+      releases: detail?.releases || detail?.resultReleases || [],
+      keys: keyRecords(),
+      currentKey: state.currentKeys.get(state.selectedExamId) || null,
+      delivery: state.deliveries.get(state.selectedExamId) || null,
+      keyRecovery: state.keyRecovery.get(state.selectedExamId) || null,
+      snapshots: snapshotRows(),
+      audit: auditRows(),
+      staff: state.data?.staff || [],
+      professorRequests: state.data?.professorRequests || [],
+    };
+    if (scope === 'examinations') return { institution: currentInstitution(), examinations: state.data?.exams || [] };
+    if (scope === 'examination') return { exam: selectedExam(), detail, questions: questions(detail), publicationManifest: detail?.publicationManifest || null };
+    if (scope === 'students') return { exam: selectedExam(), students: students(detail), sessions: sessions(detail), submissions: submissions(detail), answers: answers(detail) };
+    if (scope === 'grades') return { exam: selectedExam(), grades: grades(detail), releases: detail?.releases || detail?.resultReleases || [] };
+    if (scope === 'keys') return { exam: selectedExam(), keys: keyRecords(), currentKey: state.currentKeys.get(state.selectedExamId) || null, delivery: state.deliveries.get(state.selectedExamId) || null, keyRecovery: state.keyRecovery.get(state.selectedExamId) || null };
+    if (scope === 'recovery') return { exam: selectedExam(), snapshots: snapshotRows(), audit: auditRows() };
     if (state.tab === 'overview') return state.data;
     if (state.tab === 'professor_access') return { institution: currentInstitution(), professorRequests: state.data?.professorRequests || [], staff: state.data?.staff || [] };
     if (state.tab === 'examinations') return { exams: state.data?.exams || [], selectedExam: selectedExam(), selectedDetail: detail };
@@ -1522,6 +1960,10 @@
   function csvRows(payload) {
     if (Array.isArray(payload)) return payload;
     const source = object(payload);
+    if (source.exportSections === true) {
+      const collections = ['examinations', 'questions', 'students', 'sessions', 'submissions', 'answers', 'grades', 'releases', 'keys', 'snapshots', 'audit', 'staff', 'professorRequests'];
+      return collections.flatMap((name) => list(source[name]).map((row) => ({ exportRecordType: name, ...object(row) })));
+    }
     if (Array.isArray(source.snapshots) && Array.isArray(source.audit)) {
       return [
         ...source.snapshots.map((row) => ({ ...object(row), exportRecordType: 'recovery_snapshot' })),
@@ -1542,28 +1984,29 @@
     const url = URL.createObjectURL(new Blob([body], { type })); const link = document.createElement('a');
     link.href = url; link.download = filename; link.hidden = true; document.body.appendChild(link); link.click(); link.remove(); global.setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
-  async function exportCurrent(format, button = null) {
-    const busyKey = `export:${state.tab}:${format}`;
+  async function exportCurrent(format, button = null, scope = null) {
+    const resolvedScope = scope || state.tab;
+    const busyKey = `export:${resolvedScope}:${format}`;
     if (state.busy.has(busyKey)) return;
     state.busy.add(busyKey); buttonBusy(button, true);
     try {
-      if (['overview', 'examinations'].includes(state.tab) && !examProgress().fullyLoaded) await loadAllExams();
-      if (state.tab === 'recovery_audit') {
+      if (['all', 'examinations'].includes(resolvedScope) && !examProgress().fullyLoaded) await loadAllExams();
+      if (['all', 'recovery', 'recovery_audit'].includes(resolvedScope) && state.selectedExamId) {
         await Promise.all([
           recoveryProgress().fullyLoaded ? Promise.resolve() : loadAllRecovery(),
           auditProgress().fullyLoaded ? Promise.resolve() : loadAllAudit(),
         ]);
       }
-      const payload = exportPayload(); const filename = `examination-room-${state.tab.replace(/_/g, '-')}-${new Date().toISOString().slice(0, 10)}`;
+      const payload = exportPayload(scope); const filename = `examination-room-${resolvedScope.replace(/_/g, '-')}-${new Date().toISOString().slice(0, 10)}`;
       if (format === 'csv') downloadFile(`${filename}.csv`, 'text/csv;charset=utf-8', csvText(payload));
       else downloadFile(`${filename}.json`, 'application/json;charset=utf-8', JSON.stringify(payload, null, 2));
-      const completeness = state.tab === 'recovery_audit'
+      const completeness = ['all', 'recovery', 'recovery_audit'].includes(resolvedScope)
         ? ` All ${snapshotRows().length} checkpoints and ${auditRows().length} matching audit records are included.`
-        : ['overview', 'examinations'].includes(state.tab) ? ` All ${list(state.data?.exams).length} examinations are included.` : '';
+        : ['examinations', 'overview'].includes(resolvedScope) ? ` All ${list(state.data?.exams).length} examinations are included.` : '';
       state.toast(`${format.toUpperCase()} export prepared.${completeness}`);
     } catch (error) {
       const exams = examProgress(); const recovery = recoveryProgress(); const audit = auditProgress();
-      const retry = ['overview', 'examinations'].includes(state.tab)
+      const retry = scope ? `export_scope:${resolvedScope}:${format}` : ['overview', 'examinations'].includes(state.tab)
         ? !exams.fullyLoaded && !exams.hasMore ? 'exams_refresh' : `exams_export_${format}`
         : state.tab === 'recovery_audit' && !recovery.fullyLoaded && !recovery.hasMore
           ? 'recovery_refresh'
@@ -1607,8 +2050,9 @@
     state.root.querySelectorAll('[data-exam-admin-searchable]').forEach((node) => { node.hidden = Boolean(query) && !String(node.dataset.searchText || node.textContent || '').toLowerCase().includes(query); });
   }
   async function retryAction(value, button) {
-    const [operation, id, snap] = String(value || '').split(':');
+    const [operation, id, snap, encodedPayload = ''] = String(value || '').split(':');
     if (operation === 'refresh') { await refreshIntoRoot('Examination Room refreshed.'); return; }
+    if (operation === 'export_scope') { await exportCurrent(snap || 'json', button, id || 'all'); return; }
     if (operation === 'exams_next') { await runExamLoad('next', button); return; }
     if (operation === 'exams_all') { await runExamLoad('all', button); return; }
     if (operation === 'exams_refresh') { await runExamLoad('refresh', button); return; }
@@ -1622,7 +2066,32 @@
     if (operation === 'audit_refresh') { await runAuditLoad('refresh', button); return; }
     if (operation === 'audit_export_json') { await exportCurrent('json', button); return; }
     if (operation === 'audit_export_csv') { await exportCurrent('csv', button); return; }
-    await runAction(operation, { examId: id || state.selectedExamId, snapshotId: snap || undefined }, button);
+    let extras = {};
+    try { extras = encodedPayload ? object(JSON.parse(decodeURIComponent(encodedPayload))) : {}; }
+    catch { extras = {}; }
+    await runAction(operation, { examId: id || state.selectedExamId, snapshotId: snap || undefined, ...extras }, button);
+  }
+
+  async function selectCommandCenterExam(identifier, institutionId = state.institutionId) {
+    const id = String(identifier || '').trim();
+    const targetInstitution = String(institutionId || state.institutionId || '').trim();
+    if (!id || !targetInstitution) return;
+    const queued = state.globalQueue.find((exam) => examId(exam) === id && String(exam.ownerInstitutionId || state.institutionId) === targetInstitution) || null;
+    if (targetInstitution !== state.institutionId) {
+      state.pendingSelection = queued;
+      state.institutionId = targetInstitution;
+      state.selectedExamId = id;
+      state.details.clear(); state.audit.clear(); state.recovery.clear();
+      await refreshIntoRoot('Owner workspace and examination selected.');
+      return;
+    }
+    if (queued && !list(state.data?.exams).some((exam) => examId(exam) === id)) state.data.exams.unshift(queued);
+    state.selectedExamId = id;
+    state.search = '';
+    await ensureDetail();
+    if (state.openSections.has('recovery')) await Promise.all([ensureRecovery(), ensureAudit()]);
+    state.pendingSelection = null;
+    renderIntoRoot();
   }
 
   function bind({ root, toast, refresh }) {
@@ -1640,20 +2109,37 @@
     });
     root.addEventListener('change', async (event) => {
       if (event.target.matches('[data-exam-admin-institution]')) { state.institutionId = event.target.value; state.selectedExamId = null; state.currentKeys.clear(); state.deliveries.clear(); await refreshIntoRoot('Law-school workspace changed.'); }
-      else if (event.target.matches('[data-exam-admin-exam-selector]')) { state.selectedExamId = event.target.value; state.search = ''; root.setAttribute('aria-busy', 'true'); try { await ensureDetail(); if (state.tab === 'recovery_audit') await Promise.all([ensureRecovery(), ensureAudit()]); renderIntoRoot(); } catch (error) { state.inlineError = error; renderIntoRoot(); } finally { root.removeAttribute('aria-busy'); } }
+      else if (event.target.matches('[data-exam-admin-exam-selector]')) { root.setAttribute('aria-busy', 'true'); try { await selectCommandCenterExam(event.target.value); } catch (error) { state.inlineError = error; renderIntoRoot(); } finally { root.removeAttribute('aria-busy'); } }
       else resetOwnerControlReceipt(event.target.closest('[data-exam-admin-owner-control]'));
     });
     root.addEventListener('click', async (event) => {
+      const sectionSummary = event.target.closest('.exam-admin-section-summary');
+      if (sectionSummary) {
+        event.preventDefault();
+        const section = sectionSummary.closest('[data-exam-admin-section]');
+        const sectionId = section?.dataset.examAdminSection;
+        if (!sectionId) return;
+        if (state.openSections.has(sectionId)) state.openSections.delete(sectionId);
+        else state.openSections.add(sectionId);
+        renderIntoRoot();
+        if (sectionId === 'recovery' && state.openSections.has(sectionId) && state.selectedExamId) {
+          root.setAttribute('aria-busy', 'true');
+          try { await Promise.all([ensureRecovery(), ensureAudit()]); renderIntoRoot(); }
+          catch (error) { state.inlineError = error; renderIntoRoot(); }
+          finally { root.removeAttribute('aria-busy'); }
+        }
+        return;
+      }
       const tab = event.target.closest('[data-exam-admin-tab]');
       if (tab) { root.setAttribute('aria-busy', 'true'); try { await prepareTab(tab.dataset.examAdminTab); renderIntoRoot(); } catch (error) { state.inlineError = error; renderIntoRoot(); } finally { root.removeAttribute('aria-busy'); } return; }
       const select = event.target.closest('[data-exam-admin-select-exam]');
-      if (select) { state.selectedExamId = select.dataset.examAdminSelectExam; root.setAttribute('aria-busy', 'true'); try { await prepareTab(select.dataset.examAdminGoTab || 'examinations'); renderIntoRoot(); } catch (error) { state.inlineError = error; renderIntoRoot(); } finally { root.removeAttribute('aria-busy'); } return; }
-      const action = event.target.closest('[data-exam-admin-action]'); if (action) { await runAction(action.dataset.examAdminAction, { examId: action.dataset.examId || state.selectedExamId, snapshotId: action.dataset.snapshotId || undefined }, action); return; }
+      if (select) { root.setAttribute('aria-busy', 'true'); try { await selectCommandCenterExam(select.dataset.examAdminSelectExam, select.dataset.examAdminInstitutionId || state.institutionId); } catch (error) { state.inlineError = error; renderIntoRoot(); } finally { root.removeAttribute('aria-busy'); } return; }
+      const action = event.target.closest('[data-exam-admin-action]'); if (action) { await runAction(action.dataset.examAdminAction, { examId: action.dataset.examId || state.selectedExamId, snapshotId: action.dataset.snapshotId || undefined, ...(action.dataset.examAdminRoomAction ? { action: action.dataset.examAdminRoomAction } : {}), ...(action.dataset.examAdminReason ? { reason: action.dataset.examAdminReason } : {}) }, action); return; }
       const approve = event.target.closest('[data-exam-admin-approve-professor]'); if (approve) { await approveProfessor(approve); return; }
       const reject = event.target.closest('[data-exam-admin-reject-professor]'); if (reject) { await rejectProfessor(reject); return; }
       const revoke = event.target.closest('[data-exam-admin-revoke-staff]'); if (revoke) { await revokeStaff(revoke); return; }
       const copy = event.target.closest('[data-exam-admin-copy-key]'); if (copy) { await copyKey(copy.dataset.examAdminCopyKey); return; }
-      const exporter = event.target.closest('[data-exam-admin-export]'); if (exporter) { await exportCurrent(exporter.dataset.examAdminExport, exporter); return; }
+      const exporter = event.target.closest('[data-exam-admin-export]'); if (exporter) { await exportCurrent(exporter.dataset.examAdminExport, exporter, exporter.dataset.examAdminExportScope || null); return; }
       const examLoader = event.target.closest('[data-exam-admin-load-exams]'); if (examLoader) { await runExamLoad(examLoader.dataset.examAdminLoadExams, examLoader); return; }
       const recoveryLoader = event.target.closest('[data-exam-admin-load-recovery]'); if (recoveryLoader) { await runRecoveryLoad(recoveryLoader.dataset.examAdminLoadRecovery, recoveryLoader); return; }
       const auditLoader = event.target.closest('[data-exam-admin-load-audit]'); if (auditLoader) { await runAuditLoad(auditLoader.dataset.examAdminLoadAudit, auditLoader); return; }

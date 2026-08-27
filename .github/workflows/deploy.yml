@@ -112,6 +112,7 @@ jobs:
           node scripts/test-profile-avatar-cleanup-migration.mjs
           node scripts/test-pedro-release2-integration.mjs
           node scripts/test-pedro-migration-contract.mjs
+          node scripts/test-pedro-conditional-expression-qualification-fix.mjs
           node scripts/test-pedro-exact-openers.mjs
           node --test scripts/test-pedro-frontend.mjs
           node scripts/test-pedro-navigation.mjs
@@ -119,6 +120,7 @@ jobs:
           node scripts/test-master-experience-release.mjs
           node scripts/test-quorum-navigation-state.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
+          node scripts/test-subject-matter-incremental-snapshot-hash-fix.mjs
           node scripts/test-historical-examination-owner-access.mjs
           node scripts/test-examinations.mjs
           node scripts/test-phase4-release4.mjs

@@ -359,6 +359,7 @@
       body: options.body instanceof FormData
         ? options.body
         : JSON.stringify(options.body || {}),
+      signal: options.signal,
     });
     const payload = await response.json().catch(() => null);
 

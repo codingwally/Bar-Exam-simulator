@@ -71,6 +71,7 @@ on:
       - 'worker/wrangler.staging.toml'
       - 'worker/syllabus-review-reveal-policy.test.mjs'
       - 'scripts/test-syllabus-review-reveal-contract.mjs'
+      - 'scripts/test-subject-matter-incremental-snapshot-hash-fix.mjs'
       - 'scripts/test-historical-examination-owner-access.mjs'
       - 'scripts/stress-public-admin-static-1000.mjs'
       - 'scripts/serve-static.mjs'
@@ -94,16 +95,21 @@ on:
       - 'scripts/test-profile-avatar-cleanup-migration.mjs'
       - 'scripts/test-pedro-release2-integration.mjs'
       - 'scripts/test-pedro-migration-contract.mjs'
+      - 'scripts/test-pedro-conditional-expression-qualification-fix.mjs'
       - 'scripts/test-pedro-exact-openers.mjs'
       - 'scripts/test-pedro-frontend.mjs'
       - 'scripts/test-pedro-navigation.mjs'
       - 'scripts/verify-examinations-staging-ui.mjs'
       - 'supabase/migrations/20260826110207_subject_matter_unlimited_review_release.sql'
+      - 'supabase/migrations/20260828130000_subject_matter_incremental_snapshot_hash_fix.sql'
+      - 'supabase/migrations/20260828131000_subject_matter_official_source_filter.sql'
+      - 'supabase/migrations/20260828131500_subject_matter_revealable_pool_guard.sql'
       - 'supabase/migrations/20260827113000_restore_historical_examination_owner_access.sql'
       - 'supabase/migrations/20260827133000_require_historical_examination_track.sql'
       - 'supabase/migrations/20260827143000_pedro_private_study_inbox.sql'
       - 'supabase/migrations/20260827144000_profile_avatar_cleanup_queue.sql'
       - 'supabase/migrations/20260827145000_pedro_foreign_key_indexes.sql'
+      - 'supabase/migrations/20260828132000_pedro_conditional_expression_qualification_fix.sql'
       - 'supabase/tests/20260827_038_historical_examination_owner_access_test.sql'
       - 'scripts/build-pages-artifact.mjs'
       - 'scripts/build-staging-artifact.mjs'
@@ -210,6 +216,7 @@ jobs:
           node scripts/test-public-home-responsive-css.mjs
           node scripts/test-paid-subscription-expiry-database.mjs
           node scripts/test-syllabus-review-reveal-contract.mjs
+          node scripts/test-subject-matter-incremental-snapshot-hash-fix.mjs
           node scripts/test-historical-examination-owner-access.mjs
           node scripts/test-design-correction-release.mjs
           node scripts/test-subject-matter-consolidation.mjs
@@ -217,6 +224,7 @@ jobs:
           node scripts/test-profile-avatar-cleanup-migration.mjs
           node scripts/test-pedro-release2-integration.mjs
           node scripts/test-pedro-migration-contract.mjs
+          node scripts/test-pedro-conditional-expression-qualification-fix.mjs
           node scripts/test-pedro-exact-openers.mjs
           node --test scripts/test-pedro-frontend.mjs
           node scripts/test-pedro-navigation.mjs

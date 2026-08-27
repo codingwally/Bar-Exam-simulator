@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   patch-test-publish:
-    if: github.event.head_commit.message == 'chore: stage examination room optional schedule fix'
     runs-on: ubuntu-latest
     steps:
       - name: Check out the production branch
@@ -29,6 +28,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
+          import base64
           from pathlib import Path
 
           index_path = Path('worker/index.mjs')
@@ -37,210 +37,9 @@ jobs:
           helper_path = Path('worker/examination-room-activation-window.mjs')
           test_path = Path('worker/examination-room-activation-window.test.mjs')
 
-          helper_source = r'''export const EXAMINATION_ROOM_UNSCHEDULED_ACTIVATION_SECONDS = 24 * 60 * 60;
-
-function activationWindowError(code, message) {
-  const error = new TypeError(message);
-  error.code = code;
-  return error;
-}
-
-export function resolveExaminationRoomActivationWindow({
-  startsAt = null,
-  durationSeconds,
-  maximumExtraMinutes = 0,
-  now = Date.now(),
-} = {}) {
-  const duration = Number(durationSeconds);
-  const extraMinutes = Number(maximumExtraMinutes);
-  const nowMs = Number(now);
-
-  if (!Number.isSafeInteger(duration) || duration < 60 || duration > 86_400) {
-    throw activationWindowError(
-      'INVALID_DURATION',
-      'durationSeconds must be an integer between 60 and 86400.',
-    );
-  }
-  if (!Number.isFinite(extraMinutes) || extraMinutes < 0) {
-    throw activationWindowError(
-      'INVALID_EXTRA_MINUTES',
-      'maximumExtraMinutes must be a non-negative number.',
-    );
-  }
-  if (!Number.isFinite(nowMs)) {
-    throw activationWindowError('INVALID_NOW', 'now must be a valid timestamp.');
-  }
-
-  const normalizedStart = String(startsAt || '').trim();
-  const scheduledOpens = normalizedStart ? Date.parse(normalizedStart) : Number.NaN;
-  if (normalizedStart && !Number.isFinite(scheduledOpens)) {
-    throw activationWindowError(
-      'INVALID_START_TIME',
-      'startsAt must be a valid date when it is provided.',
-    );
-  }
-
-  const scheduledCloses = Number.isFinite(scheduledOpens)
-    ? scheduledOpens + (duration + extraMinutes * 60) * 1_000
-    : Number.NaN;
-  const usePublishedSchedule = Number.isFinite(scheduledCloses)
-    && scheduledCloses > scheduledOpens
-    && scheduledCloses > nowMs;
-  const opens = usePublishedSchedule ? scheduledOpens : nowMs;
-  const closes = usePublishedSchedule
-    ? scheduledCloses
-    : opens + EXAMINATION_ROOM_UNSCHEDULED_ACTIVATION_SECONDS * 1_000;
-
-  return {
-    opensAt: new Date(opens).toISOString(),
-    closesAt: new Date(closes).toISOString(),
-    durationSeconds: duration,
-    maximumExtraMinutes: extraMinutes,
-    scheduleSource: usePublishedSchedule ? 'published_exam' : 'room_key_issuance',
-  };
-}
-'''
-
-          test_source = r'''import test from 'node:test';
-import assert from 'node:assert/strict';
-import {
-  EXAMINATION_ROOM_UNSCHEDULED_ACTIVATION_SECONDS,
-  resolveExaminationRoomActivationWindow,
-} from './examination-room-activation-window.mjs';
-
-const NOW = Date.parse('2026-08-27T10:00:00.000Z');
-
-function secondsBetween(left, right) {
-  return (Date.parse(right) - Date.parse(left)) / 1_000;
-}
-
-test('blank start time creates a fresh 24-hour room-key window', () => {
-  const window = resolveExaminationRoomActivationWindow({
-    startsAt: null,
-    durationSeconds: 3_600,
-    maximumExtraMinutes: 15,
-    now: NOW,
-  });
-  assert.equal(window.opensAt, '2026-08-27T10:00:00.000Z');
-  assert.equal(window.scheduleSource, 'room_key_issuance');
-  assert.equal(
-    secondsBetween(window.opensAt, window.closesAt),
-    EXAMINATION_ROOM_UNSCHEDULED_ACTIVATION_SECONDS,
-  );
-  assert.equal(window.durationSeconds, 3_600);
-  assert.equal(window.maximumExtraMinutes, 15);
-});
-
-test('an ended published schedule no longer blocks a new room key', () => {
-  const window = resolveExaminationRoomActivationWindow({
-    startsAt: '2026-08-26T08:00:00.000Z',
-    durationSeconds: 7_200,
-    now: NOW,
-  });
-  assert.equal(window.opensAt, '2026-08-27T10:00:00.000Z');
-  assert.equal(window.scheduleSource, 'room_key_issuance');
-  assert.equal(
-    secondsBetween(window.opensAt, window.closesAt),
-    EXAMINATION_ROOM_UNSCHEDULED_ACTIVATION_SECONDS,
-  );
-});
-
-test('a future or still-running published schedule remains authoritative', () => {
-  const window = resolveExaminationRoomActivationWindow({
-    startsAt: '2026-08-27T09:30:00.000Z',
-    durationSeconds: 3_600,
-    maximumExtraMinutes: 15,
-    now: NOW,
-  });
-  assert.equal(window.opensAt, '2026-08-27T09:30:00.000Z');
-  assert.equal(window.closesAt, '2026-08-27T10:45:00.000Z');
-  assert.equal(window.scheduleSource, 'published_exam');
-});
-
-test('a malformed nonblank start time is rejected', () => {
-  assert.throws(
-    () => resolveExaminationRoomActivationWindow({
-      startsAt: 'not-a-date',
-      durationSeconds: 3_600,
-      now: NOW,
-    }),
-    (error) => error?.code === 'INVALID_START_TIME',
-  );
-});
-'''
-
-          replacement_function = r'''function examinationRoomPublishedActivationWindow(bundle, payload) {
-  const publishedVersionId = String(bundle?.currentPublishedVersionId || '').trim();
-  const version = examinationRoomOwnerBundleRows(bundle, 'examVersions')
-    .find((entry) => String(examinationRoomOwnerRowValue(entry, 'id') || '') === publishedVersionId);
-  if (!publishedVersionId
-      || !version
-      || examinationRoomOwnerRowValue(version, 'publicationStatus', 'publication_status') !== 'published') {
-    throw examinationRoomOwnerError(
-      'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID',
-      'The examination does not have a valid published version.',
-      409,
-      'Ask the exam creator to publish the examination before issuing a room key.',
-    );
-  }
-
-  const startsAt = examinationRoomOwnerRowValue(version?.controls, 'startsAt', 'starts_at');
-  const durationSeconds = Number(examinationRoomOwnerRowValue(
-    version,
-    'durationSeconds',
-    'duration_seconds',
-  ));
-  const maximumExtraMinutes = examinationRoomOwnerBundleRows(bundle, 'examRoster')
-    .reduce((maximum, roster) => {
-      const accommodations = examinationRoomOwnerRowValue(roster, 'accommodations') || {};
-      const extra = Number(examinationRoomOwnerRowValue(
-        accommodations,
-        'extraMinutes',
-        'extra_minutes',
-      ) || 0);
-      return Number.isFinite(extra) && extra >= 0 ? Math.max(maximum, extra) : maximum;
-    }, 0);
-
-  let activationWindow;
-  try {
-    activationWindow = resolveExaminationRoomActivationWindow({
-      startsAt,
-      durationSeconds,
-      maximumExtraMinutes,
-    });
-  } catch (error) {
-    const invalidStart = error?.code === 'INVALID_START_TIME';
-    throw examinationRoomOwnerError(
-      'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID',
-      invalidStart
-        ? 'The published examination has an invalid optional start time.'
-        : 'The published examination has no valid duration.',
-      409,
-      invalidStart
-        ? 'Ask the exam creator to clear the optional start time or enter a valid date, then publish the corrected examination.'
-        : 'Ask the exam creator to confirm the examination duration and publish the corrected examination before issuing a room key.',
-    );
-  }
-
-  const maxSessions = payload?.maxSessions == null || payload.maxSessions === ''
-    ? null
-    : Number(payload.maxSessions);
-  if (maxSessions !== null
-      && (!Number.isSafeInteger(maxSessions) || maxSessions < 1 || maxSessions > 100_000)) {
-    throw examinationRoomOwnerError(
-      'EXAM_ROOM_V1_MAX_SESSIONS_INVALID',
-      'The maximum student-session count must be a whole number from 1 to 100,000.',
-      400,
-      'Enter a valid maximum session count or leave it blank for no separate cap.',
-    );
-  }
-
-  return {
-    ...activationWindow,
-    maxSessions,
-  };
-}
-'''
+          helper_source = base64.b64decode('ZXhwb3J0IGNvbnN0IEVYQU1JTkFUSU9OX1JPT01fVU5TQ0hFRFVMRURfQUNUSVZBVElPTl9TRUNPTkRTID0gMjQgKiA2MCAqIDYwOwoKZnVuY3Rpb24gYWN0aXZhdGlvbldpbmRvd0Vycm9yKGNvZGUsIG1lc3NhZ2UpIHsKICBjb25zdCBlcnJvciA9IG5ldyBUeXBlRXJyb3IobWVzc2FnZSk7CiAgZXJyb3IuY29kZSA9IGNvZGU7CiAgcmV0dXJuIGVycm9yOwp9CgpleHBvcnQgZnVuY3Rpb24gcmVzb2x2ZUV4YW1pbmF0aW9uUm9vbUFjdGl2YXRpb25XaW5kb3coewogIHN0YXJ0c0F0ID0gbnVsbCwKICBkdXJhdGlvblNlY29uZHMsCiAgbWF4aW11bUV4dHJhTWludXRlcyA9IDAsCiAgbm93ID0gRGF0ZS5ub3coKSwKfSA9IHt9KSB7CiAgY29uc3QgZHVyYXRpb24gPSBOdW1iZXIoZHVyYXRpb25TZWNvbmRzKTsKICBjb25zdCBleHRyYU1pbnV0ZXMgPSBOdW1iZXIobWF4aW11bUV4dHJhTWludXRlcyk7CiAgY29uc3Qgbm93TXMgPSBOdW1iZXIobm93KTsKCiAgaWYgKCFOdW1iZXIuaXNTYWZlSW50ZWdlcihkdXJhdGlvbikgfHwgZHVyYXRpb24gPCA2MCB8fCBkdXJhdGlvbiA+IDg2XzQwMCkgewogICAgdGhyb3cgYWN0aXZhdGlvbldpbmRvd0Vycm9yKAogICAgICAnSU5WQUxJRF9EVVJBVElPTicsCiAgICAgICdkdXJhdGlvblNlY29uZHMgbXVzdCBiZSBhbiBpbnRlZ2VyIGJldHdlZW4gNjAgYW5kIDg2NDAwLicsCiAgICApOwogIH0KICBpZiAoIU51bWJlci5pc0Zpbml0ZShleHRyYU1pbnV0ZXMpIHx8IGV4dHJhTWludXRlcyA8IDApIHsKICAgIHRocm93IGFjdGl2YXRpb25XaW5kb3dFcnJvcigKICAgICAgJ0lOVkFMSURfRVhUUkFfTUlOVVRFUycsCiAgICAgICdtYXhpbXVtRXh0cmFNaW51dGVzIG11c3QgYmUgYSBub24tbmVnYXRpdmUgbnVtYmVyLicsCiAgICApOwogIH0KICBpZiAoIU51bWJlci5pc0Zpbml0ZShub3dNcykpIHsKICAgIHRocm93IGFjdGl2YXRpb25XaW5kb3dFcnJvcignSU5WQUxJRF9OT1cnLCAnbm93IG11c3QgYmUgYSB2YWxpZCB0aW1lc3RhbXAuJyk7CiAgfQoKICBjb25zdCBub3JtYWxpemVkU3RhcnQgPSBTdHJpbmcoc3RhcnRzQXQgfHwgJycpLnRyaW0oKTsKICBjb25zdCBzY2hlZHVsZWRPcGVucyA9IG5vcm1hbGl6ZWRTdGFydCA/IERhdGUucGFyc2Uobm9ybWFsaXplZFN0YXJ0KSA6IE51bWJlci5OYU47CiAgaWYgKG5vcm1hbGl6ZWRTdGFydCAmJiAhTnVtYmVyLmlzRmluaXRlKHNjaGVkdWxlZE9wZW5zKSkgewogICAgdGhyb3cgYWN0aXZhdGlvbldpbmRvd0Vycm9yKAogICAgICAnSU5WQUxJRF9TVEFSVF9USU1FJywKICAgICAgJ3N0YXJ0c0F0IG11c3QgYmUgYSB2YWxpZCBkYXRlIHdoZW4gaXQgaXMgcHJvdmlkZWQuJywKICAgICk7CiAgfQoKICBjb25zdCBzY2hlZHVsZWRDbG9zZXMgPSBOdW1iZXIuaXNGaW5pdGUoc2NoZWR1bGVkT3BlbnMpCiAgICA/IHNjaGVkdWxlZE9wZW5zICsgKGR1cmF0aW9uICsgZXh0cmFNaW51dGVzICogNjApICogMV8wMDAKICAgIDogTnVtYmVyLk5hTjsKICBjb25zdCB1c2VQdWJsaXNoZWRTY2hlZHVsZSA9IE51bWJlci5pc0Zpbml0ZShzY2hlZHVsZWRDbG9zZXMpCiAgICAmJiBzY2hlZHVsZWRDbG9zZXMgPiBzY2hlZHVsZWRPcGVucwogICAgJiYgc2NoZWR1bGVkQ2xvc2VzID4gbm93TXM7CiAgY29uc3Qgb3BlbnMgPSB1c2VQdWJsaXNoZWRTY2hlZHVsZSA/IHNjaGVkdWxlZE9wZW5zIDogbm93TXM7CiAgY29uc3QgY2xvc2VzID0gdXNlUHVibGlzaGVkU2NoZWR1bGUKICAgID8gc2NoZWR1bGVkQ2xvc2VzCiAgICA6IG9wZW5zICsgRVhBTUlOQVRJT05fUk9PTV9VTlNDSEVEVUxFRF9BQ1RJVkFUSU9OX1NFQ09ORFMgKiAxXzAwMDsKCiAgcmV0dXJuIHsKICAgIG9wZW5zQXQ6IG5ldyBEYXRlKG9wZW5zKS50b0lTT1N0cmluZygpLAogICAgY2xvc2VzQXQ6IG5ldyBEYXRlKGNsb3NlcykudG9JU09TdHJpbmcoKSwKICAgIGR1cmF0aW9uU2Vjb25kczogZHVyYXRpb24sCiAgICBtYXhpbXVtRXh0cmFNaW51dGVzOiBleHRyYU1pbnV0ZXMsCiAgICBzY2hlZHVsZVNvdXJjZTogdXNlUHVibGlzaGVkU2NoZWR1bGUgPyAncHVibGlzaGVkX2V4YW0nIDogJ3Jvb21fa2V5X2lzc3VhbmNlJywKICB9Owp9Cg==').decode('utf-8')
+          test_source = base64.b64decode('aW1wb3J0IHRlc3QgZnJvbSAnbm9kZTp0ZXN0JzsKaW1wb3J0IGFzc2VydCBmcm9tICdub2RlOmFzc2VydC9zdHJpY3QnOwppbXBvcnQgewogIEVYQU1JTkFUSU9OX1JPT01fVU5TQ0hFRFVMRURfQUNUSVZBVElPTl9TRUNPTkRTLAogIHJlc29sdmVFeGFtaW5hdGlvblJvb21BY3RpdmF0aW9uV2luZG93LAp9IGZyb20gJy4vZXhhbWluYXRpb24tcm9vbS1hY3RpdmF0aW9uLXdpbmRvdy5tanMnOwoKY29uc3QgTk9XID0gRGF0ZS5wYXJzZSgnMjAyNi0wOC0yN1QxMDowMDowMC4wMDBaJyk7CgpmdW5jdGlvbiBzZWNvbmRzQmV0d2VlbihsZWZ0LCByaWdodCkgewogIHJldHVybiAoRGF0ZS5wYXJzZShyaWdodCkgLSBEYXRlLnBhcnNlKGxlZnQpKSAvIDFfMDAwOwp9Cgp0ZXN0KCdibGFuayBzdGFydCB0aW1lIGNyZWF0ZXMgYSBmcmVzaCAyNC1ob3VyIHJvb20ta2V5IHdpbmRvdycsICgpID0+IHsKICBjb25zdCB3aW5kb3cgPSByZXNvbHZlRXhhbWluYXRpb25Sb29tQWN0aXZhdGlvbldpbmRvdyh7CiAgICBzdGFydHNBdDogbnVsbCwKICAgIGR1cmF0aW9uU2Vjb25kczogM182MDAsCiAgICBtYXhpbXVtRXh0cmFNaW51dGVzOiAxNSwKICAgIG5vdzogTk9XLAogIH0pOwogIGFzc2VydC5lcXVhbCh3aW5kb3cub3BlbnNBdCwgJzIwMjYtMDgtMjdUMTA6MDA6MDAuMDAwWicpOwogIGFzc2VydC5lcXVhbCh3aW5kb3cuc2NoZWR1bGVTb3VyY2UsICdyb29tX2tleV9pc3N1YW5jZScpOwogIGFzc2VydC5lcXVhbCgKICAgIHNlY29uZHNCZXR3ZWVuKHdpbmRvdy5vcGVuc0F0LCB3aW5kb3cuY2xvc2VzQXQpLAogICAgRVhBTUlOQVRJT05fUk9PTV9VTlNDSEVEVUxFRF9BQ1RJVkFUSU9OX1NFQ09ORFMsCiAgKTsKICBhc3NlcnQuZXF1YWwod2luZG93LmR1cmF0aW9uU2Vjb25kcywgM182MDApOwogIGFzc2VydC5lcXVhbCh3aW5kb3cubWF4aW11bUV4dHJhTWludXRlcywgMTUpOwp9KTsKCnRlc3QoJ2FuIGVuZGVkIHB1Ymxpc2hlZCBzY2hlZHVsZSBubyBsb25nZXIgYmxvY2tzIGEgbmV3IHJvb20ga2V5JywgKCkgPT4gewogIGNvbnN0IHdpbmRvdyA9IHJlc29sdmVFeGFtaW5hdGlvblJvb21BY3RpdmF0aW9uV2luZG93KHsKICAgIHN0YXJ0c0F0OiAnMjAyNi0wOC0yNlQwODowMDowMC4wMDBaJywKICAgIGR1cmF0aW9uU2Vjb25kczogN18yMDAsCiAgICBub3c6IE5PVywKICB9KTsKICBhc3NlcnQuZXF1YWwod2luZG93Lm9wZW5zQXQsICcyMDI2LTA4LTI3VDEwOjAwOjAwLjAwMFonKTsKICBhc3NlcnQuZXF1YWwod2luZG93LnNjaGVkdWxlU291cmNlLCAncm9vbV9rZXlfaXNzdWFuY2UnKTsKICBhc3NlcnQuZXF1YWwoCiAgICBzZWNvbmRzQmV0d2Vlbih3aW5kb3cub3BlbnNBdCwgd2luZG93LmNsb3Nlc0F0KSwKICAgIEVYQU1JTkFUSU9OX1JPT01fVU5TQ0hFRFVMRURfQUNUSVZBVElPTl9TRUNPTkRTLAogICk7Cn0pOwoKdGVzdCgnYSBmdXR1cmUgb3Igc3RpbGwtcnVubmluZyBwdWJsaXNoZWQgc2NoZWR1bGUgcmVtYWlucyBhdXRob3JpdGF0aXZlJywgKCkgPT4gewogIGNvbnN0IHdpbmRvdyA9IHJlc29sdmVFeGFtaW5hdGlvblJvb21BY3RpdmF0aW9uV2luZG93KHsKICAgIHN0YXJ0c0F0OiAnMjAyNi0wOC0yN1QwOTozMDowMC4wMDBaJywKICAgIGR1cmF0aW9uU2Vjb25kczogM182MDAsCiAgICBtYXhpbXVtRXh0cmFNaW51dGVzOiAxNSwKICAgIG5vdzogTk9XLAogIH0pOwogIGFzc2VydC5lcXVhbCh3aW5kb3cub3BlbnNBdCwgJzIwMjYtMDgtMjdUMDk6MzA6MDAuMDAwWicpOwogIGFzc2VydC5lcXVhbCh3aW5kb3cuY2xvc2VzQXQsICcyMDI2LTA4LTI3VDEwOjQ1OjAwLjAwMFonKTsKICBhc3NlcnQuZXF1YWwod2luZG93LnNjaGVkdWxlU291cmNlLCAncHVibGlzaGVkX2V4YW0nKTsKfSk7Cgp0ZXN0KCdhIG1hbGZvcm1lZCBub25ibGFuayBzdGFydCB0aW1lIGlzIHJlamVjdGVkJywgKCkgPT4gewogIGFzc2VydC50aHJvd3MoCiAgICAoKSA9PiByZXNvbHZlRXhhbWluYXRpb25Sb29tQWN0aXZhdGlvbldpbmRvdyh7CiAgICAgIHN0YXJ0c0F0OiAnbm90LWEtZGF0ZScsCiAgICAgIGR1cmF0aW9uU2Vjb25kczogM182MDAsCiAgICAgIG5vdzogTk9XLAogICAgfSksCiAgICAoZXJyb3IpID0+IGVycm9yPy5jb2RlID09PSAnSU5WQUxJRF9TVEFSVF9USU1FJywKICApOwp9KTsK').decode('utf-8')
+          replacement_function = base64.b64decode('ZnVuY3Rpb24gZXhhbWluYXRpb25Sb29tUHVibGlzaGVkQWN0aXZhdGlvbldpbmRvdyhidW5kbGUsIHBheWxvYWQpIHsKICBjb25zdCBwdWJsaXNoZWRWZXJzaW9uSWQgPSBTdHJpbmcoYnVuZGxlPy5jdXJyZW50UHVibGlzaGVkVmVyc2lvbklkIHx8ICcnKS50cmltKCk7CiAgY29uc3QgdmVyc2lvbiA9IGV4YW1pbmF0aW9uUm9vbU93bmVyQnVuZGxlUm93cyhidW5kbGUsICdleGFtVmVyc2lvbnMnKQogICAgLmZpbmQoKGVudHJ5KSA9PiBTdHJpbmcoZXhhbWluYXRpb25Sb29tT3duZXJSb3dWYWx1ZShlbnRyeSwgJ2lkJykgfHwgJycpID09PSBwdWJsaXNoZWRWZXJzaW9uSWQpOwogIGlmICghcHVibGlzaGVkVmVyc2lvbklkCiAgICAgIHx8ICF2ZXJzaW9uCiAgICAgIHx8IGV4YW1pbmF0aW9uUm9vbU93bmVyUm93VmFsdWUodmVyc2lvbiwgJ3B1YmxpY2F0aW9uU3RhdHVzJywgJ3B1YmxpY2F0aW9uX3N0YXR1cycpICE9PSAncHVibGlzaGVkJykgewogICAgdGhyb3cgZXhhbWluYXRpb25Sb29tT3duZXJFcnJvcigKICAgICAgJ0VYQU1fUk9PTV9WMV9QVUJMSVNIRURfU0NIRURVTEVfSU5WQUxJRCcsCiAgICAgICdUaGUgZXhhbWluYXRpb24gZG9lcyBub3QgaGF2ZSBhIHZhbGlkIHB1Ymxpc2hlZCB2ZXJzaW9uLicsCiAgICAgIDQwOSwKICAgICAgJ0FzayB0aGUgZXhhbSBjcmVhdG9yIHRvIHB1Ymxpc2ggdGhlIGV4YW1pbmF0aW9uIGJlZm9yZSBpc3N1aW5nIGEgcm9vbSBrZXkuJywKICAgICk7CiAgfQoKICBjb25zdCBzdGFydHNBdCA9IGV4YW1pbmF0aW9uUm9vbU93bmVyUm93VmFsdWUodmVyc2lvbj8uY29udHJvbHMsICdzdGFydHNBdCcsICdzdGFydHNfYXQnKTsKICBjb25zdCBkdXJhdGlvblNlY29uZHMgPSBOdW1iZXIoZXhhbWluYXRpb25Sb29tT3duZXJSb3dWYWx1ZSgKICAgIHZlcnNpb24sCiAgICAnZHVyYXRpb25TZWNvbmRzJywKICAgICdkdXJhdGlvbl9zZWNvbmRzJywKICApKTsKICBjb25zdCBtYXhpbXVtRXh0cmFNaW51dGVzID0gZXhhbWluYXRpb25Sb29tT3duZXJCdW5kbGVSb3dzKGJ1bmRsZSwgJ2V4YW1Sb3N0ZXInKQogICAgLnJlZHVjZSgobWF4aW11bSwgcm9zdGVyKSA9PiB7CiAgICAgIGNvbnN0IGFjY29tbW9kYXRpb25zID0gZXhhbWluYXRpb25Sb29tT3duZXJSb3dWYWx1ZShyb3N0ZXIsICdhY2NvbW1vZGF0aW9ucycpIHx8IHt9OwogICAgICBjb25zdCBleHRyYSA9IE51bWJlcihleGFtaW5hdGlvblJvb21Pd25lclJvd1ZhbHVlKAogICAgICAgIGFjY29tbW9kYXRpb25zLAogICAgICAgICdleHRyYU1pbnV0ZXMnLAogICAgICAgICdleHRyYV9taW51dGVzJywKICAgICAgKSB8fCAwKTsKICAgICAgcmV0dXJuIE51bWJlci5pc0Zpbml0ZShleHRyYSkgJiYgZXh0cmEgPj0gMCA/IE1hdGgubWF4KG1heGltdW0sIGV4dHJhKSA6IG1heGltdW07CiAgICB9LCAwKTsKCiAgbGV0IGFjdGl2YXRpb25XaW5kb3c7CiAgdHJ5IHsKICAgIGFjdGl2YXRpb25XaW5kb3cgPSByZXNvbHZlRXhhbWluYXRpb25Sb29tQWN0aXZhdGlvbldpbmRvdyh7CiAgICAgIHN0YXJ0c0F0LAogICAgICBkdXJhdGlvblNlY29uZHMsCiAgICAgIG1heGltdW1FeHRyYU1pbnV0ZXMsCiAgICB9KTsKICB9IGNhdGNoIChlcnJvcikgewogICAgY29uc3QgaW52YWxpZFN0YXJ0ID0gZXJyb3I/LmNvZGUgPT09ICdJTlZBTElEX1NUQVJUX1RJTUUnOwogICAgdGhyb3cgZXhhbWluYXRpb25Sb29tT3duZXJFcnJvcigKICAgICAgJ0VYQU1fUk9PTV9WMV9QVUJMSVNIRURfU0NIRURVTEVfSU5WQUxJRCcsCiAgICAgIGludmFsaWRTdGFydAogICAgICAgID8gJ1RoZSBwdWJsaXNoZWQgZXhhbWluYXRpb24gaGFzIGFuIGludmFsaWQgb3B0aW9uYWwgc3RhcnQgdGltZS4nCiAgICAgICAgOiAnVGhlIHB1Ymxpc2hlZCBleGFtaW5hdGlvbiBoYXMgbm8gdmFsaWQgZHVyYXRpb24uJywKICAgICAgNDA5LAogICAgICBpbnZhbGlkU3RhcnQKICAgICAgICA/ICdBc2sgdGhlIGV4YW0gY3JlYXRvciB0byBjbGVhciB0aGUgb3B0aW9uYWwgc3RhcnQgdGltZSBvciBlbnRlciBhIHZhbGlkIGRhdGUsIHRoZW4gcHVibGlzaCB0aGUgY29ycmVjdGVkIGV4YW1pbmF0aW9uLicKICAgICAgICA6ICdBc2sgdGhlIGV4YW0gY3JlYXRvciB0byBjb25maXJtIHRoZSBleGFtaW5hdGlvbiBkdXJhdGlvbiBhbmQgcHVibGlzaCB0aGUgY29ycmVjdGVkIGV4YW1pbmF0aW9uIGJlZm9yZSBpc3N1aW5nIGEgcm9vbSBrZXkuJywKICAgICk7CiAgfQoKICBjb25zdCBtYXhTZXNzaW9ucyA9IHBheWxvYWQ/Lm1heFNlc3Npb25zID09IG51bGwgfHwgcGF5bG9hZC5tYXhTZXNzaW9ucyA9PT0gJycKICAgID8gbnVsbAogICAgOiBOdW1iZXIocGF5bG9hZC5tYXhTZXNzaW9ucyk7CiAgaWYgKG1heFNlc3Npb25zICE9PSBudWxsCiAgICAgICYmICghTnVtYmVyLmlzU2FmZUludGVnZXIobWF4U2Vzc2lvbnMpIHx8IG1heFNlc3Npb25zIDwgMSB8fCBtYXhTZXNzaW9ucyA+IDEwMF8wMDApKSB7CiAgICB0aHJvdyBleGFtaW5hdGlvblJvb21Pd25lckVycm9yKAogICAgICAnRVhBTV9ST09NX1YxX01BWF9TRVNTSU9OU19JTlZBTElEJywKICAgICAgJ1RoZSBtYXhpbXVtIHN0dWRlbnQtc2Vzc2lvbiBjb3VudCBtdXN0IGJlIGEgd2hvbGUgbnVtYmVyIGZyb20gMSB0byAxMDAsMDAwLicsCiAgICAgIDQwMCwKICAgICAgJ0VudGVyIGEgdmFsaWQgbWF4aW11bSBzZXNzaW9uIGNvdW50IG9yIGxlYXZlIGl0IGJsYW5rIGZvciBubyBzZXBhcmF0ZSBjYXAuJywKICAgICk7CiAgfQoKICByZXR1cm4gewogICAgLi4uYWN0aXZhdGlvbldpbmRvdywKICAgIG1heFNlc3Npb25zLAogIH07Cn0K').decode('utf-8')
 
           helper_path.write_text(helper_source, encoding='utf-8')
           test_path.write_text(test_source, encoding='utf-8')
@@ -248,34 +47,32 @@ test('a malformed nonblank start time is rejected', () => {
           index_source = index_path.read_text(encoding='utf-8')
           import_line = "import { resolveExaminationRoomActivationWindow } from './examination-room-activation-window.mjs';\n"
           if import_line not in index_source:
-            index_source = import_line + index_source
+              index_source = import_line + index_source
           signature = 'function examinationRoomPublishedActivationWindow(bundle, payload) {'
           end_marker = '\nasync function issueExaminationRoomOwnerKey'
           start = index_source.find(signature)
           end = index_source.find(end_marker, start)
           if start < 0 or end < 0:
-            raise SystemExit('Could not locate the Examination Room activation-window function safely.')
+              raise SystemExit('Could not locate the Examination Room activation-window function safely.')
           index_source = index_source[:start] + replacement_function + index_source[end:]
           if 'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_ENDED' in index_source:
-            raise SystemExit('The obsolete ended-schedule rejection still exists after patching.')
+              raise SystemExit('The obsolete ended-schedule rejection still exists after patching.')
           index_path.write_text(index_source, encoding='utf-8')
 
           professor_source = professor_path.read_text(encoding='utf-8')
           required_start = "    if (!exam.startsAt) items.push({ section: 'exam-details', label: 'Set the start date and time', help: 'The room cannot be scheduled without a start time.', blocking: true });\n"
           if professor_source.count(required_start) != 1:
-            raise SystemExit('Could not safely locate the required-start publish blocker.')
+              raise SystemExit('Could not safely locate the required-start publish blocker.')
           professor_source = professor_source.replace(required_start, '', 1)
-
           old_publish_summary = "      <div class=\"publish-item\"><small>Starts</small><strong>${escapeHtml(formatDateTime(exam.startsAt))}</strong></div>"
           new_publish_summary = "      <div class=\"publish-item\"><small>Schedule</small><strong>${escapeHtml(exam.startsAt ? formatDateTime(exam.startsAt) : 'No fixed date · opens when the student key is issued')}</strong></div>"
           if professor_source.count(old_publish_summary) != 1:
-            raise SystemExit('Could not safely locate the publish schedule summary.')
+              raise SystemExit('Could not safely locate the publish schedule summary.')
           professor_source = professor_source.replace(old_publish_summary, new_publish_summary, 1)
-
           old_preview = "      <p class=\"preview-meta\">${escapeHtml(formatDateTime(exam.startsAt))} · ${exam.durationMinutes} minutes · ${escapeHtml(exam.jurisdiction || '')}</p>"
           new_preview = "      <p class=\"preview-meta\">${escapeHtml(exam.startsAt ? formatDateTime(exam.startsAt) : 'No fixed date · opens with the student key')} · ${exam.durationMinutes} minutes · ${escapeHtml(exam.jurisdiction || '')}</p>"
           if professor_source.count(old_preview) != 1:
-            raise SystemExit('Could not safely locate the examination preview schedule.')
+              raise SystemExit('Could not safely locate the examination preview schedule.')
           professor_source = professor_source.replace(old_preview, new_preview, 1)
           professor_path.write_text(professor_source, encoding='utf-8')
 
@@ -283,19 +80,17 @@ test('a malformed nonblank start time is rejected', () => {
           old_meta_date = '<label><i class="ph ph-calendar-blank" aria-hidden="true"></i><span class="sr-only">Date</span><input id="exam-date" type="date" value="2026-08-26"></label>'
           new_meta_date = '<label><i class="ph ph-calendar-blank" aria-hidden="true"></i><span class="sr-only">Optional examination date</span><input id="exam-date" type="date" aria-label="Optional examination date"></label>'
           if page_source.count(old_meta_date) != 1:
-            raise SystemExit('Could not safely locate the examination date field.')
+              raise SystemExit('Could not safely locate the examination date field.')
           page_source = page_source.replace(old_meta_date, new_meta_date, 1)
-
           old_start_control = '<label><span>Start</span><input id="start-control" type="datetime-local" value="2026-08-26T09:00"></label>'
           new_start_control = '<label><span>Start <small>(optional)</small></span><input id="start-control" type="datetime-local" aria-describedby="start-control-help"><small id="start-control-help">Leave blank to open the room when Admin issues the student key.</small></label>'
           if page_source.count(old_start_control) != 1:
-            raise SystemExit('Could not safely locate the start-time control.')
+              raise SystemExit('Could not safely locate the start-time control.')
           page_source = page_source.replace(old_start_control, new_start_control, 1)
-
           old_professor_script = '<script src="professor.js?v=greenfield-v1-20260827-25"></script>'
           new_professor_script = '<script src="professor.js?v=greenfield-v1-20260827-26-optional-schedule"></script>'
           if page_source.count(old_professor_script) != 1:
-            raise SystemExit('Could not safely locate the Professor script cache key.')
+              raise SystemExit('Could not safely locate the Professor script cache key.')
           page_source = page_source.replace(old_professor_script, new_professor_script, 1)
           page_path.write_text(page_source, encoding='utf-8')
           PY
@@ -316,23 +111,12 @@ test('a malformed nonblank start time is rejected', () => {
         run: |
           python - <<'PY'
           import subprocess
-
-          allowed = {
-              'worker/index.mjs',
-              'worker/examination-room-activation-window.mjs',
-              'worker/examination-room-activation-window.test.mjs',
-              'examination-room/professor.js',
-              'examination-room/index.html',
-              '.github/workflows/fix-examination-room-optional-schedule.yml',
-          }
-          changed = set(subprocess.check_output(
-              ['git', 'diff', '--name-only'], text=True,
-          ).splitlines())
+          allowed = {'worker/index.mjs', 'worker/examination-room-activation-window.mjs', 'worker/examination-room-activation-window.test.mjs', 'examination-room/professor.js', 'examination-room/index.html'}
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
           unexpected = sorted(changed - allowed)
+          missing = sorted(allowed - changed)
           if unexpected:
               raise SystemExit(f'Unexpected out-of-scope files changed: {unexpected}')
-          required = allowed - {'.github/workflows/fix-examination-room-optional-schedule.yml'}
-          missing = sorted(required - changed)
           if missing:
               raise SystemExit(f'Expected Examination Room files were not changed: {missing}')
           PY

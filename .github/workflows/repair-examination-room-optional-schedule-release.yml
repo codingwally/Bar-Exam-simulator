@@ -1,0 +1,58 @@
+name: Repair Examination Room optional schedule release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/repair-examination-room-optional-schedule-release.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-examination-room-optional-schedule-release
+  cancel-in-progress: false
+
+jobs:
+  repair-release-harness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install the missing dependency step
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/fix-examination-room-optional-schedule.yml')
+          source = workflow.read_text(encoding='utf-8')
+          marker = "      - name: Validate syntax and focused behavior\n"
+          install = (
+              "      - name: Install reviewed Worker dependencies\n"
+              "        shell: bash\n"
+              "        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund\n\n"
+          )
+          if install not in source:
+              if source.count(marker) != 1:
+                  raise SystemExit('Could not safely locate the focused validation step.')
+              source = source.replace(marker, install + marker, 1)
+          workflow.write_text(source, encoding='utf-8')
+          PY
+          grep -F "npm ci --prefix worker --ignore-scripts --no-audit --no-fund" .github/workflows/fix-examination-room-optional-schedule.yml
+
+      - name: Publish the repaired one-time release harness
+        shell: bash
+        run: |
+          git config user.name "Due Diligence Release Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/repair-examination-room-optional-schedule-release.yml
+          git add .github/workflows/fix-examination-room-optional-schedule.yml \
+            .github/workflows/repair-examination-room-optional-schedule-release.yml
+          git commit -m "chore: install Examination Room release dependencies"
+          git push origin HEAD:main

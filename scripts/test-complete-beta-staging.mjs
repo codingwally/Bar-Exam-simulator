@@ -327,7 +327,7 @@ try {
   assert.deepEqual(
     Object.keys(reviewMaterial.body.data).sort(),
     [
-      'assistanceKnown', 'assisted', 'attemptId', 'citation', 'classification', 'doctrine', 'explanationSource',
+      'access', 'assistanceKnown', 'assisted', 'attemptId', 'citation', 'classification', 'doctrine', 'explanationSource',
       'governingProvision', 'jurisprudence', 'legalBasis', 'legalReview', 'questionId',
       'reviewMaterialRevealedAt', 'sources', 'status', 'suggestedAnswer', 'teachingModel',
       'whyThisAnswerIsCorrect',
@@ -339,6 +339,9 @@ try {
   assert.equal(reviewMaterial.body.data.assisted, true);
   assert.equal(reviewMaterial.body.data.assistanceKnown, true);
   assert.equal(reviewMaterial.body.data.classification, 'assisted');
+  assert.equal(reviewMaterial.body.data.access.allowed, true);
+  assert.equal(reviewMaterial.body.data.access.unlimited, true);
+  assert.equal(reviewMaterial.body.data.access.basis, 'founding_beta');
   assert.ok(Number.isFinite(Date.parse(reviewMaterial.body.data.reviewMaterialRevealedAt)));
   assert.ok(reviewMaterial.body.data.suggestedAnswer.trim().length >= 20);
   assert.ok(reviewMaterial.body.data.legalBasis.trim().length >= 20);

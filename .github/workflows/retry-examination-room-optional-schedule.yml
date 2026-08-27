@@ -41,6 +41,81 @@ jobs:
           bash -n /tmp/examination-room-optional-schedule-patch.sh
           bash /tmp/examination-room-optional-schedule-patch.sh
 
+      - name: Replace the obsolete fixed-schedule integration contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('worker/examination-room-v1-owner.test.mjs')
+          source = path.read_text(encoding='utf-8')
+          old_title = "test('owner approval fails recoverably when the published exam has no exact usable schedule and never invents a 24-hour window'"
+          new_title = "test('owner approval converts a blank published schedule into a fresh 24-hour key window'"
+          end_marker = '\n\nfunction bytes('
+          start = source.find(old_title)
+          end = source.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit('Could not locate the obsolete Examination Room schedule test safely.')
+          block = source[start:end].replace(old_title, new_title, 1)
+          block = block.replace(
+              '  let activationCalls = 0;\n',
+              '  let activationCalls = 0;\n  let activationPayload = null;\n  const beforeRequest = Date.now();\n',
+              1,
+          )
+          old_activation = (
+              "    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) activationCalls += 1;\n"
+              "    throw new Error(`Unexpected fetch ${url}`);"
+          )
+          new_activation = (
+              "    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {\n"
+              "      activationCalls += 1;\n"
+              "      activationPayload = body.p_payload;\n"
+              "      return jsonResponse({\n"
+              "        ok: false,\n"
+              "        error: {\n"
+              "          code: 'EXPECTED_ACTIVATION_STOP',\n"
+              "          message: 'The test stops after verifying the generated activation window.',\n"
+              "          status: 409,\n"
+              "          recovery: 'No recovery is required in this test.',\n"
+              "        },\n"
+              "      });\n"
+              "    }\n"
+              "    throw new Error(`Unexpected fetch ${url}`);"
+          )
+          if old_activation not in block:
+              raise SystemExit('Could not locate the former no-activation assertion safely.')
+          block = block.replace(old_activation, new_activation, 1)
+          old_assertions = (
+              "  const result = await response.json();\n"
+              "  assert.equal(response.status, 409);\n"
+              "  assert.equal(result.error.code, 'EXAM_ROOM_V1_PUBLISHED_SCHEDULE_INVALID');\n"
+              "  assert.match(result.error.recovery, /exact start date, time, and duration/u);\n"
+              "  assert.equal(activationCalls, 0);"
+          )
+          new_assertions = (
+              "  const afterRequest = Date.now();\n"
+              "  const result = await response.json();\n"
+              "  const opens = Date.parse(activationPayload?.opensAt || '');\n"
+              "  const closes = Date.parse(activationPayload?.closesAt || '');\n"
+              "  assert.equal(response.status, 409);\n"
+              "  assert.equal(result.error.code, 'EXPECTED_ACTIVATION_STOP');\n"
+              "  assert.equal(activationCalls, 1);\n"
+              "  assert.equal(activationPayload.replaceCurrent, false);\n"
+              "  assert.ok(Number.isFinite(opens));\n"
+              "  assert.ok(Number.isFinite(closes));\n"
+              "  assert.ok(opens >= beforeRequest - 1_000);\n"
+              "  assert.ok(opens <= afterRequest + 1_000);\n"
+              "  assert.equal(closes - opens, 24 * 60 * 60 * 1_000);"
+          )
+          if old_assertions not in block:
+              raise SystemExit('Could not locate the obsolete schedule assertions safely.')
+          block = block.replace(old_assertions, new_assertions, 1)
+          source = source[:start] + block + source[end:]
+          if 'never invents a 24-hour window' in source:
+              raise SystemExit('The obsolete schedule contract remains after patching.')
+          path.write_text(source, encoding='utf-8')
+          PY
+
       - name: Install the existing worker test dependencies
         working-directory: worker
         run: npm ci
@@ -61,7 +136,14 @@ jobs:
         run: |
           python - <<'PY'
           import subprocess
-          allowed = {'worker/index.mjs', 'worker/examination-room-activation-window.mjs', 'worker/examination-room-activation-window.test.mjs', 'examination-room/professor.js', 'examination-room/index.html'}
+          allowed = {
+              'worker/index.mjs',
+              'worker/examination-room-activation-window.mjs',
+              'worker/examination-room-activation-window.test.mjs',
+              'worker/examination-room-v1-owner.test.mjs',
+              'examination-room/professor.js',
+              'examination-room/index.html',
+          }
           changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
           unexpected = sorted(changed - allowed)
           missing = sorted(allowed - changed)
@@ -81,6 +163,7 @@ jobs:
           git add worker/index.mjs \
             worker/examination-room-activation-window.mjs \
             worker/examination-room-activation-window.test.mjs \
+            worker/examination-room-v1-owner.test.mjs \
             examination-room/professor.js \
             examination-room/index.html \
             .github/workflows/fix-examination-room-optional-schedule.yml \

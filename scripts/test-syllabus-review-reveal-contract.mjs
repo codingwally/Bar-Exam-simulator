@@ -6,7 +6,9 @@ const root = new URL('../', import.meta.url);
 const read = (relative) => readFile(new URL(relative, root), 'utf8');
 
 const [
-  migration,
+  baseMigration,
+  sourceFilterMigration,
+  poolGuardMigration,
   worker,
   examinationCore,
   subjectReview,
@@ -20,6 +22,8 @@ const [
   runbook,
 ] = await Promise.all([
   read('supabase/migrations/20260826110207_subject_matter_unlimited_review_release.sql'),
+  read('supabase/migrations/20260828131000_subject_matter_official_source_filter.sql'),
+  read('supabase/migrations/20260828131500_subject_matter_revealable_pool_guard.sql'),
   read('worker/index.mjs'),
   read('worker/examinations-core.mjs'),
   read('worker/subject-matter-review.mjs'),
@@ -32,6 +36,8 @@ const [
   read('service-worker.js'),
   read('docs/operations/syllabus-review-reveal-access.md'),
 ]);
+
+const migration = `${baseMigration}\n${sourceFilterMigration}\n${poolGuardMigration}`;
 
 const APPROVED_BASES = [
   'super_admin',
@@ -127,11 +133,17 @@ function normalizedSet(values) {
   return [...new Set(values)].sort();
 }
 
-assert.equal((migration.match(/^begin;$/gmi) || []).length, 1, 'migration must use one explicit transaction');
-assert.equal((migration.match(/^commit;$/gmi) || []).length, 1, 'migration must commit once');
+for (const [name, sql] of [
+  ['base release', baseMigration],
+  ['official-source filter', sourceFilterMigration],
+  ['revealable-pool guard', poolGuardMigration],
+]) {
+  assert.equal((sql.match(/^begin;$/gmi) || []).length, 1, `${name} must use one explicit transaction`);
+  assert.equal((sql.match(/^commit;$/gmi) || []).length, 1, `${name} must commit once`);
+}
 assert.doesNotMatch(migration, /^\s*(?:drop\s+table|truncate|delete\s+from)\b/gmi);
 
-const revealSql = functionSection(migration, 'subject_matter_reveal_review');
+const revealSql = functionSection(sourceFilterMigration, 'subject_matter_reveal_review');
 const literalLists = [...revealSql.matchAll(/(?:not\s+)?in\s*\(([^)]+)\)/gi)]
   .map((match) => [...match[1].matchAll(/'([^']+)'/g)].map((item) => item[1]));
 const accessAllowlist = literalLists.find((values) => APPROVED_BASES.every((basis) => values.includes(basis)));
@@ -183,14 +195,47 @@ assert.match(
   'the retained read-only access snapshot must be validated after rollback',
 );
 assert.equal(
-  revealSql.includes('lawphil\\\\.net'),
+  sourceFilterMigration.includes('lawphil\\\\.net'),
   false,
   'standard-conforming SQL strings must contain one regex escape before a host dot',
 );
 assert.equal(
-  revealSql.includes('lawphil\\.net'),
+  sourceFilterMigration.includes('lawphil\\.net'),
   true,
   'the SQL source-host predicate must escape host dots exactly once',
+);
+assert.match(
+  revealSql,
+  /v_sources\s*:=\s*public\.subject_matter_official_review_sources\(v_raw_sources\)/i,
+  'the current reveal RPC must filter supplemental study links before returning sources',
+);
+assert.match(
+  revealSql,
+  /jsonb_array_length\(v_sources\)\s*<\s*1/i,
+  'at least one approved official source must remain after filtering',
+);
+const sourceFilterSql = functionSection(
+  sourceFilterMigration,
+  'subject_matter_official_review_sources',
+);
+assert.match(sourceFilterSql, /jsonb_agg\(normalized\.url\s+order\s+by\s+source\.ordinality\)/i);
+assert.match(sourceFilterSql, /where\s+normalized\.url\s+is\s+not\s+null/i);
+assert.match(
+  sourceFilterMigration,
+  /revoke\s+all\s+on\s+function\s+public\.subject_matter_official_review_sources\(jsonb\)[\s\S]*from\s+public\s*,\s*anon\s*,\s*authenticated\s*,\s*service_role/i,
+  'the source-filter helper must remain internal to trusted database functions',
+);
+assert.match(
+  poolGuardMigration,
+  /create\s+trigger\s+subject_matter_guard_official_placement_source_trigger[\s\S]*before\s+insert\s+or\s+update\s+of\s+exam_id\s*,\s*question_id[\s\S]*on\s+public\.subject_matter_placements/i,
+  'future placement imports must retain at least one approved official source',
+);
+assert.match(poolGuardMigration, /SUBJECT_MATTER_OFFICIAL_SOURCE_REQUIRED/);
+assert.match(poolGuardMigration, /SUBJECT_MATTER_ACTIVE_POOL_NOT_REVEALABLE/);
+assert.match(
+  poolGuardMigration,
+  /question\.content_hash\s*=\s*version_question\.snapshot_hash[\s\S]*subject_matter_official_review_sources/i,
+  'the migration must prove the complete active selector pool can be revealed',
 );
 const officialReviewSourcePattern = new RegExp(
   '^https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)*'

@@ -11,11 +11,12 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parents[3]
 VIDEO_DIR = ROOT / "docs" / "examination-room-v1" / "videos"
 SCREENSHOT_DIR = ROOT / "docs" / "examination-room-v1" / "screenshots"
+CURRENT_DIR = SCREENSHOT_DIR
 WIDTH = 1488
 HEIGHT = 1060
 FPS = 12
 HOLD_SECONDS = 1.85
-FADE_SECONDS = 0.40
+FADE_SECONDS = 0.0
 NAVY = (5, 20, 39, 235)
 GOLD = (203, 164, 84, 255)
 CREAM = (255, 252, 244, 255)
@@ -23,34 +24,28 @@ MUTED = (213, 220, 229, 255)
 
 
 PROFESSOR_STEPS = [
-    (VIDEO_DIR / "professor-frames" / "001-create.png", "Prepare the examination on one familiar scrolling page"),
-    (VIDEO_DIR / "professor-frames" / "002-roster.png", "Confirm the real-name student roster"),
-    (VIDEO_DIR / "professor-frames" / "003-safety.png", "Choose only the safeguards the professor wants"),
-    (VIDEO_DIR / "professor-frames" / "004-preview.png", "Preview exactly what students will receive"),
-    (VIDEO_DIR / "professor-frames" / "005-publish-review.png", "Run the final control check and publish"),
-    (VIDEO_DIR / "professor-frames" / "006-waiting-key.png", "Wait for the administrator's room key"),
-    (VIDEO_DIR / "professor-frames" / "007-key-issued.png", "Receive the administrator-issued key"),
-    (VIDEO_DIR / "professor-frames" / "008-room-open.png", "Enter the key and open the room"),
-    (VIDEO_DIR / "professor-frames" / "009-room-open.png", "Monitor real names and integrity signals"),
-    (VIDEO_DIR / "professor-frames" / "010-student-submitted.png", "See submissions and recovery events as they arrive"),
-    (VIDEO_DIR / "professor-frames" / "011-grading-complete.png", "Grade every response and save durable revisions"),
-    (VIDEO_DIR / "professor-frames" / "012-offline-grading.png", "Create a passphrase-protected offline grading copy"),
-    (VIDEO_DIR / "professor-frames" / "012-results-released.png", "Release only the selected, fully graded results"),
+    (CURRENT_DIR / "current-creator-create-full.jpg", "Prepare the examination on one familiar scrolling page", (0, 0, 1264, 760)),
+    (CURRENT_DIR / "current-creator-create-full.jpg", "Review questions and instructions before publication", (0, 1800, 1264, 3100)),
+    (CURRENT_DIR / "current-creator-create-full.jpg", "Publish and request the student key when ready", (0, 0, 1264, 760)),
+    (CURRENT_DIR / "current-admin-key-issued.jpg", "Admin approval issues and activates the exact student key", None),
+    (CURRENT_DIR / "current-creator-monitor.jpg", "Monitor and Grade unlock automatically - no creator key entry", None),
+    (VIDEO_DIR / "professor-frames" / "010-student-submitted.png", "See real names, submissions, and recovery events as they arrive", None),
+    (CURRENT_DIR / "current-creator-grade.jpg", "Grade every response and save durable revisions", (0, 0, 319, 1450)),
+    (VIDEO_DIR / "professor-frames" / "012-offline-grading.png", "Create a passphrase-protected offline grading copy", None),
+    (CURRENT_DIR / "current-student-result.jpg", "Release selected, fully graded results", (160, 560, 1040, 1120)),
 ]
 
 
 STUDENT_STEPS = [
-    (VIDEO_DIR / "student-frames" / "001-entry.png", "Enter the administrator-issued room key"),
-    (VIDEO_DIR / "student-frames" / "002-identity.png", "Confirm real name, student number, year, and subject"),
-    (VIDEO_DIR / "student-frames" / "003-preview.png", "Preview exam metadata while questions stay sealed"),
-    (VIDEO_DIR / "student-frames" / "004-privacy.png", "Agree to the required versioned privacy notice"),
-    (VIDEO_DIR / "student-frames" / "005-question-1.png", "Begin in a calm, protected examination workspace"),
-    (VIDEO_DIR / "student-frames" / "006-answer-1.png", "Write and save the first answer"),
-    (VIDEO_DIR / "student-frames" / "007-answer-2.png", "Continue while every change is saved"),
-    (VIDEO_DIR / "student-frames" / "008-answer-3-flagged.png", "Flag an answer for review without losing work"),
-    (VIDEO_DIR / "student-frames" / "009-answer-4.png", "Finish all questions and review completion"),
-    (SCREENSHOT_DIR / "student-submission-receipt.png", "Submit and receive a signed receipt"),
-    (SCREENSHOT_DIR / "student-result-released-final.png", "Return to see the professor-released score and feedback"),
+    (CURRENT_DIR / "current-student-preview.jpg", "Enter the active student key and real school-record identity", (0, 0, 804, 760)),
+    (CURRENT_DIR / "current-student-preview.jpg", "Preview exam metadata, then begin - no extra agreement step", (0, 1280, 804, 2220)),
+    (CURRENT_DIR / "current-student-exam.jpg", "Begin in a calm examination workspace", (0, 0, 804, 1150)),
+    (VIDEO_DIR / "student-frames" / "006-answer-1.png", "Write and save the first answer", None),
+    (VIDEO_DIR / "student-frames" / "007-answer-2.png", "Continue while every change is saved", None),
+    (VIDEO_DIR / "student-frames" / "008-answer-3-flagged.png", "Flag an answer for review without losing work", None),
+    (VIDEO_DIR / "student-frames" / "009-answer-4.png", "Finish all questions and review completion", None),
+    (CURRENT_DIR / "current-student-result.jpg", "Submit once and keep the signed receipt", (160, 100, 1040, 650)),
+    (CURRENT_DIR / "current-student-result.jpg", "Return to see the creator-released score and feedback", (160, 560, 1040, 1120)),
 ]
 
 
@@ -66,12 +61,20 @@ CAPTION_FONT = load_font(r"C:\Windows\Fonts\segoeui.ttf", 25)
 STEP_FONT = load_font(r"C:\Windows\Fonts\segoeuib.ttf", 20)
 
 
-def prepare_frame(source: Path, caption: str, step: int, total: int) -> Image.Image:
+def prepare_frame(
+    source: Path,
+    caption: str,
+    step: int,
+    total: int,
+    crop: tuple[int, int, int, int] | None = None,
+) -> Image.Image:
     if not source.exists():
         raise FileNotFoundError(f"Missing walkthrough frame: {source}")
 
     with Image.open(source) as opened:
         image = opened.convert("RGB")
+        if crop:
+            image = image.crop(crop)
         scale = min(WIDTH / image.width, HEIGHT / image.height)
         image = image.resize(
             (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
@@ -95,12 +98,15 @@ def prepare_frame(source: Path, caption: str, step: int, total: int) -> Image.Im
     return Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
 
 
-def encode_video(name: str, steps: list[tuple[Path, str]], ffmpeg_exe: str) -> Path:
+def encode_video(name: str, steps: list[tuple[Path, str, tuple[int, int, int, int] | None]], ffmpeg_exe: str) -> Path:
     output = VIDEO_DIR / f"{name}-walkthrough.mp4"
     hold_frames = round(HOLD_SECONDS * FPS)
     fade_frames = round(FADE_SECONDS * FPS)
 
-    prepared = [prepare_frame(path, caption, index, len(steps)) for index, (path, caption) in enumerate(steps, 1)]
+    prepared = [
+        prepare_frame(path, caption, index, len(steps), crop)
+        for index, (path, caption, crop) in enumerate(steps, 1)
+    ]
     command = [
         ffmpeg_exe,
         "-y",

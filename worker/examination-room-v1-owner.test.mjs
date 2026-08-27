@@ -87,6 +87,9 @@ function authenticatedOwner(url) {
   if (String(url).endsWith('/rest/v1/rpc/admin_authorization_context')) {
     return jsonResponse({ authorized: true, role: 'founder_admin', capabilities: ['role_admin'] });
   }
+  if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_query')) {
+    return jsonResponse({ ok: true, items: [] });
+  }
   return null;
 }
 
@@ -408,7 +411,7 @@ test('one-click approval escrows and emails the key; reveal/resend preserve it a
     {},
   ));
   const detail = await detailResponse.json();
-  assert.equal(detailResponse.status, 200);
+  assert.equal(detailResponse.status, 200, JSON.stringify({ detail, calls: calls.slice(-5) }));
   assert.equal(detail.keyHistory.length, 2);
   assert.equal(detail.latestKeyRecord.activationId, ROTATED_ACTIVATION_ID);
   assert.equal(detail.latestKeyRecord.roomKey, rotated.roomKey);
@@ -522,6 +525,200 @@ test('one-click approval escrows and emails the key; reveal/resend preserve it a
   assert.equal(fallbackOwner.deliveryStatus, 'sent');
   assert.deepEqual(fallbackOwner.adminRecipients, ['legacy-owner@duediligence.ph']);
   assert.deepEqual(emails.at(-1).body.bcc, ['legacy-owner@duediligence.ph']);
+});
+
+test('owner approval stays successful without a creator email and the same retry recovers its exact active key', async () => {
+  let activationCalls = 0;
+  let escrowAttempts = 0;
+  let auditAttempts = 0;
+  let emailAttempts = 0;
+  let storedEnvelope = null;
+  const activationKeyHashes = [];
+  const providerRequests = [];
+  const auditRecipients = [];
+
+  const fetchMock = async (url, options = {}) => {
+    const authorized = authenticatedOwner(url);
+    if (authorized) return authorized;
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_ensure_membership')) {
+      return jsonResponse({ ok: true });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_query')) {
+      if (body.p_operation === 'exam_detail') {
+        return jsonResponse({
+          ok: true,
+          bundle: {
+            institutionId: INSTITUTION_ID,
+            examId: EXAM_ID,
+            currentPublishedVersionId: VERSION_ID,
+            tables: {
+              examVersions: [{
+                id: VERSION_ID,
+                publication_status: 'published',
+                duration_seconds: 7_200,
+                controls: {},
+              }],
+              examRoster: [],
+            },
+          },
+        });
+      }
+      if (body.p_operation === 'key_envelope') {
+        return storedEnvelope
+          ? jsonResponse({ ok: true, ...storedEnvelope })
+          : jsonResponse({
+            ok: false,
+            error: {
+              code: 'ROOM_KEY_NOT_RECOVERABLE',
+              message: 'No envelope has been stored yet.',
+              status: 409,
+              recovery: 'Retry the same approval.',
+            },
+          });
+      }
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
+      activationCalls += 1;
+      assert.equal(body.p_operation, 'email_key');
+      assert.equal(body.p_payload.replaceCurrent, false);
+      activationKeyHashes.push(body.p_payload.roomKeyHash);
+      return jsonResponse({
+        ok: true,
+        activation: {
+          id: ACTIVATION_ID,
+          status: 'scheduled',
+          opensAt: body.p_payload.opensAt,
+          expiresAt: body.p_payload.closesAt,
+        },
+        professorEmail: null,
+        professorName: 'Examination creator',
+        examTitle: 'No-email Reliability Examination',
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_command')) {
+      if (body.p_operation === 'store_key_envelope') {
+        escrowAttempts += 1;
+        if (escrowAttempts === 1) {
+          return jsonResponse({
+            ok: false,
+            error: {
+              code: 'KEY_ESCROW_TEMPORARILY_UNAVAILABLE',
+              message: 'The encrypted key store is temporarily unavailable.',
+              status: 503,
+              recovery: 'Retry the same approval request.',
+            },
+          });
+        }
+        storedEnvelope = {
+          activationId: body.p_payload.activationId,
+          examId: body.p_exam_id,
+          institutionId: body.p_institution_id,
+          algorithm: body.p_payload.algorithm,
+          keyVersion: body.p_payload.keyVersion,
+          ciphertext: body.p_payload.ciphertext,
+          iv: body.p_payload.iv,
+          aadSha256: body.p_payload.aadSha256,
+        };
+        return jsonResponse({ ok: true, activationId: ACTIVATION_ID, escrowed: true });
+      }
+      if (body.p_operation === 'record_email_delivery') {
+        auditAttempts += 1;
+        auditRecipients.push(body.p_payload.professorRecipient);
+        if (auditAttempts === 1) {
+          return jsonResponse({
+            ok: false,
+            error: {
+              code: 'EMAIL_DELIVERY_AUDIT_TEMPORARILY_UNAVAILABLE',
+              message: 'Delivery evidence is temporarily unavailable.',
+              status: 503,
+              recovery: 'Retry the same approval request.',
+            },
+          });
+        }
+        return jsonResponse({
+          ok: true,
+          recorded: true,
+          providerStatus: body.p_payload.providerStatus,
+          providerId: body.p_payload.providerId,
+          safeErrorCode: body.p_payload.safeErrorCode,
+          attemptedAt: body.p_payload.attemptedAt,
+        });
+      }
+    }
+    if (String(url) === 'https://api.resend.com/emails') {
+      emailAttempts += 1;
+      providerRequests.push({ body, headers: options.headers });
+      return emailAttempts === 1
+        ? jsonResponse({ message: 'provider unavailable' }, 503)
+        : jsonResponse({ id: 'email-owner-only-retry' });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+
+  const approvalBody = {
+    operation: 'approve_and_email_key',
+    idempotencyKey: '56565656-5656-4656-8656-565656565656',
+    payload: { institutionId: INSTITUTION_ID, examId: EXAM_ID },
+  };
+  const approve = () => withMockFetch(fetchMock, () => worker.fetch(
+    request(
+      '/examination-room/v1/admin/command',
+      approvalBody,
+      '56565656-5656-4656-8656-565656565656',
+    ),
+    environment(),
+    {},
+  ));
+
+  const firstResponse = await approve();
+  const first = await firstResponse.json();
+  assert.equal(firstResponse.status, 201);
+  assert.equal(first.ok, true);
+  assert.equal(first.activationCommitted, true);
+  assert.match(first.roomKey, /^ER1-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]$/u);
+  assert.equal(first.keyIssuanceStatus, 'active_recovery_required');
+  assert.equal(first.keyEscrow.status, 'failed');
+  assert.equal(first.keyRecovery.status, 'deterministic_retry_available');
+  assert.equal(first.keyRecovery.roomKeyReturned, true);
+  assert.equal(first.deliveryStatus, 'failed');
+  assert.equal(first.deliveryAudit.status, 'failed');
+  assert.equal(first.recipient, null);
+  assert.equal(first.delivery.professor.status, 'not_available');
+  assert.deepEqual(first.adminRecipients, [
+    'owner-one@duediligence.ph',
+    'owner-two@duediligence.ph',
+  ]);
+
+  const retryResponse = await approve();
+  const retry = await retryResponse.json();
+  assert.equal(retryResponse.status, 201);
+  assert.equal(retry.ok, true);
+  assert.equal(retry.activationCommitted, true);
+  assert.equal(retry.roomKey, first.roomKey);
+  assert.equal(retry.activation.id, first.activation.id);
+  assert.equal(retry.keyIssuanceStatus, 'active');
+  assert.equal(retry.keyEscrow.status, 'escrowed');
+  assert.equal(retry.keyRecovery.status, 'escrowed');
+  assert.equal(retry.deliveryStatus, 'sent');
+  assert.equal(retry.deliveryAudit.status, 'recorded');
+  assert.equal(retry.recipient, null);
+  assert.equal(retry.delivery.professor.status, 'not_available');
+  assert.equal(retry.delivery.owners.status, 'sent');
+  assert.deepEqual(providerRequests[1].body.to, [
+    'owner-one@duediligence.ph',
+    'owner-two@duediligence.ph',
+  ]);
+  assert.equal(Object.hasOwn(providerRequests[1].body, 'bcc'), false);
+  assert.equal(providerRequests[0].headers['Idempotency-Key'], providerRequests[1].headers['Idempotency-Key']);
+  assert.deepEqual(auditRecipients, [null, null]);
+  assert.equal(activationCalls, 2);
+  assert.equal(escrowAttempts, 2);
+  assert.equal(auditAttempts, 2);
+  assert.equal(emailAttempts, 2);
+  assert.equal(activationKeyHashes[0], activationKeyHashes[1]);
+  assert.ok(storedEnvelope);
+  assert.equal(storedEnvelope.ciphertext.includes(first.roomKey), false);
 });
 
 test('owner approval converts a blank published schedule into a fresh 24-hour key window', async () => {
@@ -966,6 +1163,195 @@ test('owner authorization outage is distinct from an ordinary-admin denial', asy
   assert.equal(response.status, 503);
   assert.equal(result.error.code, 'EXAM_ROOM_V1_OWNER_AUTHORIZATION_UNAVAILABLE');
   assert.match(result.error.recovery, /No Examination Room data was changed/u);
+});
+
+test('owner command center merges blocked and archived lifecycle state into visible examination records', async () => {
+  const response = await withMockFetch(async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_query')) {
+      assert.equal(body.p_actor_user_id, USER_ID);
+      assert.equal(body.p_institution_id, INSTITUTION_ID);
+      return jsonResponse({
+        ok: true,
+        items: [{
+          examId: EXAM_ID,
+          blocked: true,
+          blockedAt: '2026-08-28T04:00:00.000Z',
+          blockReason: 'Owner paused new admission while reviewing a report.',
+          deleted: false,
+          canRestore: false,
+        }],
+      });
+    }
+    const authorized = authenticatedOwner(url);
+    if (authorized) return authorized;
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_query')) {
+      assert.equal(body.p_operation, 'command_center');
+      return jsonResponse({
+        ok: true,
+        counts: { exams: 1 },
+        exams: [{ examId: EXAM_ID, title: 'Constitutional Law Midterm', status: 'published' }],
+      });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  }, () => worker.fetch(
+    request('/examination-room/v1/admin/query', {
+      operation: 'command_center',
+      payload: { institutionId: INSTITUTION_ID, limit: 100, offset: 0 },
+    }),
+    environment(),
+    {},
+  ));
+  const result = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(result.exams[0].lifecycleState, 'blocked');
+  assert.equal(result.exams[0].isBlocked, true);
+  assert.equal(result.exams[0].blockReason, 'Owner paused new admission while reviewing a report.');
+  assert.equal(result.counts.blocked, 1);
+  assert.equal(result.counts.archived, 0);
+});
+
+test('owner can block, unblock, archive, and restore an examination through auditable lifecycle commands', async () => {
+  const lifecycleBodies = [];
+  const fetchMock = async (url, options = {}) => {
+    const authorized = authenticatedOwner(url);
+    if (authorized) return authorized;
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_command')) {
+      lifecycleBodies.push(body);
+      return jsonResponse({ ok: true, examId: EXAM_ID, operation: body.p_operation });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  };
+  const operations = ['block_exam', 'unblock_exam', 'archive_exam', 'restore_exam'];
+  for (const [index, operation] of operations.entries()) {
+    const requestId = `45454545-4545-4454-8454-${String(index + 1).padStart(12, '0')}`;
+    const response = await withMockFetch(fetchMock, () => worker.fetch(
+      request('/examination-room/v1/admin/command', {
+        operation,
+        idempotencyKey: requestId,
+        payload: {
+          institutionId: INSTITUTION_ID,
+          examId: EXAM_ID,
+          reason: `Owner lifecycle receipt for ${operation}.`,
+        },
+      }, requestId),
+      environment(),
+      {},
+    ));
+    assert.equal(response.status, 200);
+  }
+  assert.deepEqual(lifecycleBodies.map((body) => body.p_operation), operations);
+  assert.equal(lifecycleBodies.every((body) => body.p_actor_user_id === USER_ID), true);
+  assert.equal(lifecycleBodies.every((body) => body.p_institution_id === INSTITUTION_ID), true);
+  assert.equal(lifecycleBodies.every((body) => body.p_exam_id === EXAM_ID), true);
+  assert.equal(lifecycleBodies.every((body) => /^[0-9a-f]{64}$/u.test(body.p_payload.requestHash)), true);
+});
+
+test('owner reopen issues a fresh exact key in the same action without asking the creator to enter it', async () => {
+  const lifecycleBodies = [];
+  const activationBodies = [];
+  const ownerCommandBodies = [];
+  const response = await withMockFetch(async (url, options = {}) => {
+    const authorized = authenticatedOwner(url);
+    if (authorized) return authorized;
+    const body = options.body ? JSON.parse(options.body) : null;
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_lifecycle_command')) {
+      lifecycleBodies.push(body);
+      return jsonResponse({ ok: true, examId: EXAM_ID, restored: true, needsNewKey: true });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_ensure_membership')) {
+      return jsonResponse({ ok: true, membershipId: '99999999-9999-4999-8999-999999999999' });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_query')) {
+      if (body.p_operation === 'key_envelope') {
+        return jsonResponse({
+          ok: false,
+          error: {
+            code: 'ROOM_KEY_NOT_RECOVERABLE',
+            message: 'No envelope yet.',
+            status: 409,
+            recovery: 'Issue the key.',
+          },
+        });
+      }
+      assert.equal(body.p_operation, 'exam_detail');
+      return jsonResponse({
+        ok: true,
+        bundle: {
+          institutionId: INSTITUTION_ID,
+          examId: EXAM_ID,
+          currentPublishedVersionId: VERSION_ID,
+          tables: {
+            examVersions: [{
+              id: VERSION_ID,
+              publication_status: 'published',
+              duration_seconds: 7_200,
+              controls: { startsAt: SCHEDULE_START },
+            }],
+            examRoster: [],
+          },
+        },
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_api')) {
+      activationBodies.push(body);
+      return jsonResponse({
+        ok: true,
+        activation: {
+          id: ROTATED_ACTIVATION_ID,
+          status: 'scheduled',
+          opensAt: SCHEDULE_START,
+          expiresAt: SCHEDULE_CLOSE,
+        },
+        professorEmail: 'professor@example.edu.ph',
+        professorName: 'Prof. Elena Villanueva',
+        examTitle: 'Constitutional Law Midterm',
+      });
+    }
+    if (String(url).endsWith('/rest/v1/rpc/examination_room_v1_owner_command')) {
+      ownerCommandBodies.push(body);
+      if (body.p_operation === 'store_key_envelope') {
+        return jsonResponse({
+          ok: true,
+          activationId: ROTATED_ACTIVATION_ID,
+          escrowed: true,
+        });
+      }
+      return jsonResponse({
+        ok: true,
+        activationId: ROTATED_ACTIVATION_ID,
+        providerStatus: 'suppressed',
+        attemptedAt: '2026-08-28T04:00:00.000Z',
+      });
+    }
+    if (String(url) === 'https://api.resend.com/emails') {
+      return jsonResponse({ id: 'reopen-email-1' });
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  }, () => worker.fetch(
+    request('/examination-room/v1/admin/command', {
+      operation: 'reopen_exam',
+      idempotencyKey: '46464646-4646-4464-8464-464646464646',
+      payload: {
+        institutionId: INSTITUTION_ID,
+        examId: EXAM_ID,
+        reason: 'Owner reopened this archived examination for a new class.',
+      },
+    }, '46464646-4646-4464-8464-464646464646'),
+    environment(),
+    {},
+  ));
+  const result = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(result.reopened, true);
+  assert.match(result.roomKey, /^ER1-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]$/u);
+  assert.equal(result.activationCommitted, true);
+  assert.equal(lifecycleBodies[0].p_operation, 'reopen_exam');
+  assert.equal(activationBodies[0].p_operation, 'email_key');
+  assert.equal(activationBodies[0].p_payload.replaceCurrent, true);
+  assert.equal(ownerCommandBodies.some((body) => body.p_operation === 'store_key_envelope'), true);
+  assert.equal(ownerCommandBodies.some((body) => body.p_operation === 'record_email_delivery'), true);
 });
 
 test('owner no-code correction and room commands validate and forward only their exact safe payloads', async () => {

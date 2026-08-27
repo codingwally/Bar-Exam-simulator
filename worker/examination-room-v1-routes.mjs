@@ -15,20 +15,40 @@ import {
   normalizeRoomKey,
   normalizeStudentIdentity,
   toSafeError,
-  validatePrivacyConsent,
 } from './examination-room-v1-core.mjs';
+import {
+  EXAMINATION_ROOM_ASSISTANT_LIMITS,
+  ExaminationRoomAssistantError,
+  normalizeExaminationRoomAssistantReply,
+  normalizeExaminationRoomAssistantRequest,
+} from './examination-room-assistant.mjs';
+import {
+  EXAMINATION_ROOM_MEDIA_LIMITS,
+  ExaminationRoomMediaError,
+  normalizeExaminationRoomMediaRequest,
+} from './examination-room-media.mjs';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const REQUEST_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{15,127}$/u;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const INSTITUTION_CODE_PATTERN = /^[a-z0-9][a-z0-9._-]{1,63}$/u;
 const SESSION_TOKEN_PATTERN = /^ers1_[0-9a-f]{64}$/u;
+const ATTEMPT_BINDING_PATTERN = /^attempt-binding:[0-9a-f]{64}$/u;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
 const MAX_ROSTER_SIZE = 5_000;
 const MAX_ALLOWED_EMAILS = 5_000;
 const MAX_EVENT_DETAILS_BYTES = 8_000;
 const COMMUNITY_CREATOR_INSTITUTION_ID = 'ddc00000-0000-4000-8000-000000000001';
+const LEGACY_SESSION_GATE_CODES = new Set([
+  ERROR_CODES.PRIVACY_CONSENT_REQUIRED,
+  ERROR_CODES.PRIVACY_CONSENT_VERSION_MISMATCH,
+  ERROR_CODES.RECORDING_CONSENT_REQUIRED,
+  'PRIVACY_CONSENT_REQUIRED',
+  'PRIVACY_CONSENT_VERSION_MISMATCH',
+  'RECORDING_CONSENT_REQUIRED',
+  'CONSENT_REPLAY_INVALID',
+]);
 
 const PROFESSOR_QUERY_OPERATIONS = new Set(['role_status', 'session', 'exam', 'monitor', 'grading']);
 const PROFESSOR_COMMAND_OPERATIONS = new Set([
@@ -42,6 +62,8 @@ const PROFESSOR_COMMAND_OPERATIONS = new Set([
   'save_grade',
   'import_grades',
   'release_results',
+  'archive_exam',
+  'delete_draft',
 ]);
 const STUDENT_QUERY_OPERATIONS = new Set(['resume', 'result']);
 const STUDENT_COMMAND_OPERATIONS = new Set(['save_answer', 'record_event', 'heartbeat', 'submit']);
@@ -64,9 +86,6 @@ const RECOVERY_BY_CODE = Object.freeze({
   [ERROR_CODES.STUDENT_IDENTITY_INVALID]: 'Complete the real name, student number, subject, and year level, then try again.',
   [ERROR_CODES.STUDENT_SUBJECT_MISMATCH]: 'Use the subject shown by the professor, then try again.',
   [ERROR_CODES.STUDENT_YEAR_LEVEL_MISMATCH]: 'Use the year level on the examination roster, then try again.',
-  [ERROR_CODES.PRIVACY_CONSENT_REQUIRED]: 'Read the notice, choose Agree and begin, then continue.',
-  [ERROR_CODES.PRIVACY_CONSENT_VERSION_MISMATCH]: 'Review the current notice shown on screen and agree again.',
-  [ERROR_CODES.RECORDING_CONSENT_REQUIRED]: 'Agree to recording or ask the professor for another permitted arrangement.',
   [ERROR_CODES.SUBMISSION_ANSWER_MISSING]: 'Return to the listed question, enter an answer, wait for Saved, then submit again.',
   [ERROR_CODES.GRADING_INCOMPLETE]: 'Score every question before releasing this result.',
 });
@@ -409,6 +428,7 @@ function publicPreview(metadata) {
   const source = plainRecord(metadata, 'examination preview');
   return {
     examId: uuid(source.examId, 'the examination identifier'),
+    examVersion: cleanText(source.examVersion ?? source.examVersionId ?? source.examId, 128, 'examination version', { required: true }),
     title: cleanText(source.title, 300, 'examination title', { required: true }),
     subject: cleanText(source.subject, 160, 'subject', { required: true }),
     yearLevel: cleanText(source.yearLevel, 64, 'year level', { required: true }),
@@ -429,6 +449,16 @@ function publicPreview(metadata) {
       ? source.safeguards.slice(0, 12).map((item) => cleanText(item, 240, 'safeguard')).filter(Boolean)
       : [],
   };
+}
+
+function studentRuntimePreview(metadata) {
+  const {
+    privacyNoticeVersion: _privacyNoticeVersion,
+    privacyController: _privacyController,
+    retentionSummary: _retentionSummary,
+    ...runtimeMetadata
+  } = metadata;
+  return runtimeMetadata;
 }
 
 function safeEventDetails(value, field = 'details', depth = 0) {
@@ -490,21 +520,24 @@ function assertNoPlainSecret(value, secrets, path = 'payload') {
 function domainRouteError(error) {
   if (!isExaminationRoomV1Error(error)) return null;
   const safe = toSafeError(error);
+  if (LEGACY_SESSION_GATE_CODES.has(safe.code)) {
+    return new ExaminationRoomV1RouteError(
+      'EXAM_ROOM_V1_SESSION_BINDING_INVALID',
+      'The examination session could not be verified against the current room version.',
+      409,
+      'Return to the entry form, check the same room and student details, then choose Begin examination again.',
+    );
+  }
   const conflictCodes = new Set([
     ERROR_CODES.PUBLICATION_NOT_READY,
     ERROR_CODES.ANSWER_REVISION_CONFLICT,
     ERROR_CODES.IDEMPOTENCY_KEY_REUSED,
     ERROR_CODES.ANSWER_BINDING_MISMATCH,
   ]);
-  const preconditionCodes = new Set([
-    ERROR_CODES.PRIVACY_CONSENT_REQUIRED,
-    ERROR_CODES.PRIVACY_CONSENT_VERSION_MISMATCH,
-    ERROR_CODES.RECORDING_CONSENT_REQUIRED,
-  ]);
   return new ExaminationRoomV1RouteError(
     safe.code,
     safe.message,
-    conflictCodes.has(safe.code) ? 409 : preconditionCodes.has(safe.code) ? 412 : 400,
+    conflictCodes.has(safe.code) ? 409 : 400,
     RECOVERY_BY_CODE[safe.code] || 'Correct the highlighted information, then try again.',
     safe.details,
   );
@@ -528,8 +561,25 @@ function dependencyRouteError(error) {
 function storeError(result) {
   if (!result || result.ok !== false) return null;
   const error = result.error || {};
+  const code = cleanText(error.code || 'EXAM_ROOM_V1_UNAVAILABLE', 120, 'error code');
+  if (LEGACY_SESSION_GATE_CODES.has(code)) {
+    return new ExaminationRoomV1RouteError(
+      'EXAM_ROOM_V1_SESSION_BINDING_INVALID',
+      'The examination session could not be verified against the current room version.',
+      409,
+      'Return to the entry form, check the same room and student details, then choose Begin examination again.',
+    );
+  }
+  if (['ROOM_NOT_OPEN', 'EXAM_ROOM_V1_ROOM_NOT_OPEN'].includes(code)) {
+    return new ExaminationRoomV1RouteError(
+      code,
+      'This student key is not active for admission.',
+      Number.isInteger(error.status) ? error.status : 409,
+      'Ask the examination creator or Admin to issue or refresh the active student key, then choose Begin examination again.',
+    );
+  }
   return new ExaminationRoomV1RouteError(
-    cleanText(error.code || 'EXAM_ROOM_V1_UNAVAILABLE', 120, 'error code'),
+    code,
     cleanText(error.message || 'Examination Room could not complete that action.', 1_000, 'error message'),
     Number.isInteger(error.status) ? error.status : 503,
     cleanText(error.recovery || 'Your saved work is preserved. Check the connection, then try again.', 1_000, 'recovery guidance'),
@@ -660,6 +710,17 @@ export function createExaminationRoomV1Handlers(dependencies) {
   ]) {
     if (typeof deps[name] !== 'function') throw new TypeError(`Missing Examination Room route dependency: ${name}`);
   }
+  if (deps.examinationRoomAssistant !== undefined && typeof deps.examinationRoomAssistant !== 'function') {
+    throw new TypeError('Examination Room route dependency examinationRoomAssistant must be a function when provided');
+  }
+  if (deps.examinationRoomMedia !== undefined && typeof deps.examinationRoomMedia !== 'function') {
+    throw new TypeError('Examination Room route dependency examinationRoomMedia must be a function when provided');
+  }
+  for (const name of ['examLifecycleQuery', 'examLifecycleCommand', 'examLifecycleGuard']) {
+    if (deps[name] !== undefined && typeof deps[name] !== 'function') {
+      throw new TypeError(`Examination Room route dependency ${name} must be a function when provided`);
+    }
+  }
 
   async function respondWithErrors(work, origin, allowedOrigin) {
     try {
@@ -686,7 +747,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
   async function professorContext(request, env, requestedInstitutionId = null, authenticatedUser = null) {
     const user = authenticatedUser || await deps.authenticate(request, env);
     if (!user?.id) {
-      fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'Professor sign-in is required.', 401, 'Sign in through Due Diligence, then reopen Examination Room.');
+      fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'A Due Diligence sign-in is required.', 401, 'Sign in through Due Diligence, then reopen Examination Room.');
     }
     const authorization = await deps.authorizeProfessor(env, user);
     return {
@@ -804,7 +865,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
       if (operation === 'role_status') {
         const user = await deps.authenticate(request, env);
         if (!user?.id) {
-          fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'Professor sign-in is required.', 401, 'Sign in through Due Diligence, then reopen the Professor Examination Room card.');
+          fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'A Due Diligence sign-in is required.', 401, 'Sign in through Due Diligence, then reopen the Creator door.');
         }
         const result = ensureStoreResult(await deps.professorAccess(env, {
           operation: 'status', actorUserId: user.id, payload: {},
@@ -819,7 +880,99 @@ export function createExaminationRoomV1Handlers(dependencies) {
         scope: 'professor', operation, actorUserId: context.user.id,
         institutionId: context.institutionId, payload: safePayload,
       });
-      return deps.respond({ ok: true, ...result }, 200, origin, allowedOrigin);
+      if (typeof deps.examLifecycleQuery !== 'function') {
+        return deps.respond({ ok: true, ...result }, 200, origin, allowedOrigin);
+      }
+      const lifecycle = ensureStoreResult(await deps.examLifecycleQuery(env, {
+        actorUserId: context.user.id,
+        institutionId: context.institutionId,
+        examId: operation === 'session' ? null : safePayload.examId,
+      }));
+      const lifecycleByExam = new Map((Array.isArray(lifecycle.items) ? lifecycle.items : []).map((item) => [
+        String(item?.examId || ''),
+        item,
+      ]));
+      const annotate = (exam) => {
+        if (!isPlainRecord(exam)) return exam;
+        const item = lifecycleByExam.get(String(exam.examId || exam.id || ''));
+        if (!item) return exam;
+        return {
+          ...exam,
+          lifecycleState: item.deleted ? 'archived' : item.blocked ? 'blocked' : exam.status,
+          blockedAt: item.blockedAt || null,
+          blockReason: item.blockReason || null,
+          deletedAt: item.deletedAt || null,
+          deleteReason: item.deleteReason || null,
+          canRestore: item.canRestore === true,
+          needsNewKey: item.needsNewKey === true,
+        };
+      };
+      return deps.respond({
+        ok: true,
+        ...result,
+        ...(Array.isArray(result.exams) ? { exams: result.exams.map(annotate) } : {}),
+        ...(isPlainRecord(result.exam) ? { exam: annotate(result.exam) } : {}),
+      }, 200, origin, allowedOrigin);
+    }, origin, allowedOrigin);
+  }
+
+  async function professorAssistant(request, env, origin, allowedOrigin) {
+    return respondWithErrors(async () => {
+      await deps.rateLimit(request, env, 'professor_assistant');
+      const authenticatedUser = await deps.authenticate(request, env);
+      if (!authenticatedUser?.id) {
+        fail(
+          'EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED',
+          'Sign in to use the Examination Room assistant.',
+          401,
+          'Sign in through Due Diligence, then reopen Examination Room. Your examination on this device remains unchanged.',
+        );
+      }
+      if (typeof deps.examinationRoomAssistant !== 'function') {
+        fail(
+          'EXAM_ROOM_V1_ASSISTANT_UNAVAILABLE',
+          'The Examination Room assistant is temporarily unavailable.',
+          503,
+          'Your examination remains unchanged. Continue editing manually or try the assistant again shortly.',
+        );
+      }
+      let input;
+      try {
+        input = normalizeExaminationRoomAssistantRequest(
+          await deps.parseJson(request, EXAMINATION_ROOM_ASSISTANT_LIMITS.maximumRequestBytes),
+        );
+      } catch (error) {
+        if (error instanceof ExaminationRoomAssistantError) {
+          fail(error.code, error.message, error.status, error.recovery);
+        }
+        throw error;
+      }
+      let generated;
+      try {
+        generated = await deps.examinationRoomAssistant(env, input, {
+          actorUserId: authenticatedUser.id,
+        });
+      } catch (error) {
+        if (error instanceof ExaminationRoomAssistantError) {
+          fail(error.code, error.message, error.status, error.recovery);
+        }
+        fail(
+          'EXAM_ROOM_V1_ASSISTANT_UNAVAILABLE',
+          'The Examination Room assistant could not answer right now.',
+          503,
+          'Your examination remains unchanged. Try the message again or continue editing manually.',
+        );
+      }
+      let assistant;
+      try {
+        assistant = normalizeExaminationRoomAssistantReply(generated);
+      } catch (error) {
+        if (error instanceof ExaminationRoomAssistantError) {
+          fail(error.code, error.message, error.status, error.recovery);
+        }
+        throw error;
+      }
+      return deps.respond({ ok: true, assistant }, 200, origin, allowedOrigin);
     }, origin, allowedOrigin);
   }
 
@@ -828,7 +981,7 @@ export function createExaminationRoomV1Handlers(dependencies) {
       await deps.rateLimit(request, env, 'professor_command');
       const authenticatedUser = await deps.authenticate(request, env);
       if (!authenticatedUser?.id) {
-        fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'Professor sign-in is required.', 401, 'Sign in through Due Diligence, then reopen Examination Room.');
+        fail('EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED', 'A Due Diligence sign-in is required.', 401, 'Sign in through Due Diligence, then reopen Examination Room.');
       }
       const body = plainRecord(await deps.parseJson(request, 12_000_000));
       const operation = cleanText(body.operation, 80, 'operation', { required: true });
@@ -866,6 +1019,34 @@ export function createExaminationRoomV1Handlers(dependencies) {
       let clientReleaseEntry = null;
       let resultEmailItems = [];
 
+      if (operation === 'archive_exam' || operation === 'delete_draft') {
+        if (typeof deps.examLifecycleCommand !== 'function') {
+          fail(
+            'EXAM_ROOM_V1_LIFECYCLE_UNAVAILABLE',
+            'Examination archive controls are temporarily unavailable.',
+            503,
+            'Your examination remains saved. Refresh the creator workspace, then try the action again.',
+          );
+        }
+        const examId = uuid(payload.examId, 'the examination identifier');
+        const reason = cleanText(
+          payload.reason ?? (operation === 'delete_draft'
+            ? 'Creator deleted an unpublished draft.'
+            : 'Creator archived the examination.'),
+          1_000,
+          'the archive reason',
+          { required: true },
+        );
+        const lifecycleResult = ensureStoreResult(await deps.examLifecycleCommand(env, {
+          operation,
+          actorUserId: context.user.id,
+          institutionId: context.institutionId,
+          examId,
+          payload: { requestHash: requestInfo.requestHash, reason },
+        }));
+        return deps.respond({ ok: true, ...lifecycleResult }, 200, origin, allowedOrigin);
+      }
+
       if (operation === 'save_draft' || operation === 'publish') {
         const draft = professorDraftFromClientExam(payload.exam);
         const exam = operationalExam(payload.exam, draft);
@@ -886,14 +1067,6 @@ export function createExaminationRoomV1Handlers(dependencies) {
               'Add at least one email or switch admission to Anyone with the key.',
               409,
               'Add one email per line, or choose Anyone with the key, then publish again.',
-            );
-          }
-          if (draft.integrityTier === 'recorded_proctoring' || exam.cameraRequired || exam.microphoneRequired) {
-            fail(
-              'EXAM_ROOM_V1_RECORDED_PROCTORING_NOT_CONFIGURED',
-              'Recorded proctoring is not configured for this Examination Room release.',
-              409,
-              'Choose Standard or Focus monitoring, or ask an administrator to configure encrypted media upload, retention, deletion, review access, and an approved student alternative.',
             );
           }
         }
@@ -1135,7 +1308,11 @@ export function createExaminationRoomV1Handlers(dependencies) {
       scope: 'student', operation: 'preview', actorUserId: null, institutionId: null,
       payload: { roomKeyHash, identity },
     }, [rawRoomKey]);
-    return { rawRoomKey, roomKeyHash, identity, result, metadata: publicPreview(result.metadata) };
+    const metadata = publicPreview(result.metadata);
+    if (typeof deps.examLifecycleGuard === 'function') {
+      ensureStoreResult(await deps.examLifecycleGuard(env, metadata.examId));
+    }
+    return { rawRoomKey, roomKeyHash, identity, result, metadata };
   }
 
   async function studentPreview(request, env, origin, allowedOrigin) {
@@ -1145,37 +1322,37 @@ export function createExaminationRoomV1Handlers(dependencies) {
       const preview = await previewWithVerifiedKey(env, payload);
       return deps.respond({
         ok: true,
-        metadata: preview.metadata,
+        metadata: studentRuntimePreview(preview.metadata),
         identity: preview.result.identity ? {
           fullName: cleanText(preview.result.identity.fullName, 240, 'student name', { required: true }),
           studentNumber: cleanText(preview.result.identity.studentNumber, 64, 'student number', { required: true }),
           yearLevel: cleanText(preview.result.identity.yearLevel, 64, 'year level', { required: true }),
         } : undefined,
-        notice: preview.result.notice ? {
-          version: cleanText(preview.result.notice.version, 64, 'privacy notice version', { required: true }),
-          title: cleanText(preview.result.notice.title, 240, 'privacy notice title', { required: true }),
-          body: cleanText(preview.result.notice.body, 40_000, 'privacy notice', { required: true, singleLine: false }),
-          purposes: Array.isArray(preview.result.notice.purposes) ? preview.result.notice.purposes : [],
-        } : undefined,
       }, 200, origin, allowedOrigin);
     }, origin, allowedOrigin);
   }
 
-  async function studentConsent(request, env, origin, allowedOrigin) {
+  async function studentBegin(request, env, origin, allowedOrigin) {
     return respondWithErrors(async () => {
       const payload = plainRecord(await deps.parseJson(request, 16_000));
       await deps.rateLimit(request, env, 'student_consent', payload);
       const info = await requestContext(env, payload.idempotencyKey ?? request.headers.get('X-Request-ID'));
       const preview = await previewWithVerifiedKey(env, payload);
-      const consent = validatePrivacyConsent({
-        noticeVersion: payload.noticeVersion,
-        accepted: payload.agreed,
+      const attemptBindingId = ATTEMPT_BINDING_PATTERN.test(String(payload.attemptBindingId || ''))
+        ? String(payload.attemptBindingId)
+        : null;
+      // The existing database function still requires this historical record
+      // shape. It is generated by the server solely to bind the room version
+      // and session; direct Begin does not represent a user agreement and is
+      // never gated by browser camera or microphone permission.
+      const legacySessionBinding = {
+        noticeVersion: preview.metadata.privacyNoticeVersion,
+        accepted: true,
         acceptedAt: deps.now(),
-        recordingAccepted: payload.recordingAccepted === true,
-      }, {
-        requiredNoticeVersion: preview.metadata.privacyNoticeVersion,
-        integrityTier: preview.metadata.integrityTier,
-      });
+        recordingAccepted: preview.metadata.integrityTier === 'recorded_proctoring'
+          || preview.metadata.cameraRequired
+          || preview.metadata.microphoneRequired,
+      };
       const sessionToken = newSessionToken();
       const sessionTokenHash = await pepperedHmac(env, 'student-session', sessionToken);
       const result = await callRpc(env, {
@@ -1183,7 +1360,8 @@ export function createExaminationRoomV1Handlers(dependencies) {
         payload: {
           roomKeyHash: preview.roomKeyHash,
           identity: preview.identity,
-          consent,
+          consent: legacySessionBinding,
+          technicalBindingId: attemptBindingId,
           clientEventId: info.clientEventId,
           requestHash: info.requestHash,
           sessionTokenHash,
@@ -1216,6 +1394,85 @@ export function createExaminationRoomV1Handlers(dependencies) {
       const { publicationManifest, ...publicResult } = result;
       if (publicationManifest) publicResult.exam = buildStudentExaminationView(publicationManifest);
       return deps.respond({ ok: true, ...publicResult }, 200, origin, allowedOrigin);
+    }, origin, allowedOrigin);
+  }
+
+  async function studentMedia(request, env, origin, allowedOrigin) {
+    return respondWithErrors(async () => {
+      let protocol;
+      try {
+        protocol = new URL(request.url).protocol;
+      } catch {
+        protocol = '';
+      }
+      if (protocol !== 'https:') {
+        fail(
+          'EXAM_ROOM_V1_MEDIA_TLS_REQUIRED',
+          'Recording upload requires a secure connection.',
+          400,
+          'Keep the encrypted recording on this device and reopen the examination using its secure HTTPS address. Answers and submission remain available.',
+        );
+      }
+      const body = plainRecord(await deps.parseJson(request, EXAMINATION_ROOM_MEDIA_LIMITS.maximumRequestBytes));
+      const operation = cleanText(body.operation, 40, 'recording action', { required: true }).toLowerCase();
+      const payload = plainRecord(body.payload ?? {}, 'recording details');
+      await deps.rateLimit(request, env, 'student_media', {
+        operation,
+        payload: { sessionId: String(payload.sessionId || '').slice(0, 64) },
+      });
+      const credential = await sessionCredential(env, payload);
+      const info = await requestContext(env, body.idempotencyKey ?? request.headers.get('X-Request-ID'));
+      const {
+        sessionId: _sessionId,
+        sessionToken: _sessionToken,
+        ...mediaPayload
+      } = payload;
+      let normalized;
+      try {
+        normalized = normalizeExaminationRoomMediaRequest(operation, mediaPayload);
+      } catch (error) {
+        if (error instanceof ExaminationRoomMediaError) {
+          fail(error.code, error.message, error.status, error.recovery);
+        }
+        throw error;
+      }
+
+      await callRpc(env, {
+        scope: 'student', operation: 'session_context', actorUserId: null, institutionId: null,
+        payload: { sessionId: credential.sessionId, sessionTokenHash: credential.sessionTokenHash },
+      }, [credential.rawSessionToken]);
+
+      const localQueue = (reason) => ({
+        artifactId: normalized.artifactId,
+        state: 'local_queue',
+        provider: null,
+        providerResult: { status: reason },
+        upload: null,
+        retryable: true,
+        canContinueExam: true,
+        submissionBlocked: false,
+        recovery: 'The encrypted recording remains queued on this device. Continue the examination or submit normally; upload retries run separately.',
+      });
+      let recording;
+      if (typeof deps.examinationRoomMedia !== 'function') {
+        recording = localQueue('control_plane_temporarily_unavailable');
+      } else {
+        try {
+          recording = await deps.examinationRoomMedia(env, {
+            operation,
+            sessionId: credential.sessionId,
+            sessionTokenHash: credential.sessionTokenHash,
+            requestHash: info.requestHash,
+            payload: mediaPayload,
+          });
+        } catch (error) {
+          if (error instanceof ExaminationRoomMediaError && error.status < 500) {
+            fail(error.code, error.message, error.status, error.recovery);
+          }
+          recording = localQueue('control_plane_temporarily_unavailable');
+        }
+      }
+      return deps.respond({ ok: true, recording }, 200, origin, allowedOrigin);
     }, origin, allowedOrigin);
   }
 
@@ -1511,10 +1768,12 @@ export function createExaminationRoomV1Handlers(dependencies) {
 
   return Object.freeze({
     professorQuery,
+    professorAssistant,
     professorCommand,
     studentPreview,
-    studentConsent,
+    studentBegin,
     studentQuery,
+    studentMedia,
     studentCommand,
     adminQuery,
     adminCommand,
@@ -1523,10 +1782,13 @@ export function createExaminationRoomV1Handlers(dependencies) {
 
 export const EXAMINATION_ROOM_V1_PATHS = Object.freeze({
   '/examination-room/v1/professor/query': 'professorQuery',
+  '/examination-room/v1/professor/assistant': 'professorAssistant',
   '/examination-room/v1/professor/command': 'professorCommand',
   '/examination-room/v1/student/preview': 'studentPreview',
-  '/examination-room/v1/student/consent': 'studentConsent',
+  '/examination-room/v1/student/begin': 'studentBegin',
+  '/examination-room/v1/student/consent': 'studentBegin',
   '/examination-room/v1/student/query': 'studentQuery',
+  '/examination-room/v1/student/media': 'studentMedia',
   '/examination-room/v1/student/command': 'studentCommand',
   '/examination-room/v1/admin/query': 'adminQuery',
   '/examination-room/v1/admin/command': 'adminCommand',

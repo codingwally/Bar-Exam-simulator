@@ -4,7 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const read = (relativePath) => readFile(path.join(root, relativePath), 'utf8');
+const read = async (relativePath) => (await readFile(path.join(root, relativePath), 'utf8'))
+  .replace(/\r\n?/gu, '\n');
 
 const [
   pagesWorkflow,
@@ -76,6 +77,8 @@ for (const requiredPath of [
   "      - 'worker/examination-room-v1-*.mjs'",
   "      - 'worker/examination-room-email.mjs'",
   "      - 'worker/examination-room-email.test.mjs'",
+  "      - 'worker/examination-room-media.mjs'",
+  "      - 'worker/examination-room-media.test.mjs'",
   "      - 'worker/public-api-alias.mjs'",
   "      - 'worker/public-api-alias.test.mjs'",
   "      - 'worker/wrangler.public-api.toml'",
@@ -122,12 +125,21 @@ for (const requiredPath of [
   "      - 'scripts/test-examination-room-commercial-stress.mjs'",
   "      - 'scripts/test-examination-room-v1-staging-smoke.mjs'",
   "      - 'scripts/test-examination-room-release-workflows.mjs'",
+  "      - 'scripts/build-examination-room-release-bundle.mjs'",
+  "      - 'scripts/build-examination-room-pure-sql-release-bundle.mjs'",
+  "      - 'scripts/test-examination-room-pure-sql-release-bundle.mjs'",
+  "      - 'scripts/test-examination-room-key-reliability-migration.mjs'",
+  "      - 'scripts/test-examination-room-lifecycle-migration.mjs'",
+  "      - 'scripts/test-examination-room-recorded-media-migration.mjs'",
   "      - 'scripts/test-feature-decommission-boundary.mjs'",
   "      - 'supabase/migrations/20260825183055_examination_room_v1_greenfield.sql'",
   "      - 'supabase/migrations/20260826130536_examination_room_owner_command_center.sql'",
   "      - 'supabase/migrations/20260827010000_examination_room_open_admission_flow.sql'",
   "      - 'supabase/migrations/20260827020000_examination_room_result_email_delivery.sql'",
   "      - 'supabase/migrations/20260827030000_examination_room_supabase_storage_recovery.sql'",
+  "      - 'supabase/migrations/20260827190036_examination_room_key_delivery_nullable_creator.sql'",
+  "      - 'supabase/migrations/20260827193000_examination_room_lifecycle_controls.sql'",
+  "      - 'supabase/migrations/20260828123000_examination_room_recorded_media.sql'",
   "      - 'supabase/tests/database/**'",
   "      - '.github/workflows/staging-e2e-gate.yml'",
   "      - '.github/workflows/bootstrap-examination-room-key-pepper.yml'",
@@ -135,6 +147,18 @@ for (const requiredPath of [
   assert.ok(
     pullRequestWorkflow.includes(requiredPath),
     `The PR gate is missing the Examination Room path filter: ${requiredPath.trim()}`,
+  );
+}
+
+for (const focusedReleaseGate of [
+  'test-examination-room-key-reliability-migration.mjs',
+  'test-examination-room-lifecycle-migration.mjs',
+  'test-examination-room-recorded-media-migration.mjs',
+  'test-examination-room-pure-sql-release-bundle.mjs',
+]) {
+  assert.ok(
+    pullRequestWorkflow.includes(focusedReleaseGate),
+    `The PR gate must run the focused Examination Room release check: ${focusedReleaseGate}`,
   );
 }
 
@@ -359,7 +383,7 @@ for (const [label, workflow, databaseSecret] of [
   assert.match(
     workflow,
     /node scripts\/build-examination-room-release-bundle\.mjs --output "\$release_bundle"/u,
-    `${label} must build the exact reviewed five-migration bundle before cutover.`,
+    `${label} must build the exact reviewed nine-migration bundle before cutover.`,
   );
   assert.match(workflow, new RegExp(databaseSecret));
   assert.match(workflow, /psql "\$EXAMINATION_ROOM_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "\$release_bundle"/u);
@@ -395,6 +419,26 @@ assert.ok(
     < releaseBundleBuilder.indexOf('20260827030000_examination_room_supabase_storage_recovery.sql'),
   'The isolated release bundle must apply durable result-email delivery before private recovery storage.',
 );
+assert.ok(
+  releaseBundleBuilder.indexOf('20260827030000_examination_room_supabase_storage_recovery.sql')
+    < releaseBundleBuilder.indexOf('20260827190036_examination_room_key_delivery_nullable_creator.sql'),
+  'The isolated release bundle must apply private recovery storage before key reliability.',
+);
+assert.ok(
+  releaseBundleBuilder.indexOf('20260827190036_examination_room_key_delivery_nullable_creator.sql')
+    < releaseBundleBuilder.indexOf('20260827193000_examination_room_lifecycle_controls.sql'),
+  'The isolated release bundle must apply key reliability before lifecycle controls.',
+);
+assert.ok(
+  releaseBundleBuilder.indexOf('20260827193000_examination_room_lifecycle_controls.sql')
+    < releaseBundleBuilder.indexOf('20260828123000_examination_room_recorded_media.sql'),
+  'The isolated release bundle must apply lifecycle controls before recorded media.',
+);
+assert.ok(
+  releaseBundleBuilder.indexOf('20260828123000_examination_room_recorded_media.sql')
+    < releaseBundleBuilder.indexOf('20260828124000_examination_room_immediate_key_access.sql'),
+  'The isolated release bundle must apply recorded media before immediate Admin-key access.',
+);
 for (const requiredProbe of [
   'examination_room_v1_api(text,text,uuid,uuid,jsonb)',
   'examination_room_v1_owner_query(text,uuid,uuid,uuid,jsonb)',
@@ -413,6 +457,22 @@ for (const requiredProbe of [
   'public is false',
   'file_size_limit >= 10485760',
   'application/vnd.duediligence.examination-room-recovery+json',
+  'email_delivery_events_professor_recipient_check',
+  'professor_recipient is null',
+  'the prior room-key request is already bound to a different key.',
+  'persisted.professor_recipient is not distinct from excluded.professor_recipient',
+  'examination_room_v1_lifecycle_command(text,uuid,uuid,uuid,jsonb)',
+  'exams_owner_active_lifecycle_idx',
+  'exams_admin_lifecycle_idx',
+  'examination-room-media',
+  'media_upload_intents',
+  'media_upload_intents_touch_updated_at',
+  'media_upload_intents_no_delete',
+  'examination_room_v1_media(text,jsonb)',
+  "array['application/octet-stream']::text[]",
+  'activation_expires_at',
+  'public.examination_room_v1_lifecycle_guard(activation_row.exam_id)',
+  'examination_room_immediate_key_access',
 ]) {
   assert.ok(releaseBundleBuilder.includes(requiredProbe), 'Release bundle is missing probe: ' + requiredProbe);
 }
@@ -423,6 +483,14 @@ assert.match(releaseBundleBuilder, /examination_room_owner_ledger_exact/u);
 assert.match(releaseBundleBuilder, /examination_room_open_admission_ledger_exact/u);
 assert.match(releaseBundleBuilder, /examination_room_result_email_ledger_exact/u);
 assert.match(releaseBundleBuilder, /examination_room_recovery_storage_ledger_exact/u);
+assert.match(releaseBundleBuilder, /examination_room_key_reliability_ledger_exact/u);
+assert.match(releaseBundleBuilder, /examination_room_lifecycle_controls_ledger_exact/u);
+assert.match(releaseBundleBuilder, /examination_room_recorded_media_ledger_exact/u);
+assert.match(releaseBundleBuilder, /examination_room_immediate_key_access_ledger_exact/u);
+assert.match(releaseBundleBuilder, /name = '\$\{keyReliability\.name\}'/u);
+assert.match(releaseBundleBuilder, /name = '\$\{lifecycleControls\.name\}'/u);
+assert.match(releaseBundleBuilder, /name = '\$\{recordedMedia\.name\}'/u);
+assert.match(releaseBundleBuilder, /name = '\$\{immediateKeyAccess\.name\}'/u);
 assert.match(releaseBundleBuilder, /without this release exact checksum/u);
 assert.match(releaseBundleBuilder, /Unrecorded pre-existing .* objects cannot be adopted from existence probes/u);
 assert.doesNotMatch(releaseBundleBuilder, /Repairing only the missing/u);

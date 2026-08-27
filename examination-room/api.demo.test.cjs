@@ -72,6 +72,47 @@ test('demo owner preflight exposes the same four safe readiness checks', async (
   }
 });
 
+test('demo Examination Assistant answers a contextual follow-up from the live draft', async () => {
+  const assistantApi = demoApi();
+  const result = await assistantApi.professorAssistant({
+    message: 'Which question currently carries the most weight, and how many points is it?',
+    history: [
+      { role: 'user', text: 'Are my point totals balanced?' },
+      { role: 'assistant', text: 'The current examination totals 100 points.' },
+    ],
+    examContext: {
+      title: 'Constitutional Law — Midterm Examination',
+      subject: 'Constitutional Law',
+      totalPoints: 100,
+      reviewIssues: [],
+      questions: [
+        { number: 1, points: 30, prompt: 'Analyze the separation of powers.' },
+        { number: 2, points: 25, prompt: 'Discuss judicial review.' },
+      ],
+    },
+  });
+
+  assert.match(result.assistant.reply, /Question 1 carries the most weight at 30 points/);
+  assert.match(result.assistant.reply, /Analyze the separation of powers/);
+
+  const followUp = await assistantApi.professorAssistant({
+    message: 'How many points lower is Question 3?',
+    history: [
+      { role: 'user', text: 'Which question carries the most weight?' },
+      { role: 'assistant', text: result.assistant.reply },
+    ],
+    examContext: {
+      totalPoints: 100,
+      questions: [
+        { number: 1, points: 30, prompt: 'Analyze the separation of powers.' },
+        { number: 3, points: 20, prompt: 'State the requisites of judicial inquiry.' },
+      ],
+    },
+  });
+  assert.match(followUp.assistant.reply, /Question 3 is worth 20 points/);
+  assert.match(followUp.assistant.reply, /10 points lower than Question 1 at 30 points/);
+});
+
 test('demo Professor can create another examination with a new durable identifier', async () => {
   const api = demoApi();
   api.resetDemo();
@@ -169,20 +210,19 @@ test('demo student path withholds answer keys and releases only complete profess
     subject: 'Constitutional Law',
     yearLevel: '2L',
   };
-  const preview = await api.studentPreview({ roomKey: activation.roomKey, ...identity, identity });
-  const consent = await api.studentConsent({
+  await api.studentPreview({ roomKey: activation.roomKey, ...identity, identity });
+  const started = await api.studentBegin({
     roomKey: activation.roomKey,
     identity,
-    noticeVersion: preview.metadata.noticeVersion,
-    agreed: true,
-  }, 'consent-1');
-  const studentPayload = JSON.stringify(consent.exam);
+    attemptBindingId: `attempt-binding:${'1'.repeat(64)}`,
+  }, 'student-begin-1');
+  const studentPayload = JSON.stringify(started.exam);
   assert.equal(studentPayload.includes('correctOption'), false);
   assert.equal(studentPayload.includes('gradingGuidance'), false);
   assert.equal(studentPayload.includes('acceptedAnswers'), false);
 
-  const attemptId = consent.session.id;
-  const sessionToken = consent.session.id;
+  const attemptId = started.session.id;
+  const sessionToken = started.session.id;
   const loaded = await api.loadExam({ attemptId, sessionToken });
   assert.equal(loaded.questions[3].type, 'multiple_choice');
   assert.deepEqual(JSON.parse(JSON.stringify(loaded.questions[3].options[1])), { id: 'option-2', label: 'Supreme Court' });
@@ -254,36 +294,35 @@ test('demo import_grades accepts the Professor UI contract and commits the compl
     subject: 'Constitutional Law',
     yearLevel: '2L',
   };
-  const preview = await api.studentPreview({ roomKey: activation.roomKey, ...identity, identity });
-  const consent = await api.studentConsent({
+  await api.studentPreview({ roomKey: activation.roomKey, ...identity, identity });
+  const started = await api.studentBegin({
     roomKey: activation.roomKey,
     identity,
-    noticeVersion: preview.metadata.noticeVersion,
-    agreed: true,
-  }, 'consent-import');
+    attemptBindingId: `attempt-binding:${'2'.repeat(64)}`,
+  }, 'student-begin-import');
   for (let index = 0; index < sessionView.exam.questions.length; index += 1) {
     await api.studentCommand('save_answer', {
-      sessionId: consent.session.id,
-      sessionToken: consent.session.id,
+      sessionId: started.session.id,
+      sessionToken: started.session.id,
       questionId: `q-${index + 1}`,
       answer: index === 3 ? 'option-2' : `Answer ${index + 1}`,
       flagged: false,
     }, `answer-import-${index + 1}`);
   }
   await api.studentCommand('submit', {
-    sessionId: consent.session.id,
-    sessionToken: consent.session.id,
+    sessionId: started.session.id,
+    sessionToken: started.session.id,
   }, 'submit-import');
 
   const grades = [
     {
-      sessionId: consent.session.id,
+      sessionId: started.session.id,
       questionId: 'q-1',
       points: 26,
       feedback: 'Strong offline analysis.',
     },
     {
-      sessionId: consent.session.id,
+      sessionId: started.session.id,
       questionId: 'q-2',
       points: 22,
       feedback: 'Clear discussion of review standards.',
@@ -374,25 +413,24 @@ test('demo owner controls correct identity, change submission status, and contro
     subject: 'Constitutional Law',
     yearLevel: '2L',
   };
-  const preview = await api.studentPreview({ roomKey: api.demoRoomKey, ...identity, identity });
-  const consent = await api.studentConsent({
+  await api.studentPreview({ roomKey: api.demoRoomKey, ...identity, identity });
+  const started = await api.studentBegin({
     roomKey: api.demoRoomKey,
     identity,
-    noticeVersion: preview.metadata.noticeVersion,
-    agreed: true,
-  }, 'owner-controls-consent');
+    attemptBindingId: `attempt-binding:${'3'.repeat(64)}`,
+  }, 'owner-controls-begin');
   for (const question of sessionView.exam.questions) {
     await api.studentCommand('save_answer', {
-      sessionId: consent.session.id,
-      sessionToken: consent.session.id,
+      sessionId: started.session.id,
+      sessionToken: started.session.id,
       questionId: question.id,
       answer: question.type === 'multiple_choice' ? 'option-2' : `Answer for ${question.id}`,
       flagged: false,
     }, `owner-controls-answer-${question.id}`);
   }
   const submitted = await api.studentCommand('submit', {
-    sessionId: consent.session.id,
-    sessionToken: consent.session.id,
+    sessionId: started.session.id,
+    sessionToken: started.session.id,
   }, 'owner-controls-submit');
 
   const statusPayload = {
@@ -453,13 +491,12 @@ test('default key-only admission publishes without a roster and registers any ke
   };
   const preview = await api.studentPreview({ roomKey: activation.roomKey, identity });
   assert.equal(preview.identity.fullName, identity.fullName);
-  const consent = await api.studentConsent({
+  const started = await api.studentBegin({
     roomKey: activation.roomKey,
     identity,
-    noticeVersion: preview.metadata.noticeVersion,
-    agreed: true,
-  }, 'open-consent-0001');
-  assert.equal(consent.session.fullName, identity.fullName);
+    attemptBindingId: `attempt-binding:${'4'.repeat(64)}`,
+  }, 'open-begin-0001');
+  assert.equal(started.session.fullName, identity.fullName);
   const after = await api.professorQuery('monitor', { examId: creator.exam.id });
   assert.equal(after.exam.roster.length, 1);
   assert.equal(after.sessions.length, 1);
@@ -527,29 +564,150 @@ test('creator can revoke a live student and the same identity cannot re-enter th
     subject: creator.exam.subject,
     yearLevel: 'Second year',
   };
-  const preview = await api.studentPreview({ roomKey: activation.roomKey, identity });
-  const consent = await api.studentConsent({
+  await api.studentPreview({ roomKey: activation.roomKey, identity });
+  const started = await api.studentBegin({
     roomKey: activation.roomKey,
     identity,
-    noticeVersion: preview.metadata.noticeVersion,
-    agreed: true,
-  }, 'revoke-consent-0001');
+    attemptBindingId: `attempt-binding:${'5'.repeat(64)}`,
+  }, 'revoke-begin-0001');
   await api.professorCommand('revoke_session', {
     examId: creator.exam.id,
-    sessionId: consent.session.id,
+    sessionId: started.session.id,
     reason: 'Creator ended this practice session.',
   }, 'revoke-session-0001');
   await assert.rejects(
-    api.studentQuery('resume', { sessionId: consent.session.id, sessionToken: consent.session.id }),
+    api.studentQuery('resume', { sessionId: started.session.id, sessionToken: started.session.id }),
     (error) => error.code === 'SESSION_REVOKED',
   );
   await assert.rejects(
-    api.studentConsent({
+    api.studentBegin({
       roomKey: activation.roomKey,
       identity,
-      noticeVersion: preview.metadata.noticeVersion,
-      agreed: true,
-    }, 'revoke-consent-again-0001'),
+      attemptBindingId: `attempt-binding:${'5'.repeat(64)}`,
+    }, 'revoke-begin-again-0001'),
     (error) => ['STUDENT_BLOCKED', 'SESSION_REVOKED'].includes(error.code),
   );
+});
+
+test('demo Admin lifecycle preserves examination evidence and reopens with one idempotent replacement key', async () => {
+  const api = demoApi();
+  api.resetDemo();
+  const creator = await api.professorQuery('session');
+  await api.professorCommand('publish', { exam: creator.exam }, 'lifecycle-publish-0001');
+  const firstActivation = await api.adminCommand('activate_exam', { examId: creator.exam.id }, 'lifecycle-activate-0001');
+  await api.professorCommand('open_room', { examId: creator.exam.id }, 'lifecycle-open-0001');
+
+  const identity = {
+    fullName: 'Lifecycle Test Student',
+    studentNumber: 'LIFECYCLE-0001',
+    subject: creator.exam.subject,
+    yearLevel: 'Second year',
+  };
+  await api.studentPreview({ roomKey: firstActivation.roomKey, identity });
+  const firstSession = await api.studentBegin({
+    roomKey: firstActivation.roomKey,
+    identity,
+    attemptBindingId: `attempt-binding:${'6'.repeat(64)}`,
+  }, 'lifecycle-begin-0001');
+  await api.studentCommand('save_answer', {
+    sessionId: firstSession.session.id,
+    sessionToken: firstSession.session.id,
+    questionId: creator.exam.questions[0].id,
+    answer: 'A preserved lifecycle answer.',
+    flagged: false,
+  }, 'lifecycle-answer-0001');
+
+  const blockPayload = {
+    examId: creator.exam.id,
+    reason: 'Owner temporarily blocked new admission for a lifecycle check.',
+  };
+  const blocked = await api.adminCommand('block_exam', blockPayload, 'lifecycle-block-0001');
+  assert.equal(blocked.blocked, true);
+  assert.equal(blocked.existingAnswersPreserved, true);
+  assert.equal((await api.adminCommand('block_exam', blockPayload, 'lifecycle-block-0001')).duplicate, true);
+  await assert.rejects(
+    api.studentPreview({ roomKey: firstActivation.roomKey, identity }),
+    (error) => error.code === 'EXAMINATION_BLOCKED' && error.status === 409,
+  );
+
+  const unblocked = await api.adminCommand('unblock_exam', {
+    examId: creator.exam.id,
+    reason: 'Owner completed the lifecycle check and restored admission.',
+  }, 'lifecycle-unblock-0001');
+  assert.equal(unblocked.blocked, false);
+  assert.equal((await api.studentPreview({ roomKey: firstActivation.roomKey, identity })).ok, true);
+
+  const archived = await api.adminCommand('archive_exam', {
+    examId: creator.exam.id,
+    reason: 'Owner archived the room while preserving its complete examination evidence.',
+  }, 'lifecycle-archive-0001');
+  assert.equal(archived.archived, true);
+  assert.equal(archived.recoverable, true);
+  const archivedDetail = await api.adminQuery('exam_detail', { examId: creator.exam.id });
+  assert.equal(archivedDetail.exam.lifecycleState, 'archived');
+  assert.equal(archivedDetail.questions.length, creator.exam.questions.length);
+  assert.equal(archivedDetail.answerRevisions.length, 1);
+  assert.equal(archivedDetail.sessions[0].status, 'expired');
+  assert.equal((await api.professorQuery('session')).exams.some((exam) => exam.id === creator.exam.id), false);
+  await assert.rejects(
+    api.studentPreview({ roomKey: firstActivation.roomKey, identity }),
+    (error) => error.code === 'EXAMINATION_ARCHIVED' && error.status === 409,
+  );
+
+  const restored = await api.adminCommand('restore_exam', {
+    examId: creator.exam.id,
+    reason: 'Owner restored the archived examination for another approved sitting.',
+  }, 'lifecycle-restore-0001');
+  assert.equal(restored.restored, true);
+  assert.equal(restored.status, 'closed');
+  assert.equal(restored.needsNewKey, true);
+
+  const reopenPayload = {
+    examId: creator.exam.id,
+    reason: 'Owner reopened the preserved examination and issued one replacement key.',
+  };
+  const reopened = await api.adminCommand('reopen_exam', reopenPayload, 'lifecycle-reopen-0001');
+  assert.equal(reopened.reopened, true);
+  assert.equal(reopened.activationCommitted, true);
+  assert.equal(reopened.keyIssuanceStatus, 'active');
+  assert.equal(reopened.keyEscrow.status, 'escrowed');
+  assert.equal(reopened.deliveryAudit.status, 'recorded');
+  assert.equal(reopened.recoveryRequired, false);
+  assert.notEqual(reopened.roomKey, firstActivation.roomKey);
+  const duplicateReopen = await api.adminCommand('reopen_exam', reopenPayload, 'lifecycle-reopen-0001');
+  assert.equal(duplicateReopen.duplicate, true);
+  assert.equal(duplicateReopen.roomKey, reopened.roomKey);
+  assert.equal(duplicateReopen.activation.id, reopened.activation.id);
+  const revealed = await api.adminCommand('reveal_key', { examId: creator.exam.id }, 'lifecycle-reveal-0001');
+  assert.equal(revealed.roomKey, reopened.roomKey);
+  const resent = await api.adminCommand('resend_key', { examId: creator.exam.id }, 'lifecycle-resend-0001');
+  assert.equal(resent.roomKey, reopened.roomKey);
+  assert.equal(resent.deliveryAudit.status, 'recorded');
+
+  await assert.rejects(
+    api.studentPreview({ roomKey: firstActivation.roomKey, identity }),
+    (error) => error.code === 'ROOM_KEY_INVALID',
+  );
+  const reopenedPreview = await api.studentPreview({ roomKey: reopened.roomKey, identity });
+  assert.equal(reopenedPreview.ok, true);
+  const secondSession = await api.studentBegin({
+    roomKey: reopened.roomKey,
+    identity,
+    attemptBindingId: `attempt-binding:${'7'.repeat(64)}`,
+  }, 'lifecycle-begin-0002');
+  assert.notEqual(secondSession.session.id, firstSession.session.id);
+  assert.equal(secondSession.session.activationId, reopened.activation.id);
+
+  const reopenedDetail = await api.adminQuery('exam_detail', { examId: creator.exam.id });
+  assert.equal(reopenedDetail.questions.length, creator.exam.questions.length);
+  assert.equal(reopenedDetail.answerRevisions.length, 1);
+  assert.equal(reopenedDetail.sessions.length, 2);
+  assert.equal(reopenedDetail.keyHistory[0].roomKey, reopened.roomKey);
+  assert.equal(reopenedDetail.keyHistory.some((entry) => entry.activationId === firstActivation.activation.id), true);
+
+  const audit = await api.adminQuery('audit_log', { examId: creator.exam.id, limit: 100, offset: 0 });
+  const lifecycleEvents = new Set(audit.items.map((entry) => entry.type));
+  for (const operation of ['reopen_exam', 'block_exam', 'unblock_exam', 'archive_exam', 'restore_exam']) {
+    assert.equal(lifecycleEvents.has(`owner_${operation}`), true);
+  }
 });

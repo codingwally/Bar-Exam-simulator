@@ -6,8 +6,7 @@
    *
    * Required Promise-returning methods:
    * - previewRoom(entry) -> exam metadata only; never include questions.
-   * - getPrivacyNotice({ examId, roomKey, noticeVersion }) -> versioned notice.
-   * - beginAttempt({ examId, examVersion, roomKey, student, acceptance, client })
+   * - beginAttempt({ examId, examVersion, roomKey, student, attemptBindingId, client })
    *     -> { attemptId, sessionToken, serverNow, startedAt, expiresAt }.
    * - loadExam({ attemptId, sessionToken }) -> { questions }.
    * - syncOperations({ attemptId, sessionToken, operations })
@@ -27,7 +26,6 @@
   var DEMO_MODE = new URLSearchParams(window.location.search).get('demo') === '1';
   var REQUIRED_API_METHODS = [
     'previewRoom',
-    'getPrivacyNotice',
     'beginAttempt',
     'loadExam',
     'syncOperations',
@@ -41,8 +39,7 @@
     entry: null,
     context: null,
     metadata: null,
-    notice: null,
-    acceptance: null,
+    attemptBindingId: null,
     attempt: null,
     questions: [],
     answers: {},
@@ -60,6 +57,8 @@
     resultTimer: null,
     resultUnsubscribe: null,
     resultChecking: false,
+    media: null,
+    mediaAttemptId: null,
     view: 'entry'
   };
 
@@ -71,6 +70,10 @@
     cacheElements();
     bindEvents();
     registerExaminationRoomServiceWorker();
+
+    if (window.ExaminationRoomMediaCapture && typeof window.ExaminationRoomMediaCapture.create === 'function') {
+      state.media = window.ExaminationRoomMediaCapture.create({ onStatus: handleMediaStatus });
+    }
 
     if (DEMO_MODE && !resolveApiAdapter()) {
       window.ExaminationRoomV1Api = createDemoAdapter();
@@ -99,7 +102,7 @@
   function registerExaminationRoomServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
 
-    navigator.serviceWorker.register('/service-worker.js?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-4')
+    navigator.serviceWorker.register('/service-worker.js?v=examination-room-renovation-20260828-4')
       .catch(function () {
         // Registration failure must never block a student who still has a
         // working network connection. The exam UI already reports offline
@@ -114,10 +117,8 @@
       'previewButton', 'entryError', 'demoModeNote', 'examPreview',
       'previewExamTitle', 'previewSubject', 'previewProfessor',
       'previewDuration', 'previewQuestionCount', 'previewAvailability',
-      'previewSafeguards', 'changeDetailsButton', 'privacyButton',
-      'privacyDialog', 'privacyTitle', 'privacyIntro',
-      'privacyError', 'privacyBackButton', 'agreeButton',
-      'examView', 'examTitle', 'examSubjectLine', 'saveStatus', 'timerBox',
+      'previewSafeguards', 'changeDetailsButton', 'beginButton',
+      'examView', 'examTitle', 'examSubjectLine', 'mediaStatus', 'saveStatus', 'timerBox',
       'timerValue', 'fullscreenButton', 'offlineNotice', 'examError',
       'progressText', 'answerProgress', 'questionList', 'submitOpenButton',
       'questionPosition', 'questionType', 'flagButton', 'questionContent',
@@ -143,13 +144,7 @@
   function bindEvents() {
     elements.roomEntryForm.addEventListener('submit', handlePreviewRequest);
     elements.changeDetailsButton.addEventListener('click', unlockEntryDetails);
-    elements.privacyButton.addEventListener('click', openPrivacyDialog);
-    elements.privacyBackButton.addEventListener('click', closePrivacyDialog);
-    elements.agreeButton.addEventListener('click', handleAgreeAndBegin);
-
-    elements.privacyDialog.addEventListener('cancel', function (event) {
-      event.preventDefault();
-    });
+    elements.beginButton.addEventListener('click', handleBeginExam);
 
     elements.previousButton.addEventListener('click', function () {
       navigateToQuestion(state.currentIndex - 1);
@@ -242,36 +237,33 @@
           if (metadata.admissionMode === 'email_allowlist' && !entry.email) {
             throw createAppError('EMAIL_REQUIRED');
           }
-          var notice = await state.api.getPrivacyNotice({
-            examId: metadata.examId,
-            roomKey: entry.roomKey,
-            noticeVersion: metadata.noticeVersion
-          });
-          validateNotice(notice, metadata.noticeVersion);
-          previewBundle = { metadata: metadata, notice: notice };
+          previewBundle = { metadata: metadata };
           await databasePut('cache', {
             id: 'preview:' + context.entryHash,
             entryHash: context.entryHash,
             metadata: metadata,
-            notice: notice,
             cachedAt: new Date().toISOString()
           });
         } catch (liveError) {
           var liveCode = String(liveError && liveError.code || '').replace(/^EXAM_ROOM_V1_/, '');
-          var accessWasDenied = [
-            'INVALID_ROOM_KEY',
-            'IDENTITY_MISMATCH',
-            'STUDENT_EMAIL_REQUIRED',
+           var accessWasDenied = [
+             'INVALID_ROOM_KEY',
+             'ROOM_KEY_INVALID',
+             'IDENTITY_MISMATCH',
+             'SUBJECT_MISMATCH',
+             'STUDENT_EMAIL_REQUIRED',
             'STUDENT_EMAIL_INVALID',
             'STUDENT_EMAIL_NOT_ALLOWED',
             'STUDENT_EMAIL_MISMATCH',
             'ROSTER_NAME_MISMATCH',
-            'STUDENT_BLOCKED',
-            'ROOM_CLOSED',
-            'NOTICE_CHANGED'
-          ].indexOf(liveCode) !== -1;
-          if (!accessWasDenied && cached && isUsableCachedPreview(cached, context)) {
-            previewBundle = { metadata: cached.metadata, notice: cached.notice };
+             'STUDENT_BLOCKED',
+             'ROOM_CLOSED',
+             'ROOM_NOT_OPEN',
+             'EXAMINATION_ARCHIVED',
+             'EXAMINATION_BLOCKED'
+           ].indexOf(liveCode) !== -1;
+           if (!accessWasDenied && cached && isUsableCachedPreview(cached, context)) {
+             previewBundle = { metadata: cached.metadata };
             usedCache = true;
             showToast('The live check could not finish. A previously verified preview is shown so you can resume saved work.', 'ph-clock-counter-clockwise');
           } else {
@@ -279,7 +271,7 @@
           }
         }
       } else if (cached && isUsableCachedPreview(cached, context)) {
-        previewBundle = { metadata: cached.metadata, notice: cached.notice };
+        previewBundle = { metadata: cached.metadata };
         usedCache = true;
       } else if (!state.api) {
         throw createAppError('API_UNAVAILABLE');
@@ -290,11 +282,9 @@
       state.entry = entry;
       state.context = context;
       state.metadata = previewBundle.metadata;
-      state.notice = previewBundle.notice;
-      state.acceptance = await findAcceptance(context, previewBundle.metadata, previewBundle.notice);
+      state.attemptBindingId = await createAttemptBindingId(context, previewBundle.metadata);
 
       renderExamPreview(usedCache);
-      renderPrivacyNotice();
       elements.examPreview.hidden = false;
       elements.examPreview.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
     } catch (error) {
@@ -341,16 +331,13 @@
   }
 
   function isUsableCachedPreview(cached, context) {
-    if (!cached || cached.entryHash !== context.entryHash || !cached.metadata || !cached.notice) {
-      return false;
-    }
-    return cached.metadata.noticeVersion === cached.notice.version;
+    return Boolean(cached && cached.entryHash === context.entryHash && cached.metadata);
   }
 
   function validateMetadata(metadata) {
     var required = [
       'examId', 'examVersion', 'title', 'subject', 'professor',
-      'durationMinutes', 'questionCount', 'noticeVersion'
+      'durationMinutes', 'questionCount'
     ];
     var valid = metadata && typeof metadata === 'object' && required.every(function (key) {
       return metadata[key] !== undefined && metadata[key] !== null && metadata[key] !== '';
@@ -358,12 +345,6 @@
 
     if (!valid || !Number.isFinite(Number(metadata.durationMinutes)) || !Number.isFinite(Number(metadata.questionCount))) {
       throw createAppError('PREVIEW_INVALID');
-    }
-  }
-
-  function validateNotice(notice, expectedVersion) {
-    if (!notice || typeof notice !== 'object' || notice.version !== expectedVersion || !Array.isArray(notice.items)) {
-      throw createAppError('NOTICE_CHANGED');
     }
   }
 
@@ -388,115 +369,38 @@
       elements.previewSafeguards.appendChild(createElement('li', '', String(item)));
     });
 
-    elements.privacyButton.querySelector('span').textContent = usedCache
-      ? 'Review saved privacy warning'
-      : 'Review privacy warning';
+    elements.beginButton.querySelector('span').textContent = usedCache
+      ? 'Resume saved examination'
+      : 'Begin examination';
   }
 
-  function renderPrivacyNotice() {
-    var recordingRequired = state.metadata.integrityTier === 'recorded_proctoring' || state.metadata.cameraRequired === true || state.metadata.microphoneRequired === true;
-    setText(elements.privacyTitle, recordingRequired ? 'Recorded proctoring unavailable' : 'Privacy warning');
-    setText(elements.privacyIntro, recordingRequired
-      ? 'This examination requests recorded proctoring, but encrypted camera and microphone capture storage is not configured. Ask your Professor or administrator to change the examination mode.'
-      : 'This examination records your identity, answers, submission status, grades, and any examination-integrity features enabled by your Professor. These records can be viewed by your Professor and the platform owner.');
-    elements.agreeButton.disabled = recordingRequired;
-    elements.agreeButton.querySelector('span').textContent = recordingRequired ? 'Recording unavailable' : 'I understand — begin exam';
-  }
-
-  async function findAcceptance(context, metadata, notice) {
-    var id = await acceptanceRecordId(context, metadata, notice);
-    var acceptance = await databaseGet('acceptances', id);
-    if (!acceptance) {
-      return null;
-    }
-
-    var recordingRequired = metadata.integrityTier === 'recorded_proctoring' || metadata.cameraRequired === true || metadata.microphoneRequired === true;
-    var exactMatch = acceptance.examId === metadata.examId &&
-      acceptance.examVersion === metadata.examVersion &&
-      acceptance.roomKeyHash === context.roomKeyHash &&
-      acceptance.noticeVersion === notice.version &&
-      acceptance.studentHash === context.studentHash &&
-      acceptance.recordingAccepted === recordingRequired;
-
-    return exactMatch ? acceptance : null;
-  }
-
-  async function acceptanceRecordId(context, metadata, notice) {
-    return 'acceptance:' + await digestText([
+  async function createAttemptBindingId(context, metadata) {
+    return 'attempt-binding:' + await digestText([
       metadata.examId,
       metadata.examVersion,
       context.roomKeyHash,
-      notice.version,
       context.studentHash
     ].join('|'));
   }
 
-  function openPrivacyDialog() {
-    if (!state.metadata || !state.notice) {
-      return;
-    }
-    clearError(elements.privacyError);
-    if (!elements.privacyDialog.open) {
-      elements.privacyDialog.showModal();
-      document.body.classList.add('dialog-open');
-    }
-  }
-
-  function closePrivacyDialog() {
-    if (elements.privacyDialog.open) {
-      elements.privacyDialog.close();
-    }
-    document.body.classList.remove('dialog-open');
-  }
-
   function unlockEntryDetails() {
-    closePrivacyDialog();
     elements.examPreview.hidden = true;
     setEntryFieldsDisabled(false);
     elements.roomKey.focus();
   }
 
-  async function handleAgreeAndBegin() {
-    clearError(elements.privacyError);
-    if (!state.entry || !state.context || !state.metadata || !state.notice) {
-      showError(elements.privacyError, { code: 'PREVIEW_REQUIRED' });
+  async function handleBeginExam() {
+    clearError(elements.entryError);
+    if (!state.entry || !state.context || !state.metadata || !state.attemptBindingId) {
+      showError(elements.entryError, { code: 'PREVIEW_REQUIRED' });
       return;
     }
 
-    var recordingRequired = state.metadata.integrityTier === 'recorded_proctoring' || state.metadata.cameraRequired === true || state.metadata.microphoneRequired === true;
-    if (recordingRequired) {
-      showError(elements.privacyError, {
-        title: 'Recorded proctoring is unavailable',
-        message: 'Encrypted camera and microphone capture storage is not configured for this examination.',
-        effect: 'Questions remain sealed. Ask your Professor or administrator to change the examination mode.'
-      });
-      return;
-    }
-
-    setButtonBusy(elements.agreeButton, true, 'Opening examination');
+    setButtonBusy(elements.beginButton, true, 'Opening examination');
 
     try {
-      if (!state.acceptance) {
-        var acceptance = {
-          id: await acceptanceRecordId(state.context, state.metadata, state.notice),
-          examId: state.metadata.examId,
-          examVersion: state.metadata.examVersion,
-          roomKeyHash: state.context.roomKeyHash,
-          noticeVersion: state.notice.version,
-          studentHash: state.context.studentHash,
-          acceptedAt: new Date().toISOString(),
-          recordingAccepted: recordingRequired,
-          appVersion: APP_VERSION
-        };
-        await databasePut('acceptances', acceptance);
-        state.acceptance = acceptance;
-      }
-
       var resumed = await restoreMatchingAttempt();
-      if (resumed) {
-        closePrivacyDialog();
-        return;
-      }
+      if (resumed) return;
 
       if (!navigator.onLine) {
         throw createAppError('OFFLINE_NEW_ATTEMPT');
@@ -516,12 +420,7 @@
           subject: state.entry.subject,
           yearLevel: state.entry.yearLevel
         },
-        acceptance: {
-          acceptanceId: state.acceptance.id,
-          noticeVersion: state.acceptance.noticeVersion,
-          acceptedAt: state.acceptance.acceptedAt,
-          recordingAccepted: state.acceptance.recordingAccepted === true
-        },
+        attemptBindingId: state.attemptBindingId,
         client: {
           appVersion: APP_VERSION,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
@@ -542,8 +441,7 @@
         examId: state.metadata.examId,
         examVersion: state.metadata.examVersion,
         entryHash: state.context.entryHash,
-        acceptanceId: state.acceptance.id,
-        noticeVersion: state.notice.version,
+        attemptBindingId: state.attemptBindingId,
         sessionToken: beginResult.sessionToken,
         student: {
           fullName: state.entry.fullName,
@@ -581,17 +479,16 @@
         examId: state.attempt.examId,
         examVersion: state.attempt.examVersion,
         entryHash: state.attempt.entryHash,
-        noticeVersion: state.attempt.noticeVersion,
+        attemptBindingId: state.attempt.attemptBindingId,
         updatedAt: state.attempt.updatedAt
       });
 
-      closePrivacyDialog();
       enterExamWorkspace();
       await logIntegrityEvent('attempt_started', { appVersion: APP_VERSION });
     } catch (error) {
-      showError(elements.privacyError, error, handleAgreeAndBegin);
+      showError(elements.entryError, error, handleBeginExam);
     } finally {
-      setButtonBusy(elements.agreeButton, false);
+      setButtonBusy(elements.beginButton, false);
     }
   }
 
@@ -646,7 +543,10 @@
 
   async function restoreMatchingAttempt() {
     var pointer = await databaseGet('cache', activeAttemptPointerId());
-    if (!pointer || pointer.entryHash !== state.context.entryHash || pointer.noticeVersion !== state.notice.version) {
+    if (!pointer || pointer.entryHash !== state.context.entryHash) {
+      return false;
+    }
+    if (pointer.attemptBindingId && pointer.attemptBindingId !== state.attemptBindingId) {
       return false;
     }
 
@@ -658,13 +558,13 @@
     var exactMatch = attempt.examId === state.metadata.examId &&
       attempt.examVersion === state.metadata.examVersion &&
       attempt.entryHash === state.context.entryHash &&
-      attempt.noticeVersion === state.notice.version &&
-      attempt.acceptanceId === state.acceptance.id;
+      (!attempt.attemptBindingId || attempt.attemptBindingId === state.attemptBindingId);
     if (!exactMatch) {
       return false;
     }
 
     state.attempt = attempt;
+    state.attempt.attemptBindingId = state.attemptBindingId;
     state.questions = Array.isArray(attempt.questions) ? attempt.questions : [];
     state.answers = attempt.answers || {};
     state.flags = attempt.flags || {};
@@ -672,6 +572,7 @@
     state.metadata = attempt.metadata || state.metadata;
 
     if (attempt.status === 'submitted') {
+      resumeMediaUploads();
       var receipt = await databaseGet('receipts', attempt.attemptId);
       if (receipt) {
         renderReceipt(receipt);
@@ -693,6 +594,7 @@
     }
 
     if (attempt.status === 'pending_submit') {
+      resumeMediaUploads();
       renderPendingSubmission();
       retryPendingSubmission();
       return true;
@@ -728,6 +630,76 @@
     startTimer();
     window.scrollTo({ top: 0, behavior: 'auto' });
     scheduleQueueSync(100);
+    startMediaCapture();
+  }
+
+  function startMediaCapture() {
+    if (!state.media || !state.attempt || state.mediaAttemptId === state.attempt.attemptId) return;
+    var metadata = state.attempt.metadata || {};
+    var cameraRequired = metadata.cameraRequired === true;
+    var microphoneRequired = metadata.microphoneRequired === true;
+    if (!cameraRequired && !microphoneRequired) {
+      elements.mediaStatus.hidden = true;
+      return;
+    }
+    state.mediaAttemptId = state.attempt.attemptId;
+    state.media.start({
+      attemptId: state.attempt.attemptId,
+      sessionToken: state.attempt.sessionToken,
+      examId: state.attempt.examId,
+      startedAt: state.attempt.startedAt,
+      cameraRequired: cameraRequired,
+      microphoneRequired: microphoneRequired
+    }).catch(function (error) {
+      handleMediaStatus({
+        state: 'unavailable',
+        message: 'Recording could not start. Your examination remains open and answers continue saving.',
+        error: error
+      });
+    });
+  }
+
+  function resumeMediaUploads() {
+    if (!state.media || typeof state.media.resume !== 'function' || !state.attempt) return;
+    var metadata = state.attempt.metadata || {};
+    var cameraRequired = metadata.cameraRequired === true;
+    var microphoneRequired = metadata.microphoneRequired === true;
+    if (!cameraRequired && !microphoneRequired) return;
+    state.mediaAttemptId = state.attempt.attemptId;
+    state.media.resume({
+      attemptId: state.attempt.attemptId,
+      sessionToken: state.attempt.sessionToken,
+      examId: state.attempt.examId,
+      startedAt: state.attempt.startedAt,
+      cameraRequired: cameraRequired,
+      microphoneRequired: microphoneRequired
+    }).catch(function (error) {
+      handleMediaStatus({
+        state: 'queued',
+        message: 'Encrypted recording backup will retry separately. Your submission remains complete.',
+        error: error
+      });
+    });
+  }
+
+  function handleMediaStatus(update) {
+    if (!elements.mediaStatus || !update) return;
+    var stateName = String(update.state || 'queued');
+    var icons = {
+      requesting: 'ph-spinner-gap',
+      active: 'ph-record',
+      queued: 'ph-cloud-arrow-up',
+      finishing: 'ph-hourglass-medium',
+      permission_denied: 'ph-video-camera-slash',
+      unavailable: 'ph-video-camera-slash',
+      storage_full: 'ph-hard-drives'
+    };
+    elements.mediaStatus.hidden = stateName === 'disabled';
+    elements.mediaStatus.dataset.state = stateName;
+    var icon = elements.mediaStatus.querySelector('i');
+    var label = elements.mediaStatus.querySelector('span');
+    if (icon) icon.className = 'ph ' + (icons[stateName] || 'ph-video-camera');
+    if (label) label.textContent = update.message || 'Recording status updated.';
   }
 
   function setView(view) {
@@ -1232,6 +1204,7 @@
         elements.submitDialog.close();
       }
       stopTimer();
+      if (state.media) state.media.stop().catch(function () {});
       renderPendingSubmission();
     } catch (error) {
       state.attempt.status = 'in_progress';
@@ -1288,8 +1261,6 @@
         idempotencyKey: state.attempt.idempotencyKey,
         examId: state.attempt.examId,
         examVersion: state.attempt.examVersion,
-        acceptanceId: state.attempt.acceptanceId,
-        noticeVersion: state.attempt.noticeVersion,
         clientCompletedAt: state.attempt.clientCompletedAt,
         automaticSubmission: Boolean(state.attempt.automaticSubmission),
         answers: state.questions.map(function (question) {
@@ -1653,17 +1624,27 @@
       OFFLINE_NEW_ATTEMPT: {
         title: 'Connect before starting a new attempt',
         message: 'A new examination must be opened while connected. Saved examinations can still be resumed offline.',
-        effect: 'Your privacy-warning acknowledgement is saved for this exact examination and room key.'
+        effect: 'Your verified entry details are saved for this exact examination and room key.'
       },
       OFFLINE_EXAM_NOT_SAVED: {
         title: 'The questions are not saved on this device',
         message: 'Reconnect so the examination can be restored safely.',
-        effect: 'Your identity check and privacy agreement remain saved.'
+        effect: 'Your identity check and verified entry details remain saved.'
       },
       INVALID_ROOM_KEY: {
         title: 'That room key was not accepted',
         message: 'Check every letter and number, then try again.',
         effect: 'No examination attempt has started.'
+      },
+      ROOM_KEY_INVALID: {
+        title: 'That room key is not active yet',
+        message: 'Check every letter and number. If it is correct, ask the examination creator whether Admin has issued and opened the key.',
+        effect: 'No examination attempt has started. You can safely try the same details again.'
+      },
+      SUBJECT_MISMATCH: {
+        title: 'The subject does not match this room',
+        message: 'Enter the subject exactly as the examination creator announced it, then preview again.',
+        effect: 'No examination attempt has started and none of your details were submitted as answers.'
       },
       IDENTITY_MISMATCH: {
         title: 'These details do not match the room',
@@ -1700,6 +1681,21 @@
         message: 'The room may be early, finished, or awaiting the administrator’s start signal.',
         effect: 'No examination attempt has started.'
       },
+      ROOM_NOT_OPEN: {
+        title: 'The key is valid, but the room is not open yet',
+        message: 'Keep this page open and try again after the examination creator announces that the room is open.',
+        effect: 'No examination attempt has started and your entry details remain available here.'
+      },
+      EXAMINATION_ARCHIVED: {
+        title: 'This examination is archived',
+        message: 'Ask the examination creator or Admin to restore the room or provide the current key.',
+        effect: 'No examination attempt has started.'
+      },
+      EXAMINATION_BLOCKED: {
+        title: 'Admin temporarily blocked this examination',
+        message: 'Wait for Admin to reopen admission, then enter the same key again.',
+        effect: 'No examination attempt has started and your saved details remain unchanged.'
+      },
       SESSION_EXPIRED: {
         title: 'Your secure session needs attention',
         message: 'The examination service can no longer confirm this session automatically.',
@@ -1729,18 +1725,13 @@
       },
       PREVIEW_REQUIRED: {
         title: 'Preview the examination first',
-        message: 'Confirm the room and review its short privacy warning before questions can load.',
+        message: 'Confirm the room and student details before questions can load.',
         effect: 'No examination attempt has started.'
-      },
-      NOTICE_CHANGED: {
-        title: 'The privacy warning has changed',
-        message: 'Review the current warning before entering the examination.',
-        effect: 'Questions have not loaded.'
       },
       ATTEMPT_INVALID: {
         title: 'The attempt could not be opened safely',
         message: 'The examination did not return a complete start confirmation.',
-        effect: 'Questions have not loaded. Your privacy agreement remains saved.'
+        effect: 'Questions have not loaded. Your room and student details remain saved.'
       },
       QUESTIONS_UNAVAILABLE: {
         title: 'The questions could not be loaded',
@@ -1789,10 +1780,15 @@
       }
     };
     var result = map[code] || map.UNEXPECTED;
+    var hasSafeApiError = code !== 'UNEXPECTED' && error && typeof error.message === 'string';
     return {
       title: error && error.title ? error.title : result.title,
-      message: error && error.userMessage ? error.userMessage : result.message,
-      effect: error && error.workEffect ? error.workEffect : result.effect,
+      message: error && error.userMessage
+        ? error.userMessage
+        : hasSafeApiError ? error.message : result.message,
+      effect: error && error.workEffect
+        ? error.workEffect
+        : hasSafeApiError && typeof error.recovery === 'string' ? error.recovery : result.effect,
       retryable: error && error.retryable === false ? false : result.retryable
     };
   }
@@ -1871,10 +1867,7 @@
   }
 
   function formatAvailability(metadata) {
-    if (metadata.opensAt && metadata.closesAt) {
-      return formatDateTime(metadata.opensAt) + ' to ' + formatDateTime(metadata.closesAt);
-    }
-    return metadata.availabilityLabel || 'Controlled by the examination administrator';
+    return 'Available while this student key remains active';
   }
 
   function formatDateTime(value) {
@@ -1992,9 +1985,6 @@
       request.onblocked = function () { reject(createAppError('STORAGE_UNAVAILABLE')); };
       request.onupgradeneeded = function () {
         var db = request.result;
-        if (!db.objectStoreNames.contains('acceptances')) {
-          db.createObjectStore('acceptances', { keyPath: 'id' });
-        }
         if (!db.objectStoreNames.contains('cache')) {
           db.createObjectStore('cache', { keyPath: 'id' });
         }
@@ -2085,8 +2075,6 @@
   }
 
   function createDemoAdapter() {
-    var demoNoticeVersion = '2026-08-26.demo.1';
-
     function requireOnline() {
       if (!navigator.onLine) {
         throw createAppError(
@@ -2125,7 +2113,6 @@
           admissionMode: 'key_only',
           opensAt: new Date(now - 15 * 60 * 1000).toISOString(),
           closesAt: new Date(now + 3 * 60 * 60 * 1000).toISOString(),
-          noticeVersion: demoNoticeVersion,
           safeguards: [
             'Answers are saved locally and synchronized when connected.',
             'Window focus and fullscreen changes are recorded for review.',
@@ -2134,33 +2121,15 @@
         };
       },
 
-      getPrivacyNotice: async function (request) {
-        requireOnline();
-        await pause();
-        if (request.examId !== 'demo-remedial-law-midterm-2026' || request.noticeVersion !== demoNoticeVersion) {
-          throw createAppError('NOTICE_CHANGED');
-        }
-        return {
-          version: demoNoticeVersion,
-          title: 'Privacy and examination integrity notice',
-          intro: 'Before questions load, understand what this demonstration stores and records during your attempt.',
-          items: [
-            'Your name, student number, subject, and year level are used to match this attempt to the room.',
-            'Your answers and flags are saved in this browser so a connection loss does not clear your work.',
-            'Window focus, page visibility, connection, and fullscreen changes are logged with timestamps.',
-            'No camera, microphone, biometric identity check, or screen recording is used in this demonstration.',
-            'Your professor must review any integrity event in context; an event is not itself a finding of misconduct.'
-          ],
-          retention: '',
-          contact: 'For a real examination, contact the professor or examination administrator before beginning if you need an accommodation or do not understand the notice.'
-        };
-      },
-
       beginAttempt: async function (request) {
         requireOnline();
         await pause();
-        if (request.examId !== 'demo-remedial-law-midterm-2026' || request.acceptance.noticeVersion !== demoNoticeVersion) {
-          throw createAppError('NOTICE_CHANGED');
+        if (
+          request.examId !== 'demo-remedial-law-midterm-2026' ||
+          request.examVersion !== '1.0-demo' ||
+          normaliseRoomKey(request.roomKey) !== 'DEMO-ROOM'
+        ) {
+          throw createAppError('ATTEMPT_INVALID');
         }
         var now = new Date();
         return {

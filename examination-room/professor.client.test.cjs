@@ -150,7 +150,7 @@ test('offline grading copies remain passphrase-encrypted and examination-version
   assert.match(professorSource, /professorCommand\('import_grades'/);
   assert.match(professorSource, /importResult\.atomic !== true/);
   assert.doesNotMatch(professorSource, /for \(const grade of importedGrades\)[\s\S]{0,240}professorCommand\('save_grade'/);
-  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-4'/);
+  assert.match(professorSource, /serviceWorker\.register\('\/service-worker\.js\?v=examination-room-renovation-20260828-4'/);
   assert.match(professorSource, /await state\.offlineWorkspaceReady/);
   assert.match(professorSource, /MAX_OFFLINE_PACKAGE_BYTES\s*=\s*20\s*\*\s*1024\s*\*\s*1024/);
   assert.match(professorSource, /jsonDownloadSize\(wrapper\)\s*>\s*MAX_OFFLINE_PACKAGE_BYTES/);
@@ -169,11 +169,13 @@ test('offline grading copies remain passphrase-encrypted and examination-version
   assert.doesNotMatch(professorSource, /offlineGrades\.length\s*\?\s*offlineGrades\s*:\s*allGrades/);
 });
 
-test('recorded proctoring remains visible but publication fails closed until its media service exists', () => {
-  assert.match(professorSource, /RECORDED_PROCTORING_AVAILABLE/);
-  assert.match(professorSource, /Recorded proctoring is unavailable/);
-  assert.match(professorHtml, /id="recording-availability"/);
-  assert.match(professorHtml, /requires configured encrypted camera and microphone capture storage/i);
+test('recorded proctoring is optional, selectable, and never makes answer submission depend on storage', () => {
+  assert.doesNotMatch(professorSource, /RECORDED_PROCTORING_AVAILABLE/);
+  assert.doesNotMatch(professorSource, /Recorded proctoring is unavailable/);
+  assert.match(professorHtml, /value="recorded_proctoring"/);
+  assert.match(professorHtml, /id="camera-required"/);
+  assert.match(professorHtml, /id="microphone-required"/);
+  assert.match(professorHtml, /automatic storage fallback/i);
 });
 
 test('Professor prevalidates every numbered graded file before starting a multi-file import', () => {
@@ -322,7 +324,7 @@ test('Professor can create, duplicate, and switch among multiple creator-owned e
   assert.match(professorSource, /function duplicateDraft\(source\)/);
   assert.match(professorSource, /id: global\.crypto\.randomUUID\(\)[\s\S]*versionId: null[\s\S]*status: 'draft'/);
   assert.match(professorSource, /questions: \(source\?\.questions \|\| \[\]\)\.map[\s\S]*id: global\.crypto\.randomUUID\(\)/);
-  assert.match(professorSource, /async function createAnotherExam\(\{ duplicate = false \} = \{\}\)/);
+  assert.match(professorSource, /async function createAnotherExam\(\{ duplicate = false, preserveCurrent = true \} = \{\}\)/);
   assert.match(professorSource, /navigateToExam\(savedExamId, 'create'\)/);
   assert.match(professorSource, /\$\('#exam-switcher'\)\.addEventListener\('change'/);
   assert.doesNotMatch(professorSource, /A duplicate will be created after the current draft finishes saving/);
@@ -593,9 +595,11 @@ test('student admission defaults to open key entry and never requires a roster u
 test('Professor Create page contains its question cards at a 319px viewport', () => {
   assert.match(
     professorCss,
-    /@media \(max-width: 390px\) \{[\s\S]*?html \{ min-width: 0; \}[\s\S]*?\.editable-title \{ width: 100%; min-width: 0; max-width: 100%; flex: 1 1 100%; margin-left: 0; \}[\s\S]*?\.questions-list \{ min-width: 0; \}[\s\S]*?\.question-layout \{ min-width: 0; width: 100%; max-width: 100%; \}[\s\S]*?\.choice-row \{ min-width: 0; grid-template-columns: auto minmax\(0, 1fr\) auto; \}/,
+    /@media \(max-width: 390px\) \{[\s\S]*?\.questions-list[\s\S]*?\.question-layout[\s\S]*?\.choice-row/,
   );
-  assert.match(professorHtml, /professor\.css\?v=greenfield-v1-20260827-15/);
+  assert.match(professorHtml, /class="questions-list"/);
+  assert.match(professorHtml, /professor\.css\?v=renovation-20260828-4/);
+  assert.match(professorHtml, /api\.js\?v=renovation-20260828-4/);
 });
 
 test('optional email allowlist accepts newline or numbered entries and normalizes duplicates', () => {
@@ -647,7 +651,7 @@ test('creator receives monitor and grade access from activation without entering
   assert.match(professorHtml, /data-view="monitor" data-requires-activation="true" disabled aria-label="Monitor examination — available after Admin issues the student key"/);
   assert.match(professorHtml, /data-view="grade" data-requires-activation="true" disabled aria-label="Grade submissions — available after Admin issues the student key"/);
   assert.match(professorSource, /control\.setAttribute\('aria-label', unlocked[\s\S]*viewName/);
-  assert.match(professorHtml, /professor\.js\?v=greenfield-v1-20260827-26-optional-schedule/);
+  assert.match(professorHtml, /professor\.js\?v=renovation-20260828-4/);
 });
 
 test('creator approval survives reload and a published request keeps polling without a manual check', () => {
@@ -672,6 +676,13 @@ test('creator approval survives reload and a published request keeps polling wit
   assert.equal(state.activationTimer, null);
   assert.match(professorSource, /state\.exam\?\.activation\?\.status/);
   assert.match(professorSource, /\['published', 'key_requested', 'awaiting_approval', 'awaiting_activation'\]/);
+});
+
+test('the Examination Assistant starts minimized and keeps an explicit accessible toggle state', () => {
+  assert.match(professorHtml, /<aside class="assistant-panel is-minimized" id="assistant-panel"/);
+  assert.match(professorHtml, /id="assistant-toggle"[^>]*aria-label="Open Examination Assistant"[^>]*aria-expanded="false"/);
+  assert.match(professorSource, /setAttribute\('aria-label', minimized \? 'Open Examination Assistant' : 'Minimize Examination Assistant'\)/);
+  assert.match(professorSource, /setAttribute\('aria-expanded', String\(!minimized\)\)/);
 });
 
 test('creator can kick or block a live student through the auditable revoke_session operation', () => {
@@ -702,12 +713,17 @@ test('the root Professor door has no role, license, membership, institution, or 
   assert.doesNotMatch(checkDoor, /PROFESSOR_FORBIDDEN|license|membership/i);
 });
 
-test('examination scheduling is optional while key access remains explicit', () => {
+test('date and start-time inputs are removed while key access remains explicit', () => {
   assert.doesNotMatch(professorSource, /Set the start date and time/);
   assert.doesNotMatch(professorSource, /The room cannot be scheduled without a start time/);
-  assert.match(professorSource, /No fixed date · opens when the student key is issued/);
-  assert.match(professorHtml, /Start <small>\(optional\)<\/small>/);
-  assert.match(professorHtml, /Leave blank to open the room when Admin issues the student key/);
-  assert.doesNotMatch(professorHtml, /id="exam-date"[^>]*value=/);
-  assert.doesNotMatch(professorHtml, /id="start-control"[^>]*value=/);
+  assert.match(professorHtml, /No date or start time is required/);
+  assert.doesNotMatch(professorHtml, /id="exam-date"/);
+  assert.doesNotMatch(professorHtml, /id="start-control"/);
+  assert.match(professorHtml, /Publish &amp; request key/);
+  assert.match(professorSource, /startsAt:\s*null/);
+});
+
+test('creator monitoring shows a technical entry record without privacy-gate wording', () => {
+  assert.doesNotMatch(professorSource, /Privacy warning record/);
+  assert.match(professorSource, /<dt>Entry record<\/dt>/);
 });

@@ -103,20 +103,19 @@ for (let examIndex = 1; examIndex <= EXAM_COUNT; examIndex += 1) {
       subject: exam.subject,
       yearLevel: exam.yearLevel,
     };
-    const preview = await api.studentPreview({ roomKey: approved.roomKey, identity });
-    const consent = await api.studentConsent({
+    await api.studentPreview({ roomKey: approved.roomKey, identity });
+    const started = await api.studentBegin({
       roomKey: approved.roomKey,
       identity,
-      noticeVersion: preview.metadata.noticeVersion,
-      agreed: true,
-    }, `stress-consent-${examIndex}-${studentIndex}`);
-    sessionIds.push(consent.session.id);
+      attemptBindingId: `attempt-binding:${examIndex.toString(16).padStart(32, '0')}${studentIndex.toString(16).padStart(32, '0')}`,
+    }, `stress-begin-${examIndex}-${studentIndex}`);
+    sessionIds.push(started.session.id);
     studentAdmissions += 1;
 
     for (const question of exam.questions) {
       await api.studentCommand('save_answer', {
-        sessionId: consent.session.id,
-        sessionToken: consent.session.id,
+        sessionId: started.session.id,
+        sessionToken: started.session.id,
         questionId: question.id,
         answer: question.type === 'multiple_choice'
           ? 'option-2'
@@ -127,15 +126,15 @@ for (let examIndex = 1; examIndex <= EXAM_COUNT; examIndex += 1) {
     }
 
     await api.studentCommand('submit', {
-      sessionId: consent.session.id,
-      sessionToken: consent.session.id,
+      sessionId: started.session.id,
+      sessionToken: started.session.id,
     }, `stress-submit-${examIndex}-${studentIndex}`);
     submissions += 1;
 
     for (const question of exam.questions) {
       await api.professorCommand('save_grade', {
         examId,
-        sessionId: consent.session.id,
+        sessionId: started.session.id,
         questionId: question.id,
         points: question.points,
         feedback: `Verified stress grade for ${question.id}.`,

@@ -34,6 +34,26 @@ const releases = Object.freeze([
     file: '20260827030000_examination_room_supabase_storage_recovery.sql',
     name: 'examination_room_supabase_storage_recovery',
   },
+  {
+    version: '20260827190036',
+    file: '20260827190036_examination_room_key_delivery_nullable_creator.sql',
+    name: 'examination_room_key_delivery_nullable_creator',
+  },
+  {
+    version: '20260827193000',
+    file: '20260827193000_examination_room_lifecycle_controls.sql',
+    name: 'examination_room_lifecycle_controls',
+  },
+  {
+    version: '20260828123000',
+    file: '20260828123000_examination_room_recorded_media.sql',
+    name: 'examination_room_recorded_media',
+  },
+  {
+    version: '20260828124000',
+    file: '20260828124000_examination_room_immediate_key_access.sql',
+    name: 'examination_room_immediate_key_access',
+  },
 ]);
 
 const normalizeSource = (source) => source.replace(/\r\n?/gu, '\n');
@@ -101,7 +121,7 @@ const expectedLedgerValues = loadedReleases
   .join(',\n');
 
 const bundle = `-- DueDiligence.ph Examination Room production release.
--- Generated from exactly four reviewed Examination Room migrations.
+-- Generated from exactly eight reviewed Examination Room additive migrations.
 -- Pure PostgreSQL only: no psql meta-commands and no unrelated migrations.
 -- The transaction refuses an incomplete baseline, an existing target ledger row,
 -- or any partially applied target structure. Any failure rolls back the release.
@@ -123,6 +143,10 @@ declare
   open_admission_any boolean := false;
   result_email_any boolean := false;
   storage_recovery_any boolean := false;
+  key_reliability_any boolean := false;
+  lifecycle_controls_any boolean := false;
+  recorded_media_any boolean := false;
+  immediate_key_access_any boolean := false;
 begin
   select migration.*
   into baseline_record
@@ -269,7 +293,96 @@ begin
   )
   into storage_recovery_any;
 
-  if owner_any or open_admission_any or result_email_any or storage_recovery_any then
+  key_reliability_any := coalesce(
+    exists (
+      select 1
+      from pg_catalog.pg_attribute attribute
+      where attribute.attrelid = to_regclass('examination_room_v1.email_delivery_events')
+        and attribute.attname = 'professor_recipient'
+        and not attribute.attisdropped
+        and not attribute.attnotnull
+    )
+    or exists (
+      select 1
+      from pg_catalog.pg_constraint constraint_record
+      where constraint_record.conrelid = to_regclass('examination_room_v1.email_delivery_events')
+        and constraint_record.conname = 'email_delivery_events_professor_recipient_check'
+        and position(
+          'professor_recipient is null'
+          in lower(pg_get_constraintdef(constraint_record.oid))
+        ) > 0
+    )
+    or (
+      to_regprocedure('examination_room_v1.api_admin(text,uuid,uuid,jsonb)') is not null
+      and position(
+        'professor_contact_required'
+        in lower(pg_get_functiondef(to_regprocedure('examination_room_v1.api_admin(text,uuid,uuid,jsonb)')))
+      ) = 0
+    )
+    or position(
+      'the prior room-key request is already bound to a different key.'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.api_admin(text,uuid,uuid,jsonb)')
+      ), ''))
+    ) > 0
+    or position(
+      'persisted.professor_recipient is not distinct from excluded.professor_recipient'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('public.examination_room_v1_owner_command(text,uuid,uuid,uuid,jsonb)')
+      ), ''))
+    ) > 0,
+    false
+  );
+
+  lifecycle_controls_any := coalesce(
+    exists (
+      select 1
+      from pg_catalog.pg_attribute attribute
+      where attribute.attrelid = to_regclass('examination_room_v1.exams')
+        and attribute.attname in (
+          'blocked_at', 'blocked_by_user_id', 'block_reason',
+          'deleted_at', 'deleted_by_user_id', 'delete_reason',
+          'lifecycle_prior_status'
+        )
+        and not attribute.attisdropped
+    )
+    or to_regprocedure('public.examination_room_v1_lifecycle_query(uuid,uuid,uuid)') is not null
+    or to_regprocedure('public.examination_room_v1_lifecycle_guard(uuid)') is not null
+    or to_regprocedure('public.examination_room_v1_lifecycle_command(text,uuid,uuid,uuid,jsonb)') is not null,
+    false
+  );
+
+  recorded_media_any := coalesce(
+    exists (select 1 from storage.buckets where id = 'examination-room-media')
+    or to_regclass('examination_room_v1.media_upload_intents') is not null
+    or to_regprocedure('public.examination_room_v1_media(text,jsonb)') is not null,
+    false
+  );
+
+  immediate_key_access_any := coalesce(
+    position(
+      'activation_expires_at'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.api_admin(text,uuid,uuid,jsonb)')
+      ), ''))
+    ) > 0
+    or position(
+      'public.examination_room_v1_lifecycle_guard(activation_row.exam_id)'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.prepare_student_admission(jsonb)')
+      ), ''))
+    ) > 0,
+    false
+  );
+
+  if owner_any
+     or open_admission_any
+     or result_email_any
+     or storage_recovery_any
+     or key_reliability_any
+     or lifecycle_controls_any
+     or recorded_media_any
+     or immediate_key_access_any then
     raise exception using
       errcode = '55000',
       message = 'Partial or unrecorded Examination Room target state detected; refusing unsafe reapply';
@@ -290,6 +403,10 @@ declare
   open_admission_complete boolean := false;
   result_email_complete boolean := false;
   storage_recovery_complete boolean := false;
+  key_reliability_complete boolean := false;
+  lifecycle_controls_complete boolean := false;
+  recorded_media_complete boolean := false;
+  immediate_key_access_complete boolean := false;
 begin
   with expected(version, name, checksum) as (
     values
@@ -447,10 +564,209 @@ ${expectedLedgerValues}
   )
   into storage_recovery_complete;
 
+  key_reliability_complete := coalesce(
+    exists (
+      select 1
+      from pg_catalog.pg_attribute attribute
+      where attribute.attrelid = to_regclass('examination_room_v1.email_delivery_events')
+        and attribute.attname = 'professor_recipient'
+        and not attribute.attisdropped
+        and not attribute.attnotnull
+    )
+    and exists (
+      select 1
+      from pg_catalog.pg_constraint constraint_record
+      where constraint_record.conrelid = to_regclass('examination_room_v1.email_delivery_events')
+        and constraint_record.conname = 'email_delivery_events_professor_recipient_check'
+        and constraint_record.convalidated
+        and position(
+          'professor_recipient is null'
+          in lower(pg_get_constraintdef(constraint_record.oid))
+        ) > 0
+    )
+    and position(
+      'professor_contact_required'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.api_admin(text,uuid,uuid,jsonb)')
+      ), ''))
+    ) = 0
+    and position(
+      'the prior room-key request is already bound to a different key.'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.api_admin(text,uuid,uuid,jsonb)')
+      ), ''))
+    ) > 0
+    and position(
+      'set key_hash = p_payload ->> ''roomkeyhash'''
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.api_admin(text,uuid,uuid,jsonb)')
+      ), ''))
+    ) = 0
+    and position(
+      'persisted.professor_recipient is not distinct from excluded.professor_recipient'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('public.examination_room_v1_owner_command(text,uuid,uuid,uuid,jsonb)')
+      ), ''))
+    ) > 0,
+    false
+  );
+
+  lifecycle_controls_complete := coalesce(
+    7 = (
+      select count(*)
+      from pg_catalog.pg_attribute attribute
+      where attribute.attrelid = to_regclass('examination_room_v1.exams')
+        and attribute.attname in (
+          'blocked_at', 'blocked_by_user_id', 'block_reason',
+          'deleted_at', 'deleted_by_user_id', 'delete_reason',
+          'lifecycle_prior_status'
+        )
+        and not attribute.attisdropped
+    )
+    and 3 = (
+      select count(*)
+      from pg_catalog.pg_constraint constraint_record
+      where constraint_record.conrelid = to_regclass('examination_room_v1.exams')
+        and constraint_record.conname in (
+          'exams_block_state_check',
+          'exams_delete_state_check',
+          'exams_lifecycle_prior_status_check'
+        )
+        and constraint_record.convalidated
+    )
+    and to_regclass('examination_room_v1.exams_owner_active_lifecycle_idx') is not null
+    and to_regclass('examination_room_v1.exams_admin_lifecycle_idx') is not null
+    and to_regprocedure('public.examination_room_v1_lifecycle_query(uuid,uuid,uuid)') is not null
+    and to_regprocedure('public.examination_room_v1_lifecycle_guard(uuid)') is not null
+    and to_regprocedure('public.examination_room_v1_lifecycle_command(text,uuid,uuid,uuid,jsonb)') is not null
+    and coalesce(has_function_privilege(
+      'service_role',
+      to_regprocedure('public.examination_room_v1_lifecycle_command(text,uuid,uuid,uuid,jsonb)'),
+      'EXECUTE'
+    ), false)
+    and not coalesce(has_function_privilege(
+      'anon',
+      to_regprocedure('public.examination_room_v1_lifecycle_command(text,uuid,uuid,uuid,jsonb)'),
+      'EXECUTE'
+    ), true)
+    and not coalesce(has_function_privilege(
+      'authenticated',
+      to_regprocedure('public.examination_room_v1_lifecycle_command(text,uuid,uuid,uuid,jsonb)'),
+      'EXECUTE'
+    ), true),
+    false
+  );
+
+  recorded_media_complete := coalesce(
+    exists (
+      select 1
+      from storage.buckets bucket
+      where bucket.id = 'examination-room-media'
+        and bucket.name = 'examination-room-media'
+        and not bucket.public
+        and bucket.file_size_limit = 67108864
+        and coalesce(bucket.allowed_mime_types, array[]::text[])
+          = array['application/octet-stream']::text[]
+    )
+    and to_regclass('examination_room_v1.media_upload_intents') is not null
+    and to_regclass('examination_room_v1.media_upload_intents_session_status_idx') is not null
+    and to_regclass('examination_room_v1.media_upload_intents_pending_idx') is not null
+    and exists (
+      select 1
+      from pg_catalog.pg_class relation
+      where relation.oid = to_regclass('examination_room_v1.media_upload_intents')
+        and relation.relrowsecurity
+        and relation.relforcerowsecurity
+    )
+    and 4 = (
+      select count(*)
+      from pg_catalog.pg_constraint constraint_record
+      where constraint_record.conrelid = to_regclass('examination_room_v1.media_upload_intents')
+        and constraint_record.conname in (
+          'media_upload_intents_session_artifact_key',
+          'media_upload_intents_session_request_key',
+          'media_upload_intents_capture_window_check',
+          'media_upload_intents_status_check'
+        )
+        and constraint_record.convalidated
+    )
+    and 2 = (
+      select count(*)
+      from pg_catalog.pg_trigger trigger_record
+      where trigger_record.tgrelid = to_regclass('examination_room_v1.media_upload_intents')
+        and trigger_record.tgname in (
+          'media_upload_intents_touch_updated_at',
+          'media_upload_intents_no_delete'
+        )
+        and not trigger_record.tgisinternal
+    )
+    and to_regprocedure('public.examination_room_v1_media(text,jsonb)') is not null
+    and coalesce(has_function_privilege(
+      'service_role',
+      to_regprocedure('public.examination_room_v1_media(text,jsonb)'),
+      'EXECUTE'
+    ), false)
+    and not coalesce(has_function_privilege(
+      'anon',
+      to_regprocedure('public.examination_room_v1_media(text,jsonb)'),
+      'EXECUTE'
+    ), true)
+    and not coalesce(has_function_privilege(
+      'authenticated',
+      to_regprocedure('public.examination_room_v1_media(text,jsonb)'),
+      'EXECUTE'
+    ), true),
+    false
+  );
+
+  immediate_key_access_complete := coalesce(
+    position(
+      'activation_expires_at'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.api_admin(text,uuid,uuid,jsonb)')
+      ), ''))
+    ) > 0
+    and position(
+      '''status'', ''open'''
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.api_admin(text,uuid,uuid,jsonb)')
+      ), ''))
+    ) > 0
+    and position(
+      'p_payload ->> ''opensat'''
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.api_admin(text,uuid,uuid,jsonb)')
+      ), ''))
+    ) = 0
+    and position(
+      'public.examination_room_v1_lifecycle_guard(activation_row.exam_id)'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.prepare_student_admission(jsonb)')
+      ), ''))
+    ) > 0
+    and position(
+      'activation_row.activation_status not in (''scheduled'', ''open'')'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.prepare_student_admission(jsonb)')
+      ), ''))
+    ) > 0
+    and position(
+      'public.examination_room_v1_lifecycle_guard(exam_id)'
+      in lower(coalesce(pg_get_functiondef(
+        to_regprocedure('examination_room_v1.api_student(text,jsonb)')
+      ), ''))
+    ) > 0,
+    false
+  );
+
   if not owner_complete
      or not open_admission_complete
      or not result_email_complete
-     or not storage_recovery_complete then
+     or not storage_recovery_complete
+     or not key_reliability_complete
+     or not lifecycle_controls_complete
+     or not recorded_media_complete
+     or not immediate_key_access_complete then
     raise exception using
       errcode = '55000',
       message = 'Examination Room structural postflight failed; transaction will roll back';

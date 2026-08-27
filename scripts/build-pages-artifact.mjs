@@ -97,6 +97,7 @@ const publicFiles = Object.freeze([
   'examination-room/professor.js',
   'examination-room/student.html',
   'examination-room/student.css',
+  'examination-room/media-capture.js',
   'examination-room/student.js',
   'examination-room/offline-grading.html',
   'examination-room/offline-grading.css',

@@ -51,7 +51,7 @@
     business_comparisons: 'Current and previous operating-period comparison.',
     security: 'Administrator actions and sensitive-access history.',
     controls: 'Protected platform controls and feature state.',
-    examination_room_v1: 'Professor publication review, room-key activation, lifecycle operations, and recovery.',
+    examination_room_v1: 'Creator publication review, room-key activation, lifecycle operations, and recovery.',
   });
   const requirements = Object.freeze({
     realtime: 'learner_analytics_viewer',
@@ -3211,10 +3211,11 @@
     if ($('#section-subtitle')) {
       $('#section-subtitle').textContent = sectionSubtitles[section] || 'Protected Due Diligence administration.';
     }
+    const isExaminationRoom = section === 'examination_room_v1';
     const rangeControl = $('#reporting-range');
     const rangeApplies = ['executive', 'realtime', 'recent_users', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
     if (rangeControl) {
-      rangeControl.hidden = false;
+      rangeControl.hidden = isExaminationRoom;
       const rangeLabel = rangeControl.querySelector('.reporting-range-label');
       if (rangeLabel) rangeLabel.textContent = rangeApplies ? 'Date range' : 'Scope';
       const rangeSelect = $('#date-range');
@@ -3235,6 +3236,10 @@
     const view = $('#dashboard-view');
     const exportButton = $('#download-current-section');
     const refreshButton = $('#refresh-dashboard');
+    const systemBanner = $('#system-banner');
+    if (exportButton) exportButton.hidden = isExaminationRoom;
+    if (refreshButton) refreshButton.hidden = isExaminationRoom;
+    if (systemBanner) systemBanner.hidden = isExaminationRoom;
     view.setAttribute('aria-busy', 'true');
     view.innerHTML = `<div class="dashboard-loading" role="status" aria-label="Loading administrator data"><p>Loading ${escapeHtml(title)}…</p><div class="skeleton skeleton-kpis"></div><div class="skeleton skeleton-panels"></div></div>`;
     $('#freshness b').textContent = `Loading ${title}…`;

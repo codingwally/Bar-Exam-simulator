@@ -35,6 +35,8 @@
     confirmationResolve: null,
     offlineWorkspaceReady: Promise.resolve(false),
     revokingSessions: new Set(),
+    assistantHistory: [],
+    assistantInFlight: false,
   };
 
   const DRAFT_STORAGE_KEY = 'duediligence.examination-room.v1.professor-draft';
@@ -47,12 +49,11 @@
     short_answer: 'Short answer',
     multiple_choice: 'Multiple choice',
   });
-  const RECORDED_PROCTORING_AVAILABLE = global.DueDiligencePhase2Config?.features?.examinationRoomRecordedProctoring === true;
 
   function registerExaminationRoomServiceWorker() {
     const serviceWorker = global.navigator?.serviceWorker;
     if (!serviceWorker?.register) return Promise.resolve(false);
-    return serviceWorker.register('/service-worker.js?v=commercial-readiness-profile-analytics-offline-paid-expiry-20260827-4')
+    return serviceWorker.register('/service-worker.js?v=examination-room-renovation-20260828-4')
       .then(() => Promise.race([
         serviceWorker.ready.then(() => true),
         new Promise((resolve) => global.setTimeout(() => resolve(false), 5000)),
@@ -209,12 +210,6 @@
     return new Promise((resolve) => { state.confirmationResolve = resolve; });
   }
 
-  function localDateTimeInput(value) {
-    const date = new Date(value || Date.now());
-    const offset = date.getTimezoneOffset() * 60_000;
-    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-  }
-
   function editorQuestionType(value) {
     const normalized = String(value || 'essay').trim().toLowerCase().replace(/[\s-]+/g, '_');
     return QUESTION_TYPES[normalized] ? normalized : 'essay';
@@ -319,7 +314,7 @@
     const seen = new Set();
     return [...candidates, ...fallback].filter((summary) => {
       const id = examSummaryId(summary);
-      if (!id || seen.has(id)) return false;
+      if (!id || seen.has(id) || summary?.deletedAt || safeText(summary?.status, 40) === 'archived') return false;
       seen.add(id);
       return true;
     });
@@ -385,8 +380,8 @@
     return draft;
   }
 
-  async function createAnotherExam({ duplicate = false } = {}) {
-    await saveDraft({ force: true });
+  async function createAnotherExam({ duplicate = false, preserveCurrent = true } = {}) {
+    if (preserveCurrent) await saveDraft({ force: true });
     const draft = duplicate
       ? duplicateDraft(collectExam())
       : clientOnlyBlankDraft(state.professor?.institutionId);
@@ -407,6 +402,47 @@
     }
     const savedExamId = examSummaryId(result.exam) || draft.id;
     navigateToExam(savedExamId, 'create');
+  }
+
+  async function archiveCurrentExam() {
+    const exam = collectExam();
+    const confirmed = await requestConfirmation({
+      eyebrow: 'Delete examination',
+      title: `Delete “${exam.title || 'Untitled examination'}” from active rooms?`,
+      copy: 'The examination leaves your active list immediately, but its questions, keys, student answers, grades, receipts, and audit history remain preserved in the recoverable archive.',
+      help: 'Admin can restore the examination later. Deleting from active rooms never erases student evidence.',
+      confirmLabel: 'Delete examination',
+      cancelLabel: 'Keep examination',
+    });
+    if (!confirmed) return;
+    await api.professorCommand('archive_exam', { examId: exam.id }, api.requestId());
+    await removeLocalDraft(exam.id);
+    toast('Examination deleted from active rooms. Its complete record remains recoverable in Admin.');
+    await createAnotherExam({ preserveCurrent: false });
+  }
+
+  async function deleteCurrentDraft() {
+    const exam = collectExam();
+    if (safeText(exam.status, 40) !== 'draft') {
+      showError({
+        message: 'Only an unpublished draft can be deleted from the creator workspace.',
+        recovery: 'Use Delete examination for a published room. Admin can restore either record from the command center.',
+      }, null, 'Examination not deleted');
+      return;
+    }
+    const confirmed = await requestConfirmation({
+      eyebrow: 'Delete draft',
+      title: `Delete “${exam.title || 'Untitled examination'}”?`,
+      copy: 'This removes the unpublished draft from your active workspace and this device. Admin retains a recoverable record so an accidental click does not destroy work.',
+      help: 'Download a recovery copy first if you may need this draft again.',
+      confirmLabel: 'Delete draft',
+      cancelLabel: 'Keep draft',
+    });
+    if (!confirmed) return;
+    await api.professorCommand('delete_draft', { examId: exam.id }, api.requestId());
+    await removeLocalDraft(exam.id);
+    toast('Unpublished draft deleted from your workspace. Admin can restore it if needed.');
+    await createAnotherExam({ preserveCurrent: false });
   }
 
   function editorExamFromStored(storedExam, summary = {}, institutionId = '') {
@@ -471,13 +507,6 @@
       roster: Array.isArray(exam.roster) ? exam.roster : [],
       updatedAt: exam.updatedAt || summary.updatedAt || null,
     };
-  }
-
-  function startIsoFromControls() {
-    const value = $('#start-control').value;
-    if (!value) return null;
-    const parsed = new Date(value);
-    return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
   }
 
   function normalizeQuestion(question, index) {
@@ -674,25 +703,26 @@
     $('#command-title').value = exam.title || '';
     $('#command-title').readOnly = true;
     $('#exam-title').value = exam.title || '';
-    $('#exam-date').value = String(exam.startsAt || '').slice(0, 10);
-    $('#duration-inline').value = String(exam.durationMinutes || 120);
     $('#duration-control').value = String(exam.durationMinutes || 120);
     $('#jurisdiction').value = exam.jurisdiction || 'Philippines';
     $('#subject').value = exam.subject || '';
     $('#instructions').value = exam.instructions || '';
     $('#year-level').value = exam.yearLevel || 'Second year';
     $('#course-code').value = exam.courseCode || 'LAW-202';
-    $('#start-control').value = exam.startsAt ? localDateTimeInput(exam.startsAt) : '';
-    $('#late-control').value = exam.lateSubmissions || 'not_allowed';
-    $('#navigation-control').value = exam.navigation || 'free';
+    $('#late-control').value = exam.lateSubmissions === 'professor_review' || exam.lateSubmissions === 'grace_5'
+      ? 'professor_review'
+      : 'not_allowed';
+    $('#navigation-control').value = exam.navigation === 'sequential' || exam.navigation === 'forward_only'
+      ? 'sequential'
+      : 'free';
     $$('input[name="grading-identity"]').forEach((input) => { input.checked = input.value === (exam.gradingIdentity || 'real_names'); });
     state.anonymousGrading = exam.gradingIdentity === 'anonymous_grading' || exam.anonymousGrading === true;
     $('#anonymous-grading-toggle').checked = state.anonymousGrading;
-    $$('input[name="integrity-tier-main"], input[name="integrity-tier-side"]').forEach((input) => { input.checked = input.value === (exam.integrityTier || 'standard'); });
+    $$('input[name="integrity-tier-main"]').forEach((input) => { input.checked = input.value === (exam.integrityTier || 'standard'); });
     $('#camera-required').checked = Boolean(exam.cameraRequired);
     $('#microphone-required').checked = Boolean(exam.microphoneRequired);
     $('#recording-options').hidden = (exam.integrityTier || 'standard') !== 'recorded_proctoring';
-    $('#recording-availability').hidden = RECORDED_PROCTORING_AVAILABLE;
+    $('#recording-availability').hidden = false;
     const admissionMode = exam.admissionMode === 'email_allowlist' ? 'email_allowlist' : 'key_only';
     $$('input[name="admission-mode"]').forEach((input) => { input.checked = input.value === admissionMode; });
     $('#allowed-emails').value = normalizeAllowedEmails(exam.allowedEmails).join('\n');
@@ -767,11 +797,11 @@
       instructions: safeText($('#instructions').value, 10_000),
       courseCode: safeText($('#course-code').value, 40),
       durationMinutes: Number($('#duration-control').value || 120),
-      startsAt: startIsoFromControls(),
-      lateSubmissions: $('#late-control').value,
-      navigation: $('#navigation-control').value,
+      startsAt: null,
+      lateSubmissions: $('#late-control').value === 'professor_review' ? 'professor_review' : 'not_allowed',
+      navigation: $('#navigation-control').value === 'sequential' ? 'sequential' : 'free',
       gradingIdentity: selectedRadio('grading-identity', 'real_names'),
-      integrityTier: selectedRadio('integrity-tier-side', 'standard'),
+      integrityTier: selectedRadio('integrity-tier-main', 'standard'),
       cameraRequired: $('#camera-required').checked,
       microphoneRequired: $('#microphone-required').checked,
       admissionMode,
@@ -981,6 +1011,37 @@
       .sort((left, right) => String(right.savedAt || '').localeCompare(String(left.savedAt || '')));
   }
 
+  async function removeLocalDraft(examId) {
+    const id = safeText(examId, 80);
+    if (!id) return;
+    try {
+      const db = await draftDb();
+      if (db) {
+        await new Promise((resolve, reject) => {
+          const request = db.transaction('drafts', 'readwrite').objectStore('drafts').delete(id);
+          request.onsuccess = resolve;
+          request.onerror = () => reject(request.error);
+        });
+      }
+    } catch {
+      // Continue removing the smaller fallback copies.
+    }
+    try {
+      global.localStorage?.removeItem(`${DRAFT_FALLBACK_PREFIX}${id}`);
+      const active = JSON.parse(global.localStorage?.getItem(DRAFT_ACTIVE_KEY) || 'null');
+      if (active?.examId === id) {
+        global.localStorage?.removeItem(DRAFT_ACTIVE_KEY);
+        global.localStorage?.removeItem(DRAFT_STORAGE_KEY);
+      }
+      const index = JSON.parse(global.localStorage?.getItem(DRAFT_INDEX_KEY) || '[]');
+      if (Array.isArray(index)) {
+        global.localStorage?.setItem(DRAFT_INDEX_KEY, JSON.stringify(index.filter((entry) => entry?.examId !== id)));
+      }
+    } catch {
+      // The server action remains authoritative if browser storage is unavailable.
+    }
+  }
+
   function setSavedStatus(mode, label) {
     const status = $('#saved-status');
     status.classList.toggle('is-saving', mode === 'saving');
@@ -1075,22 +1136,20 @@
       if (!exam.allowedEmails.length) items.push({ section: 'students', label: 'Add at least one allowed email', help: 'Choose “Anyone with the student key” or enter the email addresses that may use this key.', blocking: true });
       if (invalidEmails.length) items.push({ section: 'students', label: 'Correct the email list', help: `${invalidEmails.length} line${invalidEmails.length === 1 ? '' : 's'} cannot be used as an email address.`, blocking: true });
     }
-    const totalPoints = exam.questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
-    if (totalPoints !== 100) items.push({ section: 'questions', label: `Review the ${totalPoints}-point total`, help: 'One hundred points is conventional, but the professor may publish a different total.', blocking: false });
-    if (exam.admissionMode === 'key_only') items.push({ section: 'students', label: 'Open key entry is selected', help: 'Anyone with the student key may identify themselves and enter. No roster upload is required.', blocking: false });
-    if (exam.integrityTier === 'standard') items.push({ section: 'safety', label: 'Confirm Standard integrity mode', help: 'No camera or microphone recording will occur. Focus changes are not treated as misconduct.', blocking: false });
-    if (exam.integrityTier === 'recorded_proctoring' && !RECORDED_PROCTORING_AVAILABLE) items.push({ section: 'safety', label: 'Recorded proctoring is unavailable', help: 'Choose Standard or Focus monitoring. Recorded proctoring requires configured encrypted camera and microphone capture storage.', blocking: true });
-    if (exam.gradingIdentity === 'real_names') items.push({ section: 'students', label: 'Real-name grading is selected', help: 'You may switch to optional anonymous grading without losing access to each student’s real identity.', blocking: false });
-    if (exam.status === 'draft') items.push({ section: 'exam-details', label: 'Confirm administrator key handoff', help: 'Publishing is the final creator step. Admin approves the request and issues the student key.', blocking: false });
+    if (exam.integrityTier === 'recorded_proctoring' && !exam.cameraRequired && !exam.microphoneRequired) items.push({ section: 'safety', label: 'Choose camera, microphone, or both', help: 'Recorded proctoring needs at least one recording device selected.', blocking: true });
     return items;
   }
 
   function updateReviewCount() {
     if (!state.exam) return;
-    const items = reviewItems();
+    const items = reviewItems().filter((item) => item.blocking);
     const button = $('#review-items');
-    $('span', button).textContent = `Review ${items.length} item${items.length === 1 ? '' : 's'}`;
-    button.classList.toggle('has-blockers', items.some((item) => item.blocking));
+    const icon = $('i', button);
+    $('span', button).textContent = items.length
+      ? `Review ${items.length} required item${items.length === 1 ? '' : 's'}`
+      : 'Ready to publish';
+    icon.className = `ph ${items.length ? 'ph-warning-circle' : 'ph-check-circle'}`;
+    button.classList.toggle('has-blockers', items.length > 0);
   }
 
   function updatePublishState() {
@@ -1106,6 +1165,10 @@
       button.textContent = 'Publish & request key';
       button.disabled = false;
     }
+    const deleteAction = $('[data-action="delete-exam"]');
+    const archiveAction = $('[data-action="archive-exam"]');
+    if (deleteAction) deleteAction.hidden = status !== 'draft';
+    if (archiveAction) archiveAction.hidden = status === 'archived';
     syncCreatorAccess();
   }
 
@@ -1247,7 +1310,7 @@
     const totalPoints = exam.questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
     $('#publish-summary').innerHTML = `<div class="publish-grid">
       <div class="publish-item"><small>Examination</small><strong>${escapeHtml(exam.title)}</strong></div>
-      <div class="publish-item"><small>Schedule</small><strong>${escapeHtml(exam.startsAt ? formatDateTime(exam.startsAt) : 'No fixed date · opens when the student key is issued')}</strong></div>
+      <div class="publish-item"><small>Duration</small><strong>${exam.durationMinutes} minutes · no fixed date or start time</strong></div>
       <div class="publish-item"><small>Questions and points</small><strong>${exam.questions.length} questions · ${totalPoints} points</strong></div>
       <div class="publish-item"><small>Student admission</small><strong>${exam.admissionMode === 'email_allowlist' ? `${exam.allowedEmails.length} allowed email address${exam.allowedEmails.length === 1 ? '' : 'es'}` : 'Anyone with the student key'}</strong></div>
       <div class="publish-item"><small>Grading</small><strong>${exam.gradingIdentity === 'real_names' ? 'Real names' : 'Anonymous grading (optional)'}</strong></div>
@@ -1286,7 +1349,7 @@
     $('#preview-sheet').innerHTML = `<article class="preview-document">
       <p class="section-kicker">${escapeHtml(exam.subject || 'Law examination')}</p>
       <h1>${escapeHtml(exam.title || 'Untitled examination')}</h1>
-      <p class="preview-meta">${escapeHtml(exam.startsAt ? formatDateTime(exam.startsAt) : 'No fixed date · opens with the student key')} · ${exam.durationMinutes} minutes · ${escapeHtml(exam.jurisdiction || '')}</p>
+      <p class="preview-meta">${exam.durationMinutes} minutes · opens with the student key · ${escapeHtml(exam.jurisdiction || '')}</p>
       <p>${escapeHtml(exam.instructions || 'No instructions have been added.')}</p>
       ${exam.questions.map((question, index) => `<section class="preview-question"><h3>${index + 1}. ${escapeHtml(question.prompt || 'Question prompt missing')} <small>(${question.points} points)</small></h3>${question.type === 'multiple_choice' ? `<ol type="A">${(question.options || []).map((option) => `<li>${escapeHtml(option)}</li>`).join('')}</ol>` : '<div class="preview-answer-area" aria-label="Student answer area"></div>'}</section>`).join('')}
     </article>`;
@@ -1520,11 +1583,10 @@
     }
   }
 
-  function synchronizeRadioGroup(sourceName, targetName) {
-    const selected = selectedRadio(sourceName, 'standard');
-    $$(`input[name="${targetName}"]`).forEach((input) => { input.checked = input.value === selected; });
+  function syncIntegrityControls() {
+    const selected = selectedRadio('integrity-tier-main', 'standard');
     $('#recording-options').hidden = selected !== 'recorded_proctoring';
-    $('#recording-availability').hidden = RECORDED_PROCTORING_AVAILABLE;
+    $('#recording-availability').hidden = false;
     scheduleAutosave();
   }
 
@@ -1584,10 +1646,10 @@
       ['Needs attention', disconnected + (data.incidents || []).filter((incident) => incident.severity !== 'info').length, 'Human review only'],
     ].map(([label, value, help]) => `<div class="operations-metric"><small>${escapeHtml(label)}</small><strong>${value}</strong><span>${escapeHtml(help)}</span></div>`).join('');
     const status = activationStatus() || 'waiting';
-    $('#room-state-label').textContent = status === 'open' ? 'Monitoring room open' : creatorAccessUnlocked() && status !== 'closed' ? 'Student key issued · room ready' : status === 'closed' ? 'Room closed · grading ready' : 'Waiting for Admin approval';
-    $('.live-indicator').classList.toggle('is-live', status === 'open');
+    $('#room-state-label').textContent = ['open', 'active'].includes(status) ? 'Student key active · monitoring ready' : creatorAccessUnlocked() && status !== 'closed' ? 'Student key issued · monitoring ready' : status === 'closed' ? 'Room closed · grading ready' : 'Waiting for Admin approval';
+    $('.live-indicator').classList.toggle('is-live', ['open', 'active'].includes(status));
     const openButton = $('#open-room');
-    if (status === 'open') {
+    if (['open', 'active'].includes(status)) {
       openButton.textContent = 'Close room';
       openButton.dataset.roomAction = 'close';
       openButton.disabled = false;
@@ -1596,7 +1658,7 @@
       openButton.dataset.roomAction = 'closed';
       openButton.disabled = true;
     } else {
-      openButton.textContent = creatorAccessUnlocked() ? 'Open room' : 'Waiting for student key';
+      openButton.textContent = creatorAccessUnlocked() ? 'Activate legacy key' : 'Waiting for student key';
       openButton.dataset.roomAction = 'open';
       openButton.disabled = !creatorAccessUnlocked();
     }
@@ -1610,7 +1672,7 @@
       const latestIncident = [...(data.incidents || [])].reverse().find((incident) => incident.sessionId === session.id);
       const canRevoke = !isSubmitted && !['revoked', 'blocked'].includes(sessionStatus);
       return `<tr data-monitor-session="${escapeHtml(session.id)}"><td><strong>${escapeHtml(session.fullName)}</strong>${session.email ? `<small>${escapeHtml(session.email)}</small>` : ''}</td><td>${escapeHtml(session.studentNumber)}</td><td><span class="status-label ${sessionStatus}"><i aria-hidden="true"></i>${escapeHtml(sessionStatus.replace('_', ' '))}</span></td><td>${escapeHtml(String(session.currentQuestion || '—'))}</td><td>${escapeHtml(timeAgo(session.lastSeenAt))}</td><td>${latestIncident ? escapeHtml(latestIncident.type.replace(/_/g, ' ')) : 'Clear'}</td><td><div class="session-actions"><button class="table-action" type="button" data-view-student="${escapeHtml(session.id)}">View</button>${canRevoke ? `<button class="table-action warning" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="kick">Kick</button><button class="table-action danger" type="button" data-revoke-session="${escapeHtml(session.id)}" data-revoke-mode="block">Block</button>` : ''}</div></td></tr>`;
-    }).join('') : '<tr><td colspan="7"><div class="empty-feed">No students have entered yet. Share the student key after the room opens; this page updates automatically.</div></td></tr>';
+    }).join('') : '<tr><td colspan="7"><div class="empty-feed">No students have entered yet. Share the active student key; this page updates automatically.</div></td></tr>';
     const incidents = [...(data.incidents || [])].reverse();
     $('#incident-feed').innerHTML = incidents.length ? incidents.map((incident) => {
       const session = sessions.find((entry) => entry.id === incident.sessionId);
@@ -1724,7 +1786,7 @@
       <div><dt>Status</dt><dd>${escapeHtml(submission ? 'Submitted' : session.connected ? 'In progress' : 'Disconnected')}</dd></div>
       <div><dt>Current question</dt><dd>${escapeHtml(String(session.currentQuestion || 'Not available'))}</dd></div>
       <div><dt>Last server backup</dt><dd>${escapeHtml(formatDateTime(session.lastSeenAt))}</dd></div>
-      <div><dt>Privacy warning record</dt><dd>${escapeHtml(session.consentVersion || 'Not available')}</dd></div>
+      <div><dt>Entry record</dt><dd>${session.attemptBindingId || session.consentVersion ? 'Recorded' : 'Not available'}</dd></div>
       <div><dt>Integrity events</dt><dd>${incidents.length}</dd></div>
       ${submission ? `<div><dt>Receipt</dt><dd>${escapeHtml(submission.receiptCode)}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDateTime(submission.submittedAt))}</dd></div>` : ''}
     </dl><p class="legal-note">Events are context for human review. They do not establish misconduct and do not alter the student’s grade automatically.</p>`;
@@ -2216,16 +2278,140 @@
     return importGradingPackages(file ? [file] : []);
   }
 
+  function assistantExamContext() {
+    const exam = collectExam();
+    const activeSection = $('#section-navigation .is-active')?.dataset.scrollTo || 'exam-details';
+    return {
+      examId: safeText(exam.id, 64),
+      status: safeText(exam.status, 80),
+      title: safeText(exam.title, 240),
+      subject: safeText(exam.subject, 180),
+      yearLevel: safeText(exam.yearLevel, 100),
+      instructions: safeText(exam.instructions, 8_000),
+      durationMinutes: Number(exam.durationMinutes || 120),
+      gradingIdentity: exam.gradingIdentity,
+      integrityTier: exam.integrityTier,
+      admissionMode: exam.admissionMode,
+      questionCount: exam.questions.length,
+      totalPoints: exam.questions.reduce((sum, question) => sum + Number(question.points || 0), 0),
+      reviewIssues: reviewItems().map((item) => safeText(item.label, 500)),
+      currentSection: activeSection,
+      questions: exam.questions.slice(0, 40).map((question, index) => ({
+        id: safeText(question.id, 160),
+        number: index + 1,
+        type: question.type,
+        points: Number(question.points || 0),
+        prompt: safeText(question.prompt, 4_000),
+        choices: Array.isArray(question.options) ? question.options.map((option) => safeText(option, 800)) : [],
+        correctAnswer: question.correctOption == null ? '' : safeText(question.options?.[question.correctOption], 800),
+        gradingGuidance: safeText(question.gradingGuidance, 4_000),
+        required: question.required !== false,
+      })),
+    };
+  }
+
+  const ASSISTANT_ACTION_LABELS = Object.freeze({
+    focus_exam_title: 'Go to examination title',
+    focus_subject: 'Go to subject',
+    focus_instructions: 'Go to instructions',
+    focus_questions: 'Go to questions',
+    focus_exam_settings: 'Go to exam settings',
+    focus_student_admission: 'Go to student admission',
+    open_review: 'Open review items',
+    focus_key_request: 'Go to publish and key request',
+    open_monitor: 'Open monitoring',
+    open_grading: 'Open grading',
+    open_results: 'Open results',
+    open_downloads: 'Open offline downloads',
+  });
+
+  function appendAssistantMessage(role, text, actions = []) {
+    const messages = $('#assistant-messages');
+    if (!messages) return;
+    const article = document.createElement('article');
+    article.className = `assistant-message ${role === 'user' ? 'is-user' : 'is-assistant'}`;
+    const badge = document.createElement('span');
+    badge.textContent = role === 'user' ? 'You' : 'AI';
+    const copy = document.createElement('p');
+    copy.textContent = safeText(text, 6_000);
+    article.append(badge, copy);
+    const safeActions = Array.isArray(actions) ? actions.slice(0, 4) : [];
+    if (role !== 'user' && safeActions.length) {
+      const actionWrap = document.createElement('div');
+      actionWrap.className = 'assistant-message-actions';
+      safeActions.forEach((action) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.assistantAction = safeText(action?.id, 80);
+        button.textContent = safeText(action?.label, 100) || 'Apply suggestion';
+        actionWrap.append(button);
+      });
+      article.append(actionWrap);
+    }
+    messages.append(article);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  async function submitAssistantPrompt(rawPrompt) {
+    const prompt = safeText(rawPrompt, 1_200);
+    if (!prompt || state.assistantInFlight) return;
+    const historyBefore = state.assistantHistory.slice(-10);
+    state.assistantHistory.push({ role: 'user', text: prompt });
+    appendAssistantMessage('user', prompt);
+    state.assistantInFlight = true;
+    const input = $('#assistant-input');
+    const submit = $('#assistant-form button[type="submit"]');
+    input.value = '';
+    input.disabled = true;
+    submit.disabled = true;
+    $('#assistant-status').textContent = 'Reviewing this draft…';
+    try {
+      const result = await api.professorAssistant({
+        message: prompt,
+        history: historyBefore.map((entry) => ({ role: entry.role, content: entry.text })),
+        examContext: assistantExamContext(),
+      }, api.requestId());
+      const assistant = result?.assistant || result || {};
+      const reply = safeText(assistant.reply, 6_000) || 'I reviewed the current draft, but no suggestion was returned. Try asking in a different way.';
+      state.assistantHistory.push({ role: 'assistant', text: reply });
+      state.assistantHistory = state.assistantHistory.slice(-12);
+      const actions = (assistant.suggestedActionIds || []).map((id) => ({ id, label: ASSISTANT_ACTION_LABELS[id] || 'Open suggestion' }));
+      appendAssistantMessage('assistant', reply, actions);
+      $('#assistant-status').textContent = 'Ready · suggestions never change the draft automatically';
+    } catch (error) {
+      const reply = `${error?.message || 'The assistant could not respond right now.'} ${error?.recovery || 'Your draft was not changed. Try again when the connection is stable.'}`;
+      state.assistantHistory.push({ role: 'assistant', text: reply });
+      appendAssistantMessage('assistant', reply);
+      $('#assistant-status').textContent = 'Assistant unavailable · your draft is safe';
+    } finally {
+      state.assistantInFlight = false;
+      input.disabled = false;
+      submit.disabled = false;
+      input.focus();
+    }
+  }
+
   function assistantAction(action) {
-    if (action === 'add_federalism') {
-      addQuestion('essay', { points: 10, prompt: 'Evaluate whether a federal form of government can be adopted through constitutional amendment or requires constitutional revision. Explain the controlling distinction and procedure.', wordGuideline: '400–600 words' });
-      toast('Suggestion inserted as a new draft question. Review or delete it freely.');
-    } else if (action === 'add_rights') {
-      addQuestion('essay', { points: 10, prompt: 'Analyze whether the challenged government act violates the equal protection and due process clauses. State the applicable level of scrutiny and justify your conclusion.', wordGuideline: '400–600 words' });
-      toast('Suggestion inserted as a new draft question. You remain in control.');
-    } else if (action === 'check_points') {
-      const total = collectExam().questions.reduce((sum, question) => sum + Number(question.points || 0), 0);
-      toast(total === 100 ? 'Point values total 100.' : `Point values currently total ${total}. You may keep that total or revise it.`);
+    const focus = (sectionId, selector) => {
+      switchView('create');
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (selector) global.setTimeout(() => document.querySelector(selector)?.focus(), 450);
+    };
+    if (action === 'focus_exam_title') focus('exam-details', '#exam-title');
+    else if (action === 'focus_subject') focus('exam-details', '#subject');
+    else if (action === 'focus_instructions') focus('additional-details', '#instructions');
+    else if (action === 'focus_questions') focus('questions', '#questions-list textarea, #questions-list input');
+    else if (action === 'focus_exam_settings') focus('exam-settings');
+    else if (action === 'focus_student_admission') focus('students');
+    else if (action === 'open_review') showReviewItems();
+    else if (action === 'focus_key_request') {
+      switchView('create');
+      $('#publish-exam')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      global.setTimeout(() => $('#publish-exam')?.focus(), 450);
+    } else if (action === 'open_monitor') switchView('monitor');
+    else if (action === 'open_grading' || action === 'open_results' || action === 'open_downloads') {
+      switchView('grade');
+      if (action === 'open_downloads') global.setTimeout(() => $('#export-grading-package')?.focus(), 350);
     }
   }
 
@@ -2236,7 +2422,8 @@
       if (!visible) return;
       $$('#section-navigation button').forEach((button) => button.classList.toggle('is-active', button.dataset.scrollTo === visible.target.id));
     }, { rootMargin: '-25% 0px -60% 0px', threshold: [0, .15, .4] });
-    ['questions', 'students', 'safety'].forEach((id) => state.sectionObserver.observe(document.getElementById(id)));
+    ['exam-details', 'questions', 'additional-details', 'exam-settings', 'students', 'safety']
+      .forEach((id) => state.sectionObserver.observe(document.getElementById(id)));
   }
 
   function bindEvents() {
@@ -2291,6 +2478,10 @@
         await createAnotherExam();
       } else if (button.dataset.action === 'duplicate-exam') {
         await createAnotherExam({ duplicate: true });
+      } else if (button.dataset.action === 'archive-exam') {
+        await archiveCurrentExam().catch((error) => showError(error, archiveCurrentExam, 'Examination not archived'));
+      } else if (button.dataset.action === 'delete-exam') {
+        await deleteCurrentDraft().catch((error) => showError(error, deleteCurrentDraft, 'Draft not deleted'));
       } else {
         toast('Version history is preserved after each publish, grade save, and recovery snapshot.');
       }
@@ -2397,37 +2588,34 @@
       scheduleAutosave();
     });
     $('#view-mapping').addEventListener('click', () => toast('The uploaded headings were mapped to the numbered questions shown below. Review every prompt before publishing.'));
-    $('#preview-privacy').addEventListener('click', () => openDialog('privacy-dialog'));
-    $$('input[name="integrity-tier-main"]').forEach((input) => input.addEventListener('change', () => synchronizeRadioGroup('integrity-tier-main', 'integrity-tier-side')));
-    $$('input[name="integrity-tier-side"]').forEach((input) => input.addEventListener('change', () => synchronizeRadioGroup('integrity-tier-side', 'integrity-tier-main')));
+    $$('input[name="integrity-tier-main"]').forEach((input) => input.addEventListener('change', syncIntegrityControls));
     $$('input[name="grading-identity"]').forEach((input) => input.addEventListener('change', scheduleAutosave));
-    $('#duration-inline').addEventListener('change', () => { $('#duration-control').value = $('#duration-inline').value; scheduleAutosave(); });
-    $('#duration-control').addEventListener('change', () => { $('#duration-inline').value = $('#duration-control').value; scheduleAutosave(); });
     $('#exam-form').addEventListener('input', (event) => { if (!event.target.closest('#questions-list, #roster-body') && event.target.id !== 'exam-title') scheduleAutosave(); });
     $('#exam-form').addEventListener('change', (event) => { if (!event.target.closest('#questions-list, #roster-body')) scheduleAutosave(); });
-    $('.professor-controls').addEventListener('change', (event) => { if (!event.target.matches('#duration-control, input[name="integrity-tier-side"]')) scheduleAutosave(); });
     $('#assistant-toggle').addEventListener('click', () => {
       const panel = $('#assistant-panel');
       const minimized = panel.classList.toggle('is-minimized');
       $('#assistant-toggle').setAttribute('aria-expanded', String(!minimized));
+      $('#assistant-toggle').setAttribute('aria-label', minimized ? 'Open Examination Assistant' : 'Minimize Examination Assistant');
       $('#assistant-toggle i').className = `ph ${minimized ? 'ph-plus' : 'ph-minus'}`;
     });
     $('#assistant-panel').addEventListener('click', (event) => {
       const button = event.target.closest('[data-assistant-action]');
-      if (button) assistantAction(button.dataset.assistantAction);
+      if (button) {
+        assistantAction(button.dataset.assistantAction);
+        return;
+      }
+      const prompt = event.target.closest('[data-assistant-prompt]');
+      if (prompt) submitAssistantPrompt(prompt.dataset.assistantPrompt);
     });
-    $('#assistant-form').addEventListener('submit', (event) => {
+    $('#assistant-form').addEventListener('submit', async (event) => {
       event.preventDefault();
-      const question = $('#assistant-input').value.trim();
-      if (!question) return;
-      const total = collectExam().questions.reduce((sum, entry) => sum + Number(entry.points || 0), 0);
-      const response = /point|score|total/i.test(question)
-        ? `Your current point total is ${total}. You decide whether to keep it.`
-        : /privacy|record|camera|microphone/i.test(question)
-          ? 'Recorded proctoring is unavailable until encrypted camera and microphone capture storage is configured. Choose Standard or Focus monitoring.'
-          : 'I can suggest wording, check missing fields, review point totals, or explain a control. I will not change the examination unless you choose an action.';
-      toast(response);
-      $('#assistant-input').value = '';
+      await submitAssistantPrompt($('#assistant-input').value);
+    });
+    $('#assistant-input').addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.shiftKey) return;
+      event.preventDefault();
+      $('#assistant-form').requestSubmit();
     });
     $('#refresh-monitor').addEventListener('click', () => refreshMonitor({ silent: false }));
     $('#check-activation').addEventListener('click', async () => {
@@ -2659,6 +2847,12 @@
       }
       bindEvents();
       bindSectionObserver();
+      if (global.matchMedia?.('(max-width: 820px)').matches) {
+        $('#assistant-panel').classList.add('is-minimized');
+        $('#assistant-toggle').setAttribute('aria-expanded', 'false');
+        $('#assistant-toggle').setAttribute('aria-label', 'Open Examination Assistant');
+        $('#assistant-toggle i').className = 'ph ph-plus';
+      }
       $('#loading-gate').hidden = true;
       $('#app-shell').hidden = false;
       const requestedView = global.location.hash.replace('#', '') || params.get('view') || 'create';

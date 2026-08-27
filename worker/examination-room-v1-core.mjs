@@ -762,7 +762,7 @@ export function normalizeProfessorDraft(input) {
   const privacyNoticeVersion = normalizePrivacyNoticeVersion(input.privacyNoticeVersion, {
     field: 'draft.privacyNoticeVersion',
     required: false,
-  });
+  }) || 'exam-room-direct-entry-v1';
 
   if (input.questions !== undefined && !Array.isArray(input.questions)) {
     fail(
@@ -840,13 +840,6 @@ export function getPublicationReadiness(input) {
       PUBLICATION_READINESS_CODES.YEAR_LEVEL_REQUIRED,
       'Add the intended year level before publishing.',
       'yearLevel',
-    ));
-  }
-  if (!draft.privacyNoticeVersion) {
-    issues.push(readinessIssue(
-      PUBLICATION_READINESS_CODES.PRIVACY_NOTICE_REQUIRED,
-      'Choose the privacy notice students must accept before publishing.',
-      'privacyNoticeVersion',
     ));
   }
   if (draft.questions.length === 0) {

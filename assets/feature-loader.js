@@ -24,7 +24,7 @@
       ],
       scripts: [
         'assets/study-workspace.js?v=syllabus-reveal-p0-20260826-2&feedback=offline-save-20260827-1',
-        'assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1',
+        'assets/examinations.js?v=pedro-release2-20260827-1&baseline=public-reliability-20260827-1&hotfix=ian-provisional-reveal-20260828-1',
       ],
     }),
     content: Object.freeze({

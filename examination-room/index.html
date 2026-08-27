@@ -9,9 +9,9 @@
   <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Playfair+Display:wght@500;600;700&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css">
-  <link rel="stylesheet" href="professor.css?v=greenfield-v1-20260827-15">
+  <link rel="stylesheet" href="professor.css?v=renovation-20260828-4">
 </head>
 <body>
   <a class="skip-link" href="#exam-editor">Skip to examination editor</a>
@@ -28,7 +28,7 @@
     <div class="access-panel">
       <img src="../assets/brand/icon-192.png" width="58" height="58" alt="">
       <p class="eyebrow">Examination Room</p>
-      <h1 id="access-title">Sign in to open the Professor workspace</h1>
+      <h1 id="access-title">Sign in to create an examination</h1>
       <p id="access-copy">Any signed-in Due Diligence account can create and manage its own examinations. Admin approval is required only before a room key is issued.</p>
       <div class="access-actions">
         <a class="button primary" id="access-primary-action" href="../#examination-room">Sign in through Due Diligence</a>
@@ -83,6 +83,8 @@
             <button type="button" data-action="duplicate-exam"><i class="ph ph-copy" aria-hidden="true"></i>Duplicate examination</button>
             <button type="button" data-action="download-draft"><i class="ph ph-download-simple" aria-hidden="true"></i>Download recovery copy</button>
             <button type="button" data-action="version-history"><i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i>Version history</button>
+            <button class="danger-menu-action" type="button" data-action="archive-exam"><i class="ph ph-trash" aria-hidden="true"></i>Delete examination</button>
+            <button class="danger-menu-action" type="button" data-action="delete-exam"><i class="ph ph-trash" aria-hidden="true"></i>Delete draft</button>
           </div>
         </div>
       </header>
@@ -98,10 +100,12 @@
           <nav id="section-navigation">
             <button type="button" data-scroll-to="exam-details"><i class="ph ph-file-text" aria-hidden="true"></i><span>Exam details</span></button>
             <button class="is-active" type="button" data-scroll-to="questions"><i class="ph ph-clipboard-text" aria-hidden="true"></i><span>Questions</span></button>
+            <button type="button" data-scroll-to="additional-details"><i class="ph ph-list-checks" aria-hidden="true"></i><span>Instructions</span></button>
+            <button type="button" data-scroll-to="exam-settings"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i><span>Exam settings</span></button>
             <button type="button" data-scroll-to="students"><i class="ph ph-users-three" aria-hidden="true"></i><span>Students</span></button>
-            <button type="button" data-scroll-to="safety"><i class="ph ph-shield-check" aria-hidden="true"></i><span>Safety &amp;<br>accommodations</span></button>
+            <button type="button" data-scroll-to="safety"><i class="ph ph-shield-check" aria-hidden="true"></i><span>Safeguards</span></button>
           </nav>
-          <button class="review-items" id="review-items" type="button"><i class="ph ph-warning-circle" aria-hidden="true"></i><span>Review 3 items</span></button>
+          <button class="review-items" id="review-items" type="button"><i class="ph ph-check-circle" aria-hidden="true"></i><span>Ready to publish</span></button>
         </aside>
 
         <main class="editor-scroll" id="exam-editor" tabindex="-1">
@@ -113,8 +117,6 @@
                 <textarea id="exam-title" rows="1" maxlength="180">Constitutional Law — Midterm Examination</textarea>
               </label>
               <div class="exam-meta-row">
-                <label><i class="ph ph-calendar-blank" aria-hidden="true"></i><span class="sr-only">Optional examination date</span><input id="exam-date" type="date" aria-label="Optional examination date"></label>
-                <label><i class="ph ph-clock" aria-hidden="true"></i><span class="sr-only">Duration</span><select id="duration-inline"><option value="120">2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select></label>
                 <label><i class="ph ph-file-text" aria-hidden="true"></i><span class="sr-only">Jurisdiction</span><input id="jurisdiction" value="Philippines" maxlength="80"></label>
                 <label><i class="ph ph-tag" aria-hidden="true"></i><span class="sr-only">Subject</span><input id="subject" value="Constitutional Law" maxlength="120"></label>
               </div>
@@ -159,6 +161,22 @@
               </div>
             </section>
 
+            <section class="editor-section exam-settings-section" id="exam-settings" aria-labelledby="exam-settings-title">
+              <header class="section-heading">
+                <div><p class="section-kicker">Exam settings</p><h2 id="exam-settings-title">Timing, navigation, and grading</h2><p>No date or start time is required. The room becomes available when Admin issues the student key.</p></div>
+              </header>
+              <div class="settings-grid">
+                <label class="field"><span>Duration</span><select id="duration-control"><option value="60">1 hour</option><option value="90">1 hour 30 minutes</option><option value="120" selected>2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select><small>The timer starts separately for each student when their attempt begins.</small></label>
+                <label class="field"><span>Late submissions</span><select id="late-control"><option value="not_allowed">Not allowed after time expires</option><option value="professor_review">Allow for professor review</option></select><small>You can still review an interrupted attempt from Monitor.</small></label>
+                <label class="field"><span>Navigation</span><select id="navigation-control"><option value="free">Students can navigate freely</option><option value="sequential">Forward only</option></select><small>Forward only prevents returning to earlier questions.</small></label>
+              </div>
+              <fieldset class="identity-options">
+                <legend>Grading identity</legend>
+                <label><input type="radio" name="grading-identity" value="real_names" checked><span><i class="ph ph-identification-card" aria-hidden="true"></i><strong>Real names <em>Default</em></strong><small>Grades are recorded and shown under each student’s real name.</small></span></label>
+                <label><input type="radio" name="grading-identity" value="anonymous_grading"><span><i class="ph ph-eye-slash" aria-hidden="true"></i><strong>Anonymous grading <em>Optional</em></strong><small>Names are hidden only while marking. The creator and Admin can still reveal the real identity.</small></span></label>
+              </fieldset>
+            </section>
+
             <section class="editor-section students-section" id="students" aria-labelledby="students-title">
               <header class="section-heading">
                 <div><p class="section-kicker">Student entry</p><h2 id="students-title">Who may use the student key?</h2><p>The simplest option is selected by default. Every student enters their real name, student number, subject, and year level.</p></div>
@@ -178,67 +196,37 @@
 
             <section class="editor-section safety-section" id="safety" aria-labelledby="safety-title">
               <header class="section-heading">
-                <div><p class="section-kicker">Safety &amp; accommodations</p><h2 id="safety-title">Professor-controlled examination safeguards</h2><p>Choose the least intrusive mode appropriate for this examination. Nothing here changes without your selection.</p></div>
+                <div><p class="section-kicker">Optional safeguards</p><h2 id="safety-title">Choose the level of examination monitoring</h2><p>Standard mode is selected by default. Camera and microphone recording never stop answer saving or submission if capture or storage is interrupted.</p></div>
               </header>
               <fieldset class="safety-options">
                 <legend>Integrity mode</legend>
                 <label><input type="radio" name="integrity-tier-main" value="standard" checked><span><i class="ph ph-file-lock" aria-hidden="true"></i><strong>Standard</strong><small>Authenticated access, timer, local recovery, and server backup.</small></span></label>
                 <label><input type="radio" name="integrity-tier-main" value="focus_monitoring"><span><i class="ph ph-monitor" aria-hidden="true"></i><strong>Focus monitoring</strong><small>Logs fullscreen and visibility changes as signals for professor review.</small></span></label>
-                <label><input type="radio" name="integrity-tier-main" value="recorded_proctoring"><span><i class="ph ph-video-camera" aria-hidden="true"></i><strong>Recorded proctoring — unavailable</strong><small>Requires configured encrypted camera and microphone capture storage.</small></span></label>
+                <label><input type="radio" name="integrity-tier-main" value="recorded_proctoring"><span><i class="ph ph-video-camera" aria-hidden="true"></i><strong>Recorded proctoring <em>Optional</em></strong><small>Records the selected devices in encrypted segments with automatic storage fallback.</small></span></label>
               </fieldset>
               <div class="recording-options" id="recording-options" hidden>
-                <label><input type="checkbox" id="camera-required"><span><strong>Camera recording</strong><small>Unavailable until encrypted camera capture storage is configured.</small></span></label>
-                <label><input type="checkbox" id="microphone-required"><span><strong>Microphone recording</strong><small>Unavailable until encrypted microphone capture storage is configured.</small></span></label>
-                <div class="recording-availability" id="recording-availability"><i class="ph ph-warning-circle" aria-hidden="true"></i><span><strong>Recorded proctoring is unavailable.</strong> The examination cannot be published in this mode until encrypted camera and microphone capture storage is configured.</span></div>
-              </div>
-              <div class="privacy-summary">
-                <i class="ph ph-shield-check" aria-hidden="true"></i>
-                <div><strong>A short privacy warning appears before questions load.</strong><p>It states that identity, answers, submission status, grades, and enabled examination-integrity activity are recorded for examination administration.</p></div>
-                <button class="button secondary compact" id="preview-privacy" type="button">Preview warning</button>
+                <label><input type="checkbox" id="camera-required"><span><strong>Camera recording</strong><small>The browser asks for camera permission only when the student begins.</small></span></label>
+                <label><input type="checkbox" id="microphone-required"><span><strong>Microphone recording</strong><small>The browser asks for microphone permission only when the student begins.</small></span></label>
+                <div class="recording-availability" id="recording-availability"><i class="ph ph-cloud-arrow-up" aria-hidden="true"></i><span><strong>Non-blocking recording.</strong> Google Drive is used when configured, with private Supabase storage and an encrypted device queue as fallbacks. Answers and submission remain independent.</span></div>
               </div>
             </section>
           </form>
         </main>
-
-        <aside class="professor-controls" aria-labelledby="professor-controls-title">
-          <h2 id="professor-controls-title">Professor controls</h2>
-          <section>
-            <h3>Timing &amp; navigation</h3>
-            <label><span>Duration</span><select id="duration-control"><option value="60">1 hour</option><option value="90">1 hour 30 minutes</option><option value="120" selected>2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select></label>
-            <label><span>Start <small>(optional)</small></span><input id="start-control" type="datetime-local" aria-describedby="start-control-help"><small id="start-control-help">Leave blank to open the room when Admin issues the student key.</small></label>
-            <label><span>Late submissions</span><select id="late-control"><option value="not_allowed">Not allowed</option><option value="professor_review">Professor review</option><option value="grace_5">5-minute grace period</option></select></label>
-            <label><span>Navigation</span><select id="navigation-control"><option value="free">Students can navigate freely</option><option value="forward_only">Forward only</option></select></label>
-          </section>
-          <section>
-            <h3>Grading identity</h3>
-            <label class="radio-control"><input type="radio" name="grading-identity" value="real_names" checked><span><strong>Real names</strong><small>Grades are recorded under students’ real names.</small></span></label>
-            <label class="radio-control"><input type="radio" name="grading-identity" value="anonymous_grading"><span><strong>Anonymous grading <em>(optional)</em></strong><small>Names are hidden only during grading.</small></span></label>
-          </section>
-          <section>
-            <h3>Safety &amp; integrity <span>(optional)</span></h3>
-            <label class="radio-control"><input type="radio" name="integrity-tier-side" value="standard" checked><span><strong>Standard</strong><small>No additional monitoring.</small></span></label>
-            <label class="radio-control"><input type="radio" name="integrity-tier-side" value="focus_monitoring"><span><strong>Focus monitoring</strong><small>Detects tab visibility and fullscreen exits.</small></span></label>
-            <label class="radio-control"><input type="radio" name="integrity-tier-side" value="recorded_proctoring"><span><strong>Recorded proctoring — unavailable</strong><small>Requires encrypted capture storage.</small></span></label>
-          </section>
-          <section class="roster-preview admission-preview">
-            <header><h3>Student admission</h3><button type="button" data-scroll-button="students">Change</button></header>
-            <p id="admission-summary">Anyone with the student key may enter. No roster is required.</p>
-          </section>
-          <section class="accommodations-preview">
-            <header><h3>Participant control</h3><button type="button" data-view="monitor" data-requires-activation="true" disabled>Open monitor</button></header>
-            <p>After Admin issues the student key, you can monitor real-name entries and remove or block a session.</p>
-          </section>
-        </aside>
       </div>
 
-      <aside class="assistant-panel" id="assistant-panel" aria-labelledby="assistant-title">
-        <header><h2 id="assistant-title"><i class="ph ph-sparkle" aria-hidden="true"></i>Examination Assistant</h2><button class="icon-action" id="assistant-toggle" type="button" aria-label="Minimize Examination Assistant" aria-expanded="true"><i class="ph ph-minus" aria-hidden="true"></i></button></header>
+      <aside class="assistant-panel is-minimized" id="assistant-panel" aria-labelledby="assistant-title">
+        <header><div><p class="section-kicker">AI support</p><h2 id="assistant-title"><i class="ph ph-sparkle" aria-hidden="true"></i>Examination Assistant</h2></div><button class="icon-action" id="assistant-toggle" type="button" aria-label="Open Examination Assistant" aria-expanded="false"><i class="ph ph-plus" aria-hidden="true"></i></button></header>
         <div class="assistant-body">
-          <p>Here are a few suggestions based on best practices.</p>
-          <button type="button" data-assistant-action="add_federalism"><i class="ph ph-note-pencil" aria-hidden="true"></i><span>Add a question on federalism.</span><small>Why this helps</small></button>
-          <button type="button" data-assistant-action="add_rights"><i class="ph ph-user-focus" aria-hidden="true"></i><span>Consider a question on fundamental rights.</span><small>Why this helps</small></button>
-          <button type="button" data-assistant-action="check_points"><i class="ph ph-clock" aria-hidden="true"></i><span>Check that point values total 100.</span><small>Why this helps</small></button>
-          <form id="assistant-form"><label><span class="sr-only">Ask the Examination Assistant</span><input id="assistant-input" placeholder="Ask a question about your exam…" maxlength="500"></label><button type="submit" aria-label="Send question"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i></button></form>
+          <div class="assistant-messages" id="assistant-messages" role="log" aria-live="polite" aria-label="Conversation with Examination Assistant">
+            <article class="assistant-message is-assistant"><span>AI</span><p>I can help refine questions, check point totals, explain settings, or find missing information. I will suggest changes, but I will not alter your examination unless you choose an action.</p></article>
+          </div>
+          <div class="assistant-prompts" aria-label="Suggested questions">
+            <button type="button" data-assistant-prompt="Check what is missing before I publish.">Check readiness</button>
+            <button type="button" data-assistant-prompt="Review my point distribution.">Review points</button>
+            <button type="button" data-assistant-prompt="Suggest one improvement to the current exam.">Suggest improvement</button>
+          </div>
+          <form id="assistant-form"><label><span class="sr-only">Ask the Examination Assistant</span><textarea id="assistant-input" rows="2" placeholder="Ask about this examination…" maxlength="1200"></textarea></label><button type="submit" aria-label="Send question"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i></button></form>
+          <p class="assistant-status" id="assistant-status">Ready · your draft stays under your control</p>
         </div>
       </aside>
     </section>
@@ -285,21 +273,11 @@
     </div>
   </dialog>
 
-  <dialog class="app-dialog" id="privacy-dialog" aria-labelledby="privacy-title">
-    <form method="dialog" class="dialog-shell privacy-dialog-shell">
-      <header><div><p class="eyebrow">Student privacy warning</p><h2 id="privacy-title">Before the examination begins</h2></div><button class="icon-action" value="cancel" aria-label="Close privacy warning preview"><i class="ph ph-x" aria-hidden="true"></i></button></header>
-      <div class="privacy-copy">
-        <p class="notice-lead">This examination records the student’s identity, answers, submission status, grades, and any examination-integrity features enabled by the Professor. These records can be viewed by the Professor and platform owner.</p>
-      </div>
-      <footer><button class="button secondary" value="cancel">Close warning preview</button></footer>
-    </form>
-  </dialog>
-
   <dialog class="app-dialog" id="publish-dialog" aria-labelledby="publish-title">
     <form class="dialog-shell" id="publish-form">
       <header><div><p class="eyebrow">Final creator step</p><h2 id="publish-title">Publish and request a student key?</h2></div><button class="icon-action" type="button" data-close-dialog="publish-dialog" aria-label="Close publish review"><i class="ph ph-x" aria-hidden="true"></i></button></header>
       <div id="publish-summary"></div>
-      <label class="confirmation-control"><input id="publish-confirmation" type="checkbox"><span>I reviewed the questions, points, timing, student admission, grading identity, privacy warning, and optional safeguards. Publishing saves an immutable version and sends the key request to Admin.</span></label>
+      <label class="confirmation-control"><input id="publish-confirmation" type="checkbox"><span>I reviewed the questions, points, duration, student admission, grading identity, and optional safeguards. Publishing saves an immutable version and sends the key request to Admin.</span></label>
       <footer><button class="button secondary" type="button" data-close-dialog="publish-dialog">Continue editing</button><button class="button primary" id="publish-confirm" type="submit" disabled>Publish and request key</button></footer>
     </form>
   </dialog>
@@ -356,8 +334,8 @@
   <script src="../assets/auth-session-storage.js?v=auth-persistence-20260812-1"></script>
   <script src="../assets/private-beta-session.js?v=beta-all-access-20260802-1"></script>
   <script src="view-models.js?v=greenfield-v1-20260826-1"></script>
-  <script src="api.js?v=greenfield-v1-20260827-9"></script>
+  <script src="api.js?v=renovation-20260828-4"></script>
   <script src="offline-grading-core.js?v=greenfield-v1-20260826-3"></script>
-  <script src="professor.js?v=greenfield-v1-20260827-26-optional-schedule"></script>
+  <script src="professor.js?v=renovation-20260828-4"></script>
 </body>
 </html>

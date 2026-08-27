@@ -12,6 +12,10 @@ const migrationPaths = [
   '20260826130536_examination_room_owner_command_center.sql',
   '20260827010000_examination_room_open_admission_flow.sql',
   '20260827020000_examination_room_result_email_delivery.sql',
+  '20260827190036_examination_room_key_delivery_nullable_creator.sql',
+  '20260827193000_examination_room_lifecycle_controls.sql',
+  '20260828123000_examination_room_recorded_media.sql',
+  '20260828124000_examination_room_immediate_key_access.sql',
 ].map((filename) => join(repositoryRoot, 'supabase', 'migrations', filename));
 const databaseTestPath = join(
   repositoryRoot,
@@ -76,6 +80,10 @@ async function scalar(database, sql, params = []) {
   const result = await database.query(sql, params);
   const firstRow = result.rows[0];
   return firstRow ? Object.values(firstRow)[0] : undefined;
+}
+
+function repeatHex(pair) {
+  return pair.repeat(32);
 }
 
 async function expectDatabaseError(action, pattern, label) {
@@ -337,13 +345,29 @@ try {
     create role authenticated nologin;
     create role service_role nologin bypassrls;
     create schema auth authorization postgres;
+    create schema storage authorization postgres;
+
+    create table storage.buckets (
+      id text primary key,
+      name text not null unique,
+      public boolean not null default false,
+      file_size_limit bigint,
+      allowed_mime_types text[]
+    );
+
+    create table storage.objects (
+      id uuid primary key default gen_random_uuid(),
+      bucket_id text not null references storage.buckets(id),
+      name text not null,
+      metadata jsonb not null default '{}'::jsonb
+    );
 
     create table auth.users (
       id uuid primary key,
       instance_id uuid,
       aud text,
       role text,
-      email text not null unique,
+      email text unique,
       raw_app_meta_data jsonb not null default '{}'::jsonb,
       raw_user_meta_data jsonb not null default '{}'::jsonb,
       created_at timestamptz not null default now(),
@@ -534,6 +558,8 @@ try {
 
   await database.exec(readFileSync(migrationPaths[2], 'utf8'));
   await database.exec(readFileSync(migrationPaths[3], 'utf8'));
+  await database.exec(readFileSync(migrationPaths[4], 'utf8'));
+  await database.exec(readFileSync(migrationPaths[5], 'utf8'));
 
   assert.equal(
     Number(await scalar(database, `
@@ -836,6 +862,199 @@ try {
     '-- Local PGlite validation uses the compatibility harness installed above.',
   );
   await database.exec(runnablePgTapSql);
+  await database.exec(readFileSync(migrationPaths[6], 'utf8'));
+
+  // Upgrade fixtures prove that the additive migration opens only usable,
+  // non-expired scheduled keys. Blocked and archived examinations retain their
+  // lifecycle denial even when an older node issued a scheduled activation.
+  await database.exec(`
+    insert into examination_room_v1.privacy_notice_versions (
+      id, institution_id, notice_code, version_number, title, notice_body,
+      body_sha256, effective_at, created_by_user_id
+    ) values (
+      '91000000-0000-4000-8000-000000000004',
+      '20000000-0000-0000-0000-000000000001',
+      'immediate-key-upgrade', 1, 'Immediate key upgrade',
+      'Immediate key migration fixture.', repeat('1', 64), clock_timestamp(),
+      '10000000-0000-0000-0000-000000000001'
+    );
+
+    insert into examination_room_v1.exams (
+      id, institution_id, owner_user_id, title
+    ) values
+      (
+        '91000000-0000-4000-8000-000000000001',
+        '20000000-0000-0000-0000-000000000001',
+        '10000000-0000-0000-0000-000000000005',
+        'Usable scheduled upgrade fixture'
+      ),
+      (
+        '91000000-0000-4000-8000-000000000002',
+        '20000000-0000-0000-0000-000000000001',
+        '10000000-0000-0000-0000-000000000005',
+        'Blocked scheduled upgrade fixture'
+      ),
+      (
+        '91000000-0000-4000-8000-000000000003',
+        '20000000-0000-0000-0000-000000000001',
+        '10000000-0000-0000-0000-000000000005',
+        'Archived scheduled upgrade fixture'
+      );
+
+    insert into examination_room_v1.exam_versions (
+      id, exam_id, institution_id, version_number, title_snapshot,
+      duration_seconds, privacy_notice_version_id, content_sha256,
+      publication_status, published_by_user_id, published_at, publication_manifest
+    ) values
+      (
+        '91000000-0000-4000-8000-000000000011',
+        '91000000-0000-4000-8000-000000000001',
+        '20000000-0000-0000-0000-000000000001', 1,
+        'Usable scheduled upgrade fixture', 3600,
+        '91000000-0000-4000-8000-000000000004', repeat('2', 64),
+        'published', '10000000-0000-0000-0000-000000000001', clock_timestamp(),
+        '{"schemaVersion":"examination-room/publication/v1"}'::jsonb
+      ),
+      (
+        '91000000-0000-4000-8000-000000000012',
+        '91000000-0000-4000-8000-000000000002',
+        '20000000-0000-0000-0000-000000000001', 1,
+        'Blocked scheduled upgrade fixture', 3600,
+        '91000000-0000-4000-8000-000000000004', repeat('3', 64),
+        'published', '10000000-0000-0000-0000-000000000001', clock_timestamp(),
+        '{"schemaVersion":"examination-room/publication/v1"}'::jsonb
+      ),
+      (
+        '91000000-0000-4000-8000-000000000013',
+        '91000000-0000-4000-8000-000000000003',
+        '20000000-0000-0000-0000-000000000001', 1,
+        'Archived scheduled upgrade fixture', 3600,
+        '91000000-0000-4000-8000-000000000004', repeat('4', 64),
+        'published', '10000000-0000-0000-0000-000000000001', clock_timestamp(),
+        '{"schemaVersion":"examination-room/publication/v1"}'::jsonb
+      );
+
+    update examination_room_v1.exams exam
+    set current_published_version_id = case exam.id
+      when '91000000-0000-4000-8000-000000000001'::uuid then '91000000-0000-4000-8000-000000000011'::uuid
+      when '91000000-0000-4000-8000-000000000002'::uuid then '91000000-0000-4000-8000-000000000012'::uuid
+      when '91000000-0000-4000-8000-000000000003'::uuid then '91000000-0000-4000-8000-000000000013'::uuid
+    end,
+        status = case
+          when exam.id = '91000000-0000-4000-8000-000000000003'::uuid then 'archived'
+          else 'published'
+        end,
+        blocked_at = case
+          when exam.id = '91000000-0000-4000-8000-000000000002'::uuid then clock_timestamp()
+          else null
+        end,
+        blocked_by_user_id = case
+          when exam.id = '91000000-0000-4000-8000-000000000002'::uuid
+            then '10000000-0000-0000-0000-000000000001'::uuid
+          else null
+        end,
+        block_reason = case
+          when exam.id = '91000000-0000-4000-8000-000000000002'::uuid
+            then 'Upgrade denial fixture.'
+          else null
+        end,
+        archived_at = case
+          when exam.id = '91000000-0000-4000-8000-000000000003'::uuid then clock_timestamp()
+          else null
+        end
+    where exam.id in (
+      '91000000-0000-4000-8000-000000000001',
+      '91000000-0000-4000-8000-000000000002',
+      '91000000-0000-4000-8000-000000000003'
+    );
+
+    insert into examination_room_v1.room_activations (
+      id, exam_id, institution_id, exam_version_id, key_hash,
+      key_hash_algorithm, request_hash, activation_status,
+      opens_at, closes_at, activated_by_user_id
+    ) values
+      (
+        '91000000-0000-4000-8000-000000000021',
+        '91000000-0000-4000-8000-000000000001',
+        '20000000-0000-0000-0000-000000000001',
+        '91000000-0000-4000-8000-000000000011', repeat('5', 64),
+        'hmac-sha256-v1', repeat('6', 64), 'scheduled',
+        clock_timestamp() + interval '2 hours', clock_timestamp() + interval '1 day',
+        '10000000-0000-0000-0000-000000000001'
+      ),
+      (
+        '91000000-0000-4000-8000-000000000022',
+        '91000000-0000-4000-8000-000000000002',
+        '20000000-0000-0000-0000-000000000001',
+        '91000000-0000-4000-8000-000000000012', repeat('7', 64),
+        'hmac-sha256-v1', repeat('8', 64), 'scheduled',
+        clock_timestamp() + interval '2 hours', clock_timestamp() + interval '1 day',
+        '10000000-0000-0000-0000-000000000001'
+      ),
+      (
+        '91000000-0000-4000-8000-000000000023',
+        '91000000-0000-4000-8000-000000000003',
+        '20000000-0000-0000-0000-000000000001',
+        '91000000-0000-4000-8000-000000000013', repeat('9', 64),
+        'hmac-sha256-v1', repeat('a', 64), 'scheduled',
+        clock_timestamp() + interval '2 hours', clock_timestamp() + interval '1 day',
+        '10000000-0000-0000-0000-000000000001'
+      );
+  `);
+  await database.exec(readFileSync(migrationPaths[7], 'utf8'));
+
+  assert.equal(
+    await scalar(database, `
+      select activation_status = 'open' and opens_at <= clock_timestamp()
+      from examination_room_v1.room_activations
+      where id = '91000000-0000-4000-8000-000000000021'
+    `),
+    true,
+    'the migration immediately opens a usable scheduled key issued by an older application node',
+  );
+  assert.equal(
+    await scalar(database, `
+      select activation_status
+      from examination_room_v1.room_activations
+      where id = '91000000-0000-4000-8000-000000000022'
+    `),
+    'scheduled',
+    'the migration does not open a blocked examination activation',
+  );
+  assert.equal(
+    await scalar(database, `
+      select activation_status
+      from examination_room_v1.room_activations
+      where id = '91000000-0000-4000-8000-000000000023'
+    `),
+    'scheduled',
+    'the migration does not open an archived examination activation',
+  );
+
+  await database.exec(`
+    set session_replication_role = replica;
+    delete from examination_room_v1.room_activations
+    where id in (
+      '91000000-0000-4000-8000-000000000021',
+      '91000000-0000-4000-8000-000000000022',
+      '91000000-0000-4000-8000-000000000023'
+    );
+    delete from examination_room_v1.exam_versions
+    where id in (
+      '91000000-0000-4000-8000-000000000011',
+      '91000000-0000-4000-8000-000000000012',
+      '91000000-0000-4000-8000-000000000013'
+    );
+    delete from examination_room_v1.exams
+    where id in (
+      '91000000-0000-4000-8000-000000000001',
+      '91000000-0000-4000-8000-000000000002',
+      '91000000-0000-4000-8000-000000000003'
+    );
+    delete from examination_room_v1.privacy_notice_versions
+    where id = '91000000-0000-4000-8000-000000000004';
+    set session_replication_role = origin;
+  `);
 
   assert.equal(
     await scalar(database, `
@@ -1139,6 +1358,64 @@ try {
   );
 
   await database.exec(`
+    update auth.users
+    set email = null
+    where id = '10000000-0000-0000-0000-000000000005';
+
+    update examination_room_v1.staff_memberships
+    set email_normalized = null
+    where institution_id = 'ddc00000-0000-4000-8000-000000000001'
+      and user_id = '10000000-0000-0000-0000-000000000005';
+  `);
+  const nullableCreatorApproval = await scalar(database, `
+    select public.examination_room_v1_api(
+      'admin',
+      'email_key',
+      '10000000-0000-0000-0000-000000000001',
+      'ddc00000-0000-4000-8000-000000000001',
+      jsonb_build_object(
+        'examId', '30000000-0000-4000-8000-000000000010',
+        'requestHash', repeat('d2', 32),
+        'roomKeyHash', repeat('d7', 32),
+        'keyHashAlgorithm', 'hmac-sha256-v1',
+        'opensAt', clock_timestamp() - interval '1 minute',
+        'closesAt', clock_timestamp() + interval '1 day',
+        'maxSessions', null,
+        'replaceCurrent', false
+      )
+    )
+  `);
+  assert.equal(
+    nullableCreatorApproval.ok,
+    true,
+    `a missing creator email never blocks key activation: ${JSON.stringify(nullableCreatorApproval)}`,
+  );
+  assert.equal(
+    nullableCreatorApproval.activation.status,
+    'open',
+    'Admin approval returns an immediately open activation receipt',
+  );
+  assert.equal(nullableCreatorApproval.professorEmail, null, 'the activation response preserves a nullable creator email');
+  assert.equal(
+    await scalar(database, `
+      select activation_status
+      from examination_room_v1.room_activations
+      where exam_id = '30000000-0000-4000-8000-000000000010'
+    `),
+    'open',
+    'Admin approval persists the student key as open without a Professor action',
+  );
+
+  await database.exec(`
+    update auth.users
+    set email = 'student@example.invalid'
+    where id = '10000000-0000-0000-0000-000000000005';
+
+    update examination_room_v1.staff_memberships
+    set email_normalized = 'student@example.invalid'
+    where institution_id = 'ddc00000-0000-4000-8000-000000000001'
+      and user_id = '10000000-0000-0000-0000-000000000005';
+
     do $approval_stress$
     declare
       iteration integer;
@@ -1147,13 +1424,13 @@ try {
       for iteration in 1..100 loop
         result := public.examination_room_v1_api(
           'admin',
-          'activate_exam',
+          'email_key',
           '10000000-0000-0000-0000-000000000001',
           'ddc00000-0000-4000-8000-000000000001',
           jsonb_build_object(
             'examId', '30000000-0000-4000-8000-000000000010',
             'requestHash', repeat('d2', 32),
-            'roomKeyHash', encode(sha256(convert_to(iteration::text, 'UTF8')), 'hex'),
+            'roomKeyHash', repeat('d7', 32),
             'keyHashAlgorithm', 'hmac-sha256-v1',
             'opensAt', clock_timestamp() - interval '1 minute',
             'closesAt', clock_timestamp() + interval '1 day',
@@ -1179,12 +1456,128 @@ try {
   );
   assert.equal(
     await scalar(database, `
-      select key_hash = encode(sha256(convert_to('100', 'UTF8')), 'hex')
+      select key_hash = repeat('d7', 32)
       from examination_room_v1.room_activations
       where exam_id = '30000000-0000-4000-8000-000000000010'
     `),
     true,
-    'the latest retried key verifier is the only active verifier after 100 approvals',
+    'the original key verifier is unchanged after 100 exact approval retries',
+  );
+  const replayWithDifferentKey = await scalar(database, `
+    select public.examination_room_v1_api(
+        'admin',
+        'email_key',
+        '10000000-0000-0000-0000-000000000001',
+        'ddc00000-0000-4000-8000-000000000001',
+        jsonb_build_object(
+          'examId', '30000000-0000-4000-8000-000000000010',
+          'requestHash', repeat('d2', 32),
+          'roomKeyHash', repeat('d8', 32),
+          'keyHashAlgorithm', 'hmac-sha256-v1',
+          'opensAt', clock_timestamp() - interval '1 minute',
+          'closesAt', clock_timestamp() + interval '1 day',
+          'maxSessions', null,
+          'replaceCurrent', false
+        )
+      )
+    `);
+  assert.equal(
+    replayWithDifferentKey.errorCode,
+    'ACTIVATION_REPLAY_REQUIRES_NEW_REQUEST',
+    'a different verifier cannot silently replace an idempotent active key',
+  );
+
+  const activationId = await scalar(database, `
+    select id
+    from examination_room_v1.room_activations
+    where exam_id = '30000000-0000-4000-8000-000000000010'
+    order by created_at desc
+    limit 1
+  `);
+  const failedNullableAudit = await scalar(database, `
+    select public.examination_room_v1_owner_command(
+      'record_email_delivery',
+      '10000000-0000-0000-0000-000000000001',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000010',
+      jsonb_build_object(
+        'activationId', '${activationId}',
+        'requestHash', repeat('d9', 32),
+        'deliveryKind', 'activation_key',
+        'professorRecipient', null,
+        'ownerCopyRecipients', jsonb_build_array('owner@duediligence.ph'),
+        'providerStatus', 'failed',
+        'providerId', null,
+        'safeErrorCode', 'provider_503',
+        'attemptedAt', clock_timestamp()
+      )
+    )
+  `);
+  assert.equal(failedNullableAudit.ok, true, 'owner delivery evidence accepts a nullable creator recipient');
+  assert.equal(failedNullableAudit.providerStatus, 'failed');
+
+  const sentNullableAudit = await scalar(database, `
+    select public.examination_room_v1_owner_command(
+      'record_email_delivery',
+      '10000000-0000-0000-0000-000000000001',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000010',
+      jsonb_build_object(
+        'activationId', '${activationId}',
+        'requestHash', repeat('d9', 32),
+        'deliveryKind', 'activation_key',
+        'professorRecipient', null,
+        'ownerCopyRecipients', jsonb_build_array('owner@duediligence.ph'),
+        'providerStatus', 'sent',
+        'providerId', 'provider-owner-only-1',
+        'safeErrorCode', null,
+        'attemptedAt', clock_timestamp()
+      )
+    )
+  `);
+  assert.equal(sentNullableAudit.ok, true, 'a nullable-recipient delivery retry upgrades durable evidence to sent');
+  assert.equal(sentNullableAudit.providerStatus, 'sent');
+  assert.equal(sentNullableAudit.providerId, 'provider-owner-only-1');
+  assert.equal(
+    Number(await scalar(database, `
+      select count(*)
+      from examination_room_v1.email_delivery_events
+      where request_hash = repeat('d9', 32)
+        and professor_recipient is null
+        and provider_status = 'sent'
+    `)),
+    1,
+    'nullable creator delivery evidence remains one idempotent owner-audit row',
+  );
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'student',
+        'preview',
+        null,
+        null,
+        jsonb_build_object(
+          'roomKeyHash', repeat('d7', 32),
+          'identity', jsonb_build_object(
+            'realName', 'Open Key Student',
+            'studentNumber', 'OPEN-1001',
+            'subject', 'Any entered subject',
+            'yearLevel', 'Any entered year'
+          )
+        )
+      ) ->> 'ok'
+    `),
+    'true',
+    'any student can preview immediately after Admin key approval without a Professor open-room action',
+  );
+  assert.equal(
+    Number(await scalar(database, `
+      select count(*) from examination_room_v1.exam_roster
+      where exam_id = '30000000-0000-4000-8000-000000000010'
+    `)),
+    1,
+    'the key-only preview atomically creates the student identity and exam roster row',
   );
 
   assert.equal(
@@ -1202,37 +1595,7 @@ try {
       ) ->> 'status'
     `),
     'open',
-    'the exact creator opens the latest admin activation without entering its raw key',
-  );
-
-  assert.equal(
-    await scalar(database, `
-      select public.examination_room_v1_api(
-        'student',
-        'preview',
-        null,
-        null,
-        jsonb_build_object(
-          'roomKeyHash', encode(sha256(convert_to('100', 'UTF8')), 'hex'),
-          'identity', jsonb_build_object(
-            'realName', 'Open Key Student',
-            'studentNumber', 'OPEN-1001',
-            'subject', 'Any entered subject',
-            'yearLevel', 'Any entered year'
-          )
-        )
-      ) ->> 'ok'
-    `),
-    'true',
-    'any student with the active key and complete identity can preview a key-only exam',
-  );
-  assert.equal(
-    Number(await scalar(database, `
-      select count(*) from examination_room_v1.exam_roster
-      where exam_id = '30000000-0000-4000-8000-000000000010'
-    `)),
-    1,
-    'the key-only preview atomically creates the student identity and exam roster row',
+    'legacy open-room calls remain harmless and idempotent after immediate activation',
   );
 
   assert.equal(
@@ -1243,7 +1606,7 @@ try {
         null,
         null,
         jsonb_build_object(
-          'roomKeyHash', encode(sha256(convert_to('100', 'UTF8')), 'hex'),
+          'roomKeyHash', repeat('d7', 32),
           'identity', jsonb_build_object(
             'realName', 'Open Key Student',
             'studentNumber', 'OPEN-1001',
@@ -1299,7 +1662,7 @@ try {
         null,
         null,
         jsonb_build_object(
-          'roomKeyHash', encode(sha256(convert_to('100', 'UTF8')), 'hex'),
+          'roomKeyHash', repeat('d7', 32),
           'identity', jsonb_build_object(
             'realName', 'Open Key Student',
             'studentNumber', 'OPEN-1001',
@@ -1384,7 +1747,7 @@ try {
     'the optional email allowlist publishes without a pre-uploaded roster',
   );
 
-  await database.exec(`
+  const allowlistImmediateActivation = await scalar(database, `
     select public.examination_room_v1_api(
       'admin',
       'activate_exam',
@@ -1395,24 +1758,27 @@ try {
         'requestHash', repeat('e2', 32),
         'roomKeyHash', repeat('e3', 32),
         'keyHashAlgorithm', 'hmac-sha256-v1',
-        'opensAt', clock_timestamp() - interval '1 minute',
-        'closesAt', clock_timestamp() + interval '1 day',
         'maxSessions', null,
         'replaceCurrent', false
       )
-    );
-    select public.examination_room_v1_api(
-      'professor',
-      'open_room',
-      '10000000-0000-0000-0000-000000000005',
-      'ddc00000-0000-4000-8000-000000000001',
-      jsonb_build_object(
-        'examId', '30000000-0000-4000-8000-000000000020',
-        'requestHash', repeat('e4', 32),
-        'openedAt', clock_timestamp()
-      )
-    );
+    )
   `);
+  assert.equal(
+    allowlistImmediateActivation.ok,
+    true,
+    `Admin can issue a key without any date/time payload: ${JSON.stringify(allowlistImmediateActivation)}`,
+  );
+  assert.equal(
+    allowlistImmediateActivation.activation.status,
+    'open',
+    'date-free Admin approval is the final room-opening step',
+  );
+  assert.equal(
+    Date.parse(allowlistImmediateActivation.activation.expiresAt)
+      > Date.now() + 170 * 24 * 60 * 60 * 1000,
+    true,
+    'a missing closing time receives the server recovery horizon instead of blocking approval',
+  );
 
   assert.equal(
     await scalar(database, `
@@ -1484,6 +1850,109 @@ try {
   );
 
   await database.exec(`
+    insert into examination_room_v1.room_activations (
+      id, exam_id, institution_id, exam_version_id, key_hash,
+      key_hash_algorithm, request_hash, activation_status,
+      opens_at, closes_at, max_sessions, activated_by_user_id
+    ) values
+      (
+        '30000000-0000-4000-8000-000000000031',
+        '30000000-0000-4000-8000-000000000020',
+        'ddc00000-0000-4000-8000-000000000001',
+        (select current_published_version_id from examination_room_v1.exams
+         where id = '30000000-0000-4000-8000-000000000020'),
+        repeat('e4', 32), 'hmac-sha256-v1', repeat('f4', 32), 'scheduled',
+        clock_timestamp() + interval '2 hours', clock_timestamp() + interval '1 day',
+        null, '10000000-0000-0000-0000-000000000001'
+      ),
+      (
+        '30000000-0000-4000-8000-000000000032',
+        '30000000-0000-4000-8000-000000000020',
+        'ddc00000-0000-4000-8000-000000000001',
+        (select current_published_version_id from examination_room_v1.exams
+         where id = '30000000-0000-4000-8000-000000000020'),
+        repeat('e5', 32), 'hmac-sha256-v1', repeat('f5', 32), 'closed',
+        clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 day',
+        null, '10000000-0000-0000-0000-000000000001'
+      ),
+      (
+        '30000000-0000-4000-8000-000000000033',
+        '30000000-0000-4000-8000-000000000020',
+        'ddc00000-0000-4000-8000-000000000001',
+        (select current_published_version_id from examination_room_v1.exams
+         where id = '30000000-0000-4000-8000-000000000020'),
+        repeat('e6', 32), 'hmac-sha256-v1', repeat('f6', 32), 'revoked',
+        clock_timestamp() - interval '1 hour', clock_timestamp() + interval '1 day',
+        null, '10000000-0000-0000-0000-000000000001'
+      ),
+      (
+        '30000000-0000-4000-8000-000000000034',
+        '30000000-0000-4000-8000-000000000020',
+        'ddc00000-0000-4000-8000-000000000001',
+        (select current_published_version_id from examination_room_v1.exams
+         where id = '30000000-0000-4000-8000-000000000020'),
+        repeat('e7', 32), 'hmac-sha256-v1', repeat('f7', 32), 'open',
+        clock_timestamp() - interval '2 days', clock_timestamp() - interval '1 day',
+        null, '10000000-0000-0000-0000-000000000001'
+      );
+  `);
+
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'student', 'preview', null, null,
+        jsonb_build_object(
+          'roomKeyHash', repeat('e4', 32),
+          'identity', jsonb_build_object(
+            'realName', 'Rolling Release Student',
+            'studentNumber', 'LIST-ROLLING-1',
+            'subject', 'Civil Law',
+            'yearLevel', 'First year',
+            'email', 'friend@example.com'
+          )
+        )
+      ) ->> 'ok'
+    `),
+    'true',
+    'an older scheduled key opens itself during a rolling release without a Professor action',
+  );
+  assert.equal(
+    await scalar(database, `
+      select activation_status = 'open' and opens_at <= clock_timestamp()
+      from examination_room_v1.room_activations
+      where id = '30000000-0000-4000-8000-000000000031'
+    `),
+    true,
+    'rolling-release compatibility promotes only the selected non-expired scheduled key',
+  );
+
+  for (const [keyHash, state] of [
+    [repeatHex('e5'), 'closed'],
+    [repeatHex('e6'), 'revoked'],
+    [repeatHex('e7'), 'expired'],
+  ]) {
+    assert.equal(
+      await scalar(database, `
+        select public.examination_room_v1_api(
+          'student', 'preview', null, null,
+          jsonb_build_object(
+            'roomKeyHash', '${keyHash}',
+            'identity', jsonb_build_object(
+              'realName', 'Denied Key Student',
+              'studentNumber', 'DENIED-${state.toUpperCase()}',
+              'subject', 'Civil Law',
+              'yearLevel', 'First year',
+              'email', 'friend@example.com'
+            )
+          )
+        ) ->> 'errorCode'
+      `),
+      'ROOM_KEY_INVALID',
+      `${state} activation keys remain denied`,
+    );
+  }
+
+  await database.exec(`
     insert into examination_room_v1.student_sessions (
       id, activation_id, exam_id, institution_id, exam_version_id, roster_id,
       session_token_hash, consent_request_hash, client_instance_id,
@@ -1492,7 +1961,8 @@ try {
       '30000000-0000-4000-8000-000000000021',
       (select activation.id from examination_room_v1.room_activations activation
        where activation.exam_id = '30000000-0000-4000-8000-000000000020'
-       order by activation.created_at desc limit 1),
+         and activation.key_hash = repeat('e3', 32)
+       limit 1),
       '30000000-0000-4000-8000-000000000020',
       'ddc00000-0000-4000-8000-000000000001',
       (select exam.current_published_version_id from examination_room_v1.exams exam
@@ -1501,7 +1971,7 @@ try {
        from examination_room_v1.exam_roster roster
        join examination_room_v1.student_identities identity on identity.id = roster.student_identity_id
        where roster.exam_id = '30000000-0000-4000-8000-000000000020'
-         and identity.email_normalized = 'friend@example.com'),
+         and identity.external_student_id = 'LIST-1002'),
       repeat('a1', 32), repeat('a2', 32),
       '30000000-0000-4000-8000-000000000025',
       'submitted', clock_timestamp() - interval '1 hour',
@@ -1628,8 +2098,243 @@ try {
     'the owner exam bundle includes exact per-student result-email evidence',
   );
 
+  const reservedMedia = await scalar(database, `
+    select public.examination_room_v1_media(
+      'reserve',
+      jsonb_build_object(
+        'sessionId', '30000000-0000-4000-8000-000000000021',
+        'sessionTokenHash', repeat('a1', 32),
+        'clientArtifactId', '30000000-0000-4000-8000-000000000027',
+        'requestHash', repeat('b1', 32),
+        'artifactKind', 'camera_chunk',
+        'sourceMimeType', 'video/webm;codecs=vp8,opus',
+        'encryptedSizeBytes', 1024,
+        'objectSha256', repeat('b2', 32),
+        'capturedFrom', clock_timestamp() - interval '1 minute',
+        'capturedTo', clock_timestamp(),
+        'retentionUntil', clock_timestamp() + interval '30 days',
+        'provider', 'supabase_storage',
+        'providerObjectReference', 'exam-media/session-21/artifact-27.enc',
+        'keyEnvelope', jsonb_build_object(
+          'algorithm', 'aes-256-gcm-v1',
+          'keyVersion', 1,
+          'ciphertext', repeat('A', 43),
+          'iv', repeat('B', 16),
+          'aadSha256', repeat('b3', 32)
+        )
+      )
+    )
+  `);
+  assert.equal(reservedMedia.ok, true, `recorded media reservation succeeds: ${JSON.stringify(reservedMedia)}`);
+  assert.equal(reservedMedia.status, 'prepared');
+  assert.equal(reservedMedia.provider, 'supabase_storage');
+
+  const completedMedia = await scalar(database, `
+    select public.examination_room_v1_media(
+      'complete',
+      jsonb_build_object(
+        'sessionId', '30000000-0000-4000-8000-000000000021',
+        'sessionTokenHash', repeat('a1', 32),
+        'clientArtifactId', '30000000-0000-4000-8000-000000000027',
+        'requestHash', repeat('b4', 32),
+        'provider', 'supabase_storage',
+        'providerObjectReference', 'exam-media/session-21/artifact-27.enc',
+        'objectSha256', repeat('b2', 32),
+        'encryptedSizeBytes', 1024,
+        'providerVerified', true,
+        'providerResult', jsonb_build_object('etag', 'local-database-proof', 'size', 1024),
+        'completedAt', clock_timestamp()
+      )
+    )
+  `);
+  assert.equal(completedMedia.ok, true, `recorded media completion succeeds: ${JSON.stringify(completedMedia)}`);
+  assert.equal(completedMedia.status, 'completed');
+  assert.equal(
+    Number(await scalar(database, `
+      select count(*)
+      from examination_room_v1.proctoring_artifacts artifact
+      join examination_room_v1.media_upload_intents intent on intent.artifact_id = artifact.id
+      where intent.client_artifact_id = '30000000-0000-4000-8000-000000000027'
+        and artifact.encrypted_object_reference = 'exam-media/session-21/artifact-27.enc'
+        and intent.intent_status = 'completed'
+    `)),
+    1,
+    'a completed encrypted recording is registered exactly once without storing media bytes',
+  );
+
+  const blockedLifecycle = await scalar(database, `
+    select public.examination_room_v1_lifecycle_command(
+      'block_exam',
+      '10000000-0000-0000-0000-000000000001',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000020',
+      jsonb_build_object(
+        'requestHash', repeat('c1', 32),
+        'reason', 'Owner paused new admissions for a live reliability review.'
+      )
+    )
+  `);
+  assert.equal(blockedLifecycle.ok, true, 'the platform owner can block new student admission');
+  assert.equal(blockedLifecycle.existingAnswersPreserved, true);
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_lifecycle_guard(
+        '30000000-0000-4000-8000-000000000020'
+      ) ->> 'errorCode'
+    `),
+    'EXAMINATION_BLOCKED',
+    'a blocked room rejects only new admission through the lifecycle guard',
+  );
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'student', 'preview', null, null,
+        jsonb_build_object(
+          'roomKeyHash', repeat('e3', 32),
+          'identity', jsonb_build_object(
+            'realName', 'Blocked Admission Student',
+            'studentNumber', 'BLOCKED-1001',
+            'subject', 'Civil Law',
+            'yearLevel', 'First year',
+            'email', 'friend@example.com'
+          )
+        )
+      ) ->> 'errorCode'
+    `),
+    'EXAMINATION_BLOCKED',
+    'the keyed student path itself enforces the owner block before creating a roster row',
+  );
+  assert.equal(
+    Number(await scalar(database, `
+      select count(*) from examination_room_v1.submissions
+      where id = '30000000-0000-4000-8000-000000000022'
+    `)),
+    1,
+    'blocking the room preserves the submitted answer record',
+  );
+
+  const unblockedLifecycle = await scalar(database, `
+    select public.examination_room_v1_lifecycle_command(
+      'unblock_exam',
+      '10000000-0000-0000-0000-000000000001',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000020',
+      jsonb_build_object('requestHash', repeat('c2', 32), 'reason', 'Owner review completed.')
+    )
+  `);
+  assert.equal(unblockedLifecycle.ok, true, 'the platform owner can unblock the same room');
+
+  const archivedLifecycle = await scalar(database, `
+    select public.examination_room_v1_lifecycle_command(
+      'archive_exam',
+      '10000000-0000-0000-0000-000000000005',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000020',
+      jsonb_build_object('requestHash', repeat('c3', 32), 'reason', 'Creator archived the completed class.')
+    )
+  `);
+  assert.equal(archivedLifecycle.ok, true, 'the signed-in creator can archive an owned published examination');
+  assert.equal(archivedLifecycle.recoverable, true);
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_lifecycle_guard(
+        '30000000-0000-4000-8000-000000000020'
+      ) ->> 'errorCode'
+    `),
+    'EXAMINATION_ARCHIVED',
+    'an archived room no longer accepts a student key',
+  );
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_api(
+        'student', 'preview', null, null,
+        jsonb_build_object(
+          'roomKeyHash', repeat('e3', 32),
+          'identity', jsonb_build_object(
+            'realName', 'Archived Admission Student',
+            'studentNumber', 'ARCHIVED-1001',
+            'subject', 'Civil Law',
+            'yearLevel', 'First year',
+            'email', 'friend@example.com'
+          )
+        )
+      ) ->> 'errorCode'
+    `),
+    'EXAMINATION_ARCHIVED',
+    'the keyed student path returns the archived lifecycle denial even after its activation closes',
+  );
+
+  const restoredLifecycle = await scalar(database, `
+    select public.examination_room_v1_lifecycle_command(
+      'restore_exam',
+      '10000000-0000-0000-0000-000000000001',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000020',
+      jsonb_build_object('requestHash', repeat('c4', 32), 'reason', 'Owner restored the complete examination record.')
+    )
+  `);
+  assert.equal(restoredLifecycle.ok, true, 'the platform owner can restore an archived examination');
+  assert.equal(restoredLifecycle.status, 'closed');
+  assert.equal(restoredLifecycle.needsNewKey, true);
+
+  const reopenedLifecycle = await scalar(database, `
+    select public.examination_room_v1_lifecycle_command(
+      'reopen_exam',
+      '10000000-0000-0000-0000-000000000001',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000020',
+      jsonb_build_object('requestHash', repeat('c5', 32), 'reason', 'Owner reopened the exam for a new class and key.')
+    )
+  `);
+  assert.equal(reopenedLifecycle.ok, true, 'the platform owner can reopen a restored published examination');
+  assert.equal(reopenedLifecycle.nextAction, 'issue_and_email_key');
+  assert.equal(
+    await scalar(database, `
+      select public.examination_room_v1_lifecycle_query(
+        '10000000-0000-0000-0000-000000000001',
+        'ddc00000-0000-4000-8000-000000000001',
+        '30000000-0000-4000-8000-000000000020'
+      ) #>> '{items,0,status}'
+    `),
+    'published',
+    'the owner command center immediately sees the reopened lifecycle state',
+  );
+
+  await database.exec(`
+    insert into examination_room_v1.exams (
+      id, institution_id, owner_user_id, title
+    ) values (
+      '30000000-0000-4000-8000-000000000099',
+      'ddc00000-0000-4000-8000-000000000001',
+      '10000000-0000-0000-0000-000000000006',
+      'Recoverable Creator Draft'
+    );
+  `);
+  const deletedDraft = await scalar(database, `
+    select public.examination_room_v1_lifecycle_command(
+      'delete_draft',
+      '10000000-0000-0000-0000-000000000006',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000099',
+      jsonb_build_object('requestHash', repeat('c6', 32), 'reason', 'Creator removed this unused draft.')
+    )
+  `);
+  assert.equal(deletedDraft.ok, true, 'any signed-in creator can delete an unpublished owned draft');
+  assert.equal(deletedDraft.recoverable, true, 'creator deletion remains recoverable to the platform owner');
+  const restoredDraft = await scalar(database, `
+    select public.examination_room_v1_lifecycle_command(
+      'restore_exam',
+      '10000000-0000-0000-0000-000000000001',
+      'ddc00000-0000-4000-8000-000000000001',
+      '30000000-0000-4000-8000-000000000099',
+      jsonb_build_object('requestHash', repeat('c7', 32), 'reason', 'Owner restored the creator draft after review.')
+    )
+  `);
+  assert.equal(restoredDraft.ok, true, 'the platform owner can restore a creator-deleted draft');
+  assert.equal(restoredDraft.status, 'draft');
+
   console.log(
-    `Examination Room database validation passed: full migration, ${plannedAssertions}-assertion database suite, plus community creator, roster-free publication, 100-approval idempotency, open admission, allowlist, revocation, exact-owner, platform-owner, and upgrade checks.`,
+    `Examination Room database validation passed: all eight additive migrations, ${plannedAssertions}-assertion database suite, plus immediate Admin key activation, date-free approval, rolling scheduled-key compatibility, community creator, roster-free publication, 100-approval idempotency, open admission, allowlist, revoked/closed/expired denial, lifecycle recovery, encrypted media, exact-owner, platform-owner, and upgrade checks.`,
   );
 } finally {
   await database.close();

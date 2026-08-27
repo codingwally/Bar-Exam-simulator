@@ -10,6 +10,17 @@ const attemptId = '33333333-3333-4333-8333-333333333333';
 const jobId = '44444444-4444-4444-8444-444444444444';
 const tabToken = 'tab_token_that_is_long_enough_for_a_secure_hash';
 
+function canonicalBarSimulationSetup(overrides = {}) {
+  return {
+    versionId,
+    track: 'bar_feels',
+    assessmentKind: 'curated',
+    testOnly: false,
+    subject: 'Civil Law',
+    ...overrides,
+  };
+}
+
 const env = {
   ALLOWED_ORIGIN: origin,
   SUPABASE_URL: supabaseUrl,
@@ -790,7 +801,7 @@ test('start attempt preserves server response and returns HTTP 201', async () =>
   });
 });
 
-test('Bar Exam Simulation uses the private randomized allocator only when both rollout gates are on', async () => {
+test('eligible public curated Bar Simulation destination uses the private randomized allocator when both rollout gates are on', async () => {
   const called = [];
   await withFetchMock(async (url, options) => {
     const auth = authResponse(url);
@@ -800,6 +811,17 @@ test('Bar Exam Simulation uses the private randomized allocator only when both r
     called.push(target);
     if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
       return Response.json({ allowed: true, track: 'bar_feels' });
+    }
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
+      assert.deepEqual(payload, {
+        p_user_id: userId,
+        p_operation: 'setup',
+        p_payload: {
+          operation: 'setup',
+          versionId,
+        },
+      });
+      return Response.json(canonicalBarSimulationSetup());
     }
     assert.equal(target, `${supabaseUrl}/rest/v1/rpc/bar_simulation_start_attempt_v1`);
     assert.deepEqual(payload, {
@@ -836,6 +858,98 @@ test('Bar Exam Simulation uses the private randomized allocator only when both r
   });
 });
 
+test('test-only, uploaded, system-test, and noncanonical Bar Simulation definitions preserve the fixed start path', async () => {
+  const cases = [
+    {
+      label: 'test-only curated Criminal Law I',
+      setup: canonicalBarSimulationSetup({
+        subject: 'Criminal Law I',
+        testOnly: true,
+      }),
+    },
+    {
+      label: 'uploaded Civil Law',
+      setup: canonicalBarSimulationSetup({ assessmentKind: 'uploaded' }),
+    },
+    {
+      label: 'system-test Criminal Law',
+      setup: canonicalBarSimulationSetup({
+        assessmentKind: 'system_test',
+        subject: 'Criminal Law',
+      }),
+    },
+    {
+      label: 'noncanonical curated Criminal Law I',
+      setup: canonicalBarSimulationSetup({ subject: 'Criminal Law I' }),
+    },
+  ];
+
+  for (const [index, testCase] of cases.entries()) {
+    const calls = [];
+    await withFetchMock(async (url, options) => {
+      const auth = authResponse(url);
+      if (auth) return auth;
+      const target = String(url);
+      const payload = JSON.parse(options.body);
+      calls.push(target);
+      if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+        return Response.json({ allowed: true, track: 'bar_feels' });
+      }
+      if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
+        assert.equal(payload.p_operation, 'setup');
+        assert.equal(payload.p_payload.versionId, versionId);
+        return Response.json(testCase.setup);
+      }
+      assert.equal(
+        target,
+        `${supabaseUrl}/rest/v1/rpc/examination_command`,
+        testCase.label,
+      );
+      assert.equal(payload.p_operation, 'start_attempt');
+      return Response.json({
+        attempt: { attemptId, status: 'in_progress' },
+        examination: {
+          track: 'bar_feels',
+          assessmentKind: testCase.setup.assessmentKind,
+          questionCount: 4,
+        },
+        questions: [],
+        resumed: false,
+      });
+    }, async () => {
+      const response = await worker.fetch(request('/examinations/command', {
+        operation: 'start_attempt',
+        versionId,
+        timerMode: 'strict',
+        requestKey: `fixed_simulation_start_${String(index + 1).padStart(2, '0')}`,
+        tabToken,
+      }), {
+        ...env,
+        BAR_EXAM_SIMULATION_RANDOMIZATION_V1_SCHEMA_READY: 'true',
+        BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED: 'true',
+      });
+      const body = await response.json();
+      assert.equal(response.status, 201, testCase.label);
+      assert.equal(body.data.attempt.attemptId, attemptId, testCase.label);
+      assert.equal(
+        calls.some((url) => url.endsWith('/bar_simulation_start_attempt_v1')),
+        false,
+        testCase.label,
+      );
+      assert.equal(
+        calls.some((url) => url.endsWith('/bar_simulation_open_attempt_v1')),
+        false,
+        testCase.label,
+      );
+      assert.equal(
+        calls.filter((url) => url.endsWith('/examination_command')).length,
+        1,
+        testCase.label,
+      );
+    });
+  }
+});
+
 test('Simulation rollback resumes an existing private allocation but sends new starts to the fixed catalog', async () => {
   for (const hasOpenAllocation of [true, false]) {
     const calls = [];
@@ -847,6 +961,9 @@ test('Simulation rollback resumes an existing private allocation but sends new s
       calls.push(target);
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
         return Response.json({ allowed: true, track: 'bar_feels' });
+      }
+      if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
+        return Response.json(canonicalBarSimulationSetup());
       }
       if (target === `${supabaseUrl}/rest/v1/rpc/bar_simulation_open_attempt_v1`) {
         assert.deepEqual(payload, {
@@ -915,6 +1032,9 @@ test('Simulation allocator failures return safe exhaustion and availability resp
       const target = String(url);
       if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
         return Response.json({ allowed: true, track: 'bar_feels' });
+      }
+      if (target === `${supabaseUrl}/rest/v1/rpc/examination_query`) {
+        return Response.json(canonicalBarSimulationSetup());
       }
       assert.equal(target, `${supabaseUrl}/rest/v1/rpc/bar_simulation_start_attempt_v1`);
       return Response.json({

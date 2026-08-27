@@ -9,10 +9,12 @@ import {
   normalizeRoomKey,
 } from './examination-room-v1-core.mjs';
 import {
+  EXAMINATION_ROOM_V1_PATHS,
   ExaminationRoomV1RouteError,
   createExaminationRoomV1Handlers,
   professorDraftFromClientExam,
 } from './examination-room-v1-routes.mjs';
+import { ExaminationRoomMediaError } from './examination-room-media.mjs';
 
 const IDS = Object.freeze({
   institution: '11111111-1111-4111-8111-111111111111',
@@ -22,6 +24,7 @@ const IDS = Object.freeze({
   exam: '44444444-4444-4444-8444-444444444444',
   session: '55555555-5555-4555-8555-555555555555',
   submission: '66666666-6666-4666-8666-666666666666',
+  artifact: '88888888-8888-4888-8888-888888888888',
 });
 
 const ENV = Object.freeze({ EXAMINATION_ROOM_KEY_PEPPER: 'test-only-examination-room-pepper-32-bytes-minimum' });
@@ -91,10 +94,25 @@ function identityFixture() {
   };
 }
 
+function mediaFixture(overrides = {}) {
+  return {
+    artifactId: IDS.artifact,
+    artifactKind: 'camera_chunk',
+    sourceMimeType: 'video/webm;codecs=vp8,opus',
+    encryptedSizeBytes: 1_048_640,
+    objectSha256: 'c'.repeat(64),
+    capturedFrom: '2026-08-26T02:10:00.000Z',
+    capturedTo: '2026-08-26T02:14:00.000Z',
+    derivedKey: Buffer.alloc(32, 9).toString('base64'),
+    ...overrides,
+  };
+}
+
 function previewFixture(integrityTier = 'standard') {
   return {
     metadata: {
       examId: IDS.exam,
+      examVersion: 'published-v1',
       title: 'Constitutional Law Midterm',
       subject: 'Constitutional Law',
       yearLevel: 'Second year',
@@ -173,6 +191,9 @@ function dependencyFixture(options = {}) {
   const managementCalls = [];
   const professorAccessCalls = [];
   const deliveries = [];
+  const lifecycleQueryCalls = [];
+  const lifecycleCommandCalls = [];
+  const lifecycleGuardCalls = [];
   let uuidCounter = 0;
   const rpc = options.rpc || (async (_env, parameters) => ({ ok: true, parameters }));
   const dependencies = {
@@ -239,8 +260,47 @@ function dependencyFixture(options = {}) {
     ...(typeof options.afterProfessorCommand === 'function'
       ? { afterProfessorCommand: options.afterProfessorCommand }
       : {}),
+    ...(typeof options.examinationRoomAssistant === 'function'
+      ? { examinationRoomAssistant: options.examinationRoomAssistant }
+      : {}),
+    ...(typeof options.examinationRoomMedia === 'function'
+      ? { examinationRoomMedia: options.examinationRoomMedia }
+      : {}),
+    ...(typeof options.examLifecycleQuery === 'function'
+      ? {
+          examLifecycleQuery: async (env, parameters) => {
+            lifecycleQueryCalls.push(structuredClone(parameters));
+            return options.examLifecycleQuery(env, parameters);
+          },
+        }
+      : {}),
+    ...(typeof options.examLifecycleCommand === 'function'
+      ? {
+          examLifecycleCommand: async (env, parameters) => {
+            lifecycleCommandCalls.push(structuredClone(parameters));
+            return options.examLifecycleCommand(env, parameters);
+          },
+        }
+      : {}),
+    ...(typeof options.examLifecycleGuard === 'function'
+      ? {
+          examLifecycleGuard: async (env, examId) => {
+            lifecycleGuardCalls.push(examId);
+            return options.examLifecycleGuard(env, examId);
+          },
+        }
+      : {}),
   };
-  return { handlers: createExaminationRoomV1Handlers(dependencies), calls, managementCalls, professorAccessCalls, deliveries };
+  return {
+    handlers: createExaminationRoomV1Handlers(dependencies),
+    calls,
+    managementCalls,
+    professorAccessCalls,
+    deliveries,
+    lifecycleQueryCalls,
+    lifecycleCommandCalls,
+    lifecycleGuardCalls,
+  };
 }
 
 async function json(response) {
@@ -272,6 +332,182 @@ test('professor query requires verified sign-in', async () => {
   assert.equal(response.status, 401);
   assert.equal((await json(response)).error.code, 'EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED');
   assert.equal(calls.length, 0);
+});
+
+test('any signed-in creator can hold a contextual assistant conversation without a Professor role or exam mutation', async () => {
+  const assistantCalls = [];
+  const rateLimitScopes = [];
+  const { handlers, calls } = dependencyFixture({
+    authorizeProfessor: async () => ({
+      authorized: false,
+      creatorAuthorized: false,
+      professorRoleSelected: false,
+      institutionId: null,
+      creatorWorkspaces: [],
+      memberships: [],
+    }),
+    rateLimit: async (_request, _env, scope) => {
+      rateLimitScopes.push(scope);
+    },
+    examinationRoomAssistant: async (_env, input, serverContext) => {
+      assistantCalls.push({ input, serverContext });
+      return {
+        reply: `Your earlier concern about timing applies to ${input.examContext.title}. Keep the instructions explicit.`,
+        suggestedActionIds: ['focus_instructions', 'open_review'],
+      };
+    },
+  });
+  const response = await handlers.professorAssistant(
+    makeRequest('/examination-room/v1/professor/assistant', {
+      message: 'Can you connect this to what I asked before?',
+      history: [
+        { role: 'user', content: 'I need a two-hour Constitutional Law exam.' },
+        { role: 'assistant', content: 'I can review its instructions and settings.' },
+      ],
+      examContext: {
+        examId: IDS.exam,
+        status: 'draft',
+        title: 'Constitutional Law Midterm',
+        subject: 'Constitutional Law',
+        durationMinutes: 120,
+        questionCount: 1,
+        questions: [{ number: 1, type: 'essay', prompt: 'Apply separation of powers.', points: 20 }],
+        currentSection: 'instructions',
+      },
+    }),
+    ENV, ORIGIN, ORIGIN,
+  );
+  const body = await json(response);
+  assert.equal(response.status, 200);
+  assert.equal(EXAMINATION_ROOM_V1_PATHS['/examination-room/v1/professor/assistant'], 'professorAssistant');
+  assert.equal(body.ok, true);
+  assert.match(body.assistant.reply, /earlier concern about timing/u);
+  assert.deepEqual(body.assistant.suggestedActionIds, ['focus_instructions', 'open_review']);
+  assert.deepEqual(rateLimitScopes, ['professor_assistant']);
+  assert.equal(assistantCalls.length, 1);
+  assert.equal(assistantCalls[0].input.history.length, 2);
+  assert.equal(assistantCalls[0].input.examContext.durationMinutes, 120);
+  assert.equal(assistantCalls[0].serverContext.actorUserId, IDS.professor);
+  assert.equal(calls.length, 0, 'assistant guidance must never mutate or query the examination store');
+});
+
+test('assistant rate limiting stops authentication and generation with recoverable guidance', async () => {
+  let assistantCalls = 0;
+  const { handlers, calls } = dependencyFixture({
+    rateLimit: async () => {
+      throw new ExaminationRoomV1RouteError(
+        'EXAM_ROOM_V1_RATE_LIMITED',
+        'Too many assistant messages.',
+        429,
+        'Wait a few minutes, then send the message once. Your examination remains unchanged.',
+      );
+    },
+    examinationRoomAssistant: async () => {
+      assistantCalls += 1;
+      return { reply: 'Must not run.', suggestedActionIds: [] };
+    },
+  });
+  const response = await handlers.professorAssistant(
+    makeRequest('/examination-room/v1/professor/assistant', {
+      message: 'Help with my exam.', history: [], examContext: {},
+    }),
+    ENV, ORIGIN, ORIGIN,
+  );
+  const body = await json(response);
+  assert.equal(response.status, 429);
+  assert.equal(body.error.code, 'EXAM_ROOM_V1_RATE_LIMITED');
+  assert.match(body.error.recovery, /remains unchanged/u);
+  assert.equal(assistantCalls, 0);
+  assert.equal(calls.length, 0);
+});
+
+test('assistant requires only sign-in and does not invoke generation for anonymous requests', async () => {
+  let assistantCalls = 0;
+  const { handlers, calls } = dependencyFixture({
+    examinationRoomAssistant: async () => {
+      assistantCalls += 1;
+      return { reply: 'Must not run.', suggestedActionIds: [] };
+    },
+  });
+  const response = await handlers.professorAssistant(
+    makeRequest('/examination-room/v1/professor/assistant', {
+      message: 'Help with my exam.', history: [], examContext: {},
+    }, null),
+    ENV, ORIGIN, ORIGIN,
+  );
+  const body = await json(response);
+  assert.equal(response.status, 401);
+  assert.equal(body.error.code, 'EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED');
+  assert.match(body.error.recovery, /Sign in through Due Diligence/u);
+  assert.equal(assistantCalls, 0);
+  assert.equal(calls.length, 0);
+});
+
+test('assistant validates request and response boundaries without leaking provider failures', async () => {
+  let assistantCalls = 0;
+  const fixture = dependencyFixture({
+    examinationRoomAssistant: async () => {
+      assistantCalls += 1;
+      throw Object.assign(new Error('gemini-canary raw provider failure with secret=topsecret123'), {
+        model: 'model-canary',
+        provider: 'provider-canary',
+      });
+    },
+  });
+  const invalidRequest = await fixture.handlers.professorAssistant(
+    makeRequest('/examination-room/v1/professor/assistant', {
+      message: 'Help with my exam.', history: [], examContext: {}, provider: 'client-provider-canary',
+    }),
+    ENV, ORIGIN, ORIGIN,
+  );
+  const invalidBody = await json(invalidRequest);
+  assert.equal(invalidRequest.status, 400);
+  assert.equal(invalidBody.error.code, 'EXAM_ROOM_V1_ASSISTANT_REQUEST_INVALID');
+  assert.equal(assistantCalls, 0);
+
+  const failedResponse = await fixture.handlers.professorAssistant(
+    makeRequest('/examination-room/v1/professor/assistant', {
+      message: 'Help with my exam.', history: [], examContext: {},
+    }),
+    ENV, ORIGIN, ORIGIN,
+  );
+  const failedBody = await json(failedResponse);
+  assert.equal(failedResponse.status, 503);
+  assert.equal(failedBody.error.code, 'EXAM_ROOM_V1_ASSISTANT_UNAVAILABLE');
+  assert.match(failedBody.error.recovery, /examination remains unchanged/iu);
+  assert.doesNotMatch(JSON.stringify(failedBody), /gemini|provider-canary|model-canary|topsecret123/iu);
+  assert.equal(assistantCalls, 1);
+});
+
+test('assistant rejects unsafe generated actions and reports missing configuration without blocking editing', async () => {
+  const unsafe = dependencyFixture({
+    examinationRoomAssistant: async () => ({
+      reply: 'I published the exam for you.',
+      suggestedActionIds: ['publish_exam'],
+    }),
+  });
+  const unsafeResponse = await unsafe.handlers.professorAssistant(
+    makeRequest('/examination-room/v1/professor/assistant', {
+      message: 'Publish it.', history: [], examContext: {},
+    }),
+    ENV, ORIGIN, ORIGIN,
+  );
+  const unsafeBody = await json(unsafeResponse);
+  assert.equal(unsafeResponse.status, 503);
+  assert.equal(unsafeBody.error.code, 'EXAM_ROOM_V1_ASSISTANT_RESPONSE_INVALID');
+  assert.match(unsafeBody.error.recovery, /remains unchanged/iu);
+
+  const missing = dependencyFixture();
+  const missingResponse = await missing.handlers.professorAssistant(
+    makeRequest('/examination-room/v1/professor/assistant', {
+      message: 'Review my instructions.', history: [], examContext: {},
+    }),
+    ENV, ORIGIN, ORIGIN,
+  );
+  const missingBody = await json(missingResponse);
+  assert.equal(missingResponse.status, 503);
+  assert.equal(missingBody.error.code, 'EXAM_ROOM_V1_ASSISTANT_UNAVAILABLE');
+  assert.match(missingBody.error.recovery, /Continue editing manually/u);
 });
 
 test('signed-in Professor profile can read role status and request protected school activation', async () => {
@@ -318,6 +554,67 @@ test('any signed-in creator in an active workspace can open Professor data witho
   assert.equal(calls.length, 1);
   assert.equal(calls[0].actorUserId, IDS.professor);
   assert.equal(calls[0].institutionId, IDS.institution);
+});
+
+test('creator session annotates recoverable archived drafts so the switcher can hide them', async () => {
+  const fixture = dependencyFixture({
+    rpc: async (_env, parameters) => parameters.operation === 'session'
+      ? { ok: true, exams: [{ examId: IDS.exam, status: 'draft', title: 'Archived draft' }] }
+      : { ok: true },
+    examLifecycleQuery: async () => ({
+      ok: true,
+      items: [{
+        examId: IDS.exam,
+        deleted: true,
+        deletedAt: '2026-08-26T04:00:00.000Z',
+        deleteReason: 'Creator deleted an unpublished draft.',
+        canRestore: false,
+        needsNewKey: false,
+      }],
+    }),
+  });
+  const response = await fixture.handlers.professorQuery(
+    makeRequest('/examination-room/v1/professor/query', { operation: 'session', payload: {} }),
+    ENV, ORIGIN, ORIGIN,
+  );
+  const body = await json(response);
+  assert.equal(response.status, 200);
+  assert.equal(body.exams[0].lifecycleState, 'archived');
+  assert.equal(body.exams[0].deletedAt, '2026-08-26T04:00:00.000Z');
+  assert.equal(fixture.lifecycleQueryCalls.length, 1);
+  assert.equal(fixture.lifecycleQueryCalls[0].actorUserId, IDS.professor);
+});
+
+test('any signed-in creator can archive a published exam or remove an unpublished draft without a role gate', async () => {
+  const fixture = dependencyFixture({
+    authorizeProfessor: async () => ({
+      authorized: false,
+      creatorAuthorized: false,
+      professorRoleSelected: false,
+      creatorWorkspaces: [],
+      memberships: [],
+    }),
+    examLifecycleCommand: async (_env, parameters) => ({
+      ok: true,
+      examId: parameters.examId,
+      recoverable: true,
+      ...(parameters.operation === 'archive_exam' ? { archived: true } : { deleted: true }),
+    }),
+  });
+  for (const operation of ['archive_exam', 'delete_draft']) {
+    const response = await fixture.handlers.professorCommand(
+      makeRequest('/examination-room/v1/professor/command', {
+        operation,
+        idempotencyKey: `${operation}:1234567890abcdef`,
+        payload: { examId: IDS.exam },
+      }),
+      ENV, ORIGIN, ORIGIN,
+    );
+    assert.equal(response.status, 200);
+    assert.equal((await json(response)).recoverable, true);
+  }
+  assert.deepEqual(fixture.lifecycleCommandCalls.map((call) => call.operation), ['archive_exam', 'delete_draft']);
+  assert.equal(fixture.calls.length, 0, 'lifecycle commands must not fall through the base professor dispatcher');
 });
 
 test('multiple creator workspaces fall back to the active Due Diligence Community default', async () => {
@@ -507,7 +804,7 @@ test('publish fails with field-level readiness guidance before persistence', asy
   assert.equal(calls.length, 0);
 });
 
-test('publish fails closed when recorded proctoring has no complete media pipeline', async () => {
+test('publish accepts recorded proctoring now that encrypted media degrades independently', async () => {
   const { handlers, calls } = dependencyFixture();
   const response = await handlers.professorCommand(
     makeRequest('/examination-room/v1/professor/command', {
@@ -522,11 +819,12 @@ test('publish fails closed when recorded proctoring has no complete media pipeli
       idempotencyKey: REQUEST_KEY,
     }), ENV, ORIGIN, ORIGIN,
   );
-  const result = await json(response);
-  assert.equal(response.status, 409);
-  assert.equal(result.error.code, 'EXAM_ROOM_V1_RECORDED_PROCTORING_NOT_CONFIGURED');
-  assert.match(result.error.recovery, /encrypted media upload/iu);
-  assert.equal(calls.length, 0);
+  assert.equal(response.status, 201);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].operation, 'publish');
+  assert.equal(calls[0].payload.exam.integrityTier, 'recorded_proctoring');
+  assert.equal(calls[0].payload.exam.cameraRequired, true);
+  assert.equal(calls[0].payload.exam.microphoneRequired, true);
 });
 
 test('professor opens the latest approved activation without entering or persisting a room key', async () => {
@@ -645,7 +943,7 @@ test('creator can revoke a monitored session with an idempotent auditable comman
   assert.match(calls[0].payload.requestHash, /^[0-9a-f]{64}$/u);
 });
 
-test('student preview exposes metadata and notice but never questions', async () => {
+test('student preview exposes only operational metadata and never questions or policy-gating fields', async () => {
   const { handlers, calls } = dependencyFixture({
     rpc: async (_env, parameters) => parameters.operation === 'preview' ? { ok: true, ...previewFixture() } : { ok: true },
   });
@@ -661,10 +959,45 @@ test('student preview exposes metadata and notice but never questions', async ()
   const result = await json(response);
   assert.equal(response.status, 200);
   assert.equal(result.metadata.title, 'Constitutional Law Midterm');
+  assert.equal(result.metadata.examVersion, 'published-v1');
   assert.equal('questions' in result.metadata, false);
-  assert.equal(result.notice.version, 'exam-room-v1');
+  assert.equal('notice' in result, false);
+  assert.equal('privacyNoticeVersion' in result.metadata, false);
+  assert.equal('privacyController' in result.metadata, false);
+  assert.equal('retentionSummary' in result.metadata, false);
   assert.match(calls[0].payload.roomKeyHash, /^[0-9a-f]{64}$/u);
   assert.equal(JSON.stringify(calls[0]).includes(ROOM_KEY), false);
+});
+
+test('student preview rejects a blocked examination before admitting a new student', async () => {
+  const fixture = dependencyFixture({
+    rpc: async (_env, parameters) => parameters.operation === 'preview'
+      ? { ok: true, ...previewFixture() }
+      : { ok: true },
+    examLifecycleGuard: async () => ({
+      ok: false,
+      error: {
+        code: 'EXAMINATION_BLOCKED',
+        message: 'This examination is temporarily blocked by the administrator.',
+        status: 409,
+        recovery: 'Wait for the administrator to reopen admission, then enter the same key again.',
+      },
+    }),
+  });
+  const response = await fixture.handlers.studentPreview(
+    makeRequest('/examination-room/v1/student/preview', {
+      roomKey: ROOM_KEY,
+      fullName: 'Maria Theresa Dela Cruz',
+      studentNumber: '2024-10001',
+      subject: 'Constitutional Law',
+      yearLevel: 'Second year',
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+  const result = await json(response);
+  assert.equal(response.status, 409);
+  assert.equal(result.error.code, 'EXAMINATION_BLOCKED');
+  assert.match(result.error.recovery, /same key again/i);
+  assert.deepEqual(fixture.lifecycleGuardCalls, [IDS.exam]);
 });
 
 test('student preview carries optional student.email only as normalized admission identity', async () => {
@@ -701,28 +1034,38 @@ test('invalid room key is rejected before any database lookup', async () => {
   assert.equal(calls.length, 0);
 });
 
-test('recorded proctoring consent is version-bound and explicitly recording-bound', async () => {
+test('direct Begin opens recorded proctoring without policy or device-permission gating', async () => {
   const { handlers, calls } = dependencyFixture({
-    rpc: async (_env, parameters) => parameters.operation === 'preview'
-      ? { ok: true, ...previewFixture('recorded_proctoring') }
-      : { ok: true },
+    rpc: async (_env, parameters) => {
+      if (parameters.operation === 'preview') return { ok: true, ...previewFixture('recorded_proctoring') };
+      if (parameters.operation === 'consent') return { ok: true, session: { id: IDS.session } };
+      return { ok: true };
+    },
   });
-  const response = await handlers.studentConsent(
-    makeRequest('/examination-room/v1/student/consent', {
+  const response = await handlers.studentBegin(
+    makeRequest('/examination-room/v1/student/begin', {
       roomKey: ROOM_KEY,
       fullName: 'Maria Theresa Dela Cruz', studentNumber: '2024-10001',
       subject: 'Constitutional Law', yearLevel: 'Second year',
-      noticeVersion: 'exam-room-v1', agreed: true, recordingAccepted: false,
+      attemptBindingId: `attempt-binding:${'a'.repeat(64)}`,
+      noticeVersion: 'stale-legacy-value', agreed: false, recordingAccepted: false,
       idempotencyKey: REQUEST_KEY,
     }, null), ENV, ORIGIN, ORIGIN,
   );
   const result = await json(response);
-  assert.equal(response.status, 412);
-  assert.equal(result.error.code, 'EXAM_ROOM_V1_RECORDING_CONSENT_REQUIRED');
-  assert.equal(calls.length, 1);
+  assert.equal(response.status, 201);
+  assert.equal(result.session.id, IDS.session);
+  assert.equal(EXAMINATION_ROOM_V1_PATHS['/examination-room/v1/student/begin'], 'studentBegin');
+  assert.equal(EXAMINATION_ROOM_V1_PATHS['/examination-room/v1/student/consent'], 'studentBegin');
+  const sessionCall = calls.find((entry) => entry.operation === 'consent');
+  assert.equal(sessionCall.payload.technicalBindingId, `attempt-binding:${'a'.repeat(64)}`);
+  assert.equal(sessionCall.payload.consent.noticeVersion, 'exam-room-v1');
+  assert.equal(sessionCall.payload.consent.accepted, true);
+  assert.equal(sessionCall.payload.consent.recordingAccepted, true);
+  assert.doesNotMatch(JSON.stringify(sessionCall), /stale-legacy-value/u);
 });
 
-test('consent returns a bearer session token once and persists only its HMAC', async () => {
+test('direct Begin returns a bearer session token once and persists only its HMAC', async () => {
   const publication = publicationFixture();
   const { handlers, calls } = dependencyFixture({
     rpc: async (_env, parameters) => {
@@ -733,23 +1076,57 @@ test('consent returns a bearer session token once and persists only its HMAC', a
       return { ok: true };
     },
   });
-  const response = await handlers.studentConsent(
-    makeRequest('/examination-room/v1/student/consent', {
+  const response = await handlers.studentBegin(
+    makeRequest('/examination-room/v1/student/begin', {
       roomKey: ROOM_KEY,
       fullName: 'Maria Theresa Dela Cruz', studentNumber: '2024-10001',
       subject: 'Constitutional Law', yearLevel: 'Second year',
-      noticeVersion: 'exam-room-v1', agreed: true, recordingAccepted: false,
+      attemptBindingId: `attempt-binding:${'b'.repeat(64)}`,
       idempotencyKey: REQUEST_KEY,
     }, null), ENV, ORIGIN, ORIGIN,
   );
   const result = await json(response);
   assert.equal(response.status, 201);
   assert.match(result.sessionToken, SESSION_TOKEN_PATTERN_FOR_TEST());
-  const consentCall = calls.find((entry) => entry.operation === 'consent');
-  assert.match(consentCall.payload.sessionTokenHash, /^[0-9a-f]{64}$/u);
-  assert.doesNotMatch(JSON.stringify(consentCall), new RegExp(result.sessionToken, 'u'));
+  const sessionCall = calls.find((entry) => entry.operation === 'consent');
+  assert.match(sessionCall.payload.sessionTokenHash, /^[0-9a-f]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(sessionCall), new RegExp(result.sessionToken, 'u'));
   assert.equal(result.exam.questions[0].gradingGuidance, undefined);
   assert.equal('publicationManifest' in result, false);
+});
+
+test('direct Begin converts legacy database gate failures into neutral recovery guidance', async () => {
+  const { handlers } = dependencyFixture({
+    rpc: async (_env, parameters) => {
+      if (parameters.operation === 'preview') return { ok: true, ...previewFixture() };
+      if (parameters.operation === 'consent') {
+        return {
+          ok: false,
+          error: {
+            code: 'PRIVACY_CONSENT_VERSION_MISMATCH',
+            message: 'Legacy agreement text must match.',
+            status: 412,
+            recovery: 'Review the notice and agree again.',
+          },
+        };
+      }
+      return { ok: true };
+    },
+  });
+  const response = await handlers.studentBegin(
+    makeRequest('/examination-room/v1/student/begin', {
+      roomKey: ROOM_KEY,
+      fullName: 'Maria Theresa Dela Cruz', studentNumber: '2024-10001',
+      subject: 'Constitutional Law', yearLevel: 'Second year',
+      attemptBindingId: `attempt-binding:${'c'.repeat(64)}`,
+      idempotencyKey: REQUEST_KEY,
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+  const result = await json(response);
+  assert.equal(response.status, 409);
+  assert.equal(result.error.code, 'EXAM_ROOM_V1_SESSION_BINDING_INVALID');
+  assert.match(result.error.recovery, /Begin examination again/u);
+  assert.doesNotMatch(JSON.stringify(result), /agree|consent|privacy|notice|acceptance|policy/iu);
 });
 
 function SESSION_TOKEN_PATTERN_FOR_TEST() {
@@ -782,6 +1159,195 @@ test('student resume strips the full publication manifest and returns only the s
   assert.equal('publicationManifest' in result, false);
   assert.equal('gradingGuidance' in result.exam.questions[0], false);
   assert.equal('correctOptionIndex' in result.exam.questions[0], false);
+});
+
+test('student media prepare reuses hashed session authentication and never forwards raw credentials', async () => {
+  const mediaCalls = [];
+  const rateLimitCalls = [];
+  const { handlers, calls } = dependencyFixture({
+    rateLimit: async (_request, _env, scope, context) => rateLimitCalls.push({ scope, context }),
+    rpc: async (_env, parameters) => parameters.operation === 'session_context'
+      ? { ok: true, session: { id: IDS.session, status: 'active' } }
+      : { ok: true },
+    examinationRoomMedia: async (_env, input) => {
+      mediaCalls.push(structuredClone(input));
+      return {
+        artifactId: IDS.artifact,
+        intentId: '99999999-9999-4999-8999-999999999999',
+        state: 'upload_ready',
+        provider: 'google_drive',
+        providerResult: { status: 'upload_session_created' },
+        upload: { protocol: 'google_drive_resumable', method: 'PUT', url: 'https://www.googleapis.com/upload/session' },
+        retryable: true,
+        canContinueExam: true,
+        submissionBlocked: false,
+        recovery: 'Retry separately.',
+      };
+    },
+  });
+
+  const response = await handlers.studentMedia(
+    makeRequest('/examination-room/v1/student/media', {
+      operation: 'prepare_upload',
+      payload: { sessionId: IDS.session, sessionToken: SESSION_TOKEN, ...mediaFixture() },
+      idempotencyKey: REQUEST_KEY,
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+  const result = await json(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(EXAMINATION_ROOM_V1_PATHS['/examination-room/v1/student/media'], 'studentMedia');
+  assert.equal(result.recording.state, 'upload_ready');
+  assert.equal(result.recording.submissionBlocked, false);
+  assert.equal(rateLimitCalls[0].scope, 'student_media');
+  assert.deepEqual(Object.keys(rateLimitCalls[0].context.payload), ['sessionId']);
+  assert.equal(calls[0].operation, 'session_context');
+  assert.equal(mediaCalls.length, 1);
+  assert.match(mediaCalls[0].sessionTokenHash, /^[0-9a-f]{64}$/u);
+  assert.doesNotMatch(JSON.stringify(calls), new RegExp(SESSION_TOKEN, 'u'));
+  assert.doesNotMatch(JSON.stringify(mediaCalls), new RegExp(SESSION_TOKEN, 'u'));
+  assert.doesNotMatch(JSON.stringify(mediaCalls), new RegExp(REQUEST_KEY, 'u'));
+});
+
+test('student media has no role check and completion remains available after answers submit', async () => {
+  const mediaCalls = [];
+  const { handlers } = dependencyFixture({
+    rpc: async (_env, parameters) => parameters.operation === 'session_context'
+      ? { ok: true, session: { id: IDS.session, status: 'submitted' } }
+      : { ok: true },
+    examinationRoomMedia: async (_env, input) => {
+      mediaCalls.push(structuredClone(input));
+      return {
+        artifactId: IDS.artifact,
+        artifactRecordId: '99999999-9999-4999-8999-999999999999',
+        state: 'completed',
+        provider: 'google_drive',
+        providerResult: { status: 'verified', objectId: 'DriveObject_12345678', sizeBytes: 1_048_640 },
+        upload: null,
+        retryable: false,
+        canContinueExam: true,
+        submissionBlocked: false,
+        recovery: 'Registered.',
+      };
+    },
+  });
+  const { derivedKey: _derivedKey, ...artifact } = mediaFixture();
+  const response = await handlers.studentMedia(
+    makeRequest('/examination-room/v1/student/media', {
+      operation: 'complete_upload',
+      payload: {
+        sessionId: IDS.session,
+        sessionToken: SESSION_TOKEN,
+        ...artifact,
+        provider: 'google_drive',
+        providerObjectId: 'DriveObject_12345678',
+      },
+      idempotencyKey: REQUEST_KEY,
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal((await json(response)).recording.state, 'completed');
+  assert.equal(mediaCalls.length, 1);
+  assert.equal(mediaCalls[0].operation, 'complete_upload');
+});
+
+test('student media rejects invalid credentials, insecure key transport, and invalid metadata before storage', async () => {
+  let mediaCalls = 0;
+  const { handlers, calls } = dependencyFixture({
+    examinationRoomMedia: async () => {
+      mediaCalls += 1;
+      return {};
+    },
+  });
+
+  const invalidToken = await handlers.studentMedia(
+    makeRequest('/examination-room/v1/student/media', {
+      operation: 'prepare_upload',
+      payload: { sessionId: IDS.session, sessionToken: 'invalid', ...mediaFixture() },
+      idempotencyKey: REQUEST_KEY,
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+  assert.equal(invalidToken.status, 401);
+
+  const insecure = new Request('http://worker.example/examination-room/v1/student/media', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Request-ID': REQUEST_KEY },
+    body: JSON.stringify({
+      operation: 'prepare_upload',
+      payload: { sessionId: IDS.session, sessionToken: SESSION_TOKEN, ...mediaFixture() },
+    }),
+  });
+  const insecureResponse = await handlers.studentMedia(insecure, ENV, ORIGIN, ORIGIN);
+  assert.equal(insecureResponse.status, 400);
+  assert.equal((await json(insecureResponse)).error.code, 'EXAM_ROOM_V1_MEDIA_TLS_REQUIRED');
+
+  const invalidMetadata = await handlers.studentMedia(
+    makeRequest('/examination-room/v1/student/media', {
+      operation: 'prepare_upload',
+      payload: { sessionId: IDS.session, sessionToken: SESSION_TOKEN, ...mediaFixture({ encryptedSizeBytes: 0 }) },
+      idempotencyKey: REQUEST_KEY,
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+  assert.equal(invalidMetadata.status, 400);
+  assert.equal((await json(invalidMetadata)).error.code, 'EXAM_ROOM_V1_MEDIA_SIZE_INVALID');
+  assert.equal(mediaCalls, 0);
+  assert.equal(calls.length, 0);
+});
+
+test('student media storage and dependency failures degrade to a recoverable local queue', async () => {
+  const unavailable = dependencyFixture();
+  const response = await unavailable.handlers.studentMedia(
+    makeRequest('/examination-room/v1/student/media', {
+      operation: 'prepare_upload',
+      payload: { sessionId: IDS.session, sessionToken: SESSION_TOKEN, ...mediaFixture() },
+      idempotencyKey: REQUEST_KEY,
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+  const result = await json(response);
+  assert.equal(response.status, 200);
+  assert.equal(result.recording.state, 'local_queue');
+  assert.equal(result.recording.canContinueExam, true);
+  assert.equal(result.recording.submissionBlocked, false);
+
+  const failing = dependencyFixture({
+    examinationRoomMedia: async () => { throw new Error('provider details must not escape'); },
+  });
+  const failingResponse = await failing.handlers.studentMedia(
+    makeRequest('/examination-room/v1/student/media', {
+      operation: 'prepare_upload',
+      payload: { sessionId: IDS.session, sessionToken: SESSION_TOKEN, ...mediaFixture() },
+      idempotencyKey: REQUEST_KEY,
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+  const failingResult = await json(failingResponse);
+  assert.equal(failingResponse.status, 200);
+  assert.equal(failingResult.recording.providerResult.status, 'control_plane_temporarily_unavailable');
+  assert.doesNotMatch(JSON.stringify(failingResult), /provider details must not escape/u);
+});
+
+test('student media maps client-correctable control errors without leaking internals', async () => {
+  const { handlers } = dependencyFixture({
+    examinationRoomMedia: async () => {
+      throw new ExaminationRoomMediaError(
+        'EXAM_ROOM_V1_MEDIA_KEY_INVALID',
+        'The recording key is invalid.',
+        400,
+        'Create a new encrypted segment and retry.',
+      );
+    },
+  });
+  const response = await handlers.studentMedia(
+    makeRequest('/examination-room/v1/student/media', {
+      operation: 'prepare_upload',
+      payload: { sessionId: IDS.session, sessionToken: SESSION_TOKEN, ...mediaFixture() },
+      idempotencyKey: REQUEST_KEY,
+    }, null), ENV, ORIGIN, ORIGIN,
+  );
+  const result = await json(response);
+  assert.equal(response.status, 400);
+  assert.equal(result.error.code, 'EXAM_ROOM_V1_MEDIA_KEY_INVALID');
+  assert.match(result.error.recovery, /new encrypted segment/iu);
 });
 
 test('answer saves are core-validated, append-only commands with hashed credentials', async () => {

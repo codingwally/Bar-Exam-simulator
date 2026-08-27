@@ -182,6 +182,8 @@ import {
   ExaminationRoomV1RouteError,
   createExaminationRoomV1Handlers,
 } from './examination-room-v1-routes.mjs';
+import { createExaminationRoomAssistant } from './examination-room-assistant.mjs';
+import { createExaminationRoomMediaControl } from './examination-room-media.mjs';
 import {
   GRADING_REVISION_STATUSES,
   ROOM_KEY,
@@ -400,9 +402,11 @@ async function enforceExaminationRoomV1RateLimit(request, env, scope, boundedPay
   const policies = {
     professor_query: [examinationRoomV1ProfessorRateWindows, 180],
     professor_command: [examinationRoomV1ProfessorRateWindows, 90],
+    professor_assistant: [examinationRoomV1ProfessorRateWindows, 60],
     student_preview: [examinationRoomV1StudentRateWindows, 20],
     student_consent: [examinationRoomV1StudentRateWindows, 12],
     student_query: [examinationRoomV1StudentRateWindows, 180],
+    student_media: [examinationRoomV1StudentRateWindows, 240],
     student_command: [examinationRoomV1StudentRateWindows, 300],
     admin_query: [examinationRoomV1AdminRateWindows, 90],
     admin_command: [examinationRoomV1AdminRateWindows, 45],
@@ -652,6 +656,10 @@ async function examinationRoomV1ServiceRpc(env, functionName, body) {
     'examination_room_v1_api',
     'examination_room_v1_owner_query',
     'examination_room_v1_owner_command',
+    'examination_room_v1_lifecycle_query',
+    'examination_room_v1_lifecycle_command',
+    'examination_room_v1_lifecycle_guard',
+    'examination_room_v1_media',
     'examination_room_v1_owner_ensure_membership',
     'examination_room_v1_claim_recovery_snapshot',
     'examination_room_v1_complete_recovery_snapshot',
@@ -933,6 +941,40 @@ async function examinationRoomV1OwnerCommandRpc(env, request) {
       p_exam_id: request.examId || null,
       p_payload: request.payload || {},
     },
+  ));
+}
+
+async function examinationRoomV1LifecycleQueryRpc(env, request) {
+  return examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+    env,
+    'examination_room_v1_lifecycle_query',
+    {
+      p_actor_user_id: request.actorUserId,
+      p_institution_id: request.institutionId || null,
+      p_exam_id: request.examId || null,
+    },
+  ));
+}
+
+async function examinationRoomV1LifecycleCommandRpc(env, request) {
+  return examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+    env,
+    'examination_room_v1_lifecycle_command',
+    {
+      p_operation: request.operation,
+      p_actor_user_id: request.actorUserId,
+      p_institution_id: request.institutionId,
+      p_exam_id: request.examId,
+      p_payload: request.payload || {},
+    },
+  ));
+}
+
+async function examinationRoomV1LifecycleGuardRpc(env, examId) {
+  return examinationRoomV1Result(await examinationRoomV1ServiceRpc(
+    env,
+    'examination_room_v1_lifecycle_guard',
+    { p_exam_id: examId },
   ));
 }
 
@@ -1374,17 +1416,26 @@ function examinationRoomPersistedDelivery(attempt, auditResult) {
   };
 }
 
+function examinationRoomOwnerRecoverableSideEffect(error, fallbackCode, fallbackRecovery) {
+  return {
+    status: 'failed',
+    code: String(error?.code || fallbackCode).slice(0, 120),
+    recovery: String(error?.recovery || fallbackRecovery).slice(0, 500),
+  };
+}
+
 function examinationRoomOwnerDeliverySummary(delivery, professorRecipient, ownerRecipients) {
   const status = String(delivery?.status || 'failed');
   const owners = Array.isArray(ownerRecipients) ? ownerRecipients : [];
+  const professor = String(professorRecipient || '').trim().toLowerCase() || null;
   return {
     status,
     providerAccepted: status === 'sent',
     providerId: delivery?.providerId || null,
     safeErrorCode: delivery?.safeErrorCode || null,
     professor: {
-      recipient: String(professorRecipient || '').trim().toLowerCase() || null,
-      status,
+      recipient: professor,
+      status: professor ? status : 'not_available',
     },
     owners: {
       recipients: owners,
@@ -1522,9 +1573,23 @@ async function issueExaminationRoomOwnerKey(env, owner, request, body, payload, 
     activationResult.activation?.id,
     'room activation identifier',
   );
-  await ensureExaminationRoomOwnerKeyEscrow(env, owner, {
-    institutionId, examId, activationId,
-  }, roomKey);
+  let escrowResult = null;
+  let escrowFailure = null;
+  try {
+    escrowResult = await ensureExaminationRoomOwnerKeyEscrow(env, owner, {
+      institutionId, examId, activationId,
+    }, roomKey);
+  } catch (error) {
+    escrowFailure = examinationRoomOwnerRecoverableSideEffect(
+      error,
+      'EXAM_ROOM_V1_KEY_ESCROW_RETRY_REQUIRED',
+      'The room is active and the exact key is visible in this response. Correct owner-key recovery, then retry this same approval request; do not rotate the key.',
+    );
+    console.error('Examination Room key escrow needs recovery after activation', {
+      code: escrowFailure.code,
+      activationId,
+    });
+  }
 
   const ownerCopyRecipients = examinationRoomAdminEmailRecipients(
     env,
@@ -1539,21 +1604,59 @@ async function issueExaminationRoomOwnerKey(env, owner, request, body, payload, 
     idempotencyHash: requestHash,
     ownerRecipients: ownerCopyRecipients,
   });
-  const deliveryAudit = await recordExaminationRoomOwnerEmailDelivery(env, owner, {
-    institutionId,
-    examId,
-    activationId,
-    requestHash,
-    deliveryKind: options.deliveryKind,
-    professorRecipient: String(activationResult.professorEmail || '').trim().toLowerCase(),
-    ownerCopyRecipients,
-    delivery,
-  });
+  let deliveryAudit = null;
+  let deliveryAuditFailure = null;
+  try {
+    deliveryAudit = await recordExaminationRoomOwnerEmailDelivery(env, owner, {
+      institutionId,
+      examId,
+      activationId,
+      requestHash,
+      deliveryKind: options.deliveryKind,
+      professorRecipient: String(activationResult.professorEmail || '').trim().toLowerCase() || null,
+      ownerCopyRecipients,
+      delivery,
+    });
+  } catch (error) {
+    deliveryAuditFailure = examinationRoomOwnerRecoverableSideEffect(
+      error,
+      'EXAM_ROOM_V1_EMAIL_DELIVERY_AUDIT_RETRY_REQUIRED',
+      'The room is active and its key is unchanged. Retry this same approval request to record delivery evidence; do not rotate the key.',
+    );
+    console.error('Examination Room key email audit needs recovery after activation', {
+      code: deliveryAuditFailure.code,
+      activationId,
+    });
+  }
   const persistedDelivery = examinationRoomPersistedDelivery(delivery, deliveryAudit);
+  const recoveryActions = [
+    escrowFailure?.recovery,
+    deliveryAuditFailure?.recovery,
+    delivery.status === 'sent' || delivery.status === 'suppressed'
+      ? null
+      : persistedDelivery.status === 'sent'
+        ? 'This retry was not accepted by the email provider, but an earlier successful delivery remains recorded. Choose Resend existing key to try again; the room key was not changed.'
+        : 'The room key is active and visible here. Correct the email configuration, then choose Resend existing key; do not rotate unless the key itself must change.',
+  ].filter(Boolean);
   return {
     ok: true,
     ...activationResult,
     roomKey,
+    activationCommitted: true,
+    keyIssuanceStatus: recoveryActions.length > 0 ? 'active_recovery_required' : 'active',
+    keyEscrow: escrowFailure || {
+      status: escrowResult?.duplicate === true ? 'recovered' : 'escrowed',
+      activationId,
+    },
+    keyRecovery: {
+      status: escrowFailure ? 'deterministic_retry_available' : 'escrowed',
+      activationId,
+      deterministicRetry: true,
+      roomKeyReturned: true,
+    },
+    deliveryAudit: deliveryAuditFailure || { status: 'recorded' },
+    recoveryRequired: recoveryActions.length > 0,
+    recoveryActions,
     deliveryStatus: persistedDelivery.status,
     deliverySafeErrorCode: persistedDelivery.safeErrorCode,
     deliveryAttemptStatus: delivery.status,
@@ -1563,12 +1666,8 @@ async function issueExaminationRoomOwnerKey(env, owner, request, body, payload, 
       activationResult.professorEmail,
       ownerCopyRecipients,
     ),
-    deliveryRecovery: delivery.status === 'sent'
-      ? null
-      : persistedDelivery.status === 'sent'
-        ? 'This retry was not accepted by the email provider, but an earlier successful delivery remains recorded. Choose Resend existing key to try again; the room key was not changed.'
-      : 'The room key is active and visible here. Correct the email configuration, then choose Resend existing key; do not rotate unless the key itself must change.',
-    recipient: activationResult.professorEmail,
+    deliveryRecovery: recoveryActions.at(-1) || null,
+    recipient: String(activationResult.professorEmail || '').trim().toLowerCase() || null,
     adminRecipients: ownerCopyRecipients,
     ownerRecipients: ownerCopyRecipients,
     schedule: activationWindow,
@@ -1912,6 +2011,88 @@ function examinationRoomOwnerQueryPayload(operation, payload) {
   return safe;
 }
 
+function examinationRoomLifecycleRecordId(record) {
+  return String(record?.examId || record?.exam_id || record?.id || '').trim();
+}
+
+function examinationRoomLifecycleFields(item) {
+  if (!item || typeof item !== 'object') return {};
+  const deletedAt = item.deletedAt || item.deleted_at || null;
+  const blockedAt = item.blockedAt || item.blocked_at || null;
+  return {
+    lifecycleState: deletedAt ? 'archived' : blockedAt ? 'blocked' : null,
+    blockedAt,
+    blockedByUserId: item.blockedByUserId || item.blocked_by_user_id || null,
+    blockReason: item.blockReason || item.block_reason || null,
+    isBlocked: Boolean(blockedAt),
+    deletedAt,
+    deletedByUserId: item.deletedByUserId || item.deleted_by_user_id || null,
+    deleteReason: item.deleteReason || item.delete_reason || null,
+    archivedAt: deletedAt,
+    deleted: Boolean(deletedAt),
+    priorStatus: item.priorStatus || item.prior_status || null,
+    canRestore: item.canRestore === true || item.can_restore === true,
+    needsNewKey: item.needsNewKey === true || item.needs_new_key === true,
+  };
+}
+
+function examinationRoomApplyLifecycleToRecord(record, lifecycleByExam) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return record;
+  const item = lifecycleByExam.get(examinationRoomLifecycleRecordId(record));
+  return item ? { ...record, ...examinationRoomLifecycleFields(item) } : record;
+}
+
+function examinationRoomMergeOwnerLifecycle(result, lifecycle) {
+  const items = Array.isArray(lifecycle?.items) ? lifecycle.items : [];
+  const lifecycleByExam = new Map(items.map((item) => [
+    examinationRoomLifecycleRecordId(item),
+    item,
+  ]).filter(([examId]) => examId));
+  if (!lifecycleByExam.size) return result;
+  const merged = {
+    ...result,
+    lifecycle: { items },
+    ...(Array.isArray(result?.exams)
+      ? { exams: result.exams.map((record) => examinationRoomApplyLifecycleToRecord(record, lifecycleByExam)) }
+      : {}),
+    ...(result?.exam && typeof result.exam === 'object'
+      ? { exam: examinationRoomApplyLifecycleToRecord(result.exam, lifecycleByExam) }
+      : {}),
+    ...(result?.counts && typeof result.counts === 'object'
+      ? {
+          counts: {
+            ...result.counts,
+            blocked: items.filter((item) => Boolean(item?.blocked || item?.blockedAt || item?.blocked_at)).length,
+            archived: items.filter((item) => Boolean(item?.deleted || item?.deletedAt || item?.deleted_at)).length,
+          },
+        }
+      : {}),
+  };
+  if (!result?.bundle || typeof result.bundle !== 'object') return merged;
+  const tables = result.bundle.tables && typeof result.bundle.tables === 'object'
+    ? {
+        ...result.bundle.tables,
+        ...(Array.isArray(result.bundle.tables.exams)
+          ? { exams: result.bundle.tables.exams.map((record) => examinationRoomApplyLifecycleToRecord(record, lifecycleByExam)) }
+          : {}),
+      }
+    : result.bundle.tables;
+  const bundleExamId = examinationRoomLifecycleRecordId(result.bundle);
+  const bundleLifecycle = bundleExamId && lifecycleByExam.has(bundleExamId)
+    ? examinationRoomLifecycleFields(lifecycleByExam.get(bundleExamId))
+    : {};
+  merged.bundle = {
+    ...result.bundle,
+    ...bundleLifecycle,
+    ...(result.bundle.exam && typeof result.bundle.exam === 'object'
+      ? { exam: examinationRoomApplyLifecycleToRecord(result.bundle.exam, lifecycleByExam) }
+      : {}),
+    ...(tables ? { tables } : {}),
+    lifecycle: { items },
+  };
+  return merged;
+}
+
 async function handleExaminationRoomOwnerQuery(request, env, origin, allowedOrigin) {
   return examinationRoomOwnerResponse(async () => {
     await enforceExaminationRoomV1RateLimit(request, env, 'admin_query');
@@ -1958,13 +2139,21 @@ async function handleExaminationRoomOwnerQuery(request, env, origin, allowedOrig
 
     const safeQueryPayload = examinationRoomOwnerQueryPayload(operation, payload);
 
-    const result = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerQueryRpc(env, {
+    let result = ensureExaminationRoomOwnerResult(await examinationRoomV1OwnerQueryRpc(env, {
       operation,
       actorUserId: owner.user.id,
       institutionId,
       examId,
       payload: safeQueryPayload,
     }));
+    if (['overview', 'command_center', 'exam_detail', 'export_exam_bundle'].includes(operation)) {
+      const lifecycle = ensureExaminationRoomOwnerResult(await examinationRoomV1LifecycleQueryRpc(env, {
+        actorUserId: owner.user.id,
+        institutionId,
+        examId,
+      }));
+      result = examinationRoomMergeOwnerLifecycle(result, lifecycle);
+    }
     if (operation === 'exam_detail' || operation === 'export_exam_bundle') {
       const keyHistory = await examinationRoomOwnerKeyHistory(env, result.bundle);
       const latestKeyRecord = keyHistory[0] || null;
@@ -2053,55 +2242,62 @@ async function resendExaminationRoomOwnerKey(env, owner, request, body, payload)
   }));
   const exam = (Array.isArray(center.exams) ? center.exams : [])
     .find((entry) => String(entry?.examId || entry?.id) === examId);
-  if (!exam?.professorEmail) {
-    throw examinationRoomOwnerError(
-      'EXAM_ROOM_V1_PROFESSOR_CONTACT_REQUIRED',
-      'The exam creator account has no verified delivery email.',
-      409,
-      'Add the exact creator sign-in email, then choose Resend existing key.',
-    );
-  }
-  const ownerCopyRecipients = examinationRoomAdminEmailRecipients(env, exam.professorEmail);
+  const ownerCopyRecipients = examinationRoomAdminEmailRecipients(env, exam?.professorEmail);
   const delivery = await sendExaminationRoomV1KeyEmail(env, {
-    recipient: exam.professorEmail,
-    professorName: exam.professorName,
-    examTitle: exam.title,
+    recipient: exam?.professorEmail,
+    professorName: exam?.professorName,
+    examTitle: exam?.title,
     roomKey,
-    expiresAt: exam.activation?.closesAt,
+    expiresAt: exam?.activation?.closesAt,
     idempotencyHash: requestHash,
     ownerRecipients: ownerCopyRecipients,
   });
-  const deliveryAudit = await recordExaminationRoomOwnerEmailDelivery(env, owner, {
-    institutionId,
-    examId,
-    activationId: envelope.activationId,
-    requestHash,
-    deliveryKind: 'key_resend',
-    professorRecipient: exam.professorEmail,
-    ownerCopyRecipients,
-    delivery,
-  });
+  let deliveryAudit = null;
+  let deliveryAuditFailure = null;
+  try {
+    deliveryAudit = await recordExaminationRoomOwnerEmailDelivery(env, owner, {
+      institutionId,
+      examId,
+      activationId: envelope.activationId,
+      requestHash,
+      deliveryKind: 'key_resend',
+      professorRecipient: String(exam?.professorEmail || '').trim().toLowerCase() || null,
+      ownerCopyRecipients,
+      delivery,
+    });
+  } catch (error) {
+    deliveryAuditFailure = examinationRoomOwnerRecoverableSideEffect(
+      error,
+      'EXAM_ROOM_V1_EMAIL_DELIVERY_AUDIT_RETRY_REQUIRED',
+      'The current room key is unchanged. Retry Resend existing key to record delivery evidence.',
+    );
+    console.error('Examination Room key resend audit needs recovery', {
+      code: deliveryAuditFailure.code,
+      activationId: envelope.activationId,
+    });
+  }
   const persistedDelivery = examinationRoomPersistedDelivery(delivery, deliveryAudit);
   return {
     ok: true,
     examId,
     activationId: envelope.activationId,
     roomKey,
+    deliveryAudit: deliveryAuditFailure || { status: 'recorded' },
     deliveryStatus: persistedDelivery.status,
     deliverySafeErrorCode: persistedDelivery.safeErrorCode,
     deliveryAttemptStatus: delivery.status,
     deliveryAttemptSafeErrorCode: delivery.safeErrorCode || null,
     delivery: examinationRoomOwnerDeliverySummary(
       persistedDelivery,
-      exam.professorEmail,
+      exam?.professorEmail,
       ownerCopyRecipients,
     ),
-    deliveryRecovery: delivery.status === 'sent'
+    deliveryRecovery: deliveryAuditFailure?.recovery || (delivery.status === 'sent'
       ? null
       : persistedDelivery.status === 'sent'
         ? 'This retry was not accepted by the email provider, but an earlier successful delivery remains recorded. Choose Resend existing key to try again; the current key was not changed.'
-      : 'Correct the email configuration, then choose Resend existing key again. The current key was not changed.',
-    recipient: exam.professorEmail,
+        : 'Correct the email configuration, then choose Resend existing key again. The current key was not changed.'),
+    recipient: String(exam?.professorEmail || '').trim().toLowerCase() || null,
     adminRecipients: ownerCopyRecipients,
     ownerRecipients: ownerCopyRecipients,
   };
@@ -2353,6 +2549,56 @@ async function handleExaminationRoomOwnerCommand(
       );
     }
 
+    const lifecycleCommands = new Set([
+      'reopen_exam', 'block_exam', 'unblock_exam', 'archive_exam', 'restore_exam',
+    ]);
+    if (lifecycleCommands.has(operation)) {
+      const allowed = new Set(['institutionId', 'examId', 'reason']);
+      if (Object.keys(payload).some((key) => !allowed.has(key))) {
+        throw examinationRoomOwnerError(
+          'EXAM_ROOM_V1_OWNER_FIELD_UNSUPPORTED',
+          'The examination lifecycle action contains an unsupported field.',
+          400,
+          'Refresh the selected examination and choose the lifecycle action again.',
+        );
+      }
+      const institutionId = examinationRoomOwnerUuid(payload.institutionId, 'institution identifier');
+      const examId = examinationRoomOwnerUuid(payload.examId, 'examination identifier');
+      const reason = examinationRoomOwnerCommandText(payload.reason, 'Owner receipt note', {
+        required: true,
+        minimum: 5,
+        maximum: 1_000,
+      });
+      const requestHash = await examinationRoomOwnerRequestHash(
+        env,
+        examinationRoomOwnerRequestKey(request, body),
+      );
+      const lifecycleResult = ensureExaminationRoomOwnerResult(await examinationRoomV1LifecycleCommandRpc(env, {
+        operation,
+        actorUserId: owner.user.id,
+        institutionId,
+        examId,
+        payload: { requestHash, reason },
+      }));
+      if (operation !== 'reopen_exam') {
+        return jsonResponse({ ok: true, ...lifecycleResult }, 200, origin, allowedOrigin);
+      }
+      const keyResult = await issueExaminationRoomOwnerKey(
+        env,
+        owner,
+        request,
+        body,
+        { institutionId, examId },
+        { replaceCurrent: true, deliveryKind: 'key_rotation' },
+      );
+      return jsonResponse({
+        ok: true,
+        ...keyResult,
+        reopened: true,
+        lifecycle: lifecycleResult,
+      }, 200, origin, allowedOrigin);
+    }
+
     if (operation === 'retry_snapshot') {
       const institutionId = examinationRoomOwnerUuid(payload.institutionId, 'institution identifier');
       const examId = examinationRoomOwnerUuid(payload.examId, 'examination identifier');
@@ -2480,7 +2726,7 @@ async function examinationRoomProfessorImportContext(
   if (!user?.id) {
     throw examinationRoomOwnerError(
       'EXAM_ROOM_V1_PROFESSOR_SIGN_IN_REQUIRED',
-      'Professor sign-in is required.',
+      'A Due Diligence sign-in is required.',
       401,
       'Sign in through Due Diligence, then reopen Examination Room.',
     );
@@ -4028,23 +4274,24 @@ async function sendExaminationRoomV1KeyEmail(env, message) {
       .filter((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value))
       .slice(0, 20))];
   const ownerRecipients = configuredOwnerRecipients.filter((value) => value !== recipient);
+  const primaryRecipients = recipient ? [recipient] : configuredOwnerRecipients;
   if (emailMode !== 'enabled'
       || !env.RESEND_API_KEY
       || !from
-      || !recipient
+      || primaryRecipients.length < 1
       || configuredOwnerRecipients.length < 1) {
     return {
       status: 'not_configured',
       providerId: null,
-      safeErrorCode: !recipient
-        ? 'recipient_missing'
-        : !from
+      safeErrorCode: !from
           ? 'sender_missing'
           : !env.RESEND_API_KEY
             ? 'provider_key_missing'
             : configuredOwnerRecipients.length < 1
               ? 'owner_recipients_missing'
-              : 'email_mode_invalid',
+              : primaryRecipients.length < 1
+                ? 'delivery_recipients_missing'
+                : 'email_mode_invalid',
     };
   }
   let response;
@@ -4064,8 +4311,8 @@ async function sendExaminationRoomV1KeyEmail(env, message) {
       },
       body: JSON.stringify({
         from,
-        to: [recipient],
-        ...(ownerRecipients.length ? { bcc: ownerRecipients } : {}),
+        to: primaryRecipients,
+        ...(recipient && ownerRecipients.length ? { bcc: ownerRecipients } : {}),
         subject: email.subject,
         text: email.text,
         html: email.html,
@@ -4356,6 +4603,21 @@ function barExamSimulationRandomizationV1Enabled(env) {
   return barExamSimulationRandomizationSchemaReady(env)
     && String(env.BAR_EXAM_SIMULATION_RANDOMIZATION_V1_ENABLED)
       .toLowerCase() === 'true';
+}
+
+const RANDOMIZED_BAR_SIMULATION_DESTINATIONS = new Set([
+  'Political and Public International Law',
+  'Commercial and Taxation Laws',
+  'Civil Law',
+  'Labor Law and Social Legislations',
+  'Criminal Law',
+  'Remedial Law, Legal and Judicial Ethics',
+]);
+
+function randomizedBarSimulationSetupEligible(setup) {
+  return setup?.assessmentKind === 'curated'
+    && setup?.testOnly === false
+    && RANDOMIZED_BAR_SIMULATION_DESTINATIONS.has(String(setup?.subject || '').trim());
 }
 
 function privateBetaGateEnabled(env) {
@@ -6472,20 +6734,30 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
       );
       if (authorizedAccess?.track === 'bar_feels'
           && barExamSimulationRandomizationSchemaReady(env)) {
-        if (barExamSimulationRandomizationV1Enabled(env)) {
-          useRandomizedBarSimulationStart = true;
-        } else {
-          const openRandomizedAttempt = await examinationRpc(
-            env,
-            'bar_simulation_open_attempt_v1',
-            {
-              p_user_id: user.id,
-              p_catalog_version_id: command.versionId,
-            },
-          );
-          // Rollback safety: new starts return to the fixed catalog, while an
-          // already-open private allocation must remain resumable by its owner.
-          useRandomizedBarSimulationStart = Boolean(openRandomizedAttempt?.attemptId);
+        const setup = await examinationRpc(env, 'examination_query', {
+          p_user_id: user.id,
+          p_operation: 'setup',
+          p_payload: {
+            operation: 'setup',
+            versionId: command.versionId,
+          },
+        });
+        if (randomizedBarSimulationSetupEligible(setup)) {
+          if (barExamSimulationRandomizationV1Enabled(env)) {
+            useRandomizedBarSimulationStart = true;
+          } else {
+            const openRandomizedAttempt = await examinationRpc(
+              env,
+              'bar_simulation_open_attempt_v1',
+              {
+                p_user_id: user.id,
+                p_catalog_version_id: command.versionId,
+              },
+            );
+            // Rollback safety: new starts return to the fixed catalog, while an
+            // already-open private allocation must remain resumable by its owner.
+            useRandomizedBarSimulationStart = Boolean(openRandomizedAttempt?.attemptId);
+          }
         }
       }
     } else if (command.operation === 'confirm_upload') {
@@ -8697,6 +8969,31 @@ const pedroHandlers = createPedroHandlers({
   },
 });
 
+const examinationRoomAssistant = createExaminationRoomAssistant({
+  structuredCompletion: async (env, prompt, responseSchema, validateResult) => {
+    const generated = await callGeminiStructured(
+      env,
+      prompt,
+      responseSchema,
+      validateResult,
+      { quiet: true },
+    );
+    return { result: generated.result };
+  },
+});
+
+const examinationRoomMedia = createExaminationRoomMediaControl({
+  fetch: (...args) => fetch(...args),
+  mediaRpc: async (env, { operation, payload }) => examinationRoomV1Result(
+    await examinationRoomV1ServiceRpc(env, 'examination_room_v1_media', {
+      p_operation: operation,
+      p_payload: payload,
+    }),
+  ),
+  randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)),
+  now: () => new Date().toISOString(),
+});
+
 const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
   parseJson: parseBoundedJson,
   respond: jsonResponse,
@@ -8748,6 +9045,11 @@ const examinationRoomV1Handlers = createExaminationRoomV1Handlers({
     };
   },
   rateLimit: enforceExaminationRoomV1RateLimit,
+  examinationRoomAssistant,
+  examinationRoomMedia,
+  examLifecycleQuery: examinationRoomV1LifecycleQueryRpc,
+  examLifecycleCommand: examinationRoomV1LifecycleCommandRpc,
+  examLifecycleGuard: examinationRoomV1LifecycleGuardRpc,
   rpc: examinationRoomV1Rpc,
   manageStaff: examinationRoomV1ManageStaff,
   professorAccess: examinationRoomV1ProfessorAccess,

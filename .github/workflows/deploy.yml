@@ -54,15 +54,10 @@ jobs:
             exit 1
           fi
 
-  deploy:
+  deploy_worker:
     needs: authorize
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: production-worker
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -230,6 +225,28 @@ jobs:
           workingDirectory: worker
           wranglerVersion: "4.114.0"
           command: deploy --config wrangler.public-api.toml
+
+  deploy_pages:
+    needs: deploy_worker
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install reviewed Worker dependencies
+        run: npm ci --prefix worker --ignore-scripts --no-audit --no-fund
 
       - name: Build sanitized Pages artifact
         run: node scripts/build-pages-artifact.mjs

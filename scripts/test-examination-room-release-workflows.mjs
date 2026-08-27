@@ -275,6 +275,29 @@ assert.ok(
   'The Pages release must deploy the verified Worker and provider-neutral public alias before building and exposing the new client.',
 );
 assert.match(pagesWorkflow, /command: deploy --config wrangler\.public-api\.toml/u);
+const pagesWorkerJob = pagesWorkflow.indexOf('  deploy_worker:');
+const pagesDeployJob = pagesWorkflow.indexOf('  deploy_pages:');
+assert.ok(
+  pagesWorkerJob >= 0 && pagesDeployJob > pagesWorkerJob,
+  'The Pages release must isolate the Worker cutover before the Pages deployment job.',
+);
+const pagesWorkerJobSql = pagesWorkflow.slice(pagesWorkerJob, pagesDeployJob);
+const pagesDeployJobSql = pagesWorkflow.slice(pagesDeployJob);
+assert.match(
+  pagesWorkerJobSql,
+  /environment:\s*\r?\n\s+name: production-worker/u,
+  'The Worker cutover job must receive only the protected production Worker environment.',
+);
+assert.match(
+  pagesDeployJobSql,
+  /needs: deploy_worker[\s\S]*environment:\s*\r?\n\s+name: github-pages/u,
+  'The Pages job must wait for the Worker and use the protected GitHub Pages environment.',
+);
+assert.doesNotMatch(
+  pagesDeployJobSql,
+  /CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|wrangler(?:Version|\.public-api)/u,
+  'The GitHub Pages job must not request or use Cloudflare deployment credentials.',
+);
 
 const workerCoreCutover = workerWorkflow.indexOf('      - name: Deploy Worker\n');
 const workerPublicAliasCutover = workerWorkflow.indexOf('      - name: Deploy provider-neutral public API alias\n');

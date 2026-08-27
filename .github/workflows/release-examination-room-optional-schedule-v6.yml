@@ -1,0 +1,131 @@
+name: Release Examination Room optional schedule fix v6
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/release-examination-room-optional-schedule-v6.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-examination-room-optional-schedule-v6
+  cancel-in-progress: false
+
+jobs:
+  patch-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out production main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply the isolated implementation and verified regression patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('.github/workflows/release-examination-room-optional-schedule-v5.yml').read_text(encoding='utf-8')
+          step = source.index('      - name: Apply the isolated implementation and syntax-valid regression patch\n')
+          start_marker = '        run: |\n'
+          start = source.index(start_marker, step) + len(start_marker)
+          end = source.index('\n      - name: Install the reviewed Worker test dependencies', start)
+          block = source[start:end]
+          script = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in block.splitlines()
+          ) + '\n'
+          Path('/tmp/examination-room-patch.sh').write_text(script, encoding='utf-8')
+          PY
+          bash -n /tmp/examination-room-patch.sh
+          bash /tmp/examination-room-patch.sh
+
+      - name: Align the existing client cache-version assertion
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('examination-room/professor.client.test.cjs')
+          source = path.read_text(encoding='utf-8')
+          old = r'professor\.js\?v=greenfield-v1-20260827-25'
+          new = r'professor\.js\?v=greenfield-v1-20260827-26-optional-schedule'
+          if source.count(old) != 1:
+              raise SystemExit('Could not safely locate the previous Professor script cache assertion.')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+
+      - name: Install the reviewed Worker test dependencies
+        working-directory: worker
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Validate syntax and focused Examination Room behavior
+        shell: bash
+        run: |
+          node --check worker/index.mjs
+          node --check worker/examination-room-activation-window.mjs
+          node --check worker/examination-room-v1-owner.test.mjs
+          node --check examination-room/professor.js
+          node --check examination-room/professor.client.test.cjs
+          node --test worker/examination-room-activation-window.test.mjs
+          node --test worker/examination-room-v1-owner.test.mjs
+          node --test examination-room/professor.client.test.cjs
+          git diff --check
+
+      - name: Enforce Examination Room-only scope
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          expected = {
+              'worker/index.mjs',
+              'worker/examination-room-activation-window.mjs',
+              'worker/examination-room-activation-window.test.mjs',
+              'worker/examination-room-v1-owner.test.mjs',
+              'examination-room/professor.js',
+              'examination-room/professor.client.test.cjs',
+              'examination-room/index.html',
+          }
+          changed = set(subprocess.check_output(
+              ['git', 'diff', '--name-only'], text=True,
+          ).splitlines())
+          unexpected = sorted(changed - expected)
+          missing = sorted(expected - changed)
+          if unexpected:
+              raise SystemExit(f'Unexpected out-of-scope files changed: {unexpected}')
+          if missing:
+              raise SystemExit(f'Expected Examination Room files were not changed: {missing}')
+          PY
+
+      - name: Commit and publish only the verified Examination Room fix
+        shell: bash
+        run: |
+          git config user.name "Due Diligence Release Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/fix-examination-room-optional-schedule.yml
+          rm -f .github/workflows/retry-examination-room-optional-schedule.yml
+          rm -f .github/workflows/release-examination-room-optional-schedule-v3.yml
+          rm -f .github/workflows/release-examination-room-optional-schedule-v4.yml
+          rm -f .github/workflows/release-examination-room-optional-schedule-v5.yml
+          rm -f .github/workflows/release-examination-room-optional-schedule-v6.yml
+          git add worker/index.mjs \
+            worker/examination-room-activation-window.mjs \
+            worker/examination-room-activation-window.test.mjs \
+            worker/examination-room-v1-owner.test.mjs \
+            examination-room/professor.js \
+            examination-room/professor.client.test.cjs \
+            examination-room/index.html \
+            .github/workflows/fix-examination-room-optional-schedule.yml \
+            .github/workflows/retry-examination-room-optional-schedule.yml \
+            .github/workflows/release-examination-room-optional-schedule-v3.yml \
+            .github/workflows/release-examination-room-optional-schedule-v4.yml \
+            .github/workflows/release-examination-room-optional-schedule-v5.yml \
+            .github/workflows/release-examination-room-optional-schedule-v6.yml
+          git commit -m "fix(examination-room): make examination schedule optional"
+          git push origin HEAD:main

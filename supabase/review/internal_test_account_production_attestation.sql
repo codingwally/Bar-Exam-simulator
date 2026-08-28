@@ -19,10 +19,12 @@ begin
     select 1
     from supabase_migrations.schema_migrations
     where version = '20260828095004'
+       or name = 'internal_test_account_reporting_scope_20260828'
   ) or not exists (
     select 1
     from supabase_migrations.schema_migrations
     where version = '20260828095534'
+       or name = 'internal_test_account_scoped_admin_rpcs_20260828'
   ) then
     raise exception 'INTERNAL_TEST_ATTESTATION_MIGRATION_MISSING';
   end if;

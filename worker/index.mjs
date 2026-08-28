@@ -6790,6 +6790,19 @@ Return one complete schema-valid JSON assessment. Preserve the stored legal subs
   };
 }
 
+async function failExaminationAiJob(env, user, gradingPackage, error) {
+  if (!gradingPackage?.jobId || !user?.id) return;
+  try {
+    await examinationRpc(env, 'examination_fail_ai_job', {
+      p_user_id: user.id,
+      p_job_id: gradingPackage.jobId,
+      p_safe_error_code: error?.code || 'grading_failed',
+    });
+  } catch {
+    console.error('Examination grading failure state requires operator review');
+  }
+}
+
 async function processExaminationAiJob(env, user, gradingPackage, commercialReservation = null) {
   const questions = Array.isArray(gradingPackage?.questions)
     ? gradingPackage.questions
@@ -6859,15 +6872,7 @@ async function processExaminationAiJob(env, user, gradingPackage, commercialRese
     }
     return finalState;
   } catch (error) {
-    try {
-      await examinationRpc(env, 'examination_fail_ai_job', {
-        p_user_id: user.id,
-        p_job_id: gradingPackage.jobId,
-        p_safe_error_code: error?.code || 'grading_failed',
-      });
-    } catch {
-      console.error('Examination grading failure state requires operator review');
-    }
+    await failExaminationAiJob(env, user, gradingPackage, error);
     throw error;
   }
 }
@@ -7164,14 +7169,22 @@ async function handleExaminationCommand(request, env, origin, allowedOrigin) {
       const commercialTrack = authorizedAccess?.track === 'bar_feels'
         ? 'bar_feels'
         : 'subject_matter';
-      reservation = await reserveCommercialSubmission(
-        request,
-        env,
-        user,
-        commercialTrack,
-        pendingQuestion.questionId,
-        command.requestKey,
-      );
+      try {
+        reservation = await reserveCommercialSubmission(
+          request,
+          env,
+          user,
+          commercialTrack,
+          pendingQuestion.questionId,
+          command.requestKey,
+        );
+      } catch (error) {
+        // examination_command creates (or reopens) the grading job before
+        // commercial capacity is reserved. Preserve an honest resumable state
+        // when access or capacity prevents this question from being processed.
+        await failExaminationAiJob(env, user, result, error);
+        throw error;
+      }
     }
     let state;
     try {

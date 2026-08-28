@@ -110,6 +110,12 @@ on:
       - 'supabase/migrations/20260827144000_profile_avatar_cleanup_queue.sql'
       - 'supabase/migrations/20260827145000_pedro_foreign_key_indexes.sql'
       - 'supabase/migrations/20260828132000_pedro_conditional_expression_qualification_fix.sql'
+      - 'supabase/migrations/20260828133000_optimize_internal_test_scoped_usage_helpers.sql'
+      - 'supabase/migrations/20260828133500_admin_marketing_live_home_metrics.sql'
+      - 'supabase/migrations/20260828134000_exclude_admins_from_recent_sign_in_directory.sql'
+      - 'supabase/tests/20260828133000_optimize_internal_test_scoped_usage_helpers_test.sql'
+      - 'supabase/tests/20260828133500_admin_marketing_live_home_metrics_test.sql'
+      - 'supabase/tests/20260828134000_exclude_admins_from_recent_sign_in_directory_test.sql'
       - 'supabase/tests/20260827_038_historical_examination_owner_access_test.sql'
       - 'scripts/build-pages-artifact.mjs'
       - 'scripts/build-staging-artifact.mjs'
@@ -135,6 +141,9 @@ on:
       - 'scripts/test-examination-room-commercial-stress.mjs'
       - 'scripts/test-examination-room-v1-staging-smoke.mjs'
       - 'scripts/test-examination-room-release-workflows.mjs'
+      - 'scripts/build-admin-analytics-release-bundle.mjs'
+      - 'scripts/test-admin-analytics-release-bundle.mjs'
+      - 'scripts/probe-admin-analytics-release.sql'
       - 'scripts/build-examination-room-release-bundle.mjs'
       - 'scripts/build-examination-room-pure-sql-release-bundle.mjs'
       - 'scripts/test-examination-room-pure-sql-release-bundle.mjs'
@@ -256,6 +265,7 @@ jobs:
           node scripts/test-examinations.mjs
           node scripts/test-examination-room-door-menu.mjs
           node scripts/test-examination-room-release-workflows.mjs
+          node scripts/test-admin-analytics-release-bundle.mjs
           node scripts/test-feature-decommission-boundary.mjs
           node scripts/test-pages-artifact.mjs
 

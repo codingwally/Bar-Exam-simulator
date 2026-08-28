@@ -31,8 +31,8 @@
     business_comparisons: 'Comparisons',
   });
   const sectionSubtitles = Object.freeze({
-    executive: 'Executive command center for the Judicial Observatory.',
-    realtime: 'Current signed-in activity and service demand.',
+    executive: 'Marketing reach and live learner activity.',
+    realtime: 'Current non-admin learner activity and service demand.',
     recent_users: 'Signed-in sessions, time used, and recorded activity.',
     users: 'Complete account directory, access, and learning engagement.',
     acquisition: 'Registration funnel and account activation.',
@@ -506,7 +506,7 @@
     const key = `recent-sign-ins:${state.dataScope}`;
     if (!force && state.operational.has(key)) return state.operational.get(key);
     const payload = await readApi('/admin/recent-sign-ins', {
-      limit: 7,
+      limit: 25,
       requestKey: uuidKey(),
       dataScope: state.dataScope,
     }, context);
@@ -820,12 +820,17 @@
       [],
     ];
 
-    view.querySelectorAll('.metric').forEach((item) => {
+    view.querySelectorAll('.metric, .observatory-kpi').forEach((item) => {
+      const observatoryCard = item.classList.contains('observatory-kpi');
       rows.push([
         'Summary',
-        item.querySelector('small')?.textContent?.trim() || 'Measure',
+        (observatoryCard
+          ? item.querySelector('.kpi-head span')
+          : item.querySelector('small'))?.textContent?.trim() || 'Measure',
         item.querySelector('strong')?.textContent?.trim() || 'Not available',
-        item.querySelector('em')?.textContent?.trim() || '',
+        (observatoryCard
+          ? item.querySelector('small')
+          : item.querySelector('em'))?.textContent?.trim() || '',
       ]);
     });
 
@@ -961,13 +966,29 @@
       session_end: 'Ended session',
     };
     const event = String(row.latest_event_type || '').trim();
-    const page = String(row.latest_page_area || '').trim();
+    const page = activityPageAreaLabel(row.latest_page_area);
     const result = String(row.latest_result_category || '').trim();
     const primary = labels[event] || (event ? humanizeAuditValue(event) : 'Session activity');
-    const detail = [page && humanizeAuditValue(page), result && humanizeAuditValue(result)]
+    const detail = [page, result && humanizeAuditValue(result)]
       .filter(Boolean)
       .join(' · ');
     return detail ? `${primary} · ${detail}` : primary;
+  }
+
+  function activityPageAreaLabel(value) {
+    const page = String(value || '').trim().toLowerCase();
+    const labels = {
+      home: 'Home',
+      quorum: 'Home',
+      'lex-forum': 'Home',
+      mock_bar: 'Bar Question Practice',
+      'mock-bar': 'Bar Question Practice',
+      'subject-matter': 'Syllabus-Based Review',
+      'bar-feels': 'Bar Exam Simulation',
+      'examination-room': 'Examination Room',
+      pricing: 'Plans & Pricing',
+    };
+    return labels[page] || (page ? humanizeAuditValue(page) : '');
   }
 
   function recentActivityAccessBadge(row = {}) {
@@ -985,18 +1006,6 @@
       : 'Not available';
   }
 
-  function executiveSubscriptionSegments(engagement = {}) {
-    return Object.entries(engagement.subscriptionCounts || {})
-      .map(([label, value], index) => ({
-        label,
-        value: Math.max(0, Number(value) || 0),
-        color: OBSERVATORY_CHART_COLORS[index % OBSERVATORY_CHART_COLORS.length],
-      }))
-      .filter((segment) => segment.value > 0)
-      .sort((left, right) => right.value - left.value)
-      .slice(0, 7);
-  }
-
   function executiveDeviceSegments(report = {}) {
     return (report.devices || [])
       .map((row, index) => ({
@@ -1011,141 +1020,69 @@
 
   async function renderExecutive(report, context) {
     const current = report.current || {};
-    const previous = report.previous || {};
     const traffic = current.traffic || {};
     const funnel = current.funnel || {};
-    const learning = current.learning || {};
-    const reliability = current.reliability || {};
-    const engagement = report.engagement || report.engagementOverview || {};
-    const betaAllAccess = report.betaAllAccess || {};
-    const betaKnown = typeof betaAllAccess.enabled === 'boolean';
-    const betaEnabled = betaAllAccess.enabled === true;
-    const founderAuthorized = ['founder_admin', 'super_admin'].includes(state.authorization?.role);
-    const paymentDataAvailable = sectionAllowed('payments');
-    const [directory, recentSignIns, paymentData] = await Promise.all([
-      loadUserDirectory(false, '', 0, context),
+    const [activityResult, recentSignInsResult] = await Promise.allSettled([
+      loadLiveActivity(false, context),
       loadRecentSignIns(false, context),
-      paymentDataAvailable
-        ? loadAllPhase4Operational('payments', false, '', context)
-        : Promise.resolve(null),
     ]);
+    const activity = activityResult.status === 'fulfilled' ? activityResult.value : {};
+    const recentSignIns = recentSignInsResult.status === 'fulfilled'
+      ? recentSignInsResult.value
+      : { items: [], available: false };
     const recentAccounts = [...(
-      recentSignIns.items?.length ? recentSignIns.items : directory.items || []
+      recentSignIns.items || []
     )]
+      .filter((account) => !['admin', 'founder_admin', 'super_admin']
+        .includes(String(account.role || '').toLowerCase()))
       .sort((left, right) => new Date(
         right.monitoring_recorded_at || right.last_sign_in_at || 0,
       ) - new Date(left.monitoring_recorded_at || left.last_sign_in_at || 0))
       .slice(0, 7);
-    if (paymentData?.truncated) {
-      throw new Error('Payment records exceed the 5,000-record reporting limit. Executive commercial totals are not shown because they would be incomplete.');
-    }
-    const signedInAccounts = engagement.signedInAccounts ?? directory.total;
-    const answeringUsers = engagement.usersWithAnswers;
-    const questionsAnswered = engagement.questionsAnswered ?? learning.successful_grades;
-    const gradingSuccess = reliability.success_rate;
-    const subscriptionSegments = executiveSubscriptionSegments(engagement);
     const deviceSegments = executiveDeviceSegments(report);
-    const paymentRows = paymentData?.items || [];
-    const approvedRows = paymentRows.filter((row) => String(row.status || '').toLowerCase() === 'approved');
-    const pendingRows = paymentRows.filter((row) => !['approved', 'rejected'].includes(String(row.status || '').toLowerCase()));
-    const approvedValue = paymentDataAvailable
-      ? approvedRows.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0)
-      : null;
-    const pendingValue = paymentDataAvailable
-      ? pendingRows.reduce((sum, row) => sum + (Number(row.trusted_amount_php) || 0), 0)
-      : null;
-    const subjectRows = [...(report.subjects || [])]
-      .map((row) => ({ label: row.subject || 'Unspecified', value: Math.max(0, Number(row.successful_grades) || 0) }))
-      .sort((left, right) => right.value - left.value)
-      .slice(0, 7);
+    const acquisitionRows = acquisitionSourceRows(report)
+      .map(([label, value]) => ({ label, value }));
     const funnelRows = [
-      { label: 'Visitors', value: traffic.unique_visitors },
-      { label: 'Sign-in starts', value: funnel.sign_in_started },
-      { label: 'Sign-in completed', value: funnel.sign_in_completed },
-      { label: 'Registered', value: funnel.registrations },
+      { label: 'Sign-in attempts', value: funnel.sign_in_started },
+      { label: 'Completed sign-ins', value: funnel.sign_in_completed },
+      { label: 'New accounts', value: funnel.new_accounts },
       { label: 'Onboarding completed', value: funnel.onboarding_completed },
     ].filter((row) => row.value != null);
     const executiveVisuals = {
-      activityLabels: ['Previous period', 'Selected period'],
-      activityValues: [Number(previous.learning?.successful_grades) || 0, Number(learning.successful_grades) || 0],
-      subscriptionSegments,
       deviceSegments,
+      acquisitionRows,
       funnelRows,
-      revenueRows: paymentDataAvailable ? [
-        { label: 'Approved value', value: approvedValue },
-        { label: 'Pending request value', value: pendingValue },
-      ] : [],
-      subjectRows,
     };
     stageRenderCommit(context, () => { report.executiveVisuals = executiveVisuals; });
     return `
       <div class="observatory-kpis">
-        ${observatoryKpi('Signed-in accounts', number(signedInAccounts), 'ph-users-three', 'cyan', 'All recorded accounts')}
-        ${observatoryKpi('Answering users', number(answeringUsers), 'ph-user-focus', 'cyan', 'Accounts with at least one answer')}
-        ${observatoryKpi('Questions answered', number(questionsAnswered), 'ph-chats-circle', 'cyan', 'Across website features')}
-        ${observatoryKpi('Grading success', percentage(gradingSuccess), 'ph-shield-check', gradingSuccess != null && Number(gradingSuccess) < 0.95 ? 'red' : 'green', 'Selected reporting period')}
+        ${observatoryKpi('Home viewers', number(traffic.home_viewers), 'ph-house', 'gold', 'Distinct non-admin users · selected period')}
+        ${observatoryKpi('New accounts', number(funnel.new_accounts), 'ph-user-plus', 'green', 'Distinct non-admin accounts · selected period')}
+        ${observatoryKpi('Active now', number(activity.activeSignedInLast5Minutes), 'ph-pulse', 'cyan', 'Distinct non-admin users · last 5 minutes')}
+        ${observatoryKpi('Active on Home', number(activity.activeHomeLast5Minutes), 'ph-house-line', 'cyan', 'Distinct non-admin users · last 5 minutes')}
       </div>
       <div class="executive-chart-grid executive-chart-grid-top">
-        <section class="observatory-card executive-activity-card">
-          <div class="card-head"><div><h3>Activity Trend</h3><p>Successful grades · previous and selected period.</p></div><span class="status ok">Verified</span></div>
-          <div class="chart-shell compact"><canvas id="observatory-activity-chart" aria-label="Successful grading activity comparison chart" role="img"></canvas></div>
-          <div class="legend-row"><span class="cyan"><i></i>Successful answers</span></div>
+        <section class="observatory-card">
+          <div class="card-head"><div><h3>Acquisition sources</h3><p>Recorded sessions by source in the selected period.</p></div></div>
+          <div class="chart-shell compact"><canvas id="observatory-source-chart" aria-label="Recorded acquisition sessions by source" role="img"></canvas></div>
         </section>
         <section class="observatory-card">
-          <div class="card-head"><div><h3>User Mix</h3><p>By server-resolved access category.</p></div></div>
-          <div class="donut-layout"><div class="chart-shell compact"><canvas id="observatory-user-mix-chart" aria-label="User access category distribution chart" role="img"></canvas></div>${observatoryLegend(subscriptionSegments)}</div>
+          <div class="card-head"><div><h3>Sign-in activity and new accounts</h3><p>Sign-ins are recorded events, so one user may appear more than once. New accounts counts distinct accounts.</p></div></div>
+          <div class="chart-shell compact"><canvas id="observatory-funnel-chart" aria-label="Sign-in and account funnel chart" role="img"></canvas></div>
         </section>
         <section class="observatory-card">
           <div class="card-head"><div><h3>Device Mix</h3><p>Session categories; identifiers are not collected.</p></div></div>
           <div class="donut-layout"><div class="chart-shell compact"><canvas id="observatory-device-chart" aria-label="Device category distribution chart" role="img"></canvas></div>${observatoryLegend(deviceSegments)}</div>
         </section>
       </div>
-      <div class="executive-chart-grid executive-chart-grid-bottom">
-        <section class="observatory-card">
-          <div class="card-head"><div><h3>Sign-up Funnel</h3><p>Selected reporting period.</p></div></div>
-          <div class="chart-shell compact"><canvas id="observatory-funnel-chart" aria-label="Sign-up funnel chart" role="img"></canvas></div>
-        </section>
-        <section class="observatory-card">
-          <div class="card-head"><div><h3>Revenue Record</h3><p>${paymentDataAvailable ? 'Verified requests; not bank settlement.' : 'Requires payment-administration permission.'}</p></div>${paymentDataAvailable ? '<button type="button" class="icon-link" data-admin-section="business_revenue" aria-label="Open revenue records"><i class="ph ph-arrow-up-right" aria-hidden="true"></i></button>' : ''}</div>
-          <div class="chart-shell compact"><canvas id="observatory-revenue-chart" aria-label="Approved and pending payment request value chart" role="img"></canvas></div>
-          <div class="revenue-summary"><span><b>${escapeHtml(approvedValue == null ? 'Not available' : `₱${number(approvedValue, 2)}`)}</b>Approved</span><span><b>${escapeHtml(pendingValue == null ? 'Not available' : `₱${number(pendingValue, 2)}`)}</b>Pending</span></div>
-        </section>
-        <section class="observatory-card">
-          <div class="card-head"><div><h3>Top Subjects by Answers</h3><p>Completed grades in the selected period.</p></div></div>
-          <div class="chart-shell compact"><canvas id="observatory-subject-chart" aria-label="Top subjects by successful answers chart" role="img"></canvas></div>
-        </section>
-      </div>
       <section class="observatory-card executive-recent-users">
-        <div class="card-head"><div><h3>Recent Users</h3><p>Latest recorded account sign-ins.</p></div><button type="button" class="icon-link" data-admin-section="recent_users" aria-label="Open recent user activity"><span>View recent users</span><i class="ph ph-caret-right" aria-hidden="true"></i></button></div>
-        ${table(['Name', 'Email', 'School', 'Last sign-in', 'Region', 'Device', 'Questions', 'Access', 'Remaining'], recentAccounts.map((account) => [
+        <div class="card-head"><div><h3>Recent learner sign-ins</h3><p>Latest non-admin sign-ins. Last 30 minutes: ${escapeHtml(number(activity.activeSignedInLast30Minutes))} active users · ${escapeHtml(number(activity.activeHomeLast30Minutes))} active on Home.</p></div><button type="button" class="icon-link" data-admin-section="recent_users" aria-label="Open recent user activity"><span>View recent users</span><i class="ph ph-caret-right" aria-hidden="true"></i></button></div>
+        ${recentSignInsResult.status === 'rejected'
+    ? empty('Recent learner sign-ins are temporarily unavailable.')
+    : table(['Name', 'Email', 'School', 'Last sign-in', 'Region', 'Device', 'Access'], recentAccounts.map((account) => [
           account.display_name || 'Not provided', account.email || 'Not provided', account.school || 'Not provided', dateTime(account.last_sign_in_at),
-          accountRegion(account), accountDevice(account), number(account.answered_question_count),
-          { html: true, value: commercialAccessBadge(account) }, accountRemainingAllowance(account),
+          accountRegion(account), accountDevice(account), { html: true, value: commercialAccessBadge(account) },
         ]))}
-      </section>
-      <section class="executive-operations observatory-card">
-        <header class="executive-operations-heading"><span><i class="ph ph-bell-ringing" aria-hidden="true"></i>Operations &amp; access</span><small>${escapeHtml(number((Number(report.queues?.pending_payments) || 0) + (Number(report.queues?.pending_support) || 0) + (Number(report.queues?.pending_corrections) || 0) + (Number(engagement.openQuorumReports) || 0)))} open items</small></header>
-        <div class="executive-operations-grid">
-          <div class="observatory-actions">
-            ${observatoryAction('Payments', 'Proofs awaiting review', report.queues?.pending_payments, 'payments', 'ph-receipt')}
-            ${observatoryAction('Support', 'Open cases', report.queues?.pending_support, 'support', 'ph-headset')}
-            ${observatoryAction('Corrections', 'Editorial reviews', report.queues?.pending_corrections, 'corrections', 'ph-note-pencil')}
-            ${observatoryAction('Community', 'Open reports', engagement.openQuorumReports, 'forum', 'ph-chats-circle')}
-          </div>
-          <div>
-            <dl class="definition-list">
-              <dt>Commercial enforcement</dt><dd>${!betaKnown ? 'Not confirmed' : betaEnabled ? 'Temporarily bypassed' : 'Active'}</dd>
-              <dt>Introductory allowance</dt><dd>Five lifetime practice tokens</dd>
-              <dt>Active manual entitlements</dt><dd>${escapeHtml(number(report.queues?.active_manual_entitlements))}</dd>
-              <dt>Last access change</dt><dd>${escapeHtml(dateTime(betaAllAccess.updatedAt))}</dd>
-            </dl>
-            ${founderAuthorized && betaKnown ? `<div class="dialog-actions">${actionButton(
-              betaEnabled ? 'Activate commercial enforcement' : 'Enable temporary safety access',
-              'global_beta_change', 'global_beta_all_access',
-              { currentEnabled: betaEnabled, enabled: !betaEnabled },
-            ).value}</div>` : ''}
-          </div>
-        </div>
       </section>`;
   }
 
@@ -1161,41 +1098,36 @@
         <strong>${number(value)}</strong></button>`).join('')}</div>`;
   }
 
-  async function renderRealtime(report, context) {
+  async function renderRealtime(context) {
     const activity = await loadLiveActivity(false, context);
+    context.loadedAt = activity.generatedAt || null;
     stageRenderCommit(context, () => { state.liveActivity = activity; });
-    const current = report.current?.traffic || {};
-    const previous = report.previous?.traffic || {};
     return `
-      ${heading('Live Activity', 'Approximate activity totals for recent signed-in sessions. Exact online names are withheld because the current session records cannot reliably identify a person after sign-out or an account switch.')}
+      ${heading('Live Activity', 'Approximate distinct non-admin user activity from recent visible-page updates. Use Recent Users for the latest named activity records.')}
       <div class="metric-strip">
-        ${metric('Active sessions · 5 minutes', activity.activeSignedInLast5Minutes, null, number, {
-          subtext: 'Approximate · not exact people online',
+        ${metric('Active users · 5 minutes', activity.activeSignedInLast5Minutes, null, number, {
+          subtext: 'Distinct non-admin users · approximate',
         })}
-        ${metric('Active sessions · 30 minutes', activity.activeSignedInLast30Minutes, null, number, {
-          subtext: 'Approximate · may include stale sessions',
+        ${metric('Active users · 30 minutes', activity.activeSignedInLast30Minutes, null, number, {
+          subtext: 'Distinct non-admin users · recent window',
         })}
-        ${metric('Sessions', current.sessions, previous.sessions)}
-        ${metric('Average daily views', current.average_daily_views, previous.average_daily_views, (v) => number(v, 1))}
-        ${metric('Average daily visitors', current.average_daily_unique_visitors, previous.average_daily_unique_visitors, (v) => number(v, 1))}
-        ${metric('Daily users as % of monthly users', current.dau_mau_ratio, previous.dau_mau_ratio, percentage)}
-        ${metric('Weekly users as % of monthly users', current.wau_mau_ratio, previous.wau_mau_ratio, percentage)}
+        ${metric('Active on Home · 5 minutes', activity.activeHomeLast5Minutes, null, number, {
+          subtext: 'Distinct non-admin Home users · approximate',
+        })}
+        ${metric('Active on Home · 30 minutes', activity.activeHomeLast30Minutes, null, number, {
+          subtext: 'Distinct non-admin Home users · recent window',
+        })}
       </div>
       <section class="panel">
-        <div class="panel-title-row"><div><h3>Recent activity summary</h3><p class="panel-note">Use these totals for broad demand monitoring only. The Admin does not label a named user as online until sign-in, sign-out, and account switching can be matched reliably.</p></div><button class="secondary-button" id="download-live-activity" type="button">Download summary</button></div>
+        <div class="panel-title-row"><div><h3>Recent activity summary</h3><p class="panel-note">These are distinct non-admin users attached to recent session updates. They are useful for demand monitoring, but remain approximate because sign-out and account switching are not perfect presence signals.</p></div><button class="secondary-button" id="download-live-activity" type="button">Download summary</button></div>
         ${table(['Measure', 'Value', 'Meaning'], [
-          ['Activity in the last 5 minutes', number(activity.activeSignedInLast5Minutes), 'Approximate signed-in-session records'],
-          ['Activity in the last 30 minutes', number(activity.activeSignedInLast30Minutes), 'Approximate signed-in-session records'],
+          ['Active users in the last 5 minutes', number(activity.activeSignedInLast5Minutes), 'Distinct non-admin users with recent visible-page activity'],
+          ['Active users in the last 30 minutes', number(activity.activeSignedInLast30Minutes), 'Distinct non-admin users in the recent monitoring window'],
+          ['Active on Home in the last 5 minutes', number(activity.activeHomeLast5Minutes), 'Distinct non-admin users whose recent activity is on Home'],
+          ['Active on Home in the last 30 minutes', number(activity.activeHomeLast30Minutes), 'Distinct non-admin Home users in the recent monitoring window'],
         ])}
       </section>
-      <div class="work-grid">
-        <section class="panel"><h3>Signed-in and guest sessions</h3>${barList([
-          ['Signed-in sessions', current.authenticated_sessions],
-          ['Guest sessions', current.guest_sessions],
-        ])}</section>
-        <section class="panel"><h3>Device category</h3>${barList((report.devices || []).map((row) => [row.category, row.sessions]))}</section>
-      </div>
-      <section class="panel"><h3>How this is counted</h3><p class="panel-note">Activity is based on periodic visible-page updates. Existing records may continue after sign-out or be reused after an account switch, so this page intentionally shows totals rather than named people. Private answers, tokens, prompts, IP addresses, and full browser identifiers are not shown here.</p></section>`;
+      <section class="panel"><h3>How this is counted</h3><p class="panel-note">Activity is based on periodic visible-page updates and counts each non-admin user once per window. Historical and current Home telemetry is presented under one Home label. Private answers, tokens, prompts, IP addresses, and full browser identifiers are never shown here.</p><button class="secondary-button" type="button" data-admin-section="recent_users">Open Recent Users</button></section>`;
   }
 
   function renderAcquisition(report) {
@@ -3192,12 +3124,9 @@
           || view?.firstElementChild !== renderedSurface) return;
       if (section === 'executive') {
         const visual = report.executiveVisuals || {};
-        drawLineTrend($('#observatory-activity-chart'), visual.activityLabels || [], visual.activityValues || []);
-        drawDonut($('#observatory-user-mix-chart'), visual.subscriptionSegments || [], 'Users');
+        drawHorizontalBars($('#observatory-source-chart'), visual.acquisitionRows || []);
         drawDonut($('#observatory-device-chart'), visual.deviceSegments || [], 'Sessions');
         drawFunnel($('#observatory-funnel-chart'), visual.funnelRows || []);
-        drawHorizontalBars($('#observatory-revenue-chart'), visual.revenueRows || [], { currency: true, gold: true, stacked: true });
-        drawHorizontalBars($('#observatory-subject-chart'), visual.subjectRows || []);
       } else if (section === 'marketing') {
         const sources = acquisitionSourceRows(report);
         drawGroupedBars($('#observatory-acquisition-chart'), sources.map(([label]) => label), sources.map(([, value]) => value), sources.map(() => 0));
@@ -3270,9 +3199,9 @@
     const rangeControl = $('#reporting-range');
     const dataScopeControl = $('#reporting-data-scope');
     if (dataScopeControl) dataScopeControl.hidden = !dataScopedSections.has(section);
-    const rangeApplies = ['executive', 'realtime', 'recent_users', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
+    const rangeApplies = ['executive', 'recent_users', 'acquisition', 'marketing', 'learning', 'subjects', 'reliability', 'forum', 'business_projections', 'business_comparisons'].includes(section);
     if (rangeControl) {
-      rangeControl.hidden = isExaminationRoom;
+      rangeControl.hidden = isExaminationRoom || section === 'realtime';
       const rangeLabel = rangeControl.querySelector('.reporting-range-label');
       if (rangeLabel) rangeLabel.textContent = rangeApplies ? 'Date range' : 'Scope';
       const rangeSelect = $('#date-range');
@@ -3308,7 +3237,7 @@
     }
     try {
       const reportSections = new Set([
-        'executive', 'realtime', 'acquisition', 'marketing', 'learning', 'subjects',
+        'executive', 'acquisition', 'marketing', 'learning', 'subjects',
         'reliability', 'subscriptions', 'answer_exports',
         'business_projections', 'business_comparisons',
       ]);
@@ -3319,7 +3248,7 @@
       const report = reportSections.has(section) ? await loadReport(false, context) : {};
       let html;
       if (section === 'executive') html = await renderExecutive(report, context);
-      else if (section === 'realtime') html = await renderRealtime(report, context);
+      else if (section === 'realtime') html = await renderRealtime(context);
       else if (section === 'acquisition') html = renderAcquisition(report);
       else if (section === 'marketing') html = renderMarketing(report);
       else if (section === 'recent_users') html = await renderRecentUsers(context);
@@ -3359,10 +3288,12 @@
       }
       if (reportSections.has(section)) commitReportMeta(report);
       else {
-        $('#freshness b').textContent = `Loaded ${dateTime(new Date().toISOString())}`;
-        $('#system-banner').textContent = dataScopedSections.has(section)
-          ? `${title} shows ${dataScopeLabel().toLowerCase()} records for the filters on this page. The date-range selector does not apply.`
-          : `${title} shows current records for the filters on this page. The date-range selector does not apply.`;
+        $('#freshness b').textContent = `Loaded ${dateTime(context.loadedAt || new Date().toISOString())}`;
+        $('#system-banner').textContent = section === 'realtime'
+          ? `${title} shows ${dataScopeLabel().toLowerCase()} activity in fixed 5- and 30-minute windows.`
+          : dataScopedSections.has(section)
+            ? `${title} shows ${dataScopeLabel().toLowerCase()} records for the filters on this page. The date-range selector does not apply.`
+            : `${title} shows current records for the filters on this page. The date-range selector does not apply.`;
       }
       state.sectionReady = true;
       if (exportButton) exportButton.disabled = false;
@@ -4643,8 +4574,10 @@
       downloadCsv(`due-diligence-activity-summary-${dataScopeFileSlug()}.csv`, [
         'Measure', 'Value', 'Meaning', 'Generated at',
       ], [
-        ['Activity in the last 5 minutes', state.liveActivity?.activeSignedInLast5Minutes, 'Approximate signed-in-session records; not exact people online', state.liveActivity?.generatedAt],
-        ['Activity in the last 30 minutes', state.liveActivity?.activeSignedInLast30Minutes, 'Approximate signed-in-session records; may include stale sessions', state.liveActivity?.generatedAt],
+        ['Active users in the last 5 minutes', state.liveActivity?.activeSignedInLast5Minutes, 'Distinct non-admin users with recent visible-page activity; approximate', state.liveActivity?.generatedAt],
+        ['Active users in the last 30 minutes', state.liveActivity?.activeSignedInLast30Minutes, 'Distinct non-admin users in the recent monitoring window', state.liveActivity?.generatedAt],
+        ['Active on Home in the last 5 minutes', state.liveActivity?.activeHomeLast5Minutes, 'Distinct non-admin users whose recent activity is on Home; approximate', state.liveActivity?.generatedAt],
+        ['Active on Home in the last 30 minutes', state.liveActivity?.activeHomeLast30Minutes, 'Distinct non-admin Home users in the recent monitoring window', state.liveActivity?.generatedAt],
       ]);
       toast('Activity summary downloaded for Google Sheets.');
     });
@@ -4821,7 +4754,7 @@
           row.comment_count,
           row.report_count,
         ]);
-        downloadCsv('due-diligence-quorum-posts.csv', [
+        downloadCsv('due-diligence-community-posts.csv', [
           'Posted', 'Name', 'Email', 'Type', 'Topic', 'Post', 'Status', 'Comments', 'Reports',
         ], rows);
         toast('All matching Community posts downloaded for Google Sheets.');

@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const [
-  html, css, observatoryCss, js, analytics, worker, migration, directoryMigration,
+  html, publicHtml, css, observatoryCss, js, analytics, worker, migration, directoryMigration,
   engagementMigration, globalBetaMigration, answerHistoryMigration,
   businessDetailsMigration, monitoringMigration, recentActivityMigration, preflight,
-  internalTestAttestation,
+  internalTestAttestation, scopedHelperOptimization, marketingLiveMigration,
+  recentLearnerSignInMigration,
 ] = await Promise.all([
   readFile(new URL('../admin/index.html', import.meta.url), 'utf8'),
+  readFile(new URL('../index.html', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.css', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin-observatory.css', import.meta.url), 'utf8'),
   readFile(new URL('../admin/admin.js', import.meta.url), 'utf8'),
@@ -23,6 +25,9 @@ const [
   readFile(new URL('../supabase/migrations/20260824014625_admin_recent_user_activity_directory.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/review/phase3_production_preflight.sql', import.meta.url), 'utf8'),
   readFile(new URL('../supabase/review/internal_test_account_production_attestation.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260828133000_optimize_internal_test_scoped_usage_helpers.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260828133500_admin_marketing_live_home_metrics.sql', import.meta.url), 'utf8'),
+  readFile(new URL('../supabase/migrations/20260828134000_exclude_admins_from_recent_sign_in_directory.sql', import.meta.url), 'utf8'),
 ]);
 
 const sectionLabels = [
@@ -76,6 +81,8 @@ assert.match(observatoryCss, /recent-user-activity-table/);
 assert.match(observatoryCss, /recent-user-chart-grid/);
 assert.match(observatoryCss, /--obs-muted-bright:\s*#f0f4f5/);
 assert.match(html, /id="data-scope"[\s\S]*value="regular" selected>Regular users<[\s\S]*value="internal_test">Internal testing</);
+assert.match(html, /marketing=home-live-20260828-1/);
+assert.match(publicHtml, /phase3-analytics\.js\?v=home-telemetry-20260828-1/);
 assert.doesNotMatch(html, /id="data-scope"[\s\S]{0,400}value="all"/);
 assert.match(observatoryCss, /#reporting-data-scope\[hidden\][\s\S]*display:\s*none\s*!important/);
 
@@ -109,6 +116,8 @@ assert.match(analytics, /session_heartbeat/);
 assert.match(analytics, /!headers\.Authorization && !headers\['X-DD-Beta-Access'\]/);
 assert.match(analytics, /duediligence:session/);
 assert.match(analytics, /duediligence:private-beta-access/);
+assert.match(analytics, /area === 'quorum' \|\| area === 'lex-forum'\) return 'home'/);
+assert.match(analytics, /return 'home';\s*\n\s*}/);
 assert.doesNotMatch(analytics, /CF-Connecting-IP|userAgent|navigator\.userAgent|mousemove|keydown/);
 
 for (const route of [
@@ -135,6 +144,7 @@ for (const route of [
 
 for (const rpc of [
   'admin_dashboard_snapshot_scoped_v1',
+  'admin_marketing_summary_scoped_v1',
   'admin_overview_engagement_metrics_scoped_v1',
   'admin_live_activity_scoped_v1',
   'admin_user_monitoring_directory_scoped_v1',
@@ -146,6 +156,23 @@ for (const rpc of [
   'phase4_admin_operational_data_scoped_v1',
 ]) assert.match(worker, new RegExp(rpc));
 assert.match(worker, /p_data_scope:/);
+assert.match(worker, /home_viewers:\s*currentMarketing\.home_viewers \?\? null/);
+assert.match(worker, /new_accounts:\s*currentMarketing\.new_accounts \?\? null/);
+assert.doesNotMatch(scopedHelperOptimization, /admin_learner_reporting_scope_matches/);
+assert.match(scopedHelperOptimization, /join private\.internal_test_accounts/);
+assert.match(scopedHelperOptimization, /join public\.user_roles/);
+assert.match(marketingLiveMigration, /create or replace function public\.admin_marketing_summary_scoped_v1/);
+assert.match(marketingLiveMigration, /telemetry\.event_type = 'quorum_opened'/);
+assert.match(marketingLiveMigration, /count\(distinct telemetry\.user_id\)/);
+assert.match(marketingLiveMigration, /not in \('admin', 'founder_admin', 'super_admin'\)/);
+assert.match(marketingLiveMigration, /activeHomeLast5Minutes/);
+assert.match(marketingLiveMigration, /in \('home', 'quorum', 'lex-forum'\)/);
+assert.match(marketingLiveMigration, /revoke all on function public\.admin_marketing_summary_scoped_v1[\s\S]*from public, anon, authenticated, service_role/);
+assert.match(marketingLiveMigration, /grant execute on function public\.admin_marketing_summary_scoped_v1[\s\S]*to service_role/);
+assert.match(recentLearnerSignInMigration, /create or replace function public\.admin_recent_sign_in_directory_scoped_v1/);
+assert.match(recentLearnerSignInMigration, /not in \('admin', 'founder_admin', 'super_admin'\)[\s\S]*order by[\s\S]*limit v_limit/);
+assert.match(recentLearnerSignInMigration, /revoke all on function public\.admin_recent_sign_in_directory_scoped_v1[\s\S]*from public, anon, authenticated, service_role/);
+assert.match(recentLearnerSignInMigration, /grant execute on function public\.admin_recent_sign_in_directory_scoped_v1[\s\S]*to service_role/);
 
 assert.match(js, /Download Q&amp;A|Download Q&A/);
 assert.match(js, /user_response_export/);

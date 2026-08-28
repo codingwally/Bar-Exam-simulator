@@ -15,6 +15,8 @@ const [
   stagingWorkflow,
   stagingSmoke,
   releaseBundleBuilder,
+  adminAnalyticsProbe,
+  adminAnalyticsBundleBuilder,
 ] = await Promise.all([
   read('.github/workflows/deploy.yml'),
   read('.github/workflows/validate-mandatory-early-access.yml'),
@@ -23,6 +25,8 @@ const [
   read('.github/workflows/staging-e2e-gate.yml'),
   read('scripts/test-examination-room-v1-staging-smoke.mjs'),
   read('scripts/build-examination-room-release-bundle.mjs'),
+  read('scripts/probe-admin-analytics-release.sql'),
+  read('scripts/build-admin-analytics-release-bundle.mjs'),
 ]);
 
 for (const [label, workflow] of [
@@ -140,6 +144,15 @@ for (const requiredPath of [
   "      - 'supabase/migrations/20260827190036_examination_room_key_delivery_nullable_creator.sql'",
   "      - 'supabase/migrations/20260827193000_examination_room_lifecycle_controls.sql'",
   "      - 'supabase/migrations/20260828123000_examination_room_recorded_media.sql'",
+  "      - 'supabase/migrations/20260828133000_optimize_internal_test_scoped_usage_helpers.sql'",
+  "      - 'supabase/migrations/20260828133500_admin_marketing_live_home_metrics.sql'",
+  "      - 'supabase/migrations/20260828134000_exclude_admins_from_recent_sign_in_directory.sql'",
+  "      - 'supabase/tests/20260828133000_optimize_internal_test_scoped_usage_helpers_test.sql'",
+  "      - 'supabase/tests/20260828133500_admin_marketing_live_home_metrics_test.sql'",
+  "      - 'supabase/tests/20260828134000_exclude_admins_from_recent_sign_in_directory_test.sql'",
+  "      - 'scripts/probe-admin-analytics-release.sql'",
+  "      - 'scripts/build-admin-analytics-release-bundle.mjs'",
+  "      - 'scripts/test-admin-analytics-release-bundle.mjs'",
   "      - 'supabase/tests/database/**'",
   "      - '.github/workflows/staging-e2e-gate.yml'",
   "      - '.github/workflows/bootstrap-examination-room-key-pepper.yml'",
@@ -530,5 +543,156 @@ for (const [label, workflow] of [
   assert.match(workflow, /application\/vnd\.duediligence\.examination-room-recovery\+json/u);
   assert.doesNotMatch(workflow, /wrangler@[^\s]+ r2 bucket|\/r2\/buckets\//u, label + ' must not require Cloudflare R2.');
 }
+
+for (const [label, workflow, databaseSecret, cutoverLabel] of [
+  [
+    'Pages release',
+    pagesWorkflow,
+    'EXAMINATION_ROOM_PRODUCTION_DATABASE_URL',
+    'Deploy Worker before exposing the new Pages client',
+  ],
+  [
+    'Worker release',
+    workerWorkflow,
+    'EXAMINATION_ROOM_PRODUCTION_DATABASE_URL',
+    '      - name: Deploy Worker\n',
+  ],
+  [
+    'staging release',
+    stagingWorkflow,
+    'EXAMINATION_ROOM_STAGING_DATABASE_URL',
+    'Deploy reviewed Worker and static artifact to staging',
+  ],
+]) {
+  assert.match(
+    workflow,
+    /admin_analytics_database_preapplied:\s*\n\s+description:.*20260828133000 \+ 20260828133500 \+ 20260828134000.*ledger hashes, and live probe are complete.*\n\s+required: true\s*\n\s+default: false\s*\n\s+type: boolean/u,
+    `${label} must default the exact Admin analytics database attestation to false.`,
+  );
+  assert.match(
+    workflow,
+    /ADMIN_ANALYTICS_DATABASE_PREAPPLIED: \$\{\{ inputs\.admin_analytics_database_preapplied \}\}/u,
+  );
+  assert.match(
+    workflow,
+    new RegExp(`ADMIN_ANALYTICS_DATABASE_URL: \\$\\{\\{ secrets\\.${databaseSecret} \\}\\}`),
+  );
+  assert.match(
+    workflow,
+    /node scripts\/build-admin-analytics-release-bundle\.mjs --output "\$admin_analytics_release_bundle"/u,
+  );
+  assert.match(
+    workflow,
+    /psql "\$ADMIN_ANALYTICS_DATABASE_URL" -X --set=ON_ERROR_STOP=1 --file "\$admin_analytics_release_bundle"/u,
+  );
+  assert.doesNotMatch(
+    workflow,
+    /psql "\$ADMIN_ANALYTICS_DATABASE_URL"[^\n]*--file "\$(?:scoped_helpers_migration|marketing_live_migration|recent_sign_ins_migration|live_probe)"/u,
+    `${label} must never apply the Admin analytics migrations outside the reviewed atomic bundle.`,
+  );
+  assert.match(workflow, /node scripts\/test-admin-analytics-release-bundle\.mjs/u);
+  assert.match(
+    workflow,
+    /elif \[\[ "\$ADMIN_ANALYTICS_DATABASE_PREAPPLIED" == "true" \]\]; then/u,
+  );
+  assert.match(
+    workflow,
+    /reviewed bundle atomically applied exactly 20260828133000_optimize_internal_test_scoped_usage_helpers\.sql, 20260828133500_admin_marketing_live_home_metrics\.sql, and 20260828134000_exclude_admins_from_recent_sign_in_directory\.sql, recorded their exact ledger names and source hashes, and passed the rollback-only live probe before Worker cutover/u,
+  );
+  assert.match(
+    workflow,
+    /manually run this reviewed Admin analytics bundle and verify its exact ledger-name\/source-hash postflight and rollback-only live probe/u,
+  );
+  assert.match(workflow, new RegExp(`${databaseSecret} is missing\\.`));
+
+  const release2Gate = workflow.indexOf('Require the live-probed Release 2 database contract');
+  const analyticsGate = workflow.indexOf('Apply and live-probe the exact Admin analytics migrations');
+  const bundleBuild = workflow.indexOf('build-admin-analytics-release-bundle.mjs --output', analyticsGate);
+  const bundleApply = workflow.indexOf('--file "$admin_analytics_release_bundle"', analyticsGate);
+  const cutover = workflow.indexOf(cutoverLabel);
+  assert.ok(
+    release2Gate >= 0
+      && analyticsGate > release2Gate
+      && bundleBuild > analyticsGate
+      && bundleApply > bundleBuild
+      && cutover > bundleApply,
+    `${label} must preserve database then Worker cutover order for the exact Admin analytics release.`,
+  );
+  assert.equal(
+    (workflow.match(/psql "\$ADMIN_ANALYTICS_DATABASE_URL"/gu) || []).length,
+    1,
+    `${label} must execute the reviewed Admin analytics bundle through one database apply command.`,
+  );
+}
+
+for (const migration of [
+  '20260828133000_optimize_internal_test_scoped_usage_helpers.sql',
+  '20260828133500_admin_marketing_live_home_metrics.sql',
+  '20260828134000_exclude_admins_from_recent_sign_in_directory.sql',
+]) {
+  assert.ok(adminAnalyticsBundleBuilder.includes(migration), `Admin analytics bundle is missing ${migration}`);
+}
+assert.ok(
+  adminAnalyticsBundleBuilder.indexOf('20260828133000_optimize_internal_test_scoped_usage_helpers.sql')
+    < adminAnalyticsBundleBuilder.indexOf('20260828133500_admin_marketing_live_home_metrics.sql')
+  && adminAnalyticsBundleBuilder.indexOf('20260828133500_admin_marketing_live_home_metrics.sql')
+    < adminAnalyticsBundleBuilder.indexOf('20260828134000_exclude_admins_from_recent_sign_in_directory.sql'),
+  'The atomic Admin analytics bundle must preserve the reviewed migration order.',
+);
+for (const requiredBundleGuard of [
+  'beginCount !== 1 || commitCount !== 1',
+  'supabase_migrations.schema_migrations',
+  'admin_analytics_ledger_complete',
+  'admin_analytics_ledger_exact',
+  'Partial Admin analytics migration ledger detected',
+  'sha256:',
+  "flag: 'wx'",
+  'probe.trim()',
+]) {
+  assert.ok(
+    adminAnalyticsBundleBuilder.includes(requiredBundleGuard),
+    `Admin analytics bundle is missing release guard: ${requiredBundleGuard}`,
+  );
+}
+assert.doesNotMatch(adminAnalyticsBundleBuilder, /readdir|glob|supabase\s+(?:db\s+push|migration\s+up)/u);
+
+assert.match(stagingWorkflow, /refs\/heads\/fix\/admin-marketing-live-20260828/u);
+assert.match(adminAnalyticsProbe, /^\\set ON_ERROR_STOP on/mu);
+assert.match(adminAnalyticsProbe, /begin;[\s\S]*rollback;/u);
+assert.match(adminAnalyticsProbe, /set local statement_timeout = '8s'/u);
+assert.equal((adminAnalyticsProbe.match(/^\s*begin;\s*$/gimu) || []).length, 1);
+assert.equal((adminAnalyticsProbe.match(/^\s*rollback;\s*$/gimu) || []).length, 1);
+assert.equal((adminAnalyticsProbe.match(/set local statement_timeout = '8s';/gu) || []).length, 8);
+assert.equal((adminAnalyticsProbe.match(/with response as materialized \(/gu) || []).length, 8);
+assert.doesNotMatch(adminAnalyticsProbe, /^\s*do\b/mu);
+assert.doesNotMatch(adminAnalyticsProbe, /^\s*for\b/mu);
+assert.match(adminAnalyticsProbe, /admin_analytics_probe_actor_ready[\s\S]*\\gset/u);
+for (const rpc of [
+  'admin_dashboard_snapshot_scoped_v1',
+  'admin_marketing_summary_scoped_v1',
+  'admin_live_activity_scoped_v1',
+  'admin_recent_sign_in_directory_scoped_v1',
+]) {
+  assert.equal(
+    (adminAnalyticsProbe.match(new RegExp(`select public\\.${rpc}\\(`, 'gu')) || []).length,
+    2,
+    `${rpc} must have separate regular and internal-test top-level probe statements.`,
+  );
+}
+for (const requiredLiveProbe of [
+  'public.admin_dashboard_snapshot_scoped_v1',
+  'public.admin_marketing_summary_scoped_v1',
+  'public.admin_live_activity_scoped_v1',
+  'public.admin_recent_sign_in_directory_scoped_v1',
+  "'regular'",
+  "'internal_test'",
+  'activeSignedInLast5Minutes',
+  'activeHomeLast5Minutes',
+  "item->>'role' in ('admin', 'founder_admin', 'super_admin')",
+]) {
+  assert.ok(adminAnalyticsProbe.includes(requiredLiveProbe), `Admin analytics live probe is missing: ${requiredLiveProbe}`);
+}
+assert.doesNotMatch(adminAnalyticsProbe, /\b(?:create|alter|drop|truncate)\b/iu);
+assert.doesNotMatch(adminAnalyticsProbe, /\bcommit\b/iu);
 
 console.log('Examination Room release workflow contract checks passed.');

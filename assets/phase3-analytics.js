@@ -61,8 +61,15 @@
 
   function pageArea() {
     if (location.pathname.startsWith('/admin')) return 'admin';
-    if (location.hash) return location.hash.replace(/^#/, '').slice(0, 80) || 'home';
-    return 'mock_bar';
+    if (location.hash) {
+      const area = location.hash.replace(/^#/, '').slice(0, 80) || 'home';
+      // The public product calls this destination Home. Keep legacy route
+      // hashes working, but do not continue writing the old product name into
+      // marketing and live-monitoring telemetry.
+      if (area === 'quorum' || area === 'lex-forum') return 'home';
+      return area;
+    }
+    return 'home';
   }
 
   function authHeaders() {

@@ -14,6 +14,8 @@ for (const group of [
   'Support &amp; Community', 'Business', 'Security &amp; Operations',
 ]) assert.match(html, new RegExp(group.replace('&', '&amp;').replace('&amp;amp;', '&amp;')));
 
+assert.match(html, /Marketing reach and live learner activity\./);
+
 for (const label of [
   'Executive Pulse', 'Live Activity', 'Recent users', 'Users', 'Sign-ups', 'Acquisition',
   'Answers', 'Subject Performance', 'Grading Health', 'Subscriptions',
@@ -34,19 +36,39 @@ for (const control of [
 ]) assert.match(js, new RegExp(`\\$\\('#${control}'\\)\\?\\.addEventListener`));
 
 for (const id of [
-  'observatory-activity-chart', 'observatory-user-mix-chart',
-  'observatory-device-chart', 'observatory-funnel-chart',
-  'observatory-revenue-chart', 'observatory-subject-chart',
+  'observatory-source-chart', 'observatory-device-chart', 'observatory-funnel-chart',
 ]) assert.match(js, new RegExp(id));
 
-assert.match(js, /Signed-in accounts/);
-assert.match(js, /Answering users/);
-assert.match(js, /Questions answered/);
-assert.match(js, /Grading success/);
+const executiveStart = js.indexOf('async function renderExecutive');
+const executiveEnd = js.indexOf('\n  function barList', executiveStart);
+const executiveSource = js.slice(executiveStart, executiveEnd);
+assert.ok(executiveStart >= 0 && executiveEnd > executiveStart, 'Executive renderer must be extractable.');
+assert.match(executiveSource, /Home viewers/);
+assert.match(executiveSource, /traffic\.home_viewers/);
+assert.match(executiveSource, /New accounts/);
+assert.match(executiveSource, /funnel\.new_accounts/);
+assert.match(executiveSource, /Active now/);
+assert.match(executiveSource, /activity\.activeSignedInLast5Minutes/);
+assert.match(executiveSource, /Active on Home/);
+assert.match(executiveSource, /activity\.activeHomeLast5Minutes/);
+assert.match(executiveSource, /activity\.activeSignedInLast30Minutes/);
+assert.match(executiveSource, /activity\.activeHomeLast30Minutes/);
+assert.match(executiveSource, /Distinct non-admin users · selected period/);
+assert.match(executiveSource, /New accounts counts distinct accounts/);
+assert.doesNotMatch(executiveSource, /New accounts counts distinct people/);
+assert.match(executiveSource, /Sign-ins are recorded events, so one user may appear more than once/);
+assert.match(executiveSource, /Promise\.allSettled/);
+assert.match(executiveSource, /Recent learner sign-ins/);
+assert.match(executiveSource, /\['admin', 'founder_admin', 'super_admin'\]/);
+assert.doesNotMatch(executiveSource, /signedInAccounts|Answering users|Questions answered|Grading success/);
+assert.doesNotMatch(executiveSource, /loadAllPhase4Operational|approvedValue|pendingValue/);
+assert.doesNotMatch(executiveSource, /Top Subjects|Operations &amp; access|openQuorumReports/);
+assert.doesNotMatch(executiveSource, /observatory-(?:activity|user-mix|revenue|subject)-chart/);
 assert.doesNotMatch(js, /'Not collected', 'Not collected'/);
-assert.match(js, /\['Name', 'Email', 'School', 'Last sign-in', 'Region', 'Device'/);
+assert.match(executiveSource, /\['Name', 'Email', 'School', 'Last sign-in', 'Region', 'Device', 'Access'\]/);
 assert.match(js, /accountRegion\(account\), accountDevice\(account\)/);
 assert.match(js, /\/admin\/recent-sign-ins/);
+assert.match(js, /\/admin\/recent-sign-ins'[\s\S]{0,120}limit:\s*25/);
 assert.match(js, /\/admin\/recent-user-activity/);
 assert.match(js, /data-admin-section="recent_users"/);
 assert.match(js, /Signed-in sessions, time used, and the latest recorded activity/);
@@ -72,6 +94,30 @@ assert.match(js, /A bounded page is sufficient/);
 assert.match(js, /Device and peak-hour distributions use the latest 100 sessions per period/);
 assert.match(js, /business-revenue-status-chart/);
 assert.match(js, /business-device-comparison-chart/);
+assert.match(js, /function activityPageAreaLabel\(value\)/);
+for (const legacyHomeArea of ['quorum', "'lex-forum'"]) {
+  assert.match(js, new RegExp(`${legacyHomeArea.replace('-', '\\-')}: 'Home'`));
+}
+assert.match(js, /mock_bar: 'Bar Question Practice'/);
+assert.match(js, /'mock-bar': 'Bar Question Practice'/);
+assert.match(js, /\.metric, \.observatory-kpi/);
+assert.match(js, /due-diligence-community-posts\.csv/);
+
+const realtimeStart = js.indexOf('async function renderRealtime');
+const realtimeEnd = js.indexOf('\n  function renderAcquisition', realtimeStart);
+const realtimeSource = js.slice(realtimeStart, realtimeEnd);
+assert.ok(realtimeStart >= 0 && realtimeEnd > realtimeStart, 'Live Activity renderer must be extractable.');
+assert.match(realtimeSource, /Active users · 5 minutes/);
+assert.match(realtimeSource, /Active users · 30 minutes/);
+assert.match(realtimeSource, /Active on Home · 5 minutes/);
+assert.match(realtimeSource, /Active on Home · 30 minutes/);
+assert.doesNotMatch(realtimeSource, /Average daily views|DAU|monthly users|Signed-in and guest sessions/);
+assert.doesNotMatch(realtimeSource, /loadReport|report\./);
+assert.match(js, /rangeControl\.hidden = isExaminationRoom \|\| section === 'realtime'/);
+assert.match(js, /'executive', 'acquisition', 'marketing', 'learning', 'subjects'/);
+assert.doesNotMatch(js, /'executive', 'realtime', 'acquisition'/);
+assert.match(js, /renderRealtime\(context\)/);
+assert.match(js, /activity in fixed 5- and 30-minute windows/);
 
 assert.match(css, /executive-chart-grid-top/);
 assert.match(css, /grid-template-columns:\s*226px/);

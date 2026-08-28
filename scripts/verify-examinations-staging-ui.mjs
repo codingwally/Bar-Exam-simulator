@@ -548,7 +548,7 @@ async function verifySubjectWorkspaceLayout(page, stateLabel, viewports) {
         .filter((element) => {
           const style = getComputedStyle(element);
           if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
-          if (element.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
+          if (element.closest('[hidden], [inert], [aria-hidden="true"], .dd2-sr-only')) return false;
           const bounds = element.getBoundingClientRect();
           return bounds.width > 1 && (bounds.left < -1 || bounds.right > innerWidth + 1);
         });
@@ -1013,7 +1013,7 @@ try {
             return style.display !== 'none'
               && style.visibility !== 'hidden'
               && Number.parseFloat(style.opacity || '1') > 0
-              && !element.closest('[hidden], [inert], [aria-hidden="true"]');
+              && !element.closest('[hidden], [inert], [aria-hidden="true"], .dd2-sr-only');
           })
           .map((element) => {
             const rect = element.getBoundingClientRect();

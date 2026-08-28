@@ -48,6 +48,7 @@
   ]);
   const HEARTBEAT_MS = 30_000;
   const AUTOSAVE_MS = 1_100;
+  const BAR_SIMULATION_HISTORY_PAGE_SIZE = 50;
   const SUBJECT_REVIEW_REQUEST_TIMEOUT_MS = 45_000;
   const TARGETED_QUESTION_UUID_PATTERN =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -55,6 +56,9 @@
   const state = {
     catalog: [],
     history: [],
+    historyTotal: 0,
+    historyOffset: 0,
+    historyHasMore: false,
     selectedSubject: '',
     subjectSelectionConfirmed: false,
     track: 'per_subject',
@@ -881,6 +885,79 @@
     </article>`).join('');
   }
 
+  function barSimulationHistoryMarkup() {
+    const attempts = state.history.filter((item) => item?.track === 'bar_feels');
+    const total = Math.max(attempts.length, Number(state.historyTotal) || 0);
+    const rows = attempts.map((item) => {
+      const attemptId = String(item.attemptId || '');
+      const status = String(item.status || '').toLowerCase();
+      const questionCount = Math.max(0, Number(item.questionCount) || 0);
+      const answeredCount = Math.max(0, Number(item.answeredCount) || 0);
+      const assessedCount = Math.max(0, Number(item.aiAssessmentCount) || 0);
+      const submitted = ['submitted', 'expired'].includes(status);
+      const resumable = ['in_progress', 'review'].includes(status);
+      const aiComplete = questionCount > 0 && assessedCount >= questionCount;
+      const assessmentReady = aiComplete
+        || item.humanFinalized === true
+        || item.modelsReleased === true;
+      const aiEligible = item.assessmentKind === 'curated';
+      let statusLabel = 'Saved';
+      if (resumable) statusLabel = 'In progress';
+      else if (status === 'cancelled') statusLabel = 'Cancelled';
+      else if (assessmentReady) statusLabel = 'Assessment ready';
+      else if (assessedCount > 0) statusLabel = `Assessment ${assessedCount} of ${questionCount}`;
+      else if (submitted && item.assessmentKind === 'uploaded') statusLabel = 'Awaiting human review';
+      else if (submitted) statusLabel = 'Assessment not started';
+
+      const actions = [
+        resumable ? `<button class="dd-exam-button is-primary" type="button"
+          data-exam-resume="${escapeAttribute(attemptId)}">Resume simulation</button>` : '',
+        submitted && assessmentReady
+          ? `<button class="dd-exam-button is-primary" type="button"
+              data-exam-verdict="${escapeAttribute(attemptId)}">View score and feedback</button>`
+          : '',
+        submitted && aiEligible && !assessmentReady
+          ? `<button class="dd-exam-button${assessedCount === 0 ? ' is-primary' : ''}" type="button"
+              data-history-request-ai="${escapeAttribute(attemptId)}"
+              data-question-count="${questionCount}">${assessedCount > 0 ? 'Continue AI Assessment' : 'Request AI Assessment'}</button>`
+          : '',
+      ].filter(Boolean).join('');
+
+      return `<article class="dd-bar-history-row">
+        <div class="dd-bar-history-copy">
+          <div class="dd-bar-history-title">
+            <h3>${escapeHtml(item.title || item.subject || 'Bar Exam Simulation')}</h3>
+            <span class="dd-exam-pill${assessmentReady ? '' : ' is-pending'}">${escapeHtml(statusLabel)}</span>
+          </div>
+          <p>${escapeHtml(item.subject || (item.assessmentKind === 'uploaded' ? 'Private uploaded examination' : 'Philippine Bar examination block'))}</p>
+          <div class="dd-bar-history-meta">
+            <span>${escapeHtml(formatDate(item.submittedAt || item.startedAt))}</span>
+            <span>${answeredCount} of ${questionCount} answered</span>
+            ${submitted && (aiEligible || assessedCount > 0)
+              ? `<span>${assessedCount} of ${questionCount} AI assessments saved</span>` : ''}
+          </div>
+        </div>
+        ${actions ? `<div class="dd-exam-actions dd-bar-history-actions">${actions}</div>` : ''}
+      </article>`;
+    }).join('');
+
+    return `<section class="dd-bar-history" aria-labelledby="dd-bar-history-title">
+      <div class="dd-bar-history-heading">
+        <div>
+          <p class="dd-exam-kicker">Your private results</p>
+          <h2 id="dd-bar-history-title" tabindex="-1">Scores and feedback</h2>
+          <p>Reopen a submitted simulation, continue an interrupted assessment, or resume saved work.</p>
+          ${attempts.length ? `<p class="dd-bar-history-count">Showing ${attempts.length} of ${total} simulations.</p>` : ''}
+        </div>
+      </div>
+      ${rows ? `<div class="dd-bar-history-list">${rows}</div>`
+        : '<div class="dd-bar-history-empty">Your simulations will appear here after you begin one.</div>'}
+      ${state.historyHasMore ? `<div class="dd-exam-actions dd-bar-history-pagination">
+        <button class="dd-exam-button" type="button" data-history-load-more>Load more results</button>
+      </div>` : ''}
+    </section>`;
+  }
+
   function renderBarFeels() {
     const root = pageRoot('bar_feels');
     if (!root) return;
@@ -895,6 +972,7 @@
         <span class="dd-exam-beta">Included with access</span>
       </header>
       <div class="dd-exam-status" role="status" aria-live="polite"></div>
+      ${barSimulationHistoryMarkup()}
       <div class="dd-bar-entry-grid">
         <section class="dd-bar-entry-card">
           <p class="dd-exam-kicker">Curated Route</p>
@@ -928,6 +1006,56 @@
         </section>
       </div>
     </div></div>`;
+  }
+
+  async function loadMoreBarSimulationHistory(button) {
+    if (!button || button.disabled || !state.historyHasMore) return;
+    const offset = Math.max(0, Number(state.historyOffset) || 0);
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Loading more results…';
+    setStatus('Loading more saved Bar Exam Simulation results…');
+    try {
+      const history = await api('/examinations/query', {
+        operation: 'history',
+        track: 'bar_feels',
+        limit: BAR_SIMULATION_HISTORY_PAGE_SIZE,
+        offset,
+      });
+      if (state.track !== 'bar_feels' || state.screen !== 'catalog' || !button.isConnected) return;
+      const incoming = Array.isArray(history.items)
+        ? history.items.filter((item) => item?.track === 'bar_feels')
+        : [];
+      const knownAttempts = new Set(state.history.map((item) => String(item?.attemptId || '')));
+      const additions = incoming.filter((item) => {
+        const attemptId = String(item?.attemptId || '');
+        if (!attemptId || knownAttempts.has(attemptId)) return false;
+        knownAttempts.add(attemptId);
+        return true;
+      });
+      state.history.push(...additions);
+      state.historyOffset = offset + incoming.length;
+      const reportedTotal = Number(history.total);
+      state.historyTotal = Number.isFinite(reportedTotal) && reportedTotal >= 0
+        ? Math.max(state.history.length, reportedTotal)
+        : Math.max(state.historyTotal, state.history.length);
+      state.historyHasMore = history.hasMore === true && incoming.length > 0;
+      renderBarFeels();
+      setStatus(additions.length
+        ? `Loaded ${additions.length} more saved simulation${additions.length === 1 ? '' : 's'}.`
+        : 'No additional saved simulations were found.', 'success');
+      const root = pageRoot('bar_feels');
+      focusRendered(root, state.historyHasMore ? '[data-history-load-more]' : '#dd-bar-history-title');
+    } catch (error) {
+      if (isStaleIdentityError(error)
+          || state.track !== 'bar_feels'
+          || state.screen !== 'catalog'
+          || !button.isConnected) return;
+      setStatus(error.message, 'error');
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.textContent = 'Retry loading results';
+    }
   }
 
   function setupDialog() {
@@ -2168,19 +2296,22 @@
     </section></div>`;
   }
 
-  async function requestAiAssessment(button) {
+  async function requestAiAssessmentForAttempt(button, attemptId, questionCount) {
+    if (!button || button.disabled || !attemptId) return;
+    const expectedQuestions = Math.max(1, Number(questionCount) || 1);
     button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
     button.textContent = 'Assessing each answer…';
     setStatus('The examiner is comparing each response with the stored approved answer and legal basis.');
     try {
       let result = null;
-      const maximumBatches = Math.max(1, state.active.questions.length + 1);
+      const maximumBatches = expectedQuestions + 1;
       let transientRetries = 0;
       for (let batch = 0; batch < maximumBatches; batch += 1) {
         try {
           result = await api('/examinations/command', {
             operation: 'request_ai_grading',
-            attemptId: state.active.attempt.attemptId,
+            attemptId,
             requestKey: requestKey('ai'),
           });
           transientRetries = 0;
@@ -2194,7 +2325,7 @@
           throw error;
         }
         const completed = Number(result.completedQuestions) || 0;
-        const total = Number(result.questionCount) || state.active.questions.length;
+        const total = Number(result.questionCount) || expectedQuestions;
         button.textContent = `Assessed ${completed} of ${total}…`;
         setStatus(`AI Assessment progress: ${completed} of ${total} individual answers finalized.`);
         if (result.status === 'completed') break;
@@ -2203,12 +2334,29 @@
         throw new Error('The grading queue paused before every individual assessment was finalized. Retry safely to continue.');
       }
       notify(`AI Assessment completed for ${result.completedQuestions} of ${result.questionCount} answers.`, 'ok');
-      await openVerdict(state.active.attempt.attemptId);
+      await openVerdict(attemptId);
     } catch (error) {
       setStatus(error.message, 'error');
       button.disabled = false;
+      button.removeAttribute('aria-busy');
       button.textContent = 'Retry AI Assessment';
     }
+  }
+
+  async function requestAiAssessment(button) {
+    return requestAiAssessmentForAttempt(
+      button,
+      state.active?.attempt?.attemptId,
+      state.active?.questions?.length,
+    );
+  }
+
+  async function requestHistoricalAiAssessment(button) {
+    return requestAiAssessmentForAttempt(
+      button,
+      button?.dataset.historyRequestAi,
+      button?.dataset.questionCount,
+    );
   }
 
   function humanDialog() {
@@ -3325,6 +3473,9 @@
     stopActiveTimers();
     state.catalog = [];
     state.history = [];
+    state.historyTotal = 0;
+    state.historyOffset = 0;
+    state.historyHasMore = false;
     state.selectedSubject = '';
     state.subjectSelectionConfirmed = false;
     state.subjectQuery = '';
@@ -3366,10 +3517,21 @@
         ])
         : await Promise.all([
           api('/examinations/query', { operation: 'catalog', track }),
-          api('/examinations/query', { operation: 'history', limit: 50, offset: 0 }),
+          api('/examinations/query', {
+            operation: 'history',
+            track: 'bar_feels',
+            limit: 50,
+            offset: 0,
+          }),
         ]);
       state.catalog = catalog.items || [];
-      state.history = history.items || [];
+      state.history = Array.isArray(history.items) ? history.items : [];
+      state.historyOffset = state.history.length;
+      const reportedHistoryTotal = Number(history.total);
+      state.historyTotal = Number.isFinite(reportedHistoryTotal) && reportedHistoryTotal >= 0
+        ? Math.max(state.history.length, reportedHistoryTotal)
+        : state.history.length;
+      state.historyHasMore = history.hasMore === true && state.historyOffset > 0;
       if (track === 'per_subject' && (
         !state.subjectSelectionConfirmed
         || !state.catalog.some((item) => item.subject === state.selectedSubject)
@@ -3756,8 +3918,16 @@
       });
       return;
     }
+    const loadMoreHistory = event.target.closest('[data-history-load-more]');
+    if (loadMoreHistory) {
+      loadMoreBarSimulationHistory(loadMoreHistory); return;
+    }
     if (event.target.closest('[data-request-ai]')) {
       requestAiAssessment(event.target.closest('[data-request-ai]')); return;
+    }
+    const historicalAi = event.target.closest('[data-history-request-ai]');
+    if (historicalAi) {
+      requestHistoricalAiAssessment(historicalAi); return;
     }
     if (event.target.closest('[data-request-human]')) {
       humanDialog().showModal(); return;

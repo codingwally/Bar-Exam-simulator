@@ -118,6 +118,72 @@ test('authenticated examination catalog reaches only the allowlisted RPC', async
   });
 });
 
+test('Bar Simulation history is owner-authorized and read from the track-filtered RPC', async () => {
+  await withFetchMock(async (url, options = {}) => {
+    const auth = authResponse(url);
+    if (auth) return auth;
+    const target = String(url);
+    const payload = JSON.parse(options.body);
+    if (target === `${supabaseUrl}/rest/v1/rpc/examination_authorize_access`) {
+      assert.deepEqual(payload, {
+        p_user_id: userId,
+        p_track: 'bar_feels',
+        p_version_id: null,
+        p_attempt_id: null,
+        p_allow_historical: true,
+      });
+      return Response.json({ allowed: true, basis: 'historical_owner', track: 'bar_feels' });
+    }
+    assert.equal(target, `${supabaseUrl}/rest/v1/rpc/examination_history_by_track_v1`);
+    assert.deepEqual(payload, {
+      p_user_id: userId,
+      p_track: 'bar_feels',
+      p_limit: 50,
+      p_offset: 0,
+    });
+    return Response.json({
+      track: 'bar_feels',
+      limit: 50,
+      offset: 0,
+      total: 75,
+      hasMore: true,
+      items: [{ attemptId, track: 'bar_feels', status: 'submitted' }],
+    });
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'history',
+      track: 'bar_feels',
+      limit: 50,
+      offset: 0,
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(body));
+    assert.equal(body.data.track, 'bar_feels');
+    assert.equal(body.data.total, 75);
+    assert.equal(body.data.hasMore, true);
+    assert.equal(body.data.items[0].attemptId, attemptId);
+  });
+});
+
+test('examination history rejects an explicitly invalid track before database access', async () => {
+  let fetchCalls = 0;
+  await withFetchMock(async () => {
+    fetchCalls += 1;
+    throw new Error('Invalid history input must fail before authentication or storage access.');
+  }, async () => {
+    const response = await worker.fetch(request('/examinations/query', {
+      operation: 'history',
+      track: 'all',
+      limit: 50,
+      offset: 0,
+    }), env);
+    const body = await response.json();
+    assert.equal(response.status, 400, JSON.stringify(body));
+    assert.equal(body.error.code, 'INVALID_EXAMINATION_TRACK');
+  });
+  assert.equal(fetchCalls, 0);
+});
+
 test('already-owned attempt continuation commands stay historical after current access ends', async () => {
   const operations = [
     {

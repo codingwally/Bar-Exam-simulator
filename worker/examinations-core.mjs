@@ -174,7 +174,20 @@ export function normalizeExaminationQuery(value) {
         'An attempt or examination version is required.',
       );
     }
-  } else if (operation === 'history' || operation === 'verdict') {
+  } else if (operation === 'history') {
+    const trackProvided = Object.prototype.hasOwnProperty.call(payload, 'track');
+    const historyTrack = examinationText(payload.track, 40);
+    if (trackProvided && !['per_subject', 'bar_feels'].includes(historyTrack)) {
+      throw new ExaminationValidationError(
+        'INVALID_EXAMINATION_TRACK',
+        'Choose a supported examination history.',
+      );
+    }
+    normalized.track = trackProvided ? historyTrack : null;
+    normalized.limit = integer(payload.limit ?? 30, 'History limit', 1, 100);
+    normalized.offset = integer(payload.offset ?? 0, 'History offset', 0, 10_000);
+    normalized.attemptId = optionalUuid(payload.attemptId, 'Attempt');
+  } else if (operation === 'verdict') {
     normalized.limit = integer(payload.limit ?? 30, 'History limit', 1, 100);
     normalized.offset = integer(payload.offset ?? 0, 'History offset', 0, 10_000);
     normalized.attemptId = optionalUuid(payload.attemptId, 'Attempt');

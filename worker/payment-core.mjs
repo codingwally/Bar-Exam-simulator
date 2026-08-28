@@ -214,12 +214,22 @@ export function normalizePhase4AdminRequest(payload) {
       'Select a valid Premium access filter.',
     );
   }
+  const dataScope = payload?.dataScope == null || payload.dataScope === ''
+    ? 'regular'
+    : typeof payload.dataScope === 'string' ? payload.dataScope.trim().toLowerCase() : '';
+  if (!['regular', 'internal_test'].includes(dataScope)) {
+    throw new PaymentValidationError(
+      'INVALID_ADMIN_REQUEST',
+      'Choose Regular users or Internal testing data.',
+    );
+  }
   return {
     section,
     search: String(payload?.search || '').trim().slice(0, 200),
     limit: Math.max(1, Math.min(100, Number(payload?.limit) || 50)),
     offset: Math.max(0, Number(payload?.offset) || 0),
     premiumStatus,
+    dataScope,
   };
 }
 

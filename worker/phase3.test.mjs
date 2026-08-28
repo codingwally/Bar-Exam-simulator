@@ -29,6 +29,10 @@ import {
   userResponsesCsv,
   withUtf8Bom,
 } from './admin-core.mjs';
+import {
+  PaymentValidationError,
+  normalizePhase4AdminRequest,
+} from './payment-core.mjs';
 import worker from './index.mjs';
 
 const analyticsEvent = {
@@ -88,10 +92,50 @@ test('dashboard windows are bounded and comparison-required', () => {
     previousTo: '2026-07-01T00:00:00Z',
   });
   assert.equal(request.from, '2026-07-01T00:00:00.000Z');
+  assert.equal(request.dataScope, 'regular');
+  assert.equal(normalizeDashboardRequest({
+    from: '2026-07-01T00:00:00Z',
+    to: '2026-07-31T00:00:00Z',
+    previousFrom: '2026-06-01T00:00:00Z',
+    previousTo: '2026-07-01T00:00:00Z',
+    dataScope: 'internal_test',
+  }).dataScope, 'internal_test');
+  assert.throws(() => normalizeDashboardRequest({
+    from: '2026-07-01T00:00:00Z',
+    to: '2026-07-31T00:00:00Z',
+    previousFrom: '2026-06-01T00:00:00Z',
+    previousTo: '2026-07-01T00:00:00Z',
+    dataScope: 'all',
+  }), AdminValidationError);
+  assert.throws(() => normalizeDashboardRequest({
+    from: '2026-07-01T00:00:00Z',
+    to: '2026-07-31T00:00:00Z',
+    previousFrom: '2026-06-01T00:00:00Z',
+    previousTo: '2026-07-01T00:00:00Z',
+    dataScope: false,
+  }), AdminValidationError);
   assert.throws(() => normalizeDashboardRequest({
     from: '2025-01-01', to: '2026-07-31',
     previousFrom: '2024-01-01', previousTo: '2025-01-01',
   }), AdminValidationError);
+});
+
+test('commercial Admin data permits only the two explicit reporting scopes', () => {
+  assert.equal(normalizePhase4AdminRequest({
+    section: 'payments',
+  }).dataScope, 'regular');
+  assert.equal(normalizePhase4AdminRequest({
+    section: 'access',
+    dataScope: 'internal_test',
+  }).dataScope, 'internal_test');
+  assert.throws(() => normalizePhase4AdminRequest({
+    section: 'payments',
+    dataScope: 'all',
+  }), PaymentValidationError);
+  assert.throws(() => normalizePhase4AdminRequest({
+    section: 'payments',
+    dataScope: false,
+  }), PaymentValidationError);
 });
 
 test('operational sections and administrator actions are allowlisted', () => {
@@ -143,6 +187,7 @@ test('user directory requests are bounded and exports use the fixed secure limit
     offset: 10,
     requestKey: 'directoryrequest0001',
     accessPurpose: 'dashboard',
+    dataScope: 'regular',
   });
   const exported = normalizeUserDirectoryRequest({
     search: '',
@@ -251,6 +296,7 @@ test('live activity and Quorum post requests are bounded and reject unsupported 
   }), {
     limit: 100,
     requestKey: 'liveactivitykey0001',
+    dataScope: 'regular',
   });
   assert.throws(() => normalizeLiveActivityRequest({
     limit: 10,
@@ -300,6 +346,7 @@ test('recent user activity requests are bounded, normalized, and reject unsafe i
     limit: 100,
     offset: 12,
     requestKey: 'recentactivitykey0001',
+    dataScope: 'regular',
   });
   assert.throws(() => normalizeRecentUserActivityRequest({
     from: '2026-08-01T00:00:00Z',
@@ -411,6 +458,7 @@ test('answer-history preview strictly validates filters and pagination', () => {
     limit: 50,
     offset: 100,
     requestKey: 'answerpreview000001',
+    dataScope: 'regular',
   });
   assert.deepEqual(request, {
     targetUserId: '30000000-0000-4000-8000-000000000001',
@@ -422,6 +470,7 @@ test('answer-history preview strictly validates filters and pagination', () => {
     limit: 50,
     offset: 100,
     requestKey: 'answerpreview000001',
+    dataScope: 'regular',
   });
   assert.throws(() => normalizeAnswerHistoryPreviewRequest({
     recordSource: 'examination',
@@ -503,6 +552,42 @@ const workerEnv = {
   GUEST_USAGE_HMAC_KEY: 'synthetic-hmac',
 };
 
+test('commercial Admin route forwards the explicit scope to the scoped RPC', async () => {
+  const originalFetch = globalThis.fetch;
+  let rpcBody;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    if (url.endsWith('/auth/v1/user')) {
+      return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
+    }
+    if (url.endsWith('/rest/v1/rpc/phase4_admin_operational_data_scoped_v1')) {
+      rpcBody = JSON.parse(init.body);
+      return Response.json({ total: 0, limit: 100, offset: 0, items: [] });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  try {
+    const response = await worker.fetch(new Request('https://worker.example/admin/phase4-data', {
+      method: 'POST',
+      headers: {
+        Origin: 'https://duediligence.ph',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer synthetic-user-token',
+      },
+      body: JSON.stringify({
+        section: 'access',
+        dataScope: 'internal_test',
+      }),
+    }), workerEnv);
+    assert.equal(response.status, 200);
+    assert.equal(rpcBody.p_section, 'access');
+    assert.equal(rpcBody.p_data_scope, 'internal_test');
+    assert.equal((await response.json()).dataScope, 'internal_test');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('trusted analytics endpoint validates and stores only normalized fields', async () => {
   const originalFetch = globalThis.fetch;
   let rpcBody;
@@ -578,7 +663,7 @@ test('authorized Students directory returns full emails through the protected RP
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory')) {
+    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory_scoped_v1')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 1,
@@ -608,12 +693,14 @@ test('authorized Students directory returns full emails through the protected RP
         limit: 100,
         offset: 0,
         requestKey: 'directoryrequest0003',
+        dataScope: 'internal_test',
       }),
     }), workerEnv);
     assert.equal(response.status, 200);
     assert.equal(rpcBody.p_actor_user_id, '91000000-0000-4000-8000-000000000001');
     assert.equal(rpcBody.p_access_purpose, 'dashboard');
     assert.equal(rpcBody.p_search, 'student.one@example.com');
+    assert.equal(rpcBody.p_data_scope, 'internal_test');
     const body = await response.json();
     assert.equal(body.data.items[0].email, 'student.one@example.com');
     assert.equal(JSON.stringify(rpcBody).includes('service-role'), false);
@@ -630,7 +717,7 @@ test('authorized recent sign-ins return the newest monitored account with coarse
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_recent_sign_in_directory')) {
+    if (url.endsWith('/rest/v1/rpc/admin_recent_sign_in_directory_scoped_v1')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 1,
@@ -664,6 +751,7 @@ test('authorized recent sign-ins return the newest monitored account with coarse
     assert.equal(rpcBody.p_actor_user_id, '91000000-0000-4000-8000-000000000001');
     assert.equal(rpcBody.p_limit, 7);
     assert.equal(rpcBody.p_request_key, 'recentsigninsrequest01');
+    assert.equal(rpcBody.p_data_scope, 'regular');
     const body = await response.json();
     assert.equal(body.data.items[0].current_region, 'Central Luzon, PH');
     assert.equal(body.data.items[0].current_device_category, 'desktop');
@@ -680,7 +768,7 @@ test('authorized recent user activity returns controlled session analytics throu
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_recent_user_activity_directory')) {
+    if (url.endsWith('/rest/v1/rpc/admin_recent_user_activity_directory_scoped_v1')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 1,
@@ -731,6 +819,7 @@ test('authorized recent user activity returns controlled session analytics throu
     assert.equal(rpcBody.p_search, 'student.one@example.com');
     assert.equal(rpcBody.p_limit, 100);
     assert.equal(rpcBody.p_offset, 0);
+    assert.equal(rpcBody.p_data_scope, 'regular');
     const body = await response.json();
     assert.equal(body.data.summary.activeNow, 1);
     assert.equal(body.data.items[0].latest_event_type, 'grading_success');
@@ -749,7 +838,7 @@ test('authorized Students CSV is complete, private, BOM-prefixed, and spreadshee
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory')) {
+    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory_scoped_v1')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 1,
@@ -781,6 +870,7 @@ test('authorized Students CSV is complete, private, BOM-prefixed, and spreadshee
     assert.equal(response.status, 200);
     assert.equal(rpcBody.p_access_purpose, 'csv_export');
     assert.equal(rpcBody.p_limit, 5000);
+    assert.equal(rpcBody.p_data_scope, 'regular');
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
     assert.equal(response.headers.get('Pragma'), 'no-cache');
     assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
@@ -802,7 +892,7 @@ test('Subscriptions CSV uses the protected directory and exports only subscripti
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory')) {
+    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory_scoped_v1')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 1,
@@ -845,7 +935,8 @@ test('Subscriptions CSV uses the protected directory and exports only subscripti
     assert.equal(rpcBody.p_access_purpose, 'csv_export');
     assert.equal(rpcBody.p_search, 'student');
     assert.equal(rpcBody.p_limit, 5000);
-    assert.equal(response.headers.get('Content-Disposition'), 'attachment; filename="due-diligence-subscriptions.csv"');
+    assert.equal(response.headers.get('Content-Disposition'), 'attachment; filename="due-diligence-subscriptions-regular-users.csv"');
+    assert.equal(response.headers.get('X-Admin-Data-Scope'), 'regular');
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
     assert.equal(response.headers.get('Pragma'), 'no-cache');
     const bytes = new Uint8Array(await response.arrayBuffer());
@@ -869,7 +960,7 @@ test('Students CSV refuses to silently truncate more than 5,000 matches', async 
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory')) {
+    if (url.endsWith('/rest/v1/rpc/admin_user_monitoring_directory_scoped_v1')) {
       return Response.json({
         total: 5001,
         limit: 5000,
@@ -911,7 +1002,7 @@ test('founder user-response export enriches saved answer evidence without broad 
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history_with_sources')) {
+    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history_scoped_v1')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         total: 2,
@@ -987,6 +1078,7 @@ test('founder user-response export enriches saved answer evidence without broad 
     assert.equal(rpcBody.p_target_user_id, targetUserId);
     assert.equal(rpcBody.p_actor_user_id, '91000000-0000-4000-8000-000000000001');
     assert.equal(rpcBody.p_limit, 2000);
+    assert.equal(rpcBody.p_data_scope, 'regular');
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
     assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
     assert.match(response.headers.get('Content-Disposition'), new RegExp(targetUserId));
@@ -1052,16 +1144,19 @@ test('administrator session is verified by Supabase before aggregate RPC', async
 test('admin dashboard includes all-time signed-in and answer engagement metrics', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
-  globalThis.fetch = async (input) => {
+  const scopedBodies = [];
+  globalThis.fetch = async (input, init = {}) => {
     const url = String(input);
     calls.push(url);
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_dashboard_snapshot')) {
+    if (url.endsWith('/rest/v1/rpc/admin_dashboard_snapshot_scoped_v1')) {
+      scopedBodies.push(JSON.parse(init.body));
       return Response.json({ meta: { freshness: 'current' } });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_overview_engagement_metrics')) {
+    if (url.endsWith('/rest/v1/rpc/admin_overview_engagement_metrics_scoped_v1')) {
+      scopedBodies.push(JSON.parse(init.body));
       return Response.json({
         scope: 'all_time',
         signedInAccounts: 27,
@@ -1091,6 +1186,7 @@ test('admin dashboard includes all-time signed-in and answer engagement metrics'
         to: '2026-08-01T00:00:00Z',
         previousFrom: '2026-06-01T00:00:00Z',
         previousTo: '2026-07-01T00:00:00Z',
+        dataScope: 'internal_test',
       }),
     }), workerEnv);
     assert.equal(response.status, 200);
@@ -1098,7 +1194,8 @@ test('admin dashboard includes all-time signed-in and answer engagement metrics'
     assert.equal(body.report.engagement.signedInAccounts, 27);
     assert.equal(body.report.engagement.questionsAnswered, 41);
     assert.equal(body.report.betaAllAccess.enabled, true);
-    assert.equal(calls.some((url) => url.endsWith('/admin_overview_engagement_metrics')), true);
+    assert.equal(calls.some((url) => url.endsWith('/admin_overview_engagement_metrics_scoped_v1')), true);
+    assert.deepEqual(scopedBodies.map((body) => body.p_data_scope), ['internal_test', 'internal_test']);
     assert.equal(calls.some((url) => url.endsWith('/phase4_global_beta_policy_snapshot')), true);
   } finally {
     globalThis.fetch = originalFetch;
@@ -1168,7 +1265,7 @@ test('manual founder directory email sends one private CSV attachment and record
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_prepare_user_directory_email_export')) {
+    if (url.endsWith('/rest/v1/rpc/admin_prepare_user_directory_email_export_scoped_v1')) {
       return Response.json({
         total: 1,
         tooMany: false,
@@ -1224,6 +1321,7 @@ test('manual founder directory email sends one private CSV attachment and record
       status: 'sent',
       recipientKey: 'gilmar',
       resultCount: 1,
+      dataScope: 'regular',
     });
     assert.deepEqual(emailRequest.body.to, ['founder.personal@example.com']);
     assert.equal(emailRequest.body.attachments.length, 1);
@@ -1249,7 +1347,7 @@ test('replayed founder directory email request returns 409 without sending or re
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_prepare_user_directory_email_export')) {
+    if (url.endsWith('/rest/v1/rpc/admin_prepare_user_directory_email_export_scoped_v1')) {
       return Response.json({
         alreadyPrepared: true,
         total: 1,
@@ -1313,7 +1411,7 @@ test('founder answer-history preview shows current approved practice content and
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_preview_answer_history_by_feature_v1')) {
+    if (url.endsWith('/rest/v1/rpc/admin_preview_answer_history_by_feature_scoped_v1')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         scope: 'all_users',
@@ -1356,6 +1454,7 @@ test('founder answer-history preview shows current approved practice content and
         feature: 'bar_question_practice',
         limit: 2,
         offset: 100,
+        dataScope: 'internal_test',
       }),
     }), workerEnv);
     assert.equal(response.status, 200);
@@ -1364,6 +1463,7 @@ test('founder answer-history preview shows current approved practice content and
     assert.equal(rpcBody.p_limit, 2);
     assert.equal(rpcBody.p_offset, 100);
     assert.match(rpcBody.p_request_key, /^[A-Za-z0-9_-]{16,128}$/);
+    assert.equal(rpcBody.p_data_scope, 'internal_test');
     const body = await response.json();
     assert.equal(body.data.total, 102);
     assert.equal(body.data.offset, 100);
@@ -1417,7 +1517,7 @@ test('founder answer-history export includes approved practice context and sourc
     if (url.endsWith('/auth/v1/user')) {
       return Response.json({ id: '91000000-0000-4000-8000-000000000001' });
     }
-    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history_with_sources')) {
+    if (url.endsWith('/rest/v1/rpc/admin_export_answer_history_scoped_v1')) {
       rpcBody = JSON.parse(init.body);
       return Response.json({
         scope: 'all_users',
@@ -1465,6 +1565,7 @@ test('founder answer-history export includes approved practice context and sourc
     assert.equal(rpcBody.p_from, null);
     assert.equal(rpcBody.p_to, null);
     assert.equal(rpcBody.p_limit, 5000);
+    assert.equal(rpcBody.p_data_scope, 'regular');
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
     const bytes = new Uint8Array(await response.arrayBuffer());
     assert.deepEqual([...bytes.slice(0, 3)], [0xef, 0xbb, 0xbf]);

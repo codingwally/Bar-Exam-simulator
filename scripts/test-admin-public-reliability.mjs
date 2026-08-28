@@ -195,6 +195,10 @@ assert.match(css, /@media \(max-width: 520px\)[\s\S]*\.topbar-tools \.topbar-dow
 assert.match(css, /@media \(max-width: 520px\)[\s\S]*\.topbar-tools \.freshness[\s\S]*grid-row:\s*3/);
 assert.match(css, /font-size:\s*max\(0\.875rem, 14px\)/);
 assert.match(css, /background:\s*#050b12/);
+const finalSelectorCss = css.slice(css.lastIndexOf('Final selector layout'));
+assert.match(finalSelectorCss, /grid-template-columns:\s*154px 188px auto auto/);
+assert.match(finalSelectorCss, /@media \(max-width: 920px\)[\s\S]*#reporting-data-scope:not\(\[hidden\]\),[\s\S]*#reporting-range:not\(\[hidden\]\)[\s\S]*display:\s*grid\s*!important/);
+assert.match(finalSelectorCss, /@media \(max-width: 620px\)[\s\S]*#reporting-data-scope[^}]*grid-row:\s*1[\s\S]*#reporting-range[^}]*grid-row:\s*2[\s\S]*\.refresh-button[^}]*grid-row:\s*3[\s\S]*\.freshness[^}]*grid-row:\s*4/);
 const reliabilityCss = css.slice(css.indexOf('Release 1 admin reliability'));
 assert.match(reliabilityCss, /@media \(max-width: 820px\)[\s\S]*\.table-wrap tr,[\s\S]*background:\s*#08131d/);
 assert.match(reliabilityCss, /\.action-context div,[\s\S]*background:\s*#0b151f/);

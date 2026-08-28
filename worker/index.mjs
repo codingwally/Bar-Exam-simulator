@@ -282,7 +282,7 @@ function corsHeaders(origin, allowedOrigin) {
       'X-DD-Beta-Access',
       'X-DD-Beta-Flow-ID',
     ].join(', '),
-    'Access-Control-Expose-Headers': 'Retry-After',
+    'Access-Control-Expose-Headers': 'Retry-After, Content-Disposition, X-Admin-Data-Scope',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
@@ -8253,17 +8253,19 @@ async function handleAdminDashboard(request, env, origin, allowedOrigin) {
     }
     throw error;
   }
-  const dashboardSnapshot = await protectedSupabaseRpc(env, 'admin_dashboard_snapshot', {
+  const dashboardSnapshot = await protectedSupabaseRpc(env, 'admin_dashboard_snapshot_scoped_v1', {
     p_actor_user_id: user.id,
     p_from: report.from,
     p_to: report.to,
     p_previous_from: report.previousFrom,
     p_previous_to: report.previousTo,
+    p_data_scope: report.dataScope,
   });
   let engagement = null;
   try {
-    engagement = await protectedSupabaseRpc(env, 'admin_overview_engagement_metrics', {
+    engagement = await protectedSupabaseRpc(env, 'admin_overview_engagement_metrics_scoped_v1', {
       p_actor_user_id: user.id,
+      p_data_scope: report.dataScope,
     });
   } catch {
     engagement = {
@@ -8305,7 +8307,11 @@ async function handleAdminDashboard(request, env, origin, allowedOrigin) {
       source: 'Published question bank temporarily unavailable',
     };
   }
-  return jsonResponse({ ok: true, report: result }, 200, origin, allowedOrigin);
+  return jsonResponse({
+    ok: true,
+    report: result,
+    dataScope: report.dataScope,
+  }, 200, origin, allowedOrigin);
 }
 
 async function handleAdminData(request, env, origin, allowedOrigin) {
@@ -8344,20 +8350,26 @@ async function adminUserDirectoryResult(request, env, accessPurpose) {
     }
     throw error;
   }
-  return protectedSupabaseRpc(env, 'admin_user_monitoring_directory', {
+  const data = await protectedSupabaseRpc(env, 'admin_user_monitoring_directory_scoped_v1', {
     p_actor_user_id: user.id,
     p_search: query.search,
     p_limit: query.limit,
     p_offset: query.offset,
     p_request_key: query.requestKey,
     p_access_purpose: query.accessPurpose,
+    p_data_scope: query.dataScope,
   });
+  return { data, query };
 }
 
 async function handleAdminUserDirectory(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
-  const result = await adminUserDirectoryResult(request, env, 'dashboard');
-  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+  const { data, query } = await adminUserDirectoryResult(request, env, 'dashboard');
+  return jsonResponse({
+    ok: true,
+    data,
+    dataScope: query.dataScope,
+  }, 200, origin, allowedOrigin);
 }
 
 async function handleAdminRecentSignIns(request, env, origin, allowedOrigin) {
@@ -8372,17 +8384,22 @@ async function handleAdminRecentSignIns(request, env, origin, allowedOrigin) {
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_recent_sign_in_directory', {
+  const result = await protectedSupabaseRpc(env, 'admin_recent_sign_in_directory_scoped_v1', {
     p_actor_user_id: user.id,
     p_limit: Math.min(query.limit, 25),
     p_request_key: query.requestKey,
+    p_data_scope: query.dataScope,
   });
-  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+  return jsonResponse({
+    ok: true,
+    data: result,
+    dataScope: query.dataScope,
+  }, 200, origin, allowedOrigin);
 }
 
 async function handleAdminUserDirectoryExport(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
-  const result = await adminUserDirectoryResult(request, env, 'csv_export');
+  const { data: result, query } = await adminUserDirectoryResult(request, env, 'csv_export');
   if (result?.tooMany) {
     throw new ExaminerError(
       'ADMIN_EXPORT_TOO_LARGE',
@@ -8395,7 +8412,8 @@ async function handleAdminUserDirectoryExport(request, env, origin, allowedOrigi
     headers: {
       ...corsHeaders(origin, allowedOrigin),
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="due-diligence-users.csv"',
+      'Content-Disposition': `attachment; filename="due-diligence-users-${query.dataScope === 'internal_test' ? 'internal-testing' : 'regular-users'}.csv"`,
+      'X-Admin-Data-Scope': query.dataScope,
       'Cache-Control': 'no-store',
       Pragma: 'no-cache',
       'X-Content-Type-Options': 'nosniff',
@@ -8405,7 +8423,7 @@ async function handleAdminUserDirectoryExport(request, env, origin, allowedOrigi
 
 async function handleAdminSubscriptionsExport(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
-  const result = await adminUserDirectoryResult(request, env, 'csv_export');
+  const { data: result, query } = await adminUserDirectoryResult(request, env, 'csv_export');
   if (result?.tooMany) {
     throw new ExaminerError(
       'ADMIN_EXPORT_TOO_LARGE',
@@ -8418,7 +8436,8 @@ async function handleAdminSubscriptionsExport(request, env, origin, allowedOrigi
     headers: {
       ...corsHeaders(origin, allowedOrigin),
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="due-diligence-subscriptions.csv"',
+      'Content-Disposition': `attachment; filename="due-diligence-subscriptions-${query.dataScope === 'internal_test' ? 'internal-testing' : 'regular-users'}.csv"`,
+      'X-Admin-Data-Scope': query.dataScope,
       'Cache-Control': 'no-store',
       Pragma: 'no-cache',
       'X-Content-Type-Options': 'nosniff',
@@ -8438,12 +8457,17 @@ async function handleAdminLiveActivity(request, env, origin, allowedOrigin) {
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_live_activity', {
+  const result = await protectedSupabaseRpc(env, 'admin_live_activity_scoped_v1', {
     p_actor_user_id: user.id,
     p_limit: query.limit,
     p_request_key: query.requestKey,
+    p_data_scope: query.dataScope,
   });
-  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+  return jsonResponse({
+    ok: true,
+    data: result,
+    dataScope: query.dataScope,
+  }, 200, origin, allowedOrigin);
 }
 
 async function handleAdminRecentUserActivity(request, env, origin, allowedOrigin) {
@@ -8458,7 +8482,7 @@ async function handleAdminRecentUserActivity(request, env, origin, allowedOrigin
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_recent_user_activity_directory', {
+  const result = await protectedSupabaseRpc(env, 'admin_recent_user_activity_directory_scoped_v1', {
     p_actor_user_id: user.id,
     p_search: query.search,
     p_from: query.from,
@@ -8466,8 +8490,13 @@ async function handleAdminRecentUserActivity(request, env, origin, allowedOrigin
     p_limit: query.limit,
     p_offset: query.offset,
     p_request_key: query.requestKey,
+    p_data_scope: query.dataScope,
   });
-  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+  return jsonResponse({
+    ok: true,
+    data: result,
+    dataScope: query.dataScope,
+  }, 200, origin, allowedOrigin);
 }
 
 async function handleAdminQuorumPosts(request, env, origin, allowedOrigin) {
@@ -8520,7 +8549,7 @@ async function handleAdminUserDirectoryEmail(request, env, origin, allowedOrigin
   }
   const result = await protectedSupabaseRpc(
     env,
-    'admin_prepare_user_directory_email_export',
+    'admin_prepare_user_directory_email_export_scoped_v1',
     {
       p_actor_user_id: user.id,
       p_search: exportRequest.search,
@@ -8528,6 +8557,7 @@ async function handleAdminUserDirectoryEmail(request, env, origin, allowedOrigin
       p_recipient_key: exportRequest.recipientKey,
       p_reason: exportRequest.reason,
       p_request_key: exportRequest.requestKey,
+      p_data_scope: exportRequest.dataScope,
     },
   );
   if (result?.alreadyPrepared === true) {
@@ -8549,7 +8579,7 @@ async function handleAdminUserDirectoryEmail(request, env, origin, allowedOrigin
       delivery = await sendAdminDirectoryEmail(env, {
         recipient,
         csv,
-        filename: 'due-diligence-private-user-directory.csv',
+        filename: `due-diligence-private-user-directory-${exportRequest.dataScope === 'internal_test' ? 'internal-testing' : 'regular-users'}.csv`,
         requestKey: exportRequest.requestKey,
         resultCount: items.length,
       });
@@ -8596,6 +8626,7 @@ async function handleAdminUserDirectoryEmail(request, env, origin, allowedOrigin
       status: 'sent',
       recipientKey: exportRequest.recipientKey,
       resultCount: items.length,
+      dataScope: exportRequest.dataScope,
     },
   }, 200, origin, allowedOrigin);
 }
@@ -8616,23 +8647,10 @@ async function handleAdminAnswerHistoryPreview(request, env, origin, allowedOrig
     }
     throw error;
   }
-  const legacyFormalRequest = previewRequest.feature === 'legacy_formal_exam';
   const result = await protectedSupabaseRpc(
     env,
-    legacyFormalRequest
-      ? 'admin_preview_answer_history_with_sources'
-      : 'admin_preview_answer_history_by_feature_v1',
-    legacyFormalRequest ? {
-      p_actor_user_id: user.id,
-      p_target_user_id: previewRequest.targetUserId,
-      p_from: previewRequest.from,
-      p_to: previewRequest.to,
-      p_search: previewRequest.search,
-      p_record_source: 'formal_exam',
-      p_limit: previewRequest.limit,
-      p_offset: previewRequest.offset,
-      p_request_key: previewRequest.requestKey,
-    } : {
+    'admin_preview_answer_history_by_feature_scoped_v1',
+    {
       p_actor_user_id: user.id,
       p_target_user_id: previewRequest.targetUserId,
       p_from: previewRequest.from,
@@ -8642,6 +8660,7 @@ async function handleAdminAnswerHistoryPreview(request, env, origin, allowedOrig
       p_limit: previewRequest.limit,
       p_offset: previewRequest.offset,
       p_request_key: previewRequest.requestKey,
+      p_data_scope: previewRequest.dataScope,
     },
   );
   const items = await enrichAdminAnswerHistory(result?.items, env);
@@ -8658,7 +8677,9 @@ async function handleAdminAnswerHistoryPreview(request, env, origin, allowedOrig
       dateScope: result?.dateScope || 'all_time',
       featureFilter: result?.featureFilter || previewRequest.feature,
       featureTotals: result?.featureTotals || null,
+      dataScope: previewRequest.dataScope,
     },
+    dataScope: previewRequest.dataScope,
   }, 200, origin, allowedOrigin);
 }
 
@@ -8677,7 +8698,7 @@ async function handleAdminAnswerHistoryExport(request, env, origin, allowedOrigi
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history_with_sources', {
+  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history_scoped_v1', {
     p_actor_user_id: user.id,
     p_target_user_id: exportRequest.targetUserId,
     p_from: exportRequest.from,
@@ -8685,6 +8706,7 @@ async function handleAdminAnswerHistoryExport(request, env, origin, allowedOrigi
     p_limit: exportRequest.limit,
     p_reason: exportRequest.reason,
     p_request_key: exportRequest.requestKey,
+    p_data_scope: exportRequest.dataScope,
   });
   if (result?.tooMany) {
     throw new ExaminerError(
@@ -8702,7 +8724,8 @@ async function handleAdminAnswerHistoryExport(request, env, origin, allowedOrigi
     headers: {
       ...corsHeaders(origin, allowedOrigin),
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="due-diligence-answer-history-${scope}.csv"`,
+      'Content-Disposition': `attachment; filename="due-diligence-answer-history-${exportRequest.dataScope === 'internal_test' ? 'internal-testing' : 'regular-users'}-${scope}.csv"`,
+      'X-Admin-Data-Scope': exportRequest.dataScope,
       'Cache-Control': 'no-store',
       Pragma: 'no-cache',
       'X-Content-Type-Options': 'nosniff',
@@ -8780,18 +8803,19 @@ async function handleAdminExport(request, env, origin, allowedOrigin) {
     }
     throw error;
   }
-  const snapshot = await protectedSupabaseRpc(env, 'admin_dashboard_snapshot', {
+  const snapshot = await protectedSupabaseRpc(env, 'admin_dashboard_snapshot_scoped_v1', {
     p_actor_user_id: user.id,
     p_from: report.from,
     p_to: report.to,
     p_previous_from: report.previousFrom,
     p_previous_to: report.previousTo,
+    p_data_scope: report.dataScope,
   });
   await protectedSupabaseRpc(env, 'admin_execute_action', {
     p_actor_user_id: user.id,
     p_action: 'aggregate_export',
     p_target_id: null,
-    p_payload: { aggregate_only: true },
+    p_payload: { aggregate_only: true, data_scope: report.dataScope },
     p_reason: 'Authorized aggregate business report export',
     p_request_key: crypto.randomUUID().replace(/-/g, ''),
   });
@@ -8800,7 +8824,8 @@ async function handleAdminExport(request, env, origin, allowedOrigin) {
     headers: {
       ...corsHeaders(origin, allowedOrigin),
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="due-diligence-aggregate-report.csv"',
+      'Content-Disposition': `attachment; filename="due-diligence-aggregate-report-${report.dataScope === 'internal_test' ? 'internal-testing' : 'regular-users'}.csv"`,
+      'X-Admin-Data-Scope': report.dataScope,
       'Cache-Control': 'no-store',
       'X-Content-Type-Options': 'nosniff',
     },
@@ -8819,7 +8844,7 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
     }
     throw error;
   }
-  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history_with_sources', {
+  const result = await protectedSupabaseRpc(env, 'admin_export_answer_history_scoped_v1', {
     p_actor_user_id: user.id,
     p_target_user_id: exportRequest.targetUserId,
     p_from: exportRequest.from,
@@ -8827,6 +8852,7 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
     p_limit: exportRequest.limit,
     p_reason: exportRequest.reason,
     p_request_key: exportRequest.requestKey,
+    p_data_scope: exportRequest.dataScope,
   });
   if (result?.tooMany) {
     throw new ExaminerError(
@@ -8837,13 +8863,14 @@ async function handleAdminUserResponsesExport(request, env, origin, allowedOrigi
   }
 
   const items = await enrichAdminAnswerHistory(result?.items, env);
-  const filename = `due-diligence-user-${exportRequest.targetUserId}-questions-answers.csv`;
+  const filename = `due-diligence-user-${exportRequest.targetUserId}-${exportRequest.dataScope === 'internal_test' ? 'internal-testing' : 'regular-users'}-questions-answers.csv`;
   return new Response(withUtf8Bom(answerHistoryCsv(items)), {
     status: 200,
     headers: {
       ...corsHeaders(origin, allowedOrigin),
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="${filename}"`,
+      'X-Admin-Data-Scope': exportRequest.dataScope,
       'Cache-Control': 'no-store',
       Pragma: 'no-cache',
       'X-Content-Type-Options': 'nosniff',
@@ -9056,22 +9083,19 @@ async function handlePhase4AdminData(request, env, origin, allowedOrigin) {
   await enforceAdminRateLimit(request, env);
   const user = await requireAdministrator(request, env);
   const query = normalizePhase4AdminRequest(await parseBoundedJson(request, 8_000));
-  const result = query.section === 'access'
-    ? await protectedSupabaseRpc(env, 'phase4_admin_premium_access', {
-      p_actor_user_id: user.id,
-      p_search: query.search,
-      p_status: query.premiumStatus,
-      p_limit: query.limit,
-      p_offset: query.offset,
-    })
-    : await protectedSupabaseRpc(env, 'phase4_admin_operational_data', {
+  const result = await protectedSupabaseRpc(env, 'phase4_admin_operational_data_scoped_v1', {
       p_actor_user_id: user.id,
       p_section: query.section === 'introductory_access' ? 'access' : query.section,
       p_search: query.search,
       p_limit: query.limit,
       p_offset: query.offset,
+      p_data_scope: query.dataScope,
     });
-  return jsonResponse({ ok: true, data: result }, 200, origin, allowedOrigin);
+  return jsonResponse({
+    ok: true,
+    data: result,
+    dataScope: query.dataScope,
+  }, 200, origin, allowedOrigin);
 }
 
 async function handlePhase4AdminAction(request, env, origin, allowedOrigin) {

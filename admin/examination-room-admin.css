@@ -863,7 +863,15 @@
   .exam-admin-section-body,
   .exam-admin-section-body > *,
   .exam-admin-selected-record,
-  .exam-admin-selected-record > * {
+  .exam-admin-selected-record > *,
+  .exam-admin-question-list,
+  .exam-admin-question-list > article,
+  .exam-admin-question-list > article > *,
+  .exam-admin-question-list > article > header > *,
+  .exam-admin-question-list > article > footer > *,
+  .exam-admin-answer-key,
+  .exam-admin-answer-key > div,
+  .exam-admin-question-list .exam-admin-raw {
     min-width: 0;
     max-width: 100%;
   }
@@ -898,4 +906,11 @@
   .exam-admin-selected-header .exam-admin-exam-selector { align-items: stretch; flex-direction: column; }
   .exam-admin-selected-header .exam-admin-exam-selector,
   .exam-admin-selected-header .exam-admin-exam-selector select { width: 100%; min-width: 0; max-width: 100%; }
+  .exam-admin-question-list > article > header { flex-wrap: wrap; }
+  .exam-admin-question-list h4,
+  .exam-admin-question-list > article > footer > :is(code, span),
+  .exam-admin-question-list .exam-admin-raw :is(summary, pre) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
